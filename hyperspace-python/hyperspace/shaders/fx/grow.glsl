@@ -19,42 +19,32 @@
 // Flow is a rate: u_flow_t is integrated by fx.py (@clock), the sway of
 // the blades and the ooze of the noodles read it, never u_phase × a knob.
 uniform float u_grow;    // @param 0 1 0.5 "Grow" How far the growth has come: grass from bare ground through shoots to long drooping blades; the others a slice falling through their field, 0 nothing pokes through, 1 all of it. The knob to ride with an LFO.
-uniform int   u_mode;    // @param choice [grass|sprouts|blobs|noodles] 0 "Field" What grows: a lawn seen from above, its blades lengthening and drooping, tufts sprouting in a scatter (chia seeds), blobs inflating and merging, or spaghetti noodles oozing and thickening.
+uniform int   u_mode;    // @param choice [grass|sprouts|blobs|noodles|mould|coral|cells] 0 "Field" What grows: a lawn seen from above, its blades lengthening and drooping, tufts sprouting in a scatter (chia seeds), blobs inflating and merging, spaghetti noodles oozing and thickening, mould colonies spreading from spores, a brain-coral maze closing, or the walls of plant cells thickening.
 uniform float u_amount;  // @param 0 0.3 0.04 amount "Amount" How far the growth moves the pixels, in frame heights.
 uniform int   u_push;    // @param choice [bulge|lift] 0 "Push" Bulge magnifies the frame under each lump like a lens; lift slides the pixels inside the growth along Angle by its height.
 uniform float u_angle;   // @param 0 6.2832 1.5708 wrap "Angle" Lift: the direction the growth pushes, radians (0 right, a quarter turn up).
 uniform float u_scale;   // @param 1 24 6 log "Scale" Blades, tufts or noodles across the frame's height.
-uniform float u_soft;    // @param 0.01 0.5 0.08 log "Softness" The knee of the slice: low is a hard edge where the growth breaks through, high a slow swell. Grass has no slice: it grows by Grow alone.
+uniform float u_soft;    // @param 0.01 0.5 0.08 log "Softness" The knee of the slice: low is a hard edge where the growth breaks through, high a slow swell. Grass and mould have no slice: they grow by Grow alone.
 uniform float u_flow;    // @param 0 4 0.5 "Flow" How fast the field sways and oozes; a step changes the speed, never where the field is.
 uniform float u_shade;   // @param 0 1 0.3 "Shade" Lights the growth's relief from the upper left, so the shape shows on the picture.
 
-// grass: a lawn seen from straight above. A tuft in every cell of a
-// jittered grid, seven blades each, fanned out by the golden angle (and a
-// little jitter) so no two line up, each rooted a touch off the tuft's centre. A blade is a stroke from its root along its heading, curling
-// to one side as it droops (a parabola from above), tapering to its tip;
-// its height is a rounded cross-section, highest near the root, lower
-// toward the drooping tip. Each blade grows on its own clock out of Grow:
-// it starts late by a golden-ratio stagger, then its reach goes as g^φ
-// (slow at first, then shooting out), its width as g^(1/φ) (a shoot fills
-// out early) and its droop as g^(φ²) (only a long blade flops over). At
-// Grow 0 every blade has no length: bare ground, nothing moves.
+// Fields that grow by Grow itself, not by a slice: each feature has its
+// own clock g out of Grow, started late by a golden-ratio stagger, and its
+// parts grow on golden-ratio curves — reach as g^φ (slow, then shooting
+// out), width as g^(1/φ) (fills out early), curl as g^(φ²) (only the long
+// ones flop over). At Grow 0 nothing has started: nothing moves.
 const float PHI = 1.6180340;
-const float GOLDEN_ANGLE = 2.3999632;    // 2π / φ²
 
-float blade(vec2 q, vec2 root, float th, float reach, float curl, float wide) {
-    if (reach <= 1e-4 || wide <= 1e-5) return 0.0;
-    vec2 dir = vec2(cos(th), sin(th));
-    vec2 r = q - root;
-    vec2 l = vec2(dot(r, dir), dot(r, vec2(-dir.y, dir.x)));   // along, across
-    float s = clamp(l.x, 0.0, reach);
-    float d = length(vec2(l.x - s, l.y - curl * s * s));
-    float u = s / reach;                     // 0 at the root, 1 at the tip
-    float w = wide * (1.0 - 0.85 * u);
-    float x = d / w;
-    if (x >= 1.0) return 0.0;
-    return (1.0 - x * x) * (1.0 - 0.5 * u * u);
+float clock_of(float seed) {
+    float delay = 0.4 * fract(seed * PHI);
+    return clamp((u_grow - delay) / (1.0 - delay), 0.0, 1.0);
 }
 
+// grass: a lawn seen from straight above, a tuft in each cell of a jittered
+// grid. A tuft is one star in polar coordinates about its root — 5 to 7
+// blades, each its own length (golden-ratio steps), the angle twisted by
+// the radius squared so the blades curl over as they droop. One tuft is
+// one evaluation, however many blades: nine per pixel, not one per blade
 float grass(vec2 q, float t) {
     vec2 c0 = floor(q);
     float h = 0.0;
@@ -62,24 +52,53 @@ float grass(vec2 q, float t) {
     for (int i = -1; i <= 1; i++) {
         vec2 cell = c0 + vec2(i, j);
         vec2 r = hash22(cell);
-        vec2 root = cell + 0.15 + 0.7 * r;
         float seed = hash21(cell + 3.0);
-        float th0 = seed * TAU + 0.12 * sin(t + seed * TAU);     // the tuft sways
-        for (int k = 0; k < 7; k++) {
-            float fk = float(k);
-            vec2 b = hash22(cell + vec2(fk * 3.7, 23.0));
-            float delay = 0.4 * fract(fk / PHI + seed);
-            float g = clamp((u_grow - delay) / (1.0 - delay), 0.0, 1.0);
-            float len = 0.75 * pow(1.0 / PHI, 2.0 * fract(fk * PHI + r.x));   // 0.75/φ² … 0.75
-            float side = hash21(cell + vec2(fk, 7.0)) < 0.5 ? -1.0 : 1.0;
-            float curl = side * (0.25 + 0.45 * hash21(cell + vec2(fk, 11.0)));
-            float th = th0 + fk * GOLDEN_ANGLE + 0.5 * (b.x - 0.5);
-            vec2 at = root + 0.06 * (b - 0.5);
-            h = max(h, blade(q, at, th,
-                             len * pow(g, PHI),
-                             curl * pow(g, PHI * PHI),
-                             0.08 * pow(g, 1.0 / PHI)));
-        }
+        float g = clock_of(seed);
+        if (g <= 0.0) continue;
+        vec2 v = q - (cell + 0.25 + 0.5 * r);
+        float rad = length(v);
+        float reach = 0.7 * pow(g, PHI);
+        if (rad >= reach) continue;
+        float n = 5.0 + floor(3.0 * r.y);                    // blades in the tuft
+        float curl = (seed - 0.5) * 3.5 * pow(g, PHI * PHI);
+        float a = atan(v.y, v.x) + curl * rad * rad
+                + seed * TAU + 0.12 * sin(t + seed * TAU);   // the tuft sways
+        float sector = TAU / n;
+        float k = floor(a / sector + 0.5);
+        float da = a - k * sector;                           // off its sector's centre
+        k = mod(k, n);                                       // which blade, the same across atan's seam
+        float jit = hash21(cell + vec2(k, 31.0)) - 0.5;
+        da = abs(da - 0.35 * sector * jit);                  // each blade a little off the even fan
+        float len = reach * pow(1.0 / PHI, 2.0 * fract(k * PHI + r.x));
+        float u = rad / len;
+        if (u >= 1.0) continue;
+        float w = 0.09 * pow(g, 1.0 / PHI) * (1.0 - 0.85 * u);
+        float x = rad * da / w;
+        if (x < 1.0) h = max(h, (1.0 - x * x) * (1.0 - 0.5 * u * u));
+    }
+    return h;
+}
+
+// mould: colonies spreading from spores, as on bread. Each cell's spore
+// starts on its own clock and its disc spreads as g^φ, its rim ragged by
+// one noise shared by the whole pixel, with growth rings inside it; where
+// colonies meet they merge. A slice would only threshold the disc, so it
+// grows by Grow like the grass
+float mould(vec2 q, float t) {
+    float ragged = 0.22 * perlin(q * 2.7 + vec2(t * 0.1, 0.0));
+    vec2 c0 = floor(q);
+    float h = 0.0;
+    for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+        vec2 cell = c0 + vec2(i, j);
+        vec2 r = hash22(cell);
+        float g = clock_of(hash21(cell + 5.0));
+        float R = 0.8 * pow(g, PHI);
+        float d = length(q - cell - 0.1 - 0.8 * r) + ragged;
+        if (d >= R) continue;
+        float inside = R - d;
+        float rings = 0.8 + 0.2 * sin(inside * 16.0);
+        h = max(h, sqrt(min(1.0, inside / max(R, 0.05))) * rings);   // a dome: merged colonies keep their relief
     }
     return h;
 }
@@ -117,18 +136,45 @@ float noodles(vec2 q, float t) {
     return pow(max(a, b * 0.85), 2.0);
 }
 
+// coral: a brain-coral labyrinth — the contour lines of a slow noise,
+// folded tight, so a falling slice thickens them into a maze that closes
+float coral(vec2 q, float t) {
+    float n = perlin(q * 0.6 + vec2(0.0, t * 0.05)) + 0.5 * perlin(q * 1.3 + 11.0);
+    return 0.5 + 0.5 * sin(n * 40.0 + t * 0.3);
+}
+
+// cells: the walls between cells (Voronoi, the second-nearest seed less
+// the nearest), so a falling slice thickens walls into a honeycomb of
+// plant cells — or, read the other way, leaf veins
+float cells(vec2 q, float t) {
+    vec2 c0 = floor(q);
+    float f1 = 9.0, f2 = 9.0;
+    for (int j = -1; j <= 1; j++)
+    for (int i = -1; i <= 1; i++) {
+        vec2 cell = c0 + vec2(i, j);
+        vec2 r = hash22(cell);
+        vec2 o = 0.5 + 0.3 * vec2(sin(t + r.x * TAU), cos(t * 0.8 + r.y * TAU));   // within reach of the 3 × 3 search
+        float d = length(q - cell - o);
+        if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
+    }
+    return 1.0 - smoothstep(0.0, 0.5, f2 - f1);
+}
+
 float field(vec2 uv) {
     vec2 q = centred(uv) * u_scale;
     if (u_mode == 0) return grass(q, u_flow_t);
     if (u_mode == 1) return sprouts(q, u_flow_t);
     if (u_mode == 2) return blobs(q, u_flow_t);
-    return noodles(q, u_flow_t);
+    if (u_mode == 3) return noodles(q, u_flow_t);
+    if (u_mode == 4) return mould(q, u_flow_t);
+    if (u_mode == 5) return coral(q, u_flow_t);
+    return cells(q, u_flow_t);
 }
 
 // the growth above the slice (grass: the lawn as it is): 0 below it, the height above it beyond the
 // knee, and a smooth (C1) ramp across the knee so the slope never jumps
 float growth(vec2 uv) {
-    if (u_mode == 0) return field(uv);       // grass grows by Grow itself, no slice
+    if (u_mode == 0 || u_mode == 4) return field(uv);   // grass and mould grow by Grow itself, no slice
     float k = u_soft;
     // the slice runs from a knee above the field's top (grow 0: nothing,
     // exactly) to a knee below its floor (grow 1: all of it)
