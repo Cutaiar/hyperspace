@@ -20,11 +20,13 @@ discards, so no DNS or redirect is involved.
 cd web && python3 -m http.server 8777
 ```
 
-then <http://127.0.0.1:8777>. Three tabs:
+then <http://127.0.0.1:8777>. Four tabs:
 
 - **live solver** — re-derives the whole code per update, **0.2 ms** a solve.
 - **sprite** — 216 precomputed frames, 106 KB, every one decode-verified.
 - **tiles** — the original stills, next to the plain `qr.svg` for comparison.
+- **gallery** — 29 stills across eight 4D subjects, seven dot styles and six
+  palettes. Click one to fill the screen and scan it.
 
 A `file://` open will not work: the pages `fetch` their data.
 
@@ -50,6 +52,40 @@ that decode to nothing. The numeric filler also needs each 10-bit group under
 1000, which pyqart handles by *retrying* — fatal for a live loop, so each
 group's top bit is pinned to zero instead, capping it at 511. Validity is
 structural: no control in the UI can break it, only make it harder to read.
+
+## The gallery
+
+![29 stills across eight subjects, seven styles and six palettes](shots/gallery.png)
+
+```sh
+uv run --with pyqart --with pillow --with numpy --with zxing-cpp \
+  python3 gen/gallery.py --url https://hyperspace.cutaiar.io
+```
+
+[`gen/polytopes.py`](gen/polytopes.py) generalises the tesseract to a family —
+the 16-cell, the 24-cell, the 4-8 and 8-8 duoprisms, a plain 3-cube — reusing
+the projection maths rather than copying it. [`gen/style.py`](gen/style.py) is
+the vector twin of `web/render.js`: the same dot shapes, the same
+neighbour-aware corner rounding, the same even-odd finder rings, emitted as SVG
+so a still can be printed at any size.
+
+The constraint that decides everything is quantisation. Only edges landing on
+0, 45 or 90 degrees survive sampling on a square grid, so each pose is chosen,
+not arbitrary. What that rules out, after rendering and rejecting each by eye
+at 65 modules: the 5-cell (no axis to align to), the 3-8 duoprism (its
+triangles staircase), the 24-cell seen cell-first (fills solid), and the
+tesseract folded part-way through XW (an angle that is neither 0 nor 45, so its
+edges become dotted staggers).
+
+Stroke weight is the other lever, and it is per-subject. The 16-cell seen axis
+first has four of its eight vertices projecting to the origin, so its arms
+converge on a point: at a 2-module stroke they dissolve into the halo and it
+needs 5. The 24-cell's 96 edges go the other way and need 2.
+
+**Verification is on the shipped artefact, not a model of it.** Every SVG the
+generator writes is rasterised by headless Chrome and decoded by zxing, so what
+is checked is the exact file the page serves — 29/29, the inverted palette and
+the circular-module ones included.
 
 ## The texture question
 

@@ -1,0 +1,139 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QR dither — gallery</title>
+<style>
+  :root { --red:#ff2b2b; --dim:rgba(255,255,255,.42); --line:rgba(255,255,255,.12);
+          --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace; --cell:230px; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:#000; color:#fff; font-family:var(--mono);
+              -webkit-font-smoothing:antialiased; }
+  body { padding:40px 24px 120px; }
+
+  h1 { font-size:13px; font-weight:500; text-transform:uppercase; color:var(--red);
+       letter-spacing:.35em; margin:0 0 10px; }
+  p.lede { color:var(--dim); font-size:12px; margin:0 0 28px; line-height:1.8; max-width:70ch; }
+  p.lede b { color:#fff; font-weight:500; }
+
+  .bar { display:flex; gap:18px; align-items:center; flex-wrap:wrap;
+         border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+         padding:12px 0; margin-bottom:34px; font-size:11px; color:var(--dim); }
+  .bar label { display:flex; gap:8px; align-items:center; white-space:nowrap; }
+  .bar input[type=range] { width:130px; accent-color:var(--red); }
+  .bar button { background:transparent; border:1px solid var(--line); color:var(--dim);
+                font:inherit; font-size:11px; padding:5px 12px; border-radius:6px; cursor:pointer; }
+  .bar button.on { background:var(--red); border-color:var(--red); color:#000; font-weight:600; }
+
+  h2 { font-size:11px; font-weight:500; color:#fff; text-transform:uppercase;
+       letter-spacing:.24em; margin:46px 0 4px; }
+  h2:first-of-type { margin-top:0; }
+  h2 + p { color:var(--dim); font-size:11.5px; line-height:1.7; margin:0 0 22px; max-width:68ch; }
+
+  .grid { display:grid; gap:26px 22px;
+          grid-template-columns:repeat(auto-fill,minmax(var(--cell),1fr)); }
+  figure { margin:0; }
+  .plate { display:block; width:100%; aspect-ratio:1; background:#fff; border-radius:8px;
+           padding:0; border:0; cursor:zoom-in; overflow:hidden; line-height:0; }
+  .plate.dark { background:#000; box-shadow:inset 0 0 0 1px var(--line); }
+  .plate img { display:block; width:100%; height:100%; }
+  figcaption { font-size:11px; line-height:1.65; margin-top:11px; color:var(--dim); }
+  figcaption b { display:block; color:#fff; font-weight:500; margin-bottom:3px; }
+  .meta { margin-top:6px; font-size:10px; color:rgba(255,255,255,.3); letter-spacing:.04em; }
+  .meta a { color:var(--red); text-decoration:none; }
+  .meta a:hover { text-decoration:underline; }
+
+  /* click to fill the screen -- the only way to actually scan one from a laptop */
+  dialog { border:0; padding:0; background:transparent; max-width:none; max-height:none; }
+  dialog::backdrop { background:rgba(0,0,0,.93); }
+  dialog .wrap { display:flex; flex-direction:column; align-items:center; gap:14px; }
+  dialog img { width:min(86vw,86vh); height:min(86vw,86vh); background:#fff; border-radius:10px; }
+  dialog img.dark { background:#000; }
+  dialog p { margin:0; font-size:11px; color:var(--dim); letter-spacing:.05em; }
+</style>
+
+<h1>QR dither · gallery</h1>
+<p class="lede">
+  Four-dimensional solids drawn <b>in the data</b> of a QR code — not overlaid on one.
+  Every code here is solved by pyqart's contrast-ordered elimination, so the halo
+  follows the drawing. Each file was rasterised by headless Chrome and decoded by
+  zxing before it was written: all of them land on
+  <b>https://hyperspace.cutaiar.io</b> plus an ignored <b>#fragment</b>.<br>
+  Click any code to fill the screen, then scan it with your phone — that is the only test that counts.
+</p>
+
+<div class="bar">
+  <label>size <input type="range" id="size" min="150" max="420" step="10" value="230"></label>
+  <span id="sizev">230px</span>
+  <span style="flex:1"></span>
+  <span id="count"></span>
+</div>
+
+<div id="out"></div>
+
+<dialog id="zoom">
+  <form method="dialog" class="wrap">
+    <img id="zimg" alt="">
+    <p id="zcap"></p>
+  </form>
+</dialog>
+
+<script>
+const SECTIONS = [
+  ['shapes', 'The shapes',
+   'One still per subject and pose. Only edges that quantise to 0, 45 or 90 degrees survive ' +
+   'sampling on a square grid, so these orientations are chosen, not arbitrary.'],
+  ['styles', 'The styles',
+   'One solved matrix — the 16-cell turned 45° — through every dot and eye treatment. ' +
+   'Styling never changes which modules are ink, so it cannot change what the code says. ' +
+   'It can change whether a camera manages to read it.'],
+  ['palettes', 'Colour and plate',
+   'The same trick in the page\'s own palette. Contrast in the luminance channel is what a ' +
+   'reader binarises on, which is why red survives and why the inverted one is a gamble on ' +
+   'the reader, not on the code.'],
+];
+
+const out = document.getElementById('out');
+const zoom = document.getElementById('zoom');
+const zimg = document.getElementById('zimg'), zcap = document.getElementById('zcap');
+
+fetch('gallery/manifest.json').then(r => r.json()).then(({ items }) => {
+  for (const [key, title, note] of SECTIONS) {
+    const mine = items.filter(i => i.section === key);
+    if (!mine.length) continue;
+    const h = document.createElement('h2'); h.textContent = title;
+    const p = document.createElement('p'); p.textContent = note;
+    const g = document.createElement('div'); g.className = 'grid';
+    g.innerHTML = mine.map(i => `
+      <figure>
+        <button class="plate${i.dark ? ' dark' : ''}" data-id="${i.id}">
+          <img src="${i.file}" alt="${i.title}" loading="lazy">
+        </button>
+        <figcaption><b>${i.title}</b>${i.note}
+          <div class="meta">${i.modules}×${i.modules} · ECC L · ${(i.bytes/1024).toFixed(1)} KB ·
+            <a href="${i.file}" download>svg</a></div>
+        </figcaption>
+      </figure>`).join('');
+    out.append(h, p, g);
+  }
+  const ok = items.filter(i => i.decodes).length;
+  document.getElementById('count').textContent =
+    `${items.length} stills · ${ok} decode-verified`;
+
+  out.addEventListener('click', e => {
+    const b = e.target.closest('.plate');
+    if (!b) return;
+    const it = items.find(i => i.id === b.dataset.id);
+    zimg.src = it.file;
+    zimg.classList.toggle('dark', !!it.dark);
+    zcap.textContent = `${it.title} — ${it.modules}×${it.modules}, ECC L`;
+    zoom.showModal();
+  });
+});
+
+const size = document.getElementById('size'), sizev = document.getElementById('sizev');
+size.oninput = () => {
+  document.documentElement.style.setProperty('--cell', size.value + 'px');
+  sizev.textContent = size.value + 'px';
+};
+
+</script>

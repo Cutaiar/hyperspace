@@ -29,6 +29,7 @@
     <button data-k="live" class="on">live solver</button>
     <button data-k="sprite">sprite</button>
     <button data-k="tiles">tiles</button>
+    <button data-k="gallery">gallery</button>
   </nav>
   <div class="blurb" id="blurb"></div>
 </header>
@@ -40,8 +41,10 @@ const TABS = {
             note:'Re-derives the code from scratch every frame, <b>0.2 ms</b> a solve. Fixed pivot order, so the leftover noise lands in a fixed pattern rather than following the drawing.' },
   sprite: { src:'sprite.html',
             note:'<b>216</b> precomputed frames, <b>106 KB</b>, every one decode-verified before you touch it. Two axes, no solver on the client.' },
-  tiles:  { src:'preview.html',
+  tiles:  { src:'stills.html',
             note:'The original stills, built by pyqart with <b>contrast-ordered</b> pivots — adaptive, so the halo follows the drawing. Prettier than either live order, and the reason is the 2 s factorisation.' },
+  gallery:{ src:'gallery.html',
+            note:'<b>29</b> stills across eight four-dimensional subjects, seven dot styles and six palettes — every one rasterised and decoded before it was written. Click one to fill the screen and scan it.' },
 };
 const main = document.getElementById('main'), blurb = document.getElementById('blurb');
 const frames = {};
