@@ -12876,7 +12876,14 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   NUDGE − / + are the likely first, and they are two rows that work today.
 - **A route and its poles' rows.** A route on `pair:UP/DOWN` does not take `hat:UP` and
   `hat:DOWN` off their own rows: a preset's route may not edit the meta controller's table,
-  so a press acts on both, and both are drawn. Learn pair's `step` row, being the same
-  layer, does replace them. **Recommended:** leave it until node mode and players decide how
-  a preset takes a control over.
+  so a press acts on both, both are drawn, and the learn's line says what else a press
+  moves (`_also_moved`). A `step` row and a route on one pair stand together for the same
+  reason: refusing would not hold, since the `step` row outlives the preset and the next
+  preset may name the pair. Learn pair's `step` row, being the same layer as the poles'
+  rows, does replace them. **Recommended:** leave it until node mode and players decide
+  how a preset takes a control over.
+- **A learn on one pole of a `step` pair** leaves the other pole moving as it did, as a
+  row of its own (`_split_pairs`), and says so.
+- **A control something else holds is no pole** (`models.control_free`), whether the
+  totem's `skip` or, with #365, a model's own layout.
 - **Judge it.** 576.

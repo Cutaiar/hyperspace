@@ -38,6 +38,7 @@ from imgui_bundle import imgui
 
 from . import gamepad, ui, ui_pad_lab, ui_pad_nvg
 from .pads import gesture, models
+from .routing_sources import pair_poles
 
 VIEWS = ("map", "faithful", "lanes", "cockpit")
 VIEW_LABELS = ("Map", "Faithful", "Lanes", "Cockpit")
@@ -287,13 +288,23 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
             for n, g in (("UP", "↑"), ("RIGHT", "→"), ("DOWN", "↓"), ("LEFT", "←")) if has(n)]
     if hats:
         out.append(("d-pad", hats))
+    model = r.model if models.is_model(r.model) else None
+
     def pole(name: str) -> int:
+        if not models.control_free(model, name):
+            return 0
         return (int(bool(r.hat & gamepad.HATS[name])) if name in gamepad.HATS
                 else int(name in r.down))
-    pairs = [(f"{gamepad.PAIR_SCHEME}:{a}/{b}", models.pair_label(r.model, a, b),
-              0.5 + 0.5 * (pole(a) - pole(b)), 0.5, True)
-             for a, b in models.natural_pairs(r.model if models.is_model(r.model) else None)]
-    if pairs:                         # plan 56: each one lane, one degree of freedom
+    # plan 56: each one lane, one degree of freedom: the model's, and any a row names
+    shown = list(models.natural_pairs(model))
+    for s in sorted(routed):
+        scheme, _, addr = s.partition(":")
+        a, _, b = addr.partition("/")
+        if scheme == gamepad.PAIR_SCHEME and pair_poles(addr) is not None and (a, b) not in shown:
+            shown.append((a, b))
+    pairs = [(f"{gamepad.PAIR_SCHEME}:{a}/{b}", models.pair_label(model, a, b),
+              0.5 + 0.5 * (pole(a) - pole(b)), 0.5, True) for a, b in shown]
+    if pairs:
         out.append(("pairs", pairs))
     names = list(gamepad.BUTTONS)
     for cap, extra in (("touch", ("TOUCH",)), ("back", ("LP", "RP")), ("fn", ("LFN", "RFN"))):
@@ -362,8 +373,9 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
 
 
 def _routed(says) -> frozenset:
-    """The stick-direction lanes a row maps."""
-    return frozenset(s for s in (f"axis:{n}" for n in gamepad.DIAL_LANES) if says(s)[1] is not None)
+    """The stick-direction lanes a row maps, and the pairs a row names."""
+    return frozenset(s for s in (f"axis:{n}" for n in gamepad.DIAL_LANES)
+                     if says(s)[1] is not None) | frozenset(getattr(says, "pairs", ()))
 
 
 def _line_h(px: float) -> float:

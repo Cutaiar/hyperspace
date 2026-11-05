@@ -118,7 +118,10 @@ def pair_poles(addr: str) -> tuple[Pole, Pole] | None:
     names two different controls a pad can have."""
     if addr in _POLES:
         return _POLES[addr]
-    from . import gamepad
+    try:
+        from . import gamepad
+    except ImportError:          # no window system: dormant (decision 11), asked again later
+        return None
     got = None
     pos, sep, neg = addr.partition(PAIR_SEP)
     if sep and pos != neg:
@@ -134,12 +137,22 @@ def pair_poles(addr: str) -> tuple[Pole, Pole] | None:
     return got
 
 
+def pole_free(pad, pole: Pole, skip=frozenset()) -> bool:
+    """`models.control_free` for one of `pad`'s poles: a pole held by anything
+    else neither moves a lane nor fires a row."""
+    from . import gamepad  # (a pole was read through it: it is there)
+    models = gamepad.models
+    m = getattr(pad, "model", None)
+    return models.control_free(m if models.is_model(m) else None,
+                               pole.source.partition(":")[2], skip)
+
+
 def pair_lanes(pad, names: dict[str, int], skip=frozenset()) -> list[float]:
     """Each pair's lane this frame (`names`: address → lane): 1 on its + pole,
-    0 on its − pole, its rest with neither or both. A pole in `skip` (a button
-    the totem holds, as `Router.pad`'s) reads as not pressed."""
+    0 on its − pole, its rest with neither or both. A pole that is not free
+    (`pole_free`) reads as not pressed."""
     def held(pole: Pole) -> int:
-        if pole.source in skip:
+        if not pole_free(pad, pole, skip):
             return 0
         return int(bool(pad.hat & pole.code) if pole.hat else pad.down(pole.code))
     out = [PAIR_REST] * len(names)
@@ -403,13 +416,20 @@ class Sources:
     def add_pairs(self, scheme: str, pairs) -> dict[str, int]:
         """Publish lanes for `pairs` ((address after ``pair:``, label)) under
         `scheme`, those it lacks, at its end: the names map is replaced, so
-        every address resolves again. Returns the map."""
+        every address resolves again. One it has takes the label given (a
+        row can have named a natural pair first, with no words for it).
+        Called once a frame: nothing changed, nothing is written. Returns the map."""
         m = self.names.get(scheme) or {}
+        labels = self.labels.get(scheme) or []
+        for a, lb in pairs:
+            if a in m and labels[m[a]] != lb:
+                labels = self.labels[scheme] = list(labels)
+                labels[m[a]] = lb
         new = [(a, lb) for a, lb in pairs if a not in m]
         if not new:
             return m
         m = dict(m)
-        labels = list(self.labels.get(scheme) or ())
+        labels = list(labels)
         rests = list(self.rests.get(scheme) or ())
         for addr, label in new:
             m[addr] = len(m)

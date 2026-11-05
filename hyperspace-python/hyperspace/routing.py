@@ -317,6 +317,7 @@ from .routing_sources import (  # noqa: F401
     pair_address,
     pair_lanes,
     pair_poles,
+    pole_free,
     qualified,
 )
 
@@ -3376,7 +3377,7 @@ class Router:
         if poles is None or p is None:
             return
         for pole, sign in zip(poles, (1, -1), strict=True):
-            if pole.source not in skip and (
+            if pole_free(pad, pole, skip) and (
                     pad.hat_pressed(pole.code) if pole.hat else pad.pressed(pole.code)):
                 p.step(sign * int(b.value))
 

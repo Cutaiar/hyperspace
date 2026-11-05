@@ -57,7 +57,8 @@ lane and one degree of freedom.
   (spring)** (a route). Press the + pole, then the − pole. A plain Learn pad is
   unchanged: one press, one row.
 - **GRAPH:** a pad's node has a **pairs** port group, bipolar. A cable from one
-  makes a route, as a stick's does.
+  makes a route, as a stick's does; onto a whole-number or enum param, a `step` row,
+  since a lane resting at 0.5 would park it mid-throw.
 - **Pad window:** a pair row lights both poles, with + and −; the hover names the
   control's partner; the lanes view has a **pairs** group.
 
@@ -69,8 +70,14 @@ lane and one degree of freedom.
   migrates by the same table and adds no spelling of its own.
 - **Not built: poles on keys or MIDI notes.** Their rows are dispatched by
   `Router.keys` and `midi.py`; the address has room for them.
-- **A route on a pair leaves its poles' own rows alone.** A preset's route may not
-  edit the meta controller's table, so both act, and both are drawn.
+- **A route on a pair leaves its poles' own rows alone.** The two layers do not edit
+  each other, so both act, both are drawn, and the learn's line says what else a press
+  moves. A Learn on one pole of a `step` pair leaves the other pole moving, as a row
+  of its own.
+- **A control something else holds is no pole.** `models.control_free(model, name,
+  skip)` is the one question: `natural_pairs`, `paired_with`, `degrees_of_freedom`,
+  `Router._pair_step`, `pair_lanes`, the lanes view and a pair's Learn all ask it. `skip`
+  (the totem's) is its first input and a model's own layout (#365) its second.
 
 ## An older build
 
