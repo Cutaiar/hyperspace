@@ -75,8 +75,10 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     impl = GlfwRenderer(win)
 
     bg = T.rgba(cv["bg"] if theme_name == "light" else theme["background"])
-    grad_tex = G.upload_1d(G.ramp_oklab(*G.CARD_GRADIENT, n=256))
+    LL = T.LIGHT_L if theme_name == "light" else T.DARK_L
+    grad_tex = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))
     faces = load_faces()
+    badges = T.badge_table(theme_name)
     ink = T.rgba("foreground", theme=theme)
 
     # Two frames: the first builds the font atlas and settles the backend.
@@ -89,7 +91,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
         dl = imgui.get_background_draw_list()
         for cell in SPEC["cells"]:
             if cell["kind"] == "badge":
-                D.badge(dl, cell, theme, T.BADGE)
+                D.badge(dl, cell, theme, badges)
             elif cell["kind"] == "card":
                 D.card(dl, cell, theme, grad_tex)
             elif cell["kind"] == "text":

@@ -30,8 +30,18 @@ type Cell = {
   weight?: number
 }
 
-export default function Gallery({ withText }: { withText: boolean }) {
+export default function Gallery({
+  withText,
+  dark,
+}: {
+  withText: boolean
+  dark: boolean
+}) {
   const cells = spec.cells as Cell[]
+  // Hyperspace is a black-ground app, so dark is the theme that matters; it
+  // should be nothing but a token swap on both sides.
+  if (dark) document.documentElement.classList.add("dark")
+  else document.documentElement.classList.remove("dark")
   return (
     <div
       id="shadkit-canvas"
@@ -39,7 +49,7 @@ export default function Gallery({ withText }: { withText: boolean }) {
         position: "relative",
         width: spec.canvas.w,
         height: spec.canvas.h,
-        background: spec.canvas.bg,
+        background: dark ? "#0a0a0a" : spec.canvas.bg,
         overflow: "hidden",
       }}
     >
@@ -69,7 +79,7 @@ export default function Gallery({ withText }: { withText: boolean }) {
                 fontSize: c.size,
                 fontWeight: c.weight,
                 lineHeight: `${c.h}px`,
-                color: "#0a0a0a",
+                color: dark ? "#fafafa" : "#0a0a0a",
                 whiteSpace: "pre",
                 fontVariantNumeric: "tabular-nums",
               }}

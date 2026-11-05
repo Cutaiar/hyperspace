@@ -10,6 +10,10 @@ const q = new URLSearchParams(location.search)
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {q.has("gallery") ? <Gallery withText={q.has("text")} /> : <App />}
+    {q.has("gallery") ? (
+      <Gallery withText={q.has("text")} dark={q.has("dark")} />
+    ) : (
+      <App />
+    )}
   </StrictMode>
 )

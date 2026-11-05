@@ -94,7 +94,9 @@ def edge_radius(rs, vs, filled: bool):
                 f = (t[i] - 0.5) / (t[i] - t[i + 1])
                 return float(rs[i] + f * (rs[i + 1] - rs[i]))
         return None
-    ink = np.clip(v_out - vs, 0, None)      # a ring darker than its surround
+    # the ring may be darker than its surround (light theme) or lighter
+    # (dark theme), so take the magnitude of the departure either way
+    ink = np.abs(vs - v_out)
     if ink.sum() < 1.0:
         return None
     return float((ink * rs).sum() / ink.sum())

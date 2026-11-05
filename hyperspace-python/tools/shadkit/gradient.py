@@ -73,5 +73,11 @@ def upload_1d(ramp: np.ndarray) -> int:
     return int(tex)
 
 
-# shadcn's card decoration: from-primary/5 (oklab L=0.205) up to to-card (white)
-CARD_GRADIENT = (((0.205, 0.0, 0.0), 0.05), ((1.0, 0.0, 0.0), 1.0))
+def card_gradient(lightness: dict):
+    """shadcn's `bg-gradient-to-t from-primary/5 to-card`, for one theme.
+
+    Both endpoints are theme tokens, so the ramp is not a constant: in dark,
+    `primary` is near-white and the wash runs light rather than dark.
+    """
+    return (((lightness["primary"], 0.0, 0.0), 0.05),
+            ((lightness["card"], 0.0, 0.0), 1.0))

@@ -149,7 +149,11 @@ def main() -> int:
         gb = mine.max(axis=2)
 
         def ink(img, c):
-            r = img[c["y"]:c["y"] + c["h"], c["x"]:c["x"] + c["w"]] < 200
+            box = img[c["y"]:c["y"] + c["h"], c["x"]:c["x"] + c["w"]]
+            # the page may be light-on-dark, so measure the departure from the
+            # cell's own background rather than assuming dark ink
+            bgv = np.median(np.concatenate([box[0], box[-1]]))
+            r = np.abs(box.astype(int) - bgv) > 55
             if not r.any():
                 return None
             ys, xs = np.where(r)

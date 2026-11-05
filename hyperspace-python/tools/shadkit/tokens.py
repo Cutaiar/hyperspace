@@ -42,7 +42,7 @@ DARK = {
     "secondary-foreground": "#fafafa",
     "muted": "#262626",
     "muted-foreground": "#a1a1a1",
-    "accent": "#404040",
+    "accent": "#262626",
     "border": "#ffffff1a",
     "input": "#ffffff26",
     "ring": "#737373",
@@ -50,6 +50,13 @@ DARK = {
     "sidebar": "#171717",
     "transparent": "#00000000",
 }
+
+# The oklab lightness behind the achromatic tokens, for anything that has to
+# interpolate in oklab (the card gradient). Keeping L rather than the hex
+# avoids a round trip back out of sRGB.
+LIGHT_L = {"primary": 0.205, "card": 1.0}
+DARK_L = {"primary": 0.922, "card": 0.205}
+
 
 # --radius: 0.625rem = 10px, and the scale shadcn derives from it.
 RADIUS = 10.0
@@ -93,3 +100,16 @@ BADGE = {
     "destructive": {"fill": ("destructive", 0.10), "border": ("transparent", 1.0)},
     "outline": {"fill": ("transparent", 1.0), "border": ("border", 1.0)},
 }
+
+# Not every variant is a pure token swap: the destructive badge carries
+# `bg-destructive/10 dark:bg-destructive/20`, so the alpha itself is themed.
+BADGE_DARK = {
+    "destructive": {"fill": ("destructive", 0.20), "border": ("transparent", 1.0)},
+}
+
+
+def badge_table(theme_name: str) -> dict:
+    t = dict(BADGE)
+    if theme_name == "dark":
+        t.update(BADGE_DARK)
+    return t
