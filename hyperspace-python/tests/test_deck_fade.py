@@ -485,7 +485,7 @@ def test_the_one_dream_worker_is_lent_for_the_fade_and_back():
     fade.lend()
     fade.lend()                                  # once a fade
     assert lent == ["reg b"] and b.dreamer.source is worker and a.dreamer.source is None
-    fade.mix.xfade = 0.01                        # on its way down: still lent
+    fade.mix.xfade = 0.02                        # on its way down: still lent
     fade.lend()
     assert lent == ["reg b"]
     fade.mix.xfade = 0.0

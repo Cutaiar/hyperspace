@@ -571,7 +571,7 @@ def test_a_fade_back_short_of_the_far_end_returns_the_worker_once():
 
 def test_a_deck_with_no_dream_coming_in_leaves_the_worker_until_the_end():
     f = _fading(dreams=(True, False))
-    for x in np.linspace(0.0, 0.99, 50):
+    for x in np.linspace(0.0, 0.98, 50):
         f.mix.xfade = float(x)
         if x >= 0.5 + MIDDLE:
             f.pointer.deck = f.b

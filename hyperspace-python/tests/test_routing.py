@@ -467,10 +467,12 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
         f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)",
         *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far],
         *[f"added {s} → {pid} (the APC40 map of plan 24)" for s, pid in c1],
-        f"added {send_a} → seq.page (the APC40 map of plan 31)"]
+        f"added {send_a} → seq.page (the APC40 map of plan 31)",
+        *[f"added {s} → {pid} (reserved for the meta controller)" for s, pid in (
+            (f"cc:0:{apc40.CC_MASTER}", "output.dim"), (f"cc:0:{apc40.CC_XFADE}", "output.xfade"))]]
     assert [b for b in again.to_json()["bindings"]
             if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *far, *(s for s, _ in c1),
-                                   send_a)] \
+                                   send_a, *apc40.META_CONTROLS)] \
         == t.to_json()["bindings"]
     assert Bindings.load(path, legacy_midi=legacy).to_json() == again.to_json()
     # without either file: the factory table, nothing written
@@ -1751,7 +1753,7 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     # toggles and SAVE (plan 24 C1), + SEND A's sequencer page (plan 31 §A)
     assert not any(b.source == "pad:MENU" for b in out)
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1))
+                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1 + 2))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]

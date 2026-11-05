@@ -527,6 +527,10 @@ class MetaController:
             project = getattr(getattr(getattr(deck, "presets", None), "lib", None), "project", None)
             if isinstance(project, DeckProject):     # (a stand-in deck has none)
                 project.barred = lambda deck=deck: self.bars_load(deck)
+        reg = getattr(first, "reg", None)
+        fader = reg.get("output.xfade") if reg is not None else None
+        if fader is not None:         # (a lambda: a bound method would outlast a hot reload)
+            fader.touched = lambda u: self.fader_touched(u)
         self.mix = mix if mix is not None else Mix()
         self.parked = [second]
         self.on_air_moved: list[Callable[[Deck], Any]] = []   # told after on air moves
@@ -566,9 +570,18 @@ class MetaController:
         if deck is self.on_air:
             return ("not loaded: that deck is on air. Move this controller's player off "
                     "air, or load it from the panel")
-        if 0.0 < self.mix.xfade < 1.0:
+        if between_ends(self.mix.xfade):
             return ("not loaded: the crossfader is between its ends, so both decks are on "
                     "air. Bring it to one end first")
+        return None
+
+    def bars_copy(self) -> str | None:
+        """Why "copy on air to off air" may not run now, or None. Between the fader's
+        ends, or in a timed fade, the deck off air is in the picture: a copy would jump
+        every output."""
+        if self.timed is not None or between_ends(self.mix.xfade):
+            return ("not copied: the deck off air is in the picture while the crossfader is "
+                    "between its ends. Bring it to one end first")
         return None
 
     @property
@@ -697,6 +710,19 @@ class MetaController:
             to = 1.0 if self.on_air is self.decks[0] else 0.0
         self.timed = TimedFade(self.mix.xfade, float(to), self.mix.seconds)
 
+    def fader_touched(self, u: float) -> None:
+        """The desk's fader at `u`, caught or not. A timed fade leaves it behind, so
+        soft pickup would ignore a hand until it crossed the moving value: moved
+        `HAND_MOVE` from where its first message said, the fade ends where it is, and
+        pickup then catches the fader there. A pot at rest jitters less than that."""
+        run = self.timed
+        if run is None:
+            return
+        if run.hand is None:
+            run.hand = u
+        elif abs(u - run.hand) >= HAND_MOVE:
+            self.timed = None
+
     def tick(self, now: float, dt: float) -> None:
         """Once a frame: a timed fade's step, through `output.xfade`'s `Param`, then
         on air by the fader. `dt` dates a fade asked for since the last frame."""
@@ -780,6 +806,7 @@ class TimedFade:
     seconds: float
     began: float | None = None
     wrote: float = 0.0
+    hand: float | None = None         # the desk's fader as its first message said
 
     def __post_init__(self):
         self.wrote = self.start
@@ -789,6 +816,17 @@ class TimedFade:
 # of a 7-bit desk fader (1/127), more than one at rest jitters by, and small
 # enough that "closer to" is what it reads as
 MIDDLE = 0.03
+# How near an end counts as that end: 2 steps of a 7-bit desk fader, so a worn fader
+# resting at CC 1 is at its end, mixes nothing and bars nothing
+ENDS = 2 / 127
+# How far a desk fader must move to take a timed fade from itself: above its jitter
+HAND_MOVE = 2.5 / 127     # (so 3 steps, whatever the floats)
+
+
+def between_ends(x: float) -> bool:
+    """Is the crossfader away from both ends, so both decks are in the picture?"""
+    return ENDS < x < 1.0 - ENDS
+
 
 XFADE_TIP = ("The crossfader, as a DJ mixer's: 0 deck 1 alone, 1 deck 2 alone, and what is "
              "on air is the deck it is closer to. The desk's crossfader. Fading into an "
@@ -893,8 +931,11 @@ class Fade:
     @property
     def k(self) -> float:
         """The deck off air's share of the picture: 0 at the on-air deck's end of
-        the fader, so that deck draws alone, by the bytes it draws alone."""
+        the fader, so that deck draws alone, by the bytes it draws alone. Within
+        `ENDS` of an end the fader is at that end."""
         x = self.mix.xfade
+        if not between_ends(x):
+            x = 0.0 if x < 0.5 else 1.0
         return x if self.on_air is self.decks[0] else 1.0 - x
 
     def begin_frame(self) -> None:

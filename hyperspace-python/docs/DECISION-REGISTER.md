@@ -13041,10 +13041,16 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   the dim, and `master.gain` moves to the panel: it is pre-show tuning. It was drawn in the AUDIO section already.
 - **Files.** `APC_REMAP`, as B2's: the exact old rows move in one pass (`overlay.bg` too, straight), with a backup. A row
   the owner changed stays. No schema move.
-- **Reserved.** `apc40.META_CONTROLS`, read by `is_invariant` per the table's profile, on every role of it, so a second APC
-  gets the same and a deleted row frees nothing. Learn, the desk's click and a preset's `desk` all ask there. A meta row
-  of the owner's on such a control stays, as any session row does. No new Learn road.
-- **Limit.** Pickup: a timed fade leaves the physical fader behind; soft pickup catches it where the value is.
+- **Reserved.** `apc40.META_CONTROLS`, read by `is_invariant` per the table's profile, on the first MIDI role's desk as
+  SHIFT is, so another desk's CC 14 and 15 stay its own, and a deleted row frees nothing. Learn, the desk's click and a
+  preset's `desk` all ask there. A meta row of the owner's on such a control stays, as any session row does. No new Learn road.
+- **A deleted row** comes back at the next load, noted and backed up (`remap_factory`): nothing else could restore it.
+  A second APC's faders have no rows, and are not reserved: a table does not know a second role's profile.
+- **Another profile.** `APC_REMAP` applies only to a table of the APC's profile.
+- **The ends.** Within `deck.ENDS`, 2 of 127 steps, the fader is at that end: a worn fader at CC 1 mixes nothing and bars nothing.
+- **A hand on a timed fade.** A timed fade leaves the physical fader behind, and soft pickup ignores it until it crosses the
+  value. So every message reaches `Param.touched`, caught or not: moved `deck.HAND_MOVE`, 3 steps, from its first message,
+  the fade ends there, then pickup catches it. Less than that is a pot's jitter.
 - **Judge it.** 530.
 
 ### 699. What the panel says
@@ -13053,6 +13059,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Built.** `ui_graph._deck_row`, `MetaController.words`, `app.control_title`, `_monitor`. On the deck off air the
   backdrop is forced on, since nothing else draws that deck, and the output's thumbnail is that deck's own.
 - **The title.** The OS window's. imgui's "CONTROLS" stays: `replay` and tests find the page's list by that name.
+- **Copy** is refused in words between the fader's ends and in a timed fade, when the deck off air is in the picture
+  (`bars_copy`). A look that will not land is said; the refused load's step closes empty.
+- **The frame and inset** are on the page's draw list, clipped, so popups and tooltips lie over them, and `replay` cuts them
+  from `panel:graph`.
 - **Not here.** The preset strip's name and the desk diagram's line are D5e.
 - **Judge it.** 531.
 

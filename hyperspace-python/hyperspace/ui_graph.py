@@ -778,6 +778,8 @@ def page(panel, dt: float) -> None:
         _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
     # off air: the red frame and what is on air's inset, in the canvas's corner, left
     # of the pane beside it, above the band under it (a narrow page)
+    page_list = imgui.get_window_draw_list()
+    i0 = page_list.idx_buffer.size()         # (`replay` cuts these out, with the pane's ground)
     _monitor(panel, (origin.x, origin.y), (canvas.x - size[0], canvas.y) if wide
              else (canvas.x, canvas.y - size[1]))
     # the pane, always on (plan 49): its bottom is the canvas's, so the page ends where it did
@@ -787,8 +789,6 @@ def page(panel, dt: float) -> None:
     # scrollbar — on the parent's list inside `begin_child` (one draw
     # call fewer); on the page's list they would be in the canvas's
     # picture, so the indices they take are noted for `replay` to cut out
-    page_list = imgui.get_window_draw_list()
-    i0 = page_list.idx_buffer.size()
     opened = imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders)
     omit = (i0, page_list.idx_buffer.size())
     st["pane_window"] = imgui.internal.get_current_window().name   # (the tests find it by it)
@@ -1308,10 +1308,21 @@ def _deck_row(panel) -> None:
 
 
 def copy_on_air(panel) -> None:
-    """The head's second verb: said in the footer, with what the deck lacked."""
+    """The head's second verb: said in the footer, with what the deck lacked. Refused
+    while the deck off air is in the picture (`bars_copy`). A look that will not land
+    is said, and the panel goes on: a refused load leaves that deck as it was, and its
+    step, with nothing to put back, closes empty."""
     meta, say = panel.meta, panel.library.say
+    why = meta.bars_copy()
+    if why is not None:
+        say(warning=why)
+        return
     src, dst = meta.on_air, meta.off_air
-    missing = meta.copy_on_air()
+    try:
+        missing = meta.copy_on_air()
+    except Exception as e:  # noqa: BLE001 — a panel click must not take the frame down
+        say(warning=f"not copied: {type(e).__name__}: {e}"[:160])
+        return
     words = (f"copied {src.presets.current or 'the look'} from {meta.words(src)} "
              f"to {meta.words(dst)}")
     if missing:
@@ -1432,21 +1443,33 @@ def monitor_rect(origin: tuple[float, float], avail: tuple[float, float],
 def _monitor(panel, origin, avail) -> None:
     """While the panel is on the deck off air (plan 44 D5d, DQ7): a red frame round
     the canvas, and what is on air in its corner — over the nodes, framed red — and
-    asked for again next frame."""
+    asked for again next frame. On the page's list, clipped to the canvas, so a popup
+    or a tooltip lies over them; `replay` cuts them out (`panel:graph` is no place
+    for either)."""
     mon = getattr(panel, "monitor", None)
     if not panel_off_air(panel):
         return
-    imgui.get_foreground_draw_list().add_rect(
-        imgui.ImVec2(*origin), imgui.ImVec2(origin[0] + avail[0], origin[1] + avail[1]),
-        imgui.get_color_u32(ui.RED), 0.0, OFF_AIR_FRAME)
-    if mon is None:
-        return
+    dl = imgui.get_window_draw_list()
+    edge = OFF_AIR_FRAME / 2
+    dl.push_clip_rect(imgui.ImVec2(*origin),
+                      imgui.ImVec2(origin[0] + avail[0], origin[1] + avail[1]), True)
+    try:
+        dl.add_rect(imgui.ImVec2(origin[0] + edge, origin[1] + edge),
+                    imgui.ImVec2(origin[0] + avail[0] - edge, origin[1] + avail[1] - edge),
+                    imgui.get_color_u32(ui.RED), 0.0, OFF_AIR_FRAME)
+        if mon is not None:
+            _inset(mon, dl, origin, avail)
+    finally:
+        dl.pop_clip_rect()
+
+
+def _inset(mon, dl, origin, avail) -> None:
+    """What is on air, in the canvas's corner."""
     mon.want()
     tex = mon.tex
     if tex is None or getattr(tex, "glo", 0) == 0:
         return
     a, b = monitor_rect(origin, avail, tuple(tex.size))
-    dl = imgui.get_foreground_draw_list()
     dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                  imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
     dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 2.0)

@@ -7991,7 +7991,8 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 2. Crossfader end to end. *Pass:* deck 1 to deck 2, a mix between. MASTER down. *Pass:* black, whichever deck.
 3. Audio: AUDIO section's master drive. *Pass:* it moves the analyzer; no desk control does.
 4. Arm Learn on a param and move the crossfader, then MASTER. *Pass:* "invariant", not learned, each still doing its job.
-5. Move the fader off the value during a timed fade. *Pass:* nothing until your hand reaches the value.
+5. Move the fader during a 30-second timed fade. *Pass:* the fade stops where it is, at once, from the other end of the
+   throw too; the fader then does nothing until it reaches the value. Leave it alone during another. *Pass:* it runs out.
 6. Move a pad's player off air (the player screen). *Pass:* both faders still work.
 *Fail:* a fader moves `master.gain`, or a preset can claim either.
 **531. Which deck am I on.** (a laptop)
@@ -8004,7 +8005,7 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 1. APC on air, press a filled bank pad, QUANT, OVERDUB. *Pass:* nothing changes; the footer says why.
 2. Press F1. *Pass:* the same. Say if you want F-keys kept (row 700).
 3. Move the APC's player off air. Press a pad. *Pass:* deck 2 loads, its light on; the room does not move.
-4. Fader at the middle, press again. *Pass:* refused.
+4. Fader at the middle, press again, and press **copy**. *Pass:* both refused in words. Fader a hair off its end. *Pass:* neither is.
 5. Hold an empty pad on air. *Pass:* it saves; the picture does not move.
 *Judge:* is refusing on air right, or should a press on air load the deck off air (row 700)?
 **533. Fading in practice.** (the rig)

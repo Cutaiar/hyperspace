@@ -1008,6 +1008,8 @@ class MidiIO:
                     p.fire()
                 b.last_hw = u
                 return
+            if p.touched is not None:
+                p.touched(u)
             if self._fine_on() and b.feedback == "ring" and p.kind is Kind.CONTINUOUS \
                     and not p.integer:
                 self._fine_move(b, p, u)

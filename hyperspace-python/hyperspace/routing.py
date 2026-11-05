@@ -1357,7 +1357,8 @@ def backup(path: Path, schema: str) -> Path | None:
     return bak
 
 
-def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
+def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
+                  ) -> tuple[list[Binding], list[str]]:
     """The factory rows plan 09 WP4 and plan 15 WP3 moved, on a table of
     any schema: the old APC40 factory rows swapped for the new (APC_REMAP —
     the clock's three buttons, the crossfader's master dim), the METRONOME /
@@ -1397,7 +1398,7 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                          "the crossfade and \"copy on air to off air\" replace them; the "
                          "row is free)")
             continue
-        hit = APC_REMAP.get(key)
+        hit = APC_REMAP.get(key) if profile == "apc40" else None    # (the APC40's numbers)
         if hit is not None:
             target, op, value = hit
             plan = APC_REMAP_PLAN.get(b.source, "plan 09")
@@ -1437,6 +1438,13 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         out.append(new)
         notes.append(f"added {source} → {target} (the APC40 map of "
                      f"{APC_REMAP_PLAN.get(source, 'plan 09')})")
+    # a reserved control with no row of the meta controller's (deleted: Learn may not
+    # put one back, plan 44 D5d) gets the factory's again; a row the owner changed stays
+    for f in factory_desk(profile):
+        if (f.source in META_CONTROLS.get(profile, ())
+                and not any(b.layer is None and b.overlaps(f) for b in midi)):
+            out.append(f)
+            notes.append(f"added {f.source} → {f.target} (reserved for the meta controller)")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
     chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}
@@ -2351,7 +2359,7 @@ class Bindings:
                 t = cls.factory(profile, path)
                 t.error = f"bindings: {e}"
                 return t
-            t.bindings, remapped = remap_factory(t.bindings)
+            t.bindings, remapped = remap_factory(t.bindings, t.profile)
             t.notes += remapped
             carried = Carried(
                 routes=[b.to_json() for b in [*t.routes(), *(b for b, _ in t.dropped)]],
@@ -2581,13 +2589,13 @@ class Bindings:
         """Is `b`'s control invariant — SHIFT (the first role's latch), or
         the control of an enabled layer-None row on the same device
         (`rows`, when the caller has them), or one of the profile's
-        controls reserved for the meta controller (`META_CONTROLS`, whatever
-        the table holds on it: plan 44 D5d)? A layered row on such a control
+        controls reserved for the meta controller (`META_CONTROLS`, on the first
+        role's desk, as SHIFT, whatever the table holds on it: plan 44 D5d)? A layered row on such a control
         never acts and never lights (D6)."""
         if not b.is_midi:
             return False
-        if any(Binding(b.bare, "").overlaps(Binding(s, ""))
-               for s in META_CONTROLS.get(self.profile, ())):
+        if self.is_primary(b.device) and any(Binding(b.bare, "").overlaps(Binding(s, ""))
+                                             for s in META_CONTROLS.get(self.profile, ())):
             return True
         if self.is_primary(b.device) and Binding(b.bare, "").overlaps(_SHIFT):
             return True

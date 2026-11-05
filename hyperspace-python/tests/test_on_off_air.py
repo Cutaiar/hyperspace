@@ -34,6 +34,7 @@ from hyperspace import (
     hotreload,
     lfo,
     preset,
+    routing,
     ui_graph,
     ui_media,
     undo,
@@ -539,7 +540,7 @@ def test_the_on_air_inset_and_red_frame_draw_only_off_air(shell_rig):  # noqa: F
     imgui.new_frame()
     imgui.begin("probe")
     try:
-        dl = imgui.get_foreground_draw_list()
+        dl = imgui.get_window_draw_list()
         before = dl.vtx_buffer.size()
         ui_graph._monitor(NS(meta=NS(panel=one, on_air=one), monitor=mon), (0.0, 0.0), (800.0, 600.0))
         assert not asked and dl.vtx_buffer.size() == before
@@ -548,6 +549,19 @@ def test_the_on_air_inset_and_red_frame_draw_only_off_air(shell_rig):  # noqa: F
     finally:
         imgui.end()
         imgui.end_frame()
+
+
+def test_the_frame_is_under_a_popup_and_out_of_panel_graph(shell_rig, monkeypatch):  # noqa: F811
+    """On the page's list, so a popup lies over it, and among what `replay` cuts out."""
+    r = shell_rig
+    frame(r.panel, "graph")
+    frame(r.panel, "graph")
+    on = r.panel.canvas_px[4]
+    monkeypatch.setattr(ui_graph, "panel_off_air", lambda panel: True)
+    frame(r.panel, "graph")
+    frame(r.panel, "graph")
+    off = r.panel.canvas_px[4]
+    assert off[1] - off[0] > on[1] - on[0]         # the frame's indices, cut out too
 
 
 def _on_party(rig):
@@ -607,11 +621,126 @@ def test_no_preset_may_learn_or_bind_the_reserved_controls(rig, control):
     assert not any(b.source == control for b in table.desk())
 
 
-def test_a_second_apc_gets_the_same_and_another_profile_does_not():
+def test_only_the_first_desk_of_the_apc_profile_is_reserved():
+    """Another desk's CC 14 and 15 are its own, as SHIFT's note is."""
     t = Bindings.factory("apc40")
-    assert t.is_invariant(Binding(f"cc@apc2:0:{apc40.CC_XFADE}", "x", "abs", layer="preset"))
+    t.midi_roles = ("apc40", "launch")
+    for source in (f"cc@launch:0:{apc40.CC_XFADE}", f"cc@launch:0:{apc40.CC_MASTER}"):
+        assert not t.is_invariant(Binding(source, "x", "abs", layer="preset")), source
+        assert blocked(t, source) is None
+    assert t.is_invariant(Binding(f"cc@apc40:0:{apc40.CC_XFADE}", "x", "abs", layer="preset"))
     other = Bindings([], profile="launchpad")
     assert not other.is_invariant(Binding(f"cc:0:{apc40.CC_XFADE}", "x", "abs", layer="preset"))
+
+
+def test_a_generic_desks_rows_on_those_numbers_are_not_moved():
+    rows = [Binding(f"cc:0:{apc40.CC_MASTER}", "master.gain", "abs"),
+            Binding(f"cc:0:{apc40.CC_XFADE}", "output.dim", "abs")]
+    got, _notes = routing.remap_factory(rows, "launchpad")
+    assert [(b.source, b.target) for b in got[:2]] == [(b.source, b.target) for b in rows]
+
+
+def test_a_deleted_reserved_row_comes_back_at_the_next_load_and_a_changed_one_stays():
+    table = Bindings.factory("apc40")
+    gone = f"cc:0:{apc40.CC_XFADE}"
+    rows = [b for b in table.bindings if b.is_midi and b.source != gone]
+    got, notes = routing.remap_factory(rows)
+    (row,) = [b for b in got if b.source == gone]
+    assert row.target == "output.xfade" and row.ring == 0 and row.pickup
+    assert any(gone in n and "reserved" in n for n in notes)
+    assert routing.remap_factory(got)[1] == []
+    mine = [Binding(gone, "view.bright", "abs"), *rows]
+    assert [b.target for b in routing.remap_factory(mine)[0] if b.source == gone] == ["view.bright"]
+
+
+@pytest.mark.parametrize(("x", "k"), [(0.0, 0.0), (1 / 127, 0.0), (0.002, 0.0), (2 / 127, 0.0),
+                                      (0.5, 0.5), (1.0, 1.0), (126 / 127, 1.0)])
+def test_a_fader_a_step_off_its_end_is_at_its_end(rig, x, k):
+    """A worn fader at CC 1: it mixes nothing in, and bars nothing."""
+    from hyperspace.deck import between_ends
+
+    fade = Fade(rig.one, rig.two, rig.mix, pointer=rig.meta.on_air_pointer)
+    rig.mix.xfade = x
+    assert fade.k == pytest.approx(k)
+    assert between_ends(x) == (k == 0.5)
+    if k == 0.0:
+        assert rig.meta.bars_load(rig.two) is None and rig.meta.bars_copy() is None
+
+
+def _timed_rig(tmp_path):
+    r = boot(tmp_path / "home")
+    two = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
+    meta = MetaController(r.deck, two, mix=r.mix)
+    r.midi.point(meta.pointer("apc40"), meta.panel_pointer)
+    r.reg["output.xfade_s"].set(30.0)
+    meta.crossfade()
+    meta.tick(0.0, DT)
+    meta.tick(10.0, DT)
+    assert r.mix.xfade == pytest.approx(1 / 3, abs=0.01)
+    r.midi.poll()                                      # the moved value uncatches the fader
+    return r, meta
+
+
+def test_a_hand_on_the_desks_fader_ends_a_timed_fade_far_from_its_value(tmp_path):
+    """Soft pickup alone would ignore it until it crossed the moving value."""
+    r, meta = _timed_rig(tmp_path)
+    xf = r.reg["output.xfade"]
+    at = xf.value
+    (row,) = [b for b in r.midi.table.bindings if b.target == "output.xfade"]
+    assert not row.caught
+    push(r, cc(apc40.CC_XFADE, 110), cc(apc40.CC_XFADE, 113))    # far above the value
+    assert meta.timed is None and xf.value == pytest.approx(at)
+    meta.tick(20.0, DT)
+    assert xf.value == pytest.approx(at)                         # ended where it was
+    push(r, cc(apc40.CC_XFADE, 30))                              # across it: caught
+    assert row.caught
+    undo.install(None)
+
+
+def test_a_pot_jittering_at_rest_leaves_a_timed_fade_running(tmp_path):
+    r, meta = _timed_rig(tmp_path)
+    for v in (0, 1, 0, 2, 1, 2, 0):
+        push(r, cc(apc40.CC_XFADE, v + 110))
+    assert meta.timed is not None
+    meta.tick(40.0, DT)
+    assert r.mix.xfade == 1.0
+    undo.install(None)
+
+
+@pytest.mark.parametrize("how", ["between the ends", "in a timed fade"])
+def test_copy_is_refused_while_the_deck_off_air_is_in_the_picture(rig, how):
+    said = []
+    panel = NS(meta=rig.meta, library=NS(say=lambda status=None, *, warning=None: said.append(warning)))
+    if how == "between the ends":
+        rig.mix.xfade = 0.4
+    else:
+        rig.meta.crossfade()
+    theirs = _state(rig.two)
+    ui_graph.copy_on_air(panel)
+    assert _state(rig.two) == theirs and "not copied" in said[0]
+
+
+def test_a_copy_that_will_not_land_is_said_and_leaves_no_step(rig, monkeypatch):
+    said = []
+    panel = NS(meta=rig.meta, library=NS(say=lambda status=None, *, warning=None: said.append(warning)))
+    n = len(rig.two.undo.stack)
+
+    def refuse(doc):
+        raise ValueError("a value would not land")
+
+    monkeypatch.setattr(rig.two.presets, "load_doc", refuse)
+    ui_graph.copy_on_air(panel)                       # no raise out of the panel's draw
+    assert "not copied" in said[0] and "would not land" in said[0]
+    rig.two.undo.tick(10.0)
+    rig.two.undo.tick(20.0)
+    assert len(rig.two.undo.stack) == n
+
+
+def test_the_sheet_says_what_the_keys_do():
+    from hyperspace.ui import CHEATSHEET
+
+    words = dict(row for row in CHEATSHEET if isinstance(row, tuple) and len(row) == 2)
+    assert "refused on air" in words["F1–F8"] and "refused on air" in words["Home"]
 
 
 def test_the_crossfader_keeps_its_catch_and_a_timed_fade_is_not_undoable(rig):

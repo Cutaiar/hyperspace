@@ -273,6 +273,9 @@ class Param:
     # its slot, filled or empty) — True when it saved, so the pad blinks;
     # None: under SAVE the press is an ordinary press
     save_into: Callable[[int], bool] | None = field(repr=False, default=None)
+    # told a desk fader's position on every message, caught or not (soft pickup
+    # drops an uncaught one before anything else hears it); None: nobody asks
+    touched: Callable[[float], None] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a preset or a project's session (part_of)
     modulatable: bool = True     # a lane may drive it
