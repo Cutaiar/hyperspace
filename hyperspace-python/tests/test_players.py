@@ -16,7 +16,7 @@ from test_meta_controller import _pointed
 from test_totem import FakePad
 from test_undo import boot
 
-from hyperspace import app, devices, gamepad, graphview, poi, routing, totem, undo
+from hyperspace import app, devices, gamepad, graphview, osc, poi, routing, totem, undo
 from hyperspace.deck import KEYS, MOUSE, Deck, MetaController
 from hyperspace.hotreload import MODULES
 from hyperspace.learn import SAVE_PARAM
@@ -477,6 +477,24 @@ def test_a_duty_change_mid_press_lets_go_on_the_deck_left(rig):
     rig.pad2.press("VIEW")                      # a new press acts there
     rig.frame()
     assert two.reg["view.lines"].value is True and one.reg["view.lines"].value is False
+
+
+def test_an_osc_press_ends_on_the_deck_it_was_made_on(rig):
+    """The press road D5a left: it knew its registry, and only asked when lost."""
+    one, two = rig.one, rig.two
+    source = "phone:hit"
+    one.table.row_schemes = (*one.table.row_schemes, "phone")   # what its device tells the table
+    for d in (one, two):
+        d.table.add(Binding(source, "view.lines", "momentary", layer="preset"))
+    d = osc.OscDevice("phone", {"hits": ["hit"]}, rig.devs.ctx, io=SimpleNamespace())
+    d.heard, d.now = 0.0, 0.0                   # connected, for all it is asked here
+    d.hits = [("hit", 1.0)]
+    d.act(one.router)
+    assert one.reg["view.lines"].value is True
+    d.hits = []
+    d.act(two.router)
+    assert one.reg["view.lines"].value is False and not d._pressed
+    assert not one.reg["view.lines"].__dict__["_pressed_by"]
 
 
 def test_a_chase_follows_the_player_s_deck(rig):
