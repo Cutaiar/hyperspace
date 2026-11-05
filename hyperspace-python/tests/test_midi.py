@@ -10,10 +10,10 @@ from hyperspace import apc40, hands, lfo, midi, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
+from hyperspace.deck import Mix, register_xfade
 from hyperspace.library import Library
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
-from hyperspace.deck import Mix, register_xfade
 from hyperspace.params import Kind, build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Bindings, Router, is_session_row

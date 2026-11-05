@@ -13031,7 +13031,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `drop_after_a_landing...`, `canvas_reads_the_previews_graph`, `program_takes_the_held_wiring`,
   `modulated_param_rides`, `unmoved_param_costs_nothing`, `take_lets_go`, `drop_without_undo`,
   `preview_renderer_reads`, `preview_that_raises`, `held_groups_are_the_renderers`, two of the thumbnails file.
-  `test_base_chase` loses four, `test_hands_orbit` two becomes one, `test_deck_crossfade` loses the `_HeldRig` guide.
+  `test_base_chase` loses four, `test_hands_orbit` two becomes one, `test_deck_crossfade` loses the `_HeldRig` guide,
+  `test_patches_frame_kinds` and `test_patches_replace_dream` lose three on the hold's words.
 - **Judge it.** 529.
 
 ### 698. The crossfader, MASTER and the reserved controls

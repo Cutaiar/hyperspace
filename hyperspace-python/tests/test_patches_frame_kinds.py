@@ -194,18 +194,6 @@ def test_the_host_having_only_a_second_dream_leaves_the_first_free():
     assert spawn(cut(), Host(names=patches.spec_names(spec))).taken == ()
 
 
-def test_a_held_programs_dream_is_taken_too_and_said_as_the_holds():
-    """With an output hold on and no dream in the preset there is nothing to
-    delete: the words say to drop the hold."""
-    spec, table = parts(preset("party-noita"))[:2]
-    landing = spawn(cut("dreamy"), Host.of(spec, table, held=("dream",)))
-    assert landing.taken == landing.held_taken == ("dream",)
-    assert landing.refusal == patches.HELD_TAKEN_WORDS.format(name="dreamy", nodes="dream")
-    spec, table = parts(wake_doc())[:2]                    # in the preset as well: not the hold's
-    landing = spawn(cut("dreamy"), Host.of(spec, table, held=("dream",)))
-    assert landing.held_taken == ()
-
-
 def test_a_second_dream_stays_out_and_never_becomes_the_live_one():
     """`dream.2` may be declared but no wire may touch it: a save refuses it
     in words; a file holding it (never saved: `check` refuses it) is not
