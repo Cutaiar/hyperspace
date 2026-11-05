@@ -1717,8 +1717,9 @@ class Marks(_Landings):
         loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`),
         the media channels' bins (plan 32, `Presets.media`), the GRAPH
         page's groups (plan 40 T2, `Presets.groups`) and the floor under
-        their numbers (row 563, `Presets.group_high`), and the preset's bus
-        cuts (plan 44 D3, `Presets.bus`)."""
+        their numbers (row 563, `Presets.group_high`), the preset's bus
+        cuts (plan 44 D3, `Presets.bus`) and its node mode (plan 57,
+        `Presets.node_mode`)."""
         pre = self.lib.presets
         gs = getattr(pre, "graph", None)
         return (self._show(), self.lands(),
@@ -1729,7 +1730,8 @@ class Marks(_Landings):
                 self._bins(pre),
                 copy.deepcopy(getattr(pre, "groups", None) or []),
                 getattr(pre, "group_high", 0),
-                getattr(pre, "bus", None))
+                getattr(pre, "bus", None),
+                getattr(pre, "node_mode", None))
 
     @staticmethod
     def _bins(pre):
@@ -1761,7 +1763,9 @@ class Marks(_Landings):
         page positions go back too (the undo of a tidy; they are not in its file
         until it is saved). The rest of the show is `MetaMarks`'."""
         lib, pr = self.lib, self.lib.project
-        (show, landed, note, _graph, layout, bins, groups, group_high, bus) = mark
+        (show, landed, note, _graph, layout, bins, groups, group_high, bus) = mark[:9]
+        # (plan 57: a step from before a hot reload has no node mode)
+        mode = mark[9] if len(mark) > 9 else None
         if show[0] == pr.ident():
             pr.layout = copy.deepcopy(show[1])
         self._reland(landed)
@@ -1776,6 +1780,8 @@ class Marks(_Landings):
             pre.group_high = max(pre.group_high, group_high)   # …and their floor (row 563)
             if bus is not None:                  # the bus cuts (plan 44 D3)
                 pre.bus = bus
+            if mode is not None:                 # the node mode (plan 57)
+                pre.node_mode = mode
         pr.follow()
 
 

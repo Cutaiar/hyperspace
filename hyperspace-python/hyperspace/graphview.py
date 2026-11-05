@@ -307,6 +307,18 @@ class VCable:
     inside: str = ""
 
 
+def node_mode_cable(player: int, src: str, dst: str, control: str, param: str,
+                    *, dormant: bool = False, live: float | None = None) -> VCable:
+    """One node mode cable (plan 57: a kind of its own, in `ui_graph.KIND_COLOURS`,
+    labelled): a row the preset's node mode derives (`nodemode.fill`), from pin
+    `src` to pin `dst`. `dormant`: the player is on the other `Deck`, so the cable
+    is drawn and does nothing. N1b puts these in the view."""
+    said = f"node mode: player {player}, {control} → {param}"
+    return VCable(f"node:{src}>{dst}", src, dst, VALUE, live=live, kind=NODE_MODE,
+                  dormant=dormant, off=dormant,
+                  label=f"{said}, on the other Deck" if dormant else said)
+
+
 @dataclass
 class View:
     nodes: list[VNode] = field(default_factory=list)
@@ -2306,6 +2318,7 @@ def idle_id(area: str) -> str:
 
 SHADER_ROW = 4         # the effects' chain wraps into rows of this many columns (Z rows)
 THROUGH = "through"    # a display-only wire over a run of hidden (off) effects
+NODE_MODE = "node_mode"    # a controller's control on a node's param (plan 57, `nodemode`)
 
 
 def throughs(view: View, shown: Callable[[VNode], bool]) -> list[VCable]:

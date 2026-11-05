@@ -238,6 +238,9 @@ COLOURS = {
     graphview.GEOMETRY: imgui.ImVec4(0.38, 0.72, 1.0, 1.0),
     graphview.MASK: imgui.ImVec4(0.72, 0.52, 1.0, 1.0),
 }
+# a cable of a kind with a colour of its own, whatever it carries (plan 57: the
+# owner's "a special type of cable", not white, as the value cables nearly are)
+KIND_COLOURS = {graphview.NODE_MODE: imgui.ImVec4(0.30, 0.90, 0.55, 1.0)}
 DORMANT_ALPHA = 0.22
 THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
 WIRE = 3.0               # a render cable, a trigger
@@ -3038,7 +3041,7 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
     node's stub for a render cable: plan 28 N7)."""
     k = st.get("tints", {}).get(c.id)          # plan 37 C2: tinted while the switch is lit
     if k is None:
-        k = COLOURS.get(c.type, ui.DIM)
+        k = KIND_COLOURS.get(c.kind) or COLOURS.get(c.type, ui.DIM)
     col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if c.dormant else
                        THROUGH_ALPHA if c.kind == graphview.THROUGH else k.w)
     if c.type == graphview.VALUE:
@@ -3066,10 +3069,18 @@ def bundle_thickness(count: int) -> float:
     return min(BUNDLE_MAX, WIRE + BUNDLE_STEP * max(0, count - 1))
 
 
+def _bundle_colour(b: graphview.VBundle) -> imgui.ImVec4:
+    """What a bundle carries: its kind's colour when every cable is of one kind
+    that has its own (`KIND_COLOURS`), else its type's."""
+    kinds = {c.kind for c in b.cables}
+    k = KIND_COLOURS.get(kinds.pop()) if len(kinds) == 1 else None
+    return k or COLOURS.get(b.type, ui.DIM)
+
+
 def _bundle(st: dict, b: graphview.VBundle) -> None:
     """The one wire between two nodes while either is collapsed: coloured
     by what it carries, as thick as it is many, faint while dormant."""
-    k = COLOURS.get(b.type, ui.DIM)
+    k = _bundle_colour(b)
     col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if b.dormant else k.w)
     lit = st.get("onto_lit")
     thick = bundle_thickness(b.count)
