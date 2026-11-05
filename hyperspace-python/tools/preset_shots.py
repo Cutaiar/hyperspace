@@ -69,7 +69,7 @@ POSES: dict[str, list[tuple[str, dict[str, float]]]] = {
     "party-tumble": [
         ("no hands", {}), ("both level", {"L.y": 0, "R.y": 0}),
         ("L roll thumb-up", {"L.roll": 1}), ("L pitch fingers-up", {"L.pitch": 1}),
-        ("L yaw fingers-out", {"L.yaw": 1}), ("L up (drive)", {"L.y": 1}),
+        ("L yaw fingers-out", {"L.yaw": 1}),
         ("R up (speed)", {"R.y": 1}), ("R reach in (4D deep)", {"R.z": 0}),
         ("R pull back (4D flat)", {"R.z": 1}), ("R roll thumb-up (XW)", {"R.roll": 1}),
         ("R yaw fingers-out (ZW)", {"R.yaw": 1}),

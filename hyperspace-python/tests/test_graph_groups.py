@@ -1489,7 +1489,7 @@ def test_the_browser_lists_each_patch_with_its_boundary_in_words(rig, monkeypatc
     (row,) = ui_graph.patch_list(rig.panel)
     assert (row["name"], row["slug"]) == ("acid wash", "acid-wash")
     assert row["note"].startswith("acid → wobble through a delay")
-    assert row["words"] == "in: picture · out: picture · wants: band 1, K1, right hand y"
+    assert row["words"] == "in: picture · out: picture · wants: analyzer 1, K1, right hand y"
     drawn = []
     real_selectable, real_chip = imgui.selectable, ui_graph.ui.chip
     monkeypatch.setattr(ui_graph.ui, "chip", lambda label, *a, **k: (

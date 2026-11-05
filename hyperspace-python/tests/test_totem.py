@@ -495,6 +495,9 @@ class ArmedLearn:
     def target_for(self, x):
         return None                         # buttons only
 
+    def routable(self, target):
+        return target is not None
+
     def accepts(self, s):
         return True
 

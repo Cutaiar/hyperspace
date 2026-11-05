@@ -30,7 +30,7 @@ from hyperspace.params import (
     build_session,
     chase_reaches,
 )
-from hyperspace.routing import Binding, Bindings, latch_refusal
+from hyperspace.routing import Binding, Bindings, latch_refusal, press_momentary
 from hyperspace.tapers import T_DRIVE
 from hyperspace.undo import SETTLE_S
 from hyperspace.view import ViewState
@@ -943,22 +943,40 @@ def test_a_cc_row_on_it_records_no_press_and_a_lost_desk_lets_go(rig):
     assert not rig.reg.chasing
 
 
-def test_a_stale_midi_press_of_any_scheme_does_not_outlive_the_desk(rig):
-    """The door is by what the source is, not one scheme's spelling."""
+@pytest.mark.parametrize("lost", ["close", "_let_go_held"])
+def test_a_desk_lost_leaves_what_another_desk_holds(rig, lost):
+    """A press recorded by one desk is that desk's: losing the other leaves it,
+    qualified or not, and its own release still ends the chase."""
     p = rig.reg[CHASE_PARAM]
-    p.__dict__["_pressed_by"] = {"cc:0:48", "note@launch:0:94", "pitch:0"}
-    p.set(True)
-    rig.midi._let_go_held()
-    assert not rig.reg.chasing and not p.__dict__["_pressed_by"]
+    press_momentary(p, "note@launch:0:94", True)     # the second desk's button
+    rig.learn.arm(CHASE_PARAM)
+    assert rig.learn.learn_control("note:0:94")
+    rig.inp.queue.append(_note(True))
+    rig.midi.poll()
+    getattr(rig.midi, lost)()
+    assert rig.reg.chasing, "the second desk's button still holds it"
+    assert p.__dict__["_pressed_by"] == {"note@launch:0:94"}
+    press_momentary(p, "note@launch:0:94", False)
+    assert not rig.reg.chasing
 
 
-def test_a_desk_row_switched_off_under_its_button_still_releases(rig):
+@pytest.mark.parametrize("change", ["removed", "retargeted", "switched off", "its rows forgotten"])
+def test_a_desk_row_changed_under_its_button_still_releases(rig, change):
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_control("note:0:94")
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
-    next(b for b in rig.table.bindings if b.source == "note:0:94").enabled = False
+    row = next(b for b in rig.table.bindings if b.source == "note:0:94")
+    if change == "removed":
+        rig.table.remove(row)
+    elif change == "retargeted":
+        row.target = "view.lines"               # as the desk rows' combo does
+    elif change == "switched off":
+        row.enabled = False
+    else:
+        rig.midi._held.clear()                  # the release finds no rows of the press
+        rig.table.remove(row)
     rig.inp.queue.append(_note(False))
     rig.midi.poll()
     assert not rig.reg.chasing and not rig.reg[CHASE_PARAM].__dict__["_pressed_by"]

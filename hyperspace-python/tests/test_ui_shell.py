@@ -797,7 +797,8 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     overflow it on their own."""
     reg, table = rig.reg, rig.router.table
     for p in reg:                       # forty routes: none of them a line here now
-        if p.kind is Kind.CONTINUOUS and p.modulatable and table.owner(p.id) is None:
+        if (p.kind is Kind.CONTINUOUS and ui_routing.route_target(p)
+                and table.owner(p.id) is None):
             try:
                 table.add(Binding("lfo:1", p.id, "push", 0.1))
             except Owned:
@@ -876,7 +877,7 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "Cmd+[": "SUPER+LEFT_BRACKET",
             "Home": "HOME"}
 _PADS = {"pad A Y · B X": ["A", "Y", "B", "X"], "pad BACK": ["VIEW"],
-         "LB / RB": ["LB", "RB"], "sticks": ["LSTICK", "RSTICK"], "hold START": ["MENU"]}
+         "LB / RB": ["LB", "RB"], "sticks": ["LSTICK", "RSTICK"]}
 _HATS = {"d-pad ↑ / ↓"}
 _MOUSE = {"drag", "⇧drag", "scroll", "right-click", *_HATS, "LT / RT",
           "APC40"}                                   # the desk's glyph legend, not a key
@@ -1399,7 +1400,8 @@ def test_unbind_is_not_offered_on_a_session_only_param(rig, monkeypatch):
     assert "SM (MASTER fader) · invariant" in lines
     assert not any(i.startswith("Unbind") for i in items)
     session = [b.to_json() for b in table.midi() if b.layer != "preset"]
-    table.add(Binding("lfo:0", "master.gain", "push", 0.1))
+    # (no door lets this row in since row 743: one a hot reload left in the table)
+    table.bindings.append(Binding("lfo:0", "master.gain", "push", 0.1))
     lines, items = menu(panel, monkeypatch, "master.gain", "audio", click="Unbind")
     assert "Unbind" in items and "Unbind ▸" not in items
     assert not table.routes_to("master.gain")
@@ -1629,7 +1631,10 @@ def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
         items.clear()
         _click(panel, rect, button=1)
         assert opened and set(opened) == {f"##ctx.{pid}"}, (pid, opened)
-        assert "Learn desk" in items and "Route a lane here…" in items
+        if not ui_routing.desk_target(reg[pid]):     # (the meta controller's: row 743)
+            assert "Learn desk" not in items and "Route a lane here…" not in items
+        else:
+            assert "Learn desk" in items and "Route a lane here…" in items
         assert reg[pid].base == before
         # a left click elsewhere closes it; a left click on the label opens nothing
         _click(panel, (2, 2, 4, 4))
@@ -1669,7 +1674,7 @@ def test_every_meter_has_the_band_select_menu(rig, monkeypatch):
     assert sel != 3
     _click(panel, rects[".3"], button=1)
     assert opened and set(opened) == {"##ctx.band.select.3"}
-    assert "Learn desk" in items
+    assert "Learn desk" not in items                  # the meta controller's (row 743)
     assert reg["band.select"].base == sel             # a right-click selects nothing
     # armed from a meter, the learn's red frame is on the meters too
     framed: list[str] = []
@@ -1830,7 +1835,7 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
     assert lrn.control is None and reg["view.depth4"].base == depth
     assert any(b.source == "cc:*:23" and b.target == "view.depth4" for b in table.desk())
     # a combo and a check are targets too; a file path is not
-    for page, pid in (("view", "view.shape"), ("output", "output.overlay")):
+    for page, pid in (("view", "view.shape"), ("view", "view.rotate")):
         frame(panel, page)
         frame(panel)
         assert pid in rects, pid

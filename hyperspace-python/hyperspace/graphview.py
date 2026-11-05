@@ -128,6 +128,7 @@ from . import learn as learnmod
 from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
+from .groupwords import group_title
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -144,7 +145,10 @@ from .routing import (
     base_sub,
     is_continuous,
     is_macro,
+    is_session_id,
     is_session_row,
+    meta_refusal,
+    meta_row_refusal,
     row_words,
 )
 
@@ -1592,7 +1596,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             targets.append(pid)
 
     for p in reg:
-        if p.modulatable and not p.alias:
+        if p.modulatable and not p.alias and not is_session_id(p.id):    # (register row 743)
             want(p.id)
     for b in (*routes, *setters):
         want(b.target)
@@ -1887,7 +1891,8 @@ def _sub_group(pid: str, p: Param | None) -> str:
 
 def _group_node(nodes: dict[str, VNode], group: str, add_node) -> VNode:
     nid = f"group:{group}"
-    return nodes.get(nid) or add_node(VNode(nid, "group", group))
+    # the id keeps the key, a saved layout key; only its title is words
+    return nodes.get(nid) or add_node(VNode(nid, "group", group_title(group)))
 
 
 def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
@@ -2759,6 +2764,8 @@ def summary(n: VNode) -> list[str]:
     patched = sum(p.patched for p in n.ports)
     lines: list[str]
     if n.kind in ("device", "source", "analyzer"):
+        # "band" here is the plain audio word for one of the analyzer's
+        # parts, not the fixture's name (register row 737)
         noun = "band" if n.kind == "analyzer" else "port"
         lines = [f"{_count(len(n.ports), noun)} · {patched} patched",
                  _loudest(p for p in outs if p.patched)]
@@ -3487,7 +3494,7 @@ def splice_refusal(name: str, ports: Iterable[Mapping], typ: str = IMAGE) -> str
 
 def patch_words(doc: Mapping, names: Callable[[str], str | None] | None = None) -> str:
     """A patch's boundary in words, for the browser (plan 40 T3): "in:
-    picture · out: picture · wants: K1, right hand y, band 1" — its picture
+    picture · out: picture · wants: K1, right hand y, analyzer 1" — its picture
     ports by direction and type, then every rig-side source its rows and
     modifiers read, once, in `routing.row_words`' words (`names`: the
     desk's glyph, as `cable_words` passes the port's name). Pure."""
@@ -3602,7 +3609,7 @@ LANE_NO_DELETE = ("a lane always fires an envelope: drag its pin onto another "
 LANE_BOUND = "lane {lane} fires env {env} already"
 
 # a continuous scheme's noun for the refusals ("a hand sets no base")
-NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "a band", "lfo": "an LFO",
+NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "the analyzer", "lfo": "an LFO",
          "env": "an envelope", SEQ: "a sequencer lane",
          "mod": "a modifier", "axis": "a stick", "pair": "a pair of pad buttons",
          "ext": "an outside lane"}
@@ -3930,6 +3937,9 @@ class Edit:
             if not is_continuous(scheme):
                 return KEY_ROWS if _scheme(addr) == "key" else DESK_NO_MOD.format(
                     what=_desk_noun(addr))
+            why = meta_refusal(p.id)
+            if why is not None:
+                return why
             if not p.modulatable:
                 return NOT_MODULATABLE.format(label=p.label or p.id)
             cur = self.table.owner(p.id)
@@ -3955,6 +3965,8 @@ class Edit:
                 return f"{addr} is invariant (the session's)"
             if why == "global":
                 return f"{addr} is on the global layer: latch SHIFT off to map into the preset"
+            # register row 743: what is left would land in the preset layer
+            return meta_refusal(p.id)
         return None
 
     def _input_refusal(self, skind: str, addr: str | None, pid: str) -> str | None:
@@ -4137,6 +4149,9 @@ class Edit:
             return NO_PARAM.format(pid=to.partition(":")[2])
         if p.id == picked.ref.target:
             return ALREADY
+        why = meta_row_refusal(picked.ref, p.id)
+        if why is not None:
+            return why
         if not p.modulatable:
             return NOT_MODULATABLE.format(label=p.label or p.id)
         return None
