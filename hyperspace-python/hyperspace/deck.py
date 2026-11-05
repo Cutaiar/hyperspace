@@ -476,6 +476,7 @@ class MetaController:
         self.decks = (first, second)
         self.players = players if players is not None else Players()
         self.on_players: list[Callable[[], Any]] = []
+        self.seats: dict[str, int] = {}     # role → the player it was last placed for
         self.on_air_pointer = Pointer(first)
         self.panel_pointer = Pointer(first)
         self.pointers: dict[str, Pointer] = {}
@@ -505,8 +506,11 @@ class MetaController:
         kept by name, so a controller unplugged and back is where it was."""
         got = self.pointers.get(holder)
         if got is None:
-            deck = (self.decks[0] if holder in (KEYS, MOUSE)
-                    else self.deck_for(self.players.player_of(holder).duty))
+            if holder in (KEYS, MOUSE):
+                deck = self.decks[0]
+            else:
+                player = self.players.player_of(holder)
+                deck, self.seats[holder] = self.deck_for(player.duty), player.number
             got = self.pointers[holder] = Pointer(deck)
         return got
 
@@ -530,7 +534,17 @@ class MetaController:
         deck = self.deck_of_player(number)
         for role, p in self.pointers.items():
             if role not in (KEYS, MOUSE) and self.players.player_of(role).number == number:
-                p.deck = deck
+                p.deck, self.seats[role] = deck, number
+
+    def reseat(self) -> None:
+        """A controller whose player changed by a change of the device list (the
+        first pad disabled, so the next is player 1's) goes to that player's deck.
+        One whose player is the same stays where it is, mapped elsewhere or not."""
+        for role, p in self.pointers.items():
+            if role not in (KEYS, MOUSE):
+                number = self.players.player_of(role).number
+                if self.seats.get(role) != number:
+                    p.deck, self.seats[role] = self.deck_of_player(number), number
 
     def place_players(self) -> None:
         """Every player where its duty says: for what moves on air (D5c), so an
@@ -543,6 +557,7 @@ class MetaController:
         the controller goes to that player's deck."""
         self.players.hold(role, number)
         self.point(role, self.deck_of_player(number))
+        self.seats[role] = number
         for fn in self.on_players:
             fn()
 

@@ -21,6 +21,20 @@ qualifier was a role, and it is now the holder's name. A player's first pad publ
 under that name, whatever the pad's role (`devices.qualifiers_of`). A player's second
 pad keeps its role as its address, so no two feed one lane.
 
+**`@p2` always means player 2.** A role can be spelled like a player's name, and that
+must never make two controllers answer to one name, at any step of a swap. A role takes
+the name only if that player holds it, ahead of any other pad of theirs, so it need not
+reopen. Held as a second of a kind, it is addressed `p3-pad` (`players.second_address`).
+A primary so spelled gives up its `@role` alias as soon as another device publishes that
+name (`DeviceRegistry.primaries`). The readers (`graphview`, `devices.wants`) ask who
+publishes an address before taking it for a role.
+
+**The camera job is the first pad listed on each deck** (`PadDevice._steers`). With
+everyone on air that is the first pad, as before. A player off air alone keeps a stick
+that orbits their deck, and the only pad given to player 2 keeps its job. Two players on
+one deck: the second pad's unrouted axes do nothing, as decision 24 has it. If no pad is
+player 1's, the launch notes say so, and `devices.wants` names "player 1" as missing.
+
 **The hands, a desk and the bridge have no player in their addresses.** A hand's forty
 lanes cannot be qualified (plan 27 B6), and MIDI rows name their desk by role as before.
 Their rows act wherever their holder is: the gate below reads the holder's pointer, not
@@ -30,6 +44,9 @@ the address.
 other role is player 1's; a kind's primary is player 1's whatever its role, so a rig
 whose first enabled pad is called `p2` reads the bare rows as it did. Under this rule
 `qualifiers_of` gives what plan 27 B6 gave, role by role (a test holds them equal).
+A change of the device list can change who holds a role (the first pad disabled, so the
+next is the primary): `MetaController.reseat`, on the registry's listeners, sends that
+controller to its new player's deck and leaves every other where it is.
 
 ## Where it is remembered
 
@@ -67,7 +84,8 @@ Nothing in `app.main` moves a player. Status words for a role stay `devices.line
 ## A row acts only on its player's `Deck`
 
 `Router.feeds` hides a shared scheme whose controller's pointer is on another deck
-(`Sources.away_from`, asking `DeviceRegistry.holders`). The pass, a gate, a modifier's
+(`Sources.away_from`, asking `DeviceRegistry.holders`; kept on the router until a pointer
+moves or the list changes, 186 ns a read against 683 ns rebuilt, over ten schemes). The pass, a gate, a modifier's
 input and the panel's readings all read that one view, so a row on a player elsewhere
 is dormant by the same road as a source not live: it does not act, it loses its follower
 and its turn's reading, and GRAPH draws its cable faint. So a turn on the deck a player
@@ -116,3 +134,5 @@ nothing jumps. Switching off or resetting from the other deck acts on the right 
   each hold a totem at once. An experiment; say if it should be per player.
 - **A second pad of one player** has a role as its address, so a row on it names a device
   until someone gives the pair of pads a meaning (row 736).
+- **A row naming a pad by a role whose player has changed** (`axis@pad` once `pad` is player
+  2's) is dormant, drawn on that pad's node. No such row is written by a learn after this.

@@ -161,6 +161,128 @@ def test_a_player_s_pad_publishes_under_the_player_whatever_its_role():
     assert [p.number for p in players.active()] == [1, 2]
 
 
+def _pad(role):
+    return {"role": role, "kind": "gamepad", "enabled": True, "usb": False}
+
+
+def _swap_step(players, pads):
+    made = devices.make_all(pads, devices.Context(players=players))
+    assert not [d for d in made if isinstance(d, devices.RefusedDevice)]
+    names = [d.qualifier for d in made]
+    assert len(names) == len(set(names))        # no two on one lane
+    return {d.role: d.qualifier for d in made}
+
+
+def test_swapping_two_pads_collides_at_no_step():
+    """Finding 2: the first step used to refuse a working pad."""
+    players, pads = Players(), [_pad("pad"), _pad("p2")]
+    assert _swap_step(players, pads) == {"pad": "", "p2": "p2"}
+    players.hold("pad", 2)
+    assert _swap_step(players, pads) == {"pad": "pad", "p2": "p2"}   # p2 need not reopen
+    players.hold("p2", 1)
+    assert _swap_step(players, pads) == {"pad": "p2", "p2": ""}
+
+
+def test_a_role_spelled_as_a_player_s_name_never_answers_for_another_player():
+    players = Players()
+    players.hold("a", 2)
+    players.hold("p3", 2)                        # player 2's second, spelled as player 3
+    got = _swap_step(players, [_pad("pad"), _pad("a"), _pad("p3"), _pad("p2")])
+    assert got == {"pad": "", "a": "a", "p3": "p3-pad", "p2": "p2"}
+
+
+def _swapped(rig):
+    """Roles `pad` and `p2`, each held by the other's player."""
+    players = rig.meta.players
+    players.hold("pad", 2)
+    players.hold("p2", 1)
+    ctx = devices.Context(reg=rig.one.reg, table=rig.one.table, players=players)
+    pads = [_pad("pad"), _pad("p2")]
+    made = {d.role: d for d in devices.make_all(pads, ctx)}
+    made["pad"].io, made["p2"].io = rig.pad1, rig.pad2
+    made["pad"].open = made["p2"].open = lambda: None
+    devs = devices.DeviceRegistry(devices=list(made.values()), ctx=ctx)
+    devs.point(rig.meta.pointer, rig.meta.panel_pointer)
+    rig.one.router.use(devs)
+    rig.devs = devs
+    return devs
+
+
+def test_at_p2_is_player_2_even_with_a_primary_spelled_p2(rig):
+    """Finding 1: `axis@p2` followed player 1's pad, and the pad feeding it drove nothing."""
+    devs = _swapped(rig)
+    prim = devs.primaries()
+    assert "axis" not in prim
+    assert rig.one.sources.resolve("axis@p2:LX", prim)[0] == "axis@p2"
+    _routes(rig.one, (TWO_STICK, PX), (ONE_STICK, PY))
+    rig.frame()
+    rest = _pans(rig.one)
+    rig.pad1.x = 1.0                             # role `pad`: player 2's
+    rig.frame()
+    assert rig.one.reg[PX].value != rest[0] and rig.one.reg[PY].value == rest[1]
+    rig.pad1.x, rig.pad2.x = 0.5, 1.0            # role `p2`: player 1's
+    rig.frame()
+    assert rig.one.reg[PX].value == rest[0] and rig.one.reg[PY].value != rest[1]
+
+
+def test_a_pair_step_on_at_p2_fires_from_player_2_s_pad_only(rig):
+    _swapped(rig)
+    p = rig.one.reg["view.bright"]
+    rig.one.table.add(Binding("pair@p2:A/B", "view.bright", "step", 1.0))
+    rig.frame()
+    was = p.value
+    rig.pad2.press("A")                          # role `p2`: player 1's, the bare pad
+    rig.frame()
+    assert p.value == was
+    rig.pad2.press()
+    rig.pad1.press("A")                          # role `pad`: player 2's
+    rig.frame()
+    assert p.value != was
+
+
+def test_the_readers_ask_who_publishes_a_player_s_name(rig):
+    """Finding 6: drawn on player 2's pad, and that pad's state said, whatever its role."""
+    devs = _swapped(rig)
+    one = rig.one
+    _routes(one, (TWO_STICK, PX))
+    view = graphview.build(one.table, one.reg, one.router, devs, None, None)
+    pin = _cable(view, PX).src_port
+    assert [n.id for n in view.nodes if any(q.id == pin for q in n.ports)] == ["device:pad"]
+    wanted = {w.role: w.state for w in devices.wants(one.table, devs)}
+    assert wanted["pad"] == devices.CONNECTED and "p2" not in wanted
+    devs.get("pad").io = None                    # player 2's pad lost, player 1's still there
+    wanted = {w.role: w.state for w in devices.wants(one.table, devs)}
+    assert wanted["pad"] == devices.LOST and "p2" not in wanted
+
+
+def test_a_primary_called_p2_keeps_its_alias_while_nobody_else_is_p2():
+    """Plan 27 B6's rule stands where it collides with nothing."""
+    d = devices.PadDevice("p2", io=Stick())
+    assert devices.DeviceRegistry(devices=[d]).primaries()["axis"] == "p2"
+
+
+def test_a_list_change_that_changes_a_player_moves_the_pointer(rig):
+    """Finding 3: `p2` off air; disable `pad`, `p2` is the primary, so player 1's, on air."""
+    meta, one, two = rig.meta, rig.one, rig.two
+    meta.move_player(2, Duty.OFF_AIR)
+    assert meta.pointer("p2").deck is two
+    meta.players.tell(("pad", "p2"), ("p2",))    # what the re-read list tells it
+    meta.reseat()
+    assert meta.players.player_of("p2").number == 1 and meta.pointer("p2").deck is one
+
+
+def test_a_reseat_leaves_a_controller_mapped_elsewhere_alone(rig):
+    meta, two = rig.meta, rig.two
+    meta.point("p2", two)
+    meta.reseat()
+    assert meta.pointer("p2").deck is two
+
+
+def test_main_reseats_on_a_list_change():
+    import inspect
+    assert "rig.listeners.append(lambda: meta.reseat())" in inspect.getsource(app.main)
+
+
 def test_only_a_controller_is_held(tmp_path):
     players = Players()
     devices.make_all([{"role": "pad", "kind": "gamepad", "enabled": True, "usb": False},
@@ -408,6 +530,36 @@ def test_a_view_hides_a_read_and_not_a_write():
     assert shared["axis"] == 3
 
 
+def test_a_view_pops_and_defaults_as_it_writes():
+    """Finding 5: the inherited ones read first, so a hidden scheme stayed, or was overwritten."""
+    shared = {"axis": 1}
+    v = Layered({}, shared, frozenset({"axis"}))
+    assert v.setdefault("axis", 9) == 1 and shared["axis"] == 1
+    assert v.pop("axis", None) == 1 and "axis" not in shared
+    assert v.pop("axis", None) is None
+    with pytest.raises(KeyError):
+        v.pop("axis")
+    own = {}
+    w = Layered(own, shared)
+    assert w.setdefault("lfo", 5) == 5 and own == {"lfo": 5} and "lfo" not in shared
+    assert w.pop("lfo") == 5 and not own
+
+
+def test_the_hide_set_is_kept_until_a_pointer_moves_or_the_list_changes(rig):
+    meta, one, two = rig.meta, rig.one, rig.two
+    src = one.sources
+    got = src.away_from(two.router)
+    assert src.away_from(two.router) is got      # no rebuild per cable
+    assert "axis@p2" in got
+    meta.move_player(2, Duty.OFF_AIR)
+    assert "axis@p2" not in src.away_from(two.router)
+    assert "axis@p2" in src.away_from(one.router)
+    moved = src.away_from(two.router)
+    rig.devs.apply(rig.devs.entries)             # an empty list: every device gone
+    assert src.away_from(two.router) is not moved
+    assert src.away_from(two.router) == frozenset()
+
+
 def test_sources_with_no_registry_or_a_bare_one_hide_nothing():
     src = Sources()
     assert src.away_from(object()) == frozenset()
@@ -495,6 +647,20 @@ def test_an_osc_press_ends_on_the_deck_it_was_made_on(rig):
     d.act(two.router)
     assert one.reg["view.lines"].value is False and not d._pressed
     assert not one.reg["view.lines"].__dict__["_pressed_by"]
+
+
+def test_an_osc_device_closed_after_a_move_takes_its_lanes_with_it(rig):
+    """Finding 5, where it was live: `close` pops through a router's views."""
+    one, two = rig.one, rig.two
+    one.sources.feed("phone", [0.5])
+    rig.devs.holders()["phone"] = rig.meta.pointer("p2")
+    rig.meta.move_player(2, Duty.OFF_AIR)
+    router = one.router
+    assert "phone" not in router.feeds
+    d = osc.OscDevice("phone", {}, rig.devs.ctx, io=SimpleNamespace(close=lambda: None))
+    d._router = router
+    d.close()
+    assert "phone" not in one.sources.feeds and "phone" not in two.router.feeds
 
 
 def test_a_chase_follows_the_player_s_deck(rig):
@@ -594,6 +760,17 @@ def test_mapping_a_controller_on_the_other_deck_moves_it_there(rig):
     meta.move_player(2, Duty.ON_AIR)            # no change of duty: where it is stands…
     meta.place_players()                        # …until the players are placed
     assert meta.pointer("p2").deck is one
+
+
+def test_the_same_axis_learned_again_on_the_other_deck_moves_it_too(rig):
+    """Finding 7: it said "learned", and the pad stayed away with the row dead."""
+    meta, two = rig.meta, rig.two
+    two.learn.mapped = lambda b: rig.devs.mapped(two, b)
+    _routes(two, (TWO_STICK, PX))
+    two.learn.arm(PX)
+    two.learn.learn_source(TWO_STICK)
+    assert meta.pointer("p2").deck is two
+    assert len([b for b in two.table.routes() if b.target == PX]) == 1
 
 
 def test_a_learn_that_makes_no_row_moves_nothing(rig):
@@ -743,6 +920,54 @@ def test_the_pad_device_carries_the_totem_to_the_player_s_deck(shared):
     assert state.on_reg is one.reg and one.reg["rot.phase.XY"].base == pytest.approx(0.3)
 
 
+def test_the_pad_with_the_camera_job_is_the_first_on_its_deck(rig, monkeypatch):
+    """Finding 8: with everyone on air the first pad's alone, as ever; a player off
+    air has a stick that orbits; the only pad given to player 2 keeps its job."""
+    meta, one, two = rig.meta, rig.one, rig.two
+    steered = []
+    monkeypatch.setattr(gamepad, "steer",
+                        lambda pad, router, *a, scheme="axis", **k: steered.append((pad, router, scheme)))
+    rig.frame()
+    assert steered == [(rig.pad1, one.router, "axis")]
+    steered.clear()
+    meta.move_player(2, Duty.OFF_AIR)
+    rig.frame()
+    assert steered == [(rig.pad1, one.router, "axis"), (rig.pad2, two.router, "axis@p2")]
+    steered.clear()
+    meta.move_player(1, Duty.OFF_AIR)
+    rig.frame()
+    assert steered == [(rig.pad1, two.router, "axis")]         # one on a deck
+
+
+def test_the_only_pad_given_to_player_2_steers_and_it_is_said(rig, monkeypatch):
+    players = rig.meta.players
+    players.hold("pad", 2)
+    ctx = devices.Context(reg=rig.one.reg, table=rig.one.table, players=players)
+    (d,) = devices.make_all([_pad("pad")], ctx)
+    assert d.qualifier == "p2"
+    d.io = rig.pad1
+    devs = devices.DeviceRegistry(devices=[d], ctx=ctx)
+    assert any("no pad is player 1's" in n for n in devs.notes)
+    devs.point(rig.meta.pointer, rig.meta.panel_pointer)
+    rig.one.router.use(devs)
+    steered = []
+    monkeypatch.setattr(gamepad, "steer", lambda pad, *a, **k: steered.append(pad))
+    devs.poll(DT, 0.0, router=rig.one.router)
+    assert steered == [rig.pad1]
+    _routes(rig.one, (ONE_STICK, PX))
+    wanted = {w.role: w.state for w in devices.wants(rig.one.table, devs)}
+    assert wanted["player 1"] == devices.MISSING and "pad" not in wanted
+
+
+def test_the_steering_second_pad_reads_its_own_lanes(rig):
+    rig.meta.move_player(2, Duty.OFF_AIR)
+    rig.pad2.axis = lambda i: 1.0 if i == gamepad.AX_LX else 0.0
+    was, one_was = rig.two.reg["camera.yaw"].base, rig.one.reg["camera.yaw"].base
+    rig.frame(5)
+    assert rig.two.reg["camera.yaw"].base != was
+    assert rig.one.reg["camera.yaw"].base == one_was
+
+
 def _swing(pad, reg, state, frames=30):
     for _ in range(frames):
         pad.frame(gyro=(0.0, 0.0, 200.0))
@@ -769,6 +994,27 @@ def test_the_poi_leaves_a_deck_at_home_and_writes_only_the_next(shared):
     one.reg["poi.on"].set(False)
     assert one.reg[PX].base == pytest.approx(0.25)
     assert one.reg["camera.zoom"].base == pytest.approx(one_zoom)
+
+
+def test_a_poi_whose_sensors_dropped_still_leaves_its_deck_at_home(shared):
+    """Finding 4: `driving` was None by then, so the old deck stayed displaced and
+    its homes went to the new one."""
+    one, two, swing = shared.one, shared.two, shared.swing
+    one.reg[PX].set(0.25)
+    two.reg[PX].set(-0.25)
+    zoom = one.reg["camera.zoom"].base
+    swing.on = True
+    pad = FakePad()
+    _swing(pad, one.reg, swing)
+    assert one.reg[PX].base != 0.25
+    pad.on = False
+    poi.step(swing, pad, one.reg, DT, "pad")     # the sensors go quiet
+    assert swing.driving is None and swing.on_reg is one.reg
+    pad.on = True
+    _swing(pad, two.reg, swing, frames=1)        # back, on the other deck
+    assert one.reg[PX].base == pytest.approx(0.25)
+    assert one.reg["camera.zoom"].base == pytest.approx(zoom)
+    assert swing.pan_home[0] == pytest.approx(-0.25) and swing.on_reg is two.reg
 
 
 def test_switching_the_poi_off_on_the_other_deck_sends_home_where_it_swung(shared):

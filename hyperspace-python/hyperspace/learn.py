@@ -1010,6 +1010,7 @@ class Learn:
         if cur is not None and self.same_source(cur.source, source):
             undo.push(f"learn {p.id}")               # one undo step (undo.py, plan 15)
             cur.when = when                          # the same axis again: no move
+            self._mapped(cur)
             self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
             return
         if cur is not None:

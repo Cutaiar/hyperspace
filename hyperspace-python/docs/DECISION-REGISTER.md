@@ -728,7 +728,7 @@ here; overturn → the change, then the same.
 | 733 | Plan 55: a row acts only on the `Deck` its player is on. `Router.feeds` hides a shared scheme whose controller's pointer is elsewhere, so the row is dormant by the road a source not live is; the analyzer and a deck's own lanes are nobody's. Answers DQ4; deck 2's rows on a controller wait for a player | — | owner — 2026-11-04: "A row acts only on the `Deck` its player is on" |
 | 734 | Plan 55: players 1–4, each with a duty that stays until moved; bare rows are player 1's and `@p2` player 2's, a player's first pad publishing under that name; moving a player moves all it holds; on air and off air are `MetaController.on_air` and `off_air`, so until D5c an off-air player is on deck 2; `<home>/players.json` on this Mac, only what differs, no patch and no show | — | owner — 2026-11-04: Q8; the file and the defaults are (rec) — pending the owner |
 | 735 | Plan 55: one `TotemState` and one `PoiState`, the pad's, with what they hold of a look kept to the deck their pad is on (`on_reg`); a pad arriving gives the old deck back and takes over afresh | — | owner — 2026-11-04: "no preset can affect another preset"; one state, not one per deck, is (rec) — pending the owner |
-| 736 | Plan 55: mapping a controller on another deck moves that controller, not its player; moving or placing the player brings it back. A player's second pad of a kind keeps its role as its address. A kind's primary is player 1's whatever its role | — | owner — 2026-11-04: "Mapping on another deck moves it"; the rest is (rec) — pending the owner |
+| 736 | Plan 55: mapping a controller on another deck moves that controller, not its player; moving or placing the player brings it back. `@p2` always means player 2: a role so spelled takes the name only if player 2 holds it. A player's second pad of a kind keeps its role as its address, or `p3-pad` if the role is spelled as a name. A kind's primary is player 1's whatever its role. The camera job is the first pad listed on each deck | — | owner — 2026-11-04: "Mapping on another deck moves it"; the rest is (rec) — pending the owner |
 | 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
 | 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
 | 743 | Wave 4 MR: the hard rule. No row of a preset may drive a meta controller param (`part_of(p) == "session"`); refused in words at Learn, at the pickers and at `Bindings`' doors, dropped with a note at a load, removed by the next save; the meta controller's own rows stay, the line being `is_session_row`. Overturns row 19 (a) | 572, 573 | owner — 2026-11-04: "a hard rule" |
@@ -13048,9 +13048,16 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   places the player, which brings every controller back. A second pad of one player keeps
   its role as its address, so a row on it names a device: refusing it would lose a working
   rig. A kind's primary is player 1's whatever its role, so a rig whose first enabled pad
-  is `p2` keeps its bare rows.
+  is `p2` keeps its bare rows. `@p2` always means player 2: a role so spelled takes the name
+  only if player 2 holds it, and is `p3-pad` as a second of a kind, so no step of a swap
+  refuses a working pad. The camera job is the first pad listed on each deck: on air,
+  the first pad, as before; off air alone, or the only pad given to player 2, a stick
+  still orbits, and no pad of player 1's is said.
 - **Other options.** Mapping moves the player: it would drag the performer's other
-  controllers off the deck they were playing.
+  controllers off the deck they were playing. A player's first pad steers, whichever the
+  player: it would start a second pad orbiting on every two-pad rig with everyone on air,
+  which this item must not change. A new address form for players (`@player2`): the owner
+  named `axis@p2`, and a rule that keeps the name true costs less than a second grammar.
 - **Judge it.** 564.
 
 ### 737. What the panel calls the analyzer

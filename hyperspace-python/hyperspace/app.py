@@ -1705,6 +1705,7 @@ def main(argv: list[str] | None = None) -> None:
     # plan 55: who holds what names a pad's rows, so the list is read again when it
     # changes; a mapping on either deck moves the controller mapped
     meta.on_players.append(lambda: rig.apply(rig.entries))
+    rig.listeners.append(lambda: meta.reseat())    # the list can change who holds a role
     for on in meta.decks:
         on.learn.mapped = lambda b, on=on: rig.mapped(on, b)
     # panel state and chain must stay one object even after source changes

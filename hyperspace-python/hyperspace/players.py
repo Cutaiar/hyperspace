@@ -12,6 +12,12 @@ repeatable kind publishes under that name (`devices.qualifiers_of`); a second
 of the same kind keeps its role as its address, so no two feed one lane. A
 player with no such controller has rows that are dormant and drawn.
 
+**``@p2`` always means player 2.** A role can be spelled like a player's name.
+Then it takes that name only if that player holds it; held as a second of a kind
+it has another address (`second_address`), and a primary so spelled gives up
+`@role` to whoever publishes it (`DeviceRegistry.primaries`). So no two
+controllers ever collide on a name, whatever is registered.
+
 **Who holds what, unless told otherwise:** a role ``p2``, ``p3``, ``p4`` is
 that player's, every other role player 1's, and a repeatable kind's primary
 (`primaries`, told by the device registry) is player 1's whatever its role, so
@@ -39,6 +45,7 @@ FILE = "players.json"
 SCHEMA = "players/1"
 NUMBERS = (1, 2, 3, 4)
 _ROLE = re.compile(r"p([1-4])")
+NAMES = frozenset(f"p{n}" for n in NUMBERS[1:])     # what a row calls players 2, 3, 4
 
 
 class Duty(StrEnum):
@@ -53,6 +60,12 @@ def qualifier_of(number: int) -> str:
     """The name a row gives player `number`: "" for player 1, whose rows are
     the bare ones, else ``p<number>``."""
     return "" if number == 1 else f"p{number}"
+
+
+def second_address(role: str) -> str:
+    """The address of a player's second controller of a kind: its role, unless
+    the role is spelled as a player's name, which it may not use."""
+    return f"{role}-pad" if role in NAMES else role
 
 
 @dataclass

@@ -29,7 +29,7 @@ modifiers' (`DECK_SCHEMES`) — live in that router's own `LaneLayer`, read
 over these sources through `Layered`. A scheme the layer does not hold falls
 through to the sources, so whatever feeds one with no bank still feeds it.
 
-A leaf below `routing`: it imports `motion` and numpy, and `glfw` /
+A leaf below `routing`: it imports `motion`, `pointer` and numpy, and `glfw` /
 `gamepad` only lazily, to resolve key and pad names
 (`tests/test_routing_boundary.py`). The rig facts the device registry
 states — which schemes are rows, which MIDI role an unqualified row
@@ -49,6 +49,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
+from . import pointer
 from .motion import OFF, Motion
 
 # the schemes no device feeds — the analyzer, the LFOs, the envelopes and
@@ -221,6 +222,16 @@ class Layered(MutableMapping):
 
     def __delitem__(self, scheme: str) -> None:
         del (self.own if scheme in self.own else self.shared)[scheme]
+
+    def pop(self, scheme: str, *default) -> Any:
+        """As `__delitem__` goes, hidden or not (the inherited one reads first)."""
+        return (self.own if scheme in self.own else self.shared).pop(scheme, *default)
+
+    def setdefault(self, scheme: str, default: Any = None) -> Any:
+        """As a write goes, keeping what is there, hidden or not."""
+        if scheme in self.own:
+            return self.own[scheme]
+        return (self.own if scheme in DECK_SCHEMES else self.shared).setdefault(scheme, default)
 
     def __iter__(self) -> Iterator[str]:
         for scheme in self.shared:
@@ -479,12 +490,19 @@ class Sources:
         the `Deck` its player is on. Asked of the device registry (`holders`:
         scheme → that controller's pointer), a pointer's move counting at once.
         The analyzer is nobody's, a deck's own lanes are its own, and a bare
-        registry or none holds nothing, so nothing is hidden."""
+        registry or none holds nothing, so nothing is hidden. Kept on the router
+        until a pointer moves or the list changes: the panel asks per cable."""
         holders = getattr(self.__dict__.get("devices"), "holders", None)
         if holders is None:
             return _NOWHERE
-        away = [s for s, p in holders().items() if p.deck.router is not router]
-        return frozenset(away) if away else _NOWHERE
+        held = holders()
+        hit = router.__dict__.get("_away")
+        if hit is not None and hit[0] == pointer.moves and hit[1] is held:
+            return hit[2]
+        away = [s for s, p in held.items() if p.deck.router is not router]
+        got = frozenset(away) if away else _NOWHERE
+        router.__dict__["_away"] = (pointer.moves, held, got)
+        return got
 
     def feed(self, scheme: str, values) -> None:
         """An adapter hands in this frame's vector for `ext` / `lfo` sources

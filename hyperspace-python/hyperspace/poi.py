@@ -415,9 +415,11 @@ def step(state: PoiState | None, pad, reg, dt: float, role: str = "") -> None:
             state.driving = None
             state.say("the pad's sensors went quiet")
         return
-    if state.driving is not None and state.on_reg is not reg:
-        _release(state, state.on_reg)  # its pad moved decks: that deck's shape back home
-        state.driving = None
+    if state.on_reg is not None and state.on_reg is not reg:
+        # another deck than it last wrote, by whichever road (a move, a pad back
+        # after its sensors dropped, another pad): that deck's shape back home
+        _release(state, state.on_reg)
+        state.on_reg, state.driving = None, None
     if state.driving is None:
         state.driving, state.on_reg = role, reg
         reset(state)

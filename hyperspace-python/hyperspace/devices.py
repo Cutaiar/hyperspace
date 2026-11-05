@@ -857,8 +857,8 @@ class PadDevice(Base):
     def act(self, router) -> None:
         """The pad's rows, then the sticks' camera job — on the registry
         of the deck it is on (`Base.reg`), else the router's. The camera
-        job is the primary pad's only (plan 27 B6, decision 24: defaults
-        author no look): a second pad's unrouted axes do nothing."""
+        job is one pad's on each deck (plan 27 B6, decision 24: defaults
+        author no look; plan 55, `_steers`): another's unrouted axes do nothing."""
         self._router = router       # `close` lets go through it: no later frame will
         io = self.io
         if io is None:
@@ -878,15 +878,25 @@ class PadDevice(Base):
         skip = self._totem(io, reg)
         if q:
             router.pad(io, buttons=not self._taken, role=q, **skip)
-            if io.on and claimed is not None:
-                self._dialed = gamepad.dialed(claimed(f"axis@{q}") or ())
-            return
-        router.pad(io, buttons=not self._taken, **skip)
+        else:
+            router.pad(io, buttons=not self._taken, **skip)
         if io.on:
-            routed = (claimed("axis") or ()) if claimed is not None else ()
+            axis = f"axis@{q}" if q else "axis"
+            routed = (claimed(axis) or ()) if claimed is not None else ()
             self._dialed = gamepad.dialed(routed)
-            if reg is not None:
-                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
+            if reg is not None and self._steers(router):
+                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed,
+                              scheme=axis)
+
+    def _steers(self, router) -> bool:
+        """Is the camera job this pad's: the first pad listed on the deck it is on
+        (plan 55)? So with every player on air it is the first pad's, as ever, and
+        a player off air alone, or the only pad given to player 2, keeps a stick
+        that orbits. With no pointer or no list: the primary's."""
+        devs = getattr(self.ctx, "devices", None)
+        if self.pointer is None or not hasattr(devs, "first_pad_on"):
+            return not self.qualifier
+        return devs.first_pad_on(router) is self
 
     def close(self) -> None:
         """The port shut, and what the pad's buttons held let go: a device gone
@@ -1576,15 +1586,23 @@ def qualifiers_of(entries: list[dict], players=None) -> dict[str, str]:
     """role → its qualifier, for each repeatable kind's entry (plan 55): a
     player's first controller of the kind publishes under the player's name
     (`players.qualifier_of`: bare for player 1), enabled entries first as
-    `primaries_of` goes, and a player's second keeps its role, so no two feed
-    one lane. `players` None: the kind's primary bare, the rest by role."""
+    `primaries_of` goes, a role already spelled as its holder's name first of
+    all (it need not reopen), and a player's second has `second_address`, so
+    no two feed one lane. `players` None: the kind's primary bare, the rest by role."""
     prim = primaries_of(entries)
     if players is None:
         return {(role := str(e.get("role", ""))): "" if prim[kind] == role else role
                 for e in entries if (kind := str(e.get("kind", ""))) in prim}
     players.tell(_controllers_in(entries), prim.values())
+    from .players import second_address
     out: dict[str, str] = {}
     taken: set[tuple[str, int]] = set()
+    for e in entries:
+        role, kind = str(e.get("role", "")), str(e.get("kind", ""))
+        player = players.player_of(role)
+        if kind in prim and e.get("enabled", True) and role == player.qualifier:
+            taken.add((kind, player.number))
+            out[role] = role
     for want_on in (True, False):
         for e in entries:
             role, kind = str(e.get("role", "")), str(e.get("kind", ""))
@@ -1593,7 +1611,7 @@ def qualifiers_of(entries: list[dict], players=None) -> dict[str, str]:
             player = players.player_of(role)
             first = (kind, player.number) not in taken
             taken.add((kind, player.number))
-            out[role] = player.qualifier if first else role
+            out[role] = player.qualifier if first else second_address(role)
     return out
 
 
@@ -1628,7 +1646,6 @@ def primaries_of(entries: list[dict]) -> dict[str, str]:
 
 
 def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None = None,
-         primaries: dict[str, str] | None = None,
          qualifiers: dict[str, str] | None = None) -> Base:
     """A device for one checked `[[devices]]` entry (config.devices):
     `OffDevice` when it is not enabled, `UnknownDevice` for a kind the
@@ -1636,21 +1653,18 @@ def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None
     entry of the same role, or one that already **feeds** one of its
     `feeds` (`claimed`: fed scheme → role, filled here for the next
     entry). The registry claims (scheme, role), not scheme (plan 27 B6):
-    a repeatable kind's entry other than its kind's primary (`primaries`,
-    kind → role; `primaries_of`) publishes under its role (`qualify`:
-    a second pad feeds ``axis@p2``), so two pads never collide; a kind
+    a repeatable kind's entry publishes under `qualifiers` (role → its
+    qualifier; `qualifiers_of`, `qualify`: a second pad feeds ``axis@p2``), so
+    two pads never collide; a kind
     that cannot qualify (the hands: forty lanes of another shape) is
     refused as in B1. A kind that feeds nothing (MIDI: rows, not vectors)
     is never refused for a scheme, so two desks of different roles both
-    open. `qualifiers` (`qualifiers_of`, plan 55) says it outright, a player's
-    name in place of the role. Nothing is opened here."""
+    open. Nothing is opened here."""
     role, kind = str(entry.get("role", "")), str(entry.get("kind", ""))
     cls = kind_class(kind)
     q = ""
     if cls is not None and cls.repeatable and qualifiers is not None:
         q = qualifiers.get(role, "")
-    elif cls is not None and cls.repeatable and primaries is not None:
-        q = "" if primaries.get(kind, role) == role else role
     if not entry.get("enabled", True):
         d = OffDevice(role, kind, entry, ctx)
         if q:
@@ -1728,8 +1742,9 @@ class DeviceRegistry:
         self.devices: list = list(devices) if devices is not None else make_all(
             self.entries, self.ctx)
         self._tell_table()           # which MIDI role an unqualified row means, before any opens
-        self._seed_sinks(self.entries)   # an old `send` list → the session's sink rows, once
         self.listeners: list = []
+        self._say_players()
+        self._seed_sinks(self.entries)   # an old `send` list → the session's sink rows, once
         self.error = ""              # this frame's first device error (the toast)
         # a device handed in with its adapter (tests, the frame-order stubs) is open
         self._opened: set[str] = {d.role for d in self.devices if getattr(d, "io", None) is not None}
@@ -1840,12 +1855,15 @@ class DeviceRegistry:
         first listed device that publishes the scheme bare and is not off,
         refused or unknown — a repeatable kind's primary (``pad``, ``axis``,
         ``hat`` → the first enabled pad), any other device its own
-        schemes. `Bindings.primaries`, through `Router.use`."""
+        schemes. `Bindings.primaries`, through `Router.use`. A role spelled as
+        another device's address is left out (plan 55): ``@p2`` is then that
+        device's, not an alias for the bare rows."""
         out: dict[str, str] = {}
+        names = {q for d in self.devices if (q := getattr(d, "qualifier", ""))}
         for d in self.devices:
             if isinstance(d, OffDevice | UnknownDevice | RefusedDevice) or d.kind == "midi":
                 continue
-            if getattr(d, "qualifier", ""):
+            if getattr(d, "qualifier", "") or d.role in names:
                 continue
             for s in getattr(d, "schemes", ()):
                 out.setdefault(s, d.role)
@@ -1911,6 +1929,14 @@ class DeviceRegistry:
         # memory until then, and that rewrite keeps them
         if added and hasattr(table, "write") and getattr(table, "carried", None) is None:
             table.write()
+
+    def _say_players(self) -> None:
+        """Pads there are and none is player 1's (plan 55): the bare rows wait, and
+        a stick going dead with no word is the one thing not to do."""
+        pads = [d for d in self.devices if isinstance(d, PadDevice)]
+        if (getattr(self.ctx, "players", None) is not None and pads
+                and all(d.qualifier for d in pads)):
+            self._note("players: no pad is player 1's — the bare pad rows wait for one")
 
     def _tell_table(self) -> None:
         """The shared binding table learns the MIDI roles in list order
@@ -2093,6 +2119,12 @@ class DeviceRegistry:
                         got.setdefault(s, p)
             self._holders = got
         return got
+
+    def first_pad_on(self, router):
+        """The first listed pad pointed at `router`'s deck, or None."""
+        return next((d for d in self.devices if isinstance(d, PadDevice)
+                     and getattr(d.pointer, "deck", None) is not None
+                     and d.pointer.deck.router is router), None)
 
     def controller_of(self, table, b):
         """The device row `b` of `table` reads, or None: a MIDI row's by its
@@ -2284,6 +2316,7 @@ class DeviceRegistry:
         self.entries, self.devices = new, devices
         self._holders = None
         self._tell_table()
+        self._say_players()
         self._seed_sinks(new)
         if changed:
             for d in devices:
@@ -2322,6 +2355,7 @@ WANT_STATES = (CONNECTED, LOST, OFF, MISSING)
 # a want's state as a sentence says it ("apc40 (lost)", "leap (not in this rig)")
 STATE_WORDS = {CONNECTED: "connected", LOST: "lost", OFF: "off", MISSING: "not in this rig"}
 _MIDI = ("cc", "note", "pitch")             # routing.MIDI_SCHEMES, restated (no app import)
+PLAYER_1 = "player 1"       # who a bare row names, when no device publishes it bare
 WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
 
 
@@ -2382,9 +2416,6 @@ def _rig(registry, table) -> tuple[dict[str, str], str, dict[str, str], dict[str
             status[d.role] = str(d.status)
         except Exception as e:  # noqa: BLE001 — a status never takes a page down (as `lines`)
             status[d.role] = _err("status", e)
-        # a row names its player (plan 55): whoever holds it answers for that name
-        if q := getattr(d, "qualifier", ""):
-            status.setdefault(q, status[d.role])
         for s in getattr(d, "schemes", ()) or ():
             listed.setdefault(s, d.role)
         if getattr(d, "kind", "") == "midi":
@@ -2449,12 +2480,18 @@ def wants(table, registry, only=None) -> list[Want]:
             continue
         _, at, q = head.partition("@")
         if at and q:
-            role = q
+            # whoever publishes that address answers for it (plan 55: a player's
+            # name, which a role may be spelled as); else the role it names
+            role = listed.get(head) or q
         elif scheme in _MIDI:
             role = (midi_first or getattr(table, "primary_role", lambda: "")()
                     or SCHEME_ROLE["cc"])
         else:
-            role = prim.get(scheme) or listed.get(scheme) or SCHEME_ROLE.get(scheme, scheme)
+            role = prim.get(scheme) or listed.get(scheme)
+            if not role:
+                # pads there are, and none is player 1's (plan 55): not the pad's words
+                role = (PLAYER_1 if any(base_scheme(s) == scheme for s in listed)
+                        else SCHEME_ROLE.get(scheme, scheme))
         # the desk's glyphs for an APC40's rows: a listed desk's own profile;
         # a desk the rig lacks is the table's profile only when it is the
         # first role (an unqualified row) — a qualified one's is unknown
