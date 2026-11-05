@@ -717,7 +717,7 @@ here; overturn → the change, then the same.
 | 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | (rec) — pending the owner |
 | 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moves the preview as a knob does | — | (rec) — pending the owner |
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | (rec) — pending the owner |
-| 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | The fixture: the owner, 2026-11-04. The parts' word: (rec) — pending the owner |
+| 737 | Wave 4 AZ: the panel says "analyzer" for the fixture and its tuning; a part reads its own name (SUB … AIR) or "analyzer 3", and "band" stays only as the plain audio word for one of the parts | 566 | owner — 2026-11-04: band for one bin, as built |
 | 738 | Wave 4 AZ: words only; `band.*` ids, `lane:` addresses, the `band` group key, the library's `band` folders, `SECTIONS` and `PAGE_KEYS` all stay; ROUTING's target list keeps printing raw ids | 567 | The owner, 2026-11-04 |
 
 "—": no hand check shows it; tests only.
@@ -12751,8 +12751,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 ### 737. What the panel calls the analyzer
 
 - **Answer.** The owner, 2026-11-04: "Band is a ridiculous name for this thing." The
-  analyzer is a fixture on the graph, shared, and every preset may wire from it. The
-  word for its six parts was left to the builder: (rec) — pending the owner.
+  analyzer is a fixture on the graph, shared, and every preset may wire from it. On the
+  word for its parts, the owner, 2026-11-04: "The word 'band' is fine when you are
+  referring to a specific bin that frequencies accumulate in... EQ in general uses the
+  word 'band'." Band for one bin, as built.
 - **Built.** "Analyzer" for the fixture and its tuning: the section's head ("analyzer
   tuning"), the group node's title, status and undo lines, the desk, the cheat sheet
   and refusals ("the analyzer sets no base"). A part reads its own name (SUB, BASS,
