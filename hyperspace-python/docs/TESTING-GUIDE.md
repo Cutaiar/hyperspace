@@ -6143,17 +6143,15 @@ unpicked channel still uploading.
 
 **Needs:** the APC40; the copy; branch `plan-38-hold` (plan 38).
 
-**Do:** with no hold on, learn `output.hold` and `output.take` onto two
-free buttons. Press the hold button, then the take button. Hold again and
-press **drop** on GRAPH.
+**Do:** with no hold on, put `output.hold` and `output.take` on two free
+buttons as invariant rows in `bindings.json` (Learn desk refuses a meta
+param since register row 743). Press the hold button, then the take
+button. Hold again and press **drop** on GRAPH.
 
 **Right if:** both buttons light while held and go dark after take and
-after drop; the press that learns a button does not start a hold. Learn
-the buttons *before* holding: a button learned during a hold is unlearned
-by **drop** (register row 438).
+after drop.
 
-**Wrong if:** the take button stays dark while held, or a learning press
-starts a hold.
+**Wrong if:** the take button stays dark while held.
 
 *(check 381)*
 
@@ -6471,9 +6469,8 @@ still.
 **Right if:** nothing is learned from the right hand; the footer reads
 "learning camera.zoom — move the left hand… (click to cancel)"; raising
 the left hand gives "learned camera.zoom ← hand left.y positions (into
-the preset; moved from master.gain)" — any left-hand axis is a pass —
-ROUTING lists "L height" and Zoom follows the left hand only; TUMBLE's
-own left-height row on the sound drive goes with it (⌘Z brings it back).
+the preset)" — any left-hand axis is a pass —
+ROUTING lists "L height" and Zoom follows the left hand only.
 After re-arming, nothing is learned until the left hand moves.
 
 **Wrong if:** the right hand took it; learned the moment it was armed.
@@ -7620,9 +7617,7 @@ Turn the device knobs on each.
   amount, fractals size, double vision amount, double vision ghost;
   TRACER: echo brightness, echo fade time, echo count, echo time apart,
   darken, contrast, shape hides, 4D depth; on TUMBLE, FACES and FIELD
-  D1–D4 are 4D depth, yaw, pitch and pattern and D5–D8 dark; TUMBLE's
-  left height still pushes the sound drive, marked "session" in its row
-  (click the leap → master wire on GRAPH).
+  D1–D4 are 4D depth, yaw, pitch and pattern and D5–D8 dark.
 
 **Wrong if:** a look off (a number in the preset); a knob on the wrong
 setting; an axis flipped on every preset (then flip it on the HANDS page
@@ -7934,10 +7929,8 @@ pad connected.
 
 **Right if:** the terminal says `gamepad: Afterglow Gamepad for Xbox 360
 over USB`; the pad's ring lights one quarter (player 1) instead of
-blinking; B / X step to the next / previous preset of the PRESETS page's
-list (its drop-down, by name, wrapping; a preset saved a moment ago is
-in it — not the desk's bank), A flips faces and Y lines, LB / RB step the shape, the D-pad steps brightness (up / down)
-and speed (left / right), START and BACK do nothing, the left stick
+blinking; B flips points and X screen strokes, A flips faces and Y lines, LB / RB step the shape, the D-pad steps brightness (up / down)
+and left / right and START do nothing, BACK held is the base chase, the left stick
 orbits (up tilts the camera up; held, it tumbles over the top and keeps
 going round, as the sideways orbit does) and its click resets the
 camera, the right stick's up / down zooms and its right / left speeds
@@ -7991,8 +7984,8 @@ go leaves the setting moved.
 
 **Needs:** a pad; `bindings.json` open in an editor.
 
-**Do:** change the `pad:Y` row's op to `"momentary"` and, for a button
-with a trigger on it (`pad:B` → `preset.list.next`), to `"hold"`. ⌘R.
+**Do:** change the `pad:Y` row's op to `"momentary"` and the `pad:B` row
+to `"target": "preset.list.next", "op": "hold"`. ⌘R. Afterwards put them back.
 
 **Right if:** lines show only while Y is held; B steps the preset only
 after about 0.6 s held, once per press; a tap does nothing.

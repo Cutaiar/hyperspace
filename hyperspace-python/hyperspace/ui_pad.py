@@ -60,9 +60,9 @@ import math
 from imgui_bundle import imgui
 
 from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
-from .routing import Binding
+from .routing import PAIR_SCHEME, Binding, pair_poles
 
-SCHEMES = ("pad", "hat", "axis", "touch", "motion")   # the schemes a pad control's row can have
+SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")   # the schemes a pad control's row can have
 EDGE = ui_desk.EDGE                 # from the control window's edges, as the desk sits
 PAD = ui_desk.PAD
 GAP = ui_desk.GAP                   # between this and the desk under it
@@ -111,6 +111,10 @@ def rows(table) -> dict[str, Binding]:
     for b in table.of(*SCHEMES):
         if not b.enabled:
             continue
+        # (the window's controls are the primary's: a second pad's row is not on them)
+        poles = pair_poles(":".join(b.parts)) if b.scheme == PAIR_SCHEME and not b.device else None
+        for pole in poles or ():         # plan 56: a pair's row is on both its poles
+            out.setdefault(pole.source, b)
         c = gamepad.control_in(every, b.source)
         if c is not None:
             out.setdefault(c.source, b)
@@ -237,7 +241,14 @@ def says(panel, c: gamepad.Control, b: Binding | None) -> str:
     (`ui_desk.text`), else the built-in meaning of a free axis
     (`BUILT_IN`), else "" — a dark control."""
     if b is not None:
-        return ui_desk.text(panel.reg, b)
+        if b.scheme != PAIR_SCHEME:
+            return ui_desk.text(panel.reg, b)
+        poles = pair_poles(":".join(b.parts))
+        up = bool(poles) and poles[0].source == c.source
+        if b.op == "step":             # this pole's own amount, as a row on it alone reads
+            return ui_desk.text(panel.reg, Binding(c.source, b.target, "step",
+                                                   b.value if up else -b.value))
+        return f"{ui_desk.text(panel.reg, b)} {'+' if up else '−'}"
     return BUILT_IN.get(c.source, "")
 
 
@@ -247,6 +258,11 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     it is free."""
     said = says(panel, c, b)
     learn = "right-click a param → Learn pad, then press it here"
+    model = gamepad.shown_model(getattr(panel, "pad", None))
+    other = gamepad.paired_with(c.source, model)
+    if other is not None:             # plan 56: one degree of freedom with its partner
+        word = gamepad.models.glyph(model, other.partition(":")[2], gamepad.glyph(other) or other)
+        learn += f"\none axis with {word}: right-click a param → Learn pair"
     if b is not None:
         return (f"{c.glyph} · {b.target} · {said} · {b.describe()}\n{c.name}"
                 f"\n{learn} to move it")
@@ -691,8 +707,12 @@ def _says_of(panel, table):
     def says_(source: str) -> tuple[str, Binding | None]:
         b = rows_.get(source)
         if b is not None:
-            return ui_desk.text(panel.reg, b), b
+            words = ui_desk.text(panel.reg, b)
+            if b.scheme == PAIR_SCHEME and b.op == "step":      # the lane: both ways
+                words = f"{words.rpartition(' ')[0]} ±{abs(b.value):g}"
+            return words, b
         return BUILT_IN.get(source, ""), None
+    says_.pairs = tuple(s for s in rows_ if s.startswith(f"{PAIR_SCHEME}:"))   # the lanes view's
     return says_
 
 

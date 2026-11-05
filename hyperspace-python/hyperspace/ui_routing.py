@@ -48,10 +48,10 @@ in `Router.rests`, shown dimmed; dragging it makes the row's own number,
 "auto" gives it back; scale names the rig's attenuator — a **session**
 param (the drive fader, `master.gain`) — or none, never a performance
 param (decision register row 18 (a)): a macro scales a route as its depth
-subscriber, shown read-only as a "× macro.N" chip (plan 13 §2.4). A
-route whose target is a session param (TUMBLE's left height on the
-drive) carries a dim "session" mark: it leans on that control while its
-source is live and never changes its setting (row 19 (a)). The live bar is the
+subscriber, shown read-only as a "× macro.N" chip (plan 13 §2.4). No
+route lands on a meta param (`route_target`, register row 743: tuning
+happens before the show), so the combo does not offer one and the param's
+menu says why. The live bar is the
 source's normalized reading (white) with a red hairline at the target's
 effective norm, so a route can be read working. Edits land on the table
 at once (the router reads it every frame) — nothing here is copied.
@@ -125,6 +125,7 @@ from imgui_bundle import imgui
 
 from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
+from .groupwords import group_word
 from .learn import LANE_DEPTH, clutch_of, is_auto_clutch, land_moved, move_route
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
@@ -144,6 +145,7 @@ from .routing import (
     base_refusal,
     base_sub,
     factory_desk,
+    meta_refusal,
     whole_circle,
 )
 
@@ -385,6 +387,10 @@ def add_route(panel, target: str, source: str | None = None, depth: float = LANE
     router = router_of(panel)
     src = source or f"lane:{panel.control.selb}"
     b = Binding(src, target, op, depth, motion=motion.DEFAULT_ROUTE_FEEL)
+    why = router.table.refusal(b)
+    if why is not None:                  # the referee's words, where the page shows them
+        _state(panel)["error"] = f"routing: {why}"
+        return None
     try:
         router.table.add(b)
     except Owned as e:
@@ -706,10 +712,19 @@ def modal(panel) -> None:
     imgui.end_popup()
 
 
+META_LINE = "the meta controller's: tuned before the show"
+
+
 def ctx_item(panel, p: Param) -> None:
     """The context menu's line: route the selected band's lane to this param."""
     real = panel._real(p)
     if router_of(panel) is None:
+        return
+    why = meta_refusal(real.id)
+    if why is not None:                 # register row 743: the refusal, in words
+        imgui.text_disabled(META_LINE)
+        if imgui.is_item_hovered():
+            ui.tooltip(why)
         return
     if not real.modulatable:
         imgui.text_disabled("not modulatable")
@@ -835,8 +850,15 @@ def reading(panel, router: Router, source: str) -> float | None:
     return None if math.isnan(u) else u     # NaN: a hand out of view
 
 
+def route_target(p: Param) -> bool:
+    """Can a route land on this param? Modulatable, and not the meta
+    controller's (register row 743). One rule for the target combo, the
+    menu's Learn items and Route from ▸ (`ui_graph.route_from_items`)."""
+    return p.modulatable and meta_refusal(p.id) is None
+
+
 def _targets(panel) -> list[Param]:
-    return [p for p in panel.reg if p.modulatable and not p.alias]
+    return [p for p in panel.reg if route_target(p) and not p.alias]
 
 
 def _scales(panel, target: str | None = None) -> list[Param]:
@@ -850,17 +872,6 @@ def _scales(panel, target: str | None = None) -> list[Param]:
     reg = panel.reg
     return [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias
             and part_of(q) == "session" and q.id != target]
-
-
-SESSION_MARK = "session"
-SESSION_TIP = ("a session control: this route leans on it while its source is live; "
-               "the setting itself is never changed")
-
-
-def is_session_target(panel, b: Binding) -> bool:
-    """Does the route perform a session param (decision register row 19 (a))?"""
-    p = panel.reg.get(b.target)
-    return p is not None and part_of(p) == "session"
 
 
 def _depth_chips(router: Router, b: Binding) -> list[str]:
@@ -898,7 +909,7 @@ def _param_combo(panel, label: str, current: str | None, width: float,
             continue
         if p.group != group:
             group = p.group
-            ui._micro(group or "misc")
+            ui._micro(group_word(group) or "misc")
         sel, _ = imgui.selectable(f"{p.id}##{p.id}", p.id == current)
         if imgui.is_item_hovered() and p.tip:
             ui.tooltip(p.tip)
@@ -944,10 +955,8 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     sp = imgui.get_style().item_spacing.x
     op_w = ui.chip_w("push")
     feel_w = ui.chip_w("spring")
-    session = is_session_target(panel, b)
-    mark_w = imgui.calc_text_size(SESSION_MARK).x + sp if session else 0.0
     picked = _param_combo(panel, "##target", b.target,
-                          -(feel_w + op_w + ui.chip_w("×") + 3 * sp + mark_w),
+                          -(feel_w + op_w + ui.chip_w("×") + 3 * sp),
                           lambda: _targets(panel))
     if picked:
         cur = router.table.owner(picked)
@@ -961,11 +970,6 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
             ui.tooltip(f"{b.target}: no such param — the row is dormant")
     elif not p.modulatable and imgui.is_item_hovered():
         ui.tooltip(f"{b.target} is not modulatable — the row is dormant")
-    if session:                             # row 19 (a): a route may lean on a session control
-        imgui.same_line()
-        imgui.text_colored(ui.DIM, SESSION_MARK)
-        if imgui.is_item_hovered():
-            ui.tooltip(SESSION_TIP)
     imgui.same_line()
     if b.op == TURN_OP:                     # a turn reads no feel: nothing to pick
         imgui.dummy(imgui.ImVec2(feel_w, 0))
@@ -1404,7 +1408,16 @@ def desk_target(p: Param) -> bool:
     cannot set one), not on SHIFT's own param, and not on the desk's SAVE
     (plan 24 C1: a learned toggle or key would latch it on, and every bank
     pad's tap would then make a new preset). One rule for the desk rows'
-    target combo and for the menu's "Learn desk" (`Panel._desk_target`)."""
+    target combo and for the menu's "Learn desk" (`Panel._desk_target`). Not
+    on a meta param either (register row 743): both of those land a preset-
+    layer row."""
+    return pad_target(p) and meta_refusal(p.id) is None
+
+
+def pad_target(p: Param) -> bool:
+    """Can a pad button be put on this param? `desk_target`'s rule but for a
+    meta param, which takes one: a pad row is the meta controller's own, in
+    `bindings.json`, and no preset's (`routing.is_session_row`)."""
     return p.kind is not Kind.TEXT and p.id not in (SHIFT_PARAM, SAVE_PARAM)
 
 

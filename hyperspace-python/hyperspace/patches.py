@@ -94,8 +94,9 @@ from . import graph as G
 from . import lfo as lfomod
 from . import modbank
 from . import modifiers as modmod
+from .groupwords import group_word
 from .lookback import is_lookback_key
-from .routing import Binding, base_scheme, is_continuous, is_macro
+from .routing import Binding, Macro, base_scheme, is_continuous, is_macro, meta_refusal
 
 KIND = "hyperspace.patch"
 # plan 50: `/2` is `/1` plus the optional `group` key (a patch of one param
@@ -323,7 +324,7 @@ def _check_group(doc: Mapping) -> list[str]:
     out: list[str] = []
     group = doc[GROUP_KEY]
     for key in sorted(set(doc) - set(GROUP_KEYS)):
-        out.append(GROUP_ONLY_WORDS.format(key=key, group=group))
+        out.append(GROUP_ONLY_WORDS.format(key=key, group=group_word(group)))
     if not isinstance(doc.get("values", {}), dict):
         out.append("values is not a map")
     if not isinstance(doc.get("name", ""), str) or not isinstance(doc.get("note", ""), str):
@@ -1004,11 +1005,19 @@ def check(doc: Any) -> list[str]:
                 out.append(f"route {b.source} → {b.target}: not a performer row")
             if not (m.owns(b.target) or m.own_lane(b.source)):
                 out.append(f"{key} row {b.source} → {b.target}: nothing of the patch's")
+            elif (why := meta_refusal(b.target)) is not None:    # register row 744
+                out.append(f"{key} row {b.source} → {b.target}: {why}")
     for mid, mac in (doc.get("macros") or {}).items():
         if not (isinstance(mid, str) and is_macro(mid) and 1 <= _macro_n(mid) <= MACROS):
             out.append(f"macros: {mid!r} is no macro (macro.1 … macro.{MACROS})")
         elif not isinstance(mac, Mapping) or not isinstance(mac.get("subs", []), list):
             out.append(f"{mid}: a macro is {{label, subs}}")
+        else:
+            try:
+                out += [f"{mid}'s subscriber: {meta_refusal(pid)}"      # register row 744
+                        for pid in Macro.from_json(mac).meta_subs()]
+            except (KeyError, TypeError, ValueError, AttributeError) as e:
+                out.append(f"{mid}: a subscriber this build cannot read: {e!r}"[:120])
     for key in ("lfos", "envs"):
         vals = doc.get(key) or []
         if len(_ints(vals)) != len(vals) or any(v < 1 for v in _ints(vals)):

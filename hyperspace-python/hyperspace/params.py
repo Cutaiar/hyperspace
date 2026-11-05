@@ -74,7 +74,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from . import fx, patterns, tapers, undo
+from . import fx, groupwords, patterns, tapers, undo
 from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
@@ -177,6 +177,12 @@ SESSION_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output"
 # lists the group; an id is a saved format) and are the rig's single copy:
 # `part_of` asks here first, so a preset never names one and the show keeps it
 SESSION_KEYS: dict[str, tuple[str, ...]] = {"ghost": ("mirror",)}
+# review of #371: the session params whose group is not their id's first segment
+# (`edit.undo`, `app.restart`: group `ui`; `seq.page`: group `desk`). The app's
+# verbs and the desk's page latch: no part of a look. Asked first by `part_of_id`,
+# so a table with no registry (`routing.meta_refusal`) and `part_of` cannot
+# disagree (tests/test_meta_rule.py walks the registry)
+SESSION_IDS = ("app.restart", "edit.undo", "edit.redo", "seq.page", "seq.select")
 # plan 43 C2 (row 573): the spin's pose — where each plane is in its turn,
 # `view.body` folded in (`ViewState.pose`) — saved by every preset under
 # these ids (its `pose` section, preset.POSE_KEY, beside `values`) and set
@@ -774,6 +780,8 @@ def in_group(p: Param, group: str) -> bool:
 def part_of_id(pid: str, group: str | None = None) -> str | None:
     """`part_of` by id alone: `group` is the param's, else the id's first
     segment (every group's ids start with it but the bank's, `preset`)."""
+    if pid in SESSION_IDS:
+        return "session"
     group = pid.partition(".")[0] if group is None else group
     keys = SESSION_KEYS.get(group)
     if keys and pid.rpartition(".")[2] in keys:
@@ -835,6 +843,11 @@ def is_instance_id(pid: str) -> bool:
 
 class Registry:
     """An ordered map of Param by id."""
+
+    @staticmethod
+    def group_word(group: str) -> str:
+        """`groupwords.group_word`, for `undo.py`, a leaf that holds a registry."""
+        return groupwords.group_word(group)
 
     # class-level so a registry from before a hot reload has them (plan 28 N0):
     # `serial` moves on every add and remove (the modulation patch's cache
@@ -2035,7 +2048,7 @@ def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
     r.continuous("master.gain", "Audio drive",
                  lambda: chain().gain, lambda v: setattr(chain(), "gain", v),
                  taper=tapers.T_DRIVE, fmt=tapers.fmt_gain, group=g,
-                 tip="Master gain on every band fader, after the transfer stage. Only "
+                 tip="Master gain on every analyzer band's fader, after the transfer stage. Only "
                      "does anything while a source is attached.")
     r.continuous("master.dyn", "Dynamics",
                  lambda: chain().dyn, lambda v: setattr(chain(), "dyn", v),
@@ -2046,17 +2059,17 @@ def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
     r.continuous("master.trim", "Input trim",
                  lambda: chain().trim, lambda v: setattr(chain(), "trim", v),
                  taper=tapers.T_TRIM, fmt=tapers.fmt_db, group=g,
-                 tip="One offset added to every per-band trim, at the very head of the "
+                 tip="One offset added to every analyzer band's trim, at the very head of the "
                      "chain — moves a whole song down into the 56 dB working window.")
 
     # ---- scene ----
     g = "scene"
     r.enum("scene.select", "Scene", lambda: control.scene, control.select_scene,
            control.scene_names, group=g,
-           tip="The eleven factory scenes, re-tuned onto the bands you have; the "
-               "preset strip loads a band file whole, layout included.")
+           tip="The eleven factory scenes, re-tuned onto the analyzer's bands; the "
+               "preset strip loads an analyzer file whole, layout included.")
     r.trigger("scene.reset_all", "Reset all", control.reset_all_clicked, group=g,
-              tip="Reloads the selected scene across every band. Undoable for 8 s.")
+              tip="Reloads the selected scene across the whole analyzer. Undoable for 8 s.")
 
     # ---- bands ----
     # The analyzer has N bands (plan 07), so this block is a function: it
@@ -2112,17 +2125,18 @@ def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
     def build_bands():
         g = "band"
         r.remove_prefix("band.")
-        r.enum("band.select", "Band", lambda: control.selb,
+        r.enum("band.select", "Analyzer band", lambda: control.selb,
                lambda i: setattr(control, "selb", i), lambda: chain().band_names, group=g,
                persist=False, modulatable=False,
-               tip="Which band's strip is open — the band.sel.* params follow it.")
+               tip="Which of the analyzer's bands has its strip open; the selected-band "
+                   "targets (band.sel.*) follow it.")
         # structural: never lane-driven (they rebuild this very block)
-        r.trigger("band.add", "Add band", control.add_band, group=g, modulatable=False,
-                  tip="A new band in the widest gap between the others; it becomes "
+        r.trigger("band.add", "Add analyzer band", control.add_band, group=g, modulatable=False,
+                  tip="A new analyzer band in the widest gap between the others; it becomes "
                       "the open strip.")
-        r.trigger("band.remove", "Remove band", control.remove_band, group=g,
+        r.trigger("band.remove", "Remove analyzer band", control.remove_band, group=g,
                   modulatable=False, tip="Drops the open band. The last one stays.")
-        r.trigger("band.reset", "Reset band", control.reset_band, group=g,
+        r.trigger("band.reset", "Reset analyzer band", control.reset_band, group=g,
                   tip="Puts this band's whole strip back to the selected scene.")
         for i, name in enumerate(chain().band_names):
             band_params(f"band.{i}", (lambda i=i: i), lambda lb, b=name: f"{b} {lb}")
@@ -2236,7 +2250,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
             pass
     r.switch_state = picks
     # plan 52: the base chase, held. The deck's rig control, so every deck has
-    # its own: a test or a learned button presses it, and it is `Deck.chase`'s
+    # its own: a pad's BACK (the factory row) or a learned button presses it, and it is `Deck.chase`'s
     # road: `base_chase` with this deck's undo (`chase_undo`)
     r.toggle(CHASE_PARAM, "Base chase", lambda: r.chasing, lambda v: r.base_chase(bool(v)),
              group="deck", persist=False, modulatable=False,
@@ -2770,17 +2784,18 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
                       "stop) and tap a pad instead to choose the pad.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
-        # the preset list, not the bank (2026-10-14): the pad's d-pad ← / →, held, step
-        # what the PRESETS page lists, saved ones included
+        # the preset list, not the bank (2026-10-14): they step what the PRESETS
+        # page lists, saved ones included. No factory row: Learn puts them on a
+        # control (the owner, 2026-11-04, no swapping presets from a pad)
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
                   tip="Load the next preset of the PRESETS page's list — every "
                       "preset by name, a new one included — wrapping at the end. "
-                      "The pad's d-pad →, held. The desk's QUANT walks the pads instead.")
+                      "The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
                   tip="Load the previous preset of the PRESETS page's list, wrapping "
-                      "at the start. The pad's d-pad ←, held.")
+                      "at the start.")
         # home (plan 15 WP2, decision 27): the show's startup preset. Lit
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,

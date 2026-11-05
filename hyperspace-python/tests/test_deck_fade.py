@@ -198,44 +198,46 @@ def Router_stub(src):
 
 # ----------------------------------------------- the pass order (row 625)
 
-def _free_session_param(a):
-    a.table.set_routes([])               # (the startup preset's own hand rows)
-    p = a.reg["master.gain"]
-    p.set(p._value_of_norm(0.25))
-    a.deck.sources.feed("hand", [1.0])
-    return "master.gain", p, p.norm
-
-
-def test_the_leads_session_offset_lands_in_the_frame_of_its_pass(tmp_path):
+def test_the_leads_offset_lands_in_the_frame_of_its_pass(tmp_path):
     a, b = _pair(tmp_path)
-    pid, p, was = _free_session_param(a)
-    a.table.add(Binding("hand:0", pid, "push", 0.25))
+    a.table.set_routes([])               # (the startup preset's own hand rows)
+    p = a.reg["view.bright"]
+    p.set(p._value_of_norm(0.25))
+    was = p.norm
+    a.deck.sources.feed("hand", [1.0])
+    a.table.add(Binding("hand:0", "view.bright", "push", 0.25))
     _pass((a.router, a.reg), (b.router, b.reg), chain=a.chain)
     assert p.eff_norm == pytest.approx(was + 0.25)   # this frame, not the next
 
 
-def test_a_deck_off_airs_row_on_a_session_param_is_dormant(tmp_path):
-    """Plan 44 §7's recommendation (row 650): the on-air deck's rows move the
-    room. Named the lead, the same row lands in the frame of its pass; what the
-    other deck holds is never released."""
+def test_no_deck_takes_a_row_on_a_session_param_and_one_left_standing_is_dormant(tmp_path):
+    """Register row 743: no deck's door takes a row onto a session param, so one
+    preset cannot reach through the room to the other. A hot reload can leave one
+    in the live table until the next load (row 745): off air it stays dormant
+    (row 650), and it acts only on the lead, as before."""
     a, b = _pair(tmp_path)
-    pid, p, was = _free_session_param(a)
-    b.table.add(Binding("hand:0", pid, "push", 0.25))
+    for t in (a.table, b.table):
+        with pytest.raises(ValueError, match="master.gain is the meta controller's"):
+            t.add(Binding("hand:0", "master.gain", "push", 0.25))
+        assert not t.routes_to("master.gain")
+    a.table.set_routes([])               # (the startup preset's own hand rows)
+    p = a.reg["master.gain"]
+    p.set(p._value_of_norm(0.25))
+    was = p.norm
+    a.deck.sources.feed("hand", [1.0])
+    b.table.bindings.append(Binding("hand:0", "master.gain", "push", 0.25))
     _pass((a.router, a.reg), (b.router, b.reg), chain=a.chain)
     assert p.eff_norm == pytest.approx(was) and not p.modulated
-    a.deck.session.lead = b.reg
-    _pass((b.router, b.reg), (a.router, a.reg), chain=a.chain, t=100.1)
-    assert p.eff_norm == pytest.approx(was + 0.25)
 
 
 def test_a_deck_off_air_reads_this_frames_session_values(tmp_path):
     """The lead first: a route of the deck off air scaled by a session param
-    the lead's hand rides reads the value that landed this frame."""
+    the desk moved reads the value that landed this frame."""
     a, b = _pair(tmp_path)
-    pid, p, _was = _free_session_param(a)
-    a.table.add(Binding("hand:0", pid, "push", 0.25))
+    p = a.reg["master.gain"]
+    p.set(p._value_of_norm(0.5))
     a.chain.out = CEIL * np.ones_like(a.chain.out)
-    b.table.add(Binding("lane:0", "view.bright", "push", 0.0625, scale=pid))
+    b.table.add(Binding("lane:0", "view.bright", "push", 0.0625, scale="master.gain"))
     q = b.reg["view.bright"]
     q.set(q._value_of_norm(0.25))
     base = q.norm

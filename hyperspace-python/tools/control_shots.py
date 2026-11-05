@@ -163,7 +163,7 @@ def draw(self, dt, fps):
             a.chain.warm = 0
             r = state["router"]
             if r is not None:
-                r.table.add(Binding("lane:1", "band.0.f", "push", 0.25))
+                r.table.add(Binding("lane:1", "view.speed", "push", 0.25))
                 self.router = r
         a.analyser.feed(synth(state["t"], int(a.rate / 60) + 64, a.rate))
         state["t"] += 1 / 60

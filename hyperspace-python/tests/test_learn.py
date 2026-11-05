@@ -15,7 +15,7 @@ from hyperspace.control import Control
 from hyperspace.learn import PUSH_DEPTH, Learn, centred_target, row_for
 from hyperspace.library import Library
 from hyperspace.motion import DEFAULT_ROUTE_FEEL
-from hyperspace.params import Kind, build_registry
+from hyperspace.params import Kind, build_registry, part_of
 from hyperspace.render import ViewState
 from hyperspace.routing import Binding, Bindings, Router
 
@@ -111,26 +111,21 @@ def test_the_prompts_answer_replaces_or_keeps(rig):
     assert lrn.resolve_pending(True) is None                   # nothing pending
 
 
-def test_a_learn_on_a_band_sel_alias_lands_on_the_selected_band(rig):
-    """B4: `band.sel.*` is a non-modulatable alias the router skips, so the
-    route goes on the band it stands for — whichever is selected now."""
+def test_a_learn_on_a_band_sel_alias_is_refused_as_the_bands_are(rig):
+    """B4: `band.sel.*` is a non-modulatable alias the router skips, and the
+    route would go on the band it stands for. A band is the meta controller's
+    (register row 743), so the learn is refused in words, whichever is selected."""
     lrn, t, reg = rig.learn, rig.table, rig.reg
     assert reg["band.sel.thr"].alias and not reg["band.sel.thr"].modulatable
     rig.control.selb = 2
     lrn.arm("band.sel.thr")
     lrn.learn_source("hand:7")
-    assert t.owner("band.sel.thr") is None
-    b = t.owner("band.2.thr")
-    assert (b.source, b.op) == ("hand:7", "position") and "learned band.2.thr" in lrn.last
-    # the referee still sees the real target: a second learn onto the same
-    # band through the alias is held against the row that owns it
-    rig.control.selb = 2
-    lrn.arm("band.sel.thr")
-    lrn.learn_source("hand:3")
-    assert lrn.pending is not None and lrn.pending[1] is b
+    assert t.owner("band.sel.thr") is None and t.owner("band.2.thr") is None
+    assert lrn.refused and "band.2.thr is the meta controller's" in lrn.last
     # the rule is the registry's (Registry.real), the one the panel's
     # widgets read through; a registry without one learns the alias as armed
     assert reg.real(reg["band.sel.thr"]) is reg["band.2.thr"]
+    assert Learn(reg, t).target_for("band.sel.thr").id == "band.2.thr"
     reg.real_of = None
     reg.session.real_of = None           # (plan 44 D3: the session declares the rule)
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.sel.thr"
@@ -394,13 +389,15 @@ def test_centred_target_reads_the_declared_range(rig):
 
 def test_no_target_is_refused_or_flagged(rig):
     """Rate-type params under a hand are allowed (the owner, 2026-10-04):
-    every modulatable continuous param in the registry takes a learn from
-    each kind of axis — nothing refused, nothing held, nothing warned
-    about — and lands by the one table."""
+    every modulatable continuous param in the registry but the meta
+    controller's (register row 743) takes a learn from each kind of axis —
+    nothing refused, nothing held, nothing warned about — and lands by the
+    one table."""
     lrn, t = rig.learn, rig.table
     for b in list(t.routes()):
         t.remove(b)
-    ps = [p for p in rig.reg if p.kind is Kind.CONTINUOUS and p.modulatable]
+    ps = [p for p in rig.reg if p.kind is Kind.CONTINUOUS and p.modulatable
+          and part_of(p) != "session"]
     ids = {p.id for p in ps}
     assert {"rot.rate.XY", "rot.rate.ZW", "fx.warp.drift", "fx.tripcolour.pulse",
             "view.speed"} <= ids and len(ps) > 150
@@ -688,7 +685,7 @@ def test_accepts_by_want():
     other = ("hand:right.y", "hand:7", "lane:0", "lfo:1", "ext:2", "key:B")
     # plan 27 B2: what can be armed is the device registry's; a Learn
     # handed none offers today's rig's
-    assert lrn.wants() == ("desk", "hand:left", "hand:right", "pad")
+    assert lrn.wants() == ("desk", "hand:left", "hand:right", "pad", "pair", "pair (spring)")
     assert not any(lrn.accepts(s) for s in (*desk, *left, *other))      # nothing armed
     lrn.arm("view.bright")
     assert lrn.want is None and all(lrn.accepts(s) for s in (*desk, *left, *other))
@@ -940,8 +937,9 @@ def test_unbind_by_kind(tmp_path):
     assert not [b for b in table.desk() if b.target == pid]
     # the drawn alias and its band: the desk row on the alias, the route on the band
     r.control.selb = 2
+    # (rows no door lets in since row 743: one a hot reload left in the table)
     table.bindings.append(Binding("cc:0:20", "band.sel.thr", "abs", layer="preset"))
-    table.add(Binding("lane:0", "band.2.thr", "push", 0.2))
+    table.bindings.append(Binding("lane:0", "band.2.thr", "push", 0.2))
     gone = lrn.unbind(("band.sel.thr", "band.2.thr"))
     assert {b.target for b in gone} >= {"band.sel.thr", "band.2.thr"}
     assert not table.routes_to("band.2.thr")
@@ -1134,7 +1132,11 @@ def test_a_hand_learn_onto_a_setting_is_refused_in_words(rig):
     row, holds no question, ends the learn and says why in a line the
     performer can read; a modulatable ghost param still learns."""
     lrn, t = rig.learn, rig.table
-    for pid in ("ghost.mirror", "ghost.guide", "ghost.tethers", "ghost.style"):
+    lrn.arm("ghost.mirror", "hand:right")               # the room's: the meta controller's
+    lrn.learn_source("hand:right.x")
+    assert lrn.refused and lrn.learning is None and t.owner("ghost.mirror") is None
+    assert "ghost.mirror is the meta controller's" in lrn.last
+    for pid in ("ghost.guide", "ghost.tethers", "ghost.style"):
         n = len(t.bindings)
         lrn.arm(pid, "hand:right")
         lrn.learn_source("hand:right.x")

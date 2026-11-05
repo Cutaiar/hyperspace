@@ -122,7 +122,8 @@ NO_DEVICE_SCHEMES = (*BUILTIN_SCHEMES, "mod", "key")
 # scheme not here is a role of its own (an OSC device's scheme is its
 # role). Plan 28 N5's table, moved here from graphview by plan 40 T4
 # (graphview reads it from here: the placeholder node keeps its words)
-SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pad": "pad", "hat": "pad",
+SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pair": "pad", "pad": "pad",
+               "hat": "pad",
                "touch": "pad", "motion": "pad",
                "cc": "apc40", "note": "apc40", "pitch": "apc40"}
 
@@ -600,9 +601,9 @@ class PadDevice(Base):
     the list), so whoever holds it can tell which pad is theirs."""
 
     kind = "gamepad"
-    schemes = ("axis", "pad", "hat", "touch", "motion")
-    feeds = ("axis", "touch", "motion")
-    XBOX_SCHEMES, XBOX_FEEDS = ("axis", "pad", "hat"), ("axis",)
+    schemes = ("axis", "pair", "pad", "hat", "touch", "motion")
+    feeds = ("axis", "pair", "touch", "motion")
+    XBOX_SCHEMES, XBOX_FEEDS = ("axis", "pair", "pad", "hat"), ("axis", "pair")
 
     @classmethod
     def schemes_for(cls, entry: dict | None) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -627,7 +628,8 @@ class PadDevice(Base):
         a pad other than the primary, its role too (plan 27 B6): "Learn
         p2" on a param's menu completes only from that pad, so a second
         pad can be learned onto while the first is not plugged in."""
-        return ("pad", role) if qualifier else ("pad",)
+        return ("pad", "pair", "pair (spring)", role) if qualifier else (
+            "pad", "pair", "pair (spring)")
 
     @property
     def wants(self) -> tuple[str, ...]:
@@ -730,6 +732,10 @@ class PadDevice(Base):
         axes = [Port(n, lb, rest=r, bipolar=n in g.STICKS,
                      group="sticks" if n in g.STICKS else "triggers", scheme=sc("axis"))
                 for n, lb, r in zip(g.AXES, g.AXIS_LABELS, g.AXIS_RESTS, strict=True) if has(n)]
+        from .pads import models
+        pairs = [Port(f"{a}/{b}", models.pair_label(model, a, b), rest=0.5, bipolar=True,
+                      group="pairs", scheme=sc(g.PAIR_SCHEME))
+                 for a, b in models.natural_pairs(model)]
         named = dict(g.BUTTONS)
         if model is not None:
             named = {n: i for n, i in g.ALL_BUTTONS.items()
@@ -754,7 +760,7 @@ class PadDevice(Base):
                            scheme=sc(g.MOTION_SCHEME))
                       for n, lb, r in zip(ge.MOTION_LANES, ge.MOTION_LABELS, ge.MOTION_RESTS,
                                           strict=True)]
-        return tuple(axes + buttons + hats + extra)
+        return tuple(axes + pairs + buttons + hats + extra)
 
     @property
     def model(self):
@@ -849,6 +855,7 @@ class PadDevice(Base):
         of the deck it is on (`Base.reg`), else the router's. The camera
         job is the primary pad's only (plan 27 B6, decision 24: defaults
         author no look): a second pad's unrouted axes do nothing."""
+        self._router = router       # `close` lets go through it: no later frame will
         io = self.io
         if io is None:
             return
@@ -876,6 +883,17 @@ class PadDevice(Base):
             self._dialed = gamepad.dialed(routed)
             if reg is not None:
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
+
+    def close(self) -> None:
+        """The port shut, and what the pad's buttons held let go: a device gone
+        has no `act`, so `Router.pad` never sees it off (a held BACK would go
+        on committing into the base)."""
+        lost = getattr(self.__dict__.pop("_router", None), "pad_lost", None)
+        try:
+            if lost is not None:            # duck-typed: a shim may have none
+                lost(self.qualifier)
+        finally:
+            super().close()
 
     def feed(self, sources) -> None:
         """The pad's touch and motion lanes into the shared sources (plan

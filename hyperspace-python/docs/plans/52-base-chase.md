@@ -3,7 +3,7 @@
 **Status: built (2026-11-03)** as wave 3 B1 on `wave3/b1`. Register rows
 654–656, every one (rec) pending the owner; hand checks 494–496, group BO.
 **Restart, not hot reload** (`deck.chase` is declared when a registry is
-built). The gamepad row is B2, wave 4.
+built). The gamepad row is B2, wave 4: BACK (`pad:VIEW`), register rows 723–724.
 
 The triage's phrase is "Base chase modifier". The verb: while held, what a
 param shows with its modulation (the performer's motion) is written into its
@@ -151,8 +151,17 @@ alone. Each deck's verb reaches its own registry only
 
 ## How it is called, and the seam
 
-Today: `reg["deck.chase"].set(True / False)`, whose setter calls
-`reg.base_chase`. A test presses it, and Learn lands a note or a pad button on
+`reg["deck.chase"].set(True / False)`, whose setter calls `reg.base_chase`.
+The pad's factory row holds it on BACK (`pad:VIEW`, `momentary`; the owner,
+2026-11-04, register row 723). An older file's factory tap-tempo row on BACK
+moves there at the next load; a file with nothing on BACK stays so, as the owner
+may have deleted it; and a row of the owner's on BACK stays, leaving that pad
+without a chase. It stays on until every source holding it has let go
+(`routing.press_momentary`), and a source that can never release goes through
+`routing.let_go_lost`: a pad device closed, a desk closed, an OSC sender silent. A Joy-Con's chase is its own: L on the left, R on the right, in #365's layout
+(row 724). Learn pad is armed from a widget and this param has none, so a second
+button today is a line in the file.
+A test presses it, and Learn lands a note or a pad button on
 it as `momentary`, so it is held and not latched, and a knob is refused in
 words. A row that could latch it (a `key` row, a `toggle`, a `set`, by hand in
 a file) is refused and dropped on load, as for the desk's SAVE
@@ -173,7 +182,6 @@ A bare registry, with no deck, has no steps.
 
 ## Not done
 
-- B2, the gamepad row (wave 4; the button is the owner's choice).
 - A panel button or a light for the verb: `deck.chase` is reached through the
   desk's "all params ▾" menu.
 - A key cannot press it: keys have no `momentary`, and a key row that would

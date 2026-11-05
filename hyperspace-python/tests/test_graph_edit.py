@@ -56,7 +56,8 @@ def free_param(rig, *, centred=None):
     from hyperspace.params import Kind
     table = rig.router.table
     for p in rig.reg:
-        if (p.modulatable and not p.alias and p.kind is Kind.CONTINUOUS and not p.integer
+        if (ui_routing.route_target(p) and not p.alias and p.kind is Kind.CONTINUOUS
+                and not p.integer
                 and table.owner(p.id) is None and not table.routes_to(p.id)
                 and (centred is None or learn.centred_target(p) == centred)):
             return p
@@ -174,7 +175,7 @@ def test_a_hand_into_a_base_port_is_refused_in_words_and_a_pad_is_a_setter_row(r
     e, view = edit(rig, leap())
     n = len(table.bindings)
     assert e.connect("out:hand:right.y", "base:view.bright") == "a hand sets no base; aim at mod"
-    assert e.connect("out:lane:0", "base:view.bright") == "a band sets no base; aim at mod"
+    assert e.connect("out:lane:0", "base:view.bright") == "the analyzer sets no base; aim at mod"
     assert len(table.bindings) == n
     knob = e.connect("out:cc:0:52", "base:camera.zoom")
     assert (knob.op, knob.layer, knob.target) == ("abs", "preset", "camera.zoom")

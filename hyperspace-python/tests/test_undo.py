@@ -774,8 +774,8 @@ def test_a_band_preset_load_with_a_layout_undoes_whole(rig):
     assert chain.n == 6
     lib.load("band", "THREE")
     settle(rig)
-    assert chain.n == 3 and "band.4.thr" not in reg and meta.stack[-1].label == "band: THREE"
-    assert meta.undo() and meta.status == "undid band: THREE"
+    assert chain.n == 3 and "band.4.thr" not in reg and meta.stack[-1].label == "analyzer: THREE"
+    assert meta.undo() and meta.status == "undid analyzer: THREE"
     assert chain.n == 6 and chain.layout() == layout and reg.snapshot("band") == band
     assert lib.current("band") == cur
     assert meta.redo()
@@ -806,7 +806,7 @@ def test_strips_are_put_back_only_onto_the_layout_they_were_made_on(rig):
     assert meta.undo()
     assert gain.base == was[1]                         # the rest of the step landed
     assert reg["band.0.thr"].base == edited            # the strip was left
-    assert "the bands have changed: their strips were left" in meta.status
+    assert "the analyzer's bands have changed: their strips were left" in meta.status
     control.remove_band(i)
     frames(rig, 3)
     # the same again, the band removed before the undo: the layout is the

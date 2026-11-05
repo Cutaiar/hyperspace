@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Iterator, MutableMapping
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -84,6 +84,83 @@ ROW_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
 # the qualified head (``axis@p2``) is its own Sources key — its own feed,
 # labels, rests and names — so two pads never overwrite each other
 QUALIFIER = "@"
+
+
+# Plan 56: two discrete controls of one pad as one bipolar lane. The address
+# is its own declaration, ``pair:<+ pole>/<− pole>`` in the rows' own control
+# names (``pair:UP/DOWN``, ``pair@p2:RB/LB``), so nothing lists a pair but the
+# row that reads it. Continuous: a route reads it as it reads a stick; a `step`
+# row on one is `Router.pad`'s
+PAIR_SCHEME = "pair"
+PAIR_SEP = "/"
+PAIR_REST = 0.5
+
+
+class Pole(NamedTuple):
+    """One end of a pair: the row source its control is (``hat:UP``,
+    ``pad:LB``), the constant that reads it, and whether that is a hat bit."""
+
+    source: str
+    code: int
+    hat: bool
+
+
+_POLES: dict[str, tuple[Pole, Pole] | None] = {}
+
+
+def pair_address(pos: str, neg: str, role: str = "") -> str:
+    """A pair's source address, from its poles' control names."""
+    return f"{qualified(PAIR_SCHEME, role)}:{pos}{PAIR_SEP}{neg}"
+
+
+def pair_poles(addr: str) -> tuple[Pole, Pole] | None:
+    """The (+, −) poles the address after ``pair:`` names; None unless it
+    names two different controls a pad can have."""
+    if addr in _POLES:
+        return _POLES[addr]
+    try:
+        from . import gamepad
+    except ImportError:          # no window system: dormant (decision 11), asked again later
+        return None
+    got = None
+    pos, sep, neg = addr.partition(PAIR_SEP)
+    if sep and pos != neg:
+        poles = []
+        for name in (pos, neg):
+            if name in gamepad.HATS:
+                poles.append(Pole(f"hat:{name}", gamepad.HATS[name], True))
+            elif name in gamepad.ALL_BUTTONS:
+                poles.append(Pole(f"pad:{name}", gamepad.ALL_BUTTONS[name], False))
+        if len(poles) == 2:
+            got = (poles[0], poles[1])
+    _POLES[addr] = got
+    return got
+
+
+def pole_free(pad, pole: Pole, skip=frozenset()) -> bool:
+    """`models.control_free` for one of `pad`'s poles: a pole held by anything
+    else neither moves a lane nor fires a row."""
+    from . import gamepad  # (a pole was read through it: it is there)
+    models = gamepad.models
+    m = getattr(pad, "model", None)
+    return models.control_free(m if models.is_model(m) else None,
+                               pole.source.partition(":")[2], skip)
+
+
+def pair_lanes(pad, names: dict[str, int], skip=frozenset()) -> list[float]:
+    """Each pair's lane this frame (`names`: address → lane): 1 on its + pole,
+    0 on its − pole, its rest with neither or both. A pole that is not free
+    (`pole_free`) reads as not pressed."""
+    def held(pole: Pole) -> int:
+        if not pole_free(pad, pole, skip):
+            return 0
+        return int(bool(pad.hat & pole.code) if pole.hat else pad.down(pole.code))
+    out = [PAIR_REST] * len(names)
+    for addr, i in names.items():
+        poles = pair_poles(addr)
+        if poles is not None:
+            out[i] = PAIR_REST + PAIR_REST * (held(poles[0]) - held(poles[1]))
+    return out
 
 
 def base_scheme(scheme: str) -> str:
@@ -329,7 +406,38 @@ class Sources:
             i = int(addr)
         except ValueError:
             i = -1 if m is None else m.get(addr, -1)
+            if i < 0 and base == PAIR_SCHEME and pair_poles(addr) is not None:
+                # a pair no pad publishes by default: its row declares it
+                pos, _, neg = addr.partition(PAIR_SEP)
+                m = self.add_pairs(scheme, [(addr, f"{pos} / {neg}")])
+                i = m[addr]
         return scheme, m, i
+
+    def add_pairs(self, scheme: str, pairs) -> dict[str, int]:
+        """Publish lanes for `pairs` ((address after ``pair:``, label)) under
+        `scheme`, those it lacks, at its end: the names map is replaced, so
+        every address resolves again. One it has takes the label given (a
+        row can have named a natural pair first, with no words for it).
+        Called once a frame: nothing changed, nothing is written. Returns the map."""
+        m = self.names.get(scheme) or {}
+        labels = self.labels.get(scheme) or []
+        for a, lb in pairs:
+            if a in m and labels[m[a]] != lb:
+                labels = self.labels[scheme] = list(labels)
+                labels[m[a]] = lb
+        new = [(a, lb) for a, lb in pairs if a not in m]
+        if not new:
+            return m
+        m = dict(m)
+        labels = list(labels)
+        rests = list(self.rests.get(scheme) or ())
+        for addr, label in new:
+            m[addr] = len(m)
+            labels.append(label)
+            rests.append(PAIR_REST)
+        self.labels[scheme], self.rests[scheme] = labels, rests
+        self.names[scheme] = m
+        return m
 
     def address(self, scheme: str, i: int) -> str:
         """Lane `i` of `scheme` as a row should name it: by its published

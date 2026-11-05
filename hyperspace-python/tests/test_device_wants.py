@@ -55,7 +55,7 @@ def test_row_words_say_a_control_as_a_person_does():
     assert w("hand:right.y") == "right hand y"
     assert w(Binding("hand:left.pinch.index", "x", "position")) == "left hand pinch index"
     assert w("hands:gap") == "hands gap"
-    assert w("lane:0") == "band 1"
+    assert w("lane:0") == "analyzer 1"
     assert w("pad:A") == "pad A" and w("pad@p2:A") == "pad A"
     assert w("hat:UP") == "d-pad up"
     assert w("axis@p2:LX") == "axis LX"

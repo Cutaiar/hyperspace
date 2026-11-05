@@ -395,3 +395,68 @@ def test_a_session_hit_row_waits_while_its_device_is_not_listed(tmp_path):
     again.row_schemes = (*routing.ROW_SCHEMES, *rig.row_schemes())    # Router.use does this
     again.enable(row)
     assert row.enabled
+
+
+# ------------------------------------------------------------ a press with no release
+
+def _chasing(s):
+    """A phone hit held on the base chase, BACK's row beside it."""
+    from hyperspace.params import CHASE_PARAM
+
+    s.app.router.table.add(Binding("phone:hit", CHASE_PARAM, "momentary"))
+    c = _client(s)
+    c.send_message("/hit", 1.0)
+    _until(s, lambda: s.app.reg.chasing, "the press")
+    return c
+
+
+def test_a_sender_that_dies_mid_press_lets_go_at_its_silence(tmp_path):
+    s = _show(tmp_path)
+    d = s.rig.get("phone")
+    _chasing(s)
+    _frame(s, dt=d.timeout / 2)
+    assert s.app.reg.chasing, "not silent long enough"
+    _frame(s, dt=d.timeout)
+    assert d.status == "lost" and not s.app.reg.chasing
+    assert not d._pressed
+
+
+def test_a_dead_sender_does_not_block_another_buttons_release(tmp_path):
+    """Back pressed and let go after the sender died ends the chase."""
+    from hyperspace.routing import press_momentary
+
+    s = _show(tmp_path)
+    d = s.rig.get("phone")
+    _chasing(s)
+    p = s.app.reg["deck.chase"]
+    press_momentary(p, "pad:VIEW", True)        # BACK down too
+    _frame(s, dt=d.timeout * 2)
+    assert s.app.reg.chasing, "BACK still holds it"
+    press_momentary(p, "pad:VIEW", False)
+    assert not s.app.reg.chasing
+
+
+def test_a_sender_that_releases_lets_go_at_once_and_is_forgotten(tmp_path):
+    s = _show(tmp_path)
+    d = s.rig.get("phone")
+    c = _chasing(s)
+    c.send_message("/hit", 0.0)
+    _until(s, lambda: not s.app.reg.chasing, "the release")
+    assert not d._pressed
+
+
+def test_a_row_going_under_an_osc_press_lets_go(tmp_path):
+    s = _show(tmp_path)
+    _chasing(s)
+    table = s.app.router.table
+    table.remove(next(b for b in table.bindings if b.source == "phone:hit"))
+    _frame(s)
+    assert not s.app.reg.chasing
+
+
+def test_an_osc_device_closed_mid_press_lets_go(tmp_path):
+    s = _show(tmp_path)
+    d = s.rig.get("phone")
+    _chasing(s)
+    d.close()
+    assert not s.app.reg.chasing

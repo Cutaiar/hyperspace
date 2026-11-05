@@ -99,7 +99,7 @@ PASSES = 3            # restore passes: a setter with side effects (scene.select
 # ROUTING page edits rows in place, so there is no serial to read instead
 ROW_FIELDS = ("source", "target", "op", "value", "enabled", "scale", "when", "rest",
               "layer", "pickup", "feedback", "on", "off", "ring")
-LEFT = "the bands have changed: their strips were left"
+LEFT = "the analyzer's bands have changed: their strips were left"
 
 
 def watched(p) -> bool:
@@ -701,11 +701,11 @@ class Undo:
         if ids and not parts:
             groups = {getattr(self.reg.get(pid), "group", "") for pid in ids}
             if len(groups) == 1:
-                return f"{len(ids)} {groups.pop() or 'param'} settings"
+                return f"{len(ids)} {self.reg.group_word(groups.pop()) or 'param'} settings"
         if parts and not ids:
             return ", ".join(parts)
         n = len(ids) + len(parts)
-        return f"{n} changes" if n else "the band layout"
+        return f"{n} changes" if n else "the analyzer's layout"
 
 
 # ---- the installed instance: what every push site and the two triggers reach ----
