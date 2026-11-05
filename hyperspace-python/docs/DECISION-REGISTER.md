@@ -724,7 +724,7 @@ here; overturn → the change, then the same.
 | 692 | Plan 44 D5b: ⌘Z goes by where you are, the panel's `Deck` except inside a meta section. What is under the mouse decides: a param undo watches by its own layer, wherever it is drawn; else the section; anywhere else the deck, never the focus. The audio section counts as a meta section beside the owner's three | 524, 525 | The owner, 2026-11-04, for the rule and the three sections; (rec) — pending the owner, for the mouse and for audio |
 | 693 | Plan 44 D5b: the show's mark and the session groups' labels are on the meta stack (`library.MetaMarks`); a show load is one step there and its startup preset one on the panel's deck's, so undoing all of a show load is two ⌘Zs in two places; undoing a row of the meta controller's table writes `bindings.json` | 525 | (rec) — pending the owner |
 | 715 | Plan 57 NM0: a loadable patch saves node mode as `{"player", "controller", "node"}`, the rows derived; `controller` is a device kind | 546 | owner — 2026-11-04 on saving it and on naming a player; (rec) — pending the owner on `controller` |
-| 716 | Plan 57 NM0: the fill: what stays, what fills, what is listed; a `NODE_MODE` cable kind in green | 546, 548 | owner — 2026-11-04 on the rule; (rec) — pending the owner on the colour and on a pad's axes a saved route on another node reads |
+| 716 | Plan 57 NM0: the fill: what stays, what fills, what is listed; a `NODE_MODE` cable kind in green | 546, 548 | owner — 2026-11-04 on the rule; (rec) — pending the owner on the colour and on a row elsewhere taking its freedom |
 | 717 | Plan 57: NM0 is an optional key, no bump; the rest is one migration, whose order and questions are in plan 57 | 547 | (rec) — pending the owner |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
@@ -12922,7 +12922,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Built.** `"node_mode": [{"player": 2, "controller": "gamepad", "node": "render:acid"}]`,
   written when something points. `nodemode.NodeMode`, immutable, in one order;
   `Presets.node_mode`, one per `Deck`; `point_node_mode` and `leave_node_mode`, one undo step
-  each, the dot lit. In `signature` and `library.Marks`. No UI writes it until N1.
+  each, the dot lit. In `signature` and `library.Marks`, put back by a refused load. Any node
+  with a param may be named, the camera, sequencer and channels too (`Presets._pointable`).
+  No UI writes it until N1.
 - **Why `controller`.** Everything nobody has registered is player 1's, so "player 1, this
   node" would point the desk, the pad and the hands at once. A kind names no device and reads
   as a row's address does, that player's first of the kind.
@@ -12934,7 +12936,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   by file. A device's role: rule of plan 55.
 - **To reverse.** Drop `controller` from `Pointing`; every entry then points all a player has.
 - **Rough edge.** A player's second pad cannot be pointed by a patch: it has no address a file
-  may use, as a row has none. A `dream.*` count in plan 57 is an upper bound.
+  may use, as a row has none.
 - **Judge it.** 546.
 
 ### 716. The fill, and the cable
@@ -12950,11 +12952,15 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `fillable`: continuous, no alias, no meta param (`meta_refusal`, row 743), and modulatable for
   a pad, whose rows are routes. `enter_refusal` for the chip. `graphview.NODE_MODE`,
   `node_mode_cable`, `ui_graph.KIND_COLOURS`, which `_cable` reads ahead of the type's colour.
-- **(rec).** The green, `(0.30, 0.90, 0.55)`: no other cable uses it. And `busy`: a caller's
-  list of sources not to fill, so N2a can leave an axis a saved route on another node reads,
-  as NQ6's recommendation had it. The owner's answer covers rows on the node's own params.
-- **Limit.** No view holds this cable until N1b, which adds the bundle, the menu's guard and
-  `graphview.key`. Until then a hand-edited key is saved and undrawn, and acts on nothing.
+- **(rec).** The green, `(0.30, 0.90, 0.55)`: no other cable uses it. And a row this controller
+  reads takes its freedom wherever it aims, so one stick never moves two things, as NQ6's
+  recommendation had it. The owner's answer covers rows on the node's own params. N1's desk
+  leaves out the layer rows it shadows.
+- **Limit.** **Nothing is on screen yet.** No view holds this cable until N1b, which adds the
+  menu's guard and `graphview.key`. A collapsed node draws one bundle, green only if every
+  cable in it is this kind, and today's `wiring` folds a node pair's cables together, so until
+  N1b gives these a bundle of their own the common case would read white. Until then a
+  hand-edited key is saved and undrawn, and acts on nothing.
 - **To reverse.** One function, one constant.
 - **Judge it.** 548, with N1b.
 

@@ -46,10 +46,10 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .pads.models import pole_source
 from .params import Kind
 from .players import NUMBERS
 from .routing import meta_refusal
+from .routing_sources import PAIR_SCHEME, pair_poles
 
 KEY = "node_mode"
 
@@ -59,6 +59,7 @@ NODE_GONE = "node mode: {node} is not in the preset, left out"
 
 NO_NODE = "select a node first"
 NO_PARAMS = "{node} has no params to point at"
+NO_FILLABLE = "{node} has no param a controller can fill"
 ONLY_META = "{node}'s params are the meta controller's: no row of a preset moves them"
 TOO_MANY = "{node} has too many params for this controller: {params}"
 
@@ -172,32 +173,30 @@ class Fit:
 def own_sources(source: str, qualifier: str = "") -> tuple[str, ...]:
     """The unqualified sources a row's `source` reads on the controller that
     publishes under `qualifier`, as `degrees_of_freedom` spells them; none when
-    the row is another controller's. A pair (plan 56) is its two poles."""
+    the row is another controller's, or names a pair no pad can have. A pair
+    (plan 56) is its two poles."""
     scheme, _, rest = source.partition(":")
     bare, _, who = scheme.partition("@")
     if who != qualifier:
         return ()
-    if bare == "pair":
-        return tuple(pole_source(pole) for pole in rest.split("/"))
+    if bare == PAIR_SCHEME:
+        return tuple(pole.source for pole in pair_poles(rest) or ())
     return (f"{bare}:{rest}",)
 
 
 def fill(params: Sequence[str], freedoms: Iterable[Sequence[str]],
-         rows: Iterable[tuple[str, str]] = (), qualifier: str = "",
-         busy: Iterable[str] = ()) -> Fit:
+         rows: Iterable[tuple[str, str]] = (), qualifier: str = "") -> Fit:
     """The row map, from what the patch says and nothing saved: `params` in
-    order onto `freedoms` in order. `rows` is the patch's rows as (source,
-    target): one on a param of the node stays, whoever's it is, and takes its
-    freedom if it is this controller's (`qualifier`). `busy` is sources the caller
-    will not fill (plan 53 NQ6's axis a saved route reads). Pure, so one file on
-    one controller is always one map."""
+    order onto `freedoms` in order. `rows` is the rows that stand, as (source,
+    target). One on a param of the node stays, whoever's it is. Any this
+    controller reads (`qualifier`) takes its freedom, wherever it aims, so one
+    stick never moves two things by accident. A caller whose rows are shadowed
+    while it points (a desk's layers, N1) leaves those out, keeping the ones on
+    the node. Pure, so one file on one controller is always one map."""
     rows = list(rows)
     wanted = set(params)
     kept = {target for _, target in rows if target in wanted}
-    taken = set(busy)
-    for source, target in rows:
-        if target in wanted:
-            taken.update(own_sources(source, qualifier))
+    taken = {part for source, _ in rows for part in own_sources(source, qualifier)}
     free = [tuple(f) for f in freedoms if not taken.intersection(f)]
     todo = [p for p in params if p not in kept]
     slots = tuple(Slot(f, p) for f, p in zip(free, todo, strict=False))
@@ -230,6 +229,8 @@ def enter_refusal(reg: Any, node: str | None, ids: Iterable[str],
     if fillable(reg, ids, routed=routed):
         return None
     word = node.removeprefix("render:")
-    if any(meta_refusal(pid) is not None for pid in ids):
+    if not ids:
+        return NO_PARAMS.format(node=word)
+    if all(meta_refusal(pid) is not None for pid in ids):
         return ONLY_META.format(node=word)
-    return NO_PARAMS.format(node=word)
+    return NO_FILLABLE.format(node=word)

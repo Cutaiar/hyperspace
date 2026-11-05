@@ -8,7 +8,7 @@ import pytest
 from conftest import CORPUS, seed
 
 from hyperspace import gamepad, graphview, headless, nodemode, preset, routing, ui_graph, undo
-from hyperspace.library import Marks
+from hyperspace.library import LibraryError, Marks
 from hyperspace.nodemode import NodeMode, Slot, fill
 from hyperspace.pads import models
 
@@ -152,6 +152,63 @@ def test_re_pointing_lights_the_dot(app):
     assert not app.lib.is_dirty(preset.GROUP)
 
 
+def test_a_refused_load_leaves_the_node_mode_whole(app):
+    """The landing settles against the refused file's graph; the refusal puts
+    the graph back, and the node mode with it."""
+    from test_presets import put
+
+    name = load(app, "party-noita")
+    assert app.presets.point_node_mode(1, "midi", "render:hands") is None
+    save(app, name)
+    put(Path(app.lib.home), "BROKEN", schema="hyperspace.preset/7",
+        graph={"frame": "wired", "nodes": [], "wires": [
+            {"from": "scene", "to": "acid.image"}, {"from": "acid", "to": "output.all.image"}]},
+        values={"view.speed": "fast"})
+    with pytest.raises(LibraryError, match="nothing loaded"):
+        app.lib.load(preset.GROUP, "BROKEN")
+    assert app.presets.node_mode.of(1, "midi") == "render:hands"
+    assert not app.lib.is_dirty(preset.GROUP)
+    app.presets.leave_node_mode(1, "midi")
+    save(app, name)
+
+
+def test_every_node_with_a_param_can_be_pointed_at(app):
+    """Over the canvas itself, and through a file: the camera, the sequencer
+    and the channels are in no group's list."""
+    for stem in CORPUS_PRESETS[:3]:
+        load(app, stem)
+        view = graphview.build(app.router.table, app.reg, app.router, None, None,
+                               app.presets.graph.spec)
+        for n in view.nodes:
+            name = n.id.partition(":")[2] if n.id.startswith("render:") else n.id
+            head = graphview.params_of(name) + "."
+            if nodemode.fillable(app.reg, [p.id for p in app.reg if p.id.startswith(head)]):
+                assert app.presets.point_node_mode(1, "midi", n.id) is None, n.id
+        app.presets.leave_node_mode(1, "midi")
+    for node in ("render:camera", "seq", "render:channel.a"):
+        put_file(app, "fixture", node_mode=[{**ENTRY, "node": node}])
+        load(app, "fixture")
+        assert app.presets.node_mode.of(2, "gamepad") == node
+        assert not [n for n in app.presets.notes if "node mode" in n]
+        assert json.loads(save(app, "fixture"))["node_mode"][0]["node"] == node
+
+
+def test_a_presets_and_a_mark_from_before_a_hot_reload_still_work(app):
+    load(app, CORPUS_PRESETS[0])
+    pre = app.presets
+    pre.__dict__.pop("_node_mode", None)        # a running app's object
+    assert not pre.node_mode and pre.signature()
+    assert nodemode.KEY not in pre.document("x")
+    pre.__dict__.pop("_node_mode", None)
+    pre.settle_groups()
+    marks = Marks(app.lib)
+    old = marks.take()[:9]
+    pre.node_mode = NodeMode().pointing(1, "midi", "macro.1")
+    marks.put(old)                              # an older step: left as it is
+    assert pre.node_mode.of(1, "midi") == "macro.1"
+    pre.node_mode = NodeMode()
+
+
 def test_a_node_that_goes_lets_go(app):
     load(app, CORPUS_PRESETS[0])
     bank = app.presets.banks()["lfo"]
@@ -224,9 +281,15 @@ def test_a_pair_is_one_degree_of_freedom_and_a_row_on_it_takes_both_poles():
     assert got.kept == ("a",) and not got.slots
 
 
-def test_busy_sources_are_left_alone():
-    got = fill(["a"], [("axis:LT",), ("axis:RT",)], busy=["axis:LT"])
-    assert got.slots == (Slot(("axis:RT",), "a"),)
+def test_a_row_elsewhere_takes_its_freedom_so_one_stick_never_moves_two_things():
+    got = fill(["a"], [("axis:LX",), ("axis:LY",)], rows=[("axis:LX", "fx.other.mix")])
+    assert got.slots == (Slot(("axis:LY",), "a"),) and not got.kept
+
+
+def test_a_pair_no_pad_can_have_takes_no_freedom():
+    assert nodemode.own_sources("pair:UP/NOPE") == ()
+    pair = ("hat:UP", "hat:DOWN")
+    assert fill(["a"], [pair], rows=[("pair:UP/NOPE", "x")]).slots == (Slot(pair, "a"),)
 
 
 def test_one_file_fills_what_each_controller_has():
@@ -262,6 +325,11 @@ def test_you_enter_with_a_node_selected_and_a_node_with_no_params_cannot(app):
     reg = app.reg
     assert nodemode.enter_refusal(reg, None, []) == nodemode.NO_NODE
     assert nodemode.enter_refusal(reg, "render:acid", []) == nodemode.NO_PARAMS.format(node="acid")
+    discrete = next(p.id for p in reg if p.kind is not nodemode.Kind.CONTINUOUS
+                    and routing.meta_refusal(p.id) is None)
+    mixed = ["master.gain", discrete]                       # not only the meta one's fault
+    assert nodemode.enter_refusal(reg, "render:acid", mixed) == (
+        nodemode.NO_FILLABLE.format(node="acid"))
     pid = nodemode.fillable(reg, [p.id for p in reg])[0]
     assert nodemode.enter_refusal(reg, "render:acid", [pid]) is None
 
@@ -290,6 +358,16 @@ def test_its_colour_is_no_other_cables_and_not_white(monkeypatch):
     assert (seen["col"].x, seen["col"].y, seen["col"].z, seen["col"].w) == (*rgb, k.w)
     ui_graph._cable(st, graphview.node_mode_cable(1, "a", "b", "LX", "Mix", dormant=True))
     assert seen["col"].w == pytest.approx(ui_graph.DORMANT_ALPHA)
+
+
+def test_a_bundle_of_only_node_mode_cables_is_its_colour_and_a_mix_is_not():
+    """Nodes start collapsed, so the bundle is what the owner sees."""
+    node = graphview.node_mode_cable(1, "a", "b", "LX", "Mix")
+    route = graphview.VCable("r", "a", "b")
+    green = ui_graph.KIND_COLOURS[graphview.NODE_MODE]
+    assert ui_graph._bundle_colour(graphview.VBundle("b", "x", "y", cables=[node])) is green
+    mixed = graphview.VBundle("b", "x", "y", cables=[node, route])
+    assert ui_graph._bundle_colour(mixed) is ui_graph.COLOURS[graphview.VALUE]
 
 
 def test_a_node_mode_cable_cannot_be_deleted_as_a_cable():

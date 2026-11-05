@@ -1763,7 +1763,9 @@ class Marks(_Landings):
         page positions go back too (the undo of a tidy; they are not in its file
         until it is saved). The rest of the show is `MetaMarks`'."""
         lib, pr = self.lib, self.lib.project
-        (show, landed, note, _graph, layout, bins, groups, group_high, bus, mode) = mark
+        (show, landed, note, _graph, layout, bins, groups, group_high, bus) = mark[:9]
+        # (plan 57: a step from before a hot reload has no node mode)
+        mode = mark[9] if len(mark) > 9 else None
         if show[0] == pr.ident():
             pr.layout = copy.deepcopy(show[1])
         self._reland(landed)

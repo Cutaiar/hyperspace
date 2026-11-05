@@ -146,11 +146,13 @@ from .ghost import register as declare_ghost
 from .graph import (
     EMPTY,
     FRAME_KEY,
+    MEDIA_CHANNELS,
     WIRED_FRAME,
     GraphError,
     GraphSpec,
     RigWires,
     Wiring,
+    channel_name,
     read_graph,
 )
 from .library import (
@@ -888,8 +890,6 @@ class Presets:
         self.graph = GraphSection(reg, lib=lib)
         # plan 44 D3: the bus cuts the loaded preset holds (`graph.RigWires`)
         self.bus = RigWires()
-        # plan 57: what this preset's controllers point at (`nodemode`)
-        self.node_mode = nodemode.NodeMode()
         self.landing = (None, None, None)
         # row 563: membership is settled where what the preset holds changes
         # — a landing, the table's modifiers, a bank's voices
@@ -1206,6 +1206,7 @@ class Presets:
         # (row 563: the landing settles the groups still loaded — a refusal
         # puts them back, and the floor under their numbers)
         held_groups, held_high = copy.deepcopy(self.groups), self.group_high
+        held_mode = self.node_mode          # (immutable: plan 57, as the groups, below)
         # from here to the values landing, anything that raises puts the
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
@@ -1287,6 +1288,7 @@ class Presets:
             # load leaves LFO 5's depth where it stood, not at its default
             self._restore({k: v for k, v in held_values.items() if k in reg})
             self.groups, self.group_high = held_groups, held_high
+            self.node_mode = held_mode
             raise
         # 2½. the bins (plan 32): each channel opens what its slot names at
         #     the next frame's poll
@@ -1346,7 +1348,7 @@ class Presets:
         #     plan 57 (NM0): and what its controllers point at; a node the
         #     graph does not have is left out, said; no key is nothing pointed
         mode, mode_notes = nodemode.NodeMode.read(doc.get(NODE_MODE_KEY))
-        canvas = self._held_canvas()
+        canvas = self._pointable()
         notes += mode_notes + [nodemode.NODE_GONE.format(node=e.node.removeprefix("render:"))
                                for e in mode.entries if e.node not in canvas]
         self.node_mode = mode.kept_in(canvas)
@@ -1360,7 +1362,7 @@ class Presets:
         """Player `player`'s `controller` on `node`, one undo step, the dot lit
         (plan 53 NM1: an edit of the preset); another node just switches. Why
         not (the words), when the preset does not have `node`."""
-        if node not in self._held_canvas():
+        if node not in self._pointable():
             return nodemode.NODE_GONE.format(node=node.removeprefix("render:"))
         if self.node_mode.of(player, controller) != node:
             undo.push_on(self.reg, "node mode", load=True)
@@ -1524,6 +1526,28 @@ class Presets:
         held |= {f"macro.{n}" for n in range(1, patches.MACROS + 1)}
         return held
 
+    def _pointable(self, held: set[str] | None = None) -> set[str]:
+        """Plan 57: the canvas ids node mode may point at: what a group may name
+        (`held`, `_held_canvas`), and the nodes with params every preset has
+        and no group holds: the camera, the sequencer, the eight channels. A node
+        with no params here is `nodemode.enter_refusal`'s."""
+        return (self._held_canvas() if held is None else held) | {
+            f"render:{graphview.CAMERA}", graphview.SEQ,
+            *(f"render:{channel_name(c)}" for c in MEDIA_CHANNELS)}
+
+    @property
+    def node_mode(self) -> nodemode.NodeMode:
+        """What this preset's controllers point at (plan 57). By `__dict__`, as
+        `groups`: a `Presets` from before a hot reload has none, and points at nothing."""
+        d = self.__dict__
+        if "_node_mode" not in d:
+            d["_node_mode"] = nodemode.NodeMode()
+        return d["_node_mode"]
+
+    @node_mode.setter
+    def node_mode(self, value: nodemode.NodeMode) -> None:
+        self.__dict__["_node_mode"] = value
+
     def _groupable(self, ids: list[str]) -> tuple[set[str], list[str]]:
         """Plan 40 T2: of canvas ids `ids`, those a group may hold and the
         words for the rest (`patches.groupable`, plan 50: any node the preset saves)."""
@@ -1559,12 +1583,14 @@ class Presets:
         right. Hung on the mechanisms, not the callers: the graph section's
         `on_land`, the table's `on_modifiers`, each bank's `on_change`.
         A node mode on a node that went lets go there too (plan 57)."""
-        if self.node_mode:
-            self.node_mode = self.node_mode.kept_in(self._held_canvas())
-        groups = self.groups
-        if not groups:
+        groups, mode = self.groups, self.node_mode
+        if not groups and not mode:
             return
         held = self._held_canvas()
+        if mode:
+            self.node_mode = mode.kept_in(self._pointable(held))
+        if not groups:
+            return
         for g in list(groups):
             nodes = g.get("nodes") or []
             left = [cid for cid in nodes if cid in held]
@@ -1623,7 +1649,7 @@ class Presets:
                 # plan 44 D3: a bus cable cut or joined on GRAPH
                 json.dumps(self.bus.to_json(), sort_keys=True),
                 # plan 57: a controller pointed at another node (NM1: an edit)
-                json.dumps(self.node_mode.to_json()))
+                self.node_mode)
 
     # ---- internals ----
 

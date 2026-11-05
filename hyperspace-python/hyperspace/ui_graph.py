@@ -3067,10 +3067,18 @@ def bundle_thickness(count: int) -> float:
     return min(BUNDLE_MAX, WIRE + BUNDLE_STEP * max(0, count - 1))
 
 
+def _bundle_colour(b: graphview.VBundle) -> imgui.ImVec4:
+    """What a bundle carries: its kind's colour when every cable is of one kind
+    that has its own (`KIND_COLOURS`), else its type's."""
+    kinds = {c.kind for c in b.cables}
+    k = KIND_COLOURS.get(kinds.pop()) if len(kinds) == 1 else None
+    return k or COLOURS.get(b.type, ui.DIM)
+
+
 def _bundle(st: dict, b: graphview.VBundle) -> None:
     """The one wire between two nodes while either is collapsed: coloured
     by what it carries, as thick as it is many, faint while dormant."""
-    k = COLOURS.get(b.type, ui.DIM)
+    k = _bundle_colour(b)
     col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if b.dormant else k.w)
     lit = st.get("onto_lit")
     thick = bundle_thickness(b.count)

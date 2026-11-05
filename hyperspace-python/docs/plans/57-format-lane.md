@@ -36,13 +36,15 @@ own words are per controller ("one controller points at one patch at a time"), a
 is per controller. A kind names no device, so the same file still works on another pad.
 
 **The rows are not saved. They can all be derived [V].** `nodemode.fill(params, freedoms,
-rows, qualifier, busy)` is pure:
+rows, qualifier)` is pure:
 - `params`: the node's (`ui_graph.node_params`), filtered by `nodemode.fillable`: continuous,
   no alias, no meta param (`meta_refusal`, row 743). A pad's, also modulatable.
 - `freedoms`: the controller's, in its order. `gamepad.degrees_of_freedom(model)` for a pad,
   where a pair is one. N1 adds the desk's as a profile fact.
-- `rows`: the patch's own. A mapping on the node's params stays, whoever's it is, and takes
-  its freedom if it is this controller's. The rest fill what is left.
+- `rows`: those that stand. A mapping on the node's params stays, whoever's it is. Any row
+  this controller reads takes its freedom, wherever it aims, so one stick never moves two
+  things. The rest fill what is left. A desk whose layers a node mode shadows (N1) leaves the
+  shadowed rows out.
 - What no freedom is left for is `Fit.over`, listed by `Fit.too_many`. No paging.
 
 Saving rows would be wrong as well as redundant: a row says a controller's shape, and the
@@ -50,23 +52,27 @@ file names no device. On the same file a Joy-Con fills 10 degrees of freedom and
 17 (`tests/test_nodemode.py::test_one_file_fills_what_each_controller_has`).
 
 **How the corpus fits [V].** Fillable params per node, over all 25 corpus presets, by
-`params_of`'s prefix. `dream.*` was not split between a look-back and a dream here:
+`ui_graph.node_params`'s rule. Every node with a param can be pointed at, including the
+camera, the sequencer and the eight channels, which no group holds (`Presets._pointable`):
 
 | Node | Fillable params |
 | --- | --- |
-| look-back, dream | 18 (an upper bound, see above) |
+| dream | 11 |
 | envelope, pattern | 8 |
-| fractals, zoomblur, glimmer | 7 |
+| look-back, fractals, zoomblur, glimmer | 7 |
 | plasma, huecycle, acid | 6 |
-| wobble, warp, doublevision, kaleido | 5 |
+| wobble, warp, doublevision, kaleido, a channel | 5 |
 | deconverge, tripcolour | 4 |
 | LFO | 3 |
+| camera | 2 |
 | macro, hands | 1 |
 | shape, scene, output, composite | 0: cannot be entered |
 
-Of 38 nodes, 2 exceed 16 and none exceeds 24. Xbox: 17 degrees of freedom, 11 of them axes and
-pairs; Edge 20; a Joy-Con 10. So "too many params" will be rare on the APC (16 knobs plus 8
-faders [I, N1 sets it]) and real on a Joy-Con.
+No node exceeds 11. Xbox: 17 degrees of freedom, 11 of them axes and pairs; Edge 20; a Joy-Con
+10, less any a row holds. So "too many params" should not happen on the APC (16 knobs plus 8
+faders [I, N1 sets it]), and on a Joy-Con only the dream. **For N1:** the shape reads 0 because
+`params_of` gives it a prefix no param has, though `graphview.render_owner` gives it `view.*`.
+So today's `node_params` says the shape cannot be entered; N1 should decide that on purpose.
 
 **The rest of the rule.** `enter_refusal`: a node must be selected, a node with no params
 cannot be entered, and one with only meta params says so. A node the file names and the graph
@@ -76,14 +82,14 @@ lit. A cable naming a player on another `Deck` is dormant: nothing in the file c
 N1b reads `MetaController.deck_of_player`.
 
 **The cable.** `graphview.NODE_MODE`, a kind; `graphview.node_mode_cable`, labelled "node
-mode: player 2, LX → Mix"; `ui_graph.KIND_COLOURS` holds its green, which `_cable` reads. No
-view holds one yet: N1b draws them, gives them their own bundle, guards `_cable_menu`, and
-adds them to `graphview.key`. Until then no UI writes the key, so nothing saved goes undrawn
+mode: player 2, LX → Mix"; `ui_graph.KIND_COLOURS` holds its green, which `_cable` and
+`_bundle` read. Nodes start collapsed, so the bundle is what is mostly seen, and a bundle is
+green only when every cable in it is this kind. No view holds one yet: N1b draws them, **must**
+give them their own bundle (today's `wiring` folds a node pair's cables together, and a mixed
+bundle is white), guards `_cable_menu`, and adds them to `graphview.key`. Until then no UI writes the key, so nothing saved goes undrawn
 unless a file is edited by hand. `ui_graph.DELETE` does not hold the kind, so ⌫ refuses it.
 
-**What N1 and N2 still owe the data:** whether a pad's fill counts an axis a saved route on
-another node reads as `busy` (NQ6's recommendation says yes; the owner's words cover the
-node's own params only), and D5c's "copy on air to off air", which must carry
+**What N1 and N2 still owe the data:** D5c's "copy on air to off air", which must carry
 `Presets.node_mode`. D5c was not open when this was written: its builder should check.
 
 ## 3. What the lane carries
