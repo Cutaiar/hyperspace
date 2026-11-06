@@ -359,6 +359,19 @@ def combobox_table(theme_name: str) -> dict:
 
 # The margin a popover keeps off the viewport edge - floating-ui's own
 # `padding`, and `box.place_popover`'s default.
+# An arrow pressed while the list is CLOSED decides where the highlight
+# lands, but `rows` is not known until the popup is open - so the open
+# records which end it wants and the next frame resolves it. Sentinels
+# rather than 0 / -1, because 0 is a real index and -1 is a real Python one.
+SEL_FIRST = object()
+SEL_LAST = object()
+
+# How much room the popup window keeps around its content for the field's
+# focus ring. `draw.ring` expands by `0.5 + width/2` and strokes `width`
+# wide about that path, so a 3px ring reaches 3.5px past the box; 6 is the
+# next whole step up and costs nothing but a transparent margin.
+RING_PAD = 6.0
+
 VP_PAD = T.SPACE[2]
 
 # Where each panel was last drawn, keyed by popup id — the same seam
@@ -962,13 +975,14 @@ def _state(ui, key) -> dict:
     trap the tooltip's hover clock already fell into.
     """
     return ui.anim.store.setdefault("combobox", {}).setdefault(
-        key, {"q": "", "sel": 0, "focus": True, "typed": False,
+        key, {"q": "", "sel": None, "focus": True, "typed": False,
               "was_focused": False, "side": ""})
 
 
 def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
                    disabled=False, open_=False, grab_focus=False):
-    """The trigger, which IS an input. Returns (changed, text, focused).
+    """The trigger, which IS an input. Returns (changed, text, focused,
+    clicked).
 
     This is the whole shape of the real component: Base UI's
     `ComboboxInput` is an InputGroup wrapping a real <input>, with a ghost
@@ -1034,6 +1048,11 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # both themes). That is why this one is not gated on `ui.focus_visible`.
     focused = (imgui.is_item_active()
                or (imgui.is_item_focused() and ui.focus_visible))
+    # Measured: clicking the input OPENS the list, with nothing highlighted.
+    # Focus alone does not - Tab into it and it stays closed - so the open
+    # has to hang off the click rather than off the focus, which is what the
+    # kit had and why tabbing to it opened the list.
+    clicked = imgui.is_item_clicked()
     imgui.pop_style_color(2)
     I._sandwich_end(ui, cols)
 
@@ -1053,7 +1072,37 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # open makes the next one nest, which ImGui asserts on rather than
     # tolerates ("Nested channel splitting is not supported").
     ui.dl.channels_merge()
-    return changed, out, focused
+    return changed, out, focused, clicked
+
+
+# The KEYBOARD, measured on the real Base UI component rather than
+# reasoned about. `?probe` carries `combobox.kb`, which is the only block on
+# that route WITHOUT `open` - every other one reports `aria-expanded: true`
+# whatever you press, which is how the first pass at this got it wrong.
+#
+#   closed  focus (a Tab into it)   stays CLOSED
+#   closed  click the input         opens, highlight NONE
+#   closed  ArrowDown               opens, highlight = first
+#   closed  ArrowUp                 opens, highlight = LAST
+#   closed  typing                  opens, filters, highlight NONE
+#   open    typing                  filters, highlight back to NONE
+#   open    ArrowDown               none -> first, i -> i+1, last -> NONE
+#   open    ArrowUp                 none -> last,  i -> i-1, first -> NONE
+#   open    Home/End/PageUp/PageDn  nothing at all
+#   open    Enter, highlight set    selects it, closes, value = that item
+#   open    Enter, no highlight     closes, value reverts to the committed
+#   open    Escape                  closes, value reverts, focus STAYS
+#   open    Tab                     closes, value reverts, focus MOVES ON
+#   open    click away              closes
+#
+# Two things in there are easy to get wrong and were: the highlight has a
+# real NONE state - it does not wrap, it falls off either end into nothing
+# and comes back round on the next press - and Tab is not the list's key.
+# The kit trapped Tab inside the popup, so a keyboard user could get into
+# the combobox and not out of it.
+KEY_MODEL = """closed: focus keeps it closed; click/type/arrow open it.
+open: arrows move one highlight with a NONE state at both ends, Enter takes
+the highlight, Escape closes and keeps focus, Tab closes and moves on."""
 
 
 def combobox(ui, key, x, y, w, label, items, *, size="default",
@@ -1061,6 +1110,8 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
              search="Search...", empty="No results found.") -> tuple:
     """shadcn's Combobox recipe: the trigger here, the panel on ImGui's
     popup stack. Returns `(chosen_id_or_None, open)`.
+
+    The keyboard model is `KEY_MODEL` above, measured key by key.
 
     Shaped after `interact.select`, whose filterable sibling it is — and
     like it, the popup is ImGui's: focus, dismissal on click-away or Escape,
@@ -1090,21 +1141,46 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     if not s.get("typed"):
         s["q"] = label or ""
 
-    changed, q, focused = _input_trigger(
+    # Escape closes the list and KEEPS the focus on the field - measured,
+    # and the next arrow reopens it. The field drawn here is a different
+    # imgui id from the one drawn inside the popup, so the focus does not
+    # come back on its own: the close asks for it and this hands it over on
+    # the one frame after.
+    regrab = bool(s.pop("refocus", False))
+    changed, q, focused, clicked = _input_trigger(
         ui, key, tbl, x, y, w, hh, s["q"], placeholder,
-        disabled=disabled, open_=imgui.is_popup_open(pid))
-    if changed and not disabled:
-        s["q"], s["sel"], s["typed"] = q, 0, True
-        if not imgui.is_popup_open(pid):
-            s["focus"] = True
-            imgui.open_popup(pid)
-    # Clicking the field opens the list, which is what Base UI does - the
-    # input is the trigger, so focusing it IS opening it. Edge-triggered on
-    # focus, or it would reopen the moment you dismissed it.
-    if focused and not s.get("was_focused") and not disabled:
-        if not imgui.is_popup_open(pid):
-            s["focus"] = True
-            imgui.open_popup(pid)
+        disabled=disabled, open_=imgui.is_popup_open(pid),
+        grab_focus=regrab)
+    focused = focused or regrab
+
+    def _open(sel):
+        # `armed` says the popup opened on THIS frame. The arrow that opened
+        # it must not also be processed by the list, or the first ArrowDown
+        # lands on the second row: the closed-field branch sets the
+        # highlight to the first item and the popup's own handler, running
+        # later in the same frame, moves it on by one. Measured as an
+        # off-by-one at both ends.
+        s["sel"], s["focus"], s["armed"] = sel, True, True
+        imgui.open_popup(pid)
+
+    if not disabled:
+        was_open = imgui.is_popup_open(pid)
+        if changed:
+            # typing opens it and clears the highlight - measured, and it is
+            # why `sel` starts at None rather than 0: after a filter nothing
+            # is highlighted until an arrow is pressed
+            s["q"], s["sel"], s["typed"] = q, None, True
+            if not was_open:
+                _open(None)
+        elif clicked and not was_open:
+            _open(None)
+        elif focused and not was_open:
+            # an arrow OPENS it, and which arrow decides where the highlight
+            # lands. `FIRST`/`LAST` are resolved once `rows` is known.
+            if imgui.is_key_pressed(imgui.Key.down_arrow, False):
+                _open(SEL_FIRST)
+            elif imgui.is_key_pressed(imgui.Key.up_arrow, False):
+                _open(SEL_LAST)
     s["was_focused"] = focused
     # the chevron's own target, so clicking it toggles without stealing the
     # caret from the field
@@ -1128,8 +1204,14 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     shown = filter_items(items, s["q"] if s.get("typed") else "")
     rows = [i for i, it in enumerate(shown)
             if _is_row(it) and _k(it, "enabled", True)]
-    if s["sel"] >= len(rows):
-        s["sel"] = 0
+    # resolve the two tokens an arrow-open leaves behind, and drop a
+    # highlight the filter has taken away
+    if s["sel"] is SEL_FIRST:
+        s["sel"] = 0 if rows else None
+    elif s["sel"] is SEL_LAST:
+        s["sel"] = len(rows) - 1 if rows else None
+    elif s["sel"] is not None and s["sel"] >= len(rows):
+        s["sel"] = None
 
     pad = tbl["pad"]
     ch = list_content_h(shown, tbl)
@@ -1174,13 +1256,23 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     at, _side = B.place_popover(B.Rect(x, y, w, hh), w, ph, ui.viewport,
                                 side=s["side"], align=tbl["align"],
                                 offset=tbl["side_offset"], pad=VP_PAD)
-    win_y = min(at.y, y)
-    win_h = (at.y + ph) - win_y
+    # The window is inflated by RING_PAD on every side, and everything in
+    # it is drawn RING_PAD in from its corner.
+    #
+    # ImGui clips a window's draw list to the window, and the field's focus
+    # ring is a 3px band drawn OUTSIDE the field's box - so a window that
+    # ended at the field's edge cut the ring off square, and took the right
+    # ends of the rows with it. It only showed when the list was reached
+    # with Tab, because that is the one way in that rings the field while
+    # the list is open.
+    win_y = min(at.y, y) - RING_PAD
+    win_h = (at.y + ph) - win_y + RING_PAD
     # Radix rounds its own transform, so the panel's origin is integral and
     # the gap off a fractional trigger runs 3.625 … 4.5 rather than a
     # constant 4. Measured; see the module docstring.
-    imgui.set_next_window_pos(imgui.ImVec2(round_px(at.x), round_px(win_y)))
-    imgui.set_next_window_size(imgui.ImVec2(w, win_h))
+    imgui.set_next_window_pos(
+        imgui.ImVec2(round_px(at.x) - RING_PAD, round_px(win_y)))
+    imgui.set_next_window_size(imgui.ImVec2(w + 2 * RING_PAD, win_h))
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
     imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
     # A POPUP's border is `PopupBorderSize`, which is 1.0 by default and
@@ -1206,27 +1298,39 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         a = ui.anim.to(f"{pid}:open", 1.0)
         dl = imgui.get_window_draw_list()
         p = imgui.get_window_pos()
-        px = p.x
+        px = p.x + RING_PAD
         py = p.y + (at.y - win_y)            # the panel, below the trigger
         LAST_RECT[pid] = (px, py, w, ph)
         saved, ui.dl = ui.dl, dl
         # the field, redrawn here so its caret is in the focused window
-        changed2, q2, _f2 = _input_trigger(
+        changed2, q2, _f2, _c2 = _input_trigger(
             ui, f"{key}.open", tbl, px, p.y + (y - win_y), w, hh, s["q"],
             placeholder, disabled=disabled, open_=True,
             grab_focus=s.get("focus", False))
         s["focus"] = False
         if changed2:
-            s["q"], s["sel"], s["typed"] = q2, 0, True
+            # typing clears the highlight, here as well as on the closed
+            # field - measured, and the two paths have to agree or the
+            # highlight survives a filter on one of them
+            s["q"], s["sel"], s["typed"] = q2, None, True
         _panel_chrome(ui, dl, px, py, w, ph, a, tbl)
 
-        # one highlight, moved by EITHER the pointer or the keyboard, which
-        # is what cmdk's single `data-selected` attribute means
-        if rows:
+        # One highlight, moved by EITHER the pointer or the keyboard. It
+        # does NOT wrap: measured, going past the last item clears it and
+        # the next press comes back round at the other end, so there is a
+        # real "nothing highlighted" state between the two ends.
+        n = len(rows)
+        if s.pop("armed", False):
+            n = 0                       # this frame's arrow opened the list
+        if n:
             if imgui.is_key_pressed(imgui.Key.down_arrow, True):
-                s["sel"] = (s["sel"] + 1) % len(rows)
+                cur = s["sel"]
+                s["sel"] = 0 if cur is None else (
+                    None if cur + 1 >= n else cur + 1)
             if imgui.is_key_pressed(imgui.Key.up_arrow, True):
-                s["sel"] = (s["sel"] - 1) % len(rows)
+                cur = s["sel"]
+                s["sel"] = n - 1 if cur is None else (
+                    None if cur - 1 < 0 else cur - 1)
 
         # The scroll child spans the WHOLE panel and the rows are inset
         # inside it, rather than the child BEING the rows' box.
@@ -1287,7 +1391,8 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
                 # for rows with no id, which keeps `ui.hit`'s duplicate-id
                 # guard from firing on a list of blanks.
                 if _row(ui, it, r, f"{key}.r{_k(it, 'id', '') or i}", tbl,
-                        selected=bool(rows) and rows[s["sel"]] == i,
+                        selected=(s["sel"] is not None and bool(rows)
+                                  and rows[s["sel"]] == i),
                         checked=bool(chk)):
                     chosen = _k(it, "id", "")
             if not rows and ("empty", 0) in place:
@@ -1296,12 +1401,24 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
                         tbl["empty_font"], _col(ui, tbl["empty_ink"]),
                         align="center", box_w=r.w, baseline_box=r.h)
 
-        if rows and (imgui.is_key_pressed(imgui.Key.enter, False)
-                     or imgui.is_key_pressed(imgui.Key.keypad_enter, False)):
-            chosen = _k(shown[rows[s["sel"]]], "id", "")
+        if (imgui.is_key_pressed(imgui.Key.enter, False)
+                or imgui.is_key_pressed(imgui.Key.keypad_enter, False)):
+            # with a highlight it takes it; with none it just closes, and
+            # the query reverts to the committed value on the way out
+            if rows and s["sel"] is not None:
+                chosen = _k(shown[rows[s["sel"]]], "id", "")
+            else:
+                imgui.close_current_popup()
+        # Tab is NOT the list's key. Measured: it closes the list and moves
+        # focus on. The kit swallowed it inside the popup, so a keyboard
+        # user could get into the combobox and not back out of it.
+        if imgui.is_key_pressed(imgui.Key.tab, False):
+            imgui.close_current_popup()
         if chosen is not None:
             imgui.close_current_popup()
         elif imgui.is_key_pressed(imgui.Key.escape, False):
+            # focus stays on the field, so the next arrow reopens the list
+            s["refocus"] = True
             # ImGui dismisses a popup on Escape on its own — but NOT while
             # an InputText inside it has the keyboard, because the field
             # takes the first Escape to cancel its own edit. Measured in a

@@ -328,6 +328,25 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
         </div>
       </div>
 
+      {/* ---- A combobox that is NOT forced open, which is the only way to
+           ask what the KEYBOARD does: whether focus opens it, whether an
+           arrow opens it, whether Escape closes it, and where Tab goes.
+           Every other combobox block on this route carries `open`, so
+           `aria-expanded` is true in them whatever you press. ---- */}
+      <P id="combobox.kb" w={320}>
+        <Combobox items={["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"]}>
+          <ComboboxInput placeholder="Keyboard" />
+          <ComboboxContent>
+            <ComboboxEmpty>None.</ComboboxEmpty>
+            <ComboboxList>
+              {(item: string) => (
+                <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+      </P>
+
       {/* ---- Tooltip, forced open ---- */}
       <P id="tooltip.open">
         <TooltipProvider>

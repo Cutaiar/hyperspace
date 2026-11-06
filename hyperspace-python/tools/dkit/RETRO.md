@@ -28,15 +28,17 @@ mechanism; each entry is a thing that can be done or checked.
 | 15 | Scrolling was wildly too sensitive | ImGui moves `5 × font_size` per wheel unit; macOS GLFW sends `scrollingDeltaY × 0.1` of *finger travel*, so a 100pt swipe moved 900px | **Input mapping is a measurement too.** A default is not a decision. |
 | 16 | A Buttons enumeration card on the dashboard page | Removed; the Gallery enumerates | Two pages, two jobs: gallery enumerates, dashboard uses realistically, **nothing in both**. |
 
+| 17 | The combobox opened on focus, trapped Tab, highlighted the first row always, and clipped its own focus ring | Measured the real keyboard model key by key and implemented it; inflated the popup window by `RING_PAD` | **Measure the component in the state the question is about.** My first keyboard probe used a block with `open` hard-set, so `aria-expanded` was true whatever I pressed. `?probe` now carries `combobox.kb`, the one block without it. |
+
 ## Mine, found by me or by an agent
 
 | # | Issue | Fix | What would have caught it |
 |---|---|---|---|
-| 17 | `test_gallery.py` booted a GL context per test and never shut one down, poisoning unrelated tests — and I reported those failures as a subagent's in-flight work | Boot, measure, tear down, then render | **Check `git diff` before attributing a failure.** My file was in the failing set the whole time. |
-| 18 | The first "no scrollbar" test passed against the broken code — it read pixels in a region nothing ever painted | Assert at the call site instead | **Verify every new test against the broken code it covers.** A test that cannot fail is worse than no test, because it is counted. |
-| 19 | `invisible_button` cannot take keyboard focus in ImGui 1.92.9, so the Button's focus ring — the "reference implementation" — had never painted | `ButtonFlags_.enable_nav` on `Ui.hit` | **Check that a reference implementation works before porting it.** Copying it would have shipped four more rings that cannot appear and four tests that cannot fail. |
-| 20 | `combobox_size` reserved 36px for a search field the widget had stopped drawing | Removed | **Ask both halves the same question.** A size function and the thing it sizes should be tested against each other. |
-| 21 | The empty state was still the Command recipe's — 68 tall, `popover-foreground` | Re-measured: 36, `muted-foreground`, `data-empty:p-0` | Same as 8: a correct measurement of the wrong component is still wrong. |
+| 18 | `test_gallery.py` booted a GL context per test and never shut one down, poisoning unrelated tests — and I reported those failures as a subagent's in-flight work | Boot, measure, tear down, then render | **Check `git diff` before attributing a failure.** My file was in the failing set the whole time. |
+| 19 | The first "no scrollbar" test passed against the broken code — it read pixels in a region nothing ever painted | Assert at the call site instead | **Verify every new test against the broken code it covers.** A test that cannot fail is worse than no test, because it is counted. |
+| 20 | `invisible_button` cannot take keyboard focus in ImGui 1.92.9, so the Button's focus ring — the "reference implementation" — had never painted | `ButtonFlags_.enable_nav` on `Ui.hit` | **Check that a reference implementation works before porting it.** Copying it would have shipped four more rings that cannot appear and four tests that cannot fail. |
+| 21 | `combobox_size` reserved 36px for a search field the widget had stopped drawing | Removed | **Ask both halves the same question.** A size function and the thing it sizes should be tested against each other. |
+| 22 | The empty state was still the Command recipe's — 68 tall, `popover-foreground` | Re-measured: 36, `muted-foreground`, `data-empty:p-0` | Same as 8: a correct measurement of the wrong component is still wrong. |
 
 ## The four habits these reduce to
 
