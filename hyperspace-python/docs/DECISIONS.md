@@ -653,3 +653,4 @@ nuance). Built so far: D1, D2, D3, D4.
 | Order-independent transparency (deferred): hands inside the scene are solid, drawn before the sorted see-through shape. | owner |
 | Touch shows (fingertips lighting the shape where they meet it) and hand–shape contact: looks for the creative pass, after plan 26 put the hands and the shape in one space. | owner |
 | New 4-polytope families in plan 22: ranked in [`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md). Built in plan 28 at the owner's word (2026-10-17): first its recommendation, then every candidate it drew or gave a recipe for, and its cheap extras, so the owner can judge each by eye. The 120/600 forms past the rectified 600-cell, the other Catalan duals and the duoantiprisms are not built. | owner |
+| beta decided a thing | row 911 |

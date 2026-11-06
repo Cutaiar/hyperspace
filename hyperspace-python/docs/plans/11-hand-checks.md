@@ -8273,6 +8273,16 @@ the graph it then refuses in words until a change is made there (row 753). Say w
 question at any load, and both act. Fail: a row landing or going before you answer, or a
 meta row not coming back.
 
+## ZB. Scratch group beta
+Register row 911. Headless: `tests/test_beta.py`.
+**911. Scratch beta 911.** (a laptop)
+1. beta step one of 911.
+2. beta step two of 911. *Pass:* beta passes.
+
+**912. Scratch beta 912.** (a laptop)
+1. beta step one of 912.
+2. beta step two of 912. *Pass:* beta passes.
+
 ## What no test covers
 
 Only a person can settle these:

@@ -765,6 +765,8 @@ here; overturn → the change, then the same.
 | 754 | Plan 56: a row a person makes on a `pair:` lane while a pole already has a row asks first: keep both, let the pair take over, or cancel, with no default. A file, a migration and a factory row do not ask, and both act. A taken row goes on its own layer's stack | 580 | owner — 2026-11-06 |
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
+| 911 | beta first row | (rec) | |
+| 912 | beta second row | (rec) | |
 
 "—": no hand check shows it; tests only.
 
@@ -13842,3 +13844,19 @@ still wins, as does a sink row.
   `ui_routing.desk_target`. A row on one in a patch's file drops with a note; a person's row already in `bindings.json` still works.
   Base chase's home is the pad's BACK (`pad:VIEW`).
 - **Judge it.** 574.
+
+### 911. beta section 911
+
+- **Answer.** beta answers 911.
+- **Built.** beta built 911.
+
+  A paragraph of beta's 911.
+- **Judge it.** 911.
+
+### 912. beta section 912
+
+- **Answer.** beta answers 912.
+- **Built.** beta built 912.
+
+  A paragraph of beta's 912.
+- **Judge it.** 911.
