@@ -8232,7 +8232,7 @@ Register row 753, 2026-11-06. Restart first. Headless: `tests/test_undo_latch.py
    *Pass:* "nothing to undo here yet: make a change on deck 1 first", and Brightness stays. ⇧⌘Z says the same for redo.
 2. Move any small thing on deck 1, then ⌘Z twice. *Pass:* the first takes that thing, the second Brightness.
 3. Panel on the deck on air, a change, then press a filled bank pad, then ⌘Z. *Pass:* nothing moves in the room, and
-   the footer refuses. Click to the deck off air, ⌘Z. *Pass:* refused too, and the load stands. Change something, ⌘Z twice. *Pass:* the load goes back.
+   the footer refuses. Click to the deck off air, ⌘Z. *Pass:* refused too, and the load stands. Change something, ⌘Z twice. *Pass:* the load goes back. Back on the deck on air, a change, then the pad of the look the other deck already holds, unedited, then ⌘Z. *Pass:* the change goes back: a load that changed nothing shuts nothing.
 4. Mouse on the analyzer section, move a threshold. Run the mouse over the canvas and back, with no press, ⌘Z. *Pass:* it goes back: passing over is no focus change.
 5. Move a threshold again, on the canvas turn a knob, back on the analyzer ⌘Z. *Pass:* refused; the threshold stays.
 6. Pick a value from a combo in the audio or hands section, the first change there, where the list hangs over another section. Bring the mouse back to that section, ⌘Z. *Pass:* it goes back.

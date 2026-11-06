@@ -458,6 +458,7 @@ class Undo:
         ids, parts, _left = self._differs(step.before, now, tagged=False)
         empty = self._empty(step, now, ids, parts)
         opens, self._opens = self._opens, False
+        _load_closed(self, landed=not empty)
         if empty:
             self.stack[:] = [s for s in self.stack if s is not step]
             return
@@ -475,15 +476,19 @@ class Undo:
             empty = self._marks_equal(step.before.marks)
         return empty
 
-    def _will_open(self) -> bool:
-        """Will the open step open the latch when it lands: begun on focus, and not
-        about to close empty (a load of the look already there, a knob brought back)?"""
+    def _will_land(self) -> bool:
+        """Is there an open step not about to close empty (a load of the look already
+        there, a load that failed, a knob brought back)?"""
         step = self._open
-        if step is None or not self._opens:
+        if step is None:
             return False
         now = self._take()
         ids, parts, _left = self._differs(step.before, now, tagged=False)
         return not self._empty(step, now, ids, parts)
+
+    def _will_open(self) -> bool:
+        """Will the open step open the latch when it lands: begun on focus, and landing?"""
+        return self._opens and self._will_land()
 
     def _marks_equal(self, mark) -> bool:
         try:
@@ -561,6 +566,7 @@ class Undo:
 
     def clear(self) -> None:
         """Forget every step; the state now is the settled one."""
+        _load_closed(self, landed=self._will_land())
         self.stack.clear()
         self.redos.clear()
         self._open, self._absorb, self._action_frame = None, 0, -1
@@ -742,6 +748,7 @@ _where = globals().get("_where")
 _focused: Undo | None = globals().get("_focused", _installed)   # what the latch goes by
 _hand: bool = globals().get("_hand", False)   # the person is working the panel (`by_hand`)
 _room: Undo | None = globals().get("_room")   # the stack of the deck on air (`on_air`)
+_loading: Undo | None = globals().get("_loading")   # a load's step still open (`_await_load`)
 
 
 # each registry's own `Undo`, a deck's whether or not it is the installed one, so
@@ -873,6 +880,24 @@ def _shut(u: Undo | None) -> None:
         u.latched, u._opens = True, False
 
 
+def _await_load(u: Undo) -> None:
+    """A load's step has opened on `u`, which is not the panel's deck. If it lands, and
+    the panel's deck is on air, that deck latches: a mis-pressed pad and a ⌘Z must not
+    take the room's last step. A load that changed nothing shuts nothing."""
+    global _loading
+    if u._open is not None and u._open.load:
+        _loading = u
+
+
+def _load_closed(u: Undo, *, landed: bool) -> None:
+    """`u`'s open step is closing (or a clear is dropping it): the end of the wait."""
+    global _loading
+    if u is _loading:
+        _loading = None
+        if landed and _installed is _room:
+            _shut(_installed)
+
+
 def takes_back(u: Undo) -> bool:
     """Would ⌘Z here take back the step just begun on `u`? For words which promise it:
     only a step that opens the latch and will not close empty."""
@@ -885,6 +910,8 @@ def _refused(at: Undo, verb: str) -> bool:
     closed, so a hold or a gesture under way goes on."""
     at._observe(at._fingerprint())
     _focus(at)
+    if at is _installed and _loading is not None:     # inside a load's settle time
+        _load_closed(_loading, landed=_loading._will_land())
     if at.latched and not at._will_open():
         at._say(f"nothing to {verb} here yet: make a change {at.called} first")
         return True
@@ -922,9 +949,9 @@ def push_on(reg, label: str, *, load: bool = False) -> None:
     if u is None or u is _installed:
         push(label, load=load)
     else:
-        if load and _installed is _room:      # with the panel on air: a pad, a copy (row 753)
-            _shut(_installed)
         _guarded("push", lambda v: v.push(label, load=load), on=u)
+        if load:                              # a pad, a copy, with the panel on air (row 753)
+            _await_load(u)
 
 
 def push_meta(label: str, *, load: bool = False) -> None:

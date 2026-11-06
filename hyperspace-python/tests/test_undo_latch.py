@@ -475,6 +475,96 @@ def test_a_step_that_will_land_still_goes_back_at_the_press(rig):
     assert p.base == was and not u.latched
 
 
+def _room_step(rig):
+    """A step of the room's, open to ⌘Z. Returns the param and its value before."""
+    p = rig.one.reg[BRIGHT]
+    was = p.base
+    change(rig.one.reg)
+    go(rig)
+    assert not rig.one.undo.latched
+    return p, was
+
+
+@pytest.mark.parametrize("settled", [True, False])
+def test_a_failed_load_shuts_nothing(rig, settled):
+    """Third review. A load that changes nothing on the other deck: the room's ⌘Z is as
+    it was, at the press inside the settle time and after it."""
+    p, was = _room_step(rig)
+    undo.push_on(rig.two.reg, "load that failed", load=True)
+    if settled:
+        go(rig)
+    assert not rig.one.undo.latched
+    press(rig)
+    assert p.base == was
+
+
+def test_a_pad_whose_file_will_not_load_shuts_nothing(rig):
+    """The same by the pad's road, with a file that is not there."""
+    rig.one.presets.lib.project.bank[0] = "party-wake"
+    p, was = _room_step(rig)
+    moved = p.base
+    rig.one.presets.lib.project.bank[0] = "no-such-look"
+    rig.one.reg["preset.load.0"].fire()
+    go(rig)
+    assert p.base == moved and not rig.one.undo.latched
+    press(rig)
+    assert p.base == was
+
+
+@pytest.mark.parametrize("settled", [True, False])
+def test_a_pad_of_the_look_already_there_shuts_nothing(rig, settled):
+    _pad_rig(rig)
+    rig.one.reg["preset.load.0"].fire()
+    go(rig)
+    p, was = _room_step(rig)
+    steps = len(rig.two.undo.stack)
+    rig.one.reg["preset.load.0"].fire()
+    if settled:
+        go(rig)
+        assert len(rig.two.undo.stack) == steps, "it closed empty"
+    press(rig)
+    assert p.base == was
+
+
+def test_a_real_load_with_cmd_z_inside_the_settle_takes_nothing_from_the_room(rig):
+    """The step is still open at the press and will land: the room's stack shuts then."""
+    _pad_rig(rig)
+    p, _was = _room_step(rig)
+    moved, steps = p.base, len(rig.one.undo.stack)
+    rig.one.reg["preset.load.0"].fire()
+    assert rig.two.undo._open is not None and not rig.one.undo.latched
+    press(rig)
+    refused_on(rig.one.undo, "undo", "on deck 1")
+    assert p.base == moved and len(rig.one.undo.stack) == steps
+    go(rig)
+    press(rig)
+    refused_on(rig.one.undo, "undo", "on deck 1")
+    change(rig.one.reg, "view.speed", 1)  # the press settled it: a touch now opens it
+    go(rig)
+    assert not rig.one.undo.latched
+
+
+def test_a_real_load_latches_the_room_as_it_lands(rig):
+    _pad_rig(rig)
+    _room_step(rig)
+    rig.one.reg["preset.load.0"].fire()
+    assert not rig.one.undo.latched, "not until it lands"
+    go(rig)
+    assert rig.one.undo.latched
+
+
+def test_a_copy_onto_an_empty_deck_latches_the_room_though_its_step_is_cleared(rig):
+    """`copy_on_air` clears the step it opened: the look landed all the same."""
+    assert rig.two.presets.current is None and not rig.two.undo.stack
+    p, _was = _room_step(rig)
+    moved = p.base
+    rig.meta.copy_on_air()
+    assert rig.two.undo.stack == []
+    press(rig)
+    refused_on(rig.one.undo, "undo", "on deck 1")
+    assert p.base == moved
+
+
 def test_a_pad_leaves_a_meta_stack_in_focus_alone(rig):
     """Finding 4. An analyzer nudge, a pad, ⌘Z with the mouse unmoved: the nudge goes back."""
     _pad_rig(rig)
@@ -628,14 +718,18 @@ def test_one_check_on_the_road_every_load_takes(rig):
     go(rig)
     undo.push_on(rig.two.reg, "a verb that is no load")
     assert not rig.one.undo.latched
-    undo.push_on(rig.two.reg, "a future verb", load=True)
-    assert rig.one.undo.latched
     go(rig)
+    undo.push_on(rig.two.reg, "a future verb", load=True)
+    change(rig.two.reg)  # a load that changes something
+    go(rig)
+    assert rig.one.undo.latched
 
     rig.meta.point_panel(rig.two)
     change(rig.two.reg)
     go(rig)
     undo.push_on(rig.one.reg, "panel off air", load=True)
+    change(rig.one.reg)
+    go(rig)
     assert not rig.two.undo.latched
 
 
