@@ -1,5 +1,8 @@
 # QR Dither
 
+> **[STATUS.md](STATUS.md)** is the handoff: current state, what is verified,
+> and the four open questions. Start there.
+
 A tesseract drawn *in the data of a QR code*, not on top of one. Grab it, fold
 it through the fourth dimension, and the code re-derives itself every update —
 always scanning, always landing on `hyperspace.cutaiar.io`.
