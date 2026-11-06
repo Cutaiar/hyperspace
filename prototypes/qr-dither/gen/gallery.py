@@ -11,6 +11,7 @@ what is checked is the exact file the page serves.
 """
 import argparse
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -22,7 +23,32 @@ import style as sty
 
 from paths import WEB, WORK
 
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# Headless Chrome rasterises each SVG so the thing decoded is the shipped file.
+# Nothing else about this prototype is platform-specific, so the lookup is not
+# either: set QRD_CHROME to point at any Chromium build.
+CHROME_CANDIDATES = [
+    "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+]
+
+
+def find_chrome():
+    env = os.environ.get("QRD_CHROME")
+    if env:
+        if pathlib.Path(env).exists():
+            return env
+        sys.exit(f"QRD_CHROME is set to {env!r}, which does not exist.")
+    for c in CHROME_CANDIDATES:
+        hit = shutil.which(c) or (c if pathlib.Path(c).exists() else None)
+        if hit:
+            return hit
+    sys.exit(
+        "Need headless Chrome to verify the SVGs, and none was found.\n"
+        "Tried: " + ", ".join(CHROME_CANDIDATES) + "\n"
+        "Set QRD_CHROME to a Chromium binary, or install Chrome.")
+
 OUT = WEB / "gallery"
 RAST = WORK / "gallery-rast"
 
@@ -122,7 +148,7 @@ def rasterise(svg_path, png_path, px=10, quiet=4):
     vb = txt.split('viewBox="0 0 ', 1)[1].split(" ", 1)[0]
     side = int(float(vb)) * px
     subprocess.run(
-        [CHROME, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
+        [find_chrome(), "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
          "--force-device-scale-factor=1", f"--window-size={side},{side}",
          "--default-background-color=FFFFFFFF", f"--screenshot={png_path}", str(svg_path)],
         check=True, capture_output=True, timeout=90)
@@ -144,8 +170,8 @@ def main():
     args = ap.parse_args()
     base = args.url.rstrip("#")
 
-    if not pathlib.Path(CHROME).exists():
-        sys.exit(f"need headless Chrome to verify the SVGs: {CHROME} not found")
+    chrome = find_chrome()            # fail now, not after the first solve
+    print(f"verifying with {chrome}")
 
     OUT.mkdir(parents=True, exist_ok=True)
     RAST.mkdir(parents=True, exist_ok=True)
