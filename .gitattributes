@@ -1,0 +1,7 @@
+# Doc tails every PR appends to: a merge keeps both sides' lines instead of
+# conflicting (hyperspace-python/docs/ENGINEERING.md §16, "Doc tails").
+# tests/test_doc_numbers.py catches what a clean union can't: two rows with one number.
+hyperspace-python/docs/DECISION-REGISTER.md merge=union
+hyperspace-python/docs/DECISIONS.md merge=union
+hyperspace-python/docs/plans/11-hand-checks.md merge=union
+hyperspace-python/docs/plans/README.md merge=union

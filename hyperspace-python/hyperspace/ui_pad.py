@@ -22,6 +22,10 @@ What is lit is what a control **does**:
   depth). Such a lane is lit with its label in grey — nothing in the
   table, nothing to unbind, the app's own hand on it, as a grey label on
   the desk is a row that is the meta controller's;
+* a stick a route reads as a dial (``axis:L.NE`` …, plan 28) shows its eight
+  sectors in its well, each filled to how far it reads, and its X and Y say
+  "Left dial · petal" in grey: off the camera job, the reading the panel's
+  deck's (`pad.dial.*`);
 * every other control is dark: its glyph only.
 
 Pad rows are the meta controller's, not a layer's (`learn.learn_pad_button`), so
@@ -60,6 +64,7 @@ import math
 from imgui_bundle import imgui
 
 from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
+from .params import dial_id
 from .routing import PAIR_SCHEME, Binding, pair_poles
 
 SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")   # the schemes a pad control's row can have
@@ -158,12 +163,57 @@ def _key(table) -> tuple:
             getattr(table, "redraw_serial", 0))
 
 
+def dialed(table) -> set[str]:
+    """The sticks ("L", "R") an enabled route reads as a dial (``axis:L.NE`` …,
+    gamepad.DIAL_LANES): their X and Y are off the camera job, as `gamepad.claims` has it."""
+    out = set()
+    for b in table.of("axis"):
+        stick, dot, sector = b.source.partition(":")[2].partition(".")
+        if (b.enabled and not b.device and dot and stick in gamepad.DIAL_STICKS
+                and sector in gamepad.COMPASS):      # (a second pad's row is not this picture's)
+            out.add(stick)
+    return out
+
+
 def rows_cached(panel, table) -> dict[str, Binding]:
     st = _state(panel)
     key = _key(table)
     if st.get("key") != key or st.get("table") is not table:
-        st.update(key=key, table=table, rows=rows(table))
+        st.update(key=key, table=table, rows=rows(table), dialed=dialed(table))
     return st["rows"]
+
+
+def _stick_of(source: str) -> str | None:
+    """The dial stick ("L", "R") a source belongs to: its well, or its X / Y lane."""
+    if source in ("pad:LSTICK", "pad:RSTICK"):
+        return source[4]
+    return source[5] if source in ("axis:LX", "axis:LY", "axis:RX", "axis:RY") else None
+
+
+def _dial_of(panel, source: str) -> str | None:
+    """The stick `source` is part of, when a route on the panel's deck reads it as a dial."""
+    stick = _stick_of(source)
+    return stick if stick is not None and stick in _state(panel).get("dialed", ()) else None
+
+
+def _free_words(panel, source: str) -> str:
+    """What a control with no row says, in every view: an X or Y of a stick a route reads
+    as a dial, "Left dial · petal"; else its built-in meaning, if it has one."""
+    stick = _dial_of(panel, source)
+    p = panel.reg.get(dial_id(stick)) if stick is not None and source.startswith("axis:") else None
+    return f"{p.label} · {p.text()}" if p is not None else BUILT_IN.get(source, "")
+
+
+def _sectors(panel, pad, c: gamepad.Control) -> list[float] | None:
+    """The eight sectors to draw in stick `c`'s well, how far each reads; None: this
+    stick is no dial. At rest while the pad is on the other deck: it reads that deck's."""
+    stick = _dial_of(panel, c.source)
+    if stick is None:
+        return None
+    if pad is None or not panel.pad_reads_here():
+        return [0.0] * gamepad.DIAL
+    n, j = gamepad.DIAL, list(gamepad.DIAL_STICKS).index(stick)
+    return pad.dials()[j * n:(j + 1) * n]
 
 
 # ---------------------------------------------------------------- the room
@@ -238,7 +288,8 @@ def _stick(pad, c: gamepad.Control) -> tuple[float, float]:
 
 def says(panel, c: gamepad.Control, b: Binding | None) -> str:
     """What a lit control does: its row's param in the panel's words
-    (`ui_desk.text`), else the built-in meaning of a free axis
+    (`ui_desk.text`), else, an X or Y of a stick a route reads as a dial,
+    "Left dial · petal", else the built-in meaning of a free axis
     (`BUILT_IN`), else "" — a dark control."""
     if b is not None:
         if b.scheme != PAIR_SCHEME:
@@ -249,7 +300,7 @@ def says(panel, c: gamepad.Control, b: Binding | None) -> str:
             return ui_desk.text(panel.reg, Binding(c.source, b.target, "step",
                                                    b.value if up else -b.value))
         return f"{ui_desk.text(panel.reg, b)} {'+' if up else '−'}"
-    return BUILT_IN.get(c.source, "")
+    return _free_words(panel, c.source)
 
 
 def label(panel, c: gamepad.Control, b: Binding | None) -> str:
@@ -266,10 +317,17 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     if b is not None:
         return (f"{c.glyph} · {b.target} · {said} · {b.describe()}\n{c.name}"
                 f"\n{learn} to move it")
+    stick = _dial_of(panel, c.source)
+    dial = ""
+    if stick is not None:
+        reading = panel.reg.get(dial_id(stick))
+        dial = (f"\nread as a dial ({reading.text() if reading is not None else ''}): its "
+                f"routes are axis:{stick}.N … axis:{stick}.NW, off the camera; the GRAPH "
+                "page's pad node has each sector's param, and the reading")
     if said:
-        return (f"{c.glyph} · {said} — the app's own, no row in the table\n{c.name}"
-                f"\n{learn} to take it over")
-    return f"{c.glyph} · free — nothing is mapped\n{c.name}\n{learn}"
+        whose = "" if dial else " — the app's own, no row in the table"
+        return f"{c.glyph} · {said}{whose}\n{c.name}{dial}\n{learn} to take it over"
+    return f"{c.glyph} · free — nothing is mapped\n{c.name}{dial}\n{learn}"
 
 
 # ---------------------------------------------------------------- drawing
@@ -298,9 +356,22 @@ def _lane_bar(dl, c: gamepad.Control, pad, x0: float, y0: float, x1: float, y1: 
 
 
 def _well(dl, pad, c: gamepad.Control, cx: float, cy: float, r: float,
-          edge: int, on: bool) -> None:
-    """A stick well: the ring, its centre, and the stick in it."""
+          edge: int, on: bool, sectors: list[float] | None = None) -> None:
+    """A stick well: the ring, its centre, and the stick in it. A stick read as a
+    dial shows its eight `sectors`, each filled out to how far it reads."""
     dl.add_circle_filled(_v(cx, cy), r, ui.u32(_WELL))
+    if sectors is not None:
+        step = 2 * math.pi / gamepad.DIAL
+        for k, v in enumerate(sectors):
+            a0, a1 = (k - 0.5) * step - math.pi / 2, (k + 0.5) * step - math.pi / 2
+            if v > 0.002:
+                dl.path_clear()
+                dl.path_line_to(_v(cx, cy))
+                dl.path_arc_to(_v(cx, cy), r * min(v, 1.0), a0, a1, 8)
+                dl.path_fill_convex(ui.u32(imgui.ImVec4(ui.FILL.x, ui.FILL.y, ui.FILL.z,
+                                                        0.25 + 0.6 * v)))
+            dl.add_line(_v(cx, cy), _v(cx + r * math.cos(a0), cy + r * math.sin(a0)),
+                        ui.u32(ui.LINE), 1.0)
     dl.add_circle(_v(cx, cy), r, edge)
     dx, dy = _stick(pad, c)
     knob = max(3.0, r * 0.34)
@@ -377,7 +448,8 @@ def _draw(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
         ui_desk._text(dl, c.glyph, cx, cy, ui.u32(_BLACK) if down else ink, x1 - x0 - 2)
     elif c.kind == "stick":
         r = min((x1 - x0) / 2, (y1 - y0) / 2) - 1
-        _well(dl, pad, c, cx, y0 + r + 1, r, ui.u32(ui.RED) if down else edge, on)
+        _well(dl, pad, c, cx, y0 + r + 1, r, ui.u32(ui.RED) if down else edge, on,
+              _sectors(panel, pad, c))
         ui_desk._text(dl, c.glyph, cx, y1 - 5, ink, x1 - x0)
     else:
         gw = imgui.calc_text_size(f"{c.glyph} ").x
@@ -430,7 +502,8 @@ def _draw_big(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
         lines = ui_desk.LABEL_LINES
         r = max(4.0, min((y1 - y0 - lines * lh - 4) / 2, 0.42 * (x1 - x0)))
         dl.add_text(_v(x0 + 1, y0), small, c.glyph)
-        _well(dl, pad, c, cx, y0 + r + 1, r, ui.u32(ui.RED) if down else edge, on)
+        _well(dl, pad, c, cx, y0 + r + 1, r, ui.u32(ui.RED) if down else edge, on,
+              _sectors(panel, pad, c))
         return ui_desk._Job(said, x0 + 1, y0 + 2 * r + 4, x1 - 1, y1, lines, ink,
                             "top") if on else None
     # an axis lane: the glyph, the bar on its line, the label under both
@@ -703,6 +776,7 @@ def _says_of(panel, table):
     if st.get("src_key") != key or st.get("src_table") is not table:
         st.update(src_key=key, src_table=table, src_rows=source_rows(table))
     rows_ = st["src_rows"]
+    rows_cached(panel, table)            # (what `_free_words` asks: the sticks read as dials)
 
     def says_(source: str) -> tuple[str, Binding | None]:
         b = rows_.get(source)
@@ -711,7 +785,7 @@ def _says_of(panel, table):
             if b.scheme == PAIR_SCHEME and b.op == "step":      # the lane: both ways
                 words = f"{words.rpartition(' ')[0]} ±{abs(b.value):g}"
             return words, b
-        return BUILT_IN.get(source, ""), None
+        return _free_words(panel, source), None
     says_.pairs = tuple(s for s in rows_ if s.startswith(f"{PAIR_SCHEME}:"))   # the lanes view's
     return says_
 

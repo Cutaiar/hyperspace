@@ -2224,12 +2224,33 @@ nothing while the stick is let go. A route on any dial lane takes its
 whole stick off the camera job. Two readings, per stick: **petal** (hard
 sectors, the whole push to the one pointed into, a sticky border) and
 **blend** (each lane a triangle about its own direction, so a sweep round
-the rim crossfades one route into the next). The gamepad entry's `dial_left` /
-`dial_right` (`[[devices]]`, or the old `[gamepad]` table) set where a launch starts (petal / blend); SYSTEM → gamepad
-draws both faces, names each sector's route, and has the two readings and
-**Swap dials** (`desk.pad.dial.*`, never saved). The **DIAL** factory
-loadable patch fills both clocks. With a Learn armed for the pad, a stick that
-already has a dial route learns the sector it points into.
+the rim crossfades one route into the next).
+
+**The readings are the loadable patch's** (`pad.dial.left` / `pad.dial.right`, group
+`pad`, `params.PATCH_GROUPS`; rows 729–730): saved in its `values` and put back by its
+load, like its routes, since a reading changes what those routes do. **Swap dials**
+(`pad.dial.swap`) trades them, an edit undo takes back. Every `Deck`'s registry holds its
+own (`params.declare_dial`, in `build_registry`, so with a pad or without), and **a pad
+reads the `Deck` it drives**: `PadDevice.poll` hands it that deck's `Registry.dial_modes`
+through its pointer each frame. So a load on the deck off air changes nothing a pad on
+air reads, and a pad moved across reads the other deck's from the next frame.
+The first enabled gamepad entry's `dial_left` / `dial_right` (`[[devices]]`, or the old
+`[gamepad]` table) are the launch readings (`app._dial_launch`,
+`MetaRegistry.dial_launch`): where each deck starts, so the fresh values, so what a
+loadable patch that names none gets. Read at launch: an edit waits for the next one, and
+another pad's are said and not read.
+
+**Where they show**: the GRAPH page's pad node. Selected, its details draw the pad's
+picture, then both sticks' faces, each sector filled to how far it reads and named by its
+route's param, and the two readings and the swap: the panel's deck's. A pad on the other
+deck moves no face and the details say so (`Panel.pad_reads_here`). Under `DIAL_WIDE`, the
+pane's width, a face has its legend under it. On the pad's picture (there and in the
+floating pad window) a stick a route reads as a dial shows its eight sectors in its well,
+and its X and Y read "Left dial · petal" in grey instead of the orbit they no longer
+drive. SYSTEM keeps the sticks' feel, the meta controller's. The DIAL loadable patch
+(`tests/corpus/presets/dial.json`; copy it into your library's `presets/`) fills both
+clocks. With a Learn armed for the pad, a stick that already has a dial route learns the
+sector it points into.
 
 ## 8. The APC40
 
@@ -2574,7 +2595,7 @@ how in its side pane, a cable from it onto acid's `fx.acid.mix` mod.
 
 A **loadable patch** (`presets/<slug>.json`) is one whole performance moment —
 a complete look (plan 43): the patch groups' values (`view rot
-camera eye pattern dream fx media backdrop … lfo env seq macro mod`,
+camera eye pattern dream fx media backdrop … lfo env seq macro pad mod`,
 `params.PATCH_GROUPS`; the eye since C2), the spin's pose (`pose`,
 right after `values`: the six `rot.phase.*`, `view.body` folded in — a
 load sets the turn there; a file without one leaves it spinning), the
@@ -3396,6 +3417,29 @@ uv run ruff check .
   `tests/test_osc.py` (`pythonosc`'s client to 127.0.0.1 on a port the
   device bound itself) and `tests/test_clouds.py`.
   `tests/test_app_boundary.py`'s `ORDER` pins the three device slots.
+
+### Doc tails
+
+`DECISION-REGISTER.md`, `DECISIONS.md`, `plans/11-hand-checks.md` and
+`plans/README.md` merge by union (`.gitattributes` at the repo's root, plan 58 H1):
+two PRs that each add a row at the tail merge clean, both rows kept. Most replayed
+conflicts were these files, not code.
+
+- **What it costs.** Git no longer stops two PRs that took one number, so
+  `tests/test_doc_numbers.py` does: register rows and sections, hand-check group
+  letters and check numbers each unique. Take the next free number after merging main.
+- **What it can't see.** Two PRs that edit one prose line keep both versions, so read
+  the merged preamble of a doc you edited. Each side's added lines stay in one block,
+  but a line both ends share, usually the blank between them, is kept once.
+- **Order.** Rows land in merge order. `uv run python tools/sort_register.py` puts the
+  register back; it changes no text.
+- **A branch from before `.gitattributes`.** `git merge` reads the attribute from the
+  tree you're on, so merging main into such a branch still conflicts. Run
+  `git checkout origin/main -- .gitattributes` first.
+- **On GitHub.** The server doesn't honour the attribute, on `main` or not: its merge API
+  and a PR's mergeable state both said conflict on a pair that merges clean locally
+  (retested 2026-11-06 with it on `main`). So a PR showing a conflict in these files
+  alone needs main merged locally and pushed; union resolves them with no hand work.
 
 ### CI
 

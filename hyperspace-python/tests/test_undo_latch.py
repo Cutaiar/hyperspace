@@ -7,9 +7,11 @@ Every rig is `test_undo_stacks`'s: `boot`, deck 2 and the real `MetaController`.
 
 import pytest
 import test_undo_stacks
+from conftest import leave_no_undo
 from test_undo_stacks import bases, go, here_is_meta
 
 from hyperspace import undo
+from hyperspace.library import LOADABLE
 
 BRIGHT = "view.bright"
 META = "hands.smooth"
@@ -314,6 +316,16 @@ def test_a_change_from_a_popup_is_the_persons_wherever_the_mouse_is(rig, back_in
     here_is_meta(rig)
     press(rig)
     assert q.base == was
+
+
+def test_a_finished_test_leaves_no_hand_and_no_load_behind(rig):
+    """What the fixture's teardown clears. A load inside its settle time and a hand on
+    the panel: with either left over, ⌘Z in the next test on this worker takes nothing."""
+    rig.two.loaded_patch.load(rig.lib.list(LOADABLE)[1])
+    undo.by_hand(True)
+    assert undo._loading is rig.two.undo and undo._hand
+    leave_no_undo()
+    assert undo._loading is None and not undo._hand
 
 
 def test_riding_a_meta_fader_then_crossing_a_section_opens_nothing(rig):

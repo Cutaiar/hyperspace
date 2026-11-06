@@ -41,7 +41,7 @@ Action = Iterator[None]
 # the widgets whose rect a driver can find (the ones ui.py and its pages draw)
 WIDGETS = ("button", "small_button", "invisible_button", "checkbox", "combo", "begin_combo",
            "slider_int", "slider_float", "drag_int", "drag_float", "selectable",
-           "input_text", "input_int", "input_float")
+           "input_text", "input_text_with_hint", "input_int", "input_float")
 
 
 class Driver:

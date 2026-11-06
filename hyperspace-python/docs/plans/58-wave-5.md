@@ -75,8 +75,12 @@ Measured by the same script on both commits, except the pyright row [V].
 **Why a PR is slow [V, by replay].** The last 79 pairs of merges were replayed as if they were siblings:
 31 would conflict, and **23 of those 31 are in documentation only** (`DECISION-REGISTER` 21,
 `11-hand-checks` 18, `DECISIONS` 7, `plans/README` 5). Code conflicts are rare: `app.py` 3, `deck.py` 3.
-With `merge=union` on those four files, 31 falls to 11. **So splitting big files would not buy merge
-relief; one line of git config does.** Replay reconstructs conflicts rather than counting real ones.
+With `merge=union` on those four files, 31 falls to 11 **for local merges only**. **So splitting big files
+would not buy merge relief; one line of git config does, for a merge made locally.** GitHub's server doesn't
+honour the attribute: retested 2026-11-06 with it on `main`, its merge API said 409 and a PR's mergeable
+state said conflict on a pair that merges clean locally. A PR showing doc conflicts needs main merged
+locally and pushed, which union then resolves with no hand work. Replay reconstructs conflicts rather than
+counting real ones.
 
 **Tests [V].** Fast tier on `main`: 6199 passed, 3 skipped, 458 s under contention; recent PR bodies show
 about 76 s alone. CI: 6197 passed, 5 skipped, 3.9 min median. 49 CI runs in a row are green since 11-05.
@@ -91,7 +95,7 @@ Numbers are in §7. "Saved?" says whether files on disk change.
 
 | Id | What | Files | Size | After | Saved? | Proof |
 | --- | --- | --- | --- | --- | --- | --- |
-| **H1** | Doc conflicts stop: `merge=union` on the four doc tails, plus a test that row numbers and hand-check groups are unique | `.gitattributes`, one test | S | nothing | no | Replay above; one clean replayed merge produced a duplicate row, which the test exists to catch |
+| **H1** | Doc conflicts stop in local merges (GitHub's server doesn't honour it, retested 2026-11-06, §3): `merge=union` on the four doc tails, plus a test that row numbers and hand-check groups are unique | `.gitattributes`, one test | S | nothing | no | Replay above; one clean replayed merge produced a duplicate row, which the test exists to catch |
 | **H2** | Test truth: fix `ENGINEERING.md` §16's counts and times; `wait-green` moves to `tools/wait_green.py`, which only waits and merges nothing; a builder's last check is CI, not a machine slot; the next `--all` records its durations | docs, one tool | S | nothing | no | No `hyperspace/` diff |
 | **SM1** | Salvage `tools/poi_probe.py` from `origin/worktree-poi-hand-fix` (#342 is closed). It was written against that branch's `poi.py`, so port it to `main`'s `poi.step` | one tool | S | nothing | no | Runs on its own tape against `main` |
 
