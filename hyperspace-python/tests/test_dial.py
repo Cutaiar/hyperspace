@@ -158,7 +158,7 @@ def test_the_dial_preset_fills_both_clocks(tmp_path):
 
 # ---- the session params ----
 
-def test_the_readings_are_session_params_and_swap():
+def test_the_readings_are_meta_params_and_swap():
     reg, pad = Registry(), gp.Pad()
     app._register_dial(reg, pad)
     assert pad.dial_modes == gp.DIAL_DEFAULT

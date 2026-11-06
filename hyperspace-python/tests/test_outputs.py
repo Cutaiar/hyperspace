@@ -1211,7 +1211,7 @@ def test_hands_through_an_effect_on_a_flipped_output_flip_once(ctx):
     assert np.array_equal(flipped, _mirror(plain, True, False))
 
 
-def test_the_flips_come_from_the_config_never_a_preset(tmp_path):
+def test_the_flips_come_from_the_config_never_a_loadable(tmp_path):
     from hyperspace import config
     from hyperspace.app import _slots
 

@@ -315,7 +315,7 @@ def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
     assert _mid(_frame(ctx, r, s, vs, size, 4)[1]) == RED
 
 
-def test_a_preset_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
+def test_a_loadable_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
     """R19: `Presets.load_doc` landing a section asks the attached renderer
     to reset its delays; a GRAPH edit (an `Edit` landing) does not."""
     from test_graph_edit import wired_rig
@@ -406,7 +406,7 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
     vs = [View(Switches(), (240, 150))]
     graphs = [("default", G.build_graph(vs, wired_wiring(G.Wiring(run=()))), Renderer(ctx))]
     tool = _tool()
-    for slug in tool.FIXTURE_PRESETS:
+    for slug in tool.FIXTURE_LOADABLES:
         if slug in PLAN_34:
             continue
         rig = tool.Rig(slug, "absent", ctx)

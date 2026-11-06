@@ -492,7 +492,7 @@ def desk_rig(home):
     loaded) with a MIDI adapter over fake ports on the same table and one
     shared Learn; bindings.json written once so a later write would show."""
     from test_midi import FakeIn, FakeOut
-    from test_presets import boot
+    from test_loadable import boot
 
     from hyperspace.midi import MidiIO
 
@@ -511,7 +511,7 @@ def untouched(r) -> bool:
     return (r.path.read_text(), r.path.stat().st_mtime_ns) == r.on_disk
 
 
-def test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset(tmp_path):
+def test_a_knob_learn_writes_a_desk_row_into_the_loaded_loadable(tmp_path):
     """Plan 13 §3.3, D5: a knob learn is a preset-layer row in the live
     table — the control's old preset row and the param's previous knob
     go, the global row on the same knob stays — the loaded preset is dirty
@@ -577,7 +577,7 @@ def test_a_knob_learn_replaces_an_any_channel_row_on_the_same_knob(tmp_path):
     assert untouched(r)
 
 
-def test_a_hand_learn_writes_a_route_into_the_loaded_preset(tmp_path):
+def test_a_hand_learn_writes_a_route_into_the_loaded_loadable(tmp_path):
     """The same for a hand: the route goes into the table through the
     referee — a taken target still asks, Replace / Keep — and neither the
     learn nor the answer writes bindings.json; the preset is dirty until
@@ -887,7 +887,7 @@ def left(table, pid) -> list:
             if b.target == pid and (b.is_midi or any(b is x for x in table.routes()))]
 
 
-def test_unbind_removes_the_presets_desk_rows_and_every_route(tmp_path):
+def test_unbind_removes_the_loadables_desk_rows_and_every_route(tmp_path):
     """Plan 17 WP1, fork 4: one Unbind removes what is bound to the param
     in the loaded preset — its knob, its two step buttons, the hand route
     and the disabled LFO route (its depth subscriber with it) — and never

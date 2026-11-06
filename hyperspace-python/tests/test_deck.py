@@ -413,7 +413,7 @@ def test_a_clock_other_than_the_shared_sources_is_refused_before_anything_regist
     assert called == []
 
 
-def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
+def test_the_deck_holds_the_meta_boot_hands_out(tmp_path):
     """`boot`'s handles are the deck's objects; a headless deck has no GL:
     no renderer, and the installed undo is the deck's."""
     r = boot(tmp_path / "home")
@@ -584,7 +584,7 @@ def test_a_save_of_deck_py_re_classes_the_live_deck_and_back_fills_a_new_field(
     assert type(deck) is Deck and "added" not in vars(deck) and mod.Deck is Deck
 
 
-def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, monkeypatch):
+def test_the_band_hooks_are_the_meta_and_two_decks_leave_them_once(tmp_path, monkeypatch):
     """The library's band hooks and `control.library` are rig-to-rig wiring
     (plan 44 §2: the analyzer and the library are shared): the caller sets
     them once, before `Deck.build`, which never touches them — so a second

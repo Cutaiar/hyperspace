@@ -57,7 +57,7 @@ def test_shift_latches_the_layer_and_lights_its_led(rig):
     assert t.layer == "global" and sent_notes(rig, SHIFT)[-1] == 1
 
 
-def test_a_preset_load_drops_to_the_preset_layer(rig):
+def test_a_loadable_load_drops_to_the_loadable_layer(rig):
     t, reg = rig.midi.table, rig.reg
     shift(rig)
     assert t.layer == "global"
@@ -142,7 +142,7 @@ def test_a_layer_switch_rebases_the_knobs_and_leaves_the_faders_to_pick_up(rig):
     assert apc40.RING_REBASES_KNOB                                # hand check 31's switch
 
 
-def test_a_preset_load_clears_the_faders_catch(rig):
+def test_a_loadable_load_clears_the_faders_catch(rig):
     t, reg = rig.midi.table, rig.reg
     post = reg["output.dim"]
     post.set_norm(0.5)
@@ -161,7 +161,7 @@ def test_a_preset_load_clears_the_faders_catch(rig):
     assert post.norm == pytest.approx(1.0)
 
 
-def test_the_crossfader_keeps_its_hold_across_a_preset_load(rig):
+def test_the_crossfader_keeps_its_hold_across_a_loadable_load(rig):
     """Plan 15 WP3, fork 19: a load clears a fader's catch only when its
     param is no longer where the adapter last put it. A preset never moves
     a session param (D9), so the crossfader — and MASTER — stay caught, and
@@ -476,7 +476,7 @@ def test_the_default_map_is_sorted_as_plan_13_says():
             "layer": "global"} in doc["bindings"]
 
 
-def test_an_old_bindings_file_is_sorted_in_memory_and_its_preset_rows_carried(tmp_path, capsys):
+def test_an_old_bindings_file_is_sorted_in_memory_and_its_loadable_rows_carried(tmp_path, capsys):
     """A schema-2 `bindings.json` (every row, no layers) loads sorted in
     memory: the session's rows on their layers, the preset-layer rows
     carried off the table (`carried`), a row of mine on an invariant
@@ -704,7 +704,7 @@ def test_a_layer_switch_leaves_a_glide_to_finish(rig):
     assert mix.norm == 0.0
 
 
-def test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim(tmp_path):
+def test_a_loadable_load_stops_a_glide_on_a_patch_param_and_not_on_the_dim(tmp_path):
     """D2 and D9, mid-glide. A real preset load (the host's objects,
     tests/test_undo.py's boot): the knob's glide on a performance param is
     dropped and the load's value stands; the crossfader's glide on

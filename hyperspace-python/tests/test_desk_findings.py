@@ -133,7 +133,7 @@ def intros(r) -> list[int]:
     return [list(m.data)[6] for m in r.out.sent if m.type == "sysex"]
 
 
-def test_the_owners_file_holds_the_factory_session_rows_and_nothing_else():
+def test_the_owners_file_holds_the_factory_meta_rows_and_nothing_else():
     """No stale, duplicated or conflicting row: every MIDI row of the
     owner's file is a factory map row (the session part); what the
     factory has beyond it is the preset layer, which lives in presets."""

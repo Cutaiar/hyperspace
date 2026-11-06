@@ -488,7 +488,7 @@ def test_the_canvas_is_the_panels_deck_whatever_has_the_focus(pane):
     assert ui_pane.where(p) is None and not p.in_meta_section()
 
 
-def test_a_selected_rig_node_s_param_takes_the_meta_stack(pane):
+def test_a_selected_meta_node_s_param_takes_the_meta_stack(pane):
     """The selection section shows a node's params: over a meta one of a rig node
     it is the meta stack, though the selection is no meta section."""
     r, d = pane
@@ -596,7 +596,7 @@ def test_undoing_a_tidys_positions_stays_within_one_show(rig):
     assert one.undo.undo() and pr.layout["lfo.1"] == [7, 7]
 
 
-def test_the_session_table_has_no_decks_table_face():
+def test_the_meta_table_has_no_decks_table_face():
     """`deck.MetaRows` is what `Undo` reads; `SessionTable` holds rows, and nothing
     on it pretends to be a deck's table."""
     from hyperspace.routing import MetaTable

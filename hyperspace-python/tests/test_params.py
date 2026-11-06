@@ -327,7 +327,7 @@ def test_params_survive_a_chain_swap(rig):
     assert new.params[0].post == 0.0
 
 
-def test_preset_bank_params(rig):
+def test_loadable_bank_params(rig):
     """The bank's params (plan 13 WP2): select, load, save, next / prev
     over the project's preset names, loading through `Presets` (plan 19
     WP1: twenty-four choices, the F-keys' eight with a trigger each)."""
@@ -418,7 +418,7 @@ def test_the_list_walk_from_nothing_loaded_and_a_bad_file(rig):
     assert bank.walk(1) is None and lib.error.startswith("library:")
 
 
-def test_scene_names_match_presets(rig):
+def test_scene_names_match_loadables(rig):
     assert rig[0]["scene.select"].names == list(SCENES)
 
 
@@ -469,7 +469,7 @@ def _full_registry(tmp_path):
     return reg
 
 
-def test_every_persisted_group_is_performance_or_session(tmp_path):
+def test_every_persisted_group_is_patch_or_meta(tmp_path):
     """Plan 13 §4 / exit criterion 1: every persisted param is in exactly
     one part, the two tuples are disjoint, and each persisted id's first
     segment is its group (Project._is_session splits an unattached file by it)."""
@@ -513,7 +513,7 @@ def test_snapshot_by_part(tmp_path):
     assert reg.snapshot("view", part="patch") == reg.snapshot("view")
 
 
-def test_two_decks_hold_the_session_params_by_reference():
+def test_two_decks_hold_the_meta_params_by_reference():
     """Plan 44 D3: `build_session` once, `build_performance` per deck — every
     session param is one `Param` object in both decks' registries (a base
     written through one is the room's), declared once whichever deck

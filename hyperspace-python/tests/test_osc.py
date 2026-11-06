@@ -365,7 +365,7 @@ def test_the_osc_value_mapping():
     assert osc._number([float("nan"), 0.25]) == 0.25
 
 
-def test_a_session_hit_row_waits_while_its_device_is_not_listed(tmp_path):
+def test_a_meta_hit_row_waits_while_its_device_is_not_listed(tmp_path):
     """Decision 11 for a hit row: `bindings.json` keeps a ``phone:hit``
     toggle row — loaded and written back unchanged — while no phone is
     listed (`Bindings.load` runs only the referee). The one refusal tied

@@ -131,7 +131,7 @@ def test_every_target_and_value_is_a_param_the_app_has(name, reg):
 
 
 @pytest.mark.parametrize("name", [n for n in NAMES if (ROWS / f"{n}.json").is_file()])
-def test_the_session_rows_drive_the_pad_back(name, reg):
+def test_the_meta_rows_drive_the_pad_back(name, reg):
     """Each sink row names a real channel and a param the patch drives (a
     route's target or one of its own), the param continuous (a trigger
     reads 0 out); each pad row a button the pad has, onto a param of the

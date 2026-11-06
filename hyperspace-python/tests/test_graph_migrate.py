@@ -65,7 +65,7 @@ def wires_of(section: dict) -> set[tuple[str, str]]:
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
-def test_every_library_preset_migrates_without_a_note(path):
+def test_every_library_loadable_migrates_without_a_note(path):
     doc = load(path)
     section, notes = M.to_free(doc, SPECS)
     assert notes == []
@@ -75,7 +75,7 @@ def test_every_library_preset_migrates_without_a_note(path):
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
-def test_no_library_preset_routes_an_effect_it_leaves_out(path):
+def test_no_library_loadable_routes_an_effect_it_leaves_out(path):
     """The owner's reading (row 346): no preset routes an off effect. A
     failure is a preset to look at, not a test to loosen."""
     doc = load(path)
@@ -303,10 +303,10 @@ def _values_of(doc: dict) -> dict:
 # and the look-back's `holds` are the capture wire now.
 
 TESTS = Path(__file__).parent
-PRESET_FIXTURES = sorted([*(TESTS / "fixtures" / "presets").glob("*.json"),
+LOADABLE_FIXTURES = sorted([*(TESTS / "fixtures" / "presets").glob("*.json"),
                           *(TESTS / "fixtures" / "merge-31-32").glob("*.json")])
 # the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
-CORPUS_PRESETS = sorted((CORPUS / "presets").glob("*.json"))
+CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
 # a name that is only ever an old id (V2): `ghost[.n]`, `readout[.n]`,
 # `history`, `media.<c>` (`hands` is the geometry now, not the old layer)
 _OLD_ONLY = r"ghost(\.[0-9]+)?|readout(\.[0-9]+)?|history|media\.[a-h]"
@@ -343,7 +343,7 @@ def old_ends(spec: G.GraphSpec) -> list[str]:
     return out
 
 
-@pytest.mark.parametrize("path", [*CORPUS_PRESETS, *PRESET_FIXTURES],
+@pytest.mark.parametrize("path", [*CORPUS_LOADABLES, *LOADABLE_FIXTURES],
                          ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_every_section_loads_as_a_wired_frame(tmp_path, path):
     """Every corpus preset, every fixture — and so every one of the byte
@@ -460,7 +460,7 @@ def test_a_driven_backdrop_history_is_dropped_with_a_note(how):
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
-def test_no_library_preset_drives_backdrop_history(path):
+def test_no_library_loadable_drives_backdrop_history(path):
     """Row 381: no library preset drives `backdrop.history` (a route on it
     is dropped with a note), so retiring it costs no preset a look."""
     assert "backdrop.history" in M.RETIRED

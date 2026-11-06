@@ -72,7 +72,7 @@ def test_the_committed_report_is_fresh_and_regenerates_byte_identical(tool):
         assert e.value.code == 2
 
 
-def test_the_preset_layer_is_the_three_strips_and_the_maps_preset_controls(tool):
+def test_the_loadable_layer_is_the_three_strips_and_the_maps_loadable_controls(tool):
     glyphs = [c.glyph for c in tool.layer_controls()]
     strips = [f"{s}{k}" for s in "DKS" for k in range(1, 9)]
     assert glyphs[:24] == strips
@@ -83,7 +83,7 @@ def test_the_preset_layer_is_the_three_strips_and_the_maps_preset_controls(tool)
     assert not {"SM", "X", "⇧", "G6·8", "G1·1", "G4·1", "G1·9", "G4·9"} & set(glyphs)
 
 
-def test_every_corpus_presets_numbers_are_in_the_report(tool, tmp_path):
+def test_every_corpus_loadables_numbers_are_in_the_report(tool, tmp_path):
     """The numbers the PR body and the decisions file quote: every corpus
     preset (`tests/corpus/presets`, the presets the build shipped) is a
     row; the faders are dark on every one (no preset has fader rows in this
@@ -103,7 +103,7 @@ def test_every_corpus_presets_numbers_are_in_the_report(tool, tmp_path):
     assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no media channel")
 
 
-def test_a_library_preset_that_named_a_template_is_reported_with_its_own_rows(tool, tmp_path):
+def test_a_library_loadable_that_named_a_template_is_reported_with_its_own_rows(tool, tmp_path):
     """`--library` copies a library's presets into the scratch home (the
     source is only read): plan 44 D3 retired the desk templates, so the
     fixture preset that named one is its own rows — D2 the dream (on), K3
@@ -188,7 +188,7 @@ DEFAULTS = {"view.bright": 1.0, "view.speed": 0.5, "view.pattern": 0, "view.patt
             "fx.plasma.level": 0.2, "dream.mix": 0.3, "lfo.1.depth": 0.0}
 
 
-def test_ranked_puts_the_presets_own_params_first_in_tiers():
+def test_ranked_puts_the_loadables_own_params_first_in_tiers():
     used, rest = ranked(PARAMS, VALUES, DEFAULTS, routed={"camera.zoom"},
                         on_desk={"view.speed"})
     assert used == [("camera.zoom", ROUTED), ("view.bright", MOVED),
@@ -205,7 +205,7 @@ def test_ranked_puts_the_presets_own_params_first_in_tiers():
     assert sorted(every) == sorted(p for p, _ in PARAMS)
 
 
-def test_ranked_is_pure_and_never_offers_a_dead_param_as_the_presets():
+def test_ranked_is_pure_and_never_offers_a_dead_param_as_the_loadables():
     args = (PARAMS, dict(VALUES), dict(DEFAULTS), {"dream.mix"}, set())
     a = ranked(*args)
     assert ranked(*args) == a and args[1] == VALUES          # the same answer, nothing moved
@@ -226,7 +226,7 @@ def test_the_offer_covers_no_control():
         assert apart, c
 
 
-def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig, monkeypatch):
+def test_a_picked_control_is_offered_this_loadables_params_and_a_click_maps_it(rig, monkeypatch):
     """TRIP loaded, D5 picked: the offer lists TRIP's own params first —
     its routed and moved ones, its effects that are on — and none of a
     module it has off; a click on the first item puts D5 there through

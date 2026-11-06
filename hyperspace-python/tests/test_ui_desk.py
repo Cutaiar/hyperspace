@@ -117,7 +117,7 @@ def _glyphs(rows) -> set[str]:
     return {c.glyph for b in rows for c in apc40.controls(b.source)}
 
 
-def test_the_diagram_lights_the_loaded_presets_desk_and_the_invariant_controls(rig):
+def test_the_diagram_lights_the_loaded_loadables_desk_and_the_invariant_controls(rig):
     lib, table, panel = rig.lib, rig.router.table, rig.panel
     lib.load("presets", "TRIP")
     assert table.layer == "preset" and table.desk()

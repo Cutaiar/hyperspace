@@ -118,7 +118,7 @@ def boot_registry():
 
 # ---------------------------------------------------------------- a load
 
-def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
+def test_a_loadable_load_lands_every_base_and_replaces_every_route(rig):
     """D2: every performance param lands — the file's value, or its group
     default — and every performer row is the file's; the input rows stay."""
     lib, reg, table = rig.lib, rig.reg, rig.router.table
@@ -146,7 +146,7 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
     assert rig.loaded_patch.current == "PARTIAL" and not lib.is_dirty("presets")
 
 
-def test_a_preset_with_per_frame_echo_ids_is_read_in_seconds(rig):
+def test_a_loadable_with_per_frame_echo_ids_is_read_in_seconds(rig):
     """Plan 14 WP6: a preset file that still names the per-frame
     `dream.decay` / `dream.every` loads as 60 Hz frames in seconds — its
     values, a hand push on the decay (the same throw of decays), a desk
@@ -174,7 +174,7 @@ def test_a_preset_with_per_frame_echo_ids_is_read_in_seconds(rig):
     assert any(b.target == "dream.fade" and b.source == "cc:*:17" for b in table.desk())
 
 
-def test_a_preset_load_never_touches_a_session_param(rig):
+def test_a_loadable_load_never_touches_a_meta_param(rig):
     """Plan 13 §10 exit 2: a tapped BPM survives TRIP, and so do the drive,
     an analyzer strip and the band scene, even when the file names them —
     and the master dim (plan 15 WP3), through a preset load and a show load.
@@ -218,7 +218,7 @@ def test_a_preset_load_never_touches_a_session_param(rig):
     assert slew.value == 0.12 and not rig.lib.project.is_dirty()
 
 
-def test_session_ids_in_a_preset_are_noted_and_ignored(rig):
+def test_meta_ids_in_a_loadable_are_noted_and_ignored(rig):
     """Step 1: a session id, an unknown id, a row that is not a performer
     and a second performer on a target are each noted; the unknown ids are
     returned, and the panel's warning says so in one line."""
@@ -252,7 +252,7 @@ def test_a_value_that_will_not_land_leaves_the_state_whole(rig):
     assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
 
 
-def test_a_project_reload_keeps_the_loaded_preset(rig):
+def test_a_project_reload_keeps_the_loaded_loadable(rig):
     """Review of PR #64: a project re-read from disk (or opened with no
     startup preset) keeps the preset that is loaded — its name, its clean
     reference and its slot's light."""
@@ -286,13 +286,13 @@ def test_a_strip_save_as_moves_the_banks_light(rig):
     assert pr.active == 2
 
 
-def test_rotation_phases_survive_a_preset_load(rig):
+def test_rotation_phases_survive_a_loadable_load(rig):
     rig.view.ang = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
     rig.lib.project.load_slot(1)
     assert rig.view.ang == [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]    # the spin keeps flowing
 
 
-def test_a_preset_carries_the_macros(rig):
+def test_a_loadable_carries_the_macros(rig):
     m = rig.reg["macro.1"]
     m.set_value(0.3)
     rig.lib.project.save_slot(4)
@@ -331,7 +331,7 @@ def test_a_step_or_cycle_on_the_bank_skips_empty_slots(rig):
     assert pr.active == 12 and rig.lib.current("presets") == pr.bank[12]
 
 
-def test_the_bank_names_the_house_presets(rig):
+def test_the_bank_names_the_house_loadables(rig):
     pr = rig.lib.project
     # plan 19 WP1: twenty-four slots; the house show fills the F-keys' eight
     assert len(pr.bank) == SLOTS == 24 and pr.bank[0] == "BIG BLUE WAVE"
@@ -343,7 +343,7 @@ def test_the_bank_names_the_house_presets(rig):
     assert [select.has(k) for k in range(SLOTS)] == [True] * F_KEYS + [False] * (SLOTS - F_KEYS)
 
 
-def test_a_slot_names_a_preset_file(rig):
+def test_a_slot_names_a_loadable_file(rig):
     """F<k> loads the file bank[k] names; an empty slot and a dangling name
     load nothing, change nothing, and say so."""
     lib, reg, pr = rig.lib, rig.reg, rig.lib.project
@@ -382,7 +382,7 @@ def test_cycle_flips_through_the_filled_slots(rig):
     assert pr.active == 0
 
 
-def test_shift_f_saves_the_live_state_as_the_slots_preset(rig):
+def test_shift_f_saves_the_live_state_as_the_slots_loadable(rig):
     """⇧F<k>: the live state as the slot's preset in the library (the
     slot's file written over, its old text in the trash), the bank updated
     and the project written; an empty slot gets a new, unique name."""
@@ -420,7 +420,7 @@ def test_a_full_disk_does_not_stop_the_show(rig, monkeypatch):
 
 # ---------------------------------------------------------------- startup
 
-def test_the_startup_preset_loads_on_launch(tmp_path):
+def test_the_startup_loadable_loads_on_launch(tmp_path):
     """D11: the project names its startup preset and a launch loads it; a
     startup with no file says so and the app keeps running."""
     r = boot(tmp_path)
@@ -582,7 +582,7 @@ def test_the_fx_presets_are_retired(rig):
 
 # ---------------------------------------------------------------- save
 
-def test_a_preset_round_trips(rig):
+def test_a_loadable_round_trips(rig):
     """Save then load gives the same signature; `desk` and `macros` are
     the table's (plan 13 WP4), `modules` names the performance groups'
     labels. (The base subscriber names a param nothing else in the test
@@ -629,7 +629,7 @@ MACROS = {"macro.1": {"label": "Heat", "subs": [
     {"depth": {"source": "hand:7", "target": "view.bright"}, "from": 0.0, "to": 1.0}]}}
 
 
-def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
+def test_a_loadable_load_replaces_the_desk_and_the_macros(rig):
     """Plan 13 D2 / D4, §5 steps 4–5: the preset layer is the file's (a row
     on an invariant control dropped, its note in the load's), the layer
     drops to it, the global and invariant rows stay; the macros are the
@@ -660,7 +660,7 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
     assert [b.to_json() for b in table.midi() if b.layer != "preset"] == meta_rows
 
 
-def test_a_preset_without_a_desk_gets_the_fresh_preset_layer(rig):
+def test_a_loadable_without_a_desk_gets_the_fresh_loadable_layer(rig):
     """A file with no `desk` key is a fresh preset's desk: the default
     map's preset layer (`preset.fresh_desk`, plan 13 §3.2)."""
     table = rig.router.table
@@ -678,7 +678,7 @@ def test_a_preset_without_a_desk_gets_the_fresh_preset_layer(rig):
     assert rig.loaded_patch.document("BARE")["desk"] == loadable.desk_json(fresh)
 
 
-def test_a_preset_with_a_desk_and_macros_round_trips(rig):
+def test_a_loadable_with_a_desk_and_macros_round_trips(rig):
     """What the table holds is what a save writes: an edit of the desk or a
     macro moves the dirty dot, a save writes it, a load brings it back."""
     lib, table = rig.lib, rig.router.table
@@ -701,7 +701,7 @@ def test_a_preset_with_a_desk_and_macros_round_trips(rig):
     assert not lib.is_dirty("presets")
 
 
-def test_a_preset_edited_on_disk_is_re_applied(rig):
+def test_a_loadable_edited_on_disk_is_re_applied(rig):
     path = put(rig.home, "LIVE", values={"view.shape": 2})
     rig.loaded_patch.load("LIVE")
     rig.lib.poll(now=1.0)
@@ -716,7 +716,7 @@ def test_a_preset_edited_on_disk_is_re_applied(rig):
 
 # ---------------------------------------------------------------- the project
 
-def test_a_project_load_brings_its_startup_preset(rig):
+def test_a_project_load_brings_its_startup_loadable(rig):
     rig.lib.project.load("party")
     assert rig.lib.current("presets") == "TUMBLE" and rig.view.shape == 10
     assert rig.lib.project.active == 0 and rig.lib.current("band") == "Balanced"
@@ -798,7 +798,7 @@ def party(tmp_path, full: bool = True):
     return r
 
 
-def user_presets(home):
+def user_loadables(home):
     return sorted(p.name for p in (home / "presets").glob("*.json"))
 
 
@@ -821,11 +821,11 @@ def test_save_new_never_overwrites(tmp_path):
     assert "FOUR" in lib.list("presets")
     pr.bank[5] = "TRIP 5"
     pr.clear_slot(6)
-    before = user_presets(home)
+    before = user_loadables(home)
     reg["view.shape"].set(9)
     reg["preset.save_new"].fire()
     assert lib.current("presets") == "TRIP 6" and pr.bank[6] == "TRIP 6"
-    assert user_presets(home) == sorted([*before, "trip-6.json"])
+    assert user_loadables(home) == sorted([*before, "trip-6.json"])
     assert all(p.read_bytes() == was for p, was in kept.items())
     assert lib.read("presets", "TRIP")["values"]["view.shape"] != 9     # TRIP itself untouched
     assert json.loads((home / "presets" / "trip-6.json").read_text())["values"]["view.shape"] == 9
@@ -834,7 +834,7 @@ def test_save_new_never_overwrites(tmp_path):
     for n in (7, 8, 9):
         reg["preset.save_new"].fire()
         assert lib.current("presets") == f"TRIP {n}"
-    assert user_presets(home) == sorted([*before, *[f"trip-{n}.json" for n in (6, 7, 8, 9)]])
+    assert user_loadables(home) == sorted([*before, *[f"trip-{n}.json" for n in (6, 7, 8, 9)]])
     assert not (home / "trash").exists()
     # a file stem in another case is the same file on a filesystem that
     # folds case (this rig's): it counts too (review of PR #87)
@@ -851,7 +851,7 @@ def test_save_new_never_overwrites(tmp_path):
     assert lib.current("presets") == "PRESET 2"
 
 
-def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset(tmp_path):
+def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_loadable(tmp_path):
     """The bank, the show's file, what is loaded and its clean dot: the new
     preset takes the first empty slot, the show is written at once, and —
     as the panel's "as…" does — the new preset is the loaded one, so a
@@ -940,7 +940,7 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     assert pr.bank[3] == lib.current("presets") and pr.bank_error == ""
 
 
-def test_the_new_slot_loads_from_the_preset_row(tmp_path):
+def test_the_new_slot_loads_from_the_loadable_row(tmp_path):
     """The pad over the new slot is an ordinary preset pad: clip row 1's
     button k loads what the save-as put there."""
     from test_midi import FakeIn, FakeOut, note, push
@@ -976,7 +976,7 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
     show = home / "projects" / "party.hyp.json"
     put(home, "MINE")
-    files = user_presets(home)
+    files = user_loadables(home)
     assert lib.current("presets") == "TUMBLE" and pr.active == 0
     pr.clear_slot(5)
     assert pr.bank[5] is None and json.loads(show.read_text())["bank"][5] is None
@@ -1017,7 +1017,7 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     pr.clear_slot(5)
     assert pr.bank == bank and show.read_text() == before
     assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
-    assert user_presets(home) == files and not (home / "trash").exists()
+    assert user_loadables(home) == files and not (home / "trash").exists()
 
 
 def test_the_bank_calls_are_no_undo_step(tmp_path):
@@ -1099,7 +1099,7 @@ def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
     assert not list(home.rglob("*.bak-*")) and not pr.is_dirty()
 
 
-def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
+def test_active_follows_the_loaded_loadable_from_one_place(tmp_path):
     """`Project.follow` is the one spelling of "the lit slot follows the
     loaded preset": kept where it is while that slot still names it, else
     the first slot that names it, else none; none when nothing is loaded.
@@ -1175,7 +1175,7 @@ def wake_knobs(home) -> list[str]:
     return [by_source[s] for s in DEVICE_KNOBS]
 
 
-def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(owner_home):
+def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(owner_home):
     """The owner's files (on a copy), fork 4. A preset saved before plan
     19 holds the sixteen shape pads of clip rows 4–5 in its `desk`. At a
     load those sixteen exact old factory rows are dropped **quietly** — no
@@ -1235,7 +1235,7 @@ def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(ow
         assert len(loaded_patch.desk_notes) == 16 and "(+15 more)" in lib.warning
 
 
-def test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads(owner_home):
+def test_the_next_save_of_an_old_loadable_writes_the_desk_without_the_pads(owner_home):
     """…and the next save writes the desk as it is live — without the
     rows on clip rows 4–5 — the old file going to the trash first (plan
     15's rule), byte for byte. The other presets' files are not touched."""
@@ -1339,7 +1339,7 @@ WIRED_FIXTURES = ("blank-frame", "channel-out-only", "through-one-output")
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "presets"
 
 
-def test_a_wired_preset_saves_as_v6(rig):
+def test_a_wired_loadable_saves_as_v6(rig):
     """Row 385, row 394: every save is the newest schema — plan 43 C2:
     `hyperspace.preset/9` — the frame edited or not; the ladder reads `/2`
     … `/9` (plan 40 T2's `/8` a `/7` with groups) — and a `/10` file is
@@ -1362,7 +1362,7 @@ def test_a_wired_preset_saves_as_v6(rig):
 
 
 @pytest.mark.parametrize("name", WIRED_FIXTURES)
-def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
+def test_a_wired_frame_loadable_saves_and_loads(tmp_path, name):
     """Each of T3's `/6` fixtures, loaded, saved and loaded into a fresh rig,
     lands the same `GraphSpec`, and saves `/7` (plan 36 T3) — the second
     load reads it as it is."""
@@ -1386,7 +1386,7 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
 
 # ---------------------------------------------------------------- a new preset (plan 35 T7)
 
-def _fresh_performance(lib):
+def _fresh_patch(lib):
     return {k: v for k, v in lib._fresh_all().items()
             if k in lib.reg and lib.reg[k].group in PATCH_GROUPS
             and not loadable.is_instance_id(k) and not loadable.is_switch_id(k)
@@ -1402,7 +1402,7 @@ def _spoil(rig, name):
 
 
 @pytest.mark.parametrize("name", ["big-blue-wave", "hex-engine"])
-def test_a_new_preset_is_fresh_values_and_the_scene_chain(rig, name):
+def test_a_new_loadable_is_fresh_values_and_the_scene_chain(rig, name):
     """Plan 35 T7 (row 387): the library's fresh values for every
     performance group whatever was loaded, no preset routes, the desk the
     fresh preset layer (written explicitly), the session as it was, and
@@ -1412,7 +1412,7 @@ def test_a_new_preset_is_fresh_values_and_the_scene_chain(rig, name):
     _spoil(rig, name)
     kept = reg.snapshot(part="shared_meta")
     assert rig.loaded_patch.new() == [loadable.NEW_SAID]
-    for k, v in _fresh_performance(lib).items():
+    for k, v in _fresh_patch(lib).items():
         assert reg[k].value == v, k
     assert table.routes() == []
     assert loadable.desk_json(table.desk()) == loadable.desk_json(loadable.fresh_desk())
@@ -1430,7 +1430,7 @@ def test_a_new_preset_is_fresh_values_and_the_scene_chain(rig, name):
     assert lib.path_of("presets", loadable.UNTITLED_PATCH) is None
 
 
-def test_a_new_preset_does_not_depend_on_what_was_loaded(rig):
+def test_a_new_loadable_does_not_depend_on_what_was_loaded(rig):
     after = []
     for name in ("big-blue-wave", "hex-engine"):
         _spoil(rig, name)
@@ -1440,7 +1440,7 @@ def test_a_new_preset_does_not_depend_on_what_was_loaded(rig):
     assert after[0] == after[1]
 
 
-def test_a_new_preset_undoes_in_one_step(rig):
+def test_a_new_loadable_undoes_in_one_step(rig):
     from hyperspace import undo
     from hyperspace.library import Marks
 
@@ -1463,7 +1463,7 @@ def test_a_new_preset_undoes_in_one_step(rig):
     assert rig.lib.is_dirty("presets")        # (the spoiled preset's dot, back)
 
 
-def test_a_new_preset_empties_the_bins_macros_and_modifiers(rig):
+def test_a_new_loadable_empties_the_bins_macros_and_modifiers(rig):
     """T7's deferred check (final review): after a preset with a channel's
     bin, a macro and a modifier, New leaves no bin filled, no macro
     subscriber and no modifier — and its save writes none of them."""
@@ -1483,7 +1483,7 @@ def test_a_new_preset_empties_the_bins_macros_and_modifiers(rig):
     assert not [m for m in saved["macros"].values() if m.get("subs")]
 
 
-def test_a_new_preset_saves_and_loads_back_as_the_scene_chain(rig):
+def test_a_new_loadable_saves_and_loads_back_as_the_scene_chain(rig):
     _spoil(rig, "big-blue-wave")
     rig.loaded_patch.new()
     rig.loaded_patch.save_as("blank")
@@ -1508,7 +1508,7 @@ def gl_ctx():
     yield c
 
 
-def test_a_new_preset_draws_a_shape(rig, gl_ctx):
+def test_a_new_loadable_draws_a_shape(rig, gl_ctx):
     """Plan 36 T5 (W5; was plan 35 T7's black): the new preset's frame,
     drawn on two views through the bus, is not the ground alone — the
     shape is on each window."""
@@ -1543,7 +1543,7 @@ def _resize_section(section=RESIZE_OLD):
     return graphmigrate.wired_section(graphmigrate.renamed(section), G.read_graph(section))
 
 
-def test_resize_values_save_and_load_with_the_preset(tmp_path):
+def test_resize_values_save_and_load_with_the_loadable(tmp_path):
     """A preset whose graph holds `resize.2` carries its values: saved and
     loaded into a fresh rig, `resize.2.crop_x` lands with no unknown-id
     note, and the file is `/6` (row 394).
@@ -1577,7 +1577,7 @@ def test_resize_values_save_and_load_with_the_preset(tmp_path):
     assert r.reg["resize.2.crop_x"].value == 0.7
 
 
-def test_a_new_preset_carries_no_resize_values(rig):
+def test_a_new_loadable_carries_no_resize_values(rig):
     put(rig.home, "CROP", graph=_resize_section(), values={"resize.2.crop_x": 0.3})
     rig.lib.poll()
     rig.loaded_patch.load("CROP")

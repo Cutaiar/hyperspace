@@ -54,7 +54,7 @@ def _pass(*pairs, chain=None, t=100.0):
 
 # ------------------------------------------------------------ the second deck
 
-def test_a_deck_beside_shares_the_rig_and_holds_its_own_look(tmp_path):
+def test_a_deck_beside_shares_the_meta_and_holds_its_own_look(tmp_path):
     a, b = _pair(tmp_path)
     assert b.meta_reg is a.deck.meta_reg and b.sources is a.deck.sources
     assert b.clock is a.deck.clock and b.table.meta_table is a.table.meta_table
@@ -96,7 +96,7 @@ def test_nothing_of_a_deck_beside_writes_a_file(tmp_path):
     assert files() == before
 
 
-def test_the_mix_controls_are_rig_controls_that_nothing_saves():
+def test_the_mix_controls_are_meta_controls_that_nothing_saves():
     from hyperspace.params import Registry, part_of
 
     reg, mix = Registry(), Mix()
@@ -211,7 +211,7 @@ def test_the_leads_offset_lands_in_the_frame_of_its_pass(tmp_path):
     assert p.eff_norm == pytest.approx(was + 0.25)   # this frame, not the next
 
 
-def test_no_deck_takes_a_row_on_a_session_param_and_one_left_standing_is_dormant(tmp_path):
+def test_no_deck_takes_a_row_on_a_meta_param_and_one_left_standing_is_dormant(tmp_path):
     """Register row 743: no deck's door takes a row onto a session param, so one
     preset cannot reach through the room to the other. A hot reload can leave one
     in the live table until the next load (row 745): off air it stays dormant
@@ -231,7 +231,7 @@ def test_no_deck_takes_a_row_on_a_session_param_and_one_left_standing_is_dormant
     assert p.eff_norm == pytest.approx(was) and not p.modulated
 
 
-def test_a_deck_off_air_reads_this_frames_session_values(tmp_path):
+def test_a_deck_off_air_reads_this_frames_meta_values(tmp_path):
     """The lead first: a route of the deck off air scaled by a session param
     the desk moved reads the value that landed this frame."""
     a, b = _pair(tmp_path)
@@ -246,7 +246,7 @@ def test_a_deck_off_air_reads_this_frames_session_values(tmp_path):
     assert q.eff_norm == pytest.approx(base + 0.0625 * float(p.value), rel=1e-6)
 
 
-def test_a_macro_on_a_deck_off_air_never_writes_a_session_base(tmp_path):
+def test_a_macro_on_a_deck_off_air_never_writes_a_meta_base(tmp_path):
     """Review finding 2: `follow_macros` runs off air now, and a session base
     is the lead's. Its own params still follow."""
     a, b = _pair(tmp_path)
@@ -730,7 +730,7 @@ def _corpus_docs() -> list[Path]:
 
 @pytest.mark.empty_frame
 @pytest.mark.parametrize("name", [p.stem for p in _corpus_docs()])
-def test_deck_2_at_xfade_1_is_deck_1_on_the_same_preset_byte_for_byte(ctx, tmp_path, name):
+def test_deck_2_at_xfade_1_is_deck_1_on_the_same_loadable_byte_for_byte(ctx, tmp_path, name):
     """Plan 44 D4's proof: deck 2 loaded with preset X, at `xfade` 1, draws
     exactly what deck 1 loaded with X draws at `xfade` 0 — through the fade's
     own road (`Fade.draw`, the mix pass), over a deck 1 on another look — and
@@ -821,7 +821,7 @@ def _object_state(deck) -> dict:
 
 
 @pytest.mark.empty_frame
-def test_deck_2_on_another_preset_moves_nothing_of_the_on_air_deck(ctx, tmp_path):
+def test_deck_2_on_another_loadable_moves_nothing_of_the_on_air_deck(ctx, tmp_path):
     """Review finding 1: two different looks. Every corpus preset landed on deck
     2, with its ghost, look-back and view values moved besides, leaves deck 1's
     params, its objects and, at xfade 0, its picture byte for byte. Only the

@@ -79,7 +79,7 @@ def pitches(out):
 
 # ---------------------------------------------------------------- the row
 
-def test_a_sink_row_is_a_session_row_never_a_performer_and_round_trips(tmp_path):
+def test_a_sink_row_is_a_meta_row_never_a_performer_and_round_trips(tmp_path):
     """The sink row's form: ``{"source": "param:<id>" | "lane:<i>" |
     "lane:*", "target": "<role>:<channel>", "op": "send"}``. bindings.json
     keeps it (sinks are rig, D1 / D9); it is no route, owns nothing, and a
@@ -366,7 +366,7 @@ def test_the_hands_daw_sink_on_the_registry_sends_what_handsio_sent(tmp_path):
 
 # ---------------------------------------------------------------- Learn → sink
 
-def test_learn_sink_on_a_param_lands_a_session_row_with_no_question(tmp_path):
+def test_learn_sink_on_a_param_lands_a_meta_row_with_no_question(tmp_path):
     """Right-click → Learn sink ▸ bridge:2: the row lands at once in the
     session (bindings.json written), even on a param a hand performs — no
     Replace / Keep, no pending question, the performer untouched; a second

@@ -139,7 +139,7 @@ def test_patches_is_a_leaf():
                          "write"}
 
 
-def test_the_rig_nodes_are_graphviews_not_removable():
+def test_the_meta_nodes_are_graphviews_not_removable():
     """`RIG_NODES` restates the render nodes the GRAPH page refuses to delete
     (`graphview.spec_name`): the clouds as the rig's (`NOT_REMOVABLE`), the
     camera as the look's one (`CAMERA_KEPT`, plan 43 C2); the two lists
@@ -307,7 +307,7 @@ def test_lift_of_noitas_core():
     assert len(p.control_rows) == len(doc["desk"]) + len(doc["routes"])
 
 
-def test_a_lift_that_names_the_rigs_refuses_it_and_keeps_the_rest():
+def test_a_lift_that_names_the_meta_refuses_it_and_keeps_the_rest():
     noita = loadable("party-noita")
     doc, refused = patches.lift(*parts(noita),
                                 ["render:warp", "render:output.all",
@@ -610,7 +610,7 @@ NO_RUN = {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play", "hex-engi
           "party-tracer"}
 
 
-def test_a_patch_cut_from_every_corpus_presets_main_run_round_trips():
+def test_a_patch_cut_from_every_corpus_loadables_main_run_round_trips():
     """For each corpus preset: its main run (`graph.run_back` into
     `output.all.image`) lifted, spawned back into the same preset — every
     id renamed, `.2` — landed, and lifted again reads as the first."""
@@ -739,7 +739,7 @@ def test_a_bad_patch_is_a_library_error(lib):
         lib.load(PATCHES, "acid wash")
 
 
-def test_patches_list_rename_and_delete_as_presets_do(lib):
+def test_patches_list_rename_and_delete_as_loadables_do(lib):
     """Listed by name, case folded; a patch renames, the old file to the
     trash; × deletes it, the file to the trash (one tier: every patch is
     the user's)."""

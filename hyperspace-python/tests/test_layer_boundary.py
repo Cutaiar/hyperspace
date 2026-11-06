@@ -21,7 +21,7 @@ from test_midi import note, push
 from test_on_off_air import _bank, _state
 from test_on_off_air import rig as air_rig  # noqa: F401 — two decks and the desk
 from test_pad_learn import ScriptedPad
-from test_presets import put
+from test_loadable import put
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import (

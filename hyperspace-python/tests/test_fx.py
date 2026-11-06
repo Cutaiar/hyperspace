@@ -1496,7 +1496,7 @@ def test_an_effect_file_with_an_order_line_still_parses():
     assert st.errors == {}
 
 
-def test_an_old_preset_loads_its_retired_ids_without_a_note(tmp_path):
+def test_an_old_loadable_loads_its_retired_ids_without_a_note(tmp_path):
     """A `/4` file with every `fx.<n>.order` / `.target`, `view.media` and
     `backdrop.channel` loads with no unknown-id note, and its wires are
     what the migration made of them before this task: the frame run by
@@ -1583,7 +1583,7 @@ def test_the_media_page_reads_a_wired_frames_channels():
     assert ui_media._channel_of(panel, "pattern.media") == "c"
 
 
-def test_an_old_preset_saves_no_retired_id(tmp_path):
+def test_an_old_loadable_saves_no_retired_id(tmp_path):
     """Row 394: a `/4` preset's retired ids (an effect's order and target,
     `view.media`) are read as wires on load and never written back — the
     save is `/6`, the run and the channel the wired frame's; a run

@@ -105,7 +105,7 @@ def test_rewiring_output_1_changes_that_one_port_and_nothing_else(tmp_path):
 
 # ---------------------------------------------------------------- the preset's bus cuts
 
-def test_cutting_a_bus_cable_persists_in_the_preset_and_empties_the_port(tmp_path):
+def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_path):
     """Plan 44 D3: delete on a bus cable cuts it in the loaded preset — one
     undo step, the graph section untouched, the preset dirty and the show
     not: window 1 shows nothing on its hands port (no cable drawn there,
@@ -146,7 +146,7 @@ def test_cutting_a_bus_cable_persists_in_the_preset_and_empties_the_port(tmp_pat
     assert pre.bus.cut == {G.bus_wire(2, "guide")}
 
 
-def test_a_show_with_every_cable_standing_writes_no_rig():
+def test_a_show_with_every_cable_standing_writes_no_meta():
     """The rig as it ships writes nothing (a factory show's file is as it
     was); a hand-edited `rig` that is not wires is left out, never an error."""
     assert G.BusCuts().to_json() == {}

@@ -66,7 +66,7 @@ def test_send_a_does_nothing_until_the_sequencer_is_there(rig):
     assert rig.midi.table.page is None and not rig.reg["seq.page"].value
 
 
-def test_a_pad_toggles_a_step_and_loads_no_preset(rig, seq):
+def test_a_pad_toggles_a_step_and_loads_no_loadable(rig, seq):
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     tap(rig, CLIP[0], channel=1)                               # off the page: slot 2 loads
     before, active = lib.current("presets"), pr.active

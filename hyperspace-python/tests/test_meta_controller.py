@@ -353,7 +353,7 @@ def test_a_momentary_held_when_the_desk_moves_is_let_go_on_the_deck_it_held(rig)
     assert one.reg["view.lines"].value is False and two.reg["view.lines"].value is True
 
 
-def test_a_session_fader_keeps_its_catch_across_a_move(rig):
+def test_a_meta_fader_keeps_its_catch_across_a_move(rig):
     """A session param is one object on both decks: the fader on it is still caught."""
     meta, one, two, midi = rig.meta, rig.one, rig.two, rig.r.midi
     gain = one.reg["output.dim"]
@@ -406,7 +406,7 @@ def test_each_deck_keeps_its_own_section_references(rig):
     assert one.marks.lands()["view"] == ref and two.marks.lands()["view"] != ref
 
 
-def test_a_new_preset_on_deck_2_stays_on_deck_2(rig):
+def test_a_new_loadable_on_deck_2_stays_on_deck_2(rig):
     one, two, lib = rig.one, rig.two, rig.r.lib
     before = _look(one)
     two.loaded_patch.new()
@@ -569,7 +569,7 @@ def test_the_keys_have_their_own_deck():
 
 # ---- nothing moved, in the app
 
-def test_every_pointer_on_deck_1_lands_every_corpus_preset_as_before(tmp_path):
+def test_every_pointer_on_deck_1_lands_every_corpus_loadable_as_before(tmp_path):
     """D1's walk over the corpus: with the holders pointed at deck 1 the state
     is the unpointed rig's, to the bit."""
     home = tmp_path / "home"

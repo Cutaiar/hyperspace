@@ -16,7 +16,7 @@ import pytest
 from conftest import seed
 from test_graph_groups import BREATH
 from test_pad_learn import ScriptedPad
-from test_presets import boot, put
+from test_loadable import boot, put
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import gamepad, graphview, headless, patches, ui_graph, ui_routing, undo
@@ -79,7 +79,7 @@ def test_the_five_with_a_foreign_prefix_are_refused_at_the_doors(pid):
     Binding("pad:A", "tempo.tap", "fire"),
     Binding("key:space", "audio.play", "toggle"),
 ])
-def test_the_meta_controllers_own_rows_are_not_a_presets(row):
+def test_the_meta_controllers_own_rows_are_not_a_loadables(row):
     assert is_meta_row(row) and meta_row_refusal(row) is None
     assert Bindings().add(row) is row
 
@@ -89,7 +89,7 @@ def test_the_meta_controllers_own_rows_are_not_a_presets(row):
     Binding("hand:left.y", "master.gain", "push", 0.375, enabled=False),
     Binding("cc:0:14", "master.gain", "abs", layer="preset"),
 ])
-def test_a_presets_rows_are_refused_at_the_one_door(row):
+def test_a_loadables_rows_are_refused_at_the_one_door(row):
     assert not is_meta_row(row)
     assert WORDS in meta_row_refusal(row)
     t = Bindings()
@@ -109,7 +109,7 @@ def test_every_factory_row_on_a_meta_param_is_the_meta_controllers():
                 and meta_refusal(b.target) is not None]
 
 
-def test_the_masters_row_survives_a_load_that_drops_a_presets(tmp_path):
+def test_the_masters_row_survives_a_load_that_drops_a_loadables(tmp_path):
     r = boot(tmp_path)
     table = r.router.table
     master = [b for b in table.bindings if b.target == "output.dim" and is_meta_row(b)]
@@ -121,7 +121,7 @@ def test_the_masters_row_survives_a_load_that_drops_a_presets(tmp_path):
     assert not table.routes_to("output.dim")
 
 
-def test_a_presets_row_moved_or_woken_onto_a_meta_param_is_refused():
+def test_a_loadables_row_moved_or_woken_onto_a_meta_param_is_refused():
     t = Bindings()
     b = t.add(Binding("hand:left.y", "view.bright", "push", 0.3))
     for call in (lambda: t.move_route(b, target="master.gain"),

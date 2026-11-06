@@ -248,11 +248,11 @@ def test_open_on_graph_selects_the_window(tmp_path):
         assert "select_node" not in ui_graph._state(rig.panel)
 
 
-def test_the_mutes_are_not_the_preset(tmp_path, monkeypatch):
+def test_the_mutes_are_not_the_loadable(tmp_path, monkeypatch):
     """Row 374: `output.2.scene` ("picture") is the window's mute — toggling
     it leaves the preset clean and its section as it was. The page draws
     each window's combo, its two mutes and "hands through the effects"."""
-    from test_presets import put
+    from test_loadable import put
     from test_ui_shell import _output_page, build_rig
 
     from hyperspace.library import LOADABLE

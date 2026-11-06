@@ -22,7 +22,7 @@ from conftest import seed
 from test_graph_legible import party as _party
 from test_midi import cc, note, push
 from test_pad_learn import ScriptedPad
-from test_presets import put
+from test_loadable import put
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from test_undo import DT, boot
@@ -620,7 +620,7 @@ def test_on_gl_each_deck_makes_its_own_thumbnails(ctx, tmp_path):
 # ------------------------------------------------------- the reserved desk controls
 
 @pytest.mark.parametrize("control", apc40.META_CONTROLS)
-def test_no_preset_may_learn_or_bind_the_reserved_controls(rig, control):
+def test_no_loadable_may_learn_or_bind_the_reserved_controls(rig, control):
     """The owner: the APC "inherits our generic controller setup ... and it should have
     extensions". Refused whatever the table holds on it, so a deleted row frees nothing."""
     table = rig.two.table
@@ -993,7 +993,7 @@ CARRIED = ["preset.select", "preset.next", "preset.prev", "preset.home", "preset
 
 
 @pytest.mark.parametrize("verb", CARRIED)
-def test_a_preset_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
+def test_a_loadable_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
     """The absolute rule: from a row a verb lands on the other deck, so a row a preset
     carries would be one patch changing another. Refused in words at each door."""
     t = Bindings()
@@ -1011,7 +1011,7 @@ def test_a_preset_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
 
 
 @pytest.mark.parametrize("carrier", [0, 1], ids=["on air carries", "off air carries"])
-def test_a_preset_carrying_load_rows_reaches_no_other_deck(rig, carrier):
+def test_a_loadable_carrying_load_rows_reaches_no_other_deck(rig, carrier):
     """A file holding them all, loaded on either deck: the rows drop, with a note; its
     pressed control, its fired lanes and a whole pass move nothing on the other deck."""
     d, other = (rig.one, rig.two) if carrier == 0 else (rig.two, rig.one)
@@ -1036,7 +1036,7 @@ def test_a_preset_carrying_load_rows_reaches_no_other_deck(rig, carrier):
     assert _state(other) == theirs and d.loaded_patch.current == "CARRIES"
 
 
-def test_a_learn_will_not_put_a_presets_row_on_a_library_verb(rig):
+def test_a_learn_will_not_put_a_loadables_row_on_a_library_verb(rig):
     """A desk Learn lands a preset-layer row, so it refuses, in words. A pad button's
     row is the meta controller's own, and takes one."""
     from hyperspace.ui_routing import desk_target, pad_target
@@ -1052,7 +1052,7 @@ SAVES = ["preset.save.0", "preset.save.7", "preset.save_new"]
 
 
 @pytest.mark.parametrize("verb", SAVES)
-def test_a_preset_cannot_carry_a_row_on_a_save_verb_by_any_door(verb):
+def test_a_loadable_cannot_carry_a_row_on_a_save_verb_by_any_door(verb):
     """A look's own row writing over another look's file breaks the absolute rule."""
     t = Bindings()
     for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
@@ -1075,7 +1075,7 @@ def _files(rig) -> dict:
 
 
 @pytest.mark.parametrize("carrier", [0, 1], ids=["on air carries", "off air carries"])
-def test_a_preset_carrying_save_rows_loses_them_with_a_note_and_writes_nothing(rig, carrier):
+def test_a_loadable_carrying_save_rows_loses_them_with_a_note_and_writes_nothing(rig, carrier):
     d = (rig.one, rig.two)[carrier]
     put(rig.lib.home, "SAVER",
         desk=[{"source": f"note:8:{k}", "target": v, "op": "toggle"} for k, v in enumerate(SAVES)],
@@ -1133,7 +1133,7 @@ def test_the_edges_hold_to_save_still_saves(rig):
     assert len(set(rig.lib.list(LOADABLE)) - listed) == 1
 
 
-def test_no_factory_row_or_corpus_preset_carries_a_load_or_save_row():
+def test_no_factory_row_or_corpus_loadable_carries_a_load_or_save_row():
     """The factory's load rows are all invariant and its save rows are keys, so the
     meta controller's; no corpus preset or shipped JSON's `desk` or `routes` has one."""
     rows = [b for b in factory_desk() if _library_verb(b.target)]

@@ -50,7 +50,7 @@ def _manifest() -> dict:
 
 # ---------------------------------------------------------------- no GL
 
-def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
+def test_every_corpus_loadable_has_every_state_recorded_and_nothing_else():
     """No preset or state is skipped silently: each corpus preset has a
     golden for each of the eight `Switches` states, hands absent and
     present; the window's own frame alone (`solo`, the default state) for
@@ -63,7 +63,7 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
     `<wiring>/<state>`. Plan 26 A4b: the recorded point cloud listed as a
     `cloud` device, hands present, named `cloud/<state>`, and nothing
     else."""
-    FACTORY_PRESETS = _tool().CORPUS_PRESETS
+    FACTORY_LOADABLES = _tool().CORPUS_LOADABLES
 
     doc = _manifest()
     eight = [(a, b, c) for a in (True, False) for b in (True, False) for c in (False, True)]
@@ -94,12 +94,12 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
                      "lfo-breathe", "hands-fx", "seq-demo"}
     # plan 31 P: seq-demo drawn with play pressed (`seq.run` is no preset's)
     assert doc["sequencer_running"] == ["seq-demo"] == list(_tool().RUNNING)
-    want = {(p, h, s) for p in FACTORY_PRESETS for h in ("absent", "present")
+    want = {(p, h, s) for p in FACTORY_LOADABLES for h in ("absent", "present")
             for s in [*doc["states"], "solo"]
             + (["solo-scene+hands+through"] if p in fx_on else [])}
     cap = doc["cap"]
     wired = {(p, "present", f"{name}/{s}") for name, w in doc["wired_states"].items()
-             for p in (w["presets"] or FACTORY_PRESETS) for s in w["states"]}
+             for p in (w["presets"] or FACTORY_LOADABLES) for s in w["states"]}
     capped = {(e["preset"], e["hands"], e["state"]) for e in doc["goldens"]
               if e["state"] not in doc["states"] and e["state"] not in doc["solo_states"]
               and "/" not in e["state"]}
@@ -142,7 +142,7 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
         assert e["route"] in routes, e
         assert len(e["sha256"]) == 64
         assert (MANIFEST.parent / e["png"]).is_file(), e["png"]
-    assert set(doc["presets"]) == set(FACTORY_PRESETS)
+    assert set(doc["presets"]) == set(FACTORY_LOADABLES)
     for slug, said in doc["presets"].items():
         for hands in ("absent", "present"):
             assert said[hands]["missing"] == [], slug
@@ -152,9 +152,9 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
     # 36 T3) every fixture an old file, a migration input — its graph landed
     # as its `/7`
     tool = _tool()
-    assert list(doc["fixture_states"]) == list(doc["fixtures"]) == list(tool.FIXTURE_PRESETS)
+    assert list(doc["fixture_states"]) == list(doc["fixtures"]) == list(tool.FIXTURE_LOADABLES)
     for slug, f in doc["fixture_states"].items():
-        assert (ROOT / f["file"]).is_file() and slug not in FACTORY_PRESETS
+        assert (ROOT / f["file"]).is_file() and slug not in FACTORY_LOADABLES
         assert f["states"] == list(doc["states"])
         said = doc["fixtures"][slug]["present"]
         # (plan 35 T3: a wired fixture draws only what it wires — its states
@@ -189,19 +189,19 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
     assert {e["route"] for e in doc["goldens"]} == routes
 
 
-def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on():
+def test_the_history_wiring_is_recorded_for_every_loadable_with_the_look_back_on():
     """The history-with-the-hands goldens cover exactly the corpus presets
     whose file draws a look-back (elsewhere the history holds nothing the
     picture shows, so the frame is the default one). Plan 36 T4: a
     look-back is drawn — a wire into `lookback.image` — where the old file
     turned it on (`factory-sources`' `dream.on`, the old files)."""
-    FACTORY_PRESETS = _tool().CORPUS_PRESETS
+    FACTORY_LOADABLES = _tool().CORPUS_LOADABLES
 
     lib = _tool().CORPUS
-    drawn = [slug for slug in FACTORY_PRESETS
+    drawn = [slug for slug in FACTORY_LOADABLES
              if any(w.get("to") == "lookback.image" for w in json.loads(
                  (lib / f"{slug}.json").read_text())["graph"].get("wires", []))]
-    on = [slug for slug in FACTORY_PRESETS
+    on = [slug for slug in FACTORY_LOADABLES
           if json.loads((_tool().FACTORY_SOURCES / f"{slug}.json").read_text())
           .get("values", {}).get("dream.on")]
     assert sorted(drawn) == sorted(on) == sorted(_tool().LOOKBACK_ON)
@@ -415,7 +415,7 @@ def _resave_sources() -> list[tuple[str, bool]]:
 
 @pytest.mark.parametrize("slug,factory", _resave_sources(),
                          ids=[slug for slug, _ in _resave_sources()])
-def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, factory):
+def test_every_loadable_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, factory):
     """Row 394: every corpus preset and every fixture, saved untouched as
     `/7` (`headless.resave`, the road tools/migrate_library.py takes; plan
     36 T3) and drawn from that file on the golden rig (`picture`: hands
@@ -467,7 +467,7 @@ def _grouped_sources() -> list[str]:
 
 
 @pytest.mark.parametrize("slug", _grouped_sources())
-def test_every_preset_with_its_main_run_grouped_draws_its_goldens(ctx, tmp_path, slug):
+def test_every_loadable_with_its_main_run_grouped_draws_its_goldens(ctx, tmp_path, slug):
     """Plan 40 T2 (D4: the renderer learns nothing): each corpus preset
     with its main run grouped — a grouped twin in a scratch library, `/8`,
     never the corpus file — drawn on the golden rig (`picture`: hands

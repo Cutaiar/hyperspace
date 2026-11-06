@@ -157,7 +157,7 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
     assert "scale" not in json.dumps(lfo_breathe["routes"])
 
 
-def test_a_scale_on_a_session_param_is_left_alone():
+def test_a_scale_on_a_meta_param_is_left_alone():
     """Decision register row 18 (a): a route keeps a `scale` that names a
     session param — the drive fader reaches the rotation as `scale:
     master.gain` on the six legacy6 rate rows — and nothing migrates it."""
@@ -172,7 +172,7 @@ def test_a_scale_on_a_session_param_is_left_alone():
                if b.target.startswith("rot.rate."))
 
 
-def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
+def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
     """Decision register row 18 (a): a `scale` naming a performance param
     (one a preset load could move under the route) is dropped with a note
     — in the live table and in a preset's load — the depth kept; a macro's
@@ -191,7 +191,7 @@ def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
                for n in t.notes)
     assert t.macros_doc() == {"macro.4": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
     # a preset's load
-    from test_presets import boot, put
+    from test_loadable import boot, put
     r = boot(tmp_path)
     put(tmp_path, "SCALED", routes=rows, macros={})
     r.loaded_patch.load("SCALED")
@@ -208,13 +208,13 @@ def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
     assert all(routing.is_shared_meta_id(pid) for pid in offered)
 
 
-def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):
+def test_a_base_subscriber_on_a_meta_param_is_dropped_with_a_note(tmp_path):
     """D9, review of PR #67: a base subscriber names a performance param —
     persisted, not an alias — never a session one, so a preset load never
     writes a session base through a macro. `set_macros` drops any other
     with a note (the load's notes, and the migration's), and a depth
     subscriber on a route onto one goes with that route (register row 743)."""
-    from test_presets import boot, put
+    from test_loadable import boot, put
 
     r = boot(tmp_path)
     reg, table = r.reg, r.router.table

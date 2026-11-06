@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 from test_plan31_wiring import make_app
-from test_presets import boot
+from test_loadable import boot
 
 from hyperspace import loadable
 from hyperspace.library import LibraryError

@@ -198,7 +198,7 @@ def _six(raw: bytes, name: str) -> dict:
     return doc
 
 
-def test_every_old_preset_saves_as_six_and_is_a_fixed_point(tmp_path):
+def test_every_old_loadable_saves_as_six_and_is_a_fixed_point(tmp_path):
     """Row 394 (the owner, 2026-10-25: both Macs always on the newest
     schema): every preset — the corpus's sources and every fixture, `/2` to `/6`
     — loaded into a scratch library and saved untouched is
@@ -284,7 +284,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
         assert "backdrop.history" not in doc["values"], name
 
 
-def test_an_untouched_corpus_preset_saves_as_its_load(tmp_path):
+def test_an_untouched_corpus_loadable_saves_as_its_load(tmp_path):
     """Row 394: party-trip untouched saves `/6`, its graph exactly the wired
     frame the load landed (`free_doc`) — the frame is the save."""
     from test_plan31_wiring import make_app

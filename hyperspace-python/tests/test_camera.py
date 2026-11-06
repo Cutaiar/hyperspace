@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from conftest import CORPUS
-from test_presets import boot
+from test_loadable import boot
 
 from hyperspace import geometry as G
 from hyperspace import ghost, loadable
@@ -122,7 +122,7 @@ def test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it():
     assert abs((new_x[0] - w / 2) - 2.0 * (old_x[0] - w / 2)) > 10.0
 
 
-def test_the_eye_params_are_the_presets_and_default_to_the_old_view(tmp_path):
+def test_the_eye_params_are_the_loadables_and_default_to_the_old_view(tmp_path):
     """Plan 43 C2 (rows 555, 574): the eye is the look's — performance, in
     every preset's values, never the show's session — and modulatable, its
     taper as it was (review 4: the fov linear, the distance log, so a row
@@ -302,7 +302,7 @@ def test_a_shape_through_the_eye_draws_without_error(ctx):
 
 # ------------------------------------------------------- the pan's migration
 
-def test_a_preset_2_pan_in_px_is_read_in_world_units(tmp_path):
+def test_a_loadable_2_pan_in_px_is_read_in_world_units(tmp_path):
     """The fixture is a preset/2 file from before (its pan 162, −81 px),
     loaded through a scratch library: the pan lands in world units through
     the default eye on the 1080p screen (324 px a unit), the route's depth
@@ -321,7 +321,7 @@ def test_a_preset_2_pan_in_px_is_read_in_world_units(tmp_path):
     assert rig.loaded_patch.notes == []                     # silent: nothing to say
 
 
-def test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_path):
+def test_a_saved_loadable_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_path):
     rig = boot(tmp_path)
     rig.reg["camera.pan.x"].set(2.5)
     rig.reg["camera.pan.y"].set(-0.75)
@@ -498,7 +498,7 @@ def test_an_old_camera_module_loads_at_its_converted_pan(tmp_path):
     assert not rig.lib.is_dirty("camera")
 
 
-def test_an_old_camera_default_fills_a_preset_at_its_converted_pan(tmp_path):
+def test_an_old_camera_default_fills_a_loadable_at_its_converted_pan(tmp_path):
     """The same file as the group's default (`camera/default.json`): what
     `defaults` and `resolved` fill the camera strip with — at the converted
     pan, not 190 radii. A whole preset that names no pan lands the build's

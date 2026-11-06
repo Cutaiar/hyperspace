@@ -373,7 +373,7 @@ def test_it_is_a_performer_and_the_referee_keeps_one(app):
         app.table.add(Binding(PITCH, "camera.yaw", "position"))
 
 
-def test_it_is_the_presets_row_never_the_rigs(app):
+def test_it_is_the_loadables_row_never_the_meta(app):
     row = app.table.owner("camera.yaw")
     assert not is_meta_row(row)
     assert row.to_json()["op"] == TURN_OP and row.to_json()["when"] == GRAB
@@ -703,7 +703,7 @@ def test_the_cut_is_each_rows_own(deck, tmp_path):
     assert r.yaw[-1] == pytest.approx(r.yaw[n + 1], abs=1e-6)
 
 
-def test_a_load_with_the_fist_closed_cuts_the_new_presets_row_only_until_it_opens(deck, tmp_path):
+def test_a_load_with_the_fist_closed_cuts_the_new_loadables_row_only_until_it_opens(deck, tmp_path):
     deck.loaded_patch.save_as("ORBIT")
     n = len(closing()) + 11
 

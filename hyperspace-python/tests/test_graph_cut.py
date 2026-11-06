@@ -267,7 +267,7 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
     """`cut-out` (a `/7` wired frame with a matte, a cut and a composite
     and their values), loaded, saved and loaded into a fresh rig, lands the
     same `GraphSpec` and the same cut values, and saves `/7`."""
-    from test_presets import boot
+    from test_loadable import boot
 
     src = json.loads(FIXTURE.read_text())
     assert src["schema"] == "hyperspace.preset/7"
@@ -294,8 +294,8 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
         assert doc["values"]["cut.amount"] == pytest.approx(1.0)
 
 
-def test_a_new_preset_holds_no_cut_values(tmp_path):
-    from test_presets import boot
+def test_a_new_loadable_holds_no_cut_values(tmp_path):
+    from test_loadable import boot
 
     home = tmp_path / "h"
     (home / "presets").mkdir(parents=True)

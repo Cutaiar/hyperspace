@@ -72,9 +72,9 @@ def same_picture(path, *, library=None, show=None):
     return ["x"] * 8, []
 
 
-def test_the_presets_it_finds(tmp_path):
+def test_the_loadables_it_finds(tmp_path):
     lib = _library(tmp_path)
-    got = [p.name for p in _tool().preset_files(lib)]
+    got = [p.name for p in _tool().loadable_files(lib)]
     assert got == ["acid-scene.json", "broken.json", "glimmer-bug.json", "trip-night.json"]
 
 
@@ -148,7 +148,7 @@ def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
         _tool().main(["--library", str(lib), "--to", str(out_dir), "--apply"])
 
 
-def test_a_preset_whose_picture_moves_is_not_written_unless_forced(tmp_path, capsys):
+def test_a_loadable_whose_picture_moves_is_not_written_unless_forced(tmp_path, capsys):
     lib = _library(tmp_path)
     (lib / "presets" / "broken.json").unlink()
 
@@ -223,7 +223,7 @@ def test_the_library_defaults_to_the_configs(tmp_path, capsys):
     assert _tool().main(["--library", str(tmp_path / "nowhere")]) == 2
 
 
-def test_the_real_picture_check_passes_an_old_preset(tmp_path, capsys):
+def test_the_real_picture_check_passes_an_old_loadable(tmp_path, capsys):
     """The golden rig itself (no stand-in): party-trip and glimmer-bug draw
     the same as their `/9`, so `--apply` writes both."""
     pytest.importorskip("moderngl")
@@ -254,7 +254,7 @@ def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
     shutil.copyfile(FIXTURES / "glimmer-bug.json", loadable_dir / "party" / "deep" / "bug.json")
     (loadable_dir / ".cache").mkdir()
     shutil.copyfile(SOURCES / "party-trip.json", loadable_dir / ".cache" / "x.json")
-    got = [p.relative_to(loadable_dir).as_posix() for p in _tool().preset_files(lib)]
+    got = [p.relative_to(loadable_dir).as_posix() for p in _tool().loadable_files(lib)]
     assert got == ["acid-scene.json", "broken.json", "glimmer-bug.json", "trip-night.json",
                    "party/night.json", "party/deep/bug.json"]
     out_dir = tmp_path / "out"

@@ -52,7 +52,7 @@ def test_a_named_hand_route_follows_its_axis_whatever_the_dofs_order(app):
     assert seen == [9, 5]                                           # two different lanes
 
 
-def test_a_name_the_rig_lacks_leaves_the_row_dormant(app):
+def test_a_name_the_meta_lacks_leaves_the_row_dormant(app):
     """A rig without roll: `hand:right.roll` does nothing — not the lane
     that sits where the default layout's roll would. With no map published
     at all (no hands adapter), every named row is dormant too."""

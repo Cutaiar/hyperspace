@@ -415,7 +415,7 @@ def make_app(tmp_path, plan31: bool = True):
     return headless.make_app(tmp_path, plan31)
 
 
-def test_a_preset_carries_the_pattern_and_the_envelopes(app):
+def test_a_loadable_carries_the_pattern_and_the_envelopes(app):
     reg = app.reg
     reg["seq.1.1"].set(True)
     reg["seq.3.5"].set(True)
@@ -450,7 +450,7 @@ def test_a_preset_carries_the_pattern_and_the_envelopes(app):
     assert app.loaded_patch.document("pattern")["values"] == doc["values"]
 
 
-def test_an_old_preset_loads_four_lfos_five_envelopes_and_an_empty_pattern(app):
+def test_an_old_loadable_loads_four_lfos_five_envelopes_and_an_empty_pattern(app):
     reg = app.reg
     doc = app.loaded_patch.document("old")
     old = {**doc, "values": {k: v for k, v in doc["values"].items()
@@ -488,7 +488,7 @@ def _new_ids(doc) -> list[str]:
     return [k for k in doc["values"] if k.startswith(("env.", "seq."))]
 
 
-def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
+def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
     """Nothing of plan 31's touched: still `/6` (row 394: plan 31's
     conditional `/3` is gone with the ladder), naming every env.* / seq.*
     value at its default beside every other performance value — the

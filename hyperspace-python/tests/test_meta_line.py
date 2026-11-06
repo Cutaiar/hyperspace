@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_presets import boot
+from test_loadable import boot
 
 from hyperspace import graph as G
 from hyperspace import graphmigrate, loadable
@@ -45,7 +45,7 @@ LOOK = {"ghost.alpha": 0.25, "ghost.style": 2, "cloud.size": 3.5}
 # ---------------------------------------------------------------- the table
 
 
-def test_two_decks_tables_hold_the_session_rows_by_reference():
+def test_two_decks_tables_hold_the_meta_rows_by_reference():
     """A second deck's table over the first's session: the session rows are
     the same `Binding` objects, first in its list; a key row learned on one
     deck is the other's at once; the latch, the slew and the pad's feel are
@@ -77,7 +77,7 @@ def test_two_decks_tables_hold_the_session_rows_by_reference():
     assert not any(x is key for x in b.bindings)
 
 
-def test_the_session_table_reads_and_writes_the_file(tmp_path):
+def test_the_meta_table_reads_and_writes_the_file(tmp_path):
     """`Bindings.load(path).session` is the file's session table (the old
     migrations and the backup through the load); `write` writes the session
     rows only. Its descriptors are made from `SESSION_ATTRS`, one list."""
@@ -133,7 +133,7 @@ def _old_show(home: Path, **extra) -> Path:
     return path
 
 
-def _old_preset(home: Path, name: str = "OLD", folder: str = "") -> Path:
+def _old_loadable(home: Path, name: str = "OLD", folder: str = "") -> Path:
     """dial as a `/9` (before the look was the preset's): no hands' or
     clouds' values, a module label."""
     doc = json.loads((CORPUS / "dial.json").read_text())
@@ -148,11 +148,11 @@ def _old_preset(home: Path, name: str = "OLD", folder: str = "") -> Path:
     return path
 
 
-def test_an_old_preset_opened_with_an_old_show_takes_its_look_and_cuts_end_to_end(tmp_path):
+def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_end(tmp_path):
     home = tmp_path / "home"
     show = _old_show(home)
     before = show.read_bytes()
-    _old_preset(home)
+    _old_loadable(home)
     rig = boot(home, show="rig")
     pr, reg, pre = rig.lib.project, rig.reg, rig.loaded_patch
     # the show: its look and cuts read out, its mirror the room's
@@ -188,7 +188,7 @@ def test_an_old_preset_opened_with_an_old_show_takes_its_look_and_cuts_end_to_en
     assert again.reg["ghost.alpha"].value == 0.25 and again.loaded_patch.bus.cut == {CUT}
 
 
-def test_a_cut_is_the_presets_undone_with_it_and_held_in_its_dot(tmp_path):
+def test_a_cut_is_the_loadables_undone_with_it_and_held_in_its_dot(tmp_path):
     """The cuts are in the preset's dirty dot and its load's undo step."""
     from test_undo import boot as undo_boot
     from test_undo import settle
@@ -210,7 +210,7 @@ def test_a_cut_is_the_presets_undone_with_it_and_held_in_its_dot(tmp_path):
     assert pre.bus.cut == {CUT} and pre.current == "cut trip"
 
 
-def test_the_window_a_rig_lacks_is_asked_for():
+def test_the_window_a_meta_lacks_is_asked_for():
     from hyperspace import graphview
     spec = G.read_graph({"frame": "wired", "wires": [{"from": "scene", "to": "output.4.image"}]})
     assert graphview.wanted_windows(spec, G.BusCuts().cutting(G.bus_wire(6, "hands")), 2) == [
@@ -232,7 +232,7 @@ def same_picture(path, *, library=None, show=None):
     return ["x"] * 8, []
 
 
-def test_the_tool_writes_the_shows_look_and_cuts_into_every_preset_every_folder_down(
+def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folder_down(
         tmp_path, monkeypatch, capsys):
     """tools/migrate_library.py on a scratch library (never the owner's): a
     dry run writes nothing and says the cuts; --apply backs the library up,
@@ -241,8 +241,8 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_preset_every_folder_
     nothing to do."""
     lib = tmp_path / "Drive" / "Hyperspace"
     show = _old_show(lib)
-    _old_preset(lib, "OLD")
-    _old_preset(lib, "DEEP", folder="party")
+    _old_loadable(lib, "OLD")
+    _old_loadable(lib, "DEEP", folder="party")
     shutil.copyfile(CORPUS / "legacy6.json", lib / "presets" / "legacy6.json")   # a /10
     home = tmp_path / "machine"
     home.mkdir()
@@ -305,7 +305,7 @@ def _two_decks():
         build_patch(ViewState(), meta_reg=meta_reg)
 
 
-def test_a_session_param_is_applied_once_a_frame_whichever_deck_applies():
+def test_a_meta_param_is_applied_once_a_frame_whichever_deck_applies():
     """Finding 1: deck B's apply never releases a session param deck A's
     router modulated (no flicker to the bare base); the lead deck lands it
     once a frame, B's offset riding into the next; every deck's pass in one
@@ -354,7 +354,7 @@ def test_a_part_is_cached_on_the_param_and_a_duplicate_is_refused_once():
         b.continuous("master.gain", "x", lambda: 0.0, lambda v: None, group="master")
 
 
-def test_a_table_given_a_new_session_keeps_its_own_session_rows(tmp_path):
+def test_a_table_given_a_new_meta_keeps_its_own_meta_rows(tmp_path):
     """Finding 2: `Bindings(rows, session=)` over a session no table follows
     yet keeps the rows given — they seed the session — and writes them."""
     s = MetaTable(path=tmp_path / "bindings.json")
@@ -394,14 +394,14 @@ def test_the_mirror_is_the_rooms_one_setting_and_a_rebuilt_deck_lets_its_old_sta
     assert c["ghost.2.mirror"].room is not room
 
 
-def test_an_old_shows_extra_hands_look_is_no_unknown_id_for_a_preset_without_the_node(tmp_path):
+def test_an_old_shows_extra_hands_look_is_no_unknown_id_for_a_loadable_without_the_node(tmp_path):
     """Finding 4: an old show held `ghost.2.*` (an extra hands node); an old
     preset whose graph has no second node loads with no "unknown id" — the
     show's leftover is dropped quietly — and the look it does declare lands."""
     home = tmp_path / "home"
     _old_show(home, session={"tempo.bpm": 128.0, **LOOK, "ghost.2.alpha": 0.4,
                              "ghost.2.mirror": True})
-    _old_preset(home)
+    _old_loadable(home)
     rig = boot(home, show="rig")
     rig.lib.warning = ""
     assert rig.loaded_patch.load("OLD") == []
@@ -409,7 +409,7 @@ def test_an_old_shows_extra_hands_look_is_no_unknown_id_for_a_preset_without_the
     assert rig.reg["ghost.alpha"].value == 0.25 and "ghost.2.alpha" not in rig.reg
 
 
-def test_one_look_id_set_reads_an_old_show_and_hands_on_to_old_presets():
+def test_one_look_id_set_reads_an_old_show_and_hands_on_to_old_loadables():
     """Finding 5: the ids a /2 show gives up are the ids `ten` hands on —
     the hands' and clouds' looks, never the mirror; any other id stays the
     show's."""
@@ -447,7 +447,7 @@ def test_force_by_a_bare_stem_is_refused_when_two_folders_hold_it(tmp_path, monk
 # ---------------------------------------------------------------- review of #351, round 2
 
 
-def test_the_lead_is_named_and_a_stale_follower_never_lands_the_session():
+def test_the_lead_is_named_and_a_stale_follower_never_lands_the_meta():
     """Round 2, finding 1: the lead is the deck on air, named
     (`session.lead = reg`, as `Deck.build(on_air=True)` does) — a registry
     that followed first and is still referenced (an old deck a closure
@@ -476,7 +476,7 @@ def test_deck_build_names_its_registry_the_lead(tmp_path):
     assert rig.reg.meta_reg.on_air_reg is rig.reg
 
 
-def test_the_sessions_own_apply_lands_each_param_once_a_frame():
+def test_the_meta_own_apply_lands_each_param_once_a_frame():
     """Round 2, finding 2: `session.apply()` in the same frame as the lead's
     apply — after it or before it — lands each session param once (the
     frame's shared mark), never releasing the modulation."""
@@ -538,7 +538,7 @@ def test_the_ghost_groups_roads_leave_the_mirror_alone(tmp_path):
     assert m.value is True and reg["ghost.alpha"].value == pytest.approx(0.3)
 
 
-def test_a_second_table_shares_the_session_rows_it_brings_and_refuses_another_file(tmp_path):
+def test_a_second_table_shares_the_meta_rows_it_brings_and_refuses_another_file(tmp_path):
     """Round 2, finding 5: a second deck's `Bindings(rows, session=)` adds
     the session rows it brings that the session lacks — every deck gets
     them — and one naming another file or profile is refused, named."""

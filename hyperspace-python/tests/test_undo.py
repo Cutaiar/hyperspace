@@ -333,7 +333,7 @@ def test_integrated_state_and_the_clock_are_not_watched(rig):
     assert rig.undo.stack == []
 
 
-def test_session_params_are_covered(rig):
+def test_meta_params_are_covered(rig):
     """The hands' feel and the master faders undo like the look does, on the
     meta controller's stack (plan 44 D5b)."""
     reg = rig.reg
@@ -379,7 +379,7 @@ def test_undo_of_a_slider_does_not_rerun_a_load(rig):
 
 # ---------------------------------------------------------------- actions
 
-def test_a_preset_load_is_one_step_by_every_road(rig):
+def test_a_loadable_load_is_one_step_by_every_road(rig):
     """An F-key's trigger, `preset.next`, the strip's load and the file
     watch all meet in `Presets.load_doc`: one step each, `load <name>`."""
     reg, lib = rig.reg, rig.lib
@@ -441,7 +441,7 @@ def test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_
     assert lib.current(LOADABLE) == "TRIP" and not lib.is_dirty(LOADABLE) and pr.active == 4
 
 
-def test_save_after_undoing_a_load_writes_the_earlier_preset(rig):
+def test_save_after_undoing_a_load_writes_the_earlier_loadable(rig):
     """The marks (fork 2): after undoing a load, Save writes the earlier
     look to the earlier preset's file — never over the later one."""
     reg, lib, loaded_patch = rig.reg, rig.lib, rig.loaded_patch
@@ -464,7 +464,7 @@ def test_save_after_undoing_a_load_writes_the_earlier_preset(rig):
     assert b.read_text() == b_text
 
 
-def test_a_show_load_and_its_startup_preset_are_one_step_each(rig):
+def test_a_show_load_and_its_startup_loadable_are_one_step_each(rig):
     """A show is the meta controller's and the preset it starts on is a load on
     its deck (plan 44 D5b): one step on each stack, each undoing its own, and
     both undone the `Project` comes back as it was."""
@@ -1206,7 +1206,7 @@ def test_the_slew_can_never_outlast_the_settle_time(rig):
 test_slew_max_stays_under_the_undo_settle_time = test_the_slew_can_never_outlast_the_settle_time
 
 
-def test_the_output_switches_are_left_alone_by_undo_presets_and_shows(rig):
+def test_the_output_switches_are_left_alone_by_undo_loadables_and_shows(rig):
     """Plan 21 WP4 / fork F4: output.N.* are rig settings. Flipping one
     opens no undo step; an undo and a redo of a real step around it leave
     it where it is; no preset save or show save writes it; a preset load

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from conftest import seed
 from test_media_channels import FakeOpener, Here
-from test_presets import boot
+from test_loadable import boot
 
 from hyperspace import loadable
 from hyperspace.media.channels import CHANNELS, MediaState
@@ -98,7 +98,7 @@ def test_the_sound_params_per_channel(rig):
     assert tapers.fmt_level(0.5) == "−6.0 dB" and tapers.fmt_level(2.0) == "+6.0 dB"
 
 
-def test_a_preset_without_the_sound_params_loads_them_at_their_defaults(rig):
+def test_a_loadable_without_the_sound_params_loads_them_at_their_defaults(rig):
     """No schema move (row 582): a file from before V2 names neither id and
     loads with no note, each channel's sound off at unity — even after a
     preset that had them on; one that names them lands them, and the save
@@ -123,7 +123,7 @@ LATER_EFFECTS = ('  "fx.displace.', '  "fx.blend.')
 
 
 @pytest.mark.parametrize("name", ["party-faces", "lfo-breathe"])
-def test_preset_without_media_keeps_every_value_in_six(tmp_path, name):
+def test_loadable_without_media_keeps_every_value_in_six(tmp_path, name):
     """A preset that uses no media saves `/6` (row 394) holding every value
     the base wrote (fixtures/media-preset-base/, saved by the writer before
     T5) as it wrote it — but the six `view.bmp_*` this build no longer has
@@ -151,7 +151,7 @@ def test_preset_without_media_keeps_every_value_in_six(tmp_path, name):
     assert "media.a.slot" in doc["values"] and "view.media_alpha" in doc["values"]
 
 
-def test_a_media_preset_and_one_without_are_both_six(rig):
+def test_a_media_loadable_and_one_without_are_both_six(rig):
     """Row 394: with media or without, the save is `/6`, with the bins (an
     empty section when none is assigned) and every media-family value."""
     doc = rig.loaded_patch.document("x")
@@ -171,7 +171,7 @@ def test_a_media_preset_and_one_without_are_both_six(rig):
 def test_a_row_on_a_media_param_survives_the_save(rig):
     """A route, a macro subscriber or a desk row on a media-family param is
     saved with the preset (`/6`, as every save)."""
-    from test_presets import put
+    from test_loadable import put
     put(rig.home, "LFOPOS", routes=[{"source": "lfo:0", "target": "media.a.pos",
                                      "op": "push", "value": 0.2}])
     assert rig.loaded_patch.load("LFOPOS") == []
@@ -217,7 +217,7 @@ def test_bins_round_trip(rig, tmp_path):
 
 
 def test_v2_and_v4_both_load(rig):
-    from test_presets import put
+    from test_loadable import put
     put(rig.home, "OLD", values={"view.bright": 2.0})
     put(rig.home, "NEW", schema=loadable.MEDIA_SCHEMA, values={"backdrop.channel": 2},
         media={"channels": {"b": ["shared:x.png"]}})
@@ -233,7 +233,7 @@ def test_v2_and_v4_both_load(rig):
 
 
 def test_bmp_file_dropped_with_note(rig):
-    from test_presets import put
+    from test_loadable import put
     put(rig.home, "BMP", values={"view.bmp_file": "/x.png", "view.bmp_alpha": 0.4,
                                  "view.bright": 1.5})
     assert rig.loaded_patch.load("BMP") == []
@@ -248,7 +248,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     """The factory desk's knob 7 (`cc:0:54 → view.bmp_alpha`) keeps its
     meaning: the alias reads and writes view.media_alpha, is never saved
     as its own value, and an old preset's value lands on the real one."""
-    from test_presets import put
+    from test_loadable import put
     reg = rig.reg
     alias, real = reg["view.bmp_alpha"], reg["view.media_alpha"]
     assert reg.real(alias) is real and not alias.persist and not alias.modulatable
@@ -273,7 +273,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
 
 
 def test_bad_id_in_bin_is_a_note(rig):
-    from test_presets import put
+    from test_loadable import put
     put(rig.home, "BAD", schema=loadable.MEDIA_SCHEMA,
         media={"channels": {"a": ["shared:ok.png", "nonsense", None, "local:y.png"]}})
     assert rig.loaded_patch.load("BAD") == []
@@ -313,7 +313,7 @@ def test_undo_of_a_slot_change_restores_the_source(tmp_path):
 
 
 def test_undo_of_a_load_puts_the_bins_back(tmp_path):
-    from test_presets import put
+    from test_loadable import put
     from test_undo import boot as undo_boot
     from test_undo import frames, settle
     r = undo_boot(tmp_path / "home")

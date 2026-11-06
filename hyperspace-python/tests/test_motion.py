@@ -227,7 +227,7 @@ def test_a_route_rows_motion_round_trips_and_is_absent_by_default():
     assert Binding.from_json({**d, "motion": {"mode": "off"}}).motion == OFF
 
 
-def test_a_preset_keeps_a_rows_motion_and_its_dirty_dot_sees_it():
+def test_a_loadable_keeps_a_rows_motion_and_its_dirty_dot_sees_it():
     import json
 
     from hyperspace import loadable
@@ -331,7 +331,7 @@ def test_a_position_row_glides_in_from_the_base(rig):
 
 # ---- the pad's feel ----
 
-def test_the_pad_feel_is_six_session_params_over_the_table(rig):
+def test_the_pad_feel_is_six_meta_params_over_the_table(rig):
     reg, t = rig.reg, rig.table
     assert t.pad_feel == OFF
     reg["desk.pad.feel"].set(motion.MODES.index("spring"))

@@ -116,7 +116,7 @@ def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # no
     assert lib.current("presets") == "TRIP"
 
 
-def test_the_list_is_every_preset_by_name_with_rename_and_cross(rig):  # noqa: F811
+def test_the_list_is_every_loadable_by_name_with_rename_and_cross(rig):  # noqa: F811
     """Every preset of the library, in `Library.list`'s order (case folded),
     each row `rename` and × — one tier, no row dim, no row hidden; each
     row's chips clear its name inside the list's box."""
@@ -176,7 +176,7 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     assert st["page"]["foot"] == ["trash (2) ▸"]
 
 
-def test_a_folder_preset_sits_under_its_header_and_renames_in_its_folder(rig):  # noqa: F811
+def test_a_folder_loadable_sits_under_its_header_and_renames_in_its_folder(rig):  # noqa: F811
     """Plan 48 row 588, under stage 2's tree (row 636): a preset in
     ``presets/party/`` is listed as ``party/DIAL`` and drawn under the
     ``party`` header by its leaf, its chips clear of it; `rename` seeds
@@ -370,7 +370,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
     assert ui_loadable.save_tip(lib, "presets").startswith("No preset loaded")
 
 
-def test_save_writes_over_the_loaded_presets_own_file(rig, tmp_path):  # noqa: F811
+def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa: F811
     """Save on a loaded preset writes its own file over — the one the list
     found it by — and keeps the old text in the trash; the list still holds
     the name once. TRIP's file is `party-trip.json` (the corpus kept the
@@ -391,7 +391,7 @@ def test_save_writes_over_the_loaded_presets_own_file(rig, tmp_path):  # noqa: F
     assert sorted(p.name for p in (tmp_path / "presets").glob("*trip*")) == ["party-trip.json"]
 
 
-def test_the_preset_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  # noqa: F811
+def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  # noqa: F811
     """The preset strip drops `reset` (on a document kind `Library.reset`
     loads a preset called "default", and none is there): at the control
     size, the longest name loaded and dirty, the strip's items — ◀ name ●
@@ -442,7 +442,7 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
     assert ui_loadable._state(panel)["naming"] == "presets"
 
 
-def test_new_then_save_never_writes_over_a_preset_named_untitled(rig):  # noqa: F811
+def test_new_then_save_never_writes_over_a_loadable_named_untitled(rig):  # noqa: F811
     """R17 (final review): a preset named `untitled` exists; New, then
     save, opens naming (the new preset is unsaved, whatever its name) and
     the file is the bytes it was; `as…` on it prefills nothing. A save
@@ -472,7 +472,7 @@ def test_new_then_save_never_writes_over_a_preset_named_untitled(rig):  # noqa: 
     assert not lib.loaded_patch.unsaved
 
 
-def test_the_routing_head_draws_save_and_as_over_the_presets(rig):  # noqa: F811
+def test_the_routing_head_draws_save_and_as_over_the_loadables(rig):  # noqa: F811
     """ROUTING's head is the preset strip's save / as… over the same
     `presets` group (ui_routing.head): the same words, lit while dirty,
     `Library.overwrite` on a click; its as… is the strip's name field

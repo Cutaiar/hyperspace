@@ -11,7 +11,7 @@ import json
 import os
 
 import pytest
-from test_preset_folders import _put, lib_dirs, make  # noqa: F401 — the fixture
+from test_loadable_folders import _put, lib_dirs, make  # noqa: F401 — the fixture
 
 from hyperspace.library import LOADABLE, PROJECT_SCHEMA, LibraryError
 
@@ -131,7 +131,7 @@ def test_remove_folder_takes_an_empty_folder_only(lib_dirs):  # noqa: F811
 
 # ---------------------------------------------------------------- review of #349
 
-def test_a_folder_named_like_a_preset_file_is_refused_and_never_listed(lib_dirs):  # noqa: F811
+def test_a_folder_named_like_a_loadable_file_is_refused_and_never_listed(lib_dirs):  # noqa: F811
     r = make(lib_dirs)
     lib = r.lib
     with pytest.raises(LibraryError, match="may not end in '.json'"):

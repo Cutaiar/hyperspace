@@ -136,7 +136,7 @@ def test_a_fold_read_before_the_machine_is_known_is_read_again(rig):  # noqa: F8
     assert doc["presets"] == {"folded": ["ambient", "party"]}
 
 
-def test_the_no_presets_hint_shows_while_only_empty_folders_are_there(rig):  # noqa: F811
+def test_the_no_loadables_hint_shows_while_only_empty_folders_are_there(rig):  # noqa: F811
     panel, lib = rig.panel, rig.lib
     for p in list((lib.home / "presets").glob("*.json")):
         p.unlink()

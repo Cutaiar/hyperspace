@@ -20,7 +20,7 @@ from hyperspace.patterns import NAMES
 
 # in the fast tier on purpose (~1.5 s, one load per preset): a preset edit
 # that leaves the map stale fails on the next bare `pytest`
-def test_the_map_matches_every_preset_and_fixture_as_loaded():
+def test_the_map_matches_every_loadable_and_fixture_as_loaded():
     """Every corpus preset's and fixture's mode, faces switch and faces
     wire in the map are what the files load to (`--check`)."""
     assert fs.check() == []

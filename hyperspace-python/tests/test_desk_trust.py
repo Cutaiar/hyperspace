@@ -212,7 +212,7 @@ def test_save_held_and_an_empty_pad_tapped_saves_into_that_slot(rig):
     assert lib.status == "saved TRIP 2 → slot 13"
 
 
-def test_save_held_and_a_filled_pad_tapped_saves_a_new_preset_and_keeps_the_old(rig):
+def test_save_held_and_a_filled_pad_tapped_saves_a_new_loadable_and_keeps_the_old(rig):
     """Decision 18: a filled slot takes a **new** preset (named as
     `save_new` names them) and the slot points at it; the old preset keeps
     its file, byte for byte, and stays in the list, unpadded, as "free
@@ -415,7 +415,7 @@ def test_the_render_toggles_are_invariant_and_their_leds_show_the_live_state(rig
         assert [bool(reg[p].value) for p, _ in TOGGLES] == [False, True, True, True]
 
 
-def test_an_older_presets_toggle_rows_drop_quietly_and_an_owners_row_with_a_note(rig):
+def test_an_older_loadables_toggle_rows_drop_quietly_and_an_owners_row_with_a_note(rig):
     """A preset saved before C1 holds the four toggle rows on its desk
     (the generator wrote them then). A load drops them without a note —
     the session's rows do
@@ -440,7 +440,7 @@ def test_an_older_presets_toggle_rows_drop_quietly_and_an_owners_row_with_a_note
     assert not lib.is_dirty("presets")
 
 
-def test_a_session_file_gains_the_toggles_and_the_save_once(tmp_path):
+def test_a_meta_file_gains_the_toggles_and_the_save_once(tmp_path):
     """A `bindings.json` from before C1 has no row on scene launch 1–4 (they
     were the preset's) nor on track 8's clip stop: its next load adds the
     five factory rows, says so and writes the file back once; the next
@@ -504,7 +504,7 @@ def test_every_load_relights_the_whole_desk(rig):
         assert rings == {*apc40.DEVICE_KNOBS, *apc40.TRACK_KNOBS}       # every ring set up
 
 
-def test_a_load_lets_go_of_every_fader_the_preset_binds(rig):
+def test_a_load_lets_go_of_every_fader_the_loadable_binds(rig):
     """Register row 44, changed by C1: a load re-arms soft pickup on every
     fader the new preset's desk binds, whether or not the load moved its
     param — each such fader picks up from the new preset, the same way

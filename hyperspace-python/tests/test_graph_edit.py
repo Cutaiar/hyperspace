@@ -550,7 +550,7 @@ def _two_cable_rig(rig):
     from types import SimpleNamespace as NS
 
     from test_graphview import views
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Two", schema="hyperspace.preset/7", graph=_section(
@@ -714,7 +714,7 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
     assert ui_graph.DELETE_NODE["render"] is ui_graph._delete_render_node
 
 
-def test_a_route_from_the_canvas_is_a_performer_row_in_the_preset(rig):
+def test_a_route_from_the_canvas_is_a_performer_row_in_the_loadable(rig):
     """What the canvas adds is the loaded preset's (a performer row): the
     preset is dirty, bindings.json is not written."""
     lib, table = rig.lib, rig.router.table
@@ -898,7 +898,7 @@ def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
     it whose undo steps are counted (`undo_rig`: test_undo's boot, its Undo
     real)."""
     from test_graph_json import Stub
-    from test_presets import boot, put
+    from test_loadable import boot, put
 
     from hyperspace import undo
     from hyperspace.library import LOADABLE
@@ -1123,7 +1123,7 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     from types import SimpleNamespace as NS
 
     from test_graphview import views
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Free", schema="hyperspace.preset/7", graph=_section(
@@ -1275,7 +1275,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     from types import SimpleNamespace as NS
 
     from test_graphview import views
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace import undo as undo_mod
     from hyperspace.outputs import Switches
@@ -1706,7 +1706,7 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
     `graph` (a `/6` section) — or corpus preset `slug` (tests/corpus) loaded,
     migrated as every load is — on a stub renderer, an Edit on it."""
     from test_graph_json import Stub
-    from test_presets import boot, put
+    from test_loadable import boot, put
 
     from hyperspace import undo
     from hyperspace.library import LOADABLE
@@ -2100,7 +2100,7 @@ def _drag_rig(rig, monkeypatch, *pairs, nodes=(), effects=("acid", "wobble.2"), 
     from types import SimpleNamespace as NS
 
     from test_graphview import views
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Drag", schema="hyperspace.preset/7", graph=_section(*pairs, nodes=nodes),

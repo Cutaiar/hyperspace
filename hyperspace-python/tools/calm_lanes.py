@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     ml = _migrate_library()
     home = ml.machine_home()
     library = a.library or ml.configured_library(home)
-    files = ml.preset_files(library)
+    files = ml.loadable_files(library)
     if not files:
         print(f"no presets under {library / ml.LOADABLE}")
         return 1

@@ -75,7 +75,7 @@ def test_params_registered(rig):
     assert all(p.group == "output" for p in r.group("output"))
 
 
-def test_rig_settings_never_persist_or_modulate(rig):
+def test_meta_settings_never_persist_or_modulate(rig):
     r = rig.reg
     for pid in ("output.monitor", "output.fullscreen", "output.overlay", "output.passthrough"):
         assert not r[pid].persist, pid
@@ -87,7 +87,7 @@ def test_rig_settings_never_persist_or_modulate(rig):
     assert set(saved) == {"output.bg", "output.alpha"}
 
 
-def test_dim_is_a_rig_setting_that_starts_bright(rig):
+def test_dim_is_a_meta_setting_that_starts_bright(rig):
     """Plan 15 WP3 (decision 28): the master dim is the operator's — 1 on a
     fresh Output whatever the config says (there is no key), never saved,
     never modulated, the session's by group, no `overlay.*` alias — and it
@@ -431,7 +431,7 @@ def _slots(*names, missing=()):
                  win=None if k + 1 in missing else f"w{k + 1}") for k, n in enumerate(names)]
 
 
-def test_the_output_switches_are_rig_settings():
+def test_the_output_switches_are_meta_settings():
     """Fork F4: output.N.scene / .hands / .dim are rig settings (plan 35 T4:
     the two mutes, no `.through`) —
     group `output` (the session's), never persisted (no preset, show or

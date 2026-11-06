@@ -411,7 +411,7 @@ def test_read_devices_reports_problems_and_prints_nothing(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
-def test_laptop_reads_a_rig_config_for_one_screen(tmp_path, capsys):
+def test_laptop_reads_a_meta_config_for_one_screen(tmp_path, capsys):
     """`hyperspace --laptop`: a config made for the projector rig must
     not cover the laptop black — output 1 a plain window, no overlay at
     launch, both windows on the primary screen, later outputs dropped;

@@ -99,7 +99,7 @@ def test_the_list_is_every_folder_down_by_qualified_name(lib_dirs):
     assert r.lib.groups().count(LOADABLE) == 1 and "party" not in r.lib.groups()
 
 
-def test_a_name_never_reaches_outside_the_presets_folder(lib_dirs):
+def test_a_name_never_reaches_outside_the_loadables_folder(lib_dirs):
     with pytest.raises(LibraryError):
         path_slug("../x")
     with pytest.raises(LibraryError):
@@ -173,7 +173,7 @@ def test_rename_keeps_the_folder_and_repoints_the_show(lib_dirs):
 
 # ---------------------------------------------------------------- the bank
 
-def test_the_bank_holds_a_folder_preset_and_cycle_and_walk_reach_it(lib_dirs):
+def test_the_bank_holds_a_folder_loadable_and_cycle_and_walk_reach_it(lib_dirs):
     r = make(lib_dirs)
     pr = r.lib.project
     pr.load_slot(1)
@@ -192,7 +192,7 @@ def test_the_bank_holds_a_folder_preset_and_cycle_and_walk_reach_it(lib_dirs):
     assert r.lib.still_named("C") == []          # a bare C would be a top-level preset
 
 
-def test_an_old_show_with_a_bare_name_still_loads_its_top_level_preset(lib_dirs):
+def test_an_old_show_with_a_bare_name_still_loads_its_top_level_loadable(lib_dirs):
     r = make(lib_dirs)
     pr = r.lib.project
     pr.load_startup()
@@ -215,7 +215,7 @@ def test_a_folder_slot_on_an_older_build_is_a_filled_slot_that_loads_nothing(lib
     assert old_path_of("A") == lib_dirs.loaded_patch / "a.json"     # a bare name: as ever
 
 
-def test_the_two_handed_save_lands_beside_the_loaded_preset(lib_dirs):
+def test_the_two_handed_save_lands_beside_the_loaded_loadable(lib_dirs):
     r = make(lib_dirs)
     pr = r.lib.project
     r.loaded_patch.load("party/deep/C")
@@ -345,7 +345,7 @@ def test_a_folder_named_in_another_case_is_the_folder_on_disk(lib_dirs):
     assert sorted(p.name for p in lib_dirs.loaded_patch.iterdir() if p.is_dir()) == [".cache", "party"]
 
 
-def test_the_presets_walk_is_kept_until_a_folder_moves(lib_dirs, monkeypatch):
+def test_the_loadables_walk_is_kept_until_a_folder_moves(lib_dirs, monkeypatch):
     """Review 8: two listings in a row walk the tree once; a file added
     in a subfolder is seen on the next."""
     r = make(lib_dirs)
@@ -494,7 +494,7 @@ def test_a_folder_with_no_name_is_refused(lib_dirs):
     assert tree(lib_dirs.loaded_patch) == before and r.lib.current(LOADABLE) is None
 
 
-def test_a_pad_naming_its_preset_by_another_spelling_lights(lib_dirs):
+def test_a_pad_naming_its_loadable_by_another_spelling_lights(lib_dirs):
     """Third pass 2: slots `Ac/Dc` and `Party/B` load through the loose
     read and their pads light, as an exact spelling's does."""
     _put(lib_dirs.loaded_patch / "ac-dc.json", "AC/DC")
@@ -524,7 +524,7 @@ def test_a_symlinked_home_lists_its_trash_once(tmp_path):
     assert len(listed) == 1 and not listed[0].old
 
 
-def test_a_non_preset_file_kept_deeper_goes_back_to_its_group(lib_dirs):
+def test_a_non_loadable_file_kept_deeper_goes_back_to_its_group(lib_dirs):
     """Third pass 4: only the presets have folders — a module preset the
     trash holds a folder down restores to its group's own folder."""
     r = make(lib_dirs)

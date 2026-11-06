@@ -230,7 +230,7 @@ def test_the_canvas_draws_the_hands_cable():
     assert c.type == graphview.GEOMETRY
 
 
-def test_an_unwired_layer_draws_nothing_on_the_golden_rig(ctx, bus_cuts):
+def test_an_unwired_layer_draws_nothing_on_the_golden_meta(ctx, bus_cuts):
     """GL, hands present: the layer with its hands wire draws them; without
     it, nothing — the frame is the one with no hands laid over at all."""
     from test_graph_frame import _draw, _land
@@ -251,7 +251,7 @@ def test_an_unwired_layer_draws_nothing_on_the_golden_rig(ctx, bus_cuts):
 
 # ---------------------------------------------------------------- the rig's clouds
 
-def test_a_cloud_is_in_the_scene_by_the_rigs_wire_and_cut_it_is_not():
+def test_a_cloud_is_in_the_scene_by_the_meta_wire_and_cut_it_is_not():
     spec = G.read_graph(migrated())
     g = build(spec, clouds=("scan", "desk"))
     clouds = [n for n in g.nodes["scene"].geometries() if isinstance(n, G.PointCloud)]

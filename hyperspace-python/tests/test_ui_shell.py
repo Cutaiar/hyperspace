@@ -352,7 +352,7 @@ def test_the_lookback_page_says_why_the_worker_is_off(rig, monkeypatch):
     assert rig.panel.dream_error in drawn
 
 
-def test_page_param_is_ui_state_not_a_preset(rig):
+def test_page_param_is_ui_state_not_a_loadable(rig):
     p = rig.reg["ui.page"]
     assert p.group == "ui" and not p.persist and not p.modulatable
     assert p.names == PAGE_KEYS
@@ -820,7 +820,7 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     assert rows == []
 
 
-def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeypatch):
+def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monkeypatch):
     """Plan 13 decision 13: the one ROUTING page — head, routes, desk,
     macros, session — never scrolls itself, with the house show's first
     preset loaded and with a full desk (every preset control mapped, each macro
@@ -1142,7 +1142,7 @@ def test_the_footer_says_what_was_undone(rig, monkeypatch):
     assert shown() == []
 
 
-def test_preset_bank_and_strip_on_the_presets_page(rig):
+def test_loadable_bank_and_strip_on_the_loadables_page(rig):
     """Plan 13 WP2: the bank row loads and saves presets by F-key param,
     the one preset strip shows what is loaded and its dirty dot."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
@@ -1393,7 +1393,7 @@ def test_the_menu_lists_and_unbinds_with_no_midi_adapter(rig, monkeypatch):
     assert not any(i.startswith("Unbind") for i in items)
 
 
-def test_unbind_is_not_offered_on_a_session_only_param(rig, monkeypatch):
+def test_unbind_is_not_offered_on_a_meta_only_param(rig, monkeypatch):
     """A fader's param is the session's (D6): its row's line reads
     "invariant", dim, and there is no Unbind item — none that could only
     refuse. A route on it brings a plain Unbind for the route alone."""

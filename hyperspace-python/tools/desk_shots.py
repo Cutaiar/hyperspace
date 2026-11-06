@@ -36,7 +36,7 @@ from imgui_bundle import imgui
 from hyperspace import apc40, ui, ui_desk, ui_routing
 from hyperspace.ui import PAGE_KEYS, Panel
 
-PRESET = "TRIP"
+LOADABLE = "TRIP"
 
 
 def control(glyph: str) -> apc40.Control:
@@ -49,7 +49,7 @@ def centre(rect) -> tuple[float, float]:
 
 def boot() -> Hidden:
     h = Hidden("desk shots")
-    h.r.lib.load("presets", PRESET)
+    h.r.lib.load("presets", LOADABLE)
     h.page("view")
     h.draw(6)
     return h

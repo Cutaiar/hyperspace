@@ -118,7 +118,7 @@ def _trail(ctx, hz: float, seconds: float, **dream):
     return ages, weights
 
 
-def test_the_same_preset_gives_the_same_trail_at_60_and_120_hz(ctx):
+def test_the_same_loadable_gives_the_same_trail_at_60_and_120_hz(ctx):
     """Plan 14 WP6: echo time is seconds. TRACER's set (24 echoes every
     1/15 s, a 0.76 s half-life) keeps the same trail on a 120 Hz screen as
     on a 60 Hz one — the same echoes, as old, as bright — where the old
@@ -700,7 +700,7 @@ def _final_alpha(ctx, b, bg_alpha, w=240, h=160, frames=4):
     return a
 
 
-def _corpus_presets():
+def _corpus_loadables():
     """The presets the build once shipped (tests/corpus/presets), by slug."""
     return sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 
@@ -710,15 +710,15 @@ def _corpus_presets():
 STRESS = ["effects", "multiply"]
 
 
-@pytest.mark.parametrize("name", _corpus_presets() + STRESS)
-def test_every_corpus_preset_renders_opaque_in_window_mode(ctx, tmp_path, name):
+@pytest.mark.parametrize("name", _corpus_loadables() + STRESS)
+def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name):
     """Plan 14 WP1: the render window is a Pepper's Ghost screen — in window
     mode (and fullscreen, the same opaque ground) every pixel of the final
     frame is alpha 255 for every corpus preset, and for a preset with
     cut-through, faces, points, the look-back and every effect on, through
     the FX chain and the look-back composite."""
     b = _preset_rig(ctx, tmp_path)
-    first = _corpus_presets()[0] if name in STRESS else name
+    first = _corpus_loadables()[0] if name in STRESS else name
     path = b.lib.path_of("presets", first)
     assert path is not None, first
     b.loaded_patch.load(json.loads(path.read_text())["name"])
@@ -1541,7 +1541,7 @@ def test_the_worker_status_is_never_taller_than_its_room(lbpage):
     imgui.end_frame()
 
 
-def test_the_relabel_reaches_no_preset_file(tmp_path):
+def test_the_relabel_reaches_no_loadable_file(tmp_path):
     """Labels are not in preset files: the dream module presets name ids
     only."""
     from hyperspace.library import Library

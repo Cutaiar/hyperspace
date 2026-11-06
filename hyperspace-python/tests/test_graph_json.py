@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 from conftest import CORPUS, seed
-from test_presets import boot, put
+from test_loadable import boot, put
 from wiredframe import Shows, graph, unwired, wire_switches, wiring
 
 from hyperspace import graph as G
@@ -427,7 +427,7 @@ def _fixture_in(home: Path) -> None:
     dst.write_text(FIXTURE.read_text())
 
 
-def test_no_corpus_source_carries_a_graph_and_each_preset_loads_as_before(tmp_path):
+def test_no_corpus_source_carries_a_graph_and_each_loadable_loads_as_before(tmp_path):
     """Every corpus preset loads with today's frame, no graph note and a
     clean dot. Plan 36 T3: each file is its source's `/7`, so it carries
     that frame as its graph (its source has none) and lands it as it is."""
@@ -453,7 +453,7 @@ def test_no_corpus_source_carries_a_graph_and_each_preset_loads_as_before(tmp_pa
         assert not rig.lib.is_dirty(LOADABLE), slug
 
 
-def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
+def test_the_proof_loadable_loads_its_graph_from_a_scratch_library(tmp_path):
     """`hands-lines` (a fixture, never a corpus preset): its graph lands
     — the hands in the scene as lines, the history holding them — on the
     attached renderer, the acid on, the look-back on; nothing missing, no
@@ -506,7 +506,7 @@ def test_an_unknown_node_kind_is_a_note_and_the_default_graph(tmp_path):
     assert not rig.lib.is_dirty(LOADABLE)
 
 
-def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path):
+def test_a_loadable_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path):
     """The proof of the naming rule for effects: a preset whose graph
     holds the acid twice carries `fx.acid.2.*` in its values, which land
     once the graph has (they are not unknown); the first acid keeps

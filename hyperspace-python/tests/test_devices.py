@@ -754,7 +754,7 @@ enabled = false
 '''
 
 
-def test_todays_rig_as_a_devices_list_equals_the_old_tables(tmp_path, capsys):
+def test_todays_meta_as_a_devices_list_equals_the_old_tables(tmp_path, capsys):
     """The exact `[[devices]]` block the owner pastes to get today's rig
     gives the same device entries as the old tables do, and nothing is
     said about it."""

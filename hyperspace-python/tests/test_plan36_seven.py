@@ -215,7 +215,7 @@ def test_the_migration_drops_the_values_of_effects_not_in_the_section():
 
 # ---------------------------------------------------------------- old files, one way
 
-def test_an_old_section_less_preset_migrates_to_todays_frame():
+def test_an_old_section_less_loadable_migrates_to_todays_frame():
     """A `/2` with no section (every corpus preset's source) is today's
     frame, each hidden edge a wire, as `/7`."""
     out, notes = M.seven({"schema": "hyperspace.preset/2", "values": {}}, {})
@@ -307,7 +307,7 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
 
 # ---------------------------------------------------------------- the corpus presets
 
-def test_every_corpus_preset_is_its_sources_seven_and_round_trips(tmp_path):
+def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
     """Each corpus preset (tests/corpus/presets) is `/7`; loaded and saved
     untouched it is the same bytes; and it is exactly what
     tools/migrate_library.py makes of its source (`--to`: load the old file,

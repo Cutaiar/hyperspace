@@ -98,7 +98,7 @@ if str(ROOT) not in sys.path:
 from hyperspace import routing
 from hyperspace.fx import FxState, retaper_of
 from hyperspace.params import DEPTH_TAPER, DEPTH_UNIT, UNITS_KEY, retaper_depths
-from hyperspace.loadable import dumps as preset_text
+from hyperspace.loadable import dumps as loadable_text
 
 PATCHES = "patches"
 DESK = "desk"
@@ -191,7 +191,7 @@ def text(doc: dict, kind: str = "preset") -> str:
     through `routing.dumps_doc` (a hand-edited file with no `profile` gets
     the default's, which the app would write too)."""
     if kind == "preset":
-        return preset_text(doc)
+        return loadable_text(doc)
     if kind == "bindings":
         return routing.dumps_doc({"profile": "apc40", **doc})
     return json.dumps(doc, indent=1) + "\n"
@@ -240,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
     ml = _migrate_library()
     home = ml.machine_home()
     library = (a.library or ml.configured_library(home)).expanduser()
-    loadable_files = ml.preset_files(library)
+    loadable_files = ml.loadable_files(library)
     patches = json_files(library / PATCHES)
     desks = json_files(library / DESK)
     table = home / routing.FILE

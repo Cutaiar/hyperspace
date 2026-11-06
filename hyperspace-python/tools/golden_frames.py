@@ -157,7 +157,7 @@ CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 # subjects, in the order the manifest has always listed them (the house
 # moods, plan 12's party presets, plan 14's, then the routing-era ones)
 CORPUS = ROOT / "tests" / "corpus" / "presets"
-CORPUS_PRESETS: tuple[str, ...] = (
+CORPUS_LOADABLES: tuple[str, ...] = (
     "big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo", "plasma-heart",
     "spiral-silk", "strobe-cage", "woven-lattice",
     "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
@@ -232,7 +232,7 @@ FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces
 WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
                                    "resize-faces", "resize-crop", "edges-scene",
                                    "mask-as-picture", "cut-out", "segment-motion")
-FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
+FIXTURE_LOADABLES: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES, *FEEDBACK_FIXTURES, "blank-frame",
                                     "through-one-output", "resize-faces", "edges-scene")
@@ -418,9 +418,9 @@ class Rig:
         envelope.register(reg, self.envs, self.clock)
         sequencer.register(reg, self.seq, self.clock)
         self._home = tempfile.TemporaryDirectory(prefix="hyperspace-golden-lib-")
-        if source is None and slug in FIXTURE_PRESETS:
+        if source is None and slug in FIXTURE_LOADABLES:
             source = FIXTURES / f"{slug}.json"
-        elif source is None and slug in CORPUS_PRESETS:
+        elif source is None and slug in CORPUS_LOADABLES:
             source = CORPUS / f"{slug}.json"
         if source is not None:               # a preset copied into the scratch library
             own = Path(self._home.name) / "presets"
@@ -714,7 +714,7 @@ def source_doc(loaded_patch, slug: str) -> dict:
     source (`FACTORY_SOURCES`, what its `/7` was migrated from), else the
     file as the library has it (a fixture: an old file, a migration input)."""
     src = FACTORY_SOURCES / f"{slug}.json"
-    if slug in CORPUS_PRESETS and src.is_file():
+    if slug in CORPUS_LOADABLES and src.is_file():
         return json.loads(src.read_text())
     return loaded_patch.lib.read("presets", slug)
 
@@ -867,7 +867,7 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
             key, over = rig.renderer.stats["routes"][k]
             route_name, hands_over = expected_route(
                 sw, fx_on, visible, G.through_of(spec.wiring(), k + 1) is not None)
-            if wiring is None and slug not in FIXTURE_PRESETS:
+            if wiring is None and slug not in FIXTURE_LOADABLES:
                 assert (key is not None, bool(over)) == (route_name != "none", hands_over), (
                     slug, name, key, over)
             raw = _read(ctx, f, size)
@@ -888,7 +888,7 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
             del raw
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
-        if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed
+        if slug in FIXTURE_LOADABLES:     # what the graph landed, and the nodes timed
             said["graph"] = rig.loaded_patch.graph.doc     # the section as it landed, not a repr
             said["nodes"] = list(rig.renderer._graph.timed)
         return shots, said
@@ -968,9 +968,9 @@ def job_of(entry: dict) -> str:
 
 def jobs(only: set[str] | None = None, *, cap: bool = True) -> list[Job]:
     """Every job (or only the presets in `only`), in the goldens' order."""
-    out = [Job("preset", slug, hands) for slug in CORPUS_PRESETS
+    out = [Job("preset", slug, hands) for slug in CORPUS_LOADABLES
            if not only or slug in only for hands in HANDS]
-    out += [Job("fixture", slug, "present") for slug in FIXTURE_PRESETS
+    out += [Job("fixture", slug, "present") for slug in FIXTURE_LOADABLES
             if not only or slug in only]
     if cap and (not only or CAP["preset"] in only):
         out.append(Job("cap", CAP["preset"], CAP["hands"]))
@@ -1073,14 +1073,14 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
                          f"this is {renderer!r}: record them all")
     redone = {s.loadable for s in shots}
     entries = [e for e in old["goldens"] if e["preset"] not in redone] + [s.entry() for s in shots]
-    order = {slug: k for k, slug in enumerate((*CORPUS_PRESETS, *FIXTURE_PRESETS))}
+    order = {slug: k for k, slug in enumerate((*CORPUS_LOADABLES, *FIXTURE_LOADABLES))}
     st = {name: k for k, (name, _) in enumerate(STATES)}
     entries.sort(key=lambda e: (order[e["preset"]], HANDS.index(e["hands"]),
                                 st.get(e["state"], len(st)), e["state"]))
     loadable_hashes = {k: v for k, v in old.get("presets", {}).items() if k not in redone}
-    loadable_hashes.update({k: v for k, v in said.items() if k not in FIXTURE_PRESETS})
+    loadable_hashes.update({k: v for k, v in said.items() if k not in FIXTURE_LOADABLES})
     fixtures = {k: v for k, v in old.get("fixtures", {}).items() if k not in redone}
-    fixtures.update({k: v for k, v in said.items() if k in FIXTURE_PRESETS})
+    fixtures.update({k: v for k, v in said.items() if k in FIXTURE_LOADABLES})
     doc = {
         "about": "plan 26 A0 golden frames: tools/golden_frames.py --record writes this; "
                  "tests/test_golden_frames.py compares every sha256 exactly. Far fewer "
@@ -1107,7 +1107,7 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
         "sequencer_running": list(RUNNING),
         "fixture_states": {slug: {"file": f"tests/fixtures/presets/{slug}.json",
                                   "hands": "present", "states": [n for n, _ in STATES]}
-                           for slug in FIXTURE_PRESETS},
+                           for slug in FIXTURE_LOADABLES},
         "presets": {k: loadable_hashes[k] for k in sorted(loadable_hashes, key=order.__getitem__)},
         "fixtures": {k: fixtures[k] for k in sorted(fixtures, key=order.__getitem__)},
         "goldens": entries,
@@ -1203,9 +1203,9 @@ class Loader:
         home = Path(self._home.name)
         own = home / "presets"
         own.mkdir(parents=True, exist_ok=True)
-        for slug in CORPUS_PRESETS:
+        for slug in CORPUS_LOADABLES:
             (own / f"{slug}.json").write_text((CORPUS / f"{slug}.json").read_text())
-        for slug in FIXTURE_PRESETS:
+        for slug in FIXTURE_LOADABLES:
             (own / f"{slug}.json").write_text((FIXTURES / f"{slug}.json").read_text())
         self.view, self.fx = ViewState(), FxState()
         chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
@@ -1258,9 +1258,9 @@ def signature_keys() -> list[str]:
     `SOLO_FX`) — and a CLOUDED rig's name, as the goldens draw them."""
     # (a `/6` fixture — plan 35 T3's — is a wired frame of its own: no
     # section before it, so no `default_graph` recorded to prove it against)
-    keys = [f"{slug}/states" for slug in (*CORPUS_PRESETS, *FIXTURE_PRESETS)
+    keys = [f"{slug}/states" for slug in (*CORPUS_LOADABLES, *FIXTURE_LOADABLES)
             if slug not in WIRED_FIXTURES]
-    for slug in CORPUS_PRESETS:
+    for slug in CORPUS_LOADABLES:
         keys += [f"{slug}/{name}" for name, _, _, which in WIRED
                  if which is None or slug in which]
         keys += [f"{slug}/{name}" for name, _ in SOLO]
@@ -1388,7 +1388,7 @@ def record_names() -> int:
     doc = load_manifest()
     before = json.dumps(doc["goldens"])
     changed = 0
-    for slug in FIXTURE_PRESETS:
+    for slug in FIXTURE_LOADABLES:
         said = doc.get("fixtures", {}).get(slug)
         if said is None:
             continue
@@ -1419,7 +1419,7 @@ def main() -> None:
         print(f"rewrote {record_names()} fixtures' node names; no golden touched")
         return
     only = {x.strip() for x in a.only.split(",") if x.strip()} or None
-    if only and (unknown := only - set(CORPUS_PRESETS) - set(FIXTURE_PRESETS)):
+    if only and (unknown := only - set(CORPUS_LOADABLES) - set(FIXTURE_LOADABLES)):
         ap.error(f"no such preset: {', '.join(sorted(unknown))}")
     renderer, version = renderer_name(context()), gl_version(context())
     # (pixels kept only where a PNG or the contact sheet needs them)

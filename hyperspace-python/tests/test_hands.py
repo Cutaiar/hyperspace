@@ -533,7 +533,7 @@ def _spied(app) -> list:
     return seen
 
 
-def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
+def test_learn_passes_the_axiss_centredness_and_the_meta_depth(tmp_path):
     """Plan 18 WP3, the adapter's half: a learn is told whether the axis
     that won rests in the middle — its setup *now* (`hands.<axis>.bipolar`,
     "Centred"), not the feature table — and the session's `hands.learn_depth`.
@@ -1135,7 +1135,7 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
 
 # ------------------------------------------------- one rig table (audit N1)
 
-def test_one_defaults_table_for_the_rig(tmp_path):
+def test_one_defaults_table_for_the_meta(tmp_path):
     """config.load fills the [hands] section from hands.DEFAULTS (config has
     no table of its own), and a bare AxisSettings is the axis from_config
     builds — no second table of defaults anywhere."""

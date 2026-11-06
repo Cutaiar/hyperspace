@@ -115,7 +115,7 @@ def legacy6(router: Router) -> list[str]:
     return [d["target"] for d in doc["routes"] if d["target"] not in router.reg]
 
 
-def load_preset(r, router: Router, name: str) -> list[str]:
+def load_patch(r, router: Router, name: str) -> list[str]:
     """A preset by name through the one loader (`preset.Presets` over the
     rig's library) — the road the routing presets took before plan 13 WP5
     made them presets. Returns the ids the registry lacks."""
@@ -124,7 +124,7 @@ def load_preset(r, router: Router, name: str) -> list[str]:
     return LoadedPatch(r.lib, r.reg, router).load(name)
 
 
-def session_rows() -> list[Binding]:
+def meta_rows() -> list[Binding]:
     """The factory table's rows a bindings.json keeps (plan 13 §2.2)."""
     return [b for b in Bindings.factory().bindings if routing.is_meta_row(b)]
 
@@ -904,7 +904,7 @@ def test_a_lane_may_modulate_the_analyzer():
     assert thr.norm == base                            # the user's setting is untouched
 
 
-def test_the_legacy6_preset_replaces_routes_and_lands_bases(tmp_path):
+def test_the_legacy6_loadable_replaces_routes_and_lands_bases(tmp_path):
     """The routing preset `legacy6` is a preset since plan 13 WP5: loaded by
     name through `Presets` it replaces every route and lands its bases —
     the zeros the parity anchor needs — and leaves the input rows alone."""
@@ -1015,7 +1015,7 @@ def test_the_hand_presets_name_params_and_lanes_that_exist(tmp_path, name):
     seed(tmp_path)
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
-    assert load_preset(r, router, name) == []      # no unknown target ids
+    assert load_patch(r, router, name) == []      # no unknown target ids
     rows = router.table.routes()
     assert rows and router.table.dropped == []     # one owner per target
     lay = Layout(HandSettings.from_config({}).axes)
@@ -1041,7 +1041,7 @@ def test_the_hand_presets_reach_both_ends_of_their_targets(tmp_path, name):
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
     router.names["hand"] = hands.Layout(hands.HandSettings.from_config({}).axes).index
-    load_preset(r, router, name)
+    load_patch(r, router, name)
     for b in router.table.routes():
         if b.op == "push" or b.value != 1.0:
             continue                                 # a deliberate depth or slice
@@ -1161,7 +1161,7 @@ def test_replace_owner_is_the_one_door_onto_a_taken_target():
     assert t.dropped == [] and t.notes == []
 
 
-def test_a_preset_with_two_owners_keeps_the_first_and_says_so():
+def test_a_loadable_with_two_owners_keeps_the_first_and_says_so():
     _r, router, t = _hand_rig()
     t.set_routes([Binding("hand:0", "view.bright", "position"),
                   Binding("hand:1", "view.bright", "push", 0.5),          # dropped
@@ -1181,7 +1181,7 @@ def test_a_preset_with_two_owners_keeps_the_first_and_says_so():
     assert t.dropped == []
 
 
-def test_a_preset_load_lists_what_it_dropped(tmp_path):
+def test_a_loadable_load_lists_what_it_dropped(tmp_path):
     """Was test_load_preset_lists_what_it_dropped (a routing preset): a
     preset with two performers on one target keeps the first and lists the
     second until the next edit."""
@@ -1193,7 +1193,7 @@ def test_a_preset_load_lists_what_it_dropped(tmp_path):
         "schema": loadable.SCHEMA, "name": "twice", "values": {}, "routes": [
             Binding("hand:7", "view.bright", "position").to_json(),
             Binding("hand:1", "view.bright", "position", when="hand:14").to_json()]}))
-    assert load_preset(r, router, "twice") == []            # a gate is no exemption
+    assert load_patch(r, router, "twice") == []            # a gate is no exemption
     assert [b.source for b in router.table.routes()] == ["hand:7"]
     assert [b.source for b, _ in router.table.dropped] == ["hand:1"]
     router.table.remove(router.table.routes()[0])
@@ -1507,7 +1507,7 @@ def test_an_older_file_gets_home_where_it_is_free(tmp_path, capsys):
     assert (key, "preset.home", "fire", 1.0) in routing.KEY_NEW_ROWS
 
     def write(home, *mine):
-        rows = [b for b in session_rows() if b.source not in (over, key)]
+        rows = [b for b in meta_rows() if b.source not in (over, key)]
         path = bindings_path(home)
         home.mkdir()
         Bindings([*rows, *mine], path=path).write()
@@ -1533,7 +1533,7 @@ def test_an_older_file_gets_home_where_it_is_free(tmp_path, capsys):
     assert json.loads(after)["bindings"].count(row.to_json()) == 1
     # the file is the factory's again, row for row
     assert sorted(json.dumps(b, sort_keys=True) for b in json.loads(after)["bindings"]) \
-        == sorted(json.dumps(b.to_json(), sort_keys=True) for b in session_rows())
+        == sorted(json.dumps(b.to_json(), sort_keys=True) for b in meta_rows())
     again = Bindings.load(path, legacy_midi=None)
     assert again.notes == [] and path.read_text() == after
     assert len(list((tmp_path / "a").glob("bindings.json.bak-*"))) == 1
@@ -1570,12 +1570,12 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
         assert not [r for r in routing.APC_NEW_ROWS if r[0] == s]
     assert [r[:3] for r in routing.APC_NEW_ROWS if r[0] == bar[7]] \
         == [(bar[7], routing.SAVE_PARAM, "momentary")]
-    assert [b.target for b in session_rows() if b.source in bar] == [routing.SAVE_PARAM]
+    assert [b.target for b in meta_rows() if b.source in bar] == [routing.SAVE_PARAM]
 
     def write(home, *mine):
         path = bindings_path(home)
         home.mkdir()
-        Bindings([*session_rows(), *mine], path=path).write()
+        Bindings([*meta_rows(), *mine], path=path).write()
         return path
 
     old = [Binding(s, "preset.save_new", "hold", feedback="led") for s in bar]
@@ -1590,7 +1590,7 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     assert bak.name == "bindings.json.bak-v3" and bak.read_text() == before
     after = path.read_text()
     assert sorted(json.dumps(b, sort_keys=True) for b in json.loads(after)["bindings"]) \
-        == sorted(json.dumps(b.to_json(), sort_keys=True) for b in session_rows())
+        == sorted(json.dumps(b.to_json(), sort_keys=True) for b in meta_rows())
     again = Bindings.load(path, legacy_midi=None)
     assert again.notes == [] and path.read_text() == after
     assert capsys.readouterr().err == ""
@@ -1619,7 +1619,7 @@ def test_an_old_crossfader_row_moves_to_the_decks_with_a_backup(tmp_path, capsys
 
     def write(home, **change):
         rows = []
-        for b in session_rows():
+        for b in meta_rows():
             d = b.to_json()
             if d["source"] == xf:
                 assert d == {"source": xf, "target": "output.xfade", "op": "abs", "ring": 0}
@@ -1640,7 +1640,7 @@ def test_an_old_crossfader_row_moves_to_the_decks_with_a_backup(tmp_path, capsys
     row, = [b for b in t.bindings if b.source == xf]
     assert (row.target, row.op, row.layer, row.pickup, row.feedback) == (
         "output.xfade", "abs", None, True, None)
-    assert [b.to_json() for b in t.bindings] == [b.to_json() for b in session_rows()]
+    assert [b.to_json() for b in t.bindings] == [b.to_json() for b in meta_rows()]
     bak, = path.parent.glob("bindings.json.bak-*")
     assert json.loads(bak.read_text()) == doc                 # the file as it was
     assert json.loads(path.read_text()) == t.to_json()        # written back once
@@ -1665,7 +1665,7 @@ def test_the_master_faders_old_row_moves_to_the_dim_and_the_gain_keeps_the_panel
     is left with no desk row. A row learned on HOLD, TAKE or DROP goes with a note."""
     master, xf = f"cc:0:{apc40.CC_MASTER}", f"cc:0:{apc40.CC_XFADE}"
     rows = []
-    for b in session_rows():
+    for b in meta_rows():
         d = b.to_json()
         if d["source"] == master:
             d["target"] = "master.gain"
@@ -1689,7 +1689,7 @@ def test_the_master_faders_old_row_moves_to_the_dim_and_the_gain_keeps_the_panel
     assert len(list(path.parent.glob("bindings.json.bak-*"))) == 1
 
 
-def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_path, capsys):
+def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_loadable_bank(tmp_path, capsys):
     """Plan 13 WP2: a table written before the preset bank names theme.*
     params — the factory F-keys, clip row 1, QUANT, pad B, and a row the
     user learned onto a theme slot. Every one moves to the preset param of
@@ -1700,7 +1700,7 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_preset_bank(tmp_
            **{f"preset.{w}.{k}": f"theme.{w}.{k}" for w in ("load", "save")
               for k in range(routing.F_KEYS)}}
     rows = []
-    for b in session_rows():
+    for b in meta_rows():
         d = b.to_json()
         d["target"] = old.get(d["target"], d["target"])
         if d["source"] == "pad:B":                    # the pad's B, as it was then
@@ -1765,7 +1765,7 @@ def test_a_schema_2_file_gets_the_moved_factory_rows_once(tmp_path, capsys):
     exactly those, says so, writes back once; the user's own rows on other
     notes stay; the next load is quiet."""
     path = bindings_path(tmp_path)
-    rows = [b.to_json() for b in session_rows()
+    rows = [b.to_json() for b in meta_rows()
             if b.source not in (f"note:0:{apc40.N_METRO}", f"note:0:{apc40.N_QUANT}",
                                 "key:B", "key:SHIFT+B")
             and b.target not in ("tempo.tap", "tempo.nudge")]
@@ -1797,7 +1797,7 @@ def test_a_schema_2_file_gets_the_moved_factory_rows_once(tmp_path, capsys):
         {"source": f"note:0:{apc40.N_SEND_B}", "target": "view.lines", "op": "toggle",
          "feedback": "led"}] or True     # order differs: the added rows go last
     assert {(b["source"], b["target"]) for b in t.to_json()["bindings"]} == (
-        {(b.source, b.target) for b in session_rows()}
+        {(b.source, b.target) for b in meta_rows()}
         | {(f"note:0:{apc40.N_SEND_B}", "view.lines")})
     # written back once, at schema 2; the second load finds nothing to do
     assert json.loads(path.read_text()) == t.to_json()
@@ -1865,7 +1865,7 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame():
 
 # ------------------------------------------------------------- plan 09 WP5
 
-def test_every_corpus_preset_names_real_params_with_one_owner(tmp_path):
+def test_every_corpus_loadable_names_real_params_with_one_owner(tmp_path):
     """The routes of every corpus preset (the files the build shipped, held
     to this check while it did) land on params the full registry has,
     modulatable, with a scale it has too, and one owner per target."""
@@ -1886,7 +1886,7 @@ def test_every_corpus_preset_names_real_params_with_one_owner(tmp_path):
         assert {v for v in doc["values"] if not retired(v)} <= ids, name
 
 
-def test_a_converted_presets_values_are_bases_a_preset_would_save(tmp_path):
+def test_a_converted_loadables_values_are_bases_a_loadable_would_save(tmp_path):
     """Was test_a_routing_presets_values_are_bases_a_theme_would_save (audit
     R1, decided (c)): a routing preset could set any base its rows assume;
     made presets (plan 13 WP5), every id in their `values` is a real,
@@ -1915,7 +1915,7 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
     r = rig(tmp_path=tmp_path, full=True)
     reg = r.reg
     router = Router(reg, Bindings())
-    assert load_preset(r, router, "lfo-breathe") == []
+    assert load_patch(r, router, "lfo-breathe") == []
     assert reg["lfo.1.sync"].value == lfo.SYNCS.index("1 bar")
     assert reg["lfo.2.sync"].value == lfo.SYNCS.index("1/4")
     assert reg["lfo.1.shape"].value == lfo.SHAPES.index("sine")
@@ -1983,7 +1983,7 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
     assert not depth.modulated and depth.value == pytest.approx(0.6)
 
 
-def test_the_live_table_writes_only_the_sessions_controls(tmp_path):
+def test_the_live_table_writes_only_the_meta_controls(tmp_path):
     """Was test_the_live_table_carries_the_macros. Since plan 13 WP5 the
     macros' bases, subscribers, the performer rows and the preset layer
     are the loaded preset's: `bindings.json` never gets `values`, `macros`,
@@ -2623,7 +2623,7 @@ def _play_tape(tmp_path: Path, name: str, *, lagged: bool):
     seed(tmp_path)
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
-    assert load_preset(r, router, name) == []
+    assert load_patch(r, router, name) == []
     lfos, clock = r.lfos, r.clock
     reg = r.reg
     reg["lfo.1.sync"].set(0)
@@ -2662,7 +2662,7 @@ def _play_tape(tmp_path: Path, name: str, *, lagged: bool):
     return seq, outs, router.table
 
 
-def test_every_factory_preset_lands_the_same_values_one_frame_earlier(tmp_path):
+def test_every_factory_loadable_lands_the_same_values_one_frame_earlier(tmp_path):
     """Decision 7, the gate on the lag's removal: every corpus preset (the
     ones the build shipped), played through a scratch library with the synthetic hand tape, the
     analyzer's lanes and LFO 1 on, lands every modulatable param on the

@@ -12,7 +12,7 @@ import pytest
 from conftest import (
     OWNER_KNOB,
     OWNER_PAD,
-    OWNER_PRESETS,
+    OWNER_LOADABLES,
     OWNER_ROW,
     OWNER_SHOWS,
     boot_home,
@@ -153,7 +153,7 @@ def test_slug():
     assert slug("***") == "untitled"
 
 
-def test_macros_are_performance_state(rig, tmp_path):
+def test_macros_are_patch_state(rig, tmp_path):
     """Plan 13 WP1 / WP2: the macros are performance state. A preset
     carries them and a project (the session) does not; the module strips
     still list no `macro` group (a macro's meaning is its subscribers,
@@ -177,7 +177,7 @@ def test_macros_are_performance_state(rig, tmp_path):
     assert not lib.project.is_dirty()                # not the session's
 
 
-def test_a_project_keeps_the_session_apart(rig, tmp_path):
+def test_a_project_keeps_the_meta_apart(rig, tmp_path):
     """Plan 13 §2.2 / §4: a project file (schema 2) holds the session part
     as `session` and the bank as names; the performance is the preset's.
     is_dirty sees the session, the bank and the startup preset; a file
@@ -212,7 +212,7 @@ def test_a_project_keeps_the_session_apart(rig, tmp_path):
 
 # ---------------------------------------------------------------- presets
 
-def test_load_fills_missing_ids_from_the_default_preset(rig, tmp_path):
+def test_load_fills_missing_ids_from_the_default_loadable(rig, tmp_path):
     lib = rig.lib
     band(tmp_path, "Balanced", "Kick & Sizzle")
     (tmp_path / "patches" / "band" / "sparse.json").write_text(json.dumps({
@@ -402,7 +402,7 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
 
 # --------------------------------------------------------- document kinds
 
-def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
+def test_loadables_are_the_librarys_one_document_kind(rig, tmp_path):
     """Audit L1, closed by plan 13 WP5: one preset system. The routing
     presets' kind is gone (was test_routing_presets_are_a_document_kind_of_
     the_library); what they were — legacy6, lfo-breathe, the hands-* — are
@@ -441,7 +441,7 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
         lib.load("presets", "no-such")
 
 
-def test_a_bad_preset_is_reported_not_fatal(rig, tmp_path):
+def test_a_bad_loadable_is_reported_not_fatal(rig, tmp_path):
     """Was test_a_bad_routing_preset_is_reported_not_fatal: a preset of an
     unknown schema, or with a row that is no row, is refused with a
     LibraryError and the rest of the tree is fine."""
@@ -464,7 +464,7 @@ def test_a_bad_preset_is_reported_not_fatal(rig, tmp_path):
     assert "TUMBLE" in lib.list("presets")                # the rest of the tree is fine
 
 
-def test_the_preset_kind_reaches_presets_at_call_time(rig):
+def test_the_loadable_kind_reaches_loadables_at_call_time(rig):
     """Hot reload re-classes `Presets` in place; the kind's hooks must not
     hold the pre-reload bound methods (was the routing kind's test)."""
     lib = rig.lib
@@ -485,7 +485,7 @@ def test_a_project_naming_the_old_routing_layer_is_ignored(rig, tmp_path):
     assert lib.current("bindings") is None
 
 
-def test_a_project_never_carries_the_loaded_preset(rig, tmp_path):
+def test_a_project_never_carries_the_loaded_loadable(rig, tmp_path):
     """Audit L3, and plan 13 §2.2: `Project.io` is gone, and the loaded
     preset (routes and all) stays out of a project's modules — the bank
     names presets, the project holds the session."""
@@ -632,7 +632,7 @@ def test_the_users_copy_of_the_last_show_opens_on_attach(tmp_path):
 
 # ---------------------------------------------------------------- live editing
 
-def test_editing_the_loaded_preset_reflects_in_the_app(rig, tmp_path):
+def test_editing_the_loaded_loadable_reflects_in_the_app(rig, tmp_path):
     lib = rig.lib
     assert not lib.poll(now=1.0)                      # quiet tree
     path = lib.save_as("view", "Live")
@@ -709,7 +709,7 @@ def trash(home, group) -> list:
     return sorted(d.iterdir()) if d.is_dir() else []
 
 
-def test_a_save_over_a_preset_keeps_the_old_file_in_the_trash(rig, tmp_path, monkeypatch,
+def test_a_save_over_a_loadable_keeps_the_old_file_in_the_trash(rig, tmp_path, monkeypatch,
                                                               capsys):
     """Every road that overwrites a user preset file copies it to
     `<home>/trash/<group>/` first — the strip's Save and as…, ⇧F — with
@@ -948,11 +948,11 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
         assert doc["schema"] == "hyperspace.project/3" and len(doc["bank"]) == 8
         assert all(doc["bank"]), show
     mine = json.loads((home / "projects" / "mine.hyp.json").read_text())
-    assert mine["bank"][:3] == list(OWNER_PRESETS) and mine["startup"] == "NIGHT ONE"
+    assert mine["bank"][:3] == list(OWNER_LOADABLES) and mine["startup"] == "NIGHT ONE"
     assert (home / "last_show").read_text().strip() == "mine"
     pads = old_shape_pads()
     assert len(pads) == 16 and {p["target"] for p in pads} == {"view.shape"}
-    for name in OWNER_PRESETS:
+    for name in OWNER_LOADABLES:
         doc = json.loads((home / "presets" / f"{slug(name)}.json").read_text())
         assert doc["schema"] == "hyperspace.preset/10" and doc["name"] == name   # (row 394)
         by_source = {row["source"]: row for row in doc["desk"]}
@@ -991,7 +991,7 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     r = boot_home(home)                                   # the launch: `mine`, opened last
     lib, pr = r.lib, r.lib.project
     assert pr.name == "mine" and pr.path == home / "projects" / "mine.hyp.json"
-    assert len(pr.bank) == 24 and pr.bank[:3] == list(OWNER_PRESETS)
+    assert len(pr.bank) == 24 and pr.bank[:3] == list(OWNER_LOADABLES)
     assert all(pr.bank[:8]) and pr.bank[8:] == [None] * 16
     assert not pr.is_dirty() and lib.current("presets") == "NIGHT ONE" and pr.active == 0
     assert [r.reg["preset.select"].has(k) for k in (0, 7, 8, 23)] == [True, True, False, False]
@@ -1019,15 +1019,15 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     assert tree(home, but=quiet[:2]) == after
 
 
-def test_loading_never_rewrites_a_preset_file(owner_home):
+def test_loading_never_rewrites_a_loadable_file(owner_home):
     """The owner's files (on a copy): every preset in the home loads — from
     the bank, the strip and the file watch — and no preset file changes by
     a byte or a tick of its mtime."""
     home = owner_home
-    def presets_of(root):
+    def loadables_of(root):
         return {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
                 for p in sorted((root / "presets").glob("*.json"))}
-    before = presets_of(home)
+    before = loadables_of(home)
     r = boot_home(home)
     lib, pr = r.lib, r.lib.project
     for k in range(8):
@@ -1036,8 +1036,8 @@ def test_loading_never_rewrites_a_preset_file(owner_home):
     for name in lib.list("presets"):
         lib.load("presets", name)
         lib.poll()
-    assert set(OWNER_PRESETS) <= set(lib.list("presets"))
-    assert presets_of(home) == before
+    assert set(OWNER_LOADABLES) <= set(lib.list("presets"))
+    assert loadables_of(home) == before
     assert len(list((home / "trash" / "presets").iterdir())) == 1        # nothing new in the trash
 
 
@@ -1209,7 +1209,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     pr.put_slot(23, "TRIP")
     doc = json.loads(show.read_text())
     assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.project/3"
-    presets_before = {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")}
+    loadables_before = {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")}
     # the older build's reading of the file (library.py before plan 19, SLOTS = 8)
     old_slots = 8
     bank = [str(s) if isinstance(s, str) and s else None
@@ -1220,7 +1220,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     show.write_text(json.dumps({**doc, "bank": bank}, indent=1) + "\n")
     again = boot_home(home).lib.project
     assert again.bank == eight + [None] * 16 and not again.is_dirty()
-    assert {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")} == presets_before
+    assert {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")} == loadables_before
     assert json.loads(bak8(show)[0].read_text())["bank"] == eight
 
 
@@ -1268,7 +1268,7 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     (shows / "other.hyp.json").write_text(json.dumps({**spare, "name": "other",
                                                       "bank": ["WAKE"], "startup": None}))
     lib.poll()
-    preset_before = (home / "presets" / "night-two.json").read_bytes()
+    loadable_before = (home / "presets" / "night-two.json").read_bytes()
     show_before = {s: (shows / f"{s}.hyp.json").read_bytes()
                    for s in ("mine", "party", "old", "spare", "other")}
     trash_before = {p.name for p in home.rglob("trash/**/*") if p.is_file()}
@@ -1281,10 +1281,10 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
         new = lib.rename("presets", "NIGHT TWO", "SUNRISE")
     assert new == home / "presets" / "sunrise.json"
     assert not (home / "presets" / "night-two.json").exists()
-    doc, was = json.loads(new.read_text()), json.loads(preset_before)
+    doc, was = json.loads(new.read_text()), json.loads(loadable_before)
     assert doc == {**was, "name": "SUNRISE"}
     (kept,) = [p for p in _trashed(home, "presets") if p.name.startswith("night-two.")]
-    assert kept.read_bytes() == preset_before
+    assert kept.read_bytes() == loadable_before
     for s in ("mine", "party"):
         d = json.loads((shows / f"{s}.hyp.json").read_text())
         assert "SUNRISE" in d["bank"] and "NIGHT TWO" not in d["bank"], s
@@ -1361,7 +1361,7 @@ def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
     assert lib.project.bank[1] == "NIGHT TWO"
 
 
-def test_renaming_the_loaded_preset_keeps_its_unsaved_edit(owner_home):
+def test_renaming_the_loaded_loadable_keeps_its_unsaved_edit(owner_home):
     """The loaded preset renamed: the name changes, the dot stays lit (the
     clean reference is the one it had), and save writes the new file."""
     home = owner_home
@@ -1379,7 +1379,7 @@ def test_renaming_the_loaded_preset_keeps_its_unsaved_edit(owner_home):
     assert not (home / "presets" / "night-two.json").exists()
 
 
-def test_a_deleted_preset_says_which_slots_still_name_it(owner_home):
+def test_a_deleted_loadable_says_which_slots_still_name_it(owner_home):
     """× on your own preset is plan 15's delete, unchanged; new is what is
     said: which slots and the startup preset still name it (nothing on the
     panel sets it since the library went one-tier; the file still carries

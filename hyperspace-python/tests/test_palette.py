@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from conftest import CORPUS
-from test_presets import boot, put
+from test_loadable import boot, put
 
 from hyperspace import ui_fx
 from hyperspace.fx import FX_DIR, FxChain, FxState, SpecError, parse
@@ -406,7 +406,7 @@ def test_a_centre_set_outright_becomes_the_turn():
     assert notes == []
 
 
-def test_an_old_preset_loads_as_the_same_slice(tmp_path):
+def test_an_old_loadable_loads_as_the_same_slice(tmp_path):
     """A preset saved with centre 200 / width 60 loads with no note, its
     palette at 170 → 230, its centre route on the turn and its macro with
     it; the next save writes the new keys only."""

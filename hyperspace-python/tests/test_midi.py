@@ -288,7 +288,7 @@ def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
     assert len(rig.midi.table.route("note", 0, apc40.N_METRO)) == 1
 
 
-def test_preset_row_lights_the_active_preset(rig):
+def test_loadable_row_lights_the_active_loadable(rig):
     push(rig, note(apc40.N_CLIP[0], channel=2))
     assert rig.loaded_patch.active == 2
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
@@ -380,7 +380,7 @@ def test_selected_band_rings_follow_the_selection(rig):
 
 # ---------------------------------------------------------------- learn
 
-def test_learn_binds_next_message_into_the_preset_layer(rig, tmp_path):
+def test_learn_binds_next_message_into_the_loadable_layer(rig, tmp_path):
     """Plan 13 §3.3: the learned row is a preset-layer row in the live
     table — the file is not written (tests/test_learn.py has the rest)."""
     m = rig.midi
@@ -427,7 +427,7 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
     assert rig.view.pattern_mix == 1.0
 
 
-def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
+def test_unbind_removes_only_loadable_layer_rows_and_writes_no_file(rig):
     """Plan 13 WP5: right-click → Unbind is an edit of the loaded preset —
     its desk rows on the param go (the knob and the step buttons), no file
     is written, the preset's dot lights; a param only the session maps (an
@@ -1532,7 +1532,7 @@ def fine_leds(rig, since=0):
             if m.type == "note_on" and m.note == FINE and m.channel == 0]
 
 
-def test_the_fine_param_is_the_rigs_and_send_b_is_free_on_both_layers(rig):
+def test_the_fine_param_is_the_meta_and_send_b_is_free_on_both_layers(rig):
     p = rig.reg[midi.FINE_PARAM]
     assert p.kind is Kind.TOGGLE and not p.value
     assert (p.group, p.persist, p.modulatable) == ("desk", False, False)

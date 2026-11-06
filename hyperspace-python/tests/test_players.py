@@ -1081,7 +1081,7 @@ def test_every_player_on_air_is_to_the_bit_what_no_players_was(tmp_path):
     assert pointed == plain
 
 
-def test_every_corpus_preset_lands_as_before_with_players_and_a_list(tmp_path):
+def test_every_corpus_loadable_lands_as_before_with_players_and_a_list(tmp_path):
     """D5a's walk, its proof extended: a registry whose controllers are all player
     1's, on air, on deck 1."""
     home = tmp_path / "home"

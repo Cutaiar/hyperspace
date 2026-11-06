@@ -418,7 +418,7 @@ def test_the_verb_reaches_continuous_modulatable_look_params():
     assert CHASE_PARAM not in meta_reg, "every deck has its own"
 
 
-def test_two_decks_chase_alone_and_leave_the_session_alone():
+def test_two_decks_chase_alone_and_leave_the_meta_alone():
     chain = Analyzer(Analyser())
     meta_reg = build_meta(Control(chain), SimpleNamespace(chain=chain))
     a = build_patch(ViewState(), meta_reg=meta_reg)

@@ -42,7 +42,7 @@ for _p in (ROOT, ROOT / "tools"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-import preset_shots as shots  # tools/preset_shots.py: Stage, the fake source, the poses
+import loadable_shots as shots  # tools/preset_shots.py: Stage, the fake source, the poses
 
 from hyperspace.hands.core import default_range
 

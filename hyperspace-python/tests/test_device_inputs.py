@@ -487,7 +487,7 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
 
 # ---------------------------------------------------------------- nothing old moves
 
-def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(build):
+def test_a_pre_run_bindings_json_and_every_loadable_load_quietly_with_two_desks(build):
     """The acceptance's other half: a `bindings.json` written before plan
     27 (today's factory file) loads with no note, no rewrite, nothing
     said; every corpus preset then loads with no desk note and no dirt

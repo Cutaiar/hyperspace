@@ -91,8 +91,8 @@ def main_run(doc: dict) -> tuple[str, ...]:
 
 
 # the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
-CORPUS_PRESETS = sorted((CORPUS / "presets").glob("*.json"))
-RUNS = {p.stem: main_run(json.loads(p.read_text())) for p in CORPUS_PRESETS}
+CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
+RUNS = {p.stem: main_run(json.loads(p.read_text())) for p in CORPUS_LOADABLES}
 NO_RUN = {slug for slug, run in RUNS.items() if not run}
 
 
@@ -125,7 +125,7 @@ def test_one_rule_reads_a_group_number_for_the_load_and_for_group():
     assert e.land_group({"nodes": ["render:acid"]})["id"] == "group.8"
 
 
-def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path):
+def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_path):
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-noita")
     app.loaded_patch.groups = [dict(ENTRY, patch="noita-core")]
@@ -152,7 +152,7 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     assert json.loads(raw)["schema"] == "hyperspace.preset/10"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
     assert notes == [] and again == raw
-    for k, path in enumerate(CORPUS_PRESETS):
+    for k, path in enumerate(CORPUS_LOADABLES):
         data = path.read_bytes()
         again, _, _ = headless.resave(path, tmp_path / f"f{k}")
         assert again == data and b'"groups"' not in again, path.name
@@ -226,7 +226,7 @@ def _views(n=2):
     return [View(Switches(), (64, 48)) for _ in range(n)]
 
 
-def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
+def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
     """For every corpus preset, the section loaded with its main run
     grouped is its ungrouped twin's: the same section, and `build_graph`
     of it the same `graph.signature`. The presets with no main run are
@@ -240,7 +240,7 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
                       "strobe-cage", "woven-lattice", "party-tracer"}
     app = headless.make_app(tmp_path)
     done, others = [], []
-    for path in CORPUS_PRESETS:
+    for path in CORPUS_LOADABLES:
         doc = json.loads(path.read_text())
         app.loaded_patch.load_doc(doc)
         flat = app.loaded_patch.graph.spec
@@ -261,7 +261,7 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
         assert spec.to_json() == flat.to_json(), path.stem
         assert G.signature(G.build_graph(_views(), spec.wiring())) == want, path.stem
         done.append(path.stem)
-    assert len(done) - len(others) == len(CORPUS_PRESETS) - len(NO_RUN) >= 9
+    assert len(done) - len(others) == len(CORPUS_LOADABLES) - len(NO_RUN) >= 9
     assert sorted(others) == sorted(NO_RUN)
 
 
@@ -319,7 +319,7 @@ def test_a_folded_group_hides_its_members_and_inside_cables_and_reends_the_rest(
     assert "group.1" in st["regions"]
 
 
-def test_a_rig_node_is_never_a_member_and_preset_only_keeps_the_group(rig):
+def test_a_meta_node_is_never_a_member_and_loadable_only_keeps_the_group(rig):
     st = noita(rig)
     assert ui_graph.group_nodes(rig.panel, ["device:apc40", "analyzer"]) is None
     assert st["note"] == ("device:apc40 is the rig's; left out; analyzer is the rig's; left "
@@ -711,7 +711,7 @@ def _round_trip(pre, tmp_path, k: int) -> dict:
     return doc
 
 
-@pytest.mark.parametrize("path", CORPUS_PRESETS, ids=lambda p: p.stem)
+@pytest.mark.parametrize("path", CORPUS_LOADABLES, ids=lambda p: p.stem)
 def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     """Row 563, the property: on every corpus preset, random eligible
     subsets grouped, ungrouped, regrouped and members deleted (a render
@@ -784,12 +784,12 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     assert not {cid for g in doc.get("groups", []) for cid in g["nodes"]} & set(deleted)
 
 
-def test_a_refused_load_leaves_the_loaded_presets_groups_whole(tmp_path):
+def test_a_refused_load_leaves_the_loaded_loadables_groups_whole(tmp_path):
     """Review of PR #321 (1): a load lands its graph before it reads its
     groups, and the landing settles the groups — the *loaded* preset's,
     still in place. A load refused after that (a value that will not take)
     puts everything back, the groups and the floor with it."""
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.library import LibraryError
     app = headless.make_app(seed(tmp_path))
@@ -1258,7 +1258,7 @@ def test_a_spawn_whose_devices_are_all_there_says_no_wait(rig):
     assert said.startswith("spawned acid wash: 4 nodes") and "waits for" not in said
 
 
-def test_a_row_the_sheet_kept_for_the_preset_waits_for_nothing(rig):
+def test_a_row_the_sheet_kept_for_the_loadable_waits_for_nothing(rig):
     """acid-wash's K1 kept for the preset (the sheet's **keep all existing**):
     the patch's K1 never landed, so only the hand's row is said to wait."""
     trip(rig)
@@ -1365,7 +1365,7 @@ def test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one(rig):
         undo.install(None)
 
 
-def test_wire_as_saved_refuses_a_node_the_preset_lacks():
+def test_wire_as_saved_refuses_a_node_the_loadable_lacks():
     """A port whose `was` names a node the host does not have is refused,
     named, and nothing lands (pure, on the edit layer)."""
     spec = G.read_graph({"frame": "wired", "wires": [{"from": "shape", "to": "scene.geometry"}],

@@ -43,7 +43,7 @@ from hyperspace.outputs import Switches
 from hyperspace.routing import Binding
 
 # the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
-CORPUS_PRESETS = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
+CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 # (plan 33 T6: the `/5` fixtures — T4's and T5's proofs, a channel's own
 # shaders into the faces, the backdrop, a switch — are laid out with the rest)
@@ -163,7 +163,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     (shaders); a picture the scene made, taken back into a switch with the
     media, runs back by design (`graphview.returns`)."""
     assert set(FREE) <= set(WIRED)
-    cases = [(name, None) for name in CORPUS_PRESETS]
+    cases = [(name, None) for name in CORPUS_LOADABLES]
     cases += [("party-trip", f) for f in (None, *WIRED) if f not in FREE]
     cases += [(f, f) for f in FREE]
     for name, fixture in cases:
@@ -652,7 +652,7 @@ def backward_across_areas(view):
     return out
 
 
-@pytest.mark.parametrize("name", [*(("corpus", n) for n in CORPUS_PRESETS),
+@pytest.mark.parametrize("name", [*(("corpus", n) for n in CORPUS_LOADABLES),
                                   *(("fixture", n) for n in WIRED)],
                          ids=lambda t: f"{t[0]}:{t[1]}")
 def test_no_cable_runs_backwards_across_areas(rig, name):
@@ -749,12 +749,12 @@ def test_the_areas_run_by_primitive(rig):
         assert graphview.area_of(V(f"render:{ref.name}", "render", ref.name, ref=ref)) == want
 
 
-def test_a_blank_preset_draws_only_the_outputs(rig, monkeypatch):
+def test_a_blank_loadable_draws_only_the_outputs(rig, monkeypatch):
     """`{"frame": "wired"}` with every bin empty: the canvas's render nodes
     are All outputs and the windows — the eight channels idle on MEDIA's
     line ("8 empty channels"), no pattern and no backdrop drawn. A source in
     channel a's bin draws it; a wire from channel b draws that one too."""
-    from test_presets import put
+    from test_loadable import put
     party(rig)
     reg = rig.reg
 
@@ -1093,7 +1093,7 @@ def test_deleting_the_published_node_clears_it(rig):
     assert rig.panel.graph_selected is None and rig.panel.graph_selected_params() == []
 
 
-def test_a_preset_landing_without_the_node_lets_it_go(rig):
+def test_a_loadable_landing_without_the_node_lets_it_go(rig):
     """Off the GRAPH page the value is as of the last frame it drew — until
     a preset lands (`ui_graph.settle`, on any page): one that still names
     the node keeps it, a new preset (the scene chain alone) lets it go."""

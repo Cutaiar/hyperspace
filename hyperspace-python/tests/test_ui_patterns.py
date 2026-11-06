@@ -164,7 +164,7 @@ def test_the_driver_line_names_the_macro_desk_and_base_subscribers(faces):
     assert ui_patterns.drivers(faces.panel, "pattern.mod.6").endswith("(off)")
 
 
-def test_a_session_control_on_an_input_is_named_and_nothing_is_offered(faces):
+def test_a_meta_control_on_an_input_is_named_and_nothing_is_offered(faces):
     """A knob of the session's (bindings.json's global layer) sets the
     input's base as a preset's desk row does: the row names it, and offers
     no "+ <source>" over it."""

@@ -70,7 +70,7 @@ def test_only_the_dream_is_replaceable_for_now():
     assert set(patches.REPLACEABLE) <= set(patches.ONE_PER_FRAME)
 
 
-def test_a_dream_on_the_preset_is_replaceable():
+def test_a_dream_on_the_loadable_is_replaceable():
     spec, table = parts(wake_doc())[:2]
     landing = spawn(cut("dreamy"), Host.of(spec, table))
     assert landing.replacing == ("dream",) and landing.refusal is None
@@ -211,7 +211,7 @@ def test_a_macro_on_anything_else_keeps_its_hold(rig):  # noqa: F811
     assert [s.base for s in table.macros["macro.1"].subs] == ["dream.fade"]
 
 
-def test_the_sheet_is_stale_when_another_preset_loads_under_it(rig):  # noqa: F811
+def test_the_sheet_is_stale_when_another_loadable_loads_under_it(rig):  # noqa: F811
     """The modal stops the panel, not a pad or a bank press: what it said was
     A's. Nothing of B is taken."""
     on_graph(rig, "party-wake")
@@ -482,7 +482,7 @@ def test_the_panes_sections_are_the_same_split():
 
 
 @pytest.mark.parametrize("name", ["party-wake", "party-noita"])
-def test_a_saved_preset_is_unmoved_by_who_draws_its_params(rig, name):  # noqa: F811
+def test_a_saved_loadable_is_unmoved_by_who_draws_its_params(rig, name):  # noqa: F811
     """Behaviour-neutral: the section and every `dream.*` value read back as
     the file has them, the row ids as they were."""
     path = CORPUS / "presets" / f"{name}.json"

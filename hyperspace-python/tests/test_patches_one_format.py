@@ -70,13 +70,13 @@ def test_the_one_ladder_reads_every_fragment_as_its_patch_2():
 
 
 def test_shape_of_reads_the_one_shape_three_ways():
-    preset_doc = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
-    assert patches.shape_of(preset_doc) == patches.LOADABLE_SHAPE
+    loadable_doc = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
+    assert patches.shape_of(loadable_doc) == patches.LOADABLE_SHAPE
     assert patches.shape_of(json.loads(ACID_WASH.read_text())) == patches.PATCH_SHAPE
     assert patches.shape_of(json.loads(WAKE.read_text())) == patches.GROUP_SHAPE
     assert patches.shape_of(patches.forward(OLD_MODULE)) == patches.GROUP_SHAPE
     # a preset is a patch that fills the frame: it writes no ports
-    assert "ports" not in preset_doc
+    assert "ports" not in loadable_doc
 
 
 def test_a_group_patch_spawns_as_its_values_replacing_its_group():
@@ -102,7 +102,7 @@ def test_the_corpus_is_in_the_one_shape():
         assert b'"modules"' not in path.read_bytes(), path.name
 
 
-def test_the_presets_ladder_is_one_function_the_load_reads_through():
+def test_the_loadables_ladder_is_one_function_the_load_reads_through():
     """A whole preset's steps (`seven`, `nine`, `ten`) are one function,
     `graphmigrate.forward`, which the load runs: a `/10` passes untouched,
     a `/2` comes out `/7`-shaped and said."""
@@ -122,7 +122,7 @@ def test_the_presets_ladder_is_one_function_the_load_reads_through():
 
 # ---------------------------------------------------------------- end to end
 
-def test_a_corpus_preset_round_trips_byte_for_byte_through_the_one_loader(tmp_path):
+def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_path):
     for k, name in enumerate(("party-trip", "party-noita", "seq-demo")):
         data = (CORPUS / "presets" / f"{name}.json").read_bytes()
         again, notes, _ = headless.resave(CORPUS / "presets" / f"{name}.json", tmp_path / str(k))
@@ -251,7 +251,7 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
 
 # ---------------------------------------------------------------- review fixes (PR #352)
 
-def test_a_group_never_holds_the_rigs_kinds_one_list_with_graphview():
+def test_a_group_never_holds_the_meta_kinds_one_list_with_graphview():
     """Review fix 1: a media channel, a window, All outputs and a cloud are
     the rig's (`patches.RIG_KINDS`, `graphview.RIG_KINDS` the same list):
     Group refuses them, so a group never carries what no patch can."""

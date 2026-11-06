@@ -91,7 +91,7 @@ def test_the_cut_out_on_the_scene_chain(tmp_path):
                       "composite → All outputs — in place of scene into All outputs")
 
 
-def test_the_cut_out_on_a_blank_preset_lays_the_scene_too(tmp_path):
+def test_the_cut_out_on_a_blank_loadable_lays_the_scene_too(tmp_path):
     rig, e, _ = wired_rig(tmp_path, {"frame": "wired"})
     assert e.starter("cut-out") is None
     assert wired_wires(rig) == CUT_OUT
@@ -251,7 +251,7 @@ def test_a_built_node_says_its_own_words():
 # ---------------------------------------------------------------- the /7 round trip
 
 def test_each_entry_round_trips_through_a_seven_save_with_its_values(tmp_path):
-    from test_presets import boot
+    from test_loadable import boot
 
     rig, e, _ = wired_rig(tmp_path / "a", SCENE)
     for kind in ("matte", "cut", "segment", "segment"):

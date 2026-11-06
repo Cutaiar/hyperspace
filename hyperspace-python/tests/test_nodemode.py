@@ -12,7 +12,7 @@ from hyperspace.library import LibraryError, Marks
 from hyperspace.nodemode import NodeMode, Slot, fill
 from hyperspace.pads import models
 
-CORPUS_PRESETS = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
+CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 ENTRY = {"player": 2, "controller": "gamepad", "node": "macro.1"}
 
 
@@ -66,14 +66,14 @@ def test_a_second_entry_for_one_controller_loses_and_a_kind_unknown_here_is_kept
     assert notes == [nodemode.TWICE.format(player=2, controller="gamepad", node="macro.1")]
 
 
-def test_a_preset_says_the_key_one_entry_a_line():
+def test_a_loadable_says_the_key_one_entry_a_line():
     text = loadable.dumps({"schema": loadable.SAVE_SCHEMA, "node_mode": [ENTRY, ENTRY]})
     assert f'  {json.dumps(ENTRY)},\n  {json.dumps(ENTRY)}\n' in text
 
 
 # ---- the corpus ----
 
-@pytest.mark.parametrize("stem", CORPUS_PRESETS)
+@pytest.mark.parametrize("stem", CORPUS_LOADABLES)
 def test_node_mode_round_trips_over_the_corpus(app, stem):
     """The point of the key: open it again and it is back; take it out and the
     file is the bytes it was."""
@@ -101,14 +101,14 @@ def test_node_mode_round_trips_over_the_corpus(app, stem):
 
 
 def test_a_load_with_no_key_points_at_nothing(app):
-    load(app, CORPUS_PRESETS[0])
+    load(app, CORPUS_LOADABLES[0])
     app.loaded_patch.point_node_mode(1, "midi", "macro.1")
-    load(app, CORPUS_PRESETS[1])                        # no preset affects another
+    load(app, CORPUS_LOADABLES[1])                        # no preset affects another
     assert not app.loaded_patch.node_mode
 
 
-def test_a_new_preset_points_at_nothing(app):
-    load(app, CORPUS_PRESETS[0])
+def test_a_new_loadable_points_at_nothing(app):
+    load(app, CORPUS_LOADABLES[0])
     app.loaded_patch.point_node_mode(1, "midi", "macro.1")
     app.loaded_patch.new()
     assert not app.loaded_patch.node_mode
@@ -116,7 +116,7 @@ def test_a_new_preset_points_at_nothing(app):
 
 def test_the_migration_road_keeps_the_key_as_a_fixed_point(tmp_path):
     src = tmp_path / "with.json"
-    doc = json.loads((CORPUS / "presets" / f"{CORPUS_PRESETS[0]}.json").read_text())
+    doc = json.loads((CORPUS / "presets" / f"{CORPUS_LOADABLES[0]}.json").read_text())
     doc["node_mode"] = [ENTRY]
     src.write_text(loadable.dumps(doc))
     once, notes, _ = headless.resave(src, tmp_path / "a")
@@ -134,8 +134,8 @@ def test_a_node_the_graph_does_not_have_is_said_and_left_out(app):
     assert nodemode.NODE_GONE.format(node="nothing") in app.loaded_patch.notes
 
 
-def test_pointing_at_a_node_the_preset_does_not_have_is_refused(app):
-    load(app, CORPUS_PRESETS[0])
+def test_pointing_at_a_node_the_loadable_does_not_have_is_refused(app):
+    load(app, CORPUS_LOADABLES[0])
     was = app.loaded_patch.node_mode
     assert app.loaded_patch.point_node_mode(1, "midi", "render:nothing") == (
         nodemode.NODE_GONE.format(node="nothing"))
@@ -143,7 +143,7 @@ def test_pointing_at_a_node_the_preset_does_not_have_is_refused(app):
 
 
 def test_re_pointing_lights_the_dot(app):
-    name = load(app, CORPUS_PRESETS[0])
+    name = load(app, CORPUS_LOADABLES[0])
     save(app, name)
     assert not app.lib.is_dirty(loadable.GROUP)
     app.loaded_patch.point_node_mode(1, "midi", "macro.1")
@@ -155,7 +155,7 @@ def test_re_pointing_lights_the_dot(app):
 def test_a_refused_load_leaves_the_node_mode_whole(app):
     """The landing settles against the refused file's graph; the refusal puts
     the graph back, and the node mode with it."""
-    from test_presets import put
+    from test_loadable import put
 
     name = load(app, "party-noita")
     assert app.loaded_patch.point_node_mode(1, "midi", "render:hands") is None
@@ -175,7 +175,7 @@ def test_a_refused_load_leaves_the_node_mode_whole(app):
 def test_every_node_with_a_param_can_be_pointed_at(app):
     """Over the canvas itself, and through a file: the camera, the sequencer
     and the channels are in no group's list."""
-    for stem in CORPUS_PRESETS[:3]:
+    for stem in CORPUS_LOADABLES[:3]:
         load(app, stem)
         view = graphview.build(app.router.table, app.reg, app.router, None, None,
                                app.loaded_patch.graph.spec)
@@ -193,8 +193,8 @@ def test_every_node_with_a_param_can_be_pointed_at(app):
         assert json.loads(save(app, "fixture"))["node_mode"][0]["node"] == node
 
 
-def test_a_presets_and_a_mark_from_before_a_hot_reload_still_work(app):
-    load(app, CORPUS_PRESETS[0])
+def test_a_loadables_and_a_mark_from_before_a_hot_reload_still_work(app):
+    load(app, CORPUS_LOADABLES[0])
     pre = app.loaded_patch
     pre.__dict__.pop("_node_mode", None)        # a running app's object
     assert not pre.node_mode and pre.signature()
@@ -210,7 +210,7 @@ def test_a_presets_and_a_mark_from_before_a_hot_reload_still_work(app):
 
 
 def test_a_node_that_goes_lets_go(app):
-    load(app, CORPUS_PRESETS[0])
+    load(app, CORPUS_LOADABLES[0])
     bank = app.loaded_patch.banks()["lfo"]
     voice = bank.doc()[-1]
     node = f"lfo.{voice}"
@@ -222,7 +222,7 @@ def test_a_node_that_goes_lets_go(app):
 
 
 def test_re_pointing_is_one_undo_step_that_puts_it_back(app):
-    load(app, CORPUS_PRESETS[0])
+    load(app, CORPUS_LOADABLES[0])
     was = undo._installed
     try:
         u = undo.Undo(app.reg, app.router.table, marks=Marks(app.lib))

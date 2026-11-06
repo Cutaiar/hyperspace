@@ -130,7 +130,7 @@ def _on_disk(tmp_path):
     return Bindings.load(routing.bindings_path(tmp_path), legacy_midi=None)
 
 
-def test_routing_page_edits_change_the_preset_not_bindings_json(rig, tmp_path):
+def test_routing_page_edits_change_the_loadable_not_bindings_json(rig, tmp_path):
     """Plan 13 §3.3: a route deleted, added or edited on the page (or from
     the context menu) is the loaded preset's — the table changes, the
     preset's dirty dot moves, and bindings.json is never written."""
@@ -532,14 +532,14 @@ def _drawn(monkeypatch) -> tuple[list[str], list[str]]:
     return texts, previews
 
 
-def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monkeypatch):
+def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, monkeypatch):
     """Plan 13 decision 13: the page is the loaded preset — the head names
     it (its dot, the layer, the last learn — a refusal among them — and the
     desk rows its load dropped), then its routes, its desk (each row, and
     each preset control it leaves dark), its macros with their subscribers
     (a param two macros set marked), and the session's rows read-only. An
     edit on the page marks the preset dirty and writes no file."""
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.learn import Learn
 
@@ -676,7 +676,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     assert lib.delete("presets", "My Routes")
 
 
-def test_the_base_picker_offers_performance_params_only(rig):
+def test_the_base_picker_offers_patch_params_only(rig):
     """D9, review of PR #67: a macro's "+ base" picker offers persisted,
     non-alias performance params — never a session one (the BPM, the
     drive, a band), an alias or a macro — and "+ base" adds one of those."""
@@ -1148,7 +1148,7 @@ def _routing_probe(monkeypatch) -> dict:
         page(self, dt)
         out["page"] = (imgui.get_scroll_y(), imgui.get_scroll_max_y())
 
-    def session_(panel, router):
+    def meta_(panel, router):
         meta_rows(panel, router)
         out["child"] = (imgui.get_scroll_y(), imgui.get_scroll_max_y())
 
@@ -1159,7 +1159,7 @@ def _routing_probe(monkeypatch) -> dict:
             top = imgui.get_window_pos().y
             out["lines"].append((b, section, y0, top, top + imgui.get_window_height()))
     monkeypatch.setattr(Panel, "_page_routing", page_)
-    monkeypatch.setattr(ui_routing, "meta_rows", session_)
+    monkeypatch.setattr(ui_routing, "meta_rows", meta_)
     monkeypatch.setattr(ui_routing, "_mark_line", mark_)
     return out
 
@@ -1457,7 +1457,7 @@ def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
     so two draws of an unchanged table work it out once, and a Learn, a
     flipped row, a preset load or another profile each work it out again,
     with the same answer as a fresh scan."""
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace import apc40
     from hyperspace.learn import Learn

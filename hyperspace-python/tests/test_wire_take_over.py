@@ -292,7 +292,7 @@ def test_two_outlets_on_one_taken_port_cut_one_cable_and_the_second_is_refused()
     assert into(gs, "output.all.image") == ["warp"]
 
 
-def test_the_rigs_bus_cable_is_not_a_cut():
+def test_the_meta_bus_cable_is_not_a_cut():
     """A window's port the rig's bus cable feeds is free as ever: the preset's
     wire stands in front of it, and the chip names nothing."""
     port = {"id": "out", "type": "image", "from": "warp", "was": "output.1.image"}
@@ -382,7 +382,7 @@ def test_a_cut_outlets_pin_opens_though_its_member_feeds_another_port():
 
 # ---------------------------------------------------------------- a chip that no longer holds
 
-def test_a_press_after_the_preset_moved_refuses_in_words_and_cuts_nothing(rig):  # noqa: F811
+def test_a_press_after_the_loadable_moved_refuses_in_words_and_cuts_nothing(rig):  # noqa: F811
     st = trip(rig)
     spawned(rig)
     plan = edit(rig).take_over_of(GID)
@@ -402,7 +402,7 @@ def test_a_press_after_the_preset_moved_refuses_in_words_and_cuts_nothing(rig): 
         undo.install(None)
 
 
-def test_a_press_after_a_reload_of_the_same_preset_refuses(rig):  # noqa: F811
+def test_a_press_after_a_reload_of_the_same_loadable_refuses(rig):  # noqa: F811
     trip(rig)
     spawned(rig)
     plan = edit(rig).take_over_of(GID)
@@ -467,7 +467,7 @@ def test_the_plain_chip_by_the_mouse_never_cuts(driven):
     assert CHIP in d.rects                            # still on offer
 
 
-def test_a_preset_changed_while_the_mouse_is_down_refuses(driven):
+def test_a_loadable_changed_while_the_mouse_is_down_refuses(driven):
     """What the press is judged against is what the chip said as the mouse went
     down: the cable feeding the port moves under a held chip."""
     r, d, st = driven

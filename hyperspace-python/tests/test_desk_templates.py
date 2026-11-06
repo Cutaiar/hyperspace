@@ -23,18 +23,18 @@ import json
 import shutil
 from pathlib import Path
 
-from test_presets import boot
+from test_loadable import boot
 
 from hyperspace import graphmigrate, library, loadable
 from hyperspace.loadable import desk_json
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "desk-templates"
 TEMPLATE = FIXTURES / "desk" / "fixture-shape.json"
-PRESET = FIXTURES / "presets" / "templated.json"
+LOADABLE = FIXTURES / "presets" / "templated.json"
 
 
 def put_fixtures(home: Path) -> None:
-    for src, group in ((PRESET, "presets"), (TEMPLATE, "desk")):
+    for src, group in ((LOADABLE, "presets"), (TEMPLATE, "desk")):
         (home / group).mkdir(parents=True, exist_ok=True)
         shutil.copy(src, home / group / src.name)
 
@@ -52,7 +52,7 @@ def test_the_template_code_is_gone():
 
 
 def test_ten_drops_the_template_and_its_dark_rows_and_the_labels():
-    doc = json.loads(PRESET.read_text())
+    doc = json.loads(LOADABLE.read_text())
     out = graphmigrate.ten(doc)
     assert "desk_template" not in out and "modules" not in out
     assert [r["source"] for r in out["desk"]] == ["cc:*:17", "cc:0:50"]
@@ -62,7 +62,7 @@ def test_ten_drops_the_template_and_its_dark_rows_and_the_labels():
     assert graphmigrate.ten(ten) is ten
 
 
-def test_an_old_templated_preset_loads_its_own_rows_and_saves_without_the_key(tmp_path):
+def test_an_old_templated_loadable_loads_its_own_rows_and_saves_without_the_key(tmp_path):
     rig = boot(tmp_path)
     put_fixtures(rig.home)
     rig.lib._sync()
@@ -83,7 +83,7 @@ def test_an_old_templated_preset_loads_its_own_rows_and_saves_without_the_key(tm
     assert (rig.home / "desk" / TEMPLATE.name).read_bytes() == TEMPLATE.read_bytes()
 
 
-def test_the_tool_rewrites_a_templated_preset_on_a_scratch_copy(tmp_path, monkeypatch):
+def test_the_tool_rewrites_a_templated_loadable_on_a_scratch_copy(tmp_path, monkeypatch):
     """tools/migrate_library.py --apply over a scratch library (never the
     owner's): the templated preset is /10 without the key, the library was
     backed up first, `desk/` is left as it was."""
@@ -98,13 +98,13 @@ def test_the_tool_rewrites_a_templated_preset_on_a_scratch_copy(tmp_path, monkey
     monkeypatch.setenv("HYPERSPACE_HOME", str(home))
     code = tool.main(["--library", str(lib), "--apply"], picture=lambda p, **kw: ([], []))
     assert code == 0
-    doc = json.loads((lib / "presets" / PRESET.name).read_text())
+    doc = json.loads((lib / "presets" / LOADABLE.name).read_text())
     assert doc["schema"] == tool.NEWEST == "hyperspace.preset/10"
     assert "desk_template" not in doc and "modules" not in doc
     backups = list(home.glob("library-backup-*"))
     assert len(backups) == 1
-    assert json.loads((backups[0] / "presets" / PRESET.name).read_text()) == json.loads(
-        PRESET.read_text())
+    assert json.loads((backups[0] / "presets" / LOADABLE.name).read_text()) == json.loads(
+        LOADABLE.read_text())
     assert (lib / "desk" / TEMPLATE.name).read_bytes() == TEMPLATE.read_bytes()
 
 

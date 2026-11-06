@@ -204,7 +204,7 @@ def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig)
 # ---------------------------------------------------------------- desk templates
 # (plan 44 D3: retired — no library held one; a preset names none)
 
-def test_a_corpus_preset_draws_no_template_node(rig):
+def test_a_corpus_loadable_draws_no_template_node(rig):
     """Every corpus preset has a plain desk section: no template node."""
     rig.lib.load("presets", "party-trip")
     assert not hasattr(ui_graph, "template_of") and not hasattr(graphview, "TEMPLATE")

@@ -89,7 +89,7 @@ def test_off_is_todays_canvas_and_the_view_is_untouched(rig):
     assert [c.id for c in view.cables] == cables and len(st["hide"]) == hidden
 
 
-def test_state_survives_a_preset_load(rig):
+def test_state_survives_a_loadable_load(rig):
     st = party(rig)
     st["patch_only"] = False
     rig.lib.load("presets", "party-trip")
@@ -151,7 +151,7 @@ def test_what_feeds_the_section_is_drawn_to_full_depth_downstream_one_hop(rig):
     assert "lfo.7" not in keep
 
 
-def test_the_channels_are_always_in_the_preset_only_view(rig):
+def test_the_channels_are_always_in_the_loadable_only_view(rig):
     """The owner, after the show of 2026-10-30: with no channel wired to
     the faces "you can't actually spawn one, it just doesn't exist". The
     eight channels are drawn like the outputs, wired or not, filled or

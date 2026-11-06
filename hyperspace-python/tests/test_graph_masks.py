@@ -267,7 +267,7 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
     """`mask-as-picture` (a `/7` wired frame with a matte entry and its
     values), loaded, saved and loaded into a fresh rig, lands the same
     `GraphSpec` and the same matte values, and saves `/7`."""
-    from test_presets import boot
+    from test_loadable import boot
 
     src = json.loads(FIXTURE.read_text())
     assert src["schema"] == "hyperspace.preset/7"

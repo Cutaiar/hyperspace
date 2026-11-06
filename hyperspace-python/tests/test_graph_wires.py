@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 from conftest import CORPUS
 from test_graph_json import Stub, _bare, _old
-from test_presets import boot, put
+from test_loadable import boot, put
 from wiredframe import Shows, Thru, graph, wire_switches, wiring
 
 from hyperspace import graph as G
@@ -263,7 +263,7 @@ def _edit_rig(tmp_path, **kw):
     return rig, stub, edit, pushed
 
 
-def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_path):
+def test_an_edit_lands_the_wire_through_the_loadable_and_says_its_refusals(tmp_path):
     """`Edit.wire` lands a new spec through the preset's GraphSection: an
     undo step, the renderer's wiring, the preset dirty, the section the
     save writes; a wire that would be refused is refused in the note's
@@ -319,7 +319,7 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
     assert G.Wire("hands", "scene.geometry") not in rig.loaded_patch.graph.spec.wires
 
 
-def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_preset(
+def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_loadable(
         tmp_path, monkeypatch):
     """On the GRAPH page, drawn headless on the node editor: the widget
     reports a new link between the hands' layer's output and output 2's
@@ -552,7 +552,7 @@ def test_the_wire_built_check_sees_a_wired_composite():
     assert not any(_wire_built(n) for n in plain.nodes.values())
 
 
-def test_no_corpus_preset_places_an_effect():
+def test_no_corpus_loadable_places_an_effect():
     """No corpus source carries a graph, and (plan 36 T3) each corpus
     `/7` is today's frame with no placement: the default frame holds
     nothing a section's wire builds — nothing dormant, every output's

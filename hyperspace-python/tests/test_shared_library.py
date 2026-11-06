@@ -181,7 +181,7 @@ def test_a_write_is_atomic_and_leaves_no_temp_file(tmp_path, monkeypatch):
     assert [p.name for p in path.parent.iterdir()] == ["a.json"]
 
 
-def test_the_temp_file_is_never_a_preset(tmp_path, monkeypatch):
+def test_the_temp_file_is_never_a_loadable(tmp_path, monkeypatch):
     """Mid-write, the temp file is dot-named and not ``*.json``: the
     library's globs (and a cloud client's filters) pass it by."""
     seen = []

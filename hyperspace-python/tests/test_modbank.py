@@ -259,7 +259,7 @@ def app(tmp_path):
     return SimpleNamespace(lib=lib, reg=reg, router=router, loaded_patch=loaded_patch, lfos=lfos)
 
 
-def test_a_preset_without_the_key_loads_four_lfos(app):
+def test_a_loadable_without_the_key_loads_four_lfos(app):
     app.lfos.set([1, 3])
     doc = app.loaded_patch.document("old")
     assert doc["lfos"] == [1, 3]
@@ -269,7 +269,7 @@ def test_a_preset_without_the_key_loads_four_lfos(app):
     assert "lfos" not in app.loaded_patch.document("again")   # the default writes no key
 
 
-def test_a_preset_round_trips_with_gaps(app):
+def test_a_loadable_round_trips_with_gaps(app):
     app.lfos.set([1, 3, 7])
     app.reg["lfo.7.depth"].set(0.25)
     app.reg["lfo.3.sync"].set(2)

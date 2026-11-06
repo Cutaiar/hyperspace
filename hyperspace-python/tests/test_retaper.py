@@ -297,7 +297,7 @@ def test_a_marked_document_is_left_alone_and_the_marker_is_what_a_save_writes(fi
     assert retaper_depths(out, files) == (out, [])
 
 
-def test_an_old_preset_loads_as_the_tool_rewrites_it(tmp_path):
+def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
     """End to end: a corpus preset with the marker taken off and its depths
     put back to the numbers it held before this change loads through the
     app (`Presets.load_doc` converts, silently) and saves byte for byte
@@ -321,7 +321,7 @@ def test_an_old_preset_loads_as_the_tool_rewrites_it(tmp_path):
     assert t.text(out).encode() == data and len(change.rows) == 4
 
 
-def test_every_corpus_preset_is_marked_and_a_run_on_the_corpus_is_a_no_op(files):
+def test_every_corpus_loadable_is_marked_and_a_run_on_the_corpus_is_a_no_op(files):
     t = _tool()
     for path in sorted(CORPUS.glob("*.json")):
         doc = json.loads(path.read_text())
@@ -393,7 +393,7 @@ def test_a_patch_carries_the_marker_and_an_old_one_is_read_as_it_was(tmp_path, f
     assert patches.check({**lifted, "name": "x"}) == []
 
 
-def test_the_session_table_is_read_as_it_was_marked_on_write_and_rewritten_once(tmp_path, files):
+def test_the_meta_table_is_read_as_it_was_marked_on_write_and_rewritten_once(tmp_path, files):
     """Review of #322 (9): `Bindings.from_json` converts an unmarked file's
     rows about the effect's default, counts it as a change (so `load` writes
     the file back once, backed up beside itself), `to_json` carries the

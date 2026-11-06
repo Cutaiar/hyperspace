@@ -461,7 +461,7 @@ def test_a_levelling_from_another_mode_is_ignored_said_and_kept(tmp_path, capsys
     assert json.loads(cal.read_text())["room"]["mode"] == "desktop"
 
 
-def test_a_tape_plays_in_its_own_frame_and_never_touches_the_rigs_file(tmp_path):
+def test_a_tape_plays_in_its_own_frame_and_never_touches_the_meta_file(tmp_path):
     """A screentop tape on a desktop rig that has a levelling: the tape's
     mode, no levelling, and no way to make or clear one from it."""
     cal = _levelled(tmp_path, "desktop")

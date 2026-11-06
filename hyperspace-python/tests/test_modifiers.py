@@ -26,7 +26,7 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 from imgui_bundle import imgui
-from test_presets import boot
+from test_loadable import boot
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -177,7 +177,7 @@ def analyzer(band0: float) -> NS:
     return NS(lanes=np.array([band0 * CEIL, 0.0, 0.0]))
 
 
-def test_the_mod_group_is_performance_and_its_params_come_and_go(rig):
+def test_the_mod_group_is_patch_and_its_params_come_and_go(rig):
     reg, table = rig.reg, rig.router.table
     assert PATCH_GROUPS[-1] == "mod"
     m = table.add_modifier("smooth", ["hand:right.energy"], reg, release=0.6)
@@ -271,7 +271,7 @@ def put(lib, *names: str) -> None:
         shutil.copy(FIXTURES / "presets" / f"{n}.json", lib.home / "presets" / f"{n}.json")
 
 
-def test_modifiers_live_in_the_preset_and_never_in_bindings_json(rig):
+def test_modifiers_live_in_the_loadable_and_never_in_bindings_json(rig):
     lib, reg, router, loaded_patch = rig.lib, rig.reg, rig.router, rig.loaded_patch
     table = router.table
     put(lib, "mod-energy")
@@ -316,7 +316,7 @@ def test_a_route_onto_a_missing_modifier_is_dropped_with_a_note(rig):
     assert len(json.loads((lib.home / "presets" / "mod-missing.json").read_text())["routes"]) == 2
 
 
-def test_a_modifier_whose_input_the_rig_lacks_is_dormant(rig):
+def test_a_modifier_whose_input_the_meta_lacks_is_dormant(rig):
     """A hand the rig never feeds: the modifier stays, its lane is not
     live, the route on it moves nothing, and nothing is noted."""
     lib, reg, router, loaded_patch = rig.lib, rig.reg, rig.router, rig.loaded_patch
@@ -331,7 +331,7 @@ def test_a_modifier_whose_input_the_rig_lacks_is_dormant(rig):
     assert [m.id for m in router.table.modifiers] == ["mod.1", "mod.2"]
 
 
-def test_an_older_preset_without_the_key_loads_as_before(rig):
+def test_an_older_loadable_without_the_key_loads_as_before(rig):
     """Every corpus preset has no `modifiers`: it loads with no note,
     holds none, and saves without the key — the same document as the
     base build's (no `mod.*` id among its values)."""

@@ -29,7 +29,7 @@ from hyperspace.library import PATCHES
 from hyperspace.patches import Host, spawn
 from hyperspace.routing import Bindings
 
-CORPUS_PRESETS = sorted((CORPUS / "presets").glob("*.json"))
+CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
 # the wired-frame nodes of party-wake a "dream + fx + composite" cut names
 DREAM_CUT = ["render:dream", "render:composite"]
 
@@ -81,11 +81,11 @@ def test_a_patch_holds_the_frames_kinds(name):
     ("cloud.2", patches.FIXTURE_WORDS), ("camera", patches.CAMERA_WORDS),
     ("fx", patches.NOT_HELD_WORDS), ("lookback.echo.1", patches.NOT_HELD_WORDS),
 ])
-def test_the_rig_and_the_one_camera_stay_refused(name, words):
+def test_the_meta_and_the_one_camera_stay_refused(name, words):
     assert patches.held_words(name) == words.format(name=name)
 
 
-def test_every_frame_kind_is_held_and_every_rig_kind_refused():
+def test_every_frame_kind_is_held_and_every_meta_kind_refused():
     """The lists stay honest as a kind is added."""
     assert set(G.FRAME_KINDS) <= set(patches.MAY_HOLD)
     assert not set(patches.FIXTURE_KINDS) & set(patches.MAY_HOLD)
@@ -217,7 +217,7 @@ def test_a_landing_from_before_a_hot_reload_still_lands(rig):
     assert ui_graph.group_edit(rig.panel)._spawn_refusal(old) is None
 
 
-def test_a_spawn_of_a_shape_into_a_preset_with_one_refuses_nothing_landed(rig):
+def test_a_spawn_of_a_shape_into_a_loadable_with_one_refuses_nothing_landed(rig):
     on_graph(rig, "party-wake")
     slug = put(rig, cut("shapely", ["render:shape"]))
     before, home = state(rig), files(rig.lib.home)
@@ -441,8 +441,8 @@ def hands_moved(name: str) -> str:
     return name
 
 
-@pytest.mark.parametrize("path", CORPUS_PRESETS, ids=lambda p: p.stem)
-def test_a_whole_preset_spawned_into_an_empty_frame_is_that_preset(path):
+@pytest.mark.parametrize("path", CORPUS_LOADABLES, ids=lambda p: p.stem)
+def test_a_whole_loadable_spawned_into_an_empty_frame_is_that_loadable(path):
     """Every corpus preset's section lifted whole, spawned into a frame with
     nothing in it, its pins wired as saved, is the section again (hands one
     number on: the empty frame's own hands 1 is the rig's; `spec_names` is
@@ -487,7 +487,7 @@ def test_a_whole_preset_spawned_into_an_empty_frame_is_that_preset(path):
     assert geometry(got) == geometry(spec, hands_moved), path.stem
 
 
-def test_a_new_preset_holds_a_scene_so_a_whole_frame_is_refused_there(tmp_path):
+def test_a_new_loadable_holds_a_scene_so_a_whole_frame_is_refused_there(tmp_path):
     """A new preset's section is the scene chain: a whole frame says so,
     rather than land a second scene."""
     app = headless.make_app(tmp_path)

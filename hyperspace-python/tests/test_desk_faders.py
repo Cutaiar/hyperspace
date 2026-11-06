@@ -72,7 +72,7 @@ def at(rig, pid) -> int:
 
 # ------------------------------------------------------------------ the map
 
-def test_the_faders_are_the_presets_and_the_audio_strip_is_shifts():
+def test_the_faders_are_the_loadables_and_the_audio_strip_is_shifts():
     """Decision 17: no preset-layer fader row in the factory map (no
     inherited default); the audio strip is the SHIFT layer's; MASTER and the
     crossfader stay invariant."""
@@ -89,7 +89,7 @@ def test_the_faders_are_the_presets_and_the_audio_strip_is_shifts():
     assert not [b for b in loadable.fresh_desk() if b.number == FADER and b.kind == "cc"]
 
 
-def test_every_corpus_preset_leaves_the_faders_dark_and_shift_lights_the_audio(rig):
+def test_every_corpus_loadable_leaves_the_faders_dark_and_shift_lights_the_audio(rig):
     """Decision 23: no shipped preset got fader rows — every corpus file's
     desk binds no track fader, and each loads with S1–S8 dark on the
     preset layer and the audio strip under SHIFT, with no desk note."""
@@ -108,7 +108,7 @@ def test_every_corpus_preset_leaves_the_faders_dark_and_shift_lights_the_audio(r
     assert faders_lit(t) == dict(zip(GLYPHS, SHIFT_TARGETS))
 
 
-def test_track_fader_is_a_preset_layer_row_with_soft_pickup():
+def test_track_fader_is_a_loadable_layer_row_with_soft_pickup():
     """`preset.track_fader(k, pid)` is the row a preset's desk binds track
     fader k with: the preset layer's, `abs`, no feedback, soft pickup."""
     b = loadable.track_fader(8, "dream.mix")
@@ -118,7 +118,7 @@ def test_track_fader_is_a_preset_layer_row_with_soft_pickup():
 
 # -------------------------------------------------- a preset with fader rows
 
-def test_a_preset_with_fader_rows_lights_s1_s8_and_drives_them(rig):
+def test_a_loadable_with_fader_rows_lights_s1_s8_and_drives_them(rig):
     """The fixture binds S1–S8 on its desk: it loads with no note and no
     dirt, all eight light (the on-screen desk's rule) on the preset layer,
     and each fader drives its own param once picked up. Under SHIFT the same
@@ -224,7 +224,7 @@ def test_a_power_up_forgets_where_a_fader_was_on_every_layer(rig):
     assert band.norm == pytest.approx(70 / 127, abs=0.01)
 
 
-def test_a_track_fader_is_learnable_on_the_preset_layer(rig):
+def test_a_track_fader_is_learnable_on_the_loadable_layer(rig):
     """Decision 17: S1 is the preset's, so the on-screen desk offers it and
     a desk learn on CC 7 lands a preset-layer pickup row with no ring."""
     t, m = rig.midi.table, rig.midi
@@ -242,7 +242,7 @@ def test_a_track_fader_is_learnable_on_the_preset_layer(rig):
 
 # ------------------------------------------------------------- the migration
 
-def test_an_older_session_file_moves_the_fader_rows_to_shift_once(tmp_path):
+def test_an_older_meta_file_moves_the_fader_rows_to_shift_once(tmp_path):
     """A `bindings.json` from before C2 holds the eight audio rows on the
     track faders with no layer (invariant): its next load gives each the
     SHIFT layer, notes it, keeps a backup and writes the file back once; the
@@ -285,7 +285,7 @@ def test_an_older_session_file_moves_the_fader_rows_to_shift_once(tmp_path):
     assert (b.target, b.layer) == ("view.speed", None)
 
 
-def test_a_preset_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig):
+def test_a_loadable_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig):
     """Where the owner kept a fader invariant, a preset's row on it is
     dropped with D6's note, as on any invariant control."""
     t = rig.midi.table
@@ -300,7 +300,7 @@ def test_a_preset_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig):
 
 # ------------------------------------------------------- lines and points opacity
 
-def test_lines_and_points_opacity_are_performance_params_at_one(rig):
+def test_lines_and_points_opacity_are_patch_params_at_one(rig):
     """Decision 24: each new opacity defaults to the picture as it was."""
     for pid in ("view.lines_alpha", "view.points_alpha"):
         p = rig.reg[pid]

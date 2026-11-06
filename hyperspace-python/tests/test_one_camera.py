@@ -26,7 +26,7 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 from conftest import CORPUS
-from test_presets import boot
+from test_loadable import boot
 
 from hyperspace import geometry as G
 from hyperspace import ghost, graphmigrate, graphview, headless, loadable
@@ -53,7 +53,7 @@ EYE = {"eye.fov": 30.0, "eye.distance": 5.0}
 CAMERA_AT = [40, 50]
 
 
-def old_preset(src: Path = TRIP, *, marked: bool = True) -> dict:
+def old_loadable(src: Path = TRIP, *, marked: bool = True) -> dict:
     """A corpus preset as it was before `/9`: `/7`, no eye in its values
     (and, unmarked, its depths still measured along the linear ranges'
     words — wave 0 T1's marker gone)."""
@@ -220,7 +220,7 @@ def test_the_migrations_resave_writes_a_pose_only_where_the_file_had_one(tmp_pat
     """`headless.resave` is the migration's: an old file keeps spinning (no
     pose written, so its `/9` is a fixed point), a `/9` with a pose keeps
     it as it was."""
-    old = _write(tmp_path / "old.json", old_preset())
+    old = _write(tmp_path / "old.json", old_loadable())
     data, notes, _ = headless.resave(old, tmp_path / "a")
     doc = json.loads(data)
     assert notes == [] and loadable.POSE_KEY not in doc and doc["schema"] == loadable.SAVE_SCHEMA
@@ -236,7 +236,7 @@ def test_the_migrations_resave_writes_a_pose_only_where_the_file_had_one(tmp_pat
 
 
 def test_nine_is_pure_one_way_and_keeps_what_the_file_says():
-    doc = old_preset()
+    doc = old_loadable()
     out = graphmigrate.nine(doc, EYE, CAMERA_AT)
     assert out is not doc and doc["values"].get("eye.fov") is None       # pure
     assert {k: out["values"][k] for k in EYE} == EYE
@@ -255,7 +255,7 @@ def test_nine_is_pure_one_way_and_keeps_what_the_file_says():
     assert graphmigrate.nine(None, EYE) is None
 
 
-def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path):
+def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_path):
     """REVIEW.md "Files on disk are a format", end to end: an old show
     (eye in its session, the camera's position in its layout) and an old
     `/7` preset. The show lands no eye and is clean; the old preset takes
@@ -266,7 +266,7 @@ def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path
     home = tmp_path / "lib"
     _write(home / "projects" / "rig.hyp.json", old_show())
     (home / "presets").mkdir(parents=True)
-    (home / "presets" / "old.json").write_text(loadable.dumps({**old_preset(), "name": "OLD"}))
+    (home / "presets" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig = boot(home, show="rig")
     pr, reg = rig.lib.project, rig.reg
     assert pr.name == "rig" and pr.old_eye == EYE and pr.camera_at == CAMERA_AT
@@ -306,7 +306,7 @@ def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path
     assert again.reg["eye.fov"].value == 30.0 and again.reg["eye.distance"].value == 5.0
 
 
-def test_a_bank_autosave_before_the_tool_still_hands_old_presets_the_eye(tmp_path):
+def test_a_bank_autosave_before_the_tool_still_hands_old_loadables_the_eye(tmp_path):
     """Review 2.2: the first write of an old show on this build (here the
     bank's autosave, `Project.write`) drops its eye into `.bak-v2-eye`; an
     old preset opened on the next launch — before the tool ran — still
@@ -314,7 +314,7 @@ def test_a_bank_autosave_before_the_tool_still_hands_old_presets_the_eye(tmp_pat
     home = tmp_path / "lib"
     _write(home / "projects" / "rig.hyp.json", old_show())
     (home / "presets").mkdir(parents=True)
-    (home / "presets" / "old.json").write_text(loadable.dumps({**old_preset(), "name": "OLD"}))
+    (home / "presets" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig = boot(home, show="rig")
     rig.lib.project.put_slot(0, "OLD")                # a pad: the bank's autosave
     show = json.loads((home / "projects" / "rig.hyp.json").read_text())
@@ -345,12 +345,12 @@ def test_the_tool_copies_nothing_when_nothing_it_reads_is_retapered(tmp_path, mo
     assert made == []
 
 
-def test_an_old_preset_with_no_old_eye_takes_the_builds(tmp_path):
+def test_an_old_loadable_with_no_old_eye_takes_the_builds(tmp_path):
     """A show from C2 on (the corpus's) holds no eye: an old preset lands
     the build's default, the picture it drew before."""
     rig = boot(tmp_path)
     rig.reg["eye.fov"].set(90.0)
-    (tmp_path / "presets" / "old.json").write_text(loadable.dumps({**old_preset(), "name": "OLD"}))
+    (tmp_path / "presets" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig.loaded_patch.load("OLD")
     assert rig.lib.project.old_eye == {}
     assert rig.reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
@@ -498,7 +498,7 @@ def test_the_camera_node_is_the_looks():
     assert got is None and why == graphview.CAMERA_KEPT.format(label="Camera")
 
 
-def test_the_hands_calibration_is_the_rigs_reference_eye():
+def test_the_hands_calibration_is_the_meta_reference_eye():
     """Row 575, no GL: the box is fitted into the world against the rig's
     reference eye whatever the preset's; through a zoomed eye the hands'
     picture scales about the centre as the shape's does (the scene's
@@ -528,7 +528,7 @@ def test_the_hands_calibration_is_the_rigs_reference_eye():
     assert b[:, :2] / b[:, 3:] == pytest.approx(a[:, :2] / a[:, 3:] * ratio)
 
 
-def test_the_ghost_fits_its_calibration_once_until_the_rig_changes(monkeypatch):
+def test_the_ghost_fits_its_calibration_once_until_the_meta_changes(monkeypatch):
     """Review 7: `Ghost.calibrated` fits once and keeps it while the box,
     the basis and the units stand — whatever the eye or the output's shape
     — and fits again when one of them moves."""
@@ -575,9 +575,9 @@ def _library(tmp_path: Path) -> Path:
     lib = tmp_path / "Drive" / "Hyperspace"
     loadable_dir = lib / "presets"
     loadable_dir.mkdir(parents=True)
-    (loadable_dir / "trip-old.json").write_text(loadable.dumps(old_preset()))
+    (loadable_dir / "trip-old.json").write_text(loadable.dumps(old_loadable()))
     (loadable_dir / "trip-unmarked.json").write_text(
-        loadable.dumps({**old_preset(marked=False), "name": "TRIP UNMARKED"}))
+        loadable.dumps({**old_loadable(marked=False), "name": "TRIP UNMARKED"}))
     shutil.copyfile(CORPUS / "presets" / "dial.json", loadable_dir / "dial.json")
     _write(lib / "projects" / "rig.hyp.json", old_show())
     (lib / "patches").mkdir()
@@ -595,7 +595,7 @@ def _tree(root: Path) -> dict[str, bytes]:
             if p.is_file()}
 
 
-def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_preset(tmp_path, capsys):
+def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_loadable(tmp_path, capsys):
     """The whole bump over a scratch copy: a dry run writes nothing and says
     the show, its eye, the retaper and the shows it would rewrite; --apply
     backs the library up first, retapers the patch and the desk template,
@@ -676,7 +676,7 @@ def test_the_tool_draws_the_old_file_with_the_show_open_as_its_nine(tmp_path, ca
         golden_frames.context()
     except Exception as e:  # noqa: BLE001 — any GL failure means skip
         pytest.skip(f"no standalone GL context available: {e}")
-    old = _write(tmp_path / "old" / "trip-old.json", old_preset())
+    old = _write(tmp_path / "old" / "trip-old.json", old_loadable())
     seed = headless.show_seed(old_show())
     data, _, _ = headless.resave(old, tmp_path / "scratch", show=seed)
     nine = tmp_path / "nine" / "trip-old.json"
@@ -744,7 +744,7 @@ def test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size(ctx)
     assert np.array_equal(layer[0], layer[1]) and _span(layer[0])[0] > 20
 
 
-def test_a_layer_laid_depth_aware_is_in_the_world_through_the_presets_eye(ctx):
+def test_a_layer_laid_depth_aware_is_in_the_world_through_the_loadables_eye(ctx):
     """Review 2.1 (the ruling): a hands layer laid depth-aware compares its
     depth with the scene's, so it is drawn through the scene's eye — it
     scales with the shape as the eye widens, and behind the shape at a

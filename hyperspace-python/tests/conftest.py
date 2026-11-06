@@ -46,7 +46,7 @@ _SLOW_TESTS = {
     "test_media_channels.py::test_rapid_switching_with_slow_closes_stays_fast_and_balances",
     "test_media_channels.py::test_a_video_stuck_opening_never_jams_the_closer",
     "test_media_channels.py::test_a_slow_close_never_holds_the_frame_thread",
-    "test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point",
+    "test_graph_free.py::test_every_old_loadable_saves_as_six_and_is_a_fixed_point",
     "test_undo.py::test_an_idle_app_makes_no_step",
     "test_undo.py::test_a_performers_round_off_lights_no_dot",
     "test_graph_areas.py::test_every_node_has_one_area_and_the_three_concerns_are_separate",
@@ -56,15 +56,15 @@ _SLOW_TESTS = {
     "test_geometry.py::test_warm_all_fills_every_shapes_caches",
     "test_app_boundary.py::test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck",
     "test_graph_legible.py::test_every_node_has_a_label_and_a_hover",
-    "test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier",
+    "test_routing.py::test_every_factory_loadable_lands_the_same_values_one_frame_earlier",
     "test_graph_delay.py::test_nothing_of_plan_33_has_an_own_size",
     "test_plan12_presets.py::test_each_hand_axis_moves_its_target_as_the_table_says",
-    "test_migrate_library.py::test_the_real_picture_check_passes_an_old_preset",
+    "test_migrate_library.py::test_the_real_picture_check_passes_an_old_loadable",
     "test_watchdog.py::test_a_stall_that_holds_the_gil_is_caught_by_the_c_backstop",
     "test_render.py::test_nothing_aimed_at_the_faces_is_the_old_frame_exactly",
     "test_render.py::test_every_layout_and_motion_draws_any_count",
     "test_desk_coverage.py::test_the_committed_report_is_fresh_and_regenerates_byte_identical",
-    "test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says",
+    "test_loadable.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says",
 }
 
 
@@ -411,7 +411,7 @@ def seed(home, *groups: str, last_show: str | None = "party"):
 # ------------------------------------------------ plan 19: a home like the owner's
 
 # the three presets `owner_home` holds, saved through `Presets.save_as`
-OWNER_PRESETS = ("NIGHT ONE", "NIGHT TWO", "NIGHT THREE")
+OWNER_LOADABLES = ("NIGHT ONE", "NIGHT TWO", "NIGHT THREE")
 # in NIGHT TWO: a pad of clip row 4 the owner re-aimed, as its desk row,
 # and a device knob the owner learned (knob 1–8, target)
 OWNER_PAD = {"source": "note:2:56", "target": "fx.acid.on", "op": "toggle", "feedback": "led"}
@@ -573,7 +573,7 @@ def build_owner_home(home):
         raise FileExistsError(f"{home}: an owner-like home is built in a new folder")
     r = boot_home(home)                             # a fresh home: the factory party show
     reg, pr, table = r.reg, r.lib.project, r.router.table
-    one, two, three = OWNER_PRESETS
+    one, two, three = OWNER_LOADABLES
     # NIGHT ONE: TUMBLE, dimmer
     reg["view.bright"].set(reg["view.bright"].value * 0.8)
     r.loaded_patch.save_as(one)
@@ -589,7 +589,7 @@ def build_owner_home(home):
     reg["dream.fade"].set_norm(0.7)
     r.loaded_patch.save_as(three)
     folder = home / library.LOADABLE
-    for name in OWNER_PRESETS:
+    for name in OWNER_LOADABLES:
         _with_old_pads(folder / f"{library.slug(name)}.json",
                        OWNER_PAD if name == two else None)
     # the user copy of the party show, with the eight names it had before

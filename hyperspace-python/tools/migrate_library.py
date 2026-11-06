@@ -187,7 +187,7 @@ def configured_library(home: Path) -> Path:
     return home
 
 
-def preset_files(library: Path) -> list[Path]:
+def loadable_files(library: Path) -> list[Path]:
     """The library's presets: ``presets/`` every folder down, as the library
     lists them (`library._walk`, plan 48 stage 2: hidden folders skipped,
     never through a link) — a dot-file (a write's temp file), a backup
@@ -661,7 +661,7 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     except LookupError as e:
         print(str(e), file=sys.stderr)
         return 2
-    files = preset_files(library)
+    files = loadable_files(library)
     print(f"library: {library}  ({len(files)} presets)"
           + ("" if a.apply else f"  — written to {a.to}" if a.to is not None
              else "  — dry run, nothing is written"))

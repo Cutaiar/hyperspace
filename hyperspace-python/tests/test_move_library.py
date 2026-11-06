@@ -117,7 +117,7 @@ def test_main_prints_the_config_lines_and_never_edits_config(tmp_path, capsys, m
     assert (dest / "presets" / "hi-frek.json").is_file()
 
 
-def test_a_preset_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path):
+def test_a_loadable_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path):
     """Plan 48 stage 2: ``presets/`` is walked as the library lists it —
     ``party/`` and ``party/deep/`` copied, ``presets/.hidden/`` never; the
     other groups stay one level down."""

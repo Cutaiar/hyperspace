@@ -83,7 +83,7 @@ def test_cable_words_still_read_the_port_name_first():
 
 # ---------------------------------------------------------------- wants
 
-def test_hand_rows_on_a_rig_without_hands_want_leap_not_in_this_rig():
+def test_hand_rows_on_a_meta_without_hands_want_leap_not_in_this_meta():
     ws = devices.wants(table_of(*HAND_ROWS), rig_of(DESK))
     assert ws == [Want("leap", "missing", "hand",
                        ("right hand y", "right hand roll", "left hand x"))]
@@ -123,7 +123,7 @@ def test_a_qualified_midi_row_wants_its_role_not_the_primary():
     assert by["apc40"].count == "1 control"
 
 
-def test_only_the_presets_rows_count_and_never_a_builtin_scheme():
+def test_only_the_loadables_rows_count_and_never_a_builtin_scheme():
     """Performer routes, preset-layer desk rows and modifier inputs: a
     session row (a SHIFT-layer or invariant desk row, a pad button, a key)
     is the rig's, a disabled row reads nothing, and `lane`, `lfo`, `env`,
@@ -187,7 +187,7 @@ def test_the_chip_and_the_system_lines():
     assert ui.wanted_lines(None, t) == [] and ui.wanted_lines(rig_of(DESK), None) == []
 
 
-def test_the_chip_draws_on_the_graph_head_the_preset_strip_and_system(shell_rig, monkeypatch):  # noqa: F811
+def test_the_chip_draws_on_the_graph_head_the_loadable_strip_and_system(shell_rig, monkeypatch):  # noqa: F811
     """Headless: with a registry that lacks the hands and a preset with a
     hand row, the GRAPH page, the PRESETS page and the SYSTEM page draw
     with the chip and the line; without a registry the head is as it was."""
@@ -421,7 +421,7 @@ def test_a_device_added_to_config_says_it_through_apply():
     assert "leap" not in rig._status                          # …and is forgotten
 
 
-def test_a_window_the_rig_lacks_is_said_on_output_and_the_graph_head(shell_rig, monkeypatch):  # noqa: F811
+def test_a_window_the_meta_lacks_is_said_on_output_and_the_graph_head(shell_rig, monkeypatch):  # noqa: F811
     """Plan 44 D3 (row 623): a preset that wires Output 6 and cuts a bus
     cable into Output 5, on a rig of four windows — OUTPUT (beside the
     output blocks) and the GRAPH head each say one line per window, the

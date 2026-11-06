@@ -218,7 +218,7 @@ def _pairs(section):
     ({"dream.on": True, "dream.mix": 0.0}, False),
     ({"dream.on": False, "dream.mix": 0.5}, None),
 ])
-def test_an_old_dream_preset_migrates_to_the_drawn_chain(values, dream):
+def test_an_old_dream_loadable_migrates_to_the_drawn_chain(values, dream):
     """An old file's look-back: on with a dream mix, `scene → lookback →
     dream → composite (add, under the scene) → All outputs`, the cover and
     the occluder its own wires, `dream.on` on; on with no mix, the same
@@ -357,7 +357,7 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
     assert learn.cannot_show("dream.2.fade", values, drawn=drawn) == "no look-back"
 
 
-def test_the_tracer_only_group_preset_leaves_the_worker_idle(ctx, tmp_path):
+def test_the_tracer_only_group_loadable_leaves_the_worker_idle(ctx, tmp_path):
     """The dream group's `tracer-only` (echoes alone, mix 0) says the dream
     off since plan 36 T4: applied over a frame drawing a dream, the dream
     passes through and the worker gets no submission; its note says a

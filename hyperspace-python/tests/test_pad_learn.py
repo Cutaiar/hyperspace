@@ -87,7 +87,7 @@ def test_release_edges():
 
 # ---- Learn pad ----
 
-def test_a_button_learns_a_session_row_by_the_params_kind(rig):
+def test_a_button_learns_a_meta_row_by_the_params_kind(rig):
     pad, lrn = ScriptedPad(), rig.learn
     for pid, src, held, hat, op, value in (
             ("view.faces", "pad:Y", {gp.Y}, 0, "toggle", 0.0),
@@ -131,7 +131,7 @@ def test_the_learning_press_does_not_fire_the_old_row(rig):
     assert rig.reg["view.faces"].value == faces
 
 
-def test_a_stick_learns_a_push_route_into_the_preset(rig):
+def test_a_stick_learns_a_push_route_into_the_loadable(rig):
     pad, lrn, t = ScriptedPad(), rig.learn, rig.table
     lrn.arm("camera.yaw", "pad")
     pad.frame(axes=[0.3, 0, 0, 0, -1, -1])          # inside LEARN_TRAVEL: nothing yet
@@ -222,7 +222,7 @@ def test_hold_fires_once_after_hold_s(rig):
     assert fired == [1]
 
 
-def test_no_factory_pad_row_loads_a_preset_or_taps_the_tempo(rig):
+def test_no_factory_pad_row_loads_a_loadable_or_taps_the_tempo(rig):
     """2026-11-04, the owner: no swapping presets from a controller, and tap
     tempo not a default on every controller. On the factory table neither the
     d-pad's ← / → nor B, X and BACK walk or tap, however long they are held;

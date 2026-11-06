@@ -109,7 +109,7 @@ def test_the_starters_are_their_own_submenu_first():
         "channel to backdrop", "cut-out"]               # (plan 39 T5: the cut-out)
 
 
-def test_scene_chain_on_a_blank_preset(tmp_path):
+def test_scene_chain_on_a_blank_loadable(tmp_path):
     rig, e, pushed = wired_rig(tmp_path, {"frame": "wired"})
     assert e.add_node("starter", "scene") is None
     assert wired_wires(rig) == CHAIN and _entries(rig) == []

@@ -43,7 +43,7 @@ def test_the_pipelines_are_gone():
     assert not hasattr(Switches(), "through")
 
 
-def test_no_preset_draws_the_factory_frame():
+def test_no_loadable_draws_the_factory_frame():
     """Plan 35 T4: the factory look is `frame_wires(read_graph({}))`,
     signature for signature. Plan 36 T3 (W3): only the one-way migration
     writes it (`graphmigrate.wired_wiring` of the old words, `Wiring()`);

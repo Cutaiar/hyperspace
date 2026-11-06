@@ -112,7 +112,7 @@ def test_the_tint_switch_is_off_by_default_and_on_the_head_last(rig, monkeypatch
     assert ui_graph.cable_tints(st, st["view"]) == {}
 
 
-def test_the_tint_switch_reaches_neither_the_preset_nor_the_show(rig):
+def test_the_tint_switch_reaches_neither_the_loadable_nor_the_show(rig):
     st = party(rig)
     lib = rig.lib
     plain = json.loads(lib.loaded_patch.save_as("UNTINTED").read_text())

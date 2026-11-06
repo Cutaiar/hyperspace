@@ -320,7 +320,7 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
     assert project.camera_at == [40, 50]
 
 
-def test_layout_round_trips_through_the_preset_and_the_show(rig):
+def test_layout_round_trips_through_the_loadable_and_the_show(rig):
     """The look's nodes' positions are the preset's ``layout``, the rig's
     the show's: written on save, read on load. A preset without the key
     (every corpus preset) loads with no note and no dirt; one with a bad
@@ -452,7 +452,7 @@ def test_the_graph_page_sits_after_routing():
     assert PAGE_KEYS.index("graph") == PAGE_KEYS.index("routing") + 1
 
 
-def test_the_page_draws_with_a_corpus_preset_and_a_render_graph(rig):
+def test_the_page_draws_with_a_corpus_loadable_and_a_render_graph(rig):
     """The page drawn for real on the node editor, headless: a corpus
     preset loaded, a render graph with effects, every node expanded and
     collapsed, a route and an effect node selected (the side column), a

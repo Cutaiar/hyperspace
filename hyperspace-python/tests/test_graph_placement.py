@@ -31,7 +31,7 @@ from pathlib import Path
 import pytest
 from conftest import CORPUS
 from test_graph_json import Stub
-from test_presets import boot, put
+from test_loadable import boot, put
 from wiredframe import Shows, Thru, graph, wire_switches
 
 from hyperspace import graph as G
@@ -234,7 +234,7 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
     assert rig.reg["fx.acid.2.on"].value and rig.reg["dream.on"].value
 
 
-def test_no_corpus_preset_places_an_effect_and_the_default_graph_is_identical():
+def test_no_corpus_loadable_places_an_effect_and_the_default_graph_is_identical():
     """No corpus preset places an effect (nor its source carries a graph); with no
     placement the frame is D0's — every effect in every run (the through
     outputs' copies too, plan 35 T4), no placed node, the readout split as

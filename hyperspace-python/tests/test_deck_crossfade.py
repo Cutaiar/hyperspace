@@ -67,7 +67,7 @@ def _frame(rig) -> None:
         d.view.integrate(DT)
 
 
-def _performance(deck) -> dict:
+def _patch(deck) -> dict:
     """Every performance param as it lands, to the bit."""
     return {p.id: repr(p.value) for p in deck.reg
             if part_of(p) == "patch" and p.group != "ui"}
@@ -164,7 +164,7 @@ def test_a_held_chase_lets_go_on_the_deck_left_one_step_on_its_stack(rig):
     assert len(one.undo.stack) <= steps + 1
 
 
-def test_no_session_param_jumps_at_the_middle(rig):
+def test_no_meta_param_jumps_at_the_middle(rig):
     """Same look or not: the session's values are one object, and a row of the
     session's reads on from the same follower."""
     meta, one, two = rig.meta, rig.one, rig.two
@@ -183,7 +183,7 @@ def test_no_session_param_jumps_at_the_middle(rig):
         assert not moved, (k, moved)
 
 
-def test_only_the_deck_on_air_lands_the_session_after_a_crossing(rig):
+def test_only_the_deck_on_air_lands_the_meta_after_a_crossing(rig):
     meta, one, two = rig.meta, rig.one, rig.two
     assert one.reg.lands(one.reg["output.dim"]) and not two.reg.lands(one.reg["output.dim"])
     rig.mix.xfade = 1.0
@@ -191,7 +191,7 @@ def test_only_the_deck_on_air_lands_the_session_after_a_crossing(rig):
     assert two.reg.lands(one.reg["output.dim"]) and not one.reg.lands(one.reg["output.dim"])
 
 
-def test_a_desk_fader_on_a_session_param_reads_on_across_the_middle(rig):
+def test_a_desk_fader_on_a_meta_param_reads_on_across_the_middle(rig):
     """Over the MASTER's real row and fake ports: a crossing is a pointer's move, and
     the catch of a session fader stays (D5a's `MidiIO._follow_pointer`)."""
     meta, one, two = rig.meta, rig.one, rig.two
@@ -273,7 +273,7 @@ def test_a_hand_on_the_fader_ends_a_timed_fade_there(rig):
 # ----------------------------------------------------------------- copy, headless
 
 @pytest.mark.parametrize("ran", [0, 45], ids=["just loaded", "running"])
-def test_copy_then_every_performance_param_of_both_decks_equal_each_frame(rig, ran):
+def test_copy_then_every_patch_param_of_both_decks_equal_each_frame(rig, ran):
     """Over every corpus preset, whatever was on the deck off air: 120 frames,
     one lane vector, not a bit apart, and `signature` and the dirty dot agree."""
     meta, one, two = rig.meta, rig.one, rig.two
@@ -284,16 +284,16 @@ def test_copy_then_every_performance_param_of_both_decks_equal_each_frame(rig, r
         one.loaded_patch.load(name)
         for _ in range(ran):
             _frame(rig)
-        before = _performance(one)
+        before = _patch(one)
         assert meta.copy_on_air() == [], name
-        assert _performance(one) == before, name  # the source is not moved
+        assert _patch(one) == before, name  # the source is not moved
         assert two.loaded_patch.current == one.loaded_patch.current, name
         assert two.loaded_patch.is_dirty() == one.loaded_patch.is_dirty(), name
         assert undo.alike(two.loaded_patch.signature(), one.loaded_patch.signature()), name
         assert two.loaded_patch.notes == [], (name, two.loaded_patch.notes)
         for k in range(120):
             _frame(rig)
-            diff = _diff(_performance(one), _performance(two))
+            diff = _diff(_patch(one), _patch(two))
             assert not diff, (name, k, dict(list(diff.items())[:5]))
         assert list(two.view.ang) == list(one.view.ang), name
         assert two.view.inst_phase == one.view.inst_phase, name
@@ -505,7 +505,7 @@ def test_the_poi_guide_is_on_the_picture_of_the_deck_its_pad_is_on(rig):
     assert poi.guides(state, None)                # a renderer with no deck behind it
 
 
-def test_main_puts_the_rigs_wires_on_both_renderers():
+def test_main_puts_the_meta_wires_on_both_renderers():
     src = inspect.getsource(app.main)
     assert "renderer2.cloud_source, renderer2.poi_source = " in src
     assert "renderer2.ghost.source = renderer.ghost.source" in src
