@@ -8029,6 +8029,21 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 6. Save three ways: the panel's "as…", a held empty pad, and the Edge's hold on MENU if you have one. *Pass:* each saves, as before.
 *Judge:* is green for off air right, with nothing on the pads saying what the room is on? The panel's chip and the OS title say that.
 
+## CB. The panel says which `Deck` (plan 44 D5e)
+Register rows 703, 704, 2026-11-06. Restart first (a param's label and tips are read at launch), and copy on air to off air so both decks hold a look.
+**535. Which `Deck`, wherever you look.** (the rig, with the APC40)
+1. GRAPH's head chip, to "deck 2 · off air". *Pass:* the inset says "ON AIR · deck 1", the window's title deck 2, and the PRESETS strip "deck 2 · <name>", red.
+2. H to hide the panel, the desk diagram up. *Pass:* its header says "deck 2 · off air · the desk plays deck 1", red; a knob on the APC40 moves deck 1.
+3. Show the panel, ROUTING. *Pass:* "the desk plays deck 1" over the desk's rows.
+4. SYSTEM. *Pass:* two GPU blocks, "deck 1 (on air) gpu" and "deck 2 gpu". Chip back to deck 1. *Pass:* the same two, not deck 1's twice.
+*Fail:* any place showing a deck's rows without saying which.
+**536. The words match what happens.** (the Mac, a pad helps)
+1. On deck 2, select a route cable from a controller whose player is on air. *Pass:* its row says "dormant: its controller is on the other deck". Move that player off air. *Pass:* the line goes and the row reads live.
+2. The cheat sheet. *Pass:* F1–F8, Home, APC40 clip pads and QUANT say off air; nothing says pad B walks a list.
+3. The footer's chip starts "players:". On the desk diagram, X reads "Crossfade".
+4. With the panel on air, Home, then ⌘Z. *Pass:* refused in words; the room does not move. Home's tip says so.
+*Fail:* a word that describes the old hold, or a load landing on air.
+
 ## CF. Node mode's saved form (plan 57)
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round
 trip over the corpus, the fill, the kind). **No panel writes the key until N1b,** so 546 and 547

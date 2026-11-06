@@ -803,7 +803,7 @@ def footer(panel) -> None:
         return
     st = _state(panel)
     imgui.same_line()
-    if ui.lit_chip(f"{summary(panel)}##players.open", st["large"]):
+    if ui.lit_chip(f"players: {summary(panel)}##players.open", st["large"]):
         st["large"] = not st["large"]
     if imgui.is_item_hovered():
         ui.tooltip(OPEN_TIP)

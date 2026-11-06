@@ -86,7 +86,7 @@ FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). 
 # what a show is, in one line under the SHOW label and in its hover
 SHOW_LINE = "show  ·  the desk's pads, the session, the rig's wires"
 SHOW_TIP = ("A show is the room the presets play in: which preset each of the desk's "
-            "twenty-four pads loads (set on the desk — hold a pad, or SAVE + a pad), the "
+            "twenty-four pads loads, off air (set on the desk — hold a pad, or SAVE + a pad), the "
             "session (tempo, hands, the analyzer, the outputs), the analyzer's scene, and the "
             "bus cables cut on GRAPH. A preset is the look; the show is everything "
             "around it. Open another, save this one, or start a new one here.")
@@ -289,6 +289,11 @@ def save_chip(panel, group: str, label: str, lit: bool, *, key: str | None = Non
     return hit
 
 
+def _on_deck(meta) -> str:
+    """ "· deck 2 · off air", for a hover; "" with no meta controller."""
+    return f"  ·  {meta.words(meta.panel)}" if meta is not None else ""
+
+
 def strip(panel, group: str) -> None:
     """◀ name ● ▶ · save · as… · reset — for one registry group. On the
     loadable patches' strip (a document kind) there is no reset (`Library.reset`
@@ -334,20 +339,26 @@ def strip(panel, group: str) -> None:
         _guard(panel, lib.prev, group)
     imgui.same_line(0, 2)
     label = _elide(cur) if cur else "—"
-    if width < name_w():                # a narrow strip: the name cut to its button
+    # the deck this name is on (plan 44 D5e, DQ7), red off air: only the loaded look's strip
+    meta = getattr(panel, "meta", None) if group == LOADABLE else None
+    if meta is not None:
+        label = f"{meta.deck_name(meta.panel)} · {label}"
+    if width < name_w() or meta is not None:    # a narrow strip: the name cut to its button
         label = ui.fit_text(label, width - 2 * imgui.get_style().frame_padding.x)
     imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0, 0, 0, 0))
-    imgui.push_style_color(imgui.Col_.text, ui.DIM if cur is None else
-                           imgui.ImVec4(0.92, 0.92, 0.92, 1))
+    imgui.push_style_color(imgui.Col_.text,
+                           ui.RED if meta is not None and meta.panel is not meta.on_air else
+                           ui.DIM if cur is None else imgui.ImVec4(0.92, 0.92, 0.92, 1))
     if imgui.button(f"{label}##name", imgui.ImVec2(width, 0)) and group != LOADABLE:
         imgui.open_popup("list")
     imgui.pop_style_color(2)
     _rect(panel, f"strip.{group}.name")
     if imgui.is_item_hovered():
         if cur is None:
-            ui.tooltip("no preset loaded")
+            ui.tooltip(f"no preset loaded{_on_deck(meta)}")
         elif group == LOADABLE:
-            ui.tooltip(f"{cur}  ·  the loaded preset — the list is below")
+            ui.tooltip(f"{cur}{_on_deck(meta)}  ·  the loaded preset — the list below "
+                       "loads onto this deck")
         else:
             ui.tooltip(f"{cur}  ·  click for the list")
     st["rects"].pop(f"strip.{group}.dot", None)

@@ -2824,7 +2824,9 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         # fork 1: no params added)
         for k in range(min(len(bank.bank), F_KEYS)):
             r.trigger(f"preset.load.{k}", f"Load preset {k + 1}",
-                      lambda k=k: bank.load_slot(k), group=g)
+                      lambda k=k: bank.load_slot(k), group=g,
+                      tip=f"Load pad {k + 1}'s preset into the deck off air (F{k + 1}). "
+                          "The room does not move.")
             r.trigger(f"preset.save.{k}", f"Save preset {k + 1}",
                       lambda k=k: bank.save_slot(k), group=g, modulatable=False)
         # save-as into the next empty slot (plan 15 WP4): no desk row any
@@ -2835,27 +2837,34 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                       "one (moo → moo 2), into the next empty pad. It never "
                       "overwrites a preset. On the desk, hold SAVE (track 8's clip "
                       "stop) and tap a pad instead to choose the pad.")
-        r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
-        r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
+        r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g,
+                  tip="Load the next filled pad's preset into the deck off air (the desk's "
+                      "QUANT). The room does not move.")
+        r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g,
+                  tip="Load the previous filled pad's preset into the deck off air. The "
+                      "room does not move.")
         # the preset list, not the bank (2026-10-14): they step what the PRESETS
         # page lists, saved ones included. No factory row: a pad button's Learn or
         # the bindings file puts them on a control, never a loadable patch's row (row 700)
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
                   tip="Load the next preset of the PRESETS page's list — every "
-                      "preset by name, a new one included — wrapping at the end. "
+                      "preset by name, a new one included — into the deck off air, "
+                      "wrapping at the end. The room does not move. "
                       "The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
-                  tip="Load the previous preset of the PRESETS page's list, wrapping "
-                      "at the start.")
+                  tip="Load the previous preset of the PRESETS page's list into the deck "
+                      "off air, wrapping at the start. The room does not move.")
         # home (plan 15 WP2, decision 27): the show's startup loadable patch. Lit
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
                   lit=lambda: bool(bank.startup),
                   tip="Home: load this show's startup preset into the deck off air — "
                       "the Home key (fn ← on a laptop) and OVERDUB (B11) on the desk. "
-                      "The room does not move. With the panel already on that deck, "
-                      "Undo brings back what was up.")
+                      "The room does not move. With the panel on that deck and the mouse "
+                      "off the meta sections, Undo brings back what was up. With the "
+                      "panel on air, Undo takes nothing back there until you change "
+                      "something there.")
 
     return r

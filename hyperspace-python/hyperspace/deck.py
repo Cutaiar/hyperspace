@@ -882,7 +882,7 @@ def register_xfade(reg, mix: Mix) -> list[str]:
     on the fade would cut the room on every kick) — so they cross no file. The
     desk's crossfader is the first (D5d, `apc40.META_CONTROLS`)."""
     settings = {"group": "output", "persist": False, "modulatable": False}
-    reg.continuous("output.xfade", "Deck fade", lambda: mix.xfade,
+    reg.continuous("output.xfade", "Crossfade", lambda: mix.xfade,
                    lambda v: setattr(mix, "xfade", min(1.0, max(0.0, float(v)))),
                    lo=0.0, hi=1.0, tip=XFADE_TIP, **settings)
     reg.continuous("output.xfade_s", "Fade seconds", lambda: mix.seconds,

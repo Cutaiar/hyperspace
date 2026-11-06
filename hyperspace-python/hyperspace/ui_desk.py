@@ -797,6 +797,17 @@ def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     return f"{c.glyph} · {mid} · {_layer_word(table, b)}\n{c.name}"
 
 
+def _deck_words(panel, table) -> tuple[str, bool]:
+    """The header's deck (plan 44 D5e, DQ7): the `Deck` whose rows this draws, and the
+    one the hardware plays while it is another; red for either. "" with no meta controller."""
+    meta = getattr(panel, "meta", None)
+    if meta is None:
+        return "", False
+    away = ui_routing.desk_elsewhere(panel, table)
+    words = meta.words(meta.panel)
+    return (f"{words} · {away}" if away else words), bool(away) or meta.panel is not meta.on_air
+
+
 def _loadable_name(panel) -> str:
     pr = ui_routing._loaded_patch(panel)
     cur = getattr(pr, "current", None) if pr is not None else None
@@ -1105,6 +1116,7 @@ def _header(panel, table) -> None:
     start = imgui.get_cursor_pos()
     full = imgui.get_content_region_avail().x
     end = start.x + full - ui.chip_w(BIG, CLOSE) - 8     # where the words stop: the chips
+    deck, deck_red = _deck_words(panel, table)
     imgui.set_cursor_pos(_v(start.x, start.y + 3))
     c = picked(panel) if table is not None else None
     line = can = None
@@ -1113,7 +1125,7 @@ def _header(panel, table) -> None:
         line, can = pick_line(panel, table, c)
         line = f"{line} · {math.ceil(left(panel))} s"
         words = (ui._micro_width("apc40") + ui._micro_width(f"{table.layer} layer  ·  shift")
-                 + imgui.calc_text_size(f"{_loadable_name(panel)}").x + 40)
+                 + imgui.calc_text_size(f"{_loadable_name(panel)} {deck}").x + 40)
         alone = imgui.calc_text_size(line).x > end - start.x - words
     if alone:
         imgui.text_colored(ui.RED if can else ui.DIM, ui.fit_text(line, end - start.x))
@@ -1143,6 +1155,10 @@ def _header(panel, table) -> None:
                                   "grid is the lanes' steps, scene 1–5 the lanes, clip stop "
                                   "k the length.")
         imgui.same_line()
+        if deck:        # with the panel hidden this is all that says which deck this is
+            room_ = end - imgui.get_cursor_pos_x()
+            imgui.text_colored(ui.RED if deck_red else ui.DIM, ui.fit_text(deck, max(0.0, room_)))
+            imgui.same_line()
         room_ = end - imgui.get_cursor_pos_x()
         imgui.text_colored(ui.TEXT, ui.fit_text(_loadable_name(panel), max(0.0, room_)))
         if line is not None:
