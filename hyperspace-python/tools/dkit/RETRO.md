@@ -40,6 +40,8 @@ mechanism; each entry is a thing that can be done or checked.
 | 21 | `combobox_size` reserved 36px for a search field the widget had stopped drawing | Removed | **Ask both halves the same question.** A size function and the thing it sizes should be tested against each other. |
 | 22 | The empty state was still the Command recipe's — 68 tall, `popover-foreground` | Re-measured: 36, `muted-foreground`, `data-empty:p-0` | Same as 8: a correct measurement of the wrong component is still wrong. |
 
+| 23 | A scrollbar flashing inside the Combobox popover — and I told the user there wasn't one | `begin_popup` adds `AlwaysAutoResize` to your flags, so the WINDOW sizes from the cursor extent and draws its own bar; `no_scrollbar` on every `begin_popup` | **Two bars, two switches.** I checked `bars=False` on the list and answered for the window. Asserting one thing says nothing about a different thing with the same name — and "I read the flag" is not a measurement. |
+
 ## The four habits these reduce to
 
 1. **Refresh, then measure, then build.** `refresh_shadcn.sh` → `?probe` → kit → diff. Rule zero exists because an oracle built on a stale component is a confident wrong answer.

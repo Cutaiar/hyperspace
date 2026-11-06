@@ -1308,7 +1308,24 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     imgui.push_style_color(imgui.Col_.popup_bg, imgui.ImVec4(0, 0, 0, 0))
 
     chosen = None
-    if imgui.begin_popup(pid):
+    # NO SCROLLBAR, and `begin_popup` will give you one unless you say so.
+    #
+    # `BeginPopup` adds `AlwaysAutoResize` to whatever flags you pass, and a
+    # window with that flag works its size out from the extent its CURSOR
+    # reached. This popup places things absolutely with
+    # `set_cursor_screen_pos` and holds a child window, so on a frame where
+    # that extent lands past the explicit `set_next_window_size`, ImGui
+    # draws the WINDOW's own scrollbar - a bright grey bar down the right
+    # of the panel, for a frame, on open.
+    #
+    # It is the window's bar, not the list's: the list runs `bars=False`
+    # because the real component carries `no-scrollbar`. Select never showed
+    # it because its panel holds no child window, so its extent cannot
+    # overshoot. This is the only popup in the kit that can.
+    if imgui.begin_popup(
+            pid,
+            imgui.WindowFlags_.no_scrollbar
+            | imgui.WindowFlags_.no_scroll_with_mouse):
         # shadcn fades the panel in over 100ms (`animation: enter 0.1s`).
         # ImGui places the window, so only the chrome is animated.
         a = ui.anim.to(f"{pid}:open", 1.0)

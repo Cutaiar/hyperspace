@@ -98,3 +98,54 @@ def test_the_field_still_rings_in_the_gap_which_the_browser_does_too(DB):
     band = [int(f[int(fy + fh) + d, mid].max()) for d in range(3)]
     assert min(band) > bg + 20, (
         f"no ring under the focused field: {band} against {bg}")
+
+
+def test_no_popup_in_the_kit_lets_imgui_draw_its_own_scrollbar():
+    """`imgui.begin_popup()` adds `AlwaysAutoResize` to whatever flags you
+    pass it, and a window with that flag sizes itself from the extent its
+    CURSOR reached. The Combobox places things absolutely with
+    `set_cursor_screen_pos` and holds a child window, so on a frame where
+    that extent lands past the explicit `set_next_window_size` ImGui draws
+    the WINDOW's own scrollbar - a bright bar down the right of the panel,
+    for a frame, on open.
+
+    That is the window's bar, not the list's: the list already runs
+    `bars=False`, because the real component carries `no-scrollbar`. Two
+    different bars, two different switches, and asserting one said nothing
+    about the other - which is how I came to tell the user there was no
+    scrollbar while they were watching one flash.
+
+    Asserted on the SOURCE rather than on pixels, deliberately. The flash is
+    one frame on some machines and not others; this machine (Mesa, density
+    1) does not produce it at all, so a pixel test here would pass whatever
+    the flags said. What can be pinned is that no `begin_popup` in the kit
+    is called without `no_scrollbar`.
+    """
+    import re
+    from pathlib import Path
+
+    here = Path(__file__).resolve().parent
+    offenders = []
+    for py in sorted(here.glob("*.py")):
+        if py.name.startswith("test_"):
+            continue
+        src = py.read_text()
+        for m in re.finditer(r"imgui\.begin_popup\(", src):
+            # the call's argument list, up to the matching close paren
+            tail = src[m.end():m.end() + 400]
+            depth, arg = 1, []
+            for chpos, ch in enumerate(tail):
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                arg.append(ch)
+            call = "".join(arg)
+            if "no_scrollbar" not in call:
+                line = src[:m.start()].count("\n") + 1
+                offenders.append(f"{py.name}:{line}")
+    assert not offenders, (
+        "begin_popup without no_scrollbar - ImGui will draw the window's "
+        f"own bar: {offenders}")

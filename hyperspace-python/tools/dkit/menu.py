@@ -265,7 +265,24 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
     imgui.push_style_var(imgui.StyleVar_.popup_rounding, T.RADII["lg"])
     imgui.push_style_color(imgui.Col_.popup_bg, imgui.ImVec4(0, 0, 0, 0))
     chosen = None
-    if imgui.begin_popup(key):
+    # NO SCROLLBAR, and `begin_popup` will give you one unless you say so.
+    #
+    # `BeginPopup` adds `AlwaysAutoResize` to whatever flags you pass, and a
+    # window with that flag works its size out from the extent its CURSOR
+    # reached. This popup places things absolutely with
+    # `set_cursor_screen_pos` and holds a child window, so on a frame where
+    # that extent lands past the explicit `set_next_window_size`, ImGui
+    # draws the WINDOW's own scrollbar - a bright grey bar down the right
+    # of the panel, for a frame, on open.
+    #
+    # It is the window's bar, not the list's: the list runs `bars=False`
+    # because the real component carries `no-scrollbar`. Select never showed
+    # it because its panel holds no child window, so its extent cannot
+    # overshoot. This is the only popup in the kit that can.
+    if imgui.begin_popup(
+            key,
+            imgui.WindowFlags_.no_scrollbar
+            | imgui.WindowFlags_.no_scroll_with_mouse):
         # shadcn fades the menu in over 100ms (`duration-100`). The window
         # itself is placed by ImGui, so only the chrome is animated.
         a = ui.anim.to(f"{key}:open", 1.0)
