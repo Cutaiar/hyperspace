@@ -420,17 +420,20 @@ def _sandwich_end(ui: Ui, cols: list) -> None:
 # pixel-precise device - a trackpad, a Magic Mouse - because a notched wheel
 # only ever sends whole units. It is sticky: a trackpad emits plenty of
 # whole-unit deltas mid-gesture, and deciding per event put a 10x jump in
-# the middle of every swipe (see tame_wheel).
+# the middle of every swipe.
 _PRECISE = {"seen": False}
+
+# ImGui moves `5 * font_size` px per unit of wheel. The scaling happens in a
+# GLFW callback, where there is no frame and no current window, so the step
+# is cached from inside the frame by `note_wheel_step`.
+_WHEEL = {"step": 90.0}
 
 
 def wheel_px_per_unit() -> float:
-    """How many pixels one unit of `io.mouse_wheel` should move.
+    """How many pixels one unit of raw wheel should move.
 
     `DKIT_SCROLL_PX` overrides it, so this can be dialled on the machine
-    that can feel it without editing code. The default is a guess until
-    somebody runs `dashboard.py --wheel-probe` on a Mac and tells us what
-    the trackpad actually sends; see that mode.
+    that can feel it without editing code.
     """
     import os
     env = os.environ.get("DKIT_SCROLL_PX")
@@ -442,42 +445,57 @@ def wheel_px_per_unit() -> float:
     return T.SCROLL["px_per_unit"] if _PRECISE["seen"] else T.SCROLL["notch_px"]
 
 
-def tame_wheel(io, *, font_size: float | None = None) -> None:
-    """Rescale this frame's wheel so a gesture moves what a browser moves.
+def note_wheel_step() -> None:
+    """Cache ImGui's px-per-unit. Call once per frame, INSIDE the frame."""
+    _WHEEL["step"] = 5.0 * max(imgui.get_font_size(), 1.0)
 
-    Call it once, right after the backend has filled `io`, before
-    `new_frame`.
 
-    WHAT A BROWSER DOES, measured rather than recalled. On macOS a trackpad
-    sends PIXEL-PRECISE deltas and the browser applies them 1:1 with no
-    smoothing of its own - one 300px wheel lands at exactly 300 in a single
-    step, checked in Chromium. Inertia is the OS too: AppKit keeps sending
-    events with `momentumPhase` set and decaying deltas after the finger
-    lifts, and the browser just keeps receiving them. A notched mouse wheel
-    is the other path - non-precise line deltas, about 120px a tick, and
-    that one does get an animated glide.
+def scale_wheel(delta: float, step: float, px_per_unit: float) -> float:
+    """Raw wheel delta -> the units ImGui wants, for `px_per_unit` pixels.
 
-    So the target is finger travel, 1:1, unsmoothed, and this is only a
-    scale factor. ImGui moves `5 * font_size` per unit - about 90px at this
-    type scale - which is where "far too fast" came from.
-
-    THE DISCONTINUITY THIS NO LONGER HAS. The first version decided per
-    EVENT: a delta of 1.0 or more was "a notch" and got `notch_px`, ten
-    times the precise rate. A trackpad sends whole-unit deltas constantly
-    once you move at any speed, so every swipe crossed that threshold
-    mid-gesture and sped up tenfold. The device is decided ONCE instead, by
-    whether a fractional delta has ever arrived, and never changes under a
-    gesture.
+    Pure, so the arithmetic is testable with no GL and no window - the same
+    reason `combobox_size` takes a `measure`.
     """
-    wheel = io.mouse_wheel
-    if not wheel:
-        return
-    if abs(wheel - round(wheel)) > 1e-4:
-        _PRECISE["seen"] = True
-    # `font_size` is injectable so the arithmetic is testable with no GL -
-    # the same reason `combobox_size` takes a `measure`.
-    fs = imgui.get_font_size() if font_size is None else font_size
-    io.mouse_wheel = wheel_px_per_unit() * wheel / (5.0 * max(fs, 1.0))
+    return px_per_unit * delta / max(step, 1e-6)
+
+
+def install_wheel(window, impl, *, log=None) -> None:
+    """Scale the wheel where it ENTERS, in the GLFW callback.
+
+    This is the only place it can be done, and finding that out cost a
+    shipped fix that never ran. The backend's `scroll_callback` calls
+    `io.add_mouse_wheel_event`, which QUEUES the event; `io.mouse_wheel` is
+    not populated until `imgui.new_frame()`, and ImGui applies the scrolling
+    during that same call. So code between `process_inputs()` and
+    `new_frame()` - which is where the first version lived - reads zero and
+    writes zero, every frame. Its unit test passed because it handed the
+    function a fake `io`, which is a lesson of its own: a pure function
+    tested in isolation says nothing about whether it is wired to anything.
+
+    WHAT A BROWSER DOES, measured. On macOS a trackpad sends pixel-precise
+    deltas and the browser applies them 1:1 with no smoothing of its own -
+    one 300px wheel lands at exactly 300 in a single step, checked in
+    Chromium. Inertia is the OS as well: AppKit keeps sending events with
+    `momentumPhase` set and decaying deltas after the finger lifts. So this
+    is only a scale factor, and momentum arrives for free if GLFW forwards
+    those events.
+
+    `log(dx, dy)` sees the RAW deltas, which is what `--wheel-probe` prints.
+    """
+    import glfw
+
+    def _cb(win, dx, dy):
+        if dx or dy:
+            if (abs(dy - round(dy)) > 1e-4) or (abs(dx - round(dx)) > 1e-4):
+                _PRECISE["seen"] = True
+            if log is not None:
+                log(dx, dy)
+            k = wheel_px_per_unit()
+            dx = scale_wheel(dx, _WHEEL["step"], k)
+            dy = scale_wheel(dy, _WHEEL["step"], k)
+        impl.io.add_mouse_wheel_event(dx, dy)
+
+    glfw.set_scroll_callback(window, _cb)
 
 
 FINE = 0.1          # Shift scales a drag to a tenth, as the panel's does

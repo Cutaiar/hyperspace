@@ -816,68 +816,61 @@ def test_a_region_with_no_border_gets_no_border_inset():
 # --------------------------------------------------------------------------
 # the wheel
 # --------------------------------------------------------------------------
-def test_the_wheel_has_no_discontinuity_under_a_gesture():
-    """What a browser does, measured: on macOS a trackpad sends
-    pixel-precise deltas and the browser applies them 1:1 with no smoothing
-    - one 300px wheel lands at exactly 300 in a single step, checked in
-    Chromium. So this is only a scale factor, and the one thing it must not
-    have is a step in it.
+def test_the_wheel_mapping_is_linear_with_no_cliff():
+    """The scale from raw delta to ImGui units must have no step in it.
 
     The first version decided per EVENT - a delta of 1.0 or more was "a
     notch" and got ten times the precise rate. A trackpad sends whole-unit
     deltas constantly once you move at any speed, so every swipe crossed
-    that threshold mid-gesture and sped up tenfold. That is what "still too
-    fast" was.
-
-    The device is decided ONCE now, by whether a fractional delta has ever
-    arrived. This checks the mapping is linear across the old threshold.
+    that threshold mid-gesture and sped up tenfold.
     """
     import interact as I
-
-    class _IO:
-        mouse_wheel = 0.0
-
-    io, font = _IO(), 18.2
-    step = 5.0 * font
-    I._PRECISE["seen"] = False
-    try:
-        # one fractional delta marks the device precise, for good
-        io.mouse_wheel = 0.3
-        I.tame_wheel(io, font_size=font)
-        assert I._PRECISE["seen"]
-
-        def px(raw):
-            io.mouse_wheel = raw
-            I.tame_wheel(io, font_size=font)
-            return io.mouse_wheel * step
-
-        # linear through the old 1.0 cliff, in both directions
-        for a, b in ((0.9, 1.0), (1.0, 1.1), (0.5, 1.5), (-0.9, -1.1)):
-            ra, rb = px(a) / a, px(b) / b
-            assert abs(ra - rb) < 1e-6, (
-                f"the rate changes between {a} and {b}: {ra} vs {rb}")
-        # and the rate is the precise one
-        assert abs(px(1.0) - T.SCROLL["px_per_unit"]) < 1e-6
-    finally:
-        I._PRECISE["seen"] = False
+    step = 5.0 * 18.2
+    k = T.SCROLL["px_per_unit"]
+    for a, b in ((0.9, 1.0), (1.0, 1.1), (0.5, 1.5), (-0.9, -1.1)):
+        ra = I.scale_wheel(a, step, k) / a
+        rb = I.scale_wheel(b, step, k) / b
+        assert abs(ra - rb) < 1e-9, f"the rate changes between {a} and {b}"
+    # and one unit of raw wheel moves px_per_unit pixels
+    assert abs(I.scale_wheel(1.0, step, k) * step - k) < 1e-9
 
 
-def test_a_notched_wheel_keeps_the_notch_rate():
-    """A device that has only ever sent whole units is a notched wheel, and
-    a browser gives one of those about 120px a tick, not 10."""
+def test_a_fractional_delta_marks_the_device_precise_for_good():
+    """A notched wheel only ever sends whole units, so one fractional delta
+    is proof of a trackpad - and the flag has to be STICKY, because a
+    trackpad sends plenty of whole-unit deltas mid-gesture."""
     import interact as I
-
-    class _IO:
-        mouse_wheel = 0.0
-
-    io, font = _IO(), 18.2
     I._PRECISE["seen"] = False
     try:
-        io.mouse_wheel = -1.0
-        I.tame_wheel(io, font_size=font)
-        assert abs(io.mouse_wheel * 5.0 * font + T.SCROLL["notch_px"]) < 1e-6
+        assert I.wheel_px_per_unit() == T.SCROLL["notch_px"]
+        I._PRECISE["seen"] = True
+        assert I.wheel_px_per_unit() == T.SCROLL["px_per_unit"]
     finally:
         I._PRECISE["seen"] = False
+
+
+def test_the_wheel_is_scaled_where_it_ENTERS_not_in_the_frame_loop():
+    """The bug this guards is that the first fix never ran at all.
+
+    The GLFW backend's `scroll_callback` calls `io.add_mouse_wheel_event`,
+    which QUEUES the event; `io.mouse_wheel` is not populated until
+    `imgui.new_frame()`, and ImGui applies the scrolling during that same
+    call. So code between `process_inputs()` and `new_frame()` reads zero
+    and writes zero, every frame - and its unit test passed anyway, because
+    it handed the function a fake `io`.
+
+    So this one asserts the WIRING: the frame loops install a scroll
+    callback and do not try to touch `io.mouse_wheel` themselves.
+    """
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent / "dashboard.py").read_text()
+    assert "I.install_wheel(" in src, \
+        "no scroll callback is installed - the wheel is unscaled"
+    assert "io.mouse_wheel" not in src, (
+        "dashboard.py touches io.mouse_wheel; outside a frame that is "
+        "always zero, which is how the first fix came to be a no-op")
+    assert src.count("I.note_wheel_step()") >= 2, \
+        "the px-per-unit step is not refreshed inside every frame loop"
 
 
 def test_the_scroll_rate_can_be_dialled_without_an_edit():

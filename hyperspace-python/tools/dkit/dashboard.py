@@ -864,11 +864,11 @@ def wheel_probe(theme_name: str, w: int, h: int) -> None:
     """Open the dashboard and print every raw wheel delta the OS sends.
 
     This exists because the scroll constant is the one number in the kit
-    that cannot be measured on this machine. `interact.tame_wheel` has to
-    turn `io.mouse_wheel` into pixels of finger travel, and how many units
-    a trackpad produces per point is a property of the GLFW build and the
-    platform - on macOS it comes out of `scrollingDeltaY` and a factor I
-    have only ever recalled, never checked.
+    that cannot be measured on this machine. The wheel has to be turned
+    into pixels of finger travel, and how many units a trackpad produces per
+    point is a property of the GLFW build and the platform - on macOS it
+    comes out of `scrollingDeltaY` and a factor I have only ever recalled,
+    never checked.
 
     Run it on the machine that can feel it, scroll once, and read three
     things off the output:
@@ -897,23 +897,24 @@ def wheel_probe(theme_name: str, w: int, h: int) -> None:
     print("wheel probe: scroll, then let go. Ctrl+C to stop.")
     print(f"{'t (ms)':>8}  {'raw':>10}  {'kind':>9}  {'-> px':>8}")
     t0 = time.perf_counter()
-    last = None
+    last = [None]
+
+    def _log(dx, dy):
+        now = (time.perf_counter() - t0) * 1000.0
+        gap = "" if last[0] is None else f"  (+{now - last[0]:.0f}ms)"
+        kind = "precise" if abs(dy - round(dy)) > 1e-4 else "whole"
+        print(f"{now:8.0f}  {dy:10.4f}  {kind:>9}  "
+              f"{I.wheel_px_per_unit() * dy:8.1f}{gap}", flush=True)
+        last[0] = now
+
+    # the ONLY place the wheel can be seen or scaled - see install_wheel
+    I.install_wheel(win, impl, log=_log)
     try:
         rects, last_size = None, None
         prev = time.perf_counter()
         while not glfw.window_should_close(win):
             glfw.poll_events()
             impl.process_inputs()
-            raw = io.mouse_wheel
-            if raw:
-                now = (time.perf_counter() - t0) * 1000.0
-                gap = "" if last is None else f"  (+{now - last:.0f}ms)"
-                kind = ("precise" if abs(raw - round(raw)) > 1e-4
-                        else "whole")
-                px = I.wheel_px_per_unit() * raw
-                print(f"{now:8.0f}  {raw:10.4f}  {kind:>9}  {px:8.1f}{gap}")
-                last = now
-            I.tame_wheel(io)
             now2 = time.perf_counter()
             dt = min(now2 - prev, 0.05)
             prev = now2
@@ -924,6 +925,7 @@ def wheel_probe(theme_name: str, w: int, h: int) -> None:
             if (lw, lh) != last_size:
                 rects, last_size = lay_out(lw, lh), (lw, lh)
             imgui.new_frame()
+            I.note_wheel_step()
             GL.glViewport(0, 0, fw, fh)
             _draw(ui, rects, lw, lh, series, state, bgc)
             imgui.render()
@@ -963,12 +965,11 @@ def live(theme_name: str, w: int, h: int) -> None:
     series = ticks()
     state = dict(CTL_STATE, tab=0, nav=0)
     ui = I.Ui(None, faces, theme, Anim(), grad, theme_name=theme_name)
+    I.install_wheel(win, impl)
     prev = time.perf_counter()
 
     try:
         _loop(win, impl, ui, state, series, bgc, prev)
-    except KeyboardInterrupt:
-        pass
     finally:
         impl.shutdown()
         imgui.destroy_context()
@@ -983,7 +984,6 @@ def _loop(win, impl, ui, state, series, bgc, prev) -> None:
     while not glfw.window_should_close(win):
         glfw.poll_events()
         impl.process_inputs()
-        I.tame_wheel(imgui.get_io())
         now = time.perf_counter()
         dt = min(now - prev, 0.05)          # a stall must not jump the easing
         prev = now
@@ -996,13 +996,25 @@ def _loop(win, impl, ui, state, series, bgc, prev) -> None:
             continue
         if (lw, lh) != last_size:
             rects, last_size = lay_out(lw, lh), (lw, lh)
-        imgui.new_frame()
-        GL.glViewport(0, 0, fw, fh)
-        _draw(ui, rects, lw, lh, series, state, bgc)
-        imgui.render()
-        impl.render(imgui.get_draw_data())
-        ui.frame_done(dt)
-        glfw.swap_buffers(win)
+        # Ctrl+C can land anywhere, and ImGui asserts "Forgot to call
+        # Render()" if the process tears down with a frame half open - a
+        # traceback about the wrong thing, on the way out. The frame is
+        # closed first and the loop returns normally.
+        try:
+            imgui.new_frame()
+            I.note_wheel_step()
+            GL.glViewport(0, 0, fw, fh)
+            _draw(ui, rects, lw, lh, series, state, bgc)
+            imgui.render()
+        except KeyboardInterrupt:
+            imgui.render()
+            return
+        try:
+            impl.render(imgui.get_draw_data())
+            ui.frame_done(dt)
+            glfw.swap_buffers(win)
+        except KeyboardInterrupt:
+            return
 
 
 def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
@@ -1078,7 +1090,6 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
         for i, mouse in enumerate(steps):
             glfw.poll_events()
             impl.process_inputs()
-            I.tame_wheel(imgui.get_io())
             if mouse is not None:
                 io.add_mouse_pos_event(float(mouse[0]), float(mouse[1]))
                 if len(mouse) > 2:            # (x, y, down) drives the button too

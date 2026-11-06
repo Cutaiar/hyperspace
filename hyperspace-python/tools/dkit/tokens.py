@@ -400,6 +400,15 @@ SCROLL = {
     # notch (one unit) then moves 10 px where a browser moves ~100, so
     # `notch_px` scales a unit-sized jump back up - a flick that arrives as
     # one big delta is still one gesture, not a hundred notches.
-    "px_per_unit": 10.0,
-    "notch_px": 100.0,
+    # SLOWEST SENSIBLE, as asked, and deliberately not a guess dressed up:
+    # 1 px per unit of raw wheel. If GLFW hands over a tenth of the finger's
+    # travel, as I have claimed from memory and never checked, this is a
+    # tenth of browser speed and wants dialling UP. `--wheel-probe` prints
+    # the raw deltas on a machine with a trackpad, and `DKIT_SCROLL_PX`
+    # changes this without an edit, so it can be found by feel and then
+    # written down here with a measurement beside it.
+    "px_per_unit": 1.0,
+    # A notched wheel, which only ever sends whole units: a browser gives
+    # one of those about 120 px a tick.
+    "notch_px": 120.0,
 }
