@@ -202,7 +202,20 @@ BUTTON_SIZES = {
 }
 
 BORDER_W = 1.0           # `border` on every variant, visible or not
-NUDGE = 1.0              # active:...:translate-y-px, measured as exactly +1 y
+# A DELIBERATE DEPARTURE, and the only one in this module.
+#
+# The real component does nudge: `active:not-aria-[haspopup]:translate-y-px`
+# reads back as `translate: 0px 1px` with the box's own rect moving 784.375
+# -> 785.375 while the mouse is held, measured on the current registry
+# button. aria-haspopup suppresses it so a dropdown trigger does not bounce.
+#
+# It is off here because it was asked for twice: once on ButtonGroup and
+# again on plain Buttons, and a kit that nudges in one place and not the
+# other is worse than one that is consistently either. Set this back to 1.0
+# to restore the browser's behaviour everywhere - that is the whole switch,
+# and `test_button.py` asserts against this constant rather than against a
+# literal 1.0 so it follows either way.
+NUDGE = 0.0
 UNDERLINE_OFFSET = SPACE[1]     # underline-offset-4
 UNDERLINE_W = 1.0        # measured at 14px only - see the note at the top
 

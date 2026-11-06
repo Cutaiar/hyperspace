@@ -230,9 +230,14 @@ def test_menu_items_are_accepted_too():
 # combobox_size — the panel's intrinsic height, through box.wants
 # --------------------------------------------------------------------------
 # Straight off the probe: the `combobox.open` panel is 220 x 176 with a
-# heading and three rows, and 220 x 112 once the query matches nothing.
+# heading and three rows.
+#
+# The empty figure was RE-measured on the real Base UI component, which is
+# not what the 112 above it came from: type a query that matches nothing and
+# the whole panel is 319 x 36, because `data-empty:p-0` collapses the list's
+# padding and the empty block (`py-2` on a 20px line) becomes the panel.
 BROWSER_PANEL_H = 176.0
-BROWSER_EMPTY_PANEL_H = 112.0
+BROWSER_EMPTY_PANEL_H = 36.0
 BROWSER_LIST_H = 132.0
 BROWSER_FIELD_BLOCK_H = 36.0
 
@@ -259,12 +264,12 @@ def test_the_panel_height_is_the_sum_the_browser_laid_out():
             + t["pad"]) == BROWSER_PANEL_H
 
 
-def test_an_empty_list_is_the_browsers_112():
-    """CommandEmpty is `py-6` on a 20px line box = 68, and it is a child of
-    the LIST, so it carries no group padding: 4 + 36 + 68 + 4."""
+def test_an_empty_list_is_the_browsers_thirty_six():
+    """`ComboboxEmpty` is `py-2` on a 20px line box = 36, and `data-empty:p-0`
+    takes the list's rails away, so the panel IS the empty block."""
     _w, h = C.combobox_size([], None, measure=mw, empty="Nothing found.")
     assert h == BROWSER_EMPTY_PANEL_H
-    assert C.COMBOBOX["empty_h"] == 68.0
+    assert C.COMBOBOX["empty_h"] == BROWSER_EMPTY_PANEL_H
 
 
 def test_a_query_that_filters_everything_out_shrinks_the_panel():
@@ -294,19 +299,26 @@ def test_a_long_list_clamps_at_max_h_72():
 
 
 def test_the_intrinsic_width_comes_from_the_widest_row():
-    """A row wants its text + px-2 either side + gap-2 + the 16px check,
-    and the panel adds the group's p-1 and the Command's p-1."""
+    """A row wants its text plus `pl-1.5 pr-8`, and the panel adds the
+    list's `p-1`. The group contributes nothing: measured on the real
+    component, the first row's x is the content's x + 4 and no more.
+
+    Every number is read out of the table rather than written here, so a
+    re-measurement moves the assertion with it.
+    """
+    t = C.combobox_table("light")
     src = items("XY", "Dodecahedron")
     w, _h = C.combobox_size(src, None, measure=mw)
-    row = mw("Dodecahedron") + 2 * 8.0 + 8.0 + 16.0
-    assert w == row + 2 * 4.0 + 2 * 4.0
+    row = mw("Dodecahedron") + t["row_pad_x"] + t["row_pad_r"]
+    assert w == row + 2 * t["pad"] + 2 * t["group_pad"]
 
 
 def test_a_heading_can_be_the_widest_thing_in_the_panel():
     src = [C.heading("A very long group heading"), *items("XY")]
     w, _h = C.combobox_size(src, None, measure=mw)
-    head = mw("A very long group heading") + 2 * 8.0
-    assert w == head + 2 * 4.0 + 2 * 4.0
+    t = C.combobox_table("light")
+    head = mw("A very long group heading") + 2 * t["head_pad_x"]
+    assert w == head + 2 * t["pad"] + 2 * t["group_pad"]
 
 
 def test_a_leading_icon_widens_a_row_by_the_icon_and_its_gap():
@@ -326,8 +338,10 @@ def test_min_w_is_a_floor_not_a_width():
 def test_the_search_field_contributes_no_width():
     """It is `w-full`: measured, the 220px panel's width came entirely from
     the recipe's `w-[220px]`, with the field stretching to fill it."""
+    t = C.combobox_table("light")
     narrow = C.combobox_size(items("X"), None, measure=mw)[0]
-    assert narrow == mw("X") + 2 * 8.0 + 8.0 + 16.0 + 16.0
+    assert narrow == (mw("X") + t["row_pad_x"] + t["row_pad_r"]
+                      + 2 * t["pad"] + 2 * t["group_pad"])
     assert narrow < 220.0
 
 
@@ -437,8 +451,18 @@ def test_the_search_placeholder_is_not_muted_foreground():
     assert T.INPUT["placeholder"] == ("muted-foreground", 1.0)
 
 
-def test_the_empty_state_is_not_muted_either():
-    assert C.COMBOBOX["empty_ink"] == ("popover-foreground", 1.0)
+def test_the_empty_state_is_muted_after_all():
+    """It WAS `popover-foreground` on the Popover+Command recipe, and this
+    test pinned that correctly. The real Base UI `ComboboxEmpty` carries
+    `text-muted-foreground`, measured as `oklch(0.556 0 0)` — which is what
+    muted-foreground resolves to in light.
+
+    Kept as a flipped assertion rather than deleted, because the thing worth
+    remembering is that a correct measurement of the wrong component is
+    still wrong."""
+    assert C.COMBOBOX["empty_ink"] == ("muted-foreground", 1.0)
+    assert T.rgba("muted-foreground", theme=T.LIGHT)[:3] != \
+        T.rgba("popover-foreground", theme=T.LIGHT)[:3]
 
 
 def test_the_search_fields_insets_are_the_measured_ones():
@@ -588,3 +612,88 @@ def test_the_panel_rows_are_menu_rows():
     assert t["item_h"] == M.ITEM_H == 28.0
     assert T.RADII[t["row_radius"]] == T.RADII["md"] == 8.0
     assert t["row_pad_x"] == M.ITEM_PAD_X == 6.0
+
+
+# --------------------------------------------------------------------------
+# the row, re-measured on the REAL combobox-item
+# --------------------------------------------------------------------------
+# `node /tmp/cb.js` against `?probe`, `[data-slot="combobox-item"]`:
+#
+#     content   319 x 120 @ 25,2531   radius 10   padding 0
+#     list      319 x 120 @ 25,2531   padding 4   max-height 252px
+#               offsetWidth - clientWidth == 0   <- no scrollbar, ever
+#     item[0]   311 x  28 @ 29,2535   radius 8    padding 4/32/4/6
+#     indicator span 16 wide, 287 from the row's left, 8 from its right
+#
+# Three of those the kit had wrong: it drew the row with 8 of padding on
+# BOTH sides (so the check crowded the row's edge and a long label ran
+# under it), rounded it by 6 rather than 8, and nested a p-1 group inside
+# the p-1 list so every row was inset 8 instead of 4.
+BROWSER_ITEM = {
+    "content_w": 319.0, "list_pad": 4.0, "item_w": 311.0, "item_h": 28.0,
+    "item_radius": 8.0, "pad_t": 4.0, "pad_r": 32.0, "pad_b": 4.0,
+    "pad_l": 6.0, "indicator_w": 16.0, "indicator_right": 8.0,
+    "list_max_h": 252.0, "scrollbar_w": 0.0,
+}
+
+
+def test_a_row_is_inset_from_the_panel_by_the_lists_padding_alone():
+    """311 = 319 - 2x4. The group adds nothing."""
+    t = C.combobox_table("light")
+    inset = (BROWSER_ITEM["content_w"] - BROWSER_ITEM["item_w"]) / 2
+    assert inset == BROWSER_ITEM["list_pad"]
+    assert t["pad"] + t["group_pad"] == inset
+
+
+def test_the_rows_padding_is_six_left_and_thirty_two_right():
+    """`pl-1.5 pr-8`. The asymmetry is the point: the right pad is what
+    reserves room for the ItemIndicator, which is absolutely positioned and
+    so takes no space of its own."""
+    t = C.combobox_table("light")
+    assert t["row_pad_x"] == BROWSER_ITEM["pad_l"]
+    assert t["row_pad_r"] == BROWSER_ITEM["pad_r"]
+    assert t["row_pad_r"] > t["row_pad_x"]
+
+
+def test_the_check_sits_eight_from_the_rows_right_edge():
+    """`absolute right-2` on a `size-4` span - the indicator's RIGHT edge is
+    8 in, so a 16px glyph starts 24 in. The kit placed it at
+    `row.right - padding - 16` with padding 8, which put it 8 from the edge
+    by coincidence of the old numbers and would have drifted the moment
+    either moved."""
+    t = C.combobox_table("light")
+    assert t["check"] == BROWSER_ITEM["indicator_w"]
+    assert t["check_gap"] == BROWSER_ITEM["indicator_right"]
+    row_w = BROWSER_ITEM["item_w"]
+    icon_x = row_w - t["check_gap"] - t["check"]
+    assert icon_x == 311.0 - 24.0            # the measured 287
+    assert row_w - (icon_x + t["check"]) == BROWSER_ITEM["indicator_right"]
+
+
+def test_a_label_stops_at_the_right_padding_not_at_the_check():
+    """The reserved strip is `pr-8` = 32 whether or not the row is checked,
+    because the indicator is out of flow. A label clipped at the CHECK
+    instead would reflow the moment a row became selected."""
+    t = C.combobox_table("light")
+    row_w = BROWSER_ITEM["item_w"]
+    avail = row_w - t["row_pad_r"] - t["row_pad_x"]
+    assert avail == 311.0 - 32.0 - 6.0
+    # and that is strictly less than the room up to the check, so the label
+    # can never touch it
+    assert t["row_pad_r"] > t["check_gap"] + t["check"] - 8.0
+
+
+def test_the_row_radius_is_rounded_md():
+    t = C.combobox_table("light")
+    assert T.RADII[t["row_radius"]] == BROWSER_ITEM["item_radius"]
+
+
+def test_the_list_clamps_rather_than_growing():
+    """`max-height: 252px` with `overflow-y: auto`. Sixteen rows measured
+    456 of content in a 252 box - it scrolls, it does not grow."""
+    t = C.combobox_table("light")
+    assert t["list_max_h"] == BROWSER_ITEM["list_max_h"]
+    tall = items(*[f"Row {i}" for i in range(16)])
+    _w, h = C.combobox_size(tall, None, measure=mw)
+    assert C.list_content_h(tall, t) > t["list_max_h"]
+    assert h == t["list_max_h"] + 2 * t["pad"]

@@ -283,9 +283,13 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
       </P>
 
       {/* ---- The REAL Combobox: Base UI, and the trigger IS the input.
-           Not the old Popover+Command recipe. ---- */}
+           Not the old Popover+Command recipe.
+
+           `defaultValue` so an ItemIndicator is actually rendered - the
+           check's inset is one of the numbers the kit got wrong, and with
+           nothing selected there is no check to measure. ---- */}
       <P id="combobox.real" w={320}>
-        <Combobox items={["Dodecahedron", "Great Dodecahedron", "Tesseract", "Grand antiprism"]} open>
+        <Combobox items={["Dodecahedron", "Great Dodecahedron", "Tesseract", "Grand antiprism"]} open defaultValue="Tesseract">
           <ComboboxInput placeholder="Filter planes" />
           <ComboboxContent>
             <ComboboxEmpty>No such plane.</ComboboxEmpty>
@@ -297,6 +301,32 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
           </ComboboxContent>
         </Combobox>
       </P>
+
+      {/* ---- A combobox with more items than fit, pinned near the bottom of
+           the viewport. The question this answers is what Base UI does when
+           the list does not fit below: FLIP to the other side, or CAP to
+           `--available-height` and scroll inside. The kit flips, and the
+           panel jumps from above the field to below it the moment filtering
+           shrinks it, which is the bug this block exists to settle. ---- */}
+      <div data-probe-tight style={{ position: "fixed", left: 600, bottom: 90, width: 320, zIndex: 1 }}>
+        <div data-probe="combobox.tight" style={{ width: 320 }}>
+          <Combobox
+            items={["Alpha","Beta","Gamma","Delta","Epsilon","Zeta","Eta","Theta",
+                    "Iota","Kappa","Lambda","Mu","Nu","Xi","Omicron","Pi"]}
+            open
+          >
+            <ComboboxInput placeholder="Many" />
+            <ComboboxContent>
+              <ComboboxEmpty>None.</ComboboxEmpty>
+              <ComboboxList>
+                {(item: string) => (
+                  <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
+        </div>
+      </div>
 
       {/* ---- Tooltip, forced open ---- */}
       <P id="tooltip.open">

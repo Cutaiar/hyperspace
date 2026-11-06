@@ -192,6 +192,14 @@ def badge_table(theme_name: str) -> dict:
 # shadcn's focus/hover ring: `ring-3` is a 3px box-shadow spread, outside the
 # border box, and CSS clips an outer shadow so it never paints under the
 # element. See draw.ring.
+# Chromium's own text-selection highlight, which is what a shadcn app gets:
+# nothing in the registry declares `::selection`, so the UA default stands.
+# Measured on a focused Input with its value selected, in BOTH themes —
+# `rgba(0, 65, 198, 0.8)`, which composites to (51,103,209) over white and
+# (4,56,162) over #151515. ImGui's own default is a paler, bluer
+# (0.26, 0.59, 0.98, 0.35) and reads nothing like it.
+SELECTION = (0.0, 65 / 255.0, 198 / 255.0, 0.8)
+
 RING_W = 3.0
 
 SLIDER = {

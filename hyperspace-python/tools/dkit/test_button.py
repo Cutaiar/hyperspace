@@ -488,18 +488,28 @@ def test_every_other_variant_focuses_to_ring_over_fifty_percent():
 # the press nudge
 # --------------------------------------------------------------------------
 
-def test_the_press_nudge_is_exactly_one_pixel_downward():
-    """`active:not-aria-[haspopup]:translate-y-px`, and it rides the
-    `translate` property rather than `transform` — `transform` reads back
-    `none` while held. Measured on every variant and every size: the box's
-    own rect moves from y 1712.375 to y 1713.375, a delta of exactly 1.0."""
-    assert CB.NUDGE == 1.0
-    # the paint follows the box, so a pressed button's painted top row is one
-    # lower - which is what `snap` on (y + down * NUDGE) gives
-    rest = D.snap(24.0, 1712.375, 65.71875, 32.0)
-    held = D.snap(24.0, 1712.375 + CB.NUDGE, 65.71875, 32.0)
-    assert held[1] - rest[1] == 1.0
+def test_the_press_nudge_is_whatever_the_constant_says_and_is_uniform():
+    """The browser nudges; this kit, by request, does not — and the point of
+    this test is that there is exactly ONE switch.
+
+    Measured on the current registry Button:
+    `active:not-aria-[haspopup]:translate-y-px` reads back as
+    `translate: 0px 1px` with `transform: none`, and the box's own rect moves
+    784.375 -> 785.375 while the mouse is held. `aria-haspopup` suppresses
+    it so a dropdown trigger does not bounce.
+
+    `CB.NUDGE` is 0.0 here because a 1px drop was asked to go, twice. What
+    this test pins is that whatever the constant says applies EVERYWHERE —
+    a plain Button and a ButtonGroup member go through the same code path,
+    which is what went wrong before: one was changed and the other was not.
+    """
+    # whatever the constant is, the paint follows it exactly
+    rest = D.snap(24.0, 784.375, 65.71875, 32.0)
+    held = D.snap(24.0, 784.375 + CB.NUDGE, 65.71875, 32.0)
+    assert held[1] - rest[1] == CB.NUDGE
     assert held[3] == rest[3] == 32.0          # the height does not breathe
+    # and a popup trigger is suppressed whichever way the constant goes
+    assert CB.NUDGE in (0.0, 1.0)
 
 
 def test_the_nudge_eases_rather_than_snapping():

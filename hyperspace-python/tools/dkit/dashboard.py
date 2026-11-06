@@ -865,7 +865,11 @@ def _draw(ui_box, rects, w, h, series, state, bgc):
     # (hyperspace/replay.py:91) only carries the page window's own list into
     # the canvas tap
     ui_box.dl = imgui.get_window_draw_list()
-    paint(ui_box, rects, w, h, series, state)
+    # One place where ImGui's stock focus rectangle and text selection are
+    # replaced by the kit's. A popup opened inside `paint` is a separate
+    # window but the style stack is global, so this covers those too.
+    with I.chrome(ui_box):
+        paint(ui_box, rects, w, h, series, state)
     imgui.end()
     imgui.pop_style_var(2)
     return ui_box

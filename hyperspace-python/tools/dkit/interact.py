@@ -26,6 +26,7 @@ from imgui_bundle import imgui
 import draw as D
 import tokens as T
 from ease import Anim, mix
+from contextlib import contextmanager
 
 
 @dataclass
@@ -305,6 +306,33 @@ def row_action(ui: Ui, key, x, y, size, icon, row_hot: float, *,
 # the param model rather than to the chrome; the kit follows that.
 
 
+@contextmanager
+def chrome(ui: Ui):
+    """Hold the imgui style settings the kit overrides, for a whole frame.
+
+    Two of ImGui's stock colours are visible through every widget the kit
+    wraps and neither has any counterpart in shadcn:
+
+      * **`nav_cursor`** — the blue rectangle ImGui draws around whatever
+        has keyboard focus. shadcn's focus affordance is the ring this kit
+        draws itself (`draw.ring`), on `:focus-visible` only, and the two
+        on screen together read as a bug.
+      * **`text_selected_bg`** — ImGui's is `(0.26, 0.59, 0.98, 0.35)`. The
+        browser's, measured, is `tokens.SELECTION`.
+
+    Putting them here rather than in each component is the point: a widget
+    that forgets is still right, and there is one place to change when a
+    measurement moves.
+    """
+    imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
+    imgui.push_style_color(imgui.Col_.text_selected_bg,
+                           imgui.ImVec4(*T.SELECTION))
+    try:
+        yield ui
+    finally:
+        imgui.pop_style_color(2)
+
+
 def _sandwich_begin(ui: Ui, clear_grab: bool = True) -> list:
     """Split the draw list and make the stock widget's own chrome invisible.
 
@@ -320,6 +348,12 @@ def _sandwich_begin(ui: Ui, clear_grab: bool = True) -> list:
     clear = imgui.ImVec4(0, 0, 0, 0)
     for c in cols:
         imgui.push_style_color(c, clear)
+    # `nav_cursor` is ImGui's blue focus rectangle. No shadcn component has
+    # one: focus is a ring the kit draws itself, and only on `focus-visible`.
+    # It is cleared here as well as in `chrome()` so a component used on its
+    # own - in a test, in the gallery - is never ringed in blue either.
+    imgui.push_style_color(imgui.Col_.nav_cursor, clear)
+    cols = cols + [imgui.Col_.nav_cursor]
     return cols
 
 
@@ -590,12 +624,11 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
 # ScrollArea
 # --------------------------------------------------------------------------
 
-from contextlib import contextmanager  # noqa: E402
 
 
 @contextmanager
 def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
-                backdrop=None, always=False, pad=0.0):
+                backdrop=None, always=False, pad=0.0, bars=True):
     """A scrolling region with shadcn's overlay scrollbar.
 
     ImGui's `begin_child` supplies the MECHANISM - the wheel, the clipping,
@@ -669,8 +702,14 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
         has = smax > 0.5
         show = ui.anim.to(f"{key}:bar",
                           1.0 if (always or hovered) and has else 0.0)
-        D.scroll_bar(ui.dl, x, y, w, h, h, h + smax, sy, ui.theme,
-                     alpha=show)
+        # `bars=False` is not a shortcut: shadcn's Combobox list carries
+        # `no-scrollbar`, measured as `offsetWidth - clientWidth == 0` in
+        # every state including one scrolled by 204px. That list scrolls
+        # and shows nothing, and a thumb easing in over it is the kit
+        # inventing an affordance the component does not have.
+        if bars:
+            D.scroll_bar(ui.dl, x, y, w, h, h, h + smax, sy, ui.theme,
+                         alpha=show)
         ui.scroll[key] = (sy, smax)
 
 

@@ -187,10 +187,19 @@ COMBOBOX = {
     "side_offset": T.SPACE[1.5],          # sideOffset 6, not the Select's 4
     # the panel's rows are MENU rows: h 28, rounded-md, px 6, gap 8 - all
     # three measured equal to menu.py's, so they are not restated here
+    # Measured on `[data-slot="combobox-item"]`, which is NOT menu.py's row
+    # and NOT the old Command recipe's: h 28, `rounded-md` 8, and padding
+    # `4px 32px 4px 6px` — six on the left and THIRTY-TWO on the right. The
+    # right pad is what keeps the label clear of the ItemIndicator, which is
+    # a 16px span whose right edge sits 8px from the row's (`absolute
+    # right-2`, `size-4`). The kit drew both sides at 8, so the check
+    # crowded the row's edge and long labels ran under it.
     "row_h": 28.0,
-    "row_radius": "md",
-    "row_pad_x": T.SPACE[1.5],
+    "row_radius": "md",                   # 8, not the Command recipe's 6
+    "row_pad_x": T.SPACE[1.5],            # pl-1.5 = 6
+    "row_pad_r": T.SPACE[8],              # pr-8 = 32
     "row_gap": T.SPACE[2],
+    "check_gap": T.SPACE[2],              # the indicator's `right-2` = 8
     "list_pad": T.SPACE[1],               # p-1
     "list_max_h": 252.0,                  # max-h measured
     # ---- the old recipe's trigger, kept for reference --------------------
@@ -262,7 +271,12 @@ COMBOBOX = {
     "_old_recipe_list_max_h": 288.0,      # max-h-72
 
     # ---- CommandGroup ---------------------------------------------------
-    "group_pad": T.SPACE[1],              # p-1
+    # The Base UI `ComboboxGroup` carries NO padding of its own — measured,
+    # the first row's x is the content's x + 4, which is the LIST's `p-1`
+    # and nothing else. The old Command recipe nested a p-1 group inside a
+    # p-1 list, so every row was inset 8 and two rows' worth of width went
+    # missing.
+    "group_pad": 0.0,
     "head_h": 28.0,                       # py-1.5 on a 16px line box
     "head_pad_x": T.SPACE[2],             # px-2
     "head_font": 12.0,                    # text-xs
@@ -295,10 +309,19 @@ COMBOBOX = {
     "sep_h": 1.0,
     "sep_col": ("border", 1.0),
 
-    # ---- CommandEmpty ---------------------------------------------------
-    "empty_h": 68.0,                      # py-6 on a 20px line box
+    # ---- ComboboxEmpty --------------------------------------------------
+    # Re-measured on the real component with a query that matches nothing:
+    # the whole panel is 319x36, the LIST collapses to zero height and zero
+    # padding (`data-empty:p-0`), and the empty block is the panel - 36 tall
+    # from `py-2` on a 20px line box, full width, centred, in
+    # `muted-foreground` (oklch(0.556 0 0)).
+    #
+    # The old numbers - 68 tall from `py-6`, in popover-foreground, inside
+    # the list's padding - were the Popover+Command recipe's, and they
+    # survived the rewrite because nothing asked the empty panel its height.
+    "empty_h": 36.0,                      # py-2 on a 20px line box
     "empty_font": 14.0,                   # text-sm
-    "empty_ink": ("popover-foreground", 1.0),   # NOT muted-foreground
+    "empty_ink": ("muted-foreground", 1.0),
 }
 
 # The only values that move with the theme, and all four are the trigger's.
@@ -321,6 +344,10 @@ def combobox_table(theme_name: str) -> dict:
         t.update(COMBOBOX_DARK)
     return t
 
+
+# The margin a popover keeps off the viewport edge - floating-ui's own
+# `padding`, and `box.place_popover`'s default.
+VP_PAD = T.SPACE[2]
 
 # Where each panel was last drawn, keyed by popup id — the same seam
 # menu.LAST_RECT is, and for the same reason: ImGui places the popup, so a
@@ -658,10 +685,10 @@ def _rows_node(items, mw, tbl, *, empty: str = "") -> B.Node:
                                  measure=lambda w=tw: (w, tbl["head_h"])))
             continue
         g = group if group is not None else open_group()
-        lead = ((tbl["field_icon"] + tbl["item_gap"])
+        lead = ((tbl["field_icon"] + tbl["row_gap"])
                 if _k(it, "icon", "") else 0.0)
         tw = (mw(_k(it, "label", ""), "regular", tbl["item_font"]) + lead
-              + 2 * tbl["item_pad_x"] + tbl["item_gap"] + tbl["check"])
+              + tbl["row_pad_x"] + tbl["row_pad_r"])
         g.kids.append(B.Node(h=tbl["item_h"], key=("row", i),
                              measure=lambda w=tw: (w, tbl["item_h"])))
 
@@ -693,10 +720,18 @@ def combobox_size(items, faces, *, min_w: float = 0.0, measure=None,
     tbl = combobox_table(theme_name)
     mw = measure or (lambda s, v, size: D.text_w(s, faces, v, size))
     cw, ch = B.wants(_rows_node(items, mw, tbl, empty=empty))
-    pad, fp = tbl["pad"], tbl["field_pad"]
+    pad = tbl["pad"]
+    # NO search field. The panel is the list and the list's padding, because
+    # the field IS the trigger — that is the whole shape of the real Base UI
+    # component. This function went on reserving `field_h + field_pad` after
+    # `combobox()` stopped drawing one, so the panel it predicted was 36 px
+    # taller than the panel the widget drew. Nothing caught it until a test
+    # asked both halves the same question.
+    # `data-empty:p-0` on the list: with nothing to show, the panel IS the
+    # empty block - 36 tall, no 4px rails. Measured.
+    if not any(_is_row(it) for it in items):
+        pad = 0.0
     panel = B.Node(dir="column", pad=(pad, pad, pad, pad), kids=[
-        # the input wrapper's `p-1 pb-0` over an h-8 field
-        B.Node(pad=(fp, fp, 0.0, fp), kids=[B.Node(h=tbl["field_h"])]),
         B.Node(w=cw, h=min(ch, tbl["list_max_h"])),
     ])
     w, h = B.wants(panel)
@@ -867,20 +902,25 @@ def _row(ui, it, r, key, tbl, *, selected: bool, checked: bool) -> bool:
     dim = 1.0 if enabled else tbl["item_disabled_opacity"]
     if selected and enabled:
         D.fill(ui.dl, *D.snap(r.x, r.y, r.w, r.h),
-               _col(ui, tbl["item_sel_bg"]), T.RADII[tbl["item_radius"]])
+               _col(ui, tbl["item_sel_bg"]), T.RADII[tbl["row_radius"]])
     ink = _col(ui, tbl["item_sel_ink"] if selected else tbl["item_ink"], dim)
 
-    tx = r.x + tbl["item_pad_x"]
+    tx = r.x + tbl["row_pad_x"]
     cs = tbl["check"]
     if _k(it, "icon", ""):
         g = tbl["field_icon"]
         D.icon(ui.dl, _k(it, "icon", ""), tx, r.y + (r.h - g) / 2.0, g, ink)
-        tx += g + tbl["item_gap"]
+        tx += g + tbl["row_gap"]
+    # `pr-8` is the label's limit whether or not this row is checked: the
+    # indicator is absolutely positioned, so it takes the row out of flow
+    # and the padding is what reserves its space.
     D.label(ui.dl, tx, r.y, _k(it, "label", ""), ui.faces, "regular",
             tbl["item_font"], ink, baseline_box=r.h,
-            max_w=r.x + r.w - tbl["item_pad_x"] - cs - tbl["item_gap"] - tx)
+            max_w=r.x + r.w - tbl["row_pad_r"] - tx)
     if checked:
-        D.icon(ui.dl, "check", r.x + r.w - tbl["item_pad_x"] - cs,
+        # `absolute right-2` on a `size-4` span: the check's RIGHT edge is
+        # 8 from the row's, not its left edge 8 in from the padding.
+        D.icon(ui.dl, "check", r.x + r.w - tbl["check_gap"] - cs,
                r.y + (r.h - cs) / 2.0, cs, _col(ui, tbl["check_ink"], dim))
     return bool(st and st.clicked)
 
@@ -894,7 +934,7 @@ def _state(ui, key) -> dict:
     """
     return ui.anim.store.setdefault("combobox", {}).setdefault(
         key, {"q": "", "sel": 0, "focus": True, "typed": False,
-              "was_focused": False})
+              "was_focused": False, "side": ""})
 
 
 def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
@@ -1028,6 +1068,7 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         LAST_RECT.pop(pid, None)
         ui.anim.to(f"{pid}:open", 0.0)
         s["typed"] = False               # the field goes back to the value
+        s["side"] = ""                   # decided afresh on the next open
         return None, False
 
     # filtered on what is IN the field, unless it still holds the value
@@ -1039,9 +1080,35 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
 
     pad = tbl["pad"]
     ch = list_content_h(shown, tbl)
-    lh = min(ch, tbl["list_max_h"])
+
+    # --- which side, and how tall ------------------------------------------
+    # Measured on the real component, 16 items pinned 90px from the bottom of
+    # a 900px viewport: it opens on `side="top"`, its list clamps to
+    # `max-height: 252px` and SCROLLS, and when a filter cuts it to one row
+    # the panel keeps side=top - the near edge stays 6px off the field and
+    # only the far edge moves. It does not hop to the other side.
+    #
+    # The kit re-ran the placement every frame against the current content
+    # height, so the first keystroke shrank the panel, the shrunken panel
+    # suddenly fitted below, and it jumped from above the field to below it
+    # mid-word. The side is decided ONCE, when the popup opens, and kept -
+    # which is also what `--available-height` is for: a panel that clamps
+    # never needs to flip.
+    vp = ui.viewport
+    room_below = vp.bottom - VP_PAD - (y + hh + tbl["side_offset"])
+    room_above = (y - tbl["side_offset"]) - (vp.y + VP_PAD)
+    if not s.get("side"):
+        s["side"] = ("bottom" if room_below >= min(ch + 2 * pad,
+                                                   tbl["list_max_h"])
+                     or room_below >= room_above else "top")
+    room = room_below if s["side"] == "bottom" else room_above
+    # `data-empty:p-0`: with nothing to show the list collapses and the
+    # panel is exactly the empty block. Measured at 319x36.
+    if not rows:
+        pad = 0.0
     # no search row: the panel is the list and its padding, because the
     # search field IS the trigger
+    lh = max(tbl["row_h"], min(ch, tbl["list_max_h"], room - 2 * pad))
     ph = pad + lh + pad
 
     # The popup spans the TRIGGER as well as the panel. ImGui gives a popup
@@ -1052,8 +1119,8 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     # be. Base UI has the same field doing both jobs; this is how that works
     # on ImGui's popup stack.
     at, _side = B.place_popover(B.Rect(x, y, w, hh), w, ph, ui.viewport,
-                                side="bottom", align=tbl["align"],
-                                offset=tbl["side_offset"])
+                                side=s["side"], align=tbl["align"],
+                                offset=tbl["side_offset"], pad=VP_PAD)
     win_y = min(at.y, y)
     win_h = (at.y + ph) - win_y
     # Radix rounds its own transform, so the panel's origin is integral and
@@ -1097,7 +1164,11 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
                 s["sel"] = (s["sel"] - 1) % len(rows)
 
         lx, ly, lw = px + pad, py + pad, w - 2 * pad
-        with I.scroll_area(ui, f"{key}.list", lx, ly, lw, lh, ch) as view:
+        # `no-scrollbar` on the real list, measured as a zero-width
+        # scrollbar in every state - including one scrolled 204px. It
+        # scrolls and shows nothing.
+        with I.scroll_area(ui, f"{key}.list", lx, ly, lw, lh, ch,
+                           bars=False) as view:
             node = _rows_node(shown, lambda *a: 0.0, tbl, empty=empty)
             place = B.lay(node, B.Rect(view.x, view.y, view.w, ch))
 

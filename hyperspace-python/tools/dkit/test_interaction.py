@@ -671,3 +671,110 @@ def test_a_mouse_click_leaves_no_focus_ring(DB):
     band = (slice(int(ry) - 6, int(ry) - 1), slice(int(x) - 40, int(x) + 40))
     assert np.array_equal(before[band], after[band]), (
         "a mouse click left a focus ring behind")
+
+
+def test_the_combobox_panel_keeps_its_side_while_you_type(DB):
+    """It opens on one side and stays there. Measured on the real component:
+    16 items pinned 90px from the bottom of a 900px viewport open on
+    `side="top"`, and a filter that cuts them to one leaves it on top —
+    the panel's near edge stays 6px off the field and only the far edge
+    moves.
+
+    The kit re-ran the placement every frame against the current content
+    height, so the first keystroke shrank the panel, the shrunken panel
+    suddenly fitted below, and it hopped across the field mid-word.
+
+    Driven in a SHORT window, which is the configuration that made it hop:
+    the control sits 48px off the bottom, so the full list cannot fit below
+    it but a one-row list can.
+    """
+    import comp_combobox as CC
+    SH = 820
+    rr = DB.lay_out(W, SH)
+    rx, ry, _rw, rh = rr.ctl_rows[5]
+    x, y = rx + DB.CTL_LABEL_W + 40, ry + rh / 2
+    assert SH - (ry + 32) < 120.0, "the control is not near the bottom"
+
+    openit = [(x, y)] * 8 + [(x, y, True)] * 2 + [(x, y, False)] * 40
+    DB.render("dark", W, SH, script=openit)
+    first = CC.LAST_RECT.get("##cb.ctl.find")
+    assert first, "the combobox panel did not open"
+    above_at_rest = first[1] + first[3] <= ry + 1.0
+
+    typed = openit + [(x, y)] * 50
+    DB.render("dark", W, SH, script=typed,
+              keys=[(len(openit) + 4, "y"), (len(openit) + 12, "w")])
+    after = CC.LAST_RECT.get("##cb.ctl.find")
+    assert after, "the panel closed while typing"
+    assert after[3] < first[3] - 20.0, "the list did not narrow"
+    above_when_short = after[1] + after[3] <= ry + 1.0
+    assert above_at_rest == above_when_short, (
+        f"the panel changed sides while filtering: was "
+        f"{'above' if above_at_rest else 'below'} at y={first[1]}, "
+        f"is {'above' if above_when_short else 'below'} at y={after[1]}")
+
+
+def test_the_combobox_panel_hugs_the_field_on_whichever_side(DB):
+    """`sideOffset: 6`, measured, and it holds after a filter: the gap
+    between the panel's near edge and the field is the same number before
+    and after."""
+    import comp_combobox as CC
+    import comp_combobox as _CC
+    tbl = _CC.combobox_table("dark")
+    SH = 820
+    rr = DB.lay_out(W, SH)
+    rx, ry, _rw, rh = rr.ctl_rows[5]
+    x, y = rx + DB.CTL_LABEL_W + 40, ry + rh / 2
+    openit = [(x, y)] * 8 + [(x, y, True)] * 2 + [(x, y, False)] * 40
+    DB.render("dark", W, SH, script=openit)
+    a = CC.LAST_RECT["##cb.ctl.find"]
+    typed = openit + [(x, y)] * 50
+    DB.render("dark", W, SH, script=typed,
+              keys=[(len(openit) + 4, "y"), (len(openit) + 12, "w")])
+    b = CC.LAST_RECT["##cb.ctl.find"]
+    for r in (a, b):
+        gap = (ry - (r[1] + r[3])) if r[1] < ry else (r[1] - (ry + 32.0))
+        assert abs(gap - tbl["side_offset"]) <= 0.5, (
+            f"panel at y={r[1]} h={r[3]} is {gap} off a field at {ry}, "
+            f"not {tbl['side_offset']}")
+
+
+def test_the_combobox_list_draws_no_scrollbar(DB):
+    """`no-scrollbar` on the real list, measured as `offsetWidth -
+    clientWidth == 0` in every state — including one scrolled 204px with
+    456px of content in a 252px box. It scrolls and shows nothing.
+
+    Asserted at the CALL, not on pixels. The pixel version of this test
+    passed against the broken code: the dashboard's combobox holds six
+    planes, 168px of rows in a 252px clamp, so nothing overflows and no
+    thumb would have been drawn either way. A test that cannot fail is
+    worse than no test, so this one watches the argument instead and is
+    true whatever the demo happens to hold.
+    """
+    import comp_combobox as CC
+    import interact as I
+
+    seen = []
+    real = I.scroll_area
+
+    def spy(ui, key, x, y, w, h, content_h, **kw):
+        seen.append((key, kw.get("bars", True)))
+        return real(ui, key, x, y, w, h, content_h, **kw)
+
+    rx, ry, _rw, rh = DB.lay_out(W, H).ctl_rows[5]
+    x, y = rx + DB.CTL_LABEL_W + 40, ry + rh / 2
+    openit = [(x, y)] * 8 + [(x, y, True)] * 2 + [(x, y, False)] * DWELL
+    I.scroll_area = spy
+    try:
+        DB.render("dark", W, H, script=openit)
+    finally:
+        I.scroll_area = real
+    assert CC.LAST_RECT.get("##cb.ctl.find"), "the combobox panel did not open"
+    lists = [bars for key, bars in seen if key.endswith(".list")]
+    assert lists, f"the combobox did not open a scroll area: {seen}"
+    assert not any(lists), (
+        f"the combobox list asked for scrollbars: {lists}")
+    # and the page's own scroll area still has one, so this is a
+    # per-region decision rather than the kit losing its scrollbars
+    assert any(bars for key, bars in seen if not key.endswith(".list")), \
+        f"nothing else drew a scrollbar: {seen}"
