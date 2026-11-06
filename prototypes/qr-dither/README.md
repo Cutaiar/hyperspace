@@ -14,13 +14,17 @@ way every other QR-art tool works — the picture **is** the payload, with zero
 corrected errors. The filler lands in a `#fragment`, which the browser
 discards, so no DNS or redirect is involved.
 
-## Open it
+## Get started
 
 ```sh
 cd web && python3 -m http.server 8777
 ```
 
-then <http://127.0.0.1:8777>. Four tabs:
+Open <http://127.0.0.1:8777>. That is the entire run process for *looking* at it:
+no install, no build step, no package manager. A `file://` open will not work —
+the pages `fetch` their data and use ES modules, and both need an origin.
+
+Four tabs:
 
 - **live solver** — re-derives the whole code per update, **0.2 ms** a solve.
 - **sprite** — 216 precomputed frames, 106 KB, every one decode-verified.
@@ -28,7 +32,27 @@ then <http://127.0.0.1:8777>. Four tabs:
 - **gallery** — 29 stills across eight 4D subjects, seven dot styles and six
   palettes. Click one to fill the screen and scan it.
 
-A `file://` open will not work: the pages `fetch` their data.
+Nothing is generated at page load. `web/` holds finished artefacts, and each is
+rebuilt by one command:
+
+```sh
+uv run --with pyqart --with pillow --with numpy --with zxing-cpp \
+  python3 gen/gallery.py --url https://hyperspace.cutaiar.io
+```
+
+`uv` resolves the dependencies per run, so there is no virtualenv to create or
+activate. That one also shells out to headless Chrome, which it uses to check
+its own output; it fails loudly if Chrome is not where it expects.
+
+## Architecture
+
+![Python generators write static artefacts; the browser only reads them](shots/architecture.svg)
+
+Two layers that meet at `web/`. Solving is slow, offline and rare; viewing is
+static and has no dependencies at all. The one asymmetry worth knowing is that
+only `export_js.py` takes the fast path through `basis.py` — everything else
+calls pyqart directly and pays the ~2 s elimination per image, which is fine
+for a still and impossible for a frame.
 
 ## What makes it live
 
