@@ -1,11 +1,11 @@
-"""The app's preset half with no window, no audio and no GL: the registry,
+"""The app's loadable patch half with no window, no audio and no GL: the registry,
 the library, the router (with the LFO, envelope and sequencer banks) and
-`preset.Presets`, as app.main wires them — what the tests load and save
-presets through (tests/test_plan31_wiring.make_app) and what
+`loadable.LoadedPatch`, as app.main wires them — what the tests load and save
+loadable patches through (tests/test_plan31_wiring.make_app) and what
 tools/migrate_library.py rewrites a library with (row 394).
 
 `resave` is the one road a file takes there: copied into a scratch library
-as a user's preset, loaded by the library, saved untouched under the name
+as a user's loadable patch, loaded by the library, saved untouched under the name
 it loaded as (`Library.save_as`, the strip's save), the bytes written read
 back. Nothing here touches the library a file came from.
 
@@ -14,7 +14,7 @@ where the file had one (the app saves one every time; the resave takes it
 back out of a file that had none — an old file keeps spinning, and its
 `/9` is a fixed point); and with `show` — what an old show kept of
 the camera (`show_seed`) — the scratch library opens a show holding just
-that, so an old preset takes the rig's eye as the app takes it.
+that, so an old loadable patch takes the meta controller's eye as the app takes it.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from .view import ViewState
 
 
 def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
-    """The app's registry, library, router and presets over the library at
+    """The app's registry, library, router and loadable patches over the library at
     `home` (`machine`: the home for this machine's files — bindings.json,
     last_show — default `home`); `plan31` False is a build from before plan
     31 — no envelopes, no sequencer."""
@@ -73,10 +73,10 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
                            envs=envs, seq=seq, clock=clock)
 
 
-# the library folders copied beside a preset for its load: the module
-# presets (a strip's defaults; plan 44 D3 retired the desk templates and
-# the labels, so a whole preset's load reads none of them, but the golden
-# rig and the tools keep the library's module groups as the app has them).
+# the library folders copied beside a loadable patch for its load: the module
+# loadable patches (a strip's defaults; plan 44 D3 retired the desk templates and
+# the labels, so a whole loadable patch's load reads none of them, but the golden
+# meta controller and the tools keep the library's module groups as the app has them).
 # Plan 50 (review fix 2): every module preset is a patch of one group under
 # `patches/<group>/`, so the one folder, every folder down (`copytree`) —
 # the old `<group>/` folders are the migration's to move, never read
@@ -97,15 +97,15 @@ def show_seed(doc: dict | None, eye: dict | None = None,
               camera_at: list | None = None, look: dict | None = None,
               cuts=None) -> dict | None:
     """What an old show kept of the look, as a show of its own: its
-    session's `eye.*` and its layout's camera node (plan 43 C2,
+    meta controller's `eye.*` and its layout's camera node (plan 43 C2,
     `library.show_eye`), and (plan 44 D3) the hands' and clouds' looks in
     its session and its bus cuts (`library.show_look`) — nothing else of
-    the rig: what an old preset drew through. `eye` / `camera_at` / `look`
+    the meta controller: what an old loadable patch drew through. `eye` / `camera_at` / `look`
     / `cuts` stand in where `doc` kept none (a `.bak-v2-eye` or
     `.bak-v2-look` copy's, `library.kept_eye` / `kept_look`). Written as a
     `/2` show, so the app reads it as the old show it stands for
     (`Project.old_eye`, `old_look`, `old_cuts`). None when there is
-    nothing: an old preset takes the build's defaults."""
+    nothing: an old loadable patch takes the build's defaults."""
     from .graphmigrate import CAMERA_NODE
     from .library import PROJECT_V2, RIG, show_eye, show_look
     own_eye, own_at = show_eye(doc)
@@ -142,9 +142,9 @@ def seed(home: Path, machine: Path, show: dict | None) -> None:
 def resave(path: Path, scratch: Path, *, library: Path | None = None,
            show: dict | None = None) -> tuple[bytes, list[str], str]:
     """Preset file `path` loaded and saved untouched by the app (`make_app`)
-    in a scratch library at `scratch` — `path` copied in as a preset of its
+    in a scratch library at `scratch` — `path` copied in as a loadable patch of its
     own, with `library`'s module presets beside it when
-    given, and `show` (a `show_seed`: the rig's old eye) open: (the bytes
+    given, and `show` (a `show_seed`: the meta controller's old eye) open: (the bytes
     the save wrote, the load's notes, the name it loaded as). The pose is
     written only where the file had one. Raises
     what the load raises (`LibraryError`) for a file that does not load.
@@ -159,7 +159,7 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
             if src.is_dir():
                 # (hard links where the disk allows: a library's folders are
                 # read, never written, by a resave — one copy per run, not
-                # one per preset; review 2.7)
+                # one per loadable patch; review 2.7)
                 shutil.copytree(src, home / folder, dirs_exist_ok=True,
                                 ignore=shutil.ignore_patterns(".*", "Icon*"),
                                 copy_function=_link_or_copy)

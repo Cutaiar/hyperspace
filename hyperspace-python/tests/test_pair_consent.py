@@ -650,7 +650,7 @@ def stacks_as_they_are(s) -> tuple:
 @pytest.mark.parametrize("choice", [KEEP_BOTH, TAKE_OVER])
 @pytest.mark.parametrize("hand", [False, True])
 def test_a_refused_landing_leaves_every_stack_and_latch_as_it_was(stacks, choice, hand):
-    """The referee refuses at the answer (row 743: a preset's row on a meta param):
+    """The referee refuses at the answer (row 743: a loadable patch's row on a meta param):
     nothing is pushed, focus does not move, and no latch opens or shuts."""
     s = stacks
     go(s)

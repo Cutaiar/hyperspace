@@ -5,7 +5,7 @@ shows_line`), offers the graph's pictures in a combo (`graphview.
 picture_sources`, `picture_choices`) whose pick is a GRAPH edit
 (`graphview.set_picture`: `render_wire` into `output.N.image`, `ground`
 for "nothing", the override removed for "as All outputs"), keeps the two
-mutes as the window's own (never the preset), and writes "hands through the
+mutes as the window's own (never the loadable patch), and writes "hands through the
 effects" as wiring (`graphview.set_through`: `graphmigrate.through_wires`,
 plan 36 T1 — only the wires it names). Every edit lands through GRAPH's `_land`: one
 undo step, the same refusals, and an edit put back saves in the lowest
@@ -207,8 +207,8 @@ def test_through_needs_a_hands_layer_over_all_outputs(tmp_path):
 
 
 def test_a_picture_put_back_saves_the_untouched_frame(tmp_path):
-    """A corpus preset, a picture picked for output 2 and put back — the
-    frame is the migrated one again, so the save is the untouched preset's
+    """A corpus loadable patch, a picture picked for output 2 and put back — the
+    frame is the migrated one again, so the save is the untouched loadable patch's
     (row 394: `/6` either way, and the same graph)."""
     from test_plan31_wiring import make_app
 
@@ -250,7 +250,7 @@ def test_open_on_graph_selects_the_window(tmp_path):
 
 def test_the_mutes_are_not_the_loadable(tmp_path, monkeypatch):
     """Row 374: `output.2.scene` ("picture") is the window's mute — toggling
-    it leaves the preset clean and its section as it was. The page draws
+    it leaves the loadable patch clean and its section as it was. The page draws
     each window's combo, its two mutes and "hands through the effects"."""
     from test_loadable import put
     from test_ui_shell import _output_page, build_rig

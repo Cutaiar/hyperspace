@@ -2,13 +2,13 @@
 
 Top to bottom:
 
-  tempo  ◀ preset ▶ …    the clock strip: the BPM readout, a beat light
+  tempo  ◀ loadable patch ▶ …    the clock strip: the BPM readout, a beat light
                          that flashes on every beat (the same predicate
                          as the APC's METRONOME LED), the bar's four
                          beats, then tap · trigger · nudge −/+ — the
                          trigger params as buttons — and the bpm and
                          nudge faders on one row
-  lfos   ◀ preset ▶ …    a strip per LFO, by id (four by default, plan 31
+  lfos   ◀ loadable patch ▶ …    a strip per LFO, by id (four by default, plan 31
                          B; `+ lfo` on the first strip's head adds one, a
                          strip's `×` removes it — each one undo step). Each:
                          a small scope of two cycles
@@ -21,7 +21,7 @@ Top to bottom:
 Above four LFOs (plan 31 U) every strip but one folds to a single line: a
 thumbnail of one cycle, the name, the live output as a bar, and a chevron
 that opens it. Exactly one strip is open at a time — the selected one,
-kept on the Panel for the session and never saved; a new LFO is selected
+kept on the Panel for the meta controller and never saved; a new LFO is selected
 as it is added. The full 129-point scope is drawn only on the open strip,
 the folded ones cost a 17-point thumbnail each, so sixteen LFOs stay
 cheap. The page child scrolls when the strips overflow it. At four or
@@ -93,7 +93,7 @@ def page(panel, dt: float) -> None:
 
 def selected(panel, lfos) -> int | None:
     """The open strip's id: the one picked this session, else the first.
-    Kept on the Panel only — a selection is no preset content."""
+    Kept on the Panel only — a selection is no loadable patch content."""
     ids = lfos.ids()
     sel = getattr(panel, "_lfo_open", None)
     if sel not in ids:

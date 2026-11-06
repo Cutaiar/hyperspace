@@ -2,8 +2,8 @@
 """Learn and Unbind from the right-click menu, shown headless (plan 17).
 
 Builds the app's objects the way `tools/undo_demo.py` does (its `boot`:
-library, registry, router, presets, a Learn, a MidiIO over fake ports, a
-HandsIO over synthetic hands, the startup preset, the Undo), puts the
+library, registry, router, loadable patches, a Learn, a MidiIO over fake ports, a
+HandsIO over synthetic hands, the startup loadable patch, the Undo), puts the
 control panel over them in a headless imgui context — no window — and
 prints a transcript of what the menu draws and does. The menu is read the
 way `tests/test_ui_shell.py::menu` reads it: the popup's `begin` is
@@ -14,7 +14,7 @@ answered for it, so nothing here is a real right-click.
            putting all of it back, a fader's param offering no Unbind —
            and the same again with no MIDI adapter on the panel.
   learn    plan 17 WP2: the menu's Learn desk / Learn hand ▸ left / right;
-           the session's two wrong-hand cases replayed with a bare learn
+           the meta controller's two wrong-hand cases replayed with a bare learn
            and with "Learn hand ▸ left"; a knob bump during a hand learn
            doing its own job; a fader and SHIFT working through a desk
            learn; the global layer refusing and leaving it armed — with
@@ -131,7 +131,7 @@ def unbind_demo() -> None:
     demo.frames(r, 5)
     r.undo.clear()
     t = r.router.table
-    # a param only a fader maps (invariant, the session's) with no route on it
+    # a param only a fader maps (invariant, the meta controller's) with no route on it
     pid, fader = "view.speed", next(i for i in ("master.trim", "master.dyn", "master.gain")
                                     if not t.routes_to(i))
     say("Plan 17 WP1 — one Unbind (headless: no window, no device, no hand; the menu is read "
@@ -240,7 +240,7 @@ def learn_demo() -> None:
     demo.frames(r, 5)
     r.undo.clear()
     lrn, table, reg = r.learn, r.router.table, r.reg
-    # a param nothing performs and no knob maps in this preset, and the page that draws it
+    # a param nothing performs and no knob maps in this loadable patch, and the page that draws it
     pid, page = next(
         (p.id, k) for g, k in (("view", "view"), ("view", "faces"), ("camera", "camera"),
                                ("fx", "fx")) for p in reg.group(g)

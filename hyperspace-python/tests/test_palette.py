@@ -407,7 +407,7 @@ def test_a_centre_set_outright_becomes_the_turn():
 
 
 def test_an_old_loadable_loads_as_the_same_slice(tmp_path):
-    """A preset saved with centre 200 / width 60 loads with no note, its
+    """A loadable patch saved with centre 200 / width 60 loads with no note, its
     palette at 170 → 230, its centre route on the turn and its macro with
     it; the next save writes the new keys only."""
     rig = boot(tmp_path)
@@ -442,7 +442,7 @@ def test_the_fixtures_carry_the_slice(slug):
 
 
 def test_no_corpus_file_names_the_palette():
-    """The base goldens cannot move: no corpus preset (tests/corpus, the
+    """The base goldens cannot move: no corpus loadable patch (tests/corpus, the
     goldens' subjects) turns the palette on."""
     hits = [p for p in CORPUS.rglob("*.json") if "fx.palette" in p.read_text()]
     assert hits == []

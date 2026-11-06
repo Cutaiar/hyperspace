@@ -3,7 +3,7 @@
 
 Builds the app's objects the way `app.main` does around the desk — the
 library, the registry, the binding table with `desk.slew` declared before
-the show lands, the router, the presets, a `MidiIO` over fake ports on a
+the show lands, the router, the loadable patches, a `MidiIO` over fake ports on a
 clock the script moves, the `Undo` — with no window and no device, and
 prints a transcript:
 
@@ -12,7 +12,7 @@ prints a transcript:
      80 ms: how many frames it moves on, the largest step, where it rests;
   2. a fast flick (50 CC steps in 5 frames);
   3. the ring messages sent back to the knob in both cases;
-  4. a preset load in the middle of a glide;
+  4. a loadable patch load in the middle of a glide;
   5. one turn at 80 ms as one undo step.
 
 `--png` also draws the slow turn on `camera.pan.x` as base against time,
@@ -22,7 +22,7 @@ Every number is the adapter's own, read off the registry after each
 `MidiIO.poll()`. It always runs on fresh temp homes of its own
 (`HYPERSPACE_HOME` is set here, before anything reads it), each seeded
 with the test corpus (`tests/conftest.py::seed`: TRIP is one of its
-presets): it cannot touch ~/Hyperspace. What it cannot show is the desk: whether the APC40's
+loadable patches): it cannot touch ~/Hyperspace. What it cannot show is the desk: whether the APC40's
 encoder re-bases cleanly with a value in flight, and how 80 ms feels.
 
   uv run python tools/slew_demo.py \\
@@ -54,11 +54,11 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import Library, Marks
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 

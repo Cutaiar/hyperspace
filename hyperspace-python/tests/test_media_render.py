@@ -230,7 +230,7 @@ def _renderer(ctx, media=None, wires=()):
     r = Renderer(ctx)
     r.ghost.state.on = False
     r.media = media
-    # (plan 36 T3: the rig's words before the wired frame, kept for `_back`;
+    # (plan 36 T3: the meta controller's words before the wired frame, kept for `_back`;
     # the renderer takes them wired, as the migration writes them)
     r.old_wiring = G.Wiring(wires=tuple(wires))
     r.wiring = wired_wiring(r.old_wiring)

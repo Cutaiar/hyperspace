@@ -13,8 +13,8 @@ from test_routing import rig as full_rig
 
 import hyperspace.gamepad as gp
 from hyperspace import app
-from hyperspace.params import Registry
 from hyperspace.loadable import LoadedPatch
+from hyperspace.params import Registry
 from hyperspace.routing import Binding, Bindings, Router
 
 
@@ -145,7 +145,7 @@ def test_a_stick_that_is_no_dial_still_learns_its_axis(rig):  # noqa: F811
 
 
 def test_the_dial_preset_fills_both_clocks(tmp_path):
-    seed(tmp_path)                        # the corpus: DIAL among the shipped presets
+    seed(tmp_path)                        # the corpus: DIAL among the shipped loadable patches
     r = full_rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
     assert LoadedPatch(r.lib, r.reg, router).load("DIAL") == []
@@ -156,7 +156,7 @@ def test_the_dial_preset_fills_both_clocks(tmp_path):
     assert router.table.owner("fx.wobble.amount").source == "axis:L.NE"
 
 
-# ---- the session params ----
+# ---- the shared meta params ----
 
 def test_the_readings_are_meta_params_and_swap():
     reg, pad = Registry(), gp.Pad()

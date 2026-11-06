@@ -23,7 +23,7 @@ below (`pads.models.CANON`), the GLFW hat bits, six GLFW-style axes:
         (pads/hid.py): the face, and the touchpad, the motion sensors,
         the Edge's back and Fn buttons and every output GLFW never sees
   usb   a wired Xbox 360 pad over libusb (`UsbPad`)
-  tape  a recorded hid session read back (an entry's ``tape =``)
+  tape  a recorded hid meta controller read back (an entry's ``tape =``)
 
 A pad entry's ``controller =`` says which controllers it may take
 (`pads.models.matches`): ``any`` (the next free one, as before), a model
@@ -1286,7 +1286,7 @@ def publish(router, scheme: str = "axis", model=None) -> None:
     table's (plan 27 B2: they left `Router._publish_axes`). Once: the names
     map is published as one new dict, so the router's address cache keeps.
     `scheme` is a second pad's qualified key (``axis@p2``, plan 27 B6)."""
-    # plan 56: `model`'s natural pairs; merged every frame, since a preset's row
+    # plan 56: `model`'s natural pairs; merged every frame, since a loadable patch's row
     # can have named a pair first, and another model can come (`Sources.add_pairs`)
     add = getattr(router, "add_pairs", None)
     if add is not None:

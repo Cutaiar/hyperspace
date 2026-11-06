@@ -8,14 +8,14 @@ are gone with it.
 same state, before the merge: ``v3-only.json`` by plan 31's head
 (615d4fb, `test_plan31_wiring.make_app`, two steps on and an envelope's
 attack moved), ``media-free.json`` by plan 32's head (3ad7842,
-`test_presets.boot`, one view value moved)."""
+`test_loadable.boot`, one view value moved)."""
 
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from test_plan31_wiring import make_app
 from test_loadable import boot
+from test_plan31_wiring import make_app
 
 from hyperspace import loadable
 from hyperspace.library import LibraryError
@@ -97,7 +97,7 @@ def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
     assert _backdrop_of(app) == "a"
     assert reg.media.channels["a"].bin[0] == CLIP
     # and stable through a load (once a load has read the file's integers
-    # back as floats, as every preset since plan 13 does)
+    # back as floats, as every loadable patch since plan 13 does)
     again = app.loaded_patch.save_as("both").read_bytes()
     assert app.loaded_patch.load("both") == []
     assert app.loaded_patch.save_as("both").read_bytes() == again

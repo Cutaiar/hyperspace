@@ -1,4 +1,4 @@
-"""Plan 50: one saved format — a patch, a group and a preset are one
+"""Plan 50: one saved format — a patch, a group and a loadable patch are one
 document shape (`patches.shape_of`); every fragment comes in through one
 ladder (`patches.forward`: a ``patch/1`` and a ``hyperspace.preset/1``
 module preset read as their ``patch/2``); a module preset is a **patch of
@@ -9,8 +9,8 @@ shape, a backup first.
 
 Old files are opened end to end (REVIEW.md: not only the converter): an
 old module preset in a group's folder loads from the strip, an old
-``patch/1`` spawns from GRAPH's library door, and a corpus preset
-round-trips byte for byte through the preset's one loader."""
+``patch/1`` spawns from GRAPH's library door, and a corpus loadable patch
+round-trips byte for byte through the loadable patch's one loader."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def test_shape_of_reads_the_one_shape_three_ways():
     assert patches.shape_of(json.loads(ACID_WASH.read_text())) == patches.PATCH_SHAPE
     assert patches.shape_of(json.loads(WAKE.read_text())) == patches.GROUP_SHAPE
     assert patches.shape_of(patches.forward(OLD_MODULE)) == patches.GROUP_SHAPE
-    # a preset is a patch that fills the frame: it writes no ports
+    # a loadable patch is a patch that fills the frame: it writes no ports
     assert "ports" not in loadable_doc
 
 
@@ -103,7 +103,7 @@ def test_the_corpus_is_in_the_one_shape():
 
 
 def test_the_loadables_ladder_is_one_function_the_load_reads_through():
-    """A whole preset's steps (`seven`, `nine`, `ten`) are one function,
+    """A whole loadable patch's steps (`seven`, `nine`, `ten`) are one function,
     `graphmigrate.forward`, which the load runs: a `/10` passes untouched,
     a `/2` comes out `/7`-shaped and said."""
     import inspect
@@ -253,7 +253,7 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
 
 def test_a_group_never_holds_the_meta_kinds_one_list_with_graphview():
     """Review fix 1: a media channel, a window, All outputs and a cloud are
-    the rig's (`patches.RIG_KINDS`, `graphview.RIG_KINDS` the same list):
+    the meta controller's (`patches.FIXTURE_KINDS`, `graphview.FIXTURE_KINDS` the same list):
     Group refuses them, so a group never carries what no patch can."""
     from hyperspace import graph as G
     from hyperspace import graphview
@@ -280,7 +280,7 @@ def test_an_empty_group_key_is_one_refusal_and_one_reading():
 
 
 def test_a_groups_folder_refuses_what_is_no_patch_of_that_group(tmp_path):
-    """Review fix 7: in `patches/dream/`, a whole preset, a canvas patch and
+    """Review fix 7: in `patches/dream/`, a whole loadable patch, a canvas patch and
     another group's patch are each refused, the mismatch named — never
     landed as dream values."""
     folder = tmp_path / PATCHES / "dream"
@@ -323,10 +323,10 @@ def test_a_headless_resave_sees_the_librarys_patches(tmp_path):
 
 
 def test_to_moves_no_patch_with_or_without_apply(tmp_path, monkeypatch, capsys):
-    """Review round 2: `--to` moves none — alone it writes only presets into
+    """Review round 2: `--to` moves none — alone it writes only loadable patches into
     the folder; with `--apply` the tool refuses the pair before anything is
     read (and the apply path guards its plan the same way), so the module
-    presets and the `/1` patch are left as they were."""
+    loadable patches and the `/1` patch are left as they were."""
     tool = _tool()
     root = _old_library(tmp_path / "lib")
     monkeypatch.setenv("HYPERSPACE_HOME", str(tmp_path / "machine"))

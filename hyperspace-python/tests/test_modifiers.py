@@ -1,20 +1,20 @@
-"""Plan 28 N1 — modifier nodes, in the preset.
+"""Plan 28 N1 — modifier nodes, in the loadable patch.
 
 A modifier (`modifiers.Modifier`) reads one or two source lanes, has a few
 params of its own (``mod.<n>.<p>``, group ``mod``, performance and
 modulatable), and publishes one output lane, ``mod:<n>``, which a route
-reads like any source. The preset holds them (``modifiers`` after
+reads like any source. The loadable patch holds them (``modifiers`` after
 ``routes``; decision 8); `bindings.json` never does. A desk template may
-carry them, a preset's own overriding by id. ROUTING's MODIFIERS strip
+carry them, a loadable patch's own overriding by id. ROUTING's MODIFIERS strip
 builds them.
 
 Each kind is proven on a scripted input; then the lane a route can
-source, the preset / bindings split, a route onto a missing modifier, the
+source, the loadable patch / bindings split, a route onto a missing modifier, the
 template override, the strip building "right hand energy, smoothed, times
-band 0, into acid mix" through the page's own functions, an older preset
-without the key, undo, and Learn. The presets are fixtures under
+band 0, into acid mix" through the page's own functions, an older loadable patch
+without the key, undo, and Learn. The loadable patches are fixtures under
 tests/fixtures/modifiers/, loaded through a scratch library beside the
-corpus's presets (tests/corpus, seeded).
+corpus's loadable patches (tests/corpus, seeded).
 """
 
 import json
@@ -34,9 +34,9 @@ from hyperspace import modifiers as M
 from hyperspace import routing, ui_routing, undo
 from hyperspace.bands import CEIL
 from hyperspace.learn import Learn
+from hyperspace.loadable import MODIFIERS_KEY
 from hyperspace.modifiers import Modifier, ModState, step
 from hyperspace.params import PATCH_GROUPS, part_of
-from hyperspace.loadable import MODIFIERS_KEY
 from hyperspace.routing import Binding, Bindings, Router
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "modifiers"
@@ -263,7 +263,7 @@ def test_a_modifiers_param_is_modulatable_by_a_route(rig):
     assert table.modifiers_doc(reg)[0]["mul"] == 1.0           # the file keeps the base
 
 
-# ---------------------------------------------------------------- the preset
+# ---------------------------------------------------------------- the loadable patch
 
 def put(lib, *names: str) -> None:
     (lib.home / "presets").mkdir(parents=True, exist_ok=True)
@@ -278,7 +278,7 @@ def test_modifiers_live_in_the_loadable_and_never_in_bindings_json(rig):
     assert loaded_patch.load("mod-energy") == [] and loaded_patch.notes == []
     assert [m.id for m in table.modifiers] == ["mod.1", "mod.2"]
     assert reg["mod.1.release"].value == 0.6 and reg["mod.2.how"].value == 1
-    # the session file: rows only — no modifier, no `mod.*` id anywhere
+    # the meta controller file: rows only — no modifier, no `mod.*` id anywhere
     text = json.dumps(table.to_json())
     assert "modifiers" not in table.to_json() and "mod." not in text and "mod:" not in text
     table.write()
@@ -291,16 +291,16 @@ def test_modifiers_live_in_the_loadable_and_never_in_bindings_json(rig):
     assert doc[MODIFIERS_KEY] == [Modifier.from_json(d).to_json() for d in want]
     assert not any(k.startswith("mod.") for k in doc["values"])   # loads on an older build
     assert not lib.is_dirty("presets")
-    # an edit is the preset's: its dirty dot
+    # an edit is the loadable patch's: its dirty dot
     reg["mod.1.release"].set(1.0)
     assert lib.is_dirty("presets")
     assert loaded_patch.document("X")[MODIFIERS_KEY][0]["release"] == 1.0
-    # a save, reloaded, is the same preset
+    # a save, reloaded, is the same loadable patch
     loaded_patch.save_as("MOD ENERGY 2")
     reg["mod.1.release"].set(0.2)
     loaded_patch.load("MOD ENERGY 2")
     assert reg["mod.1.release"].value == 1.0 and loaded_patch.notes == []
-    # another preset with none: every modifier and its params gone
+    # another loadable patch with none: every modifier and its params gone
     put(lib, "mod-missing")
     loaded_patch.load("mod-missing")
     assert [m.kind for m in table.modifiers] == ["curve"] and "mod.1.release" not in reg
@@ -332,7 +332,7 @@ def test_a_modifier_whose_input_the_meta_lacks_is_dormant(rig):
 
 
 def test_an_older_loadable_without_the_key_loads_as_before(rig):
-    """Every corpus preset has no `modifiers`: it loads with no note,
+    """Every corpus loadable patch has no `modifiers`: it loads with no note,
     holds none, and saves without the key — the same document as the
     base build's (no `mod.*` id among its values)."""
     lib, loaded_patch, table = rig.lib, rig.loaded_patch, rig.router.table
@@ -343,7 +343,7 @@ def test_an_older_loadable_without_the_key_loads_as_before(rig):
         assert MODIFIERS_KEY not in doc
         assert not any(k.startswith("mod.") for k in doc["values"])
         assert not lib.is_dirty("presets")
-    # a modifier left by the last preset goes with any load
+    # a modifier left by the last loadable patch goes with any load
     put(lib, "mod-energy")
     loaded_patch.load("mod-energy")
     loaded_patch.load("party-tumble")
@@ -404,7 +404,7 @@ def panel_of(rig) -> NS:
 def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     """"Right hand energy, smoothed, times band 0, into acid mix", from the
     MODIFIERS strip and the route list alone — and saved, it is the
-    fixture's preset."""
+    fixture's loadable patch."""
     reg, router, loaded_patch = rig.reg, rig.router, rig.loaded_patch
     panel = panel_of(rig)
     # (plan 36 T3: acid exists where the graph names it — every file, as
@@ -412,7 +412,7 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     from hyperspace.fx import declare
 
     declare(reg, reg.fx_state, reg.fx_state.hold(None))
-    router.table.set_routes([])                 # a preset with no routes yet
+    router.table.set_routes([])                 # a loadable patch with no routes yet
     hands(router, 0.0)
     offered = dict(ui_routing.modifier_sources(panel, router))
     assert "hand:right.energy" in offered and "lane:0" in offered

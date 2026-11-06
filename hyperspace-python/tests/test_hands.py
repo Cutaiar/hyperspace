@@ -465,7 +465,7 @@ def _frame(app):
 
 def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     """Until plan 18 WP3 `…_as_a_position_route`: the moved pitch — a
-    centred axis — now lands a push at the session's learn depth."""
+    centred axis — now lands a push at the meta controller's learn depth."""
     r = rig()
     run(r, 1, hand(), learn=app.learn, router=app.router)
     app.learn.arm("view.inst_amp")
@@ -496,7 +496,7 @@ def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     _frame(app)
     assert p.eff_norm == pytest.approx(0.25, abs=1e-4)
     # into the loaded preset: the table has it, bindings.json does not
-    # (plan 13 §3.3 — a save of the preset writes it)
+    # (plan 13 §3.3 — a save of the loadable patch writes it)
     on_disk = Bindings.load(app.table.path, legacy_midi=None)
     assert on_disk.owner("view.inst_amp") is None
 
@@ -536,7 +536,7 @@ def _spied(app) -> list:
 def test_learn_passes_the_axiss_centredness_and_the_meta_depth(tmp_path):
     """Plan 18 WP3, the adapter's half: a learn is told whether the axis
     that won rests in the middle — its setup *now* (`hands.<axis>.bipolar`,
-    "Centred"), not the feature table — and the session's `hands.learn_depth`.
+    "Centred"), not the feature table — and the meta controller's `hands.learn_depth`.
     Roll lands a push at 0.25; height on a one-sided param is still the
     fader; a roll whose "Centred" was switched off is one-sided too; at
     0.5 a push lands 0.5, a one-sided axis on a zero-centred range included.
@@ -596,7 +596,7 @@ def test_learn_passes_the_axiss_centredness_and_the_meta_depth(tmp_path):
                       (-90.0, -15.64)):
         assert reads(deg) == pytest.approx(want, abs=0.01), deg
     assert rate.base == pytest.approx(1.0)
-    run(r, 1, router=app.router)                             # the hand leaves: the preset's 1×
+    run(r, 1, router=app.router)                             # the hand leaves: the loadable patch's 1×
     _frame(app)
     assert rate.value == pytest.approx(1.0) and not rate.modulated
     app.table.remove(b)                                      # the row before this package
@@ -800,7 +800,7 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
     assert b.motion == DEFAULT_ROUTE_FEEL
     b.motion = None                                   # the push's arithmetic, not its travel
     assert learn.learning is None and "learned view.inst_amp" in learn.last
-    assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") is None  # the preset's
+    assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") is None  # the loadable patch's
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=learn, router=router)
     router.modulate()
     reg.apply()
@@ -1066,7 +1066,7 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
 
 def test_a_hand_learn_writes_the_axis_by_name_on_any_dofs(app):
     """Decision register row 20: a learn writes `hand:<name>` — the same
-    row whatever lane the axis sits on — so a preset saved on this rig
+    row whatever lane the axis sits on — so a loadable patch saved on this rig
     plays on one whose `[hands] dofs` list is ordered differently."""
     r = rig(dofs=["yaw", "pitch"])                  # right pitch is lane 3 here, not 10
     shut = {"tips": (10.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
@@ -1995,7 +1995,7 @@ def _play(r, app, frames) -> int | None:
 
 
 def test_a_hand_learn_listens_to_one_hand(tmp_path):
-    """The session's "the Leap assigned a learn to the wrong hand" (plan 17
+    """The meta controller's "the Leap assigned a learn to the wrong hand" (plan 17
     §1 row 1). A bare learn takes whichever axis of either hand travelled
     furthest: in both cases that is the right hand's. Armed with
     "hand:left" only the left hand's axes can win — the left roll is

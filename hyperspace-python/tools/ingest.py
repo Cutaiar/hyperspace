@@ -13,7 +13,7 @@ already looks:
   ``[library] path`` — so the other Mac sees it too.
 
 The file is named after ``--name``, else the video's title, slugged the way
-preset files are (``Ketchup & Marceline!`` → ``ketchup-marceline.mp4``);
+loadable patch files are (``Ketchup & Marceline!`` → ``ketchup-marceline.mp4``);
 a name already taken gets ``-2``, ``-3``, … rather than overwriting.
 
 H.264 video and AAC audio are preferred (PyAV decodes anything, but H.264

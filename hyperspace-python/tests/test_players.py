@@ -349,7 +349,7 @@ def test_a_player_off_air_at_launch_starts_there(rig, tmp_path):
 
 
 def test_a_patch_carries_no_player(rig):
-    """Remembered by the meta controller on this Mac: nothing of it in a saved preset."""
+    """Remembered by the meta controller on this Mac: nothing of it in a saved loadable patch."""
     rig.meta.move_player(2, Duty.OFF_AIR)
     for deck in rig.meta.decks:
         text = deck.loaded_patch.save_as("saved with a player off air").read_text()
@@ -1046,7 +1046,7 @@ def test_the_poi_owns_the_pan_only_on_its_own_deck(shared):
 # ---------------------------------------------------------------- every player on air: as before
 
 def _run_sticks(r, *, players):
-    """One rig through a corpus preset and pushed sticks, with or without the players."""
+    """One rig through a corpus loadable patch and pushed sticks, with or without the players."""
     second = Deck.beside(r.deck)
     ctx = devices.Context(reg=r.deck.reg, table=r.deck.table)
     pad = Stick()

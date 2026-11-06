@@ -17,7 +17,7 @@ SHIFT layer's scene pads — on both layers (`Bindings.page`, `dispatch`,
 
 Everything else on the desk — faders, knobs, SHIFT and its layers, the
 transport, TAP / NUDGE, QUANT, OVERDUB, the track strips, STOP ALL and
-MASTER — is as it was. A preset load does not leave the page.
+MASTER — is as it was. A loadable patch load does not leave the page.
 
 Lights (one rule, `routing.led_shade`, read by midi.py and ui_desk.py):
 
@@ -157,7 +157,7 @@ class SeqPage:
 
 def of(reg) -> SeqPage | None:
     """The one page `register` made, from either deck's registry: it is the
-    session's, as `seq.page` is, so it is kept there."""
+    meta controller's, as `seq.page` is, so it is kept there."""
     meta_reg = getattr(reg, "meta_reg", None)
     return getattr(meta_reg if meta_reg is not None else reg, "seq_page", None)
 
@@ -169,7 +169,7 @@ def page_of(table) -> SeqPage | None:
 
 
 def register(reg, table) -> SeqPage | None:
-    """`seq.page` — SEND A's latch, a session toggle over the table like
+    """`seq.page` — SEND A's latch, a meta controller toggle over the table like
     `desk.shift`: on puts the page up (once the sequencer's params exist),
     off takes it down — and `seq.select`, the lane the scene buttons pick.
     Neither is saved or modulated. The first table a registry meets keeps

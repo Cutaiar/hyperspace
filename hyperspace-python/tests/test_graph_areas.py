@@ -14,12 +14,12 @@ show them, and the chain a through wire over the off effects. The head's
 area chips and a click on a title frame an area.
 
 Headless, on N7's harness (tests/test_graph_legible.py): the shell's rig
-with a corpus preset loaded through the scratch library, a render graph
+with a corpus loadable patch loaded through the scratch library, a render graph
 built by `graph.default_graph` — party-trip's two-effect graph, and the
 real chain of every effect file this build has, wired by each graph
 fixture under tests/fixtures/presets — the APC40 as a real
 `devices.MidiDevice` over a stand-in adapter, the page drawn for real on
-`imgui_node_editor`. No preset is edited or added."""
+`imgui_node_editor`. No loadable patch is edited or added."""
 
 import json
 from itertools import pairwise
@@ -42,7 +42,7 @@ from hyperspace.graphmigrate import Shows
 from hyperspace.outputs import Switches
 from hyperspace.routing import Binding
 
-# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
+# the corpus: the loadable patches the build once shipped (tests/corpus/presets, one tier)
 CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 # (plan 33 T6: the `/5` fixtures — T4's and T5's proofs, a channel's own
@@ -50,7 +50,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 WIRED = sorted(p.stem for p in FIXTURES.glob("*.json")
                if "graph" in json.loads(p.read_text()))
 FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch-faces")
-# every effect file, by its @order: the chain an old preset with every one
+# every effect file, by its @order: the chain an old loadable patch with every one
 # on lands as (plan 33 T7: `names()` is by name — there is no stack)
 REAL = tuple(sorted(FxState().specs, key=lambda n: (FxState().specs[n].order, n)))
 CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, graphview.EFFECTS_AREA,
@@ -64,13 +64,13 @@ def rig(shell_rig):  # noqa: F811
 
 
 def load(rig, name, graph=None):
-    """Corpus preset `name` on the page (party-trip's render graph and
+    """Corpus loadable patch `name` on the page (party-trip's render graph and
     devices, `party`, or render graph `graph`), its state after two frames."""
     party(rig)
     if graph is not None:
         rig.panel.renderer = NS(_graph=graph)
     rig.lib.load("presets", name)
-    # (plan 35 T5: the canvas is the preset's wired frame — party-trip's is
+    # (plan 35 T5: the canvas is the loadable patch's wired frame — party-trip's is
     # the render graph's own frame, landed again after the load)
     section = getattr(rig.panel.renderer._graph, "section", None)
     if name == "party-trip" and section is not None:
@@ -98,7 +98,7 @@ def real_graph(fixture=None):
 
 
 def load_fixture(rig, fixture):
-    """Graph fixture `fixture` loaded as the preset (its spec the view's),
+    """Graph fixture `fixture` loaded as the loadable patch (its spec the view's),
     on its own render graph (`real_graph`): the page's state after two frames."""
     party(rig)
     dst = rig.lib.home / "presets" / f"{fixture}.json"
@@ -145,7 +145,7 @@ def back_wires(view, idle_open=()):
 # ---------------------------------------------------------------- the areas
 
 def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
-    """Over every corpus preset on party-trip's graph, and over party-trip
+    """Over every corpus loadable patch on party-trip's graph, and over party-trip
     on the app's whole chain wired by each graph fixture: every node is in
     one area of `ORDER`, by the one table; the areas' columns run left to
     right and never share a column — but *other*, under the audio in its
@@ -154,7 +154,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     no drawn wire runs back or within a column but the returns
     (`graphview.returns`: the effects' wrapped rows, the capture's).
 
-    Plan 33 T6: the free graph's `/5` fixtures, each loaded as the preset
+    Plan 33 T6: the free graph's `/5` fixtures, each loaded as the loadable patch
     on its own graph, hold too. The rule that keeps them right-running: a
     picture made of the media alone (every path back from it starts at a
     channel or the pattern — `media.a → acid.2 → huecycle.2`) is a branch
@@ -656,8 +656,8 @@ def backward_across_areas(view):
                                   *(("fixture", n) for n in WIRED)],
                          ids=lambda t: f"{t[0]}:{t[1]}")
 def test_no_cable_runs_backwards_across_areas(rig, name):
-    """Plan 37 P3, D5 (the rules): every corpus preset, and every graph
-    fixture, loaded as the preset on a fresh canvas (none carries a saved
+    """Plan 37 P3, D5 (the rules): every corpus loadable patch, and every graph
+    fixture, loaded as the loadable patch on a fresh canvas (none carries a saved
     position): no cable runs from an area into one left of it. Before C3,
     `acid-scene` drew `wire:acid.2>lookback/occluder` from EFFECTS back
     into LOOK-BACK — acid.2 sits between the scene and the look-back."""
@@ -1095,8 +1095,8 @@ def test_deleting_the_published_node_clears_it(rig):
 
 def test_a_loadable_landing_without_the_node_lets_it_go(rig):
     """Off the GRAPH page the value is as of the last frame it drew — until
-    a preset lands (`ui_graph.settle`, on any page): one that still names
-    the node keeps it, a new preset (the scene chain alone) lets it go."""
+    a loadable patch lands (`ui_graph.settle`, on any page): one that still names
+    the node keeps it, a new loadable patch (the scene chain alone) lets it go."""
     st = load(rig, "party-trip")
     panel = rig.panel
     st["select_node"] = "render:pattern"

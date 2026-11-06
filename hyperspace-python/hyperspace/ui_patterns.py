@@ -23,13 +23,13 @@ Top to bottom:
   second is the slider — `base → effective` while a source rides it, the
   white bar at the effective value — and a "1" chip that puts the base
   back to neutral, the pattern as designed. What drives it is the route
-  in its adapter's words with any macro scaling it, a desk or session control, a
+  in its adapter's words with any macro scaling it, a desk or meta controller control, a
   macro that sets its base (`drivers`) — a click opens ROUTING filtered
   to the input. An input nothing drives offers "+ <source>" there: a
   push route at the factory depth (routing.PATTERN_DEPTH) from the source
   the convention puts on it
   (`suggest`: lane k for SCALE … SHARP, the factory's layout; LFO 1 and
-  LFO 2 for HUE and SPREAD), into the loaded preset, staying on this
+  LFO 2 for HUE and SPREAD), into the loaded loadable patch, staying on this
   page. "all neutral" puts every base back at 1.0 as one undo step. On
   FLAT, which runs no pattern, the rows are dimmed but live.
 - a last faint line: what a right-click on an input offers.
@@ -301,7 +301,7 @@ def drivers(panel, pid: str) -> str:
     ("SUB pushes +0.5", "(off)" while disabled) with the macros scaling it
     ("× macro.2"), each desk control on it ("K3 sets it"), each macro that
     sets its base ("macro.4 sets its base"). A desk control is the loaded
-    preset's or the session's (bindings.json's): either sets the base, so
+    loadable patch's or the meta controller's (bindings.json's): either sets the base, so
     a row it drives offers no "+ <source>". "" when nothing does, or with
     no table."""
     table = panel._table()

@@ -92,7 +92,7 @@ SOURCES_ABOVE = (*ABOVE, "routing", "params", "loadable", "undo", "deck", "devic
 WALLS = {"routing.py": ABOVE, "routing_sources.py": SOURCES_ABOVE}
 # the lazy imports each file is allowed: name resolution for key and pad
 # rows (§1's "only lazily to resolve names") — pinned so a new one is a
-# decision (the Library `Router.load_preset` took went with it, plan 13
+# decision (the Library `Router.load_patch` took went with it, plan 13
 # WP5). Plan 44 D2 moved that resolution (`_resolve`, behind
 # `Sources.code`) into routing_sources.py, so routing.py has none now
 LAZY = {"routing.py": set(), "routing_sources.py": {"glfw", "gamepad"}}

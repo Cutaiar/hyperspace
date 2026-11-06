@@ -45,7 +45,7 @@ def test_the_params_are_the_looks_but_the_mirror_off_by_default_and_learnable(tm
     from test_params import make
 
     reg = make(tmp_path)[0]
-    # plan 43 §6 / plan 44 D3: the hands' look is the preset's; the mirror the room's
+    # plan 43 §6 / plan 44 D3: the hands' look is the loadable patch's; the mirror the room's
     assert "ghost" not in SHARED_META_GROUPS
     for pid in ("ghost.on", "ghost.alpha", "ghost.mirror", "ghost.guide", "ghost.tethers",
                 "ghost.style"):

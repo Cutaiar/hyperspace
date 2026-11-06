@@ -2,7 +2,7 @@
 """Save-as on the desk, shown headless (plan 15 WP4, decision 29).
 
 The APC40's clip-stop row is one SAVE AS bar: any of its eight buttons
-held 0.6 s saves the live state as a **new** preset, named from the
+held 0.6 s saves the live state as a **new** loadable patch, named from the
 loaded one, into the next empty bank slot, whose pad blinks. A tap does
 nothing; the desk never overwrites. This builds the app's objects the
 way `tools/undo_demo.py` does — no window, a `MidiIO` over fake ports,
@@ -10,12 +10,12 @@ its clock the demo's own — and prints a transcript: a slot cleared, a
 tap, a hold with every LED velocity the desk is sent and when, the
 footer's line, the files in `<home>/presets`, a second hold onto a full
 bank, two buttons held at once, the new slot's pad loading it, the
-PRESETS page's "put preset here…" and "clear slot" calls, and a Learn
+PRESETS page's "put loadable patch here…" and "clear slot" calls, and a Learn
 the bar refuses.
 
 It always runs on a fresh temp home of its own (`undo_demo` sets
 `HYPERSPACE_HOME` on import, before anything reads it, and seeds it with
-the test corpus: the party show and its presets): it cannot touch
+the test corpus: the party show and its loadable patches): it cannot touch
 ~/Hyperspace.
 
   uv run python tools/save_as_demo.py [--out docs/plans/assets/15-safety-net/save-as-demo.txt]
@@ -86,7 +86,7 @@ def files(r) -> str:
 
 
 def leds(r, since: int, t0: float) -> None:
-    """Every LED message the desk was sent for the bar and the preset row
+    """Every LED message the desk was sent for the bar and the patch row
     since `since`, with the time since `t0`: the bar as one line when its
     eight buttons got the same velocity in the same poll."""
     by_time: dict[float, dict[tuple[int, int], int]] = {}

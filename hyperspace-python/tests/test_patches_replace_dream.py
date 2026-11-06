@@ -153,7 +153,7 @@ def test_cancel_lands_nothing_and_keeps_the_hosts_dream(rig):  # noqa: F811
 
 def test_keep_all_existing_does_not_answer_the_dream(rig):  # noqa: F811
     """The controls' rows are two-way; the node's is not: **keep all existing**
-    leaves the replace asked, and lands the patch with the preset's rows."""
+    leaves the replace asked, and lands the patch with the loadable patch's rows."""
     on_graph(rig, "party-wake")
     slug = dreamy(rig)
     landing, _ = sheet_up(rig, slug)

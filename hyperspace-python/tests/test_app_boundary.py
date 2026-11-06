@@ -1015,7 +1015,7 @@ def test_both_exits_destroy_every_window_before_terminate(monkeypatch):
 def _launch(home):
     """`app.main`'s order around the desk's table, headless: the table is
     read and `_desk_table` called before the library attaches, the router
-    and the presets after, then the show's startup preset."""
+    and the loadable patches after, then the show's startup loadable patch."""
     from hyperspace import lfo, tempo
     from hyperspace.library import Library
     from hyperspace.loadable import LoadedPatch
@@ -1048,7 +1048,7 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     `routing.SLEW_DEFAULT_S` before the show lands. The party show, which
     names no smoothing, opens at 80 ms and is not unsaved because of it;
     a show that saved a number keeps it — 0 included — with no unknown-id
-    warning, since the param exists when the session values land (`main`
+    warning, since the param exists when the meta controller values land (`main`
     makes the table before `library.attach`); a show file from before the
     param opens at 80 ms, clean; and a new show goes back to 80 ms."""
     import inspect
@@ -1487,7 +1487,7 @@ def test_a_later_output_is_the_configs_and_never_overlay(monkeypatch):
 
 def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch, tmp_path):
     """Plan 21 WP4: main registers each opened output's switches before
-    the library attaches (with the other rig settings), seeded from the
+    the library attaches (with the other meta settings), seeded from the
     slots `_windows` filled from the config; the panel gets the slots;
     and what a param writes is the `View` the next frame draws."""
     import inspect

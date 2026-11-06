@@ -1,4 +1,4 @@
-"""Row 394: tools/migrate_library.py — a library's presets rewritten as
+"""Row 394: tools/migrate_library.py — a library's loadable patches rewritten as
 the newest schema (plan 44 D3: `hyperspace.preset/10`) once, through the
 app's own load and save, a picture check on the golden rig deciding what
 is written.
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "tests" / "corpus" / "presets"          # the shipped presets, as test data
+CORPUS = ROOT / "tests" / "corpus" / "presets"          # the shipped loadable patches, as test data
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"   # the corpus's /2s
 
@@ -35,7 +35,7 @@ def _tool():
 
 
 def _library(tmp_path: Path) -> Path:
-    """A library shaped like the owner's: a `/2` preset (party-trip's
+    """A library shaped like the owner's: a `/2` loadable patch (party-trip's
     source, under a file name of its own), a `/5` with an old GRAPH layout
     (glimmer-bug), one already at the newest, one this build refuses (a value that
     will not land), a module preset, the trash and a backup beside them."""
@@ -126,7 +126,7 @@ def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, c
 
 
 def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
-    """Plan 36 T3: `--to FOLDER` writes every preset that passed — the `/9`
+    """Plan 36 T3: `--to FOLDER` writes every loadable patch that passed — the `/9`
     already there too — into FOLDER under its own name; the library is
     read, never written, and no backup is made (how the corpus's `/7` were
     made from their sources)."""

@@ -20,7 +20,7 @@ else is lent the first free one its ``controller =`` matches
 (models.matches). Entries poll in list order, so the first listed has
 first pick, as with GLFW joysticks.
 
-**A tape** (`TapePad`) is a recorded session — the raw reports with their
+**A tape** (`TapePad`) is a recorded meta controller — the raw reports with their
 times, one JSON object a line — read back as if it were the pad: the
 tests, the cloud and a demo without the controller. `Recorder` writes
 one; ``tools/hid_probe.py --record`` and the browser lab both do.
@@ -414,7 +414,7 @@ class HidPad:
 
 
 class TapePad:
-    """A recorded session read back as a pad: each `latest()` the report
+    """A recorded meta controller read back as a pad: each `latest()` the report
     the tape holds for the time since it started, looping. Its model and
     transport are the header's."""
 

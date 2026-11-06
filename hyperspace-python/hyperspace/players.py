@@ -21,7 +21,7 @@ controllers ever collide on a name, whatever is registered.
 **Who holds what, unless told otherwise:** a role ``p2``, ``p3``, ``p4`` is
 that player's, every other role player 1's, and a repeatable kind's primary
 (`primaries`, told by the device registry) is player 1's whatever its role, so
-a rig whose first pad is called ``p2`` reads the bare rows as it always did.
+a meta controller whose first pad is called ``p2`` reads the bare rows as it always did.
 
 **Persistence.** The meta controller's, on this Mac: ``<home>/players.json``
 beside ``bindings.json`` (`library_home()`, never the shared library, never a
@@ -82,7 +82,7 @@ class Player:
 
 class Players:
     """The four players, who holds what, and the file that remembers it.
-    `path` None: nothing is written (the tests', and a rig with no home)."""
+    `path` None: nothing is written (the tests', and a meta controller with no home)."""
 
     def __init__(self, path: Path | None = None, notes: list[str] | None = None):
         self.path = Path(path) if path is not None else None

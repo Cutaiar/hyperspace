@@ -5,9 +5,9 @@
 The shaping in signal.py (`unit`, `Smooth`, `Flick`), the geometry in
 core.py, the layout (the new `hand` lanes after the switches, the `hands`
 scheme with its own rests), and the proof the owner asked for: a fixture
-preset that routes every new source onto a param, loaded through a scratch
+loadable patch that routes every new source onto a param, loaded through a scratch
 library and played by synthetic hands on a tape — each param moves.
-No corpus preset is touched."""
+No corpus loadable patch is touched."""
 
 import math
 import shutil
@@ -114,7 +114,7 @@ def test_gap_is_the_palms_distance():
 # ----------------------------------------------------------------- layout
 
 def test_the_new_lanes_follow_the_switches_and_no_older_lane_moves():
-    """`hand:<i>` from an older preset still reads the lane it did: the
+    """`hand:<i>` from an older loadable patch still reads the lane it did: the
     twenty-two come first, unchanged, then each hand's eight dance lanes."""
     names = hands.default_addresses()
     assert names[:22] == OLD and names[22:38] == NEW
@@ -243,8 +243,8 @@ ROUTES = {                    # the fixture's rows: source → the param it posi
 
 @pytest.fixture()
 def show(tmp_path, tape_path):
-    """The fixture preset in a scratch library (never the owner's), loaded
-    the way a pad or the strip loads a preset, the hands on the tape."""
+    """The fixture loadable patch in a scratch library (never the owner's), loaded
+    the way a pad or the strip loads a loadable patch, the hands on the tape."""
     home = tmp_path / "home"
     (home / "presets").mkdir(parents=True)
     shutil.copyfile(FIXTURE, home / "presets" / FIXTURE.name)

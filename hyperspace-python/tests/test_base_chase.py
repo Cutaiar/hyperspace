@@ -3,7 +3,7 @@ base; let go, the look stays where the performer left it.
 
 The param model first, against a twin the verb never touches (what shows is
 what would have shown), then the rig: the real router's rows, undo's one step
-per hold, the dirty dot, Learn, and two decks over one session."""
+per hold, the dirty dot, Learn, and two decks over one meta controller."""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ from hyperspace.params import (
     CHASE_LABEL,
     CHASE_PARAM,
     Registry,
-    build_patch,
     build_meta,
+    build_patch,
     chase_reaches,
 )
 from hyperspace.routing import Binding, Bindings, latch_refusal, press_momentary
@@ -681,7 +681,7 @@ def test_the_turn_commits_with_no_step(rig):
 # ---------------------------------------------------------------- two decks
 
 def beside(r):
-    """A second deck over `r`'s session, sources and clock, with the same
+    """A second deck over `r`'s meta controller, sources and clock, with the same
     route `routed` gives the first."""
     b = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
     b.table.add(Binding("hand:0", "view.bright", "push", 1.0, rest=0.5))
@@ -743,7 +743,7 @@ def _note(on: bool, number: int = 94, channel: int = 0):
 
 def _row_on_desk(rig, src: str = "note:0:94") -> Binding:
     """A person's row on a desk button, as `bindings.json` may hold one: since row 746 no
-    Learn lands one (row 755), and a file's preset-layer row on it drops with a note."""
+    Learn lands one (row 755), and a file's patch-layer row on it drops with a note."""
     return rig.table.add(Binding(src, CHASE_PARAM, "momentary"))
 
 

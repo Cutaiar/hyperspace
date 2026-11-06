@@ -1,7 +1,7 @@
 """tools/move_library.py (plan 25 D8): an existing library copied into a
 shared folder — never over a file, the machine files left behind, nothing
 in the home touched. All on tmp_path. (The hidden lists' union went with
-hidden presets, 2026-10-28: a `hidden.json` is a machine file now.)"""
+hidden loadable patches, 2026-10-28: a `hidden.json` is a machine file now.)"""
 
 import importlib.util
 import json

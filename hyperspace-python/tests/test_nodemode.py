@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from conftest import CORPUS, seed
 
-from hyperspace import gamepad, graphview, headless, nodemode, loadable, routing, ui_graph, undo
+from hyperspace import gamepad, graphview, headless, loadable, nodemode, routing, ui_graph, undo
 from hyperspace.library import LibraryError, Marks
 from hyperspace.nodemode import NodeMode, Slot, fill
 from hyperspace.pads import models
@@ -103,7 +103,7 @@ def test_node_mode_round_trips_over_the_corpus(app, stem):
 def test_a_load_with_no_key_points_at_nothing(app):
     load(app, CORPUS_LOADABLES[0])
     app.loaded_patch.point_node_mode(1, "midi", "macro.1")
-    load(app, CORPUS_LOADABLES[1])                        # no preset affects another
+    load(app, CORPUS_LOADABLES[1])                        # no loadable patch affects another
     assert not app.loaded_patch.node_mode
 
 

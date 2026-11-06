@@ -2,7 +2,7 @@
 """Plan 28 — the sticks as dials, played by a scripted pad and recorded.
 
 SYNTHETIC PAD, REAL APP: the whole app runs in-process (`app.main`, as
-tools/control_shots.py does) with the DIAL preset loaded, and the gamepad
+tools/control_shots.py does) with the DIAL loadable patch loaded, and the gamepad
 is a `gamepad.Pad` whose sticks follow a script instead of hardware —
 every other piece is the app's own: `Pad.lanes` → `Router.pad` → the
 claims → `Router.modulate` → the registry → the renderer and the fx
@@ -14,7 +14,7 @@ the frames render; the wall time each frame took is recorded beside it.
         uv run python tools/dial_demo.py [--out DIR] [--scale 0.5]
 
 (The throwaway home is seeded with the test corpus first — DIAL is
-`tests/corpus/presets/dial.json`; a fresh library ships no presets.)
+`tests/corpus/presets/dial.json`; a fresh library ships no loadable patches.)
 
 Writes, under --out (default docs/plans/assets/28-gamepad-dial/):
   dial-trace.csv     a row per frame: phase, both sticks, each stick's
@@ -120,7 +120,7 @@ SCRIPT = [
 ]
 STARTS = np.cumsum([0.0] + [s for s, *_ in SCRIPT])
 TOTAL = int(STARTS[-1] * FPS)
-WARM = 20                # frames before the script: the preset lands, imgui settles
+WARM = 20                # frames before the script: the loadable patch lands, imgui settles
 
 
 def at_frame(n: int):
@@ -427,7 +427,7 @@ def main() -> None:
     home = Path(os.environ.get("HYPERSPACE_HOME", ""))
     if not home or not home.is_dir():
         raise SystemExit("set HYPERSPACE_HOME to a throwaway folder")
-    seed(home)                                   # the corpus: DIAL among its presets
+    seed(home)                                   # the corpus: DIAL among its loadable patches
     (home / "config.toml").write_text(
         '[output]\nrender = "720p"\n[dream]\nenabled = false\n[hands]\nenabled = false\n'
         '[midi]\nenabled = false\n[gamepad]\nusb = false\n')

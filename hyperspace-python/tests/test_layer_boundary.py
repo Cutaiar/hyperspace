@@ -16,12 +16,12 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from test_loadable import put
 from test_meta_rule import _with
 from test_midi import note, push
 from test_on_off_air import _bank, _state
 from test_on_off_air import rig as air_rig  # noqa: F401 — two decks and the desk
 from test_pad_learn import ScriptedPad
-from test_loadable import put
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import (
@@ -46,8 +46,8 @@ from hyperspace.params import (
     SHARED_META_IDS,
     SHARED_META_KEYS,
     Kind,
-    Param,
     MetaRegistry,
+    Param,
     is_meta_id,
     is_per_deck_meta_id,
     part_of,
@@ -383,7 +383,7 @@ def _learned(d, pid, source=BUTTON, profile=apc40):
 
 @pytest.mark.parametrize("pid", ROWS)
 def test_a_desk_learn_on_the_class_is_refused_and_says_where_the_road_is(rig, pid):
-    """Row 755: built and removed. "No new Learn road is needed for now: a preset's Learn desk
+    """Row 755: built and removed. "No new Learn road is needed for now: a loadable patch's Learn desk
     on a meta param stays refused" (the owner, seventh round). Nothing moves, on disk either."""
     d = rig.one
     rows = list(d.table.bindings)
@@ -433,7 +433,7 @@ def test_finding_1_a_macros_subscriber_on_the_class_is_a_meta_sub(pid):
 @pytest.mark.parametrize("pid", ["deck.chase", "totem.on", "poi.on", "poi.length"])
 def test_finding_3_a_patch_with_a_row_on_the_class_is_refused_whole(pid):
     """Row 744's rule reaches the class. Read-only count, 2026-11-06: 0 of the Drive's 110
-    presets and 8 patches hold such a row, so nothing is lost."""
+    loadable patches and 8 patches hold such a row, so nothing is lost."""
     route = {"source": "lfo:0", "target": pid, "op": "push", "value": 0.2}
     assert any("no patch's row" in w for w in patches.check(_with(routes=[route])))
 

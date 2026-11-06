@@ -1,9 +1,9 @@
 """Plan 36 T6 (W6, D4): the **preset only** head chip, on by default.
 
-On, the canvas draws the preset section's nodes, what is wired to them
+On, the canvas draws the loadable patch section's nodes, what is wired to them
 (less the controllers and the modulation), whatever feeds those, the
 windows and (2026-10-31) the eight media channels; off, today's canvas. A
-drawing choice only: the state outlives a preset load, and hiding a node
+drawing choice only: the state outlives a loadable patch load, and hiding a node
 lays nothing else out. A node the picker added this session stays drawn
 (`ui_graph.reveal_node`): never saved, forgotten when it is deleted."""
 
@@ -25,7 +25,7 @@ def _lit(monkeypatch):
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
@@ -34,7 +34,7 @@ def drawn(st):
 
 
 def upstream(view, seeds):
-    """`seeds` and whatever feeds them, to full depth (what `preset_only`
+    """`seeds` and whatever feeds them, to full depth (what `patch_only`
     walks since 2026-10-31)."""
     feeds = {}
     for c in view.cables:
@@ -199,7 +199,7 @@ def test_a_picker_added_node_is_drawn_before_it_has_a_cable(rig):
     """A modifier from the picker has no cable yet, so preset only would
     hide it — and a node that is not drawn cannot be cabled. It stays
     drawn (`reveal_node`) until it is deleted; the reveal is the page's,
-    never the preset's."""
+    never the loadable patch's."""
     st = party(rig)
     m = ui_graph.add_modifier(rig.panel, "threshold", at=(100.0, 100.0))
     frame(rig.panel, "graph")

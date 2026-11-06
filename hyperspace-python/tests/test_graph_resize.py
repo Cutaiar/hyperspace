@@ -466,8 +466,8 @@ def test_two_consumers_of_one_resize_refit_from_the_one_small_picture(ctx):
 
 
 def test_a_load_frees_the_last_loadables_frame_targets(ctx):
-    """R16 (final review): preset A (channel a through a resize into
-    outputs 2 and 3), then preset B (channel b alone into output 2): 60
+    """R16 (final review): loadable patch A (channel a through a resize into
+    outputs 2 and 3), then loadable patch B (channel b alone into output 2): 60
     frames later none of A's frame targets — its `shown(...)` end, the
     resize's own size, channel a's fit — is held, and what is
     held is what B alone holds in steady state."""

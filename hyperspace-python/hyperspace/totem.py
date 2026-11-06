@@ -154,9 +154,9 @@ class TotemState:
 
 
 def register(reg, state: TotemState) -> None:
-    """The `totem.*` params: rig switches, never saved (persist off) and
+    """The `totem.*` params: meta switches, never saved (persist off) and
     never a performer's (modulatable off) — an experiment touches no
-    preset or show file. `reg.totem` is the state the pad device reads."""
+    loadable patch or show file. `reg.totem` is the state the pad device reads."""
     if f"{GROUP}.on" in reg:
         return
     reg.totem = state

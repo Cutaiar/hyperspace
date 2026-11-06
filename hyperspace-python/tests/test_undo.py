@@ -2,8 +2,8 @@
 
 Every rig is built the way app.main builds it — Library, registry, the
 hands' settings, the clock and the LFOs, an Output, attach, the Router
-over the home's bindings.json, `Presets`, a `Learn`, a `MidiIO` over
-injected ports, the startup preset, and then the `Undo` — on a tmp_path
+over the home's bindings.json, `LoadedPatch`, a `Learn`, a `MidiIO` over
+injected ports, the startup loadable patch, and then the `Undo` — on a tmp_path
 home, never ~/Hyperspace. `frames` is the app's frame order without the
 windows: the clock, the MIDI poll, the macros' follow-up, `undo.tick`,
 the feeds, `router.modulate`, `reg.apply`, `view.integrate`.
@@ -56,8 +56,8 @@ class FakeOut:
 
 def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sources=None):
     """app.main's construction order, headless, over `home` — seeded with
-    the corpus first (conftest.seed: the shipped presets and the party
-    show, which the home then opens with its startup preset, TUMBLE).
+    the corpus first (conftest.seed: the shipped loadable patches and the party
+    show, which the home then opens with its startup loadable patch, TUMBLE).
     The deck is `Deck.build`'s, the one order `app.main` runs too (plan 44
     D1); the rig around it is stand-ins: no GL (no renderer), a
     namespace for the audio engine, a bare `Output`, the panel's params
@@ -71,7 +71,7 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sour
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=True)
     lib = Library(home, period=0.0)
-    # the rig's own wiring, before the deck (as app.main): the band hooks
+    # the meta controller's own wiring, before the deck (as app.main): the band hooks
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     lib.on_load("band", control.scene_loaded)
@@ -92,7 +92,7 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sour
         return r.output
 
     def load_table(reg):
-        # the desk's session params before attach, as app.main has them (plan
+        # the desk's shared meta params before attach, as app.main has them (plan
         # 18 WP2): declared late, desk.slew would read as an unsaved show
         table = Bindings.load(bindings_path(home), legacy_midi=None)
         routing.register_desk(reg, table)
@@ -158,7 +158,7 @@ def labels(r) -> list[str]:
 
 
 def look(r) -> tuple:
-    """The loaded preset's whole state, as a save would write it."""
+    """The loaded loadable patch's whole state, as a save would write it."""
     t = r.table
     return (r.reg.snapshot(part="patch"), [b.to_json() for b in t.routes()],
             [b.to_json() for b in t.desk()], json.dumps(t.macros_doc(), sort_keys=True))
@@ -253,7 +253,7 @@ def test_a_pause_longer_than_the_settle_time_makes_a_second_step(rig):
 
 def test_a_knob_turn_on_the_desk_is_one_step(rig):
     """CC messages through `MidiIO` over injected ports: a sweep of a
-    preset-layer knob is one step, and undo puts the value back."""
+    patch-layer knob is one step, and undo puts the value back."""
     row = next(b for b in rig.table.active()
                if b.kind == "cc" and b.op == "abs" and b.feedback == "ring"
                and b.layer == "preset" and undo.watched(rig.reg[b.target]))
@@ -381,7 +381,7 @@ def test_undo_of_a_slider_does_not_rerun_a_load(rig):
 
 def test_a_loadable_load_is_one_step_by_every_road(rig):
     """An F-key's trigger, `preset.next`, the strip's load and the file
-    watch all meet in `Presets.load_doc`: one step each, `load <name>`."""
+    watch all meet in `LoadedPatch.load_doc`: one step each, `load <name>`."""
     reg, lib = rig.reg, rig.lib
     assert lib.current(LOADABLE) == "TUMBLE" and rig.undo.stack == []
     reg["preset.load.1"].fire()                        # F2
@@ -393,7 +393,7 @@ def test_a_loadable_load_is_one_step_by_every_road(rig):
     lib.load(LOADABLE, "WAKE")                          # the strip's list
     settle(rig)
     assert labels(rig)[2:] == ["load WAKE"]
-    # the file watch: the loaded preset's file edited on disk
+    # the file watch: the loaded loadable patch's file edited on disk
     path = rig.loaded_patch.save_as("MINE")
     settle(rig)
     assert len(rig.undo.stack) == 3                    # a save is no step
@@ -414,7 +414,7 @@ def test_a_loadable_load_is_one_step_by_every_road(rig):
 
 def test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_the_name(rig):
     """D2 both ways: the earlier state comes back whole — an unsaved edit
-    included — and the library says the earlier preset is loaded."""
+    included — and the library says the earlier loadable patch is loaded."""
     reg, lib, pr = rig.reg, rig.lib, rig.lib.project
     reg["view.bright"].step(7)                         # an unsaved edit of TUMBLE
     rig.table.set_macros({"macro.1": {"label": "mine", "subs": [
@@ -443,7 +443,7 @@ def test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_
 
 def test_save_after_undoing_a_load_writes_the_earlier_loadable(rig):
     """The marks (fork 2): after undoing a load, Save writes the earlier
-    look to the earlier preset's file — never over the later one."""
+    look to the earlier loadable patch's file — never over the later one."""
     reg, lib, loaded_patch = rig.reg, rig.lib, rig.loaded_patch
     a = loaded_patch.save_as("AAA")
     reg["view.shape"].step(2)
@@ -465,11 +465,11 @@ def test_save_after_undoing_a_load_writes_the_earlier_loadable(rig):
 
 
 def test_a_show_load_and_its_startup_loadable_are_one_step_each(rig):
-    """A show is the meta controller's and the preset it starts on is a load on
+    """A show is the meta controller's and the loadable patch it starts on is a load on
     its deck (plan 44 D5b): one step on each stack, each undoing its own, and
     both undone the `Project` comes back as it was."""
     reg, lib, pr = rig.reg, rig.lib, rig.lib.project
-    reg["master.gain"].step(-3)                        # a session edit
+    reg["master.gain"].step(-3)                        # a meta controller edit
     settle(rig)
     party = (pr.name, list(pr.bank), pr.startup, pr.path, look(rig),
              reg.snapshot(part="shared_meta"), lib.current(LOADABLE), lib.current("band"))
@@ -481,7 +481,7 @@ def test_a_show_load_and_its_startup_loadable_are_one_step_each(rig):
     assert labels(rig) == [f"load {pr.startup}"]
     assert pr.name == "house" and lib.current(LOADABLE) != "TUMBLE"
     assert meta.undo() and meta.status == "undid show house"
-    assert rig.undo.undo()                             # …and the preset it started on
+    assert rig.undo.undo()                             # …and the loadable patch it started on
     meta_values = reg.snapshot(part="shared_meta")
     assert (pr.name, list(pr.bank), pr.startup, pr.path) == party[:4]
     assert same_look(look(rig), party[4]) and meta_values == party[5]
@@ -546,7 +546,7 @@ def test_an_action_that_changes_nothing_leaves_no_step(rig):
     assert len(rig.undo.stack) == 1                    # and no step is opened (plan 17 WP1)
     settle(rig)
     assert len(rig.undo.stack) == 1
-    rig.lib.load(LOADABLE, "TUMBLE")                    # the same preset… with an edit: a step
+    rig.lib.load(LOADABLE, "TUMBLE")                    # the same loadable patch… with an edit: a step
     settle(rig)
     assert labels(rig)[1:] == ["load TUMBLE"]
     rig.lib.load(LOADABLE, "TUMBLE")                    # …and clean: nothing changes
@@ -638,10 +638,10 @@ def test_undo_writes_no_file_and_the_dirty_dot_is_honest(rig):
 
 def test_a_performers_round_off_lights_no_dot(rig):
     """Plan 16 WP7: a performer taking a param moves its base in the last
-    bits (plan 15 §1 row 2) and leaves it so. Every corpus preset loaded,
+    bits (plan 15 §1 row 2) and leaves it so. Every corpus loadable patch loaded,
     two hands through the box for two seconds with the lanes and the LFOs
     running, then gone: bases have moved, and no dot is lit — the
-    preset's, a module preset's, the show's. One detent of one param
+    loadable patch's, a module preset's, the show's. One detent of one param
     lights them."""
     reg, lib = rig.reg, rig.lib
 
@@ -872,7 +872,7 @@ def test_the_stack_is_bounded(rig):
 def test_undoing_a_scene_pick_names_the_band_preset_it_was_on(rig):
     """A scene pick is a watcher step (control.py pushes nothing), and
     putting `scene.select` back adopts that scene: `Marks.mend` then puts
-    the strip's own name back, so Save cannot write a user preset's look
+    the strip's own name back, so Save cannot write a user loadable patch's look
     under a factory scene's name. A slider undone after a save-as stays
     on the new name (fork 2)."""
     reg, lib, meta = rig.reg, rig.lib, rig.meta_undo
@@ -907,7 +907,7 @@ def test_an_action_that_changes_nothing_keeps_the_redo(rig):
     settle(rig)
     assert rig.undo.undo() and len(rig.undo.redos) == 1
     frames(rig, 3)
-    rig.midi.unbind("band.0.post")                     # the session's row: refused
+    rig.midi.unbind("band.0.post")                     # the meta controller's row: refused
     assert rig.learn.refused
     settle(rig)
     assert rig.undo.stack == [] and len(rig.undo.redos) == 1
@@ -941,7 +941,7 @@ def test_a_row_that_undo_brings_back_picks_up_afresh(rig):
 
 
 def test_a_load_right_after_another_action_is_its_own_step(rig):
-    """An action at the end of one frame (the panel's ×) and a preset load
+    """An action at the end of one frame (the panel's ×) and a loadable patch load
     at the start of the next (a key, before the tick) are two steps: a
     load never nests inside an action that is no load."""
     table, lib = rig.table, rig.lib
@@ -1001,7 +1001,7 @@ class _Hands:
 
 def test_an_idle_app_makes_no_step(tmp_path):
     """The real `app.frame` over the real objects, nobody touching
-    anything: every corpus preset of the party show loaded in turn, each
+    anything: every corpus loadable patch of the party show loaded in turn, each
     followed by five seconds of frames with the LFOs running and routed,
     the analyzer stepping on a synthetic signal that drives the lane
     routes, two hands moving through the box (and out of it, and back),
@@ -1123,8 +1123,8 @@ def test_an_idle_app_makes_no_step(tmp_path):
 # ------------------------------------------- plan 18 WP2: knob smoothing
 
 def _smoothed(rig, seconds=routing.SLEW_MAX_S):
-    """Knob smoothing on, the adapter on the rig's clock, the stack empty;
-    returns a preset-layer ring knob's row and its param."""
+    """Knob smoothing on, the adapter on the meta controller's clock, the stack empty;
+    returns a patch-layer ring knob's row and its param."""
     rig.midi.clock = lambda: rig.t
     rig.reg["desk.slew"].set(seconds)
     settle(rig)
@@ -1207,9 +1207,9 @@ test_slew_max_stays_under_the_undo_settle_time = test_the_slew_can_never_outlast
 
 
 def test_the_output_switches_are_left_alone_by_undo_loadables_and_shows(rig):
-    """Plan 21 WP4 / fork F4: output.N.* are rig settings. Flipping one
+    """Plan 21 WP4 / fork F4: output.N.* are meta settings. Flipping one
     opens no undo step; an undo and a redo of a real step around it leave
-    it where it is; no preset save or show save writes it; a preset load
+    it where it is; no loadable patch save or show save writes it; a loadable patch load
     and a show load leave it alone."""
     from hyperspace.outputs import Slot
     from hyperspace.overlay import register_switches
@@ -1223,7 +1223,7 @@ def test_the_output_switches_are_left_alone_by_undo_loadables_and_shows(rig):
     reg["output.1.flip_x"].set(True)
     reg["output.2.dim"].set(0.3)
     settle(r)
-    assert len(r.undo.stack) == depth                 # no step for a rig setting
+    assert len(r.undo.stack) == depth                 # no step for a meta setting
     speed = reg["view.speed"]
     was = speed.base
     speed.set(was + 0.5)
@@ -1234,7 +1234,7 @@ def test_the_output_switches_are_left_alone_by_undo_loadables_and_shows(rig):
     assert r.undo.redo() and speed.base == pytest.approx(was + 0.5)
     sw1, sw2 = slots[0].switches, slots[1].switches
     assert (sw2.scene, sw2.hands, sw2.dim, sw1.flip_x) == (False, False, 0.3, True)
-    # a preset save names none of them, and neither does a show save
+    # a loadable patch save names none of them, and neither does a show save
     path = r.loaded_patch.save_as("RIG")
     text = path.read_text()
     assert not any(pid in text for pid in ids)

@@ -6,7 +6,7 @@ It is now "build or reuse the graph for this frame's views, evaluate
 it": `build_graph` builds the frame as nodes from the renderer's
 `Wiring` — plan 35 (rows 372, 377): a wired frame, every node of it an
 ordinary node a wire reaches (plan 36 T3: nothing else — `EMPTY` is the
-empty frame, and an old preset's words are wired only by the one-way
+empty frame, and an old loadable patch's words are wired only by the one-way
 migration, `graphmigrate`) — and `Graph.evaluate`
 runs the nodes once each, in an order computed when the graph is built,
 never per frame. Plan 35 T4 retired the switch-built pipelines
@@ -105,7 +105,7 @@ Each output is wired to its end, and shows exactly that (plan 36 T1: the
 through stand-down is gone). An end with no output this frame is skipped
 and its nodes read 0 ms.
 
-**The graph in the preset** (plan 26 A4). A preset may carry a `graph`
+**The graph in the loadable patch** (plan 26 A4). A loadable patch may carry a `graph`
 section: plain JSON listing node instances by kind and their wiring,
 never a param (`GraphSpec`, `read_graph`; the kinds in `NODE_KINDS`).
 What it says becomes the `Wiring` the graph is built from —
@@ -116,13 +116,13 @@ instance of a node is named by the naming rule (ENGINEERING §2):
 `ghost.2` (its own `Ghost`, `Renderer.ghost_of`, its own `ghost.2.*`
 params), `hands.2` its layer, `fx.acid.2.*` a second acid. No section
 is the factory frame; one this build cannot read is a note and the
-factory frame (preset.py, `GraphSection`). The words the OUTPUT and
+factory frame (loadable.py, `GraphSection`). The words the OUTPUT and
 LOOKBACK pages say it in are here too (`hands_words`, `lookback_words`,
 `graph_words`, plan 35 T4: read off the wires).
 
 Render stack (ARCHITECTURE §3): this module reads params through the
 objects it is handed and never writes one; it imports moderngl and its
-sibling render modules only, never params, routing, library, preset,
+sibling render modules only, never params, routing, library, loadable patch,
 undo or control. Node methods are `run`, `paint`, `draw`, `image`,
 `depth` — never `apply`.
 """
@@ -202,7 +202,7 @@ BLENDS = ("over", "add", "depth")
 HISTORY_OF = ("scene", "scene+hands")
 # how a hands node draws its style's parts (plan 26 A4): solid (today), or
 # as lines — the edges of the same meshes (`Ghost.draw_solid(…, lines)`),
-# a node's setting in the preset's graph, not a param
+# a node's setting in the loadable patch's graph, not a param
 DRAWS = ("solid", "lines")
 # plan 32 R: the media channels a `media.<c>` node reads — `media.channels.
 # CHANNELS`, kept here because this module imports no media module (the
@@ -275,11 +275,11 @@ class Wiring:
     """What the graph is built from (plan 26 A3). Plan 35 T4: a wired frame
     (`wired`: every wire in `wires`) is what `build_graph` builds; an
     unwired one — the words before the wired frame, below, the defaults
-    the factory look — is an old preset's, which only the one-way
+    the factory look — is an old loadable patch's, which only the one-way
     migration wires (plan 36 T3: `graphmigrate.wired_wiring`; `build_graph`
     refuses it): where the hands are drawn, how their layer is laid on,
     what the history captures.
-    The renderer holds one (`Renderer.wiring`); a preset's `graph` section
+    The renderer holds one (`Renderer.wiring`); a loadable patch's `graph` section
     sets it (A4, `GraphSpec.wiring`).
 
     Plan 26 A4: `draw` is the first hands node's (`HandsAt`), and `extra`
@@ -287,11 +287,11 @@ class Wiring:
     hands node makes the layer: the one `into` "layer", else the first;
     `blend` is how that layer is laid on.
 
-    Plan 30 D1: `placed`, the effect instances the preset's graph places
+    Plan 30 D1: `placed`, the effect instances the loadable patch's graph places
     after or into a node (`EffectAt` with `after` / `into`), in the order
     the section lists them: each sits there and not in the chain's run.
 
-    Plan 28 N4: `wires`, the preset's wires the default graph builds as
+    Plan 28 N4: `wires`, the loadable patch's wires the default graph builds as
     edges (`split_wires`: those D1 would write short are in `placed`) —
     into an output's port, overriding what its switches give it; into the
     history's picture; into an effect wired on; into a composite of
@@ -306,8 +306,8 @@ class Wiring:
     Plan 33 R: `run`, the effects wired from `frame` into `fx.image`, in
     wire order — the run into All outputs' picture once wired; `()` is the empty
     run (`frame → fx.image`), and so is None (R23, plan 33 T7: the
-    order-built stack is gone — a wiring no preset's graph reached, a test
-    rig's, a tool's, the app's before its first load, runs no effect; one
+    order-built stack is gone — a wiring no loadable patch's graph reached, a test
+    meta controller's, a tool's, the app's before its first load, runs no effect; one
     that wants effects gets its run as a load does, `graphmigrate.wiring_for`)."""
 
     hands: str = "layer"
@@ -320,7 +320,7 @@ class Wiring:
     composites: tuple[CompositeAt, ...] = ()
     # plan 32 R (row 330): the media channel laid under the scene before the
     # history ("" none, else a letter of `MEDIA_CHANNELS`), and whether the
-    # history captures it too. Plan 33 R: the channel is the preset's graph
+    # history captures it too. Plan 33 R: the channel is the loadable patch's graph
     # (the wire `media.<c> → backdrop.image`); `backdrop_history` the old
     # words' capture of it (plan 36 T3: the migration writes it as the
     # capture wire; nothing lays it on per frame)
@@ -385,17 +385,17 @@ class Wiring:
 
 
 # plan 36 T3 (W3): the empty wired frame — what a renderer draws before a
-# preset lands, and a `/7` with no graph section (or an empty one): only the
+# loadable patch lands, and a `/7` with no graph section (or an empty one): only the
 # outputs, nothing wired, black. There is no other fallback.
 EMPTY = Wiring(wired=True)
 UNWIRED_WIRING = ("an unwired Wiring is the words before the wired frame (plan 35): an old "
                   "preset's — wire it by the one-way migration (graphmigrate.wired_wiring)")
 
 
-# ---------------------------------------------------------------- the preset's graph
+# ---------------------------------------------------------------- the loadable patch's graph
 
 class GraphError(ValueError):
-    """A preset's `graph` section this build cannot read: the load notes
+    """A loadable patch's `graph` section this build cannot read: the load notes
     it and takes the default graph (plan 26 A4)."""
 
 
@@ -453,7 +453,7 @@ def placement_error(effect: str, key: str, where: Any,
 
 @dataclass(frozen=True)
 class EffectAt:
-    """An effect instance the preset's graph names (plan 26 A4, plan 30 D1).
+    """An effect instance the loadable patch's graph names (plan 26 A4, plan 30 D1).
 
     Unplaced: an instance of a file — an extra one, `fx.<file>.<n>.*`
     (n ≥ 2), its own params and clock, or (plan 33 R21) instance 1, the
@@ -623,7 +623,7 @@ def _history_entry(e: dict, wired: bool = False) -> HistoryAt | LookbackAt:
     return HistoryAt(e.get("holds", "scene"))
 
 
-# The node kinds a preset's graph may name: kind → the reader of one entry
+# The node kinds a loadable patch's graph may name: kind → the reader of one entry
 # (a dict with "kind"). A kind missing here is unknown: a note and the
 # default graph, never a crash. A later WP adds its kind with one line
 # here (plan 26 A4b: the point cloud) and its node class in its own block;
@@ -638,12 +638,12 @@ NODE_KINDS: dict[str, Any] = {
 
 # ---------------------------------------------------------------- wires (plan 28 N4)
 #
-# The preset's graph is nodes plus a wire list: `{"nodes": [...], "wires":
+# The loadable patch's graph is nodes plus a wire list: `{"nodes": [...], "wires":
 # [{"from": "hands.2", "to": "output.2.hands"}, {"from": "palette", "to":
 # "output.1.image"}]}`. A wire names a node's output (`from`: the node's
 # name) and an input port (`to`: `<node>.<port>`). An input no wire names
-# is the default graph's: an output's ports follow the session's switches
-# (the rig's, not the look's); an effect is where its wires put it, and one
+# is the default graph's: an output's ports follow the meta controller's switches
+# (the meta controller's, not the look's); an effect is where its wires put it, and one
 # on no wire is in no run (plan 33: no stack holds it).
 # D1's `after` / `into` are the same wires written short, and read as such
 # (`d1_wires`): `{"file": "palette", "after": "hands"}` is the wire
@@ -769,7 +769,7 @@ def _wire_node(dst: Any) -> str | None:
 
 @dataclass(frozen=True)
 class Wire:
-    """One wire of the preset's graph (plan 28 N4): `src`, a node's name
+    """One wire of the loadable patch's graph (plan 28 N4): `src`, a node's name
     (its output), into `dst`, `<node>.<port>` (`output.2.hands`,
     `acid.2.image`). JSON `{"from": src, "to": dst}`."""
 
@@ -800,7 +800,7 @@ class Wire:
 
 @dataclass(frozen=True)
 class CompositeAt:
-    """A composite node the preset's graph adds (plan 28 N4): `under` with
+    """A composite node the loadable patch's graph adds (plan 28 N4): `under` with
     `over` laid on it at `blend`, its ports and its picture wired by the
     wire list — `composite`, `composite.2` … One no wire feeds is built
     nowhere."""
@@ -837,7 +837,7 @@ NODE_KINDS["composite"] = _composite_entry
 
 @dataclass(frozen=True)
 class SwitchAt:
-    """A switch node the preset's graph adds (plan 33 S): eight picture
+    """A switch node the loadable patch's graph adds (plan 33 S): eight picture
     inputs `in1` … `in8` and one picture out — the selected input's, by
     the param `switch[.n].select` (off, 1–8; a value, not the graph) —
     `switch`, `switch.2` … One no wire feeds or reads is kept, unreached."""
@@ -869,7 +869,7 @@ NODE_KINDS["switch"] = _switch_entry
 
 @dataclass(frozen=True)
 class DelayAt:
-    """A delay node the preset's graph adds (plan 34 L): one picture input
+    """A delay node the loadable patch's graph adds (plan 34 L): one picture input
     `image`, and out the picture that came into it last frame (z⁻¹) — so a
     loop drawn through one is legal (`wire_loops`) —
     `delay`, `delay.2` … One whose picture reaches nothing is unreached
@@ -902,7 +902,7 @@ NODE_KINDS["delay"] = _delay_entry
 
 @dataclass(frozen=True)
 class ResizeAt:
-    """A resize node the preset's graph adds (plan 34 L, Z): its input
+    """A resize node the loadable patch's graph adds (plan 34 L, Z): its input
     `image` cropped and made at a size of its own (`resize[.n].*`, values,
     not the graph) — `resize`, `resize.2` …"""
 
@@ -933,7 +933,7 @@ NODE_KINDS["resize"] = _resize_entry
 
 @dataclass(frozen=True)
 class MatteAt:
-    """A matte node the preset's graph adds (plan 39 T2, W2): its input
+    """A matte node the loadable patch's graph adds (plan 39 T2, W2): its input
     `image` made a mask — by brightness, coverage or a keyed hue
     (`matte[.n].*`, values, not the graph) — `matte`, `matte.2` …"""
 
@@ -964,7 +964,7 @@ NODE_KINDS["matte"] = _matte_entry
 
 @dataclass(frozen=True)
 class CutAt:
-    """A cut node the preset's graph adds (plan 39 T3, W3): its `image`
+    """A cut node the loadable patch's graph adds (plan 39 T3, W3): its `image`
     cut by the mask on its `mask` port — where the mask passes the picture,
     elsewhere cut away (`cut[.n].*`, values, not the graph) — `cut`,
     `cut.2` …"""
@@ -996,7 +996,7 @@ NODE_KINDS["cut"] = _cut_entry
 
 @dataclass(frozen=True)
 class SegmentAt:
-    """A segment node the preset's graph adds (plan 39 T4, W4): its `image`
+    """A segment node the loadable patch's graph adds (plan 39 T4, W4): its `image`
     cut into a foreground and a background by a matte — three pins,
     `segment.fg`, `segment.bg`, `segment.mask` — the mode, the model's
     level and the rest values (`segment[.n].*`), never the entry —
@@ -1107,7 +1107,7 @@ NODE_KINDS["dream"] = _dream_entry
 
 FRAME_KEY = "frame"           # the section's third key …
 WIRED_FRAME = "wired"         # … and its one value
-ALL_OUTPUTS = "output.all"    # the bus: what a window shows by the rig's cable from it
+ALL_OUTPUTS = "output.all"    # the bus: what a window shows by the meta controller's cable from it
 GROUND = "ground"             # a source with no node: wired into an output's port, nothing
 # the frame's entry kinds (`layer` and `guide` take `instance`): a frame
 # node exists when a wire names it or an entry declares it (GRAPH keeps
@@ -1203,22 +1203,22 @@ OLD_ID_IN_A_WIRED_FRAME = "{old} is the old name (plan 35): in a wired frame it 
 FRAME_KIND_UNWIRED = ("{kind} node: only in a wired frame (plan 35: the section says "
                       "\"frame\": \"wired\")")
 
-# ---------------------------------------------------------------- the rig's wires (plan 36 T1)
+# ---------------------------------------------------------------- the meta controller's wires (plan 36 T1)
 #
 # Plan 36 W1, decision D1: what reaches a window is a drawn cable. All
-# outputs is a bus: the rig — the open show, `library.Project.rig` — owns
+# outputs is a bus: the meta controller — the open show, `library.Project.rig` — owns
 # one cable per window and port, `output.all.<port> → output.<n>.<port>`
 # for the picture, the hands and the guide (`bus_wire`), present until
 # the show cuts it, drawn on GRAPH and cut or joined there like any wire.
-# A preset's own wire into a window's port takes that port: the bus cable
+# A loadable patch's own wire into a window's port takes that port: the bus cable
 # into it is then neither drawn nor read (`window_ports`, the one rule).
-# `RigWires` is the show's word on its own wires — which of the rig's
+# `BusCuts` is the show's word on its own wires — which of the meta controller's
 # defaults it has cut — and `present` the wires that stand; any other
-# rig-owned wire (plan 36 T2: a cloud's) is one more set of defaults.
+# fixture-owned wire (plan 36 T2: a cloud's) is one more set of defaults.
 #
 # Plan 36 T2 (W2): a window's fourth port, `depth` — the scene's depth the
 # hands are laid against depth-aware — rides the bus like the others. And
-# a cloud device is the rig's, so its wire into the scene is too:
+# a cloud device is the meta controller's, so its wire into the scene is too:
 # `cloud → scene.geometry`, `cloud.2 → scene.geometry` … one per listed
 # cloud device (`cloud_wires`), standing until the show cuts it.
 
@@ -1226,7 +1226,7 @@ BUS_PORTS = ("image", "hands", "guide", "depth")   # the ports a bus cable feeds
 
 
 def bus_wire(n: int, port: str) -> Wire:
-    """The rig's bus cable from All outputs into window `n`'s `port`."""
+    """The meta controller's bus cable from All outputs into window `n`'s `port`."""
     return Wire(f"{ALL_OUTPUTS}.{port}", f"output.{n}.{port}")
 
 
@@ -1245,35 +1245,35 @@ def cloud_name(i: int) -> str:
 
 
 def cloud_wire(i: int) -> Wire:
-    """Plan 36 T2: the rig's wire of the `i`-th cloud into the scene."""
+    """Plan 36 T2: the meta controller's wire of the `i`-th cloud into the scene."""
     return Wire(cloud_name(i), "scene.geometry")
 
 
 def cloud_wires(roles) -> tuple[Wire, ...]:
-    """The rig's cloud wires for the listed cloud devices `roles`, in order."""
+    """The meta controller's cloud wires for the listed cloud devices `roles`, in order."""
     return tuple(cloud_wire(i) for i in range(len(tuple(roles))))
 
 
 def is_cloud_wire(w: Wire) -> bool:
-    """Whether `w` is a cloud's wire into the scene (the rig's, plan 36 T2)."""
+    """Whether `w` is a cloud's wire into the scene (the meta controller's, plan 36 T2)."""
     head, _, n = w.src.partition(".")
     return (w.dst == "scene.geometry" and head == "cloud"
             and (not n or (n.isdecimal() and int(n) >= 2)))
 
 
 def is_fixture_wire(w: Wire) -> bool:
-    """Whether `w` is one of the rig's own wires (plan 36: a bus cable, a
-    cloud's wire) — the show's to cut and join, never a preset's."""
+    """Whether `w` is one of the meta controller's own wires (plan 36: a bus cable, a
+    cloud's wire) — the show's to cut and join, never a loadable patch's."""
     return is_bus(w) or is_cloud_wire(w)
 
 
 @dataclass(frozen=True)
 class BusCuts:
-    """The rig's own drawn wires as a preset holds them (plan 36 T1; plan 44
-    D3 made them the preset's, `preset.Presets.bus`, where they were the
-    show's): the defaults the preset has `cut` — every other default
+    """The meta controller's own drawn wires as a loadable patch holds them (plan 36 T1; plan 44
+    D3 made them the loadable patch's, `loadable.LoadedPatch.bus`, where they were the
+    show's): the defaults the loadable patch has `cut` — every other default
     stands. Immutable: `cutting` and `joining` return the new word, so an
-    undo mark holds one by reference. JSON (`to_json`, in the preset's file
+    undo mark holds one by reference. JSON (`to_json`, in the loadable patch's file
     under ``bus``; an old show's under ``rig``, read once):
     ``{"cut": [{"from": …, "to": …}, …]}``, sorted; nothing cut is ``{}``."""
 
@@ -1313,16 +1313,16 @@ class BusCuts:
 
 
 def bus_cuts_of(source: Any) -> BusCuts:
-    """The rig wires `source` holds (duck-typed: its `rig`, as the loaded
-    preset `preset.Presets` has, plan 44 D3) — the renderer's `rig_source`; None, or a source
-    with none, is the rig as it ships: every default standing."""
+    """The bus wires `source` holds (duck-typed: its `rig`, as the loaded
+    loadable patch `loadable.LoadedPatch` has, plan 44 D3) — the renderer's `bus_source`; None, or a source
+    with none, is the meta controller as it ships: every default standing."""
     got = getattr(source, "bus_cuts", None)
     return got if isinstance(got, BusCuts) else BusCuts()
 
 
 def window_ports(wires, n: int, bus_cuts: BusCuts | None = None) -> dict[str, Wire | None]:
     """Window `n`'s four ports (`BUS_PORTS`) → the one wire into each, or
-    None: its own wire of `wires` (the preset's), else the bus cable when
+    None: its own wire of `wires` (the loadable patch's), else the bus cable when
     `rig` has it standing — then the wire into All outputs' same port (the
     bus carries it; None while nothing is wired there). Plan 36 W1: nothing
     else reaches a window."""
@@ -2218,7 +2218,7 @@ def split_wires(wires, placed=()) -> tuple[tuple[EffectAt, ...], tuple[Wire, ...
 
 @dataclass(frozen=True)
 class GraphSpec:
-    """A preset's `graph` section, read (plan 26 A4): the node instances
+    """A loadable patch's `graph` section, read (plan 26 A4): the node instances
     and their wiring, in data — never anything that is already a param
     (an effect's on, mix and order, `ghost.alpha`, `dream.*` are in
     `values` or the show). What the default graph is built from besides
@@ -2290,7 +2290,7 @@ class GraphSpec:
                           laid_on=self.laid_on)
         run, wires = None, self.wires
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
-            # plan 33 R: the section says the run (every preset loaded on
+            # plan 33 R: the section says the run (every loadable patch loaded on
             # this build does, `graphmigrate`): its wires are the run, not
             # edges. The faces', the pattern's and the backdrop's wires are
             # edges like any other (T4), and so are a switch's (T5)
@@ -2313,7 +2313,7 @@ class GraphSpec:
             # unreached branch, never run; D1's own entries still place.
             # A pre-33 section (no run) keeps the shortening, and its
             # migration writes each as the D1 entry it stood for
-            # (`graphmigrate.migrate`), so an old preset draws as it did
+            # (`graphmigrate.migrate`), so an old loadable patch draws as it did
             synth, edges = (), wires
             edges = _reached_edges(edges, run, placed)
         return Wiring(hands=first.into, blend=self.laid, history=self.history.holds,
@@ -2401,7 +2401,7 @@ class GraphSpec:
         return frozenset(out)
 
     def to_json(self) -> dict:
-        """The section as a preset writes it: every node that is not the
+        """The section as a loadable patch writes it: every node that is not the
         default, in a fixed order (hands by instance, effects by file and
         instance, the history, then later kinds' entries as read).
 
@@ -2450,7 +2450,7 @@ class GraphSpec:
 
 def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *,
                placements: bool = False) -> GraphSpec:
-    """A preset's `graph` section → its `GraphSpec`; raises `GraphError`
+    """A loadable patch's `graph` section → its `GraphSpec`; raises `GraphError`
     (the reason in words) for anything this build cannot read — a kind
     not in `NODE_KINDS`, a key a node does not take, a value out of its
     choices, two nodes of one instance, two hands layers, `laid` on a
@@ -2676,7 +2676,7 @@ def reaches(spec: GraphSpec) -> frozenset[str]:
     """Every node with a path, through wires into picture ports, to a sink
     port (`SINKS`: an output, the pipeline end, the faces, the pattern's
     media, the backdrop, the history) — plan 33 G. A node outside it is
-    unreached: kept in the preset, drawn faint ("reaches nothing") and
+    unreached: kept in the loadable patch, drawn faint ("reaches nothing") and
     never run. Reads D1's placements as the wires they are short for.
 
     Plan 34 L: a delay's `image` is no sink port of its own — it is one
@@ -3049,7 +3049,7 @@ def placement_words(e: EffectAt) -> str:
 
 
 def graph_words(spec: GraphSpec | None, dormant: dict[str, str] | None = None) -> str:
-    """The loaded preset's graph in one line (the OUTPUT page): `graph:
+    """The loaded loadable patch's graph in one line (the OUTPUT page): `graph:
     default`, or what it changes — `graph: hands 1 in the scene as lines ·
     hands 2 a layer · acid ×2 · history with the hands`. Plan 30 D1: then
     each placed effect where it sits (`placement_words`), or — `dormant`,
@@ -3507,7 +3507,7 @@ class Hands(Node):
     Plan 26 A4: each hands node is its own `Ghost` (`Renderer.ghost_of`
     its name: `ghost` is the renderer's own, `ghost.2` … a second one
     with its own `ghost.2.*` params), drawn solid or as lines (`draw`,
-    the preset's graph). Its time is its own SYSTEM line where a scene
+    the loadable patch's graph). Its time is its own SYSTEM line where a scene
     draws it — the consumer edge decides (`Graph.timed`), the node is
     never told — and the layer's otherwise. A draw that raises costs the
     scene nothing: the frame goes on without the hands and its
@@ -3572,7 +3572,7 @@ class Hands(Node):
 # `renderer.ghost.source`); this module never imports `devices`: the
 # source is duck-typed — iterable of devices with `kind` and `role`, and
 # a `clouds` mapping ``cloud:<role>`` → the latest cloud with `points`,
-# `colors`, `frame`, `t`, `n`. The look is the `cloud.*` session params
+# `colors`, `frame`, `t`, `n`. The look is the `cloud.*` shared meta params
 # (`ViewState.cloud_*`). A role with no device, a device not open, or a
 # frame not yet published draws nothing and raises nothing.
 
@@ -5467,9 +5467,9 @@ class HandsLayer(Node):
     def in_world(self) -> bool:
         """Plan 43 C2 (review 2.1): whether this layer is laid depth-aware —
         at an output (`laid` "depth") or by a depth composite — and so drawn
-        through the scene's (the preset's) eye, its depth comparable with the
-        scene's. Otherwise it is a screen-space picture through the rig's
-        reference eye, keeping its size whatever the preset's eye."""
+        through the scene's (the loadable patch's) eye, its depth comparable with the
+        scene's. Otherwise it is a screen-space picture through the meta controller's
+        reference eye, keeping its size whatever the loadable patch's eye."""
         return getattr(self, "laid", "over") == "depth" or getattr(self, "depth_laid", False)
 
     def split(self, frame: Frame) -> bool:
@@ -5910,7 +5910,7 @@ class Effect(Node):
                  after: tuple[Node, ...] = (), placed: str | None = None):
         super().__init__(node if node is not None else name, after, image=image)
         self.effect = name
-        self.placed = placed          # D1: "after" / "into" when the preset places it
+        self.placed = placed          # D1: "after" / "into" when the loadable patch places it
 
     @property
     def makes(self) -> bool:
@@ -6161,7 +6161,7 @@ class Copy(Effect):
 class Shown(Node):
     """An output's picture as an end (plan 35 B): `shown(<source>)`, one per
     distinct source an output's `image` takes (`window_ports`: its own
-    wire, else All outputs' by the rig's bus cable), shared by every
+    wire, else All outputs' by the meta controller's bus cable), shared by every
     output showing it — the retired pipelines' ends (`Fx`, and `Wired` for
     a picture by a wire) made one. As an end it
     decides where the picture lands (`run`): straight into its one user's
@@ -6634,20 +6634,20 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     drawing the hands node wired into its `hands` (none: empty) — a guide
     is its layer's split-out picture while that layer is built on the same
     hands, as the default graph's in-scene readout was; the clouds by the
-    rig's wires into the scene (`cloud_wire`, while standing); a
+    meta controller's wires into the scene (`cloud_wire`, while standing); a
     composite's and an output's depth the wire into its `depth`, an
     output's hands laid as their layer's `laid` says; effects, copies,
     composites, switches, channels, the pattern, plan 34's delays and ring
     pictures); then one `Shown` per distinct picture an output takes; then the capture (`lookback.capture`'s) after every end and
     every delay's write; then one `Output` per view, each port its own
     wire else All outputs' by the bus cable `rig` has standing (plan 36
-    T1, `window_ports`; None: the rig as it ships, every cable standing),
+    T1, `window_ports`; None: the meta controller as it ships, every cable standing),
     through its window's mutes.
 
     Plan 35 T4: every frame is this one's. Plan 36 T3 (W3): and nothing is
     built that the wiring does not say — None is the empty frame (`EMPTY`,
     black), and an unwired `Wiring` (the words before the wired frame) is
-    refused: it is an old preset's, which the one-way migration wires
+    refused: it is an old loadable patch's, which the one-way migration wires
     (`graphmigrate.wired_wiring`); D1's placements are wires since `/7`, so
     none is placed here. The render nodes are named
     in the new ids (`hands`, `hands.layer`, `hands.guide`, `lookback`,
@@ -6764,7 +6764,7 @@ class _Build:
                              if back is not None and _kind(back.src) == "channel" else "")
         self.made: dict[str, Node | None] = {}       # a wire's name → what it reads as
         self.built: list[Node] = []                  # every node made, in order
-        # plan 36 T2: a cloud is in the scene by the rig's wire into it
+        # plan 36 T2: a cloud is in the scene by the meta controller's wire into it
         # (`cloud_wire`), while the show has not cut it — and the scene is
         # reached by the section's own wires
         self.clouds = ([PointCloud(cloud_name(i), role) for i, role in enumerate(g.clouds)
@@ -7093,7 +7093,7 @@ class _Build:
             e.placed = None
         g.run = tuple(e.effect for e in run)
         # each output's ports (plan 36 T1, `window_ports`): its own wire,
-        # else All outputs' by the rig's bus cable while it stands
+        # else All outputs' by the meta controller's bus cable while it stands
         # (`ground`, or nothing: nothing) — no other fallback
         ports = []
         for i in range(self.count):

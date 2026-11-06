@@ -6,7 +6,7 @@ deletable cable.
 | the shape read `pattern`         | `pattern → shape.faces`                     | plain faces  |
 | the cover built from the scene   | `scene.cover → lookback.cover` (a mask)     | no occlusion |
 | a layer / guide read `hands`     | `hands → hands.layer.hands` / `.guide.hands`| empty        |
-| clouds injected into the scene   | `cloud → scene.geometry` (the rig's)        | no cloud     |
+| clouds injected into the scene   | `cloud → scene.geometry` (the meta controller's)        | no cloud     |
 | `depth` auto-wired, one `blend`  | `scene.depth → composite.depth` / an output's, `laid` the layer's | no depth |
 
 Per row: unwired behaves as the table says; wired reproduces what the
@@ -249,7 +249,7 @@ def test_an_unwired_layer_draws_nothing_on_the_golden_meta(ctx, bus_cuts):
     assert (empty == bare).all() and not (lit == bare).all()
 
 
-# ---------------------------------------------------------------- the rig's clouds
+# ---------------------------------------------------------------- the meta controller's clouds
 
 def test_a_cloud_is_in_the_scene_by_the_meta_wire_and_cut_it_is_not():
     spec = G.read_graph(migrated())
@@ -289,7 +289,7 @@ def test_the_clouds_wire_is_cut_and_joined_on_graph(tmp_path):
                       G.bus_cuts_of(app.loaded_patch))
     c = cable(graphview.build(Bindings(), Registry(), None, None, g, spec),
               "cloud", "scene.geometry")
-    # (plan 44 D3: the cut is the preset's, its dot the preset's)
+    # (plan 44 D3: the cut is the loadable patch's, its dot the loadable patch's)
     assert e.unwire(c) is None and app.loaded_patch.bus.cut == {G.cloud_wire(0)}
     assert app.loaded_patch.graph.spec.to_json() == before and app.lib.is_dirty("presets")
     assert e.wire("rout:cloud", "rin:scene/geometry") is None

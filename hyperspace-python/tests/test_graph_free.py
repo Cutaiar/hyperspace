@@ -4,8 +4,8 @@ New wire ends (`frame`, `fx.image`, `pattern`, `shape.faces`,
 `backdrop.image`, `switch`), a wire from a channel into an effect as a
 branch instead of a refusal, and `reaches` / `run_of` read off the wires
 (data only). Then T3: the renderer builds each pipeline's run from the
-preset graph's wires `frame → … → fx.image`, an effect on no wire has no
-node. Row 394 (the owner, 2026-10-25): every preset, whatever its schema,
+loadable patch graph's wires `frame → … → fx.image`, an effect on no wire has no
+node. Row 394 (the owner, 2026-10-25): every loadable patch, whatever its schema,
 saves as `/6` and that save is a fixed point — what replaced the
 byte-identical-to-an-older-build saves (Review Focus 1, R10). The pictures
 are test_golden_frames.py's.
@@ -120,7 +120,7 @@ def test_a_switch_is_a_node_kind_that_may_stand_alone():
 
 ROOT = Path(__file__).resolve().parents[1]
 SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
-# plan 36 T3: the corpus presets' sources (the corpus files are their `/7`)
+# plan 36 T3: the corpus loadable patches' sources (the corpus files are their `/7`)
 LIBRARY = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
            "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32",
@@ -156,7 +156,7 @@ def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
 
 
 def old_sources() -> list[tuple[str, Path]]:
-    """Every preset file this tree holds in an older schema or the newest,
+    """Every loadable patch file this tree holds in an older schema or the newest,
     as (kind, path): the corpus's sources (dial's too), every fixture under
     tests/fixtures/presets/, merge-31-32/, old-canvas-layout/ and
     plan33-driven/, and the bytes older builds saved, kept from the
@@ -200,7 +200,7 @@ def _six(raw: bytes, name: str) -> dict:
 
 def test_every_old_loadable_saves_as_six_and_is_a_fixed_point(tmp_path):
     """Row 394 (the owner, 2026-10-25: both Macs always on the newest
-    schema): every preset — the corpus's sources and every fixture, `/2` to `/6`
+    schema): every loadable patch — the corpus's sources and every fixture, `/2` to `/6`
     — loaded into a scratch library and saved untouched is
     `hyperspace.preset/6`, its graph the wired frame, no retired id in its
     values and its GRAPH layout in today's canvas ids; and that `/6`,
@@ -298,7 +298,7 @@ def test_an_untouched_corpus_loadable_saves_as_its_load(tmp_path):
 
 def saved_bytes(home: Path, kind: str, path: Path) -> bytes:
     """`path` loaded into a scratch library at `home` (copied in as a
-    preset of its own, whatever `kind`) and saved untouched under the name
+    loadable patch of its own, whatever `kind`) and saved untouched under the name
     it loaded as: the bytes on disk (`headless.resave`, the road
     tools/migrate_library.py takes)."""
     from hyperspace import headless
@@ -338,7 +338,7 @@ def test_a_run_reads_through_an_effect_file_this_machine_lacks():
 
 
 def test_the_missing_effects_wires_survive_a_save(tmp_path):
-    """R27: a preset whose run names `foo`, loaded on a machine without
+    """R27: a loadable patch whose run names `foo`, loaded on a machine without
     it, loads with no note and saves its wires unchanged, so the Mac that
     has foo still has its run (row 394: in the `/6` frame)."""
     from test_plan31_wiring import make_app
@@ -357,7 +357,7 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
     """R19 (R14 → T5, row 350): a route on `view.media` or `backdrop.channel`
     loads as a switch over the eight channels into `pattern.media` /
     `backdrop.image`, the route retargeted onto its `select`, the select at
-    the old choice — and, saved untouched, the preset is /6 (row 394), its
+    the old choice — and, saved untouched, the loadable patch is /6 (row 394), its
     graph the switches and their wires and its routes on the selects. The
     pictures are tests/test_graph_switch.py's."""
     from test_plan31_wiring import make_app
@@ -412,7 +412,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
 
 
 def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):
-    """The app's presets over a scratch library, a renderer attached as
+    """The app's loadable patches over a scratch library, a renderer attached as
     app.py attaches it, and `slug` (or `doc`) loaded."""
     from test_plan31_wiring import make_app
 

@@ -1,4 +1,4 @@
-"""Plan 33 M: old presets as wires (graphmigrate). Row 394: one way, on
+"""Plan 33 M: old loadable patches as wires (graphmigrate). Row 394: one way, on
 load — a save is always `/6`, so nothing writes the wires back as `/4`
 values any more."""
 
@@ -21,10 +21,10 @@ from hyperspace import graphmigrate as M
 from hyperspace.library import LibraryError
 
 ROOT = Path(__file__).parent.parent / "hyperspace"
-# plan 36 T3: the corpus presets' sources (the corpus files are their `/7`)
+# plan 36 T3: the corpus loadable patches' sources (the corpus files are their `/7`)
 SOURCES = Path(__file__).parent / "fixtures" / "factory-sources" / "presets"
 FILES = sorted(SOURCES.glob("*.json"))
-# the presets written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
+# the loadable patches written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
 # is the free graph's own: nothing to migrate, nothing `/4` can say; a `/6`
 # one, plan 35 T3's, the wired frame's)
 FIXTURES = sorted(p for p in [*SOURCES.glob("*.json"),
@@ -76,8 +76,8 @@ def test_every_library_loadable_migrates_without_a_note(path):
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_no_library_loadable_routes_an_effect_it_leaves_out(path):
-    """The owner's reading (row 346): no preset routes an off effect. A
-    failure is a preset to look at, not a test to loosen."""
+    """The owner's reading (row 346): no loadable patch routes an off effect. A
+    failure is a loadable patch to look at, not a test to loosen."""
     doc = load(path)
     section, _ = M.to_free(doc, SPECS)
     frame, faces = runs(section)
@@ -198,7 +198,7 @@ def test_a_route_onto_only_the_backdrop_takes_the_first_switch():
 
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_the_migrated_runs_are_the_old_stacks(path):
-    """Every preset from before plan 33: the runs its section is given are
+    """Every loadable patch from before plan 33: the runs its section is given are
     the ones the old stack ran from its values (orders, targets) — the
     migration's half of what `legacy_values` checked both ways until row
     394 retired the way back."""
@@ -305,7 +305,7 @@ def _values_of(doc: dict) -> dict:
 TESTS = Path(__file__).parent
 LOADABLE_FIXTURES = sorted([*(TESTS / "fixtures" / "presets").glob("*.json"),
                           *(TESTS / "fixtures" / "merge-31-32").glob("*.json")])
-# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
+# the corpus: the loadable patches the build once shipped (tests/corpus/presets, one tier)
 CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
 # a name that is only ever an old id (V2): `ghost[.n]`, `readout[.n]`,
 # `history`, `media.<c>` (`hands` is the geometry now, not the old layer)
@@ -313,8 +313,8 @@ _OLD_ONLY = r"ghost(\.[0-9]+)?|readout(\.[0-9]+)?|history|media\.[a-h]"
 
 
 def loaded(tmp_path: Path, path: Path):
-    """`path` loaded as the rig loads it — a corpus preset by name (the
-    app is seeded with the corpus), a fixture copied in as a user's preset
+    """`path` loaded as the rig loads it — a corpus loadable patch by name (the
+    app is seeded with the corpus), a fixture copied in as a user's loadable patch
     — on the app's presets: (the graph section's spec, its free section,
     the load's notes)."""
     if path.parent != CORPUS / "presets":
@@ -346,7 +346,7 @@ def old_ends(spec: G.GraphSpec) -> list[str]:
 @pytest.mark.parametrize("path", [*CORPUS_LOADABLES, *LOADABLE_FIXTURES],
                          ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_every_section_loads_as_a_wired_frame(tmp_path, path):
-    """Every corpus preset, every fixture — and so every one of the byte
+    """Every corpus loadable patch, every fixture — and so every one of the byte
     test's 38 sources — lands `spec.wired`, in the new ids, with no graph
     note (a refused wire, an old id), no `into` or `holds` left in an entry
     and no retired value left in the registry's way."""
@@ -461,8 +461,8 @@ def test_a_driven_backdrop_history_is_dropped_with_a_note(how):
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_no_library_loadable_drives_backdrop_history(path):
-    """Row 381: no library preset drives `backdrop.history` (a route on it
-    is dropped with a note), so retiring it costs no preset a look."""
+    """Row 381: no library loadable patch drives `backdrop.history` (a route on it
+    is dropped with a note), so retiring it costs no loadable patch a look."""
     assert "backdrop.history" in M.RETIRED
     assert "backdrop.history" not in M.targets(load(path))
     out, notes = M.migrate(load(path), SPECS)

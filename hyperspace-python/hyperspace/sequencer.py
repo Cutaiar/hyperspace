@@ -4,9 +4,9 @@ A sequencer is a source like the LFOs (plan 31 §S): `Sequencer.step` runs
 once a frame, fires each lane's envelope on the steps it crosses, and
 `publish` hands the router five trigger-kind lanes, ``seq:<i>``, that
 pulse on the frame a lane fires, so a lane can drive a strobe as well as its
-envelope (not ``preset.next``: `routing.meta_refusal`, no preset's row loads). Every step is a registry param —
+envelope (not ``preset.next``: `routing.meta_refusal`, no loadable patch's row loads). Every step is a registry param —
 ``seq.<l>.<s>``, a toggle in v1 — so the APC40's clip grid is a plain
-toggle row with LED feedback, and Learn, undo, the preset and "a
+toggle row with LED feedback, and Learn, undo, the loadable patch and "a
 performer owns a step" all come with it (decision 4). The model stores a
 step as a float, 0 off and > 0 its velocity, so the toggle can become a
 velocity later without a new file format (decision 5).
@@ -20,7 +20,7 @@ Per sequencer (all global, decisions 5–6):
   swing   0–0.5 of a step: how late every odd step lands
   gate    0.05–1 of a step: how long a fired gate-mode envelope holds
           before it releases (`gate_seconds`; a one-shot ignores it)
-  run     the transport; session state, never in a preset (decision 8)
+  run     the transport; meta controller state, never in a loadable patch (decision 8)
 
 Per lane: the eight steps, `mute`, and `env`, the envelope it fires —
 lane l fires envelope l by default (decision 3).
@@ -269,7 +269,7 @@ class Sequencer:
 def register(reg, seq: Sequencer, clock=None) -> None:
     """The grid and its globals as params in the ``seq`` group. The steps,
     mutes, envelope ids, span, length and swing persist — the pattern is
-    the preset's (decision 8); `run` and the read-only playhead do not.
+    the loadable patch's (decision 8); `run` and the read-only playhead do not.
     `clock` is unused today and taken for the shape of lfo.register."""
     if f"{GROUP}.run" in reg:
         return

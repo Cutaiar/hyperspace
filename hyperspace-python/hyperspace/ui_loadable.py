@@ -9,22 +9,22 @@ prev / next step through ``library.list(group)``; on a module group the
 name opens the group's list (× on each, to the trash); the dot is
 ``is_dirty(group)``, a 12 px red disc (``ui.dirty_dot``, plan 19 WP5),
 and while it shows the save chip is lit solid red; save writes over the
-current preset (its old text kept in the trash) and is disabled only when
+current loadable patch (its old text kept in the trash) and is disabled only when
 none is loaded; as… turns the strip into a name field until Enter (or
-Esc); reset (module strips only) lands the group on its default preset
+Esc); reset (module strips only) lands the group on its default loadable patch
 or its fresh values.
 
 The PRESETS page (2026-10-28: one tier — nothing is factory, nothing is
-hidden, every preset is yours to load, rename and delete) reads top to
+hidden, every loadable patch is yours to load, rename and delete) reads top to
 bottom (``page``):
 
   PRESET      the preset strip over the ``presets`` document kind
-              (preset.py): ◀ loaded preset ● ▶ · new · save · as… — the
+              (loadable.py): ◀ loaded loadable patch ● ▶ · new · save · as… — the
               name is a readout, the list is the page
-  the list    every preset by name, the loaded one selected, filling the
+  the list    every loadable patch by name, the loaded one selected, filling the
               page: a click loads, `rename` turns the row into a name
               field, × sends the file to the trash. Plan 48 stage 2: a
-              tree — the top-level presets, then a folding header per
+              tree — the top-level loadable patches, then a folding header per
               folder (the fold this Mac's, in ui.json), nested folders
               nested; a row's right-click is "move to ▸", a row drags
               onto a header; a header's right-click makes a folder
@@ -36,12 +36,12 @@ bottom (``page``):
   patches ▸   folded: every patch (plan 40 T3), rename and × — a patch is
               spawned on GRAPH, never loaded here
   SHOW        one line that says what a show is — the desk's pads, the
-              session and the rig's wires — then its name ●, open ▾ (your
+              meta controller and the meta controller's wires — then its name ●, open ▾ (your
               shows), save, as…, new. The pads are set on the desk (hold
               a pad, or SAVE + a pad); nothing on the page edits them
 
 The library's warning, error and status lines stay under all of it, so a
-note like a rename's is seen. The ROUTING page's head is the preset
+note like a rename's is seen. The ROUTING page's head is the loadable patch
 strip's save / as… over the same ``presets`` group (ui_routing.head).
 
 These are functions over the Panel rather than widget classes: the
@@ -61,14 +61,14 @@ from imgui_bundle import imgui
 from . import loadable, ui
 from .groupwords import group_word
 from .library import (
-    PATCHES,
     LOADABLE,
+    PATCHES,
     RETIRED_MODULES,
     LibraryError,
 )
 
-LIST_POLL = 1.0      # seconds between re-listings of a group's presets
-NAME_MAX = 14        # chars of a preset name the strip shows before eliding
+LIST_POLL = 1.0      # seconds between re-listings of a group's loadable patches
+NAME_MAX = 14        # chars of a loadable patch name the strip shows before eliding
 PROJECT = "show"     # the listing / name-field key for the show line
 SHOW_W = 96          # the open ▾ menu
 # plan 19 WP4: a module strip's list and the trash's view
@@ -77,7 +77,7 @@ EMPTY_S = 4.0        # how long "empty trash…" stays armed for its second clic
 MIN_ROWS = 3         # the page's list is never shorter than this many rows
 TRASH_KEY = "\0trash"     # the listings cache: the trash
 # plan 48 stage 2: the tree
-FOLDERS_KEY = "\0folders" # the listings cache: the presets' folders
+FOLDERS_KEY = "\0folders" # the listings cache: the loadable patches' folders
 LOADABLE_DRAG = "PRESET"    # a row's drag payload (the name kept in `_state`'s preset_drag)
 UI_KEY = "presets"        # <machine>/ui.json: {"presets": {"folded": [folder, …]}}
 FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). "
@@ -256,7 +256,7 @@ def _begin_naming(panel, key: str, seed: str) -> None:
 
 def save_label(lib, group: str) -> str:
     """The save chip's words — "save" (one tier: every save writes the
-    loaded preset's own file; kept as a function for ROUTING's head)."""
+    loaded loadable patch's own file; kept as a function for ROUTING's head)."""
     return "save"
 
 
@@ -291,9 +291,9 @@ def save_chip(panel, group: str, label: str, lit: bool, *, key: str | None = Non
 
 def strip(panel, group: str) -> None:
     """◀ name ● ▶ · save · as… · reset — for one registry group. On the
-    presets' strip (a document kind) there is no reset (`Library.reset`
-    on a kind loads a preset called "default", and none ships) and `new`
-    starts a blank preset (plan 35 T7); its name is a readout — the
+    loadable patches' strip (a document kind) there is no reset (`Library.reset`
+    on a kind loads a loadable patch called "default", and none ships) and `new`
+    starts a blank loadable patch (plan 35 T7); its name is a readout — the
     PRESETS page's list is under it. A module strip's name opens the
     group's list."""
     lib = panel.library
@@ -362,7 +362,7 @@ def strip(panel, group: str) -> None:
     imgui.end_disabled()
     if group == LOADABLE:
         from . import ui_graph  # (late, as `new` below)
-        if wants_beside:                # plan 40 T4: the devices the preset waits for
+        if wants_beside:                # plan 40 T4: the devices the loadable patch waits for
             ui_graph._wants_chip(panel)
     else:
         _list_popup(panel, group, listing, cur)
@@ -381,10 +381,10 @@ def strip(panel, group: str) -> None:
             ui.tooltip("A new preset: default values, shape → scene → All outputs — "
                        "a shape on every window")
         imgui.same_line()
-    # R17: a preset `new` made and nothing saved names itself — a preset
+    # R17: a loadable patch `new` made and nothing saved names itself — a loadable patch
     # that happens to be called `untitled` is never written over (the flag
     # counts while `untitled` is current: an undo of New hands back the
-    # preset before, which saves as it always did)
+    # loadable patch before, which saves as it always did)
     unsaved = loaded_patch is not None and cur == loadable.UNTITLED_PATCH and (
         bool(getattr(loaded_patch, "unsaved", False)) or lib.path_of(group, cur) is None)
     if save_chip(panel, group, word, is_dirty):
@@ -435,7 +435,7 @@ def list_row_h() -> float:
 def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
               tree: bool = False) -> None:
     """One row of a preset list: the name (a pick loads it), then its
-    chips — `rename` and × on a preset or a patch (plan 40 T3: a patch's
+    chips — `rename` and × on a loadable patch or a patch (plan 40 T3: a patch's
     row has no pick — a patch is spawned on GRAPH, never loaded), × alone
     on a module preset. What was drawn joins `drawn["rows"]` as
     ``(name, chips)``."""
@@ -447,7 +447,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
         drawn["rows"].append((name, ("field",)))
         _name_field(panel, key, lambda n, old=name: _rename(panel, old, n, group))
         return
-    # plan 48 row 588: a preset from a folder reads "party / TRIP", the
+    # plan 48 row 588: a loadable patch from a folder reads "party / TRIP", the
     # folder dim — the row's text drawn over a label-less selectable; a
     # top-level name is the selectable's own label, as before
     # (plan 48 stage 2: under its folder's header — `tree` — a row is the
@@ -504,7 +504,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
 
 
 def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
-    """A module strip's list, the popup its name opens: every preset of the
+    """A module strip's list, the popup its name opens: every loadable patch of the
     group, the loaded one selected, × on each (to the trash). Past
     LIST_ROWS rows it scrolls in its own child. What was drawn is kept in
     `_state`'s ``list`` for the tests."""
@@ -568,11 +568,11 @@ def _reserve() -> float:
 
 
 def loadable_list(panel) -> None:
-    """Every preset, as a list that fills the page (never shorter than
+    """Every loadable patch, as a list that fills the page (never shorter than
     MIN_ROWS rows, scrolling past the room it has): the loaded one
     selected, a click loads, `rename` and × on each row (`_list_row`).
-    Plan 48 stage 2: a tree — the top-level presets first, then a folding
-    header per folder, alphabetically, a folder's presets (in the list's
+    Plan 48 stage 2: a tree — the top-level loadable patches first, then a folding
+    header per folder, alphabetically, a folder's loadable patches (in the list's
     order) then its own folders under it (`_folder`); a fold is this
     Mac's (`folded`). Then the foot line: the trash's while it holds
     something, and **new folder** (at the top) flush right. What was drawn
@@ -595,7 +595,7 @@ def loadable_list(panel) -> None:
     room = imgui.get_content_region_avail().y - _reserve()
     height = max(room, list_row_h() * MIN_ROWS)
     if imgui.begin_child("##presets.rows", imgui.ImVec2(0, height)):
-        if not tree["count"].get(""):  # no preset anywhere, folders or none
+        if not tree["count"].get(""):  # no loadable patch anywhere, folders or none
             imgui.text_disabled("no presets — new, then save as… makes one")
         _folder_body(panel, "", tree, cur, drawn, rect)
     imgui.end_child()
@@ -648,9 +648,9 @@ def folder_list(panel) -> list[str]:
 
 
 def _tree(lib, rows: list[str], folders: list[str]) -> dict:
-    """The list as a tree: ``rows`` — folder → its presets, in the list's
+    """The list as a tree: ``rows`` — folder → its loadable patches, in the list's
     order (``""`` the top); ``kids`` — folder → its folders, sorted case
-    folded; ``count`` — folder → presets in it, every folder down. Every
+    folded; ``count`` — folder → loadable patches in it, every folder down. Every
     folder on disk is in it, empty ones too, and every folder a name
     sits in (with its parents)."""
     by: dict[str, list[str]] = {}
@@ -680,7 +680,7 @@ def _tree(lib, rows: list[str], folders: list[str]) -> dict:
 
 def _folder_body(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None:
     """A folder's inside (the top's too): a new folder's name field while
-    one is being made here, its presets, then its folders."""
+    one is being made here, its loadable patches, then its folders."""
     if folder:
         _name_field(panel, f"newfolder:{folder}",
                     lambda n: _make_folder(panel, folder, n), "folder name")
@@ -692,7 +692,7 @@ def _folder_body(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None
 
 def _folder(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None:
     """One folder's header, folding (this Mac's, `folded`): its name, how
-    many presets it holds, and — folded — the loaded preset's name when it
+    many loadable patches it holds, and — folded — the loaded loadable patch's name when it
     is inside; a drop target for a dragged row; its right-click menu
     (`_folder_menu`). Open, its body under it, indented."""
     st = _state(panel)
@@ -827,7 +827,7 @@ def _machine(panel):
 
 
 def folded(panel) -> set[str]:
-    """The folders folded on this Mac — ``presets.folded`` in
+    """The folders folded on this Mac — ``loaded_patch.folded`` in
     ``<machine>/ui.json`` (`ui_pane.read_doc`). Read once the machine is
     known, and again if it changes (review of #349, as `ui_pane.opened`:
     a draw before the library attached must not stand for the file), any
@@ -866,7 +866,7 @@ def _folds_dirty(panel, now: float | None = None, clicks: dict | None = None) ->
 
 
 def flush_folds(panel, now: float | None = None, force: bool = False) -> bool:
-    """Write ``presets.folded`` (`ui_pane.write_key`, the rest of ui.json
+    """Write ``loaded_patch.folded`` (`ui_pane.write_key`, the rest of ui.json
     as it was) once `ui_pane.WRITE_AFTER_S` has passed since the last fold
     (`force`: now). Called each frame the list draws; True when it wrote."""
     from . import ui_pane
@@ -1029,7 +1029,7 @@ def patches_fold(panel) -> None:
 def show_line(panel) -> None:
     """What a show is, in one line (SHOW_LINE, SHOW_TIP on hover); then
     its name ● · open ▾ · save · as… · new. The pads are the desk's to
-    set; the startup preset stays whatever the file says."""
+    set; the startup loadable patch stays whatever the file says."""
     lib = panel.library
     if lib is None or lib.reg is None:
         return

@@ -33,7 +33,7 @@ def rig(tmp_path):
 def test_learn_source_writes_a_position_route_without_any_midi(rig, tmp_path):
     """A hand completing a learn: a `position` row at depth 1 through the
     table's referee, into the table and no file (plan 13 §3.3: the loaded
-    preset's) — no MidiIO exists here (B3). On an owned target it is held
+    loadable patch's) — no MidiIO exists here (B3). On an owned target it is held
     in `pending`; a new learn forgets it."""
     lrn, t = rig.learn, rig.table
     lrn.arm("view.inst_amp")
@@ -127,7 +127,7 @@ def test_a_learn_on_a_band_sel_alias_is_refused_as_the_bands_are(rig):
     assert reg.real(reg["band.sel.thr"]) is reg["band.2.thr"]
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.2.thr"
     reg.real_of = None
-    reg.meta_reg.real_of = None           # (plan 44 D3: the session declares the rule)
+    reg.meta_reg.real_of = None           # (plan 44 D3: the meta controller declares the rule)
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.sel.thr"
 
 
@@ -195,7 +195,7 @@ def test_a_centred_axis_learns_as_a_push_about_the_base_at_the_learn_depth(rig):
     """The rule's first column: a centred axis (roll) on a continuous param
     lands a push at the depth the adapter names, with no rest of its own,
     so it is centred where the axis rests. A level hand leaves the base;
-    the ends move it ±depth/2 of the throw. And the session's complaint in
+    the ends move it ±depth/2 of the throw. And the meta controller's complaint in
     its own numbers: on `rot.rate.XY` from 1× a level hand reads 1× (the
     position row read 0×: the plane stopped) and the ends are −15.64× and
     +17.64× (they were ±66.56×)."""
@@ -214,7 +214,7 @@ def test_a_centred_axis_learns_as_a_push_about_the_base_at_the_learn_depth(rig):
     # the rest is the axis's, read every frame: move it and the push follows
     played(rig, 0.3, 0.3)
     assert p.eff_norm == pytest.approx(base)
-    # rotation, from the preset's 1×
+    # rotation, from the loadable patch's 1×
     rig.table.remove(b)
     rate = reg["rot.rate.XY"]
     rate.set(1.0)
@@ -326,7 +326,7 @@ def test_a_band_lane_and_an_lfo_land_as_calm_pushes_about_the_base(rig):
         for src in ("lane:2", "lfo:0"):
             assert (row_for(src, reg[pid]).op, row_for(src, reg[pid]).value) == \
                 ("position", 1.0), (pid, src)
-    # a lane's push in the preset's own arithmetic: the base shows through
+    # a lane's push in the loadable patch's own arithmetic: the base shows through
     p = reg["view.bright"]
     p.set(0.5)
     base = p.norm
@@ -415,7 +415,7 @@ def test_no_target_is_refused_or_flagged(rig):
 
 def test_the_same_axis_again_only_refreshes_the_gate_whatever_the_op(rig):
     """The target's performer is this same axis: the learn refreshes `when`
-    and changes nothing else — a push row with a tuned depth (a preset's,
+    and changes nothing else — a push row with a tuned depth (a loadable patch's,
     or one the owner turned down on ROUTING) keeps its op and depth, and a
     position row is not turned into a push. No prompt either way."""
     lrn, t = rig.learn, rig.table
@@ -460,7 +460,7 @@ def test_a_learn_onto_a_performed_param_is_still_held_whatever_the_op(rig):
 
 def test_existing_rows_are_never_rewritten(rig):
     """This is what a *new* learn lands with: rows already in the table —
-    a preset's, the owner's — keep their op and depth through learns on
+    a loadable patch's, the owner's — keep their op and depth through learns on
     other params, and a table read back from its own JSON is unchanged."""
     t = rig.table
     mine = [Binding("hand:1", "view.speed", "position", 1.0),
@@ -485,14 +485,14 @@ def test_the_two_default_depths_agree():
     assert PUSH_DEPTH == HandSettings().learn_depth == 0.25
 
 
-# ------------------------------------------ plan 13 WP4: into the loaded preset
+# ------------------------------------------ plan 13 WP4: into the loaded loadable patch
 
 def desk_rig(home):
-    """The app's construction (tests/test_presets.boot: the startup preset
+    """The app's construction (tests/test_loadable.boot: the startup loadable patch
     loaded) with a MIDI adapter over fake ports on the same table and one
     shared Learn; bindings.json written once so a later write would show."""
-    from test_midi import FakeIn, FakeOut
     from test_loadable import boot
+    from test_midi import FakeIn, FakeOut
 
     from hyperspace.midi import MidiIO
 
@@ -512,11 +512,11 @@ def untouched(r) -> bool:
 
 
 def test_a_knob_learn_writes_a_desk_row_into_the_loaded_loadable(tmp_path):
-    """Plan 13 §3.3, D5: a knob learn is a preset-layer row in the live
-    table — the control's old preset row and the param's previous knob
-    go, the global row on the same knob stays — the loaded preset is dirty
-    and bindings.json is untouched; saving the preset writes the row, and
-    loading the preset again throws away what was learned since."""
+    """Plan 13 §3.3, D5: a knob learn is a patch-layer row in the live
+    table — the control's old patch row and the param's previous knob
+    go, the global row on the same knob stays — the loaded loadable patch is dirty
+    and bindings.json is untouched; saving the loadable patch writes the row, and
+    loading the loadable patch again throws away what was learned since."""
     from test_midi import cc, push
 
     from hyperspace import loadable
@@ -525,7 +525,7 @@ def test_a_knob_learn_writes_a_desk_row_into_the_loaded_loadable(tmp_path):
     lib, table, lrn = r.lib, r.router.table, r.learn
     assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
     lrn.arm("view.depth4")
-    push(r, cc(0x10, 64))                                   # device knob 1: free on the preset layer
+    push(r, cc(0x10, 64))                                   # device knob 1: free on the patch layer
     assert lrn.learning is None and not lrn.refused
     assert "learned view.depth4" in lrn.last and "device knob 1" in lrn.last
     row = next(b for b in table.desk() if b.target == "view.depth4")
@@ -580,7 +580,7 @@ def test_a_knob_learn_replaces_an_any_channel_row_on_the_same_knob(tmp_path):
 def test_a_hand_learn_writes_a_route_into_the_loaded_loadable(tmp_path):
     """The same for a hand: the route goes into the table through the
     referee — a taken target still asks, Replace / Keep — and neither the
-    learn nor the answer writes bindings.json; the preset is dirty until
+    learn nor the answer writes bindings.json; the loadable patch is dirty until
     saved, and a load throws the learn away."""
     r = desk_rig(tmp_path)
     lib, table, lrn = r.lib, r.router.table, r.learn
@@ -612,7 +612,7 @@ def test_a_hand_learn_writes_a_route_into_the_loaded_loadable(tmp_path):
 def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     """D5, D6, and plan 17 fork 6. With the global layer up a desk learn
     is refused in the same words as ever — nothing changes (the table, the
-    layer, the param, the file, the preset's dot) — and now **stays
+    layer, the param, the file, the loadable patch's dot) — and now **stays
     armed**: SHIFT, pressed while it is armed, latches (an invariant
     control is no candidate; it does its own job), and the same knob then
     lands. An invariant control — a fader, SHIFT's own note, OVERDUB —
@@ -684,7 +684,7 @@ def test_accepts_by_want():
     left = ("hand:left.roll", "hand:left.pinch.index", "hand:left.present")
     other = ("hand:right.y", "hand:7", "lane:0", "lfo:1", "ext:2", "key:B")
     # plan 27 B2: what can be armed is the device registry's; a Learn
-    # handed none offers today's rig's
+    # handed none offers today's meta controller's
     assert lrn.wants() == ("desk", "hand:left", "hand:right", "pad", "pair", "pair (spring)")
     assert not any(lrn.accepts(s) for s in (*desk, *left, *other))      # nothing armed
     lrn.arm("view.bright")
@@ -724,7 +724,7 @@ def test_accepts_by_want():
 def test_learn_control_needs_no_adapter(tmp_path):
     """Fork 7: the desk learn is the learn object's. A bare `Learn` over a
     table — no MidiIO anywhere — and `learn_control("cc:*:18", apc40)`: a
-    preset-layer ring row, the table's `redraw_serial` bumped (an adapter,
+    patch-layer ring row, the table's `redraw_serial` bumped (an adapter,
     if there is one, redraws), one undo step, no file. The op comes from
     the profile and the param; with no profile, a plain `abs` row in the
     row's own words. The param's old knob lets go, and is named."""
@@ -836,7 +836,7 @@ def test_a_learn_is_one_undo_step(tmp_path):
     settle(r)
     assert table.owner("view.inst_amp").when == "hand:18" and len(u.stack) == 1
     assert u.undo() and routes() == was
-    # a knob learn: a desk row of the preset's, taking the control's old row
+    # a knob learn: a desk row of the loadable patch's, taking the control's old row
     frames(r, 3)
     knob = next(b for b in table.desk() if b.kind == "cc" and b.op == "abs")
     target = next(p.id for p in reg if p.group == "view" and p.id != knob.target
@@ -856,9 +856,9 @@ def test_a_learn_is_one_undo_step(tmp_path):
 
 def bound_rig(home):
     """The app's construction with the undo (tests/test_undo.boot: TUMBLE
-    loaded), and on Brightness — a knob and two step buttons in that preset
+    loaded), and on Brightness — a knob and two step buttons in that loadable patch
     — a hand route, a disabled LFO route with a macro on its depth, and an
-    invariant row of the session's."""
+    invariant row of the meta controller's."""
     from test_undo import boot, settle
 
     from hyperspace.routing import Macro, Sub
@@ -889,9 +889,9 @@ def left(table, pid) -> list:
 
 def test_unbind_removes_the_loadables_desk_rows_and_every_route(tmp_path):
     """Plan 17 WP1, fork 4: one Unbind removes what is bound to the param
-    in the loaded preset — its knob, its two step buttons, the hand route
+    in the loaded loadable patch — its knob, its two step buttons, the hand route
     and the disabled LFO route (its depth subscriber with it) — and never
-    a session row. The preset is dirty; no file is written. It needs no
+    a meta row. The loadable patch is dirty; no file is written. It needs no
     MIDI adapter: the call is the learn object's."""
     r = bound_rig(tmp_path / "home")
     table, lrn, pid = r.table, r.learn, r.pid
@@ -914,7 +914,7 @@ def test_unbind_removes_the_loadables_desk_rows_and_every_route(tmp_path):
     assert len(bare.unbind("a", name=lambda b: b.source.upper())) == 2
     assert bare.last == "unbound a from CC:0:48 and LANE:1"
     assert [b.source for b in t.bindings] == ["cc:0:7"]
-    # only the session's row left: a refusal, in the words Unbind always used
+    # only the meta controller's row left: a refusal, in the words Unbind always used
     assert bare.unbind("a") == [] and bare.refused
     assert bare.last == ("MIDI CC 7 ch1 → a is invariant (the session's, edited in "
                          "bindings.json) — not unbound")
@@ -946,8 +946,8 @@ def test_unbind_by_kind(tmp_path):
     assert not [b for b in table.desk() if b.target == "band.sel.thr"]
     assert lrn.last.startswith("unbound band.2.thr from ")
     # a MIDI row is never a "route", whatever its op (review of PR #93): a
-    # session row with a performer op stays, and is a refusal, not an item
-    odd = Binding("cc:0:118", "view.zoom_rate", "push")           # no layer: the session's
+    # meta row with a performer op stays, and is a refusal, not an item
+    odd = Binding("cc:0:118", "view.zoom_rate", "push")           # no layer: the meta controller's
     mine = Binding("cc:0:117", "view.zoom_rate", "position", layer="preset")
     table.bindings += [odd, mine]
     assert lrn.bound("view.zoom_rate") == ([mine], [], [odd])
@@ -990,7 +990,7 @@ def test_unbind_is_one_undo_step_and_none_when_nothing_goes(tmp_path):
     assert labels(r) == [f"unbind {pid}"] and u.undo()
     frames(r, 3)
     # nothing goes: no push — the stack does not grow even before it settles
-    lrn.unbind(("output.dim",))                              # the crossfader's: the session's
+    lrn.unbind(("output.dim",))                              # the crossfader's: the meta controller's
     assert lrn.refused and "invariant" in lrn.last and u.stack == []
     free = next(p.id for p in r.reg if not any(b.target == p.id for b in table.bindings))
     lrn.unbind((free,))
@@ -1020,7 +1020,7 @@ def test_pick_then_param_maps_through_the_learn(tmp_path):
     u.clear()
     on_disk = table.path.read_bytes() if table.path.exists() else None
     assert [b.source for b in table.desk() if b.target == "view.speed" and b.kind == "cc"] \
-        == ["cc:0:49"]                                       # K2 has Speed in the startup preset
+        == ["cc:0:49"]                                       # K2 has Speed in the startup loadable patch
     before, serial = desk(), table.redraw_serial
     assert lrn.control is None and not lrn.map_picked("view.speed", apc40)   # nothing picked
     lrn.pick("cc:*:18")                                      # D3
@@ -1035,7 +1035,7 @@ def test_pick_then_param_maps_through_the_learn(tmp_path):
     assert lrn.last == "learned view.speed ← D3 (device knob 3) (into the preset); K2 let go"
     assert table.redraw_serial > serial                      # an adapter would redraw the desk
     assert (table.path.read_bytes() if table.path.exists() else None) == on_disk
-    assert r.lib.is_dirty("presets")                         # the loaded preset's edit: its dot
+    assert r.lib.is_dirty("presets")                         # the loaded loadable patch's edit: its dot
     mapped = desk()
     settle(r)
     assert labels(r) == ["learn view.speed"]                 # one step…

@@ -1,19 +1,19 @@
 """Plan 40 T1 (P1, D5): the patch as data — `patches.py` and the library's
 `patches` kind.
 
-No GL, no imgui: a corpus preset's parts are landed headless from its file
-(the graph section read, the routes and preset-layer desk in a bare
+No GL, no imgui: a corpus loadable patch's parts are landed headless from its file
+(the graph section read, the routes and patch-layer desk in a bare
 `routing.Bindings`, its values as the registry's snapshot would hold them).
 
 - `check` refuses each refusable thing in words;
 - `read` classifies the spec's example (tests/fixtures/patches/acid-wash.json)
-  into its rig rows and host ports;
+  into its control rows and host ports;
 - `lift` of warp, doublevision and fractals out of party-noita gives one
   inlet, one outlet, the three effects' values and their desk rows;
 - `spawn` renames into a host that holds them, lists a desk conflict, and
   notes a macro with no free number;
 - the round trip — `read(lift(spawn(p)))` is `read(p)` up to the renames and
-  the origin — over the example and over every corpus preset's main run;
+  the origin — over the example and over every corpus loadable patch's main run;
 - the library lists, renames, saves and reads patches, and never loads one.
 """
 
@@ -35,7 +35,7 @@ from hyperspace.routing import Binding, Bindings
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "patches"
 ACID_WASH = FIXTURES / "acid-wash.json"
-# the presets the build once shipped (tests/corpus: test data, never read by the app)
+# the loadable patches the build once shipped (tests/corpus: test data, never read by the app)
 LOADABLE = Path(__file__).resolve().parent / "corpus" / "presets"
 
 
@@ -48,8 +48,8 @@ def loadable(name: str) -> dict:
 
 
 def parts(doc: dict):
-    """A preset's parts as the app holds them once it has landed: the
-    section read, the table (its routes, its preset-layer desk, modifiers
+    """A loadable patch's parts as the app holds them once it has landed: the
+    section read, the table (its routes, its patch-layer desk, modifiers
     and macros), the performance values (a modifier's params among them, as
     the registry's snapshot has them) and the GRAPH layout."""
     spec = G.read_graph(doc["graph"])
@@ -140,8 +140,8 @@ def test_patches_is_a_leaf():
 
 
 def test_the_meta_nodes_are_graphviews_not_removable():
-    """`RIG_NODES` restates the render nodes the GRAPH page refuses to delete
-    (`graphview.spec_name`): the clouds as the rig's (`NOT_REMOVABLE`), the
+    """`FIXTURE_NODES` restates the render nodes the GRAPH page refuses to delete
+    (`graphview.spec_name`): the clouds as the meta controller's (`NOT_REMOVABLE`), the
     camera as the look's one (`CAMERA_KEPT`, plan 43 C2); the two lists
     agree, and the patch reads a name's kind as the canvas does."""
     assert set(patches.FIXTURE_NODES) == {graphview.CAMERA, "cloud"}
@@ -245,7 +245,7 @@ def test_spawn_lands_only_the_members_values():
 # ---------------------------------------------------------------- read
 
 def test_read_classifies_the_example():
-    """The spec's example: the lane route and K1's desk row are rig rows
+    """The spec's example: the lane route and K1's desk row are control rows
     (verbatim); the two picture ports are its host ports; the modifier's
     route is the patch's own, inside."""
     doc = example()
@@ -602,7 +602,7 @@ def test_the_example_round_trips(host):
         assert landing.renames["acid"] == "acid.2"
 
 
-# a preset whose main run (the effects wired one after another into All
+# a loadable patch whose main run (the effects wired one after another into All
 # outputs' picture) is empty: nothing to cut
 NO_RUN = {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play", "hex-engine",
           "inverse-halo", "legacy6", "party-faces", "party-field", "party-tumble",
@@ -612,7 +612,7 @@ NO_RUN = {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play", "hex-engi
 
 def test_a_patch_cut_from_every_corpus_loadables_main_run_round_trips():
     """For each corpus preset: its main run (`graph.run_back` into
-    `output.all.image`) lifted, spawned back into the same preset — every
+    `output.all.image`) lifted, spawned back into the same loadable patch — every
     id renamed, `.2` — landed, and lifted again reads as the first."""
     skipped, done = set(), []
     for path in sorted(LOADABLE.glob("*.json")):

@@ -429,7 +429,7 @@ def test_a_generator_lights_a_transparent_ground(ctx):
     assert (px[..., :3].max(axis=2) <= px[..., 3].astype(int) + 1).all()   # premultiplied
 
 
-# ---------------------------------------------------------------- presets and the page
+# ---------------------------------------------------------------- loadable patches and the page
 
 def shell(tmp_path):
     """The shell's rig (tests/test_ui_shell.py: the real Panel and its
@@ -477,7 +477,7 @@ def browser_scroll(panel, size) -> float:
 
 
 def test_the_browser_draws_every_strip(tmp_path, monkeypatch):
-    """The FX browser at the control size over a party preset's graph (TRIP:
+    """The FX browser at the control size over a party loadable patch's graph (TRIP:
     its run), nothing open, then each of its effects' strips with an error
     line on it, then the longest strip of all, draw (GRAPH's fx section's
     body; a section scrolls in its body)."""
@@ -530,7 +530,7 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
 
 def test_the_selection_is_a_name_a_load_keeps(tmp_path, monkeypatch):
     """The open strip is a name (`Panel.fx_selected`, the one selection
-    GRAPH shares): a preset load never moves it, nothing saves it, and a
+    GRAPH shares): a loadable patch load never moves it, nothing saves it, and a
     name the loaded graph lacks still opens its strip — or says there is
     no such effect."""
     rig = browsing(tmp_path, monkeypatch)
@@ -982,7 +982,7 @@ def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
     try:
         rig.panel.fx_selected = "warp"
         r.reg["fx.on"].set(False)                    # the effects bypassed and warp off,
-        r.reg["fx.warp.on"].set(False)               # whatever the startup preset left
+        r.reg["fx.warp.on"].set(False)               # whatever the startup loadable patch left
         settle(r)
         start = labels(r)
         rig.click("idle.fx.warp.on")                 # "turn on": the first reason's chip
@@ -1363,7 +1363,7 @@ def test_groups_follow_the_wires():
 
 def browsing(tmp_path, monkeypatch, section=BROWSED):
     """The FX page over the app's construction (test_undo.boot) with
-    `section` loaded as a `/5` preset — every effect of it on."""
+    `section` loaded as a `/5` loadable patch — every effect of it on."""
     from test_undo import boot
     st = FxState()
     r = boot(tmp_path / "home", fx=st)
@@ -1487,7 +1487,7 @@ def test_the_retired_ids_are_gone():
 
 def test_an_effect_file_with_an_order_line_still_parses():
     """Every factory file keeps its `// @order` line (plan 33 T8 rewrites the
-    header comment): `parse` accepts it, and it is what an old preset's
+    header comment): `parse` accepts it, and it is what an old loadable patch's
     absent order means (`graphmigrate`), nothing else."""
     s = parse("test", EFFECT)
     assert s.order == 12 and s.label == "Test"
@@ -1584,7 +1584,7 @@ def test_the_media_page_reads_a_wired_frames_channels():
 
 
 def test_an_old_loadable_saves_no_retired_id(tmp_path):
-    """Row 394: a `/4` preset's retired ids (an effect's order and target,
+    """Row 394: a `/4` loadable patch's retired ids (an effect's order and target,
     `view.media`) are read as wires on load and never written back — the
     save is `/6`, the run and the channel the wired frame's; a run
     reordered on GRAPH saves as the wires it now is."""

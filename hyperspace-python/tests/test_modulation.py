@@ -3,7 +3,7 @@
 Modulation is the one control concept every source shares (params.py
 docstring): a source calls modulate(u) each frame, Registry.apply() lands
 base + offsets on the object, and the base — what the user set — is what
-every surface reads and every preset saves.
+every surface reads and every loadable patch saves.
 """
 
 import math
@@ -77,7 +77,7 @@ def test_flags_say_what_a_param_is_for(rig):
         assert not reg[pid].persist, pid
     assert not reg["preset.select"].modulatable
     assert not reg["preset.save.0"].modulatable
-    assert reg["preset.load.0"].modulatable     # a kick may load a preset
+    assert reg["preset.load.0"].modulatable     # a kick may load a loadable patch
     assert not reg["camera.reset"].persist       # triggers never persist
     assert reg["view.bright"].persist and reg["view.bright"].modulatable
     assert not reg["view.test_file"].modulatable

@@ -65,7 +65,7 @@ def test_no_loadable_draws_the_factory_frame():
 
 def test_graph_imports_only_the_render_stack_and_names_no_write():
     """graph.py imports moderngl and its sibling render modules only —
-    never params, routing, library, preset, undo, control, app or ui —
+    never params, routing, library, loadable patch, undo, control, app or ui —
     and no node method is named apply, modulate, snapshot or set_value
     (the rule `test_render.py` holds render.py to)."""
     tree = ast.parse(Path(G.__file__).read_text())

@@ -6,7 +6,7 @@ the picked one runs.
 a cut, no pass of its own (row 352). Only the selected input's branch is
 made each frame: the other seven run no pass and their channels upload
 nothing (Review Focus 2), and moving `select` never builds the graph
-again. The param is declared from the preset's graph, as the effect
+again. The param is declared from the loadable patch's graph, as the effect
 instances are, and a route on the old `view.media` / `backdrop.channel`
 drives it after the migration (row 350, R19).
 
@@ -199,7 +199,7 @@ def test_select_changes_do_not_rebuild_the_graph(ctx):
 
 def _app(media=None, view=None):
     """A registry over `view` (and `media`), the LFOs and a router, the
-    library and the presets — the app's, as test_plan31_wiring.make_app
+    library and the loadable patches — the app's, as test_plan31_wiring.make_app
     builds it, with the view state kept for the renderer."""
     import tempfile
 
@@ -379,7 +379,7 @@ def test_a_migrated_backdrop_route_switches_the_backdrop(ctx):
 
 
 def test_switch_params_come_and_go_with_the_graph(tmp_path):
-    """A preset whose graph holds `switch.2` declares `switch.2.select` (its
+    """A loadable patch whose graph holds `switch.2` declares `switch.2.select` (its
     value landed); loading one without it takes the param away."""
     from test_plan31_wiring import make_app
 
@@ -416,7 +416,7 @@ def test_the_switch_onto_the_faces_is_a_cut(ctx):
 
 
 def test_a_route_on_a_removed_switch_select_goes_dormant_without_raising(ctx):
-    """Final review (10): a preset with `switch.2` and an LFO route on
+    """Final review (10): a loadable patch with `switch.2` and an LFO route on
     `switch.2.select`; a GRAPH edit deletes `switch.2` and frames are
     drawn — nothing raises, the param is gone and the route stays in the
     table, dormant (on no param), as a route on a removed modifier does."""

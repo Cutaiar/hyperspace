@@ -1,4 +1,4 @@
-"""tools/app_driver.py script: the player screen with a rig's worth of controllers
+"""tools/app_driver.py script: the player screen with a full set of controllers
 (stood in: the driver's home lists none), by mouse — at 320 and 240 px in the pane,
 a token dragged across, then the large window and a controller dragged between tokens.
 

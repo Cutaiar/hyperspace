@@ -54,7 +54,7 @@ by what feeds it, the pick lit, a click its pick (`_switch_block`).
 pins (`_create`) and a cable or node deleted (`_delete`) go through
 `graphview.Edit` and the table's own calls — the same table ROUTING
 edits, so either page shows the other's change next frame, and undo, the
-preset's dirt and the referee are theirs. A taken param asks Replace /
+loadable patch's dirt and the referee are theirs. A taken param asks Replace /
 Keep (ROUTING's prompt, `ui_routing.ask`); a refusal says why on the
 page's head (`st["note"]`) and on the drag. Right-click: a param's `mod`
 pin offers the param menu's Learn items (`Panel._ctx_learn_block`, the same
@@ -70,10 +70,10 @@ inserted into it (`dropped`). **The seam with N4** (render edits): `_create` and
 trigger cables are this file's handlers, image / geometry / mask N4's.
 
 **Edits** (plan 28 N4, the render graph): a cable dragged between two
-image ports is a wire in the preset's graph (`graphview.Edit.wire`),
+image ports is a wire in the loadable patch's graph (`graphview.Edit.wire`),
 type-checked while it is dragged — a port of another type, a port that
 does not exist, a loop: the cable goes red and the tooltip says the
-words a preset file would get; a geometry cable from a hands node into
+words a loadable patch file would get; a geometry cable from a hands node into
 the scene or the layer is where that node is drawn. Right-click the
 canvas for the picker (an effect instance, a hands node, a composite);
 right-click a render node to delete it, draw its hands as lines or set
@@ -83,7 +83,7 @@ node out of the graph, with the canvas focused (`_delete_key`). A box
 dragged on the background selects the nodes in it; with ⌥ (Option) held,
 the cables it touches instead (the widget's own link select: nodes and
 cables are never selected together), so Delete takes many cables at once. Each
-edit is one undo step and dirties the preset; the renderer builds the
+edit is one undo step and dirties the loadable patch; the renderer builds the
 graph again from it. Render edits do not go through N3's `_act`:
 their handlers (`_create_render`, `_delete_render_cable`,
 `_delete_render_node`) land through `render_edit`, whose undo step is
@@ -133,12 +133,12 @@ the panel's one selection, shared with the FX page (`Panel.fx_selected`,
 panel (2026-10-31, `publish`: `Panel.graph_selected`, the one selected
 node's id, and `graph_selected_at`) for whoever is not this view — a
 controller's node mode, the side pane's fold of every page — as of the
-last frame this page drew; a preset landing without that node lets it go
+last frame this page drew; a loadable patch landing without that node lets it go
 on any page (`settle`); `select_id` / `Panel.select_graph_node` select
 one from outside, and `node_params` / `Panel.graph_selected_params` are
 its registry ids.
 
-**The wired frame** (plan 35 G): the canvas is the preset's wired frame,
+**The wired frame** (plan 35 G): the canvas is the loadable patch's wired frame,
 in the owner's ids and words — every node of it titled for what it is
 (`graphview.label_of`: "Look-back", "Hands layer", "Channel A", a window
 by its config name), its hover what it does with its id and its params'
@@ -158,8 +158,8 @@ copy of ▸ — a frame node the section has drawn disabled
 (`render_picker`).
 
 A node can be moved: where it is dropped is saved, in the
-preset's ``layout`` for the look's nodes and the show's for the rig's
-(`graphview.home`), and the preset (or the show) is dirty. An unplaced
+loadable patch's ``layout`` for the look's nodes and the show's for the meta controller's
+(`graphview.home`), and the loadable patch (or the show) is dirty. An unplaced
 node takes its place in its **area** (plan 28 N9, `graphview.layout`):
 controllers → audio (the small *other* under it) → modulation → media →
 scene → look-back → effects → outputs (plan 35 G: by primitive), left to
@@ -185,7 +185,7 @@ owner, 2026-10-27: "for some UI, the little sidebar … is just not wide
 enough"): a grip on its left edge drags it between `SIDE_MIN` and what
 leaves `CANVAS_MIN` of canvas (`side_width`), and the width is this Mac's,
 kept in ``<machine>/ui.json`` (`read_side` / `write_side`, written when
-the drag lets go), so it holds across presets, shows and relaunches.
+the drag lets go), so it holds across loadable patches, shows and relaunches.
 
 **The editor context** is the widget's own C++ object: made on the first
 draw of the page, held in the panel's state (``panel._graph``) — not in
@@ -193,7 +193,7 @@ this module — so a hot reload of this file keeps drawing on the same
 context and makes no second one; destroyed by `close` (`Panel.close`,
 which app.py calls on quit and on ⌘R before imgui shuts down). Its
 settings file is off (`Config.settings_file = ""`): the positions are
-the preset's and the show's, never a NodeEditor.json beside the app.
+the loadable patch's and the show's, never a NodeEditor.json beside the app.
 """
 
 from __future__ import annotations
@@ -293,7 +293,7 @@ EXPAND_TIP = "Expand this node: a row per port, its real cables"
 COLLAPSE_TIP = "Collapse this node: its title and a few lines, one wire per neighbour"
 ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them all back "
            "to a handful of boxes and wires")
-# plan 36 T6 (D4): the **preset only** chip starts lit, for every preset
+# plan 36 T6 (D4): the **preset only** chip starts lit, for every loadable patch
 # (a constant so the tests' autouse fixture can start them on the full canvas)
 PATCH_ONLY = True
 PATCH_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
@@ -340,7 +340,7 @@ WIRE_MAX = 260.0         # px: the square's side at most
 WIRE_TIP = ("The shape alone, live: its edges at the angles it is drawn at — no faces, "
             "points, pattern or effects")
 # plan 37 C2 (D3): the head's **pictures · tint cables** switch, off by
-# default (plain red), page state only — never the preset's or the show's.
+# default (plain red), page state only — never the loadable patch's or the show's.
 # Lit, a picture cable's red leans by its maker's dominant hue
 # (`PreviewTextures.hue`), at most `TINT_SPAN` turns either side of red
 # (`tint`): red stays the colour of a picture cable, its lean says what
@@ -382,7 +382,7 @@ def _state(panel) -> dict:
     st.setdefault("backdrop", True)         # 2026-10-26: output 1 behind the canvas
     st.setdefault("backdrop_alpha", BACKDROP_ALPHA)
     st.setdefault("pan", (0.0, 0.0))        # canvas units every position is moved by
-    st.setdefault("patch_only", PATCH_ONLY)     # plan 36 T6 (D4): on for every preset, kept across loads
+    st.setdefault("patch_only", PATCH_ONLY)     # plan 36 T6 (D4): on for every loadable patch, kept across loads
     st.setdefault("hide", frozenset())      # the node ids that view leaves off this frame
     # 2026-10-31: the nodes the picker added this session (canvas ids), drawn
     # whatever the chip and the idle lines say until deleted (`reveal_node`):
@@ -456,7 +456,7 @@ def _id(st: dict, name: str) -> int:
 # ---------------------------------------------------------------- the model, per frame
 
 def _layouts(panel) -> tuple[dict | None, dict | None]:
-    """(the loaded preset's layout map, the open show's), the live dicts —
+    """(the loaded loadable patch's layout map, the open show's), the live dicts —
     None where the panel has no library."""
     lib = getattr(panel, "library", None)
     loaded_patch = getattr(lib, "loaded_patch", None)
@@ -492,7 +492,7 @@ def view_of(panel) -> graphview.View | None:
     # (plan 35 G: the wired frame itself, in the new ids)
     spec = getattr(gs, "spec", None)
     lanes = _lanes(panel)
-    # plan 40 T2: the preset's groups (made, opened, renamed: a new view)
+    # plan 40 T2: the loadable patch's groups (made, opened, renamed: a new view)
     groups = getattr(getattr(getattr(panel, "library", None), "loaded_patch", None), "groups", None)
     k = (graphview.key(table, reg, router, devices, rgraph, spec), groups_key(groups))
     if st["view"] is None or st["key"] != k:
@@ -550,7 +550,7 @@ def drawn_node(st: dict, n: graphview.VNode) -> bool:
     """Is node `n` drawn (plan 28 N9)? Every node but an idle one
     (`graphview.VNode.idle`: nothing in, nothing out), which is drawn only
     while its area's idle line is open — unless the picker added it this
-    session (`reveal_node`, 2026-10-31): a fresh node has no cable yet, and a
+    meta controller (`reveal_node`, 2026-10-31): a fresh node has no cable yet, and a
     node that is not drawn cannot be cabled. A folded group's member stays
     folded whatever else says."""
     if n.id in st.get("hide", ()):         # plan 36 T6: left off by the preset-only view
@@ -562,7 +562,7 @@ def drawn_node(st: dict, n: graphview.VNode) -> bool:
 
 def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
     """Plan 36 T6: the node ids the **preset only** chip leaves off the
-    canvas (`graphview.preset_only` draws the rest, and so does what the
+    canvas (`graphview.patch_only` draws the rest, and so does what the
     picker added this session, `reveal_node`); none while it is off.
     Drawing only: no wire, table or position changes, and the layout
     (`areas_of`) still lays every node out, so hiding moves nothing.
@@ -622,7 +622,7 @@ def shown(st: dict, n: graphview.VNode) -> list[graphview.VPort]:
 
 
 def forget(panel, view: graphview.View) -> None:
-    """The tidy: every position of `view`'s nodes forgotten, in the preset's
+    """The tidy: every position of `view`'s nodes forgotten, in the loadable patch's
     map and the show's — one undo step (the library's marks carry both
     maps, plan 28 N2), so ⌘Z puts them back."""
     pre, show = _layouts(panel)
@@ -1004,7 +1004,7 @@ def publish(panel, st: dict, sel) -> None:
     nodes. Written each frame the panel draws (plan 49 stage 3: GRAPH is
     always drawn; a deleted node is gone from the view, so the next frame
     publishes None), so it is live but while the panel is hidden, when it
-    is as of the last frame drawn — until `settle` sees a preset land
+    is as of the last frame drawn — until `settle` sees a loadable patch land
     without the node. `graph_selected_at` is imgui's frame count when
     the value last changed. An effect node's instance is `Panel.
     fx_selected` as well (`share`); that stays as it is."""
@@ -1017,9 +1017,9 @@ def publish(panel, st: dict, sel) -> None:
 
 
 def settle(panel) -> None:
-    """Every frame, panel hidden or not (`Panel._draw`): the loaded preset's graph
+    """Every frame, panel hidden or not (`Panel._draw`): the loaded loadable patch's graph
     spec is a new object after a load or a new (and after a graph edit) —
-    seen to have changed, a published node the preset no longer holds
+    seen to have changed, a published node the loadable patch no longer holds
     (`still_held`) is let go of, so a load on the PRESETS page does not
     leave a controller on a node that is gone. One identity test a frame;
     the names are read only when the spec moved."""
@@ -1036,10 +1036,10 @@ def settle(panel) -> None:
 
 
 def still_held(panel, nid: str, spec) -> bool:
-    """Does the preset as it now stands hold canvas node `nid`: a frame
+    """Does the loadable patch as it now stands hold canvas node `nid`: a frame
     node (`render:…`) the spec names, a modifier (`mod.N`, `modifiers.
     next_id`) the table holds; any other node — a device's, a lane's, a
-    group's — is not the preset's and stays."""
+    group's — is not the loadable patch's and stays."""
     if nid.startswith("render:"):
         return nid.partition(":")[2] in graphview.frame_names(spec)
     if nid.startswith("mod."):
@@ -1204,7 +1204,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(line)
     _area_chips(st)
-    for want in window_wants(panel):       # plan 44 D3: a window the rig lacks
+    for want in window_wants(panel):       # plan 44 D3: a window the meta controller lacks
         imgui.text_colored(ui.WARN, want)
     if st["note"]:
         imgui.text_colored(ui.WARN, st["note"])
@@ -1231,10 +1231,10 @@ def panel_wants(panel) -> list:
 
 
 def window_wants(panel) -> list[str]:
-    """Plan 44 D3 (row 623): the windows the loaded preset wires or cuts
+    """Plan 44 D3 (row 623): the windows the loaded loadable patch wires or cuts
     that this rig has not open (`graphview.window_wanted_lines` over the
-    presets' graph and bus cuts and the panel's outputs), one line each —
-    what OUTPUT and the GRAPH head say; [] with no presets (a test's panel)."""
+    loadable patches' graph and bus cuts and the panel's outputs), one line each —
+    what OUTPUT and the GRAPH head say; [] with no loadable patches (a test's panel)."""
     loaded_patch = getattr(getattr(panel, "library", None), "loaded_patch", None)
     if loaded_patch is None:
         return []
@@ -1245,10 +1245,10 @@ def window_wants(panel) -> list[str]:
 
 def _wants_chip(panel, beside: bool = True) -> None:
     """Plan 40 T4: **N devices missing** on the line after the chips before
-    it, its hover one line per device the loaded preset wants and the rig
+    it, its hover one line per device the loaded loadable patch wants and the meta controller
     lacks ("apc40 (lost): K1, K2", `devices.want_lines`); nothing when
     every wanted device is there, or with no registry (a panel from a
-    test). The PRESET strip draws the same chip (ui_presets.strip)."""
+    test). The PRESET strip draws the same chip (ui_loadable.strip)."""
     from . import devices  # (late: the GRAPH page's imports stay as they are)
     ws = panel_wants(panel)
     text = devices.missing_chip(ws)
@@ -1296,7 +1296,7 @@ def _deck_row(panel, st: dict) -> None:
     if imgui.is_item_hovered():
         ui.tooltip(COPY_TIP)
     reg = panel.reg
-    if "output.xfade" not in reg:           # (a rig with no outputs hook)
+    if "output.xfade" not in reg:           # (a meta controller with no outputs hook)
         return
     _wrap_for(XFADE_MIN_W + ui.chip_w("fade") + SECONDS_W)
     room = imgui.get_content_region_avail().x - ui.chip_w("fade") - SECONDS_W
@@ -1507,13 +1507,13 @@ def _area_chips(st: dict) -> None:
 
 
 def _place(panel, st: dict, view: graphview.View) -> None:
-    """Every node where it belongs this frame: the preset's or the show's
+    """Every node where it belongs this frame: the loadable patch's or the show's
     position, else where it already sits on the canvas, else its place in
     its area (`areas_of`) — and each area's idle line; set on the canvas
     only when that differs from what was last set, so a node being dragged
     is left alone. The layout never moves a node that is on the canvas: a
     node dragged away leaves its spot empty (2026-10-26: no layout runs on
-    its own) — only a new preset, or the head's **tidy** (`tidy`, which
+    its own) — only a new loadable patch, or the head's **tidy** (`tidy`, which
     collapses every node and forgets the positions in both maps), lays
     them out."""
     if st["tidy"]:
@@ -1555,7 +1555,7 @@ def _place(panel, st: dict, view: graphview.View) -> None:
 
 
 def _moved(panel, st: dict, view: graphview.View) -> None:
-    """A node dropped somewhere new is saved where it lives (the preset's
+    """A node dropped somewhere new is saved where it lives (the loadable patch's
     map or the show's, `graphview.home`) — once the mouse lets go."""
     if imgui.is_mouse_down(imgui.MouseButton_.left):
         return
@@ -1580,8 +1580,8 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         leave_groups(panel, list(left.values()))
     for n, now in moves:
         applied[n.id] = now
-        # (plan 36 T5: a node the preset's map already places — a new
-        # preset's All outputs — moves there, or that entry would hold it;
+        # (plan 36 T5: a node the loadable patch's map already places — a new
+        # loadable patch's All outputs — moves there, or that entry would hold it;
         # a leaver was placed by `leave_groups`)
         m = pre if graphview.home(n) == graphview.PATCH_SECTION or (pre and n.id in pre) else show
         if m is not None and n.id not in left:
@@ -1615,7 +1615,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     corner = imgui.get_cursor_screen_pos()
     ed.begin("##graph", size)
     # plan 36 T5: the canvas point at the view's top-left corner, kept for
-    # what a new preset lays out where you are looking (`in_view`)
+    # what a new loadable patch lays out where you are looking (`in_view`)
     seen = ed.screen_to_canvas(corner)
     st["seen"] = (float(seen.x), float(seen.y))
     st["zoom"] = ed.get_current_zoom() or 1.0   # canvas units a screen px, for the pins' hit rects
@@ -2006,7 +2006,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
 
 # ---------------------------------------------------------------- plan 40 T2: groups (P2, D4)
 #
-# A group of the loaded preset (`graphview.VGroup`, the preset's `groups`)
+# A group of the loaded loadable patch (`graphview.VGroup`, the loadable patch's `groups`)
 # is drawn as one node while it is folded (`_group_node`: its name and +,
 # its picture pins, a row per boundary param with its cable, its status —
 # what it waits for, P4 — and its last picture outlet's thumbnail); its
@@ -2043,8 +2043,8 @@ def group_at(view: graphview.View, name: str):
 
 def group_edit(panel) -> graphview.Edit | None:
     """The page's `Edit` for the group verbs: the router's table and the
-    preset's graph section (`patches.select` reads both), the loaded
-    `Presets` (its `groups` and `layout`), one undo step per verb pushed
+    loadable patch's graph section (`patches.select` reads both), the loaded
+    `LoadedPatch` (its `groups` and `layout`), one undo step per verb pushed
     with the library's marks (`load=True`: they carry both)."""
     e = edit_of(panel)
     if e is None:
@@ -2065,7 +2065,7 @@ def _group_said(panel, e: graphview.Edit, why: str | None) -> str | None:
 
 def group_nodes(panel, ids) -> dict | None:
     """Group (plan 40 T2): canvas ids `ids` made one group, folded — what
-    group's rule leaves out said on the head ("output.all is the rig's
+    group's rule leaves out said on the head ("output.all is the meta controller's
     window; left out"). Returns the entry, or None."""
     e = group_edit(panel)
     if e is None:
@@ -2089,7 +2089,7 @@ def rename_group(panel, gid: str, name: str) -> str | None:
 
 
 def set_open(panel, gid: str, on: bool) -> str | None:
-    """Open (`+`) or Fold (`-`) a group: the preset's, one undo step."""
+    """Open (`+`) or Fold (`-`) a group: the loadable patch's, one undo step."""
     e = group_edit(panel)
     return None if e is None else _group_said(panel, e, e.set_open(gid, on))
 
@@ -2168,7 +2168,7 @@ def group_tip(panel, view: graphview.View, g) -> str:
 
 
 def _laid(panel, st: dict, nid: str):
-    """Where node `nid` sits in layout units: the preset's or the show's
+    """Where node `nid` sits in layout units: the loadable patch's or the show's
     position, else where the canvas put it, else its place in its area."""
     pre, show = _layouts(panel)
     for m in (pre, show, st.get("sat"), st["auto"][1].nodes if st.get("auto") else None):
@@ -2231,7 +2231,7 @@ def _place_groups(panel, st: dict, view: graphview.View, applied: dict,
 
 def _moved_groups(panel, st: dict, view: graphview.View, applied: dict) -> set[str]:
     """A group's node (folded) or title (open) dropped somewhere new: every
-    member moved by the same delta, in the preset's layout — one undo step
+    member moved by the same delta, in the loadable patch's layout — one undo step
     (`Edit.move_group`). Returns the members it moved (their drop is this
     one, not theirs)."""
     moved: set[str] = set()
@@ -2327,8 +2327,8 @@ def _group_node(panel, st: dict, view: graphview.View, g, drawn: set[str]) -> No
     its stubs, its name and +, its last picture outlet's picture (plan 37),
     its status (what it waits for), then a row per boundary pin: each
     picture cable in and out, each member lane going out, each member param
-    a rig row or a crossing route lands on — its cable drawn into it — and
-    the rows a spawn's sheet kept for the preset."""
+    a control row or a crossing route lands on — its cable drawn into it — and
+    the rows a spawn's sheet kept for the loadable patch."""
     ed.begin_node(ed.NodeId(_id(st, "n:" + g.id)))
     imgui.push_id(g.id)
     # (its stubs: where a cable no boundary pin names would end — none, by
@@ -2367,7 +2367,7 @@ def _group_side(panel, st: dict, view: graphview.View, g) -> None:
     """A selected group's side pane (plan 40 T2): its name (Enter renames,
     one undo step), its provenance, what it waits for, its nodes as chips
     (a click opens the group and selects that node), its boundary in words,
-    the rows kept for the preset, and T3's chips (`_group_chips`)."""
+    the rows kept for the loadable patch, and T3's chips (`_group_chips`)."""
     ui._micro("group")
     names = st.setdefault("group_names", {})
     if names.get(g.id, (None, None))[0] != g.name:
@@ -2510,15 +2510,15 @@ def _settle_take_over(st: dict) -> None:
 #
 # A group becomes a file (save as patch: `patches.lift` over the loaded
 # parts, `Library.save_patch` — that file and nothing else) and a file
-# becomes a group in any preset (spawn: `patches.spawn` over a `Host` of
-# the live parts, then — when its rig rows collide with the preset's —
+# becomes a group in any loadable patch (spawn: `patches.spawn` over a `Host` of
+# the live parts, then — when its control rows collide with the loadable patch's —
 # the conflict sheet, `ui_routing`'s modal, else straight on — landed by
 # `graphview.Edit.spawn` through today's doors as one undo step). Nothing
 # is attached by itself (D2): every host port is an open pin on the group
 # node, unless the patch was dropped on a cable (splice) or **wire as
 # saved** is pressed. The browser is the head's **patches** chip and the
 # canvas's **spawn ▸**; the PRESETS page lists the same, for × and rename
-# only (ui_presets). The control window's only (D8): nothing on the desk.
+# only (ui_loadable). The control window's only (D8): nothing on the desk.
 
 PATCH_DRAG = "PATCH"                 # a browser line's drag payload: the patch's slug
 PATCHES_POPUP = "##graph.patches"
@@ -2536,11 +2536,11 @@ SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps e
 SHEET_REPLACES = "this preset already has {nodes}: the sheet asks to replace it"
 SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
 NO_LIBRARY = "no library: nothing to spawn"
-WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the rig lacks (`devices.want_words`')
+WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the meta controller lacks (`devices.want_words`')
 
 
 def group_entry_of(panel, gid: str) -> dict | None:
-    """The loaded preset's entry of group `gid` (its session keys too: a
+    """The loaded loadable patch's entry of group `gid` (its shared meta keys too: a
     spawn's open `ports` and its `renames`), or None."""
     pre = getattr(getattr(panel, "library", None), "loaded_patch", None)
     return next((g for g in getattr(pre, "groups", None) or () if g.get("id") == gid), None)
@@ -2556,12 +2556,12 @@ def saved_words(ports) -> str:
 def patch_list(panel) -> list[dict]:
     """The browser's lines (plan 40 T3): each patch of `Library.list(PATCHES)`
     — factory then the user's shadowing them, hidden ones out, as the
-    PRESETS list is (`ui_presets.names`, on its poll) — as ``{"name",
+    PRESETS list is (`ui_loadable.names`, on its poll) — as ``{"name",
     "slug", "note", "words", "ports"}`` (`graphview.patch_words`: "in:
     picture · out: picture · wants: K1, right hand y, analyzer 1"). A patch
     the library refuses is left out (its words on the footer once).
     Asked every frame the canvas's menu is open or a line is dragged, it
-    looks at the disk only on `ui_presets`' poll (plan 40 review fix): the
+    looks at the disk only on `ui_loadable`' poll (plan 40 review fix): the
     same listing as last time is the same list, with no file stat'ed; a new
     listing re-reads only when the listing or a file moved."""
     from . import library as libmod
@@ -2618,10 +2618,10 @@ def view_centre(panel) -> tuple[float, float]:
 def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     """Spawn patch `slug` (plan 40 P3): `Library.read_patch`, then
     `patches.spawn` over a `Host` of the live parts, its layout placed at
-    `at` (layout units; None: the canvas's centre) — and, when its rig rows
-    collide with the preset's, the conflict sheet first
+    `at` (layout units; None: the canvas's centre) — and, when its control rows
+    collide with the loadable patch's, the conflict sheet first
     (`panel.spawn_question`, drawn by `ui_routing.modal`: every row the
-    patch's, D9) — as when it holds a dream and the preset has one (wave 3
+    patch's, D9) — as when it holds a dream and the loadable patch has one (wave 3
     P2: its row says what the host's loses, `Landing.loses`) — else landed
     at once (`land_spawn`: one undo step).
     `splice`: a picture cable it was dropped on. Returns the refusal (said
@@ -3217,7 +3217,7 @@ def _hover(st: dict, view: graphview.View, panel=None) -> None:
 # words are `st["said"]`.
 
 def render_edit(panel) -> graphview.Edit:
-    """The render edits on this panel's loaded preset (its `GraphSection`),
+    """The render edits on this panel's loaded loadable patch (its `GraphSection`),
     pins named through the renderer's last graph, one undo step each."""
     lib = getattr(panel, "library", None)
     gs = getattr(getattr(lib, "loaded_patch", None), "graph", None)
@@ -3225,7 +3225,7 @@ def render_edit(panel) -> graphview.Edit:
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
     e.show = getattr(lib, "project", None)
-    e.loaded_patch = getattr(lib, "loaded_patch", None)           # (plan 44 D3: the bus cuts are the preset's)
+    e.loaded_patch = getattr(lib, "loaded_patch", None)           # (plan 44 D3: the bus cuts are the loadable patch's)
     return e
 
 
@@ -3266,7 +3266,7 @@ def new_link() -> tuple[int, int] | None:
 
 def _create_render(panel, st: dict, view: graphview.View, a: str, b: str) -> None:
     """An image / geometry / mask cable dragged (either end first): checked
-    while it is held — red, and the words a preset file would get — and a
+    while it is held — red, and the words a loadable patch file would get — and a
     wire when it is let go."""
     src, dst = graphview.Edit.ordered(a, b)
     e = render_edit(panel)
@@ -3299,7 +3299,7 @@ def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
     """Delete pressed on a render node: any node of the section out of the
     graph with its wires (plan 35 G); a window keeps itself, its wires
     gone (said, accepted as an edit: the node stays drawn); the camera and
-    a cloud are the rig's, refused in words."""
+    a cloud are the meta controller's, refused in words."""
     if _render_said(panel, render_edit(panel), lambda e: e.drop_node(n.id), st) is None:
         st.setdefault("dropped", set()).add(n.id)
         ed.accept_deleted_item(False)
@@ -3383,7 +3383,7 @@ def pick_channel(panel, c: str, at=None) -> None:
     """The picker's media ▸ channel a–h (2026-10-31). Nothing is made — the
     eight channels always exist (`graphview.build`) — and nothing is wired:
     the channel's node is revealed (`reveal_node`), put where the menu opened
-    unless the preset's layout already places it, and selected and centred
+    unless the loadable patch's layout already places it, and selected and centred
     next frame (`select_node`). The owner, after the show of 2026-10-30:
     in preset only, with no channel wired to the faces, "you can't actually
     spawn one, it just doesn't exist"."""
@@ -3712,7 +3712,7 @@ def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:
     """Every param of node `n` as the panel's own row (the owner,
     2026-10-24: "I can see the ports … but I can't actually edit those
     things"): the same widgets, so an edit is the param's — undo, the
-    preset's dirt and the modulation as on every page. Several groups get a
+    loadable patch's dirt and the modulation as on every page. Several groups get a
     small header each; more than `FOLD_AT` rows fold each group under a
     collapsing header, the node's primary group (the first, the one that
     names it: the faces pattern's "pattern" run, 2026-10-27) and a group
@@ -4003,14 +4003,14 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
         view = view_of(panel)
     table = router.table
     profile = ui.apc40 if getattr(table, "profile", None) == "apc40" else None
-    # plan 28 N4: render requests reach the preset's graph too (no undo push
+    # plan 28 N4: render requests reach the loadable patch's graph too (no undo push
     # of their own here: `_act` pushed one; the canvas's render gestures use
     # `render_edit` instead)
     lib = getattr(panel, "library", None)
     e = graphview.Edit(table, panel.reg, router, view, profile,
                        graph=getattr(getattr(lib, "loaded_patch", None), "graph", None),
                        render=getattr(getattr(panel, "renderer", None), "_graph", None))
-    e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
+    e.show = getattr(lib, "project", None)              # (plan 36 T1: the meta controller's wires)
     # row 563: a modifier or a voice deleted leaves its group at once
     e.loaded_patch = getattr(lib, "loaded_patch", None)
     return e
@@ -4067,7 +4067,7 @@ def connect(panel, a: str, b: str):
 
 def disconnect(panel, cable: graphview.VCable):
     """Delete a cable (`graphview.Edit.disconnect`): a route and its depth
-    subscribers, a preset desk row, a subscriber, a modifier's input."""
+    subscribers, a loadable patch desk row, a subscriber, a modifier's input."""
     e = edit_of(panel)
     if e is None:
         return None
@@ -4085,8 +4085,8 @@ def insert_modifier(panel, cable: graphview.VCable, kind: str):
 
 def _place_new(panel, nid: str, at) -> None:
     """A node the picker made: revealed (`reveal_node`, 2026-10-31) and, when
-    the picker opened at a point, put there (the preset's layout:
-    modifiers and macros are the preset's)."""
+    the picker opened at a point, put there (the loadable patch's layout:
+    modifiers and macros are the loadable patch's)."""
     reveal_node(_state(panel), nid)
     pre, _ = _layouts(panel)
     if at and pre is not None:
@@ -4106,12 +4106,12 @@ def _place_group(panel, e: graphview.Edit, at) -> None:
         _place_new(panel, f"render:{e.added}", at)
 
 
-# a new preset's chain sits this far in from the view's top-left corner
+# a new loadable patch's chain sits this far in from the view's top-left corner
 IN_VIEW_MARGIN = (graphview.GAP, graphview.TITLE_H)
 
 
 def in_view(panel) -> tuple[float, float]:
-    """Where a new preset's chain goes (plan 36 T5, W5: "laid out where you
+    """Where a new loadable patch's chain goes (plan 36 T5, W5: "laid out where you
     are looking"), in layout units: the canvas point at the GRAPH page's
     view's top-left corner, last drawn (`st["seen"]`; the canvas origin
     before the page has drawn), in by `IN_VIEW_MARGIN`, less the page's
@@ -4184,7 +4184,7 @@ def add_refusal(panel, scheme: str) -> str | None:
 def add_voice(panel, scheme: str, at=None):
     """The picker's "LFO" / "envelope" (plan 31 G1): a new voice in its
     bank (`graphview.Edit.add_voice`), one undo step, placed at `at` in the
-    preset's layout (a bank's membership is the preset's). Its node id, or
+    loadable patch's layout (a bank's membership is the loadable patch's). Its node id, or
     the Refusal at the cap."""
     e = edit_of(panel)
     if e is None:
@@ -4207,7 +4207,7 @@ def add_voice(panel, scheme: str, at=None):
 # an LFO thing you can mouse over, a macro thing you can mouse over, and
 # an envelope thing … because you can have up to six … we might add more
 # things to route from"): **LFO ▸** and **envelope ▸** hold the bank's
-# voices then a new one; **macro ▸** holds the rig's eight knobs by their
+# voices then a new one; **macro ▸** holds the meta controller's eight knobs by their
 # labels. A voice pick is exactly the cable a drag on this page makes:
 # the voice's ``out:`` pin into the param's ``mod`` stub through
 # `Edit.connect_value`, its refusal, its Ask (ROUTING's Replace / Keep)
@@ -4215,7 +4215,7 @@ def add_voice(panel, scheme: str, at=None):
 # macro's ``bus:`` pin into the param's ``base`` stub — a base subscriber
 # (`Edit.subscribe`, from where the param sits to its fader's end,
 # `routing.base_sub`) — on a param a base subscriber may name
-# (`routing.base_refusal`: a persisted performance param, never a macro),
+# (`routing.base_refusal`: a persisted patch param, never a macro),
 # whether or not a lane may drive it; an idle macro picked gets its label
 # first (`Edit.show_macro`, as the canvas's picker gives it), in the same
 # undo step.
@@ -4276,7 +4276,7 @@ def route_from_items(panel, p) -> dict[str, list[tuple]] | None:
     `SECTIONS`' order with only the sections offered, or None when none
     is (no router; a trigger). "lfo" and "env" come on a param a lane
     may drive (`ui_routing.route_target`: modulatable, no meta param); "macro" on one a base subscriber may name
-    (`base_refusal` None, not a macro, no text) where the rig has macros.
+    (`base_refusal` None, not a macro, no text) where the meta controller has macros.
     Each item is ``(label, pin, checked, why)``: a voice or a macro by its
     label and its ``out:`` / ``bus:`` pin, checked when it already lands
     on `p` (a route from the voice; a base subscriber of the macro); then,
@@ -4419,7 +4419,7 @@ def _cold(panel, st: dict, view: graphview.View, n: graphview.VNode,
     """The cables dragged node `n` could never go onto, wherever it is let
     go (2026-11-01: drawn undimmed while it is dragged, `_cable`): for a
     picture node every value cable, every through wire and every render
-    cable `onto_refusal` refuses (the rig's bus, a mask, a depth, a pin's);
+    cable `onto_refusal` refuses (the meta controller's bus, a mask, a depth, a pin's);
     for a node that never splices (`never`) or a modifier, every render
     cable and through wire, and for a modifier every cable with no source
     to take. Kept across the drag's frames while the view and the node
@@ -4689,7 +4689,7 @@ def _onto_menu(panel, st: dict, view: graphview.View) -> None:
 
 
 def macros_free(panel, view: graphview.View) -> list[str]:
-    """The macros the picker offers: the rig's knobs doing nothing yet (no
+    """The macros the picker offers: the meta controller's knobs doing nothing yet (no
     label, no subscriber). Every macro is a node (its knob is modulatable),
     so picking one names it and brings it to where the picker opened."""
     router = ui_routing.router_of(panel)
@@ -4853,7 +4853,7 @@ def _land_menu(panel, st: dict, view: graphview.View) -> None:
 
 
 def _value_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
-    """Delete pressed on a value / trigger cable: the session's rows are
+    """Delete pressed on a value / trigger cable: the meta controller's rows are
     kept (and say so); anything else goes (`disconnect`)."""
     b = c.ref if c.kind == "setter" else None
     if b is not None and graphview.is_meta_row(b):
@@ -4881,7 +4881,7 @@ def _value_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -
 
 
 def _fixture_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
-    """Delete pressed on the rig's node (a device, the analyzer, an LFO, a
+    """Delete pressed on the meta controller's node (a device, the analyzer, an LFO, a
     group): kept, said."""
     ed.reject_deleted_item()
     _note(st, graphview.NOT_REMOVABLE.format(label=n.label))
@@ -4910,7 +4910,7 @@ DELETE["lane"] = _lane_cut
 
 
 # a node delete's handler by the node's kind (the seam: N4 maps "render"
-# and "output", plan 35 G a channel too); a kind not listed is the rig's
+# and "output", plan 35 G a channel too); a kind not listed is the meta controller's
 DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
                "lfo": _voice_node_cut, "env": _voice_node_cut,
                "render": _delete_render_node, "output": _delete_render_node,

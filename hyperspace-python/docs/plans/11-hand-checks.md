@@ -8195,13 +8195,17 @@ is offered. Fail: a route lands on one, or a menu offers one and then nothing ha
 with no words.
 
 ## CP. The two layers, mechanically (SEM)
-Register rows 746, 747, 755, 2026-11-06.
+Register rows 746, 747, 755, 756, 2026-11-06.
 **574. A person's rows on `preset.*` work; a desk Learn says where to go.** (the rig, with the APC40, a pad)
 With one look on air and another off air: a bank pad and F2 each load off air, and the room is as
 it was. Shift+F1 saves the look in slot 1, and a held empty pad saves into it. On the Edge, hold the
 save button. Right-click **Base chase** or a preset verb: there is no Learn desk, and Learn pad is there
 with a pad connected. Pick it and press a button: it works from then on. Holding the pad's BACK still
 chases the base. Fail: any of those is refused, or a Learn desk is offered on one.
+
+**581. The rename moved nothing you can see.** (the rig) Restart. A look you know draws as it did, its
+save writes the same file, ⌘Z on each stack works, and a save of a file with a hot reload watching the
+new `loadable.py` is picked up. Fail: anything but a code word changed.
 
 ## CQ. Paired axes (plan 56)
 Register rows 748–751, 2026-11-04. Headless: `tests/test_paired_axes.py`, a scripted

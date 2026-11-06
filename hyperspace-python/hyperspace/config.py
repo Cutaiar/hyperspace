@@ -1,4 +1,4 @@
-"""Rig configuration — an optional config.toml in the library home.
+"""Meta controller configuration — an optional config.toml in the library home.
 
 The home is ``$HYPERSPACE_HOME`` (default ``~/Hyperspace``, library.py);
 a config.toml still sitting in the working directory is copied there on
@@ -46,7 +46,7 @@ dream.py, too, is imported only when its gate is open.
     flip_y = false          # last step, for a Pepper's Ghost glass (plan 23 WP1);
                             # one output. With [[output.screens]], each entry's
                             # own flip_x / flip_y. output.N.flip_x / .flip_y on
-                            # the OUTPUT page; never saved in a preset or show
+                            # the OUTPUT page; never saved in a loadable patch or show
     keep_awake = true       # while the app runs, the Mac does not idle into the
                             # screensaver, display sleep or system sleep (macOS
                             # `caffeinate -d -i`, app.Awake); false lets it
@@ -88,7 +88,7 @@ dream.py, too, is imported only when its gate is open.
                             # OUTPUT page are output 1's only)
     scene = true            # optional launch values of this window's mutes:
     hands = true            #   the picture, the hands (plan 35: "hands through the
-                            #   effects" is the preset's wiring, no key here), and
+                            #   effects" is the loadable patch's wiring, no key here), and
     dim = 1.0               #   its own dim, times the master's; under 0.1 is 0.1,
                             #   with a note — the config cannot launch an output black
     flip_x = false          #   mirror this output left-right / top-bottom, its last
@@ -114,7 +114,7 @@ A file that will not parse is not fatal: the defaults stand and
 ``cfg["error"]`` carries the message; ``cfg["notes"]`` carries requests
 like the rename above. The SYSTEM page shows both.
 
-    [[devices]]             # the rig's devices (plan 27, devices.py): one table per
+    [[devices]]             # the meta controller's devices (plan 27, devices.py): one table per
                             # device, polled in this order. No list: the four tables
                             # below ([midi], [gamepad], [hands], [bridge]) are read
                             # as before and become the equivalent entries at load,
@@ -131,7 +131,7 @@ like the rename above. The SYSTEM page shows both.
                             # map, [gamepad]'s usb, [hands]'s whole table,
                             # [bridge]'s out / in / encoding / channel / cc / rate /
                             # send / in_lanes — each with the defaults below.
-                            # Today's rig, as a list:
+                            # Today's meta controller, as a list:
                             #   [[devices]]  role = "pad"     kind = "gamepad"
                             #   [[devices]]  role = "apc40"   kind = "midi"
                             #   [[devices]]  role = "leap"    kind = "hands"   enabled = false
@@ -165,7 +165,7 @@ like the rename above. The SYSTEM page shows both.
                             #   hands entry — becomes this entry at load (one note
                             #   when the file wrote it), unless the list has a
                             #   midi-out carrying that role already. What a sink
-                            #   sends is the session's sink rows in bindings.json
+                            #   sends is the meta controller's sink rows in bindings.json
                             #   ("param:view.bright" or "lane:3" → "bridge:3"):
                             #   ROUTING's sinks, or right-click → Learn sink ▸.
                             #   [bridge] send becomes those rows the first launch
@@ -175,7 +175,7 @@ like the rename above. The SYSTEM page shows both.
                             # kind finds its feeds every 2 s and offers them to the
                             # media channels as source ids; nothing connects until
                             # a channel puts one on. NDI over the network
-                            # (ndi:<sender>, another rig's Resolume / TouchDesigner),
+                            # (ndi:<sender>, another meta controller's Resolume / TouchDesigner),
                             # Syphon from another app on this Mac
                             # (syphon:<app>/<server>, zero-copy) and the webcams
                             # (camera:<name>, 1280x720 at 30 fps):
@@ -204,7 +204,7 @@ like the rename above. The SYSTEM page shows both.
                             # false: GLFW only (USB, no extras)
                             # light = "#ff0080"  the light bar with no sink row on it, and
                             # player = 2          the player LEDs; absent: by its place
-                            # tape = "edge.jsonl" read a recorded session instead of a pad
+                            # tape = "edge.jsonl" read a recorded meta controller instead of a pad
                             # (tools/hid_probe.py --record, or the browser lab's)
     usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
                             # (one reader, lent to the first usb = true pad entry
@@ -236,8 +236,8 @@ like the rename above. The SYSTEM page shows both.
     precision = "fp32"      # or "fp16": ~10 % faster on VGG, more p99 outliers
     weights_dir = ""        # pretrained weights; "" = <library home>/weights
 
-    [hands]                 # Ultraleap hands (hands/, the `leap` bindings) — the rig;
-                            # the performance setup is the HANDS page / `hands` presets.
+    [hands]                 # Ultraleap hands (hands/, the `leap` bindings) — the meta controller;
+                            # the performance setup is the HANDS page / `hands` loadable patches.
                             # The defaults are hands/core.py's DEFAULTS, the one table
     enabled = false         # true opens the tracker; off, `leap` is never imported
     mode = "desktop"        # camera looks up from below; "screentop" from above, "hmd"
@@ -254,10 +254,10 @@ like the rename above. The SYSTEM page shows both.
     tape = ""               # a hand tape (tools/hands_tape.py record) to play instead
                             # of the camera, relative to this file; "" = the camera
 
-    [library]               # where the presets live (plan 25)
+    [library]               # where the loadable patches live (plan 25)
     path = ""               # "" = the home above, as always. Otherwise a folder —
                             # typically a cloud-synced one (Dropbox, iCloud Drive,
-                            # Syncthing…) shared with whoever you trade presets with.
+                            # Syncthing…) shared with whoever you trade loadable patches with.
                             # It holds the library: presets/, projects/, the module
                             # groups (fx/, dream/, band/…) and trash/.
                             # Machine files stay in the home: this config.toml,
@@ -327,7 +327,7 @@ PUBLISH_KEYS = ("syphon", "ndi")
 ONE_WINDOW = ("output 1 holds the GL context and paces the loop — it always opens a window "
               "(publish it, or set a later output's window = false)")
 DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 fork F4)
-# plan 35 M: an entry's `through` (plan 21 WP2's switch) is the preset's
+# plan 35 M: an entry's `through` (plan 21 WP2's switch) is the loadable patch's
 # wiring now — read, ignored, said once
 THROUGH_IS_WIRING = ("config: [[output.screens]] output {n}: through is wiring now (plan 35) — "
                      "OUTPUT's 'hands through the effects' writes it into the preset")
@@ -498,9 +498,9 @@ LAPTOP_NOTE = ("laptop: output 1 is a plain window on this screen — no fullscr
 
 
 def laptop(cfg: dict) -> None:
-    """`hyperspace --laptop`: the rig's config read for a machine with no
+    """`hyperspace --laptop`: the show machine's config read for a machine with no
     projector — one plain render window and the controls on the one
-    screen, so a config made for the rig cannot cover the laptop black.
+    screen, so a config made for the show machine cannot cover the laptop black.
     In place: output 1 neither fullscreen nor floated as the overlay at
     launch (T and the panel still can), both windows on the primary
     screen, every later output dropped. Publishing (syphon / ndi) and

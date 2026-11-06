@@ -214,7 +214,7 @@ def test_a_per_lfo_reset_after_the_step_lands_phase_zero_next_step_in_either_mod
 def test_switching_to_hz_carries_the_phase_and_a_division_lands_on_the_clock():
     """Audit B7: leaving a division for Hz continues from the wave's position
     (no stale accumulator); choosing a division lands on the clock's beat,
-    whether a knob or a preset set it."""
+    whether a knob or a loadable patch set it."""
     lfos, c = LFOs(), clock_at(120.0)
     lf = lfos[0]
     lf.shape, lf.rate, lf.phase = SHAPES.index("saw"), 0.9, 0.2

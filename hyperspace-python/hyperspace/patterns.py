@@ -17,7 +17,7 @@ and 7, are left for an LFO, a macro or a knob: a hue that follows a band
 flickers, and how far the faces drift apart is a scene's choice. Each
 meaning stands on its own whatever drives it.
 
-A mode is its index (presets store `view.pattern` as one): new modes are
+A mode is its index (loadable patches store `view.pattern` as one): new modes are
 appended after the last, never inserted. Two modes draw the music itself
 — METER and PULSE read the analyzer's bands (`u_levels`), whatever the
 routes — and the inputs style them as they do every other mode.
@@ -134,7 +134,7 @@ MODES: tuple[Mode, ...] = (
          ("coal size", _GLOW, "bends the coals", _SPEED.format("the heat rises"),
           "ash and flame part in hue", "broad glow to hot points", _HUE,
           "each face its own coals")),
-    # after EMBER: appended, never inserted — presets hold the mode as an index
+    # after EMBER: appended, never inserted — loadable patches hold the mode as an index
     Mode("METER", "The analyzer's bands: an LED wedge per band, lit as far as it reads.",
          ("LED segment size", _GLOW, "bends the wheel (above 1)",
           _SPEED.format("the wheel turns"), "hue spread across the bands",

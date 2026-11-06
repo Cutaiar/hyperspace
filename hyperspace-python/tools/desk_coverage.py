@@ -1,30 +1,30 @@
-"""The desk coverage report: every preset × every control of the preset layer.
+"""The desk coverage report: every loadable patch × every control of the patch layer.
 
     uv run python tools/desk_coverage.py            # rewrite the committed report
     uv run python tools/desk_coverage.py --check    # exit 1 if it is stale
     uv run python tools/desk_coverage.py --stdout   # print it, write nothing
     uv run python tools/desk_coverage.py --library DIR --stdout
-                                                    # a library's presets too (read only)
+                                                    # a library's loadable patches too (read only)
 
-Plan 24 C3 (decision 19). Each preset is loaded the way the app loads it —
-a headless registry, router and `Presets` over a **scratch** library home
+Plan 24 C3 (decision 19). Each loadable patch is loaded the way the app loads it —
+a headless registry, router and `LoadedPatch` over a **scratch** library home
 made for the run, never the owner's, holding the test corpus
-(`tests/corpus/presets`, the presets the build shipped until 2026-10-28,
+(`tests/corpus/presets`, the loadable patches the build shipped until 2026-10-28,
 and `tests/corpus/patches/dream`, the dream module presets they may name) — and
 each control of the APC40's
-preset layer (`layer_controls`) gets one of three words:
+patch layer (`layer_controls`) gets one of three words:
 
-  mapped   an enabled preset-layer row is on it, and the preset can show
+  mapped   an enabled patch-layer row is on it, and the loadable patch can show
            its param;
-  dark     nothing is on it on the preset layer (or only a disabled row);
-  dead     a row is on it, but its param is one the preset cannot show
+  dark     nothing is on it on the patch layer (or only a disabled row);
+  dead     a row is on it, but its param is one the loadable patch cannot show
            (`learn.cannot_show`: a pattern knob with the faces off, an
            effect's knob with that effect off, a dream knob with the
            look-back off, …), or the registry has no such param.
 
 The owner's bar for the authoring pass that follows plan 24 — **at most 4
-dark or dead controls on the preset layer** of every preset — is reported
-per preset; nothing here remaps a preset to meet it.
+dark or dead controls on the patch layer** of every loadable patch — is reported
+per loadable patch; nothing here remaps a loadable patch to meet it.
 
 The committed report is docs/plans/assets/24-party-fixes/desk-coverage.md;
 tests/test_desk_coverage.py regenerates it and fails when the committed
@@ -33,7 +33,7 @@ sorted or in the layout's order, so a second run is byte-identical.
 
 `--library DIR` copies DIR's ``presets/`` and ``desk/`` files into the
 scratch home first (DIR itself is only read), so the report covers that
-library's presets beside the corpus's, desk templates included.
+library's loadable patches beside the corpus's, desk templates included.
 """
 
 from __future__ import annotations
@@ -56,14 +56,14 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import LOADABLE, Library, group_folder
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.params import build_registry
-from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.view import ViewState
 
 REPORT = ROOT / "docs" / "plans" / "assets" / "24-party-fixes" / "desk-coverage.md"
-CORPUS = ROOT / "tests" / "corpus"                   # the presets, as test data
+CORPUS = ROOT / "tests" / "corpus"                   # the loadable patches, as test data
 CORPUS_GROUPS = (LOADABLE, "dream")      # what the scratch home is seeded with (`group_folder`)
 BAR = 4                     # the owner's bar: at most this many dark or dead
 MAPPED, DARK, DEAD = "mapped", "dark", "dead"
@@ -75,7 +75,7 @@ class Cell:
     glyph: str
     status: str                 # MAPPED / DARK / DEAD
     target: str = ""            # the row's param ("" when dark)
-    why: str = ""               # dead: why the preset cannot show it
+    why: str = ""               # dead: why the loadable patch cannot show it
 
 
 @dataclass(frozen=True)
@@ -91,15 +91,15 @@ class Row:
 # ---------------------------------------------------------------- the layer
 
 def layer_controls(table: Bindings | None = None) -> list[apc40.Control]:
-    """The controls of the APC40's preset layer, in the layout's order:
+    """The controls of the APC40's patch layer, in the layout's order:
     the device knobs D1–D8, the track knobs K1–K8 and the track faders
-    S1–S8 — the strips a preset's desk is for (`preset.device_knob`,
+    S1–S8 — the strips a loadable patch's desk is for (`loadable.device_knob`,
     `track_fader`) — and every other control the default map gives a
-    preset-layer row (`apc40.DEFAULT_MAP`: the cue knob, the plane
+    patch-layer row (`apc40.DEFAULT_MAP`: the cue knob, the plane
     buttons, the grid-motion pads, ▲ ▼, the view reset), less any control
-    an invariant row of the session table holds (`table`, the default one
+    an invariant row of the meta table holds (`table`, the default one
     when None). A free control no default row names (clip stops 1–7,
-    clip row 2 on the preset layer) is not counted: a row a preset puts
+    clip row 2 on the patch layer) is not counted: a row a loadable patch puts
     there is listed beside the table instead."""
     table = Bindings.factory() if table is None else table
     inv = table.invariant_rows()
@@ -133,8 +133,8 @@ def is_strip(c: apc40.Control) -> bool:
 
 def boot(home: Path) -> SimpleNamespace:
     """The app's construction order (app.main), headless, on `home` — a
-    scratch folder: the library, the registry, the session table (the
-    default: the home has no bindings.json), the router and `Presets`."""
+    scratch folder: the library, the registry, the meta table (the
+    default: the home has no bindings.json), the router and `LoadedPatch`."""
     chain = Analyzer(Analyser())
     control = Control(chain)
     view = ViewState()
@@ -155,7 +155,7 @@ def boot(home: Path) -> SimpleNamespace:
 
 
 def coverage_of(rig, name: str, controls: list[apc40.Control]) -> Row:
-    """Load preset `name` and read its preset layer against `controls`."""
+    """Load loadable patch `name` and read its patch layer against `controls`."""
     rig.loaded_patch.load(name)
     reg, table = rig.reg, rig.table
     values = reg.snapshot()
@@ -190,7 +190,7 @@ def _glyph_order(line: str) -> tuple[int, str]:
 
 
 def coverage(home: Path, library: Path | None = None) -> tuple[list[apc40.Control], list[Row]]:
-    """Every preset the scratch `home` lists (the corpus's, copied in, and
+    """Every loadable patch the scratch `home` lists (the corpus's, copied in, and
     with `library` that library's too), each a `Row`."""
     for group in CORPUS_GROUPS:
         _copy_in(CORPUS / group_folder(group), home / group_folder(group))
@@ -215,7 +215,7 @@ def _copy_in(src: Path, dst: Path) -> None:
 
 def report(controls: list[apc40.Control], rows: list[Row],
            source: str = "only the corpus presets (tests/corpus/presets)") -> str:
-    """The report as Markdown — the same text for the same presets, every run."""
+    """The report as Markdown — the same text for the same loadable patches, every run."""
     n = len(controls)
     out = [
         "# Desk coverage — every preset's preset layer",

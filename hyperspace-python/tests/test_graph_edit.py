@@ -31,7 +31,7 @@ PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
@@ -167,9 +167,9 @@ def test_moving_a_cables_end_moves_the_route_and_its_depth_subs_follow(rig):
 
 def test_a_hand_into_a_base_port_is_refused_in_words_and_a_pad_is_a_setter_row(rig):
     """`base` is the setters' stub: a hand (any lane) is refused in words;
-    a desk knob is the desk learn's row (a preset-layer `abs` row,
-    `bind(write=False)`: the loaded preset's); a pad button the pad
-    learn's (the session's, as the factory's pad rows are). A macro's
+    a desk knob is the desk learn's row (a patch-layer `abs` row,
+    `bind(write=False)`: the loaded loadable patch's); a pad button the pad
+    learn's (the meta controller's, as the factory's pad rows are). A macro's
     cable is a base subscriber there, a depth subscriber on a depth stub."""
     reg, table = rig.reg, rig.router.table
     e, view = edit(rig, leap())
@@ -247,7 +247,7 @@ def test_dropping_a_modifier_on_a_cable_inserts_it(rig):
 def test_deleting_a_cable_removes_the_route_and_undo_puts_it_back(tmp_path):
     """Delete on a route's cable is `remove` — its macro depth subscriber
     goes with it — as one named undo step; ⌘Z puts the row and the
-    subscriber back. A session row's cable (a key, the pad) is refused."""
+    subscriber back. A meta row's cable (a key, the pad) is refused."""
     from test_undo import boot, settle
     r = boot(tmp_path / "home")
     settle(r)
@@ -270,7 +270,7 @@ def test_deleting_a_cable_removes_the_route_and_undo_puts_it_back(tmp_path):
     assert any(x.depth == s.depth for x in table.macros[mid].subs)
     view = ui_graph.view_of(panel)
     assert any(x.ref is back[0] for x in cables(view))
-    # the session's rows are bindings.json's: refused, kept
+    # the meta controller's rows are bindings.json's: refused, kept
     key = next(c for c in cables(view, "setter") if is_meta_row(c.ref))
     res = ui_graph.disconnect(panel, key)
     assert res == graphview.META_ROW.format(what=key.ref.source)
@@ -414,7 +414,7 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
 def test_nodes_the_picker_adds_and_delete_removes(rig):
     """The picker's modifier and macro, a modifier's input by a cable, and
     a node delete: a modifier and a macro go (a route on the modifier's
-    lane stays, dormant); the rig's nodes are refused."""
+    lane stays, dormant); the meta controller's nodes are refused."""
     panel, table = rig.panel, rig.router.table
     frame(panel, "graph")
     m = ui_graph.add_modifier(panel, "combine", at=(300, 40))
@@ -467,7 +467,7 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     assert "macro.7" not in table.macros
     assert ui_graph.remove_node(panel, graphview.ANALYZER) == graphview.NOT_REMOVABLE.format(
         label=view.node(graphview.ANALYZER).label)
-    # an LFO is the preset's since plan 31 (G1): it goes through its bank,
+    # an LFO is the loadable patch's since plan 31 (G1): it goes through its bank,
     # and a rig whose router steps none says so
     assert ui_graph.remove_node(panel, "lfo.1") == graphview.NO_BANK.format(what="LFO")
 
@@ -715,8 +715,8 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
 
 
 def test_a_route_from_the_canvas_is_a_performer_row_in_the_loadable(rig):
-    """What the canvas adds is the loaded preset's (a performer row): the
-    preset is dirty, bindings.json is not written."""
+    """What the canvas adds is the loaded loadable patch's (a performer row): the
+    loadable patch is dirty, bindings.json is not written."""
     lib, table = rig.lib, rig.router.table
     lib.load("presets", "party-trip")
     assert not lib.is_dirty("presets")
@@ -775,7 +775,7 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     """Delete on a node goes by its kind (`DELETE_NODE`): a render or an
     output node is N4's (the camera refused in words: plan 35 G — the look's
     one since plan 43 C2), a
-    kind not listed is the rig's; a macro node's delete goes through the
+    kind not listed is the meta controller's; a macro node's delete goes through the
     table's `set_macros`, its label and subscribers with it."""
     from imgui_bundle import imgui_node_editor as ed
     monkeypatch.setattr(ed, "reject_deleted_item", lambda: None)
@@ -892,7 +892,7 @@ def _section(*pairs, nodes=()):
 
 
 def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
-    """A headless rig over a scratch library with preset "Free" loaded —
+    """A headless rig over a scratch library with loadable patch "Free" loaded —
     its graph section the wired frame of wires `pairs` and entries `nodes`
     (a `/6` file) — the section attached to a stub renderer, and an Edit on
     it whose undo steps are counted (`undo_rig`: test_undo's boot, its Undo
@@ -1150,7 +1150,7 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
 def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     """R21 (row 349): `acid` unwired from both sides is kept in the section
     — `{"kind": "effect", "file": "acid"}`, on no wire — drawn faint,
-    "reaches nothing"; saved, the preset is `/6` (plan 35: an edited frame
+    "reaches nothing"; saved, the loadable patch is `/6` (plan 35: an edited frame
     no older schema says); undo puts its wires back."""
     import json
 
@@ -1447,10 +1447,10 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
 
 def test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name(rig, monkeypatch):
     """macro ▸ (the owner, 2026-10-28: the Route from menu "should
-    probably include the macros as well"): the rig's eight knobs by label
+    probably include the macros as well"): the meta controller's eight knobs by label
     (`macro_label`: ROUTING's label, else "macro 3"), one already setting
-    the param checked — on a persisted performance param, modulatable or
-    not (a base subscriber is no route), never on a macro or a session
+    the param checked — on a persisted patch param, modulatable or
+    not (a base subscriber is no route), never on a macro or a meta controller
     param (`routing.base_refusal`, plan 13 D9)."""
     from hyperspace.routing import Macro, Sub
 
@@ -1466,7 +1466,7 @@ def test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name(rig, 
                            group="view", modulatable=False)
     assert list(ui_graph.route_from_items(panel, fixed)) == ["macro"]
     assert drawn_route_from(panel, fixed, monkeypatch)[0] == [ui_graph.ROUTE_FROM, "macro"]
-    # never on a macro, nor on a session param (the BPM)
+    # never on a macro, nor on a shared meta param (the BPM)
     assert "macro" not in (ui_graph.route_from_items(panel, reg["macro.1"]) or {})
     assert "macro" not in (ui_graph.route_from_items(panel, reg["tempo.bpm"]) or {})
 
@@ -1702,8 +1702,8 @@ def test_a_graph_cable_into_a_mod_pin_lands_the_smooth_spring(rig):
 # them by primitive, and its first item wires a scene to All outputs.
 
 def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
-    """`free_rig` for a wired frame: preset "Wired" whose section is
-    `graph` (a `/6` section) — or corpus preset `slug` (tests/corpus) loaded,
+    """`free_rig` for a wired frame: loadable patch "Wired" whose section is
+    `graph` (a `/6` section) — or corpus loadable patch `slug` (tests/corpus) loaded,
     migrated as every load is — on a stub renderer, an Edit on it."""
     from test_graph_json import Stub
     from test_loadable import boot, put
@@ -1725,7 +1725,7 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
         (rig.home / "presets").mkdir(parents=True, exist_ok=True)
         (rig.home / "presets" / fixture.name).write_text(fixture.read_text())
         rig.lib.load(LOADABLE, slug)
-    else:                           # (a corpus preset, seeded into the scratch library)
+    else:                           # (a corpus loadable patch, seeded into the scratch library)
         seed(rig.home, "presets", "dream")
         rig.lib.load(LOADABLE, slug)
     stub = Stub()
@@ -1922,7 +1922,7 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
 
 
 def test_deleting_a_window_unwires_it(tmp_path):
-    """An output is the rig's window: delete takes the wires into it and
+    """An output is the meta controller's window: delete takes the wires into it and
     says so (`OUTPUT_UNWIRED`), not a refusal; it shows its ground."""
     section = {"frame": "wired", "wires": [
         {"from": "channel.b", "to": "output.2.image"},
@@ -2093,7 +2093,7 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
 
 def _drag_rig(rig, monkeypatch, *pairs, nodes=(), effects=("acid", "wobble.2"), on=("acid",),
               layout=None):
-    """The page drawn on preset "Drag" — the wired frame of `pairs` and
+    """The page drawn on loadable patch "Drag" — the wired frame of `pairs` and
     `nodes` — with a probe on `_moved` (the editor's origin and scale on
     screen, the press and the last plan lit); every node at `layout`'s
     place (canvas units) when given. Returns (the section, the probe)."""
@@ -2375,7 +2375,7 @@ def test_a_node_that_never_splices_is_refused_in_words_and_dims_nothing(rig, mon
 
 def test_the_other_refusals_are_said_and_cold(rig):
     """A picture node over a value cable, a modifier over a picture cable,
-    a free effect over the rig's bus cable and over a through wire (an off
+    a free effect over the meta controller's bus cable and over a through wire (an off
     effect's): each refused in its words, each cable cold (undimmed) while
     the node is dragged — "won't take it" reads differently from "not
     near enough"."""

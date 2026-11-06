@@ -180,6 +180,6 @@ def test_the_draw_reads_the_phase_never_the_rate(name):
 
 def test_the_phases_are_not_params():
     """Integrated state, like the turn's angles: nothing writes them but
-    `integrate`, so no preset saves them and no knob can jump them."""
+    `integrate`, so no loadable patch saves them and no knob can jump them."""
     src = (PKG / "params.py").read_text()
     assert "inst_phase" not in src and "media_phase" not in src

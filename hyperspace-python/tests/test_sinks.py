@@ -2,7 +2,7 @@
 routed to a sink through the table and Learn.
 
 A sink is a device that reads effective values after `reg.apply` and sends
-them out (`Device.sinks`, `send`). What it sends is the session's sink rows
+them out (`Device.sinks`, `send`). What it sends is the meta controller's sink rows
 (routing.py, `SINK_OP`: ``param:<id>`` / ``lane:<i>`` → ``<role>:<channel>``),
 which the bridge's old `send` list becomes once; the hands' DAW out is a
 `midi-out` sink entry (`hands-daw`) carrying `HandsIO`'s messages. Fake
@@ -65,7 +65,7 @@ def _rig(tmp_path):
 
 
 def _bridge_device(r, clock=None, **cfg):
-    """A bridge device on fake ports over the rig's table, opened."""
+    """A bridge device on fake ports over the meta controller's table, opened."""
     out = FakeOut()
     io = Bridge(r.reg, cfg, inp=FakeIn(), out=out, clock=clock or Clock())
     d = devices.BridgeDevice("bridge", {"role": "bridge", "kind": "bridge", **cfg},
@@ -83,7 +83,7 @@ def test_a_sink_row_is_a_meta_row_never_a_performer_and_round_trips(tmp_path):
     """The sink row's form: ``{"source": "param:<id>" | "lane:<i>" |
     "lane:*", "target": "<role>:<channel>", "op": "send"}``. bindings.json
     keeps it (sinks are rig, D1 / D9); it is no route, owns nothing, and a
-    preset never sees it."""
+    loadable patch never sees it."""
     r = _rig(tmp_path)
     rows = [Binding("param:view.bright", "bridge:3", SINK_OP),
             Binding("lane:*", "bridge:0", SINK_OP),
@@ -156,7 +156,7 @@ def test_sink_values_read_effective_values_and_an_explicit_row_wins_its_channel(
 
 def test_the_bridges_send_list_becomes_sink_rows_once_with_one_note(tmp_path, capsys):
     """A config with the old `send` list, the bridge on: its rows land in
-    the session (bindings.json written), one note; the next launch, rows
+    the meta controller (bindings.json written), one note; the next launch, rows
     there, nothing is added or said. The default list (the file names
     none) is `lane:*` on bridge:0. An off bridge seeds nothing."""
     home = tmp_path
@@ -368,7 +368,7 @@ def test_the_hands_daw_sink_on_the_registry_sends_what_handsio_sent(tmp_path):
 
 def test_learn_sink_on_a_param_lands_a_meta_row_with_no_question(tmp_path):
     """Right-click → Learn sink ▸ bridge:2: the row lands at once in the
-    session (bindings.json written), even on a param a hand performs — no
+    meta controller (bindings.json written), even on a param a hand performs — no
     Replace / Keep, no pending question, the performer untouched; a second
     param on the same port takes it; a trigger is refused."""
     r = _rig(tmp_path)

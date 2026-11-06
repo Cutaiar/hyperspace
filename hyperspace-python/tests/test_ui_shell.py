@@ -25,10 +25,10 @@ NARROW_CONTROL = (960, 900)
 from hyperspace import ui_fx
 from hyperspace.control import Control
 from hyperspace.library import Library
+from hyperspace.loadable import LoadedPatch
 from hyperspace.outputs import Slot
 from hyperspace.overlay import Output, register_switches
 from hyperspace.params import PLANES, Kind, build_registry
-from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import (
     CHEATSHEET,
@@ -72,7 +72,7 @@ def build_rig(tmp_path, renderer=None):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
-    # the corpus first (conftest.seed): the shipped presets and the party
+    # the corpus first (conftest.seed): the shipped loadable patches and the party
     # show, which the home then opens as a fresh one did until 2026-10-28
     seed(tmp_path)
     lib = Library(tmp_path, period=0.0)
@@ -97,7 +97,7 @@ def build_rig(tmp_path, renderer=None):
              for k, nm in enumerate(("glass", "projector", "wall", "floor"))]
     slots[0].size = (1920, 1080)
     register_switches(reg, slots)
-    # the table before attach, as app.main reads it: the desk's session
+    # the table before attach, as app.main reads it: the desk's meta controller
     # param (`desk.slew`) is the table's and exists when the show lands
     table = Bindings.factory(path=tmp_path / "bindings.json")
     routing.register_desk(reg, table)
@@ -117,7 +117,7 @@ def build_rig(tmp_path, renderer=None):
     router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
     loaded_patch = LoadedPatch(lib, reg, router)  # the bank and the preset strip, as app.py builds them
     # plan 36 T3: nothing landed is the empty frame (every output black); the
-    # app always lands its startup preset — here today's frame, as one would
+    # app always lands its startup loadable patch — here today's frame, as one would
     from hyperspace import graph as G
     from hyperspace import graphmigrate as M
 
@@ -724,7 +724,7 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
     assert len({round(r[1]) for r in cells}) == 3                  # three rows of two
     assert all(cells[k][2] < cells[k + 1][0] for k in (0, 2, 4))
     assert max(r[2] for r in row + cells) <= CONTROL_SIZE[0]
-    # a lane on a plane rate (the party presets route them) reads
+    # a lane on a plane rate (the party loadable patches route them) reads
     # `base → effective` in the cell: the widest such readout fits it
     from hyperspace import ui
     p = rig.reg["rot.rate.XY"]
@@ -790,10 +790,10 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
 
 def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     """ROUTING is the one page whose list may outgrow the window: the rows
-    scroll inside a child and the page itself never does, so the preset
+    scroll inside a child and the page itself never does, so the loadable patch
     strip and the header stay put (by design; audit U1). Plan 28 N7: the
     routes are GRAPH's now — forty of them draw no line here — and the
-    child holds the desk, the macros, the session and the sinks, which
+    child holds the desk, the macros, the meta controller and the sinks, which
     overflow it on their own."""
     reg, table = rig.reg, rig.router.table
     for p in reg:                       # forty routes: none of them a line here now
@@ -822,8 +822,8 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
 
 def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monkeypatch):
     """Plan 13 decision 13: the one ROUTING page — head, routes, desk,
-    macros, session — never scrolls itself, with the house show's first
-    preset loaded and with a full desk (every preset control mapped, each macro
+    macros, meta controller — never scrolls itself, with the house show's first
+    loadable patch loaded and with a full desk (every loadable patch control mapped, each macro
     subscribed), a refused learn and a dropped desk row in the head."""
     from hyperspace.learn import Learn
 
@@ -836,7 +836,7 @@ def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monke
                                      feedback="ring", layer="preset") for k in range(8)],
             *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
                       layer="preset") for k in range(8)],
-            # the track faders: the preset's own since plan 24 C2 (decision 17)
+            # the track faders: the loadable patch's own since plan 24 C2 (decision 17)
             *[Binding(f"cc:{k}:7", "view.bright", "abs", layer="preset") for k in range(8)],
             Binding("cc:0:14", "view.bright", "abs")]         # MASTER: dropped, noted
     rig.lib.loaded_patch.desk_notes = table.set_desk(full)
@@ -1002,13 +1002,13 @@ def test_strip_round_trip(rig):
     frame(panel)
     assert lib.prev("view") == "Other"
     frame(panel)
-    # reset: the view group has no default preset, so back to the fresh values
+    # reset: the view group has no default loadable patch, so back to the fresh values
     reg["view.bright"].step(3)
     assert lib.reset("view") is None
     assert lib.current("view") is None
     frame(panel)
-    # the band group has no default preset either (one tier: the scenes are
-    # code data, not presets) — reset lands the fresh values and draws
+    # the band group has no default loadable patch either (one tier: the scenes are
+    # code data, not loadable patches) — reset lands the fresh values and draws
     frame(panel, "analyzer")
     assert lib.reset("band") is None
     frame(panel)
@@ -1062,7 +1062,7 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     assert ui_loadable.names(panel, ui_loadable.PROJECT) == ["house", "party", "show"]
     frame(panel)
     gain = rig.chain.gain
-    reg["master.gain"].set(gain + 1.0)             # a session move
+    reg["master.gain"].set(gain + 1.0)             # a meta controller move
     assert proj.is_dirty()
     frame(panel)
     ui_loadable._guard(panel, proj.save)
@@ -1143,7 +1143,7 @@ def test_the_footer_says_what_was_undone(rig, monkeypatch):
 
 
 def test_loadable_bank_and_strip_on_the_loadables_page(rig):
-    """Plan 13 WP2: the bank row loads and saves presets by F-key param,
+    """Plan 13 WP2: the bank row loads and saves loadable patches by F-key param,
     the one preset strip shows what is loaded and its dirty dot."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     frame(panel, "presets")
@@ -1394,7 +1394,7 @@ def test_the_menu_lists_and_unbinds_with_no_midi_adapter(rig, monkeypatch):
 
 
 def test_unbind_is_not_offered_on_a_meta_only_param(rig, monkeypatch):
-    """A fader's param is the session's (D6): its row's line reads
+    """A fader's param is the meta controller's (D6): its row's line reads
     "invariant", dim, and there is no Unbind item — none that could only
     refuse. A route on it brings a plain Unbind for the route alone."""
     panel, table = rig.panel, rig.router.table
@@ -1753,7 +1753,7 @@ def test_a_picked_control_dims_every_page_but_routing(rig, monkeypatch):
     lrn.pick(_control("SM").source)                          # invariant: picked for the look only
     assert ui_desk.picked(panel) is not None and pages() == idle
     lrn.pick(_control("D3").source)
-    table.set_layer("global")                                # the session's layer: nothing maps
+    table.set_layer("global")                                # the meta controller's layer: nothing maps
     assert pages() == idle
     table.set_layer("preset")
     assert pages()["view"] == (1, True)
@@ -2083,7 +2083,7 @@ def test_the_output_body_with_four_outputs_and_overlays_rows_stays_inside(rig, m
     for sl in rig.slots:
         sl.error = "present: RuntimeError: a long error that the page must cut to fit"
     drawn, edges = _output_page(rig, monkeypatch, body=True)
-    # (plan 35 T4: the two mutes; "through" is the preset's wiring)
+    # (plan 35 T4: the two mutes; "through" is the loadable patch's wiring)
     assert drawn.count("picture") == 4 and drawn.count("through effects") == 0
     for s, right, edge in edges:
         assert right <= edge + 1, f"{s!r} runs past the page ({right} > {edge})"
@@ -2131,7 +2131,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     # factory frame: none of its own), then why it is black, or its dim;
     # All outputs' combo first, its picture's source
     shows = [s for s in drawn if s.startswith("shows: ")]
-    # (plan 36 T4: the startup preset's look-back off — the scene straight)
+    # (plan 36 T4: the startup loadable patch's look-back off — the scene straight)
     assert shows == ["shows: Scene", "shows: as All outputs",
                      "shows: as All outputs · 60%",
                      "shows: as All outputs · black — nothing switched on",

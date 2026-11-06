@@ -19,7 +19,7 @@ gets there from whatever the hardware speaks, one piece per job:
                pinch, twist and tap; tilt, spin, shake and energy.
   hid.py       the hidapi road: one reader thread per Sony pad (USB or
                Bluetooth), the hub that lends them to pad entries by
-               `matches`, and the tape (a recorded session read back as
+               `matches`, and the tape (a recorded meta controller read back as
                if it were the pad).
 
 `models`, `sony` and `gesture` are leaves: they import nothing from the

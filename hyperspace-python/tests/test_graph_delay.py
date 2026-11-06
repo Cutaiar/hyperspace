@@ -299,7 +299,7 @@ def test_a_graph_rebuild_keeps_the_delay(ctx):
 
 def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
     """R19 (final review, row 354 "rebuilds, not loads"): a delay holding
-    red, then `reset_delays` (what a preset load asks) — the next frame
+    red, then `reset_delays` (what a loadable patch load asks) — the next frame
     reads nothing, the ground, as a first frame does, then the picture
     again; with no reset a rebuild of the same graph still holds red."""
     size = (160, 120)
@@ -316,7 +316,7 @@ def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
 
 
 def test_a_loadable_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
-    """R19: `Presets.load_doc` landing a section asks the attached renderer
+    """R19: `LoadedPatch.load_doc` landing a section asks the attached renderer
     to reset its delays; a GRAPH edit (an `Edit` landing) does not."""
     from test_graph_edit import wired_rig
 

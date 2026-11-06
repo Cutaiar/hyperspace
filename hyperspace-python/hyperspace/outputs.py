@@ -1,20 +1,20 @@
 """The render outputs, as the renderer sees them (plan 21 WP1).
 
 One frame is drawn per loop; each output — a window on its own screen,
-or an offscreen target standing in for one — shows what the preset's
+or an offscreen target standing in for one — shows what the loadable patch's
 graph wires into it (plan 35: its own wires; plan 36 T1, else All
-outputs' by the rig's bus cable into that port, `graph.window_ports`) through
+outputs' by the meta controller's bus cable into that port, `graph.window_ports`) through
 its window's two mutes, the picture and the hands, with its mirror and
-its own dim. A mute is the window's, never the preset's structure: off,
+its own dim. A mute is the window's, never the loadable patch's structure: off,
 the window ignores the picture (or the hands and the guide) wired into
 it and shows its ground, the hands over — it builds nothing, so it never
 rebuilds the graph (row 374). "Hands through the effects" is wiring in
-the preset, not a switch (plan 35 O). This module is the pure half of
+the loadable patch, not a switch (plan 35 O). This module is the pure half of
 that: what a window's mutes are (`Switches`), where the frame sits in an
 output of another shape (`fit`), and the one-frame record the renderer
 fills in for an output (`View`, with `Handoff` for an output in another
 window's context). `Renderer.draw_outputs` (render.py) does the
-drawing. WP3 adds the rig's side: `Slot`, one listed output for the run
+drawing. WP3 adds the meta controller's side: `Slot`, one listed output for the run
 (app.py fills it from `[[output.screens]]`), and `Presenter`, which shows
 a `Handoff` in another window's context. Plan 32 T9 adds `Offscreen`, a
 texture-backed target on the renderer's context: a publish-only output
@@ -48,7 +48,7 @@ class Switches:
     window ignores the picture wired into it), `hands` the hands mute (off:
     it ignores the hands and the guide); read by its `Output` each frame,
     never a rebuild. The through switch is gone: "hands through the
-    effects" is the preset's wiring."""
+    effects" is the loadable patch's wiring."""
 
     scene: bool = True         # the picture (its label "picture"; the id is kept)
     hands: bool = True

@@ -34,7 +34,7 @@ A watched module that was never imported (an optional adapter behind its
 device entry — dream, bridge, midi) is skipped, not an error.
 
 Data is watched the same way: `watchers` are objects with a ``poll(now)``
-(the preset library) that get polled on the same cadence, so a preset
+(the loadable patch library) that get polled on the same cadence, so a loadable patch
 JSON saved in an editor lands like a module save does.
 """
 

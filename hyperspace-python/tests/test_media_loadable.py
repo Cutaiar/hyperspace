@@ -1,10 +1,10 @@
 """Plan 32 T5 — the media channels in the preset: the `media` section (the
 bins), the channel params, and the old `view.bmp_*` dropped with a note.
 Row 394: every save is `hyperspace.preset/6` with the section and every
-media value (plan 32's "/4 only when a preset uses them" is gone with the
+media value (plan 32's "/4 only when a loadable patch uses them" is gone with the
 ladder).
 
-Rigs are test_presets.boot / test_undo.boot (app.main's order on a tmp
+Rigs are test_loadable.boot / test_undo.boot (app.main's order on a tmp
 home); the registry's own `MediaState` (`reg.media`) is handed a fake
 resolver and opener from test_media_channels, so nothing is decoded."""
 
@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 from conftest import seed
-from test_media_channels import FakeOpener, Here
 from test_loadable import boot
+from test_media_channels import FakeOpener, Here
 
 from hyperspace import loadable
 from hyperspace.media.channels import CHANNELS, MediaState
@@ -101,7 +101,7 @@ def test_the_sound_params_per_channel(rig):
 def test_a_loadable_without_the_sound_params_loads_them_at_their_defaults(rig):
     """No schema move (row 582): a file from before V2 names neither id and
     loads with no note, each channel's sound off at unity — even after a
-    preset that had them on; one that names them lands them, and the save
+    loadable patch that had them on; one that names them lands them, and the save
     holds them."""
     doc = json.loads(save_text(rig, "x"))
     assert doc["values"]["media.a.audio"] is False and doc["values"]["media.a.gain"] == 1.0
@@ -124,7 +124,7 @@ LATER_EFFECTS = ('  "fx.displace.', '  "fx.blend.')
 
 @pytest.mark.parametrize("name", ["party-faces", "lfo-breathe"])
 def test_loadable_without_media_keeps_every_value_in_six(tmp_path, name):
-    """A preset that uses no media saves `/6` (row 394) holding every value
+    """A loadable patch that uses no media saves `/6` (row 394) holding every value
     the base wrote (fixtures/media-preset-base/, saved by the writer before
     T5) as it wrote it — but the six `view.bmp_*` this build no longer has
     and the retired ids (an effect's order and target, `backdrop.history`:
@@ -145,7 +145,7 @@ def test_loadable_without_media_keeps_every_value_in_six(tmp_path, name):
             and M.effect_of(k) in (None, *held)}
     assert {k: doc["values"][k] for k in kept} == kept
     # (plan 36 T3: a later effect file is in the save only where the
-    # section names it — none of these presets runs displace)
+    # section names it — none of these loadable patches runs displace)
     assert not any(k.startswith(LATER_EFFECTS[0].strip(' "')) for k in doc["values"])
     assert doc[loadable.MEDIA_KEY] == {"channels": {}}
     assert "media.a.slot" in doc["values"] and "view.media_alpha" in doc["values"]
@@ -170,7 +170,7 @@ def test_a_media_loadable_and_one_without_are_both_six(rig):
 
 def test_a_row_on_a_media_param_survives_the_save(rig):
     """A route, a macro subscriber or a desk row on a media-family param is
-    saved with the preset (`/6`, as every save)."""
+    saved with the loadable patch (`/6`, as every save)."""
     from test_loadable import put
     put(rig.home, "LFOPOS", routes=[{"source": "lfo:0", "target": "media.a.pos",
                                      "op": "push", "value": 0.2}])
@@ -211,7 +211,7 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(0)
     assert rig.loaded_patch.load("MEDIA") == [] and rig.loaded_patch.notes == []
     assert m.to_json() == want and rig.reg["media.a.slot"].value == 1
-    # a preset without the section empties every bin
+    # a loadable patch without the section empties every bin
     rig.loaded_patch.load("party-faces")
     assert m.to_json() == {"channels": {}}
 
@@ -247,7 +247,7 @@ def test_bmp_file_dropped_with_note(rig):
 def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     """The factory desk's knob 7 (`cc:0:54 → view.bmp_alpha`) keeps its
     meaning: the alias reads and writes view.media_alpha, is never saved
-    as its own value, and an old preset's value lands on the real one."""
+    as its own value, and an old loadable patch's value lands on the real one."""
     from test_loadable import put
     reg = rig.reg
     alias, real = reg["view.bmp_alpha"], reg["view.media_alpha"]
@@ -265,7 +265,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     put(rig.home, "BOTH", values={"view.bmp_alpha": 0.25, "view.media_alpha": 0.6})
     assert rig.loaded_patch.load("BOTH") == []
     assert real.value == 0.6                       # the file's own new id wins
-    # a corpus preset's knob 7 row (party-faces, seeded) lands on the real param
+    # a corpus loadable patch's knob 7 row (party-faces, seeded) lands on the real param
     seed(rig.home, "presets")
     rig.loaded_patch.load("party-faces")
     knob =[b for b in rig.router.table.desk() if b.target == "view.bmp_alpha"]

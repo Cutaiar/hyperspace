@@ -20,9 +20,9 @@ import numpy as np
 import pytest
 from conftest import seed
 from test_graph_legible import party as _party
+from test_loadable import put
 from test_midi import cc, note, push
 from test_pad_learn import ScriptedPad
-from test_loadable import put
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from test_undo import DT, boot
@@ -276,7 +276,7 @@ def test_a_pad_press_on_the_off_air_deck_reaches_only_it(rig):
 @pytest.mark.empty_frame
 def test_on_gl_on_air_keeps_its_frame_while_the_other_deck_is_edited(ctx, tmp_path):
     """Was `..._the_projector_keeps_the_held_frame_while_the_preview_shows_the_edit`:
-    a new preset and a turned knob on the deck off air, and on air is the same bytes;
+    a new loadable patch and a turned knob on the deck off air, and on air is the same bytes;
     the fader across, the outputs show the edit."""
     rig = _gl(ctx, tmp_path / "rig")
     rig.meta.point_panel(rig.two)
@@ -297,7 +297,7 @@ def test_on_gl_on_air_keeps_its_frame_while_the_other_deck_is_edited(ctx, tmp_pa
 @pytest.mark.empty_frame
 def test_on_gl_a_bus_cable_cut_off_air_stays_off_the_picture_on_air(ctx, tmp_path):
     """Was `..._a_bus_cable_cut_after_the_hold_stays_off_the_projector`: the cuts are
-    the preset's (plan 44 D3), so each deck's renderer reads its own."""
+    the loadable patch's (plan 44 D3), so each deck's renderer reads its own."""
     rig = _gl(ctx, tmp_path / "rig")
     rig.two.loaded_patch.load("party-acid")
     before = _picture(ctx, rig.one)
@@ -994,7 +994,7 @@ CARRIED = ["preset.select", "preset.next", "preset.prev", "preset.home", "preset
 
 @pytest.mark.parametrize("verb", CARRIED)
 def test_a_loadable_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
-    """The absolute rule: from a row a verb lands on the other deck, so a row a preset
+    """The absolute rule: from a row a verb lands on the other deck, so a row a loadable patch
     carries would be one patch changing another. Refused in words at each door."""
     t = Bindings()
     for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
@@ -1037,7 +1037,7 @@ def test_a_loadable_carrying_load_rows_reaches_no_other_deck(rig, carrier):
 
 
 def test_a_learn_will_not_put_a_loadables_row_on_a_library_verb(rig):
-    """A desk Learn lands a preset-layer row, so it refuses, in words. A pad button's
+    """A desk Learn lands a patch-layer row, so it refuses, in words. A pad button's
     row is the meta controller's own, and takes one."""
     from hyperspace.ui_routing import desk_target, pad_target
 
@@ -1068,7 +1068,7 @@ def test_a_loadable_cannot_carry_a_row_on_a_save_verb_by_any_door(verb):
 
 
 def _files(rig) -> dict:
-    """Every preset file and the show's, byte for byte, with the bank."""
+    """Every loadable patch file and the show's, byte for byte, with the bank."""
     home = rig.lib.home
     return {"files": {str(f): f.read_bytes() for f in home.rglob("*.json")},
             "bank": list(rig.one.loaded_patch.lib.project.bank)}
@@ -1135,7 +1135,7 @@ def test_the_edges_hold_to_save_still_saves(rig):
 
 def test_no_factory_row_or_corpus_loadable_carries_a_load_or_save_row():
     """The factory's load rows are all invariant and its save rows are keys, so the
-    meta controller's; no corpus preset or shipped JSON's `desk` or `routes` has one."""
+    meta controller's; no corpus loadable patch or shipped JSON's `desk` or `routes` has one."""
     rows = [b for b in factory_desk() if _library_verb(b.target)]
     assert len(rows) > 24 and all(b.layer is None for b in rows)
     assert all(is_meta_row(b) for b in Bindings.factory().bindings if _library_verb(b.target))

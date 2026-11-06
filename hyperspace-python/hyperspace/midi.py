@@ -13,7 +13,7 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
   cc   abs      absolute 7-bit knob or fader → set_norm, with soft pickup:
                 after the param moved by other means the knob does nothing
                 until it sweeps through the current value, so a band switch
-                or a preset load never jumps a knob's value.
+                or a loadable patch load never jumps a knob's value.
        rel      two's-complement relative encoder → step(±n)
        rel64    64-centred relative encoder → step(±n)
        toggle   rising edge → toggle()/fire()
@@ -24,7 +24,7 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
        hold     the target fires once the button has been down HOLD_S,
                 while it is still held; a shorter press does nothing.
                 A `set` row on an enum that declares `held` (Param.held:
-                the preset bank) is a press *and* a hold: the press sets
+                the loadable patch bank) is a press *and* a hold: the press sets
                 at once, and held HOLD_S it calls held(choice) — a bank pad
                 on an empty slot saves the live state there; the new pad
                 blinks.
@@ -64,14 +64,14 @@ replacement re-sends every ring and LED (`redraw`), a control no active
 row draws going dark. A knob's ring also re-bases the endless encoder
 (`apc40.RING_REBASES_KNOB`, hand check 31), so the row is caught at the
 value just sent; the faders keep soft pickup, and a desk replacement (a
-preset load) clears the catch of a fader whose param it moved — the
-crossfader, MASTER and the session's faders keep their hold through it.
+loadable patch load) clears the catch of a fader whose param it moved — the
+crossfader, MASTER and the meta controller's faders keep their hold through it.
 
 Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
 profile's default map is used. Right-click → Learn on any panel control,
-then a knob or button, writes a preset-layer row into the loaded preset
-(`_learned`, plan 13 §3.3): the preset is dirty and bindings.json is not
+then a knob or button, writes a patch-layer row into the loaded loadable patch
+(`_learned`, plan 13 §3.3): the loadable patch is dirty and bindings.json is not
 written; a learn on an invariant control or with the global layer up is
 refused with the reason. `MidiIO.bindings` is the MIDI-side view of that table —
 what this adapter routes through and the panel edits. The profile (apc40.py is the
@@ -80,7 +80,7 @@ have rings, and what velocities its LEDs take.
 
 Knob smoothing (plan 18 WP2). `set_norm` lands on a detent, and an
 untapered param has 100 of them, so a slow turn used to move the base a
-whole detent at a time. With the session's `desk.slew` above 0
+whole detent at a time. With the meta controller's `desk.slew` above 0
 (`Bindings.slew`, seconds; 0 on a bare table, routing.SLEW_DEFAULT_S in
 the app) an `abs` row on a continuous, non-integer param aims a glide
 instead (`_aim`), and `_glide` walks the base to it once a poll: a
@@ -89,7 +89,7 @@ straight line, written between detents with `Param.set`, that arrives
 today, so the value rests where it always did. Still a scene-setter
 writing the base, never an offset. One glide per param, whoever sent it.
 Anyone else's write to the param ends its glide and stands (the panel, a
-key, an undo); a preset load ends every glide but a session param's
+key, an undo); a loadable patch load ends every glide but a shared meta param's
 (`redraw`); a layer switch ends none; turning `desk.slew` to 0, or the
 port going away, lands them all at once. A ring shows where the knob is
 sending the base, not the base in flight (`_ring_norm`): the same message
@@ -113,7 +113,7 @@ up. Faders, discrete targets and relative rows are never fine. The button
 is the adapter's, not a table row: it works on every bindings.json, gives
 way to any row this device's table puts on its control (that row is the
 owner's), is never a learn's candidate, and its LED is lit while it is
-held. `desk.fine` is the rig's (group desk, never saved, not modulatable):
+held. `desk.fine` is the meta controller's (group desk, never saved, not modulatable):
 a reconnect lets go of it, as of SAVE.
 """
 
@@ -405,7 +405,7 @@ class MidiIO:
         # every control feedback has drawn since the last redraw, by
         # (kind, channel, number), with the row that drew it: a redraw
         # darkens each one no active row draws now, even when the row that
-        # lit it has left the table (a preset load's smaller desk, the
+        # lit it has left the table (a loadable patch load's smaller desk, the
         # ROUTING page's ×) — D8, review of PR #67
         self._shown: dict[tuple, Binding] = {}
         # knob smoothing: the glides in flight, by param id, and the clock
@@ -560,12 +560,12 @@ class MidiIO:
         return self.table.for_param(pid)
 
     def unbind(self, pid: str) -> list[Binding]:
-        """The loaded preset's desk rows on `pid` go — `Learn.unbind` with
+        """The loaded loadable patch's desk rows on `pid` go — `Learn.unbind` with
         the routes left alone (plan 17 WP1: the menu calls the learn object
         itself, so Unbind is there with no adapter). The table's
         `redraw_serial` moves, so this adapter redraws and the controls go
         dark (`_follow_table`); the undo step, and the refusal for a param
-        only the session maps (D5, D6), are `Learn.unbind`'s."""
+        only the meta controller maps (D5, D6), are `Learn.unbind`'s."""
         return self.learner.unbind((pid,), routes=False, name=self.control_name)
 
     def control_name(self, b: Binding) -> str:
@@ -607,7 +607,7 @@ class MidiIO:
         self._fire_holds()
         self._follow_table()        # SHIFT pressed just now: this frame's redraw
         # knob smoothing: each glide's step for this frame — after the
-        # table is followed, so a preset a pad loaded in this very poll has
+        # table is followed, so a loadable patch a pad loaded in this very poll has
         # ended its glides (`redraw`) before any of them steps over it
         self._glide(self._now())
         self._follow_fine()
@@ -629,8 +629,8 @@ class MidiIO:
         act on the deck arrived at. Each press still down is released now on
         the deck it pressed, by the road a note-off takes, and its real note-off
         goes nowhere (its key stays, mapped to no rows); its held buttons let go
-        there too; a timed hold is forgotten; a glide or a catch on a preset's
-        param goes, a session param's stays (`is_session_id`: the same object
+        there too; a timed hold is forgotten; a glide or a catch on a loadable patch's
+        param goes, a shared meta param's stays (`is_shared_meta_id`: the same object
         on both); and the new table's rows are drawn and re-armed as a load's
         are. One identity test a frame."""
         was = self.__dict__.get("_on")
@@ -656,7 +656,7 @@ class MidiIO:
 
     def _follow_table(self) -> None:
         """A layer switch or a desk replacement since the last look: redraw
-        every ring and LED; a replacement (a preset load) also clears the
+        every ring and LED; a replacement (a loadable patch load) also clears the
         catch of each fader whose param it moved; a desk row edited in place (`redraw_serial`, the
         ROUTING page) only redraws."""
         seen = self._serials()
@@ -844,7 +844,7 @@ class MidiIO:
         SAVE is held (`desk.save`, track 8's clip stop), a press on a `set`
         row whose param saves into its choice (`Param.save_into`: a bank
         pad) saves the live state into that slot — an empty slot as #158's
-        hold does, a filled one as a **new** preset the slot then points
+        hold does, a filled one as a **new** loadable patch the slot then points
         at (`library.Project.save_into`: nothing is overwritten or
         trashed) — instead of loading it, and starts no hold. The pad
         blinks for BLINK_S when the save worked. SAVE and the pads are
@@ -1314,10 +1314,10 @@ class MidiIO:
                switch: bool = False) -> None:
         """Every ring and LED for the layer that is up (plan 13 §3.1): each
         control some row names, or feedback drew since the last redraw
-        (`_shown` — a row since removed lit it: a preset load's smaller
+        (`_shown` — a row since removed lit it: a loadable patch load's smaller
         desk, the ROUTING page's ×), goes dark unless an active row draws
         it (D8); then every active row is re-sent — a knob's ring re-bases
-        it (`_rebase`). `load` (a desk replacement: a preset load) also
+        it (`_rebase`). `load` (a desk replacement: a loadable patch load) also
         clears a fader's catch when its param is no longer where this
         adapter last put it — `_uncatch_moved`'s test — or it has no last
         write, or the param is not where this fader itself last was
@@ -1325,10 +1325,10 @@ class MidiIO:
         have made the last write): a fader whose base the load moved
         picks up, and one whose param the load left alone (the
         crossfader, SM's dim, and the audio strip on S1–S8 under SHIFT: a
-        preset never moves a session param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
-        every glide (knob smoothing) but a session param's, before anything
+        loadable patch never moves a shared meta param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
+        every glide (knob smoothing) but a shared meta param's, before anything
         else: the load's value stands, even where it equals the glide's
-        last write; a session param the load never moves goes on arriving,
+        last write; a shared meta param the load never moves goes on arriving,
         and its fader is compared with where the glide is taking the param
         (the fader's own position), so it keeps its hold too.
 
@@ -1337,15 +1337,15 @@ class MidiIO:
         also sends dark every control of the profile's layout that no
         active row draws, not only those a row has named (`_dark_desk`: a
         light another program left on goes out), and **every fader the new
-        preset binds** (a preset-layer row) lets go, moved or not, so each
-        picks up from the new preset the same way every time. A fresh row
+        loadable patch binds** (a patch-layer row) lets go, moved or not, so each
+        picks up from the new loadable patch the same way every time. A fresh row
         starts from where its control physically is (`_hw`), so a fader
-        already on the value catches on its first move. The session's
-        faders (invariant or global: a preset never moves their params,
+        already on the value catches on its first move. The meta controller's
+        faders (invariant or global: a loadable patch never moves their params,
         D9) keep the rule above.
 
         **A layer switch re-arms every layered fader** (`switch`; plan 24
-        C2, D7): since the track faders carry the preset's targets on one
+        C2, D7): since the track faders carry the loadable patch's targets on one
         layer and the audio strip under SHIFT, one physical fader serves
         two params. Each layered fader row starts from where the fader
         physically is (`_hw`) and is caught only when its param is already

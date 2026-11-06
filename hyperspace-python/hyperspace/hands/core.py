@@ -1,7 +1,7 @@
 """Ultraleap hands — two tracked hands as twelve axes and eight switches,
 and the dance sources beside them.
 
-The hands are the performing surface; the APC40 stays on presets and
+The hands are the performing surface; the APC40 stays on loadable patches and
 master controls. Each hand gives the palm's rigid-body pose — six axes by
 default — and every axis is an analog signal (signal.py): calibrated,
 smoothed, shaped (dead zone, curve), enveloped (attack, decay), sprung
@@ -64,7 +64,7 @@ preset strip saves and loads a *setup*, a project carries it, and an
 APC40 knob can be learned onto, say, the smoothing. The calibrated
 ranges belong to the box, not to a setup: they live in
 ``<home>/hands.json`` (the HANDS page's calibrate button, or
-tools/hands_probe.py --calibrate). Rig choices — tracking mode, which
+tools/hands_probe.py --calibrate). Meta controller choices — tracking mode, which
 features, the MIDI port — are the ``[hands]`` section of config.toml.
 
 The same file holds the interaction box (plan 18): bounds on the palm's
@@ -261,7 +261,7 @@ BIPOLAR = {"x", "z", "roll", "pitch", "yaw"}
 DEFAULT_DOFS = ["x", "y", "z", "roll", "pitch", "yaw"]
 DEADZONE_CENTRED = 0.04  # a level hand reads exactly neutral; a height axis starts at 0
 
-# [hands] in config.toml — the rig, not the performance. The one table:
+# [hands] in config.toml — the meta controller, not the performance. The one table:
 # config.DEFAULTS["hands"] is this dict, HandSettings.from_config and
 # HandsIO fill from it, so a key exists exactly here.
 DEFAULTS: dict = {
@@ -742,7 +742,7 @@ class HandSettings:
 
     @classmethod
     def from_config(cls, cfg: dict | None = None) -> HandSettings:
-        """The axes a rig config asks for: `dofs` per hand, left then
+        """The axes a meta controller config asks for: `dofs` per hand, left then
         right, on consecutive CCs from `cc` on `channel`."""
         cfg = filled_config(cfg)
         dofs = list(cfg["dofs"])
@@ -776,7 +776,7 @@ def filled_config(cfg: dict | None) -> dict:
 
 def register(reg, settings: HandSettings) -> None:
     """Every setting as a param in the ``hands`` group — what a setup
-    preset saves. Not modulatable: a lane shouldn't bend the instrument."""
+    loadable patch saves. Not modulatable: a lane shouldn't bend the instrument."""
     if f"{GROUP}.smooth" in reg:
         return
 
@@ -1248,7 +1248,7 @@ class LeapSource:
         # HDMI re-sync, one callback that raised) is over. Without this the
         # status stayed bad while frames kept coming, `on` stayed false and
         # HandsIO fed the router nothing: the ghost hands drew, but no
-        # route moved, in any preset, until the next launch
+        # route moved, in any loadable patch, until the next launch
         self.status = "tracking"
 
     def latest(self) -> tuple[int, float, dict[str, tuple[dict, float]]]:
@@ -1865,9 +1865,9 @@ class HandsIO:
         """While a param is armed to learn, the axis that has moved
         furthest (≥ LEARN_MOVE) since the learn began takes it — a hand
         moves all its axes at once, so first-to-move won't do. The route
-        goes into the loaded preset through `learn.learn_source` (the
+        goes into the loaded loadable patch through `learn.learn_source` (the
         referee and the Replace / Keep prompt as ever); no file is written,
-        the preset shows dirty until a save (plan 13 §3.3).
+        the loadable patch shows dirty until a save (plan 13 §3.3).
 
         A learn says what it waits for (plan 17 WP2: `learn.accepts`,
         asked per axis address): under "Learn hand ▸ left" only the left
@@ -1902,7 +1902,7 @@ class HandsIO:
             gate = self.held_gate(self.axes[best].side)
             # what the row lands as is the learn's (plan 18 WP3): told whether
             # this axis rests in the middle — its setup now, not the feature
-            # table — and the session's depth for a push
+            # table — and the meta controller's depth for a push
             centred = bool(self.axes[best].bipolar)
             depth = float(self.settings.learn_depth)
             learn.learn_source(self.address(best), when=gate, centred=centred, depth=depth)
@@ -2069,7 +2069,7 @@ class HandsIO:
 
     def clear_level(self) -> None:
         """Back to the tracking mode's own frame. Not from a tape: the file
-        is the rig's."""
+        is the meta controller's."""
         self._rooms()
         if self.on_tape:
             return

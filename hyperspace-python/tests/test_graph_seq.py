@@ -37,7 +37,7 @@ def test_env_and_seq_are_node_kinds_in_the_modulation_area():
     assert seq is not None and seq.kind == "seq" and seq.label == "sequencer"
     for n in (*envs, seq):
         assert n.area == graphview.MODULATION
-        assert graphview.home(n) == graphview.PATCH_SECTION     # the preset's layout
+        assert graphview.home(n) == graphview.PATCH_SECTION     # the loadable patch's layout
     # every envelope param on its envelope's node, the grid's on the sequencer
     assert view.owner("mod:env.3.decay")[0].id == "env.3"
     assert view.owner("base:env.3.fire")[0].id == "env.3"

@@ -1,21 +1,21 @@
-"""Plan 44 D3 — the session / performance line made mechanical (schema `/10`).
+"""Plan 44 D3 — the meta controller / performance line made mechanical (schema `/10`).
 
 What crosses the line, and how each half is held:
 
-- the registry: `params.build_session` → the rig's `SessionRegistry`, one
-  for every deck; `build_performance` → a deck's `Registry`, which holds the
-  session's `Param` objects by reference (tests/test_params.py proves the
+- the registry: `params.build_meta` → the meta controller's `MetaRegistry`, one
+  for every deck; `build_patch` → a deck's `Registry`, which holds the
+  meta controller's `Param` objects by reference (tests/test_params.py proves the
   registry half);
-- the table: `routing.SessionTable` (the session rows, `bindings.json`, the
+- the table: `routing.MetaTable` (the meta rows, `bindings.json`, the
   latch, the slew, the pad's feel, the rig facts) and a deck's `Bindings`
   holding its rows by reference beside the deck's own;
 - the media: `media.channels.MediaSources` (resolver, opener, closer, the
   mixer) shared, a deck's `Channels` (the eight channels) its own;
-- the library: what is loaded and the dirty dot are the `Presets`' own;
+- the library: what is loaded and the dirty dot are the `LoadedPatch`' own;
 - the look made whole: the hands' and clouds' looks and the bus cuts are
-  the preset's — an old (`/2`) show's are handed to every old preset a
+  the loadable patch's — an old (`/2`) show's are handed to every old loadable patch a
   load reads while it is open, and the migration writes them into every
-  preset (REVIEW.md: an old preset and an old show opened end to end, not
+  loadable patch (REVIEW.md: an old loadable patch and an old show opened end to end, not
   only the converter).
 """
 
@@ -46,12 +46,12 @@ LOOK = {"ghost.alpha": 0.25, "ghost.style": 2, "cloud.size": 3.5}
 
 
 def test_two_decks_tables_hold_the_meta_rows_by_reference():
-    """A second deck's table over the first's session: the session rows are
+    """A second deck's table over the first's session: the meta rows are
     the same `Binding` objects, first in its list; a key row learned on one
     deck is the other's at once; the latch, the slew and the pad's feel are
-    one value; each deck's routes and preset layer are its own; the file
-    holds the session rows once, whichever deck writes it; the sources
-    follow the session table once."""
+    one value; each deck's routes and patch layer are its own; the file
+    holds the meta rows once, whichever deck writes it; the sources
+    follow the meta table once."""
     a = Bindings.factory()
     s = a.meta_table
     assert isinstance(s, MetaTable) and s.tables == [a]
@@ -78,9 +78,9 @@ def test_two_decks_tables_hold_the_meta_rows_by_reference():
 
 
 def test_the_meta_table_reads_and_writes_the_file(tmp_path):
-    """`Bindings.load(path).session` is the file's session table (the old
-    migrations and the backup through the load); `write` writes the session
-    rows only. Its descriptors are made from `SESSION_ATTRS`, one list."""
+    """`Bindings.load(path).session` is the file's meta table (the old
+    migrations and the backup through the load); `write` writes the meta controller
+    rows only. Its descriptors are made from `META_TABLE_ATTRS`, one list."""
     from hyperspace.routing import META_TABLE_ATTRS
     path = tmp_path / "bindings.json"
     t = Bindings.load(path, legacy_midi=None)
@@ -98,7 +98,7 @@ def test_the_meta_table_reads_and_writes_the_file(tmp_path):
 
 
 def test_two_decks_channels_read_through_one_set_of_sources():
-    """`MediaSources` is the rig's (one resolver, opener, closer, mixer);
+    """`MediaSources` is the meta controller's (one resolver, opener, closer, mixer);
     each deck's `Channels` are its own eight; `MediaState` is the old name."""
     a = Channels(resolver=NoResolver())
     b = Channels(sources=a.sources)
@@ -120,7 +120,7 @@ def test_a_media_state_from_before_the_split_finds_its_sources():
     assert "resolver" not in old.__dict__
 
 
-# ---------------------------------------------------------------- an old show and an old preset
+# ---------------------------------------------------------------- an old show and an old loadable patch
 
 
 def _old_show(home: Path, **extra) -> Path:
@@ -134,7 +134,7 @@ def _old_show(home: Path, **extra) -> Path:
 
 
 def _old_loadable(home: Path, name: str = "OLD", folder: str = "") -> Path:
-    """dial as a `/9` (before the look was the preset's): no hands' or
+    """dial as a `/9` (before the look was the loadable patch's): no hands' or
     clouds' values, a module label."""
     doc = json.loads((CORPUS / "dial.json").read_text())
     doc["schema"] = graphmigrate.EYE_SCHEMA
@@ -159,7 +159,7 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     assert pr.old_look == LOOK and pr.old_cuts.cut == {CUT}
     assert reg["ghost.mirror"].value is True and reg["tempo.bpm"].value == 128.0
     assert not pr.is_dirty()
-    # the old preset, loaded with the show open: the show's look and cuts
+    # the old loadable patch, loaded with the show open: the show's look and cuts
     assert pre.load("OLD") == []
     assert reg["ghost.alpha"].value == 0.25 and reg["cloud.size"].value == 3.5
     assert reg["ghost.style"].value == 2
@@ -170,7 +170,7 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     assert doc["schema"] == "hyperspace.preset/10" and "modules" not in doc
     assert doc[loadable.BUS_KEY] == {"cut": [CUT.to_json()]}
     assert doc["values"]["ghost.alpha"] == 0.25 and "ghost.mirror" not in doc["values"]
-    # the show saved: /3, the rig's session, kept as /2 beside it
+    # the show saved: /3, the meta controller, kept as /2 beside it
     path = pr.save()
     saved = json.loads(path.read_text())
     assert saved["schema"] == "hyperspace.project/3" and "rig" not in saved
@@ -189,7 +189,7 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
 
 
 def test_a_cut_is_the_loadables_undone_with_it_and_held_in_its_dot(tmp_path):
-    """The cuts are in the preset's dirty dot and its load's undo step."""
+    """The cuts are in the loadable patch's dirty dot and its load's undo step."""
     from test_undo import boot as undo_boot
     from test_undo import settle
 
@@ -236,7 +236,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
         tmp_path, monkeypatch, capsys):
     """tools/migrate_library.py on a scratch library (never the owner's): a
     dry run writes nothing and says the cuts; --apply backs the library up,
-    rewrites every preset — folders too — as /10 with the show's look and
+    rewrites every loadable patch — folders too — as /10 with the show's look and
     cuts, and the show as /3 beside its .bak-v2-look; a second run has
     nothing to do."""
     lib = tmp_path / "Drive" / "Hyperspace"
@@ -297,7 +297,7 @@ def _two_decks():
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
-    from hyperspace.params import build_patch, build_meta
+    from hyperspace.params import build_meta, build_patch
     from hyperspace.view import ViewState
     chain = Analyzer(Analyser())
     meta_reg = build_meta(Control(chain), SimpleNamespace(chain=chain))
@@ -306,7 +306,7 @@ def _two_decks():
 
 
 def test_a_meta_param_is_applied_once_a_frame_whichever_deck_applies():
-    """Finding 1: deck B's apply never releases a session param deck A's
+    """Finding 1: deck B's apply never releases a shared meta param deck A's
     router modulated (no flicker to the bare base); the lead deck lands it
     once a frame, B's offset riding into the next; every deck's pass in one
     frame shares one mark."""
@@ -320,7 +320,7 @@ def test_a_meta_param_is_applied_once_a_frame_whichever_deck_applies():
         a.apply()
         b.begin_frame()
         assert b.frame == a.frame            # one mark for the frame
-        b.apply()                            # deck B's apply: the session param untouched
+        b.apply()                            # deck B's apply: the shared meta param untouched
         assert p.modulated and p.value != pytest.approx(base)
     held = p.value
     a.begin_frame()
@@ -344,7 +344,7 @@ def test_a_meta_param_is_applied_once_a_frame_whichever_deck_applies():
 
 def test_a_part_is_cached_on_the_param_and_a_duplicate_is_refused_once():
     """Findings 6, 7: `part_of` reads the param's cached part; a second
-    declaration of a session id on any deck is refused by the session."""
+    declaration of a meta controller id on any deck is refused by the meta controller."""
     from hyperspace.params import part_of
     _meta_table, a, b = _two_decks()
     p = a["ghost.mirror"]
@@ -355,8 +355,8 @@ def test_a_part_is_cached_on_the_param_and_a_duplicate_is_refused_once():
 
 
 def test_a_table_given_a_new_meta_keeps_its_own_meta_rows(tmp_path):
-    """Finding 2: `Bindings(rows, session=)` over a session no table follows
-    yet keeps the rows given — they seed the session — and writes them."""
+    """Finding 2: `Bindings(rows, session=)` over a meta controller no table follows
+    yet keeps the rows given — they seed the meta controller — and writes them."""
     s = MetaTable(path=tmp_path / "bindings.json")
     key = Binding("key:F9", "view.lines", "toggle")
     t = Bindings([key, Binding("hand:7", "view.speed", "push", 0.3)], meta_table=s)
@@ -367,7 +367,7 @@ def test_a_table_given_a_new_meta_keeps_its_own_meta_rows(tmp_path):
 
 
 def test_the_mirror_is_the_rooms_one_setting_and_a_rebuilt_deck_lets_its_old_state_go():
-    """Finding 3: the mirror's value lives on the session's param
+    """Finding 3: the mirror's value lives on the meta controller's param
     (`ghost.RoomSetting`), read there; a deck's hands state is held weakly,
     so a deck rebuilt is written, its old state forgotten."""
     import gc
@@ -396,7 +396,7 @@ def test_the_mirror_is_the_rooms_one_setting_and_a_rebuilt_deck_lets_its_old_sta
 
 def test_an_old_shows_extra_hands_look_is_no_unknown_id_for_a_loadable_without_the_node(tmp_path):
     """Finding 4: an old show held `ghost.2.*` (an extra hands node); an old
-    preset whose graph has no second node loads with no "unknown id" — the
+    loadable patch whose graph has no second node loads with no "unknown id" — the
     show's leftover is dropped quietly — and the look it does declare lands."""
     home = tmp_path / "home"
     _old_show(home, session={"tempo.bpm": 128.0, **LOOK, "ghost.2.alpha": 0.4,
@@ -428,9 +428,9 @@ def test_one_look_id_set_reads_an_old_show_and_hands_on_to_old_loadables():
 
 
 def test_force_by_a_bare_stem_is_refused_when_two_folders_hold_it(tmp_path, monkeypatch, capsys):
-    """Finding 8: a bare stem two folders hold forces only the preset whose
+    """Finding 8: a bare stem two folders hold forces only the loadable patch whose
     path it is — `--force trip` the top-level `trip.json`, never
-    `party/trip.json` — and one no preset's path is (`night` in
+    `party/trip.json` — and one no loadable patch's path is (`night` in
     `party/` and `club/`) forces none, said; `--force party/trip` forces that one."""
     tool = _tool()
     r1, r2 = tool.Result("trip.json"), tool.Result("party/trip.json")
@@ -449,7 +449,7 @@ def test_force_by_a_bare_stem_is_refused_when_two_folders_hold_it(tmp_path, monk
 
 def test_the_lead_is_named_and_a_stale_follower_never_lands_the_meta():
     """Round 2, finding 1: the lead is the deck on air, named
-    (`session.lead = reg`, as `Deck.build(on_air=True)` does) — a registry
+    (`meta_reg.on_air_reg = reg`, as `Deck.build(on_air=True)` does) — a registry
     that followed first and is still referenced (an old deck a closure
     holds) lands nothing once another is named."""
     from hyperspace.params import build_patch
@@ -478,7 +478,7 @@ def test_deck_build_names_its_registry_the_lead(tmp_path):
 
 def test_the_meta_own_apply_lands_each_param_once_a_frame():
     """Round 2, finding 2: `session.apply()` in the same frame as the lead's
-    apply — after it or before it — lands each session param once (the
+    apply — after it or before it — lands each shared meta param once (the
     frame's shared mark), never releasing the modulation."""
     meta_reg, a, _b = _two_decks()
     p = meta_reg["master.gain"]
@@ -502,7 +502,7 @@ def test_the_meta_own_apply_lands_each_param_once_a_frame():
 
 def test_a_param_with_no_group_is_unclassified():
     """Round 2, finding 3: `group=None` is in no part — never handed to the
-    session for an id that starts like a session group's."""
+    meta controller for an id that starts like a shared meta group's."""
     from hyperspace.params import Kind, Param, part_of
     p = Param("master.thing", "x", Kind.TOGGLE, group=None)
     assert part_of(p) is None and p._part is None
@@ -540,7 +540,7 @@ def test_the_ghost_groups_roads_leave_the_mirror_alone(tmp_path):
 
 def test_a_second_table_shares_the_meta_rows_it_brings_and_refuses_another_file(tmp_path):
     """Round 2, finding 5: a second deck's `Bindings(rows, session=)` adds
-    the session rows it brings that the session lacks — every deck gets
+    the meta rows it brings that the meta controller lacks — every deck gets
     them — and one naming another file or profile is refused, named."""
     a = Bindings.factory(path=tmp_path / "bindings.json")
     s = a.meta_table
@@ -560,12 +560,12 @@ def test_a_second_table_shares_the_meta_rows_it_brings_and_refuses_another_file(
 
 
 def test_a_mirror_from_before_the_room_is_given_one_never_declared_twice():
-    """Round 3, finding 1: a hot reload keeps a session whose `ghost.mirror`
+    """Round 3, finding 1: a hot reload keeps a meta controller whose `ghost.mirror`
     was declared by the build before (no `room`); a deck's `register` gives
     it a `RoomSetting` with its setting kept, and never re-declares it."""
     from hyperspace.ghost import GhostState, RoomSetting
     from hyperspace.ghost import register as declare_ghost
-    from hyperspace.params import Registry, MetaRegistry
+    from hyperspace.params import MetaRegistry, Registry
     s = MetaRegistry()
     old = GhostState(mirror=True)
     a = Registry(meta_reg=s)

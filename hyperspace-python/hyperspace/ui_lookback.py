@@ -28,7 +28,7 @@ layout: which param is drawn under which node, in order, two to a row
 
 One function, `page`, for the LOOKBACK page and GRAPH's side pane's
 lookback section (ui_pane.py). A function over the Panel, like
-ui_presets: it draws with the panel's widget helpers and keeps no state,
+ui_loadable: it draws with the panel's widget helpers and keeps no state,
 so a hot reload of this module lands on the next frame. Without a
 renderer (headless tests) or before the first capture, the thumbnail row
 says so instead of drawing textures; the control window shares the
@@ -138,7 +138,7 @@ def _drawn(panel, spec):
 
 
 def _spec(panel):
-    """The loaded preset's graph (`Panel.graph_now`), or None: a stand-in
+    """The loaded loadable patch's graph (`Panel.graph_now`), or None: a stand-in
     renderer or library, no graph."""
     now = getattr(panel, "graph_now", None)
     try:
@@ -223,7 +223,7 @@ def capture_line(spec) -> str:
     """The LOOKBACK page's "records:" (plan 35 U): the source wired into
     `lookback.image` by its title (`graphview.picture_label`: "Scene"),
     or "nothing — the echoes fade" with no wire there. `spec` is the
-    loaded preset's graph (`graphview.page_spec`: None is the empty
+    loaded loadable patch's graph (`graphview.page_spec`: None is the empty
     frame, plan 36 T3)."""
     spec = graphview.page_spec(spec)
     now = graphview.picture_now(spec, CAPTURE)
@@ -248,7 +248,7 @@ def draws_over_line(spec) -> str:
 def _records_row(panel, spec) -> None:
     """The records combo, half the row, and "draws over:" beside it; the
     last edit's words under them while there are any. `spec` is the
-    loaded preset's graph (`_spec`)."""
+    loaded loadable patch's graph (`_spec`)."""
     frame = graphview.page_spec(spec)
     width = imgui.get_content_region_avail().x * 0.55
     # (the hover: the longer words — "with the hands", a placed effect)

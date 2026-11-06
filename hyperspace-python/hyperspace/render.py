@@ -85,7 +85,7 @@ count and the wiring do not change — and evaluates it: the nodes run
 once each, in an order settled when the graph was built, and each node
 is timed on the GPU (`PassTimer`, one line per node on the SYSTEM page).
 Plan 35 T4: every graph is a wired frame's (`graph.build_graph`; plan 36
-T3: nothing else — `graph.EMPTY` until a preset lands); the pipelines are gone, and
+T3: nothing else — `graph.EMPTY` until a loadable patch lands); the pipelines are gone, and
 every golden frame is drawn byte for byte. The passes themselves (`draw_scene`,
 `_face_picture`, `_draw_cover`, `_compose`, `_show`, `dim_pass`) stay
 here; the nodes call them.
@@ -152,12 +152,12 @@ from .graph import (
     SegmentNode,
     Wiring,
     build_graph,
+    bus_cuts_of,
     channel_into,
     cloud_roles,
     graph_key,
     param_prefix,
     picture,
-    bus_cuts_of,
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
@@ -1155,7 +1155,7 @@ class Renderer:
         self._show_vao: moderngl.VertexArray | None = None
         # plan 26 A3: the program a Composite node lays a layer with, on
         # first use; and the wiring the frame is built from — plan 36 T3
-        # (W3): the empty frame (black) until a preset's graph lands one
+        # (W3): the empty frame (black) until a loadable patch's graph lands one
         self._lay_prog: moderngl.Program | None = None
         self._lay_vao: moderngl.VertexArray | None = None
         self.wiring = EMPTY
@@ -1171,12 +1171,12 @@ class Renderer:
         self.poi_guide = None
         # the registry of the deck this renderer draws (`Deck.build`); None: no deck
         self.deck_reg = None
-        # plan 36 T1: whoever holds the rig's own wires (the open show,
+        # plan 36 T1: whoever holds the meta controller's own wires (the open show,
         # `library.Project.rig`, by `app`); None: every bus cable standing
         self.bus_source = None
         # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
-        # …), handed over by whoever declared their params (the preset's
-        # graph section, `preset.GraphSection`); their Ghosts, made on
+        # …), handed over by whoever declared their params (the loadable patch's
+        # graph section, `loadable.GraphSection`); their Ghosts, made on
         # first use (`ghost_of`)
         self.ghost_states: dict[str, GhostState] = {}
         self._ghosts: dict[str, Ghost] = {}
@@ -1427,7 +1427,7 @@ class Renderer:
     def _face_media(self, s: ViewState) -> tuple[moderngl.Texture, bool] | None:
         """The texture the faces draw over their pattern (plan 32 T7, row
         331: where the one bitmap file was) and whether it is in GL's row
-        order. Plan 33 R: what the preset's graph wires into `pattern.media`
+        order. Plan 33 R: what the loadable patch's graph wires into `pattern.media`
         — not `view.media`. In a frame, what the graph's pattern node read
         for this scene pass (`graph.PatternNode.layer`, handed over as
         `_face_layer`: a channel's raw texture, or a branch's picture at its
@@ -1748,7 +1748,7 @@ class Renderer:
         # and its background model go, after `SIZED_KEEP_FRAMES`
         self._tend_segments(graph)
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
-        # effect the preset placed on an edge runs there (and moves its
+        # effect the loadable patch placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
         # effects on a through output stands down as with none. Plan 33 R:
         # the runs are the graph's (its wires), each effect asked `live`
@@ -1817,17 +1817,17 @@ class Renderer:
         effect files present (`FxState.specs`, as a set): each pipeline's
         run is the wiring's (`Wiring.run`, its wires), so a file that goes
         or comes builds again and a toggle does not (an off node reads
-        through). A wiring that says no run (no preset's graph reached it)
+        through). A wiring that says no run (no loadable patch's graph reached it)
         has the empty one (R23, plan 33 T7). A new graph
         fits the effects' texture pool to what it needs (`Graph.pool`).
-        Plan 28 N4: the preset's wires are part of the key — they ride in
+        Plan 28 N4: the loadable patch's wires are part of the key — they ride in
         the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
         so an edit on the GRAPH page that lands a new `GraphSpec` builds
         the graph again, with the same refusals (a dormant wire, a loop).
         Plan 35 B, T4: every frame is a wired frame, keyed by the views'
         count alone — a window's switches are mutes, read by each output
-        every frame, never a rebuild. Plan 36 T1: the rig's own wires
-        (`rig_source`, the open show: `graph.rig_of`) are part of the key —
+        every frame, never a rebuild. Plan 36 T1: the meta controller's own wires
+        (`bus_source`, the open show: `graph.bus_cuts_of`) are part of the key —
         a bus cable cut on GRAPH builds again."""
         # (`s`: the view state, unread since plan 36 T3 — the backdrop is
         # the section's wires, never laid on per frame)
@@ -2447,7 +2447,7 @@ class Renderer:
             frames = self._frames = {}
         # R16 (final review): every key asked for is marked — a string
         # key (an end's `shown(...)`, a `#fit`) is pruned when idle as a
-        # `(name, size)` one is, so a load leaves nothing of the last preset
+        # `(name, size)` one is, so a load leaves nothing of the last loadable patch
         self.__dict__.setdefault("_sized_used", set()).add(key)
         have = frames.get(key)
         if (have is not None and have[0].size == size
@@ -2522,7 +2522,7 @@ class Renderer:
     def delay_pair(self, name: str) -> DelayPair:
         """Delay `name`'s pair (plan 34 D, row 354), made on first ask and
         kept by name across graph rebuilds — an edit elsewhere on GRAPH
-        does not cut the feedback; a preset load does (`reset_delays`, R19)
+        does not cut the feedback; a loadable patch load does (`reset_delays`, R19)
         (__dict__: a renderer from before plan 34 has none)."""
         pairs = self.__dict__.setdefault("_delays", {})
         got = pairs.get(name)
@@ -2625,9 +2625,9 @@ class Renderer:
         self._stopped = []
 
     def reset_delays(self) -> None:
-        """R19 (final review, row 354): a preset load landed a new section —
+        """R19 (final review, row 354): a loadable patch load landed a new section —
         at the next turn every pair holds nothing (as on its first frame),
-        so no trail of the last preset shows in the new one. A GRAPH edit
+        so no trail of the last loadable patch shows in the new one. A GRAPH edit
         or rebuild does not ask: the feedback runs on across those. The
         textures are kept; only what they hold is forgotten."""
         self.__dict__["_delays_reset"] = True
@@ -2673,7 +2673,7 @@ class Renderer:
         textures (R16: every key — `(name, size)`, an end's `shown(...)`, a
         `#fit`, a channel's fit) that no frame has asked for in the last
         `SIZED_KEEP_FRAMES` — a channel whose clip changed size, a branch
-        unwired, the preset before a load — so pictures never pile up,
+        unwired, the loadable patch before a load — so pictures never pile up,
         and (R29) a switch flicked every frame between branches of other
         sizes reallocates nothing: the branch not picked keeps its
         textures for the next flick."""
@@ -2725,7 +2725,7 @@ class Renderer:
         """The `Ghost` that draws hands node `name` (plan 26 A4): `ghost` is
         the renderer's own (`self.ghost`, `ghost.*`); another (`ghost.2` …)
         is made on first ask over its state in `ghost_states` — the one the
-        registry's `ghost.2.*` params write (`preset.GraphSection`), a
+        registry's `ghost.2.*` params write (`loadable.GraphSection`), a
         fresh one when none was handed over — and follows the first's
         tracker and routing table. A state handed over again later
         replaces the Ghost. getattr: a renderer from before A4."""
@@ -3703,7 +3703,7 @@ def render_offscreen(
     `wiring`: the graph's (`Renderer.wiring` — plan 33 R: a channel on the
     faces is the wire `media.<c> → pattern.media`), None today's frame —
     plan 36 T3: said here, as the tool's own wiring, by the one-way
-    migration of a preset with no section (`graphmigrate.wired_wiring`),
+    migration of a loadable patch with no section (`graphmigrate.wired_wiring`),
     never by the renderer, whose own is the empty frame."""
     own = ctx is None
     if own:

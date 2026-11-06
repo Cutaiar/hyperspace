@@ -1,9 +1,9 @@
 """Plan 43 C2 — one orbit camera (the owner, 2026-11-02; register rows 555,
-572–576): the eye (`eye.fov`, `eye.distance`) is the preset's beside
+572–576): the eye (`eye.fov`, `eye.distance`) is the loadable patch's beside
 `camera.*`, modulatable; every save is `hyperspace.preset/9` and records
 the spin's pose (`pose`, `view.body` folded in), which a load sets; an old
-preset takes the eye its old show held; the hands' calibration is fitted
-to the rig's reference eye, so hands drawn in the scene scale with the
+loadable patch takes the eye its old show held; the hands' calibration is fitted
+to the meta controller's reference eye, so hands drawn in the scene scale with the
 shape and a hands layer keeps its size; the migration tool moves a
 library (the retaper first, a backup, the shows' eye kept as
 ``.bak-v2-eye``).
@@ -54,7 +54,7 @@ CAMERA_AT = [40, 50]
 
 
 def old_loadable(src: Path = TRIP, *, marked: bool = True) -> dict:
-    """A corpus preset as it was before `/9`: `/7`, no eye in its values
+    """A corpus loadable patch as it was before `/9`: `/7`, no eye in its values
     (and, unmarked, its depths still measured along the linear ranges'
     words — wave 0 T1's marker gone)."""
     doc = json.loads(src.read_text())
@@ -67,7 +67,7 @@ def old_loadable(src: Path = TRIP, *, marked: bool = True) -> dict:
 
 def old_show(**extra) -> dict:
     """A show from before C2 (`hyperspace.project/2`): the eye in its
-    session, the camera node's GRAPH position in its layout."""
+    meta controller, the camera node's GRAPH position in its layout."""
     return {"schema": L.PROJECT_V2, "name": "rig", "bank": [None] * 8,
             "session": {"tempo.bpm": 128.0, **EYE},
             "layout": {"render:camera": CAMERA_AT, "device:apc40": [1, 2]}, **extra}
@@ -83,7 +83,7 @@ def _write(path: Path, doc: dict) -> Path:
 
 
 def test_the_eye_is_the_looks_and_the_pose_is_no_base(tmp_path):
-    """Row 555: the eye leaves the session for the performance part, ids
+    """Row 555: the eye leaves the meta controller for the patch part, ids
     kept; the pose's ids are the six phases, which stay `persist=False` —
     no base, so no undo step and no dirty dot as the turn moves."""
     assert "eye" in PATCH_GROUPS and "eye" not in SHARED_META_GROUPS
@@ -149,7 +149,7 @@ def test_a_saved_pose_draws_the_same_shape_whichever_way_the_switch_stands(three
 
 def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_back(tmp_path):
     """Hand check 431's road, headless: the eye, the camera and the turn
-    (a 3D switch's body included) are saved; another preset moves the
+    (a 3D switch's body included) are saved; another loadable patch moves the
     framing and leaves the turn spinning (it has no pose); loading the
     first again puts both back and the shape is drawn as it was."""
     rig = boot(tmp_path)
@@ -174,7 +174,7 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     assert not any(k.startswith("rot.phase.") for k in doc["values"])
     keys = list(doc)
     assert keys.index(loadable.POSE_KEY) == keys.index("values") + 1
-    # another preset (a corpus /9: the default eye, no pose)
+    # another loadable patch (a corpus /9: the default eye, no pose)
     turn = list(view.ang)
     rig.loaded_patch.load("DIAL")
     assert reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
@@ -205,7 +205,7 @@ def test_a_pose_that_is_not_six_numbers_is_said_and_the_turn_left_spinning(tmp_p
 
 
 def test_a_pose_in_values_is_no_pose(tmp_path):
-    """A hand-edited `rot.phase.*` in `values` is not part of a preset (it
+    """A hand-edited `rot.phase.*` in `values` is not part of a loadable patch (it
     is no base), said as ever; the turn is left."""
     rig = boot(tmp_path)
     doc = json.loads((CORPUS / "presets" / "dial.json").read_text())
@@ -258,8 +258,8 @@ def test_nine_is_pure_one_way_and_keeps_what_the_file_says():
 def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_path):
     """REVIEW.md "Files on disk are a format", end to end: an old show
     (eye in its session, the camera's position in its layout) and an old
-    `/7` preset. The show lands no eye and is clean; the old preset takes
-    the show's eye and position, a `/9` its own; the preset's save is `/9`
+    `/7` loadable patch. The show lands no eye and is clean; the old loadable patch takes
+    the show's eye and position, a `/9` its own; the loadable patch's save is `/9`
     with that eye; the show's save drops the eye after keeping the file as
     ``.bak-v2-eye`` (once); a fresh launch on the saved files draws the
     same framing."""
@@ -298,7 +298,7 @@ def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_pa
     assert sorted(p.name for p in show.parent.glob("rig.hyp.json.bak-*")) == [
         bak.name, "rig.hyp.json.bak-v2-look"]
     # a fresh launch: the show holds no eye now, but its `.bak-v2-eye` does
-    # — still handed to old presets (review 2.2) — and the /9 carries its own
+    # — still handed to old loadable patches (review 2.2) — and the /9 carries its own
     again = boot(home, show="rig")
     assert again.lib.project.old_eye == EYE and again.lib.project.camera_at == CAMERA_AT
     assert not any(k.startswith("eye.") for k in again.lib.project.session)
@@ -309,7 +309,7 @@ def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_pa
 def test_a_bank_autosave_before_the_tool_still_hands_old_loadables_the_eye(tmp_path):
     """Review 2.2: the first write of an old show on this build (here the
     bank's autosave, `Project.write`) drops its eye into `.bak-v2-eye`; an
-    old preset opened on the next launch — before the tool ran — still
+    old loadable patch opened on the next launch — before the tool ran — still
     takes that eye and the camera's position from the backup."""
     home = tmp_path / "lib"
     _write(home / "projects" / "rig.hyp.json", old_show())
@@ -346,7 +346,7 @@ def test_the_tool_copies_nothing_when_nothing_it_reads_is_retapered(tmp_path, mo
 
 
 def test_an_old_loadable_with_no_old_eye_takes_the_builds(tmp_path):
-    """A show from C2 on (the corpus's) holds no eye: an old preset lands
+    """A show from C2 on (the corpus's) holds no eye: an old loadable patch lands
     the build's default, the picture it drew before."""
     rig = boot(tmp_path)
     rig.reg["eye.fov"].set(90.0)
@@ -489,8 +489,8 @@ def test_nine_leaves_values_that_are_no_map_to_the_load():
 
 
 def test_the_camera_node_is_the_looks():
-    """GRAPH: the camera is no rig node any more — its position is the
-    preset's and its refusal says it is the look's one camera."""
+    """GRAPH: the camera is no fixture node any more — its position is the
+    loadable patch's and its refusal says it is the look's one camera."""
     assert "camera" not in graphview.FIXTURE_KINDS and "camera" in graphview.ALWAYS_KINDS
     cam = graphview.VNode("render:camera", "render", "Camera")
     assert graphview.home(cam) == graphview.PATCH_SECTION
@@ -499,13 +499,13 @@ def test_the_camera_node_is_the_looks():
 
 
 def test_the_hands_calibration_is_the_meta_reference_eye():
-    """Row 575, no GL: the box is fitted into the world against the rig's
-    reference eye whatever the preset's; through a zoomed eye the hands'
+    """Row 575, no GL: the box is fitted into the world against the meta controller's
+    reference eye whatever the loadable patch's; through a zoomed eye the hands'
     picture scales about the centre as the shape's does (the scene's
     camera), and the reference eye's picture — a layer's — does not move."""
     import inspect
     m, box = ghost.basis("desktop"), ghost.box_of(None)
-    # no argument takes an eye: nobody can pass the preset's back in
+    # no argument takes an eye: nobody can pass the loadable patch's back in
     assert list(inspect.signature(ghost.calibration).parameters) == ["box", "m", "units"]
     ref = ghost.calibration(box, m)
     cal_zoomed = ghost.through_eye(ref, m, 1.6, 30.0)
@@ -570,7 +570,7 @@ def same_picture(path, *, library=None, show=None):
 
 def _library(tmp_path: Path) -> Path:
     """A library like the owner's before C2: an old show holding the eye,
-    two `/7` presets (one with the taper marker, one without), a `/9`
+    two `/7` loadable patches (one with the taper marker, one without), a `/9`
     already, a patch and a desk template from before the tapers."""
     lib = tmp_path / "Drive" / "Hyperspace"
     loadable_dir = lib / "presets"
@@ -599,7 +599,7 @@ def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_loadable(tmp_pa
     """The whole bump over a scratch copy: a dry run writes nothing and says
     the show, its eye, the retaper and the shows it would rewrite; --apply
     backs the library up first, retapers the patch and the desk template,
-    writes every old preset as `/9` with the show's eye and camera position
+    writes every old loadable patch as `/9` with the show's eye and camera position
     (no pose: they keep spinning), leaves the `/9` alone, and rewrites the
     show without the eye beside its ``.bak-v2-eye``. A second run finds
     nothing to do — and reads the eye from that backup."""
@@ -686,7 +686,7 @@ def test_the_tool_draws_the_old_file_with_the_show_open_as_its_nine(tmp_path, ca
     with_show, _ = golden_frames.picture(old, show=seed, **kw)
     assert golden_frames.picture(nine, **kw)[0] == with_show
     assert golden_frames.picture(old, **kw)[0] != with_show
-    # the rig's GL objects went with the picture: collected later, on a test's
+    # the meta controller's GL objects went with the picture: collected later, on a test's
     # own context, they would delete that context's objects of the same names
     released = []
     moderngl = sys.modules["moderngl"]
@@ -725,7 +725,7 @@ def _span(pic) -> tuple[int, int]:
 
 
 def test_hands_in_the_scene_scale_with_the_shape_and_a_layer_keeps_its_size(ctx):
-    """Row 575 / hand check 433, drawn: widening the preset's eye (47.6° →
+    """Row 575 / hand check 433, drawn: widening the loadable patch's eye (47.6° →
     60°, out, so nothing leaves the frame) shrinks the shape, and the hands
     drawn in the scene shrink with it by the same ratio; the hands drawn
     as a layer are the same picture, pixel for pixel, whatever the eye."""
@@ -864,8 +864,8 @@ def test_a_loaded_pose_turns_on_as_the_saved_shape_did(plane):
 
 def test_an_old_show_with_the_camera_under_its_old_id_and_no_eye(tmp_path):
     """Reviews 2 and 3: a show whose layout holds the camera under the old
-    canvas id (`render:eye`) and whose session holds no eye — the position
-    is the old presets' (`camera_at`), never the show's; its write drops it
+    canvas id (`render:eye`) and whose meta controller holds no eye — the position
+    is the old loadable patches' (`camera_at`), never the show's; its write drops it
     and keeps the file first as ``.bak-v2-eye``."""
     home = tmp_path / "lib"
     show = _write(home / "projects" / "rig.hyp.json",

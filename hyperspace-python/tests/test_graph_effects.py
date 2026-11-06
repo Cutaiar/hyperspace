@@ -130,7 +130,7 @@ def test_the_renderer_builds_the_run_from_the_wires_and_a_toggle_does_not_rebuil
     that says a run builds it from its wires, in wire order; the graph
     keys on the effect files present, so switching one on keeps the graph
     object, and a rewire builds another. A wiring that says no run (no
-    preset's graph) has the empty one (R23, plan 33 T7: the stack is gone),
+    loadable patch's graph) has the empty one (R23, plan 33 T7: the stack is gone),
     whatever is switched on."""
     from test_outputs import rig, run, views
 

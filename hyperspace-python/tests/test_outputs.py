@@ -142,7 +142,7 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
     if echoes:
         st = r.lookback.state
         st.on, st.echoes, st.gap, st.tint_from = True, 8, 0.0, 0
-        # (plan 36 T4: the look-back drawn, as an old preset with it on and
+        # (plan 36 T4: the look-back drawn, as an old loadable patch with it on and
         # no dream migrates: `scene → lookback → composite (add)`)
         r.wiring = wired_wiring(r.old_wiring, look="trail")
     g = r.ghost
@@ -152,7 +152,7 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
 
 
 def wired(r, section: dict):
-    """`section` (a preset's graph section, plan 28 N4's words) as a load
+    """`section` (a loadable patch's graph section, plan 28 N4's words) as a load
     lands it over `r`'s effects: plan 33 R23, `graphmigrate` — the run the
     effects on make, beside the section's own wires."""
     from hyperspace.graphmigrate import specs_of, state_values, wiring_for
@@ -163,7 +163,7 @@ def wired(r, section: dict):
 
 def keep_run(r, wiring):
     """`wiring` (a placement, a hands node: plan 26–30's words) with `r`'s
-    run kept — the run the rig's effects landed as (plan 33 R23); a wiring
+    run kept — the run the meta controller's effects landed as (plan 33 R23); a wiring
     that says a run of its own keeps it."""
     from dataclasses import replace
 

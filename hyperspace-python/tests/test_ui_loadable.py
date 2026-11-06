@@ -2,12 +2,12 @@
 hidden) — headless imgui over the controls rig (tests/test_ui_shell.py),
 on a home seeded with the corpus, which opens the party show.
 
-Top to bottom (ui_presets.page): the preset strip — ◀ name ● ▶ · new ·
-save · as…, the name a readout — then every preset as a list that fills
+Top to bottom (ui_loadable.page): the preset strip — ◀ name ● ▶ · new ·
+save · as…, the name a readout — then every loadable patch as a list that fills
 the page (a click loads, `rename` and × on each row), the trash's foot
 while the trash holds something, the patches fold, one line for the show
 (its name ●, open ▾, save, as…, new) and the library's notes. No bank
-pills, no "starts on", no preset combo, no module-preset fold.
+pills, no "starts on", no loadable patch combo, no module-preset fold.
 """
 
 import json
@@ -24,7 +24,7 @@ from test_ui_shell import (  # noqa: F401 — the fixture
     rig,
 )
 
-from hyperspace import ui, ui_pane, ui_loadable
+from hyperspace import ui, ui_loadable, ui_pane
 from hyperspace.library import HOME_UNSET, PATCHES, Library
 from hyperspace.ui import PAGE_KEYS
 
@@ -79,7 +79,7 @@ def _open_patches(monkeypatch):
 def test_the_page_is_strip_list_patches_show_top_to_bottom(rig):  # noqa: F811
     """The strip's rects, the list's box under it, the show line under
     that — and nothing of the old page: no bank pill, no "starts on", no
-    preset combo, no "more"."""
+    loadable patch combo, no "more"."""
     panel = rig.panel
     st = _page(panel)
     rects, page = st["rects"], st["page"]
@@ -99,7 +99,7 @@ def test_the_page_is_strip_list_patches_show_top_to_bottom(rig):  # noqa: F811
 
 
 def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # noqa: F811
-    """The name on the presets' strip reads what is loaded ("—" for
+    """The name on the loadable patches' strip reads what is loaded ("—" for
     nothing) and a click on it opens nothing: the list is the page."""
     panel, lib = rig.panel, rig.lib
     got = _labels(monkeypatch)
@@ -117,7 +117,7 @@ def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # no
 
 
 def test_the_list_is_every_loadable_by_name_with_rename_and_cross(rig):  # noqa: F811
-    """Every preset of the library, in `Library.list`'s order (case folded),
+    """Every loadable patch of the library, in `Library.list`'s order (case folded),
     each row `rename` and × — one tier, no row dim, no row hidden; each
     row's chips clear its name inside the list's box."""
     panel, lib = rig.panel, rig.lib
@@ -156,7 +156,7 @@ def test_a_click_on_a_row_loads_it_and_the_loaded_row_is_selected(rig, monkeypat
 
 def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # noqa: F811
     """× on any row: the file goes to the trash, the row leaves the list,
-    the foot says the trash holds something. A preset a pad names is still
+    the foot says the trash holds something. A loadable patch a pad names is still
     its file's: the footer says which pad, nothing is cleared for you."""
     panel, lib = rig.panel, rig.lib
     st = _page(panel)
@@ -169,7 +169,7 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     page = st["page"]
     assert "DIAL" not in [n for n, _ in page["rows"]] and len(page["rows"]) == 24
     assert page["foot"] == ["trash (1) ▸"] and "trash" in page["rects"]
-    _click(panel, page["rects"]["×.ACID"])                       # F6's preset
+    _click(panel, page["rects"]["×.ACID"])                       # F6's loadable patch
     assert lib.warning.startswith("ACID is in the trash — F6 still names it")
     assert lib.project.bank[5] == "ACID" and "ACID" not in lib.list("presets")
     page_frame(panel)
@@ -177,12 +177,12 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
 
 
 def test_a_folder_loadable_sits_under_its_header_and_renames_in_its_folder(rig):  # noqa: F811
-    """Plan 48 row 588, under stage 2's tree (row 636): a preset in
+    """Plan 48 row 588, under stage 2's tree (row 636): a loadable patch in
     ``presets/party/`` is listed as ``party/DIAL`` and drawn under the
     ``party`` header by its leaf, its chips clear of it; `rename` seeds
     the field with the leaf alone, and the file stays in its folder.
     (The window tall enough that the folder, after every top-level
-    preset, is in view.)"""
+    loadable patch, is in view.)"""
     panel, lib = rig.panel, rig.lib
     imgui.get_io().display_size = imgui.ImVec2(CONTROL_SIZE[0], 2400)
     src = lib.path_of("presets", "DIAL")
@@ -304,7 +304,7 @@ def test_the_shows_row_is_never_covered(rig):  # noqa: F811
 # ------------------------------------------------------------ the strip
 
 def _dirty(r):
-    """An edit the loaded preset does not hold: the presets group (and the
+    """An edit the loaded loadable patch does not hold: the loadable patches group (and the
     view's) is dirty."""
     reg = r.reg
     reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
@@ -312,9 +312,9 @@ def _dirty(r):
 
 
 def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
-    """Plan 14 §1: right after a preset loaded, no rail dot is lit and the
-    show is not unsaved — every dot compares against the loaded preset or
-    show. An edit brings the preset's back; a session move the show's."""
+    """Plan 14 §1: right after a loadable patch loaded, no rail dot is lit and the
+    show is not unsaved — every dot compares against the loaded loadable patch or
+    show. An edit brings the loadable patch's back; a meta controller move the show's."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     for name in ("TRIP", "WAKE", "BIG BLUE WAVE"):
         lib.load("presets", name)
@@ -325,8 +325,8 @@ def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
     page_frame(panel, "presets")
     reg["view.bright"].set_value(reg["view.bright"].value + 1.0)   # an edit: the dot comes back
     assert ui_loadable.dirty(panel, "view") and ui_loadable.dirty(panel, "presets")
-    assert not lib.project.is_dirty()                     # a performance move: the preset's
-    reg["master.gain"].set(reg["master.gain"].value + 1.0)  # a session move: the show's
+    assert not lib.project.is_dirty()                     # a performance move: the loadable patch's
+    reg["master.gain"].set(reg["master.gain"].value + 1.0)  # a meta controller move: the show's
     assert ui_loadable.dirty(panel, "master") and lib.project.is_dirty()
 
 
@@ -371,7 +371,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
 
 
 def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa: F811
-    """Save on a loaded preset writes its own file over — the one the list
+    """Save on a loaded loadable patch writes its own file over — the one the list
     found it by — and keeps the old text in the trash; the list still holds
     the name once. TRIP's file is `party-trip.json` (the corpus kept the
     stems the build shipped, as the owner's migrated library may): a save
@@ -393,7 +393,7 @@ def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa:
 
 def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  # noqa: F811
     """The preset strip drops `reset` (on a document kind `Library.reset`
-    loads a preset called "default", and none is there): at the control
+    loads a loadable patch called "default", and none is there): at the control
     size, the longest name loaded and dirty, the strip's items — ◀ name ●
     ▶ · new · save · as… — clear one another and the page's edge."""
     panel, lib = rig.panel, rig.lib
@@ -419,8 +419,8 @@ def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):
 
 
 def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
-    """Plan 35 T7 (row 387): `new` sits before `save` on the presets' strip
-    and starts the blank preset; `save` on the untitled preset begins
+    """Plan 35 T7 (row 387): `new` sits before `save` on the loadable patches' strip
+    and starts the blank loadable patch; `save` on the untitled loadable patch begins
     naming, since it has no file to write over."""
     from hyperspace import loadable
 
@@ -443,10 +443,10 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
 
 
 def test_new_then_save_never_writes_over_a_loadable_named_untitled(rig):  # noqa: F811
-    """R17 (final review): a preset named `untitled` exists; New, then
-    save, opens naming (the new preset is unsaved, whatever its name) and
+    """R17 (final review): a loadable patch named `untitled` exists; New, then
+    save, opens naming (the new loadable patch is unsaved, whatever its name) and
     the file is the bytes it was; `as…` on it prefills nothing. A save
-    clears the flag: save on the saved preset writes over it."""
+    clears the flag: save on the saved loadable patch writes over it."""
     from hyperspace import loadable
 
     panel, lib = rig.panel, rig.lib
@@ -669,7 +669,7 @@ def test_the_show_line_names_the_show_and_its_dot(rig, monkeypatch):  # noqa: F8
     assert ui_loadable.SHOW_LINE.upper() in texts and "party" in texts
     assert "●" not in texts and "show.dot" not in st["rects"]
     assert not lib.project.is_dirty()
-    reg["master.gain"].set(reg["master.gain"].value + 1.0)      # a session move
+    reg["master.gain"].set(reg["master.gain"].value + 1.0)      # a meta controller move
     texts.clear()
     page_frame(panel)
     assert lib.project.is_dirty() and "●" in texts and "show.dot" in st["rects"]
@@ -679,7 +679,7 @@ def test_the_show_line_names_the_show_and_its_dot(rig, monkeypatch):  # noqa: F8
 
 def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa: F811
     """The open ▾ combo lists `Project.list()` — the library's shows — and
-    a pick opens that show with its startup preset."""
+    a pick opens that show with its startup loadable patch."""
     panel, lib = rig.panel, rig.lib
     assert lib.project.list() == ["house", "party"]
     st = _page(panel)
@@ -736,9 +736,9 @@ def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
 def test_nothing_on_the_page_says_starts_on_f_keys_hidden_or_factory(rig, monkeypatch):  # noqa: F811
     """The owner's ask, 2026-10-28: no "starts on", no F-key, no hidden, no
     factory, no slot — in any text the page draws, any hover, any widget
-    label, any rect key — with a preset loaded, the trash holding a file,
+    label, any rect key — with a loadable patch loaded, the trash holding a file,
     a patch in its fold and the show line drawn. The page says show and
-    preset, never project or startup."""
+    loadable patch, never project or startup."""
     panel, lib = rig.panel, rig.lib
     lib.load("presets", "TRIP")
     lib.delete("presets", "DIAL")
@@ -813,7 +813,7 @@ def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
     """Plan 16 WP7: every line that reports something that just happened
     goes through `Library.say`, so the same press giving the same words
     shows them again — an empty F-key, home on a show that names no
-    startup preset, a pad naming no file, a show saved twice."""
+    startup loadable patch, a pad naming no file, a show saved twice."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     proj = lib.project
     clock = [1000.0]

@@ -68,7 +68,7 @@ def _frame(rig) -> None:
 
 
 def _patch(deck) -> dict:
-    """Every performance param as it lands, to the bit."""
+    """Every patch param as it lands, to the bit."""
     return {p.id: repr(p.value) for p in deck.reg
             if part_of(p) == "patch" and p.group != "ui"}
 
@@ -165,8 +165,8 @@ def test_a_held_chase_lets_go_on_the_deck_left_one_step_on_its_stack(rig):
 
 
 def test_no_meta_param_jumps_at_the_middle(rig):
-    """Same look or not: the session's values are one object, and a row of the
-    session's reads on from the same follower."""
+    """Same look or not: the meta controller's values are one object, and a row of the
+    meta controller's reads on from the same follower."""
     meta, one, two = rig.meta, rig.one, rig.two
     one.reg["output.dim"].set(0.7)
     one.loaded_patch.load(min(one.loaded_patch.lib.list(LOADABLE)))
@@ -193,7 +193,7 @@ def test_only_the_deck_on_air_lands_the_meta_after_a_crossing(rig):
 
 def test_a_desk_fader_on_a_meta_param_reads_on_across_the_middle(rig):
     """Over the MASTER's real row and fake ports: a crossing is a pointer's move, and
-    the catch of a session fader stays (D5a's `MidiIO._follow_pointer`)."""
+    the catch of a meta controller fader stays (D5a's `MidiIO._follow_pointer`)."""
     meta, one, two = rig.meta, rig.one, rig.two
     midi = rig.r.midi
     midi.point(meta.pointer("apc40"), meta.panel_pointer)
@@ -274,7 +274,7 @@ def test_a_hand_on_the_fader_ends_a_timed_fade_there(rig):
 
 @pytest.mark.parametrize("ran", [0, 45], ids=["just loaded", "running"])
 def test_copy_then_every_patch_param_of_both_decks_equal_each_frame(rig, ran):
-    """Over every corpus preset, whatever was on the deck off air: 120 frames,
+    """Over every corpus loadable patch, whatever was on the deck off air: 120 frames,
     one lane vector, not a bit apart, and `signature` and the dirty dot agree."""
     meta, one, two = rig.meta, rig.one, rig.two
     names = sorted(one.loaded_patch.lib.list(LOADABLE))
@@ -354,8 +354,8 @@ def test_a_copy_onto_a_deck_that_had_another_row_there_keeps_the_ledger(rig):
 
 
 def test_copy_leaves_the_mirror(rig):
-    """`ghost.mirror` is the meta controller's in a performance group, one object
-    on both, in no preset (`_values` is `snapshot(part="performance")`)."""
+    """`ghost.mirror` is the meta controller's in a patch group, one object
+    on both, in no loadable patch (`_values` is `snapshot(part="performance")`)."""
     meta, one, two = rig.meta, rig.one, rig.two
     mirror = one.reg["ghost.mirror"]
     assert two.reg["ghost.mirror"] is mirror and part_of(mirror) == "shared_meta"
@@ -417,7 +417,7 @@ def test_a_copy_of_unsaved_edits_is_dirty_and_a_clean_look_clean(rig):
 
 
 def test_nothing_of_a_copy_is_shared_after_it(rig):
-    """No preset can affect another: a knob, a route, an LFO on the copy."""
+    """No loadable patch can affect another: a knob, a route, an LFO on the copy."""
     meta, one, two = rig.meta, rig.one, rig.two
     one.table.add(Binding("axis:LX", "view.bright", "push", 0.5))
     meta.copy_on_air()

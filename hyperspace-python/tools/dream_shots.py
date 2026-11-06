@@ -99,9 +99,9 @@ def run(ctx, dream, worker, frames, fps=60.0):
 
 
 def loadable_shot(ctx, slug: str, frames: int, precision: str, poses) -> None:
-    """A party preset (plan 14 WP6: WAKE with the worker on, as the app
+    """A party loadable patch (plan 14 WP6: WAKE with the worker on, as the app
     opens it by default) through the real loader and hand chain
-    (tools/preset_shots.Stage), the DreamWorker on its slot, paced at 60
+    (tools/loadable_shots.Stage), the DreamWorker on its slot, paced at 60
     fps; one frame per pose to docs/plans/assets/12-presets/<slug>-dream/,
     and a sheet beside them."""
     sys.path.insert(0, str(ROOT / "tools"))

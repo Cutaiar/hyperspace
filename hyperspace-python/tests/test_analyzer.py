@@ -375,7 +375,7 @@ def strip_of(chain):
 
 def test_the_scene_combo_and_the_strip_follow_each_other(tmp_path):
     """Audit A1, as it stands since the library went one-tier: the combo's
-    scenes are code data (hyperspace/scenes/band/), the strip's presets the
+    scenes are code data (hyperspace/scenes/band/), the strip's loadable patches the
     user's — a band preset saved under a scene's name with the scene's
     document lands the same strip, the combo follows a strip load of it
     (Library.on_load), and a strip load keeps the band names because the
@@ -467,7 +467,7 @@ def test_reset_all_re_tunes_the_bands_loaded_and_undo_is_whole(tmp_path):
 def test_the_combo_is_clean_on_any_layout_and_undo_gives_the_strip_back(tmp_path):
     """Code review of PR #44: the combo applies no layout, so its reference
     for "clean" is the state it landed, not the file's layout ids; and a
-    reset undo puts the strip's current preset back too."""
+    reset undo puts the strip's current loadable patch back too."""
     reg, control, audio, lib = wired(tmp_path)
     put_band(tmp_path, "Balanced", scene("Balanced"))   # the strip's Balanced: the user's
     control.add_band()                                # seven bands, not the file's six
@@ -573,7 +573,7 @@ def test_audio_engine_carries_the_layout_across_sources():
 
 def test_balanced_is_the_default_table_and_the_reference_edges():
     """The reference's per-band windows live once in code (`default_params`);
-    the Balanced scene file is the same numbers as a preset, and its layout
+    the Balanced scene file is the same numbers as a loadable patch, and its layout
     is the six reference bands (audit A5: one table, the file pinned to it)."""
     doc = scene("Balanced")
     rows = A.scene_rows(doc["values"])

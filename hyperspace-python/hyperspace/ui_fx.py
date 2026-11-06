@@ -5,7 +5,7 @@ fx section (`ui_pane.SECTIONS`), and `ui.page` on FX focuses that section.
 "The page" below is that section's body.
 
 The owner's "file explorer" over the graph (row 348): the page lists every
-effect instance the loaded preset's graph holds — in the run, on a branch,
+effect instance the loaded loadable patch's graph holds — in the run, on a branch,
 unreached — grouped by where its path ends (`groups`): **Run** (in wire
 order), **→ faces**, **→ pattern media**, **→ backdrop**, **→ output N**,
 **→ <effect> aux**, and **reaches nothing** last. An effect behind a switch
@@ -173,8 +173,8 @@ def _group_key(end: str) -> tuple:
 
 
 def _spec(panel):
-    """The loaded preset's graph spec (`Panel.graph_now`), or None: a
-    stand-in Panel, no presets, no graph."""
+    """The loaded loadable patch's graph spec (`Panel.graph_now`), or None: a
+    stand-in Panel, no loadable patches, no graph."""
     now = getattr(panel, "graph_now", None)
     try:
         return now()[1] if now is not None else None
@@ -189,7 +189,7 @@ def page(panel, dt: float) -> None:
     panel._check("fx.on")
     imgui.same_line()
     panel._slider("fx.mix")
-    # plan 14 WP5: a preset load replaces every effect value (plan 13 D2),
+    # plan 14 WP5: a loadable patch load replaces every effect value (plan 13 D2),
     # so what is tried here is gone on the next F-key unless it is saved
     _faint(RESET_NOTE)
     if fx is None:

@@ -1,10 +1,10 @@
 """Plan 48 stage 2: the library's folder operations — `Library.move` (a
-preset into another folder, its bytes kept, the bank and every show
-following), `make_folder`, `rename_folder` (every preset inside keeps its
+loadable patch into another folder, its bytes kept, the bank and every show
+following), `make_folder`, `rename_folder` (every loadable patch inside keeps its
 leaf, the slots follow) and `remove_folder` (an empty folder only), and
 `folders` (every folder down, empty ones too, hidden ones never).
 
-Over test_preset_folders' temp library and temp machine home: nothing
+Over test_loadable_folders' temp library and temp machine home: nothing
 here touches ~/Hyperspace or a Drive folder."""
 
 import json

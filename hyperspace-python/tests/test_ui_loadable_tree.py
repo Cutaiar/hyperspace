@@ -2,11 +2,11 @@
 controls rig (tests/test_ui_shell.py), on a home seeded with the corpus
 (the party show open: ACID on F6), driven by the mouse and the keys.
 
-The top-level presets first, then a folding header per folder,
+The top-level loadable patches first, then a folding header per folder,
 alphabetically, nested folders nested; a header folds by a click and the
-fold is this Mac's (``presets.folded`` in ``<machine>/ui.json``, beside
+fold is this Mac's (``loaded_patch.folded`` in ``<machine>/ui.json``, beside
 the pane's); a row's right-click **move to ▸** and a drag onto a header
-move the preset (its bytes kept, the bank's slot following); a folder's
+move the loadable patch (its bytes kept, the bank's slot following); a folder's
 right-click makes a folder inside, renames it, removes it (empty only);
 **new folder** at the list's foot makes one at the top."""
 
@@ -16,13 +16,13 @@ import time
 from imgui_bundle import imgui
 from test_ui_shell import CONTROL_SIZE, _click, _mouse, frame, rig  # noqa: F401 — the fixture
 
-from hyperspace import ui_pane, ui_loadable
+from hyperspace import ui_loadable, ui_pane
 
 TALL = (CONTROL_SIZE[0], 2400)      # every row in view: the folders sit after the top level
 
 
 def _folders(lib, layout: dict[str, list[str]]) -> None:
-    """Move corpus presets into folders: {"party": ["DIAL", "FIELD"], …};
+    """Move corpus loadable patches into folders: {"party": ["DIAL", "FIELD"], …};
     an empty list makes an empty folder."""
     for folder, names in layout.items():
         d = lib.home / "presets" / folder
@@ -96,7 +96,7 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     doc = json.loads(ui_json.read_text())
     assert doc["presets"] == {"folded": ["party"]}
     assert doc["pane"] == {"open": {"presets": False}} and doc["graph"] == {"side": 300}
-    # a fresh panel state reads it back: still folded, the loaded preset said
+    # a fresh panel state reads it back: still folded, the loaded loadable patch said
     st.pop("folded")
     labels = []
     real = imgui.tree_node_ex

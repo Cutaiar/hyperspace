@@ -1,12 +1,12 @@
 """Plan 36 T1 (W1, decision D1): outputs show only their own wires; All
 outputs is a drawn bus.
 
-A window's port takes its own wire, else All outputs' by the rig's bus
+A window's port takes its own wire, else All outputs' by the meta controller's bus
 cable `output.all.<port> → output.<n>.<port>` (`graph.window_ports`) —
-nothing else reaches it. The bus cuts are the loaded preset's (plan 44 D3:
-`preset.Presets.bus`, `graph.RigWires`; plan 36 T1 kept them in the show):
+nothing else reaches it. The bus cuts are the loaded loadable patch's (plan 44 D3:
+`loadable.LoadedPatch.bus`, `graph.BusCuts`; plan 36 T1 kept them in the show):
 every cable present by default, drawn on GRAPH as ordinary render cables,
-cut and joined there, saved in the preset's file under `bus`. A drag changes the one wire it lands (`render_wire`): no placement,
+cut and joined there, saved in the loadable patch's file under `bus`. A drag changes the one wire it lands (`render_wire`): no placement,
 guide or other wire moves with it. The install's repro is the first test:
 wiring the scene into `output.1.image` on the factory `party-trip` changes
 that one port and nothing else."""
@@ -32,7 +32,7 @@ def _views(n: int = 2) -> list[View]:
 
 def _party(tmp_path):
     """The headless app on the factory `party-trip`, and a GRAPH edit on it
-    holding the presets (their bus cuts, plan 44 D3), its undo steps counted."""
+    holding the loadable patches (their bus cuts, plan 44 D3), its undo steps counted."""
     app = make_app(tmp_path)
     app.lib.load("presets", "party-trip")
     pushed: list[str] = []
@@ -83,7 +83,7 @@ def test_rewiring_output_1_changes_that_one_port_and_nothing_else(tmp_path):
     into_after = {w.dst: w.src for w in after}
     assert {d: s for d, s in into_after.items() if d != "output.1.image"} == into_before
     assert app.loaded_patch.graph.spec.effects == spec.effects        # no placement moved
-    assert app.loaded_patch.bus == G.BusCuts()                       # no rig cable moved
+    assert app.loaded_patch.bus == G.BusCuts()                       # no bus cable moved
     g, view = _build(app)
     assert G.signature(g)[1] == out2                             # output 2: as it was
     # output 1's ports: its own picture; its hands and guide by the bus,
@@ -103,14 +103,14 @@ def test_rewiring_output_1_changes_that_one_port_and_nothing_else(tmp_path):
             assert len(_into(view, f"output.{n}", port)) == 1, (n, port)
 
 
-# ---------------------------------------------------------------- the preset's bus cuts
+# ---------------------------------------------------------------- the loadable patch's bus cuts
 
 def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_path):
-    """Plan 44 D3: delete on a bus cable cuts it in the loaded preset — one
-    undo step, the graph section untouched, the preset dirty and the show
+    """Plan 44 D3: delete on a bus cable cuts it in the loaded loadable patch — one
+    undo step, the graph section untouched, the loadable patch dirty and the show
     not: window 1 shows nothing on its hands port (no cable drawn there,
     nothing read) while window 2 keeps its own. The cut is saved in the
-    preset's file (`bus`) and read back by its load; a drag from All
+    loadable patch's file (`bus`) and read back by its load; a drag from All
     outputs' pin joins it again."""
     app, e, pushed = _party(tmp_path)
     show, pre = app.lib.project, app.loaded_patch
@@ -128,7 +128,7 @@ def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_p
     assert G.output_ports(app.loaded_patch.graph.wiring, 1, pre.bus)["hands"] is None
     # (a second cut of it is the one refusal)
     assert e.unwire(cable) == graphview.NO_SUCH_WIRE.format(wire=str(G.bus_wire(1, "hands")))
-    # in the preset's file, and back
+    # in the loadable patch's file, and back
     path = pre.save_as("bus test")
     doc = json.loads(path.read_text())
     assert doc["bus"] == {"cut": [{"from": "output.all.hands", "to": "output.1.hands"}]}
@@ -138,7 +138,7 @@ def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_p
     assert pre.bus == G.BusCuts()
     app.lib.load("presets", "bus test")
     assert pre.bus.cut == {G.bus_wire(1, "hands")} and not app.lib.is_dirty("presets")
-    # joined again by a drag from the bus's pin: the preset dirty
+    # joined again by a drag from the bus's pin: the loadable patch dirty
     assert e.wire("rout:output.all.hands", "rin:output.1/hands") is None
     assert pre.bus == G.BusCuts() and app.lib.is_dirty("presets")
     # a port's name alone: whatever is wired into it — here the bus cable
@@ -160,7 +160,7 @@ def test_a_show_with_every_cable_standing_writes_no_meta():
 
 
 def test_a_window_port_is_its_own_wire_else_the_bus_cable_else_nothing():
-    """`window_ports`, the one rule: a preset's wire into the port takes it
+    """`window_ports`, the one rule: a loadable patch's wire into the port takes it
     (the bus cable is then not read); with none, All outputs' wire into the
     same port while the bus cable stands; cut, nothing — no other fallback."""
     wires = [G.Wire("lookback", "output.all.image"), G.Wire("hands.layer", "output.all.hands"),
@@ -180,8 +180,8 @@ def test_a_window_port_is_its_own_wire_else_the_bus_cable_else_nothing():
 
 def test_a_drag_from_the_bus_takes_the_port_and_only_into_the_same_port(tmp_path):
     """A drag from All outputs' bus pin onto a window's same port is the
-    rig's cable: the preset's own wire into that port gives it up (one
-    wire into a port), in one step. Into another port, or with no presets
+    meta controller's cable: the loadable patch's own wire into that port gives it up (one
+    wire into a port), in one step. Into another port, or with no loadable patches
     to hold it, refused in words; an effect does not go onto a bus cable."""
     app, e, pushed = _party(tmp_path)
     assert e.wire("scene", "output.2.image") is None
@@ -200,8 +200,8 @@ def test_a_drag_from_the_bus_takes_the_port_and_only_into_the_same_port(tmp_path
 
 
 def test_deleting_a_window_takes_its_bus_cables_too(tmp_path):
-    """A window is the rig's: deleting its node takes every wire drawn into
-    it — the preset's and the bus cables — in one step, so it shows its
+    """A window is the meta controller's: deleting its node takes every wire drawn into
+    it — the loadable patch's and the bus cables — in one step, so it shows its
     ground as the words say; "as All outputs" on OUTPUT joins its picture's
     cable again."""
     app, e, pushed = _party(tmp_path)
@@ -223,7 +223,7 @@ def test_deleting_a_window_takes_its_bus_cables_too(tmp_path):
 
 def test_an_undo_puts_a_cut_bus_cable_back(tmp_path):
     """A cut is one undo step of the app's (`undo.push(…, load=True)`, the
-    library's marks: plan 44 D3, the preset's cuts): undone, the cable
+    library's marks: plan 44 D3, the loadable patch's cuts): undone, the cable
     stands again."""
     from test_graph_edit import free_rig
     from test_undo import settle
@@ -239,7 +239,7 @@ def test_an_undo_puts_a_cut_bus_cable_back(tmp_path):
 
 def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
     """On the golden rig (two synthetic hands): the renderer reads the bus
-    cuts off its `rig_source` (plan 44 D3: the presets) — cutting window 2's hands and guide cables
+    cuts off its `bus_source` (plan 44 D3: the loadable patches) — cutting window 2's hands and guide cables
     builds a new graph, and window 2 draws pixel for pixel what window 3,
     wired `ground` into those ports, draws; with every cable standing the
     two differ (the layer is laid over). Skips without a standalone GL
@@ -275,8 +275,8 @@ def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
 
 
 def test_deleting_a_window_cuts_only_the_bus_cables_drawn(tmp_path):
-    """Review M2: a bus cable into a port the preset wires itself is not
-    drawn, so deleting the window does not cut it — the preset's wire goes,
+    """Review M2: a bus cable into a port the loadable patch wires itself is not
+    drawn, so deleting the window does not cut it — the loadable patch's wire goes,
     and that cable stands (the port reads All outputs' again by it)."""
     app, e, _ = _party(tmp_path)
     assert e.wire("scene", "output.2.hands") is None
@@ -287,7 +287,7 @@ def test_deleting_a_window_cuts_only_the_bus_cables_drawn(tmp_path):
 
 def test_through_refuses_a_window_with_no_picture_or_its_own_hands(tmp_path):
     """Review M3: with its picture cable cut a window shows no picture to put
-    the hands through; with a hands wire of the preset's own, through would
+    the hands through; with a hands wire of the loadable patch's own, through would
     drop it — both refused in words, nothing changed (the toggle is
     lossless: off puts back exactly what on took)."""
     app, e, _ = _party(tmp_path)

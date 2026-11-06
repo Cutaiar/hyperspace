@@ -2,7 +2,7 @@
 LFOs as one of N. Ids are one past the highest and never compact, a gap
 publishes NaN so a route from a removed voice goes dormant, a change of
 membership rebuilds the patch through the registry's serial, and the
-membership is the preset's and undo's."""
+membership is the loadable patch's and undo's."""
 
 import ast
 import math
@@ -225,7 +225,7 @@ def test_undo_of_add_and_remove_restores_the_params_and_their_bases():
         undo.install(None)
 
 
-# ---- the preset ----
+# ---- the loadable patch ----
 
 @pytest.fixture()
 def app(tmp_path):

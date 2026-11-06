@@ -46,7 +46,7 @@ def open_ids(rig, gid=GID) -> list[str]:  # noqa: F811
 
 
 class Section:
-    """The `gs` an `Edit` lands through, with no rig: for hosts no preset has."""
+    """The `gs` an `Edit` lands through, with no rig: for hosts no loadable patch has."""
 
     def __init__(self, doc):
         self.spec = G.read_graph(doc)
@@ -293,7 +293,7 @@ def test_two_outlets_on_one_taken_port_cut_one_cable_and_the_second_is_refused()
 
 
 def test_the_meta_bus_cable_is_not_a_cut():
-    """A window's port the rig's bus cable feeds is free as ever: the preset's
+    """A window's port the meta controller's bus cable feeds is free as ever: the loadable patch's
     wire stands in front of it, and the chip names nothing."""
     port = {"id": "out", "type": "image", "from": "warp", "was": "output.1.image"}
     e, _, _ = on_section({"nodes": EFFECTS, "wires": [{"from": "acid", "to": "output.all.image"}]},

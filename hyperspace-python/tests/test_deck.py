@@ -3,7 +3,7 @@ bundle, built by `Deck.build` in `app.main`'s order, with no behaviour
 change. The proof: a rig built the way `tests/test_undo.boot` built it
 at 749be48 (a copy of that body, below) and one built through
 `Deck.build` (today's `boot`) reach the same state over every corpus
-preset; two registries share no frame state; `main` builds its deck once
+loadable patch; two registries share no frame state; `main` builds its deck once
 with the frame order unchanged; and every swap target the deck lists
 lives in a watched module, the deck itself included. Plan 44 D2 adds the
 second comparison: one `Sources` fed once drives two routers over two
@@ -14,9 +14,9 @@ never handed the router its banks (`use_lfos` / `use_bank` /
 `use_sequencer`, which `main` has called since plans 28 N0 and 31) and
 built its `Undo` without `banks=`. Today's `boot` runs `main`'s lines, so
 its LFOs, envelopes and sequencer step inside the pass and undo takes the
-banks' membership. On three corpus presets (TRIP, TUMBLE, seq-demo) a
+banks' membership. On three corpus loadable patches (TRIP, TUMBLE, seq-demo) a
 bank-driven row then leaves a base (`camera.zoom`, `view.bright`) a
-round-off apart from the old rig's after the undo, because undo puts
+round-off apart from the old meta controller's after the undo, because undo puts
 back only a base that is not `undo.alike` its state (plan 15 §1 row 2).
 `alike` is the right comparison for that case: it is the tolerance undo
 itself uses to call two bases the same value. With main's three lines
@@ -50,11 +50,11 @@ from hyperspace.ghost import GhostState
 from hyperspace.hotreload import MODULES
 from hyperspace.learn import Learn
 from hyperspace.library import LOADABLE, Library, Marks
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Registry, build_registry, part_of
-from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Bindings, Router, Sources, bindings_path
 from hyperspace.view import ViewState
 
@@ -98,7 +98,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     sequencer.register(reg, seq, clock)
     output = Output(None, None)
     output.register(reg)
-    # the desk's session params before attach, as app.main has them (plan 18
+    # the desk's shared meta params before attach, as app.main has them (plan 18
     # WP2): declared late, desk.slew would read as an unsaved show
     table = Bindings.load(bindings_path(home), legacy_midi=None)
     routing.register_desk(reg, table)
@@ -153,7 +153,7 @@ def _state(r) -> dict:
 
 
 def _walk(r) -> list[dict]:
-    """Every corpus preset in turn: load it, 120 frames with one fixed lane
+    """Every corpus loadable patch in turn: load it, 120 frames with one fixed lane
     vector, `view.bright` turned and settled into a step, `undo.undo()`."""
     names = sorted(r.lib.list(LOADABLE))
     files = sorted((CORPUS / "presets").glob("*.json"))
@@ -202,7 +202,7 @@ def _compare(old: list[dict], new: list[dict], *, exact: bool) -> None:
 def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path):
     """Plan 44 D1's proof: over one seeded home, the rig `boot` built at
     749be48 and the rig `Deck.build` builds (today's `boot`) land every
-    corpus preset to the same registry, table, routes, desk, macros,
+    corpus loadable patch to the same registry, table, routes, desk, macros,
     modifiers, banks and undo stack — so the bundle changed nothing.
 
     One drift the old `boot` had from `main`, which this PR ends: it never
@@ -210,7 +210,7 @@ def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path)
     `use_sequencer`, which `main` has called since plans 28 N0 and 31), so
     its LFOs, envelopes and sequencer never stepped inside the pass. With
     those three lines added — what `main` ran — the old way and the deck
-    are equal to the bit; without them, three presets (TRIP, TUMBLE,
+    are equal to the bit; without them, three loadable patches (TRIP, TUMBLE,
     seq-demo) leave a base a round-off apart after the undo, which undo's
     own tolerance (`undo.alike`) calls the same value."""
     home = tmp_path / "home"
@@ -224,7 +224,7 @@ def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path)
 
 
 def _feed(src: Sources, t: float) -> None:
-    """One frame of what the rig's sources say, into `src`: the hands'
+    """One frame of what the meta controller's sources say, into `src`: the hands'
     lanes (named, as the adapter publishes them) and the pad's axes, each
     a slow wave of its own; the analyzer's lanes are the chain's."""
     from hyperspace import gamepad
@@ -251,8 +251,8 @@ def _values(reg) -> dict:
 def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
     """Plan 44 D2's proof, the first thing decks promise: one `Sources`
     fed once a frame, two `Router`s over two registries both loaded with
-    the same preset, and every param of the two lands the value one router
-    over its own sources lands — every frame, over every corpus preset.
+    the same loadable patch, and every param of the two lands the value one router
+    over its own sources lands — every frame, over every corpus loadable patch.
     The pass of each reads the shared feeds (the hands, the pad, the
     analyzer's chain) and steps its own banks, modifiers and followers."""
     solo = boot(tmp_path / "solo")
@@ -301,8 +301,8 @@ def test_a_deck_beside_changes_nothing_on_air_and_lands_what_one_deck_lands(tmp_
     """Plan 44 D4, the same-state test extended. An empty deck beside the
     first, its pass and its apply in the frame in `app.frame`'s order, leaves
     the first where D1's walk leaves a deck alone, to the bit. And a deck
-    beside the first loaded with the same preset lands, every frame of every
-    corpus preset, the performance values a deck alone lands."""
+    beside the first loaded with the same loadable patch lands, every frame of every
+    corpus loadable patch, the performance values a deck alone lands."""
     solo = _walk(boot(tmp_path / "solo"))
     r = boot(tmp_path / "with")
     beside = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
@@ -451,7 +451,7 @@ def test_two_registries_share_no_frame_state():
 
 
 def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
-    """`main` calls `Deck.build` once, the hooks at the rig's places, and
+    """`main` calls `Deck.build` once, the hooks at the meta controller's places, and
     hands `Host` the deck; `frame`'s order (test_app_boundary.ORDER) is
     what it was before D1 — `frame` reads the same flat handles."""
     tree = ast.parse(textwrap.dedent(inspect.getsource(app.main)))
@@ -464,7 +464,7 @@ def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
     assert kw["panel"] == "panel_setup" and kw["devices"] == "devices_setup"
     assert kw["renderer"] == "renderer" and kw["table"] == "load_table"
     assert kw["made"] == "made"
-    # the hooks hand their objects on through `build` (RigMade), no shared
+    # the hooks hand their objects on through `build` (DeckHooksMade), no shared
     # sentinels in `main`
     assert "nonlocal" not in inspect.getsource(app.main)
     # nothing of the deck's is still built in main
@@ -488,7 +488,7 @@ def test_the_build_keeps_mains_order():
     """`Deck.build`'s lines in the order `main` had them at 749be48: the
     registry, the band hooks, the hands, the clock and banks, the outputs,
     the table, attach, the panel, the router and its banks, the
-    presets, learn, the devices, the startup preset, the marks and undo."""
+    loadable patches, learn, the devices, the startup loadable patch, the marks and undo."""
     src = textwrap.dedent(inspect.getsource(Deck.build))
     src = src[src.index('"""', src.index('"""') + 3) + 3:]       # the body, not the docstring
     seq = ["s = ViewState()", "build_registry(s, control, audio, on_deck.project",
@@ -594,7 +594,7 @@ def test_the_band_hooks_are_the_meta_and_two_decks_leave_them_once(tmp_path, mon
     calls: list[str] = []
     ONCE = ["on_layout:band", "extra:band", "on_load:band"]
 
-    def band() -> list[str]:          # the presets kind's own on_load is the deck's
+    def band() -> list[str]:          # the loadable patches kind's own on_load is the deck's
         return [c for c in calls if c.endswith(":band")]
 
     for name in ("on_layout", "extra", "on_load"):
@@ -616,7 +616,7 @@ def test_the_band_hooks_are_the_meta_and_two_decks_leave_them_once(tmp_path, mon
                         table=lambda reg: Bindings(),
                         attach=False, startup=False, install=False, on_air=False)
     assert r.lib.reg is r.reg and undo.installed() is r.undo      # the first deck's still
-    # (plan 44 D3: what is loaded is each deck's presets' own — the first's
+    # (plan 44 D3: what is loaded is each deck's loadable patches' own — the first's
     # is as it was; the kind stays the first until a pointer moves it, D5a)
     assert startups == [] and r.loaded_patch.current == loaded         # nothing re-landed
     assert second.loaded_patch.current is None and r.lib.loaded_patch is r.loaded_patch

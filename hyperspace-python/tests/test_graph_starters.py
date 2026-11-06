@@ -1,9 +1,9 @@
-"""Plan 36 T5 (W5): a new preset that starts somewhere, and the picker's
+"""Plan 36 T5 (W5): a new loadable patch that starts somewhere, and the picker's
 starters.
 
 **new** on the PRESET strip makes the scene chain — `shape →
 scene.geometry`, `scene → output.all.image`, plain faces — laid left to
-right in the preset's layout map where the GRAPH page is looking
+right in the loadable patch's layout map where the GRAPH page is looking
 (`ui_graph.in_view`). The picker's **starters ▸** each add a pre-wired
 group (`graphview.STARTERS`) in one undo step, its new nodes laid left to
 right from where the menu opened; a picture cable's menu has the tracers
@@ -29,7 +29,7 @@ SCENE = {"frame": "wired", "wires": [{"from": "shape", "to": "scene.geometry"},
 
 @pytest.fixture()
 def page(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
@@ -218,7 +218,7 @@ def test_a_cable_starter_is_only_a_picture_one(tmp_path):
 
 def test_a_starter_lands_at_the_point_as_one_undo_step(page):
     """From the picker on the panned canvas: the new nodes left to right
-    from the menu's point, in the preset's layout (canvas units less the
+    from the menu's point, in the loadable patch's layout (canvas units less the
     pan), and one ⌘Z takes the wires and the places back."""
     lib = page.lib
     lib.loaded_patch.new((0.0, 0.0))

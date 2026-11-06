@@ -1,5 +1,5 @@
 """Plan 25: the shared library folder — `[library] path` puts the library
-(presets, shows, module groups, the trash) in a folder of its own, the machine files stay in the home, a missing folder is never created
+(loadable patches, shows, module groups, the trash) in a folder of its own, the machine files stay in the home, a missing folder is never created
 and refuses every write, writes are atomic, and a cloud client's conflict
 copy is listed beside the file it copies.
 
@@ -17,8 +17,8 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.library import LAST_SHOW, LOADABLE, Library, LibraryError
-from hyperspace.params import build_registry
 from hyperspace.loadable import LoadedPatch
+from hyperspace.params import build_registry
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
 
@@ -49,7 +49,7 @@ def test_no_machine_is_todays_library(tmp_path):
 
 
 def test_a_save_lands_in_the_library_and_last_show_in_the_machine_home(tmp_path):
-    """The acceptance demo: machine home A plus library L — a preset save
+    """The acceptance demo: machine home A plus library L — a loadable patch save
     writes L/presets and nothing new in A but last_show; then L is gone, a
     relaunch warns, refuses saves, and creates nothing."""
     a, lib_root = tmp_path / "A", tmp_path / "L"

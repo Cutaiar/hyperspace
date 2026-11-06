@@ -95,7 +95,7 @@ def test_only_lane_rows_move_and_a_second_run_changes_nothing():
 
 def test_the_run_writes_as_the_app_writes_and_backs_up_first(tmp_path, monkeypatch):
     """A dry run writes nothing; --apply copies the library to the machine
-    home first and rewrites only the presets with a hot or feel-less lane
+    home first and rewrites only the loadable patches with a hot or feel-less lane
     row, byte for byte as the app saves (indent 1, a trailing newline),
     every other key as it was."""
     t = _tool()
@@ -131,7 +131,7 @@ def test_the_run_writes_as_the_app_writes_and_backs_up_first(tmp_path, monkeypat
     assert all(r["motion"]["mode"] == "spring" for r in lanes)
     others = [r for r in src["routes"] if not str(r["source"]).startswith("lane:")]
     assert [r for r in out["routes"] if not str(r["source"]).startswith("lane:")] == others
-    # the already-calm preset and the dot-file were left alone
+    # the already-calm loadable patch and the dot-file were left alone
     assert json.loads((library / "presets" / "calm.json").read_text()) == calm_doc
     assert (library / "presets" / ".party-trip.json.tmp").read_text() == "{}"
 

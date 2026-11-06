@@ -1,6 +1,6 @@
 """Plan 44 D5b: three undo stacks, by the owner's design of 2026-11-04.
 
-One per `Deck`, scoped to its preset, and one for the meta controller. ⌘Z goes by
+One per `Deck`, scoped to its loadable patch, and one for the meta controller. ⌘Z goes by
 where you are, never by the newest of all stacks; a load is a step on its deck's
 stack. Every rig is `boot` plus deck 2 and the meta controller, as `app.main` has
 them, and `frames` ticks all three.
@@ -38,7 +38,7 @@ def rig(tmp_path):
 
 
 def go(rig, n: int = SETTLE) -> None:
-    """`n` frames of what undo sees: each stack ticked, on the rig's clock."""
+    """`n` frames of what undo sees: each stack ticked, on the meta controller's clock."""
     for _ in range(n):
         rig.r.t += DT
         for s in rig.meta.stacks:
@@ -54,7 +54,7 @@ def bases(deck) -> dict:
 
 
 def test_there_are_three_stacks_and_they_watch_apart(rig):
-    """A deck's stack holds the preset's params, the meta controller's the meta
+    """A deck's stack holds the loadable patch's params, the meta controller's the meta
     params: every watched param is on exactly one layer's."""
     one, two, meta = rig.meta.stacks
     assert (one, two, meta) == (rig.one.undo, rig.two.undo, rig.meta.undo)
@@ -155,7 +155,7 @@ def test_a_meta_knob_is_one_step_on_the_meta_stack(rig):
 @pytest.mark.parametrize("which", ["one", "two"])
 def test_undo_on_either_deck_never_moves_a_meta_param(rig, which):
     """Whichever deck the panel is on, ⌘Z and its redo leave every meta param where
-    it is, and so what a load, a meta edit between and a preset edit did to them."""
+    it is, and so what a load, a meta edit between and a loadable patch edit did to them."""
     deck = getattr(rig, which)
     rig.meta.point_panel(deck)
     deck.reg["view.bright"].step(3)
@@ -233,7 +233,7 @@ def test_a_load_is_a_step_on_its_decks_stack_and_recovers_a_mistake(rig):
 
 
 def test_a_decks_undo_never_relands_the_meta_controllers_strip(rig):
-    """The session groups' labels are the meta controller's one strip (row 689): a
+    """The shared meta groups' labels are the meta controller's one strip (row 689): a
     load undone on a deck leaves the analyzer's name and reference alone, and its
     own stack puts them back."""
     lib, reg = rig.lib, rig.reg
@@ -256,7 +256,7 @@ def test_a_decks_undo_never_relands_the_meta_controllers_strip(rig):
 
 def test_the_shows_mark_is_on_the_meta_stack(rig):
     """A show load is the meta controller's: undone in a meta section the show comes
-    back and no deck moves; the startup preset is a load on the panel's deck and
+    back and no deck moves; the startup loadable patch is a load on the panel's deck and
     undoes there, leaving the show where it is. The file's bank is never rewound."""
     pr, one = rig.lib.project, rig.one
     assert pr.name == "party"
@@ -316,8 +316,8 @@ def test_the_meta_controllers_rows_are_a_step_and_their_undo_writes_their_file(r
 
 
 def test_a_corpus_walk_a_decks_stack_holds_no_meta_param(rig):
-    """Every corpus preset loaded on each deck, every step's state read: no base of
-    a meta param on a deck's stack, no base of a preset's on the meta stack, and the
+    """Every corpus loadable patch loaded on each deck, every step's state read: no base of
+    a meta param on a deck's stack, no base of a loadable patch's on the meta stack, and the
     walk makes no step on the meta stack at all."""
     names = rig.lib.list(LOADABLE)
     assert len(names) > 3
@@ -328,7 +328,7 @@ def test_a_corpus_walk_a_decks_stack_holds_no_meta_param(rig):
         go(rig)
         assert len(deck.undo.stack) >= len(names) - 1
         for s in deck.undo.stack:
-            # (by id: a param an older preset's graph declared may be gone by now)
+            # (by id: a param an older loadable patch's graph declared may be gone by now)
             bad = [k for k in s.before.bases if part_of_id(k) != "patch"]
             assert not bad, (s.label, bad[:5])
             assert s.before.rows == ()
@@ -406,7 +406,7 @@ def test_where_you_are_is_the_section_under_the_mouse(pane):
     x0, y0, _x1, _y1 = d.rect("scene.select")          # its top: the pane may clip its bottom
     d.run(d.move((x0 + 4, y0 + 3)), d.wait(1))
     assert ui_pane.where(p) == "analyzer" and p.in_meta_section()
-    d.run(d.move("new##new"), d.wait(1))               # the presets section
+    d.run(d.move("new##new"), d.wait(1))               # the loadable patches section
     assert ui_pane.where(p) == "presets" and not p.in_meta_section()
 
 
@@ -444,7 +444,7 @@ def _drawn_params(r, d, part: str) -> list[str]:
 
 
 def test_a_param_under_the_mouse_says_by_its_own_layer_in_a_mixed_section(pane):
-    """The hands section is a meta section that also draws the preset's params: the
+    """The hands section is a meta section that also draws the loadable patch's params: the
     param under the mouse decides, and off every param the section does."""
     r, d = pane
     p = r.panel
@@ -489,7 +489,7 @@ def test_the_canvas_is_the_panels_deck_whatever_has_the_focus(pane):
 
 
 def test_a_selected_meta_node_s_param_takes_the_meta_stack(pane):
-    """The selection section shows a node's params: over a meta one of a rig node
+    """The selection section shows a node's params: over a meta one of a fixture node
     it is the meta stack, though the selection is no meta section."""
     r, d = pane
     p = r.panel
@@ -597,7 +597,7 @@ def test_undoing_a_tidys_positions_stays_within_one_show(rig):
 
 
 def test_the_meta_table_has_no_decks_table_face():
-    """`deck.MetaRows` is what `Undo` reads; `SessionTable` holds rows, and nothing
+    """`deck.MetaRows` is what `Undo` reads; `MetaTable` holds rows, and nothing
     on it pretends to be a deck's table."""
     from hyperspace.routing import MetaTable
 

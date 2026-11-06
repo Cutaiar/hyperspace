@@ -2,10 +2,10 @@
 node of a loadable patch, its degrees of freedom filled by that node's params.
 
 The owner, 2026-11-04: node mode cables are "a special type of cable", drawn and
-labelled, and "should save as part of the preset. In doing so, when you open that
-preset up again, if you choose a different thing for node mode, it should just
+labelled, and "should save as part of the loadable patch. In doing so, when you open that
+loadable patch up again, if you choose a different thing for node mode, it should just
 switch. Whether or not you're in node mode and which node you are pointing to
-with node mode, it's just application state. It should just go in the preset."
+with node mode, it's just application state. It should just go in the loadable patch."
 
 **What is saved** (`KEY`, written only when something points; a patch with none
 saves as it did, byte for byte)::
@@ -31,10 +31,10 @@ params stays, the rest fill what is left, and there is no paging: a param with n
 freedom left is `Fit.over`, listed, as a node with too many params. A pair of
 discrete controls is one degree of freedom (`gamepad.degrees_of_freedom`). You
 enter with a node selected and a node with no params cannot be entered
-(`enter_refusal`). A meta param is no row of a preset's, in node mode as anywhere
+(`enter_refusal`). A meta param is no row of a loadable patch's, in node mode as anywhere
 (`routing.meta_refusal`, row 743).
 
-**Whose it is.** The preset's: `preset.Presets.node_mode`, one per `Deck`, in its
+**Whose it is.** The loadable patch's: `loadable.LoadedPatch.node_mode`, one per `Deck`, in its
 dirty dot and in a load's undo step (`library.Marks`). Who is on which `Deck` is the
 meta controller's: a cable naming a player on another `Deck` is drawn dormant, and
 the file does not change.
@@ -92,7 +92,7 @@ def _entry(raw: Any) -> Pointing | None:
 @dataclass(frozen=True)
 class NodeMode:
     """What a patch points where. Immutable, so an undo mark keeps one by
-    reference (as `graph.RigWires`), and in one order whatever made it, so the
+    reference (as `graph.BusCuts`), and in one order whatever made it, so the
     dirty dot and the file do not depend on the order things were pointed."""
 
     entries: tuple[Pointing, ...] = ()

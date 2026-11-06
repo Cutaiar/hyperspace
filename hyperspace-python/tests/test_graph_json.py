@@ -1,17 +1,17 @@
-"""Plan 26 A4: the render graph in the preset as JSON; node instances and
+"""Plan 26 A4: the render graph in the loadable patch as JSON; node instances and
 the naming rule; the OUTPUT and LOOKBACK pages in words.
 
-A preset may carry a `graph` section (`graph.GraphSpec`: node instances
+A loadable patch may carry a `graph` section (`graph.GraphSpec`: node instances
 and their wiring, never a param). None is the default graph — every
-preset from before A4, every corpus preset. One this build cannot read
+loadable patch from before A4, every corpus loadable patch. One this build cannot read
 is a note and the default graph, never a crash. A second instance of a
 node gets the marked ids (`fx.acid.2.*`, `ghost.2.*`) and its own params;
-the first keeps today's. The proof preset is a fixture,
+the first keeps today's. The proof loadable patch is a fixture,
 `tests/fixtures/presets/hands-lines.json`, loaded through a scratch
 library (its pictures are `tests/test_golden_frames.py`'s).
 
 The pure half first (the JSON, the wiring, the default graph's shape,
-the words), then the preset loads over a scratch library, then the GL
+the words), then the loadable patch loads over a scratch library, then the GL
 half: two acids in one chain, two hands nodes each its own Ghost, hands
 drawn as lines, a time per node.
 """
@@ -36,7 +36,7 @@ from hyperspace.outputs import Switches, View
 
 S = Switches
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "presets" / "hands-lines.json"
-# the corpus presets' sources (plan 36 T3: the corpus files are their `/7`)
+# the corpus loadable patches' sources (plan 36 T3: the corpus files are their `/7`)
 SOURCES = Path(__file__).resolve().parent / "fixtures" / "factory-sources" / "presets"
 DEFAULT = G.Wiring()
 TODAY = wired_wiring(G.Wiring())       # (plan 36 T3: today's frame, by the migration)
@@ -65,7 +65,7 @@ def _old(w: G.Wiring) -> G.Wiring:
 
 
 def _bare(w: G.Wiring) -> G.Wiring:
-    """`w` without its run (plan 33 T3: every loaded preset carries its
+    """`w` without its run (plan 33 T3: every loaded loadable patch carries its
     run as wires, `Wiring.run`; these tests are about the rest), in plan
     33's words (`_old`)."""
     from dataclasses import replace
@@ -270,7 +270,7 @@ def test_the_wiring_in_words():
 
 
 def test_the_output_pages_shows_line_says_the_wiring():
-    """`ui.output_shows` under a preset's graph: an output whose scene
+    """`ui.output_shows` under a loadable patch's graph: an output whose scene
     holds the hands says so (no layer over it); a layer names its node,
     lines and blend; the default wiring's words are today's, unchanged."""
     from hyperspace.ui import output_shows
@@ -366,7 +366,7 @@ def _registry(fx=None):
 def test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain():
     """`FxState.set_instances({"acid": 2})`: the effect `acid.2` — the
     acid file's spec labelled "Acid 2", its own values, clock and order —
-    declared as `fx.acid.2.*` (performance params, so a preset carries
+    declared as `fx.acid.2.*` (patch params, so a loadable patch carries
     them); the first acid keeps `fx.acid.*`. A re-declare of the acid file
     (a hot edit) never drops the second's; going back to one drops them."""
     from hyperspace.fx import declare
@@ -411,7 +411,7 @@ def test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain():
     assert all(pid in reg for pid in first) and "acid.2" not in fx.values
 
 
-# ---------------------------------------------------------------- the preset
+# ---------------------------------------------------------------- the loadable patch
 
 
 class Stub:
@@ -428,7 +428,7 @@ def _fixture_in(home: Path) -> None:
 
 
 def test_no_corpus_source_carries_a_graph_and_each_loadable_loads_as_before(tmp_path):
-    """Every corpus preset loads with today's frame, no graph note and a
+    """Every corpus loadable patch loads with today's frame, no graph note and a
     clean dot. Plan 36 T3: each file is its source's `/7`, so it carries
     that frame as its graph (its source has none) and lands it as it is."""
     seed(tmp_path)
@@ -454,7 +454,7 @@ def test_no_corpus_source_carries_a_graph_and_each_loadable_loads_as_before(tmp_
 
 
 def test_the_proof_loadable_loads_its_graph_from_a_scratch_library(tmp_path):
-    """`hands-lines` (a fixture, never a corpus preset): its graph lands
+    """`hands-lines` (a fixture, never a corpus loadable patch): its graph lands
     — the hands in the scene as lines, the history holding them — on the
     attached renderer, the acid on, the look-back on; nothing missing, no
     note, a clean dot; a save writes the wired frame the load made of it
@@ -481,7 +481,7 @@ def test_the_proof_loadable_loads_its_graph_from_a_scratch_library(tmp_path):
     text = loadable.dumps(doc)
     first = json.dumps(doc[loadable.GRAPH_KEY]["nodes"][0])
     assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {first}' in text
-    # another preset with today's frame: back to the default
+    # another loadable patch with today's frame: back to the default
     rig.lib.load(LOADABLE, "party-tumble")
     assert _bare(stub.wiring) == DEFAULT
 
@@ -507,10 +507,10 @@ def test_an_unknown_node_kind_is_a_note_and_the_default_graph(tmp_path):
 
 
 def test_a_loadable_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path):
-    """The proof of the naming rule for effects: a preset whose graph
+    """The proof of the naming rule for effects: a loadable patch whose graph
     holds the acid twice carries `fx.acid.2.*` in its values, which land
     once the graph has (they are not unknown); the first acid keeps
-    `fx.acid.*`; a preset without the second drops its params; a save
+    `fx.acid.*`; a loadable patch without the second drops its params; a save
     round-trips both."""
     rig = boot(tmp_path)
     graph = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}]}
@@ -541,8 +541,8 @@ def test_a_loadable_says_two_acids_in_data_and_carries_the_seconds_values(tmp_pa
 
 def test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror(tmp_path):
     """`ghost.2.*`: the naming rule's same group, so (plan 44 D3) the
-    preset's look — a preset that names `ghost.2.alpha` lands it — but for
-    `ghost.2.mirror`, the room's (`params.SESSION_KEYS`); its own
+    loadable patch's look — a loadable patch that names `ghost.2.alpha` lands it — but for
+    `ghost.2.mirror`, the room's (`params.SHARED_META_KEYS`); its own
     `GhostState`, handed to the renderer for the second node's Ghost and
     kept while the app runs, so the mirror comes back with the node."""
     from hyperspace.params import part_of
@@ -568,7 +568,7 @@ def test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror(tmp_path):
     assert "ghost.2.mirror" not in reg and stub.ghost_states == {}
     rig.lib.load(LOADABLE, "Glass")
     assert reg["ghost.2.mirror"].value is True and stub.ghost_states["ghost.2"] is state
-    assert reg["ghost.2.alpha"].value == pytest.approx(0.2)        # the preset's again
+    assert reg["ghost.2.alpha"].value == pytest.approx(0.2)        # the loadable patch's again
 
 
 def test_a_load_refused_for_a_value_puts_the_graph_back(tmp_path):
@@ -586,7 +586,7 @@ def test_a_load_refused_for_a_value_puts_the_graph_back(tmp_path):
 
 
 def test_an_instance_id_is_sorted_against_the_graph_the_load_lands(tmp_path):
-    """Review fix: with a second acid landed, a preset whose graph does not
+    """Review fix: with a second acid landed, a loadable patch whose graph does not
     hold it (no section, or one that fell back) and whose values name
     `fx.acid.2.*` loads, the ids unknown — never a KeyError after the old
     graph was dropped. And anything that raises after the graph landed
@@ -633,11 +633,11 @@ def test_an_instance_id_is_sorted_against_the_graph_the_load_lands(tmp_path):
 def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
     """Plan 44 D3: an old (`/2`) show held a second hands node's settings in
     its session; its look (`ghost.2.on`, `.alpha`, `.style`) is handed to
-    the presets before `/10` a load reads while it is open (`old_look`,
+    the loadable patches before `/10` a load reads while it is open (`old_look`,
     `graphmigrate.ten`), its mirror is the show's own and is seeded into
-    the node when the startup preset first declares it. No unknown id is
-    said and the show is clean; a preset without the node leaves the show
-    holding the mirror alone (the look is each preset's), and opening the
+    the node when the startup loadable patch first declares it. No unknown id is
+    said and the show is clean; a loadable patch without the node leaves the show
+    holding the mirror alone (the look is each loadable patch's), and opening the
     show again brings it back."""
     from hyperspace.library import PROJECT_SUFFIX, PROJECTS
 
@@ -661,10 +661,10 @@ def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
     state = rig.loaded_patch.graph.states["ghost.2"]
     assert state.on and state.mirror and state.style == 3
     assert not rig.lib.project.is_dirty()
-    # the preset saved: the look is its own now, `/10`
+    # the loadable patch saved: the look is its own now, `/10`
     saved = json.loads(rig.loaded_patch.save_as("Glass").read_text())
     assert saved["values"]["ghost.2.alpha"] == 0.3 and "ghost.2.mirror" not in saved["values"]
-    # a preset without the node: the show holds the mirror alone, clean
+    # a loadable patch without the node: the show holds the mirror alone, clean
     rig.lib.load(LOADABLE, "party-tumble")
     assert "ghost.2.on" not in reg and not rig.lib.project.is_dirty()
     rig.lib.project.save()
@@ -672,7 +672,7 @@ def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
     assert doc["schema"] == "hyperspace.project/3"
     assert {k: v for k, v in doc["session"].items() if k.startswith("ghost.2.")} == {
         "ghost.2.mirror": True}
-    # opening the show again: the mirror back from it, the look from the preset
+    # opening the show again: the mirror back from it, the look from the loadable patch
     rig.lib.project.load("rig")
     assert reg["ghost.2.mirror"].value is True and reg["ghost.2.alpha"].value == 0.3
     assert not rig.lib.project.is_dirty()
@@ -680,7 +680,7 @@ def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
 
 def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):
     """The marks carry the graph (`library.Marks`): undoing a load of a
-    preset with a second acid takes its params away again, and redoing it
+    loadable patch with a second acid takes its params away again, and redoing it
     brings them back with their values."""
     from test_undo import boot as undo_boot
     from test_undo import settle

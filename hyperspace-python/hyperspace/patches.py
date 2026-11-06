@@ -1,10 +1,10 @@
 """Patches — a group of nodes and its boundary, as data (plan 40 P1).
 
-A **patch** is a preset fragment with a boundary: the nodes of a region of
+A **patch** is a loadable patch fragment with a boundary: the nodes of a region of
 the GRAPH page, their values, the wires among them, the routes, desk rows,
 modifiers, voices and macro subscribers among them — and every cable that
 crosses the region's edge. Its file is ``<library>/patches/<slug>.json``,
-``hyperspace.patch/1``, in the preset's own keys plus one, ``ports``::
+``hyperspace.patch/1``, in the loadable patch's own keys plus one, ``ports``::
 
     {"schema": "hyperspace.patch/1", "name": "acid wash", "note": "…",
      "nodes":  [{"kind": "effect", "file": "acid"}, {"kind": "delay"}, …],
@@ -19,14 +19,14 @@ crosses the region's edge. Its file is ``<library>/patches/<slug>.json``,
      "layout": {"render:acid": [0, 0], …}}
 
 Its ids are its own, the lowest as if it were alone (`acid`, `mod.1`,
-`lfo.1`; an envelope from 6, the lane envelopes 1–5 being every preset's;
+`lfo.1`; an envelope from 6, the lane envelopes 1–5 being every loadable patch's;
 a macro keeps its number, there are eight); its layout is relative to its
 own origin. ``ports`` holds only the picture / geometry / mask cables that
 cross the edge (an inlet's ``was`` the source it came from, an outlet's
 the port it went into). **The rest of the boundary is classified at read,
 not stored twice** (`read`):
 
-- a **rig row** — a route or desk row whose source is not the patch's own
+- a **control row** — a route or desk row whose source is not the patch's own
   (anything but a ``mod:`` / ``lfo:`` / ``env:`` lane of an id it holds,
   or a macro it holds): a knob, a hand axis, an audio band, a pad stick,
   an OSC fader — kept verbatim, the absolute address it is;
@@ -40,31 +40,31 @@ D5 (the owner's): a patch **drives** a host param through a port, it never
 **sets** one — ``values`` holds only its members' params.
 
 Four functions: `check` (the refusals in words), `read` (the fragment and
-its boundary), `lift` (cut a patch out of a loaded preset's parts: the
+its boundary), `lift` (cut a patch out of a loaded loadable patch's parts: the
 pure half of *save as patch*) and `spawn` (what landing it in another
-preset would add: the pure half of *spawn*, P3 lands it through today's
+loadable patch would add: the pure half of *spawn*, P3 lands it through today's
 doors as one undo step). A leaf like `graphmigrate.py`: pure data in, pure
 data out — it imports `graph`'s names and helpers, `routing`'s `Binding`
 and scheme split and the modifiers' id rule, and nothing of the app.
 `library` imports it (for `check`), never the reverse.
 
-**One format** (plan 50): a patch, a group and a preset are one document
-shape (`shape_of`). A *preset* is a patch that fills the whole frame — no
+**One format** (plan 50): a patch, a group and a loadable patch are one document
+shape (`shape_of`). A *loadable patch* is a patch that fills the whole frame — no
 ``ports``, every part replaced when it opens (``hyperspace.preset/10``,
 its own ladder in `graphmigrate`); a *group* is a patch not yet saved
 (its members and its boundary pins: `groupable` is the canvas's rule,
 `select` the save's); a *patch* is ``hyperspace.patch/2`` — ``/1`` plus
 the optional ``group`` key: a **patch of one param group**
 (``{"group": "dream", "values": {…}}``, no canvas part) is what a module
-preset was, kept under ``<library>/patches/<group>/`` and opened from that
+loadable patch was, kept under ``<library>/patches/<group>/`` and opened from that
 group's strip as a spawn that replaces the group's values (`spawn`'s
 `Landing.replaces`). Every fragment comes in through `forward`, the one
 ladder (a ``patch/1`` and a ``hyperspace.preset/1`` module preset are read
 as their ``/2``), so a file of any age reaches `check`, `read` and
 `spawn` in today's words.
 
-**Frame kinds** (wave 3 P1): a patch holds any render node a preset file
-holds but the rig's own and the look's one camera — the scene, the shape,
+**Frame kinds** (wave 3 P1): a patch holds any render node a loadable patch file
+holds but the meta controller's own and the look's one camera — the scene, the shape,
 the backdrop, the pattern, a look-back, the dream, hands 1, its layer and
 its guide as well as what `MAY_HOLD` always named — so a "dream + fx +
 composite" patch exists. No schema moves (the file's keys are as they were;
@@ -122,7 +122,7 @@ GROUP_EMPTY_WORDS = "group is {value!r}: the key names no param group"
 GROUP_ONLY_WORDS = ("{key}: a patch of one group ({group}) holds values only — no canvas, "
                     "rows or voices")
 # the marker that a patch's depths are measured along the effect tapers
-# (wave 0 T1), as a preset's `units` is — `params.UNITS_KEY`, `DEPTH_UNIT`
+# (wave 0 T1), as a loadable patch's `units` is — `params.UNITS_KEY`, `DEPTH_UNIT`
 # and `DEPTH_TAPER`, spelled here a second time because this module is a
 # leaf (tests/test_retaper.py holds the two spellings equal). A file
 # without it is read as it was by the library's door (`Library.read_patch`,
@@ -134,9 +134,9 @@ KEYS = ("schema", "name", "note", "nodes", "wires", "values", "modifiers", "rout
         "macros", "lfos", "envs", "ports", "layout", UNITS_KEY)
 # (a patch of one group's keys are `GROUP_KEYS`, plan 50: `check` reads it apart)
 
-# what a patch may hold of the render graph: the kinds a preset's section
+# what a patch may hold of the render graph: the kinds a loadable patch's section
 # declares (`graph.wire_node_kind(…, wired=True)`), since wave 3 P1 the
-# frame's too. Not here: the rig's (`RIG_KINDS`), the look's one camera, and
+# frame's too. Not here: the meta controller's (`FIXTURE_KINDS`), the look's one camera, and
 # what is a name but no node of a wired frame (an echo pin, `fx`, `frame`)
 MAY_HOLD = ("effect", "composite", "switch", "delay", "resize", "copy", "matte", "cut",
             "segment", "hands", "layer", "guide", "scene", "shape", "backdrop", "pattern",
@@ -153,19 +153,19 @@ ONE_PER_FRAME = ("scene", "shape", "backdrop", "pattern", "dream")
 REPLACEABLE = ("dream",)
 # the render nodes the GRAPH page never deletes and a patch never holds —
 # `graphview.spec_name` refuses the camera (the look's one, `CAMERA_KEPT`,
-# plan 43 C2) and the clouds (the rig's, `NOT_REMOVABLE`); the windows are
+# plan 43 C2) and the clouds (the meta controller's, `NOT_REMOVABLE`); the windows are
 # refused by kind, `output`. Copied, not imported (graphview is the app's);
 # tests/test_patches.py holds the two lists equal
 FIXTURE_NODES = ("camera", "cloud")
 # the modulation banks a patch carries voices of, and the canvas ids
 LFO, ENV, MOD, MACRO = "lfo", "env", modmod.SCHEME, "macro"
 VOICES = (LFO, ENV)
-# the sequencer's lane envelopes (`envelope.LANE_ENVS`): every preset's, so a
+# the sequencer's lane envelopes (`envelope.LANE_ENVS`): every loadable patch's, so a
 # patch never carries one by identity — its envelopes are 6 and up
 LANE_ENVS = envmod.LANE_ENVS
 FIRST_ENV = max(LANE_ENVS) + 1
-MACROS = 8                     # macro.1 … macro.8, the rig's eight knobs
-# the rig-side sources one control drives one param from (the Learn rule:
+MACROS = 8                     # macro.1 … macro.8, the meta controller's eight knobs
+# the control-side sources one control drives one param from (the Learn rule:
 # "one axis, one param", plan 18 fork 7) — a patch row on one of these that
 # the host already sends somewhere else is a conflict (P3's sheet). A desk
 # control is judged by `Binding.overlaps` instead; every other scheme (an
@@ -245,7 +245,7 @@ def forward(doc: Mapping) -> dict:
     """The one ladder for a fragment (plan 50): a ``patch/1``, a ``patch/2``
     or a module preset (``hyperspace.preset/1`` with a `group`) → its
     ``patch/2``, step by step (`STEPS`), a copy — the input is never
-    changed. A whole preset (``hyperspace.preset/2`` and up) is no fragment:
+    changed. A whole loadable patch (``hyperspace.preset/2`` and up) is no fragment:
     its ladder is `graphmigrate`'s, so it is refused here, as is anything
     newer than this build or of another kind (ValueError, in words)."""
     kind, version = _schema(doc)
@@ -274,11 +274,11 @@ def forward(doc: Mapping) -> dict:
 
 def shape_of(doc: Mapping) -> str:
     """Which reading of the one document shape `doc` is (plan 50):
-    `PRESET_SHAPE` — a whole preset, a patch that fills the frame (no
-    ports, its parts replace the open preset's when it opens); `GROUP_SHAPE`
+    `LOADABLE_SHAPE` — a whole loadable patch, a patch that fills the frame (no
+    ports, its parts replace the open loadable patch's when it opens); `GROUP_SHAPE`
     — a patch of one param group (its `group` key: what a module preset
     was; it replaces that group's values); `PATCH_SHAPE` — a fragment of
-    the canvas with its boundary, spawned into the open preset under fresh
+    the canvas with its boundary, spawned into the open loadable patch under fresh
     ids. By the schema's kind, then the `group` key — its presence, as
     `check` reads it (review fix 6: a `group` that is empty or not text is
     still a group patch's key, and `check` refuses it in one line,
@@ -333,7 +333,7 @@ def _check_group(doc: Mapping) -> list[str]:
 def _kind(name: str) -> str | None:
     """A render node name's kind as the GRAPH page reads it
     (`graphview.kind_of`, restated): a wired frame's kinds, All outputs as
-    an output, the look's camera and the rig's clouds."""
+    an output, the look's camera and the meta controller's clouds."""
     if not isinstance(name, str):
         return None
     if name == G.ALL_OUTPUTS:
@@ -447,7 +447,7 @@ def _voice(cid: str) -> tuple[str, int] | None:
 def _lane(addr: str) -> tuple[str, int] | None:
     """A source address that is a modulation lane → (its bank or ``mod``,
     the voice id it is): ``lfo:0`` → ("lfo", 1), ``env:6`` → ("env", 7),
-    ``mod:3`` → ("mod", 3). None for any other source (a rig's)."""
+    ``mod:3`` → ("mod", 3). None for any other source (a meta controller's)."""
     if not isinstance(addr, str):
         return None
     head, _, tail = addr.partition(":")
@@ -551,7 +551,7 @@ def _param_rows(name: str) -> list[tuple[str, Callable[[str], bool]]]:
     `view.pattern*` and `view.media_*` the pattern's; `dream.*` split by
     key between a look-back and the dream (`params.is_lookback_knob`), so
     either can be in a patch, and land, without the other's values. The
-    scene has none: `scene.*` is the band scene's (a session group); a
+    scene has none: `scene.*` is the band scene's (a shared meta group); a
     copy's knobs are its original's."""
     kind = _kind(name)
     if kind in ("copy", "scene"):
@@ -749,8 +749,8 @@ class _Renamer:
 
 @dataclass(frozen=True)
 class Patch:
-    """A patch file, read (`read`): the fragment in the preset's own keys,
-    the file's `ports`, and the two classified boundary lists — `rig_rows`
+    """A patch file, read (`read`): the fragment in the loadable patch's own keys,
+    the file's `ports`, and the two classified boundary lists — `control_rows`
     (every route or desk row whose source is not the patch's own) and
     `host_ports` (every `ports` entry, then the value crossings derived
     from the rows: each ``{"id": "value.<k>", "type": "value",
@@ -807,7 +807,7 @@ def _in_order(wires: Iterable[dict]) -> tuple[dict, ...]:
 
 
 def _entry(d: Mapping) -> dict:
-    """A modifier's entry in full (every param, as a preset writes it), so a
+    """A modifier's entry in full (every param, as a loadable patch writes it), so a
     file that leaves a default out reads as one that says it; one this build
     cannot read as it is (`check` refuses it)."""
     try:
@@ -967,7 +967,7 @@ def check(doc: Any) -> list[str]:
         for end in (_node_of(src), dst.rpartition(".")[0]):
             if end in held:
                 continue
-            # (the rig's own ends said as such; any other end — the scene, a
+            # (the meta controller's own ends said as such; any other end — the scene, a
             # host effect — is simply across the edge)
             why = held_words(end) if _kind(end) in ("output", "channel", *FIXTURE_NODES) else None
             out.append(f"wire {src} → {dst}: {why}" if why is not None
@@ -1036,17 +1036,17 @@ def check(doc: Any) -> list[str]:
 # cuts a patch with it and `read` classifies a file's rows with it; the
 # GRAPH page's group node (`graphview.VGroup`) draws a group's boundary
 # with it — so a group folded on the canvas shows exactly the pins and
-# rows a patch saved from it would have as ports and rig rows.
+# rows a patch saved from it would have as ports and control rows.
 
-# where a cable sits against a region: both ends inside; from the rig (a
+# where a cable sits against a region: both ends inside; from the meta controller (a
 # knob, a hand, a band) onto a member; from the host onto a member (a host
 # lane, a host macro, a picture into a member's port); from a member out
 # to the host
 INSIDE, CONTROL, INTO, OUT = "inside", "rig", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
-# the rig's own render kinds, always there — its windows (an output, All
+# the meta controller's own render kinds, always there — its windows (an output, All
 # outputs), its media channels (this Mac's files) and its clouds — which no
-# preset file holds as a node; `graphview.RIG_KINDS` is this list. Plan 50
+# loadable patch file holds as a node; `graphview.FIXTURE_KINDS` is this list. Plan 50
 # (review fix 1): no group holds one either, so a group can never carry what
 # no patch can
 FIXTURE_KINDS = ("output", "channel", "cloud")
@@ -1060,7 +1060,7 @@ def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     an output, the camera or a cloud, a media channel, a hands' layer or
     guide without its hands, the sequencer, a lane envelope, a node the section lacks, a modifier
     the table lacks, a copy without its original, a group (no nesting),
-    any other canvas id (a device, the analyzer: the rig's). Pure.
+    any other canvas id (a device, the analyzer: the meta controller's). Pure.
 
     Plan 50: this is the **save's** rule — `Edit.save_patch` asks it, and a
     group holding what it refuses is not saved, in its words. What a group
@@ -1073,13 +1073,13 @@ def groupable(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
     """The members a **group** may hold, and the words for the rest (plan
     50, the second half of harden-node-groups: "a group holds any node,
     checked at save"). A group is a patch not yet saved, so it holds any
-    node the preset file saves: every render node of its section — the
+    node the loadable patch file saves: every render node of its section — the
     frame's singletons, hands 1, the camera, a copy without its original —
     its modifiers, its LFOs and envelopes (the lane envelopes too) and the
-    macros. Refused here only what no preset holds and what a group cannot:
-    the rig's render kinds (`RIG_KINDS`: a window, All outputs, a media
+    macros. Refused here only what no loadable patch holds and what a group cannot:
+    the meta controller's render kinds (`FIXTURE_KINDS`: a window, All outputs, a media
     channel, a cloud), a device, the analyzer, the sequencer, a node or
-    modifier the preset lacks, a group (no nesting). Whether it can be saved
+    modifier the loadable patch lacks, a group (no nesting). Whether it can be saved
     as a patch is asked at the save (`select`). Pure."""
     return _select(spec, table, node_ids, save=False)
 
@@ -1185,7 +1185,7 @@ def sub_side(members: _Members, mid: Any, pid: Any) -> str | None:
     """Where macro `mid`'s subscriber on param `pid` (a base's param, or
     the target of the route a depth scales) sits: `INSIDE`, `OUT` (a member
     macro onto a host param: a host port), `INTO` (a host macro onto a
-    member: the preset's, `HOST_MACRO_WORDS` at a lift); None when it
+    member: the loadable patch's, `HOST_MACRO_WORDS` at a lift); None when it
     touches nothing of the region."""
     own_m, own_p = _macro_n(mid) in members.macros, members.owns(pid)
     if own_m:
@@ -1195,7 +1195,7 @@ def sub_side(members: _Members, mid: Any, pid: Any) -> str | None:
 
 def input_side(members: _Members, mid: Any, addr: Any) -> str | None:
     """Where modifier `mid`'s input reading `addr` sits: a member
-    modifier's input from its own lane `INSIDE`, from a rig source `RIG`,
+    modifier's input from its own lane `INSIDE`, from a control source `RIG`,
     from a host lane `INTO`; a host modifier reading a member's lane
     `OUT`; None when it touches nothing of the region."""
     own_m = modmod.number(mid) in members.mods
@@ -1223,10 +1223,10 @@ def _desk_row(b: Binding) -> dict:
 def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
          layout: Mapping[str, Any] | None, node_ids: Iterable[str]
          ) -> tuple[dict, list[str]]:
-    """Cut a patch out of a loaded preset's parts — the pure half of *save
+    """Cut a patch out of a loaded loadable patch's parts — the pure half of *save
     as patch* (P1). `spec` is the landed graph section, `table` the
-    `routing.Bindings` (its routes, preset-layer desk, modifiers, macros),
-    `values` the registry's snapshot of the performance params, `layout`
+    `routing.Bindings` (its routes, patch-layer desk, modifiers, macros),
+    `values` the registry's snapshot of the patch params, `layout`
     the GRAPH page's positions, `node_ids` the canvas ids picked
     (``render:acid.2``, ``mod.3``, ``lfo.5``, ``env.7``, ``macro.2``).
 
@@ -1245,7 +1245,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
     inputs, subscribers and layout; the layout rebased so its top-left is
     ``(0, 0)``. Every cable crossing the edge is classified: a render wire
     into a member is an inlet port (``was`` its source), out of one an
-    outlet (``was`` the port it went into); a row from a rig source onto a
+    outlet (``was`` the port it went into); a row from a control source onto a
     member is kept verbatim; a row from a member lane onto a host param, or
     from a host lane onto a member, is kept with the host's end as it is
     (a host port, derived at `read`). `values` holds only the members'
@@ -1340,7 +1340,7 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
 
 @dataclass(frozen=True)
 class Host:
-    """What `spawn` reads of the preset a patch lands in — a small
+    """What `spawn` reads of the loadable patch a patch lands in — a small
     read-only view the caller builds (`Host.of` from the live parts):
 
     - `names`: every render node the host's section has: a spawned node takes
@@ -1353,7 +1353,7 @@ class Host:
     - `macros`: the macros in use — a label or a subscriber in the table, or
       a row whose target is the macro (a macro's value alone is no use: the
       eight knobs always have one);
-    - `desk`: the preset layer's desk rows; `routes`: the performer rows
+    - `desk`: the patch layer's desk rows; `routes`: the performer rows
       (`Bindings.owner` for every param is the first enabled performer on it).
 
     (No registry ids: a route onto a param the host lacks lands dormant, as
@@ -1409,7 +1409,7 @@ class Conflict:
     """One collision between a patch's row and the host (P3's sheet, D3),
     with enough for a two-way choice in words:
 
-    - ``"desk"``: a desk control the host's preset layer maps
+    - ``"desk"``: a desk control the host's patch layer maps
       (`Binding.overlaps`) — `control_or_source` the control, `host_target`
       the param the host has on it, `patch_target` the patch's;
     - ``"source"``: a one-owner source (`ONE_OWNER`: a hand axis, a pad
@@ -1436,14 +1436,14 @@ class Landing:
     (only the ids that moved: ``{"acid": "acid.2", "mod.1": "mod.7",
     "lfo.1": "lfo.6"}``), the render `nodes` and internal `wires` (to join
     the host's section), the `values`, the `modifiers` entries, the `routes`
-    and `desk` rows (JSON, as a preset holds them), the `macros` (each
+    and `desk` rows (JSON, as a loadable patch holds them), the `macros` (each
     member macro's label and subscribers), the bank voices `lfos` / `envs`,
     the `layout` moved to the drop point, the `group` entry (P2's shape:
     ``{"name", "patch", "nodes", "open": false}`` — **no `id`**: T2 numbers
     groups, the caller adds ``"id": "group.<n>"``), the `ports` with their
     ends renamed (each an open pin: one whose `was` the host lacks is no
     note), the `conflicts` (P3's sheet; empty: land at once), the `wants`
-    (the rig-side sources by scheme head — ``cc``, ``hand``, ``axis@p2`` —
+    (the control-side sources by scheme head — ``cc``, ``hand``, ``axis@p2`` —
     each with the rows and modifier inputs that read it, for P4 to word)
     and the `notes` (a macro with no free number, a bank with no room)."""
 
@@ -1486,7 +1486,7 @@ class Landing:
 
     @property
     def refusal(self) -> str | None:
-        """Why this landing cannot land, in words, or None: what the preset
+        """Why this landing cannot land, in words, or None: what the loadable patch
         has to delete first (`TAKEN_WORDS`). What it may replace (`replacing`) is
         no refusal but a row of the sheet."""
         nodes = [n for n in self.taken if n not in self.replacing]
@@ -1585,7 +1585,7 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     it, its value and every row onto it stay out, the rest spawned.
 
     Lists the conflicts (`Conflict`) and the wants; a spawn twice into one
-    host has its second copy's rig rows collide with the first's, row by
+    host has its second copy's control rows collide with the first's, row by
     row. `patch` is the group's provenance slug (default: the name's).
 
     Plan 50: a patch of one param group (`GROUP_KEY`, what a module preset
@@ -1723,7 +1723,7 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
         if owner is not None:
             conflicts.append(Conflict("target", b.target, owner.source, b.source, dict(r),
                                       owner.to_json()))
-    # the wants: every rig-side source, by its scheme head (qualifier kept)
+    # the wants: every control-side source, by its scheme head (qualifier kept)
     wants: dict[str, list[dict]] = {}
     own = _Members(kept.render, tuple(rn.voice(MOD, n) for n in kept.mods), lfos, envs,
                    tuple(rn.voice(MACRO, n) for n in kept.macros))
@@ -1745,13 +1745,38 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
 
 
 def is_control_source(addr: str) -> bool:
-    """Is `addr` a rig-side source — not a modulation lane (``mod:``,
+    """Is `addr` a control-side source — not a modulation lane (``mod:``,
     ``lfo:``, ``env:``)? Open-ended, as `routing.is_continuous` is: any
     other scheme, a ``cc:`` or an OSC role, qualified or not."""
     return _lane(addr) is None
 
 
-__all__ = ["INSIDE", "INTO", "KIND", "OUT", "CONTROL", "SCHEMA", "Conflict", "Host", "Landing",
-           "Patch", "check", "crossing", "entry_name", "held_words", "input_side",
-           "is_control_source", "lift", "read", "replace_key", "select", "side", "slug", "spawn",
-           "spec_names", "sub_side", "touches", "wire_type"]
+__all__ = [
+    "CONTROL",
+    "INSIDE",
+    "INTO",
+    "KIND",
+    "OUT",
+    "SCHEMA",
+    "Conflict",
+    "Host",
+    "Landing",
+    "Patch",
+    "check",
+    "crossing",
+    "entry_name",
+    "held_words",
+    "input_side",
+    "is_control_source",
+    "lift",
+    "read",
+    "replace_key",
+    "select",
+    "side",
+    "slug",
+    "spawn",
+    "spec_names",
+    "sub_side",
+    "touches",
+    "wire_type",
+]

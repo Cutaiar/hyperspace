@@ -15,7 +15,7 @@ It never overwrites: a file DEST already has is left alone — identical is
 prints). The machine files (config.toml, bindings.json and its backups, hands.json,
 windows.json, last_show, logs, weights/), the trash, the legacy bindings/
 folder, backups, dot-files and ``.git`` stay behind — and so does a
-``hidden.json`` from before 2026-10-28 (the library has no hidden presets
+``hidden.json`` from before 2026-10-28 (the library has no hidden loadable patches
 any more). Nothing in HOME is deleted or edited, and config.toml is never
 touched.
 """

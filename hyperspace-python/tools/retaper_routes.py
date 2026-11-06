@@ -7,7 +7,7 @@
 **The owner runs this on the library before the next show**, with both
 Macs on this build (a dry run first, then `--write`). Until then every
 old file is read as it was at each load (`params.retaper_depths` in
-`Presets.load_doc`, `patches.read`, the desk templates' expansion and
+`LoadedPatch.load_doc`, `patches.read`, the desk templates' expansion and
 `Bindings.from_json`), so nothing is lost; this rewrite makes it
 permanent, with a backup, so the whole library moves together.
 
@@ -22,16 +22,16 @@ safe; depths are not. The documents visited, each without the marker
 ``units["fx.depth"] == "taper"`` (a marked one is left as it is, so a
 second run finds nothing to do):
 
-- the presets, ``<library>/presets/*.json``;
+- the loadable patches, ``<library>/presets/*.json``;
 - the patches, ``<library>/patches/*.json`` (a patch saved on this build
   carries the marker; `patches.read` converts an older one when it is
   spawned);
-- the desk templates, ``<library>/desk/*.json`` (expanded into a preset's
+- the desk templates, ``<library>/desk/*.json`` (expanded into a loadable patch's
   desk at load; a `set` row's value is a norm);
-- the session table, ``<home>/bindings.json`` — the machine home's, not
+- the meta table, ``<home>/bindings.json`` — the machine home's, not
   the library's — whose `set` rows (and any hand-edited performer row) are
   measured about the effect's default, there being no base of its own.
-  A show holds no rows (its `session` is a snapshot of session params),
+  A show holds no rows (its `session` is a snapshot of shared meta params),
   so there is nothing to visit there.
 
 In each (not ``trash/``, not a backup, not a dot-file):
@@ -56,7 +56,7 @@ In each (not ``trash/``, not a backup, not a dot-file):
   runs the taper's curve — a macro resting mid-throw lands the base
   somewhere else at load, and two macros that agreed on a shared base
   at their rests no longer do. The tool names every such sub; listen to
-  those presets and re-set the ends by ear;
+  those loadable patches and re-set the ends by ear;
 - a row whose ``value`` is missing is read as 1.0 (`Binding.value`'s
   default, which `to_json` omits); a row whose value is not a number is
   left as it is and named ("left");
@@ -65,9 +65,9 @@ In each (not ``trash/``, not a backup, not a dot-file):
 Rows onto other params, depth subscribers, ``scale`` and ``rest`` do not
 move. A changed row is written as the app writes one (`Binding.to_json`:
 a depth of exactly 1.0 omitted, the keys in its order), and each document
-as the app saves its kind (a preset through `preset.dumps`, the rows one
+as the app saves its kind (a loadable patch through `loadable.dumps`, the rows one
 a line; a patch and a desk template as the library writes them,
-``json.dumps(indent=1)``; the session table through `routing.dumps_doc`),
+``json.dumps(indent=1)``; the meta table through `routing.dumps_doc`),
 so a diff shows only the rows that moved and the marker. Every unmarked
 document is written, marker at least.
 
@@ -97,8 +97,8 @@ if str(ROOT) not in sys.path:
 
 from hyperspace import routing
 from hyperspace.fx import FxState, retaper_of
-from hyperspace.params import DEPTH_TAPER, DEPTH_UNIT, UNITS_KEY, retaper_depths
 from hyperspace.loadable import dumps as loadable_text
+from hyperspace.params import DEPTH_TAPER, DEPTH_UNIT, UNITS_KEY, retaper_depths
 
 PATCHES = "patches"
 DESK = "desk"
@@ -185,9 +185,9 @@ def retaper(doc: dict, files: dict, *, file: str = "", kind: str = "preset"
 
 
 def text(doc: dict, kind: str = "preset") -> str:
-    """`doc` as the app writes one of its `kind`: a preset through
-    `preset.dumps` (the rows one a line); a patch or a desk template as the
-    library writes them (``json.dumps(indent=1)``); the session table
+    """`doc` as the app writes one of its `kind`: a loadable patch through
+    `loadable.dumps` (the rows one a line); a patch or a desk template as the
+    library writes them (``json.dumps(indent=1)``); the meta table
     through `routing.dumps_doc` (a hand-edited file with no `profile` gets
     the default's, which the app would write too)."""
     if kind == "preset":

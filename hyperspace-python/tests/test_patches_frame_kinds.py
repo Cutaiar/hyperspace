@@ -1,14 +1,14 @@
 """Wave 3 P1: frame kinds in patches — the dream, a look-back, the scene and
 the rest are held by a patch, so a "dream + fx + composite" patch exists.
 
-- what is refused still is the rig's (`RIG_KINDS`) and the look's one camera;
+- what is refused still is the meta controller's (`FIXTURE_KINDS`) and the look's one camera;
 - a frame kind's params are the ones the canvas says are its, the look-back's
   and the dream's split by key, the band scene's no node's;
 - what can be made twice is renamed (hands 1 lands as `hands.2`, a look-back
   as `lookback.2`); what a frame holds one of keeps its name, and a host that
   already has it refuses the spawn in words, nothing landed (the dream's is
   the sheet's since P2: tests/test_patches_replace_dream.py);
-- a spawn into an empty frame is the frame: every corpus preset, whole.
+- a spawn into an empty frame is the frame: every corpus loadable patch, whole.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import CORPUS, seed
 from test_graph_groups import files, spawned, state, watch, wires
-from test_patches import land, parts, loadable
+from test_patches import land, loadable, parts
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -59,7 +59,7 @@ def on_graph(rig, name: str) -> None:
 
 
 def put(rig, doc: dict, slug: str | None = None) -> str:
-    """A patch in the rig's scratch library."""
+    """A patch in the meta controller's scratch library."""
     slug = slug or patches.slug(doc["name"])
     (rig.lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
     (rig.lib.home / PATCHES / f"{slug}.json").write_text(json.dumps(doc))
@@ -112,7 +112,7 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     """Over the whole registry: where `patches._param_rows` gives a frame
     kind's param an owner it is the node the canvas puts it on
     (`graphview.OWNERS`, the dream's on the dream's since P2); no frame kind
-    owns a session group's param."""
+    owns a shared meta group's param."""
     app = headless.make_app(tmp_path)
     frame_kinds = ("scene", "shape", "backdrop", "pattern", "lookback", "dream")
     mem = patches._Members(frame_kinds)
@@ -258,7 +258,7 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     assert patches.check(doc) == []
     assert {patches.entry_name(n) for n in doc["nodes"]} == {"dream", "composite", "acid"}
 
-    # back on its own preset the sheet asks to replace that dream (P2), not here
+    # back on its own loadable patch the sheet asks to replace that dream (P2), not here
     assert ui_graph.spawn(rig.panel, "dream-wash") is None
     assert ui_routing.sheet(rig.panel)[0].replacing == ("dream",)
     assert ui_routing.settle_sheet(rig.panel, False) is None
@@ -443,12 +443,12 @@ def hands_moved(name: str) -> str:
 
 @pytest.mark.parametrize("path", CORPUS_LOADABLES, ids=lambda p: p.stem)
 def test_a_whole_loadable_spawned_into_an_empty_frame_is_that_loadable(path):
-    """Every corpus preset's section lifted whole, spawned into a frame with
+    """Every corpus loadable patch's section lifted whole, spawned into a frame with
     nothing in it, its pins wired as saved, is the section again (hands one
-    number on: the empty frame's own hands 1 is the rig's; `spec_names` is
-    what a load would hold). What is left out is the rig's alone. The literal
+    number on: the empty frame's own hands 1 is the meta controller's; `spec_names` is
+    what a load would hold). What is left out is the meta controller's alone. The literal
     "a load is a spawn into an empty frame" of plan 50 is therefore true of
-    the graph; `Presets.load_doc` stays the replace landing (row 660)."""
+    the graph; `LoadedPatch.load_doc` stays the replace landing (row 660)."""
     doc = json.loads(path.read_text())
     p = parts(doc)
     spec = p[0]
@@ -488,7 +488,7 @@ def test_a_whole_loadable_spawned_into_an_empty_frame_is_that_loadable(path):
 
 
 def test_a_new_loadable_holds_a_scene_so_a_whole_frame_is_refused_there(tmp_path):
-    """A new preset's section is the scene chain: a whole frame says so,
+    """A new loadable patch's section is the scene chain: a whole frame says so,
     rather than land a second scene."""
     app = headless.make_app(tmp_path)
     app.loaded_patch.new()

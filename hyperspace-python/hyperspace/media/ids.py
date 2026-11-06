@@ -1,4 +1,4 @@
-"""Source ids: `<kind>:<ref>`, the one name a channel slot, a preset and the
+"""Source ids: `<kind>:<ref>`, the one name a channel slot, a loadable patch and the
 resolver share. `shared:` and `local:` are folder-relative, `file:` is an
 absolute path, the rest name a live feed. `phone:` is reserved (V2): it
 parses but is never opened. `panel:` names a picture of the control

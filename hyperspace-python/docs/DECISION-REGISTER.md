@@ -763,6 +763,7 @@ here; overturn → the change, then the same.
 | 752 | **Its list is replaced by row 746's class.** Plan 44 D5d: no preset may carry a row on a library verb, a load (`is_load_verb`) or a save (`is_save_verb`: `preset.save.<k>`, `preset.save_new`). `routing.meta_refusal` refuses a desk row or route on one at every door, dropped with a note on load and gone at the next save; the meta controller's own rows pass, so a person's saves are as they were. `preset.*` stays out of `is_session_id` until SEM. Not a format change | 700, 743 | owner — 2026-11-06: "no patch can affect another patch" |
 | 753 | The undo latch: whenever focus comes to a stack it latches shut, ⌘Z and ⇧⌘Z there refuse in words and touch no history, and the first push after the focus event opens it, down to the oldest step. One rule for the decks and the meta stack. A mouse passing over is no focus event; a press is, and so is the person's own change in the panel. A controller opens the stack in focus and moves no focus (rec); a load onto the other deck with the panel on air, and a fade, latch the panel's deck in place (rec) | 691, 700 | answered, the owner, 2026-11-06 |
 | 754 | Plan 56: a row a person makes on a `pair:` lane while a pole already has a row asks first: keep both, let the pair take over, or cancel, with no default. A file, a migration and a factory row do not ask, and both act. A taken row goes on its own layer's stack | 580 | owner — 2026-11-06 |
+| 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 
 "—": no hand check shows it; tests only.
@@ -13815,6 +13816,18 @@ still wins, as does a sink row.
 - **To reverse.** `propose_row` always landing is row 751's behaviour for routes; the `step`
   road then needs its old removal back.
 - **Judge it.** 580.
+
+### 756. The rename
+
+- **Answer.** The owner, 2026-11-04, fourth round: "`rig`, `session` and lowercase "deck" all become the meta controller"; eighth round: patch and
+  loadable patch replace "preset". Glossary signed 2026-11-06. Code in SEM, files in the format lane.
+- **Built.** The table is in the PR body of `wave4/sem-rename`, with its scripts and proofs. By what each thing is, not by substitution: `RigWires` held a patch's bus cuts, so
+  `BusCuts`; `RIG_KINDS` are fixtures; `patches.RIG` is a control row's side; `hands.core.rig` is `filled_config`.
+- **Stays, saved:** `preset.*` ids, `hyperspace.preset/…`, `presets/`, `band.*`, `desk.*`, a show's `session` and `rig` keys, `Project.session`, `library.RIG`, `Binding.layer`'s
+  `"preset"`, ui.json's `presets` key, and each value of a renamed constant (`LOADABLE` is `"presets"`). **Stays, panel:** every word a person reads, for D5e; `_page_presets`, looked up by
+  `PAGE_KEYS`. **Stays, other senses:** module and band presets, `presets_axis`, render performance. **Stays, harness:** the tests' and tools' `rig`.
+- **Lowercase "deck":** read by hand; every one found means a `Deck`, so none moved.
+- **Judge it.** 581.
 
 ### 755. A desk Learn on a per-deck meta param stays refused
 

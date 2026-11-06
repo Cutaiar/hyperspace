@@ -4,7 +4,7 @@ A modifier reads one or two source lanes, has a few params of its own,
 and publishes one output lane under the scheme ``mod`` (``mod:<n>`` for
 ``mod.<n>``), so a route may say ``"source": "mod:2"`` and the Router,
 Learn, the referee and ROUTING's source combo need no new path. They
-live in the preset beside its routes (decision 8, `preset.MODIFIERS_KEY`)
+live in the loadable patch beside its routes (decision 8, `loadable.MODIFIERS_KEY`)
 and never in `bindings.json`.
 
   kind       inputs  params                            out
@@ -41,7 +41,7 @@ from .tapers import clamp
 
 SCHEME = "mod"              # the output lanes' scheme: ``mod:<n>``
 PREFIX = "mod."             # the ids, and the registry group's params: ``mod.<n>.<p>``
-GROUP = "mod"               # the registry group (params.PERFORMANCE_GROUPS)
+GROUP = "mod"               # the registry group (params.PATCH_GROUPS)
 KINDS = ("curve", "scale", "smooth", "combine", "threshold", "delay")
 HOW = ("add", "mul", "min", "max", "cross")
 # how many inputs each kind reads
@@ -149,7 +149,7 @@ class Modifier:
         return OUT.get(self.kind, VALUE)
 
     def to_json(self, params: dict[str, float] | None = None) -> dict:
-        """The preset's entry: id, kind, ``in``, then each param — an enum
+        """The loadable patch's entry: id, kind, ``in``, then each param — an enum
         by its name, a toggle as a bool. `params` (the registry's bases)
         stands in for the live values when given."""
         vals = self.params if params is None else {**self.params, **params}
@@ -167,7 +167,7 @@ class Modifier:
 
     @classmethod
     def from_json(cls, d) -> Modifier:
-        """A preset's entry; ValueError for one that names no kind or id
+        """A loadable patch's entry; ValueError for one that names no kind or id
         this build knows. A missing param takes its default, an unknown
         key is ignored, an enum may be its name or its index."""
         if not isinstance(d, dict):

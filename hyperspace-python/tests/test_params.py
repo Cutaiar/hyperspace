@@ -13,15 +13,15 @@ from hyperspace.control import SCENES, Control
 from hyperspace.geometry import SHAPES
 from hyperspace.library import Library
 from hyperspace.params import (
-    PER_DECK_META,
     PATCH_GROUPS,
+    PER_DECK_META,
     SHARED_META_GROUPS,
     Kind,
-    Registry,
     MetaRegistry,
+    Registry,
+    build_meta,
     build_patch,
     build_registry,
-    build_meta,
     part_of,
     part_of_id,
 )
@@ -33,7 +33,7 @@ def make(tmp_path):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
-    seed(tmp_path)                  # the corpus: the shipped presets, the party and house shows
+    seed(tmp_path)                  # the corpus: the shipped loadable patches, the party and house shows
     lib = Library(tmp_path)
     project = lib.project
     reg = build_registry(view, control, audio, project)
@@ -329,7 +329,7 @@ def test_params_survive_a_chain_swap(rig):
 
 def test_loadable_bank_params(rig):
     """The bank's params (plan 13 WP2): select, load, save, next / prev
-    over the project's preset names, loading through `Presets` (plan 19
+    over the project's loadable patch names, loading through `LoadedPatch` (plan 19
     WP1: twenty-four choices, the F-keys' eight with a trigger each)."""
     from hyperspace.loadable import LoadedPatch
     from hyperspace.routing import Bindings, Router
@@ -358,7 +358,7 @@ def test_loadable_bank_params(rig):
 def test_the_list_triggers_walk_the_drop_downs_list_not_the_bank(rig):
     """`preset.list.next` / `prev` (the pad's B / X, 2026-10-14) step the
     PRESETS page's list — `Library.list`, by name — wrapping at both ends,
-    and pass over the bank: a preset in no slot is reached, and one saved
+    and pass over the bank: a loadable patch in no slot is reached, and one saved
     as new a moment ago is in the walk. QUANT's `preset.next` still walks
     only the bank's filled slots."""
     from hyperspace.library import LOADABLE
@@ -395,8 +395,8 @@ def test_the_list_triggers_walk_the_drop_downs_list_not_the_bank(rig):
 
 
 def test_the_list_walk_from_nothing_loaded_and_a_bad_file(rig):
-    """With no preset loaded the walk starts at the list's first (next) or
-    last (prev); a preset file that will not parse shows on the library's
+    """With no loadable patch loaded the walk starts at the list's first (next) or
+    last (prev); a loadable patch file that will not parse shows on the library's
     error line and the walk raises nothing."""
     from hyperspace.library import LOADABLE
     from hyperspace.loadable import LoadedPatch
@@ -406,14 +406,14 @@ def test_the_list_walk_from_nothing_loaded_and_a_bad_file(rig):
     LoadedPatch(bank.lib, reg, Router(reg, Bindings()))
     lib = bank.lib
     listing = lib.list(LOADABLE)
-    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the presets' own landing)
+    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the loadable patches' own landing)
     assert bank.walk(-1) == listing[-1]
-    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the presets' own landing)
+    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the loadable patches' own landing)
     assert bank.walk(1) == listing[0]
     bad = lib.home / LOADABLE / "aaa-broken.json"
     bad.parent.mkdir(parents=True, exist_ok=True)
     bad.write_text("{ not json")
-    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the presets' own landing)
+    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the loadable patches' own landing)
     lib.error = ""
     assert bank.walk(1) is None and lib.error.startswith("library:")
 
@@ -447,7 +447,7 @@ def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
     # the slot bounds itself: a restore writes raw, and nothing else would clamp
     assert reg.restore({"macro.3": 5.0, "macro.4": -2.0}) == []
     assert reg["macro.3"].value == 1.0 and reg["macro.4"].value == 0.0
-    # performance state (plan 13 WP1): in the whole snapshot and its performance part
+    # performance state (plan 13 WP1): in the whole snapshot and its patch part
     assert set(reg.snapshot("macro")) == {p.id for p in ms}
     assert set(reg.snapshot("macro")) <= set(reg.snapshot(part="patch"))
 
@@ -478,7 +478,7 @@ def test_every_persisted_group_is_patch_or_meta(tmp_path):
     persisted = [p for p in reg if p.persist]
     for must in ("hands", "tempo", "lfo", "output", "macro", "band", "desk"):
         assert any(p.group == must for p in persisted), must
-    # the desk (plan 18 WP2): knob smoothing is the session's and a show
+    # the desk (plan 18 WP2): knob smoothing is the meta controller's and a show
     # keeps it; the layer latch beside it is still never saved
     assert part_of(reg["desk.slew"]) == "shared_meta" and reg["desk.slew"].persist
     assert not reg["desk.shift"].persist and "desk" in SHARED_META_GROUPS
@@ -491,8 +491,8 @@ def test_every_persisted_group_is_patch_or_meta(tmp_path):
 
 
 def test_snapshot_by_part(tmp_path):
-    """The performance and session parts partition the whole snapshot;
-    the macros are in the whole one and in the performance part."""
+    """The performance and meta controller parts partition the whole snapshot;
+    the macros are in the whole one and in the patch part."""
     reg = _full_registry(tmp_path)
     whole = reg.snapshot()
     perf, sess = reg.snapshot(part="patch"), reg.snapshot(part="shared_meta")
@@ -504,7 +504,7 @@ def test_snapshot_by_part(tmp_path):
     assert macros <= set(whole) and macros <= set(perf)
     assert "tempo.bpm" in sess and "scene.select" in sess and "lfo.1.depth" in perf
     # plan 43 §6 item 1 / plan 44 D3: the hands' look and the clouds' are the
-    # preset's, but for the mirror — the room's (`SESSION_KEYS`)
+    # loadable patch's, but for the mirror — the room's (`SHARED_META_KEYS`)
     assert "ghost.alpha" in perf and "ghost.style" in perf and "cloud.size" in perf
     assert "ghost.mirror" in sess and "ghost.mirror" not in perf
     assert part_of_id("ghost.2.mirror") == "shared_meta" and part_of_id("ghost.2.on") == "patch"
@@ -514,11 +514,11 @@ def test_snapshot_by_part(tmp_path):
 
 
 def test_two_decks_hold_the_meta_params_by_reference():
-    """Plan 44 D3: `build_session` once, `build_performance` per deck — every
-    session param is one `Param` object in both decks' registries (a base
+    """Plan 44 D3: `build_meta` once, `build_patch` per deck — every
+    shared meta param is one `Param` object in both decks' registries (a base
     written through one is the room's), declared once whichever deck
-    declares it, and dropped from both when the session drops it; each
-    deck's performance params are its own."""
+    declares it, and dropped from both when the meta controller drops it; each
+    deck's patch params are its own."""
     from hyperspace import tempo
     chain = Analyzer(Analyser())
     control, audio = Control(chain), SimpleNamespace(chain=chain)
@@ -533,11 +533,11 @@ def test_two_decks_hold_the_meta_params_by_reference():
     assert b["master.gain"].base == pytest.approx(1.7)
     a["view.bright"].set(0.3)
     assert b["view.bright"].base != pytest.approx(0.3)
-    # a session param declared on one deck is the session's, and the other's
+    # a shared meta param declared on one deck is the meta controller's, and the other's
     clock = tempo.Clock()
     tempo.register(a, clock)
     assert a["tempo.bpm"] is b["tempo.bpm"] is meta_reg["tempo.bpm"]
-    tempo.register(b, clock)                # declared once: the session has it already
+    tempo.register(b, clock)                # declared once: the meta controller has it already
     assert b["tempo.bpm"] is meta_reg["tempo.bpm"]
     with pytest.raises(ValueError):         # …and a second declaration is refused
         b.continuous("tempo.bpm", "BPM", lambda: 1.0, lambda v: None, group="tempo")
@@ -545,16 +545,16 @@ def test_two_decks_hold_the_meta_params_by_reference():
     a["ghost.mirror"].set(True)
     states = a["ghost.mirror"].room.states
     assert len(states) == 2 and all(st.mirror for st in states)
-    # the mirror is the session's even though its group is a deck's
+    # the mirror is the meta controller's even though its group is a deck's
     assert a["ghost.mirror"] is b["ghost.mirror"] is meta_reg["ghost.mirror"]
     assert a["ghost.alpha"] is not b["ghost.alpha"]
-    # the aliases the session declares are answered from any deck
+    # the aliases the meta controller declares are answered from any deck
     assert a.real(a["band.sel.f"]) is meta_reg.real(meta_reg["band.sel.f"])
     # a band removed leaves every deck
     gone = next(p.id for p in meta_reg if p.id.startswith("band.0."))
     a.remove(gone)
     assert gone not in meta_reg and gone not in a and gone not in b
-    # the session never takes a deck's param
+    # the meta controller never takes a deck's param
     with pytest.raises(ValueError):
         meta_reg.continuous("view.x", "x", lambda: 0.0, lambda v: None, group="view")
 
@@ -605,7 +605,7 @@ def test_the_bank_adds_no_params(rig):
     `preset` group is the 21 it was — select, a load and a save for each
     F-key, save-as, next, prev, home — and the list's next / prev
     (2026-10-14, the pad's B / X); slots 9–24 are choices of
-    `preset.select`, which says which of them hold a preset (`Param.has`,
+    `preset.select`, which says which of them hold a loadable patch (`Param.has`,
     what a pad's "filled" light reads)."""
     reg, _view, _control, _audio, bank = rig
     ids = [p.id for p in reg if p.group == "preset"]
@@ -634,7 +634,7 @@ def test_the_bank_adds_no_params(rig):
 def test_inst_layout_is_declared(tmp_path):
     """Plan 20 WP6: `view.inst_layout`, three choices, default GRID, in the
     view group, persisted and modulatable like the motion beside it, and
-    declared just before it. A layout change is one undo step; a preset
+    declared just before it. A layout change is one undo step; a loadable patch
     that does not name the id — every file saved before this plan, the
     whole factory layer — loads it as GRID."""
     from test_undo import boot, frames, labels, settle
@@ -679,7 +679,7 @@ def test_inst_layout_is_declared(tmp_path):
     frames(r, 5)
     assert r.view.inst_layout == 0 and r.undo.stack == []
 
-    # a preset that does not name it loads it as GRID: every corpus preset
+    # a loadable patch that does not name it loads it as GRID: every corpus loadable patch
     names = r.lib.list("presets")
     assert len(names) >= 5
     for name in names:
@@ -723,11 +723,11 @@ def test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker():
 
 
 def test_every_node_param_today_reads_as_its_first_instance():
-    """No preset or binding migrates for a single-instance graph: every
+    """No loadable patch or binding migrates for a single-instance graph: every
     effect's, the hands' and the dream's params as registered today read
     back as instance 1 under their own id, their group is their id's
     first segment (so an extra instance lands in the same part of a
-    preset), and no effect file or key is purely decimal (which would
+    loadable patch), and no effect file or key is purely decimal (which would
     read as a marker)."""
     from hyperspace.fx import FxState
     from hyperspace.ghost import GhostState

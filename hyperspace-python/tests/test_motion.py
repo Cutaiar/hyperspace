@@ -1,6 +1,6 @@
 """motion.py — the analyzer's followers, shared — and the feel a route row
 or the pad runs them with (routing.Binding.motion, Router.feel_of, the pad's
-`desk.pad.*` session params)."""
+`desk.pad.*` shared meta params)."""
 
 import math
 from types import SimpleNamespace as NS
@@ -190,7 +190,7 @@ def test_a_spring_written_as_hz_and_damping_reads_as_the_same_spring():
 
 def test_an_old_shows_stick_spring_ids_read_as_todays():
     """A show saved before 2026-10-29 holds `desk.pad.hz` / `.damp`; its
-    session reads them as today's duration and bounce, each on its own."""
+    meta controller reads them as today's duration and bounce, each on its own."""
     from hyperspace import routing
     old = {"desk.pad.hz": 2.0, "desk.pad.damp": 0.7, "desk.pad.feel": 2, "view.bright": 0.4}
     new = routing.renamed_session(old)
@@ -236,7 +236,7 @@ def test_a_loadable_keeps_a_rows_motion_and_its_dirty_dot_sees_it():
     back = Binding.from_json(json.loads(text)["routes"][0])
     assert back.motion == Motion("follow", 0.02, 0.4)
     before = json.dumps([b.to_json()])
-    b.motion = Motion("follow", 0.02, 0.8)            # what Presets.signature compares
+    b.motion = Motion("follow", 0.02, 0.8)            # what LoadedPatch.signature compares
     assert json.dumps([b.to_json()]) != before
 
 

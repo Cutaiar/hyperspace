@@ -796,7 +796,7 @@ def test_the_room_maps_the_drawings_hits_onto_the_screen(rig, monkeypatch):
     at = {h[4]: h[:4] for h in c.hits}
     assert at["pad:A"] == pytest.approx((ox, oy, ox + 1000 * s, oy + 620 * s))
     assert at["pad:B"] == pytest.approx((ox + 500 * s, oy + 310 * s, ox + 510 * s, oy + 320 * s))
-    surf.vg = None                                  # the rig's panel closes without a NanoVG
+    surf.vg = None                                  # the meta controller's panel closes without a NanoVG
 
 
 def test_quiet_rooms_let_go_and_a_failed_start_frees_its_context(rig, monkeypatch):

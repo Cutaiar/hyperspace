@@ -1,4 +1,4 @@
-"""The device registry (plan 27): every input or output the rig has,
+"""The device registry (plan 27): every input or output the meta controller has,
 listed in ``config.toml`` as ``[[devices]]``, opened behind its own entry,
 polled in order each frame, and closed in one list.
 
@@ -23,7 +23,7 @@ module, each imported lazily inside its device's `open`, so importing
 **Roles, not serials** (decision 11): an entry has a `role` — `apc40`,
 `pad`, `leap`, `wand1` — the name the SYSTEM page, the notes and a MIDI
 row's qualifier (``cc@launch:0:7``) use. A role contains no ``:``. **For
-today's devices the role is not the scheme:** a preset names a *scheme*
+today's devices the role is not the scheme:** a loadable patch names a *scheme*
 (`hand:right.roll`, `axis:LX`, `ext:3`, `cc:0:48`) and the device's
 `schemes` tuple says which schemes its role publishes, so every existing
 row is unchanged whatever the entry is called. A new device (B4's OSC)
@@ -50,7 +50,7 @@ when the device sends one). Discrete controls stay scene-setters: a
 device delivers them as rows through the table (`Router.pad`,
 `MidiIO._handle`), never as a feed. A device may expose `layers`
 (decision 14: the APC40 as two nodes in plan 28): the first MIDI role's
-desk has two, the preset layer and SHIFT's global one.
+desk has two, the patch layer and SHIFT's global one.
 
 **The frame.** `DeviceRegistry.poll` runs in the scene-setter slot
 (after the key rows, before the macros and undo): each device is polled,
@@ -79,9 +79,9 @@ old list stands.
 whose `name` is the channel, so its `address` is ``<role>:<channel>`` —
 ``bridge:3``), and its `send(reg, analyzer)` runs in the slot after
 `reg.apply`, reading **effective** values. What a sink sends is the
-session's *sink rows* (routing.py, `SINK_OP`): a `Binding` from a param
+meta controller's *sink rows* (routing.py, `SINK_OP`): a `Binding` from a param
 (``param:<id>``) or a lane (``lane:<i>``, ``lane:*``) to a sink port, in
-`bindings.json` (sinks are rig), made on the ROUTING page or by the param
+`bindings.json` (sinks are meta controller), made on the ROUTING page or by the param
 menu's "Learn sink ▸ <role>:<channel>" (learn.Learn.learn_sink) — the same
 table and Learn as a hand routed to a param, with no referee (a sink row is
 not a performer). An entry's old `send` list (`[bridge] send`) becomes its
@@ -118,7 +118,7 @@ BUILTIN_SCHEMES = ("lane", "lfo", "env", "seq")
 # module imports nothing of the app at its top) and the keyboard
 NO_DEVICE_SCHEMES = (*BUILTIN_SCHEMES, "mod", "key")
 # a role-less row's role when no listed device publishes its scheme: the
-# rig's usual name for the kind behind it (config.py's example list); a
+# meta controller's usual name for the kind behind it (config.py's example list); a
 # scheme not here is a role of its own (an OSC device's scheme is its
 # role). Plan 28 N5's table, moved here from graphview by plan 40 T4
 # (graphview reads it from here: the placeholder node keeps its words)
@@ -417,14 +417,14 @@ class OffDevice(Base):
 
     @property
     def wants(self) -> tuple[str, ...]:
-        """Its kind's: a rig that lists a device, off or not, can arm a
+        """Its kind's: a meta controller that lists a device, off or not, can arm a
         learn for it (it completes once the device is on)."""
         f = self.__dict__.get("_wants_for")
         return f(self.role, self.qualifier) if f is not None else self._wants
 
     @property
     def rows(self) -> tuple[str, ...]:
-        """Its kind's, so a hit row in a preset is not refused while the
+        """Its kind's, so a hit row in a loadable patch is not refused while the
         device is off."""
         return self._rows
 
@@ -477,7 +477,7 @@ class MidiDevice(Base):
     MIDI role's rows are unqualified (every row written before plan 27),
     any other's carry its role (``cc@launch:0:7``) — `MidiIO.qualifier` —
     and each role has its own layer; the first role's desk has two, the
-    preset layer and SHIFT's global one (`desk.shift`). Its rows are
+    patch layer and SHIFT's global one (`desk.shift`). Its rows are
     applied inside `poll` (a scene-setter), an armed desk Learn completed
     there too. A desk that is not plugged in is `lost` and reconnects
     itself (`midi.Ports.retry`), redrawing every light when it comes."""
@@ -513,8 +513,8 @@ class MidiDevice(Base):
     @property
     def layers(self) -> tuple[str, ...]:
         """The desk's layers (decision 14, for plan 28's one node per
-        mode): the first MIDI role's APC40 has the preset layer and SHIFT's
-        global one; any other desk has the preset layer only — no latch of
+        mode): the first MIDI role's APC40 has the patch layer and SHIFT's
+        global one; any other desk has the patch layer only — no latch of
         its own in this plan."""
         if self.profile == "apc40" and self._primary():
             return ("preset", "global")
@@ -1084,7 +1084,7 @@ class BridgeDevice(Base):
     ports looked for again in `poll`; the inbound lanes fed as ``ext``,
     with their labels and rests, in the feed slot (`receive`, `publish`);
     and the out half a **sink** — in the slot after `reg.apply`, the
-    session's sink rows on this role (``param:view.bright → bridge:3``,
+    meta controller's sink rows on this role (``param:view.bright → bridge:3``,
     routing.sink_values) read as effective values and sent through the
     bridge's gate (`send_values`). With no binding table in the context (a
     bare shim) the out half sends the entry's old `send` list, as a
@@ -1191,7 +1191,7 @@ class MidiOutDevice(Base):
         `hands-daw` entry the `[hands] out` setting becomes at load
         (config.py). When the port comes back after a gap the DAW is
         brought up to date (`HandsIO.resync`) before the hands' frame runs;
-      * the session's sink rows on this role, encoded like the bridge's
+      * the meta controller's sink rows on this role, encoded like the bridge's
         lanes (`encoding`, `channel`, `cc`, `rate`; `bridge.Sender`).
 
     A `lost` port is looked for again in `poll` (the device's own job,
@@ -1750,7 +1750,7 @@ class DeviceRegistry:
         self._tell_table()           # which MIDI role an unqualified row means, before any opens
         self.listeners: list = []
         self._say_players()
-        self._seed_sinks(self.entries)   # an old `send` list → the session's sink rows, once
+        self._seed_sinks(self.entries)   # an old `send` list → the meta controller's sink rows, once
         self.error = ""              # this frame's first device error (the toast)
         # a device handed in with its adapter (tests, the frame-order stubs) is open
         self._opened: set[str] = {d.role for d in self.devices if getattr(d, "io", None) is not None}
@@ -1809,7 +1809,7 @@ class DeviceRegistry:
     def continuous_schemes(self) -> tuple[str, ...]:
         """The schemes a route can read as a lane, in offer order: the
         built-in `lane` (the analyzer), `lfo`, `env` and `seq` first, then each listed
-        device's `feeds` in list order (an `off` device's too, so a preset
+        device's `feeds` in list order (an `off` device's too, so a loadable patch
         row naming it stays a dormant route, not an unknown one). What the
         Router offers (`Router.schemes`, plan 27 B2: no fixed tuple)."""
         out = list(BUILTIN_SCHEMES)
@@ -1843,7 +1843,7 @@ class DeviceRegistry:
         `apc40` by default) — the desk the file's rows were written for —
         else the first listed; the rest in list order. So a generic box
         listed above the APC40 never inherits the APC40's rows or SHIFT,
-        and a rig whose only desk is generic still maps (orchestrator's
+        and a meta controller whose only desk is generic still maps (orchestrator's
         ruling on PR #181)."""
         midi = [d for d in self.devices if d.kind == "midi"]
         table = getattr(self.ctx, "table", None)
@@ -1897,7 +1897,7 @@ class DeviceRegistry:
 
     def _seed_sinks(self, entries: list[dict]) -> None:
         """An enabled entry's old `send` list (`[bridge] send`, the bridge's
-        default ``["lane:*"]`` included) becomes the session's sink rows on
+        default ``["lane:*"]`` included) becomes the meta controller's sink rows on
         its role — **once per role**, marked done in `bindings.json` itself
         (`Bindings.sinks_seeded`, never by consuming the owner's config
         key): a role in that list is never seeded again, so deleting every
@@ -1930,7 +1930,7 @@ class DeviceRegistry:
                        "ROUTING (sinks)")
             for why in bad:
                 self._note(f"bindings: [{e.get('kind', role)}] send {why} — not translated")
-        # a file still holding a preset's part waits for the first-launch
+        # a file still holding a loadable patch's part waits for the first-launch
         # migration to rewrite it (routing.Bindings.load): the rows are in
         # memory until then, and that rewrite keeps them
         if added and hasattr(table, "write") and getattr(table, "carried", None) is None:
@@ -2345,13 +2345,13 @@ class DeviceRegistry:
         return changed
 
 
-# ---- what the loaded preset wants, and the arrival (plan 40 T4) ----
+# ---- what the loaded loadable patch wants, and the arrival (plan 40 T4) ----
 #
-# The bindings on a device the rig lacks were never dropped (decision 11:
-# a performer row on a scheme no device feeds waits; a preset-layer desk
+# The bindings on a device the meta controller lacks were never dropped (decision 11:
+# a performer row on a scheme no device feeds waits; a patch-layer desk
 # row is kept whatever is plugged in, and the desk relights from the table
 # when its port comes back). What was missing is the *saying*: which
-# devices the loaded preset wants and does not have, and a word when one
+# devices the loaded loadable patch wants and does not have, and a word when one
 # arrives. `wants` is that answer, pure over the table and the registry;
 # the GRAPH head's and the PRESET strip's chip, the SYSTEM page's lines,
 # a group node's status line (T2) and a spawn's notes (T3) all read it.
@@ -2367,11 +2367,11 @@ WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
 
 @dataclass(frozen=True)
 class Want:
-    """One device role the loaded preset's rows name (plan 40 T4): `state`
+    """One device role the loaded loadable patch's rows name (plan 40 T4): `state`
     is the registry's view this frame — ``connected`` (listed, live),
     ``lost`` (listed, the hardware away, or in error), ``off`` (listed,
     ``enabled = false``) or ``missing`` (no entry for the role: "not in this
-    rig"); `scheme` the first scheme a row of it names (``cc``, ``hand``);
+    meta controller"); `scheme` the first scheme a row of it names (``cc``, ``hand``);
     `rows` those rows' sources in words, each once, in table order
     ("K1", "right hand y" — routing.row_words)."""
 
@@ -2430,10 +2430,10 @@ def _device_facts(registry, table) -> tuple[dict[str, str], str, dict[str, str],
 
 
 def _rows_of(table) -> list[tuple[str, str]]:
-    """(source, where it lands) for each row the loaded preset names a
+    """(source, where it lands) for each row the loaded loadable patch names a
     device by: its enabled performer routes (target: the param), its
-    enabled preset-layer desk rows (the param) and its modifiers' inputs
-    (the modifier's id) — never a session row, which is the rig's."""
+    enabled patch-layer desk rows (the param) and its modifiers' inputs
+    (the modifier's id) — never a meta row, which is the meta controller's."""
     out: list[tuple[str, str]] = []
     for b in getattr(table, "bindings", ()) or ():
         if not b.enabled:
@@ -2456,7 +2456,7 @@ def _lands(where: str, only) -> bool:
 
 
 def wants(table, registry, only=None) -> list[Want]:
-    """Every device role the loaded preset's rows name (plan 40 T4), in
+    """Every device role the loaded loadable patch's rows name (plan 40 T4), in
     table order, each with its state this frame and its rows in words.
     A row's role is its ``@role`` qualifier; else, for ``cc:`` / ``note:``
     / ``pitch:``, the first MIDI role (`DeviceRegistry.midi_roles`, the
@@ -2468,9 +2468,9 @@ def wants(table, registry, only=None) -> list[Want]:
     named. `only`, when given, keeps the rows that land on those ids — a
     param id, a modifier id, or an id a landing starts with (``fx.acid.2``
     covers ``fx.acid.2.speed``): `wants_for`. Pure: reads the table and
-    the registry (`registry` None: a rig with nothing listed).
+    the registry (`registry` None: a meta controller with nothing listed).
 
-    >>> [(w.role, w.state, w.rows) for w in wants(table, rig)]   # doctest: +SKIP
+    >>> [(w.role, w.state, w.rows) for w in wants(table, meta controller)]   # doctest: +SKIP
     [('apc40', 'lost', ('K1', 'K2')), ('leap', 'missing', ('right hand y',))]
     """
     from .routing import base_scheme, row_words
@@ -2499,7 +2499,7 @@ def wants(table, registry, only=None) -> list[Want]:
                 role = (PLAYER_1 if any(base_scheme(s) == scheme for s in listed)
                         else SCHEME_ROLE.get(scheme, scheme))
         # the desk's glyphs for an APC40's rows: a listed desk's own profile;
-        # a desk the rig lacks is the table's profile only when it is the
+        # a desk the meta controller lacks is the table's profile only when it is the
         # first role (an unqualified row) — a qualified one's is unknown
         prof = profile.get(role) if role in status else (
             table_profile if not (at and q) else "")
@@ -2524,7 +2524,7 @@ def wants_for(table, registry, ids) -> list[Want]:
     T2): a collection of param ids and modifier ids, each covering the
     ids under it — `wants(table, registry, only=ids)`.
 
-    >>> wants_for(table, rig, ["fx.acid.2", "mod.3"])            # doctest: +SKIP
+    >>> wants_for(table, meta controller, ["fx.acid.2", "mod.3"])            # doctest: +SKIP
     [Want(role='apc40', state='lost', scheme='cc', rows=('K1', 'K2'))]
     """
     return wants(table, registry, only=frozenset(ids))
@@ -2569,9 +2569,9 @@ def missing_chip(ws) -> str | None:
 
 def wanted_lines(ws) -> list[str]:
     """The SYSTEM page's lines under the device lines (plan 40 T4), one per
-    wanted role the rig lacks: "wanted by the preset: leap — not in this
-    rig; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
-    wait". Nothing for a connected role, nothing when the preset wants
+    wanted role the meta controller lacks: "wanted by the preset: leap — not in this
+    meta controller; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
+    wait". Nothing for a connected role, nothing when the loadable patch wants
     nothing."""
     return [f"wanted by the preset: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"
             for w in ws if w.lacking]

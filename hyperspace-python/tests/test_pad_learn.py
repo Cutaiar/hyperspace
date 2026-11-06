@@ -141,7 +141,7 @@ def test_a_stick_learns_a_push_route_into_the_loadable(rig):
     b = t.owner("camera.yaw")
     assert (b.source, b.op, b.value) == ("axis:LX", "push", PUSH_DEPTH)
     assert not any(d.get("source") == "axis:LX" for d in on_file(rig.path)) \
-        if rig.path.exists() else True             # a route is the preset's, not the session's
+        if rig.path.exists() else True             # a route is the loadable patch's, not the meta controller's
 
 
 def test_a_trigger_on_a_one_sided_fader_is_its_position(rig):
@@ -223,7 +223,7 @@ def test_hold_fires_once_after_hold_s(rig):
 
 
 def test_no_factory_pad_row_loads_a_loadable_or_taps_the_tempo(rig):
-    """2026-11-04, the owner: no swapping presets from a controller, and tap
+    """2026-11-04, the owner: no swapping loadable patches from a controller, and tap
     tempo not a default on every controller. On the factory table neither the
     d-pad's ← / → nor B, X and BACK walk or tap, however long they are held;
     the APC keeps TAP TEMPO and the keyboard (not a controller) B."""
@@ -469,7 +469,7 @@ def test_learn_on_a_second_pad_writes_its_qualified_rows(rig):
     assert gp.learn_from(two, lrn, role="p2") is True
     assert [(b.source, b.op) for b in t.bindings if b.target == "view.points"
             and b.source.startswith("pad@")] == [("pad@p2:A", "toggle")]
-    assert any(d.get("source") == "pad@p2:A" for d in on_file(rig.path))   # the session's
+    assert any(d.get("source") == "pad@p2:A" for d in on_file(rig.path))   # the meta controller's
     assert any(b.source == "pad:A" for b in t.bindings)                   # the primary's stays
     lrn.arm("camera.yaw", "pad")
     two.frame(axes=[1.0, 0, 0, 0, -1, -1])

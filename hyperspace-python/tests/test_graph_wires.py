@@ -1,16 +1,16 @@
 """Plan 28 N4: the render graph edited as nodes and a wire list, outputs as nodes.
 
-A preset's `graph` section is nodes plus wires: `{"nodes": [...],
+A loadable patch's `graph` section is nodes plus wires: `{"nodes": [...],
 "wires": [{"from": "hands.2", "to": "output.2.hands"}, …]}`. A wire
 names a node's output and a `node.port`; an input no wire names is the
-default graph's (an output's ports follow the session's switches); D1's
+default graph's (an output's ports follow the meta controller's switches); D1's
 `after` / `into` are the same wires written short. A wire this build
 cannot honour — no such node or port, a port of another type, two into
 one port, a loop — is a note and that port's default. On the GRAPH page
 an image cable dragged between two ports is a wire, the picker adds an
 effect instance, a hands node or a composite, and deleting a render node
-or cable edits the section; each edit lands through the preset's
-`GraphSection` (an undo step, the preset dirty, the renderer building the
+or cable edits the section; each edit lands through the loadable patch's
+`GraphSection` (an undo step, the loadable patch dirty, the renderer building the
 graph again).
 
 The pure half first (the JSON, the refusals, the graph's shape), then the
@@ -37,7 +37,7 @@ from hyperspace.outputs import Switches, View
 
 S = Switches
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
-# the corpus presets' sources (plan 36 T3: the corpus files are their `/7`)
+# the corpus loadable patches' sources (plan 36 T3: the corpus files are their `/7`)
 SOURCES = Path(__file__).resolve().parent / "fixtures" / "factory-sources" / "presets"
 WIRED = ("hands-glass-only", "wired-outputs")
 FILES = {"warp", "acid", "palette", "kaleido"}
@@ -111,7 +111,7 @@ def test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_
     state (an end of its own, `Shown`; its through hands and their guide
     gone with the picture they were in); `.hands` lays the wired layer
     over (and its guide); an output no wire names is exactly the frame's
-    without the wires — the window's mutes, the rig's, not the look's."""
+    without the wires — the window's mutes, the meta controller's, not the look's."""
     shows = [Shows(), Shows(through=True), Shows(scene=False), Shows()]
     plain = graph(shows, effects=RUN)
     section = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
@@ -147,7 +147,7 @@ def test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_
         {"wires": _wires(("hands", "output.3.hands"))}).wiring()))
     assert g.dormant == {"hands.layer → output.3.hands":
                          "wire hands.layer → output.3.hands — no output 3 this frame"}
-    # a preset load never writes a mute: the windows' switches are as they were
+    # a loadable patch load never writes a mute: the windows' switches are as they were
     vs = _views(S(), S(scene=False))
     G.build_graph(vs, wired_wiring(G.read_graph(section, effects=FILES).wiring()), effects=RUN)
     assert [v.switches for v in vs] == [S(), S(scene=False)]
@@ -155,7 +155,7 @@ def test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_
 
 def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_default(tmp_path):
     """Each wire this build cannot honour is a note in words and that
-    port's default; the rest of the graph stands. Through a preset load:
+    port's default; the rest of the graph stands. Through a loadable patch load:
     the note on the strip ("; the default wiring"), the section kept as
     the file had it, a clean dot."""
     cases = [
@@ -207,7 +207,7 @@ def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_defau
                 [{"from": "scene", "to": "history.image", "how": 1}]):
         with pytest.raises(G.GraphError):
             G.read_graph({"wires": bad})
-    # through a preset load
+    # through a loadable patch load
     rig = boot(tmp_path)
     stub = Stub()
     rig.loaded_patch.graph.attach(stub)
@@ -264,8 +264,8 @@ def _edit_rig(tmp_path, **kw):
 
 
 def test_an_edit_lands_the_wire_through_the_loadable_and_says_its_refusals(tmp_path):
-    """`Edit.wire` lands a new spec through the preset's GraphSection: an
-    undo step, the renderer's wiring, the preset dirty, the section the
+    """`Edit.wire` lands a new spec through the loadable patch's GraphSection: an
+    undo step, the renderer's wiring, the loadable patch dirty, the section the
     save writes; a wire that would be refused is refused in the note's
     words and nothing changes; dragging again into the same port replaces
     the wire; `unwire` takes it out. Plan 35 G: in the wired frame's ids —
@@ -273,7 +273,7 @@ def test_an_edit_lands_the_wire_through_the_loadable_and_says_its_refusals(tmp_p
     `lookback` — every wire of the frame an ordinary wire."""
     rig, stub, edit, pushed = _edit_rig(tmp_path)
     rig.loaded_patch.save_as("Base")
-    base = rig.loaded_patch.graph.doc                  # (plan 36 T3: the startup preset's /7)
+    base = rig.loaded_patch.graph.doc                  # (plan 36 T3: the startup loadable patch's /7)
     assert not rig.lib.is_dirty(LOADABLE)
     assert edit.wire("hands", "output.1.image") == (
         "wire hands → output.1.image — hands makes geometry, output.1.image takes a picture")
@@ -324,7 +324,7 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_lo
     """On the GRAPH page, drawn headless on the node editor: the widget
     reports a new link between the hands' layer's output and output 2's
     `hands` port; the page's dispatch (by the cable's type: image is N4's)
-    checks it, accepts it and lands the wire — the preset dirty, one undo
+    checks it, accepts it and lands the wire — the loadable patch dirty, one undo
     step, the renderer's wiring holding the wire. A drag of the wrong type
     is refused red, with the note's words, and nothing changes; a render
     cable deleted on the canvas is unwired (plan 35 G: a second delete of
@@ -635,7 +635,7 @@ moderngl = pytest.importorskip("moderngl")
 
 def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
     """With warp on: the history wired into output 2's picture shows the
-    frame with no effect (byte for byte the chain-less rig's), output 1 is
+    frame with no effect (byte for byte the chain-less meta controller's), output 1 is
     byte for byte the default graph's; the chain ran once (for output 1),
     and output 2's route is its own end."""
     import numpy as np
@@ -644,7 +644,7 @@ def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
 
     def frame(effects, section):
         r = gl_rig(ctx, effects=effects, hands=False)
-        if section is not None:          # (plan 33 R23: the rig's run kept)
+        if section is not None:          # (plan 33 R23: the meta controller's run kept)
             r.wiring = wired_wiring(wired(r, section))
         return r, run(ctx, r, views(ctx, S(), S()), frames=2)
 

@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-"""Rewrite a library's presets as the newest schema, once (row 394).
+"""Rewrite a library's loadable patches as the newest schema, once (row 394).
 
     uv run python tools/migrate_library.py [--library PATH] [--show NAME] [--apply]
                                            [--force NAME …]
     uv run python tools/migrate_library.py --library PATH --to FOLDER [--force NAME …]
 
 The owner's decision of 2026-10-25: both Macs always run the newest build,
-so every preset in the library is moved to the newest schema and old
+so every loadable patch in the library is moved to the newest schema and old
 schemas stop circulating. Since plan 44 D3 (rows 611–625) that is
 ``hyperspace.preset/10`` — plan 36 T3's graph that says everything (every
 edge a wire, ``/7``), the GRAPH page's groups (``/8``), the one orbit
-camera (``/9``, plan 43 C2: the eye in every preset's ``values``) and the
+camera (``/9``, plan 43 C2: the eye in every loadable patch's ``values``) and the
 look made whole (``/10``: the hands' and clouds' looks — ``ghost.*`` but
 ``ghost.mirror``, ``cloud.*`` — in ``values`` and the bus cuts in
 ``bus``, where until now the open show held them; no ``modules`` labels,
 no ``desk_template``) — and every show to ``hyperspace.project/3`` (the
-rig's session, the pads and ``startup``). A load reads an older file
+meta controller, the pads and ``startup``). A load reads an older file
 through the one-way migration (`graphmigrate.seven`, then `nine`, then
 `ten`), so a library not yet at ``/9`` takes the ``/9`` step first in the
-same pass: one run, one backup. Each preset in ``<library>/presets/``,
+same pass: one run, one backup. Each loadable patch in ``<library>/presets/``,
 every folder down as the library lists them (plan 48; not ``trash/``,
 not a hidden folder, not a backup, not a dot-file) is loaded and saved untouched
 by the app itself (`hyperspace.headless.resave`: the registry, library,
-router and presets the tests save through) in a scratch library — the
-library's module presets beside it, and **the rig's
+router and loadable patches the tests save through) in a scratch library — the
+library's module presets beside it, and **the meta controller's
 show open** (below) — and three checks are made:
 
 - it loads (a file this build refuses is left as it is);
@@ -37,19 +37,19 @@ show open** (below) — and three checks are made:
   Both are drawn by *this* build — the original through the same one-way
   migration a load runs — so "round-trip picture: same" proves the
   written ``/10`` draws what this build draws of the old file with the
-  rig's show open (the eye included), never that it draws what an older
-  build drew. That parity is the migration's tests and the eye: a preset
+  meta controller's show open (the eye included), never that it draws what an older
+  build drew. That parity is the migration's tests and the eye: a loadable patch
   with a look-back or a dream is eyeballed live on the old and new build
   (hand check 366, party-wake).
 
-**The rig's show** (plan 43 C2, plan 44 D3): an old preset drew through
+**The meta controller's show** (plan 43 C2, plan 44 D3): an old loadable patch drew through
 the eye, the hands' and clouds' looks and the bus cuts the open show held,
 so its ``/10`` takes that show's — the eye and the looks from its
 ``session``, the camera node's GRAPH position from its ``layout``, the
-cuts from its ``rig`` — exactly as the app hands them to an old preset's
+cuts from its ``rig`` — exactly as the app hands them to an old loadable patch's
 load (`library.Project.old_eye`, `old_look`, `old_cuts`): **the show's
-cuts are written into every preset the library holds** (as the ``/9``
-step wrote the show's eye into every preset), since each preset now says
+cuts are written into every loadable patch the library holds** (as the ``/9``
+step wrote the show's eye into every loadable patch), since each loadable patch now says
 for itself which cables stand.
 The show is ``--show NAME`` (a file stem under ``<library>/projects/``),
 else this Mac's last show (``<home>/last_show``), else the library's one
@@ -65,7 +65,7 @@ held the eye (the app's own backups, `library.LOOK_BACKUP`, `EYE_BACKUP`).
 everything, so ``--apply`` measures every document of the library still
 without the taper marker (``units["fx.depth"] == "taper"``) along the
 effect tapers before anything else — the patches and this Mac's ``bindings.json`` (kept as ``bindings.json.bak-v3``) as
-retaper_routes.py writes them. A preset is retapered by its own resave
+retaper_routes.py writes them. A loadable patch is retapered by its own resave
 (its load measures an unmarked file's depths, its save writes the marker),
 so every ``/10`` is along the tapers. The dry run says what it would
 retaper.
@@ -86,7 +86,7 @@ good. A file whose load or save raises (a frame that does not settle
 included) is skipped alone; the run goes on. No pose is written: an old
 file had none and keeps spinning (`headless.resave` takes it back out).
 
-The default is a **dry run**: for each preset its file, its name, old schema
+The default is a **dry run**: for each loadable patch its file, its name, old schema
 → new, the notes its load made and the checks' results; the show and the
 eye it hands on; the shows and the documents it would rewrite. Nothing is
 written anywhere but a scratch folder.
@@ -94,22 +94,22 @@ written anywhere but a scratch folder.
 ``--apply`` first copies the whole library folder to a local backup,
 ``~/Hyperspace/library-backup-<YYYYMMDD-HHMMSS>/`` (the machine's home,
 ``$HYPERSPACE_HOME`` if set — never inside the library), and says where;
-then retapers, then computes and rewrites each preset that passed (against
+then retapers, then computes and rewrites each loadable patch that passed (against
 the retapered module presets; a dry run computes against a retapered scratch
 copy, so it says what --apply writes), in place and
 atomically (a dot-named temp file renamed over it), under its own file
 name, then the shows. A file whose bytes the save would not change
-(already ``/10`` and a fixed point) is left untouched. A preset that failed
+(already ``/10`` and a fixed point) is left untouched. A loadable patch that failed
 a check is **not written** and is listed at the end — unless ``--force
 NAME`` (its file stem; repeatable) names it, which writes it despite a
 picture or fixed-point difference (a file that does not load has nothing
 to write). No name changes. **Run it between shows, with both Macs on this
 build**: a Mac on an older build refuses a ``/10`` and a ``/3`` show.
 
-``--to FOLDER`` (plan 36 T3) writes each preset that passed into FOLDER
+``--to FOLDER`` (plan 36 T3) writes each loadable patch that passed into FOLDER
 under its own file name instead — the library is read, never written, so
 no backup is made, nothing in the library is retapered and no show is
-rewritten (the presets are computed against a retapered scratch copy). The test
+rewritten (the loadable patches are computed against a retapered scratch copy). The test
 corpus was made so: ``--library <a copy holding tests/corpus/presets>
 --to tests/corpus/presets`` (with ``$HYPERSPACE_HOME`` pointed at a
 scratch folder; no show, so the build's default eye — what the goldens
@@ -117,7 +117,7 @@ draw with).
 
 The library is ``--library``, else the config's ``[library] path`` (the
 machine home's config.toml), else the machine home. Exit status: 0 when
-every preset is (or would be) migrated or already was, 1 when any was (or
+every loadable patch is (or would be) migrated or already was, 1 when any was (or
 would be) skipped, 2 when the library is not there or ``--show`` names no
 show.
 """
@@ -144,17 +144,17 @@ SHOW_SUFFIX = ".hyp.json"
 BACKUP_PREFIX = "library-backup-"
 NEWEST = "hyperspace.preset/10"           # plan 44 D3 (rows 611–625)
 SHOW_NEWEST = "hyperspace.project/3"
-# what a load note says of a graph section the build refused (preset.py:
+# what a load note says of a graph section the build refused (loadable.py:
 # `GraphSection.read`, `UNWIRED_SAID`)
 NOT_READ = "not read — black"
 
 
 @dataclass
 class Result:
-    """What one preset's checks found."""
+    """What one loadable patch's checks found."""
 
     file: str                       # the file's path under presets/ (party/trip.json), kept
-    name: str = ""                  # the preset's own name
+    name: str = ""                  # the loadable patch's own name
     old: str = "?"                  # its schema as found
     new: str = ""                   # the schema it saves as
     notes: list[str] = field(default_factory=list)
@@ -221,7 +221,7 @@ def _read(path: Path) -> dict | None:
 
 def rig_show(library: Path, home: Path, name: str | None = None
              ) -> tuple[Path | None, dict | None, str]:
-    """The show whose eye the presets take (plan 43 C2): `name` (a file
+    """The show whose eye the loadable patches take (plan 43 C2): `name` (a file
     stem), else this Mac's last show if the library holds it, else the
     library's only show — (its path or None, its `headless.show_seed` or
     None when it kept no eye and no camera position, a line saying which).
@@ -277,9 +277,9 @@ def rig_show(library: Path, home: Path, name: str | None = None
 
 def check(path: Path, library: Path, scratch: Path, *, picture=None,
           show: dict | None = None, file: str | None = None) -> Result:
-    """Load, save, re-save and draw preset file `path` (`picture`: the
-    golden rig's, `golden_frames.picture`; a test may hand its own), the
-    rig's show `show` (a `headless.show_seed`) open. An old file whose
+    """Load, save, re-save and draw loadable patch file `path` (`picture`: the
+    golden meta controller's, `golden_frames.picture`; a test may hand its own), the
+    meta controller's show `show` (a `headless.show_seed`) open. An old file whose
     section the load did not read is an error: never written (`NOT_READ`).
     `file` is what the result calls it — its path under ``presets/``
     (``party/trip.json``, plan 48 stage 2), else its file name."""
@@ -320,7 +320,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
     try:
         before, _ = picture(path, library=library, show=show)
         after, _ = picture(nine, library=library, show=show)
-    except Exception as e:  # noqa: BLE001 — a preset the rig cannot draw is a skip, said
+    except Exception as e:  # noqa: BLE001 — a loadable patch the rig cannot draw is a skip, said
         res.picture = f"not drawn: {type(e).__name__}: {e}"
         return res
     moved = sum(1 for a, b in zip(before, after) if a != b) + abs(len(before) - len(after))
@@ -366,7 +366,7 @@ def retaper_plan(library: Path, home: Path) -> list[tuple[Path, object]]:
     """What the retaper would write first (plan 43 C2: one bump moves
     everything): every patch and this Mac's bindings.json
     still without the taper marker, each with its `retaper_routes.Change`.
-    The presets are retapered by their own resave."""
+    The loadable patches are retapered by their own resave."""
     from hyperspace import routing
     from hyperspace.fx import FxState
 
@@ -397,10 +397,10 @@ def retaper_write(todo) -> list[str]:
 
 
 def shared_retapers(library: Path, todo) -> bool:
-    """Whether `retaper_plan` would rewrite a document a preset's load reads
+    """Whether `retaper_plan` would rewrite a document a loadable patch's load reads
     beside it (`headless.SHARED_FOLDERS`, the module presets — none today:
     the retaper rewrites patches and `bindings.json`, plan 44 D3 retired the
-    desk templates) — else the library itself is what every preset is
+    desk templates) — else the library itself is what every loadable patch is
     computed against."""
     from hyperspace.headless import SHARED_FOLDERS
     for path, _c in todo:
@@ -416,10 +416,10 @@ def shared_retapers(library: Path, todo) -> bool:
 
 
 def retapered_copy(library: Path, todo, dest: Path) -> Path:
-    """The folders copied beside a preset for its load (`headless.SHARED_FOLDERS`:
+    """The folders copied beside a loadable patch for its load (`headless.SHARED_FOLDERS`:
     the module presets) copied to `dest`, each document
     of `retaper_plan`'s that lives there written as the retaper writes it —
-    what a dry run or --to computes every preset's /10 against, so it is what
+    what a dry run or --to computes every loadable patch's /10 against, so it is what
     --apply (which retapers the library itself first) writes."""
     from hyperspace.headless import SHARED_FOLDERS
     for folder in SHARED_FOLDERS:
@@ -471,7 +471,7 @@ def show_write(todo) -> list[str]:
 
 
 # plan 50: the folders in a library root that hold no module presets — the
-# document kinds', the shows', the trash, the old routing presets
+# document kinds', the shows', the trash, the old routing loadable patches
 NOT_MODULES = (LOADABLE, PROJECTS, "patches", "trash", "bindings")
 
 
@@ -572,7 +572,7 @@ def backup(library: Path, home: Path) -> Path:
 def write(path: Path, data: bytes) -> None:
     """`data` over `path` atomically: a dot-named temp file beside it (no
     ``*.json``, so neither the library nor a cloud client takes it for a
-    preset), then renamed over the file."""
+    loadable patch), then renamed over the file."""
     tmp = path.parent / f".{path.name}.migrate-{time.time_ns()}.tmp"
     try:
         with open(tmp, "xb") as f:
@@ -585,8 +585,8 @@ def write(path: Path, data: bytes) -> None:
 def _forced(r: Result, forced: set[str], stems: dict[str, int]) -> bool:
     """Whether ``--force`` names `r`: by its file under ``presets/`` less
     ``.json`` (``party/trip``), or by its stem alone (``trip``) only when no
-    other preset of the library has that stem (`stems`: each stem's count;
-    review of #351 — one name never forces a preset in every folder)."""
+    other loadable patch of the library has that stem (`stems`: each stem's count;
+    review of #351 — one name never forces a loadable patch in every folder)."""
     if r.file.removesuffix(".json") in forced:
         return True
     stem = Path(r.file).stem
@@ -603,15 +603,15 @@ def stem_counts(results) -> dict[str, int]:
 
 
 def ambiguous_forces(results, forced: set[str], stems: dict[str, int]) -> list[str]:
-    """The ``--force`` names that are no preset's path but a stem more than
-    one preset has (`stems`, `stem_counts`): each forces none, said, so the
+    """The ``--force`` names that are no loadable patch's path but a stem more than
+    one loadable patch has (`stems`, `stem_counts`): each forces none, said, so the
     owner gives the folder path."""
     paths = {r.file.removesuffix(".json") for r in results}
     return sorted(n for n in forced if n not in paths and stems.get(n, 0) > 1)
 
 
 def line(r: Result) -> str:
-    """One preset's report line."""
+    """One loadable patch's report line."""
     head = f"{r.file:40s} {r.name!r:36s} {r.old.rpartition('/')[2] or '?':>2} → "
     if r.error:
         return f"{r.file:40s} {'':36s} {r.old.rpartition('/')[2]:>2} → --  SKIP: {r.error}"
@@ -668,10 +668,10 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     print(said)
     print("(round-trip picture: the old file as this build loads it, the show open, vs its "
           "/10 — not parity with an older build; eyeball dream presets live, hand check 366)")
-    # (review 5: every preset's /10 is computed against the module presets as the
+    # (review 5: every loadable patch's /10 is computed against the module presets as the
     # retaper leaves them — with --apply the library is backed up and
     # retapered first; a dry run and --to read a retapered scratch copy, so
-    # they report what --apply writes. --to writes only presets.)
+    # they report what --apply writes. --to writes only loadable patches.)
     retapers = retaper_plan(library, home)
     shows = show_plan(library) if a.to is None else []
     if retapers:

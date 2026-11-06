@@ -27,7 +27,7 @@ def _roll(r, app, normal=ROLL45, **kw):
 
 
 def test_a_named_hand_route_follows_its_axis_whatever_the_dofs_order(app):
-    """One preset row, two rigs: the default six dofs (right roll is lane 9)
+    """One patch row, two rigs: the default six dofs (right roll is lane 9)
     and a trimmed, reordered list (right roll is lane 5). The row follows the
     right roll on both — through the same router, so a republished layout
     re-resolves the cached address."""
@@ -75,7 +75,7 @@ def test_a_name_the_meta_lacks_leaves_the_row_dormant(app):
 
 
 def test_a_numeric_hand_route_still_reads(app):
-    """`hand:<i>` is the lane at index i — a saved user preset with numbers
+    """`hand:<i>` is the lane at index i — a saved user loadable patch with numbers
     works as it did, with or without the adapter's map."""
     r = rig()
     app.table.add(Binding("hand:9", "view.inst_amp", "position"))          # right.roll
@@ -153,7 +153,7 @@ def test_the_routing_page_offers_and_writes_names(app):
 
 
 def test_a_learn_knows_a_numbered_row_is_the_same_axis(app):
-    """Review of PR #70: a preset saved with numbers keeps `hand:7`; a learn
+    """Review of PR #70: a loadable patch saved with numbers keeps `hand:7`; a learn
     writes `hand:right.y`. Learn compares the lanes, not the strings: a
     learn onto the same param refreshes the gate with no Replace / Keep
     question, and a learn of the right height elsewhere moves the numbered

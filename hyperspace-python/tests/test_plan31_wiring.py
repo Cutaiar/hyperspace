@@ -1,6 +1,6 @@
 """Plan 31 W1, the wiring: the envelopes as a second modulator bank, the
 sequencer stepping inside `Router.modulate` and firing them, and the lot
-carried by undo and the preset — end to end through a real Router and
+carried by undo and the loadable patch — end to end through a real Router and
 Registry on a deterministic clock (`Clock(now=…)`, ticked by hand).
 
 The frame here is the app's: the clock ticks, `router.modulate` runs the
@@ -392,7 +392,7 @@ def test_undo_of_a_step_toggle():
         undo.install(None)
 
 
-# ---- the preset ----
+# ---- the loadable patch ----
 
 @pytest.fixture()
 def app(tmp_path):
@@ -400,8 +400,8 @@ def app(tmp_path):
 
 
 def make_app(tmp_path, plan31: bool = True):
-    """The app's registry, library, router and presets over `tmp_path`,
-    seeded with the corpus first (conftest.seed: the presets the build once
+    """The app's registry, library, router and loadable patches over `tmp_path`,
+    seeded with the corpus first (conftest.seed: the loadable patches the build once
     shipped, the dream module presets and the party show, so the home is
     the one these tests were written on); `plan31` False is a build from
     before plan 31 — no envelopes, no sequencer. (Row 394:
@@ -446,7 +446,7 @@ def test_a_loadable_carries_the_pattern_and_the_envelopes(app):
     assert reg["seq.1.1"].value is True and app.seq.lanes[0].steps[0] == 1.0
     assert reg["env.2.attack"].value == pytest.approx(0.5)
     assert app.envs.ids() == [1, 2, 3, 4, 5, 6] and app.envs.voice(6).decay == 1.5
-    assert app.seq.run                            # the transport is the session's
+    assert app.seq.run                            # the transport is the meta controller's
     assert app.loaded_patch.document("pattern")["values"] == doc["values"]
 
 
@@ -478,7 +478,7 @@ def test_nan_never_reaches_a_param_from_an_idle_bank():
     assert r.box.x == 0.0 and not math.isnan(r.reg["t.x"].value)
 
 
-# ---- plan 31 P: the envelopes and the sequencer in the preset (row 394: /6) ----
+# ---- plan 31 P: the envelopes and the sequencer in the loadable patch (row 394: /6) ----
 
 # (plan 43 C2: V6 is the save schema, named for the row it pinned)
 V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/10"
@@ -496,7 +496,7 @@ def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
     same file."""
     from hyperspace import loadable
 
-    app.reg["seq.run"].set(True)                  # the transport is never the preset's
+    app.reg["seq.run"].set(True)                  # the transport is never the loadable patch's
     doc = app.loaded_patch.document("plain")
     assert doc["schema"] == V6
     assert "lfos" not in doc and "envs" not in doc
@@ -512,7 +512,7 @@ def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
     first = path.read_bytes()
     assert first == loadable.dumps(doc).encode()
     # and stable through a load (once a load has read the file's integers
-    # back as floats, as every preset since plan 13 does)
+    # back as floats, as every loadable patch since plan 13 does)
     assert app.loaded_patch.load("plain") == []
     again = app.loaded_patch.save_as("plain").read_bytes()
     assert app.loaded_patch.load("plain") == []
@@ -560,7 +560,7 @@ def test_a_3_round_trips_and_a_2_after_it_puts_the_defaults_back(app):
 
 
 def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
-    """The library takes /2 … /6 (`preset.VERSIONS`): a /2 and a /3 document
+    """The library takes /2 … /6 (`loadable.VERSIONS`): a /2 and a /3 document
     load to the same state (/2 → /3 is the identity); a build from before
     plan 31, whose kind takes /2 alone, refuses this build's save whole
     instead of loading it and stripping the pattern on its next save."""
@@ -598,7 +598,7 @@ def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
     """The corpus's seq-demo: kick 1 and 5, snare 3 and 7, hats on every
     step at half a bar, one-shot envelopes on brightness, zoom and the
     deconverge. It loads stopped (decision 8); with play pressed at the
-    golden rig's clock — triggered at T0 = 2.0, play and a restart on the
+    golden meta controller's clock — triggered at T0 = 2.0, play and a restart on the
     first frame, eight 60 Hz frames — the hashed frame is 117 ms into the
     kick; the hat that fired with it (70 ms) is over and the snare (step 3,
     at 2.267) is still to come. tools/golden_frames.py draws that frame;

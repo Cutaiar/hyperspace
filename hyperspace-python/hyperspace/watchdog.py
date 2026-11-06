@@ -1,7 +1,7 @@
 """The stall log — a frozen show leaves a stack dump behind (plan 14 WP1).
 
 Everything below writes ``<home>/stall.log``, each entry a ``=== <kind>``
-header (the wall time, the loaded preset) and every thread's stack
+header (the wall time, the loaded loadable patch) and every thread's stack
 (``faulthandler.dump_traceback(all_threads=True)``):
 
 **The whole loop stalls** (`Watchdog`). A daemon thread watches the frame
@@ -41,7 +41,7 @@ main thread:
 - ``non-finite`` — a param dropped a NaN / inf offset or value
   (`Registry.nonfinite`), once per param.
 - ``warning`` — a show problem worth a banner, once per message (a
-  preset that asks for the dream — `dream.on` with `dream.mix` above 0 —
+  loadable patch that asks for the dream — `dream.on` with `dream.mix` above 0 —
   with no worker to dream; dismissed, it does not come back).
 
 The banner keeps a render error after the render recovers — its last
@@ -134,7 +134,7 @@ class Watchdog:
         return True
 
     def log(self, kind: str, headline: str, body: str = "") -> bool:
-        """One entry: the header (kind, wall time, preset, `headline`), then
+        """One entry: the header (kind, wall time, loadable patch, `headline`), then
         `body`, then every thread's stack. Never raises."""
         if self._file is None:
             return False

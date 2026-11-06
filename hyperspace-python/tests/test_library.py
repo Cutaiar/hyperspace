@@ -1,4 +1,4 @@
-"""The preset & project library: files, dirty state, live edits.
+"""The loadable patch & project library: files, dirty state, live edits.
 
 Every test builds its library on tmp_path (or points HYPERSPACE_HOME at
 one) — nothing here may touch ~/Hyperspace.
@@ -11,8 +11,8 @@ from types import SimpleNamespace
 import pytest
 from conftest import (
     OWNER_KNOB,
-    OWNER_PAD,
     OWNER_LOADABLES,
+    OWNER_PAD,
     OWNER_ROW,
     OWNER_SHOWS,
     boot_home,
@@ -23,14 +23,14 @@ from conftest import (
     tree,
 )
 
-from hyperspace import config, library, params, patches, placement, loadable, routing
+from hyperspace import config, library, loadable, params, patches, placement, routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, SCENES_DIR, Control
 from hyperspace.library import Library, LibraryError, migrate_doc, scene_doc, slug
-from hyperspace.params import build_registry
 from hyperspace.loadable import LoadedPatch
+from hyperspace.params import build_registry
 from hyperspace.routing import Bindings as _Bindings
 from hyperspace.routing import Router as _Router
 from hyperspace.view import ViewState
@@ -52,7 +52,7 @@ def edit(path, fn):
 
 
 def make(home, show: str | None = "house"):
-    """Over a home seeded with the corpus (conftest.seed: the presets the
+    """Over a home seeded with the corpus (conftest.seed: the loadable patches the
     build once shipped and the party and house shows) that opened `show`
     last — the house moods these tests were written on (None: the party
     show, the seed's `last_show`)."""
@@ -154,10 +154,10 @@ def test_slug():
 
 
 def test_macros_are_patch_state(rig, tmp_path):
-    """Plan 13 WP1 / WP2: the macros are performance state. A preset
-    carries them and a project (the session) does not; the module strips
+    """Plan 13 WP1 / WP2: the macros are performance state. A loadable patch
+    carries them and a project (the meta controller) does not; the module strips
     still list no `macro` group (a macro's meaning is its subscribers,
-    which live in the preset). The live table keeps them too until plan
+    which live in the loadable patch). The live table keeps them too until plan
     13 WP5 (test_routing)."""
     lib, reg = rig.lib, rig.reg
     assert "macro" not in lib.groups() and "view" in lib.groups()
@@ -166,22 +166,22 @@ def test_macros_are_patch_state(rig, tmp_path):
     lib.project.save_slot(0)
     assert lib.read("presets", lib.project.bank[0])["values"]["macro.2"] == pytest.approx(0.3)
     m.set_value(0.7)
-    assert lib.is_dirty("presets")                   # the loaded preset tracks it
+    assert lib.is_dirty("presets")                   # the loaded loadable patch tracks it
     lib.project.load_slot(0)
-    assert m.value == pytest.approx(0.3)             # the preset brought it back
+    assert m.value == pytest.approx(0.3)             # the loadable patch brought it back
     path = lib.project.save("Show")
     doc = json.loads(path.read_text())
     assert "macro.2" not in doc["session"] and "values" not in doc
     assert "macro" not in doc["modules"]
     m.set_value(0.1)
-    assert not lib.project.is_dirty()                # not the session's
+    assert not lib.project.is_dirty()                # not the meta controller's
 
 
 def test_a_project_keeps_the_meta_apart(rig, tmp_path):
-    """Plan 13 §2.2 / §4: a project file (schema 2) holds the session part
-    as `session` and the bank as names; the performance is the preset's.
-    is_dirty sees the session, the bank and the startup preset; a file
-    that lacks a session id takes the loaded state, so it opens clean."""
+    """Plan 13 §2.2 / §4: a project file (schema 2) holds the meta controller part
+    as `session` and the bank as names; the performance is the loadable patch's.
+    is_dirty sees the meta controller, the bank and the startup loadable patch; a file
+    that lacks a meta controller id takes the loaded state, so it opens clean."""
     lib, reg = rig.lib, rig.reg
     reg["view.shape"].set(5)
     reg["master.gain"].set(2.0)
@@ -194,9 +194,9 @@ def test_a_project_keeps_the_meta_apart(rig, tmp_path):
     assert doc["bank"] == lib.project.bank[:8] == library.bank_doc(lib.project.bank)
     assert doc["startup"] == "BIG BLUE WAVE"
     assert not lib.project.is_dirty()
-    reg["view.shape"].set(6)                         # a performance move: the preset's
+    reg["view.shape"].set(6)                         # a performance move: the loadable patch's
     assert not lib.project.is_dirty()
-    reg["master.gain"].set(1.0)                      # a session move dirties the project
+    reg["master.gain"].set(1.0)                      # a meta controller move dirties the project
     assert lib.project.is_dirty()
     lib.project.save()
     lib.project.startup = "EMBER ORBIT"              # …as does the startup combo
@@ -210,7 +210,7 @@ def test_a_project_keeps_the_meta_apart(rig, tmp_path):
     assert not lib.project.is_dirty()
 
 
-# ---------------------------------------------------------------- presets
+# ---------------------------------------------------------------- loadable patches
 
 def test_load_fills_missing_ids_from_the_default_loadable(rig, tmp_path):
     lib = rig.lib
@@ -314,8 +314,8 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
 
 def test_delete_and_rename(rig, tmp_path):
     """Audit L5: `rename` had no caller and went; delete deletes any file
-    (False only when there is no such preset). Plan 19 WP4 brings a rename
-    back with a caller (the preset list), for the presets' group — and
+    (False only when there is no such loadable patch). Plan 19 WP4 brings a rename
+    back with a caller (the preset list), for the loadable patches' group — and
     plan 40 the patches' (`RENAMABLE`): a module preset is named by shows
     and scenes."""
     lib = rig.lib
@@ -324,7 +324,7 @@ def test_delete_and_rename(rig, tmp_path):
     with pytest.raises(LibraryError, match="only a preset can be renamed"):
         lib.rename("camera", "Wide", "Tall")
     assert library.RENAMABLE == ("presets", "patches")
-    assert not lib.delete("band", "Percussive")             # no such preset
+    assert not lib.delete("band", "Percussive")             # no such loadable patch
     assert not lib.delete("camera", "never was")
     assert lib.delete("camera", "Wide")
     assert lib.list("camera") == [] and lib.current("camera") is None
@@ -332,7 +332,7 @@ def test_delete_and_rename(rig, tmp_path):
 
 def test_a_group_registered_after_attach_has_a_default_too(rig):
     """Audit L6: the overlay's output.* registered after attach(), so reset
-    and the dirty dot ignored them until a preset saved them. Now a group's
+    and the dirty dot ignored them until a loadable patch saved them. Now a group's
     fresh values are adopted the first time anyone asks about it."""
     lib, reg = rig.lib, rig.reg
     late = SimpleNamespace(alpha=1.0)
@@ -403,10 +403,10 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
 # --------------------------------------------------------- document kinds
 
 def test_loadables_are_the_librarys_one_document_kind(rig, tmp_path):
-    """Audit L1, closed by plan 13 WP5: one preset system. The routing
-    presets' kind is gone (was test_routing_presets_are_a_document_kind_of_
+    """Audit L1, closed by plan 13 WP5: one loadable patch system. The routing
+    loadable patches' kind is gone (was test_routing_presets_are_a_document_kind_of_
     the_library); what they were — legacy6, lfo-breathe, the hands-* — are
-    presets, which list, load, save, dirty and delete through the library
+    loadable patches, which list, load, save, dirty and delete through the library
     like any module's. A user's old bindings/ folder is no group."""
     from hyperspace.routing import Binding
 
@@ -442,7 +442,7 @@ def test_loadables_are_the_librarys_one_document_kind(rig, tmp_path):
 
 
 def test_a_bad_loadable_is_reported_not_fatal(rig, tmp_path):
-    """Was test_a_bad_routing_preset_is_reported_not_fatal: a preset of an
+    """Was test_a_bad_routing_preset_is_reported_not_fatal: a loadable patch of an
     unknown schema, or with a row that is no row, is refused with a
     LibraryError and the rest of the tree is fine."""
     lib = rig.lib
@@ -465,7 +465,7 @@ def test_a_bad_loadable_is_reported_not_fatal(rig, tmp_path):
 
 
 def test_the_loadable_kind_reaches_loadables_at_call_time(rig):
-    """Hot reload re-classes `Presets` in place; the kind's hooks must not
+    """Hot reload re-classes `LoadedPatch` in place; the kind's hooks must not
     hold the pre-reload bound methods (was the routing kind's test)."""
     lib = rig.lib
     seen = []
@@ -476,7 +476,7 @@ def test_the_loadable_kind_reaches_loadables_at_call_time(rig):
 
 def test_a_project_naming_the_old_routing_layer_is_ignored(rig, tmp_path):
     """A hand-edited project naming a `bindings` module (the routing
-    presets' old group) loads, and names nothing current."""
+    loadable patches' old group) loads, and names nothing current."""
     lib = rig.lib
     p = tmp_path / "projects" / "odd.hyp.json"
     p.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "Odd",
@@ -487,8 +487,8 @@ def test_a_project_naming_the_old_routing_layer_is_ignored(rig, tmp_path):
 
 def test_a_project_never_carries_the_loaded_loadable(rig, tmp_path):
     """Audit L3, and plan 13 §2.2: `Project.io` is gone, and the loaded
-    preset (routes and all) stays out of a project's modules — the bank
-    names presets, the project holds the session."""
+    loadable patch (routes and all) stays out of a project's modules — the bank
+    names loadable patches, the project holds the meta controller."""
     lib = rig.lib
     lib.load("presets", "hands-play")
     doc = json.loads(lib.project.save("Set").read_text())
@@ -540,7 +540,7 @@ def test_bad_files_are_reported_not_fatal(rig, tmp_path):
 
 def test_schema_migration_table():
     """The shows' ladder (plan 50: the only one `migrate_doc` serves — a
-    preset's is `graphmigrate.forward`, a fragment's `patches.forward`)."""
+    loadable patch's is `graphmigrate.forward`, a fragment's `patches.forward`)."""
     with pytest.raises(LibraryError, match="no schema"):
         migrate_doc({}, "hyperspace.project")
     with pytest.raises(LibraryError, match="not a hyperspace.project"):
@@ -577,7 +577,7 @@ def test_project_save_load_new(rig, tmp_path):
     assert lib.project.list() == ["gig", "house", "party"]   # house, party: the seed's
     doc = json.loads(p.read_text())
     assert doc["schema"] == "hyperspace.project/3" and doc["name"] == "Gig"
-    # a performance group's label is the preset's, never the project's
+    # a patch group's label is the loadable patch's, never the project's
     assert doc["modules"] == {"band": "Percussive"}
     assert doc["session"]["master.gain"] == 2.5 and "camera.zoom" not in doc["session"]
     assert doc["bank"][2] == "STROBE CAGE"
@@ -586,7 +586,7 @@ def test_project_save_load_new(rig, tmp_path):
 
     lib.project.new()
     assert lib.project.name == "untitled" and lib.project.path is None
-    assert rig.chain.gain == 1.0                                     # a fresh session…
+    assert rig.chain.gain == 1.0                                     # a fresh meta controller…
     assert lib.current("band") is None                               # …no module preset,
     assert lib.project.bank == [None] * library.SLOTS                # …an empty bank
     assert lib.project.startup is None                               # …and nothing to start on
@@ -595,8 +595,8 @@ def test_project_save_load_new(rig, tmp_path):
     assert missing == [] and lib.project.path == p
     assert rig.chain.gain == 2.5
     assert lib.current("band") == "Percussive" and not lib.is_dirty("band")
-    assert lib.project.active == 0                                   # the startup preset's slot
-    # a module whose preset is gone is still "loaded", the values speak for it
+    assert lib.project.active == 0                                   # the startup loadable patch's slot
+    # a module whose loadable patch is gone is still "loaded", the values speak for it
     lib.save_as("band", "Mine")
     lib.project.save()
     lib.delete("band", "Mine")
@@ -640,7 +640,7 @@ def test_editing_the_loaded_loadable_reflects_in_the_app(rig, tmp_path):
     edit(path, lambda d: d["values"].__setitem__("view.bright", 3.0))
     assert lib.poll(now=3.0)
     assert rig.view.bright == 3.0 and "view/Live" in lib.status
-    # a file for a preset that is not loaded changes nothing but the listing
+    # a file for a loadable patch that is not loaded changes nothing but the listing
     other = tmp_path / "patches" / "view" / "other.json"
     other.write_text(json.dumps({"schema": "hyperspace.preset/1", "group": "view",
                                  "name": "Other", "values": {"view.bright": 0.1}}))
@@ -661,7 +661,7 @@ def test_editing_the_open_project_reloads_it(rig, tmp_path):
     lib = rig.lib
     p = lib.project.save("Set")
     lib.poll(now=1.0)
-    rig.view.shape = 3                                 # the performance, the preset's
+    rig.view.shape = 3                                 # the performance, the loadable patch's
     edit(p, lambda d: (d["session"].__setitem__("master.gain", 4.0),
                        d["bank"].__setitem__(0, "RENAMED")))
     assert lib.poll(now=2.0)
@@ -688,7 +688,7 @@ def test_a_band_presets_normalisation_switch_round_trips(rig):
 def test_the_librarys_shows_are_listed_and_load_by_name(rig, tmp_path):
     """The load combo lists the library's shows (`projects/*.hyp.json`;
     plan 12's `party`, from the seed); opening one by name lands its bank,
-    and its startup preset with it."""
+    and its startup loadable patch with it."""
     lib = rig.lib
     assert lib.project.list() == ["house", "party"]
     assert lib.project.load("party") == []
@@ -711,7 +711,7 @@ def trash(home, group) -> list:
 
 def test_a_save_over_a_loadable_keeps_the_old_file_in_the_trash(rig, tmp_path, monkeypatch,
                                                               capsys):
-    """Every road that overwrites a user preset file copies it to
+    """Every road that overwrites a user loadable patch file copies it to
     `<home>/trash/<group>/` first — the strip's Save and as…, ⇧F — with
     the file's own name and a date; the copy is the old file, byte for
     byte. A copy that fails does not stop the save: the warning says so."""
@@ -726,7 +726,7 @@ def test_a_save_over_a_loadable_keeps_the_old_file_in_the_trash(rig, tmp_path, m
     assert kept.name.startswith("loud-one.") and kept.suffix == ".json"
     stamp = kept.name[len("loud-one."):-len(".json")]
     assert len(stamp) == 15 and stamp[8] == "-" and stamp.replace("-", "").isdigit()
-    # a preset (the document kind), by ⇧F: the bank's save
+    # a loadable patch (the document kind), by ⇧F: the bank's save
     lib.project.save_slot(2)                                  # over STROBE CAGE, the seed's
     name = lib.project.bank[2]
     mine = lib.path_of("presets", name)
@@ -778,7 +778,7 @@ def test_a_delete_keeps_the_file_in_the_trash_or_does_not_delete(rig, tmp_path, 
 
 
 def test_a_save_that_changes_nothing_trashes_nothing(rig, tmp_path):
-    """Fork 6 (b): Save on an unchanged preset leaves the trash alone."""
+    """Fork 6 (b): Save on an unchanged loadable patch leaves the trash alone."""
     lib, reg = rig.lib, rig.reg
     lib.save_as("view", "Same")
     for _ in range(3):
@@ -811,7 +811,7 @@ def test_two_trashings_in_one_second_do_not_collide(rig, tmp_path, monkeypatch):
 
 
 def test_the_trash_is_no_group_and_is_never_watched(rig, tmp_path):
-    """`trash` is listed as no group, its files as no presets, and the file
+    """`trash` is listed as no group, its files as no loadable patches, and the file
     watch never sees them: editing or adding a trashed file re-applies
     nothing."""
     lib, reg = rig.lib, rig.reg
@@ -939,7 +939,7 @@ def test_a_bank_is_written_as_far_as_its_last_filled_slot():
 
 def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     """The fixture every "on a copy" test stands on: two shows with
-    eight-name banks, three presets whose desks hold the sixteen shape pads
+    eight-name banks, three loadable patches whose desks hold the sixteen shape pads
     as today's writer wrote them (one with a re-aimed pad and a learned
     knob), a bindings.json with the owner's row, and the machine's files."""
     home = owner_home
@@ -980,7 +980,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
 def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     """The owner's files, rule 1 (on a copy): a show with an eight-name
     bank opens, padded to twenty-four in memory, clean — and is not
-    rewritten: after a launch, preset loads, home, opening the other show
+    rewritten: after a launch, loadable patch loads, home, opening the other show
     and a quit, every file in the home but `last_show` and `windows.json`
     (written as they always were) has the bytes and the mtime it had —
     and but `bindings.json`, which the first launch of plan 19 WP2 rewrites
@@ -1020,8 +1020,8 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
 
 
 def test_loading_never_rewrites_a_loadable_file(owner_home):
-    """The owner's files (on a copy): every preset in the home loads — from
-    the bank, the strip and the file watch — and no preset file changes by
+    """The owner's files (on a copy): every loadable patch in the home loads — from
+    the bank, the strip and the file watch — and no loadable patch file changes by
     a byte or a tick of its mtime."""
     home = owner_home
     def loadables_of(root):
@@ -1051,7 +1051,7 @@ def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home)
     lib, pr = r.lib, r.lib.project
     show = home / "projects" / "mine.hyp.json"
     was = json.loads(show.read_text())
-    pr.startup = "NIGHT TWO"                               # the startup preset, in memory
+    pr.startup = "NIGHT TWO"                               # the startup loadable patch, in memory
     pr.write()
     doc = json.loads(show.read_text())
     assert doc == {**was, "startup": "NIGHT TWO"} and len(doc["bank"]) == 8
@@ -1126,7 +1126,7 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
         pr.save_slot(12)                                   # ⇧click on a far slot
         assert pr.bank[12] is None and show.read_bytes() == old
         assert lib.current("presets") == "PRESET 13" and pr.active == -1   # in no slot: none lit
-        assert "PRESET 13" in lib.list("presets")          # the preset is saved, and listed
+        assert "PRESET 13" in lib.list("presets")          # the loadable patch is saved, and listed
         assert lib.warning == f"saved PRESET 13 — slot 13 not changed — {why}"
         assert r.reg["preset.save_new"].fire() is True     # the desk's save-as: F1–F8 are full
         name = lib.current("presets")
@@ -1198,7 +1198,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     so a build from before plan 19 opens a long bank by cutting it to
     eight (`_take`'s `[:SLOTS]` with SLOTS = 8). It shows slots 1–8
     correctly, and its next write of that show drops the far slots'
-    names from the file. The presets' files are untouched, and
+    names from the file. The loadable patches' files are untouched, and
     `.bak-v2-bank8` is the file from before any far slot existed."""
     home = owner_home
     r = boot_home(home)
@@ -1316,7 +1316,7 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
 
 def test_rename_refuses_a_taken_name(owner_home):
     """Refused, nothing on disk changed: an empty name, a name taken by
-    another preset's name or its file stem, or by another spelling of the
+    another loadable patch's name or its file stem, or by another spelling of the
     same slug. A rename that only changes case or spacing keeps the
     file's stem: rewritten in place, its old text in the trash."""
     home = owner_home
@@ -1362,7 +1362,7 @@ def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
 
 
 def test_renaming_the_loaded_loadable_keeps_its_unsaved_edit(owner_home):
-    """The loaded preset renamed: the name changes, the dot stays lit (the
+    """The loaded loadable patch renamed: the name changes, the dot stays lit (the
     clean reference is the one it had), and save writes the new file."""
     home = owner_home
     r = boot_home(home)
@@ -1380,8 +1380,8 @@ def test_renaming_the_loaded_loadable_keeps_its_unsaved_edit(owner_home):
 
 
 def test_a_deleted_loadable_says_which_slots_still_name_it(owner_home):
-    """× on your own preset is plan 15's delete, unchanged; new is what is
-    said: which slots and the startup preset still name it (nothing on the
+    """× on your own loadable patch is plan 15's delete, unchanged; new is what is
+    said: which slots and the startup loadable patch still name it (nothing on the
     panel sets it since the library went one-tier; the file still carries
     it). The slots are not cleared for the owner — a restore to the old
     name makes them work."""
@@ -1389,7 +1389,7 @@ def test_a_deleted_loadable_says_which_slots_still_name_it(owner_home):
     r = boot_home(home)
     lib, pr = r.lib, r.lib.project
     show = (home / "projects" / "mine.hyp.json").read_bytes()
-    assert lib.delete("presets", "NIGHT ONE")                 # F1 and the startup preset
+    assert lib.delete("presets", "NIGHT ONE")                 # F1 and the startup loadable patch
     assert lib.warning == ("NIGHT ONE is in the trash — F1 and the startup preset still name it; "
                            "restore it from the trash, or clear the slot")
     assert pr.bank[0] == "NIGHT ONE" and pr.startup == "NIGHT ONE"
@@ -1543,7 +1543,7 @@ def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
 def test_the_trash_lists_only_what_it_kept(owner_home):
     """Review of PR #117: a Finder `.DS_Store` (or any file `to_trash` did
     not write) in a trash folder is not listed, not restored and not
-    emptied — a restore would have made it a preset."""
+    emptied — a restore would have made it a loadable patch."""
     home = owner_home
     lib = boot_home(home).lib
     junk = [home / "trash" / "presets" / ".DS_Store", home / "trash" / "presets" / "notes.txt"]
@@ -1559,7 +1559,7 @@ def test_the_trash_lists_only_what_it_kept(owner_home):
 # ------------------------------------------- the stick spring's knobs (2026-10-29)
 
 def _bare(home):
-    """A library over an empty home with the desk's session params — the
+    """A library over an empty home with the desk's shared meta params — the
     pad's feel among them (routing._register_pad_feel, through the Router)."""
     chain = Analyzer(Analyser())
     lib = Library(home, period=0.0)

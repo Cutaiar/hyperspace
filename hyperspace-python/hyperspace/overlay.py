@@ -30,7 +30,7 @@ config's ``[[output.screens]]``, one output with no list):
   output.N.dim        0–1      that output's own dim, times the master —
                                only when the config lists two or more outputs
 
-("hands through the effects" is the preset's wiring, plan 35 O: no switch)
+("hands through the effects" is the loadable patch's wiring, plan 35 O: no switch)
 
 The monitor / fullscreen / overlay params above are output 1's; a later
 output's screen and fullscreen are its config entry's (plan 21 fork F10).
@@ -44,7 +44,7 @@ the control window) — G, or the pan button on the APC40, takes clicks
 back.
 
 Rig-specific settings (monitor, fullscreen, overlay, passthrough, dim,
-and every output.N.*) never persist in a preset and cannot be modulated; ground and opacity are
+and every output.N.*) never persist in a loadable patch and cannot be modulated; ground and opacity are
 a look and can. The dim (plan 15 WP3, decision 28) is the operator's: it
 is not a window-system setting — the renderer multiplies the finished
 frame by it (render.Renderer.dim_pass; app.frame hands it over beside
@@ -58,7 +58,7 @@ Overlay is there only when the config asks (decision 21 (a), plan 14
 WP2): ``[output] overlay = true``. Otherwise the render window is created
 without a transparent framebuffer (app._windows) and ``output.overlay``
 refuses to switch on — the ``T`` key, the APC40's MASTER select, the
-panel and a preset all land on the one param, so one gate covers every
+panel and a loadable patch all land on the one param, so one gate covers every
 road — and the ground (``output.bg``) and opacity do
 nothing, since they only ever act in overlay. The show behind a Pepper's
 Ghost glass can never go see-through by accident.
@@ -444,16 +444,16 @@ def register_switches(reg: Registry, slots) -> list[str]:
     N (an `outputs.Slot`, numbered by its place in the config's list),
     ``output.N.scene`` (labelled "picture") and ``output.N.hands`` — the
     window's two mutes (plan 35 O, row 374: off, it ignores what is wired
-    into that port; never the preset's structure, never a rebuild) —,
+    into that port; never the loadable patch's structure, never a rebuild) —,
     ``output.N.flip_x`` / ``.flip_y`` (plan 23 WP1: the output's mirror) and
     — only when the config lists two or more outputs — ``output.N.dim``.
-    No ``.through``: "hands through the effects" is the preset's wiring. They
+    No ``.through``: "hands through the effects" is the loadable patch's wiring. They
     write the slot's `outputs.Switches`, which `app._draw_render` hands the
     renderer each frame in that output's `View`; the renderer only reads
     them (ARCHITECTURE §3).
 
-    Rig settings, like ``output.fullscreen`` beside them (fork F4): group
-    ``output``, never persisted — no preset, show or undo step holds them
+    Meta settings, like ``output.fullscreen`` beside them (fork F4): group
+    ``output``, never persisted — no loadable patch, show or undo step holds them
     — and not modulatable; a launch (and ⌘R) takes them from the config's
     ``[[output.screens]]`` entry, so a switch flipped at the party lasts
     until the restart. They can be learned onto a desk button like any

@@ -124,7 +124,7 @@ def test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it():
 
 def test_the_eye_params_are_the_loadables_and_default_to_the_old_view(tmp_path):
     """Plan 43 C2 (rows 555, 574): the eye is the look's — performance, in
-    every preset's values, never the show's session — and modulatable, its
+    every loadable patch's values, never the show's session — and modulatable, its
     taper as it was (review 4: the fov linear, the distance log, so a row
     learned before lands the same value); the defaults the old view."""
     rig = boot(tmp_path)
@@ -146,7 +146,7 @@ def test_the_eye_params_are_the_loadables_and_default_to_the_old_view(tmp_path):
 def test_the_pan_range_keeps_a_routed_pan_as_far_as_it_was():
     """hands-orbit's push of 0.1 on a hand across the box (0 → 1) moves the
     pan by 0.1 of its range: ±400 px before, ±1.2 units now — ≈ ±390 px on
-    the 1080p screen the presets are converted at, within 5 %."""
+    the 1080p screen the loadable patches are converted at, within 5 %."""
     old = 0.1 * 8000.0 / 2.0
     new = 0.1 * 2.0 * PAN_RANGE / 2.0 * G.PAN_REF_PX
     assert new == pytest.approx(old, rel=0.05)
@@ -306,7 +306,7 @@ def test_a_loadable_2_pan_in_px_is_read_in_world_units(tmp_path):
     """The fixture is a preset/2 file from before (its pan 162, −81 px),
     loaded through a scratch library: the pan lands in world units through
     the default eye on the 1080p screen (324 px a unit), the route's depth
-    is the file's (a fraction of the range), and the preset is clean."""
+    is the file's (a fraction of the range), and the loadable patch is clean."""
     rig = boot(tmp_path)
     lib = rig.lib
     (lib.home / "presets").mkdir(parents=True, exist_ok=True)
@@ -501,7 +501,7 @@ def test_an_old_camera_module_loads_at_its_converted_pan(tmp_path):
 def test_an_old_camera_default_fills_a_loadable_at_its_converted_pan(tmp_path):
     """The same file as the group's default (`camera/default.json`): what
     `defaults` and `resolved` fill the camera strip with — at the converted
-    pan, not 190 radii. A whole preset that names no pan lands the build's
+    pan, not 190 radii. A whole loadable patch that names no pan lands the build's
     pan (plan 44 D3: a load fills from `_fresh_of`, never a `default.json`)."""
     rig = boot(tmp_path)
     _old_module(rig.lib, "default")
@@ -532,7 +532,7 @@ def test_a_camera_module_saved_now_says_its_pan_is_in_world_units(tmp_path):
 
 def test_a_hand_edited_units_that_is_no_object_is_no_marker(tmp_path):
     """`"units": "world"` (a string) neither raises nor counts as the
-    marker: the preset loads and its pan is read in px."""
+    marker: the loadable patch loads and its pan is read in px."""
     out, _ = loadable.pan_world({"units": "world", "values": {"camera.pan.x": 324.0}})
     assert out["values"]["camera.pan.x"] == pytest.approx(1.0)
     odd = {"units": None, "values": None}

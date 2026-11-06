@@ -92,8 +92,8 @@ def test_the_listed_roles_are_the_cloud_devices_of_the_registry(tmp_path):
 
 
 def test_the_cloud_params_are_the_looks_and_default_to_a_cloud_at_the_shapes_size():
-    """cloud.* — a performance group (plan 43 §6, plan 44 D3: how a cloud is
-    drawn is the look's, saved and landed by a preset); the scale
+    """cloud.* — a patch group (plan 43 §6, plan 44 D3: how a cloud is
+    drawn is the look's, saved and landed by a loadable patch); the scale
     puts the fixture (±3 units) at about the shape's size (radius 1)."""
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer

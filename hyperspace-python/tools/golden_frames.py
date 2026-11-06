@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Plan 26 A0 — golden frames: every corpus preset in every output state
+"""Plan 26 A0 — golden frames: every corpus loadable patch in every output state
 it reaches, rendered offscreen, hashed byte for byte.
 
-Each corpus preset (`CORPUS_PRESETS`: the twenty-five files under
-`tests/corpus/presets/`, the presets the build shipped until 2026-10-28 —
+Each corpus loadable patch (`CORPUS_LOADABLES`: the twenty-five files under
+`tests/corpus/presets/`, the loadable patches the build shipped until 2026-10-28 —
 test data now, read by nothing in the app) is copied into a throwaway
-library home and loaded through the real `Presets` over a `Router`, with two synthetic hands
+library home and loaded through the real `LoadedPatch` over a `Router`, with two synthetic hands
 (`tests/fake_hands.py`: the left open, the right a fist, test_ghost's
 pose) present or absent through the real `HandsIO`, and drawn through
 `Renderer.draw_outputs` on eight outputs at once — the eight `Switches`
@@ -13,35 +13,35 @@ states `tests/test_outputs.py` enumerates (scene × hands × through) —
 for `FRAMES` frames at `DT`, the clock pinned (`t_now = T0 + k·DT`).
 Output 1 is multisampled like the window; the others are plain targets.
 The LFOs and the analyzer are at rest (never stepped, never fed), the
-dream is off (no worker attached), the preset's own look-back is kept,
-the ghost hands are on (`ghost.on`, a session param no preset sets) and
+dream is off (no worker attached), the loadable patch's own look-back is kept,
+the ghost hands are on (`ghost.on`, a shared meta param no loadable patch sets) and
 the render cap is the app's default (1080p). Then the window's own frame,
 output 1 alone (`SOLO`: the default state, and with an effect on also
 through), so the pipeline is drawn direct into the multisampled target.
-Once more, for one preset, a 2× HiDPI 1080p screen (3840×2160) under
+Once more, for one loadable patch, a 2× HiDPI 1080p screen (3840×2160) under
 that cap. And (plan 26 A3) the render graph's other wirings, hands
 present (`WIRED`): the hands inside the scene (the scene's output with
 the hands in it, beside a glass output that shows the hands' layer
 alone, over and through) and the hands' layer laid on depth-aware, for
-every preset; the history holding the hands' layer, for the presets
+every loadable patch; the history holding the hands' layer, for the loadable patches
 with the look-back on — each a rig of its own (`Renderer.wiring`), its
 outputs named `<wiring>/<state>`. And (plan 26 A4b) a recorded point
-cloud (`CLOUDED`): a scratch `config.toml` in the rig's home listing one
+cloud (`CLOUDED`): a scratch `config.toml` in the meta controller's home listing one
 `cloud` device over the fixture recording (`tests/fixtures/clouds/`,
 copied in), opened by the real device registry, polled on the pinned
 clock and handed to the renderer, so the default scene gains its
-point-cloud node — named `cloud/<state>`. And (plan 26 A4) the proof presets,
-fixtures under `tests/fixtures/presets/` (`FIXTURE_PRESETS`, never a
-corpus preset): each copied into the scratch library and loaded like a
-user's preset, its `graph` section landing through the real `Presets`
-onto the rig's renderer, hands present, in the eight states — the
+point-cloud node — named `cloud/<state>`. And (plan 26 A4) the proof loadable patches,
+fixtures under `tests/fixtures/presets/` (`FIXTURE_LOADABLES`, never a
+corpus loadable patch): each copied into the scratch library and loaded like a
+user's loadable patch, its `graph` section landing through the real `LoadedPatch`
+onto the meta controller's renderer, hands present, in the eight states — the
 manifest's `fixture_states` and `fixtures`. And (plan 31 P) the
 envelopes and the step sequencer are stepped through the router as the
 app steps them — at rest and stopped, so they move nothing — but for the
-presets in `RUNNING` (``seq-demo``), drawn with play pressed as the rig
+loadable patches in `RUNNING` (``seq-demo``), drawn with play pressed as the rig
 starts, so their frame is the pattern mid-envelope at the pinned clock.
 Plan 32's five fixtures are media
-presets (`MEDIA_FIXTURES`): their bins name `local:` ids the rig's media
+loadable patches (`MEDIA_FIXTURES`): their bins name `local:` ids the meta controller's media
 channels find under `tests/golden/media/` (`GoldenMedia`), every still
 decoded before the first frame is drawn.
 
@@ -50,7 +50,7 @@ it, plus a quarter-size PNG for a person (one file per distinct
 picture). The pipeline each state reached (the retired `outputs.route`'s
 table, kept here as data, `ROUTES`: SCENE, SCENE+HANDS, HANDS or none,
 and the hands laid over after) is recorded beside it, so the manifest
-lists what each preset actually reaches.
+lists what each loadable patch actually reaches.
 `tests/test_golden_frames.py` compares every hash exactly, on the
 renderer the goldens were recorded on (`GL_RENDERER`), and skips with a
 note elsewhere.
@@ -63,7 +63,7 @@ note elsewhere.
 
 A diff writes a contact sheet of every frame that moved (golden | now |
 difference ×4) under docs/plans/assets/26-render-graph/. `--record` with
-`--only` re-records only those presets and keeps the rest. Nothing reads
+`--only` re-records only those loadable patches and keeps the rest. Nothing reads
 or writes ~/Hyperspace: the library home is a temporary folder and
 HYPERSPACE_HOME is pointed at another before anything is imported.
 """
@@ -116,8 +116,8 @@ HANDS = ("absent", "present")
 SHIPPED: tuple[tuple[str, dict], ...] = tuple(
     ("scene+hands", {"scene": True, "hands": True, "through": False}) for _ in range(8))
 # single-output goldens (output 1 alone, 4× MSAA, like the window): every
-# preset × hands in the default state (`Switches()` = scene + hands, no
-# through), and for a preset with an effect on also through. Alone, a
+# loadable patch × hands in the default state (`Switches()` = scene + hands, no
+# through), and for a loadable patch with an effect on also through. Alone, a
 # pipeline has one consumer and is drawn direct into output 1 — the path
 # the eight-output frame never takes — and the hands' readout split
 # (`_frame_passes`: `through` over all views) is this output's alone
@@ -125,8 +125,8 @@ SOLO = (("solo", {"scene": True, "hands": True, "through": False}),)
 SOLO_FX = (("solo-scene+hands+through", {"scene": True, "hands": True, "through": True}),)
 
 # plan 26 A3: the graph's other wirings (`graph.Wiring`), hands present —
-# (name, the wiring's fields, the output states drawn as one rig's
-# outputs, output 1 first, the presets it is drawn for: None, every
+# (name, the wiring's fields, the output states drawn as one meta controller's
+# outputs, output 1 first, the loadable patches it is drawn for: None, every
 # one). In the scene: the scene's output with the hands in it, and a glass
 # (scene off) with the hands' layer over and through; depth-aware: the
 # layer over at the output and through the effects; the history of the
@@ -140,7 +140,7 @@ WIRED: tuple[tuple[str, dict, tuple[str, ...], tuple[str, ...] | None], ...] = (
 )
 
 # plan 26 A4b: a recorded point cloud in the scene — (name, the scratch
-# config's device list, the output states, the presets), hands present.
+# config's device list, the output states, the loadable patches), hands present.
 # The device plays the fixture at its 12 fps against the pinned clock, so
 # the frame drawn is the same on every run (frame 1 after FRAMES frames)
 CLOUD_FIXTURE = ROOT / "tests" / "fixtures" / "clouds" / "knot.npz"
@@ -152,10 +152,10 @@ file = "clouds/knot.npz"
 CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
     ("cloud", CLOUD_CONFIG, ("scene", "scene+hands"), ("legacy6", "party-faces")),
 )
-# the corpus (2026-10-28): the twenty-five `/7` presets the build shipped
+# the corpus (2026-10-28): the twenty-five `/7` loadable patches the build shipped
 # until the library went one-tier, kept as test data — the goldens' main
 # subjects, in the order the manifest has always listed them (the house
-# moods, plan 12's party presets, plan 14's, then the routing-era ones)
+# moods, plan 12's party loadable patches, plan 14's, then the routing-era ones)
 CORPUS = ROOT / "tests" / "corpus" / "presets"
 CORPUS_LOADABLES: tuple[str, ...] = (
     "big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo", "plasma-heart",
@@ -165,23 +165,23 @@ CORPUS_LOADABLES: tuple[str, ...] = (
     "legacy6", "lfo-breathe", "seq-demo", "hands-fx", "hands-pinch", "hands-play",
     "hands-orbit",
 )
-# plan 26 A4: the proof presets — fixtures, never corpus presets — each
-# loaded through the scratch library like a user's preset, its `graph`
-# section landing through the real `Presets` (`GraphSection`) onto the
-# rig's renderer, hands present, every output state as one rig's outputs
+# plan 26 A4: the proof loadable patches — fixtures, never corpus loadable patches — each
+# loaded through the scratch library like a user's loadable patch, its `graph`
+# section landing through the real `LoadedPatch` (`GraphSection`) onto the
+# meta controller's renderer, hands present, every output state as one meta controller's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
-# plan 36 T3 (D5): the corpus presets are `/7` files; what they were made
+# plan 36 T3 (D5): the corpus loadable patches are `/7` files; what they were made
 # from — the `/2` (seq-demo `/3`) sources the retired generator wrote,
 # which tools/migrate_library.py migrated — is read where the proof needs
 # the section before the wired frame (`plan33_section`)
 FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
-# plan 30 D1: the three placements' proof presets — the palette after the
+# plan 30 D1: the three placements' proof loadable patches — the palette after the
 # hands' layer, the palette into output 2's picture, a second acid after
 # the scene (`graph.EffectAt.after` / `into`)
-# plan 28 N4: the wire list's proof presets — hands 2 wired to output 2's
+# plan 28 N4: the wire list's proof loadable patches — hands 2 wired to output 2's
 # hands alone, the palette wired into output 1's picture and a second acid
 # from the history into output 2's (`graph.Wire`)
-# plan 32 T6: the media channels' proof presets — a still on channel a as
+# plan 32 T6: the media channels' proof loadable patches — a still on channel a as
 # the backdrop under the scene, and channel c wired into output 2's picture
 # (`graph.MediaNode`); their stills are under tests/golden/media/. Plan 32
 # T7's three: the still on the faces (`view.media`), and the still wired into
@@ -202,7 +202,7 @@ FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # kaleidoscope in the still's disc, the scene elsewhere. Plan 39 T4's
 # `segment-motion` (`/7`, a wired frame): the scene over the still into a
 # motion segment, its foreground into All outputs — the model learns the
-# rig's first frame, its later frames (the pinned clock: the polytope turns,
+# meta controller's first frame, its later frames (the pinned clock: the polytope turns,
 # the still does not) are the second picture, so the turning polytope is
 # the foreground and the still is cut away
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
@@ -213,7 +213,7 @@ MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces
 # plan 34 T2's two: the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
-# from a cleared state over the rig's FRAMES frames, seven feedback steps.
+# from a cleared state over the meta controller's FRAMES frames, seven feedback steps.
 # Plan 34 T3's one: the look-back's third-newest echo on the faces, the
 # look-back off and a capture every frame (`echo.3 → shape.faces`): the
 # pattern for the first three frames, then the scene of three frames back
@@ -241,8 +241,8 @@ MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the po
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
-# plan 31 P: the presets drawn with the sequencer running (`seq.run` is
-# never in a preset): play pressed as the rig starts, so step 1 fires on
+# plan 31 P: the loadable patches drawn with the sequencer running (`seq.run` is
+# never in a loadable patch): play pressed as the rig starts, so step 1 fires on
 # the first frame at T0 + DT and the hashed frame, FRAMES − 1 frames
 # later (about 117 ms at 120 BPM), is mid-envelope on its kick (the hat
 # that fired with it is over, the snare still to come: tests/
@@ -283,13 +283,13 @@ from hyperspace.graph import Wiring, build_graph, read_graph, signature
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import features, skeleton
 from hyperspace.library import Library
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.media import ids as media_ids
 from hyperspace.media.channels import MediaState
 from hyperspace.media.source import FETCHING
 from hyperspace.outputs import Switches, View
 from hyperspace.params import build_registry
-from hyperspace.loadable import LoadedPatch
 from hyperspace.render import Renderer
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
@@ -331,7 +331,7 @@ class FakeHands:
 
 
 class GoldenMedia:
-    """The rig's media resolver (plan 32 T6): a `local:` id is a file under
+    """The meta controller's media resolver (plan 32 T6): a `local:` id is a file under
     `tests/golden/media/`; nothing else is on this Mac."""
 
     proxy_cache = None
@@ -384,16 +384,16 @@ class Shot:
 
 
 class Rig:
-    """One preset, hands present or absent, on the tool's one context
+    """One loadable patch, hands present or absent, on the tool's one context
     (`context()`), with a renderer of its own: the registry, the router,
     the hands chain, the renderer."""
 
     def __init__(self, slug: str, hands: str, ctx: moderngl.Context, *,
                  source: Path | None = None, library: Path | None = None,
                  show: dict | None = None):
-        """A corpus preset by its slug, or a fixture (`FIXTURE_PRESETS`):
+        """A corpus loadable patch by its slug, or a fixture (`FIXTURE_LOADABLES`):
         copied into the scratch library first and loaded from there. Row
-        394: or any preset file `source`, copied in as `slug` — with
+        394: or any loadable patch file `source`, copied in as `slug` — with
         `library`'s desk templates and module presets beside it
         (`headless.SHARED_FOLDERS`) — for `picture`; plan 43 C2: and `show`
         (`headless.show_seed`, an old show's eye) open, as the migration's
@@ -402,7 +402,7 @@ class Rig:
         self.view, self.fx, self.dream, self.ghost = (ViewState(), FxState(), DreamState(),
                                                       GhostState())
         chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
-        # plan 32: the channels the `media.*` params write and the preset's
+        # plan 32: the channels the `media.*` params write and the loadable patch's
         # bins fill, as app.main makes them (here over the golden stills)
         self.media = MediaState(GoldenMedia())
         self.reg = reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain),
@@ -412,7 +412,7 @@ class Rig:
         tempo.register(reg, self.clock)
         lfo.register(reg, lfo.LFOs(), self.clock)      # declared, never stepped: at rest
         # plan 31 P: the envelopes and the sequencer, stepped as the app
-        # steps them — at rest and stopped unless the preset is in
+        # steps them — at rest and stopped unless the loadable patch is in
         # `RUNNING`, so no other golden sees them
         self.envs, self.seq = envelope.Envelopes(), sequencer.Sequencer()
         envelope.register(reg, self.envs, self.clock)
@@ -422,7 +422,7 @@ class Rig:
             source = FIXTURES / f"{slug}.json"
         elif source is None and slug in CORPUS_LOADABLES:
             source = CORPUS / f"{slug}.json"
-        if source is not None:               # a preset copied into the scratch library
+        if source is not None:               # a loadable patch copied into the scratch library
             own = Path(self._home.name) / "presets"
             own.mkdir(parents=True, exist_ok=True)
             (own / f"{slug}.json").write_bytes(Path(source).read_bytes())
@@ -449,7 +449,7 @@ class Rig:
         self.seeded = False          # K3: the phases, set on the first frame (`frame`)
         reg["ghost.on"].set(True)
         # plan 28 N4: a second hands node the graph declares shows too (its
-        # own `ghost.<n>.on`, the session's like `ghost.on`); only a fixture
+        # own `ghost.<n>.on`, the meta controller's like `ghost.on`); only a fixture
         # declares one, so no other golden sees this
         for pid in [p.id for p in reg if re.fullmatch(r"ghost\.[0-9]+\.on", p.id)]:
             reg[pid].set(True)
@@ -458,13 +458,13 @@ class Rig:
                           out=NullOut(), clock=lambda: self.t)
         self.clock.trigger(self.t)
         if slug in RUNNING:
-            # the transport is the session's (decision 8): pressed play,
+            # the transport is the meta controller's (decision 8): pressed play,
             # the pattern restarting at step 1 on the first frame (T0 + DT)
             self.seq.run = True
             self.seq.restart()
         self.ctx = ctx
         r = self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx, ghost=self.ghost)
-        # plan 26 A4: the preset's graph (none for a corpus preset: the
+        # plan 26 A4: the loadable patch's graph (none for a corpus preset: the
         # default wiring) onto this renderer, as app.py attaches it
         loaded_patch.graph.attach(r)
         r.max_frame = RENDER_CAP
@@ -474,7 +474,7 @@ class Rig:
         r.ghost.source, r.ghost.router = self.io, self.router
         self.devices = None          # plan 26 A4b: a device registry, polled each frame
         # plan 32: the channels on the renderer, as app.main hands them; the
-        # stills the preset's slots name opened and decoded before the first
+        # stills the loadable patch's slots name opened and decoded before the first
         # frame (the pool's job: a golden must not catch one half-way)
         r.media = self.media
         self.media.poll(0.0, self.t)
@@ -486,7 +486,7 @@ class Rig:
             time.sleep(0.01)
 
     def list_devices(self, toml: str) -> None:
-        """A scratch `config.toml` in the rig's home listing `toml`'s
+        """A scratch `config.toml` in the meta controller's home listing `toml`'s
         devices (the cloud fixture copied in beside it), opened by the real
         registry on the pinned clock and handed to the renderer."""
         import shutil
@@ -557,7 +557,7 @@ def context() -> moderngl.Context:
     on every call: a context made and released since (each test's own,
     tests/conftest.py) left none current, and GL calls go to the current
     one. Its objects are freed when they are collected (`gc_mode` auto),
-    so each rig's renderer goes with the rig (`render_all` collects after
+    so each meta controller's renderer goes with the rig (`render_all` collects after
     each)."""
     global _CTX, _PARK
     if _CTX is None:
@@ -570,7 +570,7 @@ def context() -> moderngl.Context:
 
 class _Lent(moderngl.Program):
     """A pooled program as one rig holds it: the pool's linked program
-    under a wrapper of its own. Releasing it (or the rig's end) hands the
+    under a wrapper of its own. Releasing it (or the meta controller's end) hands the
     program back to the pool, never to GL; collecting it does nothing."""
 
     def __del__(self):
@@ -587,7 +587,7 @@ class ProgramPool:
     out again (the tool's harness only: the app compiles every program it
     asks for, as before). Each rig builds a new `Renderer`, which asks for
     some 26 programs whose sources are the same rig after rig; linking them
-    was most of a rig's cost. A program lent is exactly one freshly linked:
+    was most of a meta controller's cost. A program lent is exactly one freshly linked:
     within a rig every request gets a program of its own (two `acid`
     instances never share one), and a program lent again has every uniform
     and uniform-block binding put back as the link left it (snapshotted
@@ -669,7 +669,7 @@ _LENDING = False
 @contextmanager
 def shared_programs(ctx: moderngl.Context):
     """Within this block, `ctx.program` lends from the process's
-    `ProgramPool` (one rig's lifetime: `_shoot`, `picture`); after it,
+    `ProgramPool` (one meta controller's lifetime: `_shoot`, `picture`); after it,
     every program the rig held is back in the pool and `ctx.program` is
     moderngl's own again. Nothing under hyperspace/ knows of it."""
     global _POOL, _LENDING
@@ -710,7 +710,7 @@ def expected_route(state: dict, fx_on: bool, visible: bool,
 
 
 def source_doc(loaded_patch, slug: str) -> dict:
-    """Preset `slug`'s file before `/7` (plan 36 T3): a corpus preset's
+    """Preset `slug`'s file before `/7` (plan 36 T3): a corpus loadable patch's
     source (`FACTORY_SOURCES`, what its `/7` was migrated from), else the
     file as the library has it (a fixture: an old file, a migration input)."""
     src = FACTORY_SOURCES / f"{slug}.json"
@@ -751,9 +751,9 @@ def _placements_wait(loaded_patch, slug: str) -> dict | None:
 
 
 def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
-    """The rig's wired frame (plan 35 T3, row 392): the preset's section as
+    """The meta controller's wired frame (plan 35 T3, row 392): the loadable patch's section as
     the load wired it — or a WIRED variant's (`variant_section` over the
-    preset's run, wired as a load wires it) — and each view's state as
+    loadable patch's run, wired as a load wires it) — and each view's state as
     that output's own wires (`output_wires`); the mutes are all on.
 
     A wired fixture (`WIRED_FIXTURES`, `/6`) is a frame of its own, not
@@ -805,7 +805,7 @@ def _lays_hands(section: dict) -> bool:
 
 
 def state_views(slug: str, states, size, targets) -> list[View]:
-    """The rig's windows: every mute on (the states are wiring), but for a
+    """The meta controller's windows: every mute on (the states are wiring), but for a
     wired fixture's, whose picture and hands mutes are its state's."""
     if slug not in WIRED_FIXTURES:
         return [View(Switches(), size, target=f) for f in targets]
@@ -821,7 +821,7 @@ Keep = Callable[[str, str], bool] | None
 def _shoot(slug: str, hands: str, states, size, logical, dpr,
            wiring: dict | None = None, config: str | None = None, *,
            label: str = "{}", keep: Keep = None) -> tuple[list[Shot], dict]:
-    """Render one rig's states (under `wiring`, the preset's own when
+    """Render one meta controller's states (under `wiring`, the loadable patch's own when
     None; with `config`'s devices listed, A4b); its shots and what the load
     said. The framebuffers and the renderer are new per rig, so nothing a
     rig drew reaches the next (its programs are lent from the pool,
@@ -861,7 +861,7 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
         shots = []
         for k, ((name, sw), f) in enumerate(zip(states, targets)):
             # what the output settled on (its end, the hands laid over):
-            # for a corpus preset in its own wiring, `outputs.route`'s
+            # for a corpus loadable patch in its own wiring, `outputs.route`'s
             # table (`expected_route`) — a picture where it names one, the
             # hands over where it lays them
             key, over = rig.renderer.stats["routes"][k]
@@ -871,7 +871,7 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
                 assert (key is not None, bool(over)) == (route_name != "none", hands_over), (
                     slug, name, key, over)
             raw = _read(ctx, f, size)
-            # plan 28 N4: an output whose picture is the preset's own wire
+            # plan 28 N4: an output whose picture is the loadable patch's own wire
             # shows no pipeline of the table: its route reads "none" and its
             # entry says what feeds the wire (`wired`, in the old ids, as
             # the manifest has them)
@@ -900,15 +900,15 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
 def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
             states=STATES, hands: str = "present", show: dict | None = None
             ) -> tuple[list[str], list[str]]:
-    """Row 394 (tools/migrate_library.py): preset file `source` drawn on the
+    """Row 394 (tools/migrate_library.py): loadable patch file `source` drawn on the
     golden rig — copied into a scratch library as `slug`, loaded like a
-    user's preset, hands `hands`, `states` as its outputs' wiring
-    (`rig_section`, as a corpus preset's goldens) for `FRAMES` frames on
+    user's loadable patch, hands `hands`, `states` as its outputs' wiring
+    (`rig_section`, as a corpus loadable patch's goldens) for `FRAMES` frames on
     the pinned clock — and (each output's SHA-256, the load's notes). Two
     files that draw the same have the same hashes; the frame is never
-    asserted on, so a preset this build reads with a note still draws.
+    asserted on, so a loadable patch this build reads with a note still draws.
     Plan 43 C2: `show` (`headless.show_seed`) is open while it loads — the
-    old show's eye an old preset takes.
+    old show's eye an old loadable patch takes.
 
     Collected here, not in `_picture`: while its frame runs it still holds
     the rig, whose GL objects (`gc_mode` auto, a rig is full of cycles) would
@@ -945,7 +945,7 @@ def _picture(source, slug, library, states, hands, show=None) -> tuple[list[str]
 @dataclass(frozen=True)
 class Job:
     """One test's worth of rigs (tests/test_golden_frames.py draws one job
-    per test, so the workers share them out): a corpus preset with the
+    per test, so the workers share them out): a corpus loadable patch with the
     hands absent or present — its eight states, the window alone, and with
     the hands present the WIRED and CLOUDED rigs — a fixture's eight
     states, or the cap frame."""
@@ -967,7 +967,7 @@ def job_of(entry: dict) -> str:
 
 
 def jobs(only: set[str] | None = None, *, cap: bool = True) -> list[Job]:
-    """Every job (or only the presets in `only`), in the goldens' order."""
+    """Every job (or only the loadable patches in `only`), in the goldens' order."""
     out = [Job("preset", slug, hands) for slug in CORPUS_LOADABLES
            if not only or slug in only for hands in HANDS]
     out += [Job("fixture", slug, "present") for slug in FIXTURE_LOADABLES
@@ -982,7 +982,7 @@ def run_job(job: Job, keep: Keep = None) -> tuple[list[Shot], dict | None]:
     slug, hands = job.slug, job.hands
     if job.kind == "fixture":
         got, info = _shoot(slug, "present", STATES, (W, H), (W, H), DPR, keep=keep)
-        gc.collect()        # the rig's GL objects, freed now (gc_mode auto)
+        gc.collect()        # the meta controller's GL objects, freed now (gc_mode auto)
         return got, info
     if job.kind == "cap":
         state = dict(STATES)[CAP["state"]]
@@ -1021,7 +1021,7 @@ def run_job(job: Job, keep: Keep = None) -> tuple[list[Shot], dict | None]:
 
 def render_all(only: set[str] | None = None, *, cap: bool = True,
                keep: Keep = None) -> tuple[list[Shot], dict]:
-    """Every golden (or only the presets in `only`), and per preset what
+    """Every golden (or only the loadable patches in `only`), and per loadable patch what
     its load said; pixels kept where `keep` says (every frame's, if None)."""
     shots: list[Shot] = []
     said: dict[str, dict] = {}
@@ -1063,7 +1063,7 @@ def load_manifest() -> dict:
 
 def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
            version: str = "?") -> dict:
-    """Write the manifest (merged with the presets not re-recorded under
+    """Write the manifest (merged with the loadable patches not re-recorded under
     `only`) and a PNG per distinct picture; drop PNGs nothing names."""
     GOLDEN.mkdir(parents=True, exist_ok=True)
     (GOLDEN / "png").mkdir(exist_ok=True)
@@ -1177,10 +1177,10 @@ def summary(doc: dict) -> str:
 
 # ---------------------------------------------------------------- the frame's signatures (plan 35 T2)
 #
-# Plan 35 B (Review Focus 1): every case the goldens draw — each preset and
-# fixture in the eight states as one rig's eight outputs, and the WIRED
-# variants over their presets and states — built by `build_graph` from the
-# preset's section written as a wired frame (`graphmigrate.wired_section`)
+# Plan 35 B (Review Focus 1): every case the goldens draw — each loadable patch and
+# fixture in the eight states as one meta controller's eight outputs, and the WIRED
+# variants over their loadable patches and states — built by `build_graph` from the
+# loadable patch's section written as a wired frame (`graphmigrate.wired_section`)
 # with each output's state as its own wires (`output_wires`) and every mute
 # on. `graph.signature` must equal, node for node, the frame the retired
 # `default_graph` built from the switches: T2 recorded it to SIGNATURES and
@@ -1192,7 +1192,7 @@ SIGNATURES = ROOT / "tests" / "fixtures" / "frame-signatures.json"
 
 
 class Loader:
-    """Each preset loaded as the rig loads it (the real `Presets` over a
+    """Each loadable patch loaded as the rig loads it (the real `LoadedPatch` over a
     scratch library, the corpus and the fixtures copied in), headless: no
     renderer, no media. `load(slug)` gives the landed spec, its section
     (`GraphSection.free_doc`: the migrated one) and the effect instances
@@ -1245,7 +1245,7 @@ class Loader:
 
 
 def _effects_on(slug: str) -> bool:
-    """Whether a corpus preset has an effect on, as its goldens recorded
+    """Whether a corpus loadable patch has an effect on, as its goldens recorded
     it (the manifest's `effects_on`: what draws `SOLO_FX`)."""
     said = load_manifest().get("presets", {}).get(slug, {})
     return bool(said.get("absent", {}).get("effects_on"))
@@ -1254,8 +1254,8 @@ def _effects_on(slug: str) -> bool:
 def signature_keys() -> list[str]:
     """Every case's key, `<slug>/<variant>`: `states` (the eight), a WIRED
     variant's name, and (plan 35 T3) the window alone — `solo`, and
-    `solo-scene+hands+through` for a preset with an effect on (`SOLO`,
-    `SOLO_FX`) — and a CLOUDED rig's name, as the goldens draw them."""
+    `solo-scene+hands+through` for a loadable patch with an effect on (`SOLO`,
+    `SOLO_FX`) — and a CLOUDED meta controller's name, as the goldens draw them."""
     # (a `/6` fixture — plan 35 T3's — is a wired frame of its own: no
     # section before it, so no `default_graph` recorded to prove it against)
     keys = [f"{slug}/states" for slug in (*CORPUS_LOADABLES, *FIXTURE_LOADABLES)
@@ -1278,8 +1278,8 @@ _VARIANT_ENTRY = {"hands": lambda v: {"kind": "hands", "into": v},
 
 def variant_section(fields: dict, run: tuple[str, ...]) -> dict:
     """A WIRED variant as the section that reads as it (plan 35 T3): a
-    wiring of that one field (`Wiring(**fields)`) over the preset's run,
-    in the old ids, as a pre-35 preset would have said it."""
+    wiring of that one field (`Wiring(**fields)`) over the loadable patch's run,
+    in the old ids, as a pre-35 loadable patch would have said it."""
     nodes = [_VARIANT_ENTRY[k](v) for k, v in fields.items()]
     for e in run:
         file, n = G.split_instance(e)
@@ -1293,7 +1293,7 @@ def variant_section(fields: dict, run: tuple[str, ...]) -> dict:
 def signature_case(loader: Loader, key: str):
     """(the states, the old spec, the old section, the effect instances,
     the wired section, the cloud roles) of case `key`. A WIRED variant is
-    the golden rig's: a wiring of that one field over the preset's run
+    the golden meta controller's: a wiring of that one field over the loadable patch's run
     (`_shoot`), said as the section that reads as it, and wired as a load
     wires it. `solo` and `solo-…` are one window; a CLOUDED rig lists
     its device's role."""

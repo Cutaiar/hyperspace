@@ -1,10 +1,10 @@
 """Plan 22 B5: the macro candidates (kept as test fixtures in
 tests/fixtures/macro-candidates/ since plan 25 retired shared/; the owner
 has them in his library) load cleanly through the real road — copied into
-a library's presets/, then `Presets.load` — with no note, no dropped row,
+a library's presets/, then `LoadedPatch.load` — with no note, no dropped row,
 every subscriber on a real param or a route the file carries. Whether
 the macros are any good is the
-owner's listening session (docs/plans/22-macro-candidates.md), not a test's."""
+owner's listening meta controller (docs/plans/22-macro-candidates.md), not a test's."""
 
 import json
 import shutil
@@ -74,7 +74,7 @@ def test_each_candidate_loads_with_no_note_and_keeps_every_row(rig, path):
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)
 def test_every_subscriber_names_a_real_param_or_a_route_of_its_file(rig, path):
-    """A base subscriber names a continuous performance param a preset may
+    """A base subscriber names a continuous patch param a loadable patch may
     set (`routing.base_refusal`); a depth subscriber names an enabled route
     the file carries, onto a modulatable param. Every macro has a label and
     the file's note says what each one does."""

@@ -6,15 +6,15 @@ rig is reused: a scratch library seeded with the corpus, its show the party show
 
 - **the two-handed save**: track 8's clip stop is SAVE (invariant); SAVE
   held and a bank pad tapped saves the live state into that pad's slot —
-  an empty slot as #158's hold does, a filled slot as a **new** preset the
-  slot then points at, the old preset's file untouched and still listed,
+  an empty slot as #158's hold does, a filled slot as a **new** loadable patch the
+  slot then points at, the old loadable patch's file untouched and still listed,
   the trash untouched; the pad blinks; SAVE alone does nothing; the same
   under SHIFT; ten times in a row;
 - **every load relights the whole desk**: every ring and LED re-sent, every
-  control nothing draws sent dark, and every fader the new preset binds
+  control nothing draws sent dark, and every fader the new loadable patch binds
   picks up again (register row 44, changed);
 - **the render toggles on both layers**: points, lines, faces and rotate
-  are invariant rows whose LEDs show the live state; an older preset's
+  are invariant rows whose LEDs show the live state; an older loadable patch's
   toggle rows drop quietly at load (fixture under tests/fixtures/);
 - **the desk event log**: the last twenty presses, what each did and on
   which layer.
@@ -67,12 +67,12 @@ def save_up():
     return note(STOP, 0, channel=SAVE_CH)
 
 
-# the preset files the seed put there (the corpus): not the owner's saves
+# the loadable patch files the seed put there (the corpus): not the owner's saves
 SEEDED = {p.name for p in (CORPUS / "presets").glob("*.json")}
 
 
 def user_files(lib) -> dict[str, bytes]:
-    """The presets saved since the seed: {file name: bytes}."""
+    """The loadable patches saved since the seed: {file name: bytes}."""
     folder = lib.home / "presets"
     return {p.name: p.read_bytes() for p in folder.glob("*.json")
             if p.name not in SEEDED} if folder.is_dir() else {}
@@ -126,7 +126,7 @@ def test_a_reconnect_lets_go_of_a_save_whose_release_was_lost(rig):
 def test_nothing_can_latch_save(rig, tmp_path):
     """Review of PR #175: only a `momentary` row may drive `desk.save`. A
     learn onto it is refused (the desk, the pad), the table refuses a
-    latching row at runtime, a preset's desk row that would latch it drops
+    latching row at runtime, a loadable patch's desk row that would latch it drops
     with a note, and a hand-edited bindings.json loses such a row with a
     note — never a crash, never SAVE stuck on."""
     from hyperspace.learn import SAVE_REFUSAL
@@ -194,7 +194,7 @@ def test_a_reconnect_forgets_where_the_faders_were(rig):
 # --------------------------------------------------------- the two-handed save
 
 def test_save_held_and_an_empty_pad_tapped_saves_into_that_slot(rig):
-    """On an empty pad the two-handed save is #158's save: a new preset
+    """On an empty pad the two-handed save is #158's save: a new loadable patch
     named from the loaded one into that slot, loaded, the pad blinking."""
     at = clocked(rig)
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
@@ -213,11 +213,11 @@ def test_save_held_and_an_empty_pad_tapped_saves_into_that_slot(rig):
 
 
 def test_save_held_and_a_filled_pad_tapped_saves_a_new_loadable_and_keeps_the_old(rig):
-    """Decision 18: a filled slot takes a **new** preset (named as
-    `save_new` names them) and the slot points at it; the old preset keeps
+    """Decision 18: a filled slot takes a **new** loadable patch (named as
+    `save_new` names them) and the slot points at it; the old loadable patch keeps
     its file, byte for byte, and stays in the list, unpadded, as "free
-    this pad (keeps the preset)" leaves it; nothing goes to the trash; the
-    new preset is the loaded one and its pad blinks."""
+    this pad (keeps the loadable patch)" leaves it; nothing goes to the trash; the
+    new loadable patch is the loaded one and its pad blinks."""
     at = clocked(rig)
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))                                                  # TRIP
@@ -226,7 +226,7 @@ def test_save_held_and_a_filled_pad_tapped_saves_a_new_loadable_and_keeps_the_ol
     old = dict(user_files(lib))
     assert list(old) == ["trip-2.json"]
     gone = trash(lib)
-    # the filled pad: slot 11, which holds TRIP 2 (a user preset) — and F3,
+    # the filled pad: slot 11, which holds TRIP 2 (a user loadable patch) — and F3,
     # which holds FIELD (a shipped one)
     at(5.0, save_down())
     mark = len(rig.out.sent)
@@ -287,12 +287,12 @@ def test_the_two_handed_save_works_ten_times_in_a_row(rig):
 def test_a_save_tap_does_not_load_or_start_a_hold(rig):
     """The pad under SAVE is the save's and nothing else: its slot is not
     loaded first, and its hold (#158's save into an empty slot) never fires
-    after it — one press, one preset."""
+    after it — one press, one loadable patch."""
     at = clocked(rig)
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))
     loads = []
-    pr.lib.on_load("presets", loads.append)       # (a save lands the new preset too)
+    pr.lib.on_load("presets", loads.append)       # (a save lands the new loadable patch too)
     at(1.0, save_down())
     for k in (1, 15):                             # a filled pad (FACES), an empty one
         n, ch = pad(k)
@@ -307,8 +307,8 @@ def test_a_save_tap_does_not_load_or_start_a_hold(rig):
 
 
 def test_a_failed_save_into_a_filled_slot_leaves_the_slot_and_blinks_nothing(rig, monkeypatch):
-    """A show file that cannot be written keeps the slot on the preset it
-    named (the new preset is saved and in the list, the footer says why);
+    """A show file that cannot be written keeps the slot on the loadable patch it
+    named (the new loadable patch is saved and in the list, the footer says why);
     a save that could not be written at all blinks nothing."""
     at = clocked(rig)
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
@@ -344,7 +344,7 @@ def test_a_failed_save_into_a_filled_slot_leaves_the_slot_and_blinks_nothing(rig
 def test_the_hold_on_an_empty_pad_still_saves_and_a_filled_one_only_loads(rig):
     """#158's hold stays beside the two-handed save: an empty pad held
     saves into its slot; a filled pad held loads and writes nothing (the
-    desk never overwrites, and the hold never makes a new preset over a
+    desk never overwrites, and the hold never makes a new loadable patch over a
     filled slot — that is the two-handed save's)."""
     at = clocked(rig)
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
@@ -383,7 +383,7 @@ def test_the_render_toggles_are_invariant_and_their_leds_show_the_live_state(rig
     both layers — D6's list grows by four — and each LED shows the param's
     live state: after a press on either layer, after the panel moves it,
     and right after a load on either layer. Reset view (scene launch 5)
-    stays the preset's."""
+    stays the loadable patch's."""
     t, reg = rig.midi.table, rig.reg
     for pid, n in TOGGLES:
         (b,) = t.route("note", 0, n)
@@ -403,7 +403,7 @@ def test_the_render_toggles_are_invariant_and_their_leds_show_the_live_state(rig
             reg[pid].set(was)                                         # the panel moves it back
             rig.midi.poll()
             assert leds(rig, n)[-1] == (1 if was else 0), (layer, pid)
-    # right after a load, on either layer: the loaded preset's values
+    # right after a load, on either layer: the loaded loadable patch's values
     for under_shift in (False, True):
         if under_shift and t.layer == "preset":
             shift(rig)
@@ -416,9 +416,9 @@ def test_the_render_toggles_are_invariant_and_their_leds_show_the_live_state(rig
 
 
 def test_an_older_loadables_toggle_rows_drop_quietly_and_an_owners_row_with_a_note(rig):
-    """A preset saved before C1 holds the four toggle rows on its desk
+    """A loadable patch saved before C1 holds the four toggle rows on its desk
     (the generator wrote them then). A load drops them without a note —
-    the session's rows do
+    the meta controller's rows do
     the same job (`routing.RETIRED_DESK_ROWS`) — and drops an owner's row
     on the SAVE button with the usual note. Loaded through a scratch
     library from tests/fixtures/desk-trust/."""
@@ -442,7 +442,7 @@ def test_an_older_loadables_toggle_rows_drop_quietly_and_an_owners_row_with_a_no
 
 def test_a_meta_file_gains_the_toggles_and_the_save_once(tmp_path):
     """A `bindings.json` from before C1 has no row on scene launch 1–4 (they
-    were the preset's) nor on track 8's clip stop: its next load adds the
+    were the loadable patch's) nor on track 8's clip stop: its next load adds the
     five factory rows, says so and writes the file back once; the next
     load is quiet. A row the owner put on one of those controls is kept,
     and that control gets no factory row."""
@@ -475,7 +475,7 @@ def test_a_meta_file_gains_the_toggles_and_the_save_once(tmp_path):
 # --------------------------------------------------- every load relights the desk
 
 def test_every_load_relights_the_whole_desk(rig):
-    """A load re-sends every ring and LED the new preset and the session
+    """A load re-sends every ring and LED the new loadable patch and the meta controller
     draw, and sends dark every other control on the desk — the whole
     layout, even one no row ever named (a light some other program left
     on) — on whichever layer the load came from."""
@@ -506,12 +506,12 @@ def test_every_load_relights_the_whole_desk(rig):
 
 def test_a_load_lets_go_of_every_fader_the_loadable_binds(rig):
     """Register row 44, changed by C1: a load re-arms soft pickup on every
-    fader the new preset's desk binds, whether or not the load moved its
-    param — each such fader picks up from the new preset, the same way
-    every time. The session's faders (invariant, never moved by a preset,
+    fader the new loadable patch's desk binds, whether or not the load moved its
+    param — each such fader picks up from the new loadable patch, the same way
+    every time. The meta controller's faders (invariant, never moved by a loadable patch,
     D9: the crossfader's dim, MASTER) keep their hold as before."""
     t, reg = rig.midi.table, rig.reg
-    # a preset desk with a fader row (C2 moves S1–S8 there; a test row here)
+    # a loadable patch desk with a fader row (C2 moves S1–S8 there; a test row here)
     speed = Binding(f"cc:0:{apc40.CC_FADER}", "view.speed", "abs", layer="preset")
     for b in [x for x in t.bindings if x.source == speed.source]:
         t.bindings.remove(b)                                          # free S1 for the test

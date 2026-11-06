@@ -6,9 +6,9 @@ published as a gate like them, after every older lane, and shown on the
 HANDS page. The proof the owner asked for: their intended mapping
 (`position` rows from the right hand's yaw / pitch / roll onto
 `camera.yaw`, `camera.pitch` and `rot.phase.XY`, each gated by the grab)
-is a fixture preset, loaded through a scratch library and played by
+is a fixture loadable patch, loaded through a scratch library and played by
 synthetic hands on a tape: the shape follows the hand only while it is
-closed. No corpus preset is touched."""
+closed. No corpus loadable patch is touched."""
 
 import json
 import math
@@ -70,7 +70,7 @@ def test_the_grab_is_a_schmitt_trigger_with_a_debounce():
 # ----------------------------------------------------------------- layout
 
 def test_the_grab_lanes_follow_every_older_lane():
-    """`hand:<i>` from an older preset still reads the lane it did: the
+    """`hand:<i>` from an older loadable patch still reads the lane it did: the
     thirty-eight lanes before C5 keep their places, the two grabs follow."""
     names = hands.default_addresses()
     lay = hands.Layout(HandSettings.from_config({}).axes)
@@ -191,8 +191,8 @@ def test_a_palm_only_source_never_grabs():
 
 @pytest.fixture()
 def show(tmp_path, tape_path):
-    """The fixture preset in a scratch library (never the owner's), loaded
-    the way a pad or the strip loads a preset, the hand on the tape."""
+    """The fixture loadable patch in a scratch library (never the owner's), loaded
+    the way a pad or the strip loads a loadable patch, the hand on the tape."""
     home = tmp_path / "home"
     (home / "presets").mkdir(parents=True)
     shutil.copyfile(FIXTURE, home / "presets" / FIXTURE.name)

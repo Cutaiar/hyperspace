@@ -23,8 +23,8 @@ from hyperspace import (
     devices,
     lfo,
     library,
-    poi,
     loadable,
+    poi,
     seq_page,
     totem,
     undo,
@@ -58,7 +58,7 @@ def rig(tmp_path):
 
 
 def _look(deck) -> dict:
-    """What a preset is, on one deck: nothing here may move when the other acts."""
+    """What a loadable patch is, on one deck: nothing here may move when the other acts."""
     t = deck.table
     return {"bases": deck.reg.snapshot(part="patch"),
             "routes": [b.to_json() for b in t.routes()],
@@ -198,7 +198,7 @@ def test_what_the_panel_does_on_deck_2_stays_on_deck_2(rig):
 
 
 def test_a_deck_s_own_verbs_land_on_that_deck_wherever_the_panel_is(rig):
-    """`Presets.load` / `save_as` / `Library.load(into=)`, the panel on deck 1."""
+    """`LoadedPatch.load` / `save_as` / `Library.load(into=)`, the panel on deck 1."""
     meta, one, two, lib = rig.meta, rig.one, rig.two, rig.r.lib
     before = _look(one)
     names = [n for n in sorted(lib.list(LOADABLE)) if n != before["name"]]
@@ -260,7 +260,7 @@ def test_the_first_desk_carries_the_sequencer_page(rig):
     object on both tables: it reads the deck the first desk is on."""
     meta, one, two = rig.meta, rig.one, rig.two
     page = seq_page.of(one.reg)
-    assert page is not None and page is seq_page.of(two.reg)   # the session's, from either
+    assert page is not None and page is seq_page.of(two.reg)   # the meta controller's, from either
     assert page.reg is one.reg
     meta.point(DESK, two)
     assert page.reg is two.reg
@@ -307,7 +307,7 @@ def test_a_save_on_deck_2_captures_deck_2(rig):
 
 
 def test_the_sequencer_page_goes_with_the_desk(rig):
-    """`Bindings.page` is the session's: SEND A works with the desk on deck 2, a
+    """`Bindings.page` is the meta controller's: SEND A works with the desk on deck 2, a
     page up stays up across a move, and its steps land on the desk's deck."""
     meta, one, two, midi = rig.meta, rig.one, rig.two, rig.r.midi
     meta.point(DESK, two)
@@ -354,7 +354,7 @@ def test_a_momentary_held_when_the_desk_moves_is_let_go_on_the_deck_it_held(rig)
 
 
 def test_a_meta_fader_keeps_its_catch_across_a_move(rig):
-    """A session param is one object on both decks: the fader on it is still caught."""
+    """A shared meta param is one object on both decks: the fader on it is still caught."""
     meta, one, two, midi = rig.meta, rig.one, rig.two, rig.r.midi
     gain = one.reg["output.dim"]
     assert two.reg["output.dim"] is gain
@@ -378,7 +378,7 @@ def test_a_meta_fader_keeps_its_catch_across_a_move(rig):
 
 
 def test_deck_2s_load_leaves_deck_1s_labels_and_light(rig):
-    """The panel on deck 1: `deck2.presets.load` touches none of what its strip reads."""
+    """The panel on deck 1: `deck2.loaded_patch.load` touches none of what its strip reads."""
     one, two, lib = rig.one, rig.two, rig.r.lib
     labels, lit = {g: lib.landed(g) for g in lib.landed_groups()}, lib.project.active
     dots = {g: lib.is_dirty(g) for g in ("view", "pattern")}
@@ -571,7 +571,7 @@ def test_the_keys_have_their_own_deck():
 
 def test_every_pointer_on_deck_1_lands_every_corpus_loadable_as_before(tmp_path):
     """D1's walk over the corpus: with the holders pointed at deck 1 the state
-    is the unpointed rig's, to the bit."""
+    is the unpointed meta controller's, to the bit."""
     home = tmp_path / "home"
     plain = _walk(boot(home))
     r = boot(home)
@@ -599,7 +599,7 @@ def test_main_points_every_holder_and_moves_none():
 
 def test_the_experiments_are_on_both_decks_over_one_state(rig):
     """The panel hook runs on the first deck only: what it registers that is no
-    session group must reach the second, or a pad there loses it."""
+    shared meta group must reach the second, or a pad there loses it."""
     one, two = rig.one, rig.two
     state, swing = totem.TotemState(), poi.PoiState()
     totem.register(one.reg, state)

@@ -1,5 +1,5 @@
 """The hard rule (the owner, 2026-11-04; register rows 743–745): no row of a
-preset may drive a meta controller param (`part_of(p) == "session"`). Every door
+loadable patch may drive a meta controller param (`part_of(p) == "session"`). Every door
 refuses it in words, a saved one drops with a note and the next save removes it,
 and the meta controller's own rows stay.
 """
@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 from conftest import seed
 from test_graph_groups import BREATH
-from test_pad_learn import ScriptedPad
 from test_loadable import boot, put
+from test_pad_learn import ScriptedPad
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import gamepad, graphview, headless, patches, ui_graph, ui_routing, undo
@@ -100,7 +100,7 @@ def test_a_loadables_rows_are_refused_at_the_one_door(row):
 
 def test_every_factory_row_on_a_meta_param_is_the_meta_controllers():
     """The line is mechanical: the factory's rows on a meta param all pass by
-    their layer, and the factory's preset layer holds none, with no id listed."""
+    their layer, and the factory's patch layer holds none, with no id listed."""
     table = Bindings.factory()
     on_meta = [b for b in table.bindings if meta_refusal(b.target) is not None]
     assert any(b.target == "output.dim" for b in on_meta) and len(on_meta) > 40
@@ -199,7 +199,7 @@ def test_a_hand_or_a_stick_learn_on_a_meta_param_is_refused_in_words(tmp_path):
 
 
 def test_a_desk_learn_on_a_meta_param_ends_and_a_pad_button_still_lands(tmp_path):
-    """The desk's preset layer is refused, wherever the control. A pad button is
+    """The desk's patch layer is refused, wherever the control. A pad button is
     the meta controller's own row, which stays allowed: the learn it answers
     was armed bare, so the refusal leaves it armed for that."""
     r = boot(tmp_path)
@@ -322,7 +322,7 @@ def test_a_graph_cable_onto_a_meta_param_is_refused_in_words(rig):
 
 def test_the_graph_lists_no_mod_port_for_a_meta_param_but_a_meta_row_stands(rig):
     """A meta param gets no stub of its own, and a row of the meta controller's
-    still draws: it is not a preset's."""
+    still draws: it is not a loadable patch's."""
     table = rig.router.table
     table.set_routes([])
     table.bindings = [b for b in table.bindings if b.target != "tempo.bpm"]
@@ -348,7 +348,7 @@ def test_a_route_end_moved_onto_a_meta_param_is_refused(rig):
 
 def test_macro_base_and_depth_subscribers_on_a_meta_param_are_dropped():
     """Decided: both, at `set_macros`. A base already was (D9); a depth has no
-    route to scale. A depth on a preset's route stays."""
+    route to scale. A depth on a loadable patch's route stays."""
     t = Bindings()
     notes = t.set_macros({"macro.1": {"subs": [
         {"base": "master.gain"},

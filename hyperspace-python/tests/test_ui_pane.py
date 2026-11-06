@@ -1,5 +1,5 @@
 """Plan 49, stage 1: GRAPH's side pane is always on and holds folding
-sections — selection, presets, lookback, faces, analyzer — each drawing
+sections — selection, loadable patches, lookback, faces, analyzer — each drawing
 what its page draws, found by the panel driver by the ids its page uses;
 the fold state is this Mac's, in ui.json beside the pane's width."""
 
@@ -11,7 +11,7 @@ from imgui_bundle import imgui, implot
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import ui, ui_bands, ui_graph, ui_pane, ui_loadable
+from hyperspace import ui, ui_bands, ui_graph, ui_loadable, ui_pane
 from hyperspace.analyzer import N_MAX
 from hyperspace.ui import PAGE_KEYS
 
@@ -19,7 +19,7 @@ WIDE = (1600, 900)      # a page wider than ui_graph.WIDE: the pane beside the c
 
 # a control each section draws, by the id its page draws it under
 SECTION_IDS = {
-    "presets": "new##new",           # the preset strip's new chip (ui_presets.strip)
+    "presets": "new##new",           # the preset strip's new chip (ui_loadable.strip)
     "lookback": "dream.on",
     "faces": "view.faces",
     "analyzer": "scene.select",
@@ -294,7 +294,7 @@ def test_the_narrow_band_opens_selection_alone_and_one_section_takes_it_all(
     band under the canvas, with its own fold state — selection alone at
     first — the headers one row, and an open section the band's height."""
     with build_rig(tmp_path) as r:
-        d = Driver(step=lambda: frame(r.panel, "graph"))    # the rig's 820 px window
+        d = Driver(step=lambda: frame(r.panel, "graph"))    # the meta controller's 820 px window
         d.record(monkeypatch.setattr)
         d.run(d.wait(3))
         st = _st(r)
@@ -335,7 +335,7 @@ def test_the_projector_inset_keeps_clear_of_the_pane(tmp_path, monkeypatch):
     pic = (1920, 1080)
     (x, y), (x1, y1) = ui_graph.monitor_rect((0.0, 0.0), (800.0, 100.0), pic)
     assert y1 <= 100.0 - 8.0 + 1e-6 and abs((y1 - y) / (x1 - x) - 1080 / 1920) < 1e-6
-    with build_rig(tmp_path) as r:                  # the rig's 820 px window: narrow
+    with build_rig(tmp_path) as r:                  # the meta controller's 820 px window: narrow
         got = []
         monkeypatch.setattr(ui_graph, "_monitor", lambda panel, o, a: got.append((o, a)))
         for _ in range(2):
@@ -557,7 +557,7 @@ def test_setting_the_same_slot_again_brings_the_section_back(pane):
 
 
 def test_the_focused_section_lands_at_the_top_of_the_pane_with_room(tmp_path, monkeypatch):
-    """Selection and presets open above it, the pane shorter than the lot:
+    """Selection and loadable patches open above it, the pane shorter than the lot:
     the focused header scrolls to the pane's top, its body runs down to the
     headers after it, and those stay in view."""
     with build_rig(tmp_path) as r:
@@ -580,7 +580,7 @@ def test_the_band_grows_for_the_focused_section_and_only_it_draws(tmp_path, monk
     section alone, all but `CANVAS_MIN` of the page, the chips above it; a
     click on a chip lets go and the band is `BELOW_H` again. The column
     beside the canvas keeps its folds."""
-    with build_rig(tmp_path) as r:              # the rig's 820 px window: the band
+    with build_rig(tmp_path) as r:              # the meta controller's 820 px window: the band
         d = Driver(step=lambda: frame(r.panel))
         d.record(monkeypatch.setattr)
         r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
@@ -692,7 +692,7 @@ def test_the_track_readout_is_measured_as_printed(tmp_path, monkeypatch):
     widths = []
     real = ui_mod._readout_width
     monkeypatch.setattr(ui_mod, "_readout_width", lambda t: (widths.append(t), real(t))[1])
-    # (the rig's stand-in audio has no transport params: its buttons stubbed)
+    # (the meta controller's stand-in audio has no transport params: its buttons stubbed)
     monkeypatch.setattr(ui_mod.Panel, "_button", lambda self, *a, **k: False)
     with build_rig(tmp_path) as r:
         r.panel.audio.__dict__.update(mode="file", on=False, playing=True,
@@ -790,7 +790,7 @@ def test_every_section_focused_lands_in_view_and_inside_the_pane(tmp_path, monke
 
 
 def test_a_fresh_launch_has_no_scrollbar_on_the_pane(pane):
-    """Selection and presets open, nothing focused: the sections fit the
+    """Selection and loadable patches open, nothing focused: the sections fit the
     pane exactly, with the spacing after each open body counted."""
     r, _d = pane
     win = imgui.internal.find_window_by_name(_st(r)["pane_window"])

@@ -2,13 +2,13 @@
 
 **APC40-only** (plan 27 B2): with several MIDI desks listed, this draws
 the first MIDI role's rows (`Bindings.active()` with no role) over
-`apc40.LAYOUT` — the APC40 in every rig that lists it first. A second
+`apc40.LAYOUT` — the APC40 in every meta controller that lists it first. A second
 desk (a `generic` profile) has no layout to draw; plan 29's generic
 on-screen desk is what replaces this module for any profile.
 
 A picture of the desk in the control window: every control of
 `apc40.LAYOUT` at its place on the device, with its glyph — the same
-glyph the ROUTING page prints first on a desk or session row and Learn
+glyph the ROUTING page prints first on a desk or meta row and Learn
 prints in its messages — so a row can be found on the device by looking.
 
 **It takes the room it has** (`room`, plan 17 fork 1): the space left of
@@ -18,7 +18,7 @@ panel hidden (`ui.panel`: H, DEVICE ON/OFF, the header's `big` chip) it is
 the whole control window. There is no DESK page and no param for its
 size. Once a layout unit is `LABEL_UNIT` px wide every lit control also
 carries **what it does** (`text`): its param's label, or the value's name
-for an enum `set` row (the bank row reads the presets' names). A label in
+for an enum `set` row (the bank row reads the loadable patches' names). A label in
 the bright ink is a row of the layer that is up; a grey one is invariant
 — the same on both layers. Under that size the drawing is the glyphs
 alone, as before.
@@ -30,9 +30,9 @@ either size. ⇧ fills red while the global layer is up. A knob's arc is
 its ring — the param's base (audit R6); a fader's cap the param's value;
 a button's LED is filled when the device's would be (`routing.led_level`,
 the rule midi.py lights by). A **bank pad** (clip rows 1, 4 and 5, plan 19
-WP2) has three states, as on the device: the loaded preset's is green, a
-slot that holds another preset is amber at half strength and reads that
-preset's name, and an empty slot's is drawn as a dark control — its glyph
+WP2) has three states, as on the device: the loaded loadable patch's is green, a
+slot that holds another loadable patch is amber at half strength and reads that
+loadable patch's name, and an empty slot's is drawn as a dark control — its glyph
 only, no label (`empty`); its hover still says what the pad is. The hover
 names the control: glyph · param · its label · layer, and Akai's name.
 
@@ -57,10 +57,10 @@ click completes it instead, as a knob bump would.
 
 **The offer** (plan 24 C3): while a mappable control is picked, the
 empty ground of the right-hand section (`OFFER`, under the transport row)
-lists the params this preset uses, ranked (`offer`, `learn.ranked`: what
+lists the params this loadable patch uses, ranked (`offer`, `learn.ranked`: what
 its routes and macros move, what it set off the group default, the
 effects and layers it has on, then what is already on the desk), and its
-chip "all params ▾" opens every param, this preset's first and then a
+chip "all params ▾" opens every param, this loadable patch's first and then a
 menu per group — not the whole registry in one list. A click on one puts
 the picked control there (`take`): `Learn.map_picked`, the same road the
 page's click takes, which still works beside it.
@@ -93,7 +93,7 @@ LABEL_UNIT = 44.0          # a layout unit this wide or wider carries labels…
 LABEL_UNIT_H = 32.0        # …if it is also this tall (a short, wide window: glyphs only)
 EDGE = 12.0                # from the control window's edges, the panel and the sheet
 PAD = 8.0
-HEAD_H = 26.0              # the header's line: the layer, the preset, the chip
+HEAD_H = 26.0              # the header's line: the layer, the loadable patch, the chip
 GLYPH_PX = 10.0            # the glyphs' type size
 GAP = EDGE                 # from the cheat sheet
 LABEL_PX = (11.0, 18.0)    # the labels' type size: 0.2 of a unit, kept in this range
@@ -102,14 +102,14 @@ BIG, PANEL = "big", "panel"    # the header's chip: hide the panel / bring it ba
 CLOSE = "×"                # the header's last chip: close the desk (`ui.desk`)
 PICK_S = 20.0              # a picked control lets go by itself after this long with no click
 PICK_MOVE = 12.0           # px the mouse must leave a pick's click by before a click can map
-SAYS_S = 0.5               # how long the labels' texts are kept (a renamed preset shows by then)
+SAYS_S = 0.5               # how long the labels' texts are kept (a renamed loadable patch shows by then)
 LET_GO_TIP = "click to let go"     # the footer's picked line: on it where it fits, and on hover
-# The offer (plan 24 C3): where the picked control's list of this preset's
+# The offer (plan 24 C3): where the picked control's list of this loadable patch's
 # params is drawn, in layout units (x, y, w, h) — the right-hand section's
 # empty ground between the transport row and the crossfader, so it covers
 # no control and the desk's own layout never moves while a pick stands
 OFFER = (apc40.RIGHT, 10.45, 4.0, 2.95)
-OFFER_ALL = "all params ▾"          # its chip: every param, this preset's first, then by group
+OFFER_ALL = "all params ▾"          # its chip: every param, this loadable patch's first, then by group
 OFFER_SHORT = "all ▾"               # …where the long label does not fit beside the head
 OFFER_PAD = (4.0, 3.0)              # its inner padding, px
 OFFER_SPACING = (4.0, 1.0)          # …and its items' spacing: three items fit on the small desk
@@ -207,7 +207,7 @@ def lit_cached(panel, table) -> dict[str, Binding]:
 
 def mappable(table, c: apc40.Control) -> str | None:
     """Why a click on a param could not put this control on it, or None
-    when it can: an invariant control is the session's on both layers
+    when it can: an invariant control is the meta controller's on both layers
     (D6), and nothing is mapped while the global layer is up (D5) — what
     `Learn.learn_control` refuses, asked before the click."""
     name = apc40.named(c.source) or c.glyph
@@ -332,7 +332,7 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
     """What the desk's header says of the picked control, and whether a
     click on a param would map it: "D3 picked: click a param to put it
     here · click D3 again to let go", or why not and what the control
-    does ("S3 (track fader 3) is invariant (the session's): SUB Post-drive")."""
+    does ("S3 (track fader 3) is invariant (the meta controller's): SUB Post-drive")."""
     why = mappable(table, c)
     if why is None:
         if panel.open and ui_pane.shown(panel, ui_pane.ROUTING):
@@ -365,9 +365,9 @@ def footer_line(panel, now: float | None = None) -> tuple[str, bool] | None:
 def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
     """What a picked control is offered (plan 24 C3): `learn.ranked` over
     every param a desk control may take (`ui_routing.desk_target`) — this
-    preset's own first, ranked, then the rest by group. Built from the
+    loadable patch's own first, ranked, then the rest by group. Built from the
     registry, the table and the library's group defaults, and kept while
-    the pick, the table and the loaded preset stand."""
+    the pick, the table and the loaded loadable patch stand."""
     st = _state(panel)
     lib = getattr(panel, "library", None)
     key = (getattr(getattr(panel, "learn", None), "control", None), _key(table),
@@ -417,7 +417,7 @@ def _offer_item(panel, pid: str, why: str, width: float) -> None:
 
 
 def _offer_all(panel, used, rest) -> None:
-    """The chip's popup: this preset's params, then every other param a
+    """The chip's popup: this loadable patch's params, then every other param a
     menu per group."""
     if not imgui.begin_popup("##offer_all"):
         return
@@ -441,7 +441,7 @@ def _offer_all(panel, used, rest) -> None:
 
 def _offer(panel, table, origin, unit) -> None:
     """The picked control's offer, in the `OFFER` ground: a chip that
-    opens every param, then this preset's params, ranked (`offer`); a
+    opens every param, then this loadable patch's params, ranked (`offer`); a
     click on one maps the pick there. Drawn only while a click on a param
     would map it (`picking`)."""
     st = _state(panel)
@@ -660,7 +660,7 @@ STEP_WORDS = {"band.select": group_part("band").capitalize()}
 def text(reg, b: Binding) -> str:
     """What a lit control does, in the panel's words (plan 17 fork 8): a
     `set` row on an enum → that value's name (the bank row reads the
-    presets' names, a scene pad the scene's; `SET_WORDS` puts a word
+    loadable patches' names, a scene pad the scene's; `SET_WORDS` puts a word
     before it — "analyzer SUB"); a `step` row → the label and the step
     ("Brightness +3"); a toggle row on an enum, which steps it → the
     label, the value now and "next" ("SUB Transfer: SQ · next"); a target
@@ -751,7 +751,7 @@ def _wrapped(text: str, width: float, lines: int, px: float
     key = (text, round(width), lines, round(px, 1))
     hit = _WRAPS.get(key)
     if hit is None:
-        if len(_WRAPS) > 4000:          # preset names come and go; never grows without end
+        if len(_WRAPS) > 4000:          # loadable patch names come and go; never grows without end
             _WRAPS.clear()
         rows = wrap(text, width, lines)
         hit = _WRAPS[key] = (rows, [imgui.calc_text_size(r).x for r in rows],
@@ -762,7 +762,7 @@ def _wrapped(text: str, width: float, lines: int, px: float
 def _says(panel, table, shown: dict[str, Binding]) -> dict[str, str]:
     """{glyph: `text`} for the lit controls, kept while the lit map stands
     and for at most `SAYS_S` (an enum's names are asked of the app — the
-    bank's are its presets' — and can change under a row that did not)."""
+    bank's are its loadable patches' — and can change under a row that did not)."""
     st = _state(panel)
     now = time.monotonic()
     hit = st.get("says")
@@ -786,7 +786,7 @@ def _layer_word(table, b: Binding) -> str:
 
 def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     """The hover: "D3 · fx.kaleido.segments · Kaleidoscope segments ·
-    preset layer", then Akai's name. Without a registry (or when the text
+    patch layer", then Akai's name. Without a registry (or when the text
     is the id) the param's words are left out."""
     if b is None:
         return f"{c.glyph} · unmapped — dark on the {table.layer} layer\n{c.name}"
@@ -806,7 +806,7 @@ def _loadable_name(panel) -> str:
 def _led(panel, b: Binding) -> tuple[float, float, float] | None:
     """The colour the device's LED shows for a lit button row, or None
     (off). A row at level 1 (`routing.led_level`: a bank pad whose slot
-    holds a preset that is not the loaded one) shows the profile's
+    holds a loadable patch that is not the loaded one) shows the profile's
     "filled" colour — amber on the clip grid — at `FILLED` strength."""
     p = panel.reg.get(b.target)
     if p is None or b.feedback != "led":
@@ -1046,7 +1046,7 @@ def _runs(jobs: list[tuple[apc40.Control, _Job]]) -> list[_Job]:
 
 
 def diagram(panel) -> None:
-    """The desk window: a header (the layer up, the loaded preset, the
+    """The desk window: a header (the layer up, the loaded loadable patch, the
     `big` / `panel` chip), then every control at its place — in the room
     `room` gives it."""
     table = _table(panel)
@@ -1097,10 +1097,10 @@ def _close(panel) -> None:
 
 
 def _header(panel, table) -> None:
-    """One line `HEAD_H` tall: apc40 · the layer up · the loaded preset,
+    """One line `HEAD_H` tall: apc40 · the layer up · the loaded loadable patch,
     and the chip at the right. While a control is picked the line says so
     — what is picked, what the next click does, how to let go, the
-    seconds left — after the preset's name where there is room (the big
+    seconds left — after the loadable patch's name where there is room (the big
     desk), in place of the line's other words where there is not."""
     start = imgui.get_cursor_pos()
     full = imgui.get_content_region_avail().x

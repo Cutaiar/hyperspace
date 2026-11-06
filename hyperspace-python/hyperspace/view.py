@@ -173,13 +173,13 @@ class ViewState:
     # position in world units (the unit circumradius; pan.y positive down)
     zoom: float = 1.0
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
-    # the eye (eye.* — the preset's since plan 43 C2): the one fixed camera
+    # the eye (eye.* — the loadable patch's since plan 43 C2): the one fixed camera
     # the scene is seen through; the defaults are project_h's divide
-    # (geometry.EYE_FOV / EYE_DISTANCE), the rig's reference eye the hands'
+    # (geometry.EYE_FOV / EYE_DISTANCE), the meta controller's reference eye the hands'
     # calibration is fitted to (ghost.calibration)
     eye_fov: float = EYE_FOV           # degrees across the shorter side
     eye_distance: float = EYE_DISTANCE  # world units from the origin
-    # the point clouds (cloud.* — session; plan 26 A4b, graph.PointCloud):
+    # the point clouds (cloud.* — meta controller; plan 26 A4b, graph.PointCloud):
     # how a recorded or live cloud is drawn in the shared camera. Nothing
     # reads them until a `cloud` device is listed
     cloud_size: float = 2.0      # a point's radius, logical px
@@ -204,7 +204,7 @@ class ViewState:
     pattern_mix: float = 1.0     # flat ↔ pattern blend
     # plan 32 (row 331): a media channel over the face pattern, where the
     # one bitmap file (view.bmp_*) was; the same alpha, size and path. Which
-    # channel is the preset graph's wire into `pattern.media` (plan 33 T7:
+    # channel is the loadable patch graph's wire into `pattern.media` (plan 33 T7:
     # `view.media` is retired)
     media_alpha: float = 1.0     # its opacity fader
     media_scale: float = 0.9     # its width, face-UV units (face spans 1.0)
@@ -215,28 +215,28 @@ class ViewState:
     # host, as inst_phase; not a param, never saved
     media_phase: float = 0.0
     # the backdrop (row 330): a picture under the scene — which one is the
-    # preset graph's wire into `backdrop.image` (plan 33 T7: `backdrop.channel`
+    # loadable patch graph's wire into `backdrop.image` (plan 33 T7: `backdrop.channel`
     # is retired)
     backdrop_alpha: float = 1.0
     backdrop_history: bool = False   # the look-back captures the backdrop too
     # plan 33 S: each switch node's pick (`switch[.n].select`, declared from
-    # the preset's graph: params.declare_switches) — switch name → 0 off,
+    # the loadable patch's graph: params.declare_switches) — switch name → 0 off,
     # 1–8 its input; read once a frame by the renderer
     switch: dict[str, int] = field(default_factory=dict)
     # plan 34 Z: each resize node's values (`resize[.n].*`, declared from the
-    # preset's graph: params.declare_resizes) — resize name → its state
+    # loadable patch's graph: params.declare_resizes) — resize name → its state
     resize: dict[str, ResizeState] = field(default_factory=dict)
     # plan 39 T2: each matte node's values (`matte[.n].*`, declared from the
-    # preset's graph: params.declare_mattes) — matte name → its state
+    # loadable patch's graph: params.declare_mattes) — matte name → its state
     mattes: dict[str, MatteState] = field(default_factory=dict)
     # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
-    # preset's graph: params.declare_cuts) — cut name → its state
+    # loadable patch's graph: params.declare_cuts) — cut name → its state
     cuts: dict[str, CutState] = field(default_factory=dict)
     # plan 39 T4: each segment node's values (`segment[.n].*`, declared from
-    # the preset's graph: params.declare_segments) — segment name → its state
+    # the loadable patch's graph: params.declare_segments) — segment name → its state
     segments: dict[str, SegmentState] = field(default_factory=dict)
     # plan 36 T4: each extra look-back's values (`dream.<n>.*`, declared from
-    # the preset's graph: params.declare_lookbacks) — `lookback.<n>` → its
+    # the loadable patch's graph: params.declare_lookbacks) — `lookback.<n>` → its
     # `lookback.DreamState` (`lookback`'s are the renderer's own, `dream.*`)
     lookback: dict[str, Any] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
@@ -289,7 +289,7 @@ class ViewState:
 
     def pose(self) -> list[float]:
         """The spin's pose as six plane angles, each in (−π, π] — what a
-        preset saves (plan 43 C2, row 573: `params.POSE_IDS`) — one pose
+        loadable patch saves (plan 43 C2, row 573: `params.POSE_IDS`) — one pose
         per picture, by one road (review 2.4):
 
         - a 3D shape: its own XY, XZ and YZ folded, the W planes 0 — body
@@ -311,7 +311,7 @@ class ViewState:
           layers taking the folded XY, XZ and YZ (the one case not exact).
 
         The folded roads return angles in (−π, π]; a scene's are as they
-        stand (`preset.pose_angle` rounds both the same way)."""
+        stand (`loadable.pose_angle` rounds both the same way)."""
         ang = [float(a) for a in self.ang]
         scene = bool(SHAPES[self.shape].layers)
         if scene and (is_3d(self.shape) or (self.body is None and not self.held)):

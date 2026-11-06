@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Plan 12 — the party presets, offscreen: each preset's look under a set
+"""Plan 12 — the party loadable patches, offscreen: each loadable patch's look under a set
 of hand poses, and the sweep tables the plan cites.
 
-Every ``party-*`` preset of the test corpus (``tests/corpus/presets/``, copied
-into a scratch library home) is loaded through the real ``Presets`` over a
+Every ``party-*`` loadable patch of the test corpus (``tests/corpus/presets/``, copied
+into a scratch library home) is loaded through the real ``LoadedPatch`` over a
 ``Router`` — its values and its routes in one load, as its pad does — and
 two fake hands are driven through the real ``HandsIO`` chain
 (range → One Euro → dead zone → follower) at a handful of poses, each held
 for a second and a half before the frame is taken. No audio source: the
 lane rows are quiet, so what the shots show is the hands alone over the
-preset's bases. No dream worker either (the tool attaches none), so in the wake
+loadable patch's bases. No dream worker either (the tool attaches none), so in the wake
 shots the echoes are real and the dream buffer is empty.
 
-    uv run python tools/preset_shots.py [--only tumble,trip] [--frames 90] [--no-shots]
+    uv run python tools/loadable_shots.py [--only tumble,trip] [--frames 90] [--no-shots]
 
 Writes, under docs/plans/assets/12-presets/:
   <name>/<pose>.png       one frame per pose, 960×600
@@ -48,14 +48,14 @@ from hyperspace.fx import FxState
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
 from hyperspace.library import LOADABLE, Library
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.params import Kind, build_registry
-from hyperspace.loadable import LoadedPatch
 from hyperspace.render import Renderer, ViewState
 from hyperspace.routing import Bindings, Router
 
 OUT = ROOT / "docs" / "plans" / "assets" / "12-presets"
-CORPUS = ROOT / "tests" / "corpus" / "presets"      # the presets, as test data
+CORPUS = ROOT / "tests" / "corpus" / "presets"      # the loadable patches, as test data
 HAND_AXES = tuple(DEFAULT_DOFS)                       # x y z roll pitch yaw
 W, H = 960, 600
 DT = 1 / 60
@@ -177,11 +177,11 @@ def pose_hands(pose: dict[str, float]) -> dict[str, dict[str, float]]:
 
 
 class Stage:
-    """Everything one preset needs: registry, router, hands, clock, LFOs."""
+    """Everything one loadable patch needs: registry, router, hands, clock, LFOs."""
 
     def __init__(self, name: str, ctx=None, load: str | None = None):
-        """`load`: the name the list holds the preset under, when it is not
-        a party preset's upper-case slot name (tools/orbit_demo.py)."""
+        """`load`: the name the list holds the loadable patch under, when it is not
+        a party loadable patch's upper-case slot name (tools/orbit_demo.py)."""
         self.t = 0.0
         self.view = ViewState()
         self.fx, self.dream = FxState(), DreamState()
@@ -196,7 +196,7 @@ class Stage:
         envs, seq = envelope.Envelopes(), sequencer.Sequencer()
         envelope.register(self.reg, envs, self.clock)
         sequencer.register(self.reg, seq, self.clock)
-        # the preset through the one loader (plan 13 WP2), over a throwaway
+        # the loadable patch through the one loader (plan 13 WP2), over a throwaway
         # library home holding the corpus, so nothing touches ~/Hyperspace
         self._home = tempfile.TemporaryDirectory()
         own = Path(self._home.name) / LOADABLE
@@ -212,7 +212,7 @@ class Stage:
         missing = loaded_patch.load(load or name.split("-", 1)[1].upper())
         assert not missing and not loaded_patch.notes and not self.router.table.dropped, (
             name, missing, loaded_patch.notes)
-        # the preset's own routes: the table was empty before the load
+        # the loadable patch's own routes: the table was empty before the load
         self.routes = list(self.router.table.routes())
         self.src = DictSource(lambda: self.t)
         self.io = HandsIO(HandSettings.from_config(), {"enabled": True}, source=self.src,
@@ -221,7 +221,7 @@ class Stage:
         self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx) if ctx is not None else None
         if self.renderer is not None:
             # plan 36 T3: a bare renderer draws the app's empty frame; the
-            # preset's graph onto it, as app.py attaches it
+            # loadable patch's graph onto it, as app.py attaches it
             loaded_patch.graph.attach(self.renderer)
             errs = self.renderer.fx.compile_all()     # before any frame: a broken shader is a stop
             if errs:
@@ -270,7 +270,7 @@ def fmt(p, v) -> str:
 
 
 def sweep(name: str, frames: int) -> str:
-    """Every hand row of the preset across its axis's throw — the markdown
+    """Every hand row of the loadable patch across its axis's throw — the markdown
     table the plan cites. A fresh stage per reading, so nothing carries."""
     rows = [b for b in Stage(name).routes if b.scheme == "hand"]
     us = (0.0, 0.25, 0.5, 0.75, 1.0)

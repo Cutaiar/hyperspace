@@ -190,7 +190,7 @@ def test_a_delay_reaches_only_when_read():
 ])
 def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
     """Plan 34's feedback words (a delay, a resize, an echo, the dream) on a
-    wire and as a bare entry read with no note, and a preset holding them
+    wire and as a bare entry read with no note, and a loadable patch holding them
     saves `/6` with the node in its frame (row 394)."""
     from test_plan31_wiring import make_app
 

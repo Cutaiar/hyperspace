@@ -4,7 +4,7 @@ each written to fail before its fix. The rigs are test_plan31_wiring's."""
 import pytest
 from test_plan31_wiring import frame, make_app, rig
 
-from hyperspace import envelope, graphview, modbank, loadable, sequencer
+from hyperspace import envelope, graphview, loadable, modbank, sequencer
 from hyperspace.envelope import Envelope
 from hyperspace.sequencer import SPANS, Sequencer
 from hyperspace.tempo import Clock
@@ -283,7 +283,7 @@ def test_the_tooltips_and_the_graph_picker_say_the_banks_reason():
     assert "LFO" in ui_lfo.add_tip(rig().lfos) and "env 6" in ui_seq.add_tip(rig().envs)
 
 
-# ---- 9: a removed id is never handed out again in the session ----
+# ---- 9: a removed id is never handed out again in the meta controller ----
 
 def test_removing_the_top_voice_then_adding_does_not_reuse_its_id():
     import math

@@ -433,7 +433,7 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
     `lane` and `lfo` first, then the schemes the listed devices feed —
     the pad's `axis` (not its `pad` / `hat` rows), the hands' `hand`, the
     bridge's `ext`; MIDI feeds nothing; an `off` device's scheme is still
-    listed, so a preset row naming it is dormant, not unknown."""
+    listed, so a patch row naming it is dormant, not unknown."""
     io = SimpleNamespace(on=False, error="", last="", name="", profile=None, bindings=[])
     reg = devices.DeviceRegistry(devices=[
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),

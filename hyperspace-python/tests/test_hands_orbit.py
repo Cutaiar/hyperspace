@@ -781,7 +781,7 @@ def test_another_decks_turn_keeps_no_step_on_this_undo(deck, tmp_path):
 # ------------------------------------------------------------ saved and held
 
 def test_a_save_has_the_row_and_the_turned_camera(deck, tmp_path):
-    """The camera route is the preset's (plan 43 C2): saved, reloaded, it is there."""
+    """The camera route is the loadable patch's (plan 43 C2): saved, reloaded, it is there."""
     script = closing() + [fist(yaw=float(k)) for k in range(31)] + opening(yaw=30.0)
     Run(deck, tmp_path, script, steps=deck.undo)
     path = deck.loaded_patch.save_as("ORBIT")

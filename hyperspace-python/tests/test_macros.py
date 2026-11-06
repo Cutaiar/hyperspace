@@ -127,7 +127,7 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
     assert t.bindings[0].scale is None
     assert t.macros_doc() == {"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
     assert any("depth subscriber of macro.1" in n for n in t.notes)
-    # the route and its macro are a preset's (plan 13 WP5): the table
+    # the route and its macro are a loadable patch's (plan 13 WP5): the table
     # carries them as one, the same subscriber, the same depth (nothing
     # reads `carried` since the one-tier library of 2026-10-28 retired
     # plan 13 §6's migration; the next write leaves it out)
@@ -159,7 +159,7 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
 
 def test_a_scale_on_a_meta_param_is_left_alone():
     """Decision register row 18 (a): a route keeps a `scale` that names a
-    session param — the drive fader reaches the rotation as `scale:
+    shared meta param — the drive fader reaches the rotation as `scale:
     master.gain` on the six legacy6 rate rows — and nothing migrates it."""
     row = {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625,
            "scale": "master.gain"}
@@ -173,10 +173,10 @@ def test_a_scale_on_a_meta_param_is_left_alone():
 
 
 def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
-    """Decision register row 18 (a): a `scale` naming a performance param
-    (one a preset load could move under the route) is dropped with a note
-    — in the live table and in a preset's load — the depth kept; a macro's
-    becomes a depth subscriber and a session param's stays, as before."""
+    """Decision register row 18 (a): a `scale` naming a patch param
+    (one a loadable patch load could move under the route) is dropped with a note
+    — in the live table and in a loadable patch's load — the depth kept; a macro's
+    becomes a depth subscriber and a shared meta param's stays, as before."""
     rows = [{"source": "hand:1", "target": "view.bright", "op": "push", "value": 0.3,
              "scale": "view.speed"},                                  # performance: dropped
             {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3,
@@ -190,7 +190,7 @@ def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
     assert any("dropped the scale view.speed of hand:1 → view.bright" in n and "18 (a)" in n
                for n in t.notes)
     assert t.macros_doc() == {"macro.4": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
-    # a preset's load
+    # a loadable patch's load
     from test_loadable import boot, put
     r = boot(tmp_path)
     put(tmp_path, "SCALED", routes=rows, macros={})
@@ -198,7 +198,7 @@ def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
     assert [b.scale for b in r.router.table.routes()] == [None, None, "master.gain"]
     assert any("dropped the scale view.speed" in n for n in r.loaded_patch.notes)
     assert r.router.table.macros_doc()["macro.4"]["subs"] == [depth_sub("lfo:1", "fx.mix")]
-    # the ROUTING page's combo offers session params only
+    # the ROUTING page's combo offers shared meta params only
     from types import SimpleNamespace
 
     from hyperspace import ui_routing
@@ -209,9 +209,9 @@ def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
 
 
 def test_a_base_subscriber_on_a_meta_param_is_dropped_with_a_note(tmp_path):
-    """D9, review of PR #67: a base subscriber names a performance param —
-    persisted, not an alias — never a session one, so a preset load never
-    writes a session base through a macro. `set_macros` drops any other
+    """D9, review of PR #67: a base subscriber names a patch param —
+    persisted, not an alias — never a meta controller one, so a loadable patch load never
+    writes a meta controller base through a macro. `set_macros` drops any other
     with a note (the load's notes, and the migration's), and a depth
     subscriber on a route onto one goes with that route (register row 743)."""
     from test_loadable import boot, put

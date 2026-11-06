@@ -1,8 +1,8 @@
 # ruff: noqa: F811 — `rig` is test_midi's fixture, taken as each test's argument
 """The owner's APC40 findings of 2026-10-16, reproduced with the fake port.
 
-The owner's session file is copied to tests/fixtures/desk-findings/ (its
-MIDI rows are the factory map's session part, row for row). Every symptom
+The owner's meta controller file is copied to tests/fixtures/desk-findings/ (its
+MIDI rows are the factory map's meta controller part, row for row). Every symptom
 of the report — the activator row (G8) taking two presses to go off and
 one to go on, the solo row (G9) that never goes dark while the rec-arm
 row (G10) lights and darkens press by press, track select (G7) and
@@ -39,10 +39,10 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.library import Library
+from hyperspace.loadable import LoadedPatch
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Binding, Router
 from hyperspace.view import ViewState
 
@@ -97,9 +97,9 @@ class Apc40:
 
 
 def owner_rig(tmp_path):
-    """test_midi's rig on the owner's session file and a shipped preset
+    """test_midi's rig on the owner's meta controller file and a shipped loadable patch
     from the corpus (its desk holds the activator row, as every corpus
-    preset's does)."""
+    loadable patch's does)."""
     shutil.copy(OWNER, tmp_path / "bindings.json")
     seed(tmp_path)
     chain = Analyzer(Analyser())
@@ -135,8 +135,8 @@ def intros(r) -> list[int]:
 
 def test_the_owners_file_holds_the_factory_meta_rows_and_nothing_else():
     """No stale, duplicated or conflicting row: every MIDI row of the
-    owner's file is a factory map row (the session part); what the
-    factory has beyond it is the preset layer, which lives in presets."""
+    owner's file is a factory map row (the meta controller part); what the
+    factory has beyond it is the patch layer, which lives in loadable patches."""
     own = json.loads(OWNER.read_text())["bindings"]
     # (the file as a load moves it: plan 44 D5d's crossfader and MASTER)
     own = [b.to_json() | {"op": b.op, "value": b.value, "layer": b.layer}
@@ -148,7 +148,7 @@ def test_the_owners_file_holds_the_factory_meta_rows_and_nothing_else():
     mine = {key(r) for r in own if r["source"].split(":")[0] in ("cc", "note")}
     factory = {key(r) for r in apc40.DEFAULT_MAP}
     assert mine <= factory
-    # beyond it: the preset layer, and SEND A — the sequencer page (plan 31
+    # beyond it: the patch layer, and SEND A — the sequencer page (plan 31
     # §A), newer than the file, added at its load (`APC_NEW_ROWS`)
     send_a = (routing.SEQ_PAGE_SOURCE, routing.SEQ_PAGE_PARAM, "toggle", 1.0, None)
     assert {r[4] for r in factory - mine - {send_a}} == {"preset"}

@@ -9,7 +9,7 @@ import pytest
 from test_ui_shell import page_frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graphview, patches, routing, ui, ui_desk, ui_graph, ui_pane, ui_loadable
+from hyperspace import graphview, patches, routing, ui, ui_desk, ui_graph, ui_loadable, ui_pane
 from hyperspace.groupwords import group_part, group_title, group_word
 from hyperspace.library import PATCHES, Library, LibraryError
 from hyperspace.params import Registry

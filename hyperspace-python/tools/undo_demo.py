@@ -3,16 +3,16 @@
 
 Builds the app's objects the way `app.main` does — library, registry,
 hands' settings, clock and LFOs, the router over the home's
-bindings.json, the presets, a Learn, a MidiIO over fake ports, a HandsIO
-over synthetic hands, the startup preset, then the `Undo` — with no
+bindings.json, the loadable patches, a Learn, a MidiIO over fake ports, a HandsIO
+over synthetic hands, the startup loadable patch, then the `Undo` — with no
 window, and prints a transcript: a slider drag, a knob sweep, a hand
-moving, a preset load, Ctrl+Z down the stack with the status line the
-footer shows, a redo, a save over a preset and a delete with the trash
+moving, a loadable patch load, Ctrl+Z down the stack with the status line the
+footer shows, a redo, a save over a loadable patch and a delete with the trash
 listed, and what `Undo.tick` costs a frame.
 
 It always runs on a fresh temp home of its own (`HYPERSPACE_HOME` is set
 here, before anything reads it), seeded with the test corpus
-(`tests/conftest.py::seed`: the presets, the dream module presets and the
+(`tests/conftest.py::seed`: the loadable patches, the dream module presets and the
 party show, which the home then opens): it cannot touch ~/Hyperspace.
 
   uv run python tools/undo_demo.py [--out docs/plans/assets/15-safety-net/undo-demo.txt]
@@ -59,11 +59,11 @@ from hyperspace.ghost import GhostState
 from hyperspace.hands.core import features
 from hyperspace.learn import Learn
 from hyperspace.library import LOADABLE, TRASH, Library, Marks
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 

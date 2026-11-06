@@ -5,7 +5,7 @@ shape, for the owner to judge by eye (D1), and the migration map
 
 Not plan 22's `tools/pattern_sheet.py` (one face's pattern alone, a tile per
 input value): here each pattern is drawn **on the faces of a shape, as a
-show draws it** — a corpus preset loaded through the real `Presets` over a
+show draws it** — a corpus loadable patch loaded through the real `LoadedPatch` over a
 scratch library home (`tools/golden_frames.py`'s `Rig`: HYPERSPACE_HOME is
 a temporary folder before anything is imported, the library home another;
 nothing reads or writes ~/Hyperspace or the Drive library), its own
@@ -15,11 +15,11 @@ frames on the pinned clock, so an animated pattern is past its first frame.
 
 What a tile shows, the same for every mode (only `view.pattern` differs):
 - `view.pattern_mix` 1.0 — the pattern alone on the faces, not the
-  preset's blend with the plain fill;
-- the eight inputs where the corpus presets' lane routes leave them on a
+  loadable patch's blend with the plain fill;
+- the eight inputs where the corpus loadable patches' lane routes leave them on a
   **medium passage** (plan 22 B3's MEDIUM bands: lane i pushes input i at
   `routing.PATTERN_DEPTH` on a base of 1; HUE and SPREAD at 1.0) — the
-  default pattern depth, set as the inputs' bases since the rig's analyzer
+  default pattern depth, set as the inputs' bases since the meta controller's analyzer
   is never fed;
 - the analyzer's lanes as the renderer reads them (`Renderer.bands`) at
   the same passage, which only METER and PULSE draw.
@@ -33,9 +33,9 @@ large). Each writes one PNG per mode and a labelled sheet in
 
 The migration map (`docs/plans/assets/37-faces/migration-map.md`) is
 generated, never hand-edited: what each mode draws and its ranked nearest
-neighbours are data here (`DRAWS`, `NEAREST`); which presets use each mode
+neighbours are data here (`DRAWS`, `NEAREST`); which loadable patches use each mode
 — with the faces wire drawn, with the faces off, or carried unwired — is
-read off every corpus preset (`tests/corpus/presets`) and every fixture as
+read off every corpus loadable patch (`tests/corpus/presets`) and every fixture as
 the real loader lands them (`usage`). `--check` regenerates it and fails when the file differs
 (tests/test_faces_map.py runs it), so the map cannot rot silently.
 
@@ -82,10 +82,10 @@ CORPUS = gf.CORPUS                                  # tests/corpus/presets
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 
 FRAMES = 3                    # frames drawn before the read: past the first
-TILE = (480, 300)             # a mode's PNG and a sheet's tile, half the rig's 960×600
+TILE = (480, 300)             # a mode's PNG and a sheet's tile, half the meta controller's 960×600
 LABEL_H = 22
-# (sheet file, the preset it is drawn on, what it shows, values set over
-# the preset's own for every mode). The Heart is lit at party-faces'
+# (sheet file, the loadable patch it is drawn on, what it shows, values set over
+# the loadable patch's own for every mode). The Heart is lit at party-faces'
 # brightness (plasma-heart's own 1.2 leaves the face too dim to judge)
 SHEETS = (("sheet.png", "party-faces",
            "a tesseract turning in 4D: many small faces, seen through each other", {}),
@@ -98,7 +98,7 @@ MEDIUM = (1.00, 1.00, 0.70, 0.90, 0.60, 0.60)
 
 
 def passage_inputs(out=MEDIUM, depth: float = PATTERN_DEPTH) -> list[float]:
-    """The eight inputs as the presets' lane routes leave them for lanes
+    """The eight inputs as the loadable patches' lane routes leave them for lanes
     `out` (tools/pattern_sheet.py's rule): lane i pushes input i at `depth` of
     the 0–2.6 range on a base of 1, held to the range; HUE and SPREAD 1."""
     mods = [1.0] * N_INPUTS
@@ -210,7 +210,7 @@ NEAREST: dict[str, tuple[tuple[str, str], ...]] = {
 
 
 def nearest_kept(mode: str, kept) -> str:
-    """The mode a preset on `mode` migrates to when only `kept` stay: the
+    """The mode a loadable patch on `mode` migrates to when only `kept` stay: the
     first kept name in `mode`'s ranked list, else the first kept mode in
     NAMES order (FLAT, when kept, is never chosen for a patterned mode
     unless nothing else is)."""
@@ -230,7 +230,7 @@ def nearest_kept(mode: str, kept) -> str:
 
 @dataclass(frozen=True)
 class Use:
-    """One preset's pattern, as the real loader lands it."""
+    """One loadable patch's pattern, as the real loader lands it."""
 
     slug: str
     where: str            # "corpus" or "fixture"
@@ -280,7 +280,7 @@ def _path_to_faces(wires) -> tuple[str, ...]:
 
 
 def _driven(doc: dict) -> tuple[str, ...]:
-    """The rows in a preset file that set `view.pattern`: its routes, desk
+    """The rows in a loadable patch file that set `view.pattern`: its routes, desk
     and macros (`source op`)."""
     rows = []
     for key in ("routes", "desk"):
@@ -295,9 +295,9 @@ def _driven(doc: dict) -> tuple[str, ...]:
 
 
 def usage() -> list[Use]:
-    """Every corpus preset and every fixture under tests/fixtures/presets/,
-    each loaded through the real `Presets` over a scratch library (the
-    golden rig's headless `Loader`, every fixture copied in), read for its
+    """Every corpus loadable patch and every fixture under tests/fixtures/presets/,
+    each loaded through the real `LoadedPatch` over a scratch library (the
+    golden meta controller's headless `Loader`, every fixture copied in), read for its
     landed mode, faces switch and wires."""
     loader = gf.Loader()
     own = Path(loader._home.name) / "presets"
@@ -416,7 +416,7 @@ def render_map(uses: list[Use]) -> str:
 
 
 def check() -> list[str]:
-    """What is stale: the map against the presets, and the data against NAMES."""
+    """What is stale: the map against the loadable patches, and the data against NAMES."""
     errs = []
     for n in NAMES:
         if n not in DRAWS:
@@ -436,7 +436,7 @@ def check() -> list[str]:
 # ---- the sheets ----
 
 def shoot(slug: str, modes: list[int], frames: int, over: dict | None = None):
-    """{mode: (H, W, 3) uint8, top row first} — preset `slug` on the golden
+    """{mode: (H, W, 3) uint8, top row first} — loadable patch `slug` on the golden
     rig, hands absent, one fresh rig per mode (so every mode starts on the
     same clock), the mode set, the inputs at the default depth on a medium
     passage, the mix at 1, then `over`'s values."""

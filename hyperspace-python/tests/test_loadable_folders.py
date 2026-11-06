@@ -1,8 +1,8 @@
-"""Plan 48: preset folders, stage 1 — the library lists presets every
-folder down under ``presets/``, a preset's name is folder-qualified
-(``party/B``), the bank points at a preset by that name (a bare name is a
+"""Plan 48: loadable patch folders, stage 1 — the library lists loadable patches every
+folder down under ``presets/``, a loadable patch's name is folder-qualified
+(``party/B``), the bank points at a loadable patch by that name (a bare name is a
 top-level file, so every older show reads as it did), a save writes back
-where the preset came from and a two-handed save lands beside it, and the
+where the loadable patch came from and a two-handed save lands beside it, and the
 trash is this Mac's (``<machine>/trash``), never in the synced library.
 
 Every test runs over a temp library and a temp machine home; nothing here
@@ -28,8 +28,8 @@ from hyperspace.library import (
     path_slug,
     slug,
 )
-from hyperspace.params import build_registry
 from hyperspace.loadable import LoadedPatch
+from hyperspace.params import build_registry
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
 
@@ -49,7 +49,7 @@ def tree(folder):
 
 @pytest.fixture()
 def lib_dirs(tmp_path):
-    """A library L (the "Drive" folder) and a machine home M: presets
+    """A library L (the "Drive" folder) and a machine home M: loadable patches
     ``a``, ``party/B``, ``party/deep/C``, a hidden ``.cache/x.json``, and a
     cloud client's conflict copy of ``party/B``; a show whose bank names
     ``A`` bare and ``party/B``."""
@@ -87,7 +87,7 @@ def test_the_list_is_every_folder_down_by_qualified_name(lib_dirs):
     assert "A" in listing and "party/B" in listing and "party/deep/C" in listing
     # the conflict copy keeps plan 25's rule, in its folder: listed by its stem
     assert "party/b (Dan's conflicted copy)" in listing
-    assert not [n for n in listing if "X" in n or "cache" in n]   # a hidden folder is no preset
+    assert not [n for n in listing if "X" in n or "cache" in n]   # a hidden folder is no loadable patch
     assert len(listing) == 4
     p = lib_dirs.loaded_patch
     assert r.lib.path_of(LOADABLE, "A") == p / "a.json"
@@ -189,7 +189,7 @@ def test_the_bank_holds_a_folder_loadable_and_cycle_and_walk_reach_it(lib_dirs):
     pr.load_slot(2)
     assert r.lib.current(LOADABLE) == "party/deep/C"
     assert r.lib.still_named("party/deep/C") == ["F3"]
-    assert r.lib.still_named("C") == []          # a bare C would be a top-level preset
+    assert r.lib.still_named("C") == []          # a bare C would be a top-level loadable patch
 
 
 def test_an_old_show_with_a_bare_name_still_loads_its_top_level_loadable(lib_dirs):
@@ -246,7 +246,7 @@ def test_the_trash_is_this_macs_and_restore_returns_to_the_folder(lib_dirs):
     assert lib.restore_trash(item) == "party/deep/C"
     assert (lib_dirs.loaded_patch / "party" / "deep" / "c.json").is_file()
     assert lib.trash() == []
-    # a save over a folder preset keeps the old text on this Mac too
+    # a save over a folder loadable patch keeps the old text on this Mac too
     r.loaded_patch.load("party/B")
     path = lib_dirs.loaded_patch / "party" / "b.json"
     path.write_text(path.read_text() + "\n")       # its text is not what a save writes
@@ -525,7 +525,7 @@ def test_a_symlinked_home_lists_its_trash_once(tmp_path):
 
 
 def test_a_non_loadable_file_kept_deeper_goes_back_to_its_group(lib_dirs):
-    """Third pass 4: only the presets have folders — a module preset the
+    """Third pass 4: only the loadable patches have folders — a module preset the
     trash holds a folder down restores to its group's own folder."""
     r = make(lib_dirs)
     deep = lib_dirs.machine / "trash" / "camera" / "odd"

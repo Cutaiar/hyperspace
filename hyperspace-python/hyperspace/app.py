@@ -22,7 +22,7 @@ fullscreen, overlay) through the output.* params. ``hyperspace --laptop``
   L  lines          F  faces          ?  cheat sheet
   T  overlay: float the render over the screen    G  clicks through it
      (only with [output] overlay = true in config.toml — decision 21)
-  F1–F8  load a preset of the bank               ⇧F1–F8  save the live state as it
+  F1–F8  load a loadable patch of the bank               ⇧F1–F8  save the live state as it
   B  tap tempo      ⇧B  LFO trigger: the downbeat is now, synced LFOs restart
   Cmd+Z / Ctrl+Z  undo the last gesture or load here  with ⇧  redo (undo.py)
 
@@ -91,7 +91,7 @@ from . import undo as undos
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
-from .deck import KEYS, MOUSE, Deck, Fade, MetaController, Mix, DeckHooksMade, register_xfade
+from .deck import KEYS, MOUSE, Deck, DeckHooksMade, Fade, MetaController, Mix, register_xfade
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotreload import HotReloader
 from .learn import Learn
@@ -767,7 +767,7 @@ def control_title(meta) -> str:
 def _desk_table(reg: Registry, table: Bindings) -> Bindings:
     """The app's binding table, with the desk's own params declared on it
     and knob smoothing at the app's default (plan 18 WP2, fork 12). Called
-    before `library.attach`, like every session param's registration, so
+    before `library.attach`, like every shared meta param's registration, so
     `desk.slew` exists when the show's session values land: a show that
     saved a number keeps it (0 included), one that names none takes 80 ms
     as the state it opened with — clean, and what "default" means. A bare
@@ -779,7 +779,7 @@ def _desk_table(reg: Registry, table: Bindings) -> Bindings:
 
 def _hand_settings(reg: Registry, cfg: dict):
     """The hands setup as `hands.*` params — registered whether or not the
-    tracker is on, so a project or preset carries it either way. hands/core.py
+    tracker is on, so a project or loadable patch carries it either way. hands/core.py
     imports the SDK only inside LeapSource, so this costs nothing."""
     try:
         from . import hands
@@ -838,7 +838,7 @@ def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
 
 
 def _register_dial(reg: Registry, pad) -> None:
-    """The sticks' dial readings (gamepad.dial, a prototype) as session
+    """The sticks' dial readings (gamepad.dial, a prototype) as meta controller
     params on the pad: one enum per stick, and a trigger that swaps the
     two — the same routes felt the other way, to compare them. Never
     saved, never performed: the gamepad entry's `dial_left` / `dial_right`
@@ -917,7 +917,7 @@ class Awake:
 def _share_experiments(first: Registry, second: Registry, *, poi_cfg: dict) -> None:
     """The totem's and the poi's params on the second deck too (plan 44 D5a),
     over the one state each: they are registered by the panel hook, which only
-    the first deck runs, and neither is a session group, so a pad or the panel
+    the first deck runs, and neither is a shared meta group, so a pad or the panel
     on deck 2 would lose them. One state, one pad: what it holds of a look is of
     the deck its pad is on (`on_reg`, plan 55) and goes no further."""
     if (state := totem.state_of(first)) is not None:
@@ -1222,9 +1222,9 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
 
     Plan 44 D4 (row 625): a deck off air (`Host.off_air`) sets its macros'
     bases beside the on-air deck's and runs its pass and apply straight
-    **after** the on-air deck's, so what it reads of a session param (a
+    **after** the on-air deck's, so what it reads of a shared meta param (a
     route's scale on `master.gain`) is this frame's, landed by the on-air
-    deck, the session's lead; then its integrator.
+    deck, the meta controller's lead; then its integrator.
 
     Plan 44 D5d: the crossfader comes first of all (`MetaController.tick`), so the
     deck arriving on air is the one this frame's `dim`, `bands` and `max_frame` go
@@ -1315,7 +1315,7 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
 
     # ---- undo: every scene-setter of this frame has written its base
     # (the panel's edits are last frame's tail), so compare the bases and
-    # the preset's table against last frame's — a change opens a step, a
+    # the loadable patch's table against last frame's — a change opens a step, a
     # settle time closes it. No performer has run yet; a performer writes a
     # base only on a step it holds open (undo.py, plan 15 WP1; plan 51 O2) ----
     for stack in h.stacks or (h.undo,):
@@ -1439,7 +1439,7 @@ def _hot_error_toast(msg: str) -> None:
 
 def _args(argv: list[str] | None = None) -> argparse.Namespace:
     """The command line. ``--laptop`` (or ``--single``): no projector on
-    this machine — config.laptop reads the rig's config for one screen."""
+    this machine — config.laptop reads the show machine's config for one screen."""
     p = argparse.ArgumentParser(prog="hyperspace", description="Real-time 4D polytope visualizer.")
     p.add_argument("--laptop", "--single", action="store_true",
                    help="one screen, no projector: the render output is a plain window "
@@ -1462,7 +1462,7 @@ def main(argv: list[str] | None = None) -> None:
     players = Players.load(home, cfg.setdefault("notes", []))
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
     # with no list) and the controls; output 1's window is the render window.
-    # On a laptop the rig's windows.json is not read: its spots are the rig's
+    # On a laptop the show machine's windows.json is not read: its spots are the show machine's
     slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, None if args.laptop else home)
     render_win = slots[0].win
     if args.laptop:
@@ -1506,20 +1506,20 @@ def main(argv: list[str] | None = None) -> None:
     audio = AudioEngine()
     audio.rescan()                         # the one PortAudio scan, here at startup — never mid-set on a first read
     control = Control(audio.chain)
-    # presets, projects, the preset bank (its project's): in the home, or in
+    # loadable patches, projects, the loadable patch bank (its project's): in the home, or in
     # the folder [library] path names (plan 25) — the machine files
     # (config, bindings, windows, logs, last_show) stay in the home either way
     lp = cfg.get("library", {}).get("path", "")
     library = Library(Path(lp), machine=home) if lp else Library()
     # the media folder and the eight channels (plan 32): the channels'
-    # params are declared over this one `MediaState`, the preset's bins are
+    # params are declared over this one `MediaState`, the loadable patch's bins are
     # its, and the renderer reads its frames
     media = _open_media(lp, home)
     renderer.media = media.state
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
-    # an analyzer preset carries its band layout; the library hands it to
+    # an analyzer loadable patch carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
     library.on_layout("band", control.apply_layout)
     # …and a saved band preset carries the layout back out (audit A2); the
@@ -1529,8 +1529,8 @@ def main(argv: list[str] | None = None) -> None:
     control.library = library
 
     # the deck (deck.py, plan 44 D1): the registry, the view state, the
-    # table, the router, the banks, the presets, learn and undo,
-    # built by `Deck.build` in the order these lines had here. The rig
+    # table, the router, the banks, the loadable patches, learn and undo,
+    # built by `Deck.build` in the order these lines had here. The meta controller
     # objects built between its lines — the hands' setup, the outputs, the
     # panel, the devices — are the hooks below, each run at its old place
     made = DeckHooksMade()          # what each hook below returned, filled by Deck.build
@@ -1544,11 +1544,11 @@ def main(argv: list[str] | None = None) -> None:
         # the render window's placement registers before attach, so "default"
         # includes output.* and reset / the dirty dot see them (audit L6)
         output = _make_output(render_win, reg, cfg)
-        register_xfade(reg, mix)               # the deck fade (plan 44 D4): rig controls
+        register_xfade(reg, mix)               # the deck fade (plan 44 D4): meta controls
         slots[0].output = output
         for sl in later:                       # no params: the config says (fork F10)
             sl.output = _later_output(sl)
-        # each opened output's switches (plan 21 WP4): rig settings, seeded
+        # each opened output's switches (plan 21 WP4): meta settings, seeded
         # from the config's launch values already on the slots, never saved
         register_switches(reg, slots)
         return output
@@ -1556,7 +1556,7 @@ def main(argv: list[str] | None = None) -> None:
     def load_table(reg: Registry) -> Bindings:
         # one binding table for keys, pad, MIDI and lanes (an old midi_map.json
         # migrates) — read before attach for the same reason: the desk's
-        # session param, `desk.slew`, is the table's, at the app's default
+        # shared meta param, `desk.slew`, is the table's, at the app's default
         # until the show says otherwise
         mc = cfg.get("midi", {})
         return _desk_table(reg, Bindings.load(
@@ -1639,7 +1639,7 @@ def main(argv: list[str] | None = None) -> None:
         panel.media = media                        # the MEDIA page: the folder and the channels
         renderer.ghost.router = router           # the guide lights what the table routes
         renderer.cloud_source = device_reg              # cloud:<role> → the scene's point clouds (A4b)
-        # (the bus cuts: the renderer reads the presets, `Deck.build` — plan 44 D3)
+        # (the bus cuts: the renderer reads the loadable patches, `Deck.build` — plan 44 D3)
         media.state.resolver.devices = device_reg       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
         # the GRAPH canvas (2026-11-02); `on_page` is the panel's own fact, read
         media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(
@@ -1651,7 +1651,7 @@ def main(argv: list[str] | None = None) -> None:
         renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
         # …closed with the adapters, at quit and restart — deck 2's too (plan 44 D4)
         segmenters = _Closer(lambda: _close_each([r.close for r in rendering]))
-        # the sticks as dials (gamepad.dial, a prototype): session params on
+        # the sticks as dials (gamepad.dial, a prototype): shared meta params on
         # whichever pad is the primary now
         _register_dial(reg, lambda: device_reg.adapter("gamepad"))
         awake = _open_awake(cfg)               # no screensaver over the show
@@ -1668,7 +1668,7 @@ def main(argv: list[str] | None = None) -> None:
     clock, loaded_patch, undo_obj = deck.clock, deck.loaded_patch, deck.undo
     panel.undo = undo_obj              # the footer's message slot
     panel.deck = deck                  # plan 44 D1: beside its handles; D5 reads through it
-    # deck 2 (plan 44 D4): its own look over the same session, sources and
+    # deck 2 (plan 44 D4): its own look over the same meta controller, sources and
     # clock, and a renderer of its own states on the render context (which is
     # not current here: the control window's is). Nothing points at it: no
     # controller, no page, no undo, no file. Built now, not on a fade's first
@@ -1677,7 +1677,7 @@ def main(argv: list[str] | None = None) -> None:
     renderer2 = renderer.sibling()
     glfw.make_context_current(ctrl_win)
     renderer2.segment_cfg = renderer.segment_cfg
-    # the rig's wires, on both (plan 44 D5c): either deck can be on air
+    # the meta controller's wires, on both (plan 44 D5c): either deck can be on air
     renderer2.cloud_source, renderer2.poi_source = renderer.cloud_source, renderer.poi_source
     renderer2.ghost.source = renderer.ghost.source
     channels2 = Channels(sources=media.state.sources)
@@ -1714,7 +1714,7 @@ def main(argv: list[str] | None = None) -> None:
     reloader = HotReloader(targets=lambda: [
         # the deck's objects (deck.py, plan 44 D1): the renderer and its
         # parts, the view state, the registry and every param, the marks,
-        # undo, the router, the presets, learn and the banks
+        # undo, the router, the loadable patches, learn and the banks
         *deck.targets(),
         # deck 2 (plan 44 D4), its channels, and the fade
         *deck2.targets(),
@@ -1724,7 +1724,7 @@ def main(argv: list[str] | None = None) -> None:
         (fade, "deck", "Fade"),
         (mix, "deck", "Mix"),
         (media.state, "media.channels", "Channels"),          # plan 32 (plan 44 D3: its new name)
-        (media.state.sources, "media.channels", "MediaSources"),   # plan 44 D3: the rig's half
+        (media.state.sources, "media.channels", "MediaSources"),   # plan 44 D3: the meta controller's half
         *[(ch, "media.channels", "Channel") for ch in media.state.channels.values()],
         (media.folder, "media.folder", "MediaFolder"),
         (panel, "ui", "Panel"),
@@ -1797,7 +1797,7 @@ def main(argv: list[str] | None = None) -> None:
     panel.watchdog, panel.render_watch = watchdog, render_watch
 
     def dream_check(on: Deck, name: str | None) -> None:
-        # a preset that asks for the dream — a dream node on (plan 36 T4:
+        # a loadable patch that asks for the dream — a dream node on (plan 36 T4:
         # `dream.on`) with a mix above 0 — with no worker to dream: the
         # dream passes its picture through. Said on the banner (until
         # dismissed), logged once. Echoes alone are a normal mode. The deck
@@ -1809,7 +1809,7 @@ def main(argv: list[str] | None = None) -> None:
     for on in meta.decks:
         on.loaded_patch.listeners.append(lambda name, on=on: dream_check(on, name))
         on.loaded_patch.listeners.append(lambda name, on=on: fade.ask_warm(on))
-    dream_check(deck, loaded_patch.current)          # the startup preset has already landed
+    dream_check(deck, loaded_patch.current)          # the startup loadable patch has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
     publishers = _Closer(lambda: _close_each((lambda: _close_publishers(render_win, slots),
@@ -1820,7 +1820,7 @@ def main(argv: list[str] | None = None) -> None:
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
 
     def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
-        if args.laptop:                   # the rig's spots are kept for the rig
+        if args.laptop:                   # the show machine's spots are kept for it
             return
         _save_windows(home, render_win, ctrl_win, output, [sl.output for sl in slots[1:]])
 
