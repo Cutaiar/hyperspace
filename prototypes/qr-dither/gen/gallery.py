@@ -264,10 +264,12 @@ def main():
 
     good = sum(1 for i in items if i["decodes"])
     print(f"\n{good}/{len(items)} rasterised and decoded back to {base}")
+    # `bad` carries the control too, so the exit code has to read it and not
+    # just the item count -- a broken control with 29 good stills is a failure
     for ident, got in bad:
         print(f"  FAILED {ident}: {got!r}")
     print(f"gallery: {OUT}")
-    return 0 if good == len(items) else 1
+    return 0 if (good == len(items) and not bad) else 1
 
 
 if __name__ == "__main__":

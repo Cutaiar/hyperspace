@@ -47,6 +47,10 @@ export type Cell = { row: number; col: number; cut: Rect; art: Rect }
 
 export type Layout = {
   paper: Paper
+  mode: CutMode
+  /** carried so an exporter can tell how far art may safely spread */
+  gutter: number
+  bleed: number
   usable: Rect
   cols: number
   rows: number
@@ -111,7 +115,7 @@ export function layout(opts: SheetOpts): Layout {
     warnings.push('The A4 print-then-cut area is derived from the Letter inset, not published. Verify before a real cut.')
 
   const area = usable.w * usable.h
-  return { paper: opts.paper, usable, cols, rows, cells,
+  return { paper: opts.paper, mode: opts.mode, gutter, bleed, usable, cols, rows, cells,
            coverage: area > 0 ? (cells.length * sticker * sticker) / area : 0,
            warnings }
 }

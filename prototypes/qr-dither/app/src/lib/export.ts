@@ -17,6 +17,22 @@ const f = (v: number) => (Math.round(v * 1000) / 1000).toString()
 
 export type Code = { id: string; modules: number; matrix: string; dark: boolean }
 
+/** How far an inverted sticker's black plate may spread past its cut.
+ *
+ *  Never more than half the gutter, or the plate crosses into the next
+ *  sticker: at a zero gutter a 3 mm plate reaches 3 mm into a neighbour whose
+ *  quiet zone is only 2.41 mm, covering part of its outermost data column and
+ *  making a perfectly good code unreadable. And never at all in print-then-cut,
+ *  where the cutter takes its line from registration marks and bleed buys
+ *  nothing. The sheet's own warning tells you when this is clamping. */
+function plateInset(lay: Layout): number {
+  if (lay.mode !== 'vendor') return 0
+  return Math.max(0, Math.min(lay.bleed, lay.gutter / 2))
+}
+
+const grow = (r: { x: number; y: number; w: number; h: number }, by: number) =>
+  ({ x: r.x - by, y: r.y - by, w: r.w + 2 * by, h: r.h + 2 * by })
+
 /** Dark-module rects for one code, in mm, placed at (x, y) over `size` mm. */
 function moduleRects(code: Code, x: number, y: number, size: number) {
   const n = code.modules
@@ -55,11 +71,11 @@ export function sheetSvg({ layout: lay, placed, codes, cutline }: SheetExport): 
     const code = codes[p.id]
     if (!code) continue
     if (code.dark) {
-      // over the ART rect, not the cut: bleed exists so a cut that lands a
-      // millimetre out still hits printed black instead of white paper. The
-      // modules stay positioned against the cut, so the quiet zone is intact.
-      art.push(`<rect x="${f(p.art.x)}" y="${f(p.art.y)}" width="${f(p.art.w)}" ` +
-               `height="${f(p.art.h)}" fill="#000"/>`)
+      // bleed exists so a cut landing a millimetre out still hits printed
+      // black, but never so far that it reaches the next sticker
+      const r = grow(p.cut, plateInset(lay))
+      art.push(`<rect x="${f(r.x)}" y="${f(r.y)}" width="${f(r.w)}" ` +
+               `height="${f(r.h)}" fill="#000"/>`)
     }
     const fill = code.dark ? '#fff' : '#000'
     const rects = moduleRects(code, p.cut.x, p.cut.y, p.cut.w)
@@ -102,9 +118,10 @@ export function sheetPdf({ layout: lay, placed, codes, cutline }: SheetExport): 
     const code = codes[p.id]
     if (!code) continue
     if (code.dark) {
-      s.push('0 0 0 rg',                     // the art rect, so the bleed is black too
-        `${f(p.art.x * MM_TO_PT)} ${f(up(p.art.y, p.art.h))} ` +
-        `${f(p.art.w * MM_TO_PT)} ${f(p.art.h * MM_TO_PT)} re f`)
+      const r = grow(p.cut, plateInset(lay))   // same clamp as the SVG
+      s.push('0 0 0 rg',
+        `${f(r.x * MM_TO_PT)} ${f(up(r.y, r.h))} ` +
+        `${f(r.w * MM_TO_PT)} ${f(r.h * MM_TO_PT)} re f`)
     }
     s.push(code.dark ? '1 1 1 rg' : '0 0 0 rg')
     for (const [x, y, rw, rh] of moduleRects(code, p.cut.x, p.cut.y, p.cut.w))
