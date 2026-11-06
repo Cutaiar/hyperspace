@@ -3661,10 +3661,12 @@ class DeckProject(Project):
         if self.meta is None:
             return self
         where, why = self.meta.row_load()
+        if why is None and where is None:     # never this deck: it may be on air (row 700)
+            why = "not loaded: there is no deck off air to load"
         if why is not None:
             self.lib.say(warning=f"{what}: {why}")
             return None
-        return where if where is not None else self
+        return where
 
     def _say_loaded(self, where: Project) -> None:
         name = getattr(where._loader(), "current", None)    # the look's own name

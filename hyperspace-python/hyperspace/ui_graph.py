@@ -807,6 +807,7 @@ def page(panel, dt: float) -> None:
     times = st["times"]
     times.append(time.perf_counter() - t0)
     del times[:-TIMES]
+    _arrive(panel, st)
 
 
 def pinch_wheel(magnification: float) -> float:
@@ -1160,7 +1161,7 @@ def head_line(st: dict, view: graphview.View) -> str:
 
 def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None:
     width = imgui.get_content_region_avail().x
-    _deck_row(panel)
+    _deck_row(panel, st)
     if _patches_chip(panel):                # plan 40 T3: the browser
         imgui.same_line()
     any_open = bool(st["open"])
@@ -1274,17 +1275,18 @@ def _wrap_for(width: float) -> None:
         imgui.new_line()
 
 
-def _deck_row(panel) -> None:
+def _deck_row(panel, st: dict) -> None:
     """The head's first line (plan 44 D5d): which `Deck` the panel is on, the same
     words as the window's title, red off air, a click for the other; then the two
     verbs, "copy on air to off air" and the crossfade, by hand and timed. Nothing with
-    no meta controller (a panel from a test)."""
+    no meta controller (a panel from a test). A click moves the panel at the page's end
+    (`_arrive`): this frame's view and selection are of the deck it is on."""
     meta = getattr(panel, "meta", None)
     if meta is None:
         return
     words = meta.words(meta.panel)
     if ui.lit_chip(f"{words}##graph.deck", panel_off_air(panel)):
-        meta.point_panel(meta.decks[1] if meta.panel is meta.decks[0] else meta.decks[0])
+        st["panel_to"] = meta.decks[1] if meta.panel is meta.decks[0] else meta.decks[0]
     if imgui.is_item_hovered():
         ui.tooltip(DECK_TIP)
     _wrap_for(ui.chip_w(COPY_LABEL))
@@ -1305,6 +1307,13 @@ def _deck_row(panel) -> None:
         ui.tooltip(FADE_TIP)
     imgui.same_line()
     panel._slider("output.xfade_s", SECONDS_W)
+
+
+def _arrive(panel, st: dict) -> None:
+    """The page is drawn: the panel goes to the deck its chip was clicked for."""
+    to = st.pop("panel_to", None)
+    if to is not None:
+        panel.meta.point_panel(to)
 
 
 def copy_on_air(panel) -> None:

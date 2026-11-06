@@ -1697,7 +1697,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     inv_rows = table.invariant_rows() if hasattr(table, "invariant_rows") else []
     for b in setters:
         # a layered row on an invariant control never acts (D6)
-        shadowed = (b.is_midi and b.layer is not None and bool(inv_rows)
+        shadowed = (b.is_midi and b.layer is not None and hasattr(table, "is_invariant")
                     and table.is_invariant(b, inv_rows))
         src, inside = row_pin(b, shadowed)
         dst = f"{BASE}:{b.target}"

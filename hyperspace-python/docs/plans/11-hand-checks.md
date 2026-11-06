@@ -8019,7 +8019,7 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 2. Fade across, panel on the other, the same. *Pass:* the same, both ways.
 *Fail:* any edit shows on the other deck. The owner's absolute rule: report it.
 **578. A press always loads off air.** (the rig, with the APC40; rows 700, 752)
-1. Player 1 on air as it starts, deck 2 on another look. Press a filled bank pad. *Pass:* the room does not move. The footer reads "<name> loaded off air on deck 2; the room still sees deck 1". That pad is lit green and the rest of the filled ones amber; the pad deck 1's look came from is amber too.
+1. Player 1 on air as it starts, deck 2 on another look. Press a filled bank pad. *Pass:* the room does not move. The footer reads "<name> loaded off air on deck 2; the room still sees deck 1; to take it back, put the panel on deck 2, then ⌘Z". That pad is lit green and the rest of the filled ones amber; the pad deck 1's look came from is amber too.
 2. Click the chip to deck 2. *Pass:* the strip and the canvas show what the pad loaded. ⌘Z there takes it back. Back on deck 1, ⌘Z never undoes a pad.
 3. QUANT several times. *Pass:* it walks the pads from the one lit, wrapping. F-keys and Home the same.
 4. Fade across. *Pass:* the pads' light moves to what deck 1 holds; the next press loads deck 1, and the footer says so.

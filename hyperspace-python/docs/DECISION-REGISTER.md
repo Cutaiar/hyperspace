@@ -13051,7 +13051,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **The ends.** Within `deck.ENDS`, 2 of 127 steps, the fader is at that end: a worn fader at CC 1 mixes nothing and bars nothing.
 - **A hand on a timed fade.** A timed fade leaves the physical fader behind, and soft pickup ignores it until it crosses the
   value. So every message reaches `Param.touched`, caught or not: moved `deck.HAND_MOVE`, 3 steps, from its first message,
-  the fade ends there, then pickup catches it. Less than that is a pot's jitter.
+  the fade ends there, then pickup catches it. Less than that is a pot's jitter, and is dropped, so it writes nothing and ends nothing.
+- **The fade chip.** A click during a run does nothing: past the middle, "the deck off air" is where it came from.
 - **Judge it.** 530.
 
 ### 699. What the panel says
@@ -13082,8 +13083,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   (`bars_load`, `MetaController.mixing`, which copy asks too).
 - **Not changed.** The panel's own load, which is the plain `Project`'s, on the deck the panel looks at. A save, on the deck
   its row is on, so a held empty pad on air saves the look on air. An empty pad's words.
-- **What the person sees.** The status line: "TRIP loaded off air on deck 2; the room still sees deck 1". The cheat sheet says
-  "load off air".
+- **What the person sees.** The status line: "TRIP loaded off air on deck 2; the room still sees deck 1; to take it back, put
+  the panel on deck 2, then ⌘Z" ("⌘Z takes it back" with the panel already there). The cheat sheet says "load off air".
+- **A mis-pressed pad and ⌘Z.** The step is on the off-air stack and ⌘Z goes by where the panel is (rows U1, U2, as the owner chose),
+  so with the panel on air ⌘Z undoes the room's last step and leaves the load. Not changed; the words say how. For the owner.
 - **The light.** `preset.select` reads `DeckProject.lit`: green is what the deck off air holds, on every controller and the
   on-screen desk, since that is what a press changes; every other filled slot is amber, the room's included. Nothing on the
   pads says which the room is on: the chip and the title do. A held pad's save blinks regardless of the light (`_fire_holds`).

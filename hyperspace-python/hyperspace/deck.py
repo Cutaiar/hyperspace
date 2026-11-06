@@ -592,9 +592,13 @@ class MetaController:
         return (None, why) if why is not None else (self.off_air_project(), None)
 
     def loaded_words(self, name: str) -> str:
-        """The status line after a row's load: what, where, and that the room is as it was."""
-        return (f"{name} loaded off air on {self.deck_name(self.off_air)}; "
-                f"the room still sees {self.deck_name(self.on_air)}")
+        """The status line after a row's load: what, where, that the room is as it was,
+        and how to take it back: the step is on that deck's stack, and ⌘Z goes by where
+        the panel is (the owner: "by where you are"), which may be the room."""
+        off = self.deck_name(self.off_air)
+        back = ("⌘Z takes it back" if self.panel is self.off_air
+                else f"to take it back, put the panel on {off}, then ⌘Z")
+        return f"{name} loaded off air on {off}; the room still sees {self.deck_name(self.on_air)}; {back}"
 
     def deck_name(self, deck: Deck) -> str:
         return f"deck {1 if deck is self.decks[0] else 2}"
@@ -729,23 +733,31 @@ class MetaController:
     def crossfade(self, to: float | None = None) -> None:
         """Run the fader to `to` (None: the end of the deck off air) over
         `output.xfade_s` seconds, read now; 0 is a cut. `tick` moves it, from the
-        fader's place. A hand on the fader meanwhile ends it there."""
+        fader's place. A hand on the fader meanwhile ends it there. Asked again while
+        one runs, with no `to`, it does nothing: past the middle on air has crossed, so
+        "the deck off air" is where it came from, and a double click would turn back."""
         if to is None:
+            if self.timed is not None:
+                return
             to = 1.0 if self.on_air is self.decks[0] else 0.0
         self.timed = TimedFade(self.mix.xfade, float(to), self.mix.seconds)
 
-    def fader_touched(self, u: float) -> None:
+    def fader_touched(self, u: float) -> bool:
         """The desk's fader at `u`, caught or not. A timed fade leaves it behind, so
         soft pickup would ignore a hand until it crossed the moving value: moved
         `HAND_MOVE` from where its first message said, the fade ends where it is, and
-        pickup then catches the fader there. A pot at rest jitters less than that."""
+        pickup then catches the fader there. A pot at rest jitters less than that, and
+        such a message is dropped (True): written, even caught, or caught as the fade
+        passes it, it would end the fade (`tick`) with the fader stranded at the pot."""
         run = self.timed
         if run is None:
-            return
+            return False
         if run.hand is None:
             run.hand = u
         elif abs(u - run.hand) >= HAND_MOVE:
             self.timed = None
+            return False
+        return True
 
     def tick(self, now: float, dt: float) -> None:
         """Once a frame: a timed fade's step, through `output.xfade`'s `Param`, then

@@ -814,8 +814,8 @@ def test_a_library_verb_from_either_deck_loads_off_air_and_the_room_is_as_it_was
         assert rig.two.presets.current != "TRIP"
         assert _state(rig.one) == theirs
         assert len(rig.two.undo.stack) == steps + 1
-        assert rig.lib.status == (f"{rig.two.presets.current} loaded off air on deck 2; "
-                                  "the room still sees deck 1")
+        assert rig.lib.status.startswith(f"{rig.two.presets.current} loaded off air on deck 2; "
+                                         "the room still sees deck 1; ")
 
 
 def test_the_strip_reads_the_panels_deck_whichever_deck_a_press_loaded(rig):
@@ -884,9 +884,7 @@ def test_a_pad_is_refused_from_the_first_frame_of_a_timed_fade(rig):
             rig.lib.warning = ""
             d.reg["preset.select"].set(0)
             assert rig.two.presets.current == was and "not loaded" in rig.lib.warning
-    rig.one.reg["output.xfade_s"].set(0.0)
-    rig.meta.crossfade()
-    rig.meta.tick(1.0, DT)
+    rig.meta.tick(100.0, DT)
     assert rig.meta.timed is None and rig.meta.bars_load() is None      # it arrived
 
 
@@ -1196,3 +1194,164 @@ def test_no_tip_still_names_the_hold(rig, words):
     """REVIEW's "text matches the current model", over every param's own words."""
     for p in rig.one.reg:
         assert words not in (p.tip or ""), p.id
+
+
+# ------------------------------------------------------- review of db415ae
+
+def _caught_at_zero(tmp_path):
+    """A 30-second fade asked from 0 with the desk's fader caught at 0, the first case."""
+    r = boot(tmp_path / "home")
+    two = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
+    meta = MetaController(r.deck, two, mix=r.mix)
+    r.midi.point(meta.pointer("apc40"), meta.panel_pointer)
+    push(r, cc(apc40.CC_XFADE, 0))
+    (row,) = [b for b in r.midi.table.bindings if b.target == "output.xfade"]
+    assert row.caught
+    r.reg["output.xfade_s"].set(30.0)
+    meta.crossfade()
+    meta.tick(0.0, DT)
+    return r, meta
+
+
+def test_a_pots_jitter_caught_at_the_end_leaves_a_timed_fade_running(tmp_path):
+    """Finding 1. One step, even a caught one, is written by nobody, and `tick` runs on."""
+    r, meta = _caught_at_zero(tmp_path)
+    for step in (0, 1, 0, 2, 1):
+        push(r, cc(apc40.CC_XFADE, step))
+        meta.tick(0.1, DT)
+        assert meta.timed is not None
+    meta.tick(15.0, DT)
+    assert r.mix.xfade == pytest.approx(0.5, abs=0.01)
+    meta.tick(31.0, DT)
+    assert r.mix.xfade == 1.0
+    undo.install(None)
+
+
+def test_a_fader_resting_where_the_fade_passes_does_not_strand_it(tmp_path):
+    """Finding 1. It would catch as the value crosses it, and end the fade between the ends."""
+    r, meta = _timed_rig(tmp_path)
+    (row,) = [b for b in r.midi.table.bindings if b.target == "output.xfade"]
+    rest = 64
+    push(r, cc(apc40.CC_XFADE, rest))
+    for t, jitter in ((15.5, 65), (16.0, 64)):        # the value passes the pot's 0.5
+        meta.tick(t, DT)
+        r.midi.poll()
+        push(r, cc(apc40.CC_XFADE, jitter))
+        assert meta.timed is not None and not row.caught
+    meta.tick(31.0, DT)
+    assert r.mix.xfade == 1.0
+    undo.install(None)
+
+
+def test_a_real_move_still_ends_it_where_it_is(tmp_path):
+    r, meta = _caught_at_zero(tmp_path)
+    push(r, cc(apc40.CC_XFADE, 1), cc(apc40.CC_XFADE, 4))
+    assert meta.timed is None
+    undo.install(None)
+
+
+def test_a_chip_click_moves_the_panel_after_the_page_is_drawn(rig):
+    """Finding 2. `_arrive` is the page's last act; the frame's view stays one deck's."""
+    st = {"panel_to": rig.two}
+    panel = NS(meta=rig.meta)
+    src = inspect.getsource(ui_graph.page)
+    assert src.rindex("_arrive(panel, st)") > src.rindex("_canvas(panel, st, view")
+    assert src.rindex("_arrive(panel, st)") > src.rindex("ui_pane.draw(panel, st, dt")
+    assert "point_panel" not in inspect.getsource(ui_graph._deck_row)
+    assert rig.meta.panel is rig.one
+    ui_graph._arrive(panel, st)
+    assert rig.meta.panel is rig.two and "panel_to" not in st
+    ui_graph._arrive(panel, st)                       # once
+    assert rig.meta.panel is rig.two
+
+
+def test_a_layered_row_on_a_reserved_control_never_acts_its_row_disabled():
+    """Finding 3: `dispatch`, `active` and the graph's shadow all ask what `is_invariant` says."""
+    t = Bindings([Binding(f"cc:0:{apc40.CC_XFADE}", "output.xfade", "abs", enabled=False),
+                  Binding(f"cc:0:{apc40.CC_XFADE}", "view.bright", "abs", layer="global"),
+                  Binding("cc:0:1", "view.speed", "abs", layer="global")])
+    t.set_layer("global")
+    assert t.dispatch("cc", 0, apc40.CC_XFADE) == []
+    assert [b.target for b in t.active() if b.layer == "global"] == ["view.speed"]
+    assert t.is_invariant(t.bindings[1], [])
+    other = Bindings([Binding(f"cc:0:{apc40.CC_XFADE}", "view.bright", "abs", layer="global")],
+                     profile="generic")
+    other.set_layer("global")
+    assert [b.target for b in other.dispatch("cc", 0, apc40.CC_XFADE)] == ["view.bright"]
+
+
+def test_a_mis_pressed_pad_and_cmd_z_by_where_you_are_and_the_words_say_so(rig):
+    """Finding 4. It is true: with the panel on air ⌘Z is the room's stack and leaves the
+    load. Not changed (the owner: "by where you are"); the status line says how."""
+    _bank(rig, "party-wake")
+    n = len(rig.one.undo.stack)
+    rig.one.reg["preset.load.0"].fire()
+    assert undo.here() is rig.one.undo and len(rig.one.undo.stack) == n
+    assert rig.lib.status.endswith("to take it back, put the panel on deck 2, then ⌘Z")
+    rig.meta.point_panel(rig.two)
+    assert undo.here() is rig.two.undo
+    rig.one.reg["preset.load.0"].fire()
+    assert rig.lib.status.endswith("; ⌘Z takes it back")
+
+
+def test_a_generic_table_gains_no_apc_rows():
+    """Finding 5."""
+    rows, notes = routing.remap_factory([], "generic")
+    assert not [b for b in rows if b.is_midi] and not [n for n in notes if "APC40" in n]
+    rows, _ = routing.remap_factory([], "apc40")
+    assert any(b.target == "preset.select" for b in rows)
+
+
+def test_a_click_on_the_fade_chip_during_a_run_does_nothing(rig):
+    """Finding 6: not a restart, and past the middle not a way back."""
+    meta = rig.meta
+    rig.one.reg["output.xfade_s"].set(10.0)
+    meta.crossfade()
+    meta.tick(0.0, DT)
+    meta.tick(7.0, DT)
+    assert meta.on_air is rig.two
+    run = meta.timed
+    meta.crossfade()
+    assert meta.timed is run
+    meta.tick(11.0, DT)
+    assert rig.mix.xfade == 1.0 and meta.on_air is rig.two
+    meta.crossfade()                                  # and home, once it has arrived
+    assert meta.timed is not None and meta.timed.to == 0.0
+
+
+def test_a_load_with_nowhere_to_land_is_refused_never_this_deck(rig):
+    """Finding 7: it fails closed."""
+    project = rig.one.presets.lib.project
+    _bank(rig, "party-wake")
+    project.meta = NS(row_load=lambda: (None, None))
+    theirs = _state(rig.one)
+    rig.lib.warning = ""
+    assert project.load_slot(0) is None
+    assert _state(rig.one) == theirs and "not loaded" in rig.lib.warning
+
+
+def test_the_leftover_words_are_gone():
+    """Finding 8."""
+    from hyperspace import replay
+
+    assert "held PROJECTOR" not in replay.__doc__ and "ON AIR inset" in replay.__doc__
+    assert "output.dim" in meta_row_refusal.__doc__
+
+
+def test_is_invariant_parses_nothing_once_it_has_seen_a_control(rig, monkeypatch):
+    """Finding 9: per port and per setter row, so no `Binding` is built on the warm road."""
+    table, b = Bindings(), Binding(f"cc:0:{apc40.CC_XFADE}", "view.bright", "abs", layer="global")
+    assert table.is_invariant(b)
+
+    def built(*a, **k):
+        raise AssertionError("parsed again")
+
+    monkeypatch.setattr(routing, "Binding", built)
+    assert table.is_invariant(b)
+
+
+def test_names_is_settles_one_road(rig):
+    """Finding 10: `spec` None is no instances, `fx` an empty set; there is no fallback."""
+    gs = rig.one.presets.graph
+    assert gs.names(None)["fx"] == frozenset() and "spec" in inspect.signature(gs.names).parameters
+    assert inspect.signature(gs.names).parameters["spec"].default is inspect.Parameter.empty

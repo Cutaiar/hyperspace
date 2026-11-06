@@ -273,6 +273,7 @@ import time
 import weakref
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
+from functools import cache, lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -913,6 +914,18 @@ class Binding:
 _SHIFT = Binding(SHIFT_SOURCE, SHIFT_PARAM, "toggle")    # the latch's control
 
 
+@lru_cache(maxsize=1024)
+def _bare_row(source: str) -> Binding:
+    """A control by its address alone, parsed once: asked per port and per row."""
+    return Binding(source, "")
+
+
+@cache
+def _reserved(profile: str) -> tuple[Binding, ...]:
+    """The profile's `META_CONTROLS`, parsed once, as `_SHIFT` is."""
+    return tuple(_bare_row(s) for s in META_CONTROLS.get(profile, ()))
+
+
 def row_words(row: Binding | str, names=None) -> str:
     """A row's source in words (plan 40 T4): what a person calls the
     control or the lane, without its device's role — the caller says the
@@ -1430,7 +1443,7 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
         out.append(b)
     used = {b.source for b in out}
     midi = [b for b in out if b.is_midi]
-    for source, target, op, value, only_if_moved in APC_NEW_ROWS:
+    for source, target, op, value, only_if_moved in APC_NEW_ROWS if profile == "apc40" else ():
         new = Binding(source, target, op, value, feedback="led")
         if (source in used or (only_if_moved and not moved_theme)
                 or any(b.overlaps(new) for b in midi)):
@@ -1600,7 +1613,7 @@ def meta_row_refusal(b: Binding, target: str | None = None) -> str | None:
     only if the row is a preset's. The line is `is_session_row`, what the
     meta controller's table holds, and no list of ids: a route of any op and
     a preset-layer desk row are a preset's; an invariant or global-layer desk
-    row (the APC's MASTER fader on `master.gain`), a key, a pad button and a
+    row (the APC's MASTER fader on `output.dim`), a key, a pad button and a
     sink are the meta controller's own and stay."""
     return None if is_session_row(b) else meta_refusal(b.target if target is None else target)
 
@@ -2624,17 +2637,16 @@ class Bindings:
         never acts and never lights (D6)."""
         if not b.is_midi:
             return False
-        if self.is_primary(b.device) and any(Binding(b.bare, "").overlaps(Binding(s, ""))
-                                             for s in META_CONTROLS.get(self.profile, ())):
-            return True
-        if self.is_primary(b.device) and Binding(b.bare, "").overlaps(_SHIFT):
+        bare, primary = _bare_row(b.bare), self.is_primary(b.device)
+        if primary and (bare.overlaps(_SHIFT)
+                        or any(bare.overlaps(x) for x in _reserved(self.profile))):
             return True
         # a page's control while it is up: the page's, so no Learn takes it.
         # Only for the desk as it stands (`rows` None): given `rows`, the
         # question is the table's own (D6: a preset's desk loaded under the
         # page keeps its rows there)
-        if (rows is None and self.is_primary(b.device)
-                and any(Binding(b.bare, "").overlaps(x) for x in self.page_rows)):
+        if (rows is None and primary
+                and any(bare.overlaps(x) for x in self.page_rows)):
             return True
         inv = self.invariant_rows() if rows is None else rows
         return any(x is not b and b.overlaps(x) for x in inv)
@@ -2684,9 +2696,10 @@ class Bindings:
         inv = [b for b in rows if b.layer is None]
         if inv:
             return inv
-        if (self.is_primary(role) and kind == "note" and channel == 0
-                and number == _SHIFT.number):
-            return []
+        if self.is_primary(role) and (
+                (kind == "note" and channel == 0 and number == _SHIFT.number)
+                or any(x.matches(kind, channel, number) for x in _reserved(self.profile))):
+            return []                # (their row disabled: still no layer's, `is_invariant`)
         layer = self.layer_of(role)
         return [b for b in rows if b.layer == layer]
 
@@ -2696,7 +2709,8 @@ class Bindings:
         rows on controls that are not invariant — and, first, a surface
         page's rows (plan 31 §A), which hide every row on their controls."""
         rows = [b for b in self.midi() if self.serves(role, b)]
-        index = self._controls([b for b in rows if b.layer is None and b.enabled],
+        reserved = _reserved(self.profile) if self.is_primary(role) else ()
+        index = self._controls([*(b for b in rows if b.layer is None and b.enabled), *reserved],
                                shift=self.is_primary(role))     # once a frame: an index,
         layer = self.layer_of(role)                             # not a pairwise scan
         page = self.page_rows if self.is_primary(role) else []

@@ -466,16 +466,13 @@ class GraphSection:
         if self.on_land is not None:
             self.on_land()
 
-    def names(self, spec: GraphSpec | None = None) -> dict[str, Any]:
-        """The node instances `spec` (the landed one by default) declares,
-        by kind — what a landing settles: ``fx`` (the effect instances that
-        exist, `FxState.held`'s word: None for every file), ``switch``,
-        ``resize``, ``lookback``, and (plan 39 T2–T4) ``matte``, ``cut``,
+    def names(self, spec: GraphSpec | None) -> dict[str, Any]:
+        """The node instances `spec` declares (None: none), by kind — what a landing
+        settles: ``fx`` (the effect instances that exist, `FxState.held`'s word),
+        ``switch``, ``resize``, ``lookback``, and (plan 39 T2–T4) ``matte``, ``cut``,
         ``segment``."""
-        spec = self.spec if spec is None else spec
         if spec is None:
-            fx = getattr(self.fx, "held", None) if self.fx is not None else frozenset()
-            return {"fx": fx, "switch": [], "resize": [], "lookback": [],
+            return {"fx": frozenset(), "switch": [], "resize": [], "lookback": [],
                     "matte": [], "cut": [], "segment": []}
         return {"fx": frozenset(spec.effect_names()),
                 "switch": [sw.name for sw in spec.switches],
@@ -488,9 +485,7 @@ class GraphSection:
 
     def _settle(self, spec: GraphSpec | None) -> None:
         """Declare `spec`'s instances and drop the others'."""
-        reg, names = self.reg, self.names(spec) if spec is not None else {
-            "fx": frozenset(), "switch": [], "resize": [], "lookback": [],
-            "matte": [], "cut": [], "segment": []}
+        reg, names = self.reg, self.names(spec)
         if self.fx is not None:
             # plan 36 T3 (W3): the effects the section names, and no others
             changed = self.fx.hold(names["fx"])
