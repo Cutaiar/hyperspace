@@ -538,6 +538,17 @@ def test_the_warm_draw_is_waited_for_and_a_look_that_will_not_draw_is_skipped():
 
 # ------------------------------------------------------------------ the real fader
 
+def test_a_missing_patch_on_the_real_decks_is_the_librarys_own_refusal_and_is_skipped(air):
+    lib = air.lib
+    playlist.save(lib, lst(("not-a-patch", 10.0), ("party-tumble", 10.0)))
+    p = Playing(air.meta, lib)
+    assert p.select("cart")
+    p.play()
+    p.tick(0.0)
+    assert air.two.loaded_patch.current == "TUMBLE" and air.one.loaded_patch.current == "ACID"
+    assert "skipped not-a-patch" in lib.warning and "not-a-patch" in lib.warning
+
+
 def test_crossfade_seconds_zero_is_a_cut_on_the_real_meta_controller(air):
     meta = air.meta
     air.one.reg["output.xfade_s"].set(5.0)
