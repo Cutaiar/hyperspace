@@ -571,7 +571,7 @@ def test_the_keys_have_their_own_deck():
 
 def test_every_pointer_on_deck_1_lands_every_corpus_loadable_as_before(tmp_path):
     """D1's walk over the corpus: with the holders pointed at deck 1 the state
-    is the unpointed meta controller's, to the bit."""
+    is the unpointed rig's, to the bit."""
     home = tmp_path / "home"
     plain = _walk(boot(home))
     r = boot(home)

@@ -1865,7 +1865,7 @@ class HandsIO:
         """While a param is armed to learn, the axis that has moved
         furthest (≥ LEARN_MOVE) since the learn began takes it — a hand
         moves all its axes at once, so first-to-move won't do. The route
-        goes into the loaded loadable patch through `learn.learn_source` (the
+        goes into the loaded patch through `learn.learn_source` (the
         referee and the Replace / Keep prompt as ever); no file is written,
         the loadable patch shows dirty until a save (plan 13 §3.3).
 

@@ -1,7 +1,7 @@
-"""The ROUTING page — one page over the loaded loadable patch (plan 13 §3.3,
+"""The ROUTING page — one page over the loaded patch (plan 13 §3.3,
 decision register row 13).
 
-Top to bottom: the **head** (the loaded loadable patch's name, its dirty dot,
+Top to bottom: the **head** (the loaded patch's name, its dirty dot,
 save / as… over it — a factory one gets a user shadow, `Library.overwrite`
 — and the desk's layer, PRESET or GLOBAL, SHIFT's latch; then what the
 last learn did, a refusal in the warning colour, and the notes of the
@@ -19,7 +19,7 @@ with its label and its base / depth subscribers) and the **meta controller**
 never learned or edited here, D5).
 
 Every edit here changes the live table — the routes, the desk, the
-macros — and so the loaded loadable patch's dirty dot (`LoadedPatch.signature`);
+macros — and so the loaded patch's dirty dot (`LoadedPatch.signature`);
 **no file is written**. Only a save (this head's, the PRESETS page's
 strip, ⇧F) writes the loadable patch. New desk rows come from Learn (right-click
 a control, then move a knob or button — midi.py's `_learned`).
@@ -45,7 +45,7 @@ a lane at the asymptote on the param's end stop), a fraction of the
 throw for `position`; `rest` (push rows only) is the source reading that
 pushes nothing — normally the source's own, what its adapter publishes
 in `Router.rests`, shown dimmed; dragging it makes the row's own number,
-"auto" gives it back; scale names the meta controller's attenuator — a **meta controller**
+"auto" gives it back; scale names the meta controller's attenuator — a **shared meta**
 param (the drive fader, `master.gain`) — or none, never a performance
 param (decision register row 18 (a)): a macro scales a route as its depth
 subscriber, shown read-only as a "× macro.N" chip (plan 13 §2.4). No
@@ -80,7 +80,7 @@ target, "Route a lane here…") holds the question in the page's state
 with what *Replace* would do to the table (`ask`); a hand learn the MIDI
 (`learn.Learn`) had to hold (`panel.learn.pending`) is the same question,
 answered through its `resolve_pending`. `_question` is whichever is up; `prompt`
-reads it, `answer` settles it; *Replace* changes the loaded loadable patch's
+reads it, `answer` settles it; *Replace* changes the loaded patch's
 routes and writes no file. Every
 Replace — here, `_wake`, `_retarget`, the adapter's — is one call,
 `Bindings.replace_owner`, which removes whoever owns the target *when the
@@ -395,7 +395,7 @@ def router_of(panel) -> Router | None:
 def add_route(panel, target: str, source: str | None = None, depth: float = LANE_DEPTH,
               op: str = "push") -> Binding | None:
     """A new `push` row from the selected band's lane (or `source`) to
-    target, into the loaded loadable patch (no file written); it rests where its
+    target, into the loaded patch (no file written); it rests where its
     source does and travels on the default feel (`motion.DEFAULT_ROUTE_FEEL`,
     the `smooth` spring — the owner, 2026-10-31). None when the target
     already has a performer — the prompt is up, and *Replace* puts the
@@ -424,7 +424,7 @@ def add_route(panel, target: str, source: str | None = None, depth: float = LANE
 
 def ask(panel, old: Binding, new: Binding, commit: Callable[[], object]) -> None:
     """Hold the question: `old` performs the target now, `new` asks for it,
-    `commit` is what *Replace* does to the table (the loaded loadable patch's
+    `commit` is what *Replace* does to the table (the loaded patch's
     routes; no file). Until it is answered the table is untouched. Every commit goes
     through `Bindings.replace_owner`, which reads the target's owner at
     that moment — `old` is who to name, not who to remove."""
@@ -524,7 +524,7 @@ def prompt(panel) -> tuple[Binding, Binding] | None:
 
 def answer(panel, replace_it: bool) -> None:
     """*Replace* (True) or *Keep* (False) for whatever `prompt` shows;
-    Replace changes the loaded loadable patch's routes — no file is written."""
+    Replace changes the loaded patch's routes — no file is written."""
     q = _question(panel)
     if q is None:
         return
@@ -1265,7 +1265,7 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
         ui.tooltip(f"source {src}  ·  target {tgt}")
 
 
-# ---- the head: the loaded loadable patch, the layer, the last learn, the load's notes ----
+# ---- the head: the loaded patch, the layer, the last learn, the load's notes ----
 
 def _loaded_patch(panel):
     """The library's `LoadedPatch` (loadable.py), or None on a panel without one."""
@@ -1281,7 +1281,7 @@ def _save_as(panel, name: str) -> None:
 
 
 def head(panel, router: Router) -> None:
-    """The loaded loadable patch · its dirty dot · the layer up · save · as…; then
+    """The loaded patch · its dirty dot · the layer up · save · as…; then
     the last learn and the last load's notes. The preset strip's own
     save / as… (ui_loadable), over the same loadable patch — a factory one gets a
     user shadow (`Library.overwrite`)."""
@@ -1381,7 +1381,7 @@ def _learn_line(panel) -> None:
         imgui.pop_style_color()
 
 
-# ---- the desk: the loaded loadable patch's layer ----
+# ---- the desk: the loaded patch's layer ----
 
 def control_name(table, b: Binding) -> str:
     """The control a MIDI row names, in Akai's words where the table's
@@ -1475,7 +1475,7 @@ def _dark_signature(table) -> tuple:
 
 
 def unmapped(table) -> list[Binding]:
-    """The patch-layer controls the loaded loadable patch leaves dark (D8).
+    """The patch-layer controls the loaded patch leaves dark (D8).
     A pairwise scan of the table (~10 ms on the rig), so the ROUTING page
     draw remembers the last answer until the table's signature changes."""
     sig = _dark_signature(table)
@@ -1768,7 +1768,7 @@ def macros(panel, router: Router) -> None:
 # (`modifier_sources`: `_sources` plus every modifier's own lane); the
 # params are the panel's own widgets over `mod.<n>.<p>` (so Learn, "Route
 # a lane here…" and the base → effective readout come with them); the bar
-# is the live output. Every edit is the loaded loadable patch's (its dirty dot,
+# is the live output. Every edit is the loaded patch's (its dirty dot,
 # one undo step); nothing is written.
 
 MOD_KIND_W = 96.0        # the "+ modifier" kind combo
@@ -1793,7 +1793,7 @@ def modifier_sources(panel, router: Router, mid: str | None = None) -> list[tupl
 
 
 def add_modifier(panel, kind: str, inputs=(), **params: float) -> Modifier:
-    """"+ modifier": a new `kind` node into the loaded loadable patch, its params
+    """"+ modifier": a new `kind` node into the loaded patch, its params
     declared (`Bindings.add_modifier`); one undo step."""
     router = router_of(panel)
     undo.push(f"add modifier {kind}")

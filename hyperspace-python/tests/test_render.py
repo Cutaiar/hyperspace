@@ -1148,7 +1148,7 @@ def _wire(r, s):
     values = state_values(st)
     values.update({f"fx.{n}.target": 1 for n in getattr(st, "aimed", ())})
     values["view.media"] = int(getattr(s, "media", 0) or 0)
-    # (plan 36 T4: the look-back drawn while the meta controller's `dream.on` is on, as
+    # (plan 36 T4: the look-back drawn while the rig's `dream.on` is on, as
     # the old words had it)
     look = "trail" if r.lookback.state.on else "off"
     r.wiring = wired_wiring(wiring_for(values, specs_of(st), wired=False), look)

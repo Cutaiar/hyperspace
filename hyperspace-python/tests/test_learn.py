@@ -485,7 +485,7 @@ def test_the_two_default_depths_agree():
     assert PUSH_DEPTH == HandSettings().learn_depth == 0.25
 
 
-# ------------------------------------------ plan 13 WP4: into the loaded loadable patch
+# ------------------------------------------ plan 13 WP4: into the loaded patch
 
 def desk_rig(home):
     """The app's construction (tests/test_loadable.boot: the startup loadable patch
@@ -514,7 +514,7 @@ def untouched(r) -> bool:
 def test_a_knob_learn_writes_a_desk_row_into_the_loaded_loadable(tmp_path):
     """Plan 13 §3.3, D5: a knob learn is a patch-layer row in the live
     table — the control's old patch row and the param's previous knob
-    go, the global row on the same knob stays — the loaded loadable patch is dirty
+    go, the global row on the same knob stays — the loaded patch is dirty
     and bindings.json is untouched; saving the loadable patch writes the row, and
     loading the loadable patch again throws away what was learned since."""
     from test_midi import cc, push
@@ -684,7 +684,7 @@ def test_accepts_by_want():
     left = ("hand:left.roll", "hand:left.pinch.index", "hand:left.present")
     other = ("hand:right.y", "hand:7", "lane:0", "lfo:1", "ext:2", "key:B")
     # plan 27 B2: what can be armed is the device registry's; a Learn
-    # handed none offers today's meta controller's
+    # handed none offers today's rig's
     assert lrn.wants() == ("desk", "hand:left", "hand:right", "pad", "pair", "pair (spring)")
     assert not any(lrn.accepts(s) for s in (*desk, *left, *other))      # nothing armed
     lrn.arm("view.bright")
@@ -889,7 +889,7 @@ def left(table, pid) -> list:
 
 def test_unbind_removes_the_loadables_desk_rows_and_every_route(tmp_path):
     """Plan 17 WP1, fork 4: one Unbind removes what is bound to the param
-    in the loaded loadable patch — its knob, its two step buttons, the hand route
+    in the loaded patch — its knob, its two step buttons, the hand route
     and the disabled LFO route (its depth subscriber with it) — and never
     a meta row. The loadable patch is dirty; no file is written. It needs no
     MIDI adapter: the call is the learn object's."""
@@ -1035,7 +1035,7 @@ def test_pick_then_param_maps_through_the_learn(tmp_path):
     assert lrn.last == "learned view.speed ← D3 (device knob 3) (into the preset); K2 let go"
     assert table.redraw_serial > serial                      # an adapter would redraw the desk
     assert (table.path.read_bytes() if table.path.exists() else None) == on_disk
-    assert r.lib.is_dirty("presets")                         # the loaded loadable patch's edit: its dot
+    assert r.lib.is_dirty("presets")                         # the loaded patch's edit: its dot
     mapped = desk()
     settle(r)
     assert labels(r) == ["learn view.speed"]                 # one step…

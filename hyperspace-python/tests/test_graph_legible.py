@@ -65,7 +65,7 @@ def party(rig):
 
 def land_frame(rig, src, *shows):
     """The wired frame of `src` with output k's overrides for `shows[k - 1]`
-    (`tests/wiredframe.shown`) landed as the loaded loadable patch's graph."""
+    (`tests/wiredframe.shown`) landed as the loaded patch's graph."""
     from wiredframe import shown
     section = shown(src, *shows)
     spec = G.read_graph(section)

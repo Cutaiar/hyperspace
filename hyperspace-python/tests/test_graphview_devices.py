@@ -4,9 +4,9 @@ Presentation only: the rows, their layers and their homes are what the
 table holds (D1, D4–D6, D12); nothing in apc40.py or midi.py is touched.
 The desk is a real `devices.MidiDevice` over a stand-in adapter that
 carries the APC40 profile (its `LAYOUT` is the device's ports), on the
-shell meta controller's factory table (tests/test_ui_shell.py), so the invariant, the
+shell rig's factory table (tests/test_ui_shell.py), so the invariant, the
 global and the patch layer are the factory's. (Plan 24 C3's desk templates are
-retired, plan 44 D3.) Every loadable patch is the corpus's or made here in the meta controller's
+retired, plan 44 D3.) Every loadable patch is the corpus's or made here in the rig's
 scratch library: no loadable patch is edited or added."""
 
 

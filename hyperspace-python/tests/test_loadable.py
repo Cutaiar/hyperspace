@@ -837,7 +837,7 @@ def test_save_new_never_overwrites(tmp_path):
     assert user_loadables(home) == sorted([*before, *[f"trip-{n}.json" for n in (6, 7, 8, 9)]])
     assert not (home / "trash").exists()
     # a file stem in another case is the same file on a filesystem that
-    # folds case (this meta controller's): it counts too (review of PR #87)
+    # folds case (this rig's): it counts too (review of PR #87)
     ten = put(home, "SUNSET").rename(home / "presets" / "Trip-10.json")
     was = ten.read_bytes()
     assert reg["preset.save_new"].fire() is True
@@ -968,10 +968,10 @@ def test_the_new_slot_loads_from_the_loadable_row(tmp_path):
 
 
 def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
-    """The PRESETS page's two slot items: "put loadable patch here…" points a slot
+    """The PRESETS page's two slot items: "put preset here…" points a slot
     at any loadable patch, "clear slot" empties it. Both write the show at once,
     neither writes, moves or deletes a loadable patch file, and the lit slot
-    follows the loaded loadable patch."""
+    follows the loaded patch."""
     r = boot(tmp_path, None)
     lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
     show = home / "projects" / "party.hyp.json"
@@ -989,12 +989,12 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     assert lib.status == "F6: MINE" and lib.current("presets") == "TUMBLE" and pr.active == 0
     reg["preset.load.5"].fire()
     assert lib.current("presets") == "MINE" and pr.active == 5
-    # the loaded loadable patch's slot cleared: no pad lit; put back elsewhere: that one
+    # the loaded patch's slot cleared: no pad lit; put back elsewhere: that one
     pr.clear_slot(5)
     assert pr.active == -1 and lib.current("presets") == "MINE"
     pr.put_slot(2, "MINE")
     assert pr.bank[2] == "MINE" and pr.active == 2
-    # the slot of the loaded loadable patch pointed elsewhere: its light goes
+    # the slot of the loaded patch pointed elsewhere: its light goes
     pr.put_slot(2, "WAKE")
     assert pr.active == -1
     # a loadable patch may sit in two slots; the light stays where it is
@@ -1042,7 +1042,7 @@ def test_the_bank_calls_are_no_undo_step(tmp_path):
 
 
 def test_rename_and_trash_are_no_undo_step(tmp_path):
-    """Plan 19 WP4 (§1 row 10): rename (of the loaded loadable patch too), ×,
+    """Plan 19 WP4 (§1 row 10): rename (of the loaded patch too), ×,
     restore and empty write files and change nothing live, so none is an
     undo step — undo cannot put a file back; the trash is the net."""
     from test_undo import boot as undo_boot

@@ -415,7 +415,7 @@ def harmless(name: str) -> str:
 
 
 def next_name(base: str | None, taken: set[str], *, key=None) -> str:
-    """A name for a new loadable patch grown from `base`, the loaded loadable patch's name
+    """A name for a new loadable patch grown from `base`, the loaded patch's name
     (plan 15 WP4, fork 16): the first ``"<stem> <n>"`` whose slug is not in
     `taken`, a set of slugs. A base that ends in whitespace and a number
     after a non-empty stem counts on from that number (``TRIP 2`` →
@@ -1001,7 +1001,7 @@ class Project:
         shared meta group's module counts: a patch group's label is the
         loadable patch's (loadable.py)."""
         lib = self.lib
-        # a document kind is never the project's (the loaded loadable patch, the
+        # a document kind is never the project's (the loaded patch, the
         # only kind since plan 13 WP5): what it has landed survives a project
         # load, and so do the patch groups' references — the loaded
         # loadable patch's, which their dirty dots compare against (plan 14 WP4)
@@ -1060,7 +1060,7 @@ class Project:
     # ---- the bank: SLOTS pointers to loadable patch files ----
 
     def follow(self) -> None:
-        """`active` follows the loaded loadable patch — the one place (plan 19
+        """`active` follows the loaded patch — the one place (plan 19
         WP1): kept where it is when that slot still names it, else the
         first slot that names it, else −1; −1 when nothing is loaded."""
         lib, cur = self.lib, self.lib.current(LOADABLE)
@@ -1185,7 +1185,7 @@ class Project:
         write, in slot k rather than the next empty one. **A filled slot
         takes the new loadable patch too**: the slot points at it, and the loadable patch
         it named keeps its file, untouched, and stays in the list, unpadded
-        — exactly as "free this pad (keeps the loadable patch)" leaves it. Nothing
+        — exactly as "free this pad (keeps the preset)" leaves it. Nothing
         is overwritten and nothing goes to the trash (owner, 2026-10-09 and
         2026-10-14). True when slot k now names the new loadable patch; False for a
         slot the bank does not have, a save that failed, or a show file
@@ -1289,7 +1289,7 @@ class Project:
 
     def _set_slot(self, k: int, name: str | None, said: str) -> None:
         """One slot's pointer, written into the show now; `active` follows
-        the loaded loadable patch to a slot that names it, or to none (`follow`).
+        the loaded patch to a slot that names it, or to none (`follow`).
         A show file that cannot be written leaves the slot as it was, and
         the footer says why."""
         lib, was = self.lib, self.bank[k]
@@ -1701,7 +1701,7 @@ class _Landings:
 class Marks(_Landings):
     """What is loaded on one `Deck`, for an undo step that undoes a load (undo.py;
     plan 15 WP1, fork 2; per deck since plan 44 D5a, scoped to the loadable patch since
-    D5b): that deck's landed names and clean references, and the loaded loadable patch's
+    D5b): that deck's landed names and clean references, and the loaded patch's
     note. Opaque to undo.py, which only calls `take`, `before` and `put` — so
     after undoing a load the library says the earlier loadable patch is loaded
     again, and Save cannot write the earlier look over the later file.
@@ -1721,10 +1721,10 @@ class Marks(_Landings):
         return (pr.ident(), copy.deepcopy(getattr(pr, "layout", {})))
 
     def take(self) -> tuple:
-        """(`_show`, {group: landed}, the loaded loadable patch's note and the notes
-        its load left for the panel, the loaded loadable patch's graph — plan 26
+        """(`_show`, {group: landed}, the loaded patch's note and the notes
+        its load left for the panel, the loaded patch's graph — plan 26
         A4, `loadable.GraphSection.mark`, None with no loadable patches), the
-        loaded loadable patch's GRAPH page layout (plan 28 N2, `LoadedPatch.layout`),
+        loaded patch's GRAPH page layout (plan 28 N2, `LoadedPatch.layout`),
         the media channels' bins (plan 32, `LoadedPatch.media`), the GRAPH
         page's groups (plan 40 T2, `LoadedPatch.groups`) and the floor under
         their numbers (row 563, `LoadedPatch.group_high`), the loadable patch's bus
@@ -1758,7 +1758,7 @@ class Marks(_Landings):
         return mark[0][0] != now[0][0] or mark[0][1] == now[0][1]
 
     def before(self, mark: tuple) -> None:
-        """First in a restore: the loaded loadable patch's graph goes back first of all
+        """First in a restore: the loaded patch's graph goes back first of all
         (plan 26 A4): an effect instance's params (`fx.acid.2.*`) exist before
         their values land."""
         gs = getattr(self.lib.loaded_patch, "graph", None)
@@ -1768,7 +1768,7 @@ class Marks(_Landings):
     def put(self, mark: tuple) -> None:
         """Last in a restore: each of the deck's groups' name, reference and
         re-apply road as they were (`Library.reland`; a group that had none then
-        has none now), the loaded loadable patch's note and its load's notes for the
+        has none now), the loaded patch's note and its load's notes for the
         panel, and the bank's lit slot. While the show is the same one its GRAPH
         page positions go back too (the undo of a tidy; they are not in its file
         until it is saved). The rest of the show is `MetaMarks`'."""
@@ -1889,7 +1889,7 @@ class Library:
         # Every line is set through `say`; only a clear ("") is assigned
         self.said: dict[str, int] = {}
         self._fresh: dict[str, Any] = {}
-        self._current: dict[str, str | None] = {}     # group → loaded loadable patch name
+        self._current: dict[str, str | None] = {}     # group → loaded patch name
         self._loaded: dict[str, Any] = {}             # group → what that load produced
         self._layout_hooks: dict[str, Any] = {}
         self._extra_hooks: dict[str, Any] = {}    # group → what a save adds beside values
@@ -2868,7 +2868,7 @@ class Library:
            removal: the new file and the copy; the shows still name the old
            name (a slot says "no preset", the trash holds it)*;
         4. both paths are synced (our own writes: the watcher sees no
-           edit); the loaded loadable patch keeps its clean reference under the new
+           edit); the loaded patch keeps its clean reference under the new
            name, so an unsaved edit stays one, and the load hook is told;
         5. every ``hyperspace.project/2`` show in ``<home>/projects`` whose
            bank or startup names the old loadable patch is copied to the trash,
@@ -3123,7 +3123,7 @@ class Library:
         folder on disk) — plan 48 stage 2. The file moves whole, its bytes
         as they were (`_move_file`), its stem and inner ``name`` kept, so it
         is listed as ``<folder>/<leaf>``. Then, as a rename does
-        (`_follow_many`): the loaded loadable patch's name follows if it is the one
+        (`_follow_many`): the loaded patch's name follows if it is the one
         moved, and every show in the home that names it — the open show's
         bank and startup too, written as a rename writes it — names it by
         the new name, each show copied to the trash first. No undo step
@@ -3179,7 +3179,7 @@ class Library:
         """Rename the folder `folder` (``party/deep``) to `name` in the same
         parent and return it. Every loadable patch inside, every folder down, keeps
         its file and its leaf — ``party/deep/C`` becomes ``party/deeper/C``
-        — and the loaded loadable patch and every show's slots follow, as a move
+        — and the loaded patch and every show's slots follow, as a move
         does (`_follow_many`). One step on disk (the folder's own rename),
         never over another folder. Refused for no such folder, the top, or
         a name taken in the parent."""

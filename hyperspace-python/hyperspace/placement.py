@@ -28,7 +28,7 @@ fullscreen is the config's say, fork F6). ``render`` is a list, one entry
 per render output in the config's order (plan 21: ``[[output.screens]]``;
 one entry with no list), and `place` is called once per window, so
 nothing here assumes how many render windows there are. A file with one
-entry still loads for a meta controller with two: the second opens at its default spot. ``screen`` is the
+entry still loads for an install with two: the second opens at its default spot. ``screen`` is the
 name of the screen the rect was on, kept for the note; placement is decided
 by geometry alone. The file is written on quit and on restart only (fork
 F5); delete it to forget.

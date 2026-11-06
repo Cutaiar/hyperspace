@@ -65,7 +65,7 @@ def _old(w: G.Wiring) -> G.Wiring:
 
 
 def _bare(w: G.Wiring) -> G.Wiring:
-    """`w` without its run (plan 33 T3: every loaded loadable patch carries its
+    """`w` without its run (plan 33 T3: every loaded patch carries its
     run as wires, `Wiring.run`; these tests are about the rest), in plan
     33's words (`_old`)."""
     from dataclasses import replace

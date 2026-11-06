@@ -277,7 +277,7 @@ def test_two_desks_open_each_with_its_profile_and_its_own_rows(build):
 def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     """The acceptance: Learn desk, a knob on the second controller — the
     row is `cc@launch:…`, a patch-layer `abs` row with soft pickup and no
-    feedback, into the loaded loadable patch (dirty, no file written) — and from
+    feedback, into the loaded patch (dirty, no file written) — and from
     then on that knob drives the param while the same CC on the APC40 does
     not, and the reverse. A note learns as a toggle; the same Learn
     completes from the APC40 too."""

@@ -38,7 +38,7 @@ def rig(tmp_path):
 
 
 def go(rig, n: int = SETTLE) -> None:
-    """`n` frames of what undo sees: each stack ticked, on the meta controller's clock."""
+    """`n` frames of what undo sees: each stack ticked, on the rig's clock."""
     for _ in range(n):
         rig.r.t += DT
         for s in rig.meta.stacks:

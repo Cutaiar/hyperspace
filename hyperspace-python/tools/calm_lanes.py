@@ -4,10 +4,10 @@ no more than a new route would.
 
     uv run python tools/calm_lanes.py [--library PATH] [--cap DEPTH] [--apply]
 
-The owner, 2026-11-02, after the show of 2026-10-30: "all existing loadable patches
+The owner, 2026-11-02, after the show of 2026-10-30: "all existing presets
 need to have sensible mappings for the audio analyzer cables … whatever
 the default is now, just use that as an upper bound for what audio is
-allowed to push on its controls, and then just update all the loadable patches
+allowed to push on its controls, and then just update all the presets
 accordingly. Make sure that they're all using spring controls as well."
 PRs #301 and #305 set those defaults for *new* routes only (a saved row
 keeps its own depth and feel), and loadable patches here are made by copying and

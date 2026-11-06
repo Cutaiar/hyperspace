@@ -456,7 +456,7 @@ def _id(st: dict, name: str) -> int:
 # ---------------------------------------------------------------- the model, per frame
 
 def _layouts(panel) -> tuple[dict | None, dict | None]:
-    """(the loaded loadable patch's layout map, the open show's), the live dicts —
+    """(the loaded patch's layout map, the open show's), the live dicts —
     None where the panel has no library."""
     lib = getattr(panel, "library", None)
     loaded_patch = getattr(lib, "loaded_patch", None)
@@ -1017,7 +1017,7 @@ def publish(panel, st: dict, sel) -> None:
 
 
 def settle(panel) -> None:
-    """Every frame, panel hidden or not (`Panel._draw`): the loaded loadable patch's graph
+    """Every frame, panel hidden or not (`Panel._draw`): the loaded patch's graph
     spec is a new object after a load or a new (and after a graph edit) —
     seen to have changed, a published node the loadable patch no longer holds
     (`still_held`) is let go of, so a load on the PRESETS page does not
@@ -1231,7 +1231,7 @@ def panel_wants(panel) -> list:
 
 
 def window_wants(panel) -> list[str]:
-    """Plan 44 D3 (row 623): the windows the loaded loadable patch wires or cuts
+    """Plan 44 D3 (row 623): the windows the loaded patch wires or cuts
     that this rig has not open (`graphview.window_wanted_lines` over the
     loadable patches' graph and bus cuts and the panel's outputs), one line each —
     what OUTPUT and the GRAPH head say; [] with no loadable patches (a test's panel)."""
@@ -1245,7 +1245,7 @@ def window_wants(panel) -> list[str]:
 
 def _wants_chip(panel, beside: bool = True) -> None:
     """Plan 40 T4: **N devices missing** on the line after the chips before
-    it, its hover one line per device the loaded loadable patch wants and the meta controller
+    it, its hover one line per device the loaded patch wants and the meta controller
     lacks ("apc40 (lost): K1, K2", `devices.want_lines`); nothing when
     every wanted device is there, or with no registry (a panel from a
     test). The PRESET strip draws the same chip (ui_loadable.strip)."""
@@ -1296,7 +1296,7 @@ def _deck_row(panel, st: dict) -> None:
     if imgui.is_item_hovered():
         ui.tooltip(COPY_TIP)
     reg = panel.reg
-    if "output.xfade" not in reg:           # (a meta controller with no outputs hook)
+    if "output.xfade" not in reg:           # (a test rig with no outputs hook)
         return
     _wrap_for(XFADE_MIN_W + ui.chip_w("fade") + SECONDS_W)
     room = imgui.get_content_region_avail().x - ui.chip_w("fade") - SECONDS_W
@@ -2006,7 +2006,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
 
 # ---------------------------------------------------------------- plan 40 T2: groups (P2, D4)
 #
-# A group of the loaded loadable patch (`graphview.VGroup`, the loadable patch's `groups`)
+# A group of the loaded patch (`graphview.VGroup`, the loadable patch's `groups`)
 # is drawn as one node while it is folded (`_group_node`: its name and +,
 # its picture pins, a row per boundary param with its cable, its status —
 # what it waits for, P4 — and its last picture outlet's thumbnail); its
@@ -2065,7 +2065,7 @@ def _group_said(panel, e: graphview.Edit, why: str | None) -> str | None:
 
 def group_nodes(panel, ids) -> dict | None:
     """Group (plan 40 T2): canvas ids `ids` made one group, folded — what
-    group's rule leaves out said on the head ("output.all is the meta controller's
+    group's rule leaves out said on the head ("output.all is the rig's
     window; left out"). Returns the entry, or None."""
     e = group_edit(panel)
     if e is None:
@@ -2540,7 +2540,7 @@ WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the meta controller lac
 
 
 def group_entry_of(panel, gid: str) -> dict | None:
-    """The loaded loadable patch's entry of group `gid` (its shared meta keys too: a
+    """The loaded patch's entry of group `gid` (its shared meta keys too: a
     spawn's open `ports` and its `renames`), or None."""
     pre = getattr(getattr(panel, "library", None), "loaded_patch", None)
     return next((g for g in getattr(pre, "groups", None) or () if g.get("id") == gid), None)
@@ -3217,7 +3217,7 @@ def _hover(st: dict, view: graphview.View, panel=None) -> None:
 # words are `st["said"]`.
 
 def render_edit(panel) -> graphview.Edit:
-    """The render edits on this panel's loaded loadable patch (its `GraphSection`),
+    """The render edits on this panel's loaded patch (its `GraphSection`),
     pins named through the renderer's last graph, one undo step each."""
     lib = getattr(panel, "library", None)
     gs = getattr(getattr(lib, "loaded_patch", None), "graph", None)

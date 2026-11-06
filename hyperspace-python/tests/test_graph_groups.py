@@ -1,7 +1,7 @@
 """Plan 40 T2 (P2, D4, D7) — the group node: groups in the loadable patch, folded
 by default, open in place, Group and Ungroup.
 
-A group is a region of the loaded loadable patch (`loadable.GROUPS_KEY`: ``{"id":
+A group is a region of the loaded patch (`loadable.GROUPS_KEY`: ``{"id":
 "group.1", "name", "patch"?, "nodes": [canvas ids], "open"}``) drawn on
 GRAPH as one node. Folded — the owner's one sanctioned exception to plan
 36's no-hidden-edge rule (D4) — its members are not drawn and neither is a
@@ -326,7 +326,7 @@ def test_a_meta_node_is_never_a_member_and_loadable_only_keeps_the_group(rig):
                           "out; nothing to group")
     st = noita(rig, [dict(ENTRY, nodes=[*NOITA_CORE, "device:apc40"])])
     (g,) = st["view"].groups
-    assert g.ids == frozenset(NOITA_CORE)               # the meta controller's left out of the drawing too
+    assert g.ids == frozenset(NOITA_CORE)               # the rig's left out of the drawing too
     assert set(NOITA_CORE) <= graphview.patch_only(st["view"])
     assert ui_graph._id(st, "n:group.1") in st["names"]   # the folded node is on the canvas
 
@@ -763,7 +763,7 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
         res = e.remove_node(cid)               # None: done; a Refusal: in words
         if graphview.is_macro(cid) and not isinstance(res, (str, graphview.Ask)):
             # a macro "deleted" loses its label and subscribers; the knob is
-            # the meta controller's and stays, so the node is still held — and a member
+            # the rig's and stays, so the node is still held — and a member
             assert cid in pre._held_canvas() and cid in g["nodes"]
         elif not isinstance(res, (str, graphview.Ask)) and cid in pre._held_canvas():
             # plan 50: a group holds any node the loadable patch saves — hands 1 too,
@@ -1020,7 +1020,7 @@ def test_one_selector_two_rules_the_save_and_the_canvas():
 # file becomes a group in any loadable patch (spawn: through today's doors in load
 # order, one undo step; the conflicts asked first — tests/test_ui_routing.py
 # drives the sheet — and nothing attached by itself, D2). The patch is the
-# spec's example, tests/fixtures/patches/acid-wash.json, put into the meta controller's
+# spec's example, tests/fixtures/patches/acid-wash.json, put into the rig's
 # scratch library; the host is party-trip (K1 there is view.bright: the
 # sheet asks), whose own effects are none of the patch's, so the first
 # spawn keeps the patch's ids and a second one takes `.2`.
@@ -1036,7 +1036,7 @@ def files(root: Path) -> dict[str, bytes]:
 
 
 def with_patch(rig, doc: dict | None = None, slug: str = "acid-wash") -> None:
-    """A patch in the meta controller's scratch library (its user folder)."""
+    """A patch in the rig's scratch library (its user folder)."""
     d = rig.lib.home / "patches"
     d.mkdir(parents=True, exist_ok=True)
     text = ACID_WASH.read_text() if doc is None else json.dumps(doc)

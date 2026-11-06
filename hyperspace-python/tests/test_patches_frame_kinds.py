@@ -1,7 +1,7 @@
 """Wave 3 P1: frame kinds in patches — the dream, a look-back, the scene and
 the rest are held by a patch, so a "dream + fx + composite" patch exists.
 
-- what is refused still is the meta controller's (`FIXTURE_KINDS`) and the look's one camera;
+- what is refused still is the rig's (`FIXTURE_KINDS`) and the look's one camera;
 - a frame kind's params are the ones the canvas says are its, the look-back's
   and the dream's split by key, the band scene's no node's;
 - what can be made twice is renamed (hands 1 lands as `hands.2`, a look-back
@@ -59,7 +59,7 @@ def on_graph(rig, name: str) -> None:
 
 
 def put(rig, doc: dict, slug: str | None = None) -> str:
-    """A patch in the meta controller's scratch library."""
+    """A patch in the rig's scratch library."""
     slug = slug or patches.slug(doc["name"])
     (rig.lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
     (rig.lib.home / PATCHES / f"{slug}.json").write_text(json.dumps(doc))
@@ -446,7 +446,7 @@ def test_a_whole_loadable_spawned_into_an_empty_frame_is_that_loadable(path):
     """Every corpus loadable patch's section lifted whole, spawned into a frame with
     nothing in it, its pins wired as saved, is the section again (hands one
     number on: the empty frame's own hands 1 is the meta controller's; `spec_names` is
-    what a load would hold). What is left out is the meta controller's alone. The literal
+    what a load would hold). What is left out is the rig's alone. The literal
     "a load is a spawn into an empty frame" of plan 50 is therefore true of
     the graph; `LoadedPatch.load_doc` stays the replace landing (row 660)."""
     doc = json.loads(path.read_text())

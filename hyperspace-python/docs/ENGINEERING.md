@@ -654,7 +654,7 @@ honour costs only that effect its place: below.) A point cloud is not a
 kind here: clouds follow the device list (below), and `{"kind":
 "cloud"}` is an unknown kind (plan 28 added none). Since plan 28 the
 section may also carry a `wires` list (below). Undoing a load puts the
-loaded loadable patch's graph back before its values (`library.Marks`).
+loaded patch's graph back before its values (`library.Marks`).
 
 **Two of a node.** `{"kind": "effect", "file": "acid", "instance": 2}`
 adds a second acid: the effect `acid.2` in `FxState`
@@ -1348,7 +1348,7 @@ folder — typically a cloud-synced one shared with someone (see "The
 shared library" below). The library has one tier (2026-10-28): nothing
 ships with the app, every file in it is yours. All formats are plain JSON with a `schema`
 string, and the library is watched: edit a file in an editor (or let a
-cloud client sync one in) while the app runs and the loaded loadable patch or show
+cloud client sync one in) while the app runs and the loaded patch or show
 follows within a couple of seconds. In code, `Library.home` is the library
 root and `Library.machine` the home.
 
@@ -1792,7 +1792,7 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 The panel is built to be read from a few feet back in a dark room. It
 is GRAPH, always drawn, and a side pane of folding sections (plan 49,
 `ui_pane.SECTIONS`); a header shows a red dirty dot where its group has
-moved off its loaded loadable patch. `ui.page` is the focus, by index into
+moved off its loaded patch. `ui.page` is the focus, by index into
 `ui.PAGES`: a section is brought up by it and scrolls in its own body
 (2372 × 900 is the control size, `app.CONTROL_SIZE`).
 The window is two 4:3 panes: the panel opens at `ui.panel_w`, leaving
@@ -1840,7 +1840,7 @@ the panel at 540 and the desk takes what is left.
   it", "macro.4 sets its base", "(off)" — a link to ROUTING filtered to
   that input. An input nothing drives offers **+ SUB** … **+ AIR**
   (inputs 0–5), **+ LFO 1** (HUE) or **+ LFO 2** (SPREAD): a click adds a
-  push route at the factory depth into the loaded loadable patch and stays on
+  push route at the factory depth into the loaded patch and stays on
   FACES; ⌘Z takes it back. Second: the slider (`base → effective` while
   driven, a white bar at the effective value) and a **1** chip back to
   neutral. On FLAT every row reads "FLAT reads no input", dimmed but
@@ -1952,7 +1952,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   modifier's `in`: its input. Drag from a patched input pin to another
   input pin to move a cable's end. Refused in words on the head: "a hand
   sets no base; aim at mod", "a macro sets a base or scales a depth; aim
-  at base or a depth stub", "keys are the meta controller's rows: map them on
+  at base or a depth stub", "keys are the session's rows: map them on
   ROUTING", a SHIFT-node port into `base`. A free modifier let go over a
   cable is inserted into it (or a cable's right-click **insert ▸**).
 - **Editing the render graph**: an image cable between two ports is a
@@ -2058,7 +2058,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   `<library>/patches/<slug>.json` and nothing else; sets the group's
   `patch` (one step).
 - **The wants chip.** GRAPH's head and the PRESET strip show **N devices
-  missing** when a device the loaded loadable patch's rows name is lost, off or
+  missing** when a device the loaded patch's rows name is lost, off or
   not in the meta controller, its hover one line per role ("apc40 (lost): K1, K2, …");
   SYSTEM lists "wanted by the preset: leap — not in this rig; 3 rows wait".
   `devices.wants` is asked once a frame for all three
@@ -2100,7 +2100,7 @@ the layer that is up, grey an invariant control.
 **Click a desk control, then a param.** A left click on a control in the
 diagram picks it: it is framed on the desk and on its ROUTING line, and
 every page but ROUTING is dimmed and takes no input except a click on a
-param, which puts the control on that param in the loaded loadable patch (one
+param, which puts the control on that param in the loaded patch (one
 undo step). A pick lets go by itself after 20 s with no click
 (`ui_desk.PICK_S`), or on a click on it, the desk's empty ground or the
 footer line. No click maps until the mouse has moved 12 px from the click
@@ -2248,8 +2248,8 @@ rec-arm; column 9 scene launch 1–5, STOP ALL, MASTER select), B1–B22 the
 other buttons, ⇧ SHIFT. Akai's name is in each hover.
 
 **Two layers under a latched SHIFT.** SHIFT's LED is lit while the
-**global** layer (the meta controller's) is up; otherwise the **loadable patch** layer
-(the loaded loadable patch's own desk) is up. A control the up layer does not map
+**global** layer (the meta controller's) is up; otherwise the **patch** layer
+(the loaded patch's own desk) is up. A control the up layer does not map
 is dark and does nothing. **Invariant** controls mean the same on both
 layers; none of them can be learned, mapped by a click or unbound, a
 loadable patch's desk row on one is dropped at load with a note, and each keeps
@@ -2338,7 +2338,7 @@ half strength with the loadable patch's name.
 and 5), on either layer: the live state is saved as a **new** user
 loadable patch named from the loaded one with the next free number (moo → moo
 2; with nothing loaded, PRESET 1; it never overwrites a file), it
-becomes the loaded loadable patch and goes into
+becomes the loaded patch and goes into
 *that* pad's slot, and the show is written at once ("saved TRIP 2 →
 F6", or "→ slot 10"); the pad blinks for 1.5 s (`midi.BLINK_S`). **A
 filled pad takes the new loadable patch too**: the slot points at it, and the
@@ -2363,9 +2363,9 @@ light another program left on goes out.
 **The desk log** (SYSTEM page, under **midi**, the fold "desk log"):
 the last twenty presses (`midi.DESK_LOG_SIZE`), newest first, each with
 the time, the control ("G1·5 (clip 1·5)"), what it did ("Preset →
-TRIP", "nothing (no row on the patch layer)", "saved into slot 15: TRIP
+TRIP", "nothing (no row on the preset layer)", "saved into slot 15: TRIP
 2", "held: nothing saved (a filled pad only loads)") and the layer it
-was read on ([loadable patch], [global], or [both] for an invariant control).
+was read on ([preset], [global], or [both] for an invariant control).
 Button presses, holds that fired and two-handed saves are logged; knob
 and fader moves are not. It is in memory only.
 
@@ -2481,10 +2481,10 @@ meta controller's rows dim — then:
   undo step; never a meta row.
 - The hand rows' "Gate: … ▸" and "Route a lane here…".
 
-**A learn writes into the loaded loadable patch** — never `bindings.json` — and
+**A learn writes into the loaded patch** — never `bindings.json` — and
 lights its dirty dot until a save. A desk learn makes a patch-layer row;
 the line says what let go ("learned view.bright ← D3 (device knob 3)
-(into the loadable patch); K1 let go"). A hand learn makes a route naming the
+(into the preset); K1 let go"). A hand learn makes a route naming the
 axis by name (`hand:right.pitch`), so a meta controller that reorders `[hands] dofs`
 keeps its loadable patches; a name the meta controller lacks is dormant. What it lands as:
 a tilt, or a sideways or in/out move on an axis whose "Centred" is on,
@@ -2670,10 +2670,10 @@ startup preset"). Nothing on the panel sets `startup` since 2026-10-28:
 a show file keeps what it says, a new show says nothing.
 
 **The PRESETS page** (`ui_loadable.page`), top to bottom: **the loadable patch
-strip** — ◀ the loaded loadable patch's name ● ▶ (the name is a readout; the
+strip** — ◀ the loaded patch's name ● ▶ (the name is a readout; the
 arrows step the list by name), **new** (a blank preset: default values,
 shape → scene → All outputs, named `untitled` and dirty until saved),
-**save** (over the loaded loadable patch's file; on `untitled` it asks for a
+**save** (over the loaded patch's file; on `untitled` it asks for a
 name) and **as…**; **the list** — every loadable patch by name, case folded,
 filling the page (never shorter than three rows, scrolling past the room
 it has), the loaded one selected, a folder's loadable patch drawn `party / TRIP`
@@ -2687,7 +2687,7 @@ asks "delete N files for good? — click again" for 4 s and empties this
 Mac's only; **patches ▸**,
 folded — every patch, rename and × (a patch is spawned on GRAPH, never
 loaded here); **show** — one line saying what a show is ("the desk's
-pads, the meta controller, the meta controller's wires"), then its name ● (red while it
+pads, the session, the rig's wires"), then its name ● (red while it
 differs from its file), **open ▾** (your shows), **save**, **as…**,
 **new**; then the library's warning, error and status lines. Nothing
 drops down but **open ▾**, nothing is dim, no row is special.
@@ -2731,7 +2731,7 @@ keeps 100 steps; a launch starts empty.
 
 **Watched:** the base of every persisted param that is not an alias, a
 trigger or in the `tempo` group — performance and meta controller alike, the
-camera included — and the loaded loadable patch's routes, patch layer and
+camera included — and the loaded patch's routes, patch layer and
 macros.
 
 **Not a step:** a performer (a hand, a band, an LFO writes an offset,
@@ -3056,9 +3056,9 @@ set from the config entry at every launch and Cmd+R (defaults scene on,
 hands on, through off, dim 1), never saved, never in a loadable patch, show or
 undo step; a switch flipped mid-set lasts until the restart. They can be
 learned onto a desk button. What every output draws through is the
-loaded loadable patch's one camera (plan 43 C2): the window is the meta controller's, the
+loaded patch's one camera (plan 43 C2): the window is the meta controller's, the
 framing is the look's — and so (plan 44 D3) are the bus cuts: which of the
-meta controller's cables from All outputs reach a window is the loaded loadable patch's
+meta controller's cables from All outputs reach a window is the loaded patch's
 (`LoadedPatch.bus`); a window the loadable patch wires that this rig has not open is
 asked for in words (`graphview.wanted_windows`, `WINDOW_WANTED`).
 
@@ -3127,7 +3127,7 @@ the stream's callback reaches the new code through the class; adding
 the module itself needed a restart.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
-<kind>` header — the time, the loaded loadable patch, what happened — and every
+<kind>` header — the time, the loaded patch, what happened — and every
 thread's stack, for:
 
 - `stall` — no frame completed for 2 s;

@@ -4,7 +4,7 @@
 The layout (`apc40.LAYOUT`): one entry per control the protocol names,
 none overlapping, a unique short glyph each, and a glyph for every MIDI
 row shipped. The diagram (ui_desk.py): what it lights is the layer that
-is up — the loaded loadable patch's desk plus the invariant controls, then the
+is up — the loaded patch's desk plus the invariant controls, then the
 global layer after SHIFT — read from the table with no MIDI device. The
 ROUTING rows print the glyph. Headless imgui, a library on tmp_path.
 """
@@ -491,7 +491,7 @@ def test_a_controls_text(rig):
 
 def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
     """Plan 19 WP2, fork 5, on screen as on the device: a bank pad is the
-    loaded loadable patch's (green), a filled slot's (amber at `FILLED` strength,
+    loaded patch's (green), a filled slot's (amber at `FILLED` strength,
     its loadable patch's name in the bright ink) or an empty slot's — drawn as a
     dark control, its glyph and no label, on both layers. Its hover and
     the pick line still say what the pad is: an empty slot."""

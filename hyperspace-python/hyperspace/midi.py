@@ -70,7 +70,7 @@ crossfader, MASTER and the meta controller's faders keep their hold through it.
 Bindings persist with every other source's in bindings.json (routing.py;
 an old midi_map.json is migrated on first run). With no file the device
 profile's default map is used. Right-click → Learn on any panel control,
-then a knob or button, writes a patch-layer row into the loaded loadable patch
+then a knob or button, writes a patch-layer row into the loaded patch
 (`_learned`, plan 13 §3.3): the loadable patch is dirty and bindings.json is not
 written; a learn on an invariant control or with the global layer up is
 refused with the reason. `MidiIO.bindings` is the MIDI-side view of that table —
@@ -560,7 +560,7 @@ class MidiIO:
         return self.table.for_param(pid)
 
     def unbind(self, pid: str) -> list[Binding]:
-        """The loaded loadable patch's desk rows on `pid` go — `Learn.unbind` with
+        """The loaded patch's desk rows on `pid` go — `Learn.unbind` with
         the routes left alone (plan 17 WP1: the menu calls the learn object
         itself, so Unbind is there with no adapter). The table's
         `redraw_serial` moves, so this adapter redraws and the controls go

@@ -19,7 +19,7 @@ hidden, every loadable patch is yours to load, rename and delete) reads top to
 bottom (``page``):
 
   PRESET      the preset strip over the ``presets`` document kind
-              (loadable.py): ◀ loaded loadable patch ● ▶ · new · save · as… — the
+              (loadable.py): ◀ loaded patch ● ▶ · new · save · as… — the
               name is a readout, the list is the page
   the list    every loadable patch by name, the loaded one selected, filling the
               page: a click loads, `rename` turns the row into a name
@@ -256,7 +256,7 @@ def _begin_naming(panel, key: str, seed: str) -> None:
 
 def save_label(lib, group: str) -> str:
     """The save chip's words — "save" (one tier: every save writes the
-    loaded loadable patch's own file; kept as a function for ROUTING's head)."""
+    loaded patch's own file; kept as a function for ROUTING's head)."""
     return "save"
 
 
@@ -692,7 +692,7 @@ def _folder_body(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None
 
 def _folder(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None:
     """One folder's header, folding (this Mac's, `folded`): its name, how
-    many loadable patches it holds, and — folded — the loaded loadable patch's name when it
+    many loadable patches it holds, and — folded — the loaded patch's name when it
     is inside; a drop target for a dragged row; its right-click menu
     (`_folder_menu`). Open, its body under it, indented."""
     st = _state(panel)
@@ -827,7 +827,7 @@ def _machine(panel):
 
 
 def folded(panel) -> set[str]:
-    """The folders folded on this Mac — ``loaded_patch.folded`` in
+    """The folders folded on this Mac — ``presets.folded`` in
     ``<machine>/ui.json`` (`ui_pane.read_doc`). Read once the machine is
     known, and again if it changes (review of #349, as `ui_pane.opened`:
     a draw before the library attached must not stand for the file), any
@@ -866,7 +866,7 @@ def _folds_dirty(panel, now: float | None = None, clicks: dict | None = None) ->
 
 
 def flush_folds(panel, now: float | None = None, force: bool = False) -> bool:
-    """Write ``loaded_patch.folded`` (`ui_pane.write_key`, the rest of ui.json
+    """Write ``presets.folded`` (`ui_pane.write_key`, the rest of ui.json
     as it was) once `ui_pane.WRITE_AFTER_S` has passed since the last fold
     (`force`: now). Called each frame the list draws; True when it wrote."""
     from . import ui_pane

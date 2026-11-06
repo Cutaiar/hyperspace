@@ -108,7 +108,7 @@ def main() -> None:
     panel.pad_diagram = True
     table = h.r.router.table
     for b in ROWS:
-        if table.owner(b.target) is None:      # the loaded loadable patch may perform it already
+        if table.owner(b.target) is None:      # the loaded patch may perform it already
             table.add(b)
 
     views = ui_pad_views.VIEWS

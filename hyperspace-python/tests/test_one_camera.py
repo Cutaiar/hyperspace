@@ -3,7 +3,7 @@
 `camera.*`, modulatable; every save is `hyperspace.preset/9` and records
 the spin's pose (`pose`, `view.body` folded in), which a load sets; an old
 loadable patch takes the eye its old show held; the hands' calibration is fitted
-to the meta controller's reference eye, so hands drawn in the scene scale with the
+to the rig's reference eye, so hands drawn in the scene scale with the
 shape and a hands layer keeps its size; the migration tool moves a
 library (the retaper first, a backup, the shows' eye kept as
 ``.bak-v2-eye``).
@@ -499,7 +499,7 @@ def test_the_camera_node_is_the_looks():
 
 
 def test_the_hands_calibration_is_the_meta_reference_eye():
-    """Row 575, no GL: the box is fitted into the world against the meta controller's
+    """Row 575, no GL: the box is fitted into the world against the rig's
     reference eye whatever the loadable patch's; through a zoomed eye the hands'
     picture scales about the centre as the shape's does (the scene's
     camera), and the reference eye's picture — a layer's — does not move."""
@@ -686,7 +686,7 @@ def test_the_tool_draws_the_old_file_with_the_show_open_as_its_nine(tmp_path, ca
     with_show, _ = golden_frames.picture(old, show=seed, **kw)
     assert golden_frames.picture(nine, **kw)[0] == with_show
     assert golden_frames.picture(old, **kw)[0] != with_show
-    # the meta controller's GL objects went with the picture: collected later, on a test's
+    # the rig's GL objects went with the picture: collected later, on a test's
     # own context, they would delete that context's objects of the same names
     released = []
     moderngl = sys.modules["moderngl"]

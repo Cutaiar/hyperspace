@@ -1393,9 +1393,9 @@ def fx_files(source=None) -> dict:
     """The effect specs to measure a document's depths against
     (`retaper_depths`): an `FxState`'s own `files`, or the one a registry
     declared from (`Registry.fx_state`, build_registry). With neither — a
-    reader with no meta controller in hand, `Bindings.from_json`, `patches.read` — the
+    reader with no registry in hand, `Bindings.from_json`, `patches.read` — the
     shader folder as it ships (`fx.FX_DIR`), parsed **once** per process
-    and kept; a meta controller whose effects live elsewhere passes its own state."""
+    and kept; a test rig whose effects live elsewhere passes its own state."""
     global _FALLBACK_FILES
     files = getattr(source, "files", None)
     if files is None:

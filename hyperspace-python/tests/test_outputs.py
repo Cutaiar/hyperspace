@@ -78,7 +78,7 @@ def test_outputs_imports_nothing_from_app_ui_or_params():
     """ARCHITECTURE §3: the render stack only reads. outputs.py imports
     moderngl and glsl at most — no app, ui, params, routing or library."""
     tree = ast.parse(Path(O.__file__).read_text())
-    banned = {"app", "ui", "params", "routing", "library", "preset", "undo", "control",
+    banned = {"app", "ui", "params", "routing", "library", "loadable", "undo", "control",
               "overlay", "config"}
     for node in ast.walk(tree):
         names = []
@@ -163,7 +163,7 @@ def wired(r, section: dict):
 
 def keep_run(r, wiring):
     """`wiring` (a placement, a hands node: plan 26–30's words) with `r`'s
-    run kept — the run the meta controller's effects landed as (plan 33 R23); a wiring
+    run kept — the run the rig's effects landed as (plan 33 R23); a wiring
     that says a run of its own keeps it."""
     from dataclasses import replace
 

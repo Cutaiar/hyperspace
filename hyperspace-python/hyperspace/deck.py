@@ -277,7 +277,7 @@ class Deck:
             # plan 26 A4: a loadable patch's graph section sets the renderer's wiring and
             # hands an extra hands node its own state (`Renderer.ghost_states`)
             loaded_patch.graph.attach(renderer)
-            # plan 44 D3: the bus cuts are the loaded loadable patch's — the renderer
+            # plan 44 D3: the bus cuts are the loaded patch's — the renderer
             # reads them off the loadable patches (`graph.bus_cuts_of`: `LoadedPatch.bus_cuts`)
             renderer.bus_source = loaded_patch
             renderer.deck_reg = reg            # whose picture it is (the poi's guide)
@@ -789,7 +789,7 @@ class MetaController:
         if p is not None:
             p.set(x)
         else:
-            self.mix.xfade = x                # (no param: a meta controller with no outputs hook)
+            self.mix.xfade = x                # (no param: a test rig with no outputs hook)
 
     # ---- copy on air to off air (D5c): the second verb ----
 

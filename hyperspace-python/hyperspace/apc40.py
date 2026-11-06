@@ -56,7 +56,7 @@ SHIFT layer
 (the band strip on the device knobs, the hand feel and BPM on track knobs
 1–5, the band scenes on clip rows 2–3, and since plan 24 C2 the bands'
 post-drive, the master dynamics and trim on the track faders),
-``"preset"`` is the loaded loadable patch's own (the factory default below is
+``"preset"`` is the loaded patch's own (the factory default below is
 what a fresh loadable patch starts with; since plan 24 C2 the track faders are a
 loadable patch's too, and the default gives them nothing). A control with no row
 on the layer that is up is dark and does nothing; midi.py dispatches and draws by those rules.
@@ -543,7 +543,7 @@ DEFAULT_MAP: list[dict] = [
     # track faders S1–S8, global layer (SHIFT up; plan 24 C2, decision 17,
     # amending D6): per-band output drive on 1–6, master dynamics and trim
     # on 7–8 — the audio one latch away. On the patch layer the faders are
-    # the loaded loadable patch's (`TRACK_FADERS`): none here, so a fresh loadable patch and
+    # the loaded patch's (`TRACK_FADERS`): none here, so a fresh loadable patch and
     # every factory one leaves them dark. Soft pickup across the latch (D7)
     *[_cc(t, CC_FADER, i, ring=0, layer=G) for i, t in enumerate(SHIFT_FADERS)],
     # MASTER: the master dim — black (down, CC 0) ↔ full; the crossfader: the

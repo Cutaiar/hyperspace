@@ -2345,13 +2345,13 @@ class DeviceRegistry:
         return changed
 
 
-# ---- what the loaded loadable patch wants, and the arrival (plan 40 T4) ----
+# ---- what the loaded patch wants, and the arrival (plan 40 T4) ----
 #
 # The bindings on a device the meta controller lacks were never dropped (decision 11:
 # a performer row on a scheme no device feeds waits; a patch-layer desk
 # row is kept whatever is plugged in, and the desk relights from the table
 # when its port comes back). What was missing is the *saying*: which
-# devices the loaded loadable patch wants and does not have, and a word when one
+# devices the loaded patch wants and does not have, and a word when one
 # arrives. `wants` is that answer, pure over the table and the registry;
 # the GRAPH head's and the PRESET strip's chip, the SYSTEM page's lines,
 # a group node's status line (T2) and a spawn's notes (T3) all read it.
@@ -2367,11 +2367,11 @@ WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
 
 @dataclass(frozen=True)
 class Want:
-    """One device role the loaded loadable patch's rows name (plan 40 T4): `state`
+    """One device role the loaded patch's rows name (plan 40 T4): `state`
     is the registry's view this frame — ``connected`` (listed, live),
     ``lost`` (listed, the hardware away, or in error), ``off`` (listed,
     ``enabled = false``) or ``missing`` (no entry for the role: "not in this
-    meta controller"); `scheme` the first scheme a row of it names (``cc``, ``hand``);
+    rig"); `scheme` the first scheme a row of it names (``cc``, ``hand``);
     `rows` those rows' sources in words, each once, in table order
     ("K1", "right hand y" — routing.row_words)."""
 
@@ -2430,7 +2430,7 @@ def _device_facts(registry, table) -> tuple[dict[str, str], str, dict[str, str],
 
 
 def _rows_of(table) -> list[tuple[str, str]]:
-    """(source, where it lands) for each row the loaded loadable patch names a
+    """(source, where it lands) for each row the loaded patch names a
     device by: its enabled performer routes (target: the param), its
     enabled patch-layer desk rows (the param) and its modifiers' inputs
     (the modifier's id) — never a meta row, which is the meta controller's."""
@@ -2456,7 +2456,7 @@ def _lands(where: str, only) -> bool:
 
 
 def wants(table, registry, only=None) -> list[Want]:
-    """Every device role the loaded loadable patch's rows name (plan 40 T4), in
+    """Every device role the loaded patch's rows name (plan 40 T4), in
     table order, each with its state this frame and its rows in words.
     A row's role is its ``@role`` qualifier; else, for ``cc:`` / ``note:``
     / ``pitch:``, the first MIDI role (`DeviceRegistry.midi_roles`, the
@@ -2468,7 +2468,7 @@ def wants(table, registry, only=None) -> list[Want]:
     named. `only`, when given, keeps the rows that land on those ids — a
     param id, a modifier id, or an id a landing starts with (``fx.acid.2``
     covers ``fx.acid.2.speed``): `wants_for`. Pure: reads the table and
-    the registry (`registry` None: a meta controller with nothing listed).
+    the registry (`registry` None: a test rig with nothing listed).
 
     >>> [(w.role, w.state, w.rows) for w in wants(table, meta controller)]   # doctest: +SKIP
     [('apc40', 'lost', ('K1', 'K2')), ('leap', 'missing', ('right hand y',))]
@@ -2524,7 +2524,7 @@ def wants_for(table, registry, ids) -> list[Want]:
     T2): a collection of param ids and modifier ids, each covering the
     ids under it — `wants(table, registry, only=ids)`.
 
-    >>> wants_for(table, meta controller, ["fx.acid.2", "mod.3"])            # doctest: +SKIP
+    >>> wants_for(table, device_reg, ["fx.acid.2", "mod.3"])            # doctest: +SKIP
     [Want(role='apc40', state='lost', scheme='cc', rows=('K1', 'K2'))]
     """
     return wants(table, registry, only=frozenset(ids))
@@ -2570,7 +2570,7 @@ def missing_chip(ws) -> str | None:
 def wanted_lines(ws) -> list[str]:
     """The SYSTEM page's lines under the device lines (plan 40 T4), one per
     wanted role the meta controller lacks: "wanted by the preset: leap — not in this
-    meta controller; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
+    rig; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
     wait". Nothing for a connected role, nothing when the loadable patch wants
     nothing."""
     return [f"wanted by the preset: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"

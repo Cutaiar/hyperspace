@@ -294,7 +294,7 @@ def test_the_narrow_band_opens_selection_alone_and_one_section_takes_it_all(
     band under the canvas, with its own fold state — selection alone at
     first — the headers one row, and an open section the band's height."""
     with build_rig(tmp_path) as r:
-        d = Driver(step=lambda: frame(r.panel, "graph"))    # the meta controller's 820 px window
+        d = Driver(step=lambda: frame(r.panel, "graph"))    # the rig's 820 px window
         d.record(monkeypatch.setattr)
         d.run(d.wait(3))
         st = _st(r)
@@ -335,7 +335,7 @@ def test_the_projector_inset_keeps_clear_of_the_pane(tmp_path, monkeypatch):
     pic = (1920, 1080)
     (x, y), (x1, y1) = ui_graph.monitor_rect((0.0, 0.0), (800.0, 100.0), pic)
     assert y1 <= 100.0 - 8.0 + 1e-6 and abs((y1 - y) / (x1 - x) - 1080 / 1920) < 1e-6
-    with build_rig(tmp_path) as r:                  # the meta controller's 820 px window: narrow
+    with build_rig(tmp_path) as r:                  # the rig's 820 px window: narrow
         got = []
         monkeypatch.setattr(ui_graph, "_monitor", lambda panel, o, a: got.append((o, a)))
         for _ in range(2):
@@ -580,7 +580,7 @@ def test_the_band_grows_for_the_focused_section_and_only_it_draws(tmp_path, monk
     section alone, all but `CANVAS_MIN` of the page, the chips above it; a
     click on a chip lets go and the band is `BELOW_H` again. The column
     beside the canvas keeps its folds."""
-    with build_rig(tmp_path) as r:              # the meta controller's 820 px window: the band
+    with build_rig(tmp_path) as r:              # the rig's 820 px window: the band
         d = Driver(step=lambda: frame(r.panel))
         d.record(monkeypatch.setattr)
         r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
@@ -692,7 +692,7 @@ def test_the_track_readout_is_measured_as_printed(tmp_path, monkeypatch):
     widths = []
     real = ui_mod._readout_width
     monkeypatch.setattr(ui_mod, "_readout_width", lambda t: (widths.append(t), real(t))[1])
-    # (the meta controller's stand-in audio has no transport params: its buttons stubbed)
+    # (the rig's stand-in audio has no transport params: its buttons stubbed)
     monkeypatch.setattr(ui_mod.Panel, "_button", lambda self, *a, **k: False)
     with build_rig(tmp_path) as r:
         r.panel.audio.__dict__.update(mode="file", on=False, playing=True,

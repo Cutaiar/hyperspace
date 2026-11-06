@@ -2,7 +2,7 @@
 
 **APC40-only** (plan 27 B2): with several MIDI desks listed, this draws
 the first MIDI role's rows (`Bindings.active()` with no role) over
-`apc40.LAYOUT` — the APC40 in every meta controller that lists it first. A second
+`apc40.LAYOUT` — the APC40 in every install that lists it first. A second
 desk (a `generic` profile) has no layout to draw; plan 29's generic
 on-screen desk is what replaces this module for any profile.
 
@@ -30,7 +30,7 @@ either size. ⇧ fills red while the global layer is up. A knob's arc is
 its ring — the param's base (audit R6); a fader's cap the param's value;
 a button's LED is filled when the device's would be (`routing.led_level`,
 the rule midi.py lights by). A **bank pad** (clip rows 1, 4 and 5, plan 19
-WP2) has three states, as on the device: the loaded loadable patch's is green, a
+WP2) has three states, as on the device: the loaded patch's is green, a
 slot that holds another loadable patch is amber at half strength and reads that
 loadable patch's name, and an empty slot's is drawn as a dark control — its glyph
 only, no label (`empty`); its hover still says what the pad is. The hover
@@ -332,7 +332,7 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
     """What the desk's header says of the picked control, and whether a
     click on a param would map it: "D3 picked: click a param to put it
     here · click D3 again to let go", or why not and what the control
-    does ("S3 (track fader 3) is invariant (the meta controller's): SUB Post-drive")."""
+    does ("S3 (track fader 3) is invariant (the session's): SUB Post-drive")."""
     why = mappable(table, c)
     if why is None:
         if panel.open and ui_pane.shown(panel, ui_pane.ROUTING):
@@ -367,7 +367,7 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     every param a desk control may take (`ui_routing.desk_target`) — this
     loadable patch's own first, ranked, then the rest by group. Built from the
     registry, the table and the library's group defaults, and kept while
-    the pick, the table and the loaded loadable patch stand."""
+    the pick, the table and the loaded patch stand."""
     st = _state(panel)
     lib = getattr(panel, "library", None)
     key = (getattr(getattr(panel, "learn", None), "control", None), _key(table),
@@ -786,7 +786,7 @@ def _layer_word(table, b: Binding) -> str:
 
 def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     """The hover: "D3 · fx.kaleido.segments · Kaleidoscope segments ·
-    patch layer", then Akai's name. Without a registry (or when the text
+    preset layer", then Akai's name. Without a registry (or when the text
     is the id) the param's words are left out."""
     if b is None:
         return f"{c.glyph} · unmapped — dark on the {table.layer} layer\n{c.name}"
@@ -1046,7 +1046,7 @@ def _runs(jobs: list[tuple[apc40.Control, _Job]]) -> list[_Job]:
 
 
 def diagram(panel) -> None:
-    """The desk window: a header (the layer up, the loaded loadable patch, the
+    """The desk window: a header (the layer up, the loaded patch, the
     `big` / `panel` chip), then every control at its place — in the room
     `room` gives it."""
     table = _table(panel)
@@ -1097,7 +1097,7 @@ def _close(panel) -> None:
 
 
 def _header(panel, table) -> None:
-    """One line `HEAD_H` tall: apc40 · the layer up · the loaded loadable patch,
+    """One line `HEAD_H` tall: apc40 · the layer up · the loaded patch,
     and the chip at the right. While a control is picked the line says so
     — what is picked, what the next click does, how to let go, the
     seconds left — after the loadable patch's name where there is room (the big

@@ -117,7 +117,7 @@ def legacy6(router: Router) -> list[str]:
 
 def load_patch(r, router: Router, name: str) -> list[str]:
     """A loadable patch by name through the one loader (`loadable.LoadedPatch` over the
-    meta controller's library) — the road the routing loadable patches took before plan 13 WP5
+    rig's library) — the road the routing loadable patches took before plan 13 WP5
     made them loadable patches. Returns the ids the registry lacks."""
     from hyperspace.loadable import LoadedPatch
 
@@ -407,7 +407,7 @@ def test_table_file_round_trip_and_path(tmp_path):
     t.write()
     text = path.read_text()
     # one row per line — the meta controller's controls only: a performer row and
-    # the patch layer are the loaded loadable patch's (plan 13 §2.2, WP5)
+    # the patch layer are the loaded patch's (plan 13 §2.2, WP5)
     assert text.count("\n  {") == len(meta_rows) < n
     doc = json.loads(text)
     assert set(doc) == {"schema", "profile", "bindings", "units"}   # (units: wave 0 T1)
@@ -1986,7 +1986,7 @@ def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
 def test_the_live_table_writes_only_the_meta_controls(tmp_path):
     """Was test_the_live_table_carries_the_macros. Since plan 13 WP5 the
     macros' bases, subscribers, the performer rows and the patch layer
-    are the loaded loadable patch's: `bindings.json` never gets `values`, `macros`,
+    are the loaded patch's: `bindings.json` never gets `values`, `macros`,
     a performer row or a patch-layer row, whatever the table holds, and a
     Router lands nothing from the file (the startup loadable patch does)."""
     path = bindings_path(tmp_path)

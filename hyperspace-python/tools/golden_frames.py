@@ -26,7 +26,7 @@ alone, over and through) and the hands' layer laid on depth-aware, for
 every loadable patch; the history holding the hands' layer, for the loadable patches
 with the look-back on — each a rig of its own (`Renderer.wiring`), its
 outputs named `<wiring>/<state>`. And (plan 26 A4b) a recorded point
-cloud (`CLOUDED`): a scratch `config.toml` in the meta controller's home listing one
+cloud (`CLOUDED`): a scratch `config.toml` in the rig's home listing one
 `cloud` device over the fixture recording (`tests/fixtures/clouds/`,
 copied in), opened by the real device registry, polled on the pinned
 clock and handed to the renderer, so the default scene gains its
@@ -34,14 +34,14 @@ point-cloud node — named `cloud/<state>`. And (plan 26 A4) the proof loadable 
 fixtures under `tests/fixtures/presets/` (`FIXTURE_LOADABLES`, never a
 corpus loadable patch): each copied into the scratch library and loaded like a
 user's loadable patch, its `graph` section landing through the real `LoadedPatch`
-onto the meta controller's renderer, hands present, in the eight states — the
+onto the rig's renderer, hands present, in the eight states — the
 manifest's `fixture_states` and `fixtures`. And (plan 31 P) the
 envelopes and the step sequencer are stepped through the router as the
 app steps them — at rest and stopped, so they move nothing — but for the
 loadable patches in `RUNNING` (``seq-demo``), drawn with play pressed as the rig
 starts, so their frame is the pattern mid-envelope at the pinned clock.
 Plan 32's five fixtures are media
-loadable patches (`MEDIA_FIXTURES`): their bins name `local:` ids the meta controller's media
+loadable patches (`MEDIA_FIXTURES`): their bins name `local:` ids the rig's media
 channels find under `tests/golden/media/` (`GoldenMedia`), every still
 decoded before the first frame is drawn.
 
@@ -125,7 +125,7 @@ SOLO = (("solo", {"scene": True, "hands": True, "through": False}),)
 SOLO_FX = (("solo-scene+hands+through", {"scene": True, "hands": True, "through": True}),)
 
 # plan 26 A3: the graph's other wirings (`graph.Wiring`), hands present —
-# (name, the wiring's fields, the output states drawn as one meta controller's
+# (name, the wiring's fields, the output states drawn as one rig's
 # outputs, output 1 first, the loadable patches it is drawn for: None, every
 # one). In the scene: the scene's output with the hands in it, and a glass
 # (scene off) with the hands' layer over and through; depth-aware: the
@@ -168,7 +168,7 @@ CORPUS_LOADABLES: tuple[str, ...] = (
 # plan 26 A4: the proof loadable patches — fixtures, never corpus loadable patches — each
 # loaded through the scratch library like a user's loadable patch, its `graph`
 # section landing through the real `LoadedPatch` (`GraphSection`) onto the
-# meta controller's renderer, hands present, every output state as one meta controller's outputs
+# rig's renderer, hands present, every output state as one rig's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # plan 36 T3 (D5): the corpus loadable patches are `/7` files; what they were made
 # from — the `/2` (seq-demo `/3`) sources the retired generator wrote,
@@ -202,7 +202,7 @@ FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # kaleidoscope in the still's disc, the scene elsewhere. Plan 39 T4's
 # `segment-motion` (`/7`, a wired frame): the scene over the still into a
 # motion segment, its foreground into All outputs — the model learns the
-# meta controller's first frame, its later frames (the pinned clock: the polytope turns,
+# rig's first frame, its later frames (the pinned clock: the polytope turns,
 # the still does not) are the second picture, so the turning polytope is
 # the foreground and the still is cut away
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
@@ -213,7 +213,7 @@ MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces
 # plan 34 T2's two: the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
-# from a cleared state over the meta controller's FRAMES frames, seven feedback steps.
+# from a cleared state over the rig's FRAMES frames, seven feedback steps.
 # Plan 34 T3's one: the look-back's third-newest echo on the faces, the
 # look-back off and a capture every frame (`echo.3 → shape.faces`): the
 # pattern for the first three frames, then the scene of three frames back
@@ -331,7 +331,7 @@ class FakeHands:
 
 
 class GoldenMedia:
-    """The meta controller's media resolver (plan 32 T6): a `local:` id is a file under
+    """The rig's media resolver (plan 32 T6): a `local:` id is a file under
     `tests/golden/media/`; nothing else is on this Mac."""
 
     proxy_cache = None
@@ -486,7 +486,7 @@ class Rig:
             time.sleep(0.01)
 
     def list_devices(self, toml: str) -> None:
-        """A scratch `config.toml` in the meta controller's home listing `toml`'s
+        """A scratch `config.toml` in the rig's home listing `toml`'s
         devices (the cloud fixture copied in beside it), opened by the real
         registry on the pinned clock and handed to the renderer."""
         import shutil
@@ -557,7 +557,7 @@ def context() -> moderngl.Context:
     on every call: a context made and released since (each test's own,
     tests/conftest.py) left none current, and GL calls go to the current
     one. Its objects are freed when they are collected (`gc_mode` auto),
-    so each meta controller's renderer goes with the rig (`render_all` collects after
+    so each rig's renderer goes with the rig (`render_all` collects after
     each)."""
     global _CTX, _PARK
     if _CTX is None:
@@ -570,7 +570,7 @@ def context() -> moderngl.Context:
 
 class _Lent(moderngl.Program):
     """A pooled program as one rig holds it: the pool's linked program
-    under a wrapper of its own. Releasing it (or the meta controller's end) hands the
+    under a wrapper of its own. Releasing it (or the rig's end) hands the
     program back to the pool, never to GL; collecting it does nothing."""
 
     def __del__(self):
@@ -587,7 +587,7 @@ class ProgramPool:
     out again (the tool's harness only: the app compiles every program it
     asks for, as before). Each rig builds a new `Renderer`, which asks for
     some 26 programs whose sources are the same rig after rig; linking them
-    was most of a meta controller's cost. A program lent is exactly one freshly linked:
+    was most of a rig's cost. A program lent is exactly one freshly linked:
     within a rig every request gets a program of its own (two `acid`
     instances never share one), and a program lent again has every uniform
     and uniform-block binding put back as the link left it (snapshotted
@@ -669,7 +669,7 @@ _LENDING = False
 @contextmanager
 def shared_programs(ctx: moderngl.Context):
     """Within this block, `ctx.program` lends from the process's
-    `ProgramPool` (one meta controller's lifetime: `_shoot`, `picture`); after it,
+    `ProgramPool` (one rig's lifetime: `_shoot`, `picture`); after it,
     every program the rig held is back in the pool and `ctx.program` is
     moderngl's own again. Nothing under hyperspace/ knows of it."""
     global _POOL, _LENDING
@@ -751,7 +751,7 @@ def _placements_wait(loaded_patch, slug: str) -> dict | None:
 
 
 def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
-    """The meta controller's wired frame (plan 35 T3, row 392): the loadable patch's section as
+    """The rig's wired frame (plan 35 T3, row 392): the loadable patch's section as
     the load wired it — or a WIRED variant's (`variant_section` over the
     loadable patch's run, wired as a load wires it) — and each view's state as
     that output's own wires (`output_wires`); the mutes are all on.
@@ -805,7 +805,7 @@ def _lays_hands(section: dict) -> bool:
 
 
 def state_views(slug: str, states, size, targets) -> list[View]:
-    """The meta controller's windows: every mute on (the states are wiring), but for a
+    """The rig's windows: every mute on (the states are wiring), but for a
     wired fixture's, whose picture and hands mutes are its state's."""
     if slug not in WIRED_FIXTURES:
         return [View(Switches(), size, target=f) for f in targets]
@@ -821,7 +821,7 @@ Keep = Callable[[str, str], bool] | None
 def _shoot(slug: str, hands: str, states, size, logical, dpr,
            wiring: dict | None = None, config: str | None = None, *,
            label: str = "{}", keep: Keep = None) -> tuple[list[Shot], dict]:
-    """Render one meta controller's states (under `wiring`, the loadable patch's own when
+    """Render one rig's states (under `wiring`, the loadable patch's own when
     None; with `config`'s devices listed, A4b); its shots and what the load
     said. The framebuffers and the renderer are new per rig, so nothing a
     rig drew reaches the next (its programs are lent from the pool,
@@ -982,7 +982,7 @@ def run_job(job: Job, keep: Keep = None) -> tuple[list[Shot], dict | None]:
     slug, hands = job.slug, job.hands
     if job.kind == "fixture":
         got, info = _shoot(slug, "present", STATES, (W, H), (W, H), DPR, keep=keep)
-        gc.collect()        # the meta controller's GL objects, freed now (gc_mode auto)
+        gc.collect()        # the rig's GL objects, freed now (gc_mode auto)
         return got, info
     if job.kind == "cap":
         state = dict(STATES)[CAP["state"]]
@@ -1178,7 +1178,7 @@ def summary(doc: dict) -> str:
 # ---------------------------------------------------------------- the frame's signatures (plan 35 T2)
 #
 # Plan 35 B (Review Focus 1): every case the goldens draw — each loadable patch and
-# fixture in the eight states as one meta controller's eight outputs, and the WIRED
+# fixture in the eight states as one rig's eight outputs, and the WIRED
 # variants over their loadable patches and states — built by `build_graph` from the
 # loadable patch's section written as a wired frame (`graphmigrate.wired_section`)
 # with each output's state as its own wires (`output_wires`) and every mute
@@ -1255,7 +1255,7 @@ def signature_keys() -> list[str]:
     """Every case's key, `<slug>/<variant>`: `states` (the eight), a WIRED
     variant's name, and (plan 35 T3) the window alone — `solo`, and
     `solo-scene+hands+through` for a loadable patch with an effect on (`SOLO`,
-    `SOLO_FX`) — and a CLOUDED meta controller's name, as the goldens draw them."""
+    `SOLO_FX`) — and a CLOUDED rig's name, as the goldens draw them."""
     # (a `/6` fixture — plan 35 T3's — is a wired frame of its own: no
     # section before it, so no `default_graph` recorded to prove it against)
     keys = [f"{slug}/states" for slug in (*CORPUS_LOADABLES, *FIXTURE_LOADABLES)
@@ -1293,7 +1293,7 @@ def variant_section(fields: dict, run: tuple[str, ...]) -> dict:
 def signature_case(loader: Loader, key: str):
     """(the states, the old spec, the old section, the effect instances,
     the wired section, the cloud roles) of case `key`. A WIRED variant is
-    the golden meta controller's: a wiring of that one field over the loadable patch's run
+    the golden rig's: a wiring of that one field over the loadable patch's run
     (`_shoot`), said as the section that reads as it, and wired as a load
     wires it. `solo` and `solo-…` are one window; a CLOUDED rig lists
     its device's role."""

@@ -158,7 +158,7 @@ def labels(r) -> list[str]:
 
 
 def look(r) -> tuple:
-    """The loaded loadable patch's whole state, as a save would write it."""
+    """The loaded patch's whole state, as a save would write it."""
     t = r.table
     return (r.reg.snapshot(part="patch"), [b.to_json() for b in t.routes()],
             [b.to_json() for b in t.desk()], json.dumps(t.macros_doc(), sort_keys=True))
@@ -393,7 +393,7 @@ def test_a_loadable_load_is_one_step_by_every_road(rig):
     lib.load(LOADABLE, "WAKE")                          # the strip's list
     settle(rig)
     assert labels(rig)[2:] == ["load WAKE"]
-    # the file watch: the loaded loadable patch's file edited on disk
+    # the file watch: the loaded patch's file edited on disk
     path = rig.loaded_patch.save_as("MINE")
     settle(rig)
     assert len(rig.undo.stack) == 3                    # a save is no step
@@ -1123,7 +1123,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
 # ------------------------------------------- plan 18 WP2: knob smoothing
 
 def _smoothed(rig, seconds=routing.SLEW_MAX_S):
-    """Knob smoothing on, the adapter on the meta controller's clock, the stack empty;
+    """Knob smoothing on, the adapter on the rig's clock, the stack empty;
     returns a patch-layer ring knob's row and its param."""
     rig.midi.clock = lambda: rig.t
     rig.reg["desk.slew"].set(seconds)

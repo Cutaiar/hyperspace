@@ -97,7 +97,7 @@ class Apc40:
 
 
 def owner_rig(tmp_path):
-    """test_midi's rig on the owner's meta controller file and a shipped loadable patch
+    """test_midi's rig on the owner's rig file and a shipped loadable patch
     from the corpus (its desk holds the activator row, as every corpus
     loadable patch's does)."""
     shutil.copy(OWNER, tmp_path / "bindings.json")

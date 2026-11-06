@@ -128,7 +128,7 @@ def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
     if lines:
         for b in rows:                  # in the adapter's words: "R height positions …"
             imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
-    # routes are the loaded loadable patch's (plan 13 §3.3): an edit here changes
+    # routes are the loaded patch's (plan 13 §3.3): an edit here changes
     # the table and the loadable patch's dirty dot, and writes no file
     if gate and rows:
         _gate_menu(router, rows)

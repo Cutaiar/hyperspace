@@ -1,7 +1,7 @@
 """The stall log — a frozen show leaves a stack dump behind (plan 14 WP1).
 
 Everything below writes ``<home>/stall.log``, each entry a ``=== <kind>``
-header (the wall time, the loaded loadable patch) and every thread's stack
+header (the wall time, the loaded patch) and every thread's stack
 (``faulthandler.dump_traceback(all_threads=True)``):
 
 **The whole loop stalls** (`Watchdog`). A daemon thread watches the frame
@@ -92,7 +92,7 @@ def _quiet_call(fn: Callable | None, default=None):
 class Watchdog:
     """The log file and the whole-loop stall thread. One per process.
     `clock` is the loop's own (the `now` it pets with); `wall` stamps the
-    log; `preset` names what is loaded. All injectable, so a test drives a
+    log; `loadable` names what is loaded. All injectable, so a test drives a
     stall with a fake clock and `check()` and never sleeps."""
 
     def __init__(self, path: Path | str, *, limit: float = LIMIT, period: float = PERIOD,

@@ -166,7 +166,7 @@ def test_macros_are_patch_state(rig, tmp_path):
     lib.project.save_slot(0)
     assert lib.read("presets", lib.project.bank[0])["values"]["macro.2"] == pytest.approx(0.3)
     m.set_value(0.7)
-    assert lib.is_dirty("presets")                   # the loaded loadable patch tracks it
+    assert lib.is_dirty("presets")                   # the loaded patch tracks it
     lib.project.load_slot(0)
     assert m.value == pytest.approx(0.3)             # the loadable patch brought it back
     path = lib.project.save("Show")
@@ -586,7 +586,7 @@ def test_project_save_load_new(rig, tmp_path):
 
     lib.project.new()
     assert lib.project.name == "untitled" and lib.project.path is None
-    assert rig.chain.gain == 1.0                                     # a fresh meta controller…
+    assert rig.chain.gain == 1.0                                     # a fresh rig…
     assert lib.current("band") is None                               # …no module preset,
     assert lib.project.bank == [None] * library.SLOTS                # …an empty bank
     assert lib.project.startup is None                               # …and nothing to start on
@@ -1362,7 +1362,7 @@ def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
 
 
 def test_renaming_the_loaded_loadable_keeps_its_unsaved_edit(owner_home):
-    """The loaded loadable patch renamed: the name changes, the dot stays lit (the
+    """The loaded patch renamed: the name changes, the dot stays lit (the
     clean reference is the one it had), and save writes the new file."""
     home = owner_home
     r = boot_home(home)

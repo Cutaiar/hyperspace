@@ -122,7 +122,7 @@ LOOKBACK pages say it in are here too (`hands_words`, `lookback_words`,
 
 Render stack (ARCHITECTURE §3): this module reads params through the
 objects it is handed and never writes one; it imports moderngl and its
-sibling render modules only, never params, routing, library, loadable patch,
+sibling render modules only, never params, routing, library, loadable,
 undo or control. Node methods are `run`, `paint`, `draw`, `image`,
 `depth` — never `apply`.
 """
@@ -1313,9 +1313,9 @@ class BusCuts:
 
 
 def bus_cuts_of(source: Any) -> BusCuts:
-    """The bus wires `source` holds (duck-typed: its `rig`, as the loaded
+    """The bus wires `source` holds (duck-typed: its `bus_cuts`, as the loaded
     loadable patch `loadable.LoadedPatch` has, plan 44 D3) — the renderer's `bus_source`; None, or a source
-    with none, is the meta controller as it ships: every default standing."""
+    with none, is the frame as it ships: every default standing."""
     got = getattr(source, "bus_cuts", None)
     return got if isinstance(got, BusCuts) else BusCuts()
 
@@ -3049,7 +3049,7 @@ def placement_words(e: EffectAt) -> str:
 
 
 def graph_words(spec: GraphSpec | None, dormant: dict[str, str] | None = None) -> str:
-    """The loaded loadable patch's graph in one line (the OUTPUT page): `graph:
+    """The loaded patch's graph in one line (the OUTPUT page): `graph:
     default`, or what it changes — `graph: hands 1 in the scene as lines ·
     hands 2 a layer · acid ×2 · history with the hands`. Plan 30 D1: then
     each placed effect where it sits (`placement_words`), or — `dormant`,

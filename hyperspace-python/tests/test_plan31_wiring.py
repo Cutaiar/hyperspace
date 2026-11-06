@@ -598,7 +598,7 @@ def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
     """The corpus's seq-demo: kick 1 and 5, snare 3 and 7, hats on every
     step at half a bar, one-shot envelopes on brightness, zoom and the
     deconverge. It loads stopped (decision 8); with play pressed at the
-    golden meta controller's clock — triggered at T0 = 2.0, play and a restart on the
+    golden rig's clock — triggered at T0 = 2.0, play and a restart on the
     first frame, eight 60 Hz frames — the hashed frame is 117 ms into the
     kick; the hat that fired with it (70 ms) is over and the snare (step 3,
     at 2.267) is still to come. tools/golden_frames.py draws that frame;

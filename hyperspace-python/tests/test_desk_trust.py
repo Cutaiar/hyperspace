@@ -216,7 +216,7 @@ def test_save_held_and_a_filled_pad_tapped_saves_a_new_loadable_and_keeps_the_ol
     """Decision 18: a filled slot takes a **new** loadable patch (named as
     `save_new` names them) and the slot points at it; the old loadable patch keeps
     its file, byte for byte, and stays in the list, unpadded, as "free
-    this pad (keeps the loadable patch)" leaves it; nothing goes to the trash; the
+    this pad (keeps the preset)" leaves it; nothing goes to the trash; the
     new loadable patch is the loaded one and its pad blinks."""
     at = clocked(rig)
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
@@ -403,7 +403,7 @@ def test_the_render_toggles_are_invariant_and_their_leds_show_the_live_state(rig
             reg[pid].set(was)                                         # the panel moves it back
             rig.midi.poll()
             assert leds(rig, n)[-1] == (1 if was else 0), (layer, pid)
-    # right after a load, on either layer: the loaded loadable patch's values
+    # right after a load, on either layer: the loaded patch's values
     for under_shift in (False, True):
         if under_shift and t.layer == "preset":
             shift(rig)

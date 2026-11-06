@@ -2,7 +2,7 @@
 
 What crosses the line, and how each half is held:
 
-- the registry: `params.build_meta` → the meta controller's `MetaRegistry`, one
+- the registry: `params.build_meta` → the rig's `MetaRegistry`, one
   for every deck; `build_patch` → a deck's `Registry`, which holds the
   meta controller's `Param` objects by reference (tests/test_params.py proves the
   registry half);
@@ -98,7 +98,7 @@ def test_the_meta_table_reads_and_writes_the_file(tmp_path):
 
 
 def test_two_decks_channels_read_through_one_set_of_sources():
-    """`MediaSources` is the meta controller's (one resolver, opener, closer, mixer);
+    """`MediaSources` is the rig's (one resolver, opener, closer, mixer);
     each deck's `Channels` are its own eight; `MediaState` is the old name."""
     a = Channels(resolver=NoResolver())
     b = Channels(sources=a.sources)
@@ -550,9 +550,9 @@ def test_a_second_table_shares_the_meta_rows_it_brings_and_refuses_another_file(
     assert key in s.rows
     again = Bindings([Binding("key:F10", "view.lines", "toggle")], meta_table=s)
     assert sum(1 for x in again.bindings if x.source == "key:F10") == 1   # not twice
-    with pytest.raises(ValueError, match="the session's"):
+    with pytest.raises(ValueError, match="the meta table's"):
         Bindings([], meta_table=s, path=tmp_path / "other.json")
-    with pytest.raises(ValueError, match="the session's"):
+    with pytest.raises(ValueError, match="the meta table's"):
         Bindings([], meta_table=s, profile="launchpad")
 
 

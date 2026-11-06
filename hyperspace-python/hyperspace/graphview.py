@@ -3032,7 +3032,7 @@ def land_choices(view: View, edit, fixed: str, nid: str
 # P2, D4 (the owner's, 2026-10-27: "Saved, folded until `+` … an explicit
 # place where we want to say, okay, we want to encapsulate complexity" —
 # the one sanctioned exception to plan 36's no-hidden-edge rule). A group
-# is a region of the loaded loadable patch — the loadable patch's `groups` entries — drawn
+# is a region of the loaded patch — the loadable patch's `groups` entries — drawn
 # on GRAPH as one node: folded, its members are not drawn and neither is
 # a cable with both ends inside; every cable with one end inside is drawn
 # re-ended at the group node — a picture cable at one typed pin each, a
@@ -3122,7 +3122,7 @@ def is_group_pin(pin: str) -> bool:
 
 @dataclass
 class VGroup:
-    """One group of the loaded loadable patch on the canvas (plan 40 T2): its `id`
+    """One group of the loaded patch on the canvas (plan 40 T2): its `id`
     (``group.<n>``), `name`, provenance `patch` (the slug it was spawned
     from, or None), its entry's canvas ids (`nodes`) and the view's nodes of
     the ones a group may hold and the view has (`members`), whether it is
@@ -4220,7 +4220,7 @@ class Edit:
 
     def disconnect_value(self, cable: VCable):
         """A route → `remove` (its depth subscribers go with it); a desk
-        row of the loaded loadable patch → `remove`; a macro subscriber → out of
+        row of the loaded patch → `remove`; a macro subscriber → out of
         its macro; a modifier's input → unset. The meta controller's rows (keys,
         the pad, an invariant or global-layer desk row) are `bindings.json`'s
         and are refused: ROUTING edits them."""
@@ -4416,7 +4416,7 @@ class Edit:
         loadable patch saves — whether it saves as a patch is asked at the save) made
         one group, folded, named "group <n>" — one undo step. Returns (the
         entry, or None when nothing was grouped; the words for what was
-        left out: "output.all is the meta controller's window; left out", a node another group
+        left out: "output.all is the rig's window; left out", a node another group
         held moved here, said; "nothing to group"). A node is in one group
         at most: grouping a member of another moves it (an emptied group
         goes); a group holds nodes, never a group."""
@@ -5015,7 +5015,7 @@ class Edit:
 
     def save_patch(self, gid: str, name: str, note: str = "") -> str | None:
         """**Save as patch…** / **Update patch** (plan 40 T3, P3): group
-        `gid` cut out of the loaded loadable patch (`patches.lift` over
+        `gid` cut out of the loaded patch (`patches.lift` over
         `LoadedPatch.parts()`), named, and written as ``<library>/patches/<slug>.json``
         (`Library.save_patch`: an older text of it to the trash) — that
         file and nothing else. A member the lift's rule refuses (a
@@ -5433,7 +5433,7 @@ def _drawn_edge(x: dict) -> bool:
 
 
 def _bus_cuts(edit: Edit) -> rgraph.BusCuts:
-    """The bus cuts the loaded loadable patch holds (`edit.loaded_patch.bus`, plan 44
+    """The bus cuts the loaded patch holds (`edit.loaded_patch.bus`, plan 44
     D3; plan 36 T1's were the show's); with no loadable patches, the meta controller as it
     ships: every cable standing."""
     return rgraph.bus_cuts_of(getattr(edit, "loaded_patch", None))

@@ -694,7 +694,7 @@ Every settable thing is a `Param` with a stable id (`view.bright`,
 
 | Flag | Means |
 |---|---|
-| `persist` | belongs in a snapshot. Its group puts it in the **performance** part (a loadable patch's `values`) or the **meta controller** part (a show's `session`): `params.PATCH_GROUPS` / `SHARED_META_GROUPS`, `part_of` — by the contract "a loadable patch is a complete look; the meta controller is what is plugged in" (plan 43; the eye is performance since C2). On by default; never for triggers. The rotation phases (`rot.phase.*`) are `persist=False` — the turn moves every frame, so it is no base — yet a loadable patch saves them as its `pose` (`params.POSE_IDS`, `ViewState.pose`) and a load sets the turn |
+| `persist` | belongs in a snapshot. Its group puts it in the **performance** part (a loadable patch's `values`) or the **meta controller** part (a show's `session`): `params.PATCH_GROUPS` / `SHARED_META_GROUPS`, `part_of` — by the contract "a preset is a complete look; the rig is what is plugged in" (plan 43; the eye is performance since C2). On by default; never for triggers. The rotation phases (`rot.phase.*`) are `persist=False` — the turn moves every frame, so it is no base — yet a loadable patch saves them as its `pose` (`params.POSE_IDS`, `ViewState.pose`) and a load sets the turn |
 | `modulatable` | a performer may drive it. Off for meta settings (`output.monitor`, `.fullscreen`, `.overlay`, `.passthrough`, `.dim`, every `hands.*`), UI state, aliases, `tempo.tap`, the dream params whose change rebuilds something (`dream.gap`, `dream.res`, `dream.layer`), the per-output switches, and `ghost.style` / `.mirror` / `.guide` / `.tethers`. A route onto one is dormant; a hand Learn onto one is refused in words (`Learn.learn_source`), and a loadable patch's route onto one is dropped at load with a note (`LoadedPatch.load_doc`) |
 | `alias` | a view onto another param (`band.sel.*` follows the selected band); never persists or modulates. `Registry.real` resolves it |
 
@@ -825,7 +825,7 @@ param id), `op`, `value`, `enabled`, and for performers `scale` (a
 **meta controller** param only, such as `master.gain`), `when` (a gate), `rest`;
 MIDI rows add `pickup`, `feedback`, `on`, `off`, `ring` and `layer` —
 absent for an **invariant** control (the meta controller's, one meaning on both
-layers), `"global"` (the SHIFT layer) or `"preset"` (the loaded loadable patch's
+layers), `"global"` (the SHIFT layer) or `"preset"` (the loaded patch's
 desk).
 
 | Scheme | Address | Fed by | Reaches the param as |
@@ -1027,16 +1027,16 @@ completers:
 - **A pad button, or an OSC hit** — `gamepad.learn_from` (or
   `OscDevice.learn`) → `Learn.learn_pad_button`: a meta row in
   `bindings.json`, written at once; a stick, a trigger or an OSC axis →
-  `Learn.learn_source`, a route in the loaded loadable patch.
+  `Learn.learn_source`, a route in the loaded patch.
 - **A sink port** — not armed at all: the menu's **Learn sink ▸** pick
   is `Learn.learn_sink(pid, port)`, a meta controller sink row written to
   `bindings.json` at once, never a performer and never a prompt
   (`tests/test_sinks.py::test_learn_sink_on_a_param_lands_a_meta_row_with_no_question`).
 
-Every desk, hand and stick learn lands in the **loaded loadable patch**: the table changes, the
+Every desk, hand and stick learn lands in the **loaded patch**: the table changes, the
 loadable patch's dirty dot lights (`LoadedPatch.signature`), and no file is written
 until a save. **Unbind** is `Learn.unbind(ids, *, desk=True,
-routes=True)`: the loaded loadable patch's desk rows and every route on the param
+routes=True)`: the loaded patch's desk rows and every route on the param
 and its real param, as one undo step; a meta row is never removed.
 `learn.bound(table, ids)` is what both Unbind and the menu's lines ask
 (`tests/test_learn.py::test_unbind_removes_the_loadables_desk_rows_and_every_route`).
@@ -1075,7 +1075,7 @@ So a performer that owns a macro moves only its depth subscribers; the
 base subscribers follow the knob, the panel or a restore
 (`tests/test_macros.py::test_a_performer_on_a_macro_moves_only_its_depth_subscribers`).
 Two macros on one param: the later id wins. The subscribers and the
-macros' values belong to the loaded loadable patch; `bindings.json` never holds
+macros' values belong to the loaded patch; `bindings.json` never holds
 them. Since plan 28 the chain lands **the same frame**: an LFO owning
 another's depth, a macro scaling a push and a modulated `scale` are read
 after they land (§2).
@@ -1089,7 +1089,7 @@ a loop may close). Each reads one or two lanes and publishes `mod:<n>`,
 which a route sources like any lane, so the Router, Learn, the referee
 and ROUTING need no other path. Its params `mod.<n>.<p>` are ordinary
 patch params (group `mod`), ownable like an LFO's knobs. They
-live in the loaded loadable patch (`loadable.MODIFIERS_KEY`), never in
+live in the loaded patch (`loadable.MODIFIERS_KEY`), never in
 `bindings.json`; a desk template may carry them, and so may a patch
 (§3.11, with the graph region they sit in). A modifier whose input
 is not live is dormant: its lane reads NaN and a route on it lets go
@@ -1120,20 +1120,20 @@ is not live is dormant: its lane reads NaN and a route on it lets go
 | a row Learn put on `preset.list.next` / `prev` (no factory row since 2026-11-04, row 723) | → `Project.walk` → `Library.next` / `prev` on the presets: the PRESETS page's list (`Library.list`: every loadable patch by name, re-read each step so a new save is in it), wrapping. The APC40's QUANT (`preset.next`) walks the bank's filled slots instead (`Project.cycle`) | a loadable patch load |
 | a macro's knob | its base → `Router.follow_macros` → each base subscriber's base | base |
 | an analyzer band, a hand axis, a pinch, a DAW lane, an LFO | `lane:` / `hand:` / `ext:` / `lfo:` → its performer row → `Router.modulate` | offset (a pinch may instead gate a row) |
-| right-click → Learn hand / Learn desk / click-then-map | `Learn` (§3.5) | the loaded loadable patch's table |
-| right-click → Learn pad | `gamepad.learn_from` → `Learn.learn_pad_button` (a button: the meta controller's `bindings.json`, written at once) or `Learn.learn_source` (a stick or trigger: a route in the loaded loadable patch) | the table |
+| right-click → Learn hand / Learn desk / click-then-map | `Learn` (§3.5) | the loaded patch's table |
+| right-click → Learn pad | `gamepad.learn_from` → `Learn.learn_pad_button` (a button: the meta controller's `bindings.json`, written at once) or `Learn.learn_source` (a stick or trigger: a route in the loaded patch) | the table |
 | right-click → Learn pad on a Sony pad (plan 42) | `gamepad.learn_from`: the touchpad click, the back and Fn buttons as button rows; a finger dragged along x or y, a pinch, a twist, a tap, a tilt from where the pad was held when the learn was armed, or a shake as a route (`gamepad._learn_extra`) | the table |
 | right-click → Learn sink ▸ `<role>:<channel>` | `Learn.learn_sink`: a sink row; the sink device sends the param's effective value after `reg.apply` | `bindings.json` (no param) |
 | a sink row onto a pad's port, `<role>:0`–`8` (plan 42) | `PadDevice.send` → `devices.pad_effects` → `Pad.send_effects` → the hid reader, written only when it changed | the pad's light bar, lights, rumble, triggers (no param) |
-| right-click → Unbind | `Learn.unbind` | the loaded loadable patch's table |
-| a ROUTING-page edit | the table in place: the loaded loadable patch, its dirty dot | the table |
-| a modifier (ROUTING's MODIFIERS strip, or the GRAPH page) | its node in the pass → its `mod:<n>` lane → the route sourcing it → `Router.modulate` | offset; the modifier itself is the loaded loadable patch's table |
-| a cable dragged on the GRAPH page | `graphview.Edit` → the table's own calls (`Bindings.add` / `move_route` / `remove`, a Learn, a macro subscriber, a modifier input) or, for an image cable, a new `graph` section read back and landed (`GraphSection.land`) | the loaded loadable patch's table or graph (a pad setter: `bindings.json`) |
+| right-click → Unbind | `Learn.unbind` | the loaded patch's table |
+| a ROUTING-page edit | the table in place: the loaded patch, its dirty dot | the table |
+| a modifier (ROUTING's MODIFIERS strip, or the GRAPH page) | its node in the pass → its `mod:<n>` lane → the route sourcing it → `Router.modulate` | offset; the modifier itself is the loaded patch's table |
+| a cable dragged on the GRAPH page | `graphview.Edit` → the table's own calls (`Bindings.add` / `move_route` / `remove`, a Learn, a macro subscriber, a modifier input) or, for an image cable, a new `graph` section read back and landed (`GraphSection.land`) | the loaded patch's table or graph (a pad setter: `bindings.json`) |
 | a loadable patch | `LoadedPatch.load`: every performance base in one `Library.restore`, then the modifiers (`Bindings.set_modifiers`, their params declared), `Bindings.set_routes`, `set_desk`, `set_macros`, the GRAPH page's `layout`, the base subscribers landed (`Router.follow_macros(force=True)`); shared meta params never | bases and the loadable patch's table |
 | a module preset or show | `Library.restore` (a show: its session part) | base |
-| **a picture node dropped on a picture cable**, or a cable's **insert ▸** (GRAPH, 2026-11-01: any kind, not only an effect) | `ui_graph.onto_plan` (what the drag lights is what the drop does) → `put_onto` → `Edit.place_node` (a free node, or one lifted with ⌘: out of its place, its chain closed over it, onto the cable by `graphview.INSERT_PORTS`; a composite or a switch asks its inlet first, a channel takes the cable over) or `insert_node` → `Edit.insert_node` (a new node made and spliced): a new `graph` section read back and landed | the loaded loadable patch's graph, one undo step |
-| a cable's **starters ▸ feedback**, or a picture node's **add feedback after** (GRAPH, wave 0 E1, 2026-11-02) | `ui_graph.add_starter("feedback", cable)` / `ui_graph.add_feedback_after` (the cable out of the node, `graphview.picture_feeds` off the spec's wires; several, a submenu) → `Edit.starter("feedback", cable)` → `graphview._feedback_starter`: a new composite (over) onto the cable by the insert table's splice (`_onto`), `composite → delay.image`, `delay → fade.image`, `fade → composite.under`, landed; then the fade on at level `FEEDBACK_LEVEL` (0.75) in the same step (`_set_after_landing`); the three laid left to right from the menu's point, or under the node's box (`ui_graph.node_below`; `Edit.placed`, `chain_layout`). From the picker, a scene feeding several picture ports is refused in words | the loaded loadable patch's graph and the fade's values, one undo step |
-| **spawn ▸** a patch, or a patch dropped on a cable (GRAPH, plan 40) | `ui_graph.spawn` → `patches.spawn` → the conflict sheet if any (`ui_routing.modal`) → `Edit.spawn` / `Edit.splice`: the section through `gs.land`, `bank.add`, `add_modifier`, `lib.restore`, `Bindings.add` / `replace_owner`, `bind(write=False)`, `set_macros`, the group (§3.11) | the loaded loadable patch's graph, table, values and `groups`, one undo step; no file |
+| **a picture node dropped on a picture cable**, or a cable's **insert ▸** (GRAPH, 2026-11-01: any kind, not only an effect) | `ui_graph.onto_plan` (what the drag lights is what the drop does) → `put_onto` → `Edit.place_node` (a free node, or one lifted with ⌘: out of its place, its chain closed over it, onto the cable by `graphview.INSERT_PORTS`; a composite or a switch asks its inlet first, a channel takes the cable over) or `insert_node` → `Edit.insert_node` (a new node made and spliced): a new `graph` section read back and landed | the loaded patch's graph, one undo step |
+| a cable's **starters ▸ feedback**, or a picture node's **add feedback after** (GRAPH, wave 0 E1, 2026-11-02) | `ui_graph.add_starter("feedback", cable)` / `ui_graph.add_feedback_after` (the cable out of the node, `graphview.picture_feeds` off the spec's wires; several, a submenu) → `Edit.starter("feedback", cable)` → `graphview._feedback_starter`: a new composite (over) onto the cable by the insert table's splice (`_onto`), `composite → delay.image`, `delay → fade.image`, `fade → composite.under`, landed; then the fade on at level `FEEDBACK_LEVEL` (0.75) in the same step (`_set_after_landing`); the three laid left to right from the menu's point, or under the node's box (`ui_graph.node_below`; `Edit.placed`, `chain_layout`). From the picker, a scene feeding several picture ports is refused in words | the loaded patch's graph and the fade's values, one undo step |
+| **spawn ▸** a patch, or a patch dropped on a cable (GRAPH, plan 40) | `ui_graph.spawn` → `patches.spawn` → the conflict sheet if any (`ui_routing.modal`) → `Edit.spawn` / `Edit.splice`: the section through `gs.land`, `bank.add`, `add_modifier`, `lib.restore`, `Bindings.add` / `replace_owner`, `bind(write=False)`, `set_macros`, the group (§3.11) | the loaded patch's graph, table, values and `groups`, one undo step; no file |
 | **wire as saved**, and its take-over chip (GRAPH side pane, wave 3 P3) | `ui_graph.wire_as_saved` → `Edit.wire_as_saved`. The chip: `ui_graph.take_over_plan` → `Edit.take_over_of` → a `graphview.TakeOver` (its words by `graphview.port_said`), pressed through `ui_graph.take_over` → `Edit.wire_taking_over`. Both land through `Edit._saved_pins`. | One undo step; only the chip cuts; its source stays on the canvas, not re-wired. |
 | **group N nodes** / **ungroup** (GRAPH's right-click), `+` / `−` on a group | `Edit.group` / `ungroup` / `set_open` | the loadable patch's `groups` only (nothing of the renderer), one undo step |
 
@@ -1369,10 +1369,10 @@ table's `Bindings.on_modifiers` (every `set_modifiers`), each bank's
 restore) settles alike and a draw or a save never finds a dead member to
 filter (`live_groups` stays as the save's guard). Every step that removes
 a node pushes with the marks, so its undo puts a member back in its group;
-a refused load puts the loaded loadable patch's groups and floor back with the rest.
+a refused load puts the loaded patch's groups and floor back with the rest.
 
 **What the loadable patch wants, and the arrival** (P4). `devices.wants(table,
-registry)` lists, per device role, the rows of the loaded loadable patch (enabled
+registry)` lists, per device role, the rows of the loaded patch (enabled
 performer routes, patch-layer desk rows, modifier inputs) that the role
 would feed, with its state — connected, lost, off, or not in this rig —
 and the rows in words (`routing.row_words`: "K1", "right hand y"). The
@@ -1401,7 +1401,7 @@ docstring has the rest.
 | `motion.py` | the envelope followers the analyzer is made of, and a damped spring, for any signal; a spring set by perceptual duration and bounce (Apple's model), exactly a frequency and a damping ratio (`spring_hz`, `spring_feel`, the named `SPRINGS`); what a feel does to a jump (`response`, `settle`) | `pole`, `follow`, `spring`, `Motion`, `Follower`, `response`, `settle`, `spring_hz`, `SPRINGS`, `DEFAULT_ROUTE_FEEL` (the feel a new route is made with) | the chain still matches the frozen oracle (`tests/test_golden.py`); the spring is exact at any dt; a response is what a Follower stepping frame by frame lands on; a spring file written as hz / damp reads as the same spring (`tests/test_motion.py`) |
 | `tapers.py` | position ↔ value for every fader | `Taper`, `exp_zero`, `exp_pure`, `exp_time`, `lin_t`, `lin_db`, `count`, `exp_signed` (the effects' speed: a hard zero in the middle, exponential either side), `exp_amount` (an amount's zero-safe log: off at 0, then its octaves) | exact round trip on every detent (`tests/test_control.py::test_taper_round_trip`, `tests/test_retaper.py`) |
 | `routing.py` | the table, the file, the referee, the desk's layers, the macros, the modifiers, the modulation pass in dependency order, the banks and the sequencer stepped in it | `Binding`, `Bindings` (`modifiers`, `set_modifiers`, `set_modifier_input`), `Router` (`modgraph`, `build_modgraph`, `modgraph_notes`, `use_lfos`, `use_bank`, `bank`, `use_sequencer`, `modulate`, `felt_now`, `felt_lanes`), `BANKS`, `BUILTIN_LANES`, `declare_modifiers`, `Macro` / `Sub`, `Owned`, `act`, `referee`, `register_desk`, `led_level`, `LOOP_KEY_ROWS`, `backup`, `remap_factory`, `renamed_session` | §3.3–§3.8; imports nothing above it (`tests/test_routing_boundary.py`); `tests/test_routing.py`, `tests/test_desk.py`, `tests/test_macros.py`, `tests/test_hand_names.py` |
-| `patches.py` | a patch as data (plan 40, §3.11): the file's refusals, its fragment and boundary, the lift out of a loaded loadable patch, the spawn's landing into another, the one boundary classifier GRAPH's groups share | `check`, `read` → `Patch`, `lift`, `Host` (`of`), `spawn` → `Landing`, `Conflict`, `select`, `crossing`, `side`, `ONE_OWNER`, `SCHEMA` | pure: `lift` and `spawn` write nothing; a leaf over the pure pieces (`graph`'s names, `routing`'s `Binding` and scheme split, `modifiers`, `modbank`, `lfo`, `envelope`; no app module imported directly: `tests/test_patches.py::test_patches_is_a_leaf`); `spawn` lands only the patch's own wires and only its members' values (`tests/test_patches.py`) |
+| `patches.py` | a patch as data (plan 40, §3.11): the file's refusals, its fragment and boundary, the lift out of a loaded patch, the spawn's landing into another, the one boundary classifier GRAPH's groups share | `check`, `read` → `Patch`, `lift`, `Host` (`of`), `spawn` → `Landing`, `Conflict`, `select`, `crossing`, `side`, `ONE_OWNER`, `SCHEMA` | pure: `lift` and `spawn` write nothing; a leaf over the pure pieces (`graph`'s names, `routing`'s `Binding` and scheme split, `modifiers`, `modbank`, `lfo`, `envelope`; no app module imported directly: `tests/test_patches.py::test_patches_is_a_leaf`); `spawn` lands only the patch's own wires and only its members' values (`tests/test_patches.py`) |
 | `modgraph.py` | the modulation graph as data and the order it runs in (plan 28 N0; named `patch.py` until plan 40, D1) | `ModNode`, `ModEdge`, `ModGraph`, `KINDS`, `PORTS`, `LFO_KNOBS`, `ENV_KNOBS`, `ordering`, `order`, `cycles`, `RENDER_VALUE` | a leaf (`tests/test_modgraph.py::test_modgraph_is_a_leaf`); dependencies first, ties in insertion order, no loop but through a delay (`tests/test_modgraph.py`) |
 | `modifiers.py` | the six modifier kinds as pure steps (plan 28 N1) | `Modifier`, `KINDS`, `PARAMS`, `INPUTS`, `OUT`, `ModState`, `step`, `smooth_motion`, `next_id`, `param_id` | imports only `motion` and `tapers`; the Router declares their params (`routing.declare_modifiers`) and steps them; never in `bindings.json` (`tests/test_modifiers.py`) |
 | `learn.py` | arming, completing and refusing a Learn; pick-then-map; a sink pick; Unbind | `row_for`, `whole_circle` (a hand's room lane: `position`, depth 1, no feel; plan 51), `Learn` (`arm`, `wants`, `accepts`, `learn_control`, `learn_source`, `learn_pad_button`, `learn_sink`, `sinks`, `pick`, `map_picked`, `unbind`, `pending`, `last`, `devices`), `BARE_WANTS`, `blocked`, `bound`, `centred_target`, `PUSH_DEPTH`, `LANE_DEPTH` | nothing completes a learn its `want` does not name; a refused desk learn stays armed; a non-modulatable target is refused for a hand; no learn writes a file (`tests/test_learn.py`) |
@@ -1591,8 +1591,8 @@ it draws reaches a param (§2, Drawing). Plan 22's lifts (seven shapes
 given an invented w) and its mask (the Heart's W planes folded onto 3D
 planes) are gone.
 
-**The desk (APC40).** Two layers in one table: the **loadable patch** layer (the
-loaded loadable patch's `desk`) and the **global** layer (the meta controller's), plus
+**The desk (APC40).** Two layers in one table: the **patch** layer (the
+loaded patch's `desk`) and the **global** layer (the meta controller's), plus
 **invariant** rows that mean the same on both (SHIFT, the faders, the
 crossfader, the bank pads, OVERDUB). SHIFT latches the
 layer (`desk.shift`). `Bindings.dispatch` sends a message to the invariant
@@ -1701,7 +1701,7 @@ dream is no longer pulled by the look-back's run.
 **Render graph.** `graph.build_graph` builds the frame as nodes from
 the renderer's `Wiring` alone (plan 35/36: only what a wire reaches; no
 switch builds a node, a window's mutes are read each frame), the meta controller's
-standing wires (`BusCuts`: the bus and cloud cables, the loaded loadable patch's
+standing wires (`BusCuts`: the bus and cloud cables, the loaded patch's
 cuts since plan 44 D3) and the effect
 files present (one `Effect` node per wired instance);
 `Renderer._graph_for` keeps it

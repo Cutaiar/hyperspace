@@ -116,8 +116,8 @@ FRONT, BEHIND = -400.0, 400.0
 def _rig(ctx, wiring=None, z0=None, *, effects=(), shape=True, **kw):
     r = rig(ctx, effects=effects, **kw)
     if wiring is not None:
-        # (plan 33 R23: the meta controller's run kept; plan 36 T4: its look-back drawn
-        # while the meta controller's `dream.on` is on, as the old words had it)
+        # (plan 33 R23: the rig's run kept; plan 36 T4: its look-back drawn
+        # while the rig's `dream.on` is on, as the old words had it)
         from hyperspace.graphmigrate import look_of
         st = r.lookback.state
         r.wiring = wired_wiring(keep_run(r, wiring),

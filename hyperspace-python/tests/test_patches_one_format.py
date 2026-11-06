@@ -253,7 +253,7 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
 
 def test_a_group_never_holds_the_meta_kinds_one_list_with_graphview():
     """Review fix 1: a media channel, a window, All outputs and a cloud are
-    the meta controller's (`patches.FIXTURE_KINDS`, `graphview.FIXTURE_KINDS` the same list):
+    the rig's (`patches.FIXTURE_KINDS`, `graphview.FIXTURE_KINDS` the same list):
     Group refuses them, so a group never carries what no patch can."""
     from hyperspace import graph as G
     from hyperspace import graphview

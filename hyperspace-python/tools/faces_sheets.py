@@ -19,7 +19,7 @@ What a tile shows, the same for every mode (only `view.pattern` differs):
 - the eight inputs where the corpus loadable patches' lane routes leave them on a
   **medium passage** (plan 22 B3's MEDIUM bands: lane i pushes input i at
   `routing.PATTERN_DEPTH` on a base of 1; HUE and SPREAD at 1.0) — the
-  default pattern depth, set as the inputs' bases since the meta controller's analyzer
+  default pattern depth, set as the inputs' bases since the rig's analyzer
   is never fed;
 - the analyzer's lanes as the renderer reads them (`Renderer.bands`) at
   the same passage, which only METER and PULSE draw.
@@ -82,7 +82,7 @@ CORPUS = gf.CORPUS                                  # tests/corpus/presets
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 
 FRAMES = 3                    # frames drawn before the read: past the first
-TILE = (480, 300)             # a mode's PNG and a sheet's tile, half the meta controller's 960×600
+TILE = (480, 300)             # a mode's PNG and a sheet's tile, half the rig's 960×600
 LABEL_H = 22
 # (sheet file, the loadable patch it is drawn on, what it shows, values set over
 # the loadable patch's own for every mode). The Heart is lit at party-faces'
@@ -297,7 +297,7 @@ def _driven(doc: dict) -> tuple[str, ...]:
 def usage() -> list[Use]:
     """Every corpus loadable patch and every fixture under tests/fixtures/presets/,
     each loaded through the real `LoadedPatch` over a scratch library (the
-    golden meta controller's headless `Loader`, every fixture copied in), read for its
+    golden rig's headless `Loader`, every fixture copied in), read for its
     landed mode, faces switch and wires."""
     loader = gf.Loader()
     own = Path(loader._home.name) / "presets"

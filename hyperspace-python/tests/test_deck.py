@@ -16,7 +16,7 @@ built its `Undo` without `banks=`. Today's `boot` runs `main`'s lines, so
 its LFOs, envelopes and sequencer step inside the pass and undo takes the
 banks' membership. On three corpus loadable patches (TRIP, TUMBLE, seq-demo) a
 bank-driven row then leaves a base (`camera.zoom`, `view.bright`) a
-round-off apart from the old meta controller's after the undo, because undo puts
+round-off apart from the old rig's after the undo, because undo puts
 back only a base that is not `undo.alike` its state (plan 15 §1 row 2).
 `alike` is the right comparison for that case: it is the tolerance undo
 itself uses to call two bases the same value. With main's three lines
@@ -224,7 +224,7 @@ def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path)
 
 
 def _feed(src: Sources, t: float) -> None:
-    """One frame of what the meta controller's sources say, into `src`: the hands'
+    """One frame of what the rig's sources say, into `src`: the hands'
     lanes (named, as the adapter publishes them) and the pad's axes, each
     a slow wave of its own; the analyzer's lanes are the chain's."""
     from hyperspace import gamepad
@@ -451,7 +451,7 @@ def test_two_registries_share_no_frame_state():
 
 
 def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
-    """`main` calls `Deck.build` once, the hooks at the meta controller's places, and
+    """`main` calls `Deck.build` once, the hooks at the rig's places, and
     hands `Host` the deck; `frame`'s order (test_app_boundary.ORDER) is
     what it was before D1 — `frame` reads the same flat handles."""
     tree = ast.parse(textwrap.dedent(inspect.getsource(app.main)))

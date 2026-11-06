@@ -1,7 +1,7 @@
 """Plan 32 T5 — the media channels in the preset: the `media` section (the
 bins), the channel params, and the old `view.bmp_*` dropped with a note.
 Row 394: every save is `hyperspace.preset/6` with the section and every
-media value (plan 32's "/4 only when a loadable patch uses them" is gone with the
+media value (plan 32's "/4 only when a preset uses them" is gone with the
 ladder).
 
 Rigs are test_loadable.boot / test_undo.boot (app.main's order on a tmp

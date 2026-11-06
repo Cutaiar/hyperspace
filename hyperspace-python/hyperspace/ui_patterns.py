@@ -29,7 +29,7 @@ Top to bottom:
   push route at the factory depth (routing.PATTERN_DEPTH) from the source
   the convention puts on it
   (`suggest`: lane k for SCALE … SHARP, the factory's layout; LFO 1 and
-  LFO 2 for HUE and SPREAD), into the loaded loadable patch, staying on this
+  LFO 2 for HUE and SPREAD), into the loaded patch, staying on this
   page. "all neutral" puts every base back at 1.0 as one undo step. On
   FLAT, which runs no pattern, the rows are dimmed but live.
 - a last faint line: what a right-click on an input offers.

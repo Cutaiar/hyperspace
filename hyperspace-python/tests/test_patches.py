@@ -122,7 +122,7 @@ def test_patches_is_a_leaf():
     modifiers' id rule — never the app, the library, a page or the renderer
     (library imports it, for `check`)."""
     tree = ast.parse(Path(patches.__file__).read_text())
-    banned = {"library", "preset", "app", "render", "graphview", "undo", "control", "params",
+    banned = {"library", "loadable", "app", "render", "graphview", "undo", "control", "params",
               "midi", "apc40", "devices", "imgui"}
     for node in ast.walk(tree):
         names = []
@@ -141,7 +141,7 @@ def test_patches_is_a_leaf():
 
 def test_the_meta_nodes_are_graphviews_not_removable():
     """`FIXTURE_NODES` restates the render nodes the GRAPH page refuses to delete
-    (`graphview.spec_name`): the clouds as the meta controller's (`NOT_REMOVABLE`), the
+    (`graphview.spec_name`): the clouds as the rig's (`NOT_REMOVABLE`), the
     camera as the look's one (`CAMERA_KEPT`, plan 43 C2); the two lists
     agree, and the patch reads a name's kind as the canvas does."""
     assert set(patches.FIXTURE_NODES) == {graphview.CAMERA, "cloud"}

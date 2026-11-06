@@ -132,10 +132,10 @@ def _on_disk(tmp_path):
 
 def test_routing_page_edits_change_the_loadable_not_bindings_json(rig, tmp_path):
     """Plan 13 §3.3: a route deleted, added or edited on the page (or from
-    the context menu) is the loaded loadable patch's — the table changes, the
+    the context menu) is the loaded patch's — the table changes, the
     loadable patch's dirty dot moves, and bindings.json is never written."""
     panel, lib = rig.panel, rig.panel.library
-    router = rig.router                             # the one the meta controller's Loadable patches loads into
+    router = rig.router                             # the one the rig's Loadable patches loads into
     router.table.write()
     path = routing.bindings_path(tmp_path)
     assert router.table.path == path
@@ -203,7 +203,7 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
 def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, monkeypatch):
     """Plan 09 WP5, exit criterion 3 without the mouse: a second performer
     on a target is a question, not an error. *Replace* swaps the owner (in
-    the loaded loadable patch — no file is written, plan 13 §3.3); *Keep* leaves
+    the loaded patch — no file is written, plan 13 §3.3); *Keep* leaves
     the table untouched. The same modal
     serves the page's own edits (add, a retarget, a row waking up) and a
     hand learn the shared `Learn` is holding in `pending` — no MIDI adapter
@@ -533,7 +533,7 @@ def _drawn(monkeypatch) -> tuple[list[str], list[str]]:
 
 
 def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, monkeypatch):
-    """Plan 13 decision 13: the page is the loaded loadable patch — the head names
+    """Plan 13 decision 13: the page is the loaded patch — the head names
     it (its dot, the layer, the last learn — a refusal among them — and the
     desk rows its load dropped), then its routes, its desk (each row, and
     each loadable patch control it leaves dark), its macros with their subscribers
@@ -637,7 +637,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     and deleted on the one preset strip's library group, the routes with
     the rest of the loadable patch."""
     panel, lib = rig.panel, rig.panel.library
-    router = rig.router                             # the one the meta controller's Loadable patches loads into
+    router = rig.router                             # the one the rig's Loadable patches loads into
     frame(panel, "routing")
     assert lib.kinds == ("patches", "presets")     # plan 40 T1: patches are spawned
     listing = lib.list("presets")
@@ -694,7 +694,7 @@ def test_the_base_picker_offers_patch_params_only(rig):
 
 def test_the_routing_heads_name_field_draws(rig):
     """The head's save as… is the preset strip's name field, over the
-    loaded loadable patch (ui_loadable._name_field under its own key)."""
+    loaded patch (ui_loadable._name_field under its own key)."""
     panel, lib = rig.panel, rig.panel.library
     lib.load("presets", "TRIP")
     frame(panel, "routing")

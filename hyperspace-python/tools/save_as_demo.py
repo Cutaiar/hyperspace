@@ -10,7 +10,7 @@ its clock the demo's own — and prints a transcript: a slot cleared, a
 tap, a hold with every LED velocity the desk is sent and when, the
 footer's line, the files in `<home>/presets`, a second hold onto a full
 bank, two buttons held at once, the new slot's pad loading it, the
-PRESETS page's "put loadable patch here…" and "clear slot" calls, and a Learn
+PRESETS page's "put preset here…" and "clear slot" calls, and a Learn
 the bar refuses.
 
 It always runs on a fresh temp home of its own (`undo_demo` sets

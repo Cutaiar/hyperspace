@@ -175,7 +175,7 @@ like the rename above. The SYSTEM page shows both.
                             # kind finds its feeds every 2 s and offers them to the
                             # media channels as source ids; nothing connects until
                             # a channel puts one on. NDI over the network
-                            # (ndi:<sender>, another meta controller's Resolume / TouchDesigner),
+                            # (ndi:<sender>, another machine's Resolume / TouchDesigner),
                             # Syphon from another app on this Mac
                             # (syphon:<app>/<server>, zero-copy) and the webcams
                             # (camera:<name>, 1280x720 at 30 fps):
@@ -204,7 +204,7 @@ like the rename above. The SYSTEM page shows both.
                             # false: GLFW only (USB, no extras)
                             # light = "#ff0080"  the light bar with no sink row on it, and
                             # player = 2          the player LEDs; absent: by its place
-                            # tape = "edge.jsonl" read a recorded meta controller instead of a pad
+                            # tape = "edge.jsonl" read a recorded session instead of a pad
                             # (tools/hid_probe.py --record, or the browser lab's)
     usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
                             # (one reader, lent to the first usb = true pad entry

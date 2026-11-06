@@ -342,7 +342,7 @@ def shows_line(spec, n: int | None, slots=(), bus_cuts=None) -> str:
     "nothing — its ground" for a `ground` wire or nothing anywhere; a
     window putting the hands through the effects says so after. `n` None:
     All outputs' own picture. The mutes are not read: they are the
-    window's ticks beside the words. `rig` (plan 36 T1): the show's meta controller
+    window's ticks beside the words. `bus_cuts` (plan 36 T1): the loaded patch's
     wires — a window whose bus cable is cut shows nothing by it."""
     spec = graphview.page_spec(spec)
     alls = graphview.picture_now(spec, f"{graphview.rgraph.ALL_OUTPUTS}.image")
@@ -533,7 +533,7 @@ def device_lines(registry) -> list[str]:
 
 def wanted_lines(registry, table) -> list[str]:
     """Plan 40 T4: the SYSTEM page's lines under the device lines, one per
-    device role the loaded loadable patch's rows want and the meta controller lacks — "wanted
+    device role the loaded patch's rows want and the meta controller lacks — "wanted
     by the preset: leap — not in this rig; 3 rows wait" (`devices.wants`,
     `devices.wanted_lines`); none without a registry or a table."""
     if registry is None or table is None:
@@ -918,7 +918,7 @@ class Panel:
         `key` tells apart several items that stand for one param, so each
         gets its own popup. `extra`,
         when given, is called inside the popup after the param's own items
-        to draw the caller's (a bank slot's "put loadable patch here…")."""
+        to draw the caller's (a bank slot's "put preset here…")."""
         if imgui.is_item_hovered():             # what ⌘Z goes by (`in_meta_section`)
             self._param_under = a
         if getattr(self, "_picking", False):    # a desk control is picked: the click is its
@@ -1024,7 +1024,7 @@ class Panel:
 
     def _ctx_lines(self, a: Param, p: Param) -> tuple[list, list]:
         """The menu's lines, one per thing bound to the param, read from
-        the table: the loaded loadable patch's desk rows, the routes ("(off)" when
+        the table: the loaded patch's desk rows, the routes ("(off)" when
         disabled; the hand rows through hands/panel.py), then the meta controller's
         rows, dim — those are never an item (D5, D6). Returns (the desk
         rows, the routes) an Unbind would remove."""
@@ -1051,7 +1051,7 @@ class Panel:
         """The one Unbind (plan 17 WP1): drawn only when it would remove
         something — a plain item with one kind bound, a submenu (desk /
         route / both) with both. `Learn.unbind` does it: one undo step, the
-        loaded loadable patch edited, no file written."""
+        loaded patch edited, no file written."""
         if not desk and not routes:
             return
         ids, lrn = (a.id, p.id), self.learn
@@ -2170,7 +2170,7 @@ class Panel:
         return fx_on, visible, (dim.value if dim is not None else 1.0)
 
     def graph_now(self):
-        """(the renderer's wiring, the loaded loadable patch's graph spec or None):
+        """(the renderer's wiring, the loaded patch's graph spec or None):
         what the OUTPUT page says in words (plan 26 A4). Any piece missing
         (no renderer, no loadable patches) reads as the empty frame (plan 36 T3:
         `graph.EMPTY`). Plan 35 T5: the wired frame itself, in the new ids,
@@ -2199,7 +2199,7 @@ class Panel:
         return [] if nid is None else ui_graph.node_params(self, nid)
 
     def bus_cuts_now(self):
-        """The loaded loadable patch's bus cuts (plan 44 D3; plan 36 T1's were the show's:
+        """The loaded patch's bus cuts (plan 44 D3; plan 36 T1's were the show's:
         `graph.BusCuts`), what the OUTPUT page's words and edits read;
         with no loadable patches, every cable standing."""
         return bus_cuts_of(getattr(getattr(self, "library", None), "loaded_patch", None))
@@ -2243,7 +2243,7 @@ class Panel:
         fx_on, visible, master = self._outputs_now()
         ghost = self.reg.get("ghost.on")
         # plan 26 A4: the render graph the outputs are wired by — the
-        # loaded loadable patch's `graph` section, or the default; plan 35 U: the
+        # loaded patch's `graph` section, or the default; plan 35 U: the
         # wired frame the pages read and edit (`graphview.page_spec`)
         wiring, spec = self.graph_now()
         bus_cuts = self.bus_cuts_now()
@@ -2327,7 +2327,7 @@ class Panel:
                 if imgui.is_item_hovered():
                     tooltip(line)
             # plan 26 A4: the words say the wiring too — the switches above
-            # and the loaded loadable patch's graph set it (`hands: in the scene`);
+            # and the loaded patch's graph set it (`hands: in the scene`);
             # the whole graph in words on the line's hover
             # plan 30 D1: the effects placed on what it shows, and on hover
             # why a placed one runs nowhere this frame (`Graph.dormant`)
@@ -2372,7 +2372,7 @@ class Panel:
     # ---- plan 35 U: the pages' graph edits (OUTPUT, LOOKBACK) ----
 
     def _graph_edit(self, fn, key: str) -> None:
-        """Page edit `fn(edit)` on the loaded loadable patch's graph — GRAPH's own
+        """Page edit `fn(edit)` on the loaded patch's graph — GRAPH's own
         `render_edit`: one undo step, its refusals — its words (a refusal,
         or what it did) kept under `key` for the page's line."""
         e = ui_graph.render_edit(self)

@@ -1,4 +1,4 @@
-"""Plan 40 T4 — what the loaded loadable patch wants and the rig lacks, and the
+"""Plan 40 T4 — what the loaded patch wants and the rig lacks, and the
 arrival (spec P4).
 
 - **`devices.wants(table, registry)`**: one `Want(role, state, scheme,

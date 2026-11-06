@@ -435,7 +435,7 @@ class FxState:
     Plan 36 T3 (W3): `files` is every effect file on disk (the library the
     GRAPH picker and the migration read); `specs` is the instances that
     exist. Until a loadable patch's graph lands that is every file once and the
-    extra instances `set_instances` counts (a meta controller's, a tool's); once one
+    extra instances `set_instances` counts (a test rig's, a tool's); once one
     does (`hold`), exactly the instances its section names — instance 1
     of a file included — and nothing else has params.
     """
@@ -557,7 +557,7 @@ class FxState:
 
     def set_instances(self, counts: dict[str, int]) -> set[str]:
         """Hold each effect file `counts` names that many times (plan 26 A4;
-        a file not named, once) — a meta controller's or a tool's, with no graph landed
+        a file not named, once) — a test rig's or a tool's, with no graph landed
         (plan 36 T3: it lets go of any `hold`). Returns the effect names
         whose params appeared or went (`acid.2`, …) — the registry
         re-declares those (`declare`). A file that is not on disk keeps its

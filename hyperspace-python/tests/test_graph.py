@@ -69,7 +69,7 @@ def test_graph_imports_only_the_render_stack_and_names_no_write():
     and no node method is named apply, modulate, snapshot or set_value
     (the rule `test_render.py` holds render.py to)."""
     tree = ast.parse(Path(G.__file__).read_text())
-    banned = {"params", "routing", "library", "preset", "undo", "control", "app", "ui",
+    banned = {"params", "routing", "library", "loadable", "undo", "control", "app", "ui",
               "overlay", "config", "midi", "bridge", "dream", "osc", "torch", "leap",
               "segment", "Vision"}
     for node in ast.walk(tree):

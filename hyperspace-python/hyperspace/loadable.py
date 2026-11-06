@@ -77,7 +77,7 @@ A load is a scene-setter (docs/ARCHITECTURE.md §3): it writes bases and
 replaces rows, never an offset. In order (plan 13 §5):
 
 1. note what the file names that a loadable patch may not: a shared meta param
-   ("`tempo.bpm` is the meta controller's, ignored"), an id nobody has, a
+   ("`tempo.bpm` is the session's, ignored"), an id nobody has, a
    ``routes`` row that is not a performer row or that aims at a param
    that is not modulatable (dropped), a row on a meta param (dropped: the
    hard rule, register row 743; the file is not rewritten, and the next
@@ -117,7 +117,7 @@ A save (`document`) writes the performance snapshot, every performer row
 row's ``layer`` left out: every desk row is the loadable patch's), the table's
 macros (`Bindings.macros_doc`), the bus cuts and the node mode. The dirty dot (`signature`) covers all of it, so a Learn,
 an Unbind or a ROUTING-page edit — which change the table and write no
-file — shows as the loaded loadable patch edited; only a save (⇧F, a pad, the
+file — shows as the loaded patch edited; only a save (⇧F, a pad, the
 strip's save / as…) writes it.
 
 The twenty-five loadable patches the build once shipped, and the generator that
@@ -171,7 +171,7 @@ from .lookback import (
 from .media import channels as media_channels
 from .modifiers import Modifier
 from .palettecompat import palette_slice
-from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadable patch.* names
+from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadable.* names
     CUT_GROUP,
     MATTE_GROUP,
     PAN_IDS,
@@ -327,7 +327,7 @@ FX_GROUP = "fx"          # the effects' param group (plan 40 T5: no module prese
 
 
 class GraphSection:
-    """The loaded loadable patch's ``graph`` section, landed (plan 26 A4).
+    """The loaded patch's ``graph`` section, landed (plan 26 A4).
 
     A loadable patch may carry the render graph it wants as plain JSON
     (`graph.GraphSpec`: node instances and their wiring — never a param).
@@ -633,7 +633,7 @@ def read_groups(raw, held, refusal: Callable[[list[str]], tuple[set, list[str]]]
     """A file's `groups` (plan 40 T2, load step 6½) → (the groups, the
     notes). A member id the loadable patch does not hold (`held`, the canvas ids
     its graph, modifiers and voices make) is left out with a note ("group
-    acid wash: acid.3 is not in the loadable patch — left out"); one a group may
+    acid wash: acid.3 is not in the preset — left out"); one a group may
     not hold (`refusal(ids)` → (the ids kept, the words for the rest):
     `patches.groupable`'s rule, plan 50) is left out in its words; a node already in an
     earlier group is left out of the later; a group left with no member is
@@ -802,7 +802,7 @@ def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
 
 
 class LoadedPatch:
-    """The loaded loadable patch over one library, registry and router.
+    """The loaded patch over one library, registry and router.
 
     Built as ``LoadedPatch(lib, reg, router)`` once the router exists (app.main);
     it registers the ``presets`` document kind and makes itself
@@ -811,7 +811,7 @@ class LoadedPatch:
     up at call time, so a hot reload that re-classes it reaches them.
 
     Plan 44 D3: what is loaded is this object's own — `landing`, (the
-    loaded loadable patch's name, what its load or save produced — the signature
+    loaded patch's name, what its load or save produced — the signature
     the dirty dot compares against —, how to re-apply it), which
     `Library._landed` / `current` / `is_dirty` hand here for the loadable patches
     group (`Library._owner`) — and so are the loadable patch's bus cuts (`bus`)."""
@@ -855,10 +855,10 @@ class LoadedPatch:
         # been saved — save names it (whatever a file of its name holds);
         # a load or a save clears it (`_landed`)
         self.unsaved = False
-        # plan 26 A4: the loaded loadable patch's graph section (its instances'
+        # plan 26 A4: the loaded patch's graph section (its instances'
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
-        # plan 44 D3: the bus cuts the loaded loadable patch holds (`graph.BusCuts`)
+        # plan 44 D3: the bus cuts the loaded patch holds (`graph.BusCuts`)
         self.bus = BusCuts()
         self.landing = (None, None, None)
         # row 563: membership is settled where what the loadable patch holds changes
@@ -898,7 +898,7 @@ class LoadedPatch:
 
     @property
     def current(self) -> str | None:
-        """The loaded loadable patch's name (plan 44 D3: this object's own)."""
+        """The loaded patch's name (plan 44 D3: this object's own)."""
         return self.landing[0]
 
     @property
@@ -908,7 +908,7 @@ class LoadedPatch:
         return self.landing[1]
 
     def is_dirty(self) -> bool:
-        """Has the live look moved off what the loaded loadable patch produced?
+        """Has the live look moved off what the loaded patch produced?
         Within undo's tolerance (`undo.alike`); nothing loaded is clean, a
         new loadable patch never saved (`land_unsaved`'s ()) is dirty."""
         ref = self.loaded
@@ -1347,7 +1347,7 @@ class LoadedPatch:
         if self.note:
             doc["note"] = self.note
         table = self.router.table
-        # plan 26 A4: the graph the loaded loadable patch carried — plan 35 T3: the
+        # plan 26 A4: the graph the loaded patch carried — plan 35 T3: the
         # wired frame the load or the GRAPH page landed; plan 36 T3: with
         # none landed (nothing loaded yet) the empty frame the renderer
         # draws for none (`graph.EMPTY`), black, so what a save writes is
@@ -1449,7 +1449,7 @@ class LoadedPatch:
         return gs
 
     def parts(self) -> tuple:
-        """Plan 40 T3: the loaded loadable patch's parts, as `patches.lift` reads them
+        """Plan 40 T3: the loaded patch's parts, as `patches.lift` reads them
         (*save as patch*): the landed section (`GraphSpec`, None with none),
         the table (`routing.Bindings`: its routes, patch-layer desk,
         modifiers, macros), the registry's snapshot of the performance
@@ -1460,7 +1460,7 @@ class LoadedPatch:
                 dict(getattr(self, "layout", None) or {}))
 
     def _held_canvas(self) -> set[str]:
-        """Plan 40 T2: the GRAPH canvas ids the loaded loadable patch holds that a
+        """Plan 40 T2: the GRAPH canvas ids the loaded patch holds that a
         group may name — its section's render nodes (``render:acid.2``), its
         modifiers, its LFOs and envelopes (the bank's ids; with no bank —
         a test's bare router — the voices the registry holds, the canvas's

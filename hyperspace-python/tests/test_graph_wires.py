@@ -635,7 +635,7 @@ moderngl = pytest.importorskip("moderngl")
 
 def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
     """With warp on: the history wired into output 2's picture shows the
-    frame with no effect (byte for byte the chain-less meta controller's), output 1 is
+    frame with no effect (byte for byte the chain-less rig's), output 1 is
     byte for byte the default graph's; the chain ran once (for output 1),
     and output 2's route is its own end."""
     import numpy as np
@@ -644,7 +644,7 @@ def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
 
     def frame(effects, section):
         r = gl_rig(ctx, effects=effects, hands=False)
-        if section is not None:          # (plan 33 R23: the meta controller's run kept)
+        if section is not None:          # (plan 33 R23: the rig's run kept)
             r.wiring = wired_wiring(wired(r, section))
         return r, run(ctx, r, views(ctx, S(), S()), frames=2)
 

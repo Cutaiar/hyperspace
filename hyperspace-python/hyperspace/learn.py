@@ -21,7 +21,7 @@ failing to open — there was no hand Learn at all (audit B3). Now
 ``app.main`` builds one ``Learn`` over the live table whatever the MIDI
 gate says and hands it to both adapters and to the panel.
 
-A learn writes into the **loaded loadable patch** (plan 13 §3.3, D5): the row
+A learn writes into the **loaded patch** (plan 13 §3.3, D5): the row
 goes into the live table — a knob's as a patch-layer desk row, a hand's
 as a route — and no file is written. The loadable patch's dirty dot (loadable.py,
 `LoadedPatch.signature` over the table) shows it until a save (⇧F, the loadable patch
@@ -32,7 +32,7 @@ nothing changes, and the learn **stays armed** (plan 17 fork 6) — the
 next control that can take it does.
 
 **Unbind** is here too (plan 17 WP1): `unbind` removes what is bound to a
-param in the loaded loadable patch — its patch-layer desk rows and its routes,
+param in the loaded patch — its patch-layer desk rows and its routes,
 one kind or both — as one undo step, whether or not a MIDI adapter
 exists. `bound` is the same question without the edit (the menu asks it
 to know what to list and whether to offer the item at all). A meta row
@@ -814,7 +814,7 @@ class Learn:
 
     def learn_control(self, source: str, profile=None) -> bool:
         """A desk control completes the armed learn: a patch-layer row
-        into the loaded loadable patch (plan 13 §3.3). True when it landed.
+        into the loaded patch (plan 13 §3.3). True when it landed.
 
         The one road onto the desk (plan 17 WP2): the MIDI adapter calls
         it with the message it received, the on-screen desk with the
@@ -1204,7 +1204,7 @@ class Learn:
 
     def resolve_pending(self, replace: bool) -> Binding | None:
         """The prompt's answer to a held learn: *Replace* swaps the target's
-        performer for the learned row (into the loaded loadable patch, no file
+        performer for the learned row (into the loaded patch, no file
         written); *Keep* leaves the table as it was. Returns the row now in
         the table, or None."""
         if self.pending is None:
@@ -1231,7 +1231,7 @@ class Learn:
         onto a target, which reads the owner *now* (a free target takes the
         row; the prompt's Replace removes whoever holds it at this moment,
         not whoever did when the question was asked). A route of the
-        loaded loadable patch's: no file is written (plan 13 §3.3). One undo step
+        loaded patch's: no file is written (plan 13 §3.3). One undo step
         (undo.py): the rows it took out come back with a Ctrl+Z."""
         undo.push(f"learn {b.target}")
         table = self.table
@@ -1248,7 +1248,7 @@ class Learn:
     # ---- unbind ----
 
     def bound(self, ids) -> tuple[list[Binding], list[Binding], list[Binding]]:
-        """What is bound to a param: (the loaded loadable patch's desk rows, its
+        """What is bound to a param: (the loaded patch's desk rows, its
         routes, the meta controller's MIDI rows). `ids` as for `unbind`. The first
         two are what `unbind` may remove; the third it never does."""
         return bound(self.table, ids)
@@ -1263,7 +1263,7 @@ class Learn:
         `redraw_serial`: an adapter redraws and the control goes dark, D8);
         a route — any scheme, enabled or not — through `Bindings.remove`,
         its depth subscribers with it. No file is written: the edit is the
-        loaded loadable patch's (plan 13 §3.3). One undo step, pushed once and only
+        loaded patch's (plan 13 §3.3). One undo step, pushed once and only
         when something goes. `name(b)` gives each row's words for the
         message; without it, `Binding.describe()`. A meta row is never
         removed: with nothing else to remove, that is a refusal."""

@@ -168,7 +168,7 @@ def test_moving_a_cables_end_moves_the_route_and_its_depth_subs_follow(rig):
 def test_a_hand_into_a_base_port_is_refused_in_words_and_a_pad_is_a_setter_row(rig):
     """`base` is the setters' stub: a hand (any lane) is refused in words;
     a desk knob is the desk learn's row (a patch-layer `abs` row,
-    `bind(write=False)`: the loaded loadable patch's); a pad button the pad
+    `bind(write=False)`: the loaded patch's); a pad button the pad
     learn's (the meta controller's, as the factory's pad rows are). A macro's
     cable is a base subscriber there, a depth subscriber on a depth stub."""
     reg, table = rig.reg, rig.router.table
@@ -715,7 +715,7 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
 
 
 def test_a_route_from_the_canvas_is_a_performer_row_in_the_loadable(rig):
-    """What the canvas adds is the loaded loadable patch's (a performer row): the
+    """What the canvas adds is the loaded patch's (a performer row): the
     loadable patch is dirty, bindings.json is not written."""
     lib, table = rig.lib, rig.router.table
     lib.load("presets", "party-trip")
@@ -1447,7 +1447,7 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
 
 def test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name(rig, monkeypatch):
     """macro ▸ (the owner, 2026-10-28: the Route from menu "should
-    probably include the macros as well"): the meta controller's eight knobs by label
+    probably include the macros as well"): the rig's eight knobs by label
     (`macro_label`: ROUTING's label, else "macro 3"), one already setting
     the param checked — on a persisted patch param, modulatable or
     not (a base subscriber is no route), never on a macro or a meta controller

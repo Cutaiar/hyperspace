@@ -687,7 +687,7 @@ class Binding:
     ring: int = 2                # ring style for "ring" feedback (profile-defined)
     # the desk layer (plan 13 §3.1): None = invariant, the meta controller's control
     # with one meaning on both layers; "global" = SHIFT up; "preset" = the
-    # loaded loadable patch's own. MIDI rows only
+    # loaded patch's own. MIDI rows only
     layer: str | None = None
     # runtime, never persisted
     caught: bool = field(default=False, repr=False, compare=False)
@@ -1076,7 +1076,7 @@ def sink_rows_from_send(role: str, send: Iterable, lanes: int | None = None
     expanded — becomes the row on ``<role>:<k>``. A star is one row,
     ``lane:*`` on its first channel, and takes `lanes` channels (the
     default band layout's count when None) before the next entry, as the
-    old list did on a meta controller with that many bands (`sink_values`: a row on a
+    old list did on an install with that many bands (`sink_values`: a row on a
     channel a star also fills wins it)."""
     n = len(BANDS) if lanes is None else int(lanes)
     rows: list[Binding] = []
@@ -1569,7 +1569,7 @@ PER_DECK_WORDS = "{pid} is the meta controller's, a person's to press; no patch'
 def meta_refusal(pid: str | None) -> str | None:
     """Why no row of a loadable patch may drive `pid`, or None when one may. The hard
     rule (the owner, 2026-11-04, register row 743; overturns the old "a route
-    may perform a shared meta param"): tuning like `master.gain` happens before
+    may perform a session param"): tuning like `master.gain` happens before
     the show, and the refusal says which params belong in the loadable patch. By the
     id (`is_shared_meta_id`), so a table with no registry and a param this build
     has not made yet are still classed; it says what `part_of` says of every
@@ -1642,7 +1642,7 @@ def settle_bases(doc: dict | None, reg: Registry | None = None
 
 def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[str]:
     """A route's `scale` settled (decision register row 18 (a)): it is the
-    meta controller's attenuator, so it names a **meta controller** param — the legacy6 rate
+    meta controller's attenuator, so it names a **shared meta** param — the legacy6 rate
     rows' `master.gain`, the drive fader — and is kept only then.
     `scale: "macro.N"` becomes a depth subscriber of macro.N `from 0, to 1`
     (unless an identical one is there) and the row loses the field (plan 13
@@ -1993,7 +1993,7 @@ def dumps_doc(d: dict) -> str:
 def is_meta_row(b: Binding) -> bool:
     """A row `bindings.json` keeps (plan 13 §2.2): anything but a performer
     row (push / position, disabled ones too) and a patch-layer MIDI row —
-    those are the loaded loadable patch's. A sink row (plan 27 B3, `SINK_OP`) is
+    those are the loaded patch's. A sink row (plan 27 B3, `SINK_OP`) is
     the meta controller's: sinks are meta controller (D1 / D9)."""
     # (the layer first: the undo stack reads this for every row, every frame,
     # and `is_midi` parses the source)
@@ -2020,7 +2020,7 @@ class Carried:
 
 # the attributes of a deck's table that are the meta table's (plan 44
 # D3): one value for every deck, read and written through the deck's
-# table as before (`Bindings.<name>` is a property onto `session`)
+# table as before (`Bindings.<name>` is a property onto `meta_table`)
 META_TABLE_ATTRS = ("path", "profile", "slew", "pad_feel", "unbacked", "said", "midi_roles",
                  "primaries", "row_schemes", "carried", "error", "migrated", "read_at",
                  "changed", "sinks_seeded", "layer", "layers", "layer_serial",
@@ -2043,7 +2043,7 @@ class MetaTable:
     layer, the macros, the modifiers), so a deck's table is still one list;
     a meta row a deck learns, edits or drops is handed to every other
     deck's table at once (`Bindings._share`). The file is read by
-    `Bindings.load(path)` into a first deck's table (its `.session` is this
+    `Bindings.load(path)` into a first deck's table (its `.meta_table` is this
     table; the old file's migrations — `migrate_v1`, `remap_factory` — and
     its `backup` first) and written here: `to_json`, `dumps`, `write`."""
 
@@ -2199,15 +2199,15 @@ def _meta_table_attr(name: str) -> property:
     """A deck table's view of the meta table's `name` (plan 44 D3)."""
     return property(lambda self: getattr(self._sess(), name),
                     lambda self, v: setattr(self._sess(), name, v),
-                    doc=f"The session table's `{name}` (`SessionTable`).")
+                    doc=f"The meta table's `{name}` (`MetaTable`).")
 
 
 class Bindings:
     """A deck's table: rows of every scheme, indexed for the adapters.
 
     In memory the table holds the meta controller's rows — by reference, the
-    meta table's (`session`, `MetaTable`, plan 44 D3) — and this
-    deck's own: the loaded loadable patch's performer rows, patch layer, macros
+    meta table's (`meta_table`, `MetaTable`, plan 44 D3) — and this
+    deck's own: the loaded patch's performer rows, patch layer, macros
     and modifiers, so `bindings`, `routes()`, `desk()`, `serves`, the
     referee and `dispatch` see one list as they always have. The file
     (`to_json`, `write`) holds only the meta controller's (`is_meta_row`), and
@@ -2215,7 +2215,7 @@ class Bindings:
     latch, the meta controller facts, what the launch did to the file) is read and
     written through this table onto the meta table."""
 
-    # the loaded loadable patch's modifiers (plan 28 N1, `modifiers.Modifier`), in
+    # the loaded patch's modifiers (plan 28 N1, `modifiers.Modifier`), in
     # id order: a tuple, always replaced whole (`set_modifiers`,
     # `add_modifier`, `remove_modifier`), so a table from before a hot
     # reload reads the class's empty one. The loadable patch's, never the file's:
@@ -2282,7 +2282,7 @@ class Bindings:
             self.bindings: list[Binding] = own
         elif (path is not None and path != meta_table.path) or (
                 profile is not None and profile != meta_table.profile):
-            raise ValueError("Bindings(session=): the path and profile are the session's — "
+            raise ValueError("Bindings(meta_table=): the path and profile are the meta table's — "
                              f"{meta_table.path} / {meta_table.profile}")
         elif meta_table.tables:
             # (review of #351, round 2: a meta row given that the meta controller
@@ -2344,7 +2344,7 @@ class Bindings:
     def factory(cls, profile: str = "apc40", path: Path | None = None) -> Bindings:
         """Keys, pad and the device profile's default MIDI map — its loadable patch
         layer too, the fresh loadable patch's desk, which the file never keeps. No
-        performer rows: those are the loaded loadable patch's (plan 13 §2.2; the
+        performer rows: those are the loaded patch's (plan 13 §2.2; the
         house presets carry the legacy6 lane rows)."""
         return cls([*keymap(), *padmap(), *factory_desk(profile)], path=path, profile=profile)
 
@@ -2513,7 +2513,7 @@ class Bindings:
     def to_json(self) -> dict:
         """The file's dict: the meta controller's rows of this table only
         (`MetaTable.to_json`) — never a performer row, a patch-layer
-        row, the macros or any values; those are the loaded loadable patch's (plan
+        row, the macros or any values; those are the loaded patch's (plan
         13 §2.2)."""
         return self._sess().to_json(self.bindings)
 
@@ -2767,7 +2767,7 @@ class Bindings:
         to the patch layer
         (D4) and ask the adapter to redraw the desk and clear the faders'
         catch (`desk_serial`). Returns the notes; the file is not written —
-        the desk is the loaded loadable patch's.
+        the desk is the loaded patch's.
 
         ``load=False`` is an undo's restore (undo.py, plan 15): the same
         replacement and the same dropping rules, but only a redraw is
@@ -2912,7 +2912,7 @@ class Bindings:
         D5, D6). A continuous source's row (a hand learn) is a performer
         like any route: `add` — `Owned` if the target is taken. The file
         is written unless `write` is False (a knob Learn: the row is the
-        loaded loadable patch's, plan 13 §3.3). Returns the rows dropped.
+        loaded patch's, plan 13 §3.3). Returns the rows dropped.
         """
         why = latch_refusal(b) or meta_row_refusal(b)
         if why is not None:
@@ -2949,7 +2949,7 @@ class Bindings:
         return gone
 
     def unbind(self, pid: str) -> list[Binding]:
-        """Right-click → Unbind: the loaded loadable patch's desk rows on `pid` go
+        """Right-click → Unbind: the loaded patch's desk rows on `pid` go
         (plan 13 §3.3) — the loadable patch is edited, not saved, so no file is
         written; a meta row (invariant or global) stays, it is edited in
         `bindings.json`. Returns the rows removed."""

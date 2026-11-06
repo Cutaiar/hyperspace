@@ -3,7 +3,7 @@ outputs is a drawn bus.
 
 A window's port takes its own wire, else All outputs' by the meta controller's bus
 cable `output.all.<port> → output.<n>.<port>` (`graph.window_ports`) —
-nothing else reaches it. The bus cuts are the loaded loadable patch's (plan 44 D3:
+nothing else reaches it. The bus cuts are the loaded patch's (plan 44 D3:
 `loadable.LoadedPatch.bus`, `graph.BusCuts`; plan 36 T1 kept them in the show):
 every cable present by default, drawn on GRAPH as ordinary render cables,
 cut and joined there, saved in the loadable patch's file under `bus`. A drag changes the one wire it lands (`render_wire`): no placement,
@@ -106,7 +106,7 @@ def test_rewiring_output_1_changes_that_one_port_and_nothing_else(tmp_path):
 # ---------------------------------------------------------------- the loadable patch's bus cuts
 
 def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_path):
-    """Plan 44 D3: delete on a bus cable cuts it in the loaded loadable patch — one
+    """Plan 44 D3: delete on a bus cable cuts it in the loaded patch — one
     undo step, the graph section untouched, the loadable patch dirty and the show
     not: window 1 shows nothing on its hands port (no cable drawn there,
     nothing read) while window 2 keeps its own. The cut is saved in the
@@ -180,7 +180,7 @@ def test_a_window_port_is_its_own_wire_else_the_bus_cable_else_nothing():
 
 def test_a_drag_from_the_bus_takes_the_port_and_only_into_the_same_port(tmp_path):
     """A drag from All outputs' bus pin onto a window's same port is the
-    meta controller's cable: the loadable patch's own wire into that port gives it up (one
+    rig's cable: the loadable patch's own wire into that port gives it up (one
     wire into a port), in one step. Into another port, or with no loadable patches
     to hold it, refused in words; an effect does not go onto a bus cable."""
     app, e, pushed = _party(tmp_path)

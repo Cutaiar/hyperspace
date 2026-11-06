@@ -160,8 +160,8 @@ def main() -> None:
     from hyperspace.dream import DreamWorker
 
     ctx = moderngl.create_context(standalone=True)
-    if args.loadable:
-        loadable_shot(ctx, args.loadable, args.frames, args.precision, WAKE_POSES)
+    if args.preset:
+        loadable_shot(ctx, args.preset, args.frames, args.precision, WAKE_POSES)
         return
     # the spike's defaults (DreamState), the dream buffer alone over the scene
     dream = DreamState(on=True, echoes=0, gap=0.0, layer=LAYERS.index(args.layer))

@@ -92,7 +92,7 @@ def owner_of(view, pid):
 
 def test_every_route_is_one_cable_and_every_cable_one_route(rig):
     """Today's routes convert one-to-one (decision 13): every performer
-    row of a loaded loadable patch — enabled or not — is exactly one `route`
+    row of a loaded patch — enabled or not — is exactly one `route`
     cable whose `ref` is that row, into its target's `mod` stub, and no
     route cable stands for anything else."""
     for name in ("party-trip", "lfo-breathe", "hands-fx", "legacy6"):
@@ -321,7 +321,7 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
 
 
 def test_layout_round_trips_through_the_loadable_and_the_show(rig):
-    """The look's nodes' positions are the loadable patch's ``layout``, the meta controller's
+    """The look's nodes' positions are the loadable patch's ``layout``, the rig's
     the show's: written on save, read on load. A loadable patch without the key
     (every corpus loadable patch) loads with no note and no dirt; one with a bad
     entry keeps the good ones and says so."""
@@ -507,7 +507,7 @@ def _in_editor(rig, fn):
 
 def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     """A node moved on the canvas is written where it lives — a render
-    node and an LFO (plan 31 G1) into the loaded loadable patch's layout (dirtying
+    node and an LFO (plan 31 G1) into the loaded patch's layout (dirtying
     it), the analyzer into the show's — once the mouse lets go; a node left
     alone is written nowhere."""
     rig.lib.load("presets", "party-trip")
@@ -846,7 +846,7 @@ def test_the_new_nodes_sit_in_their_areas(rig):
     assert graphview.spec_name("rin:shape/faces", g) == ("shape.faces", None)
     assert graphview.spec_name("rin:backdrop/image", g) == ("backdrop.image", None)
     assert graphview.spec_name("rout:shape", g) == ("shape", None)
-    assert graphview.spec_name("render:camera", g)[0] is None      # the meta controller's
+    assert graphview.spec_name("render:camera", g)[0] is None      # the rig's
 
 
 def test_an_unreached_branch_is_drawn_faint_from_the_spec(rig):

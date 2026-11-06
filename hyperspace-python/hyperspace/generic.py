@@ -21,7 +21,7 @@ keyboard's knobs — maps on the desk's Learn with no code:
   * **Plain names.** A control is named by its row ("MIDI CC 7 ch1 on
     launch"); there is no layout to draw, so the desk page (ui_desk.py)
     stays the APC40's, and the device line counts no sources.
-  * **One layer.** It has no SHIFT: its rows are the loaded loadable patch's (a
+  * **One layer.** It has no SHIFT: its rows are the loaded patch's (a
     learn) or the meta controller's invariant ones; plan 28 is where a device with
     a mode switch becomes one node per mode.
 

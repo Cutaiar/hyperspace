@@ -5,7 +5,7 @@ fx section (`ui_pane.SECTIONS`), and `ui.page` on FX focuses that section.
 "The page" below is that section's body.
 
 The owner's "file explorer" over the graph (row 348): the page lists every
-effect instance the loaded loadable patch's graph holds — in the run, on a branch,
+effect instance the loaded patch's graph holds — in the run, on a branch,
 unreached — grouped by where its path ends (`groups`): **Run** (in wire
 order), **→ faces**, **→ pattern media**, **→ backdrop**, **→ output N**,
 **→ <effect> aux**, and **reaches nothing** last. An effect behind a switch
@@ -173,7 +173,7 @@ def _group_key(end: str) -> tuple:
 
 
 def _spec(panel):
-    """The loaded loadable patch's graph spec (`Panel.graph_now`), or None: a
+    """The loaded patch's graph spec (`Panel.graph_now`), or None: a
     stand-in Panel, no loadable patches, no graph."""
     now = getattr(panel, "graph_now", None)
     try:

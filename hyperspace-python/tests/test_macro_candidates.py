@@ -4,7 +4,7 @@ has them in his library) load cleanly through the real road — copied into
 a library's presets/, then `LoadedPatch.load` — with no note, no dropped row,
 every subscriber on a real param or a route the file carries. Whether
 the macros are any good is the
-owner's listening meta controller (docs/plans/22-macro-candidates.md), not a test's."""
+owner's listening rig (docs/plans/22-macro-candidates.md), not a test's."""
 
 import json
 import shutil

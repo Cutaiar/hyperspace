@@ -383,7 +383,7 @@ def _learned(d, pid, source=BUTTON, profile=apc40):
 
 @pytest.mark.parametrize("pid", ROWS)
 def test_a_desk_learn_on_the_class_is_refused_and_says_where_the_road_is(rig, pid):
-    """Row 755: built and removed. "No new Learn road is needed for now: a loadable patch's Learn desk
+    """Row 755: built and removed. "No new Learn road is needed for now: a preset's Learn desk
     on a meta param stays refused" (the owner, seventh round). Nothing moves, on disk either."""
     d = rig.one
     rows = list(d.table.bindings)

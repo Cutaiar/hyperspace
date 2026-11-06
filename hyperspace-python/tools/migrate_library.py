@@ -15,7 +15,7 @@ look made whole (``/10``: the hands' and clouds' looks — ``ghost.*`` but
 ``ghost.mirror``, ``cloud.*`` — in ``values`` and the bus cuts in
 ``bus``, where until now the open show held them; no ``modules`` labels,
 no ``desk_template``) — and every show to ``hyperspace.project/3`` (the
-meta controller, the pads and ``startup``). A load reads an older file
+rig, the pads and ``startup``). A load reads an older file
 through the one-way migration (`graphmigrate.seven`, then `nine`, then
 `ten`), so a library not yet at ``/9`` takes the ``/9`` step first in the
 same pass: one run, one backup. Each loadable patch in ``<library>/presets/``,
@@ -23,7 +23,7 @@ every folder down as the library lists them (plan 48; not ``trash/``,
 not a hidden folder, not a backup, not a dot-file) is loaded and saved untouched
 by the app itself (`hyperspace.headless.resave`: the registry, library,
 router and loadable patches the tests save through) in a scratch library — the
-library's module presets beside it, and **the meta controller's
+library's module presets beside it, and **the rig's
 show open** (below) — and three checks are made:
 
 - it loads (a file this build refuses is left as it is);
@@ -37,12 +37,12 @@ show open** (below) — and three checks are made:
   Both are drawn by *this* build — the original through the same one-way
   migration a load runs — so "round-trip picture: same" proves the
   written ``/10`` draws what this build draws of the old file with the
-  meta controller's show open (the eye included), never that it draws what an older
+  rig's show open (the eye included), never that it draws what an older
   build drew. That parity is the migration's tests and the eye: a loadable patch
   with a look-back or a dream is eyeballed live on the old and new build
   (hand check 366, party-wake).
 
-**The meta controller's show** (plan 43 C2, plan 44 D3): an old loadable patch drew through
+**The rig's show** (plan 43 C2, plan 44 D3): an old loadable patch drew through
 the eye, the hands' and clouds' looks and the bus cuts the open show held,
 so its ``/10`` takes that show's — the eye and the looks from its
 ``session``, the camera node's GRAPH position from its ``layout``, the
@@ -278,8 +278,8 @@ def rig_show(library: Path, home: Path, name: str | None = None
 def check(path: Path, library: Path, scratch: Path, *, picture=None,
           show: dict | None = None, file: str | None = None) -> Result:
     """Load, save, re-save and draw loadable patch file `path` (`picture`: the
-    golden meta controller's, `golden_frames.picture`; a test may hand its own), the
-    meta controller's show `show` (a `headless.show_seed`) open. An old file whose
+    golden rig's, `golden_frames.picture`; a test may hand its own), the
+    rig's show `show` (a `headless.show_seed`) open. An old file whose
     section the load did not read is an error: never written (`NOT_READ`).
     `file` is what the result calls it — its path under ``presets/``
     (``party/trip.json``, plan 48 stage 2), else its file name."""

@@ -304,7 +304,7 @@ def test_the_shows_row_is_never_covered(rig):  # noqa: F811
 # ------------------------------------------------------------ the strip
 
 def _dirty(r):
-    """An edit the loaded loadable patch does not hold: the loadable patches group (and the
+    """An edit the loaded patch does not hold: the loadable patches group (and the
     view's) is dirty."""
     reg = r.reg
     reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
@@ -313,7 +313,7 @@ def _dirty(r):
 
 def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
     """Plan 14 §1: right after a loadable patch loaded, no rail dot is lit and the
-    show is not unsaved — every dot compares against the loaded loadable patch or
+    show is not unsaved — every dot compares against the loaded patch or
     show. An edit brings the loadable patch's back; a meta controller move the show's."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     for name in ("TRIP", "WAKE", "BIG BLUE WAVE"):
@@ -371,7 +371,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
 
 
 def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa: F811
-    """Save on a loaded loadable patch writes its own file over — the one the list
+    """Save on a loaded patch writes its own file over — the one the list
     found it by — and keeps the old text in the trash; the list still holds
     the name once. TRIP's file is `party-trip.json` (the corpus kept the
     stems the build shipped, as the owner's migrated library may): a save

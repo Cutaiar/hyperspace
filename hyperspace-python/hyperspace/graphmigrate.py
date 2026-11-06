@@ -551,7 +551,7 @@ def to_free(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     return (section if isinstance(section, dict) else {}), notes
 
 
-# ---------------------------------------------------------------- a meta controller's run, as a load lands it
+# ---------------------------------------------------------------- a test rig's run, as a load lands it
 
 def specs_of(fx: Any) -> Specs:
     """An `FxState`'s effect instances as `Specs` — each one's file
@@ -1042,7 +1042,7 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
 
 def section_of(wiring: G.Wiring) -> dict:
     """An unwired `Wiring` (no loadable patch's graph reached it: the app before its
-    first load, a test meta controller's, a tool's — `wiring_for`'s run) said as the
+    first load, a test rig's, a tool's — `wiring_for`'s run) said as the
     section before the wired frame that reads as it, in the old ids (plan
     35 T4): its hands entries, `laid`, `holds`, its placed effects and the
     run's instances, its composites, then the run `frame → … → fx.image`

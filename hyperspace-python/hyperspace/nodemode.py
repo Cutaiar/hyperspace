@@ -2,10 +2,10 @@
 node of a loadable patch, its degrees of freedom filled by that node's params.
 
 The owner, 2026-11-04: node mode cables are "a special type of cable", drawn and
-labelled, and "should save as part of the loadable patch. In doing so, when you open that
-loadable patch up again, if you choose a different thing for node mode, it should just
+labelled, and "should save as part of the preset. In doing so, when you open that
+preset up again, if you choose a different thing for node mode, it should just
 switch. Whether or not you're in node mode and which node you are pointing to
-with node mode, it's just application state. It should just go in the loadable patch."
+with node mode, it's just application state. It should just go in the preset."
 
 **What is saved** (`KEY`, written only when something points; a patch with none
 saves as it did, byte for byte)::

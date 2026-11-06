@@ -40,7 +40,7 @@ D5 (the owner's): a patch **drives** a host param through a port, it never
 **sets** one — ``values`` holds only its members' params.
 
 Four functions: `check` (the refusals in words), `read` (the fragment and
-its boundary), `lift` (cut a patch out of a loaded loadable patch's parts: the
+its boundary), `lift` (cut a patch out of a loaded patch's parts: the
 pure half of *save as patch*) and `spawn` (what landing it in another
 loadable patch would add: the pure half of *spawn*, P3 lands it through today's
 doors as one undo step). A leaf like `graphmigrate.py`: pure data in, pure
@@ -1223,7 +1223,7 @@ def _desk_row(b: Binding) -> dict:
 def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
          layout: Mapping[str, Any] | None, node_ids: Iterable[str]
          ) -> tuple[dict, list[str]]:
-    """Cut a patch out of a loaded loadable patch's parts — the pure half of *save
+    """Cut a patch out of a loaded patch's parts — the pure half of *save
     as patch* (P1). `spec` is the landed graph section, `table` the
     `routing.Bindings` (its routes, patch-layer desk, modifiers, macros),
     `values` the registry's snapshot of the patch params, `layout`

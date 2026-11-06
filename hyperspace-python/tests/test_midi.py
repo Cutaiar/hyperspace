@@ -428,7 +428,7 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
 
 
 def test_unbind_removes_only_loadable_layer_rows_and_writes_no_file(rig):
-    """Plan 13 WP5: right-click → Unbind is an edit of the loaded loadable patch —
+    """Plan 13 WP5: right-click → Unbind is an edit of the loaded patch —
     its desk rows on the param go (the knob and the step buttons), no file
     is written, the loadable patch's dot lights; a param only the meta controller maps (an
     invariant fader, a global-layer knob) is refused with the reason in
@@ -1292,7 +1292,7 @@ def test_closing_the_adapter_lands_every_glide(rig):
 
 def test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty(rig, monkeypatch):
     """Fork 5: the velocities sent for a bank pad's three states — GREEN
-    (1) for the loaded loadable patch's slot, YELLOW (5) for a slot that holds
+    (1) for the loaded patch's slot, YELLOW (5) for a slot that holds
     another loadable patch, 0 for an empty one — on rows 1, 4 and 5 alike, and
     the same under SHIFT. A load moves the green; a cleared slot goes
     dark; a filled one comes up amber. `filled_of` answering None (the
