@@ -200,10 +200,9 @@ PER_DECK_META = "per_deck_meta"
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS,
          PER_DECK_META: PER_DECK_META_GROUPS}
 # the two layers (the owner, 2026-11-04, fourth round: "two layers of granularity and no
-# others"), and which each part is in. A param is in exactly one: `param_layer`, which
-# tests/test_layer_boundary.py holds over the app's whole registry
-PATCH_LAYER, META_LAYER = "patch", "meta"
-LAYER_OF_PART = {"performance": PATCH_LAYER, "session": META_LAYER, PER_DECK_META: META_LAYER}
+# others"): these parts are the meta controller's, and "performance" is the patch's. A param
+# is in exactly one (tests/test_layer_boundary.py, over the app's whole registry)
+META_PARTS = ("session", PER_DECK_META)
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
 # dir · out · DRIVE · gain). It lives here, not in the chain, because it is
@@ -777,20 +776,17 @@ def part_of(p: Param) -> str | None:
 _UNSET = object()
 
 
-def param_layer(p: Param) -> str | None:
-    """The layer `p` is in, `PATCH_LAYER` or `META_LAYER`; None: in neither, a bug."""
-    return LAYER_OF_PART.get(part_of(p))
-
-
-def id_layer(pid: str, group: str | None = None) -> str | None:
-    """`param_layer` by id alone, as `part_of_id` is `part_of`."""
-    return LAYER_OF_PART.get(part_of_id(pid, group))
+def is_session_id(pid: str | None) -> bool:
+    """Does `pid` name a session param (`SESSION_GROUPS`, plan 13 §4), the one object every
+    deck shares? By its group prefix, so a param this registry lacks (a band a layout has
+    not built yet) is still classed."""
+    return bool(pid) and part_of_id(pid) == "session"
 
 
 def is_meta_id(pid: str | None) -> bool:
-    """Does `pid` name a param of the meta controller, whichever kind: by its id, so a
-    table with no registry and a param this build has not made yet are still classed."""
-    return bool(pid) and id_layer(pid) == META_LAYER
+    """Does `pid` name a param of the meta controller, whichever kind? The test for "may
+    a patch's row reach it"; `is_session_id` only for "is it one object on every deck"."""
+    return bool(pid) and part_of_id(pid) in META_PARTS
 
 
 def is_per_deck_meta_id(pid: str | None) -> bool:

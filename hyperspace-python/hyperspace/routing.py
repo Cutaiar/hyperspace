@@ -296,7 +296,9 @@ from .params import (
     Param,
     Registry,
     fx_files,
+    is_meta_id,
     is_per_deck_meta_id,
+    is_session_id,
     part_of,
     part_of_id,
     retaper_depths,
@@ -1537,7 +1539,7 @@ class Macro:
         """The meta params this macro's subscribers name (row 744), a depth
         subscriber by its route's target."""
         names = (s.base if s.depth is None else s.depth[1] for s in self.subs)
-        return [pid for pid in names if is_session_id(pid)]
+        return [pid for pid in names if is_meta_id(pid)]
 
     @classmethod
     def from_json(cls, d: dict) -> Macro:
@@ -1562,13 +1564,6 @@ META_WORDS = "{pid} is the meta controller's, tuned before the show; no preset r
 # ...and on a meta param that is one per `Deck` (register row 746: `preset.*`, `deck.chase`,
 # `totem.*`, `poi.*`): a press of one is a person's, whatever it does
 PER_DECK_WORDS = "{pid} is the meta controller's, a person's to press; no patch's row may drive it"
-
-
-def is_session_id(pid: str | None) -> bool:
-    """Does `pid` name a session param (params.SESSION_GROUPS, plan 13 §4)?
-    By its group prefix, so a param this registry lacks (a band a layout
-    has not built yet) is still classed."""
-    return bool(pid) and part_of_id(pid) == "session"
 
 
 def meta_refusal(pid: str | None) -> str | None:

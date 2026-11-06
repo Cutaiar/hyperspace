@@ -129,7 +129,7 @@ import mido
 
 from . import apc40, generic, seq_page
 from .learn import Learn
-from .params import Kind, Param, Registry
+from .params import Kind, Param, Registry, is_meta_id
 from .pointer import Through
 from .routing import (
     FINE_DIV,
@@ -1359,7 +1359,7 @@ class MidiIO:
                 # lets go of their catch (review of #344, round 2)
                 self.__dict__["_fine_moved"] = set()
             slews = self._slew_state()
-            for pid in [pid for pid in slews if not is_session_id(pid)]:
+            for pid in [pid for pid in slews if not is_meta_id(pid)]:   # (a load moves none)
                 del slews[pid]
         active = self._active()
         drawn = {b.control for b in active if b.feedback}

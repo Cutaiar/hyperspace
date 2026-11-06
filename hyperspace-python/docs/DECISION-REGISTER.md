@@ -763,7 +763,7 @@ here; overturn → the change, then the same.
 | 752 | **Its list is replaced by row 746's class.** Plan 44 D5d: no preset may carry a row on a library verb, a load (`is_load_verb`) or a save (`is_save_verb`: `preset.save.<k>`, `preset.save_new`). `routing.meta_refusal` refuses a desk row or route on one at every door, dropped with a note on load and gone at the next save; the meta controller's own rows pass, so a person's saves are as they were. `preset.*` stays out of `is_session_id` until SEM. Not a format change | 700, 743 | owner — 2026-11-06: "no patch can affect another patch" |
 | 753 | The undo latch: whenever focus comes to a stack it latches shut, ⌘Z and ⇧⌘Z there refuse in words and touch no history, and the first push after the focus event opens it, down to the oldest step. One rule for the decks and the meta stack. A mouse passing over is no focus event; a press is, and so is the person's own change in the panel. A controller opens the stack in focus and moves no focus (rec); a load onto the other deck with the panel on air, and a fade, latch the panel's deck in place (rec) | 691, 700 | answered, the owner, 2026-11-06 |
 | 754 | Plan 56: a row a person makes on a `pair:` lane while a pole already has a row asks first: keep both, let the pair take over, or cancel, with no default. A file, a migration and a factory row do not ask, and both act. A taken row goes on its own layer's stack | 580 | owner — 2026-11-06 |
-| 755 | SEM: Learn desk on a meta param that is one per `Deck` lands a person's row, on the global layer, in `bindings.json`, one step on the meta stack; `preset.*` takes a button. A wire on GRAPH and ROUTING's target combo still refuse, and every tuned meta param (`master.gain`) still refuses a desk Learn | 746, 752 | (rec) — pending the owner: the seventh round said no new road is needed |
+| 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 
 "—": no hand check shows it; tests only.
 
@@ -13597,9 +13597,10 @@ still wins, as does a sink row.
   and orthogonal, so that neither can leak into the other". Seventh round: "`preset.*` and `deck.chase` become meta params".
   Plan 58 §2, 2026-11-06, found they cannot just join the meta list, since `Registry.add` makes a session param one object on both
   `Deck`s, and these close over one.
-- **Built.** `params.PER_DECK_META`, a third value of `part_of`, in `PARTS`, with `PER_DECK_META_GROUPS`. `LAYER_OF_PART` maps the
-  three parts onto the two layers; `param_layer`, `id_layer`, `is_meta_id`, `is_per_deck_meta_id` ask it. `Registry.add` still shares
-  only "session", and `SessionRegistry.add` refuses the class. `part_of` is now None only for what the test fails on.
+- **Built.** `params.PER_DECK_META`, a third value of `part_of`, in `PARTS`, with `PER_DECK_META_GROUPS`. `META_PARTS` says which parts
+  are the meta controller's. One predicate family, in `params`: `is_meta_id` (may a patch's row reach it), `is_session_id` (is it one
+  object on every deck), `is_per_deck_meta_id`. `Registry.add` still shares only "session", and `SessionRegistry.add` refuses the class.
+  `part_of` is now None only for what the test fails on.
 - **The sweep:** a headless registry found 24 in neither: `preset.*` 23 (`select`, `load.0–7`, `save.0–7`, `save_new`, `next`, `prev`,
   `list.next`, `list.prev`, `home`) and `deck.chase`. App-only, by the source and a fixture that adds them: `totem.*` and `poi.*`.
   Nothing else: `hands`, `output`, `overlay`, `ui` and `desk.pad.dial.*` are session groups already.
@@ -13610,7 +13611,12 @@ still wins, as does a sink row.
 - **A person's rows stay,** by the existing line, `is_session_row`: a key, a pad or hat button, an invariant or global-layer desk row,
   a sink. Tested by the real road: the bank pads and F-keys loading off air, ⇧F-keys, a held empty pad, the Edge's hold-to-save, Learn pad.
 - **No file changes:** none of the class persists, none is in a snapshot, and undo watches none. A saved row on one drops with a note
-  and a later save removes it, as MR1 ruled for meta rows. `tools/meta_routes.py` lists them with the others. The Drive was not read.
+  and a later save removes it, as MR1 ruled for meta rows. `tools/meta_routes.py` lists them with the others.
+- **A patch is refused whole** (`patches.check`, row 744) if it holds a row or a macro subscriber on one, now the class too
+  (`Macro.meta_subs` by `is_meta_id`). The orchestrator's read-only count, 2026-11-06: **0 of the Drive's 110 presets and 8 patches hold
+  a row on `deck.chase`, `totem.*` or `poi.*`**, so nothing is lost today.
+- **A load leaves a glide on one alone** (`MidiIO.redraw`, by `is_meta_id`): a person's knob on a `poi.*` dial, in `bindings.json`, goes
+  on arriving, since a load moves none of the class. A pointer move still drops it (`_follow_pointer`): that param is the other deck's.
 - **Judge it.** 574.
 
 ### 747. The import wall
@@ -13810,20 +13816,16 @@ still wins, as does a sink row.
   road then needs its old removal back.
 - **Judge it.** 580.
 
-### 755. A desk Learn on a per-deck meta param is a person's row
+### 755. A desk Learn on a per-deck meta param stays refused
 
-- **Asked.** The orchestrator, 2026-11-06: give Learn desk on `preset.*`, refused since #380, a road if it is small. **Pending the
-  owner:** the seventh round, 2026-11-04, said "no new Learn road is needed for now: a preset's Learn desk on a meta param stays
-  refused". This keeps that for every tuned meta param; it adds a person's row for the class of row 746, which no patch can hold.
-- **Built.** `Learn.learn_control` on the class lands `layer="global"`: in `bindings.json`, written now, shared to both decks, one step
-  on the meta stack. `ui_routing.desk_learnable` offers the menu item; `desk_target` is unchanged, so ROUTING's combo and a picked
-  control's offers stay as they were. A wire on GRAPH still refuses.
-- **Why the global layer and not invariant.** An invariant row on a control makes every patch's desk row there drop at a load, and
-  a later save removes it: one person's Learn would edit every patch. On the global layer the layers stay apart. The cost: it is
-  pressed with SHIFT latched, and the status line says so.
-- **`preset.*` takes a button:** a knob's sweep on `preset.select` would load on every tick. A `poi.*` dial may take a knob.
-- **A cost to say.** Base chase learned on a desk button (plan 52) used to be a preset-layer row, there at once; it is now on this
-  road, so it wants SHIFT latched. Its home stays the pad's BACK (`pad:VIEW`). A desk row a look already saved on `deck.chase`,
-  `totem.*` or `poi.*` drops with a note, as the owner ruled meta rows do (MR1).
-- **If the owner says no:** one branch in `learn_control` and one line in `ui.py`.
+- **Answer.** The owner, 2026-11-04, seventh round: "no new Learn road is needed for now: a preset's Learn desk on a meta param stays
+  refused." The refusal now says where a person's road is: Learn pad, a key, the APC's factory rows (`learn.PER_DECK_ROAD`).
+- **Built and removed.** Row 752 left open whether SEM could give the desk a Learn, so #388 first built one, landing a person's row on
+  the global layer. Its review (2026-11-06) found it was not small: it silently deleted factory global rows on that control and wrote
+  the file; its rows on a second desk's global layer could never fire, as nothing raises that layer; Unbind refused them; a save
+  verb took `toggle`, so one tap wrote a library file; and hover-to-map reached it. All of that against the seventh round. It is gone,
+  and `desk_learnable` with it.
+- **What is true now.** A desk button can't be learned on Base chase, a preset verb, `totem.*` or `poi.*`. Hover-to-map and the menu go by
+  `ui_routing.desk_target`. A row on one in a patch's file drops with a note; a person's row already in `bindings.json` still works.
+  Base chase's home is the pad's BACK (`pad:VIEW`).
 - **Judge it.** 574.

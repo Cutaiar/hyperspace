@@ -987,10 +987,9 @@ class Panel:
     @staticmethod
     def _desk_target(a: Param) -> bool:
         """Can a desk control be put on this param? The rule "Learn desk"
-        is offered by (plan 17 WP3: Learn only where it can act): what ROUTING's desk
-        rows offer their targets by, and a meta param that is one per `Deck`, whose
-        learn is a person's row (`ui_routing.desk_learnable`, row 746)."""
-        return ui_routing.desk_learnable(a)
+        is offered by (plan 17 WP3: Learn only where it can act) — the one
+        ROUTING's desk rows offer their targets by (`ui_routing.desk_target`)."""
+        return ui_routing.desk_target(a)
 
     def _table(self):
         """The live binding table — the router's, else the learn object's —
@@ -1091,8 +1090,8 @@ class Panel:
     def _ctx_learn(self, a: Param, p: Param) -> None:
         """The Learn items of a param not armed (plan 17 WP2, fork 5).
         **Learn desk**: wherever a desk row can go — not a file path, not
-        SHIFT's own param, not a meta param but for one per `Deck`
-        (`ui_routing.desk_learnable`) — with or without a MIDI adapter. **Learn hand ▸ left /
+        SHIFT's own param, not a meta param (what `ui_routing._desk_targets`
+        leaves out) — with or without a MIDI adapter. **Learn hand ▸ left /
         right**: only with a tracker, on a param a hand can drive (the real
         one is modulatable and no meta param), for the sides the rig's
         axes have. **Learn pad**: while a gamepad is connected, wherever a
@@ -1123,7 +1122,7 @@ class Panel:
             lrn.arm(a.id, "pad")
         # plan 56: two presses, one axis. A pair moves along a range, so a
         # param with one; "(spring)" a route, on what a route can carry
-        if pad is not None and pad.on and ui_routing.desk_target(a) and p.kind in (
+        if pad is not None and pad.on and self._desk_target(a) and p.kind in (
                 Kind.CONTINUOUS, Kind.ENUM):
             if imgui.menu_item_simple("Learn pair"):
                 lrn.arm(a.id, learn.PAIR_WANT)

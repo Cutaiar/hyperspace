@@ -8196,15 +8196,12 @@ with no words.
 
 ## CP. The two layers, mechanically (SEM)
 Register rows 746, 747, 755, 2026-11-06.
-**574. A person's rows on `preset.*` work; a patch's do not.** (the rig, with the APC40, a pad)
+**574. A person's rows on `preset.*` work; a desk Learn says where to go.** (the rig, with the APC40, a pad)
 With one look on air and another off air: a bank pad and F2 each load off air, and the room is as
 it was. Shift+F1 saves the look in slot 1, and a held empty pad saves into it. On the Edge, hold the
-save button. Right-click **Base chase** or a preset verb and pick Learn pad, then press a button: it
-works from then on. Now Learn desk: on `Next preset` pick Learn desk and press a free APC button. The
-status line says "on the global layer: latch SHIFT to press it". With SHIFT off the button does what the
-look says, and with SHIFT latched it loads the next look off air. Quit and reopen: it is still there. ⌘Z
-over OUTPUT before quitting takes it back. Fail: any of those is refused, a row lands in the look's
-file, or the look's own row on that button stopped working.
+save button. Right-click **Base chase** or a preset verb: there is no Learn desk, and Learn pad is there
+with a pad connected. Pick it and press a button: it works from then on. Holding the pad's BACK still
+chases the base. Fail: any of those is refused, or a Learn desk is offered on one.
 
 ## CQ. Paired axes (plan 56)
 Register rows 748–751, 2026-11-04. Headless: `tests/test_paired_axes.py`, a scripted

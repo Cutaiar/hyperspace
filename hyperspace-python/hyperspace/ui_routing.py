@@ -147,7 +147,7 @@ from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
 from .modifiers import Modifier, smooth_motion
 from .motion import Motion
-from .params import Kind, Param, is_per_deck_meta_id, part_of
+from .params import Kind, Param, part_of
 from .routing import (
     SAVE_PARAM,
     SHIFT_PARAM,
@@ -1496,13 +1496,6 @@ def desk_target(p: Param) -> bool:
     on a meta param either (register row 743): both of those land a preset-
     layer row."""
     return pad_target(p) and meta_refusal(p.id) is None
-
-
-def desk_learnable(p: Param) -> bool:
-    """Can "Learn desk" land on this param? `desk_target`, or a meta param that is one per
-    `Deck` (row 746), whose learn lands the meta controller's row (`Learn.learn_control`).
-    ROUTING's combo keeps `desk_target`: it re-aims a preset-layer row."""
-    return desk_target(p) or (pad_target(p) and is_per_deck_meta_id(p.id))
 
 
 def pad_target(p: Param) -> bool:

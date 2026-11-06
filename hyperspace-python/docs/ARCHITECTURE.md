@@ -784,7 +784,7 @@ Consequences:
   controller's** (`params.is_meta_id`; `routing.meta_refusal`, register
   rows 743, 746): no row of a preset drives one, and a preset never sets its base.
   The line is `routing.is_session_row`, so the meta controller's own rows stay.
-- **Every param is in exactly one layer** (`params.param_layer`): "performance"
+- **Every param is in exactly one layer** (`params.META_PARTS`): "performance"
   is the patch, "session" and `PER_DECK_META` the meta controller. "session" is one
   object on every deck; `PER_DECK_META` (`preset.*`, `deck.chase`, `totem.*`,
   `poi.*`) closes over one deck and stays each deck's own

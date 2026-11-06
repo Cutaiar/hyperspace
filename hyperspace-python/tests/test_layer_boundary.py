@@ -16,20 +16,31 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from test_meta_rule import _with
 from test_midi import note, push
-from test_on_off_air import _bank, _clip, _state
+from test_on_off_air import _bank, _state
 from test_on_off_air import rig as air_rig  # noqa: F401 — two decks and the desk
 from test_pad_learn import ScriptedPad
 from test_presets import put
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import apc40, app, gamepad, graphview, hands, poi, routing, totem, ui_routing, undo
+from hyperspace import (
+    apc40,
+    app,
+    gamepad,
+    graphview,
+    hands,
+    patches,
+    poi,
+    routing,
+    totem,
+    ui_routing,
+    undo,
+)
 from hyperspace.overlay import Output
 from hyperspace.params import (
-    LAYER_OF_PART,
-    META_LAYER,
+    META_PARTS,
     PARTS,
-    PATCH_LAYER,
     PER_DECK_META,
     PER_DECK_META_GROUPS,
     SESSION_IDS,
@@ -37,10 +48,8 @@ from hyperspace.params import (
     Kind,
     Param,
     SessionRegistry,
-    id_layer,
     is_meta_id,
     is_per_deck_meta_id,
-    param_layer,
     part_of,
     part_of_id,
 )
@@ -48,6 +57,7 @@ from hyperspace.routing import (
     MOD_OPS,
     Binding,
     Bindings,
+    Macro,
     base_refusal,
     is_session_row,
     meta_refusal,
@@ -77,6 +87,12 @@ def rig(air_rig):  # noqa: F811
 
 # ------------------------------------------------------------ exactly one layer
 
+def layer_of(p) -> str | None:
+    """The layer `p` is in; None: in neither, a bug."""
+    part = part_of(p)
+    return "meta" if part in META_PARTS else "patch" if part == "performance" else None
+
+
 def layer_faults(reg) -> list[str]:
     """Every param of `reg` not in exactly one layer, in words."""
     out = []
@@ -86,7 +102,7 @@ def layer_faults(reg) -> list[str]:
             claims = ["session"]        # (asked first: `part_of_id`)
         if len(claims) != 1:
             out.append(f"{p.id}: group {p.group!r} is in {claims or 'neither layer'}")
-        elif param_layer(p) not in (PATCH_LAYER, META_LAYER):
+        elif layer_of(p) is None:
             out.append(f"{p.id}: in no layer")
         elif part_of(p) != part_of_id(p.id):
             out.append(f"{p.id}: by the param {part_of(p)}, by the id {part_of_id(p.id)}")
@@ -99,8 +115,7 @@ def test_no_group_is_in_two_parts_and_every_part_is_in_one_layer():
         for g in groups:
             assert g not in seen, f"{g} is in {seen[g]} and {name}"
             seen[g] = name
-    assert set(LAYER_OF_PART) == set(PARTS)
-    assert set(LAYER_OF_PART.values()) == {PATCH_LAYER, META_LAYER}, "two layers and no others"
+    assert {*META_PARTS, "performance"} == set(PARTS), "two layers and no others"
 
 
 def test_every_param_of_the_app_is_in_exactly_one_layer(rig):
@@ -195,7 +210,7 @@ def test_the_sweep_names_what_was_in_neither(rig):
     assert groups == set(PER_DECK_META_GROUPS)
     assert sum(p.group == "preset" for p in rig.one.reg) == 23
     assert [p.id for p in rig.one.reg if p.group == "deck"] == ["deck.chase"]
-    assert all(param_layer(p) == META_LAYER and is_meta_id(p.id) for p in per_deck(rig.one.reg))
+    assert all(layer_of(p) == "meta" and is_meta_id(p.id) for p in per_deck(rig.one.reg))
 
 
 def test_they_stay_one_object_per_deck_and_a_shared_param_stays_one(rig):
@@ -223,7 +238,6 @@ def test_the_shared_registry_refuses_one():
 
 
 def test_an_id_this_build_lacks_is_still_classed():
-    assert id_layer("preset.a.new.verb") == META_LAYER
     assert is_meta_id("preset.a.new.verb") and is_per_deck_meta_id("poi.a.new.dial")
     assert meta_refusal("preset.a.new.verb") is not None
     assert not is_meta_id(None) and not is_meta_id("")
@@ -232,7 +246,7 @@ def test_an_id_this_build_lacks_is_still_classed():
 def test_the_refusal_is_the_layer_over_every_param(rig):
     """Every param of a deck: refused exactly when it is meta. No list of ids."""
     for p in rig.one.reg:
-        assert (meta_refusal(p.id) is not None) == (param_layer(p) == META_LAYER), p.id
+        assert (meta_refusal(p.id) is not None) == (layer_of(p) == "meta"), p.id
 
 
 ROWS = ["preset.next", "preset.select", "preset.save.0", "preset.save_new", "preset.home",
@@ -360,101 +374,97 @@ def test_a_pad_learn_on_a_load_still_lands_and_loads_off_air(rig):
     assert rig.two.presets.current == "TUMBLE" and _state(d) == theirs
 
 
-# ------------------------------------------------------------ Learn desk's road
+# ------------------------------------------------------------ review of #388
 
 def _learned(d, pid, source=BUTTON, profile=apc40):
     d.learn.arm(pid, "desk")
     return d.learn.learn_control(source, profile)
 
 
-def test_a_desk_learn_on_a_load_lands_a_persons_row_on_the_global_layer(rig):
-    _bank(rig, "party-wake", "party-tumble")
+@pytest.mark.parametrize("pid", ROWS)
+def test_a_desk_learn_on_the_class_is_refused_and_says_where_the_road_is(rig, pid):
+    """Row 755: built and removed. "No new Learn road is needed for now: a preset's Learn desk
+    on a meta param stays refused" (the owner, seventh round). Nothing moves, on disk either."""
     d = rig.one
-    assert ui_routing.desk_learnable(d.reg["preset.load.1"])
-    assert not ui_routing.desk_target(d.reg["preset.load.1"]), "ROUTING's combo re-aims a patch's row"
-    theirs = _state(d)
-    assert _learned(d, "preset.load.1")
-    row = next(b for b in d.table.bindings if b.source == BUTTON)
-    assert row.layer == SHIFT_UP and is_session_row(row)
-    assert "global layer" in d.learn.last
-    assert any(b is row for b in rig.two.table.bindings), "the meta controller's: both decks"
-    doc = json.loads(d.table.path.read_text())
-    assert any(r["source"] == BUTTON and r["target"] == "preset.load.1"
-               for r in doc["bindings"]), "written now, as a pad's is"
-
-    # SHIFT down: the patch's layer is up, and the press is nothing
-    rig.meta.pointer("apc40").deck = d
-    was = rig.two.presets.current
-    push(rig.r, note(N, channel=CH), note(N, 0, channel=CH))
-    assert rig.two.presets.current == was
-    # SHIFT up: the press loads off air
-    d.table.set_layer(SHIFT_UP)
-    push(rig.r, note(N, channel=CH), note(N, 0, channel=CH))
-    assert rig.two.presets.current == "TUMBLE" and _state(d) == theirs
+    rows = list(d.table.bindings)
+    file = d.table.path.read_bytes() if d.table.path.exists() else None
+    assert not _learned(d, pid)
+    assert "no patch's row" in d.learn.last and "Learn pad" in d.learn.last
+    assert d.learn.learning is None, "armed for the desk, so the learn is over"
+    assert len(d.table.bindings) == len(rows) and all(a is b for a, b in zip(d.table.bindings, rows))
+    assert (d.table.path.read_bytes() if d.table.path.exists() else None) == file
 
 
-def test_it_takes_no_row_from_a_patch_on_that_control(rig):
+@pytest.mark.parametrize("pid", ROWS)
+def test_neither_the_menu_nor_hover_to_map_offers_the_class(rig, pid):
+    from hyperspace.ui import Panel
+
+    assert not ui_routing.desk_target(rig.one.reg[pid]) and not Panel._desk_target(rig.one.reg[pid])
     d = rig.one
-    keep = Binding(BUTTON, "view.lines", "toggle", layer="preset")
-    d.table.bind(keep, write=False)
-    assert _learned(d, "preset.next")
-    assert any(b is keep for b in d.table.bindings), "the layers are apart"
-    assert not d.table.is_invariant(keep), "and the control stays learnable, so no load drops it"
+    d.learn.pick(BUTTON)
+    assert not d.learn.map_picked(pid, apc40)
+    assert "Learn pad" in d.learn.last and not [b for b in d.table.bindings if b.source == BUTTON]
 
 
-def test_it_is_one_step_on_the_meta_stack_and_on_no_decks(rig):
+def test_a_bare_arm_still_waits_for_a_pad_button(rig):
     d = rig.one
-    deck_steps, meta_steps = len(d.undo.stack), len(rig.meta.undo.stack)
-    assert _learned(d, "preset.next")
-    assert len(rig.meta.undo.stack) == meta_steps + 1 and len(d.undo.stack) == deck_steps
-    assert rig.meta.undo.undo()
-    assert not [b for b in d.table.bindings if b.source == BUTTON]
-    doc = json.loads(d.table.path.read_text())
-    assert not [r for r in doc["bindings"] if r["source"] == BUTTON]
+    d.learn.arm("preset.next")
+    assert not d.learn.learn_control(BUTTON, apc40)
+    assert d.learn.learning == "preset.next"
+    assert d.learn.learn_pad_button("pad:A")
 
 
-@pytest.mark.parametrize("pid", ["totem.on", "poi.on", "deck.chase", "totem.reset"])
-def test_the_road_is_the_whole_class(rig, pid):
+def test_the_tuned_meta_params_refuse_without_the_road_words(rig):
     d = rig.one
-    assert ui_routing.desk_learnable(d.reg[pid])
-    assert _learned(d, pid)
-    row = next(b for b in d.table.bindings if b.source == BUTTON)
-    assert row.target == pid and row.layer == SHIFT_UP
-
-
-def test_a_knob_on_a_load_is_refused_in_words(rig):
-    d = rig.one
-    assert not _learned(d, "preset.select", "cc:0:16")
-    assert "takes a button" in d.learn.last
-    assert not [b for b in d.table.bindings if b.source == "cc:0:16" and b.target == "preset.select"]
-
-
-def test_a_knob_may_take_a_poi_dial(rig):
-    d = rig.one
-    assert _learned(d, "poi.length", "cc:0:16")
-    row = next(b for b in d.table.bindings if b.target == "poi.length")
-    assert row.layer == SHIFT_UP
-
-
-def test_the_tuned_meta_params_still_refuse_a_desk_learn(rig):
-    """The seventh round: "a preset's Learn desk on a meta param stays refused". The road
-    is the class's alone: a session param has its reserved controls."""
-    d = rig.one
-    assert not ui_routing.desk_learnable(d.reg["master.gain"])
     assert not _learned(d, "master.gain")
-    assert "meta controller" in d.learn.last
-    assert not [b for b in d.table.bindings if b.source == BUTTON]
+    assert "meta controller" in d.learn.last and "Learn pad" not in d.learn.last
 
 
-def test_an_invariant_control_and_a_latched_global_layer_still_refuse(rig):
-    d = rig.one
-    n, ch = _clip(0)
-    assert not _learned(d, "preset.next", f"note:{ch}:{n}")
-    assert "invariant" in d.learn.last
-    d.learn.arm(None)
-    d.table.set_layer(SHIFT_UP)
-    assert not _learned(d, "preset.next")
-    assert "global layer" in d.learn.last
+@pytest.mark.parametrize("pid", ["deck.chase", "totem.on", "poi.length", "preset.next"])
+def test_finding_1_a_macros_subscriber_on_the_class_is_a_meta_sub(pid):
+    """`Macro.meta_subs`, so `patches.check` and `tools/meta_routes.py` see it (row 744)."""
+    base = Macro.from_json({"subs": [{"base": pid}]})
+    depth = Macro.from_json({"subs": [{"depth": {"source": "lfo:0", "target": pid}}]})
+    assert base.meta_subs() == [pid] and depth.meta_subs() == [pid]
+    assert any("no patch's row" in w for w in patches.check(_with(macros={
+        "macro.3": {"subs": [{"base": pid}]}})))
+
+
+@pytest.mark.parametrize("pid", ["deck.chase", "totem.on", "poi.on", "poi.length"])
+def test_finding_3_a_patch_with_a_row_on_the_class_is_refused_whole(pid):
+    """Row 744's rule reaches the class. Read-only count, 2026-11-06: 0 of the Drive's 110
+    presets and 8 patches hold such a row, so nothing is lost."""
+    route = {"source": "lfo:0", "target": pid, "op": "push", "value": 0.2}
+    assert any("no patch's row" in w for w in patches.check(_with(routes=[route])))
+
+
+def test_finding_2_a_load_lets_a_glide_on_the_class_arrive(tmp_path):
+    """A person's knob on a per-deck meta param: a load moves no such param, so its glide
+    goes on, as `output.xfade`'s does (tests/test_desk.py). A load stops only a patch's."""
+    from test_midi import cc
+    from test_undo import boot, frames
+
+    r = boot(tmp_path / "home")
+    r.midi.clock = lambda: r.t
+    if "poi.length" not in r.reg:
+        poi.register(r.reg, poi.PoiState(), {})
+    reg, slews = r.reg, r.midi._slews
+    reg["desk.slew"].set(routing.SLEW_MAX_S)
+    n = apc40.TRACK_KNOBS[0]
+    r.table.add(Binding(f"cc:0:{n}", "poi.length", "abs"))     # invariant, as a file may hold
+    p = reg["poi.length"]
+    p.set_norm(0.0)
+    r.inp.queue.append(cc(n, 0))
+    frames(r, 20)
+    r.inp.queue.append(cc(n, 127))
+    frames(r, 3)
+    assert "poi.length" in slews
+    mid = p.norm
+    r.presets.load("TRIP")
+    frames(r)
+    assert "poi.length" in slews and p.norm > mid
+    frames(r, 20)
+    assert p.norm == pytest.approx(1.0) and not slews
 
 
 # ------------------------------------------------------------ the import wall

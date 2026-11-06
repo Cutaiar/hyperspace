@@ -741,12 +741,24 @@ def _note(on: bool, number: int = 94, channel: int = 0):
     return mido.Message(kind, channel=channel, note=number, velocity=127 if on else 0)
 
 
-def test_a_desk_button_learned_on_it_is_held_not_latched(rig):
-    src = "note:0:94"
+def _row_on_desk(rig, src: str = "note:0:94") -> Binding:
+    """A person's row on a desk button, as `bindings.json` may hold one: since row 746 no
+    Learn lands one (row 755), and a file's preset-layer row on it drops with a note."""
+    return rig.table.add(Binding(src, CHASE_PARAM, "momentary"))
+
+
+def test_a_desk_button_cannot_be_learned_on_it(rig):
+    """Row 755: refused, per the seventh round, in words that say where its road is."""
     rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control(src)
-    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
-    row = [b for b in rig.table.bindings if b.source == src and b.layer == "global"]
+    assert not rig.learn.learn_control("note:0:94")
+    assert "Learn pad" in rig.learn.last
+    assert [b.source for b in rig.table.bindings if b.target == CHASE_PARAM] == ["pad:VIEW"]
+
+
+def test_a_desk_row_on_it_is_held_not_latched(rig):
+    src = "note:0:94"
+    _row_on_desk(rig, src)
+    row = [b for b in rig.table.bindings if b.source == src and b.target == CHASE_PARAM]
     assert [(b.target, b.op) for b in row] == [(CHASE_PARAM, "momentary")]
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
@@ -824,9 +836,7 @@ def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
 def test_a_desk_button_and_a_pad_button_hold_it_together(rig):
     """Brushing the pad's button does not end what the APC's holds, or the
     other way about; a desk cable lost lets go only of the desk's."""
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control("note:0:94")
-    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
+    _row_on_desk(rig)
     pad = Pad()
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
@@ -852,9 +862,7 @@ def test_a_desk_button_and_a_pad_button_hold_it_together(rig):
 
 def test_a_desk_closed_lets_go(rig):
     """A desk's device closed with its button down: no poll follows."""
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control("note:0:94")
-    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
+    _row_on_desk(rig)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
@@ -880,9 +888,7 @@ def test_a_desk_lost_leaves_what_another_desk_holds(rig, lost):
     qualified or not, and its own release still ends the chase."""
     p = rig.reg[CHASE_PARAM]
     press_momentary(p, "note@launch:0:94", True)     # the second desk's button
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control("note:0:94")
-    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
+    _row_on_desk(rig)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     getattr(rig.midi, lost)()
@@ -894,13 +900,11 @@ def test_a_desk_lost_leaves_what_another_desk_holds(rig, lost):
 
 @pytest.mark.parametrize("change", ["removed", "retargeted", "switched off", "its rows forgotten"])
 def test_a_desk_row_changed_under_its_button_still_releases(rig, change):
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control("note:0:94")
-    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
+    _row_on_desk(rig)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
-    row = next(b for b in rig.table.bindings if b.source == "note:0:94")
+    row = next(b for b in rig.table.bindings if b.source == "note:0:94" and b.target == CHASE_PARAM)
     if change == "removed":
         rig.table.remove(row)
     elif change == "retargeted":
