@@ -172,6 +172,14 @@ all five textures, 16/16 across every dot and eye style). `gen/gallery.py`
 rasterises each SVG it writes with headless Chrome and decodes *that* — the
 shipped file, not a model of it.
 
+The sticker exporters get the same treatment. [`app/src/lib/style.ts`](app/src/lib/style.ts)
+is the TypeScript twin of `gen/style.py`, so a sheet exports with the dot, eye
+and colour treatment it previews with — and [`gen/sheets.py`](gen/sheets.py)
+rasterises every sheet `npm run check` writes, with Chrome for the SVG and
+poppler for the PDF, decodes every sticker on the page and measures one of each
+code. **276/276**, 24/24 of them on a vendor sheet at zero gutter with inverted
+and light codes alternating.
+
 [`gen/robust.py`](gen/robust.py) measures the three things that actually kill a
 code in the world: minimum camera pixels per module, blur tolerance, and a
 specular hotspot from a phone flash. It measures the **rendered** code, never
