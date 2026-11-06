@@ -380,4 +380,26 @@ SCROLL = {
     "thumb_min": 18.0,
     "thumb": ("border", 1.0),  # bg-border; measured identical when hovered
     "hide_delay": 0.6,         # Radix's scrollHideDelay, for type="hover"
+    # The scrollbar lives inside the VIEWPORT, not inside the root box, so a
+    # bordered region insets it by the border. Measured on a 320x200 root
+    # with `rounded-lg border`: viewport at (1,1) 318x198, scrollbar at
+    # (309,1) 10x198, thumb at (311,2) 7 wide. The kit drew the bar against
+    # the ROOT's edge, which put the thumb on top of the border and one
+    # pixel further out than the browser's at every point.
+    "border": 1.0,
+    # How far one unit of `io.mouse_wheel` scrolls.
+    #
+    # ImGui's own answer is `5 * font_size`, about 90 px at this type scale.
+    # On macOS GLFW hands it `scrollingDeltaY * 0.1` for a precise trackpad,
+    # and `scrollingDeltaY` is points of FINGER TRAVEL - so a 100 pt swipe
+    # arrives as 10 units and ImGui moves the page 900 px. The browser moves
+    # it 100: a trackpad scrolls 1:1 with the finger. That is the whole of
+    # why this felt nine times too fast.
+    #
+    # 10 px per unit puts a precise trackpad back at 1:1. A discrete wheel
+    # notch (one unit) then moves 10 px where a browser moves ~100, so
+    # `notch_px` scales a unit-sized jump back up - a flick that arrives as
+    # one big delta is still one gesture, not a hundred notches.
+    "px_per_unit": 10.0,
+    "notch_px": 100.0,
 }

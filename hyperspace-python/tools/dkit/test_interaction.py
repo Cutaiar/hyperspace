@@ -1196,3 +1196,101 @@ def test_the_range_sliders_thumb_rings_from_the_keyboard(DB):
     i_kb = ring_ink(top_band(kb[-1], t.x, t.y, t.w), ground)
     assert i_rest < 1.0, f"an untouched range thumb rang: {i_rest:.1f}"
     assert i_kb > 10.0, f"no ring on a keyboard-focused range thumb: {i_kb:.1f}"
+
+
+def test_the_range_sliders_track_takes_a_click(DB):
+    """Radix moves the NEAREST thumb to the pointer when you press the
+    track, and hands it the drag — the same thing a single-thumb slider does,
+    because a single-thumb slider is a stock `imgui.slider_float` and that is
+    what ImGui does. Only the two thumbs carried targets here, so a press on
+    the track did nothing at all.
+
+    Driven at three places: past the low thumb, past the high one, and
+    between them nearer the low. Dwells past the 150ms transition so the
+    value read back is the settled one.
+    """
+    r = DB.lay_out(W, H)
+    rx, ry, rw, rh = r.ctl_rows[6]            # "Window", the range slider
+    sx = rx + DB.CTL_LABEL_W
+    sw = rw - DB.CTL_LABEL_W - 46
+    lo0, hi0 = DB.CTL_STATE["win_lo"], DB.CTL_STATE["win"]
+
+    def press(frac):
+        cx = sx + 6 + frac * (sw - 12)
+        cy = ry + rh / 2
+        script = [(10, 10, False)] * 8 + [(cx, cy, False)] * 4 \
+            + [(cx, cy, True)] * 3 + [(cx, cy, False)] * DWELL
+        DB.render("dark", W, H, script=script, keep="last")
+        s = DB.render.last_state
+        return s["win_lo"], s["win"]
+
+    lo, hi = press(0.05)
+    assert lo < lo0 - 0.1, f"the low thumb did not come to the pointer: {lo}"
+    assert hi == pytest.approx(hi0, abs=1e-6), "the high thumb moved too"
+
+    lo, hi = press(0.95)
+    assert hi > hi0 + 0.1, f"the high thumb did not come to the pointer: {hi}"
+    assert lo == pytest.approx(lo0, abs=1e-6), "the low thumb moved too"
+
+    # between them, nearer the low one: the low one goes
+    lo, hi = press(0.45)
+    assert lo > lo0 + 0.1 and hi == pytest.approx(hi0, abs=1e-6)
+
+
+def test_the_disabled_range_slider_ignores_a_track_click(DB):
+    """`disabled:pointer-events-none`. The dashboard's Bypass switch turns
+    the whole control column off, which is how a disabled one is reachable
+    at all."""
+    r = DB.lay_out(W, H)
+    bx, by, _bw, bh = r.ctl_rows[1]           # "Bypass"
+    sw_x, sw_y = bx + DB.CTL_LABEL_W + 8, by + bh / 2
+    rx, ry, rw, rh = r.ctl_rows[6]
+    sx = rx + DB.CTL_LABEL_W
+    sw = rw - DB.CTL_LABEL_W - 46
+    cx, cy = sx + 6 + 0.05 * (sw - 12), ry + rh / 2
+
+    script = [(10, 10, False)] * 6
+    script += [(sw_x, sw_y, False)] * 3 + [(sw_x, sw_y, True)] * 2 \
+        + [(sw_x, sw_y, False)] * DWELL          # bypass on -> column off
+    script += [(cx, cy, False)] * 3 + [(cx, cy, True)] * 3 \
+        + [(cx, cy, False)] * DWELL
+    DB.render("dark", W, H, script=script, keep="last")
+    s = DB.render.last_state
+    assert s["bypass"], "the bypass switch did not turn on"
+    assert s["win_lo"] == pytest.approx(DB.CTL_STATE["win_lo"], abs=1e-6), \
+        "a disabled range slider moved"
+
+
+def test_the_inputs_text_sits_where_the_kit_put_it(DB):
+    """ImGui draws an InputText's text at the cursor PLUS `FramePadding`,
+    default (4, 3). The kit's frame is its own and the stock one is
+    transparent, so that padding was pure offset: the value sat 4 right and
+    3 down of the placeholder, and the selection band measured 9px above / 4
+    below in a 32px field instead of 6.5 either side.
+
+    Asserted on the SELECTION, because it is the one part of an input whose
+    box is visible without reading glyphs: double-click to select a word,
+    then measure the band's position in the field.
+    """
+    import numpy as np
+    r = DB.lay_out(W, H)
+    kx, ky, _kw, kh = r.ctl_rows[5]          # "Find", the combobox field
+    fx, fy = kx + DB.CTL_LABEL_W, ky
+    fh = 32.0
+    cx, cy = fx + 30, fy + fh / 2
+    script = [(10, 10, False)] * 8
+    script += [(cx, cy, False)] * 4 + [(cx, cy, True)] * 2 \
+        + [(cx, cy, False)] * 3
+    script += [(cx, cy, True)] * 2 + [(cx, cy, False)] * 2      # double-click
+    script += [(cx, cy, True)] * 2 + [(cx, cy, False)] * DWELL
+    f = np.asarray(DB.render("dark", W, H, script=script,
+                             keep="last")[-1])[:, :, :3].astype(int)
+
+    reg = f[int(fy):int(fy + fh), int(fx):int(fx + 150)]
+    blue = (reg[:, :, 2] - reg[:, :, 0] > 40) & (reg[:, :, 2] > 60)
+    rows = np.nonzero(blue.any(axis=1))[0]
+    assert len(rows), "nothing was selected - the field did not take a click"
+    above, below = int(rows.min()), int(fh - 1 - rows.max())
+    assert abs(above - below) <= 2, (
+        f"the selection band is {above} from the top and {below} from the "
+        f"bottom of a {fh:.0f}px field")

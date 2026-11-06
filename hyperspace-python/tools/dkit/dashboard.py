@@ -177,8 +177,6 @@ class Rects:
     routing_card: tuple = (0, 0, 0, 0)
     routing_rows: list = field(default_factory=list)
     controls_card: tuple = (0, 0, 0, 0)
-    buttons_card: tuple = (0, 0, 0, 0)
-    btn_rows: list = field(default_factory=list)
     ctl_rows: list = field(default_factory=list)
     table_tabs: tuple = (0, 0, 0, 0)
     table_rows: list = field(default_factory=list)
@@ -292,14 +290,6 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
                 bands,
                 N(dir="row", gap=CARD_GAP, key="cards",
                   kids=(routing, controls)),
-                # every Button variant and size, because a component with
-                # six variants shown in three of them is not demonstrated
-                N(dir="column", pad=CARD_PAD, gap=0.0, key="buttons", kids=(
-                    N(h=T.CARD_TITLE_H), N(h=T.CARD_TITLE_GAP),
-                    N(h=T.CARD_DESC_H), N(h=T.CARD_HEAD_GAP),
-                    N(dir="column", gap=T.SPACE[3], kids=tuple(
-                        N(h=40.0, key=("btn", i)) for i in range(3))),
-                )),
                 N(h=32.0, key="tabs"),
                 # The table is its NATURAL height - every row - and the PAGE
                 # scrolls. It used to take whatever was left and scroll
@@ -340,8 +330,6 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
     r.routing_card = at["routing"].as_tuple()
     r.routing_rows = [at[("routing", i)].as_tuple() for i in range(N_BANDS)]
     r.controls_card = at["controls"].as_tuple()
-    r.buttons_card = at["buttons"].as_tuple()
-    r.btn_rows = [at[("btn", i)].as_tuple() for i in range(3)]
     r.ctl_rows = [at[("ctl", i)].as_tuple() for i in range(2 * CTL_ROWS)]
 
     tb = at["tabs"]
@@ -477,13 +465,15 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         gw = bw - 2 * GUT
         pre = CG.plan(gw, faces, ui.theme_name)
         with I.scroll_area(ui, "page", bx, by, bw, bh, pre[0] + 2 * GUT,
-                           backdrop=T.rgba("background", theme=theme)) as view:
+                           backdrop=T.rgba("background", theme=theme),
+                           border=0.0) as view:
             CG.paint(ui, view.x + GUT, view.y + GUT, gw, state, pre=pre)
         state["page_scroll"], state["page_max"] = I.scrolled(ui, "page")
         return
 
     with I.scroll_area(ui, "page", bx, by, bw, bh, r.body_h,
-                       backdrop=T.rgba("background", theme=theme)) as view:
+                       backdrop=T.rgba("background", theme=theme),
+                       border=0.0) as view:
         # re-lay-out at this frame's scroll, so there is no frame of lag
         rr = lay_out(w, h, body_dy=view.y - by)
         _body(ui, rr, w, h, series, state)
@@ -716,34 +706,6 @@ def _body(ui, r, w, h, series, state):
                     disabled=off).clicked:
         state["said"] = "delete \u00b7 node"
 
-    # ---- every Button variant and size ------------------------------------
-    card_head(dl, r.buttons_card, "Buttons",
-              "Six variants and eight sizes - the press nudge is +1px, and "
-              "the focus ring is keyboard-only", faces, theme)
-    VARIANTS = ("default", "secondary", "outline", "ghost", "destructive",
-                "link")
-    SIZES = ("xs", "sm", "default", "lg")
-    ICONS = ("icon-xs", "icon-sm", "icon", "icon-lg")
-
-    def _strip(row, labels, *, variant=None, size="default", icon=False):
-        bx, by, _bw, bh = r.btn_rows[row]
-        for i, lab in enumerate(labels):
-            v = variant or lab
-            z = lab if variant else size
-            bw2, bh2 = CB.button_size(z, "" if icon else lab.title(), faces,
-                                      icon=icon)
-            st = CB.ui_button(ui, f"btn.{row}.{i}", bx, by + (bh - bh2) / 2,
-                              bw2, bh2, "" if icon else lab.title(),
-                              variant=v, size=z,
-                              icon="check" if icon else None)
-            if st.clicked:
-                state["said"] = f"{v} \u00b7 {z}"
-            bx += bw2 + T.SPACE[2]
-
-    _strip(0, VARIANTS)                                   # six variants
-    _strip(1, SIZES, variant="outline")                   # four text sizes
-    _strip(2, ICONS, variant="outline", icon=True)        # four icon sizes
-
     # ---- table ------------------------------------------------------------
     tx, ty, _, th = r.table_tabs
     picked, _tabs_w = I.tabs(ui, "tab", tx, ty, th, TABS, state["tab"])
@@ -904,6 +866,13 @@ def live(theme_name: str, w: int, h: int) -> None:
     A real event loop with real timing, so the 150ms transitions run off the
     clock rather than off a scripted dt. Resizing re-lays-out; the table
     grows and shrinks with the window.
+
+    Ctrl+C is a way to quit this, so it exits the way closing the window
+    does rather than printing a traceback from wherever in GLFW the signal
+    happened to land. The teardown is in a `finally` for the same reason it
+    matters here more than most places: `glfw.terminate()` is what gives the
+    window and its GL context back to the OS, and skipping it on the way out
+    of an exception leaves them dangling.
     """
     import time
     win, impl, io, faces, grad = _boot(theme_name, w, h, visible=True,
@@ -916,12 +885,27 @@ def live(theme_name: str, w: int, h: int) -> None:
     series = ticks()
     state = dict(CTL_STATE, tab=0, nav=0)
     ui = I.Ui(None, faces, theme, Anim(), grad, theme_name=theme_name)
-    rects, last_size = None, None
     prev = time.perf_counter()
 
+    try:
+        _loop(win, impl, ui, state, series, bgc, prev)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        impl.shutdown()
+        imgui.destroy_context()
+        glfw.terminate()
+
+
+def _loop(win, impl, ui, state, series, bgc, prev) -> None:
+    """The live event loop. Split out of `live` only so the setup, the loop
+    and the teardown each sit in one piece."""
+    import time
+    rects, last_size = None, None
     while not glfw.window_should_close(win):
         glfw.poll_events()
         impl.process_inputs()
+        I.tame_wheel(imgui.get_io())
         now = time.perf_counter()
         dt = min(now - prev, 0.05)          # a stall must not jump the easing
         prev = now
@@ -941,9 +925,6 @@ def live(theme_name: str, w: int, h: int) -> None:
         impl.render(imgui.get_draw_data())
         ui.frame_done(dt)
         glfw.swap_buffers(win)
-
-    impl.shutdown()
-    glfw.terminate()
 
 
 def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
@@ -1008,60 +989,70 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
     # keyboard at all. tests/ui_driver.py:172 turns it on for the same reason.
     io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
     frames = []
-    for i, mouse in enumerate(steps):
-        glfw.poll_events()
-        impl.process_inputs()
-        if mouse is not None:
-            io.add_mouse_pos_event(float(mouse[0]), float(mouse[1]))
-            if len(mouse) > 2:            # (x, y, down) drives the button too
-                io.add_mouse_button_event(0, bool(mouse[2]))
-            if len(mouse) > 3:            # (x, y, down, wheel) drives scroll
-                io.add_mouse_wheel_event(0.0, float(mouse[3]))
-            if len(mouse) > 4:            # ..., right) drives button 1
-                io.add_mouse_button_event(1, bool(mouse[4]))
-        for k in keymap.get(i, ()):
-            if isinstance(k, str):
-                for ch in k:
-                    io.add_input_character(ord(ch))
-                continue
-            io.add_key_event(k, True)
-            io.add_key_event(k, False)
-        imgui.new_frame()
-        GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
-        GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+    # The teardown is in a `finally` because a script that raises - a
+    # component handed the wrong kind of item, an ImGui assert - would
+    # otherwise leave this context and window alive, and every later
+    # render() in the same process would assert "Forgot to call
+    # Render()" instead of reporting its own problem. One real crash
+    # then reads as a dozen unrelated ones, which is exactly how long
+    # the Gallery's own crash took to find.
+    try:
+        for i, mouse in enumerate(steps):
+            glfw.poll_events()
+            impl.process_inputs()
+            I.tame_wheel(imgui.get_io())
+            if mouse is not None:
+                io.add_mouse_pos_event(float(mouse[0]), float(mouse[1]))
+                if len(mouse) > 2:            # (x, y, down) drives the button too
+                    io.add_mouse_button_event(0, bool(mouse[2]))
+                if len(mouse) > 3:            # (x, y, down, wheel) drives scroll
+                    io.add_mouse_wheel_event(0.0, float(mouse[3]))
+                if len(mouse) > 4:            # ..., right) drives button 1
+                    io.add_mouse_button_event(1, bool(mouse[4]))
+            for k in keymap.get(i, ()):
+                if isinstance(k, str):
+                    for ch in k:
+                        io.add_input_character(ord(ch))
+                    continue
+                io.add_key_event(k, True)
+                io.add_key_event(k, False)
+            imgui.new_frame()
+            GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
+            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
 
-        imgui.set_next_window_pos(imgui.ImVec2(0, 0))
-        imgui.set_next_window_size(imgui.ImVec2(w, h))
-        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
-        imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
-        imgui.begin("##dkit", None, WIN_FLAGS)
-        # a real window's list, not the background list: replay.keep
-        # (hyperspace/replay.py:91) only carries the page window's own list
-        # into the canvas tap
-        ui = I.Ui(imgui.get_window_draw_list(), faces, theme, anim, grad_tex,
-                  theme_name=theme_name)
-        paint(ui, rects, w, h, series, state)
-        imgui.end()
-        imgui.pop_style_var(2)
+            imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+            imgui.set_next_window_size(imgui.ImVec2(w, h))
+            imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
+            imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+            imgui.begin("##dkit", None, WIN_FLAGS)
+            # a real window's list, not the background list: replay.keep
+            # (hyperspace/replay.py:91) only carries the page window's own list
+            # into the canvas tap
+            ui = I.Ui(imgui.get_window_draw_list(), faces, theme, anim, grad_tex,
+                      theme_name=theme_name)
+            paint(ui, rects, w, h, series, state)
+            imgui.end()
+            imgui.pop_style_var(2)
 
-        imgui.render()
-        impl.render(imgui.get_draw_data())
-        GL.glFinish()
-        ui.frame_done(dt)
+            imgui.render()
+            impl.render(imgui.get_draw_data())
+            GL.glFinish()
+            ui.frame_done(dt)
 
-        if i >= 2:
-            fw, fh = glfw.get_framebuffer_size(win)
-            raw = GL.glReadPixels(0, 0, fw, fh, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
-            px = np.frombuffer(raw, np.uint8).reshape(fh, fw, 3)[::-1]
-            if not px.any():
-                raise SystemExit("the hidden window read back black")
-            if keep == "last":
-                frames.clear()
-            frames.append(px.copy())
+            if i >= 2:
+                fw, fh = glfw.get_framebuffer_size(win)
+                raw = GL.glReadPixels(0, 0, fw, fh, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
+                px = np.frombuffer(raw, np.uint8).reshape(fh, fw, 3)[::-1]
+                if not px.any():
+                    raise SystemExit("the hidden window read back black")
+                if keep == "last":
+                    frames.clear()
+                frames.append(px.copy())
 
-    impl.shutdown()
-    imgui.destroy_context(ctx)      # or the next render() inherits this state
-    glfw.terminate()
+    finally:
+        impl.shutdown()
+        imgui.destroy_context(ctx)      # or the next render() inherits this state
+        glfw.terminate()
     return frames
 
 

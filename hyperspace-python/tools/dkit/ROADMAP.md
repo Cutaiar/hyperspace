@@ -215,7 +215,7 @@ on the per-frame `Ui` was thrown away before it could be read, so the
 tooltip could never reach its delay. Measure, then compose; they find
 different bugs.
 
-### The five rules this has settled into
+### The six rules this has settled into
 
 Each one is here because breaking it cost a round of rework.
 
@@ -245,13 +245,28 @@ Each one is here because breaking it cost a round of rework.
    writing constants") and it applies to spacing exactly as it applies to
    the offsets that started it. `tokens.SPACE`, and `box.stack` /
    `box.card_body` rather than `i * pitch`.
-3. **The demo is the dashboard.** Every state a component can be in has to
+3. **The React app is the rubric, and it has two pages.** Every component
+   lands in the prototype twice before the ImGui version is judged: once on
+   the **gallery page**, enumerated in every state it has, and once on the
+   **dashboard page**, used the way something real would use it. The second
+   is where the judgement is - a Combobox filtering 600 params is a
+   different claim from a Combobox with three fruit in it - and it is what
+   makes "does the kit look right" a question with an answer.
+
+   The same split holds on the ImGui side: `dashboard.py --live` has a
+   **Gallery** tab, which is the enumeration, and the dashboard page, which
+   is the realistic use. Nothing belongs in both. A Buttons card showing six
+   variants and eight sizes was on the dashboard page and had to come off:
+   the Gallery already enumerates them, and a dashboard that enumerates its
+   own controls is a gallery with worse framing.
+
+4. **The demo is the dashboard.** Every state a component can be in has to
    be reachable there, not only in the gallery. The gallery is a contact
    sheet: it proves chrome to a pixel and tells you nothing about how a
    disabled control feels under the pointer. Three real bugs - the slider's
    stray format string, the discarded per-frame state, the invisible input
    text in light - were all invisible to the diff by construction.
-4. **A test asks the source; it never copies a number.** Two tests held a
+5. **A test asks the source; it never copies a number.** Two tests held a
    `92.0` for a label column and went stale the moment the spacing moved.
    Where a pixel probe cannot tell two things apart - a tooltip floating
    over the card description behind it - count the thing instead of

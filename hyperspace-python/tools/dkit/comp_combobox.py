@@ -877,17 +877,22 @@ def _field(ui, key, x, y, w, h, tbl, text, placeholder, *, focus: bool):
     # kit that takes the keyboard without being asked.
     imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
     tx = x + tbl["field_text_x"]
-    # the CSS line box is 20 in a 32 field, so the glyphs sit 6 down;
-    # imgui adds frame_padding.y inside the frame it draws from the cursor
+    # the CSS line box is 20 in a 32 field, so the glyphs sit 6 down.
+    # `FramePadding` goes to zero rather than being subtracted back out:
+    # the frame here is the kit's own, the stock one is transparent, so
+    # there is no padding for imgui to add - and with it zeroed the cursor
+    # IS the text's top-left on both axes, which the y-only subtraction
+    # never fixed for x.
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
     imgui.set_cursor_screen_pos(imgui.ImVec2(
-        tx, y + (h - tbl["field_line"]) / 2.0
-        - imgui.get_style().frame_padding.y))
+        tx, y + (h - tbl["field_line"]) / 2.0))
     imgui.push_item_width(w - tbl["field_text_x"] - tbl["field_text_r"])
     if focus:
         # a fresh Popover mounts its Command with the input focused
         imgui.set_keyboard_focus_here()
     changed, out = imgui.input_text(f"##{key}", text)
     imgui.pop_item_width()
+    imgui.pop_style_var()
     imgui.pop_style_color(2)
     I._sandwich_end(ui, cols)
 
@@ -981,6 +986,12 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # field the moment the list opens - which is exactly when the kit asks
     # for that focus.
     imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
+    # ImGui draws an InputText's text at the cursor PLUS `FramePadding`,
+    # default (4, 3), and the frame it would pad is the stock one, which is
+    # transparent here. Zeroed, so the cursor IS the text's top-left: the
+    # value lines up with `input_pad_l` and the selection band is centred
+    # in the field rather than sitting 3 px low.
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
     imgui.set_cursor_screen_pos(
         imgui.ImVec2(x + pl, y + (h - tbl["field_font"] * 1.3) / 2.0))
     imgui.push_item_width(w - pl - pr - cz)
@@ -996,6 +1007,7 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     if disabled:
         imgui.end_disabled()
     imgui.pop_item_width()
+    imgui.pop_style_var()
     # `interact.text_input`'s rule, and measured on this control too: the
     # trigger is an InputGroup that rings on
     # `has-[[data-slot=input-group-control]:focus-visible]`, and its control

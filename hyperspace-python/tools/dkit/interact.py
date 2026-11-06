@@ -125,12 +125,18 @@ class Ui:
         return h[key]
 
     # -- state ------------------------------------------------------------
-    def hit(self, key: str, x, y, w, h, *, allow_overlap: bool = False) -> State:
+    def hit(self, key: str, x, y, w, h, *, allow_overlap: bool = False,
+            nav: bool = True) -> State:
         """Place an invisible_button over the rect and read it back.
 
         `allow_overlap` lets a later, smaller control on top of this one take
         the hover — a row with a kebab in it, for instance. Without it the
         row swallows the button.
+
+        `nav=False` keeps the target out of the Tab order. It is for a
+        target that exists only to catch a POINTER: a range slider's track
+        is one, and left navigable it swallowed the Tab that belongs to the
+        thumbs, so the keyboard could focus a slider and ring nothing.
         """
         if w <= 0 or h <= 0:
             return State()
@@ -151,8 +157,9 @@ class Ui:
         # its three colours pushed transparent - would also take focus, but
         # it reports `is_item_hovered` True while merely nav-focused, which
         # would light every hover tint in the kit off the keyboard.
-        clicked = imgui.invisible_button(f"##{key}", imgui.ImVec2(w, h),
-                                         imgui.ButtonFlags_.enable_nav)
+        clicked = imgui.invisible_button(
+            f"##{key}", imgui.ImVec2(w, h),
+            imgui.ButtonFlags_.enable_nav if nav else 0)
         hovered = imgui.is_item_hovered()
         held = imgui.is_item_active()
         # read here or not at all: `is_item_focused` answers for the LAST
@@ -409,6 +416,35 @@ def _sandwich_end(ui: Ui, cols: list) -> None:
     ui.dl.channels_set_current(0)
 
 
+def tame_wheel(io, *, font_size: float | None = None) -> None:
+    """Rescale this frame's wheel so a gesture moves what a browser moves.
+
+    Call it once, right after the backend has filled `io`, before
+    `new_frame`. ImGui scrolls `5 * font_size` per unit of `io.mouse_wheel`
+    - about 90 px here - and on macOS GLFW hands it `scrollingDeltaY * 0.1`
+    from a precise trackpad, where `scrollingDeltaY` is points of finger
+    travel. So a 100 pt swipe arrived as 10 units and moved the page 900 px
+    against the browser's 100. Nine times too fast, everywhere, which is
+    exactly what it felt like.
+
+    `SCROLL["px_per_unit"]` is the target. A unit-sized delta is treated as
+    a discrete notch instead and gets `notch_px`, so a mouse wheel is not
+    left crawling.
+    """
+    wheel = io.mouse_wheel
+    if not wheel:
+        return
+    want = T.SCROLL["px_per_unit"] * wheel
+    if abs(wheel) >= 0.999:
+        # a whole unit in one event is a wheel notch, not finger travel
+        want = T.SCROLL["notch_px"] * wheel
+    # `font_size` is injectable so the arithmetic is testable with no GL -
+    # the same reason `combobox_size` takes a `measure`.
+    fs = imgui.get_font_size() if font_size is None else font_size
+    step = 5.0 * max(fs, 1.0)
+    io.mouse_wheel = want / step
+
+
 FINE = 0.1          # Shift scales a drag to a tenth, as the panel's does
 
 
@@ -540,6 +576,19 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     # right; on the light one the value is invisible against the field. The
     # theme has to be pushed explicitly rather than relied on.
     imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(*ui.col("foreground")))
+    # ImGui draws an InputText's text at the cursor PLUS `FramePadding`, and
+    # the default is (4, 3). So the value sat 4 right and 3 down of where
+    # this put it: the selection band measured 9 px above and 4 below in a
+    # 32 px field instead of 6.5 either side, and - worse, because it is
+    # visible without selecting anything - the placeholder (drawn here, at
+    # `pad_x`) and the value (drawn by imgui, at `pad_x + 4`) did not line
+    # up with each other.
+    #
+    # Zeroing it is better than subtracting it: the frame is the kit's own
+    # `draw.field`, the stock one is transparent, so there is no padding for
+    # imgui to be adding in the first place and the cursor becomes exactly
+    # the text's top-left.
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
     imgui.set_cursor_screen_pos(
         imgui.ImVec2(x + tbl["pad_x"], y + (hh - tbl["font"] * 1.3) / 2.0))
     imgui.push_item_width(w - 2.0 * tbl["pad_x"])
@@ -549,6 +598,7 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     if disabled:
         imgui.end_disabled()
     imgui.pop_item_width()
+    imgui.pop_style_var()
     # NOT gated on `ui.focus_visible`, and that is measured rather than
     # sloppy: a text field is the one control Chromium matches
     # `:focus-visible` on however the focus arrived. Clicked with the
@@ -676,6 +726,45 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
     changed = False
     hot = 0.0
     kb_focus = False
+
+    # The TRACK is a target too, submitted first and `allow_overlap` so the
+    # two thumbs on top of it still take their own hover. Without it a click
+    # anywhere but on a thumb did nothing, where the single-thumb slider -
+    # a stock `imgui.slider_float` - jumps to the pointer, and so does
+    # Radix: pressing the track moves the NEAREST thumb there and hands it
+    # the drag.
+    #
+    # Which thumb was grabbed has to outlive the frame, or a drag that
+    # carries one thumb past the other would hop to whichever is nearest
+    # mid-gesture. It goes in `ui.drag`, the store that already exists for
+    # exactly this.
+    def _at_pointer():
+        """The value under the pointer, through the SAME inset span the
+        thumbs were laid out on - a thumb is inset by its own width, so the
+        track's usable run is `w - tz`, not `w`."""
+        f = (imgui.get_io().mouse_pos.x - x - tz / 2.0) / max(w - tz, 1.0)
+        return vmin + span * min(max(f, 0.0), 1.0)
+
+    tr = ui.hit(f"{key}.track", x, y, w, h, allow_overlap=True, nav=False)
+    # The PRESS, not the click: `State.clicked` fires on RELEASE, and by then
+    # `held` is already False - the first version chose a thumb and dropped
+    # it in the same frame, so nothing moved at all.
+    if not tr.held:
+        ui.drag.pop(key, None)
+    elif key not in ui.drag and not disabled:
+        v = _at_pointer()
+        # nearest in VALUE, not in pixels: the two agree on a linear track
+        # and the value is the thing the caller owns
+        ui.drag[key] = "lo" if abs(v - lo) <= abs(v - hi) else "hi"
+    grabbed = ui.drag.get(key)
+    if grabbed and not disabled:
+        v = _at_pointer()
+        if grabbed == "lo":
+            lo = min(v, hi)
+        else:
+            hi = max(v, lo)
+        changed = True
+
     for i, (name, val) in enumerate((("lo", lo), ("hi", hi))):
         t = thumbs[i]
         st = ui.hit(f"{key}.{name}", t.x, t.y, t.w, t.h)
@@ -714,7 +803,8 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
 
 @contextmanager
 def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
-                backdrop=None, always=False, pad=0.0, bars=True):
+                backdrop=None, always=False, pad=0.0, bars=True,
+                border=None):
     """A scrolling region with shadcn's overlay scrollbar.
 
     ImGui's `begin_child` supplies the MECHANISM - the wheel, the clipping,
@@ -795,7 +885,7 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
         # inventing an affordance the component does not have.
         if bars:
             D.scroll_bar(ui.dl, x, y, w, h, h, h + smax, sy, ui.theme,
-                         alpha=show)
+                         alpha=show, border=border)
         ui.scroll[key] = (sy, smax)
 
 

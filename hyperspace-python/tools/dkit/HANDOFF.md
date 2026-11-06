@@ -303,7 +303,33 @@ anything against the premise.** For a component, that means reading the
 actual registry file, not recalling its recipe. The cmdk port survives as
 `rank_items_cmdk()` for a future Command palette, where it is correct.
 
-### 3. The demo is the dashboard, and "visible" means visible
+### 3. The React app is the rubric, and it has two pages
+
+Set as a standing rule by the user, and it is a better framing than what I
+had been doing:
+
+> if I ask you for new components and new features, they get a gallery page
+> in the test shadcn dashboard. They're used in a realistic way on the
+> dashboard page to provide a reasonable view of what they might be used
+> for. This is where there's some creativity involved. Once they're in the
+> shadcn React dashboard, that's what you use as the rubric to grade the
+> ImGui version off of.
+
+So a component lands in `prototypes/dashboard` twice before the kit's
+version is judged: the **gallery page** enumerates every state it has, and
+the **dashboard page** uses it the way something real would. The second is
+where the judgement lives. A Combobox filtering 600 params is a different
+claim from a Combobox with three fruit in it, and only the realistic use
+shows whether the component earns its place.
+
+The ImGui side mirrors it: `dashboard.py --live` has a **Gallery** tab
+(`comp_gallery.py`) for the enumeration and the dashboard page for the
+realistic use. **Nothing belongs in both.** A Buttons card showing six
+variants and eight sizes was sitting on the dashboard page and has been
+removed - the Gallery already enumerates them, and a dashboard that
+enumerates its own controls is a gallery with worse framing.
+
+### 4. The demo is the dashboard, and "visible" means visible
 
 Three separate times I fixed a component's internals and left the thing on
 screen untouched — most recently shipping a Combobox whose table and filter
@@ -316,7 +342,7 @@ nothing about how a control feels under the pointer. Three real bugs — the
 stray format string, the discarded per-frame state, the invisible light-theme
 input text — were invisible to the diff by construction.
 
-### 4. Spacing is a scale, not a pitch
+### 5. Spacing is a scale, not a pitch
 
 Prompted by "you're missing the concept of a gap". There was no space scale
 at all; containers were hand-sized and gaps were arithmetic at the draw
@@ -325,7 +351,7 @@ component paddings, and `box.stack` / `box.card_body` rather than
 `i * pitch`. The failure mode is quiet — nothing looks broken, it just reads
 wrong, and no number in the file says which one is at fault.
 
-### 5. Precalculating bounding boxes is the antipattern it sounds like
+### 6. Precalculating bounding boxes is the antipattern it sounds like
 
 Prompted directly. Replaced by intrinsic sizing: `box.Node` with a bottom-up
 `measure_tree` and a top-down `place_tree`. Measured at **0.38 ms for 955
@@ -334,14 +360,14 @@ FFI boundary — the reason Taffy's Python bindings were rejected at 1.4 ms for
 180 boxes. Note `flex-basis: 0` (CSS `flex-1`) is not `flex-grow: 1` on an
 auto basis: grow distributes only leftover space.
 
-### 6. A test asks the source; it never copies a number
+### 7. A test asks the source; it never copies a number
 
 Two tests held a literal `92.0` for a label column and went stale the moment
 the spacing moved. Where a pixel probe cannot distinguish two things — a
 tooltip floating over the card description behind it — count the thing
 instead of sampling it.
 
-### 7. Subagents work, on disjoint files, with the premise stated
+### 8. Subagents work, on disjoint files, with the premise stated
 
 Three agents in parallel, each owning one `comp_*.py` + one `test_*.py` and
 nothing else, each independently verified against its own oracle pass. All
@@ -351,7 +377,7 @@ restated in the brief, and the reviewer re-measuring rather than reading.
 What broke it: a wrong premise in the brief propagates straight through
 everything downstream, and the agent's verification cannot see it (see 2).
 
-### 8. Hyperspace is not the authority on UI
+### 9. Hyperspace is not the authority on UI
 
 "hyperspace shouldn't be taken as gospel... don't be too corrupted by it."
 I had been arguing "the app does X, so dkit should". The only binding

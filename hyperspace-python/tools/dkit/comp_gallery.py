@@ -293,9 +293,11 @@ def _s_menu(faces, tn):
 def _s_scroll(faces, tn):
     def draw(ui, k, x, y, w, h, st):
         n, rh = 14, 24.0
+        # this specimen draws a 1px border, so the scrollbar is inset by it
+        # the way the browser's is - the bar belongs to the VIEWPORT
         with I.scroll_area(ui, k, x, y, w, h, n * rh, radius=T.RADII["lg"],
                            backdrop=T.rgba("card", theme=ui.theme),
-                           pad=T.SPACE[2]) as view:
+                           pad=T.SPACE[2], border=1.0) as view:
             for i in range(n):
                 D.label(ui.dl, view.x, view.y + i * rh, f"Row {i + 1}",
                         ui.faces, "regular", 13,

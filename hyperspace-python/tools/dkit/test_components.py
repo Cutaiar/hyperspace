@@ -751,3 +751,108 @@ def test_the_combobox_trigger_rings_on_keyboard_focus(painted, monkeypatch,
     # light swaps the border, dark does not - the Button's measured anomaly
     swapped = tbl["trigger_focus_border"] != tbl["trigger_border"]
     assert swapped == (theme_name == "light")
+
+
+# --------------------------------------------------------------------------
+# the scrollbar sits inside the VIEWPORT, not against the root's edge
+# --------------------------------------------------------------------------
+# Measured on ?probe, `scroll.h200.content400`, a 320x200 root with
+# `rounded-lg border`:
+#
+#     root       320 x 200     radius 10   overflow visible
+#     viewport   318 x 198 @ 1,1           <- inset by the 1px border
+#     scrollbar   10 x 198 @ 309,1         <- hangs off the VIEWPORT's edge
+#     thumb        7 x  97 @ 311,2         <- +2 left (border-l + p-px), +1 top
+#
+# The kit hung the bar off the ROOT's edge, so the thumb sat on top of the
+# border and one pixel further out than the browser's at every point - which
+# is what "no gutter" looked like, and why it crossed the rounded corner more
+# than the real one does.
+BROWSER_SCROLL = {
+    "root_w": 320.0, "root_h": 200.0, "border": 1.0,
+    "bar_x": 309.0, "bar_y": 1.0, "bar_w": 10.0, "bar_h": 198.0,
+    "thumb_x": 311.0, "thumb_y": 2.0, "thumb_w": 7.0, "thumb_h": 97.02,
+    "viewport_h": 198.0, "content_h": 400.0,
+}
+
+
+def test_the_scroll_thumb_lands_where_the_browsers_does():
+    b = BROWSER_SCROLL
+    s = T.SCROLL
+    assert s["border"] == b["border"]
+    # the bar, derived the way draw.scroll_bar derives it
+    bar_x = 0.0 + b["root_w"] - s["border"] - s["bar_w"]
+    bar_y = 0.0 + s["border"]
+    bar_h = b["root_h"] - 2 * s["border"]
+    assert (bar_x, bar_y, bar_h) == (b["bar_x"], b["bar_y"], b["bar_h"])
+
+    t = B.scroll_thumb(bar_x, bar_y, s["bar_w"], bar_h,
+                       b["viewport_h"], b["content_h"], 0.0,
+                       inset=s["track_inset"], thumb_w=s["thumb_w"],
+                       thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
+    assert (t.x, t.y, t.w) == (b["thumb_x"], b["thumb_y"], b["thumb_w"])
+    assert abs(t.h - b["thumb_h"]) < 0.05
+
+
+def test_the_thumb_keeps_a_gutter_off_the_right_edge():
+    """Two pixels: the 1px border it is inside, and the 1px `p-px` rail."""
+    b, s = BROWSER_SCROLL, T.SCROLL
+    right = b["thumb_x"] + b["thumb_w"]
+    assert b["root_w"] - right == s["border"] + s["track_inset"]
+
+
+def test_a_region_with_no_border_gets_no_border_inset():
+    """The dashboard's page is not a bordered box, so its bar hangs off its
+    own edge. `border=0` is a caller's statement about its own chrome, not a
+    switch to turn the measurement off."""
+    s = T.SCROLL
+    t = B.scroll_thumb(0.0 + 300.0 - 0.0 - s["bar_w"], 0.0, s["bar_w"], 200.0,
+                       100.0, 400.0, 0.0,
+                       inset=s["track_inset"], thumb_w=s["thumb_w"],
+                       thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
+    assert t.x + t.w == 300.0 - s["track_inset"]
+
+
+# --------------------------------------------------------------------------
+# the wheel
+# --------------------------------------------------------------------------
+def test_the_wheel_is_scaled_to_the_browsers_response():
+    """ImGui moves `5 * font_size` per unit of `io.mouse_wheel` - about 90px
+    here. macOS GLFW hands it `scrollingDeltaY * 0.1` from a precise
+    trackpad, and `scrollingDeltaY` is points of FINGER TRAVEL, so a 100pt
+    swipe arrived as 10 units and moved 900px where a browser moves 100.
+
+    `tame_wheel` rescales so a unit is `px_per_unit`. This checks the
+    arithmetic without a GL context by standing in for `get_font_size`.
+    """
+    import interact as I
+
+    class _IO:
+        mouse_wheel = 0.0
+
+    io = _IO()
+    font = 18.2
+    step = 5.0 * font
+
+    # a precise trackpad: ten small events, 100pt of finger travel in all
+    total = 0.0
+    for _ in range(10):
+        io.mouse_wheel = 0.1
+        I.tame_wheel(io, font_size=font)
+        total += io.mouse_wheel * step
+    # ten events of 0.1 units at 10 px a unit is 10 px of page, which is
+    # the 10 pt of finger that produced them: 1:1, as the browser is
+    assert abs(total - 10 * 0.1 * T.SCROLL["px_per_unit"]) < 1e-6
+    # and against what it used to be, which is the size of the complaint
+    assert abs(total * (step / T.SCROLL["px_per_unit"]) - 10 * 0.1 * step) < 1e-6
+    assert step / T.SCROLL["px_per_unit"] > 8.0
+
+    # a discrete wheel notch is a notch, not a tenth of a finger
+    io.mouse_wheel = -1.0
+    I.tame_wheel(io, font_size=font)
+    assert abs(io.mouse_wheel * step + T.SCROLL["notch_px"]) < 1e-6
+
+    # nothing in, nothing out
+    io.mouse_wheel = 0.0
+    I.tame_wheel(io, font_size=font)
+    assert io.mouse_wheel == 0.0

@@ -869,7 +869,7 @@ def _dim(col, f: float):
 
 
 def scroll_bar(dl, x, y, w, h, viewport_h, content_h, scroll_y, theme, *,
-               alpha=1.0):
+               alpha=1.0, border=None):
     """Radix's overlay scrollbar: the track is transparent, so this is the
     thumb and nothing else. Returns its Rect, or None with no overflow.
 
@@ -878,7 +878,12 @@ def scroll_bar(dl, x, y, w, h, viewport_h, content_h, scroll_y, theme, *,
     """
     import box as B
     s = SCROLL
-    t = B.scroll_thumb(x + w - s["bar_w"], y, s["bar_w"], h,
+    # `border` is the region's own 1px frame, which the scrollbar sits
+    # INSIDE: measured, the viewport is (1,1) 318x198 in a 320x200 root and
+    # the bar hangs off the viewport's right edge, not the root's. Pass 0
+    # for a region with no border, which is what the dashboard's page is.
+    b = s["border"] if border is None else border
+    t = B.scroll_thumb(x + w - b - s["bar_w"], y + b, s["bar_w"], h - 2 * b,
                        viewport_h, content_h, scroll_y,
                        inset=s["track_inset"], thumb_w=s["thumb_w"],
                        thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
