@@ -635,20 +635,13 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
         if radius and backdrop is not None:
             D.cover_corners(ui.dl, x, y, w, h, radius, backdrop)
 
-        s = T.SCROLL
-        bar = B.Rect(x + w - s["bar_w"], y, s["bar_w"], h)
         # content height from the child's own scroll range, so the thumb
         # cannot disagree with what actually scrolls
-        thumb = B.scroll_thumb(
-            bar.x, bar.y, bar.w, bar.h, h, h + smax, sy,
-            inset=s["track_inset"], thumb_w=s["thumb_w"],
-            thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
+        has = smax > 0.5
         show = ui.anim.to(f"{key}:bar",
-                          1.0 if (always or hovered) and thumb else 0.0)
-        if thumb is not None and show > 0.01:
-            D.fill(ui.dl, *D.snap(thumb.x, thumb.y, thumb.w, thumb.h),
-                   ui.col(s["thumb"][0], s["thumb"][1] * show),
-                   s["thumb_w"] / 2.0)
+                          1.0 if (always or hovered) and has else 0.0)
+        D.scroll_bar(ui.dl, x, y, w, h, h, h + smax, sy, ui.theme,
+                     alpha=show)
         ui.scroll[key] = (sy, smax)
 
 

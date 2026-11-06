@@ -116,6 +116,19 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 D.tooltip_panel(dl, cell["x"], cell["y"], cell["w"],
                                 cell["h"], theme, tips,
                                 arrow_at=cell["x"] + cell["w"] / 2.0)
+            elif cell["kind"] == "scroll":
+                # the box, then the overlay thumb at a pinned scroll
+                D.box(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                      # Tailwind's bare `border` is border-border, NOT
+                      # input. They are the same #e5e5e5 in light and differ
+                      # in dark (10% vs 15% white), so this only showed up
+                      # on the dark pass - 510 pixels of it.
+                      border_col=T.rgba("border", theme=theme),
+                      radius=T.RADII["lg"], border_w=1.0)
+                vp = cell["h"] - 2.0
+                D.scroll_bar(dl, cell["x"] + 1.0, cell["y"] + 1.0,
+                             cell["w"] - 2.0, vp, vp, float(cell["content"]),
+                             cell["frac"] * (cell["content"] - vp), theme)
             elif cell["kind"] == "text":
                 D.text_cell(dl, cell, faces, ink)
         imgui.render()

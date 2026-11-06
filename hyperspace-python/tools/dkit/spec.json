@@ -2,7 +2,7 @@
   "_comment": "The shared gallery spec. Both the React oracle and the ImGui kit read this file and draw the SAME rects, so a diff measures chrome, never text metrics. Rects are CSS/content-box pixels at device-pixel-ratio 1, origin top-left.",
   "canvas": {
     "w": 760,
-    "h": 1060,
+    "h": 1140,
     "bg": "#ffffff"
   },
   "cells": [
@@ -439,6 +439,42 @@
       "w": 140,
       "h": 28,
       "text": ""
+    },
+    {
+      "id": "scroll.top",
+      "kind": "scroll",
+      "variant": "always",
+      "x": 40,
+      "y": 1000,
+      "w": 180,
+      "h": 120,
+      "text": "",
+      "content": 1200,
+      "frac": 0.0
+    },
+    {
+      "id": "scroll.mid",
+      "kind": "scroll",
+      "variant": "always",
+      "x": 260,
+      "y": 1000,
+      "w": 180,
+      "h": 120,
+      "text": "",
+      "content": 1200,
+      "frac": 0.5
+    },
+    {
+      "id": "scroll.end",
+      "kind": "scroll",
+      "variant": "always",
+      "x": 480,
+      "y": 1000,
+      "w": 180,
+      "h": 120,
+      "text": "",
+      "content": 400,
+      "frac": 1.0
     }
   ]
 }

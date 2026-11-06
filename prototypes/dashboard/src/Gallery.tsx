@@ -9,6 +9,7 @@
 // ?gallery&text    the same grid with text, advisory only
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
@@ -40,6 +41,8 @@ type Cell = {
   weight?: number
   fracs?: number[]
   on?: boolean
+  content?: number
+  frac?: number
 }
 
 export default function Gallery({
@@ -182,6 +185,21 @@ export default function Gallery({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+          ) : c.kind === "scroll" ? (
+            // type="always" so the scrollbar is up without a hover, and the
+            // viewport scrolled by a ref so the thumb sits at a known
+            // fraction. The kit draws the same box and the same thumb.
+            <ScrollArea
+              type="always"
+              className="h-full w-full rounded-lg border"
+              ref={(el: HTMLDivElement | null) => {
+                const vp = el?.querySelector<HTMLDivElement>(
+                  '[data-slot="scroll-area-viewport"]')
+                if (vp) vp.scrollTop = (c.frac ?? 0) * ((c.content ?? 0) - (c.h - 2))
+              }}
+            >
+              <div style={{ height: c.content }} />
+            </ScrollArea>
           ) : c.kind === "card" ? (
             <Card
               className={

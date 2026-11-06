@@ -16,7 +16,7 @@ import math
 
 from imgui_bundle import imgui
 
-from tokens import RADII, RING_W, SELECT_SIZES, rgba
+from tokens import RADII, RING_W, SCROLL, SELECT_SIZES, rgba
 
 
 def _u32(col) -> int:
@@ -819,6 +819,28 @@ def _dim(col, f: float):
     return (col[0], col[1], col[2], col[3] * f)
 
 
+
+
+def scroll_bar(dl, x, y, w, h, viewport_h, content_h, scroll_y, theme, *,
+               alpha=1.0):
+    """Radix's overlay scrollbar: the track is transparent, so this is the
+    thumb and nothing else. Returns its Rect, or None with no overflow.
+
+    Shared by `interact.scroll_area` and the gallery, so the thing the diff
+    measures is the thing the demo draws.
+    """
+    import box as B
+    s = SCROLL
+    t = B.scroll_thumb(x + w - s["bar_w"], y, s["bar_w"], h,
+                       viewport_h, content_h, scroll_y,
+                       inset=s["track_inset"], thumb_w=s["thumb_w"],
+                       thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
+    if t is None or alpha <= 0.001:
+        return t
+    fill(dl, *snap(t.x, t.y, t.w, t.h),
+         rgba(s["thumb"][0], s["thumb"][1] * alpha, theme=theme),
+         s["thumb_w"] / 2.0)
+    return t
 
 
 def select_trigger(dl, x, y, w, h, theme, tbl, *, size="default", hot=0.0,

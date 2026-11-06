@@ -57,6 +57,10 @@ KIND = {
     "select": {"radius": 10.0, "outset": 0, "ring": True},
     # the tooltip panel is a filled rounded-md box
     "tooltip": {"radius": 8.0, "outset": 0, "ring": False},
+    # a ScrollArea is a 1px-bordered rounded-lg box; its thumb is a 3.5px
+    # capsule, below the 3px the radial march can resolve, so the thumb is
+    # held to the flat metric (where it has to be exact anyway)
+    "scroll": {"radius": 10.0, "outset": 0, "ring": True},
 }
 
 
@@ -94,6 +98,29 @@ def icon_boxes(cell):
                  cell["y"] + (cell["h"] - cs) / 2.0, cs, cs)]
     if cell["kind"] == "tooltip":
         return [arrow_box(cell)]
+    if cell["kind"] == "scroll":
+        # Only the thumb's two END CAPS. It is a 7px capsule, so r = 3.5 -
+        # under the 3px the radial march can resolve, which drops it into
+        # the flat metric where a cap's antialiasing reads as 3-5 levels.
+        # Its straight sides stay strict, and they are exact; its geometry
+        # is pinned three other ways (test_components against Chromium's own
+        # numbers, and a pixel check in the demo against box.scroll_thumb).
+        import sys as _s
+        _s.path.insert(0, str(HERE))
+        import box as _B
+        from tokens import SCROLL as _SC
+        vp = cell["h"] - 2.0
+        t = _B.scroll_thumb(
+            cell["x"] + 1.0 + cell["w"] - 2.0 - _SC["bar_w"], cell["y"] + 1.0,
+            _SC["bar_w"], vp, vp, float(cell["content"]),
+            cell["frac"] * (cell["content"] - vp),
+            inset=_SC["track_inset"], thumb_w=_SC["thumb_w"],
+            thumb_inset=_SC["thumb_inset"], thumb_min=_SC["thumb_min"])
+        if t is None:
+            return []
+        cap = _SC["thumb_w"] / 2.0 + 1.0
+        return [(t.x - 1, t.y - 1, t.w + 2, cap + 1),
+                (t.x - 1, t.y + t.h - cap, t.w + 2, cap + 1)]
     return []
 
 
