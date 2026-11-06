@@ -7941,22 +7941,24 @@ a ⌘Z no longer takes back a meta edit made while you were elsewhere.
    mouse on the canvas, turn a preset knob.
 2. Mouse on the canvas, ⌘Z. *Pass:* the knob goes back and the threshold stays.
 3. ⌘Z again until "nothing to undo". *Pass:* the threshold still stays.
-4. Mouse on the analyzer section, ⌘Z. *Pass:* the threshold goes back, the footer says so, and the
-   picture's preset values do not move. Do the same with `master.gain` in the audio section, and say
-   whether audio should count as a meta section.
+4. Mouse on the analyzer section, ⌘Z. *Pass:* the footer says "nothing to undo here yet" and the threshold
+   stays (the latch, row 753). Nudge another threshold, then ⌘Z twice. *Pass:* the threshold goes back, the
+   footer says so, and the picture's preset values do not move. Do the same with `master.gain` in the audio
+   section, and say whether audio should count as a meta section.
 5. Load the wrong preset, ⌘Z on the canvas. *Pass:* the earlier preset is back with its unsaved edits.
 6. Tweak a band, then press the key row that focuses the analyzer. Move the mouse to the desk diagram,
-   turn a desk knob, ⌘Z. *Pass:* the knob goes back and the band stays.
-7. In the hands section, ⌘Z with the mouse on a `ghost` row, then on a shaping knob. *Pass:* the first
+   turn a desk knob, ⌘Z. *Pass:* refused, since a controller moves no focus (row 753), and the band stays.
+   Turn it again, ⌘Z. *Pass:* the knob goes back and the band stays.
+7. In the hands section, change a `ghost` row and ⌘Z, then change a shaping knob and ⌘Z. *Pass:* the first
    takes the deck's, the second the last hands change.
 *Fail:* any ⌘Z that moves the other layer, or a knob or an orbit that ends up as two steps.
 **525. A show, and the table's rows.** (anywhere; a throwaway show)
 1. Open another show. Mouse on the canvas, ⌘Z. *Pass:* the earlier preset is back, the show's name stays.
-2. Mouse on the hands section, ⌘Z. *Pass:* the show's name, its bank and the analyzer's name are back,
-   and the picture does not move.
+2. Mouse on the hands section, change a knob there, ⌘Z twice (the latch, row 753). *Pass:* the show's name,
+   its bank and the analyzer's name are back, and the picture does not move.
 3. Say whether two ⌘Zs in two places is what you want for a show load (row 693).
-4. Learn a key row on ROUTING, then ⌘Z in a meta section, and restart. *Pass:* the row is gone, and stays
-   gone after the restart.
+4. Learn a key row on ROUTING, then in a meta section change something, ⌘Z twice, and restart. *Pass:* the
+   row is gone, and stays gone after the restart.
 
 ## BZ. The crossfader's side and copy on air (plan 44 D5c)
 Register rows 694–696, 2026-11-04. Restart first. **Nothing here is meant to look different yet:** no control
@@ -8019,8 +8021,8 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 2. Fade across, panel on the other, the same. *Pass:* the same, both ways.
 *Fail:* any edit shows on the other deck. The owner's absolute rule: report it.
 **578. A press always loads off air.** (the rig, with the APC40; rows 700, 752)
-1. Player 1 on air as it starts, deck 2 on another look. Press a filled bank pad. *Pass:* the room does not move. The footer reads "<name> loaded off air on deck 2; the room still sees deck 1; to take it back, put the panel on deck 2, then ⌘Z". That pad is lit green and the rest of the filled ones amber; the pad deck 1's look came from is amber too.
-2. Click the chip to deck 2. *Pass:* the strip and the canvas show what the pad loaded. ⌘Z there takes it back. Back on deck 1, ⌘Z never undoes a pad.
+1. Player 1 on air as it starts, deck 2 on another look. Press a filled bank pad. *Pass:* the room does not move. The footer reads "<name> loaded off air on deck 2; the room still sees deck 1", with no ⌘Z in it. That pad is lit green and the rest of the filled ones amber; the pad deck 1's look came from is amber too.
+2. Click the chip to deck 2. *Pass:* the strip and the canvas show what the pad loaded. ⌘Z there refuses (group CR); change something there and ⌘Z twice takes the load back. Press a pad with the panel on deck 2: the footer ends "⌘Z takes it back", and it does. Back on deck 1, ⌘Z never undoes a pad.
 3. QUANT several times. *Pass:* it walks the pads from the one lit, wrapping. F-keys and Home the same.
 4. Fade across. *Pass:* the pads' light moves to what deck 1 holds; the next press loads deck 1, and the footer says so.
 5. In ROUTING or Learn, try to put a desk knob or button on `preset.next`, then on `preset.save_new`. *Pass:* each refused, in words, "no preset row may drive it". A pad button's Learn takes one, and works.
@@ -8221,6 +8223,24 @@ learn press that also steps the param, or a pair lost on reload.
 *Pass:* (1) the param returns to its base at once and does not stick. (2) The first
 pad's press is refused in words and the learn still waits; the row names the second
 pad's role, and only that pad moves it. Fail: a stuck offset.
+
+## CR. The undo latch (row 753)
+Register row 753, 2026-11-06. Restart first. Headless: `tests/test_undo_latch.py`, every case on the real
+`MetaController`. **One thing is different on purpose:** ⌘Z can say no where it used to act.
+**579. Coming to a stack.** (a laptop)
+1. On deck 1, move Brightness. Click the chip to deck 2, move something, click back to deck 1. ⌘Z, on the canvas.
+   *Pass:* "nothing to undo here yet: make a change on deck 1 first", and Brightness stays. ⇧⌘Z says the same for redo.
+2. Move any small thing on deck 1, then ⌘Z twice. *Pass:* the first takes that thing, the second Brightness.
+3. Panel on the deck on air, a change, then press a filled bank pad, then ⌘Z. *Pass:* nothing moves in the room, and
+   the footer refuses. Click to the deck off air, ⌘Z. *Pass:* refused too, and the load stands. Change something, ⌘Z twice. *Pass:* the load goes back. Back on the deck on air, a change, then the pad of the look the other deck already holds, unedited, then ⌘Z. *Pass:* the change goes back: a load that changed nothing shuts nothing.
+4. Mouse on the analyzer section, move a threshold. Run the mouse over the canvas and back, with no press, ⌘Z. *Pass:* it goes back: passing over is no focus change.
+5. Move a threshold again, on the canvas turn a knob, back on the analyzer ⌘Z. *Pass:* refused; the threshold stays.
+6. Pick a value from a combo in the audio or hands section, the first change there, where the list hangs over another section. Bring the mouse back to that section, ⌘Z. *Pass:* it goes back.
+7. Ride `master.gain` on the APC, and straight after run the mouse across the analyzer and back to the canvas. ⌘Z in the analyzer: *Pass:* refused, the old meta step stays. Then, again from a change on the deck, the same ride and pass, ⌘Z on the canvas. *Pass:* it takes the deck's step.
+8. Hold BACK (a base chase) on deck 1 with deck 1 latched, ⌘Z. *Pass:* refused, and the hold goes on. Let go: the latch is still shut. Turn an APC knob on that deck, ⌘Z. *Pass:* it goes back.
+9. Panel on the deck off air, a change, fade across, ⌘Z. *Pass:* refused. Nudge an analyzer threshold with the mouse there, press a bank pad, ⌘Z, the mouse unmoved. *Pass:* the threshold goes back.
+*Fail:* any ⌘Z that takes back a step you made before you came to that stack, or a refusal right after a change you just made there.
+*Judge:* with the panel on air and open, a pad's load shuts it (step 3), and any fade shuts the panel's deck (step 9): both past the owner's sentence, row 753. Right? And a controller's change opens the stack in focus, whoever's it is: another player's knob counts (row 753). Right, or only your own player's?
 
 ## What no test covers
 

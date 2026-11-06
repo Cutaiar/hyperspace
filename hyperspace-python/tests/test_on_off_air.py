@@ -814,8 +814,8 @@ def test_a_library_verb_from_either_deck_loads_off_air_and_the_room_is_as_it_was
         assert rig.two.presets.current != "TRIP"
         assert _state(rig.one) == theirs
         assert len(rig.two.undo.stack) == steps + 1
-        assert rig.lib.status.startswith(f"{rig.two.presets.current} loaded off air on deck 2; "
-                                         "the room still sees deck 1; ")
+        assert rig.lib.status == (f"{rig.two.presets.current} loaded off air on deck 2; "
+                                  "the room still sees deck 1")
 
 
 def test_the_strip_reads_the_panels_deck_whichever_deck_a_press_loaded(rig):
@@ -1280,18 +1280,26 @@ def test_a_layered_row_on_a_reserved_control_never_acts_its_row_disabled():
     assert [b.target for b in other.dispatch("cc", 0, apc40.CC_XFADE)] == ["view.bright"]
 
 
-def test_a_mis_pressed_pad_and_cmd_z_by_where_you_are_and_the_words_say_so(rig):
-    """Finding 4. It is true: with the panel on air ⌘Z is the room's stack and leaves the
-    load. Not changed (the owner: "by where you are"); the status line says how."""
-    _bank(rig, "party-wake")
+def test_the_words_after_a_press_name_cmd_z_only_where_it_is_true(rig):
+    """Finding 4, as row 753 settled it. With the panel on air the words name no ⌘Z; with
+    the panel on the deck off air the load is a push on the stack in focus, so ⌘Z does
+    take it back; a mouse in a meta section is ⌘Z elsewhere, so they do not say so."""
+    _bank(rig, "party-wake", "party-tumble")
     n = len(rig.one.undo.stack)
     rig.one.reg["preset.load.0"].fire()
     assert undo.here() is rig.one.undo and len(rig.one.undo.stack) == n
-    assert rig.lib.status.endswith("to take it back, put the panel on deck 2, then ⌘Z")
+    assert rig.lib.status.endswith("the room still sees deck 1")
+    _quiet(rig.two)
     rig.meta.point_panel(rig.two)
     assert undo.here() is rig.two.undo
-    rig.one.reg["preset.load.0"].fire()
+    rig.one.reg["preset.load.1"].fire()
     assert rig.lib.status.endswith("; ⌘Z takes it back")
+    now = rig.two.presets.current
+    rig.r.reg["edit.undo"].fire()
+    assert rig.two.presets.current != now
+    undo.where(lambda: True)
+    rig.one.reg["preset.load.1"].fire()
+    assert rig.lib.status.endswith("the room still sees deck 1")
 
 
 def test_a_generic_table_gains_no_apc_rows():
