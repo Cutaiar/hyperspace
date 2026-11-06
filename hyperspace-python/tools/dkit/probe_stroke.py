@@ -22,7 +22,11 @@ def main() -> None:
     for hint, v in ((glfw.CONTEXT_VERSION_MAJOR, 3), (glfw.CONTEXT_VERSION_MINOR, 3),
                     (glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE),
                     (glfw.OPENGL_FORWARD_COMPAT, True), (glfw.VISIBLE, False),
-                    (glfw.SAMPLES, 0)):
+                    (glfw.SAMPLES, 0),
+                    # 1:1 pixels on a Retina Mac too, or the framebuffer comes
+                    # back at 2x and every rect in the spec is half the size it
+                    # claims. No-op off macOS.
+                    (glfw.COCOA_RETINA_FRAMEBUFFER, False)):
         glfw.window_hint(hint, v)
     win = glfw.create_window(W, H, "probe", None, None)
     glfw.make_context_current(win)

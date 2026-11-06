@@ -95,11 +95,6 @@ Two findings worth carrying forward:
 same surface as `prototypes/dashboard/`, drawn with nothing but `draw.py`, on
 real catalog and band data, headless, in both themes.
 
-```bash
-HYPERSPACE_HOME=$(mktemp -d) uv run python tools/dkit/dashboard.py \
-    --out /tmp/dkit --theme dark
-```
-
 Layout follows the house pattern (`ui_players.lay_out`,
 `ui_players.py:122-176`): a pure function of size returning every rectangle,
 no imgui in it, drawn in a second pass.
@@ -144,12 +139,6 @@ straight RGBA lerp from `transparent` goes through transparent *black*, so a
 sidebar item measurably darkened to 20 on its way from 23 to 38 before this
 was fixed. Browsers premultiply; so does the kit.
 
-```bash
-# a hover easing in and out, as a frame sequence
-HYPERSPACE_HOME=$(mktemp -d) uv run python tools/dkit/dashboard.py \
-    --out /tmp/dkit --theme dark --hover
-```
-
 The demo now draws into a real window's draw list rather than the background
 list — `replay.keep` (`hyperspace/replay.py:91`) only carries the page
 window's own list into the canvas tap, so background-list chrome would be
@@ -157,20 +146,63 @@ missing from `panel:graph`.
 
 ## Running it
 
+Nothing here needs `HYPERSPACE_HOME` — dkit touches none of the app's state.
+On a Mac, after the usual `uv sync`, that is the whole setup.
+
+### The demo, which needs nothing but the venv
+
 ```bash
 cd hyperspace-python
-export UV_NO_GROUP="hands dream"
+uv run python tools/dkit/dashboard.py --out /tmp/dkit --theme dark
+uv run python tools/dkit/dashboard.py --out /tmp/dkit --theme light
+```
 
-# oracle (needs the dashboard built and previewing on :4173)
-( cd ../prototypes/dashboard && npm run build && npx vite preview --port 4173 & )
+A hover easing in and out, as a frame sequence (30 PNGs):
+
+```bash
+uv run python tools/dkit/dashboard.py --out /tmp/dkit --theme dark --hover
+```
+
+### The unit tests, which need no GL and no display
+
+```bash
+uv run python -m pytest tools/dkit/test_ease.py -q
+```
+
+### The diff, which also needs the React oracle
+
+Two halves: the oracle is a Vite build, the kit is Python.
+
+```bash
+# once
+cd prototypes/dashboard && npm install && npm run build
+npx vite preview --port 4173 &
+
+# then, from hyperspace-python
 node tools/dkit/capture_react.js "http://localhost:4173/?gallery" /tmp/dkit
-
-# the kit, and the verdict
-HYPERSPACE_HOME=$(mktemp -d) uv run python tools/dkit/gallery.py --out /tmp/dkit
+uv run python tools/dkit/gallery.py --out /tmp/dkit
 uv run python tools/dkit/diff.py /tmp/dkit
 ```
 
-`/tmp/dkit/contact.png` is `react | imgui | diff x4`.
+`/tmp/dkit/contact.png` is `react | imgui | diff x4`. Add `&dark` to the URL
+and `--theme dark` to `gallery.py` for the dark pass.
+
+`probe_stroke.py` prints where ImGui actually puts a stroke — run it if a
+border ever lands a pixel off on a different machine.
+
+### On a Mac, expect different numbers
+
+Every figure in this file was measured on Mesa/llvmpipe under Xvfb. The Mac
+rasterizes through Metal and **will not match them** — the project already
+gates its render goldens on `GL_RENDERER` for the same reason
+(`tests/test_golden_frames.py:336`). The straight edges and fills should
+still be exact, because those are geometry; the corner displacement figure
+is the one to expect to move. Record a Mac baseline and compare against that
+rather than against this container's.
+
+The windows are created with `COCOA_RETINA_FRAMEBUFFER` off, so the
+framebuffer is 1:1 with the spec on a Retina display. Without it the readback
+comes back at 2x and `gallery.py`'s size check trips.
 
 ## Known limits
 

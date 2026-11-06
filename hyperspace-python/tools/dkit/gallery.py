@@ -64,6 +64,9 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
     glfw.window_hint(glfw.VISIBLE, False)
     glfw.window_hint(glfw.SAMPLES, 0)          # the panel window uses 0 too
+    # 1:1 pixels on a Retina Mac too, or the framebuffer comes back at 2x and
+    # the size check below trips. No-op off macOS.
+    glfw.window_hint(glfw.COCOA_RETINA_FRAMEBUFFER, False)
     win = glfw.create_window(w, h, "dkit", None, None)
     if not win:
         glfw.terminate()
