@@ -13185,6 +13185,10 @@ the knob; a fader has to be brought there.
   node mode until the desk leaves its node.
 - **FINE (row 609, the owner: SEND B stays FINE) works on a filled knob:** `_fine_release`
   reads these rows too, or the next coarse detent would jump.
+- **What the fill counts as taken is what `dispatch` does.** It asks `Bindings.above_layers`,
+  `dispatch`'s own first step, on every channel a control can arrive on, and an any-channel row of
+  this desk on the node's params keeps every control it names. `tests/test_node_desk.py` fills a
+  node over awkward tables and checks by `dispatch` that each filled control reaches its param.
 - **Leaving re-arms every fader** as a layer switch does, so a saved fader under node mode
   picks up and never jumps.
 - **A player's second desk** gets no rows: a saved entry reaches a player's first of a kind

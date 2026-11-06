@@ -649,3 +649,117 @@ def test_under_asks_what_dispatch_does_on_an_any_channel_row(rig, monkeypatch):
     monkeypatch.setattr(apc40, "degrees_of_freedom", lambda: every)
     t.rows_serial += 1
     assert rig.nd1.under(saved) and _dispatch_agrees(rig, saved)
+
+
+# ---------------------------------------------------------------- second review of #396:
+# what the fill counts as taken is what `dispatch` does
+
+
+def _fader_row(params, invariant=False):
+    return Binding(f"cc:*:{FADER}", params[0], "abs", ring=0,
+                   layer=None if invariant else "preset")
+
+
+AWKWARD = {
+    "disabled invariant": lambda ps: [Binding(f"cc:0:{K1}", "view.speed", "abs", enabled=False)],
+    "invariant": lambda ps: [Binding(f"cc:0:{K2}", "view.speed", "abs")],
+    "any-channel invariant": lambda ps: [Binding(f"cc:*:{FADER}", "view.speed", "abs", ring=0)],
+    "any-channel mapping": lambda ps: [_fader_row(ps)],
+    "qualified mapping": lambda ps: [Binding(f"cc@{DESK}:0:{K1}", ps[0], "abs", layer="preset")],
+    "qualified invariant": lambda ps: [Binding(f"cc@{DESK}:0:{K3}", "view.speed", "abs")],
+    "qualified any-channel": lambda ps: [Binding(f"cc@{DESK}:*:{FADER}", "view.speed", "abs")],
+    "one channel of a device knob": lambda ps: [Binding(f"cc:3:{D1}", "view.speed", "abs")],
+    "disabled mapping": lambda ps: [Binding(f"cc:0:{K1}", ps[0], "abs", layer="preset",
+                                            enabled=False)],
+    "global row on the node": lambda ps: [Binding(f"cc:0:{K1}", ps[0], "abs", layer="global")],
+    "a pad's row on the node": lambda ps: [Binding("axis:LX", ps[0], "push", 0.5)],
+    "an other desk's row": lambda ps: [Binding(f"cc@launch:0:{K1}", ps[0], "abs", layer="preset")],
+}
+
+
+def _channels(source):
+    b = Binding(source, "")
+    return range(16) if b.channel is None else (b.channel,)
+
+
+def _reaches_what_it_says(rig, params, added):
+    """By `dispatch`: every filled control reaches its param and nothing else, on every
+    channel it can arrive on; every param is filled, kept or listed; a row kept stays."""
+    t = rig.one.table
+    now = rig.nd1._follow(DESK)
+    for b in now.rows:
+        for ch in _channels(b.bare):
+            assert [x.target for x in t.dispatch(b.kind, ch, b.number, DESK)] == [b.target], b
+    assert sorted((*[s.param for s in now.fit.slots], *now.fit.kept, *now.fit.over)) == sorted(params)
+    assert len({b.control for b in now.rows}) == len(now.rows)
+    for b in added:
+        if b.enabled and b.is_midi and t.serves(DESK, b) and b.layer in (None, "preset"):
+            for ch in _channels(b.bare):
+                assert any(x is b for x in t.dispatch(b.kind, ch, b.number, DESK)), (b, ch)
+            assert not rig.nd1.under(b)
+
+
+@pytest.mark.parametrize("which", sorted(AWKWARD))
+def test_every_filled_control_reaches_its_param_over_an_awkward_table(rig, which):
+    node, params = pick_node(rig.one, 4)
+    t = rig.one.table
+    added = AWKWARD[which](params)
+    t.bindings.extend(added)
+    t.rows_serial += 1
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert rig.nd1.rows()
+    _reaches_what_it_says(rig, params, added)
+
+
+def test_a_reserved_control_is_no_freedom_whatever_the_profile_lists(rig, monkeypatch):
+    node, params = pick_node(rig.one, 2)
+    every = [(apc40.META_CONTROLS[0],), *apc40.degrees_of_freedom()]
+    monkeypatch.setattr(apc40, "degrees_of_freedom", lambda: every)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert apc40.META_CONTROLS[0] not in {b.source for b in rig.nd1.rows()}
+    _reaches_what_it_says(rig, params, [])
+
+
+def test_a_disabled_invariant_row_gives_its_knob_to_the_fill(rig):
+    """A review finding, disproved for a knob: only SHIFT and a reserved control stay no
+    layer's with their row off. `dispatch` reads no disabled row on any other control."""
+    node, params = pick_node(rig.one)
+    t = rig.one.table
+    off = Binding(f"cc:0:{K1}", "view.speed", "abs", enabled=False)
+    t.bindings.append(off)
+    t.rows_serial += 1
+    assert t.above_layers("cc", 0, K1, DESK) is None
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert rig.nd1.rows()[0].source == f"cc:0:{K1}" and rig.nd1.rows()[0].target == params[0]
+    assert t.dispatch("cc", 0, K1, DESK) == [rig.nd1.rows()[0]]
+
+
+def test_an_any_channel_row_keeps_all_eight_faders(rig):
+    node, params = pick_node(rig.one, 4)
+    t = rig.one.table
+    inv = Binding(f"cc:*:{FADER}", "view.speed", "abs", ring=0)
+    t.bindings.append(inv)
+    t.rows_serial += 1
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert not {b.source for b in rig.nd1.rows()} & {f"cc:{k}:{FADER}" for k in range(8)}
+    t.bindings.remove(inv)
+    mapping = _fader_row(params)
+    t.bindings.append(mapping)
+    t.rows_serial += 1
+    assert not {b.source for b in rig.nd1.rows()} & {f"cc:{k}:{FADER}" for k in range(8)}
+    assert rig.nd1._follow(DESK).fit.kept == (params[0],)
+    for k in range(8):
+        assert t.dispatch("cc", k, FADER, DESK) == [mapping]
+
+
+def test_above_layers_is_what_dispatch_answers_first(rig):
+    t = rig.one.table
+    inv = Binding(f"cc:0:{K1}", "view.speed", "abs")
+    t.bindings.append(inv)
+    t.rows_serial += 1
+    assert t.above_layers("cc", 0, K1, DESK) == [inv] == t.dispatch("cc", 0, K1, DESK)
+    number = int(apc40.META_CONTROLS[0].rpartition(":")[2])
+    t.bindings[:] = [b for b in t.bindings if not (b.kind == "cc" and b.number == number)]
+    t.rows_serial += 1
+    assert t.above_layers("cc", 0, number, DESK) == [] == t.dispatch("cc", 0, number, DESK)
+    assert t.above_layers("cc", 0, K2, DESK) is None

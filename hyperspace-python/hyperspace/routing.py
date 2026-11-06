@@ -2697,21 +2697,33 @@ class Bindings:
             page = [b for b in self.page_rows if b.matches(kind, channel, number)]
             if page:
                 return [b for b in page if b.enabled]
+        above = self.above_layers(kind, channel, number, role)
+        if above is not None:
+            return above
         rows = [b for b in self.route(kind, channel, number)
                 if b.enabled and self.serves(role, b)]
-        inv = [b for b in rows if b.layer is None]
-        if inv:
-            return inv
-        if self.is_primary(role) and (
-                (kind == "note" and channel == 0 and number == _SHIFT.number)
-                or any(x.matches(kind, channel, number) for x in _reserved(self.profile))):
-            return []                # (their row disabled: still no layer's, `is_invariant`)
         layer = self.layer_of(role)
         if layer == "preset":
             node = [b for b in self.node_rows(role) if b.matches(kind, channel, number)]
             if node:
                 return node
         return [b for b in rows if b.layer == layer]
+
+    def above_layers(self, kind: str, channel: int, number: int,
+                     role: str | None = None) -> list[Binding] | None:
+        """What answers a message ahead of every layer: the enabled invariant rows on its
+        control, none at all on SHIFT or a reserved control, or None when the layers
+        decide. `dispatch`'s rule, which node mode's fill asks too (`NodeDesk`): a control
+        this holds is no degree of freedom, since a row there could never be reached."""
+        inv = [b for b in self.route(kind, channel, number)
+               if b.enabled and self.serves(role, b) and b.layer is None]
+        if inv:
+            return inv
+        if self.is_primary(role) and (
+                (kind == "note" and channel == 0 and number == _SHIFT.number)
+                or any(x.matches(kind, channel, number) for x in _reserved(self.profile))):
+            return []                # (their row disabled: still no layer's, `is_invariant`)
+        return None
 
     def active(self, role: str | None = None) -> list[Binding]:
         """The MIDI rows of the device of `role` (None: the first MIDI
