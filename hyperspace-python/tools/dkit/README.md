@@ -202,6 +202,32 @@ Two things worth knowing:
   appear in the `panel:graph` texture that feeds the render graph. Fine on
   the panel; it cannot be part of anything projected.
 
+## The box model
+
+`box.py` is the layer that stops the kit degenerating into typed offsets.
+Without it the trend badge ended up carrying `+26`, `+6` and `+19` — three
+constants that did not agree with each other, so the label sat a pixel
+inside the icon and the icon a pixel above centre. Nobody reads that and
+sees it. The answer is not better constants; it is not writing constants.
+
+* **`Rect`** — `pad()` in CSS shorthand order, `expand`, `cut_left/right/
+  top/bottom`, `align`. Padding a box is a thing you can now say.
+* **`Flow`** — a measured single-line row. Items are collected, then placed,
+  so the row knows its own width *before* deciding where anything goes.
+  That is what lets a pill size itself to its contents, or a row centre
+  itself in a box it did not choose.
+* **`place_popover`** — Radix's placement model, which shadcn uses: the
+  panel sits on a `side` of the **anchor**, offset by `sideOffset`, aligned
+  on the cross axis, then **flipped** if it will not fit and **shifted** to
+  stay on screen. ImGui's default is to place a popup at the mouse, which
+  reads wrong for a row action — the menu should land in the same place
+  however you arrived at the button.
+
+All three are pure geometry with no imgui in them, so they are unit-tested
+the way `ui_players.lay_out` (`ui_players.py:122-176`) is — including a
+sweep that asserts a popover never leaves the viewport from any trigger
+position.
+
 ## Testing it
 
 `test_interaction.py` drives synthetic input and reads the result back, so

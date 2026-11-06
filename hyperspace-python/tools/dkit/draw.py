@@ -433,3 +433,20 @@ def icon(dl, name, x, y, size, col, *, width=None) -> bool:
 
 def icon_centred(dl, name, cx, cy, size, col, **kw) -> bool:
     return icon(dl, name, cx - size / 2.0, cy - size / 2.0, size, col, **kw)
+
+
+def flow_text(f, s, faces, variant="regular", size=14.0, tabular=False):
+    """Add a measured text cell to a box.Flow."""
+    return f.text(s, text_w(s, faces, variant, size, tabular), size,
+                  variant, size, tabular)
+
+
+def draw_flow(dl, placed, faces, col):
+    """Render the (cell, rect) pairs a box.Flow.place() returned."""
+    for cell, r in placed:
+        if cell.kind == "icon":
+            icon(dl, cell.payload[0], r.x, r.y, r.w, col)
+        elif cell.kind == "text":
+            s, variant, size, tabular = cell.payload
+            label(dl, r.x, r.y, s, faces, variant, size, col,
+                  baseline_box=r.h, tabular=tabular)

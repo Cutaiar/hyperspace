@@ -34,6 +34,7 @@ sys.path.insert(0, str(HERE))
 
 import draw as D          # noqa: E402
 import gradient as G      # noqa: E402
+import box as B           # noqa: E402
 import interact as I      # noqa: E402
 import menu as M          # noqa: E402
 import tokens as T        # noqa: E402
@@ -246,19 +247,23 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
                 T.rgba("muted-foreground", theme=theme), baseline_box=20)
         D.label(dl, x + 20, y + 38, value, faces, "semibold", 30,
                 T.rgba("foreground", theme=theme), baseline_box=36, tabular=True)
-        dwid = D.text_w(delta, faces, "medium", 12, True) + 26
-        D.box(dl, x + cw - 20 - dwid, y + 14, dwid, 20,
+        # shadcn's badge: gap-1 (4), px-2 (8) but pl-1.5 (6) with a leading
+        # icon, and [&>svg]:size-3 (12). Measured, not guessed - the hand
+        # offsets this replaces put the label a pixel inside the icon.
+        f = B.Flow(gap=4).icon("trending-up" if up else "trending-down", 12)
+        D.flow_text(f, delta, faces, "medium", 12, tabular=True)
+        pill_w = f.width() + 6 + 8
+        pill = B.Rect(x + cw - 20 - pill_w, y + 14, pill_w, 20)
+        D.box(dl, *pill.as_tuple(),
               border_col=T.rgba("border", theme=theme), radius=T.RADII["4xl"])
-        D.icon(dl, "trending-up" if up else "trending-down",
-               x + cw - 20 - dwid + 6, y + 16, 14,
-               T.rgba("foreground", theme=theme))
-        D.label(dl, x + cw - 20 - dwid + 19, y + 14, delta, faces, "medium", 12,
-                T.rgba("foreground", theme=theme), baseline_box=20, tabular=True)
-        hwid = D.label(dl, x + 20, y + ch - 52, head, faces, "medium", 14,
-                       T.rgba("foreground", theme=theme), baseline_box=20)
-        D.icon(dl, "trending-up" if up else "trending-down",
-               x + 26 + hwid, y + ch - 50, 15,
-               T.rgba("foreground", theme=theme))
+        D.draw_flow(dl, f.place(pill.pad(0, 8, 0, 6), "start"), faces,
+                    T.rgba("foreground", theme=theme))
+        g = B.Flow(gap=6)
+        D.flow_text(g, head, faces, "medium", 14)
+        g.icon("trending-up" if up else "trending-down", 15)
+        D.draw_flow(dl, g.place(B.Rect(x + 20, y + ch - 52, cw - 40, 20),
+                                "start"), faces,
+                    T.rgba("foreground", theme=theme))
         D.label(dl, x + 20, y + ch - 32, detail, faces, "regular", 13,
                 T.rgba("muted-foreground", theme=theme), baseline_box=18,
                 max_w=cw - 40)
@@ -338,11 +343,13 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         # row_action submits it every frame regardless - see its docstring for
         # why gating submission on the hover makes it unclickable.
         mkey = f"rowmenu.{ri}"
-        if I.row_action(ui, f"kebab.{ri}", rx + rw - 30, ry + (rh - 26) / 2,
-                        26, "ellipsis-vertical", hovered,
+        kb = B.Rect(rx + rw - 30, ry + (rh - 26) / 2, 26, 26)
+        if I.row_action(ui, f"kebab.{ri}", kb.x, kb.y, kb.w,
+                        "ellipsis-vertical", hovered,
                         pinned=imgui.is_popup_open(mkey), glyph=15).clicked:
             imgui.open_popup(mkey)
-        picked = M.popup(ui, mkey, ROW_MENU)
+        # hangs off the kebab, not off the mouse
+        picked = M.popup(ui, mkey, ROW_MENU, anchor=kb)
         if picked:
             state["said"] = f"{picked} \u00b7 {row['name']}"
         D.fill(dl, rx, ry + rh - 1, rw, 1, T.rgba("border", theme=theme))

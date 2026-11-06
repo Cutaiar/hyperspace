@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 from imgui_bundle import imgui
 
+import box as B
 import draw as D
 import tokens as T
 from ease import mix
@@ -131,15 +132,30 @@ def _row(ui, it, x, y, w, key, alpha):
     return bool(st and st.clicked)
 
 
-def popup(ui, key: str, items, *, min_w: float = MIN_W) -> str | None:
+def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
+          side: str = "bottom", align: str = "end",
+          offset: float = 4.0) -> str | None:
     """Draw the menu `key` if ImGui has it open. Returns the chosen item id.
 
     Open it with `imgui.open_popup(key)` from the trigger — usually
-    `interact.icon_button(..., "ellipsis-vertical")`.
+    `interact.row_action(..., "ellipsis-vertical")`.
+
+    Pass `anchor` (the trigger's `box.Rect`) and the panel hangs off that
+    control, flipping and shifting to stay on screen — Radix's model, which
+    is what shadcn uses. Without it ImGui places the popup at the mouse,
+    which reads wrong for a row action: the menu should land in the same
+    place however you arrived at the button.
     """
     cw, ch = measure(ui, items, min_w)
     w, h = cw + 2 * PAD, ch + 2 * PAD
 
+    if anchor is not None:
+        vp = imgui.get_main_viewport()
+        avail = B.Rect(vp.work_pos.x, vp.work_pos.y,
+                       vp.work_size.x, vp.work_size.y)
+        at, _ = B.place_popover(anchor, w, h, avail, side=side, align=align,
+                                offset=offset)
+        imgui.set_next_window_pos(imgui.ImVec2(at.x, at.y))
     imgui.set_next_window_size(imgui.ImVec2(w, h))
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
     imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
