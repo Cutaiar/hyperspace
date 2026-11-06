@@ -8,10 +8,13 @@ const STATUS = {
   fail:  { label: 'too small', cls: 'bg-red-500/15 text-red-300 border-red-500/35' },
 }
 
-export function CodeCard({ item, medium, preview, onZoom }: {
+export function CodeCard({ item, medium, preview, cell, onZoom }: {
   item: Item
   medium: Medium
+  /** the code's own rendered size — the medium's real pixels on a screen medium */
   preview: number
+  /** the grid cell, which may be wider, so a 200px code gets a readable caption */
+  cell: number
   onZoom: (i: Item) => void
 }) {
   const v = verdict(item, medium)
@@ -19,7 +22,7 @@ export function CodeCard({ item, medium, preview, onZoom }: {
   const dp = v.unit === 'mm' ? 2 : 1
 
   return (
-    <figure className="m-0">
+    <figure className="m-0" style={{ maxWidth: Math.max(preview, cell) }}>
       <button
         onClick={() => onZoom(item)}
         // On a screen medium this renders at the medium's real pixel size, so
@@ -32,7 +35,7 @@ export function CodeCard({ item, medium, preview, onZoom }: {
              className="block h-full w-full" />
       </button>
 
-      <figcaption className="mt-3" style={{ width: preview }}>
+      <figcaption className="mt-3">
         <div className="flex items-start justify-between gap-2">
           <b className="text-[12.5px] font-medium text-foreground">{item.title}</b>
           <Badge variant="outline" className={`shrink-0 text-[10px] ${s.cls}`}>{s.label}</Badge>

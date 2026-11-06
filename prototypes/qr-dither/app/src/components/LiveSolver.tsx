@@ -6,6 +6,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useMirror } from '@/lib/useMirror'
 import { QArtSolver, rasterise, maxSpan } from '@/lib/solver.js'
 import { drawStyled, DOT_TYPES, EYE_TYPES } from '@/lib/render.js'
 
@@ -37,15 +38,14 @@ const MODENOTE: Record<string, string> = {
 const RATES = [1, 2, 3, 4, 6, 8, 12, 15, 20, 24, 30, 60, 0]   // 0 == uncapped
 const SENS = 0.006, FRICTION = 0.9
 
-type Engine = {
-  ang: Record<string, number>
+type Cfg = {
   rate: Record<string, number>
   opt: { stroke: number; wDist: number; zDist: number; margin: number }
   sty: Record<string, unknown>
   mode: '4d' | '3d'
-  paused: boolean; ghost: boolean
-  dirty: boolean; pending: boolean
-  vx: number; vy: number; down: boolean; px: number; py: number
+  paused: boolean
+  ghost: boolean
+  rateIdx: number
 }
 
 export function LiveSolver() {
@@ -57,35 +57,28 @@ export function LiveSolver() {
   const [ready, setReady] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [texture, setTexture] = useState('gothic')
-  const [mode, setMode] = useState<'4d' | '3d'>('4d')
-  const [paused, setPaused] = useState(false)
-  const [ghost, setGhost] = useState(false)
-  const [rateIdx, setRateIdx] = useState(RATES.indexOf(12))
-  const [rate, setRate] = useState<Record<string, number>>(
-    () => ({ ...Object.fromEntries(PLANES.map(([k]) => [k, 0])), XW: 0.35 }))
-  const [opt, setOpt] = useState({ stroke: 3, wDist: 7.0, zDist: 3.0, margin: -0.04 })
-  const [sty, setSty] = useState<Record<string, unknown>>({
-    dotType: 'square', eyeFrame: 'square', eyeCore: 'square', styleEyes: true,
-    fg: '#000000', fg2: '#ff2b2b', bg: '#ffffff', gradient: false, px: 10,
-  })
 
-  // The loop reads only this. React state is the source of truth for the
-  // controls and is copied in below, so a slider drag re-renders but a frame
-  // never does -- the readouts are written straight to the DOM.
-  const eng = useRef<Engine>({
-    ang: Object.fromEntries(PLANES.map(([k]) => [k, 0])),
-    rate: {}, opt, sty, mode: '4d', paused: false, ghost: false,
+  // What the loop owns and React never touches: the pose and the throw.
+  const eng = useRef({
+    ang: Object.fromEntries(PLANES.map(([k]) => [k, 0])) as Record<string, number>,
     dirty: true, pending: true, vx: 0, vy: 0, down: false, px: 0, py: 0,
   })
+
+  // Everything a control can change lives in ONE mirrored object, so the loop
+  // sees a new field the moment it exists. See useMirror for why that matters.
+  const { value: cfg, ref: cfgRef, patch } = useMirror<Cfg>(
+    {
+      rate: { ...Object.fromEntries(PLANES.map(([k]) => [k, 0])), XW: 0.35 },
+      opt: { stroke: 3, wDist: 7.0, zDist: 3.0, margin: -0.04 },
+      sty: { dotType: 'square', eyeFrame: 'square', eyeCore: 'square', styleEyes: true,
+             fg: '#000000', fg2: '#ff2b2b', bg: '#ffffff', gradient: false, px: 10 },
+      mode: '4d', paused: false, ghost: false, rateIdx: RATES.indexOf(12),
+    },
+    () => { eng.current.dirty = true },        // any change at all repaints
+  )
+
   const solvers = useRef<Record<string, InstanceType<typeof QArtSolver>>>({})
   const active = useRef<string>('gothic')
-
-  useEffect(() => {
-    const e = eng.current
-    e.rate = rate; e.opt = opt; e.sty = sty
-    e.mode = mode; e.paused = paused; e.ghost = ghost
-    e.dirty = true
-  }, [rate, opt, sty, mode, paused, ghost])
 
   // load a texture blob on demand; only gothic is committed
   useEffect(() => {
@@ -107,9 +100,11 @@ export function LiveSolver() {
     return () => { alive = false }
   }, [texture])
 
-  // rateIdx is read inside the loop without restarting it
-  const rateIdxRef = useRef(rateIdx)
-  useEffect(() => { rateIdxRef.current = rateIdx; eng.current.dirty = true }, [rateIdx])
+  function applyDrag(dx: number, dy: number) {
+    const a = eng.current.ang
+    if (cfgRef.current.mode === '4d') { a.XW += dx; a.YW += dy }
+    else { a.XZ += dx; a.YZ += dy }            // trackball: about Y, about X
+  }
 
   // the engine: one effect for the lifetime of the component
   useEffect(() => {
@@ -131,7 +126,7 @@ export function LiveSolver() {
     const schedule = () => {
       clearTimeout(timer)
       if (stop) return
-      const hz = RATES[rateIdxRef.current]
+      const hz = RATES[cfgRef.current.rateIdx]
       if (!hz) { raf = requestAnimationFrame(step); return }
       // wait for the next deadline rather than a flat interval, so time spent
       // solving does not get added on top of the requested period
@@ -140,12 +135,12 @@ export function LiveSolver() {
     }
 
     const step = (t: number) => {
-      const e = eng.current
+      const e = eng.current, k = cfgRef.current
       // angles advance by real elapsed time, so turn speed is independent of
       // update rate: a lower rate samples the motion, it does not slow it
       const dt = Math.min((t - last) / 1000, 0.25); last = t; lastStep = t
-      if (!e.paused)
-        for (const [k] of PLANES) if (e.rate[k]) { e.ang[k] += e.rate[k] * dt; e.pending = true }
+      if (!k.paused)
+        for (const [p] of PLANES) if (k.rate[p]) { e.ang[p] += k.rate[p] * dt; e.pending = true }
       if (!e.down && (Math.abs(e.vx) > 1e-5 || Math.abs(e.vy) > 1e-5)) {
         applyDrag(e.vx, e.vy); e.vx *= FRICTION; e.vy *= FRICTION; e.pending = true
       }
@@ -153,19 +148,23 @@ export function LiveSolver() {
         drawnAt.push(t)
         while (drawnAt.length && t - drawnAt[0] > 1000) drawnAt.shift()
         const t0 = performance.now()
-        const want = rasterise(tctx, n, PLANES.map(([k, p]) => [p, e.ang[k]]),
-          e.opt.stroke, e.opt.margin,
-          { wDist: e.opt.wDist, zDist: e.opt.zDist, span: maxSpan(e.opt.wDist, e.opt.zDist) })
+        const want = rasterise(tctx, n, PLANES.map(([p, pl]) => [pl, e.ang[p]]),
+          k.opt.stroke, k.opt.margin,
+          { wDist: k.opt.wDist, zDist: k.opt.zDist, span: maxSpan(k.opt.wDist, k.opt.zDist) })
         const mods = solvers.current[active.current].solve(want)
         const ms = performance.now() - t0
-        drawStyled(ctx, mods, n, quiet, e.sty)
-        if (e.ghost) {                       // the source drawing, under the modules
-          const px = e.sty.px as number
-          ctx.globalCompositeOperation = 'destination-over'
-          ctx.fillStyle = 'rgba(255,120,120,.40)'
+        drawStyled(ctx, mods, n, quiet, k.sty)
+        if (k.ghost) {
+          // The source drawing, tinted over the code. This used to ask for
+          // destination-over -- "under the modules" -- which can never show:
+          // drawStyled fills the whole canvas with opaque paper first, so
+          // anything composited behind it is hidden. The button was dead from
+          // the day it was written. A translucent pass on top is the version
+          // that can actually be seen, and the modules still read through it.
+          const px = k.sty.px as number
+          ctx.fillStyle = 'rgba(255,64,64,.34)'
           for (let y = 0; y < n; y++) for (let x = 0; x < n; x++)
             if (want[y * n + x]) ctx.fillRect((x + quiet) * px, (y + quiet) * px, px, px)
-          ctx.globalCompositeOperation = 'source-over'
         }
         let hit = 0, tot = 0
         for (let i = 0; i < n * n; i++) if (want[i]) { tot++; if (mods[i]) hit++ }
@@ -173,7 +172,7 @@ export function LiveSolver() {
           stats.current.textContent =
             `${ms.toFixed(2)} ms · ${((tot ? hit / tot : 1) * 100).toFixed(0)}% of the drawing held · ${drawnAt.length} /s`
         if (angles.current)
-          angles.current.textContent = PLANES.map(([k]) => `${k} ${deg(e.ang[k]).toFixed(0)}°`).join('   ')
+          angles.current.textContent = PLANES.map(([p]) => `${p} ${deg(e.ang[p]).toFixed(0)}°`).join('   ')
         e.dirty = false; e.pending = false
       }
       schedule()
@@ -182,23 +181,22 @@ export function LiveSolver() {
     return () => { stop = true; clearTimeout(timer); cancelAnimationFrame(raf) }
   }, [ready])
 
-  function applyDrag(dx: number, dy: number) {
+  const reset = () => {
     const e = eng.current
-    if (e.mode === '4d') { e.ang.XW += dx; e.ang.YW += dy }
-    else { e.ang.XZ += dx; e.ang.YZ += dy }      // trackball: about Y, about X
+    for (const [p] of PLANES) e.ang[p] = 0
+    e.vx = e.vy = 0; e.dirty = true
   }
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       const k = ev.key.toLowerCase()
-      if (k === 'g') setGhost(g => !g)
-      if (k === 'r') { for (const [p] of PLANES) eng.current.ang[p] = 0
-                       eng.current.vx = eng.current.vy = 0; eng.current.dirty = true }
-      if (k === ' ') { ev.preventDefault(); setPaused(p => !p) }
+      if (k === 'g') patch(c => ({ ghost: !c.ghost }))
+      if (k === 'r') reset()
+      if (k === ' ') { ev.preventDefault(); patch(c => ({ paused: !c.paused })) }
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [])
+  }, [patch])
 
   const onDown = (ev: React.PointerEvent) => {
     const e = eng.current
@@ -215,116 +213,121 @@ export function LiveSolver() {
   const onUp = () => { eng.current.down = false }
 
   const num = (v: number, d = 2) => v.toFixed(d)
+  const setOpt = (p: Partial<Cfg['opt']>) => patch(c => ({ opt: { ...c.opt, ...p } }))
+  const setSty = (p: Record<string, unknown>) => patch(c => ({ sty: { ...c.sty, ...p } }))
 
   return (
-    <div className="flex flex-wrap items-start gap-8 py-8">
+    <div className="flex flex-wrap items-start gap-10 pb-24">
       <div className="flex flex-col items-center gap-3">
         <div ref={stage} onPointerDown={onDown} onPointerMove={onMove}
              onPointerUp={onUp} onPointerCancel={onUp}
              className="cursor-grab touch-none rounded-lg bg-white leading-none active:cursor-grabbing">
-          <canvas ref={canvas} className="block size-[min(86vw,460px)] rounded-lg" />
+          <canvas ref={canvas} className="block size-[min(86vw,520px)] rounded-lg" />
         </div>
         <div ref={stats} className="font-mono text-[11px] tabular-nums text-muted-foreground" />
         <div ref={angles} className="font-mono text-[10px] tabular-nums text-muted-foreground/60" />
         <div className="flex gap-2">
           <Button size="sm" variant="outline" className="text-[11px]"
-                  onClick={() => setPaused(p => !p)}>{paused ? 'play' : 'pause'}</Button>
-          <Button size="sm" variant={ghost ? 'default' : 'outline'} className="text-[11px]"
-                  onClick={() => setGhost(g => !g)}>ghost</Button>
-          <Button size="sm" variant="outline" className="text-[11px]"
-                  onClick={() => { for (const [p] of PLANES) eng.current.ang[p] = 0
-                                   eng.current.vx = eng.current.vy = 0; eng.current.dirty = true }}>
-            reset
+                  onClick={() => patch(c => ({ paused: !c.paused }))}>
+            {cfg.paused ? 'play' : 'pause'}
           </Button>
+          <Button size="sm" variant={cfg.ghost ? 'default' : 'outline'} className="text-[11px]"
+                  onClick={() => patch(c => ({ ghost: !c.ghost }))}>ghost</Button>
+          <Button size="sm" variant="outline" className="text-[11px]" onClick={reset}>reset</Button>
         </div>
       </div>
 
-      <div className="w-[300px] shrink-0 space-y-6">
-        <Field label="grab">
-          <ToggleGroup type="single" value={mode} variant="outline" size="sm"
-                       onValueChange={v => v && setMode(v as '4d' | '3d')}>
-            <ToggleGroupItem value="4d" className="text-[11px]">fold (4D)</ToggleGroupItem>
-            <ToggleGroupItem value="3d" className="text-[11px]">turn (3D)</ToggleGroupItem>
-          </ToggleGroup>
-          <Note>{MODENOTE[mode]}</Note>
-        </Field>
+      <div className="grid min-w-[280px] flex-1 gap-x-10 gap-y-7 self-start
+                      [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+        <div className="space-y-6">
+          <Field label="grab">
+            <ToggleGroup type="single" value={cfg.mode} variant="outline" size="sm"
+                         onValueChange={v => v && patch({ mode: v as '4d' | '3d' })}>
+              <ToggleGroupItem value="4d" className="text-[11px]">fold (4D)</ToggleGroupItem>
+              <ToggleGroupItem value="3d" className="text-[11px]">turn (3D)</ToggleGroupItem>
+            </ToggleGroup>
+            <Note>{MODENOTE[cfg.mode]}</Note>
+          </Field>
 
-        <Field label="texture">
-          <Select value={texture} onValueChange={setTexture}>
-            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.keys(BLOB).map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Note>
-            {err === texture
-              ? <span className="text-primary">Not built. Run gen/export_js.py --order {texture} --out {BLOB[texture]}</span>
-              : TEXNOTE[texture]}
-          </Note>
-        </Field>
+          <Field label="texture">
+            <Select value={texture} onValueChange={setTexture}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.keys(BLOB).map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Note>
+              {err === texture
+                ? <span className="text-primary">Not built. Run gen/export_js.py --order {texture} --out {BLOB[texture]}</span>
+                : TEXNOTE[texture]}
+            </Note>
+          </Field>
 
-        <Field label="rotation (rad/s)">
-          {PLANES.map(([k]) => (
-            <Row key={k} name={k} value={num(rate[k])}>
-              <Slider value={[rate[k]]} min={-1.5} max={1.5} step={0.01}
-                      onValueChange={v => setRate(r => ({ ...r, [k]: v[0] }))} />
-            </Row>
-          ))}
-        </Field>
-
-        <Field label="drawing">
-          <Row name="edge" value={`${opt.stroke} mod`}>
-            <Slider value={[opt.stroke]} min={1} max={6} step={1}
-                    onValueChange={v => setOpt(o => ({ ...o, stroke: v[0] }))} />
-          </Row>
-          <Row name="w-dist" value={num(opt.wDist, 1)}>
-            <Slider value={[opt.wDist]} min={2} max={14} step={0.1}
-                    onValueChange={v => setOpt(o => ({ ...o, wDist: v[0] }))} />
-          </Row>
-          <Row name="z-dist" value={num(opt.zDist, 1)}>
-            <Slider value={[opt.zDist]} min={2} max={14} step={0.1}
-                    onValueChange={v => setOpt(o => ({ ...o, zDist: v[0] }))} />
-          </Row>
-          <Row name="margin" value={num(opt.margin)}>
-            <Slider value={[opt.margin]} min={-0.1} max={0.3} step={0.01}
-                    onValueChange={v => setOpt(o => ({ ...o, margin: v[0] }))} />
-          </Row>
-          <Row name="update" value={RATES[rateIdx] ? `${RATES[rateIdx]} /s` : 'every frame'}>
-            <Slider value={[rateIdx]} min={0} max={RATES.length - 1} step={1}
-                    onValueChange={v => setRateIdx(v[0])} />
-          </Row>
-        </Field>
-
-        <Field label="style">
-          {([['dots', 'dotType', DOT_TYPES], ['eye', 'eyeFrame', EYE_TYPES],
-             ['core', 'eyeCore', EYE_TYPES]] as const).map(([lbl, key, vals]) => (
-            <Row key={key} name={lbl}>
-              <Select value={sty[key] as string} onValueChange={v => setSty(s => ({ ...s, [key]: v }))}>
-                <SelectTrigger className="h-7 w-full text-[10.5px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(vals as string[]).map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </Row>
-          ))}
-          <div className="flex items-center gap-3 pt-1">
-            {([['ink', 'fg'], ['ink 2', 'fg2'], ['paper', 'bg']] as const).map(([lbl, key]) => (
-              <label key={key} className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-                <input type="color" value={sty[key] as string}
-                       onChange={ev => setSty(s => ({ ...s, [key]: ev.target.value }))}
-                       className="size-6 cursor-pointer rounded border border-border bg-transparent p-0.5" />
-                {lbl}
-              </label>
+          <Field label="rotation (rad/s)">
+            {PLANES.map(([p]) => (
+              <Row key={p} name={p} value={num(cfg.rate[p])}>
+                <Slider value={[cfg.rate[p]]} min={-1.5} max={1.5} step={0.01}
+                        onValueChange={v => patch(c => ({ rate: { ...c.rate, [p]: v[0] } }))} />
+              </Row>
             ))}
-            <Button size="sm" variant={sty.gradient ? 'default' : 'outline'}
-                    className="ml-auto h-6 px-2 text-[10px]"
-                    onClick={() => setSty(s => ({ ...s, gradient: !s.gradient }))}>grad</Button>
-          </div>
-          <Row name="detail" value={`${sty.px} px`}>
-            <Slider value={[sty.px as number]} min={4} max={16} step={1}
-                    onValueChange={v => setSty(s => ({ ...s, px: v[0] }))} />
-          </Row>
-        </Field>
+          </Field>
+        </div>
+
+        <div className="space-y-6">
+          <Field label="drawing">
+            <Row name="edge" value={`${cfg.opt.stroke} mod`}>
+              <Slider value={[cfg.opt.stroke]} min={1} max={6} step={1}
+                      onValueChange={v => setOpt({ stroke: v[0] })} />
+            </Row>
+            <Row name="w-dist" value={num(cfg.opt.wDist, 1)}>
+              <Slider value={[cfg.opt.wDist]} min={2} max={14} step={0.1}
+                      onValueChange={v => setOpt({ wDist: v[0] })} />
+            </Row>
+            <Row name="z-dist" value={num(cfg.opt.zDist, 1)}>
+              <Slider value={[cfg.opt.zDist]} min={2} max={14} step={0.1}
+                      onValueChange={v => setOpt({ zDist: v[0] })} />
+            </Row>
+            <Row name="margin" value={num(cfg.opt.margin)}>
+              <Slider value={[cfg.opt.margin]} min={-0.1} max={0.3} step={0.01}
+                      onValueChange={v => setOpt({ margin: v[0] })} />
+            </Row>
+            <Row name="update" value={RATES[cfg.rateIdx] ? `${RATES[cfg.rateIdx]} /s` : 'every frame'}>
+              <Slider value={[cfg.rateIdx]} min={0} max={RATES.length - 1} step={1}
+                      onValueChange={v => patch({ rateIdx: v[0] })} />
+            </Row>
+          </Field>
+
+          <Field label="style">
+            {([['dots', 'dotType', DOT_TYPES], ['eye', 'eyeFrame', EYE_TYPES],
+               ['core', 'eyeCore', EYE_TYPES]] as const).map(([lbl, key, vals]) => (
+              <Row key={key} name={lbl}>
+                <Select value={cfg.sty[key] as string} onValueChange={v => setSty({ [key]: v })}>
+                  <SelectTrigger className="h-7 w-full text-[10.5px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(vals as readonly string[]).map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Row>
+            ))}
+            <div className="flex items-center gap-3 pt-1">
+              {([['ink', 'fg'], ['ink 2', 'fg2'], ['paper', 'bg']] as const).map(([lbl, key]) => (
+                <label key={key} className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+                  <input type="color" value={cfg.sty[key] as string}
+                         onChange={ev => setSty({ [key]: ev.target.value })}
+                         className="size-6 cursor-pointer rounded border border-border bg-transparent p-0.5" />
+                  {lbl}
+                </label>
+              ))}
+              <Button size="sm" variant={cfg.sty.gradient ? 'default' : 'outline'}
+                      className="ml-auto h-6 px-2 text-[10px]"
+                      onClick={() => setSty({ gradient: !cfg.sty.gradient })}>grad</Button>
+            </div>
+            <Row name="detail" value={`${cfg.sty.px} px`}>
+              <Slider value={[cfg.sty.px as number]} min={4} max={16} step={1}
+                      onValueChange={v => setSty({ px: v[0] })} />
+            </Row>
+          </Field>
+        </div>
       </div>
     </div>
   )

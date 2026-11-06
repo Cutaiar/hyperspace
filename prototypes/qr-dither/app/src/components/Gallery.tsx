@@ -11,6 +11,7 @@ import {
   Select, SelectContent, SelectGroup, SelectItem,
   SelectLabel, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { CodeCard } from '@/components/CodeCard'
 import { across, type Item, type Manifest } from '@/lib/manifest'
@@ -20,7 +21,7 @@ const SECTIONS = [
   ['shapes', 'The shapes',
    'One still per subject and pose. Only edges that quantise to 0, 45 or 90 degrees survive sampling on a square grid, so these orientations are chosen, not arbitrary.'],
   ['styles', 'The styles',
-   'One solved matrix — the 16-cell turned 45° — through every dot and eye treatment. Styling never changes what the code says, only whether a camera can read it, and the measured floors below show it doing exactly that.'],
+   'One solved matrix — the 16-cell turned 45° — through every dot and eye treatment. Styling never changes what the code says, only whether a camera can read it, and the measured floors show it doing exactly that.'],
   ['palettes', 'Colour and plate',
    'The same trick in the page’s own palette. Contrast in the luminance channel is what a reader binarises on, which is why red keeps half the glare headroom of ink.'],
 ] as const
@@ -36,23 +37,25 @@ export function Gallery() {
     fetch('/data/gallery/manifest.json').then(r => r.json()).then(setMan)
   }, [])
 
-  // the selected medium, with the thresholds the user can overrule
   const medium: Medium = useMemo(() => {
     const base = MEDIA.find(m => m.id === mediumId) ?? MEDIA[0]
     return base.unit === 'px' ? { ...base, safety }
          : base.distanceM ? base : { ...base, floorMm }
   }, [mediumId, safety, floorMm])
 
-  const preview = medium.unit === 'px' ? medium.size : 260
+  // On a screen medium a card is rendered at that medium's real pixel size, so
+  // it stays the honest test. The grid cell can be wider than the code, so a
+  // 200px code does not force a 200px-wide caption.
+  const preview = medium.unit === 'px' ? medium.size : 230
+  const cell = Math.max(preview, 215)
   const sheet = perSheet(medium)
 
-  // the control: a boring QR for the same destination, judged identically
   const control = useMemo<Item | null>(() => {
     const b = man?.baselines.find(x => x.ecc === 'M')
     if (!b) return null
     return {
       id: 'control', file: 'current-plain.svg', title: 'Plain QR (control)',
-      note: `ECC ${b.ecc}, version ${b.version} — the boring code for the same URL. Everything else is judged against this.`,
+      note: `ECC ${b.ecc}, version ${b.version} — the boring code for the same URL.`,
       section: 'shapes', modules: b.modules, bytes: 0, decodes: true, dark: false,
       pose: '—', stroke: 0, version: b.version, dot: 'square',
       min_ppm: b.min_ppm, blur: b.blur, flash: b.flash, matrix: '',
@@ -61,138 +64,143 @@ export function Gallery() {
 
   const tally = useMemo(() => {
     if (!man) return null
-    const all = [...man.items]
-    const ok = all.filter(i => verdict(i, medium).status === 'ok').length
-    return { ok, total: all.length }
+    return { ok: man.items.filter(i => verdict(i, medium).status === 'ok').length,
+             total: man.items.length }
   }, [man, medium])
 
-  if (!man) return <div className="p-10 text-sm text-muted-foreground">loading…</div>
+  if (!man) return <div className="py-10 text-sm text-muted-foreground">loading…</div>
 
   return (
-    <div className="pb-32">
-      <p className="mt-0 max-w-[74ch] text-[12px] leading-[1.8] text-muted-foreground">
-        Four-dimensional solids drawn <b className="font-medium text-foreground">in the data</b> of
-        a QR code, not overlaid on one. Every file here was rasterised and decoded before it was
-        written, so the question is never whether it is a valid code — it is whether the thing you
-        print it on leaves a camera enough to work with. Pick a destination and every code gets a
-        verdict against it.
-      </p>
+    <div
+      className="grid gap-x-12 gap-y-10 pb-24 lg:grid-cols-[var(--side)_minmax(0,1fr)]"
+      style={{ '--side': `${Math.max(300, preview + 24)}px` } as React.CSSProperties}
+    >
+      {/* ---- everything that steers the page, in the column it needs anyway ---- */}
+      <aside className="space-y-5 lg:sticky lg:top-6 lg:self-start">
+        <p className="m-0 text-[11.5px] leading-[1.75] text-muted-foreground">
+          Four-dimensional solids drawn <b className="font-medium text-foreground">in the data</b> of
+          a QR code, not overlaid on one. Every file was rasterised and decoded before it was
+          written, so the question is never whether it is a valid code — it is whether what you
+          print it on leaves a camera enough to work with.
+        </p>
 
-      {/* ---- the bar that replaced the old tiles page ---- */}
-      <div className="mt-7 flex flex-wrap items-center gap-4 border-y border-border py-3">
-        <Select value={mediumId} onValueChange={setMediumId}>
-          <SelectTrigger className="w-[260px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {['Screen', 'Print', 'Projected'].map(g => (
-              <SelectGroup key={g}>
-                <SelectLabel>{g}</SelectLabel>
-                {MEDIA.filter(m => m.group === g).map(m => (
-                  <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Badge variant={medium.measured ? 'outline' : 'secondary'} className="text-[10px]">
-          {medium.measured ? 'floor measured × safety' : 'floor is a rule of thumb'}
-        </Badge>
-
-        {tally && (
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {tally.ok}/{tally.total} read here
-          </span>
-        )}
-        {sheet && (
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {sheet.cols}×{sheet.rows} = <b className="text-foreground">{sheet.total}</b> per Letter sheet
-          </span>
-        )}
-
-        <span className="flex-1" />
-
-        <Drawer>
-          <DrawerTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 text-[11px]">
-              <SlidersHorizontal className="size-3.5" /> Thresholds
-            </Button>
-          </DrawerTrigger>
-          <DrawerContent>
-            <div className="mx-auto w-full max-w-md">
-              <DrawerHeader>
-                <DrawerTitle className="text-sm">Thresholds</DrawerTitle>
-                <DrawerDescription className="text-[11px] leading-relaxed">
-                  These are judgements, not measurements, so they are yours to move.
-                  gen/robust.py measured each code’s floor against a patient decoder on a clean
-                  image; a phone in a dim room is neither.
-                </DrawerDescription>
-              </DrawerHeader>
-              <div className="space-y-7 px-4 pb-2">
-                <div>
-                  <div className="mb-2 flex justify-between font-mono text-[11px]">
-                    <span className="text-muted-foreground">screen safety factor</span>
-                    <span>×{safety.toFixed(1)}</span>
-                  </div>
-                  <Slider value={[safety]} min={1} max={6} step={0.5}
-                          onValueChange={v => setSafety(v[0])} />
-                  <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                    Multiplies the measured min px/module. ×1 trusts the lab number outright.
-                  </p>
-                </div>
-                <div>
-                  <div className="mb-2 flex justify-between font-mono text-[11px]">
-                    <span className="text-muted-foreground">print floor</span>
-                    <span>{floorMm.toFixed(2)} mm/module</span>
-                  </div>
-                  <Slider value={[floorMm]} min={0.3} max={1.5} step={0.05}
-                          onValueChange={v => setFloorMm(v[0])} />
-                  <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-                    0.6 mm is the usual comfortable minimum for phone scanning. Etching wants more
-                    — how much more is a question for a test plate, not for this slider.
-                  </p>
-                </div>
-              </div>
-              <DrawerFooter>
-                <DrawerClose asChild><Button variant="outline" size="sm">Done</Button></DrawerClose>
-              </DrawerFooter>
-            </div>
-          </DrawerContent>
-        </Drawer>
-      </div>
-
-      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{medium.blurb}</p>
-
-      {/* ---- the control, pinned ---- */}
-      {control && (
-        <section className="mt-9">
-          <h2 className="m-0 text-[11px] font-medium uppercase tracking-[0.24em]">The control</h2>
-          <p className="mb-5 mt-1 max-w-[68ch] text-[11.5px] leading-relaxed text-muted-foreground">
-            Judged by the same rule as everything below. If this fails too, the medium is the
-            problem and no amount of art will fix it.
-          </p>
-          <CodeCard item={control} medium={medium} preview={preview} onZoom={setZoom} />
-        </section>
-      )}
-
-      {SECTIONS.map(([key, title, note]) => {
-        const mine = man.items.filter(i => i.section === key)
-        if (!mine.length) return null
-        return (
-          <section key={key} className="mt-12">
-            <h2 className="m-0 text-[11px] font-medium uppercase tracking-[0.24em]">{title}</h2>
-            <p className="mb-6 mt-1 max-w-[68ch] text-[11.5px] leading-relaxed text-muted-foreground">
-              {note}
-            </p>
-            <div className="flex flex-wrap gap-x-6 gap-y-9">
-              {mine.map(i => (
-                <CodeCard key={i.id} item={i} medium={medium} preview={preview} onZoom={setZoom} />
+        <div className="space-y-3">
+          <Select value={mediumId} onValueChange={setMediumId}>
+            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {['Screen', 'Print', 'Projected'].map(g => (
+                <SelectGroup key={g}>
+                  <SelectLabel>{g}</SelectLabel>
+                  {MEDIA.filter(m => m.group === g).map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
-            </div>
-          </section>
-        )
-      })}
+            </SelectContent>
+          </Select>
 
-      {/* ---- scan it for real ---- */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Badge variant={medium.measured ? 'outline' : 'secondary'} className="text-[10px]">
+              {medium.measured ? 'floor measured × safety' : 'floor is a rule of thumb'}
+            </Badge>
+            <Drawer>
+              <DrawerTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 gap-1.5 px-2 text-[10px]">
+                  <SlidersHorizontal className="size-3" /> adjust
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent>
+                <div className="mx-auto w-full max-w-md">
+                  <DrawerHeader>
+                    <DrawerTitle className="text-sm">Thresholds</DrawerTitle>
+                    <DrawerDescription className="text-[11px] leading-relaxed">
+                      These are judgements, not measurements, so they are yours to move.
+                      gen/robust.py measured each code’s floor against a patient decoder on a
+                      clean image; a phone in a dim room is neither.
+                    </DrawerDescription>
+                  </DrawerHeader>
+                  <div className="space-y-7 px-4 pb-2">
+                    <div>
+                      <div className="mb-2 flex justify-between font-mono text-[11px]">
+                        <span className="text-muted-foreground">screen safety factor</span>
+                        <span>×{safety.toFixed(1)}</span>
+                      </div>
+                      <Slider value={[safety]} min={1} max={6} step={0.5}
+                              onValueChange={v => setSafety(v[0])} />
+                      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                        Multiplies the measured min px/module. ×1 trusts the lab number outright.
+                      </p>
+                    </div>
+                    <div>
+                      <div className="mb-2 flex justify-between font-mono text-[11px]">
+                        <span className="text-muted-foreground">print floor</span>
+                        <span>{floorMm.toFixed(2)} mm/module</span>
+                      </div>
+                      <Slider value={[floorMm]} min={0.3} max={1.5} step={0.05}
+                              onValueChange={v => setFloorMm(v[0])} />
+                      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                        0.6 mm is the usual comfortable minimum for phone scanning. Etching wants
+                        more — how much more is a question for a test plate, not this slider.
+                      </p>
+                    </div>
+                  </div>
+                  <DrawerFooter>
+                    <DrawerClose asChild><Button variant="outline" size="sm">Done</Button></DrawerClose>
+                  </DrawerFooter>
+                </div>
+              </DrawerContent>
+            </Drawer>
+          </div>
+
+          <div className="space-y-1 font-mono text-[11px] text-muted-foreground">
+            {tally && <div><b className="text-foreground">{tally.ok}</b>/{tally.total} read here</div>}
+            {sheet && (
+              <div>{sheet.cols}×{sheet.rows} = <b className="text-foreground">{sheet.total}</b> per Letter sheet</div>
+            )}
+          </div>
+
+          <p className="text-[10.5px] leading-relaxed text-muted-foreground/80">{medium.blurb}</p>
+        </div>
+
+        <Separator />
+
+        {control && (
+          <div>
+            <h2 className="m-0 mb-1 text-[10px] font-medium uppercase tracking-[0.22em]">
+              The control
+            </h2>
+            <p className="mb-3 text-[10.5px] leading-relaxed text-muted-foreground">
+              Judged by the same rule as everything else. If this fails too, the medium is the
+              problem and no amount of art will fix it.
+            </p>
+            <CodeCard item={control} medium={medium} preview={preview} cell={cell} onZoom={setZoom} />
+          </div>
+        )}
+      </aside>
+
+      {/* ---- the codes, filling whatever width is left ---- */}
+      <main className="min-w-0 space-y-12">
+        {SECTIONS.map(([key, title, note]) => {
+          const mine = man.items.filter(i => i.section === key)
+          if (!mine.length) return null
+          return (
+            <section key={key}>
+              <h2 className="m-0 text-[11px] font-medium uppercase tracking-[0.24em]">{title}</h2>
+              <p className="mb-6 mt-1 max-w-[80ch] text-[11.5px] leading-relaxed text-muted-foreground">
+                {note}
+              </p>
+              <div className="grid gap-x-6 gap-y-9"
+                   style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${cell}px, 1fr))` }}>
+                {mine.map(i => (
+                  <CodeCard key={i.id} item={i} medium={medium}
+                            preview={preview} cell={cell} onZoom={setZoom} />
+                ))}
+              </div>
+            </section>
+          )
+        })}
+      </main>
+
       <Drawer open={!!zoom} onOpenChange={o => !o && setZoom(null)}>
         <DrawerContent>
           {zoom && (
