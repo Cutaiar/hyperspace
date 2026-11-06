@@ -260,12 +260,20 @@ def where(panel) -> str | None:
     return (panel.__dict__.get(ui_graph.STATE) or {}).get("pane_under")
 
 
+def _working() -> bool:
+    """Is the person working the panel, as far as a frame's start can say (`undo.by_hand`)?
+    A button down or just released, or an item live. Not a text field: one stays live with
+    nobody at it for as long as the cursor sits there, so a text field's writers report
+    their own write, `undo.by_hand(True)` where they write (row 757)."""
+    return (any(imgui.is_mouse_down(b) or imgui.is_mouse_released(b) for b in (0, 1))
+            or (imgui.is_any_item_active() and not imgui.get_io().want_text_input))
+
+
 def left(panel) -> None:
     """A frame's draw begins: nothing is under the mouse until the draw says so, so
     a panel hidden or collapsed says nothing is (`where`, `Panel.in_meta_section`)."""
     from . import ui_graph  # (late: ui_graph imports this module)
-    undo.by_hand(imgui.is_any_item_active()
-                 or any(imgui.is_mouse_down(b) or imgui.is_mouse_released(b) for b in (0, 1)))
+    undo.by_hand(_working())
     panel._param_under = None
     st = panel.__dict__.get(ui_graph.STATE)
     if st is not None:
