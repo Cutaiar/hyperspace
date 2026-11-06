@@ -1759,6 +1759,7 @@ def macros(panel, router: Router) -> None:
         imgui.set_next_item_width(MACRO_NAME_W)
         changed, text = imgui.input_text_with_hint("##label", "label", m.label if m else "")
         if changed:
+            undo.by_hand(True)          # the field's own report: row 757
             _macro(table, p.id).label = text
         imgui.same_line()
         # plan 49 stage 3: in a narrow pane the chips go on a row of their own

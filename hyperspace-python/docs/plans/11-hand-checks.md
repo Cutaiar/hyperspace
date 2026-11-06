@@ -8348,6 +8348,16 @@ the graph it then refuses in words until a change is made there (row 753). Say w
 question at any load, and both act. Fail: a row landing or going before you answer, or a
 meta row not coming back.
 
+## CT. A cursor in a text field is no hand (row 757)
+Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui and the real stacks; the real panel by `Driver`.
+**582. A text field, the APC, and ⌘Z.** (the rig, with the APC40)
+1. On deck 1, move Brightness, then click into a find field (ROUTING's filter or the media search). Leave the cursor there and take your hand off the mouse. Ride `master.gain` on the APC. Click into the analyzer, ⌘Z. *Pass:* refused in words; the ride stands.
+2. Change something small on deck 1 and repeat the ride with the cursor in the field, but click on the canvas, not the analyzer, ⌘Z. *Pass:* that small change goes back, no refusal.
+3. Mouse in the analyzer, with the deck in focus: Cmd+click a threshold, leave the mouse alone, type a value, Enter. ⌘Z there. *Pass:* it goes back: the typed value was your own change.
+4. On the canvas, select a group, type a new name in the side pane, Enter, ⌘Z. *Pass:* the old name returns.
+5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
+*Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
+
 ## What no test covers
 
 Only a person can settle these:
