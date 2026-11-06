@@ -55,8 +55,8 @@ one per `Deck`, and a pad reads the `Deck` it drives); the gamepad entry's
 `[gamepad]` table) are what a loadable patch that names none gets. They are set on the
 GRAPH page's pad node.
 **Swap dials** (`pad.dial.swap`) trades them, so the same routes can
-be felt both ways. Learn pad can put it on BACK (`pad:VIEW`), which is
-free.
+be felt both ways. Learn pad can put it on a free button; a row on it acts on the deck
+that pad is on. (A row on the old `desk.pad.dial.*` ids moves on load, row 730.)
 
 ## The DIAL preset
 

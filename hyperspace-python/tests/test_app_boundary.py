@@ -330,8 +330,8 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     audio = Stub("audio", log, chain=chain, on=True)
     reg = Stub("reg", log)
     fired: list[str] = []
-    reg.get = lambda pid: SimpleNamespace(fire=lambda: fired.append(pid), step=lambda a: None,
-                                          toggle=lambda: None, text=lambda: "petal")
+    reg.get = lambda pid: SimpleNamespace(fire=lambda: fired.append(pid),
+                                          step=lambda a: None, toggle=lambda: None)
     reg.__dict__["fired"] = fired
     panel = Stub("panel", log, restart_requested=False, page=1, history=PageHistory(1))
     renderer = Stub("renderer", log)

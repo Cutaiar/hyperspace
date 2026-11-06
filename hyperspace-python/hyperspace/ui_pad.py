@@ -64,6 +64,7 @@ import math
 from imgui_bundle import imgui
 
 from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
+from .params import dial_id
 from .routing import PAIR_SCHEME, Binding, pair_poles
 
 SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")   # the schemes a pad control's row can have
@@ -168,7 +169,8 @@ def dialed(table) -> set[str]:
     out = set()
     for b in table.of("axis"):
         stick, dot, sector = b.source.partition(":")[2].partition(".")
-        if b.enabled and dot and stick in gamepad.DIAL_STICKS and sector in gamepad.COMPASS:
+        if (b.enabled and not b.device and dot and stick in gamepad.DIAL_STICKS
+                and sector in gamepad.COMPASS):      # (a second pad's row is not this picture's)
             out.add(stick)
     return out
 
@@ -181,31 +183,31 @@ def rows_cached(panel, table) -> dict[str, Binding]:
     return st["rows"]
 
 
-def _stick_of(c: gamepad.Control) -> str | None:
-    """The dial stick ("L", "R") a control belongs to: its well, or its X / Y lane."""
-    if c.source in ("pad:LSTICK", "pad:RSTICK"):
-        return c.source[4]
-    if c.kind == "axis" and c.address in ("LX", "LY", "RX", "RY"):
-        return c.address[0]
-    return None
+def _stick_of(source: str) -> str | None:
+    """The dial stick ("L", "R") a source belongs to: its well, or its X / Y lane."""
+    if source in ("pad:LSTICK", "pad:RSTICK"):
+        return source[4]
+    return source[5] if source in ("axis:LX", "axis:LY", "axis:RX", "axis:RY") else None
 
 
-def _dial_of(panel, c: gamepad.Control) -> str | None:
-    """The stick this control is part of, when a route on the panel's deck reads it as a dial."""
-    stick = _stick_of(c)
+def _dial_of(panel, source: str) -> str | None:
+    """The stick `source` is part of, when a route on the panel's deck reads it as a dial."""
+    stick = _stick_of(source)
     return stick if stick is not None and stick in _state(panel).get("dialed", ()) else None
 
 
-def _mode(panel, stick: str) -> str:
-    """A stick's dial reading on the panel's deck (`pad.dial.*`), "" without one."""
-    p = panel.reg.get(f"pad.dial.{'left' if stick == 'L' else 'right'}")
-    return p.text() if p is not None else ""
+def _free_words(panel, source: str) -> str:
+    """What a control with no row says, in every view: an X or Y of a stick a route reads
+    as a dial, "Left dial · petal"; else its built-in meaning, if it has one."""
+    stick = _dial_of(panel, source)
+    p = panel.reg.get(dial_id(stick)) if stick is not None and source.startswith("axis:") else None
+    return f"{p.label} · {p.text()}" if p is not None else BUILT_IN.get(source, "")
 
 
 def _sectors(panel, pad, c: gamepad.Control) -> list[float] | None:
     """The eight sectors to draw in stick `c`'s well, how far each reads; None: this
     stick is no dial. At rest while the pad is on the other deck: it reads that deck's."""
-    stick = _dial_of(panel, c)
+    stick = _dial_of(panel, c.source)
     if stick is None:
         return None
     if pad is None or not panel.pad_reads_here():
@@ -298,10 +300,7 @@ def says(panel, c: gamepad.Control, b: Binding | None) -> str:
             return ui_desk.text(panel.reg, Binding(c.source, b.target, "step",
                                                    b.value if up else -b.value))
         return f"{ui_desk.text(panel.reg, b)} {'+' if up else '−'}"
-    stick = _dial_of(panel, c)
-    if stick is not None and c.kind == "axis":
-        return f"{'Left' if stick == 'L' else 'Right'} dial · {_mode(panel, stick)}"
-    return BUILT_IN.get(c.source, "")
+    return _free_words(panel, c.source)
 
 
 def label(panel, c: gamepad.Control, b: Binding | None) -> str:
@@ -318,15 +317,17 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     if b is not None:
         return (f"{c.glyph} · {b.target} · {said} · {b.describe()}\n{c.name}"
                 f"\n{learn} to move it")
-    stick = _dial_of(panel, c)
+    stick = _dial_of(panel, c.source)
+    dial = ""
     if stick is not None:
-        return (f"{c.glyph} · read as a dial ({_mode(panel, stick)}): its routes are "
-                f"axis:{stick}.N … axis:{stick}.NW, off the camera\n{c.name}"
-                f"\nthe GRAPH page's pad node: each sector's param, and the reading")
+        reading = panel.reg.get(dial_id(stick))
+        dial = (f"\nread as a dial ({reading.text() if reading is not None else ''}): its "
+                f"routes are axis:{stick}.N … axis:{stick}.NW, off the camera; the GRAPH "
+                "page's pad node has each sector's param, and the reading")
     if said:
-        return (f"{c.glyph} · {said} — the app's own, no row in the table\n{c.name}"
-                f"\n{learn} to take it over")
-    return f"{c.glyph} · free — nothing is mapped\n{c.name}\n{learn}"
+        whose = "" if dial else " — the app's own, no row in the table"
+        return f"{c.glyph} · {said}{whose}\n{c.name}{dial}\n{learn} to take it over"
+    return f"{c.glyph} · free — nothing is mapped\n{c.name}{dial}\n{learn}"
 
 
 # ---------------------------------------------------------------- drawing
@@ -775,6 +776,7 @@ def _says_of(panel, table):
     if st.get("src_key") != key or st.get("src_table") is not table:
         st.update(src_key=key, src_table=table, src_rows=source_rows(table))
     rows_ = st["src_rows"]
+    rows_cached(panel, table)            # (what `_free_words` asks: the sticks read as dials)
 
     def says_(source: str) -> tuple[str, Binding | None]:
         b = rows_.get(source)
@@ -783,7 +785,7 @@ def _says_of(panel, table):
             if b.scheme == PAIR_SCHEME and b.op == "step":      # the lane: both ways
                 words = f"{words.rpartition(' ')[0]} ±{abs(b.value):g}"
             return words, b
-        return BUILT_IN.get(source, ""), None
+        return _free_words(panel, source), None
     says_.pairs = tuple(s for s in rows_ if s.startswith(f"{PAIR_SCHEME}:"))   # the lanes view's
     return says_
 

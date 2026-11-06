@@ -1373,6 +1373,13 @@ def backup(path: Path, schema: str) -> Path | None:
     return bak
 
 
+# the dial's readings were `desk.pad.dial.*`, never saved, but a row learned onto one
+# was (plan 28 tells the performer to put Swap dials on a button). They are the loadable
+# patch's now, `pad.dial.*` (register row 730): a pad button's row on one stays, as any
+# meta row on a patch param does, and acts on the deck the pad is on
+OLD_DIAL = "desk.pad.dial."
+
+
 def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
                   ) -> tuple[list[Binding], list[str]]:
     """The factory rows plan 09 WP4 and plan 15 WP3 moved, on a table of
@@ -1390,7 +1397,8 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
     2026-10-14, the loadable patch walk to the d-pad held (2026-10-29), and off the
     pad with BACK's tap tempo the base chase now (2026-11-04)
     (PAD_LAYOUTS); the track faders' eight invariant audio rows
-    moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
+    moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2); any row on the
+    dial's old ids moved to `pad.dial.*` (OLD_DIAL, row 730).
     Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
 
@@ -1404,6 +1412,11 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
     notes: list[str] = []
     moved_theme = False
     for b in rows:
+        if b.target.startswith(OLD_DIAL):
+            target = "pad.dial." + b.target[len(OLD_DIAL):]
+            notes.append(f"moved {b.source} → {b.target} to {target} (the dial's readings "
+                         "are the loadable patch's: the row acts on the deck the pad is on)")
+            b = replace(b, target=target)
         key = (b.source, b.target, b.op, float(b.value))
         if key in RETIRED_ROWS:
             notes.append(f"removed {b.source} → {b.target} (the clip-stop SAVE AS bar is "

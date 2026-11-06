@@ -2231,12 +2231,14 @@ the rim crossfades one route into the next).
 load, like its routes, since a reading changes what those routes do. **Swap dials**
 (`pad.dial.swap`) trades them, an edit undo takes back. Every `Deck`'s registry holds its
 own (`params.declare_dial`, in `build_registry`, so with a pad or without), and **a pad
-reads the `Deck` it drives**: `PadDevice.poll` asks `params.dial_readings(self.reg)`
+reads the `Deck` it drives**: `PadDevice.poll` hands it that deck's `Registry.dial_modes`
 through its pointer each frame. So a load on the deck off air changes nothing a pad on
 air reads, and a pad moved across reads the other deck's from the next frame.
-The gamepad entry's `dial_left` / `dial_right` (`[[devices]]`, or the old `[gamepad]`
-table) are the launch readings (`app._dial_launch`, `params.launch_dial`): the fresh
-values, so what a loadable patch that names none gets.
+The first enabled gamepad entry's `dial_left` / `dial_right` (`[[devices]]`, or the old
+`[gamepad]` table) are the launch readings (`app._dial_launch`,
+`MetaRegistry.dial_launch`): where each deck starts, so the fresh values, so what a
+loadable patch that names none gets. Read at launch: an edit waits for the next one, and
+another pad's are said and not read.
 
 **Where they show**: the GRAPH page's pad node. Selected, its details draw the pad's
 picture, then both sticks' faces, each sector filled to how far it reads and named by its

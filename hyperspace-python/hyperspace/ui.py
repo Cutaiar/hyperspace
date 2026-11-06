@@ -83,7 +83,7 @@ from .graph import (
 from .groupwords import group_title
 from .hands import panel as ui_hands
 from .media import publish
-from .params import PLANES, Kind, Param, Registry, build_registry, part_of
+from .params import PLANES, Kind, Param, Registry, build_registry, dial_id, part_of
 from .pointer import Through
 from .view import RED as RED_RGB
 from .view import ViewState
@@ -2924,8 +2924,8 @@ class Panel:
         lanes = pad.dials() if on else [0.0] * len(gamepad.DIAL_LANES)
         n = gamepad.DIAL
         for j, stick in enumerate(gamepad.DIAL_STICKS):
-            side = "left" if stick == "L" else "right"
-            mode = self.reg[f"pad.dial.{side}"].text()
+            pid = dial_id(stick)
+            side, mode = pid.rpartition(".")[2], self.reg[pid].text()
             xy = None
             if on:
                 ax, ay = gamepad.DIAL_STICKS[stick]
@@ -2933,8 +2933,8 @@ class Panel:
                       pad.axes[ay] if ay < len(pad.axes) else 0.0)
             names = [routed.get(f"axis:{stick}.{k}") for k in gamepad.COMPASS]
             self._dial(lanes[j * n:(j + 1) * n], names, xy, f"{side} stick · {mode}")
-        self._row("pad.dial.left")
-        self._row("pad.dial.right")
+        for stick in gamepad.DIAL_STICKS:
+            self._row(dial_id(stick))
         self._button("pad.dial.swap", small=True)
         imgui.push_text_wrap_pos(0.0)
         if not here:

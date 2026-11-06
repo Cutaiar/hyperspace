@@ -739,7 +739,7 @@ here; overturn → the change, then the same.
 | 717 | Plan 57: NM0 is an optional key, no bump; the rest is one migration, whose order and questions are in plan 57 | 547 | owner — 2026-11-06: yes, and all of it in one migration: "coordinating the migration is not hard" (`plans/57-format-lane.md` §6) |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
-| 729 | Wave 4 #287: the dial's readings are the patch's: `pad.dial.left`, `.right` and `.swap`, group `pad` in `PATCH_GROUPS`, one per `Deck`, and a pad reads the `Deck` it drives (`dial_readings` through its pointer each poll). Launch readings from `config.toml` are the fresh values. Replaces Dillon's one dict every pad read (#287) | 559 | owner — 2026-11-06 ("us", the readings the patch's); the per-deck read is the plan's rule, no loadable patch can affect another |
+| 729 | Wave 4 #287: the dial's readings are the patch's: `pad.dial.left`, `.right` and `.swap`, group `pad` in `PATCH_GROUPS`, one per `Deck`, and a pad reads the `Deck` it drives (that deck's `Registry.dial_modes` through its pointer each poll). Launch readings from `config.toml` are the fresh values. Replaces Dillon's one dict every pad read (#287) | 559 | owner — 2026-11-06 ("us", the readings the patch's); the per-deck read is the plan's rule, no loadable patch can affect another |
 | 730 | Wave 4 #287: the pad node shows them, SYSTEM no longer does; refused in a patch fragment (no member owns them); saved as two more `values`, with **no schema bump and no migration**; the corpus gains the two values | 559, 560 | (rec) — pending the owner |
 | 731 | Wave 4 PC: T2's ⇧ fine mode reaches every slider left out (a route's depth and rest, its feel's knobs, a macro subscriber's from and to, GRAPH's backdrop); the side pane's paper cuts at 240 px (the patch chips, the analyzer's scene row, meter tags, transfer row, spectrogram hint) | 561 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner |
 | 732 | Wave 4 PC: the on-screen desk draws SEND B as FINE, reserved from its clicks; `desk.fine` is declared beside `desk.save`; a row of the owner's on SEND B still takes the button | 562 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; the reservation follows the owner's seventh round, 2026-11-04 |
@@ -13279,13 +13279,15 @@ not Dillon. So the intent is his and the build is rewritten on `main`, with one 
   A load on the deck off air would have changed the live pad's readings, and no loadable
   patch may affect another.
 - **Built:** each registry declares its own (`params.declare_dial`, in `build_registry`), so a
-  pad connected or not, deck 1 or deck 2, headless or not. `PadDevice.poll` asks the registry
-  it reaches through its pointer (`Base.reg`), each frame, and hands the pad the answer. Two
+  pad connected or not, deck 1 or deck 2, headless or not. `PadDevice.poll` hands the pad the
+  dict of the registry it reaches through its pointer (`Base.reg`), each frame. Two
   pads on two decks each read their own. `params` restates the two words, because the import
   wall (row 747) keeps `gamepad` from it; `tests/test_dial.py` holds them equal.
 - **Launch:** `dial_left` and `dial_right` in `config.toml` now mean what a loadable patch that
-  names none gets. They are set on deck 1 before attach, so they are the fresh values, and kept
-  on the `MetaRegistry` for deck 2 to start on, with no undo step on either.
+  names none gets. `app.main` sets them on the `MetaRegistry` before any deck's registry is built,
+  so both decks start on them and they are the fresh values, with no undo step on either. Read
+  at launch, on the first enabled pad only (a reading is a deck's, not a pad's); another pad's
+  that differ are said on the SYSTEM page, and an edit waits for the next launch.
 - **The panel's two decks:** the pad node shows the deck the panel shows. A pad driving the
   other deck moves no face and the node says so, rather than draw one deck's readings under
   another deck's sticks.
@@ -13305,8 +13307,11 @@ not Dillon. So the intent is his and the build is rewritten on `main`, with one 
   together. `/11` carries them through untouched, as any other id.
 - **The corpus** and one fixture gain the two values, so they still resave byte for byte.
   Written by loading and saving each, checked to differ by those two keys alone.
-- **A row on the old ids.** `desk.pad.dial.*` were never saved, but a row Learn put on one in a
-  `bindings.json` now names nothing and drops with the usual note. Nothing migrates it.
+- **A row on the old ids.** `desk.pad.dial.*` were never saved as values, but plan 28 told the
+  performer to Learn a button onto Swap dials, and that row is in `bindings.json`, a saved id.
+  `remap_factory` moves it to `pad.dial.*` on load, with a note, a backup and one write. The row
+  stands: `meta_refusal` stops a patch's row on a meta param, and this is a meta row on a patch
+  param, like `pad:LB → view.shape`. It acts on the deck the pad is on.
 - **Open to overturn.** The owner may prefer the readings stay out of a save at their launch
   values; that is not built, as it would make a file mean different things on the two Macs.
 

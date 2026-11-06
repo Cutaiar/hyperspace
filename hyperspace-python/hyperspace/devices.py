@@ -659,19 +659,13 @@ class PadDevice(Base):
         return j if isinstance(j, int) and not isinstance(j, bool) and j >= 0 else None
 
     def open(self) -> None:
-        from .gamepad import DIAL_MODES, Claims, Pad
+        from .gamepad import Claims, Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
         # plan 42: which controllers it may take, the hid road, a tape
         tape = self.entry.get("tape")
         self.io.hid = bool(self.entry.get("hid", True))
         self.io.controller = str(self.entry.get("controller", "any") or "any")
         self.io.tape = tape if isinstance(tape, str) and tape else None
-        # alone, where each stick's dial reading starts (`dial_left` / `dial_right`);
-        # with a registry, `poll` reads the deck's (`params.dial_readings`)
-        for stick, key in (("L", "dial_left"), ("R", "dial_right")):
-            mode = self.entry.get(key)
-            if mode in DIAL_MODES:
-                self.io.dial_modes[stick] = mode
         claims = getattr(self.ctx, "pads", None)
         if claims is None:
             claims = self.ctx.pads = Claims()
@@ -840,11 +834,10 @@ class PadDevice(Base):
         if self.io is not None:
             self.io.dt_hint = dt       # the touch and motion lanes' time (plan 42)
             self.io.poll()
-            # a pad reads the `Deck` it drives: that deck's loadable patch's dials
-            from .params import dial_readings
-            readings = dial_readings(self.reg)
-            if readings is not None:
-                self.io.dial_modes = readings
+            # a pad reads the `Deck` it drives: that deck's dict, no copy (`params.declare_dial`)
+            modes = getattr(self.reg, "dial_modes", None)
+            if modes is not None:
+                self.io.dial_modes = modes
 
     def learn(self, learn) -> bool:
         if self.io is None:

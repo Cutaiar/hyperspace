@@ -883,6 +883,10 @@ def is_instance_id(pid: str) -> bool:
 class Registry:
     """An ordered map of Param by id."""
 
+    # this deck's dial readings, {"L": "petal", "R": "blend"} (`declare_dial`); None: a
+    # registry with no dial
+    dial_modes: dict[str, str] | None = None
+
     @staticmethod
     def group_word(group: str) -> str:
         """`groupwords.group_word`, for `undo.py`, a leaf that holds a registry."""
@@ -1246,21 +1250,27 @@ class Registry:
 
 
 # the sticks' dial readings (plan 28, rows 729-730). Restated from `gamepad`
-# (`DIAL_MODES`, `DIAL_DEFAULT`), a meta controller module this one may not import;
-# tests/test_dial.py holds them equal
+# (`DIAL_MODES`, `DIAL_DEFAULT`): the import wall forces it, `params` being both layers'
+# and `gamepad` the meta controller's, and it imports glfw. tests/test_dial.py holds them equal
 DIAL_READINGS = ("petal", "blend")
 DIAL_SIDES = (("L", "left", "petal"), ("R", "right", "blend"))   # stick, its id's word, default
+
+
+def dial_id(stick: str) -> str:
+    """The param of stick "L" or "R"'s dial reading."""
+    return f"pad.dial.{'left' if stick == 'L' else 'right'}"
 
 
 def declare_dial(r: Registry) -> None:
     """The sticks' dial readings on one deck's registry: `pad.dial.left` and `.right`,
     saved and landed with its loadable patch like its routes, and `pad.dial.swap`, which
-    trades them. Each registry holds its own, so a load on one `Deck` changes nothing a
-    pad on the other reads: a pad asks the `Deck` it drives (`dial_readings`, in
-    `devices.PadDevice.poll`). They start at the launch readings, the meta controller's
-    (`launch_dial`). Not a performer's: no lane rides a reading, though a row can set one."""
-    launch = getattr(r.meta_reg, "dial_launch", None) or {}
-    modes = {stick: launch.get(stick, fresh) for stick, _, fresh in DIAL_SIDES}
+    trades them. Each registry holds its own (`Registry.dial_modes`, {"L": "petal", …}), so
+    a load on one `Deck` changes nothing a pad on the other reads: a pad reads that dict
+    of the `Deck` it drives (`devices.PadDevice.poll`). They start at the launch readings,
+    the meta controller's (`MetaRegistry.dial_launch`). Not a performer's: no lane rides a
+    reading, though a row can set one."""
+    launch = r.meta_reg.dial_launch or {}
+    modes = r.dial_modes = {stick: launch.get(stick, fresh) for stick, _, fresh in DIAL_SIDES}
 
     def set_mode(stick: str, i) -> None:
         modes[stick] = DIAL_READINGS[int(i) % len(DIAL_READINGS)]
@@ -1269,40 +1279,19 @@ def declare_dial(r: Registry) -> None:
            "points into gets the whole push; blend, neighbouring sectors crossfade as it "
            "sweeps round. The loadable patch's: saved with its routes.")
     for stick, side, _ in DIAL_SIDES:
-        r.enum(f"pad.dial.{side}", f"{side.capitalize()} dial",
+        r.enum(dial_id(stick), f"{side.capitalize()} dial",
                lambda s=stick: DIAL_READINGS.index(modes[s]),
                lambda i, s=stick: set_mode(s, i),
                list(DIAL_READINGS), group="pad", modulatable=False,
                tip=tip.format(side, stick))
 
     def swap() -> None:
-        left, right = r["pad.dial.left"], r["pad.dial.right"]
+        left, right = r[dial_id("L")], r[dial_id("R")]
         a, b = left.value, right.value
         left.set(b)
         right.set(a)
     r.trigger("pad.dial.swap", "Swap dials", swap, group="pad", modulatable=False,
               tip="Swap the two sticks' dial readings, petal and blend.")
-
-
-def launch_dial(r: Registry, launch: dict[str, str]) -> None:
-    """The launch readings (the gamepad entry's `dial_left`, `dial_right`) on the first
-    deck, before the library attaches, so they are the fresh values: what a loadable
-    patch that names no reading gets. Kept on the meta controller's registry, for
-    a deck built later to start on them."""
-    meta = r.meta_reg
-    if meta is not None:
-        meta.dial_launch = dict(launch)
-    for stick, side, _ in DIAL_SIDES:
-        r[f"pad.dial.{side}"].set(DIAL_READINGS.index(launch[stick]))
-
-
-def dial_readings(reg) -> dict[str, str] | None:
-    """{"L": "petal", "R": "blend"} as `reg`, one deck's registry, says; None: it has
-    none (a registry of a test's, no registry)."""
-    if reg is None:
-        return None
-    left, right = reg.get("pad.dial.left"), reg.get("pad.dial.right")
-    return None if left is None or right is None else {"L": left.text(), "R": right.text()}
 
 
 class MetaRegistry(Registry):
@@ -1313,6 +1302,11 @@ class MetaRegistry(Registry):
     and holds these `Param` objects by reference — a param added or removed
     here is added to or removed from every deck at once, in the order it
     came. A patch param is refused: it is a deck's."""
+
+    # the launch readings of the sticks' dials ({"L": …, "R": …}; `app._dial_launch`), set
+    # before any deck's registry is built: where each deck's start, and so the fresh values
+    # a loadable patch naming none gets. None: `DIAL_SIDES`'s defaults
+    dial_launch: dict[str, str] | None = None
 
     def __init__(self):
         super().__init__()

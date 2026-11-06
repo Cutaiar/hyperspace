@@ -8104,7 +8104,7 @@ saying the orbit on a dialed stick (`ui_pad.says`).
 *Pass:* (2) nothing in the room or the stick's feel changes: still petal. (3) The faces rest,
 the drop-downs say blend, and the node says the pad is on the other deck. (4) Now it crossfades
 and the faces fill. Fail: the stick on air turning to blend at (2), the one thing that may never
-happen (`PadDevice.poll`, `params.dial_readings`), or a face moving at (3).
+happen (`PadDevice.poll`, `Registry.dial_modes`), or a face moving at (3).
 
 ## CK. Pane paper cuts (wave 4 PC)
 Register rows 731–732, 2026-11-04. Headless: `tests/test_ui_fine.py` (every raw slider's drag,

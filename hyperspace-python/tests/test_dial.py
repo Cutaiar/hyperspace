@@ -19,8 +19,8 @@ import hyperspace.gamepad as gp
 from hyperspace import app, lfo, params, patches
 from hyperspace.deck import Deck, MetaController
 from hyperspace.loadable import LoadedPatch
-from hyperspace.params import Registry, dial_readings, part_of
-from hyperspace.routing import Binding, Bindings, Router
+from hyperspace.params import Registry, build_meta, dial_id, part_of
+from hyperspace.routing import Binding, Bindings, Router, is_meta_row, meta_row_refusal
 
 
 def at(deg: float, r: float = 1.0) -> tuple[float, float]:
@@ -169,12 +169,12 @@ def test_the_readings_are_the_patchs_and_swap(rig):  # noqa: F811
     reg = rig.reg
     left = reg["pad.dial.left"]
     assert left.persist and part_of(left) == "patch" and not left.modulatable
-    assert dial_readings(reg) == gp.DIAL_DEFAULT
+    assert reg.dial_modes == gp.DIAL_DEFAULT
     left.set(1)
-    assert dial_readings(reg) == {"L": "blend", "R": "blend"}
+    assert reg.dial_modes == {"L": "blend", "R": "blend"}
     reg["pad.dial.right"].set(0)
     reg["pad.dial.swap"].fire()
-    assert dial_readings(reg) == {"L": "petal", "R": "blend"}
+    assert reg.dial_modes == {"L": "petal", "R": "blend"}
     assert "pad.dial.left" in reg.snapshot(part="patch")
     assert "pad.dial.left" not in reg.snapshot(part="shared_meta")
 
@@ -182,42 +182,61 @@ def test_the_readings_are_the_patchs_and_swap(rig):  # noqa: F811
 def test_the_params_restate_the_pads_readings():
     assert params.DIAL_READINGS == gp.DIAL_MODES
     assert {stick: fresh for stick, _, fresh in params.DIAL_SIDES} == gp.DIAL_DEFAULT
+    assert (dial_id("L"), dial_id("R")) == ("pad.dial.left", "pad.dial.right")
 
 
 def test_config_picks_the_launch_readings():
-    """The gamepad entry's `dial_left` / `dial_right` (plan 27's [[devices]]; the old
-    [gamepad] table's keys translate) are the launch readings; a value that is no
-    reading leaves the default. A pad opened with no registry still seeds itself."""
-    from hyperspace import config, devices
+    """The first enabled gamepad entry's `dial_left` / `dial_right` (plan 27's [[devices]];
+    the old [gamepad] table's keys translate) are the launch readings; a value that is no
+    reading leaves the default."""
+    from hyperspace import config
 
     entry = {"role": "pad", "kind": "gamepad", **config._kind_defaults("gamepad"),
              "dial_left": "blend", "dial_right": "nonsense"}
     assert app._dial_launch({"devices": [entry]}) == {"L": "blend", "R": "blend"}
     assert app._dial_launch({}) == gp.DIAL_DEFAULT
-    dev = devices.make(entry)
-    dev.open()
-    try:
-        assert dev.io.dial_modes == {"L": "blend", "R": "blend"}
-    finally:
-        dev.close()
     assert config._kind_defaults("gamepad")["dial_left"] == "petal"
 
 
+def test_a_disabled_entry_is_not_read_and_a_later_pads_keys_are_said():
+    from hyperspace import config
+
+    pad = {"role": "pad", "kind": "gamepad", **config._kind_defaults("gamepad")}
+    off = {**pad, "role": "off", "enabled": False, "dial_left": "blend"}
+    cfg = {"devices": [off, pad]}
+    assert app._dial_launch(cfg) == gp.DIAL_DEFAULT and not cfg.get("notes")
+    cfg = {"devices": [pad, {**pad, "role": "p2", "dial_left": "blend"}]}
+    assert app._dial_launch(cfg) == gp.DIAL_DEFAULT
+    assert "p2" in cfg["notes"][0] and "first enabled pad only" in cfg["notes"][0]
+
+
+def test_an_opened_pad_takes_no_reading_from_its_entry():
+    """The readings are a deck's, read at `poll`; a live edit of `dial_left` waits for
+    the next launch (`config.toml`'s words), so the entry seeds nothing."""
+    from hyperspace import config, devices
+
+    dev = devices.make({"role": "pad", "kind": "gamepad", **config._kind_defaults("gamepad"),
+                        "dial_left": "blend"})
+    dev.open()
+    try:
+        assert dev.io.dial_modes == gp.DIAL_DEFAULT
+    finally:
+        dev.close()
+
+
 def _two_decks(home, launch=None):
-    """Two decks as `app.main` builds them, with the launch readings set where it sets
-    them when `launch` is given: before attach, so they are the fresh values."""
-    def table(reg):
-        if launch is not None:
-            params.launch_dial(reg, launch)
-        return Bindings([])
+    """Two decks as `app.main` builds them: the launch readings on the meta controller's
+    registry before any deck's is built."""
     r = boot(home)
-    lib = r.lib
-    first = Deck.build(library=lib, control=r.control, audio=NS(chain=r.chain), table=table,
+    meta_reg = build_meta(r.control, NS(chain=r.chain))
+    meta_reg.dial_launch = launch
+    first = Deck.build(library=r.lib, control=r.control, audio=NS(chain=r.chain),
+                       table=lambda reg: Bindings([]), meta_reg=meta_reg,
                        startup=False, install=False)
     second = Deck.beside(first, lfos=lfo.LFOs(seed=1))
     meta = MetaController(first, second, mix=r.mix)
-    lib.pointer = meta.panel_pointer
-    return NS(lib=lib, one=first, two=second, meta=meta)
+    r.lib.pointer = meta.panel_pointer
+    return NS(lib=r.lib, one=first, two=second, meta=meta)
 
 
 def _flip(deck, *, left: int, right: int, name: str):
@@ -232,26 +251,26 @@ def test_a_loadable_patch_keeps_its_readings(tmp_path):
     that names none gets the launch readings, not the last one's."""
     t = _two_decks(tmp_path / "home", {"L": "blend", "R": "blend"})
     deck = t.one
-    assert dial_readings(deck.reg) == {"L": "blend", "R": "blend"}
+    assert deck.reg.dial_modes == {"L": "blend", "R": "blend"}
     plain = deck.loaded_patch.save_as("PLAIN")
     path = _flip(deck, left=0, right=0, name="BOTH PETAL")
     values = json.loads(path.read_text())["values"]
     assert values["pad.dial.left"] == 0 and values["pad.dial.right"] == 0
     deck.reg["pad.dial.left"].set(1)
     assert deck.loaded_patch.load("BOTH PETAL") == []
-    assert dial_readings(deck.reg) == {"L": "petal", "R": "petal"}
+    assert deck.reg.dial_modes == {"L": "petal", "R": "petal"}
     doc = json.loads(plain.read_text())
     for k in ("pad.dial.left", "pad.dial.right"):
         doc["values"].pop(k)
     (plain.parent / "bare.json").write_text(json.dumps({**doc, "name": "BARE"}))
     assert deck.loaded_patch.load("BARE") == []
-    assert dial_readings(deck.reg) == {"L": "blend", "R": "blend"}
+    assert deck.reg.dial_modes == {"L": "blend", "R": "blend"}
     assert not deck.loaded_patch.is_dirty()    # an older file is no edit for naming none
 
 
 def test_a_deck_built_later_starts_on_the_launch_readings(tmp_path):
     t = _two_decks(tmp_path / "home", {"L": "blend", "R": "petal"})
-    assert dial_readings(t.two.reg) == {"L": "blend", "R": "petal"}
+    assert t.two.reg.dial_modes == {"L": "blend", "R": "petal"}
     assert t.one.reg["pad.dial.left"] is not t.two.reg["pad.dial.left"]
     t.two.undo.tick(1.0)
     t.two.undo.tick(2.0)
@@ -263,6 +282,47 @@ def test_a_patch_fragment_may_not_carry_a_reading():
     doc = {"schema": patches.SCHEMA, "name": "x", "nodes": [{"id": "wobble", "kind": "effect"}],
            "values": {"pad.dial.left": 1}}
     assert any("pad.dial.left" in why for why in patches.check(doc))
+
+
+# ---- a row on the old ids ----
+
+OLD_ROW = {"source": "pad:VIEW", "target": "desk.pad.dial.swap", "op": "fire"}
+
+
+def test_a_row_learned_on_the_old_ids_moves_with_a_backup(tmp_path):
+    """Plan 28 told the performer to Learn a button onto Swap dials, which wrote
+    `desk.pad.dial.swap` into `bindings.json`: an old file opens with the row on
+    `pad.dial.swap`, noted, the file kept beside itself, written once."""
+    path = tmp_path / "bindings.json"
+    table = Bindings([Binding.from_json(OLD_ROW)], path=path)
+    table.write()
+    was = path.read_text()
+    assert "desk.pad.dial.swap" in was
+    loaded = Bindings.load(path, legacy_midi=None)
+    assert not any(b.target.startswith("desk.pad.dial") for b in loaded.bindings)
+    row = next(b for b in loaded.bindings if b.target == "pad.dial.swap")
+    assert row.source == "pad:VIEW" and row.op == "fire" and is_meta_row(row)
+    assert meta_row_refusal(row) is None and row not in loaded.routes()
+    assert "pad.dial.swap" in path.read_text() and "desk.pad.dial" not in path.read_text()
+    assert [p.read_text() for p in tmp_path.glob("bindings.json.bak-v*")] == [was]
+    assert any("desk.pad.dial.swap" in n for n in loaded.notes)
+    again = Bindings.load(path, legacy_midi=None)          # the second launch says nothing
+    assert again.notes == [] and len(list(tmp_path.glob("bindings.json.bak-v*"))) == 1
+
+
+def test_the_moved_row_stands_and_swaps_only_the_deck_the_pad_is_on(tmp_path):
+    """A meta row may drive a patch param: `meta_refusal` is the other way round. The row
+    is on the meta controller's one table and acts through the router of the pad's deck."""
+    t = _two_decks(tmp_path / "home")
+    row = t.one.table.add(Binding("pad:VIEW", "pad.dial.swap", "fire"))
+    assert row is not None and row in t.two.table.bindings
+    pad = ScriptedPad()
+    pad.frame()
+    t.two.router.pad(pad)
+    pad.frame(held={gp.VIEW})
+    t.two.router.pad(pad)
+    assert t.two.reg.dial_modes == {"L": "blend", "R": "petal"}
+    assert t.one.reg.dial_modes == gp.DIAL_DEFAULT
 
 
 # ---- a pad reads the `Deck` it drives ----
@@ -310,8 +370,8 @@ def test_a_load_on_the_other_deck_changes_nothing_a_pad_reads(tmp_path, pad_on, 
     before = _reads(dev)
     assert dev.io.dial_modes == gp.DIAL_DEFAULT
     assert there.loaded_patch.load("BLEND LEFT") == []
-    assert dial_readings(there.reg) == {"L": "blend", "R": "petal"}   # it landed, there
-    assert dial_readings(here.reg) == gp.DIAL_DEFAULT                 # and not here
+    assert there.reg.dial_modes == {"L": "blend", "R": "petal"}   # it landed, there
+    assert here.reg.dial_modes == gp.DIAL_DEFAULT                 # and not here
     assert _reads(dev) == before and dev.io.dial_modes == gp.DIAL_DEFAULT
     # the same pad moved over reads that deck: its stick's lanes change with it
     t.meta.point("pad", there)
@@ -341,10 +401,10 @@ def test_a_reading_is_one_undo_step_on_its_own_deck(tmp_path):
     t.two.reg["pad.dial.swap"].fire()
     t.two.undo.tick(3.0)
     t.two.undo.tick(9.0)
-    assert dial_readings(t.two.reg) == {"L": "blend", "R": "petal"}
+    assert t.two.reg.dial_modes == {"L": "blend", "R": "petal"}
     assert t.two.undo.undo() is True
-    assert dial_readings(t.two.reg) == gp.DIAL_DEFAULT
-    assert len(t.one.undo.stack) == held and dial_readings(t.one.reg) == gp.DIAL_DEFAULT
+    assert t.two.reg.dial_modes == gp.DIAL_DEFAULT
+    assert len(t.one.undo.stack) == held and t.one.reg.dial_modes == gp.DIAL_DEFAULT
 
 
 def test_copy_on_air_to_off_air_brings_the_readings(tmp_path):
@@ -457,7 +517,7 @@ def test_picking_a_reading_on_the_pad_node_sets_it(tmp_path, monkeypatch):
         pad = ScriptedPad()
         r.panel.pad = pad
         _pane(r.panel, pad)
-        assert dial_readings(r.reg) == {"L": "blend", "R": "petal"}
+        assert r.reg.dial_modes == {"L": "blend", "R": "petal"}
 
 
 def test_the_stick_feel_is_picked_on_system(tmp_path, monkeypatch):
@@ -488,9 +548,25 @@ def test_the_pad_picture_shows_a_dialed_stick(tmp_path):
         lx, rx = gp.control("axis:LX"), gp.control("axis:RX")
         assert ui_pad.says(r.panel, lx, None) == "Left dial · petal"
         assert ui_pad.says(r.panel, rx, None) == ui_pad.BUILT_IN["axis:RX"]
-        assert "read as a dial (petal)" in ui_pad.label(r.panel, lx, None)
+        said = ui_pad.label(r.panel, lx, None)
+        assert "read as a dial (petal)" in said and "Learn pad" in said     # beside the hint
+        well = ui_pad.label(r.panel, gp.control("pad:LSTICK"), None)
+        assert "read as a dial (petal)" in well and "Learn pad" in well and "free" in well
         r.reg["pad.dial.left"].set(1)
         assert ui_pad.says(r.panel, lx, None) == "Left dial · blend"
         pad.frame(axes=[1.0, 0.0, 0.0, 0.0, -1.0, -1.0])
         assert ui_pad._sectors(r.panel, pad, gp.control("pad:LSTICK"))[2] > 0
         assert ui_pad._sectors(r.panel, pad, gp.control("pad:RSTICK")) is None
+        # every view says the same: the lanes and the cockpit read through `_says_of`
+        says = ui_pad._says_of(r.panel, r.router.table)
+        assert says("axis:LX") == ("Left dial · blend", None)
+        assert says("axis:RX") == (ui_pad.BUILT_IN["axis:RX"], None)
+
+
+def test_a_second_pads_dial_route_leaves_the_primarys_stick_alone():
+    from hyperspace import ui_pad
+
+    table = Bindings([Binding("axis@p2:L.N", "view.inst_amp", "push", 1.0)])
+    assert ui_pad.dialed(table) == set()
+    table.add(Binding("axis:R.N", "view.bright", "push", 1.0))
+    assert ui_pad.dialed(table) == {"R"}

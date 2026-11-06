@@ -114,7 +114,7 @@ from .outputs import (
     View,
 )
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
-from .params import Registry, launch_dial
+from .params import Registry, build_meta
 from .pinch import install as install_pinch
 from .players import Players
 from .pointer import Pointer, Through
@@ -838,14 +838,22 @@ def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
 
 
 def _dial_launch(cfg: dict) -> dict[str, str]:
-    """Each stick's dial reading at launch, {"L": …, "R": …}: the first gamepad
+    """Each stick's dial reading at launch, {"L": …, "R": …}: the first enabled gamepad
     entry's `dial_left` / `dial_right` (`[[devices]]`, or the old `[gamepad]` table
-    translated), else `gamepad.DIAL_DEFAULT`. What a loadable patch naming none gets."""
+    translated), else `gamepad.DIAL_DEFAULT`. What a loadable patch naming none gets. A
+    reading is a deck's, not a pad's, so there is one pair: a later entry's that differs
+    is said (`cfg["notes"]`, the SYSTEM page) and not read."""
     out = dict(gamepad.DIAL_DEFAULT)
-    entry = next((e for e in config.devices(cfg) if e.get("kind") == "gamepad"), {})
-    for stick, key in (("L", "dial_left"), ("R", "dial_right")):
-        if entry.get(key) in gamepad.DIAL_MODES:
-            out[stick] = entry[key]
+    pads = [e for e in config.devices(cfg) if e.get("kind") == "gamepad" and e.get("enabled", True)]
+    keys = (("L", "dial_left"), ("R", "dial_right"))
+    for stick, key in keys:
+        if pads and pads[0].get(key) in gamepad.DIAL_MODES:
+            out[stick] = pads[0][key]
+    for e in pads[1:]:
+        if any(e.get(key) in gamepad.DIAL_MODES and e[key] != out[stick] for stick, key in keys):
+            cfg.setdefault("notes", []).append(
+                f"config: {e.get('role')}: dial_left / dial_right are read on the first "
+                "enabled pad only; a loadable patch's own readings win")
     return out
 
 
@@ -1529,8 +1537,6 @@ def main(argv: list[str] | None = None) -> None:
         # shared meta param, `desk.slew`, is the table's, at the app's default
         # until the show says otherwise
         mc = cfg.get("midi", {})
-        # the sticks' dial readings at launch, before attach: the fresh values
-        launch_dial(reg, _dial_launch(cfg))
         return _desk_table(reg, Bindings.load(
             bindings_path(home), mc.get("profile", "apc40"),
             Path(mc.get("map", "midi_map.json")),
@@ -1626,9 +1632,12 @@ def main(argv: list[str] | None = None) -> None:
         awake = _open_awake(cfg)               # no screensaver over the show
         return _DevicesMade(device_reg, dream_io, awake, segmenters)
 
+    restart = lambda: [setattr(p, "restart_requested", True) for p in panels]
+    # the meta controller's params, with what any deck's registry reads as it is built
+    meta_reg = build_meta(control, audio, restart, media=media.state)
+    meta_reg.dial_launch = _dial_launch(cfg)
     deck = Deck.build(library=library, control=control, audio=audio, table=load_table,
-                      renderer=renderer, media=media.state,
-                      restart=lambda: [setattr(p, "restart_requested", True) for p in panels],
+                      renderer=renderer, media=media.state, restart=restart, meta_reg=meta_reg,
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
                       devices=devices_setup, made=made, warm=True)
     hand_settings, output, panel = made.hands, made.outputs, made.panel
