@@ -69,8 +69,11 @@ cd app && npm run check
    (bleed wider than half the gutter, under the 6 mm minimum, nothing fits).
    Pure: no React, no DOM, no SVG, so the preview and the exporter read the
    same geometry and cannot disagree.
-2. **Preview** — the sheet drawn to scale with cut lines and bleed shown, plus
-   the per-sheet count and a warning when pitch drops under the floor.
+2. ~~**Preview**~~ — done: `src/components/Builder.tsx`. The sheet drawn to
+   scale in millimetres, cut lines, bleed, Cricut's reserved corners, the
+   per-sheet count, and the warning that says what a size costs you: at 44 mm
+   a version-12 code is 15 to a Letter sheet, and dropping to 40 mm buys 20 at
+   0.548 mm per module, under the floor.
 3. **Selection** — pick from the gallery, set a count per code, fill the sheet
    or repeat one code.
 4. **Export** — SVG first (it is already what the codes are). PDF via a vector
