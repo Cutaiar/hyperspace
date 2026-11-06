@@ -84,7 +84,7 @@ from .groupwords import group_title
 from .hands import panel as ui_hands
 from .media import publish
 from .params import PLANES, Kind, Param, Registry, build_registry, part_of
-from .pointer import Through
+from .pointer import Through, deck_number
 from .view import RED as RED_RGB
 from .view import ViewState
 
@@ -2759,7 +2759,7 @@ class Panel:
         if fade is None:
             return _gpu_block(getattr(self.renderer, "stats", None) or {}, "gpu")
         stats = getattr(fade.on_air.renderer, "stats", None) or {}
-        return _gpu_block(stats, f"deck {1 if fade.on_air is fade.decks[0] else 2} (on air) gpu")
+        return _gpu_block(stats, f"deck {deck_number(fade.decks, fade.on_air)} (on air) gpu")
 
     def deck2_gpu_lines(self) -> list[str]:
         """Plan 44 D4, §8: the second GPU block, what the deck off air costs —
@@ -2770,7 +2770,7 @@ class Panel:
         if fade is None:
             return []
         mixed = getattr(fade.on_air.renderer, "mix_error", "")
-        deck = f"deck {2 if fade.off_air is fade.decks[1] else 1}"
+        deck = f"deck {deck_number(fade.decks, fade.off_air)}"
         said = [f"{deck}: {e}" for e in (fade.error, fade.warm_error, mixed) if e]
         if not (fade.drew or fade.previewed):
             return [f"{deck}: off air, draws nothing", *said]

@@ -304,6 +304,8 @@ def strip(panel, group: str) -> None:
     lib = panel.library
     if lib is None or lib.reg is None or group in RETIRED_MODULES:
         return                  # (plan 40 T5: a retired module group has no strip)
+    # the deck this name is on, for the hover (`page` says it over the strip)
+    meta = getattr(panel, "meta", None) if group == LOADABLE else None
     imgui.push_id(f"strip.{group}")
     if _name_field(panel, group, lambda n: _save_as(panel, group, n)):
         imgui.pop_id()
@@ -339,16 +341,11 @@ def strip(panel, group: str) -> None:
         _guard(panel, lib.prev, group)
     imgui.same_line(0, 2)
     label = _elide(cur) if cur else "—"
-    # the deck this name is on (plan 44 D5e, DQ7), red off air: only the loaded look's strip
-    meta = getattr(panel, "meta", None) if group == LOADABLE else None
-    if meta is not None:
-        label = f"{meta.deck_name(meta.panel)} · {label}"
-    if width < name_w() or meta is not None:    # a narrow strip: the name cut to its button
+    if width < name_w():                # a narrow strip: the name cut to its button
         label = ui.fit_text(label, width - 2 * imgui.get_style().frame_padding.x)
     imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(0, 0, 0, 0))
-    imgui.push_style_color(imgui.Col_.text,
-                           ui.RED if meta is not None and meta.panel is not meta.on_air else
-                           ui.DIM if cur is None else imgui.ImVec4(0.92, 0.92, 0.92, 1))
+    imgui.push_style_color(imgui.Col_.text, ui.DIM if cur is None else
+                           imgui.ImVec4(0.92, 0.92, 0.92, 1))
     if imgui.button(f"{label}##name", imgui.ImVec2(width, 0)) and group != LOADABLE:
         imgui.open_popup("list")
     imgui.pop_style_color(2)
@@ -557,6 +554,10 @@ def page(panel) -> None:
     if lib is None or lib.reg is None or LOADABLE not in lib.kinds:
         return
     ui._micro("preset")
+    meta = getattr(panel, "meta", None)
+    if meta is not None:    # plan 44 D5e, DQ7: its own room, so no name is cut for it
+        imgui.same_line()
+        ui._micro(meta.words(meta.panel), ui.RED if meta.panel is not meta.on_air else ui.DIM)
     strip(panel, LOADABLE)
     loadable_list(panel)
     imgui.separator()

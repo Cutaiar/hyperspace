@@ -797,15 +797,31 @@ def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     return f"{c.glyph} · {mid} · {_layer_word(table, b)}\n{c.name}"
 
 
-def _deck_words(panel, table) -> tuple[str, bool]:
-    """The header's deck (plan 44 D5e, DQ7): the `Deck` whose rows this draws, and the
-    one the hardware plays while it is another; red for either. "" with no meta controller."""
+def _deck_words(panel, table) -> tuple[str, str, bool]:
+    """The header's deck (plan 44 D5e, DQ7): the `Deck` whose rows this draws, the clause
+    naming the one the hardware plays while it is another, and whether it is red: either
+    of those. Empty with no meta controller."""
     meta = getattr(panel, "meta", None)
     if meta is None:
-        return "", False
-    away = ui_routing.desk_elsewhere(panel, table)
-    words = meta.words(meta.panel)
-    return (f"{words} · {away}" if away else words), bool(away) or meta.panel is not meta.on_air
+        return "", "", False
+    away = ui_routing.desk_elsewhere(panel, table) or ""
+    return meta.words(meta.panel), away, bool(away) or meta.panel is not meta.on_air
+
+
+NEIGHBOUR_MIN = 64.0        # px: what the deck's words leave of what sits beside them
+
+
+def fit_deck(deck: str, away: str, beside: str, room: float, width=None) -> str:
+    """The deck's words for a header with `room` px, sharing it with `beside` (the look's
+    name, or the pick's line): with the "desk plays" clause where both fit, without it
+    where they do not, and cut only past that, always leaving `beside` its minimum."""
+    width = width or (lambda t: imgui.calc_text_size(t).x)
+    keep = min(width(beside), NEIGHBOUR_MIN) + 8.0      # (the line's item spacing)
+    if away and width(f"{deck} · {away}") + keep <= room:
+        return f"{deck} · {away}"
+    if width(deck) + keep <= room:
+        return deck
+    return ui.fit_text(deck, max(0.0, room - keep))
 
 
 def _loadable_name(panel) -> str:
@@ -1116,7 +1132,7 @@ def _header(panel, table) -> None:
     start = imgui.get_cursor_pos()
     full = imgui.get_content_region_avail().x
     end = start.x + full - ui.chip_w(BIG, CLOSE) - 8     # where the words stop: the chips
-    deck, deck_red = _deck_words(panel, table)
+    deck, away, deck_red = _deck_words(panel, table)
     imgui.set_cursor_pos(_v(start.x, start.y + 3))
     c = picked(panel) if table is not None else None
     line = can = None
@@ -1125,10 +1141,16 @@ def _header(panel, table) -> None:
         line, can = pick_line(panel, table, c)
         line = f"{line} · {math.ceil(left(panel))} s"
         words = (ui._micro_width("apc40") + ui._micro_width(f"{table.layer} layer  ·  shift")
-                 + imgui.calc_text_size(f"{_loadable_name(panel)} {deck}").x + 40)
+                 + imgui.calc_text_size(f"{_loadable_name(panel)}").x + 40)
         alone = imgui.calc_text_size(line).x > end - start.x - words
     if alone:
-        imgui.text_colored(ui.RED if can else ui.DIM, ui.fit_text(line, end - start.x))
+        # which deck a bind lands on, before the line that offers it
+        if deck:
+            said = fit_deck(deck, "", line, end - start.x)
+            imgui.text_colored(ui.RED if deck_red else ui.DIM, said)
+            imgui.same_line()
+        imgui.text_colored(ui.RED if can else ui.DIM,
+                           ui.fit_text(line, max(0.0, end - imgui.get_cursor_pos_x())))
         if imgui.is_item_hovered():
             ui.tooltip(line)
     else:
@@ -1138,6 +1160,10 @@ def _header(panel, table) -> None:
     elif table is None:
         imgui.same_line()
         imgui.text_disabled("no desk table")
+        if deck:
+            imgui.same_line()
+            imgui.text_colored(ui.RED if deck_red else ui.DIM,
+                               ui.fit_text(deck, max(0.0, end - imgui.get_cursor_pos_x())))
     else:
         glob = table.layer == "global"
         imgui.same_line()
@@ -1157,7 +1183,10 @@ def _header(panel, table) -> None:
         imgui.same_line()
         if deck:        # with the panel hidden this is all that says which deck this is
             room_ = end - imgui.get_cursor_pos_x()
-            imgui.text_colored(ui.RED if deck_red else ui.DIM, ui.fit_text(deck, max(0.0, room_)))
+            said = fit_deck(deck, away, _loadable_name(panel), room_)
+            imgui.text_colored(ui.RED if deck_red else ui.DIM, said)
+            if away and imgui.is_item_hovered():
+                ui.tooltip(f"{deck} · {away}")
             imgui.same_line()
         room_ = end - imgui.get_cursor_pos_x()
         imgui.text_colored(ui.TEXT, ui.fit_text(_loadable_name(panel), max(0.0, room_)))

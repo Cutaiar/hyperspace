@@ -2862,9 +2862,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                   lit=lambda: bool(bank.startup),
                   tip="Home: load this show's startup preset into the deck off air — "
                       "the Home key (fn ← on a laptop) and OVERDUB (B11) on the desk. "
-                      "The room does not move. With the panel on that deck and the mouse "
-                      "off the meta sections, Undo brings back what was up. With the "
-                      "panel on air, Undo takes nothing back there until you change "
-                      "something there.")
+                      "The room does not move. The line at the foot of the window says "
+                      "whether ⌘Z takes it back.")
 
     return r

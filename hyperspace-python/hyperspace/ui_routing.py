@@ -818,7 +818,7 @@ def _pair_body(panel, asked: PairAsk) -> None:
 
 
 META_LINE = "the meta controller's: tuned before the show"
-PER_DECK_LINE = "the meta controller's: a person's to press"
+PER_DECK_LINE = "the meta controller's: one per deck, a person's own"
 
 
 def ctx_item(panel, p: Param) -> None:
@@ -1040,16 +1040,22 @@ def dormant_words(reg, router: Router, b: Binding, p: Param | None) -> str | Non
         return None
     if not reg.lands(p):
         return DORMANT_OFF_AIR
-    return DORMANT_AWAY if b.head in router.sources.away_from(router) else None
+    # `lane`: as the pass reads it, a source qualified with the primary's own role is bare
+    return DORMANT_AWAY if router.lane(b.source)[0] in router.sources.away_from(router) else None
 
 
 def desk_elsewhere(panel, table) -> str | None:
     """While the APC40 is on another `Deck` than the panel (DQ7): the words that say so.
     What a person sees of the desk is the panel's deck's rows, and those and the hardware
-    then disagree on purpose. None with no such desk or no meta controller."""
+    then disagree on purpose. None with no meta controller, or no such desk connected: one
+    listed and unplugged plays nothing, though its pointer stands."""
     meta = getattr(panel, "meta", None)
-    p = None if meta is None or table is None else meta.pointers.get(table.primary_role())
-    if p is None or p.deck is meta.panel:
+    regs = getattr(panel, "devices", None)
+    if meta is None or table is None or regs is None:
+        return None
+    role = table.primary_role()
+    p, desk = meta.pointers.get(role), regs.get(role)
+    if p is None or desk is None or desk.status != "connected" or p.deck is meta.panel:
         return None
     return f"the desk plays {meta.deck_name(p.deck)}"
 

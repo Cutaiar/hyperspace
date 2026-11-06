@@ -75,7 +75,7 @@ from .lookback import DreamState
 from .outputs import Offscreen, View, preview_size
 from .params import MetaRegistry, Registry, build_registry, part_of
 from .players import Duty, Players
-from .pointer import Pointer
+from .pointer import Pointer, deck_number
 from .routing import Bindings, Router, Sources
 from .view import ViewState
 
@@ -605,7 +605,7 @@ class MetaController:
         return f"{name} loaded off air on {off}; the room still sees {self.deck_name(self.on_air)}{back}"
 
     def deck_name(self, deck: Deck) -> str:
-        return f"deck {1 if deck is self.decks[0] else 2}"
+        return f"deck {deck_number(self.decks, deck)}"
 
     def bars_copy(self) -> str | None:
         """Why "copy on air to off air" may not run now, or None. Between the fader's
