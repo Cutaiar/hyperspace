@@ -765,6 +765,7 @@ here; overturn → the change, then the same.
 | 754 | Plan 56: a row a person makes on a `pair:` lane while a pole already has a row asks first: keep both, let the pair take over, or cancel, with no default. A file, a migration and a factory row do not ask, and both act. A taken row goes on its own layer's stack | 580 | owner — 2026-11-06 |
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
+| 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` counts one only on a frame a key reaches it. A value typed into a slider, a name or a label still counts, on the Enter or the keystroke that writes it. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -13746,6 +13747,7 @@ still wins, as does a sink row.
   Going to a meta section and pressing is the focus change, and it refuses.
 - **The person's own change.** The panel says whether a button is down, just released, or an item live, as of its latest draw (`ui_pane.left`, `undo.by_hand`). A step begun then takes
   the focus to its own stack, which already says the edited param's layer, so a combo hanging over another section is no matter. It never samples the mouse's place.
+- **A cursor in a text field was a hand too, until row 757.** It is not one now, except on the frame a key lands.
 - **Known limit: a hand held on the panel.** The signal says the person is working the panel, not which edit is theirs. A controller's step begun while a mouse button is held anywhere in the panel, or on that button's release frame, counts as the person's: an APC knob turned with the mouse held on empty space moves focus to the knob's stack and latches the stack you were on. The cost is one refused ⌘Z, and a knob on a meta param can open the meta stack, the one case where a controller's change does move focus. Left, because the small fix does not work: asking for an active item changes nothing, since in the real panel every press activates something (210 of 210 points across the panel, driven by mouse: the canvas's own item, or the window's). Telling them apart needs each widget to report its own edit, which is an audit of every panel widget, popups and canvas included.
 - **(rec) — pending the owner: controllers.** A controller's real change on the stack in focus opens it, whoever's it is, another player's included, since "some minor action on that deck" is often on the
   APC. It never moves focus, wherever the mouse is. So a change on the APC right after the mouse went elsewhere is refused once, and the next opens. What is not a change opens nothing: a difference within `REL_TOL` makes no step at all, and
@@ -13842,3 +13844,16 @@ still wins, as does a sink row.
   `ui_routing.desk_target`. A row on one in a patch's file drops with a note; a person's row already in `bindings.json` still works.
   Base chase's home is the pad's BACK (`pad:VIEW`).
 - **Judge it.** 574.
+
+### 757. A cursor in a text field is no hand
+
+- **The bug.** Row 753's "person's own change" read `imgui.is_any_item_active()`, and a text field stays active after the mouse is up, for as long as the cursor sits there. So a find field left focused made every controller's change a person's: an APC ride on `master.gain` moved focus to the meta stack and opened it, and ⌘Z in the analyzer took the ride back, the hazard check 579's step 7 rules out. Found while proving the undo test leak (#394); shown on real ImGui and the real stacks.
+- **Built, (rec) — pending the owner.** `ui_pane._working`: a button down or just released, as before; an item live, unless it is a text field (`io.want_text_input`); a text field only on a frame with a character queued or a key pressed. Read at the top of the draw, before the widgets take the queue, and a stack's tick reads it a frame later, so the frame that writes is the frame that counts.
+- **What counts, by road** (`tests/test_undo_hand.py`, each driven on real ImGui):
+  - A slider's value typed: ImGui writes it only at Enter here, not per key, so Enter's frame takes the focus to the param's own stack and opens it, a deck's or the meta stack's. The real `Panel` too, by `Driver.enter`.
+  - A macro label: written per keystroke, in the fingerprint, so its first key opens the deck's stack.
+  - A name with an undo step, a group's rename by Enter: `Edit.rename_group` pushes in the draw, on Enter's frame, so it counts. Tested on the real name field with a commit that pushes the same way, not on a real group; check 582's step 4 is the real one.
+  - **A save as, a file or folder rename: no step, with Enter or the chip, as before.** `Library.save_as` pushes nothing, so there is nothing to open. Not a loss.
+  - A name typed with no commit (the save-as-patch form's fields, a find field): changes nothing, so nothing to count.
+- **Known limit, the same kind as 753's.** A controller's step begun on the very frame a key lands in a text field counts as the person's. It takes typing and riding within a frame of each other.
+- **Judge it.** 582.
