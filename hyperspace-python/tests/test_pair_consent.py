@@ -620,3 +620,49 @@ def test_under_the_latch_a_taken_meta_row_comes_back_over_a_meta_section(stacks)
     assert s.table.owner(TARGET).source == UP_DOWN
     press_z(s, meta=False)                           # the deck is shut: it says so
     assert s.table.owner(TARGET).source == UP_DOWN
+
+
+def test_one_answer_on_the_step_road_is_one_press_of_z(stacks):
+    """`settle_pair` and `_land_step` both push on the meta stack, in one frame: the
+    inner push is the same action (`Undo.push`), so one press takes the whole answer."""
+    s = stacks
+    go(s)
+    was = depth(s)
+    undo.by_hand(True)
+    s.learn.arm(TARGET, PAIR_WANT)
+    s.learn.learn_pad_button("hat:UP")
+    s.learn.learn_pad_button("hat:DOWN")
+    settle_pair(s.learn.pair_ask, TAKE_OVER, s.reg)
+    go(s)
+    assert depth(s) == (was[0], was[1] + 1)
+    press_z(s, meta=True)
+    undo.by_hand(False)
+    assert depth(s) == was
+    assert {"hat:UP", "hat:DOWN"} <= hat_rows(s.table) and not s.table.of("pair")
+
+
+def stacks_as_they_are(s) -> tuple:
+    """Everything a refused landing must leave alone, of all three stacks."""
+    return (undo._focused, *((len(u.stack), len(u.redos), u.latched, u._opens, u._open)
+                             for u in s.meta.stacks))
+
+
+@pytest.mark.parametrize("choice", [KEEP_BOTH, TAKE_OVER])
+@pytest.mark.parametrize("hand", [False, True])
+def test_a_refused_landing_leaves_every_stack_and_latch_as_it_was(stacks, choice, hand):
+    """The referee refuses at the answer (row 743: a preset's row on a meta param):
+    nothing is pushed, focus does not move, and no latch opens or shuts."""
+    s = stacks
+    go(s)
+    undo.by_hand(hand)
+    s.meta.undo.latched = True           # a shut stack is the case a push could open
+    row = Binding(UP_DOWN, "master.gain", "push", 0.5)
+    asked = PairAsk(s.table, row, lambda: s.table.replace_owner(row))
+    asked.replaced = s.table.routes_replaced_n
+    before, rows = stacks_as_they_are(s), list(s.table.bindings)
+    said = settle_pair(asked, choice, s.reg)
+    assert "nothing landed" in said
+    assert stacks_as_they_are(s) == before
+    go(s)
+    undo.by_hand(False)
+    assert stacks_as_they_are(s) == before and s.table.bindings == rows

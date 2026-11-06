@@ -607,6 +607,9 @@ def settle_pair(ask: PairAsk, choice: str, reg: Registry | None = None) -> str:
         return f"nothing landed: {pair} → {new.target}"
     if ask.stale:
         return withdrawn_words(ask)
+    why = table.refusal(new)             # before any push: a push moves the focus (row 753)
+    if why is not None:
+        return f"nothing landed: {why}"
     rows = ask.rows
     gone = rows if choice == TAKE_OVER else []
     meta = is_session_row(new) or any(is_session_row(x) for x in gone)
@@ -618,7 +621,7 @@ def settle_pair(ask: PairAsk, choice: str, reg: Registry | None = None) -> str:
         undo.push_meta(label)
     try:
         ask.land()                       # first: a refusal leaves the poles' rows alone
-    except ValueError as e:              # (`Owned` is one)
+    except ValueError as e:              # not the referee's, asked above: a guard for the poles
         return f"nothing landed: {e}"
     bare = tuple(pole.source for pole in pair_poles(":".join(new.parts)) or ())
     kept: list[Binding] = []
