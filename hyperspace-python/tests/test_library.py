@@ -188,7 +188,7 @@ def test_a_project_keeps_the_session_apart(rig, tmp_path):
     path = lib.project.save("Split")
     doc = json.loads(path.read_text())
     assert doc["schema"] == "hyperspace.project/3" and "values" not in doc
-    assert doc["session"] == reg.snapshot(part="session")
+    assert doc["session"] == reg.snapshot(part="shared_meta")
     assert "master.gain" in doc["session"] and "view.shape" not in doc["session"]
     # the file holds the F-keys' eight (plan 19 WP1: `bank_doc`), the show 24
     assert doc["bank"] == lib.project.bank[:8] == library.bank_doc(lib.project.bank)

@@ -70,7 +70,7 @@ def _frame(rig) -> None:
 def _performance(deck) -> dict:
     """Every performance param as it lands, to the bit."""
     return {p.id: repr(p.value) for p in deck.reg
-            if part_of(p) == "performance" and p.group != "ui"}
+            if part_of(p) == "patch" and p.group != "ui"}
 
 
 def _session(deck) -> dict:
@@ -358,7 +358,7 @@ def test_copy_leaves_the_mirror(rig):
     on both, in no preset (`_values` is `snapshot(part="performance")`)."""
     meta, one, two = rig.meta, rig.one, rig.two
     mirror = one.reg["ghost.mirror"]
-    assert two.reg["ghost.mirror"] is mirror and part_of(mirror) == "session"
+    assert two.reg["ghost.mirror"] is mirror and part_of(mirror) == "shared_meta"
     mirror.set(1)
     was = mirror.base
     doc = one.presets.document("x")
@@ -373,7 +373,7 @@ def test_a_copy_is_one_step_on_the_off_air_stack_and_its_undo_puts_the_look_back
     two.presets.load(names[1])
     for _ in range(40):
         _frame(rig)
-    two_look, two_name = two.reg.snapshot(part="performance"), two.presets.current
+    two_look, two_name = two.reg.snapshot(part="patch"), two.presets.current
     two_routes = [b.to_json() for b in two.table.routes()]
     steps, one_steps = len(two.undo.stack), len(one.undo.stack)
     one.presets.load(names[0])
@@ -388,7 +388,7 @@ def test_a_copy_is_one_step_on_the_off_air_stack_and_its_undo_puts_the_look_back
     assert two.undo.undo()
     assert two.presets.current == two_name
     assert [b.to_json() for b in two.table.routes()] == two_routes
-    now = two.reg.snapshot(part="performance")
+    now = two.reg.snapshot(part="patch")
     assert undo.alike(now, two_look)
 
 
@@ -421,12 +421,12 @@ def test_nothing_of_a_copy_is_shared_after_it(rig):
     meta, one, two = rig.meta, rig.one, rig.two
     one.table.add(Binding("axis:LX", "view.bright", "push", 0.5))
     meta.copy_on_air()
-    look = one.reg.snapshot(part="performance")
+    look = one.reg.snapshot(part="patch")
     rows = [b.to_json() for b in one.table.routes()]
     two.reg["view.bright"].set(0.1)
     two.table.remove(two.table.routes()[0])
     two.lfos.add()
-    assert one.reg.snapshot(part="performance") == look
+    assert one.reg.snapshot(part="patch") == look
     assert [b.to_json() for b in one.table.routes()] == rows
     assert one.presets.current == two.presets.current
 

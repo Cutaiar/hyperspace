@@ -60,7 +60,7 @@ def rig(tmp_path):
 def _look(deck) -> dict:
     """What a preset is, on one deck: nothing here may move when the other acts."""
     t = deck.table
-    return {"bases": deck.reg.snapshot(part="performance"),
+    return {"bases": deck.reg.snapshot(part="patch"),
             "routes": [b.to_json() for b in t.routes()],
             "desk": [b.to_json() for b in t.desk()],
             "name": deck.presets.current,

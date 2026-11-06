@@ -155,7 +155,7 @@ def test_nothing_can_latch_save(rig, tmp_path):
     # a hand-edited bindings.json
     path = bindings_path(tmp_path / "h")
     (tmp_path / "h").mkdir()
-    session = [b for b in Bindings.factory().bindings if routing.is_session_row(b)]
+    session = [b for b in Bindings.factory().bindings if routing.is_meta_row(b)]
     Bindings([*session, Binding("key:S", SAVE_PARAM, "toggle")], path=path).write()
     loaded = Bindings.load(path, legacy_midi=None)
     assert "dropped key:S → desk.save (toggle): desk.save takes only a momentary row " \
@@ -170,7 +170,7 @@ def test_save_not_added_is_said(tmp_path):
     takes a free control) — said on the SYSTEM page line (`said`) and on
     stderr at every launch, never silent."""
     session = [b for b in Bindings.factory().bindings
-               if routing.is_session_row(b) and b.target != SAVE_PARAM]
+               if routing.is_meta_row(b) and b.target != SAVE_PARAM]
     mine = Binding(f"note:{SAVE_CH}:{STOP}", "view.points", "toggle", feedback="led")
     path = bindings_path(tmp_path / "a")
     (tmp_path / "a").mkdir()
@@ -451,7 +451,7 @@ def test_a_session_file_gains_the_toggles_and_the_save_once(tmp_path):
     new = {(s, t) for s, t, *_ in routing.APC_NEW_ROWS}
     assert {(s, t) for s, t, _op in added} <= new
     old = [b for b in Bindings.factory().bindings
-           if routing.is_session_row(b) and (b.source, b.target) not in
+           if routing.is_meta_row(b) and (b.source, b.target) not in
            {(s, t) for s, t, _op in added}]
     path = bindings_path(tmp_path / "a")
     (tmp_path / "a").mkdir()

@@ -123,7 +123,7 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
         if who is None:
             continue
         owned += 1
-        assert p.group in params.PERFORMANCE_GROUPS, pid
+        assert p.group in params.PATCH_GROUPS, pid
         rule = graphview.OWNERS.get(p.group)
         got = rule(pid, None) if callable(rule) and p.group != "fx" else (
             "shape" if pid == "fx.face_map" else rule)

@@ -264,7 +264,7 @@ def test_declare_segments_comes_and_goes():
     assert params.declare_segments(reg, ["segment"]) == []
     assert reg.segment_state["segment"] is kept
     assert not params.is_segment_id("segment.1.on") and params.is_segment_id("segment.12.mode")
-    groups = params.PERFORMANCE_GROUPS
+    groups = params.PATCH_GROUPS
     assert groups.index("segment") == groups.index("cut") + 1
 
 

@@ -126,7 +126,7 @@ def load_preset(r, router: Router, name: str) -> list[str]:
 
 def session_rows() -> list[Binding]:
     """The factory table's rows a bindings.json keeps (plan 13 §2.2)."""
-    return [b for b in Bindings.factory().bindings if routing.is_session_row(b)]
+    return [b for b in Bindings.factory().bindings if routing.is_meta_row(b)]
 
 
 def factory_pattern(out) -> np.ndarray:
@@ -402,7 +402,7 @@ def test_table_file_round_trip_and_path(tmp_path):
     assert bindings_path() == Path("bindings.json")
     t = Bindings.factory(path=path)
     n = len(t.bindings)
-    session = [b for b in t.bindings if routing.is_session_row(b)]
+    session = [b for b in t.bindings if routing.is_meta_row(b)]
     t.add(Binding("lane:2", "view.bright", "push", 0.4))
     t.write()
     text = path.read_text()
@@ -539,7 +539,7 @@ def test_factory_files_match_the_code():
     assert re.search(r'^  \{"source": "key:RIGHT"', f.read_text(), re.MULTILINE)
     t = Bindings.from_json(doc)
     assert not t.migrated and not t.changed and t.dropped == []
-    assert all(routing.is_session_row(b) for b in t.bindings) and t.macros == {}
+    assert all(routing.is_meta_row(b) for b in t.bindings) and t.macros == {}
 
 
 # -------------------------------------------------------------- adapters
@@ -1901,7 +1901,7 @@ def test_a_converted_presets_values_are_bases_a_preset_would_save(tmp_path):
                 continue
             assert pid in ids, (key, pid)
             p = r.reg[pid]
-            assert p.persist and not p.alias and part_of(p) == "performance", (key, pid)
+            assert p.persist and not p.alias and part_of(p) == "patch", (key, pid)
 
 
 def test_lfo_breathe_is_the_chain_the_plan_draws(tmp_path):
@@ -2001,7 +2001,7 @@ def test_the_live_table_writes_only_the_sessions_controls(tmp_path):
     t.bind(Binding("cc:0:99", "view.zoom", "abs"))               # a session row: the file
     doc = json.loads(path.read_text())
     assert set(doc) == {"schema", "profile", "bindings", "units"}   # (units: wave 0 T1)
-    assert all(routing.is_session_row(Binding.from_json(d)) for d in doc["bindings"])
+    assert all(routing.is_meta_row(Binding.from_json(d)) for d in doc["bindings"])
     assert {"source": "cc:0:99", "target": "view.zoom", "op": "abs"} in doc["bindings"]
     assert not any(d.get("layer") == "preset" for d in doc["bindings"])
     # the next start reads the session's rows and nothing it would land

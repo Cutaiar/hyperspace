@@ -160,7 +160,7 @@ from .routing import (
     base_refusal,
     base_sub,
     factory_desk,
-    is_session_row,
+    is_meta_row,
     meta_refusal,
     whole_circle,
 )
@@ -807,7 +807,7 @@ def _pair_body(panel, asked: PairAsk) -> None:
         answer_pair(panel, TAKE_OVER)
         imgui.close_current_popup()
     if imgui.is_item_hovered():
-        meta = any(is_session_row(x) for x in asked.rows)
+        meta = any(is_meta_row(x) for x in asked.rows)
         ui.tooltip("The rows above go, and the pair lands."
                    + (f" A meta controller's row goes for every patch: {META_UNDO}" if meta else ""))
     if ui.chip("Cancel##pair"):
@@ -976,7 +976,7 @@ def _scales(panel, target: str | None = None) -> list[Param]:
     go, every frame)."""
     reg = panel.reg
     return [q for q in reg if q.kind is Kind.CONTINUOUS and not q.alias
-            and part_of(q) == "session" and q.id != target]
+            and part_of(q) == "shared_meta" and q.id != target]
 
 
 def _depth_chips(router: Router, b: Binding) -> list[str]:

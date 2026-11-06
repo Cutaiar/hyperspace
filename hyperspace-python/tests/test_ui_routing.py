@@ -687,7 +687,7 @@ def test_the_base_picker_offers_performance_params_only(rig):
     ids = {q.id for q in offered}
     assert "view.bright" in ids and "fx.mix" in ids
     assert not ids & {"tempo.bpm", "master.gain", "band.sel.trim", "band.0.trim"}
-    assert all(part_of(q) == "performance" and q.persist and not q.alias for q in offered)
+    assert all(part_of(q) == "patch" and q.persist and not q.alias for q in offered)
     assert not any(q.group == "macro" for q in offered)
     assert all(routing.base_refusal(q.id, reg) is None for q in offered)
 

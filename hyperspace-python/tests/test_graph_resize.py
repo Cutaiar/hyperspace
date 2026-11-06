@@ -117,8 +117,8 @@ def test_declare_resizes_comes_and_goes():
     assert reg.resize_state["resize"] is kept
     assert not params.is_resize_id("resize.1.size") and not params.is_resize_id("resize.crop")
     assert params.is_resize_id("resize.12.filter")
-    assert params.RESIZE_GROUP in params.PERFORMANCE_GROUPS
-    groups = params.PERFORMANCE_GROUPS
+    assert params.RESIZE_GROUP in params.PATCH_GROUPS
+    groups = params.PATCH_GROUPS
     assert groups.index("resize") == groups.index("switch") + 1
 
 

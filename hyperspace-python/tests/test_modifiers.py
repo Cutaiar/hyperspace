@@ -35,7 +35,7 @@ from hyperspace import routing, ui_routing, undo
 from hyperspace.bands import CEIL
 from hyperspace.learn import Learn
 from hyperspace.modifiers import Modifier, ModState, step
-from hyperspace.params import PERFORMANCE_GROUPS, part_of
+from hyperspace.params import PATCH_GROUPS, part_of
 from hyperspace.preset import MODIFIERS_KEY
 from hyperspace.routing import Binding, Bindings, Router
 
@@ -179,13 +179,13 @@ def analyzer(band0: float) -> NS:
 
 def test_the_mod_group_is_performance_and_its_params_come_and_go(rig):
     reg, table = rig.reg, rig.router.table
-    assert PERFORMANCE_GROUPS[-1] == "mod"
+    assert PATCH_GROUPS[-1] == "mod"
     m = table.add_modifier("smooth", ["hand:right.energy"], reg, release=0.6)
     assert m.id == "mod.1"
     ids = [p.id for p in reg.group("mod")]
     assert ids == ["mod.1.attack", "mod.1.release", "mod.1.spring"]
     p = reg["mod.1.release"]
-    assert part_of(p) == "performance" and p.modulatable and p.value == 0.6
+    assert part_of(p) == "patch" and p.modulatable and p.value == 0.6
     p.set(1.2)
     assert table.modifier("mod.1").params["release"] == 1.2
     table.add_modifier("combine", (), reg)

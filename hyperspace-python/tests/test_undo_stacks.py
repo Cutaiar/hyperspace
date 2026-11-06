@@ -50,7 +50,7 @@ def here_is_meta(rig, on: bool = True) -> None:
 
 
 def bases(deck) -> dict:
-    return deck.reg.snapshot(part="performance")
+    return deck.reg.snapshot(part="patch")
 
 
 def test_there_are_three_stacks_and_they_watch_apart(rig):
@@ -62,11 +62,11 @@ def test_there_are_three_stacks_and_they_watch_apart(rig):
     m = {p.id for p in meta._params()}
     for u, deck in ((one, rig.one), (two, rig.two)):
         ids = {p.id for p in u._params()}
-        assert ids and all(part_of(deck.reg[i]) == "performance" for i in ids)
+        assert ids and all(part_of(deck.reg[i]) == "patch" for i in ids)
         assert not ids & m
         # (between them, every watched param of the deck: nothing fell through)
         assert ids | m == {p.id for p in deck.reg if undo.watched(p)}
-    assert all(part_of(rig.reg[i]) != "performance" for i in m)
+    assert all(part_of(rig.reg[i]) != "patch" for i in m)
     assert meta.reg is rig.one.session and meta.table.session is rig.one.session_table
 
 
@@ -165,19 +165,19 @@ def test_undo_on_either_deck_never_moves_a_meta_param(rig, which):
     rig.reg["master.gain"].step(-3)                    # the hour-old analyzer tweak
     rig.reg["band.0.thr"].step(4)
     go(rig)
-    tuned = deck.reg.snapshot(part="session")
+    tuned = deck.reg.snapshot(part="shared_meta")
     steps = len(rig.meta.undo.stack)
     fired = 0
     while deck.undo.stack:
         rig.reg["edit.undo"].fire()
         fired += 1
-        assert deck.reg.snapshot(part="session") == tuned
+        assert deck.reg.snapshot(part="shared_meta") == tuned
     assert fired == 2 and deck.undo.status != "nothing to undo"
     rig.reg["edit.undo"].fire()                        # nothing left here: nothing crosses
-    assert deck.undo.status == "nothing to undo" and deck.reg.snapshot(part="session") == tuned
+    assert deck.undo.status == "nothing to undo" and deck.reg.snapshot(part="shared_meta") == tuned
     assert len(rig.meta.undo.stack) == steps
     rig.reg["edit.redo"].fire()
-    assert deck.reg.snapshot(part="session") == tuned
+    assert deck.reg.snapshot(part="shared_meta") == tuned
 
 
 @pytest.mark.parametrize("which", ["one", "two"])
@@ -293,7 +293,7 @@ def test_the_meta_controllers_rows_are_a_step_and_their_undo_writes_their_file(r
     session = t1.session
     path = session.path
     row = Binding("key:F13", "view.points", "toggle")
-    assert routing.is_session_row(row)
+    assert routing.is_meta_row(row)
     t1.add(row)
     t1.write()
     go(rig)
@@ -329,13 +329,13 @@ def test_a_corpus_walk_a_decks_stack_holds_no_meta_param(rig):
         assert len(deck.undo.stack) >= len(names) - 1
         for s in deck.undo.stack:
             # (by id: a param an older preset's graph declared may be gone by now)
-            bad = [k for k in s.before.bases if part_of_id(k) != "performance"]
+            bad = [k for k in s.before.bases if part_of_id(k) != "patch"]
             assert not bad, (s.label, bad[:5])
             assert s.before.rows == ()
             assert "band" not in s.before.marks[1] if s.before.marks else True
     assert rig.meta.undo.stack == []
     m = {p.id for p in rig.meta.undo._params()}
-    assert m and all(part_of_id(k) == "session" for k in m)
+    assert m and all(part_of_id(k) == "shared_meta" for k in m)
 
 
 def test_the_frame_ticks_all_three():
@@ -450,7 +450,7 @@ def test_a_param_under_the_mouse_says_by_its_own_layer_in_a_mixed_section(pane):
     p = r.panel
     frame(p, "hands")
     d.run(d.wait(2))
-    meta, preset = _drawn_params(r, d, "session"), _drawn_params(r, d, "performance")
+    meta, preset = _drawn_params(r, d, "shared_meta"), _drawn_params(r, d, "patch")
     assert meta and preset, (meta[:5], preset[:5])
     d.run(d.reveal(meta[0]), d.move(meta[0]), d.wait(2))
     assert p._param_under is r.reg[meta[0]] and p.in_meta_section()
@@ -497,7 +497,7 @@ def test_a_selected_rig_node_s_param_takes_the_meta_stack(pane):
 
     def metas(n):
         return [k for _g, pids in ui_graph.side_groups(p, n)[:1] for k in pids
-                if undo.watched(r.reg[k]) and part_of(r.reg[k]) == "session"]
+                if undo.watched(r.reg[k]) and part_of(r.reg[k]) == "shared_meta"]
 
     node = next((n for n in view.nodes if metas(n)), None)
     assert node is not None, sorted({n.kind for n in view.nodes})

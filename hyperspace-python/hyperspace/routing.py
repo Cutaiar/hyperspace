@@ -298,7 +298,7 @@ from .params import (
     fx_files,
     is_meta_id,
     is_per_deck_meta_id,
-    is_session_id,
+    is_shared_meta_id,
     part_of,
     part_of_id,
     retaper_depths,
@@ -1578,7 +1578,7 @@ def meta_refusal(pid: str | None) -> str | None:
     (row 700) and a save writes over a slot's file, so a patch's row on `preset.*` would
     be one patch changing another, which the absolute rule forbids; `deck.chase`,
     `totem.*` and `poi.*` are a person's controls, in no look."""
-    if is_session_id(pid):
+    if is_shared_meta_id(pid):
         return META_WORDS.format(pid=pid)
     return PER_DECK_WORDS.format(pid=pid) if is_per_deck_meta_id(pid) else None
 
@@ -1590,7 +1590,7 @@ def meta_row_refusal(b: Binding, target: str | None = None) -> str | None:
     a preset-layer desk row are a preset's; an invariant or global-layer desk
     row (the APC's MASTER fader on `output.dim`), a key, a pad button and a
     sink are the meta controller's own and stay."""
-    return None if is_session_row(b) else meta_refusal(b.target if target is None else target)
+    return None if is_meta_row(b) else meta_refusal(b.target if target is None else target)
 
 
 def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
@@ -1604,14 +1604,14 @@ def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
     p = reg.get(pid) if reg is not None else None
     if p is None:
         part = part_of_id(pid)
-        if part == "session":
+        if part == "shared_meta":
             return "a session param, never a preset's (plan 13 D9)"
-        return None if part == "performance" else "not part of a preset"
-    if part_of(p) == "session":
+        return None if part == "patch" else "not part of a preset"
+    if part_of(p) == "shared_meta":
         return "a session param, never a preset's (plan 13 D9)"
     if p.alias:
         return "an alias, not part of a preset"
-    if part_of(p) != "performance" or not p.persist:
+    if part_of(p) != "patch" or not p.persist:
         return "not part of a preset"
     return None
 
@@ -1651,7 +1651,7 @@ def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[st
     it is. Edits `rows` and `macros` in place; returns a note per row."""
     notes: list[str] = []
     for b in rows:
-        if b.scale is None or is_session_id(b.scale):
+        if b.scale is None or is_shared_meta_id(b.scale):
             continue
         if not is_macro(b.scale):
             notes.append(f"dropped the scale {b.scale} of {b.source} → {b.target}: a route's "
@@ -1990,7 +1990,7 @@ def dumps_doc(d: dict) -> str:
     return text + "\n}\n"
 
 
-def is_session_row(b: Binding) -> bool:
+def is_meta_row(b: Binding) -> bool:
     """A row `bindings.json` keeps (plan 13 §2.2): anything but a performer
     row (push / position, disabled ones too) and a preset-layer MIDI row —
     those are the loaded preset's. A sink row (plan 27 B3, `SINK_OP`) is
@@ -2130,7 +2130,7 @@ class SessionTable:
     def rows(self) -> list[Binding]:
         """The session's rows, in their order: one list in every deck."""
         tables = self.tables
-        return [b for b in tables[0].bindings if is_session_row(b)] if tables else []
+        return [b for b in tables[0].bindings if is_meta_row(b)] if tables else []
 
     def set_rows(self, rows: Iterable[Binding]) -> None:
         """An undo's restore: these are the session's rows now, in every deck's
@@ -2140,7 +2140,7 @@ class SessionTable:
         if not tables:
             return
         home = tables[0]
-        home.bindings = [*rows, *(b for b in home.bindings if not is_session_row(b))]
+        home.bindings = [*rows, *(b for b in home.bindings if not is_meta_row(b))]
         home.dropped, home.notes = [], []
         home._share()
         for t in tables:
@@ -2162,7 +2162,7 @@ class SessionTable:
         which the session's are written (default: `rows`)."""
         rows = self.rows if rows is None else rows
         d = {"schema": SCHEMA, "profile": self.profile,
-             "bindings": [b.to_json() for b in rows if is_session_row(b)]}
+             "bindings": [b.to_json() for b in rows if is_meta_row(b)]}
         seeded = getattr(self, "sinks_seeded", None)
         if seeded:
             d["sinks_seeded"] = list(seeded)
@@ -2264,9 +2264,9 @@ class Bindings:
         others = [t for t in self._sess().tables if t is not self]
         if not others:
             return
-        rows = [b for b in self.bindings if is_session_row(b)]
+        rows = [b for b in self.bindings if is_meta_row(b)]
         for t in others:
-            t.bindings = [*rows, *(b for b in t.bindings if not is_session_row(b))]
+            t.bindings = [*rows, *(b for b in t.bindings if not is_meta_row(b))]
             t.rows_serial = getattr(t, "rows_serial", 0) + 1
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
@@ -2290,9 +2290,9 @@ class Bindings:
             # and handed to every deck by the `_share` below)
             have = session.rows
             known = {json.dumps(b.to_json(), sort_keys=True) for b in have}
-            extra = [b for b in own if is_session_row(b)
+            extra = [b for b in own if is_meta_row(b)
                      and json.dumps(b.to_json(), sort_keys=True) not in known]
-            self.bindings = [*have, *extra, *(b for b in own if not is_session_row(b))]
+            self.bindings = [*have, *extra, *(b for b in own if not is_meta_row(b))]
             shared = bool(extra)
         else:
             # (review of #351: a session no table follows yet holds no rows —
@@ -2942,7 +2942,7 @@ class Bindings:
         self.bindings = [x for x in self.bindings if not any(x is g for g in gone)]
         self.bindings.append(b)
         self.dropped, self.notes = [], []
-        if is_session_row(b) or any(is_session_row(g) for g in gone):
+        if is_meta_row(b) or any(is_meta_row(g) for g in gone):
             self._share()                 # plan 44 D3: the session's rows, every deck's
         if write:
             self.write()
@@ -2967,7 +2967,7 @@ class Bindings:
         self._check(b)
         self.bindings.append(b)
         self.dropped, self.notes = [], []
-        if is_session_row(b):
+        if is_meta_row(b):
             self._share()                 # plan 44 D3: the session's rows, every deck's
         return b
 
@@ -3025,7 +3025,7 @@ class Bindings:
         """Take a row out; a route's depth subscribers go with it unless
         another route has the same (source, target)."""
         self.bindings = [x for x in self.bindings if x is not b]
-        if is_session_row(b):
+        if is_meta_row(b):
             self._share()                 # plan 44 D3: gone from every deck
         if b.op in MOD_OPS:
             self._follow_route((b.source, b.target), None)

@@ -231,7 +231,7 @@ def test_a_power_cycle_with_the_page_up_resends_the_page(rig, seq):
 
 def test_older_files_get_send_a_unless_it_is_taken(tmp_path):
     session = [b for b in Bindings.factory().bindings
-               if routing.is_session_row(b) and b.target != routing.SEQ_PAGE_PARAM]
+               if routing.is_meta_row(b) and b.target != routing.SEQ_PAGE_PARAM]
     path = bindings_path(tmp_path / "a")
     (tmp_path / "a").mkdir()
     Bindings(session, path=path).write()

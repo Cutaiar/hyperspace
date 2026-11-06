@@ -297,12 +297,12 @@ def _two_decks():
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
-    from hyperspace.params import build_performance, build_session
+    from hyperspace.params import build_patch, build_meta
     from hyperspace.view import ViewState
     chain = Analyzer(Analyser())
-    session = build_session(Control(chain), SimpleNamespace(chain=chain))
-    return session, build_performance(ViewState(), session=session), \
-        build_performance(ViewState(), session=session)
+    session = build_meta(Control(chain), SimpleNamespace(chain=chain))
+    return session, build_patch(ViewState(), session=session), \
+        build_patch(ViewState(), session=session)
 
 
 def test_a_session_param_is_applied_once_a_frame_whichever_deck_applies():
@@ -348,8 +348,8 @@ def test_a_part_is_cached_on_the_param_and_a_duplicate_is_refused_once():
     from hyperspace.params import part_of
     _session, a, b = _two_decks()
     p = a["ghost.mirror"]
-    assert p._part == "session" == part_of(p)
-    assert a["view.bright"]._part == "performance"
+    assert p._part == "shared_meta" == part_of(p)
+    assert a["view.bright"]._part == "patch"
     with pytest.raises(ValueError, match="duplicate param id master.gain"):
         b.continuous("master.gain", "x", lambda: 0.0, lambda v: None, group="master")
 
@@ -383,10 +383,10 @@ def test_the_mirror_is_the_rooms_one_setting_and_a_rebuilt_deck_lets_its_old_sta
     del b
     gc.collect()
     assert len(room.states) == 1
-    from hyperspace.params import build_performance
+    from hyperspace.params import build_patch
     from hyperspace.view import ViewState
     fresh = GhostState()
-    c = build_performance(ViewState(), ghost=fresh, session=session)
+    c = build_patch(ViewState(), ghost=fresh, session=session)
     assert fresh.mirror is True and c["ghost.mirror"] is p and len(room.states) == 2
     p.set(False)
     assert fresh.mirror is False and p.value is False
@@ -452,11 +452,11 @@ def test_the_lead_is_named_and_a_stale_follower_never_lands_the_session():
     (`session.lead = reg`, as `Deck.build(on_air=True)` does) — a registry
     that followed first and is still referenced (an old deck a closure
     holds) lands nothing once another is named."""
-    from hyperspace.params import build_performance
+    from hyperspace.params import build_patch
     from hyperspace.view import ViewState
     session, stale, _b = _two_decks()
     assert session.lead is stale                 # nobody named: the first
-    live = build_performance(ViewState(), session=session)
+    live = build_patch(ViewState(), session=session)
     session.lead = live
     p = session["master.gain"]
     base = p.value
@@ -467,7 +467,7 @@ def test_the_lead_is_named_and_a_stale_follower_never_lands_the_session():
     live.apply()
     assert p.value != pytest.approx(base)
     with pytest.raises(ValueError):
-        session.lead = build_performance(ViewState())        # not a follower
+        session.lead = build_patch(ViewState())        # not a follower
 
 
 def test_deck_build_names_its_registry_the_lead(tmp_path):

@@ -16,7 +16,7 @@ from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
 from hyperspace.preset import Presets
-from hyperspace.routing import Bindings, Router, is_session_row
+from hyperspace.routing import Bindings, Router, is_meta_row
 from hyperspace.view import ViewState
 
 
@@ -552,7 +552,7 @@ def test_an_invariant_control_works_through_a_desk_learn(rig):
 def test_map_round_trips_json(tmp_path):
     path = tmp_path / "m.json"
     mm = Bindings.load(path)
-    n = len([b for b in mm.midi() if is_session_row(b)])   # the file keeps the session's
+    n = len([b for b in mm.midi() if is_meta_row(b)])   # the file keeps the session's
     mm.bind(Binding("pitch:3", "view.zoom", "abs"))
     mm2 = Bindings.load(path)
     assert len(mm2.midi()) == n + 1

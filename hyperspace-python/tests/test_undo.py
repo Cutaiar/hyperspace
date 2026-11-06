@@ -160,7 +160,7 @@ def labels(r) -> list[str]:
 def look(r) -> tuple:
     """The loaded preset's whole state, as a save would write it."""
     t = r.table
-    return (r.reg.snapshot(part="performance"), [b.to_json() for b in t.routes()],
+    return (r.reg.snapshot(part="patch"), [b.to_json() for b in t.routes()],
             [b.to_json() for b in t.desk()], json.dumps(t.macros_doc(), sort_keys=True))
 
 
@@ -472,7 +472,7 @@ def test_a_show_load_and_its_startup_preset_are_one_step_each(rig):
     reg["master.gain"].step(-3)                        # a session edit
     settle(rig)
     party = (pr.name, list(pr.bank), pr.startup, pr.path, look(rig),
-             reg.snapshot(part="session"), lib.current(PRESETS), lib.current("band"))
+             reg.snapshot(part="shared_meta"), lib.current(PRESETS), lib.current("band"))
     last = lib.last_show()
     pr.load("house")
     settle(rig)
@@ -482,7 +482,7 @@ def test_a_show_load_and_its_startup_preset_are_one_step_each(rig):
     assert pr.name == "house" and lib.current(PRESETS) != "TUMBLE"
     assert meta.undo() and meta.status == "undid show house"
     assert rig.undo.undo()                             # …and the preset it started on
-    session = reg.snapshot(part="session")
+    session = reg.snapshot(part="shared_meta")
     assert (pr.name, list(pr.bank), pr.startup, pr.path) == party[:4]
     assert same_look(look(rig), party[4]) and session == party[5]
     assert (lib.current(PRESETS), lib.current("band")) == party[6:]

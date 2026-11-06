@@ -84,7 +84,7 @@ from imgui_bundle import imgui
 from . import apc40, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .groupwords import group_part, group_word
-from .params import PERFORMANCE_GROUPS, Kind
+from .params import PATCH_GROUPS, Kind
 from .routing import FINE_PARAM, Binding, fine_gives_way, led_shade
 
 MIN_W = 300.0              # the window is never narrower, px
@@ -381,7 +381,7 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     values = reg.snapshot()
     defaults: dict = {}
     if lib is not None and lib.reg is not None:
-        for g in PERFORMANCE_GROUPS:
+        for g in PATCH_GROUPS:
             defaults.update(lib.defaults(g))
     routed = {b.target for b in table.routes() if b.enabled}
     routed |= {s.base for m in table.macros.values() for s in m.subs if s.base}

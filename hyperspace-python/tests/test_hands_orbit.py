@@ -24,7 +24,7 @@ from hyperspace.deck import Deck
 from hyperspace.hands import core as hc
 from hyperspace.hands import room as R
 from hyperspace.hands import tape as T
-from hyperspace.routing import MOD_OPS, TURN_GRACE_S, TURN_OP, Binding, Owned, is_session_row
+from hyperspace.routing import MOD_OPS, TURN_GRACE_S, TURN_OP, Binding, Owned, is_meta_row
 
 YAW, PITCH = "hand:right.room.yaw", "hand:right.room.pitch"
 GRAB = "hand:right.grab"
@@ -375,7 +375,7 @@ def test_it_is_a_performer_and_the_referee_keeps_one(app):
 
 def test_it_is_the_presets_row_never_the_rigs(app):
     row = app.table.owner("camera.yaw")
-    assert not is_session_row(row)
+    assert not is_meta_row(row)
     assert row.to_json()["op"] == TURN_OP and row.to_json()["when"] == GRAB
     assert Binding.from_json(row.to_json()) == row
     assert '"turn"' not in app.table.dumps()

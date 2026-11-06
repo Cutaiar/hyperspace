@@ -43,8 +43,8 @@ from hyperspace.params import (
     PARTS,
     PER_DECK_META,
     PER_DECK_META_GROUPS,
-    SESSION_IDS,
-    SESSION_KEYS,
+    SHARED_META_IDS,
+    SHARED_META_KEYS,
     Kind,
     Param,
     SessionRegistry,
@@ -59,7 +59,7 @@ from hyperspace.routing import (
     Bindings,
     Macro,
     base_refusal,
-    is_session_row,
+    is_meta_row,
     meta_refusal,
 )
 
@@ -90,7 +90,7 @@ def rig(air_rig):  # noqa: F811
 def layer_of(p) -> str | None:
     """The layer `p` is in; None: in neither, a bug."""
     part = part_of(p)
-    return "meta" if part in META_PARTS else "patch" if part == "performance" else None
+    return "meta" if part in META_PARTS else "patch" if part == "patch" else None
 
 
 def layer_faults(reg) -> list[str]:
@@ -98,8 +98,8 @@ def layer_faults(reg) -> list[str]:
     out = []
     for p in reg:
         claims = [name for name, groups in PARTS.items() if p.group in groups]
-        if p.id in SESSION_IDS or p.id.rpartition(".")[2] in SESSION_KEYS.get(p.group, ()):
-            claims = ["session"]        # (asked first: `part_of_id`)
+        if p.id in SHARED_META_IDS or p.id.rpartition(".")[2] in SHARED_META_KEYS.get(p.group, ()):
+            claims = ["shared_meta"]        # (asked first: `part_of_id`)
         if len(claims) != 1:
             out.append(f"{p.id}: group {p.group!r} is in {claims or 'neither layer'}")
         elif layer_of(p) is None:
@@ -115,7 +115,7 @@ def test_no_group_is_in_two_parts_and_every_part_is_in_one_layer():
         for g in groups:
             assert g not in seen, f"{g} is in {seen[g]} and {name}"
             seen[g] = name
-    assert {*META_PARTS, "performance"} == set(PARTS), "two layers and no others"
+    assert {*META_PARTS, "patch"} == set(PARTS), "two layers and no others"
 
 
 def test_every_param_of_the_app_is_in_exactly_one_layer(rig):
@@ -142,7 +142,7 @@ def test_the_test_fails_on_neither_and_on_both(monkeypatch):
     assert layer_faults([Param("x", "x", Kind.TOGGLE, group=None)])
     p = Param("view.x", "x", Kind.TOGGLE, group="view")
     assert not layer_faults([p])
-    monkeypatch.setitem(PARTS, "session", (*PARTS["session"], "view"))
+    monkeypatch.setitem(PARTS, "shared_meta", (*PARTS["shared_meta"], "view"))
     assert layer_faults([p])
 
 
@@ -259,7 +259,7 @@ def test_no_patch_row_reaches_one_by_any_door(pid):
     for row in (Binding("note:0:60", pid, "toggle", layer="preset"),
                 *(Binding("seq:0", pid, op, 1.0) for op in MOD_OPS),
                 Binding("hand:left.y", pid, "push", 0.5, enabled=False)):
-        assert not is_session_row(row)
+        assert not is_meta_row(row)
         assert "no patch's row" in routing.meta_row_refusal(row)
         with pytest.raises(ValueError):       # (`deck.chase`: the held rule says first)
             t.add(row)
@@ -283,7 +283,7 @@ def test_a_saved_row_on_a_totem_or_a_poi_drops_with_a_note_and_presses_nothing(r
         values={"totem.on": True, "poi.length": 2.0})
     d.presets.load("CARRIES")
     assert d.presets.current == "CARRIES"
-    assert not [b for b in d.table.bindings if b.target in targets and not is_session_row(b)]
+    assert not [b for b in d.table.bindings if b.target in targets and not is_meta_row(b)]
     for t in targets:
         assert any(n.startswith("dropped note:8:") and f"→ {t}" in n and "no patch's row" in n
                    for n in d.presets.notes), t
@@ -331,7 +331,7 @@ def test_the_graph_offers_no_port_on_one(rig):
     Binding("key:T", "totem.reset", "fire"),
 ])
 def test_the_meta_rows_road_stays_open(row):
-    assert is_session_row(row) and routing.meta_row_refusal(row) is None
+    assert is_meta_row(row) and routing.meta_row_refusal(row) is None
     assert Bindings().add(row) is row
 
 
@@ -339,7 +339,7 @@ def test_every_factory_row_on_the_class_is_the_meta_controllers():
     rows = [b for b in Bindings.factory().bindings if is_per_deck_meta_id(b.target)]
     assert {b.target for b in rows} >= {"preset.select", "preset.load.0", "preset.save.0",
                                         "preset.home", "deck.chase"}
-    assert all(is_session_row(b) for b in rows)
+    assert all(is_meta_row(b) for b in rows)
 
 
 def test_shift_f_keys_save_by_the_real_road(rig):
@@ -364,7 +364,7 @@ def test_a_pad_learn_on_a_load_still_lands_and_loads_off_air(rig):
     d.learn.arm("preset.load.1", "pad")
     assert d.learn.learn_pad_button("pad:A")
     row = next(b for b in d.table.bindings if b.source == "pad:A")
-    assert row.target == "preset.load.1" and is_session_row(row)
+    assert row.target == "preset.load.1" and is_meta_row(row)
     assert any(b is row for b in rig.two.table.bindings)
     doc = json.loads(d.table.path.read_text())
     assert any(r["source"] == "pad:A" and r["target"] == "preset.load.1" for r in doc["bindings"])

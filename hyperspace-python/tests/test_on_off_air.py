@@ -52,7 +52,7 @@ from hyperspace.routing import (
     Binding,
     Bindings,
     factory_desk,
-    is_session_row,
+    is_meta_row,
     led_shade,
     meta_refusal,
     meta_row_refusal,
@@ -151,7 +151,7 @@ def _pass(rig) -> None:
 def _state(d) -> dict:
     """What a patch is, on one deck: nothing here may move when the other acts."""
     t = d.table
-    return {"bases": d.reg.snapshot(part="performance"),
+    return {"bases": d.reg.snapshot(part="patch"),
             "routes": [b.to_json() for b in t.routes()],
             "desk": [b.to_json() for b in t.desk()],
             "modifiers": t.modifiers_doc(d.reg),
@@ -197,7 +197,7 @@ def _pattern_reset(rig, d):
 
 
 def _pattern_road(rig, d):
-    p = next(p for p in d.reg if p.group == "pattern" and p.persist and part_of(p) == "performance"
+    p = next(p for p in d.reg if p.group == "pattern" and p.persist and part_of(p) == "patch"
              and getattr(p.kind, "value", "") == "continuous")
     p.set_norm(0.5 if p.norm != 0.5 else 0.25)
 
@@ -413,7 +413,7 @@ def test_the_output_controls(rig):
     reg = rig.one.reg
     for pid in ("output.xfade", "output.xfade_s"):
         p = reg[pid]
-        assert p is rig.two.reg[pid] and part_of(p) == "session"
+        assert p is rig.two.reg[pid] and part_of(p) == "shared_meta"
         assert p.group == "output" and not p.persist and not p.modulatable
     for pid in ("output.hold", "output.take", "output.drop"):
         assert pid not in reg
@@ -999,7 +999,7 @@ def test_a_preset_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
     t = Bindings()
     for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
                 Binding("seq:0", verb, "push", 1.0), Binding("lfo:0", verb, "position", 1.0)):
-        assert not is_session_row(row) and "no patch's row" in meta_row_refusal(row)
+        assert not is_meta_row(row) and "no patch's row" in meta_row_refusal(row)
         with pytest.raises(ValueError, match="no patch's row"):
             t.add(row)
     assert t.set_desk([Binding("note:0:60", verb, "toggle")]) and not t.desk()
@@ -1007,7 +1007,7 @@ def test_a_preset_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
     # (the meta controller's own rows pass: invariant, global layer, a key, a pad)
     for row in (Binding("note:0:61", verb, "toggle"), Binding("note:0:62", verb, "toggle", layer="global"),
                 Binding("key:F9", verb, "fire"), Binding("pad:A", verb, "fire")):
-        assert is_session_row(row) and meta_row_refusal(row) is None
+        assert is_meta_row(row) and meta_row_refusal(row) is None
 
 
 @pytest.mark.parametrize("carrier", [0, 1], ids=["on air carries", "off air carries"])
@@ -1023,7 +1023,7 @@ def test_a_preset_carrying_load_rows_reaches_no_other_deck(rig, carrier):
                 for k, v in enumerate(CARRIED)])
     d.presets.load("CARRIES")
     assert d.presets.current == "CARRIES"
-    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_session_row(b)]
+    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_meta_row(b)]
     desk_notes = [n for n in d.presets.notes if n.startswith("dropped note:8:") and "no patch's row" in n]
     assert len(desk_notes) == len(CARRIED)
     assert all(any(f"→ {v}" in n for n in d.presets.notes) for v in CARRIED), "each route said"
@@ -1058,13 +1058,13 @@ def test_a_preset_cannot_carry_a_row_on_a_save_verb_by_any_door(verb):
     for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
                 Binding("note:0:60", verb, "hold", layer="preset"),
                 Binding("seq:0", verb, "push", 1.0), Binding("lfo:0", verb, "position", 1.0)):
-        assert not is_session_row(row) and "no patch's row" in meta_row_refusal(row)
+        assert not is_meta_row(row) and "no patch's row" in meta_row_refusal(row)
         with pytest.raises(ValueError, match="no patch's row"):
             t.add(row)
     assert t.set_desk([Binding("note:0:60", verb, "toggle")]) and not t.desk()
     for row in (Binding("note:0:61", verb, "hold"), Binding("note:0:62", verb, "hold", layer="global"),
                 Binding("key:SHIFT+F9", verb, "fire"), Binding("pad@edge:MENU", verb, "hold")):
-        assert is_session_row(row) and meta_row_refusal(row) is None
+        assert is_meta_row(row) and meta_row_refusal(row) is None
 
 
 def _files(rig) -> dict:
@@ -1083,7 +1083,7 @@ def test_a_preset_carrying_save_rows_loses_them_with_a_note_and_writes_nothing(r
                 for k, v in enumerate(SAVES)])
     d.presets.load("SAVER")
     assert d.presets.current == "SAVER"
-    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_session_row(b)]
+    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_meta_row(b)]
     for v in SAVES:
         assert any(n.startswith("dropped note:8:") and f"→ {v}" in n and "no patch's row" in n
                    for n in d.presets.notes), v
@@ -1123,7 +1123,7 @@ def test_a_held_empty_pad_on_the_invariant_row_writes_its_file(rig):
 def test_the_edges_hold_to_save_still_saves(rig):
     """The Edge's factory row (row 723): `pad@edge:MENU`, a hold, the meta controller's."""
     row = Binding("pad@edge:MENU", "preset.save_new", "hold")
-    assert is_session_row(row) and rig.one.table.add(row) is row
+    assert is_meta_row(row) and rig.one.table.add(row) is row
     rig.one.table.primaries = {"pad": "edge"}
     listed = set(rig.lib.list(PRESETS))
     pad = ScriptedPad()
@@ -1138,7 +1138,7 @@ def test_no_factory_row_or_corpus_preset_carries_a_load_or_save_row():
     meta controller's; no corpus preset or shipped JSON's `desk` or `routes` has one."""
     rows = [b for b in factory_desk() if _library_verb(b.target)]
     assert len(rows) > 24 and all(b.layer is None for b in rows)
-    assert all(is_session_row(b) for b in Bindings.factory().bindings if _library_verb(b.target))
+    assert all(is_meta_row(b) for b in Bindings.factory().bindings if _library_verb(b.target))
     root = Path(__file__).parent / "corpus"
     files = [*root.rglob("*.json"), *Path(app.__file__).parent.rglob("*.json")]
     assert files

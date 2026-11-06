@@ -163,14 +163,14 @@ def test_a_refused_load_keeps_the_extra_voices_and_their_values(tmp_path):
     reg[f"lfo.{n}.rate"].set(7.0)
     m = app.envs.add()
     reg[f"env.{m}.decay"].set(3.0)
-    before = reg.snapshot(part="performance")
+    before = reg.snapshot(part="patch")
     with pytest.raises(ValueError):
         app.presets.load_doc(bad)
     assert app.lfos.ids() == [1, 2, 3, 4, 5] and app.envs.ids() == [1, 2, 3, 4, 5, 6]
     assert reg[f"lfo.{n}.depth"].value == pytest.approx(0.9)
     assert reg[f"lfo.{n}.rate"].value == pytest.approx(7.0)
     assert reg[f"env.{m}.decay"].value == pytest.approx(3.0)
-    assert reg.snapshot(part="performance") == before
+    assert reg.snapshot(part="patch") == before
 
 
 # ---- 5 and 6: the sequencer alone (test_sequencer's rig) ----

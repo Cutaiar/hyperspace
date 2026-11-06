@@ -175,12 +175,12 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     CUT_GROUP,
     MATTE_GROUP,
     PAN_IDS,
-    PERFORMANCE_GROUPS,
+    PATCH_GROUPS,
     PLANES,
     POSE_IDS,
     RESIZE_GROUP,
     SEGMENT_GROUP,
-    SESSION_GROUPS,
+    SHARED_META_GROUPS,
     SWITCH_GROUP,
     UNITS,
     UNITS_KEY,
@@ -529,13 +529,13 @@ class GraphSection:
         session = getattr(project, "session", None) or {}
         held = {pid: v for pid, v in session.items()
                 if pid.startswith(name + ".") and pid in self.reg
-                and part_of(self.reg[pid]) == "session"}
+                and part_of(self.reg[pid]) == "shared_meta"}
         if held:
             self.reg.restore(held)
         if project is not None and isinstance(getattr(project, "session", None), dict):
             # an id the show lacks takes the state this landing left, as a
             # show's `_apply` does for a param added since: the show stays clean
-            for pid, v in self.reg.snapshot(part="session").items():
+            for pid, v in self.reg.snapshot(part="shared_meta").items():
                 if pid.startswith(name + "."):
                     project.session.setdefault(pid, v)
 
@@ -950,7 +950,7 @@ class Presets:
         lib, reg = self.lib, self.reg
         undo.push_on(self.reg, "new preset", load=True)    # the load below joins this step
         values = {k: v for k, v in lib._fresh_all().items()
-                  if k in reg and reg[k].group in PERFORMANCE_GROUPS
+                  if k in reg and reg[k].group in PATCH_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
                   and not is_resize_id(k) and not is_lookback_id(k)
@@ -1081,9 +1081,9 @@ class Presets:
             elif p is None:
                 if pid not in from_show:
                     unknown.append(pid)
-            elif part_of(p) == "session":
+            elif part_of(p) == "shared_meta":
                 notes.append(f"{pid} is the session's, ignored")
-            elif part_of(p) != "performance" or not p.persist:
+            elif part_of(p) != "patch" or not p.persist:
                 notes.append(f"{pid} is not part of a preset, ignored")
             else:
                 values[pid] = v
@@ -1169,7 +1169,7 @@ class Presets:
                      load=True)
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
-        held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
+        held_graph, held_values = gs.mark(), reg.snapshot(part="patch")
         # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
         held_banks = {s: b.doc() for s, b in self.banks().items()}
@@ -1199,9 +1199,9 @@ class Presets:
                 if p is None:
                     if pid not in from_show:
                         late.append(pid)
-                elif part_of(p) == "session":
+                elif part_of(p) == "shared_meta":
                     notes.append(f"{pid} is the session's, ignored")
-                elif part_of(p) != "performance" or not p.persist:
+                elif part_of(p) != "patch" or not p.persist:
                     notes.append(f"{pid} is not part of a preset, ignored")
                 else:
                     values[pid] = v
@@ -1213,18 +1213,18 @@ class Presets:
             #    object was built with (plan 44 D3: `_fresh_of`, never a
             #    group's `default.json`; a session key of a performance
             #    group, `ghost.mirror`, is never touched)
-            by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
+            by_group: dict[str, dict[str, Any]] = {g: {} for g in PATCH_GROUPS}
             for pid, v in values.items():
                 by_group[reg[pid].group][pid] = v
             landed: dict[str, Any] = {}
-            for group in PERFORMANCE_GROUPS:
+            for group in PATCH_GROUPS:
                 fresh = {k: v for k, v in lib._fresh_of(group).items()
-                         if k in reg and part_of(reg[k]) == "performance"}
+                         if k in reg and part_of(reg[k]) == "patch"}
                 landed.update({**fresh, **by_group[group]})
             # a value that will not take (a hand-edited "fast" on a number)
             # must not leave half the look on this preset and half on the
             # last: the state as it was goes back and the load is refused whole
-            before = reg.snapshot(part="performance")
+            before = reg.snapshot(part="patch")
             try:
                 self._restore(landed)
             except (ValueError, TypeError) as e:
@@ -1283,7 +1283,7 @@ class Presets:
         self.note = str(doc.get("note") or "")
         # 6. each performance group's strip clean against what landed, naming
         #    no module preset (plan 44 D3: the labels are retired, row 540)
-        for group in PERFORMANCE_GROUPS:
+        for group in PATCH_GROUPS:
             if group in NO_MODULE and group not in RETIRED_MODULES:
                 continue
             lib.label(group, None)
@@ -1422,7 +1422,7 @@ class Presets:
         """The preset's `values`: every performance base but the modifiers'
         params, which their entries hold (so a file saved here loads on an
         older build with no unknown id)."""
-        return {k: v for k, v in self.reg.snapshot(part="performance").items()
+        return {k: v for k, v in self.reg.snapshot(part="patch").items()
                 if not k.startswith(modifiers.PREFIX)}
 
     def _modifiers_part(self, name: str | None = None) -> dict:
@@ -1456,7 +1456,7 @@ class Presets:
         params (a modifier's params among them) and the GRAPH page's
         layout. Reads only."""
         return (getattr(self._graph_section(), "spec", None), self.router.table,
-                self.reg.snapshot(part="performance"),
+                self.reg.snapshot(part="patch"),
                 dict(getattr(self, "layout", None) or {}))
 
     def _held_canvas(self) -> set[str]:

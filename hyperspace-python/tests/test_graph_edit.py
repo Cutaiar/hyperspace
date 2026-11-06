@@ -24,7 +24,7 @@ from hyperspace import graph as G
 from hyperspace.devices import Port
 from hyperspace.learn import Learn
 from hyperspace.motion import DEFAULT_ROUTE_FEEL
-from hyperspace.routing import MOD_OPS, Binding, is_session_row
+from hyperspace.routing import MOD_OPS, Binding, is_meta_row
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
@@ -179,10 +179,10 @@ def test_a_hand_into_a_base_port_is_refused_in_words_and_a_pad_is_a_setter_row(r
     assert len(table.bindings) == n
     knob = e.connect("out:cc:0:52", "base:camera.zoom")
     assert (knob.op, knob.layer, knob.target) == ("abs", "preset", "camera.zoom")
-    assert not is_session_row(knob)
+    assert not is_meta_row(knob)
     pad = e.connect("out:pad:BACK", "base:view.points")
     assert (pad.source, pad.target, pad.op) == ("pad:BACK", "view.points", "toggle")
-    assert is_session_row(pad) and pad in table.bindings
+    assert is_meta_row(pad) and pad in table.bindings
     _, view = edit(rig, leap())
     refs = [c.ref for c in cables(view, "setter")]
     assert any(x is knob for x in refs) and any(x is pad for x in refs)
@@ -271,7 +271,7 @@ def test_deleting_a_cable_removes_the_route_and_undo_puts_it_back(tmp_path):
     view = ui_graph.view_of(panel)
     assert any(x.ref is back[0] for x in cables(view))
     # the session's rows are bindings.json's: refused, kept
-    key = next(c for c in cables(view, "setter") if is_session_row(c.ref))
+    key = next(c for c in cables(view, "setter") if is_meta_row(c.ref))
     res = ui_graph.disconnect(panel, key)
     assert res == graphview.SESSION_ROW.format(what=key.ref.source)
     assert key.ref in table.bindings
@@ -723,7 +723,7 @@ def test_a_route_from_the_canvas_is_a_performer_row_in_the_preset(rig):
     before = table.path.read_text() if table.path.exists() else None
     frame(rig.panel, "graph")
     b = ui_graph.connect(rig.panel, "out:lane:1", f"mod:{free_param(rig, centred=False).id}")
-    assert b.op in MOD_OPS and not is_session_row(b)
+    assert b.op in MOD_OPS and not is_meta_row(b)
     assert lib.is_dirty("presets")
     assert (table.path.read_text() if table.path.exists() else None) == before
 

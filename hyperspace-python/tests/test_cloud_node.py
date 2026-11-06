@@ -98,12 +98,12 @@ def test_the_cloud_params_are_the_looks_and_default_to_a_cloud_at_the_shapes_siz
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
-    from hyperspace.params import PERFORMANCE_GROUPS, build_registry
+    from hyperspace.params import PATCH_GROUPS, build_registry
 
     chain = Analyzer(Analyser())
     view = ViewState()
     reg = build_registry(view, Control(chain), NS(chain=chain))
-    assert "cloud" in PERFORMANCE_GROUPS
+    assert "cloud" in PATCH_GROUPS
     ids = [p.id for p in reg if p.group == "cloud"]
     assert ids == ["cloud.size", "cloud.scale", "cloud.bright", "cloud.colors"]
     assert reg["cloud.size"].value == 2.0 and reg["cloud.scale"].value == 0.3

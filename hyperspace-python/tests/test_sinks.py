@@ -90,7 +90,7 @@ def test_a_sink_row_is_a_session_row_never_a_performer_and_round_trips(tmp_path)
             Binding("lane:2", "hands-daw:1", SINK_OP, enabled=False)]
     for b in rows:
         r.table.add(b)
-    assert all(b.is_sink and not b.is_performer and routing.is_session_row(b) for b in rows)
+    assert all(b.is_sink and not b.is_performer and routing.is_meta_row(b) for b in rows)
     assert r.table.routes() == [] and r.table.owner("view.bright") is None
     assert [b.sink for b in rows] == [("bridge", 3), ("bridge", 0), ("hands-daw", 1)]
     # a lane reads as the ext / LFO rows do: scheme, index, then its name

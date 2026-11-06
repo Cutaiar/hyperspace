@@ -24,8 +24,8 @@ from hyperspace.params import (
     CHASE_LABEL,
     CHASE_PARAM,
     Registry,
-    build_performance,
-    build_session,
+    build_patch,
+    build_meta,
     chase_reaches,
 )
 from hyperspace.routing import Binding, Bindings, latch_refusal, press_momentary
@@ -403,8 +403,8 @@ def test_a_restore_brings_the_ledger_of_the_base_it_brings(reg):
 
 def test_the_verb_reaches_continuous_modulatable_look_params():
     chain = Analyzer(Analyser())
-    session = build_session(Control(chain), SimpleNamespace(chain=chain))
-    reg = build_performance(ViewState(), session=session)
+    session = build_meta(Control(chain), SimpleNamespace(chain=chain))
+    reg = build_patch(ViewState(), session=session)
     reached = {p.id for p in reg if chase_reaches(p)}
     assert "view.bright" in reached and "rot.rate.XY" in reached and "camera.yaw" in reached
     for p in reg:
@@ -420,9 +420,9 @@ def test_the_verb_reaches_continuous_modulatable_look_params():
 
 def test_two_decks_chase_alone_and_leave_the_session_alone():
     chain = Analyzer(Analyser())
-    session = build_session(Control(chain), SimpleNamespace(chain=chain))
-    a = build_performance(ViewState(), session=session)
-    b = build_performance(ViewState(), session=session)
+    session = build_meta(Control(chain), SimpleNamespace(chain=chain))
+    a = build_patch(ViewState(), session=session)
+    b = build_patch(ViewState(), session=session)
     a[CHASE_PARAM].set(True)
     assert a.chasing and not b.chasing and not b[CHASE_PARAM].value
     pa, pb = a["view.bright"], b["view.bright"]
@@ -658,7 +658,7 @@ def test_a_commit_lights_the_dirty_dot_and_a_save_holds_it(rig):
     go(rig, 2)
     rig.reg[CHASE_PARAM].set(False)
     assert rig.presets.is_dirty()
-    assert rig.reg.snapshot(part="performance")[p.id] == pytest.approx(p.value)
+    assert rig.reg.snapshot(part="patch")[p.id] == pytest.approx(p.value)
 
 
 def test_the_turn_commits_with_no_step(rig):

@@ -383,7 +383,7 @@ def test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain():
     assert sorted(second) == sorted(pid.replace("fx.acid.", "fx.acid.2.") for pid in first)
     assert all(instance_of(pid, "fx.acid") == (2, pid.split(".", 3)[3]) for pid in second)
     assert reg["fx.acid.2.mix"].label == "Acid 2 mix" and part_of(reg["fx.acid.2.mix"]) == \
-        "performance"
+        "patch"
     assert fx.specs["acid.2"].name == "acid" and fx.file_of("acid.2") == "acid"
     # its own values and clock
     reg["fx.acid.2.twist"].set(1.7)
@@ -555,9 +555,9 @@ def test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror(tmp_path):
         values={"ghost.2.alpha": 0.2})
     rig.lib.load(PRESETS, "Glass")
     reg = rig.reg
-    assert part_of(reg["ghost.2.alpha"]) == "performance" and reg["ghost.2.alpha"].label == \
+    assert part_of(reg["ghost.2.alpha"]) == "patch" and reg["ghost.2.alpha"].label == \
         "Ghost 2 opacity"
-    assert part_of(reg["ghost.2.mirror"]) == "session"
+    assert part_of(reg["ghost.2.mirror"]) == "shared_meta"
     assert rig.presets.notes == [] and reg["ghost.2.alpha"].value == pytest.approx(0.2)
     state = stub.ghost_states["ghost.2"]
     reg["ghost.2.mirror"].set(True)

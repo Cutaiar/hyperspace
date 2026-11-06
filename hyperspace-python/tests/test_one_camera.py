@@ -36,10 +36,10 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.learn import Learn
 from hyperspace.params import (
-    PERFORMANCE_GROUPS,
+    PATCH_GROUPS,
     PLANES,
     POSE_IDS,
-    SESSION_GROUPS,
+    SHARED_META_GROUPS,
     build_registry,
     part_of,
 )
@@ -86,13 +86,13 @@ def test_the_eye_is_the_looks_and_the_pose_is_no_base(tmp_path):
     """Row 555: the eye leaves the session for the performance part, ids
     kept; the pose's ids are the six phases, which stay `persist=False` —
     no base, so no undo step and no dirty dot as the turn moves."""
-    assert "eye" in PERFORMANCE_GROUPS and "eye" not in SESSION_GROUPS
+    assert "eye" in PATCH_GROUPS and "eye" not in SHARED_META_GROUPS
     assert POSE_IDS == tuple(f"rot.phase.{n}" for n in PLANES)
     rig = boot(tmp_path)
-    snap = rig.reg.snapshot(part="performance")
+    snap = rig.reg.snapshot(part="patch")
     for pid in POSE_IDS:
         p = rig.reg[pid]
-        assert not p.persist and pid not in snap and part_of(p) == "performance"
+        assert not p.persist and pid not in snap and part_of(p) == "patch"
     assert {"eye.fov", "eye.distance"} <= set(snap)
 
 

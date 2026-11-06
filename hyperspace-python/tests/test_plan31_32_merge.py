@@ -81,7 +81,7 @@ def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
     # channel under the scene is the graph's wire)
     from hyperspace import graphmigrate as M
 
-    assert doc["values"] == reg.snapshot(part="performance")
+    assert doc["values"] == reg.snapshot(part="patch")
     assert not [k for k in doc["values"] if M.retired(k)]
     assert doc[preset.MEDIA_KEY] == {"channels": {"a": [CLIP]}}
     app.presets.save_as("both")

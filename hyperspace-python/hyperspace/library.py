@@ -144,8 +144,8 @@ from .groupwords import group_word
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
-    PERFORMANCE_GROUPS,
-    SESSION_GROUPS,
+    PATCH_GROUPS,
+    SHARED_META_GROUPS,
     UNITS,
     UNITS_KEY,
     Registry,
@@ -1005,7 +1005,7 @@ class Project:
         # only kind since plan 13 WP5): what it has landed survives a project
         # load, and so do the performance groups' references — the loaded
         # preset's, which their dirty dots compare against (plan 14 WP4)
-        kept = {g: lib.landed(g) for g in (*lib._kinds, *PERFORMANCE_GROUPS)}
+        kept = {g: lib.landed(g) for g in (*lib._kinds, *PATCH_GROUPS)}
         lib._current.clear()
         lib._loaded.clear()
         lib._adopted.clear()
@@ -1014,7 +1014,7 @@ class Project:
                 lib.reland(group, mark)
         docs: list[tuple[str, str, dict | None]] = []
         for group, ref in self.modules.items():
-            if group in lib._kinds or group not in SESSION_GROUPS:
+            if group in lib._kinds or group not in SHARED_META_GROUPS:
                 continue                              # a preset's, or a document kind's
             if isinstance(ref, dict):                 # inline copy of a preset
                 name, doc = str(ref.get("name") or ""), dict(ref)
@@ -1036,7 +1036,7 @@ class Project:
         missing = [pid for pid in missing if not is_instance_id(pid)]
         # ids the file lacks (a param added since) take the state this load
         # left, so an untouched project is not dirty the moment it opens
-        for pid, v in (lib.reg.snapshot(part="session") if lib.reg is not None else {}).items():
+        for pid, v in (lib.reg.snapshot(part="shared_meta") if lib.reg is not None else {}).items():
             self.session.setdefault(pid, v)
         for group, name, doc in docs:
             vals = (lib.reg.snapshot(group) if doc is None
@@ -1050,7 +1050,7 @@ class Project:
         # defaults (plan 14 WP4)
         if lib.reg is not None:
             named = {g for g, _n, _d in docs}
-            for group in SESSION_GROUPS:
+            for group in SHARED_META_GROUPS:
                 if group not in named and group not in lib._kinds:
                     lib._landed(group, None, lib.reg.snapshot(group))
         # the bank lights the slot naming the preset still loaded, if any
@@ -1445,10 +1445,10 @@ class Project:
             self.path = self.path_for(name)
         elif self.path is None:
             self.path = self.path_for(self.name)
-        self.session = {**self._held_back(), **lib.reg.snapshot(part="session")}
+        self.session = {**self._held_back(), **lib.reg.snapshot(part="shared_meta")}
         self.modules = {}
         for group, cur in lib._current.items():
-            if cur is None or group in lib._kinds or group not in SESSION_GROUPS:
+            if cur is None or group in lib._kinds or group not in SHARED_META_GROUPS:
                 continue                              # a preset's label, or a kind's
             if lib.path_of(group, cur) is not None:
                 self.modules[group] = cur
@@ -1536,7 +1536,7 @@ class Project:
             return False
         return (self.path is None
                 or not undo.alike(self.session, {**self._held_back(),
-                                                 **reg.snapshot(part="session")})
+                                                 **reg.snapshot(part="shared_meta")})
                 or (self.bank, self.startup) != self._saved
                 or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {}))
 
@@ -1711,7 +1711,7 @@ class Marks(_Landings):
     the one strip the meta controller has."""
 
     def _mine(self, group: str, kinds) -> bool:
-        return group in kinds or group not in SESSION_GROUPS
+        return group in kinds or group not in SHARED_META_GROUPS
 
     def _show(self) -> tuple:
         """Which show this is, and the GRAPH page's positions of its rig nodes
@@ -1804,7 +1804,7 @@ class MetaMarks(_Landings):
     startup preset it brought up is a load on its deck's stack."""
 
     def _mine(self, group: str, kinds) -> bool:
-        return group in SESSION_GROUPS and group not in kinds
+        return group in SHARED_META_GROUPS and group not in kinds
 
     def take(self) -> tuple:
         """(the show's mark, {group: landed}, {group: its `extra` hook's dict —
@@ -2572,7 +2572,7 @@ class Library:
         (`Presets.labels`, plan 44 D5a), since what a section's dot compares
         against is that deck's. None: a session group, or no presets yet,
         kept here, the one strip the meta controller has."""
-        if group not in PERFORMANCE_GROUPS:
+        if group not in PATCH_GROUPS:
             return None
         return getattr(self.presets, "labels", None)
 
@@ -3522,7 +3522,7 @@ class Library:
     def _push(self, group: str, label: str) -> None:
         """A load of one group's values: one step on the stack that watches them
         (plan 44 D5b), the meta controller's for a session group, else the deck's."""
-        if group in SESSION_GROUPS:
+        if group in SHARED_META_GROUPS:
             undo.push_meta(label, load=True)
         else:
             undo.push_on(self.reg, label, load=True)

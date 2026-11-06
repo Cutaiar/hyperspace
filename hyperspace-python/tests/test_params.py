@@ -14,14 +14,14 @@ from hyperspace.geometry import SHAPES
 from hyperspace.library import Library
 from hyperspace.params import (
     PER_DECK_META,
-    PERFORMANCE_GROUPS,
-    SESSION_GROUPS,
+    PATCH_GROUPS,
+    SHARED_META_GROUPS,
     Kind,
     Registry,
     SessionRegistry,
-    build_performance,
+    build_patch,
     build_registry,
-    build_session,
+    build_meta,
     part_of,
     part_of_id,
 )
@@ -449,7 +449,7 @@ def test_macro_knobs_are_persisted_attenuators_with_no_object(rig):
     assert reg["macro.3"].value == 1.0 and reg["macro.4"].value == 0.0
     # performance state (plan 13 WP1): in the whole snapshot and its performance part
     assert set(reg.snapshot("macro")) == {p.id for p in ms}
-    assert set(reg.snapshot("macro")) <= set(reg.snapshot(part="performance"))
+    assert set(reg.snapshot("macro")) <= set(reg.snapshot(part="patch"))
 
 
 def _full_registry(tmp_path):
@@ -474,17 +474,17 @@ def test_every_persisted_group_is_performance_or_session(tmp_path):
     one part, the two tuples are disjoint, and each persisted id's first
     segment is its group (Project._is_session splits an unattached file by it)."""
     reg = _full_registry(tmp_path)
-    assert not set(PERFORMANCE_GROUPS) & set(SESSION_GROUPS)
+    assert not set(PATCH_GROUPS) & set(SHARED_META_GROUPS)
     persisted = [p for p in reg if p.persist]
     for must in ("hands", "tempo", "lfo", "output", "macro", "band", "desk"):
         assert any(p.group == must for p in persisted), must
     # the desk (plan 18 WP2): knob smoothing is the session's and a show
     # keeps it; the layer latch beside it is still never saved
-    assert part_of(reg["desk.slew"]) == "session" and reg["desk.slew"].persist
-    assert not reg["desk.shift"].persist and "desk" in SESSION_GROUPS
+    assert part_of(reg["desk.slew"]) == "shared_meta" and reg["desk.slew"].persist
+    assert not reg["desk.shift"].persist and "desk" in SHARED_META_GROUPS
     for p in persisted:
-        assert (p.group in PERFORMANCE_GROUPS) + (p.group in SESSION_GROUPS) == 1, p.id
-        assert part_of(p) in ("performance", "session"), p.id
+        assert (p.group in PATCH_GROUPS) + (p.group in SHARED_META_GROUPS) == 1, p.id
+        assert part_of(p) in ("patch", "shared_meta"), p.id
         assert p.id.partition(".")[0] == p.group, p.id
     assert all(not p.persist for p in reg if p.id.startswith("rot.phase."))
     assert all(part_of(p) == PER_DECK_META and not p.persist for p in reg.group("preset"))
@@ -495,11 +495,11 @@ def test_snapshot_by_part(tmp_path):
     the macros are in the whole one and in the performance part."""
     reg = _full_registry(tmp_path)
     whole = reg.snapshot()
-    perf, sess = reg.snapshot(part="performance"), reg.snapshot(part="session")
+    perf, sess = reg.snapshot(part="patch"), reg.snapshot(part="shared_meta")
     assert perf and sess and not set(perf) & set(sess)
     assert {**perf, **sess} == whole
-    assert all(part_of(reg[k]) == "performance" for k in perf)
-    assert all(part_of(reg[k]) == "session" for k in sess)
+    assert all(part_of(reg[k]) == "patch" for k in perf)
+    assert all(part_of(reg[k]) == "shared_meta" for k in sess)
     macros = {f"macro.{k}" for k in range(1, 9)}
     assert macros <= set(whole) and macros <= set(perf)
     assert "tempo.bpm" in sess and "scene.select" in sess and "lfo.1.depth" in perf
@@ -507,10 +507,10 @@ def test_snapshot_by_part(tmp_path):
     # preset's, but for the mirror — the room's (`SESSION_KEYS`)
     assert "ghost.alpha" in perf and "ghost.style" in perf and "cloud.size" in perf
     assert "ghost.mirror" in sess and "ghost.mirror" not in perf
-    assert part_of_id("ghost.2.mirror") == "session" and part_of_id("ghost.2.on") == "performance"
+    assert part_of_id("ghost.2.mirror") == "shared_meta" and part_of_id("ghost.2.on") == "patch"
     # the filters combine
-    assert reg.snapshot("macro", part="session") == {}
-    assert reg.snapshot("view", part="performance") == reg.snapshot("view")
+    assert reg.snapshot("macro", part="shared_meta") == {}
+    assert reg.snapshot("view", part="patch") == reg.snapshot("view")
 
 
 def test_two_decks_hold_the_session_params_by_reference():
@@ -522,9 +522,9 @@ def test_two_decks_hold_the_session_params_by_reference():
     from hyperspace import tempo
     chain = Analyzer(Analyser())
     control, audio = Control(chain), SimpleNamespace(chain=chain)
-    session = build_session(control, audio)
-    a = build_performance(ViewState(), session=session)
-    b = build_performance(ViewState(), session=session)
+    session = build_meta(control, audio)
+    a = build_patch(ViewState(), session=session)
+    b = build_patch(ViewState(), session=session)
     assert isinstance(session, SessionRegistry) and a.session is session is b.session
     assert a["master.gain"] is b["master.gain"] is session["master.gain"]
     assert a["view.bright"] is not b["view.bright"]

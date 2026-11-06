@@ -242,7 +242,7 @@ def test_declare_mattes_comes_and_goes():
     assert params.declare_mattes(reg, ["matte"]) == []
     assert reg.matte_state["matte"] is kept
     assert not params.is_matte_id("matte.1.key") and params.is_matte_id("matte.12.hue")
-    groups = params.PERFORMANCE_GROUPS
+    groups = params.PATCH_GROUPS
     assert groups.index("matte") == groups.index("resize") + 1
 
 

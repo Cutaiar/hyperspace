@@ -33,7 +33,7 @@ from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import F_KEYS, SLOTS, Library, LibraryError, bank_doc
 from hyperspace.lookback import DreamState
-from hyperspace.params import PERFORMANCE_GROUPS, build_registry, part_of
+from hyperspace.params import PATCH_GROUPS, build_registry, part_of
 from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
@@ -95,11 +95,11 @@ def expected(lib, values):
     """Every performance param: the file's value, else the value its object
     was built with (plan 44 D3: `_fresh_of`, never a `default.json`)."""
     out = {}
-    for g in PERFORMANCE_GROUPS:
+    for g in PATCH_GROUPS:
         out.update({k: v for k, v in lib._fresh_of(g).items()
-                    if part_of(lib.reg[k]) == "performance"})
+                    if part_of(lib.reg[k]) == "patch"})
     out.update(values)
-    return {k: out[k] for k in lib.reg.snapshot(part="performance") if k in out}
+    return {k: out[k] for k in lib.reg.snapshot(part="patch") if k in out}
 
 
 def boot_registry():
@@ -135,7 +135,7 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
                "enabled": False}]
     put(rig.home, "PARTIAL", values=values, routes=routes)
     assert rig.presets.load("PARTIAL") == []
-    assert reg.snapshot(part="performance") == expected(lib, values)
+    assert reg.snapshot(part="patch") == expected(lib, values)
     assert rig.view.shape == 4 and reg["lfo.1.depth"].value == 0.25
     assert reg["view.bright"].value == lib.defaults("view")["view.bright"]
     assert reg["dream.fade"].value == lib.defaults("dream")["dream.fade"]
@@ -187,26 +187,26 @@ def test_a_preset_load_never_touches_a_session_param(rig):
     out = Output(None, None)
     out.register(reg)
     reg["output.dim"].set(0.4)
-    assert part_of(reg["output.dim"]) == "session"
+    assert part_of(reg["output.dim"]) == "shared_meta"
     reg["tempo.bpm"].set(100.0)
     reg["master.gain"].set(2.0)
     reg["band.0.atk"].set(0.3)
     slew = reg["desk.slew"]
     slew.set(0.12)
-    assert part_of(slew) == "session" and rig.router.table.slew == 0.12
+    assert part_of(slew) == "shared_meta" and rig.router.table.slew == 0.12
     scene = control.scene
     put(rig.home, "FAST", values={"view.shape": 5, "tempo.bpm": 140.0, "desk.slew": 0.2,
                                   "scene.select": (scene + 1) % 3, "output.dim": 1.0})
-    before = reg.snapshot(part="session")
+    before = reg.snapshot(part="shared_meta")
     assert before["desk.slew"] == 0.12
     rig.presets.load("FAST")
     assert slew.value == 0.12 and "desk.slew is the session's, ignored" in rig.presets.notes
     assert rig.view.shape == 5
     assert rig.clock.bpm == 100.0 and rig.chain.gain == 2.0 and rig.chain.params[0].atk == 0.3
-    assert control.scene == scene and reg.snapshot(part="session") == before
+    assert control.scene == scene and reg.snapshot(part="shared_meta") == before
     assert out.dim == 0.4 and "output.dim is the session's, ignored" in rig.presets.notes
     rig.presets.load("TRIP")                          # the party preset, too
-    assert rig.clock.bpm == 100.0 and reg.snapshot(part="session") == before
+    assert rig.clock.bpm == 100.0 and reg.snapshot(part="shared_meta") == before
     assert out.dim == 0.4
     rig.lib.project.load("party")                     # a show load, startup preset and all
     assert rig.lib.current("presets") == "TUMBLE" and out.dim == 0.4
@@ -449,7 +449,7 @@ def test_home_loads_what_the_show_starts_on(rig):
     assert (home.group, home.label, home.modulatable, home.persist) \
         == ("preset", "Home", True, False)
     assert proj.startup == "BIG BLUE WAVE" and home.get() is True      # lit: there is one
-    launched = (reg.snapshot(part="performance"),
+    launched = (reg.snapshot(part="patch"),
                 [b.to_json() for b in rig.router.table.routes()],
                 [b.to_json() for b in rig.router.table.desk()])
     reg["preset.load.2"].fire()
@@ -459,7 +459,7 @@ def test_home_loads_what_the_show_starts_on(rig):
     home.fire()
     assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
     assert proj.active == 0 and rig.view.shape == 17 and not lib.warning
-    assert (reg.snapshot(part="performance"),
+    assert (reg.snapshot(part="patch"),
             [b.to_json() for b in rig.router.table.routes()],
             [b.to_json() for b in rig.router.table.desk()]) == launched
     # home follows "starts on": no pointer of its own
@@ -477,13 +477,13 @@ def test_home_with_no_starts_on_says_so_and_loads_nothing(rig):
     reg, lib, proj = rig.reg, rig.lib, rig.lib.project
     reg["preset.load.2"].fire()
     reg["view.bright"].set_value(reg["view.bright"].value + 1.0)
-    before = reg.snapshot(part="performance")
+    before = reg.snapshot(part="patch")
     proj.startup = None
     assert reg["preset.home"].get() is False                           # dark: nothing to go to
     reg["preset.home"].fire()
     assert lib.warning == "home: this show names no startup preset"
     assert lib.current("presets") == "STROBE CAGE" and lib.is_dirty("presets")
-    assert reg.snapshot(part="performance") == before and proj.active == 2
+    assert reg.snapshot(part="patch") == before and proj.active == 2
     proj.startup = "BIG BLUE WAVE"                                     # picked: home goes there,
     reg["preset.home"].fire()                                          # and the note is gone
     assert lib.current("presets") == "BIG BLUE WAVE" and lib.warning == ""
@@ -607,7 +607,7 @@ def test_a_preset_round_trips(rig):
     assert "modules" not in doc                     # (plan 44 D3: the labels are retired)
     # every performance base, the media family's too — and no retired id
     # (plan 33 T7: the wires say them; row 394: nothing writes them back)
-    snap = rig.reg.snapshot(part="performance")
+    snap = rig.reg.snapshot(part="patch")
     assert doc["values"] == snap
     from hyperspace.graphmigrate import retired
     assert not [k for k in doc["values"] if retired(k)]
@@ -1388,7 +1388,7 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
 
 def _fresh_performance(lib):
     return {k: v for k, v in lib._fresh_all().items()
-            if k in lib.reg and lib.reg[k].group in PERFORMANCE_GROUPS
+            if k in lib.reg and lib.reg[k].group in PATCH_GROUPS
             and not preset.is_instance_id(k) and not preset.is_switch_id(k)
             and lib.reg[k].group != "modifiers"}
 
@@ -1410,7 +1410,7 @@ def test_a_new_preset_is_fresh_values_and_the_scene_chain(rig, name):
     window."""
     lib, reg, table = rig.lib, rig.reg, rig.router.table
     _spoil(rig, name)
-    kept = reg.snapshot(part="session")
+    kept = reg.snapshot(part="shared_meta")
     assert rig.presets.new() == [preset.NEW_SAID]
     for k, v in _fresh_performance(lib).items():
         assert reg[k].value == v, k
@@ -1419,7 +1419,7 @@ def test_a_new_preset_is_fresh_values_and_the_scene_chain(rig, name):
     doc = rig.presets.document(preset.UNTITLED_PRESET)
     assert doc["desk"] == preset.desk_json(preset.fresh_desk())
     assert doc["routes"] == []
-    assert reg.snapshot(part="session") == kept
+    assert reg.snapshot(part="shared_meta") == kept
     spec = rig.presets.graph.spec
     assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}],
             "wires": [{"from": "shape", "to": "scene.geometry"},
@@ -1435,7 +1435,7 @@ def test_a_new_preset_does_not_depend_on_what_was_loaded(rig):
     for name in ("big-blue-wave", "hex-engine"):
         _spoil(rig, name)
         rig.presets.new()
-        after.append((rig.reg.snapshot(part="performance"),
+        after.append((rig.reg.snapshot(part="patch"),
                       rig.presets.document(preset.UNTITLED_PRESET)))
     assert after[0] == after[1]
 
@@ -1450,14 +1450,14 @@ def test_a_new_preset_undoes_in_one_step(rig):
         _spoil(rig, "big-blue-wave")
         u.tick(1.0)
         u.tick(2.0)
-        before = rig.reg.snapshot(part="performance")
+        before = rig.reg.snapshot(part="patch")
         loaded = rig.lib.current("presets")
         rig.presets.new()
         assert u.stack[-1].label == "new preset"
         assert u.undo()
     finally:
         undo.install(None)
-    assert rig.reg.snapshot(part="performance") == before
+    assert rig.reg.snapshot(part="patch") == before
     assert rig.lib.current("presets") == loaded
     assert len(rig.router.table.routes()) >= 1
     assert rig.lib.is_dirty("presets")        # (the spoiled preset's dot, back)

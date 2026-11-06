@@ -205,7 +205,7 @@ def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
     offered = {q.id for q in ui_routing._scales(SimpleNamespace(reg=r.reg), "rot.rate.ZW")}
     assert "master.gain" in offered and "view.speed" not in offered
     assert not any(pid.startswith("macro.") for pid in offered)
-    assert all(routing.is_session_id(pid) for pid in offered)
+    assert all(routing.is_shared_meta_id(pid) for pid in offered)
 
 
 def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):

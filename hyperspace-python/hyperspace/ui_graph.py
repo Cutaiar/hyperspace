@@ -4856,7 +4856,7 @@ def _value_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> No
     """Delete pressed on a value / trigger cable: the session's rows are
     kept (and say so); anything else goes (`disconnect`)."""
     b = c.ref if c.kind == "setter" else None
-    if b is not None and graphview.is_session_row(b):
+    if b is not None and graphview.is_meta_row(b):
         ed.reject_deleted_item()
         _note(st, graphview.SESSION_ROW.format(what=b.source))
     elif ed.accept_deleted_item():

@@ -80,10 +80,10 @@ from .routing import Bindings, Router, Sources
 from .view import ViewState
 
 
-def in_preset(p) -> bool:
+def in_patch(p) -> bool:
     """Is `p` a param of the preset, what a `Deck`'s undo stack watches (plan 44
     D5b)? A meta param is on the meta controller's stack (`meta_stack`)."""
-    return part_of(p) == "performance"
+    return part_of(p) == "patch"
 
 
 @dataclass
@@ -303,7 +303,7 @@ class Deck:
         # is loaded through the deck's marks, and a restore tells the router its
         # macros are acted on. The meta params are on `meta_stack`'s
         marks = Marks(presets.lib)
-        undo_obj = undos.Undo(reg, router.table, marks=marks, only=in_preset,
+        undo_obj = undos.Undo(reg, router.table, marks=marks, only=in_patch,
                               on_restore=router.sync_macros,
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts

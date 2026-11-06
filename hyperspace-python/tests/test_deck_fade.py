@@ -104,7 +104,7 @@ def test_the_mix_controls_are_rig_controls_that_nothing_saves():
     fade, secs = reg["output.xfade"], reg["output.xfade_s"]
     for p in (fade, secs):
         assert p.group == "output" and not p.persist and not p.modulatable
-        assert part_of(p) == "session"
+        assert part_of(p) == "shared_meta"
     fade.set(0.25)
     secs.set(3.0)
     assert (mix.xfade, mix.seconds) == (0.25, 3.0)
@@ -815,7 +815,7 @@ def _object_state(deck) -> dict:
     from hyperspace.params import part_of
 
     r = deck.renderer
-    return {"params": {p.id: repr(p.get()) for p in deck.reg if part_of(p) == "performance"},
+    return {"params": {p.id: repr(p.get()) for p in deck.reg if part_of(p) == "patch"},
             "ghost": asdict(r.ghost.state), "dream": repr(asdict(r.lookback.state)),
             "view": repr(deck.view.pose())}
 

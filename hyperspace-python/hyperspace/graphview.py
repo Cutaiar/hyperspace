@@ -129,7 +129,7 @@ from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .groupwords import group_title
-from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_meta_id
+from .params import PATCH_GROUPS, Kind, Param, Registry, is_meta_id
 from .routing import (
     MOD_OPS,
     PAIR_SCHEME,
@@ -145,7 +145,7 @@ from .routing import (
     base_sub,
     is_continuous,
     is_macro,
-    is_session_row,
+    is_meta_row,
     meta_refusal,
     meta_row_refusal,
     row_words,
@@ -2696,7 +2696,7 @@ def home(n: VNode) -> str:
         return PRESET
     if n.kind == "group":
         group = n.id.partition(":")[2]
-        return PRESET if group in PERFORMANCE_GROUPS else SESSION
+        return PRESET if group in PATCH_GROUPS else SESSION
     return SESSION
 
 
@@ -4229,7 +4229,7 @@ class Edit:
             return table.remove(cable.ref)
         if cable.kind == "setter":
             b = cable.ref
-            if is_session_row(b):
+            if is_meta_row(b):
                 return Refusal(SESSION_ROW.format(what=b.source))
             table.remove(b)
             table.redraw_serial += 1

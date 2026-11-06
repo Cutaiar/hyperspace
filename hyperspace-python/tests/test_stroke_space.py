@@ -29,7 +29,7 @@ def test_the_default_is_world_space_a_preset_performance_switch():
     reg = boot_registry()
     p = reg["view.screen_strokes"]
     assert ViewState().screen_strokes is False and p.base is False
-    assert p.group == "view" and part_of(p) == "performance" and p.persist
+    assert p.group == "view" and part_of(p) == "patch" and p.persist
     assert p.modulatable                      # as view.lines / view.cut_through
 
 

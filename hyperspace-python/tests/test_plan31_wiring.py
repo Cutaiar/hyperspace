@@ -15,7 +15,7 @@ import pytest
 from hyperspace import devices, envelope, lfo, modgraph, routing, sequencer, undo
 from hyperspace.envelope import Envelopes
 from hyperspace.lfo import LFOs
-from hyperspace.params import PERFORMANCE_GROUPS, Registry
+from hyperspace.params import PATCH_GROUPS, Registry
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.sequencer import Sequencer
 from hyperspace.tempo import Clock
@@ -71,7 +71,7 @@ def test_the_kinds_and_schemes_are_registered():
     assert set(modgraph.ENV_KNOBS) <= set(modgraph.PORTS)
     assert len(set(modgraph.PORTS)) == len(modgraph.PORTS)
     assert devices.BUILTIN_SCHEMES == routing.BUILTIN_LANES == ("lane", "lfo", "env", "seq")
-    assert {"env", "seq"} <= set(PERFORMANCE_GROUPS)
+    assert {"env", "seq"} <= set(PATCH_GROUPS)
     r = rig()
     assert r.router.schemes()[:4] == ("lane", "lfo", "env", "seq")
     frame(r, 0.5)
@@ -500,7 +500,7 @@ def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
     doc = app.presets.document("plain")
     assert doc["schema"] == V6
     assert "lfos" not in doc and "envs" not in doc
-    every = app.reg.snapshot(part="performance")
+    every = app.reg.snapshot(part="patch")
     # (plan 36 T3: but an effect's only where the section names it)
     from hyperspace import graphmigrate as M
 
@@ -536,7 +536,7 @@ def test_anything_of_plan_31_saves_in_six(app, touch):
     doc = app.presets.document("new")
     assert doc["schema"] == V6 and next(iter(doc)) == "schema"
     # every envelope and sequencer value, as every other group's
-    snap = app.reg.snapshot(part="performance")
+    snap = app.reg.snapshot(part="patch")
     assert set(_new_ids(doc)) == {k for k in snap if k.startswith(("env.", "seq."))}
 
 
@@ -575,10 +575,10 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     doc["values"] = {k: v for k, v in doc["values"].items()
                      if not k.startswith(("env.", "seq."))}
     assert app.presets.load_doc({**doc, "schema": V2}) == []
-    want = app.reg.snapshot(part="performance")
+    want = app.reg.snapshot(part="patch")
     app.reg["view.bright"].set(0.2)
     assert app.presets.load_doc({**doc, "schema": V3}) == []
-    assert app.reg.snapshot(part="performance") == want
+    assert app.reg.snapshot(part="patch") == want
     app.reg["seq.3.3"].set(True)
     app.presets.save_as("pattern")
     lib = app.lib

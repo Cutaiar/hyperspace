@@ -166,23 +166,23 @@ F_KEYS = 8
 # them, a load lands them — but for the one setting each hands node keeps
 # for the room (`SESSION_KEYS`: `ghost.mirror`, a real mirror in front of
 # the performer's hands; the owner's answer of 2026-11-02, kept 2026-11-03)
-PERFORMANCE_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
+PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "mod")
-SESSION_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
+SHARED_META_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk")
 # plan 44 D3 (row 612): the session params inside a performance group, by
 # group → the last segment of their ids — `ghost.mirror`, and an extra
 # hands node's `ghost.2.mirror`. They keep their group (the HANDS page
 # lists the group; an id is a saved format) and are the rig's single copy:
 # `part_of` asks here first, so a preset never names one and the show keeps it
-SESSION_KEYS: dict[str, tuple[str, ...]] = {"ghost": ("mirror",)}
+SHARED_META_KEYS: dict[str, tuple[str, ...]] = {"ghost": ("mirror",)}
 # review of #371: the session params whose group is not their id's first segment
 # (`edit.undo`, `app.restart`: group `ui`; `seq.page`: group `desk`). The app's
 # verbs and the desk's page latch: no part of a look. Asked first by `part_of_id`,
 # so a table with no registry (`routing.meta_refusal`) and `part_of` cannot
 # disagree (tests/test_meta_rule.py walks the registry)
-SESSION_IDS = ("app.restart", "edit.undo", "edit.redo", "seq.page", "seq.select")
+SHARED_META_IDS = ("app.restart", "edit.undo", "edit.redo", "seq.page", "seq.select")
 # plan 43 C2 (row 573): the spin's pose — where each plane is in its turn,
 # `view.body` folded in (`ViewState.pose`) — saved by every preset under
 # these ids (its `pose` section, preset.POSE_KEY, beside `values`) and set
@@ -197,12 +197,12 @@ POSE_IDS = tuple(f"rot.phase.{name}" for name in PLANE_NAMES)
 # None persists, so no file holds one and none is in a snapshot
 PER_DECK_META_GROUPS = ("preset", "deck", "totem", "poi")
 PER_DECK_META = "per_deck_meta"
-PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS,
+PARTS = {"patch": PATCH_GROUPS, "shared_meta": SHARED_META_GROUPS,
          PER_DECK_META: PER_DECK_META_GROUPS}
 # the two layers (the owner, 2026-11-04, fourth round: "two layers of granularity and no
 # others"): these parts are the meta controller's, and "performance" is the patch's. A param
 # is in exactly one (tests/test_layer_boundary.py, over the app's whole registry)
-META_PARTS = ("session", PER_DECK_META)
+META_PARTS = ("shared_meta", PER_DECK_META)
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
 # dir · out · DRIVE · gain). It lives here, not in the chain, because it is
@@ -756,7 +756,7 @@ def chase_reaches(p: Param) -> bool:
     """Does the base chase commit this param (plan 52, row 654): continuous,
     modulatable and the deck's own. A session param is the room's and a
     deck's verb never writes it; a macro is left out (`CHASE_REFUSED_GROUPS`)."""
-    return (p.kind is Kind.CONTINUOUS and p.modulatable and part_of(p) == "performance"
+    return (p.kind is Kind.CONTINUOUS and p.modulatable and part_of(p) == "patch"
             and p.group not in CHASE_REFUSED_GROUPS)
 
 
@@ -776,11 +776,11 @@ def part_of(p: Param) -> str | None:
 _UNSET = object()
 
 
-def is_session_id(pid: str | None) -> bool:
+def is_shared_meta_id(pid: str | None) -> bool:
     """Does `pid` name a session param (`SESSION_GROUPS`, plan 13 §4), the one object every
     deck shares? By its group prefix, so a param this registry lacks (a band a layout has
     not built yet) is still classed."""
-    return bool(pid) and part_of_id(pid) == "session"
+    return bool(pid) and part_of_id(pid) == "shared_meta"
 
 
 def is_meta_id(pid: str | None) -> bool:
@@ -815,12 +815,12 @@ def in_group(p: Param, group: str) -> bool:
 def part_of_id(pid: str, group: str | None = None) -> str | None:
     """`part_of` by id alone: `group` is the param's, else the id's first
     segment (every group's ids start with it but the bank's, `preset`)."""
-    if pid in SESSION_IDS:
-        return "session"
+    if pid in SHARED_META_IDS:
+        return "shared_meta"
     group = pid.partition(".")[0] if group is None else group
-    keys = SESSION_KEYS.get(group)
+    keys = SHARED_META_KEYS.get(group)
     if keys and pid.rpartition(".")[2] in keys:
-        return "session"
+        return "shared_meta"
     for name, groups in PARTS.items():
         if group in groups:
             return name
@@ -964,7 +964,7 @@ class Registry:
         session param (`part_of`) is the session's: added there, and so to
         every deck that follows it — declared once (plan 44 D3)."""
         session = self.session
-        if session is not None and session is not self and part_of(p) == "session":
+        if session is not None and session is not self and part_of(p) == "shared_meta":
             return session.add(p)            # (its one duplicate check, every deck)
         return self._put(p)
 
@@ -1157,7 +1157,7 @@ class Registry:
         the bases are the ones the doc road landed."""
         for p in self._p.values():
             q = src._p.get(p.id)
-            if q is None or q is p or part_of(p) != "performance":
+            if q is None or q is p or part_of(p) != "patch":
                 continue
             p._trim = q._trim
             if p.kind is not Kind.TRIGGER and p.get() != q.get():
@@ -1301,7 +1301,7 @@ class SessionRegistry(Registry):
 
     def add(self, p: Param) -> Param:
         part = part_of(p)
-        if part == "performance":
+        if part == "patch":
             raise ValueError(f"{p.id} is a performance param: a deck's, never the session's")
         if part == PER_DECK_META:
             raise ValueError(f"{p.id} closes over one deck: each deck's own, never shared")
@@ -2071,12 +2071,12 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     panel once it exists.
     """
     if session is None:
-        session = build_session(control, audio, restart, media=media)
-    return build_performance(view, bank, dream=dream, fx=fx, ghost=ghost, media=media,
+        session = build_meta(control, audio, restart, media=media)
+    return build_patch(view, bank, dream=dream, fx=fx, ghost=ghost, media=media,
                              session=session)
 
 
-def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
+def build_meta(control, audio, restart=None, media=None) -> SessionRegistry:
     """Declare the rig's params once (plan 44 D3): the analyzer's (`master`,
     `scene`, `band` — the bands rebuilt on a layout change, `band.sel.*`
     the selected band's views), the audio transport, `app.restart` and the
@@ -2272,7 +2272,7 @@ def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
     return r
 
 
-def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
+def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                       session: SessionRegistry | None = None) -> Registry:
     """Declare a deck's own params (plan 44 D3): the look's — the view, the
     media channels' (`media`, the deck's `Channels`), the backdrop, the

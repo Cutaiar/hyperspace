@@ -892,7 +892,7 @@ class Panel:
         screen: no stack, since a move is on none of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
-            return part_of(p) != "performance"
+            return part_of(p) != "patch"
         if ui_players.over(self):
             return None
         return ui_pane.where(self) in META_SECTIONS

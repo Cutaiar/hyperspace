@@ -99,7 +99,7 @@ def test_dim_is_a_rig_setting_that_starts_bright(rig):
     p = r["output.dim"]
     assert p.kind is Kind.CONTINUOUS and (p.lo, p.hi) == (0.0, 1.0) and p.value == 1.0
     assert not p.persist and not p.modulatable and not p.alias
-    assert p.group == "output" and part_of(p) == "session"
+    assert p.group == "output" and part_of(p) == "shared_meta"
     assert "overlay.dim" not in r
     assert "output.dim" not in r.snapshot("output") and "output.dim" not in r.snapshot()
     assert p.text() == "100%"
@@ -454,10 +454,10 @@ def test_the_output_switches_are_rig_settings():
     assert not any(p.id.startswith("output.2.") for p in reg)       # not opened: none
     for pid in ids:
         p = reg[pid]
-        assert p.group == "output" and part_of(p) == "session"
+        assert p.group == "output" and part_of(p) == "shared_meta"
         assert not p.persist and not p.modulatable and not p.alias and not undo.watched(p)
     assert not any(pid in reg.snapshot() for pid in ids)
-    assert not any(pid in reg.snapshot(part="session") for pid in ids)
+    assert not any(pid in reg.snapshot(part="shared_meta") for pid in ids)
     assert reg["output.1.scene"].kind is Kind.TOGGLE and reg["output.1.dim"].kind is Kind.CONTINUOUS
     assert reg["output.1.scene"].label == "Glass picture"
     assert reg["output.3.hands"].label == "Wall hands"

@@ -133,11 +133,11 @@ def test_the_eye_params_are_the_presets_and_default_to_the_old_view(tmp_path):
             ("eye.fov", G.EYE_FOV, EYE_FOV_RANGE, False),
             ("eye.distance", G.EYE_DISTANCE, EYE_DISTANCE_RANGE, True)):
         p = reg[pid]
-        assert p.group == "eye" and part_of(p) == "performance" and p.persist, pid
+        assert p.group == "eye" and part_of(p) == "patch" and p.persist, pid
         assert p.modulatable and p.log is log and p.taper is None, pid
         assert p.value == pytest.approx(default) and (p.lo, p.hi) == (lo, hi), pid
-        assert pid in reg.snapshot(part="performance")
-        assert pid not in reg.snapshot(part="session")
+        assert pid in reg.snapshot(part="patch")
+        assert pid not in reg.snapshot(part="shared_meta")
     assert rig.view.eye_fov == pytest.approx(G.EYE_FOV)
     pan = reg["camera.pan.x"]
     assert (pan.lo, pan.hi) == (-PAN_RANGE, PAN_RANGE) and pan.text() == "+0.00"

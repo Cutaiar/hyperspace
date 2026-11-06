@@ -76,10 +76,10 @@ def script(d, panel):
     assert "loaded off air on deck 2" in panel.library.status
     assert "⌘Z" not in panel.library.status      # the panel is on air: ⌘Z does not reach it
 
-    held = one.reg.snapshot(part="performance")
+    held = one.reg.snapshot(part="patch")
     panel.reg["edit.undo"].fire()     # a mis-pressed pad and ⌘Z: the latch (row 753)
     yield from d.wait(10)
     at = undos.here()
     print(f"status line: {at.status}", file=sys.stderr)
     assert at.status.startswith("nothing to undo here yet")
-    assert one.reg.snapshot(part="performance") == held
+    assert one.reg.snapshot(part="patch") == held

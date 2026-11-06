@@ -328,7 +328,7 @@ def test_a_full_snapshot_from_before_loads_with_no_note_and_no_dot(tmp_path):
     """What a save on the build before N8 wrote: every performance base,
     the palette's old ids among them at their defaults, the palette off."""
     rig = boot(tmp_path)
-    snap = rig.reg.snapshot(part="performance")
+    snap = rig.reg.snapshot(part="patch")
     old = {k: v for k, v in snap.items()
            if not k.startswith("fx.palette.") or k.rsplit(".", 1)[1] in
            ("on", "mix", "speed", "blend", "order", "target", "mode", "anchors")

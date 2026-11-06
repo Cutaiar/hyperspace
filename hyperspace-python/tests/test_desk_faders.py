@@ -249,7 +249,7 @@ def test_an_older_session_file_moves_the_fader_rows_to_shift_once(tmp_path):
     next load is quiet. A fader row the owner changed stays invariant."""
     old = []
     for b in Bindings.factory().bindings:
-        if not routing.is_session_row(b):
+        if not routing.is_meta_row(b):
             continue
         if b.kind == "cc" and b.number == FADER and b.is_midi:
             b = Binding.from_json({**b.to_json(), "layer": None})
@@ -308,7 +308,7 @@ def test_lines_and_points_opacity_are_performance_params_at_one(rig):
         assert getattr(ViewState(), pid.partition(".")[2]) == 1.0
         assert (p.lo, p.hi) == (0.0, 1.0)
         assert p.modulatable and p.persist
-        assert not routing.is_session_id(pid)
+        assert not routing.is_shared_meta_id(pid)
         assert routing.base_refusal(pid, rig.reg) is None
 
 

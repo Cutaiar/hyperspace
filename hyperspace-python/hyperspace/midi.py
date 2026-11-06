@@ -142,7 +142,7 @@ from .routing import (
     act,
     bindings_path,
     fine_gives_way,
-    is_session_id,
+    is_shared_meta_id,
     led_lit,
     led_shade,
     let_go_lost,
@@ -649,7 +649,7 @@ class MidiIO:
         holds, blinks = self._hold_state()
         holds.clear()
         blinks.clear()
-        for pid in [pid for pid in self._writes if not is_session_id(pid)]:
+        for pid in [pid for pid in self._writes if not is_shared_meta_id(pid)]:
             del self._writes[pid]
         self._seen = self._serials()
         self.redraw(load=True)

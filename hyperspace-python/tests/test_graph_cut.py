@@ -242,7 +242,7 @@ def test_declare_cuts_comes_and_goes():
     assert reg.cut_state["cut"] is kept
     assert not params.is_cut_id("cut.1.amount") and params.is_cut_id("cut.12.invert")
     assert not params.is_cut_id("view.cut_through")
-    groups = params.PERFORMANCE_GROUPS
+    groups = params.PATCH_GROUPS
     assert groups.index("cut") == groups.index("matte") + 1
 
 

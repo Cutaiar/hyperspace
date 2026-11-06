@@ -397,7 +397,7 @@ def test_no_target_is_refused_or_flagged(rig):
     for b in list(t.routes()):
         t.remove(b)
     ps = [p for p in rig.reg if p.kind is Kind.CONTINUOUS and p.modulatable
-          and part_of(p) != "session"]
+          and part_of(p) != "shared_meta"]
     ids = {p.id for p in ps}
     assert {"rot.rate.XY", "rot.rate.ZW", "fx.warp.drift", "fx.tripcolour.pulse",
             "view.speed"} <= ids and len(ps) > 150

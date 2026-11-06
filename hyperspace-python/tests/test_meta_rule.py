@@ -29,7 +29,7 @@ from hyperspace.routing import (
     Macro,
     Sub,
     factory_desk,
-    is_session_row,
+    is_meta_row,
     meta_refusal,
     meta_row_refusal,
 )
@@ -80,7 +80,7 @@ def test_the_five_with_a_foreign_prefix_are_refused_at_the_doors(pid):
     Binding("key:space", "audio.play", "toggle"),
 ])
 def test_the_meta_controllers_own_rows_are_not_a_presets(row):
-    assert is_session_row(row) and meta_row_refusal(row) is None
+    assert is_meta_row(row) and meta_row_refusal(row) is None
     assert Bindings().add(row) is row
 
 
@@ -90,7 +90,7 @@ def test_the_meta_controllers_own_rows_are_not_a_presets(row):
     Binding("cc:0:14", "master.gain", "abs", layer="preset"),
 ])
 def test_a_presets_rows_are_refused_at_the_one_door(row):
-    assert not is_session_row(row)
+    assert not is_meta_row(row)
     assert WORDS in meta_row_refusal(row)
     t = Bindings()
     with pytest.raises(ValueError, match=WORDS):
@@ -104,7 +104,7 @@ def test_every_factory_row_on_a_meta_param_is_the_meta_controllers():
     table = Bindings.factory()
     on_meta = [b for b in table.bindings if meta_refusal(b.target) is not None]
     assert any(b.target == "output.dim" for b in on_meta) and len(on_meta) > 40
-    assert all(is_session_row(b) and meta_row_refusal(b) is None for b in on_meta)
+    assert all(is_meta_row(b) and meta_row_refusal(b) is None for b in on_meta)
     assert not [b for b in factory_desk() if b.layer == "preset"
                 and meta_refusal(b.target) is not None]
 
@@ -112,7 +112,7 @@ def test_every_factory_row_on_a_meta_param_is_the_meta_controllers():
 def test_the_masters_row_survives_a_load_that_drops_a_presets(tmp_path):
     r = boot(tmp_path)
     table = r.router.table
-    master = [b for b in table.bindings if b.target == "output.dim" and is_session_row(b)]
+    master = [b for b in table.bindings if b.target == "output.dim" and is_meta_row(b)]
     assert master
     put(tmp_path, "LEANS", routes=[
         {"source": "hand:left.y", "target": "output.dim", "op": "push", "value": 0.375}])
@@ -276,7 +276,7 @@ def test_a_drag_from_an_invariant_control_says_invariant_not_the_rule(rig):
 def test_routing_and_the_desk_combo_offer_no_meta_param(rig):
     panel, reg = rig.panel, rig.reg
     for offered in (ui_routing._targets(panel), ui_routing._desk_targets(panel)):
-        assert offered and not [p for p in offered if part_of(p) == "session"]
+        assert offered and not [p for p in offered if part_of(p) == "shared_meta"]
     gain = reg["master.gain"]
     assert not ui_routing.route_target(gain) and not ui_routing.desk_target(gain)
     assert ui_routing.pad_target(gain)

@@ -99,7 +99,7 @@ from .envelope import GROUP as ENV_SCHEME
 from .graph import pin_node, source_into
 from .motion import DEFAULT_ROUTE_FEEL
 from .params import (
-    PERFORMANCE_GROUPS,
+    PATCH_GROUPS,
     Kind,
     Param,
     Registry,
@@ -117,7 +117,7 @@ from .routing import (
     Bindings,
     Owned,
     base_scheme,
-    is_session_row,
+    is_meta_row,
     meta_refusal,
     pair_address,
     pair_poles,
@@ -357,7 +357,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
         else:
             tiers[tier].append(pid)
     used = [(pid, why) for why, ids in tiers.items() for pid in ids]
-    order = {g: i for i, g in enumerate(PERFORMANCE_GROUPS)}
+    order = {g: i for i, g in enumerate(PATCH_GROUPS)}
     groups = sorted(rest, key=lambda g: (order.get(g, len(order)), list(rest).index(g)))
     return used, [(g, rest[g]) for g in groups]
 
@@ -587,7 +587,7 @@ def _label(pid: str, reg: Registry | None) -> str:
 
 def _row_says(x: Binding, reg: Registry | None) -> str:
     """"d-pad up moves Brightness", with whose row it is."""
-    whose = "the meta controller's, for every patch" if is_session_row(x) else "this patch's"
+    whose = "the meta controller's, for every patch" if is_meta_row(x) else "this patch's"
     return f"{row_words(x)} moves {_label(x.target, reg)} ({whose})"
 
 
@@ -622,10 +622,10 @@ def settle_pair(ask: PairAsk, choice: str, reg: Registry | None = None) -> str:
         return f"nothing landed: {why}"
     rows = ask.rows
     gone = rows if choice == TAKE_OVER else []
-    meta = is_session_row(new) or any(is_session_row(x) for x in gone)
-    taken_route = any(not is_session_row(x) for x in gone)
+    meta = is_meta_row(new) or any(is_meta_row(x) for x in gone)
+    taken_route = any(not is_meta_row(x) for x in gone)
     label = f"pair {new.target}"
-    if not is_session_row(new) or taken_route:
+    if not is_meta_row(new) or taken_route:
         undo.push(label)
     if meta:
         undo.push_meta(label)
