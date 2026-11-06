@@ -1463,6 +1463,8 @@ class Panel:
             tooltip(FINE_TIP)
         elif hovered:
             tooltip(f"{FINE_TIP}\n{tip}" if shift else tip)
+        if changed:
+            undo.by_hand(True)          # (typed into it: row 757)
         return changed, v
 
     def _fine_tip(self, a: Param, p: Param) -> None:
@@ -1550,6 +1552,7 @@ class Panel:
         self._ghost(p, half)
         imgui.pop_id()
         if changed and pos2 != pos:
+            undo.by_hand(True)          # (typed into it: row 757)
             p.set_position(pos2)
             return True
         return False
@@ -1598,6 +1601,7 @@ class Panel:
         self._learn_frame(a)
         self._ghost(p, half)
         if changed:
+            undo.by_hand(True)          # (typed into it: row 757)
             p.set_value(nv)
         return changed
 

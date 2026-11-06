@@ -139,7 +139,6 @@ MIN_BODY_H = 150.0       # beside the canvas, an open body is never shorter (the
 CHIP_MAX = 220.0         # px: the most a band header's words take
 WRITE_AFTER_S = 0.5      # a fold is written this long after the last click
 COST_KEEP = 0.9          # a body's running mean: this much the last mean, the rest the newest
-NAMED_KEYS = tuple(imgui.Key(k) for k in range(imgui.Key.named_key_begin, imgui.Key.named_key_end))
 NOTHING = "nothing selected — click a node, a cable or a group on the canvas"
 OPEN_TIP = "Fold or unfold this section (kept on this Mac)"
 
@@ -262,18 +261,12 @@ def where(panel) -> str | None:
 
 
 def _working() -> bool:
-    """Is the person working the panel this frame (`undo.by_hand`)? A button down or just
-    released, or an item live. A text field stays live with nobody at it, for as long as
-    the cursor sits there, so one counts only on a frame a key reaches it: a label writes
-    on each keystroke, a slider's field and a name on Enter (row 757). Read before the
-    frame's widgets, while the queue still holds what they are about to take."""
-    if any(imgui.is_mouse_down(b) or imgui.is_mouse_released(b) for b in (0, 1)):
-        return True
-    if not imgui.is_any_item_active():
-        return False
-    io = imgui.get_io()
-    return (not io.want_text_input or not io.input_queue_characters.empty()
-            or any(imgui.is_key_pressed(k) for k in NAMED_KEYS))
+    """Is the person working the panel, as far as a frame's start can say (`undo.by_hand`)?
+    A button down or just released, or an item live. Not a text field: one stays live with
+    nobody at it for as long as the cursor sits there, so a text field's writers report
+    their own write, `undo.by_hand(True)` where they write (row 757)."""
+    return (any(imgui.is_mouse_down(b) or imgui.is_mouse_released(b) for b in (0, 1))
+            or (imgui.is_any_item_active() and not imgui.get_io().want_text_input))
 
 
 def left(panel) -> None:

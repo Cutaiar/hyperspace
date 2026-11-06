@@ -58,7 +58,7 @@ import time
 
 from imgui_bundle import imgui
 
-from . import loadable, ui
+from . import loadable, ui, undo
 from .groupwords import group_word
 from .library import (
     LOADABLE,
@@ -242,6 +242,7 @@ def _name_field(panel, key: str, commit, hint: str = "preset name") -> bool:
     if ok:
         name = st["buf"].strip()
         if name:
+            undo.by_hand(True)          # the field's own report: row 757
             commit(name)
             st["naming"] = None
     return True
