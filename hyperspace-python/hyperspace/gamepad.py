@@ -23,7 +23,7 @@ below (`pads.models.CANON`), the GLFW hat bits, six GLFW-style axes:
         (pads/hid.py): the face, and the touchpad, the motion sensors,
         the Edge's back and Fn buttons and every output GLFW never sees
   usb   a wired Xbox 360 pad over libusb (`UsbPad`)
-  tape  a recorded hid meta controller read back (an entry's ``tape =``)
+  tape  a recorded hid session read back (an entry's ``tape =``)
 
 A pad entry's ``controller =`` says which controllers it may take
 (`pads.models.matches`): ``any`` (the next free one, as before), a model

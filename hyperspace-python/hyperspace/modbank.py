@@ -136,7 +136,7 @@ class Bank:
         one too — is never handed out again, so a route left dormant on its
         lane is not picked up by the next voice added. An explicit `add(n)`
         (an undo, a loadable patch load) may still bring a removed id back. Not
-        saved: a fresh meta controller starts from the highest id present."""
+        saved: a fresh run starts from the highest id present."""
         return max(self.width, getattr(self, "high", 0)) + 1
 
     def can_add(self) -> bool:

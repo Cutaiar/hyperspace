@@ -1950,8 +1950,8 @@ def renamed_session(session: dict) -> dict:
     """A show's session with the stick spring's old values (`desk.pad.hz`,
     `desk.pad.damp`) as today's `desk.pad.duration` and `desk.pad.bounce`,
     each on its own and exactly (`motion.spring_feel`); a value the
-    meta controller already holds under today's id wins, one that is no number is
-    dropped. The meta controller given is left as it is."""
+    session already holds under today's id wins, one that is no number is
+    dropped. The session given is left as it is."""
     hz_id, damp_id = PAD_FEEL_OLD
     if hz_id not in session and damp_id not in session:
         return session
