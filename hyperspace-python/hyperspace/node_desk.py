@@ -217,7 +217,22 @@ class NodeDesk:
         control they fill)? It does not act until they go."""
         if not b.is_midi or b.layer != "preset":
             return False
-        return any(same_control(x, b) for x in self.rows(self.deck.table.role_of(b) or None))
+        role = self.deck.table.role_of(b) or None
+        rows = self.rows(role)
+        if not rows:
+            return False
+        # `Bindings.dispatch`'s rule, for each control the row names: an any-channel row
+        # on the eight faders still fires from a fader node mode has not filled
+        controls = getattr(self._profile(self._role(role)), "controls", None)
+        names = [c.source for c in controls(b.bare)] if controls is not None else []
+
+        def taken(source: str) -> bool:
+            probe = Binding(source, "")
+            if probe.channel is None:
+                return any(x.kind == probe.kind and x.number == probe.number
+                           and x.channel is None for x in rows)
+            return any(x.matches(probe.kind, probe.channel, probe.number) for x in rows)
+        return all(taken(s) for s in names or [b.bare])
 
     def held(self) -> list[Held]:
         """Every desk this patch can point, in list order: a player's first of each."""

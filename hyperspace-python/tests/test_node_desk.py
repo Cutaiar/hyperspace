@@ -637,3 +637,26 @@ def test_a_row_takes_the_profiles_whole_feedback_as_a_learn_does(rig):
     was = Binding(f"cc:0:{K1}", "x", "abs")
     was.feedback_from(None)
     assert was.feedback is None
+
+
+def _dispatch_agrees(rig, b, faders=range(8)) -> bool:
+    """Does `dispatch` send every channel of fader row `b` to something other than `b`?"""
+    t = rig.one.table
+    return all(not any(x is b for x in t.dispatch("cc", ch, FADER, DESK)) for ch in faders)
+
+
+def test_under_asks_what_dispatch_does_on_an_any_channel_row(rig, monkeypatch):
+    node, params = pick_node(rig.one, 8)
+    t = rig.one.table
+    other = next(p.id for p in rig.one.reg if p.modulatable and p.id not in params
+                 and routing.meta_refusal(p.id) is None and p.kind.name == "CONTINUOUS")
+    saved = Binding(f"cc:*:{FADER}", other, "abs", ring=0, layer="preset")
+    t.bind(saved, write=False)
+    monkeypatch.setattr(apc40, "degrees_of_freedom", lambda: [(f"cc:0:{FADER}",)])
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert any(x is saved for x in t.dispatch("cc", 1, FADER, DESK))    # S2 still fires it
+    assert not rig.nd1.under(saved) and not _dispatch_agrees(rig, saved)
+    every = [(f"cc:{k}:{FADER}",) for k in range(8)]
+    monkeypatch.setattr(apc40, "degrees_of_freedom", lambda: every)
+    t.rows_serial += 1
+    assert rig.nd1.under(saved) and _dispatch_agrees(rig, saved)
