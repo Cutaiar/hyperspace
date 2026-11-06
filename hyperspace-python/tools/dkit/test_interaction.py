@@ -384,3 +384,130 @@ def test_input_text_is_visible_in_both_themes(DB):
         frames = DB.render(theme, W, H, script=[(0.0, 0.0)] * 4)
         assert ink(frames[-1], x, y) > 2.0, (
             f"the input's value is invisible on the {theme} theme")
+
+
+# --------------------------------------------------------------------------
+# ScrollArea
+# --------------------------------------------------------------------------
+
+def table_centre(DB):
+    vx, vy, vw, vh = DB.lay_out(W, H).table_view
+    return vx + vw / 2, vy + vh / 2
+
+
+def test_the_wheel_scrolls_the_table(DB):
+    x, y = table_centre(DB)
+    DB.render("dark", W, H, script=[(x, y)] * 6)
+    assert DB.render.last_state["table_scroll"] == 0.0
+    DB.render("dark", W, H,
+              script=[(x, y)] * 6 + [(x, y, False, -3.0)] * 10 + [(x, y)] * 20)
+    assert DB.render.last_state["table_scroll"] > 100.0, "the wheel did nothing"
+
+
+def test_the_scroll_range_is_the_content_less_the_viewport(DB):
+    """101 rows of 34 in a 196px viewport is 3238 of travel, and that number
+    must not drift as the thing is scrolled.
+
+    It did: the content extent was stated with a SCREEN cursor position
+    inside a scrolled child, so it started lower every frame and the range
+    went 3238 -> 5638 -> 51238 while the row count never changed.
+    """
+    x, y = table_centre(DB)
+    _vx, _vy, _vw, vh = DB.lay_out(W, H).table_view
+    want = 101 * DB.ROW_H - vh
+    seen = []
+    for n in (0, 10, 200):
+        DB.render("dark", W, H,
+                  script=[(x, y)] * 4 + [(x, y, False, -3.0)] * n + [(x, y)] * 8)
+        seen.append(DB.render.last_state["table_max"])
+    assert all(abs(m - want) < 0.5 for m in seen), (
+        f"the scroll range drifted: {seen}, wanted {want}")
+
+
+def test_scrolling_clamps_at_both_ends(DB):
+    x, y = table_centre(DB)
+    DB.render("dark", W, H,
+              script=[(x, y)] * 4 + [(x, y, False, -3.0)] * 200 + [(x, y)] * 8)
+    st = DB.render.last_state
+    assert st["table_scroll"] == pytest.approx(st["table_max"], abs=0.5)
+    DB.render("dark", W, H,
+              script=[(x, y)] * 4 + [(x, y, False, -3.0)] * 50
+              + [(x, y, False, 3.0)] * 200 + [(x, y)] * 8)
+    assert DB.render.last_state["table_scroll"] == 0.0
+
+
+def test_scrolled_content_stays_inside_the_viewport(DB):
+    """The bug this is here for: rows drawn into the PARENT's draw list are
+    clipped by nothing, so a scrolled table painted straight over the header
+    above it. Content has to go into the child's list.
+    """
+    DBr = DB.lay_out(W, H)
+    vx, vy, vw, vh = DBr.table_view
+    x, y = vx + vw / 2, vy + vh / 2
+    frames = DB.render("dark", W, H,
+                       script=[(x, y)] * 4 + [(x, y, False, -3.0)] * 8
+                       + [(x, y)] * 20)
+    assert DB.render.last_state["table_scroll"] > 0, "it did not scroll"
+    still = DB.render("dark", W, H, script=[(x, y)] * 4)[-1]
+    # The header sits flush on top of the viewport, so there is no gap to
+    # inspect - but it must be IDENTICAL scrolled and not. A row painted
+    # into the parent's list instead of the child's lands right on it.
+    hx, hy, hw, hh = DBr.table_head
+    band = (slice(int(hy), int(hy + hh)), slice(int(hx), int(hx + hw)))
+    assert np.array_equal(frames[-1][band], still[band]), (
+        "scrolled rows leaked over the table header")
+
+
+def test_the_scrollbar_shows_on_hover_and_not_otherwise(DB):
+    """shadcn's default is `type="hover"`: no scrollbar until the pointer is
+    over the region. Dwells either side of the easing period."""
+    DBr = DB.lay_out(W, H)
+    vx, vy, vw, vh = DBr.table_view
+    import tokens as T
+    col = int(vx + vw - T.SCROLL["bar_w"] + T.SCROLL["thumb_inset"] + 3)
+    inside = (vx + vw / 2, vy + vh / 2)
+    away = (vx + 40, DBr.header[1] + 20)
+
+    off = DB.render("dark", W, H, script=[away] * DWELL)[-1]
+    on = DB.render("dark", W, H,
+                   script=[inside] * 6 + [(inside[0], inside[1], False, -3.0)] * 6
+                   + [inside] * DWELL)[-1]
+    band = slice(int(vy) + 4, int(vy + vh) - 4)
+    assert on[band, col].max() > off[band, col].max() + 6, (
+        "the scrollbar did not appear while the region was hovered")
+
+
+def test_the_thumb_lands_where_the_geometry_says(DB):
+    """Pixels against box.scroll_thumb, so the drawn thumb and the measured
+    law cannot drift apart."""
+    import box as B
+    import tokens as T
+    DBr = DB.lay_out(W, H)
+    vx, vy, vw, vh = DBr.table_view
+    x, y = vx + vw / 2, vy + vh / 2
+    frames = DB.render("dark", W, H,
+                       script=[(x, y)] * 6 + [(x, y, False, -3.0)] * 8
+                       + [(x, y)] * DWELL)
+    st = DB.render.last_state
+    s = T.SCROLL
+    t = B.scroll_thumb(vx + vw - s["bar_w"], vy, s["bar_w"], vh, vh,
+                       vh + st["table_max"], st["table_scroll"],
+                       inset=s["track_inset"], thumb_w=s["thumb_w"],
+                       thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
+    assert t is not None
+    # Differenced against a column just LEFT of the thumb, inside the same
+    # rows. Two earlier attempts measured the wrong thing: a raw column
+    # crosses every 34px row separator (and read a thumb 42px tall), and
+    # differencing against an unhovered frame removes the hovered ROW's tint
+    # too, which starts exactly where the thumb does not.
+    f = frames[-1]
+    col = int(t.x + t.w / 2)
+    ref = int(t.x) - 4
+    a = f[:, col, 0].astype(int)
+    b = f[:, ref, 0].astype(int)
+    lit = [yy for yy in range(int(vy) + 2, int(vy + vh) - 2)
+           if a[yy] - b[yy] > 4]
+    assert lit, "no thumb was drawn"
+    assert abs(min(lit) - t.y) <= 2.0, f"thumb top {min(lit)} vs {t.y:.1f}"
+    assert abs(max(lit) + 1 - (t.y + t.h)) <= 2.0, (
+        f"thumb bottom {max(lit) + 1} vs {t.y + t.h:.1f}")

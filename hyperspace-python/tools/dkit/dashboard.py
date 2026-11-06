@@ -116,6 +116,11 @@ def ticks(n=180, seed=0x4d21):
 # exactly what happened when this went from 92 to 74.
 CTL_LABEL_W = 74.0
 
+# A table row's height. One constant, because lay_out counts slots with it
+# and paint places rows with it, and the two disagreeing is a whole class of
+# bug.
+ROW_H = 34.0
+
 
 CTL_STATE = {
     "cutoff": 2400.0,
@@ -130,6 +135,8 @@ CTL_STATE = {
     "tag": "bad id",
     "tip_frames": 0,
     "tip_now": False,
+    "table_scroll": 0.0,
+    "table_max": 0.0,
 }
 
 
@@ -151,6 +158,9 @@ class Rects:
     ctl_rows: list = field(default_factory=list)
     table_tabs: tuple = (0, 0, 0, 0)
     table_rows: list = field(default_factory=list)
+    # the scrolling viewport the rows live in; table_rows are the slots
+    # inside it at scroll 0
+    table_view: tuple = (0, 0, 0, 0)
     table_head: tuple = (0, 0, 0, 0)
     cols: list = field(default_factory=list)
 
@@ -181,7 +191,7 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
     N = B.Node
 
     # ---- the two cards whose content IS a stack of rows -----------------
-    ROW_H, ROW_GAP, N_BANDS = 24.0, T.SPACE[3], 6
+    CTL_ROW_H, ROW_GAP, N_BANDS = 24.0, T.SPACE[3], 6
     CARD_PAD = (T.CARD_PAD,) * 4
 
     def titled(*rows, key=None, gap=ROW_GAP, dir="column"):
@@ -194,13 +204,15 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
             N(dir=dir, gap=gap, kids=rows),
         ))
 
-    routing = titled(*(N(h=ROW_H, key=("routing", i)) for i in range(N_BANDS)),
+    routing = titled(*(N(h=CTL_ROW_H, key=("routing", i))
+                       for i in range(N_BANDS)),
                      key="routing", )
     routing.grow, routing.basis = 1.0, 0.0
     # Two columns of five: live controls left, every state right.
     controls = titled(
         *(N(dir="column", gap=ROW_GAP, grow=1.0, basis=0.0,
-            kids=tuple(N(h=ROW_H, key=("ctl", c * 5 + i)) for i in range(5)))
+            kids=tuple(N(h=CTL_ROW_H, key=("ctl", c * 5 + i))
+                       for i in range(5)))
           for c in range(2)),
         key="controls", dir="row", gap=T.SPACE[6])
     controls.grow, controls.basis = 1.0, 0.0
@@ -292,15 +304,16 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
         r.sources.append((8, sy + i * 34, SIDEBAR_W - 16, 32))
 
     rows = at["rows"]
+    r.table_view = rows.as_tuple()
     if n_rows is None:
         # However many fit in what is left, and NO forced minimum: a window
         # short enough to leave less than one row used to get one anyway,
         # hanging 10 px off the bottom at 1280x900. A row that does not fit
         # is not a row - it is the case ScrollArea exists for, and until that
         # lands the honest answer is to draw none rather than to overflow.
-        n_rows = max(0, int(rows.h // 34))
+        n_rows = max(0, int(rows.h // ROW_H))
     for i in range(n_rows):
-        r.table_rows.append((rows.x, rows.y + i * 34, rows.w, 34))
+        r.table_rows.append((rows.x, rows.y + i * ROW_H, rows.w, ROW_H))
 
     # Shape | Kind | Schlafli | Dim | Cells | Family — weights, and flex
     # resolves them. The old version hand-summed six fractions that had to
@@ -585,8 +598,8 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     if picked is not None:
         state["tab"] = picked
     rows = filtered(state["tab"])
-    shown = min(len(r.table_rows), len(rows))
-    D.label(dl, tx, ty, f"Showing {shown} of {len(rows)}", faces, "regular", 13,
+    # every row is in the table now; the viewport decides what is on screen
+    D.label(dl, tx, ty, f"{len(rows)} shapes", faces, "regular", 13,
             T.rgba("muted-foreground", theme=theme), align="right",
             box_w=r.table_head[2], baseline_box=th, tabular=True)
 
@@ -599,8 +612,32 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         D.label(dl, cxp, hy, head, faces, "medium", 13, ink, align=al,
                 box_w=cwid - (COL_PAD if al == "right" else 0), baseline_box=hh)
 
-    for ri, (row, rect) in enumerate(zip(rows[:shown], r.table_rows)):
-        rx, ry, rw, rh = rect
+    vx, vy, vw, vh = r.table_view
+    with I.scroll_area(ui, "table", vx, vy, vw, vh, len(rows) * ROW_H,
+                       backdrop=T.rgba("background", theme=theme)) as view:
+        _table_rows(ui, rows, view, vy, vh, r, faces, theme, ink, state)
+    # recorded rather than read off pixels: a row that scrolled past the top
+    # looks exactly like a row that was never drawn
+    state["table_scroll"], state["table_max"] = I.scrolled(ui, "table")
+
+    return
+
+
+def _table_rows(ui, rows, view, vy, vh, r, faces, theme, ink, state):
+    """The table's rows, drawn inside the scroll viewport.
+
+    Culled to what is visible: 101 rows means 101 invisible_buttons and 101
+    popup calls otherwise, and ImGui would clip them all away having done
+    the work. Culling is on the ROW, not on the draw, so a row that is not
+    on screen submits no widget at all.
+    """
+    dl = ui.dl                      # the CHILD's list: see scroll_area
+    aligns = ["left", "left", "left", "center", "right", "left"]
+    first = max(int((vy - view.y) // ROW_H) - 1, 0)
+    last = min(int((vy + vh - view.y) // ROW_H) + 1, len(rows) - 1)
+    for ri in range(first, last + 1):
+        row = rows[ri]
+        rx, ry, rw, rh = view.x, view.y + ri * ROW_H, view.w, ROW_H
         hovered = I.row(ui, f"row.{ri}", rx, ry, rw, rh).hot
         # the kebab reveals on row hover and stays while its menu is open.
         # row_action submits it every frame regardless - see its docstring for
@@ -758,9 +795,9 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
            keys=None):
     """Draw the dashboard, optionally stepping a script of mouse positions.
 
-    `script` is a list of (x, y) or (x, y, down) — one per frame — so a hover
-    or a click can be driven headlessly. Returns a list of frames (the last
-    one only, if no script was given).
+    `script` is a list of (x, y), (x, y, down) or (x, y, down, wheel) — one
+    per frame — so a hover, a click or a scroll can be driven headlessly.
+    Returns a list of frames (the last one only, if no script was given).
     """
     theme = T.LIGHT if theme_name == "light" else T.DARK
     if not glfw.init():
@@ -816,6 +853,8 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
             io.add_mouse_pos_event(float(mouse[0]), float(mouse[1]))
             if len(mouse) > 2:            # (x, y, down) drives the button too
                 io.add_mouse_button_event(0, bool(mouse[2]))
+            if len(mouse) > 3:            # (x, y, down, wheel) drives scroll
+                io.add_mouse_wheel_event(0.0, float(mouse[3]))
         for k in keymap.get(i, ()):
             if isinstance(k, str):
                 for ch in k:

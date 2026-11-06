@@ -422,3 +422,65 @@ def test_the_page_fits_the_window():
                   else r.table_head[1] + r.table_head[3])
         assert bottom <= h + 0.01, f"the page overflows at {w}x{h}"
         assert r.controls_card[0] + r.controls_card[2] <= w + 0.01
+
+
+# --------------------------------------------------------------------------
+# ScrollArea geometry
+# --------------------------------------------------------------------------
+# Chromium, measured on ?probe: a 320x200 ScrollArea with a 1px border, so
+# the viewport is 198 tall and the scrollbar is 10 wide at x=309, y=1. Its
+# track is the scrollbar less 1px of padding at each end.
+
+BAR = dict(bar_x=309.0, bar_y=1.0, bar_w=10.0, bar_h=198.0, viewport_h=198.0)
+
+
+@pytest.mark.parametrize("content,thumb_h", [
+    (200, 194.04), (400, 97.02), (1200, 32.34),
+    (3000, 18.0), (8000, 18.0), (30000, 18.0),      # the floor
+])
+def test_scroll_thumb_height_matches_the_browser(content, thumb_h):
+    t = B.scroll_thumb(content_h=float(content), scroll_y=0.0, **BAR)
+    assert t is not None
+    assert t.h == pytest.approx(thumb_h, abs=0.02)
+    assert (t.x, t.w) == (311.0, 7.0)               # 2 in, 7 wide
+
+
+def test_the_thumbs_floor_is_real_and_not_rounding():
+    """At a 198px viewport the ideal thumb goes 97, 32, 13, 5, 1 as the
+    content grows; the rendered one stops at 18 and stays there."""
+    ideal = [198.0 / c * 196.0 for c in (3000, 8000, 30000)]
+    assert all(i < 18.0 for i in ideal)
+    for c in (3000, 8000, 30000):
+        assert B.scroll_thumb(content_h=float(c), scroll_y=0.0, **BAR).h == 18.0
+
+
+@pytest.mark.parametrize("frac,y", [
+    (0.0, 2.0), (0.25, 42.997), (0.5, 83.830), (0.75, 124.827), (1.0, 165.660),
+])
+def test_scroll_thumb_travel_matches_the_browser(frac, y):
+    t = B.scroll_thumb(content_h=1200.0, scroll_y=frac * (1200.0 - 198.0), **BAR)
+    assert t.y == pytest.approx(y, abs=0.1)
+
+
+def test_no_thumb_when_there_is_nothing_to_scroll():
+    """The browser draws no scrollbar without overflow, and neither should
+    this - a full-height thumb on an unscrollable region is a lie."""
+    assert B.scroll_thumb(content_h=198.0, scroll_y=0.0, **BAR) is None
+    assert B.scroll_thumb(content_h=100.0, scroll_y=0.0, **BAR) is None
+
+
+def test_thumb_stays_inside_its_track_at_every_scroll():
+    """Swept, because an off-by-one here puts the thumb through the end of
+    its own track at exactly the position people scroll to most."""
+    for content in (250, 400, 1200, 9000):
+        for i in range(101):
+            sy = i / 100.0 * (content - 198.0)
+            t = B.scroll_thumb(content_h=float(content), scroll_y=sy, **BAR)
+            assert t.y >= 2.0 - 1e-6
+            assert t.y + t.h <= 199.0 + 1e-6, f"{content} at {sy}"
+
+
+def test_scroll_thumb_clamps_a_scroll_past_the_end():
+    a = B.scroll_thumb(content_h=1200.0, scroll_y=1002.0, **BAR)
+    b = B.scroll_thumb(content_h=1200.0, scroll_y=99999.0, **BAR)
+    assert a.y == pytest.approx(b.y)

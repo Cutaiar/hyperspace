@@ -312,3 +312,33 @@ def select_table(theme_name: str) -> dict:
 
 def tooltip_table(theme_name: str) -> dict:
     return dict(TOOLTIP)
+
+
+# --------------------------------------------------------------------------
+# ScrollArea, as measured
+# --------------------------------------------------------------------------
+#
+# Radix's scrollbar OVERLAYS its viewport rather than taking layout space,
+# which is the whole reason to draw it ourselves: ImGui's own scrollbar is a
+# column of the child window and is always there. Measured on ?probe at
+# several content ratios:
+#
+#     scrollbar       10 wide (w-2.5), right-aligned inside the border
+#     thumb            7 wide, 2 in from the scrollbar's left edge
+#                      (a 1px transparent border-l, then 1px of padding)
+#     track            the scrollbar less 1px of padding at each end
+#     thumb height     max(18, viewport / content * track)
+#     thumb travel     track_y + frac * (track - thumb)
+#
+# The 18 is a floor and not a rounding artifact: at a viewport of 198 the
+# ideal thumb goes 97.0, 32.3, 12.9, 4.9, 1.3 as the content grows, and the
+# rendered one stops at 18 and stays there.
+SCROLL = {
+    "bar_w": SPACE[2.5],       # w-2.5 = 10
+    "thumb_w": 7.0,
+    "thumb_inset": 2.0,        # border-l 1 + p-px 1
+    "track_inset": 1.0,        # p-px, top and bottom
+    "thumb_min": 18.0,
+    "thumb": ("border", 1.0),  # bg-border; measured identical when hovered
+    "hide_delay": 0.6,         # Radix's scrollHideDelay, for type="hover"
+}

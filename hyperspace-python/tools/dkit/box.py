@@ -583,3 +583,34 @@ def wants(root: Node) -> tuple:
     """The size a tree wants, without placing it - what a ScrollArea needs
     to know whether its content overflows, and what `height: auto` means."""
     return measure_tree(root)
+
+
+def scroll_thumb(bar_x, bar_y, bar_w, bar_h, viewport_h, content_h, scroll_y,
+                 *, inset=1.0, thumb_w=7.0, thumb_inset=2.0, thumb_min=18.0):
+    """Where a Radix scrollbar's thumb goes. Pure geometry, no imgui.
+
+    Measured on ?probe rather than reasoned about:
+
+        track       = the scrollbar less `inset` at each end
+        thumb h     = max(thumb_min, viewport / content * track)
+        thumb y     = track_y + frac * (track - thumb)
+
+    `thumb_min` is a real floor, not rounding: at a 198px viewport the ideal
+    thumb goes 97.0, 32.3, 12.9, 4.9, 1.3 as the content grows and the
+    rendered one stops at 18.
+
+    Returns None when there is nothing to scroll, which is what the browser
+    does too - a scrollbar with no overflow is not drawn at all.
+    """
+    if content_h <= viewport_h + 0.5 or viewport_h <= 0:
+        return None
+    track_y = bar_y + inset
+    track_h = bar_h - 2 * inset
+    if track_h <= 0:
+        return None
+    th = max(thumb_min, viewport_h / content_h * track_h)
+    th = min(th, track_h)
+    span = max(content_h - viewport_h, 1e-6)
+    frac = min(max(scroll_y / span, 0.0), 1.0)
+    return Rect(bar_x + thumb_inset, track_y + frac * (track_h - th),
+                thumb_w, th)

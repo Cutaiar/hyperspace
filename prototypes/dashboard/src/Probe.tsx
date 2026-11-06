@@ -11,6 +11,7 @@
 // THEMSELVES, which is the question "how big is a switch, actually" — and
 // the answer (h-[18.4px]) is not one I would have guessed.
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
@@ -158,6 +159,26 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
             </div>
           </CardContent>
         </Card>
+      </P>
+
+      {/* ---- ScrollArea: the thumb's size law is the thing to measure.
+           Radix sizes the thumb by viewport/content, with a floor, and the
+           scrollbar OVERLAYS rather than taking layout space - both of
+           which decide whether a kit version can be drawn from
+           scroll_y/scroll_max_y alone. Three content ratios pin the law.
+           `type="always"` so it is up without a hover; the default is
+           "hover", which is itself worth recording. ---- */}
+      {[200, 400, 1200].map((ch) => (
+        <P key={`sa${ch}`} id={`scroll.h200.content${ch}`} w={320}>
+          <ScrollArea type="always" className="h-[200px] w-full rounded-lg border">
+            <div style={{ height: ch }} data-probe-content />
+          </ScrollArea>
+        </P>
+      ))}
+      <P id="scroll.hover.default" w={320}>
+        <ScrollArea className="h-[120px] w-full rounded-lg border">
+          <div style={{ height: 600 }} />
+        </ScrollArea>
       </P>
 
       {/* ---- Tooltip, forced open ---- */}

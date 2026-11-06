@@ -67,6 +67,10 @@ class Ui:
     def texting(self) -> dict:
         return self.anim.store["texting"]
 
+    @property
+    def scroll(self) -> dict:
+        return self.anim.store.setdefault("scroll", {})
+
     # -- the measured component tables, resolved for this theme ----------
     def __post_init__(self):
         self.slider_tbl = T.slider_table(self.theme_name)
@@ -551,3 +555,104 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
     D.slider(ui.dl, x, y, w, h, [flo, fhi], ui.theme, ui.slider_tbl,
              ring_f=ring_f, disabled=disabled)
     return changed, lo, hi
+
+
+# --------------------------------------------------------------------------
+# ScrollArea
+# --------------------------------------------------------------------------
+
+from contextlib import contextmanager  # noqa: E402
+
+
+@contextmanager
+def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
+                backdrop=None, always=False, pad=0.0):
+    """A scrolling region with shadcn's overlay scrollbar.
+
+    ImGui's `begin_child` supplies the MECHANISM - the wheel, the clipping,
+    the scroll position, keyboard paging, nesting - and reimplementing any
+    of that would be wasted work. What it does not supply is the look: its
+    scrollbar is a column of the child window, always present, and it takes
+    layout space. Radix's floats over the viewport and is 10px wide. So the
+    child runs with `no_scrollbar` and the thumb is drawn afterwards, into
+    the PARENT's draw list so it sits above the content and is not clipped
+    by it.
+
+        with I.scroll_area(ui, "table", x, y, w, h, radius=14) as view:
+            ...draw at `view`, which is already scrolled...
+
+    `view` is the content rect, already offset by the scroll position, so a
+    caller lays out against it exactly as it would against any other rect.
+    `content_h` is how tall that content is - with the layout tree that is
+    `box.wants(node)[1]`, which is the question a scroll region exists to
+    ask.
+
+    `backdrop` is the colour behind the region: with a `radius` the corners
+    are painted back with `draw.cover_corners`, because ImGui clips to a
+    rectangle and a draw list cannot erase. That is this primitive's first
+    real use - it was built for exactly this and had nothing to call it.
+
+    One deliberate difference from Radix, which is a deviation and not an
+    oversight: its default `type="hover"` does not render the scrollbar at
+    all until the pointer is over the region, then unmounts it 600ms after
+    it leaves - an abrupt appear and disappear. The same information eases
+    in here on the kit's own 150ms curve. The GEOMETRY is measured and
+    matches to the pixel; only the reveal differs.
+    """
+    imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    imgui.begin_child(f"##{key}", imgui.ImVec2(w, h), 0,
+                      imgui.WindowFlags_.no_scrollbar)
+    # ImGui works a child's scroll range out from the extent its CURSOR
+    # reached, and chrome drawn straight into a draw list never moves the
+    # cursor - so without this the content measures 0 tall, scroll_max_y is
+    # 0 and the wheel does nothing. One zero-width dummy states the height.
+    #
+    # In WINDOW coordinates, not screen ones. A screen position inside a
+    # scrolled child is further down its content the further it has
+    # scrolled, so the dummy started lower each frame and the content grew
+    # without bound: scroll_max_y went 3238 -> 5638 -> 51238 while the row
+    # count never changed.
+    imgui.set_cursor_pos(imgui.ImVec2(0.0, 0.0))
+    imgui.dummy(imgui.ImVec2(0.0, max(content_h, 0.0)))
+    sy = imgui.get_scroll_y()
+    import box as B
+    # The content has to go into the CHILD's draw list, which is what gets
+    # clipped to the child's rect. Drawing it into the parent's list instead
+    # is not clipped by anything: the first version scrolled correctly and
+    # painted the rows straight over the table header above it.
+    outer, ui.dl = ui.dl, imgui.get_window_draw_list()
+    try:
+        yield B.Rect(x + pad, y + pad - sy, w - 2 * pad, h - 2 * pad)
+    finally:
+        # read INSIDE the child: both are properties of its window
+        sy = imgui.get_scroll_y()
+        smax = imgui.get_scroll_max_y()
+        ui.dl = outer
+        imgui.end_child()
+
+        hovered = imgui.is_mouse_hovering_rect(imgui.ImVec2(x, y),
+                                               imgui.ImVec2(x + w, y + h))
+        if radius and backdrop is not None:
+            D.cover_corners(ui.dl, x, y, w, h, radius, backdrop)
+
+        s = T.SCROLL
+        bar = B.Rect(x + w - s["bar_w"], y, s["bar_w"], h)
+        # content height from the child's own scroll range, so the thumb
+        # cannot disagree with what actually scrolls
+        thumb = B.scroll_thumb(
+            bar.x, bar.y, bar.w, bar.h, h, h + smax, sy,
+            inset=s["track_inset"], thumb_w=s["thumb_w"],
+            thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
+        show = ui.anim.to(f"{key}:bar",
+                          1.0 if (always or hovered) and thumb else 0.0)
+        if thumb is not None and show > 0.01:
+            D.fill(ui.dl, *D.snap(thumb.x, thumb.y, thumb.w, thumb.h),
+                   ui.col(s["thumb"][0], s["thumb"][1] * show),
+                   s["thumb_w"] / 2.0)
+        ui.scroll[key] = (sy, smax)
+
+
+def scrolled(ui: Ui, key) -> tuple:
+    """(scroll_y, scroll_max_y) for a region drawn this frame - what a
+    caller needs to know whether there is anything below the fold."""
+    return ui.scroll.get(key, (0.0, 0.0))
