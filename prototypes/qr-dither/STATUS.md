@@ -95,6 +95,17 @@ See STICKERS.md for the detail. In short, each needs one cheap real-world test:
 
 ## Smaller opens, in the code
 
+- **Three renderers draw a styled module grid, and only two are held together
+  by a test.** `lib/render.js` paints the canvas for the live solver,
+  `gen/style.py` writes the stills, `lib/style.ts` feeds the exporters, and all
+  three carry the same `FINDER`, the same `DOTS` table and the same eye ratios
+  independently. `gen/twins.py` pins the last two — change one and a command
+  tells you. Nothing pins `render.js`; the README calls it a twin and that is
+  an assertion, not a measurement. Deliberate: its drift is cosmetic and shows
+  up the moment you open the live view, where a divergent *export* would not,
+  and a third harness would be friction on every style change. If a constant
+  ever gets tuned in one file, this is the paragraph to remember.
+
 - Four of five texture blobs are gitignored (358 KB each). Only `gothic` ships;
   the live solver's texture picker prints the command for the others.
 - The builder preview draws codes with `preserveAspectRatio="none"`. Harmless
