@@ -323,3 +323,60 @@ def flex(container: Rect, items, *, direction: str = "row", gap: float = 0.0,
             out.append(Rect(inner.x + c_at, inner.y + at, c_size, b))
         at += b + between
     return out
+
+
+# --------------------------------------------------------------------------
+# component geometry, measured against Radix
+# --------------------------------------------------------------------------
+#
+# Pure width -> rects, no imgui, so these are unit-tested the way
+# ui_players.lay_out (ui_players.py:122-176) is. Every law here was read off
+# tools/dkit/probe_react.js rather than derived from the Tailwind classes,
+# and two of them are not what the classes suggest.
+
+def slider_geom(x, y, w, h, fracs, *, track_h=4.0, thumb=12.0):
+    """(track, range, [thumb, ...]) for a slider, in CSS pixels.
+
+    The measured law, and the surprise in it: the range and the thumb do NOT
+    share a mapping.
+
+        range  x = f_lo * W,  width = (f_hi - f_lo) * W      <- edge to edge
+        thumb  left = f * (W - thumb)                        <- inset by itself
+
+    So they agree only at f = 0.5. At 25% on a 240px track the range ends at
+    60 while the thumb's centre sits at 63; at 100% the range reaches 240 and
+    the thumb's centre stops at 234. Radix insets the thumb so it can never
+    overhang the track, and does not inset the range to match. Reproducing
+    one law for both - which is what reading the classes gets you - puts the
+    thumb up to half its own width away from the end of its own fill.
+
+    `fracs` is one fraction for a single thumb, or two for a range. The track
+    is centred vertically in (y, h), which is what `items-center` does.
+    """
+    fs = sorted(fracs if isinstance(fracs, (list, tuple)) else [fracs])
+    track = Rect(x, y + (h - track_h) / 2.0, w, track_h)
+    lo = fs[0] if len(fs) > 1 else 0.0
+    hi = fs[-1]
+    rng = Rect(x + lo * w, track.y, (hi - lo) * w, track_h)
+    span = max(w - thumb, 0.0)
+    thumbs = [Rect(x + f * span, y + (h - thumb) / 2.0, thumb, thumb)
+              for f in fs]
+    return track, rng, thumbs
+
+
+def switch_geom(x, y, size=("default",)):
+    """(track, thumb_off, thumb_on) for a switch, in CSS pixels.
+
+    The track carries a 1px border, so the thumb lives in the content box:
+    inset 1 from the left, centred in the remaining height, and travelling
+    (content width - thumb width). For the default size that content box is
+    16.390625 tall against a 16px thumb, which is why the thumb sits at
+    y + 1.195 rather than at a whole pixel.
+    """
+    from tokens import SWITCH_SIZES
+    name = size[0] if isinstance(size, (list, tuple)) else size
+    w, h, th = SWITCH_SIZES[name]
+    track = Rect(x, y, w, h)
+    cw, ch = w - 2.0, h - 2.0                       # inside the 1px border
+    ty = y + 1.0 + (ch - th) / 2.0
+    return track, Rect(x + 1.0, ty, th, th), Rect(x + 1.0 + (cw - th), ty, th, th)

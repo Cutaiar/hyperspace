@@ -12,9 +12,11 @@ reasoned about and diffed one at a time.
 
 from __future__ import annotations
 
+import math
+
 from imgui_bundle import imgui
 
-from tokens import RADII, rgba
+from tokens import RADII, RING_W, rgba
 
 
 def _u32(col) -> int:
@@ -58,6 +60,39 @@ def border(dl, x, y, w, h, col, radius=0.0, width=1.0) -> None:
         imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h), _u32(col),
         rounding=css_radius(radius, w, h), thickness=width,
     )
+
+
+def snap(x, y, w, h):
+    """Round a rect's edges to whole pixels, the way Chromium paints one.
+
+    Chromium lays out on a 1/64 px grid but PIXEL-SNAPS a box decoration's
+    painted edges to whole device pixels. ImGui antialiases them instead -
+    which is the more faithful rendering of the stated geometry, and the
+    wrong answer if the bar is "match the browser".
+
+    Measured twice, on the two shapes that have fractional edges:
+
+    * the Switch is `h-[18.4px]`, so its box runs y 790 .. 808.390625. The
+      background is painted into rows 790..807 and row 808 is left
+      completely empty. Unsnapped that was 91 levels on a dark switch - the
+      largest single disagreement the diff has ever reported.
+    * a Slider thumb at 33.3% lands at x 102.604 .. 114.604. The browser
+      paints it at 103 .. 115 - snapped at both edges, width preserved at
+      12 - and puts no ink at all in column 102, where ImGui put 133.
+
+    This matters well beyond the gallery: 292 of the registry's 427 params
+    are continuous, so a thumb sits on a fraction almost always. Layout keeps
+    the fraction (box.slider_geom and box.switch_geom are exact, and the
+    thumb's placement depends on it); only paint snaps.
+
+    Round, not floor: 808.390625 -> 808 and 102.604 -> 103, which is what
+    matching edge positions rather than extents requires.
+
+    Round, not floor: 808.390625 -> 808 and 807.6 -> 808, which is what
+    matching edge positions rather than extents requires.
+    """
+    x0, y0 = round(x), round(y)
+    return float(x0), float(y0), float(round(x + w) - x0), float(round(y + h) - y0)
 
 
 def box(dl, x, y, w, h, *, fill_col=None, border_col=None, radius=0.0,
@@ -450,3 +485,296 @@ def draw_flow(dl, placed, faces, col):
             s, variant, size, tabular = cell.payload
             label(dl, r.x, r.y, s, faces, variant, size, col,
                   baseline_box=r.h, tabular=tabular)
+
+
+# --------------------------------------------------------------------------
+# rounded clipping  (CSS `overflow: hidden` on a rounded box)
+# --------------------------------------------------------------------------
+#
+# ImGui clips to rectangles only - push_clip_rect takes an AABB and nothing
+# else - so a rounded container cannot clip its children the way a browser
+# does. This bites immediately: shadcn's slider track is
+# `overflow-hidden rounded-full` and its range is a plain rect, so the
+# range's ends are shaped entirely by the track's corners. A ScrollArea is
+# the same problem one size up.
+#
+# There is no stencil in a draw list, and nothing can erase what is already
+# drawn, so there are exactly two honest techniques:
+#
+#   1. For an axis-aligned RECT child - which is what `overflow-hidden`
+#      actually meets most of the time (a slider range, a progress fill, a
+#      selected row inside a rounded card) - round the child's own corners by
+#      the container's radius, but only the corners it actually reaches.
+#      That is not an approximation of the clip: it IS the clip, exactly,
+#      because the intersection of a rect with a rounded rect is a rect whose
+#      touched corners carry the container's arc.
+#
+#   2. For arbitrary content - text, icons, a whole scrolling subtree - clip
+#      to the rect with push_clip_rect and then paint the four corner
+#      notches back in the colour behind the container. Exact whenever that
+#      backdrop is a known flat colour, which inside a panel it is.
+#
+# `corner_flags` is (1) and `cover_corners` is (2). Both are measured against
+# the browser in the gallery rather than taken on trust.
+
+_CF = None
+
+
+def _corner_flag_table():
+    """ImDrawFlags for each corner, resolved once.
+
+    Built lazily: the enum lives on the imgui module, and naming it at import
+    time would make this module depend on a context existing.
+    """
+    global _CF
+    if _CF is None:
+        f = imgui.ImDrawFlags_
+        _CF = {
+            "tl": f.round_corners_top_left, "tr": f.round_corners_top_right,
+            "bl": f.round_corners_bottom_left, "br": f.round_corners_bottom_right,
+            "none": f.round_corners_none,
+        }
+    return _CF
+
+
+def corner_flags(cx, cy, cw, ch, bx, by, bw, bh, *, eps: float = 0.5) -> int:
+    """Which of a rounded container's corners an axis-aligned child reaches.
+
+    (cx, cy, cw, ch) is the child, (bx, by, bw, bh) the container. A child
+    reaches a corner when it touches BOTH of that corner's sides, within
+    `eps`. Returns ImDrawFlags to pass as `flags` to a rounded fill, so the
+    child is rounded exactly where the container would have clipped it and
+    square everywhere else.
+
+    `eps` is half a pixel rather than zero because these rects are computed
+    in float CSS space and a range at 100% lands on 239.99999 as readily as
+    on 240.
+    """
+    cf = _corner_flag_table()
+    left = cx <= bx + eps
+    right = cx + cw >= bx + bw - eps
+    top = cy <= by + eps
+    bottom = cy + ch >= by + bh - eps
+    out = 0
+    if left and top:
+        out |= cf["tl"]
+    if right and top:
+        out |= cf["tr"]
+    if left and bottom:
+        out |= cf["bl"]
+    if right and bottom:
+        out |= cf["br"]
+    return out or cf["none"]
+
+
+def fill_clipped(dl, x, y, w, h, col, box, radius) -> None:
+    """Fill a rect child as a rounded container would have clipped it.
+
+    `box` is (bx, by, bw, bh). The child is rounded by the container's radius
+    on the corners it reaches and left square elsewhere - see the note above
+    on why that is the clip rather than a stand-in for it.
+    """
+    if col[3] <= 0.0 or w <= 0 or h <= 0:
+        return
+    bx, by, bw, bh = box
+    r = css_radius(radius, bw, bh)
+    flags = corner_flags(x, y, w, h, bx, by, bw, bh)
+    # ImGui clamps rounding to min(w, h) / 2 of the rect it is drawing, not of
+    # the container, so a child narrower than the container's diameter would
+    # otherwise lose the arc it is supposed to inherit. Nothing can be done
+    # about that through add_rect_filled, and at the sizes that matter (a
+    # slider range a pixel or two wide) the difference is sub-pixel - but say
+    # so rather than pretend the clamp is not there.
+    dl.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h),
+                       _u32(col), r, flags)
+
+
+def cover_corners(dl, x, y, w, h, radius, backdrop, *, seg: int = 0) -> None:
+    """Paint back the four corner notches of a rounded box.
+
+    The companion to push_clip_rect for content that is NOT a rect - text,
+    icons, a whole scrolling subtree. Draw the content clipped to the box,
+    then call this: it fills, in the colour BEHIND the box, the area inside
+    the bounding rect but outside the rounded rect. Exact whenever that
+    backdrop is a known flat colour, which inside a panel it is.
+
+    One notch is a square of side r with a quarter disc taken out of it, so
+    the region is CONCAVE - the arc bulges into it. It goes up as an explicit
+    polygon through add_concave_poly_filled (the call ui_bands.py:261 already
+    uses for the spectrogram) rather than through the path API's convex fill,
+    which would bridge the arc and cover the box's own corner.
+    """
+    r = css_radius(radius, w, h)
+    if r <= 0.0 or backdrop[3] <= 0.0:
+        return
+    c = _u32(backdrop)
+    n = seg or max(6, int(r * 2))
+    # (outer corner, arc centre) per corner, and the angle the arc starts at
+    corners = (
+        ((x, y), (x + r, y + r), 180.0),              # top-left
+        ((x + w, y), (x + w - r, y + r), 270.0),      # top-right
+        ((x + w, y + h), (x + w - r, y + h - r), 0.0),   # bottom-right
+        ((x, y + h), (x + r, y + h - r), 90.0),       # bottom-left
+    )
+    for (ox, oy), (cx, cy), a0 in corners:
+        pts = [imgui.ImVec2(ox, oy)]
+        for i in range(n + 1):
+            a = math.radians(a0 + 90.0 * i / n)
+            pts.append(imgui.ImVec2(cx + r * math.cos(a), cy + r * math.sin(a)))
+        dl.add_concave_poly_filled(pts, c)
+
+
+# --------------------------------------------------------------------------
+# rings  (shadcn's `ring-N`, which is a box-shadow and not an outline)
+# --------------------------------------------------------------------------
+
+def ring(dl, x, y, w, h, col, radius, width=None) -> None:
+    """A CSS `box-shadow: 0 0 0 Npx col` - an N px band OUTSIDE the box.
+
+    Not a filled expanded rect: CSS clips an outer box-shadow so it is never
+    painted under the element, and the kit has elements with transparent
+    backgrounds (the Input in light) where a filled ring would show through
+    the middle. So it is a true annulus, which means a stroke - and that
+    needs to know where ImGui actually puts one.
+
+    Calibrated, because the obvious guesses are all wrong. An add_rect stroke
+    of thickness t is centred on `p + 0.5`, not on `p`:
+
+        t = 1   covers [p, p + 1)          <- wholly inside, the README's finding
+        t = 3   covers [p - 1, p + 2)      <- measured here
+
+    So to land a band of `width` px wholly outside the box, the path must be
+    expanded by `0.5 + width / 2` - 2.0 for the 3px ring shadcn uses, which
+    is neither 3 nor 1.5. Verified on all four sides against the exact rows
+    and columns CSS paints. At width 1 the formula gives 1.0, which is the
+    expansion `card` was already measured to need for its 1px ring.
+    """
+    s = RING_W if width is None else width
+    if col[3] <= 0.0 or s <= 0.0:
+        return
+    e = 0.5 + s / 2.0
+    dl.add_rect(
+        imgui.ImVec2(x - e, y - e), imgui.ImVec2(x + w + e, y + h + e),
+        _u32(col),
+        # concentric with the box's own corner, so the band's outer edge
+        # lands at radius + s and its inner edge at radius
+        rounding=css_radius(radius, w, h) + e, thickness=s,
+    )
+
+
+def shadow_stack(dl, x, y, w, h, radius, layers) -> None:
+    """Several CSS box-shadows at once, painted back to front.
+
+    `layers` is (dx, dy, blur, spread, alpha) per shadow - the shape
+    tokens.SHADOW_MD holds. CSS lists shadows front to back, so they go up in
+    reverse.
+    """
+    for dx, dy, blur, spread, a in reversed(layers):
+        shadow(dl, x, y, w, h, (0.0, 0.0, 0.0, a), radius,
+               dx=dx, dy=dy, blur=blur, spread=spread)
+
+
+# --------------------------------------------------------------------------
+# Tier 1 components - chrome only, state passed in
+# --------------------------------------------------------------------------
+#
+# Pure functions of (rect, state, tokens), the way `badge` and `card` are, so
+# the gallery can pin them to spec rects and the diff can measure them one at
+# a time. The interactive versions in interact.py call straight into these.
+
+def slider(dl, x, y, w, h, fracs, theme, tbl, *, ring_f=0.0, disabled=False,
+           track_h=None, thumb=None):
+    """shadcn Slider.
+
+    `ring_f` is 0..1 for the thumb's hover/active ring, so a caller can ease
+    it rather than snap it; `fracs` is one fraction or two. The range is
+    clipped by the track exactly the way `overflow-hidden rounded-full`
+    clips it - see fill_clipped.
+    """
+    import box as B
+    th = tbl["track_h"] if track_h is None else track_h
+    tz = tbl["thumb"] if thumb is None else thumb
+    a = tbl["disabled_opacity"] if disabled else 1.0
+
+    def c(key, mul=1.0, themed=True):
+        tok, al = tbl[key]
+        return rgba(tok, al * mul * a, theme=theme if themed else None)
+
+    track, rng, thumbs = B.slider_geom(x, y, w, h, fracs, track_h=th, thumb=tz)
+    # Exact geometry above, snapped paint below - the browser does the same.
+    ptrack = snap(track.x, track.y, track.w, track.h)
+    fill(dl, *ptrack[:4], c("track"), ptrack[3] / 2.0)
+    if rng.w > 0.0:
+        px, py, pw, ph = snap(rng.x, rng.y, rng.w, rng.h)
+        if pw > 0.0:
+            fill_clipped(dl, px, py, pw, ph, c("range"), ptrack, ptrack[3] / 2.0)
+    for t in thumbs:
+        tx, ty, tw, tht = snap(t.x, t.y, t.w, t.h)
+        if ring_f > 0.01:
+            ring(dl, tx, ty, tw, tht, c("ring", ring_f), tw / 2.0)
+        box(dl, tx, ty, tw, tht,
+            # a literal white, NOT a token - see the note in tokens.SLIDER
+            fill_col=c("thumb_fill", themed=False),
+            border_col=c("thumb_border"),
+            radius=tw / 2.0, border_w=1.0)
+    return track, rng, thumbs
+
+
+def switch(dl, x, y, on_f, theme, tbl, *, size="default", ring_f=0.0,
+           disabled=False):
+    """shadcn Switch. `on_f` is 0..1, so the thumb slides and the track
+    cross-fades on the same eased value rather than snapping."""
+    import box as B
+    from ease import mix
+    track, off, onr = B.switch_geom(x, y, size)
+    a = 0.5 if disabled else 1.0
+    # The default size is 18.390625 px tall, and the browser paints that box
+    # snapped to whole pixels while still laying the thumb out off the
+    # fraction - so the TRACK snaps and the thumb does not. See draw.snap.
+    px, py, pw, ph = snap(track.x, track.y, track.w, track.h)
+    if ring_f > 0.01:
+        ring(dl, px, py, pw, ph, rgba("ring", 0.5 * ring_f, theme=theme),
+             ph / 2.0)
+    bg = mix(rgba(tbl["off"][0], tbl["off"][1] * a, theme=theme),
+             rgba(tbl["on"][0], tbl["on"][1] * a, theme=theme), on_f)
+    box(dl, px, py, pw, ph, fill_col=bg,
+        border_col=rgba(*tbl["border"], theme=theme),
+        radius=ph / 2.0, border_w=1.0)
+    tx = off.x + (onr.x - off.x) * on_f
+    # the thumb's own colour is themed AND state-dependent: in dark it
+    # inverts between `foreground` and `primary-foreground`
+    tc = mix(rgba(tbl["thumb_off"][0], tbl["thumb_off"][1] * a, theme=theme),
+             rgba(tbl["thumb_on"][0], tbl["thumb_on"][1] * a, theme=theme), on_f)
+    qx, qy, qw, qh = snap(tx, off.y, off.w, off.h)
+    fill(dl, qx, qy, qw, qh, tc, qw / 2.0)
+    return track
+
+
+def field(dl, x, y, w, h, theme, tbl, *, focus_f=0.0, invalid=False,
+          disabled=False, radius=None):
+    """The chrome an Input and a Select trigger share: a 1px bordered box
+    with a 3px focus ring outside it.
+
+    One function because the two are measured identical apart from height,
+    radius and padding - and keeping them one place is what stops the two
+    drifting a pixel apart the way the trend badge's three constants did.
+    """
+    from ease import mix
+    r = RADII[tbl.get("radius", "lg")] if radius is None else radius
+    if invalid:
+        rc, bc = tbl["invalid_ring"], tbl["invalid_border"]
+        ring(dl, x, y, w, h, rgba(*rc, theme=theme), r)
+        bcol = rgba(*bc, theme=theme)
+    else:
+        if focus_f > 0.01:
+            ring(dl, x, y, w, h,
+                 rgba(tbl["ring"][0], tbl["ring"][1] * focus_f, theme=theme), r)
+        bcol = mix(rgba(*tbl["border"], theme=theme),
+                   rgba(*tbl.get("focus_border", tbl["border"]), theme=theme),
+                   focus_f)
+    bg = tbl["disabled_bg"] if (disabled and "disabled_bg" in tbl) else tbl["bg"]
+    box(dl, x, y, w, h, fill_col=rgba(*bg, theme=theme), border_col=bcol,
+        radius=r, border_w=1.0)
+    return r
+
+

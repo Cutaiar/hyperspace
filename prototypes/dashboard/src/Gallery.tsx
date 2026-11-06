@@ -9,6 +9,8 @@
 // ?gallery&text    the same grid with text, advisory only
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { Slider } from "@/components/ui/slider"
+import { Switch } from "@/components/ui/switch"
 import spec from "../../../hyperspace-python/tools/dkit/spec.json"
 
 // The dashboard decorates its stat cards on top of the base Card; that
@@ -28,6 +30,8 @@ type Cell = {
   text: string
   size?: number
   weight?: number
+  fracs?: number[]
+  on?: boolean
 }
 
 export default function Gallery({
@@ -86,6 +90,28 @@ export default function Gallery({
             >
               {c.text}
             </span>
+          ) : c.kind === "slider" ? (
+            // Pinned by width only: the root takes the cell's height and
+            // `items-center` does the vertical placement, which is the law
+            // box.slider_geom reproduces. The values are fractions in the
+            // spec, so the component's own 0..100 domain is used.
+            <Slider
+              className="h-full w-full"
+              value={(c.fracs ?? [0]).map((f) => f * 100)}
+              min={0}
+              max={100}
+              // Radix's default step is 1, which SNAPS the value: a spec
+              // fraction of 0.375 came back drawn at 0.38 and showed up as
+              // the worst corner figure in the set. The spec pins a
+              // fraction, so the oracle must honour it exactly - step is a
+              // behaviour knob, not chrome.
+              step={0.0001}
+            />
+          ) : c.kind === "switch" ? (
+            // NOT stretched: a Switch has an intrinsic size (32 x 18.390625
+            // for default), and reproducing that size is half of what is
+            // being checked. The spec rect is that intrinsic size.
+            <Switch checked={c.on} size={c.variant as "sm" | "default"} />
           ) : c.kind === "card" ? (
             <Card
               className={

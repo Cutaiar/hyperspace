@@ -33,6 +33,15 @@ SPEC = json.loads((HERE / "spec.json").read_text())
 KIND = {
     "badge": {"radius": 26.0, "outset": 0, "ring": False},
     "card":  {"radius": 14.0, "outset": 3, "ring": True},
+    # A slider's and a switch's arcs do not sit at their cell's corners -
+    # they belong to a thumb somewhere along the track, and to the track's
+    # own end caps. So those kinds declare SUB-BOXES (see sub_boxes) and both
+    # metrics walk those instead of the cell rect. Without that the thumb's
+    # antialiased disc lands in the flat-region metric and reports a failure
+    # that is really sub-pixel agreement, which is the exact mistake this
+    # module exists to avoid.
+    "slider": {"radius": 6.0, "outset": 3, "ring": True},
+    "switch": {"radius": 9.195, "outset": 0, "ring": False},
 }
 
 
@@ -42,6 +51,75 @@ def geom(cell):
     r = min(k["radius"], min(cell["w"], cell["h"]) / 2.0)
     ring = k["ring"] or cell.get("variant") == "outline"
     return r, k["outset"], ring
+
+
+def sub_boxes(cell):
+    """The rounded boxes inside a cell whose arcs are worth measuring.
+
+    For a Badge or a Card that is the cell itself. For a Slider it is each
+    thumb (a 1px-bordered disc, so a ring) plus the track's own end caps; for
+    a Switch, the track and the thumb. Returns (x, y, w, h, radius, is_ring,
+    outset) per box.
+
+    This exists because the radial march below finds a corner by walking out
+    from the arc's centre, and a slider thumb's centre is wherever its value
+    puts it - nowhere near the cell's corner. Measuring the cell's corners
+    instead would sample flat track and return nothing, while leaving the
+    thumb's antialiased edge inside the strict metric, where a third of a
+    pixel of rasterizer disagreement reads as a hundred levels.
+
+    `corners` exists for a subtler reason, and it was a real false alarm. A
+    Switch's thumb sits ON one end of its own track, so that end's arc centre
+    is INSIDE the thumb: the ray starts in thumb colour and the step it finds
+    is thumb-to-background, not track-to-background. In light that self-
+    cancels (thumb and page are both white, so the contrast guard rejects the
+    ray) but in dark it does not, and it reported 0.996 px on a track that is
+    actually fine. So the track declares only the two corners the thumb is
+    not standing on.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    k = cell["kind"]
+    if k == "slider":
+        import box as B
+        from tokens import SLIDER
+        track, _, thumbs = B.slider_geom(
+            cell["x"], cell["y"], cell["w"], cell["h"], cell["fracs"],
+            track_h=SLIDER["track_h"], thumb=SLIDER["thumb"])
+        out = [(t.x, t.y, t.w, t.h, t.w / 2.0, True, 3, None) for t in thumbs]
+        # the track's rounded ends: a 4px bar, so r = 2 - below the 3px floor
+        # the march can resolve, so it contributes nothing and is listed only
+        # so corner_mask excludes it from the strict metric.
+        out.append((track.x, track.y, track.w, track.h, track.h / 2.0, False,
+                    0, None))
+        return out
+    if k == "switch":
+        import box as B
+        track, off, on = B.switch_geom(cell["x"], cell["y"], cell["variant"])
+        t = on if cell["on"] else off
+        # The thumb stands on one end of the track, so each box has one end
+        # that cannot be measured and one that can - and they are opposite
+        # ends, so between them all four arcs get measured once against a
+        # clean background.
+        #
+        #   * the TRACK's arc on the thumb's end has its centre inside the
+        #     thumb, so the ray starts in thumb colour.
+        #   * the THUMB's arc on that same end is 1px from the track's edge
+        #     (16px thumb in an 18px track), so the ray exits through a
+        #     sliver of track into the page: the profile is dark-light-dark
+        #     rather than a step, and the 50% crossing is unstable on it.
+        #
+        # The slider's thumb does not need this: at 12px against a 4px track
+        # it overhangs vertically, so its rays reach the page cleanly even at
+        # the ends.
+        near = ("tr", "br") if cell["on"] else ("tl", "bl")
+        far = ("tl", "bl") if cell["on"] else ("tr", "br")
+        return [(track.x, track.y, track.w, track.h, track.h / 2.0, False, 0,
+                 far),
+                (t.x, t.y, t.w, t.h, t.w / 2.0, False, 0, far)]
+    r, outset, ring = geom(cell)
+    return [(cell["x"], cell["y"], cell["w"], cell["h"], r, ring, outset, None)]
 
 # (dx, dy) toward the corner's centre, and the angle range of its arc
 CORNERS = {
@@ -107,20 +185,26 @@ def measure(react: np.ndarray, mine: np.ndarray) -> dict:
     for c in SPEC["cells"]:
         if c["kind"] not in KIND:        # text cells are advisory, not chrome
             continue
-        r, _, ring = geom(c)
-        filled = not ring
         deltas = []
-        for name, (a0, a1) in CORNERS.items():
-            cx = c["x"] + r if "l" in name else c["x"] + c["w"] - r
-            cy = c["y"] + r if "t" in name else c["y"] + c["h"] - r
+        for bx, by, bw, bh, r, ring, _os, only in sub_boxes(c):
+          filled = not ring
+          # an arc smaller than ~3px spans too few samples for the radial
+          # march to resolve; it stays in the flat metric instead
+          if r < 3.0:
+              continue
+          for name, (a0, a1) in CORNERS.items():
+            if only is not None and name not in only:
+                continue
+            cx = bx + r if "l" in name else bx + bw - r
+            cy = by + r if "t" in name else by + bh - r
             for ang in np.linspace(a0 + 6, a1 - 6, 14):
                 rr, vr = ray(react, cx, cy, ang, r)
                 _, vm = ray(mine, cx, cy, ang, r)
                 if np.isnan(vr).any() or np.isnan(vm).any():
                     continue
-                k = pick_channel(vr, vm)
-                er = edge_radius(rr, vr[:, k], filled)
-                em = edge_radius(rr, vm[:, k], filled)
+                ch = pick_channel(vr, vm)
+                er = edge_radius(rr, vr[:, ch], filled)
+                em = edge_radius(rr, vm[:, ch], filled)
                 if er is not None and em is not None:
                     deltas.append(em - er)
         out[c["id"]] = np.array(deltas) if deltas else np.array([])

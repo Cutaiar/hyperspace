@@ -59,19 +59,30 @@ def tolerant_delta(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 def corner_mask(shape: tuple[int, int]) -> np.ndarray:
-    """True where a cell's rounded corner arc lives."""
+    """True where a rounded corner arc lives.
+
+    Walks contour.sub_boxes rather than the cell rect, so a slider's thumb
+    and a switch's thumb - whose arcs are nowhere near their cell's corners -
+    are excluded from the strict metric too. Leaving them in it would fail a
+    third of a pixel of rasterizer disagreement as a hundred-level error,
+    which is the thing the two-metric split exists to prevent.
+    """
     m = np.zeros(shape, bool)
     for c in SPEC["cells"]:
         if c["kind"] not in C.KIND:
             continue
-        r, outset, _ = C.geom(c)
-        # the corner box must also cover chrome that lives outside the box -
-        # a card's ring sits at x-1 and its shadow reaches ~3px further
-        k = int(np.ceil(r)) + 2 + outset
-        x, y = c["x"] - outset, c["y"] - outset
-        w, h = c["w"] + 2 * outset, c["h"] + 2 * outset
-        for cx, cy in ((x, y), (x + w - k, y), (x, y + h - k), (x + w - k, y + h - k)):
-            m[max(cy, 0): cy + k, max(cx, 0): cx + k] = True
+        for bx, by, bw, bh, r, _ring, outset, _only in C.sub_boxes(c):
+            # the corner box must also cover chrome that lives outside the
+            # box - a card's ring sits at x-1 and its shadow reaches ~3px
+            # further, and a slider thumb's hover ring reaches 3px
+            k = int(np.ceil(r)) + 2 + outset
+            x = int(np.floor(bx - outset))
+            y = int(np.floor(by - outset))
+            w = int(np.ceil(bw + 2 * outset))
+            h = int(np.ceil(bh + 2 * outset))
+            for cx, cy in ((x, y), (x + w - k, y), (x, y + h - k),
+                           (x + w - k, y + h - k)):
+                m[max(cy, 0): cy + k, max(cx, 0): cx + k] = True
     return m
 
 
@@ -104,9 +115,10 @@ def main() -> int:
     for c in SPEC["cells"]:
         if c["kind"] not in C.KIND:      # text: measured by ink extent, see README
             continue
-        x0, y0 = max(c["x"] - PAD, 0), max(c["y"] - PAD, 0)
-        x1 = min(c["x"] + c["w"] + PAD, strict.shape[1])
-        y1 = min(c["y"] + c["h"] + PAD, strict.shape[0])
+        # a Switch is 18.390625 px tall, so cell rects are not all integers
+        x0, y0 = max(int(c["x"]) - PAD, 0), max(int(c["y"]) - PAD, 0)
+        x1 = min(int(np.ceil(c["x"] + c["w"])) + PAD, strict.shape[1])
+        y1 = min(int(np.ceil(c["y"] + c["h"])) + PAD, strict.shape[0])
         sl = (slice(y0, y1), slice(x0, x1))
 
         flat = ~corners[sl]                       # straight edges, fills, bg
@@ -125,15 +137,16 @@ def main() -> int:
 
     inside = np.zeros(strict.shape, bool)
     for c in SPEC["cells"]:
-        inside[max(c["y"] - PAD, 0):c["y"] + c["h"] + PAD,
-               max(c["x"] - PAD, 0):c["x"] + c["w"] + PAD] = True   # text too
+        inside[max(int(c["y"]) - PAD, 0):int(np.ceil(c["y"] + c["h"])) + PAD,
+               max(int(c["x"]) - PAD, 0):int(np.ceil(c["x"] + c["w"])) + PAD] = True
     bg = int((strict[~inside] > a.tol).sum())
 
     # text is advisory, so keep it out of the chrome summary
     textmask = np.zeros(strict.shape, bool)
     for c in SPEC["cells"]:
         if c["kind"] not in C.KIND:
-            textmask[c["y"]:c["y"] + c["h"], c["x"]:c["x"] + c["w"]] = True
+            textmask[int(c["y"]):int(np.ceil(c["y"] + c["h"])),
+                     int(c["x"]):int(np.ceil(c["x"] + c["w"]))] = True
     chrome = ~corners & ~textmask
 
     allarc = [float(np.abs(v).max()) for v in arcs.values() if len(v)]
@@ -149,7 +162,8 @@ def main() -> int:
         gb = mine.max(axis=2)
 
         def ink(img, c):
-            box = img[c["y"]:c["y"] + c["h"], c["x"]:c["x"] + c["w"]]
+            box = img[int(c["y"]):int(np.ceil(c["y"] + c["h"])),
+                      int(c["x"]):int(np.ceil(c["x"] + c["w"]))]
             # the page may be light-on-dark, so measure the departure from the
             # cell's own background rather than assuming dark ink
             bgv = np.median(np.concatenate([box[0], box[-1]]))

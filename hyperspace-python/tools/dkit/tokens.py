@@ -117,3 +117,144 @@ def badge_table(theme_name: str) -> dict:
     if theme_name == "dark":
         t.update(BADGE_DARK)
     return t
+
+
+# --------------------------------------------------------------------------
+# Tier 1 components, as measured
+# --------------------------------------------------------------------------
+#
+# Every number below came out of tools/dkit/probe_react.js against the real
+# components on the ?probe route - not out of reading the Tailwind classes.
+# Four of them are things a reading gets wrong:
+#
+#   * the switch is 18.390625 px tall. The class says `h-[18.4px]`; Chromium
+#     lays out on a 1/64 px grid, so 18.4 becomes 1177/64.
+#   * the slider thumb is `bg-white` - a LITERAL, not a token. It stays pure
+#     white on Hyperspace's #0a0a0a ground. Every other fill in the kit
+#     swaps with the theme; this one must not.
+#   * the switch thumb INVERTS in dark: `foreground` when off,
+#     `primary-foreground` when on. In light both states are white.
+#   * the select trigger has no hover tint in light at all, and does have one
+#     in dark (`input/30` -> `input/50`).
+#
+# Where a value is (token, alpha) the alpha MULTIPLIES whatever the token
+# already carries, which is how `bg-input/80` works on a dark `input` that is
+# itself #ffffff26. See rgba().
+
+# shadcn's focus/hover ring: `ring-3` is a 3px box-shadow spread, outside the
+# border box, and CSS clips an outer shadow so it never paints under the
+# element. See draw.ring.
+RING_W = 3.0
+
+SLIDER = {
+    "track_h": 4.0,          # Track is `h-1`
+    "thumb": 12.0,           # Thumb is `size-3`
+    "track": ("muted", 1.0),
+    "range": ("primary", 1.0),
+    # literal, NOT a token - see the note above
+    "thumb_fill": ("#ffffff", 1.0),
+    "thumb_border": ("ring", 1.0),
+    "ring": ("ring", 0.5),
+    "disabled_opacity": 0.5,
+}
+
+# (w, h, thumb) per size. The fractional height is not a typo.
+SWITCH_SIZES = {
+    "default": (32.0, 18.390625, 16.0),
+    "sm": (24.0, 14.0, 12.0),
+}
+SWITCH = {
+    "off": ("input", 1.0),
+    "on": ("primary", 1.0),
+    "thumb_off": ("background", 1.0),
+    "thumb_on": ("background", 1.0),
+    "border": ("transparent", 1.0),
+}
+SWITCH_DARK = {
+    "off": ("input", 0.8),              # dark:data-unchecked:bg-input/80
+    "thumb_off": ("foreground", 1.0),   # dark:data-unchecked:bg-foreground
+    "thumb_on": ("primary-foreground", 1.0),
+}
+
+INPUT = {
+    "h": 32.0,               # h-8
+    "radius": "lg",          # rounded-lg = 10
+    "pad_x": 10.0,           # px-2.5
+    "font": 14.0,            # md:text-sm
+    "bg": ("transparent", 1.0),
+    "border": ("input", 1.0),
+    "focus_border": ("ring", 1.0),
+    "ring": ("ring", 0.5),
+    "invalid_border": ("destructive", 1.0),
+    "invalid_ring": ("destructive", 0.2),
+    "disabled_bg": ("input", 0.5),
+    "disabled_opacity": 0.5,
+    "placeholder": ("muted-foreground", 1.0),
+}
+INPUT_DARK = {
+    "bg": ("input", 0.3),               # dark:bg-input/30
+    "invalid_border": ("destructive", 0.5),
+    "invalid_ring": ("destructive", 0.4),
+    "disabled_bg": ("input", 0.8),
+}
+
+# The trigger's radius is NOT constant across sizes: default is rounded-lg
+# (10) and sm is rounded-md (8).
+SELECT_SIZES = {"default": (32.0, "lg"), "sm": (28.0, "md")}
+SELECT = {
+    "pad_l": 10.0,
+    "pad_r": 8.0,
+    "chevron": 16.0,
+    "font": 14.0,
+    "bg": ("transparent", 1.0),
+    "hover_bg": ("transparent", 1.0),   # light has no hover tint
+    "border": ("input", 1.0),
+    "ring": ("ring", 0.5),
+}
+SELECT_DARK = {
+    "bg": ("input", 0.3),
+    "hover_bg": ("input", 0.5),
+}
+
+TOOLTIP = {
+    "radius": "md",          # rounded-md = 8
+    "pad_x": 12.0,           # px-3
+    "pad_y": 6.0,            # py-1.5
+    "font": 12.0,            # text-xs
+    "bg": ("foreground", 1.0),
+    "fg": ("background", 1.0),
+    "arrow": 10.0,           # size-2.5, rotated 45 -> a 14.142 bbox
+    "arrow_radius": 2.0,
+    "arrow_dy": 2.0,         # translate-y-[calc(-50% - 2px)]
+    "side_offset": 0.0,
+}
+
+# shadow-md, which the Select's popover carries on top of its 1px ring.
+SHADOW_MD = ((0.0, 4.0, 6.0, -1.0, 0.10), (0.0, 2.0, 4.0, -2.0, 0.10))
+
+
+def _themed(base: dict, dark: dict, theme_name: str) -> dict:
+    t = dict(base)
+    if theme_name == "dark":
+        t.update(dark)
+    return t
+
+
+def slider_table(theme_name: str) -> dict:
+    return dict(SLIDER)                 # no per-theme overrides: all tokens
+
+
+def switch_table(theme_name: str) -> dict:
+    return _themed(SWITCH, SWITCH_DARK, theme_name)
+
+
+def input_table(theme_name: str) -> dict:
+    return _themed(INPUT, INPUT_DARK, theme_name)
+
+
+def select_table(theme_name: str) -> dict:
+    return _themed(SELECT, SELECT_DARK, theme_name)
+
+
+def tooltip_table(theme_name: str) -> dict:
+    return dict(TOOLTIP)

@@ -75,6 +75,8 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     grad_tex = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))
     faces = load_faces()
     badges = T.badge_table(theme_name)
+    sliders = T.slider_table(theme_name)
+    switches = T.switch_table(theme_name)
     ink = T.rgba("foreground", theme=theme)
 
     # Two frames: the first builds the font atlas and settles the backend.
@@ -90,6 +92,12 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 D.badge(dl, cell, theme, badges)
             elif cell["kind"] == "card":
                 D.card(dl, cell, theme, grad_tex)
+            elif cell["kind"] == "slider":
+                D.slider(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                         cell["fracs"], theme, sliders)
+            elif cell["kind"] == "switch":
+                D.switch(dl, cell["x"], cell["y"], 1.0 if cell["on"] else 0.0,
+                         theme, switches, size=cell["variant"])
             elif cell["kind"] == "text":
                 D.text_cell(dl, cell, faces, ink)
         imgui.render()
