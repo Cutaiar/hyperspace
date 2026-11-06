@@ -114,7 +114,7 @@ from .outputs import (
     View,
 )
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
-from .params import Registry
+from .params import Registry, launch_dial
 from .pinch import install as install_pinch
 from .players import Players
 from .pointer import Pointer, Through
@@ -837,46 +837,16 @@ def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
         return None, dream_error(e)
 
 
-def _register_dial(reg: Registry, pad) -> None:
-    """The sticks' dial readings (gamepad.dial, a prototype) as meta controller
-    params on the pad: one enum per stick, and a trigger that swaps the
-    two — the same routes felt the other way, to compare them. Never
-    saved, never performed: the gamepad entry's `dial_left` / `dial_right`
-    set where a launch starts. `pad` is a `gamepad.Pad` or a callable
-    returning the one that is current (the device registry's primary pad,
-    which a config edit may replace); None, no pad: nothing registered."""
-    pad_of = pad if callable(pad) else (lambda: pad)
-    if pad_of() is None or "desk.pad.dial.left" in reg:
-        return
-    modes = list(gamepad.DIAL_MODES)
-
-    def mode_of(stick: str) -> str:
-        p = pad_of()
-        return (p.dial_modes if p is not None else gamepad.DIAL_DEFAULT).get(
-            stick, gamepad.DIAL_DEFAULT[stick])
-
-    def set_mode(stick: str, i) -> None:
-        p = pad_of()
-        if p is not None:
-            p.dial_modes[stick] = modes[int(i) % len(modes)]
-
-    tip = ("How the {} stick reads as a dial (its axis:{}.* lanes): petal, the "
-           "sector it points into gets the whole push; blend, neighbouring sectors "
-           "crossfade as it sweeps round.")
-    for stick, side in (("L", "left"), ("R", "right")):
-        reg.enum(f"desk.pad.dial.{side}", f"{side.capitalize()} dial",
-                 lambda s=stick: modes.index(mode_of(s)),
-                 lambda i, s=stick: set_mode(s, i),
-                 modes, group="desk", persist=False, modulatable=False,
-                 tip=tip.format(side, stick))
-
-    def swap():
-        p = pad_of()
-        if p is not None:
-            m = p.dial_modes
-            m["L"], m["R"] = m.get("R", "blend"), m.get("L", "petal")
-    reg.trigger("desk.pad.dial.swap", "Swap dials", swap, group="desk", modulatable=False,
-                tip="Swap the two sticks' dial readings — petal ↔ blend.")
+def _dial_launch(cfg: dict) -> dict[str, str]:
+    """Each stick's dial reading at launch, {"L": …, "R": …}: the first gamepad
+    entry's `dial_left` / `dial_right` (`[[devices]]`, or the old `[gamepad]` table
+    translated), else `gamepad.DIAL_DEFAULT`. What a loadable patch naming none gets."""
+    out = dict(gamepad.DIAL_DEFAULT)
+    entry = next((e for e in config.devices(cfg) if e.get("kind") == "gamepad"), {})
+    for stick, key in (("L", "dial_left"), ("R", "dial_right")):
+        if entry.get(key) in gamepad.DIAL_MODES:
+            out[stick] = entry[key]
+    return out
 
 
 class Awake:
@@ -1559,6 +1529,8 @@ def main(argv: list[str] | None = None) -> None:
         # shared meta param, `desk.slew`, is the table's, at the app's default
         # until the show says otherwise
         mc = cfg.get("midi", {})
+        # the sticks' dial readings at launch, before attach: the fresh values
+        launch_dial(reg, _dial_launch(cfg))
         return _desk_table(reg, Bindings.load(
             bindings_path(home), mc.get("profile", "apc40"),
             Path(mc.get("map", "midi_map.json")),
@@ -1651,9 +1623,6 @@ def main(argv: list[str] | None = None) -> None:
         renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
         # …closed with the adapters, at quit and restart — deck 2's too (plan 44 D4)
         segmenters = _Closer(lambda: _close_each([r.close for r in rendering]))
-        # the sticks as dials (gamepad.dial, a prototype): shared meta params on
-        # whichever pad is the primary now
-        _register_dial(reg, lambda: device_reg.adapter("gamepad"))
         awake = _open_awake(cfg)               # no screensaver over the show
         return _DevicesMade(device_reg, dream_io, awake, segmenters)
 

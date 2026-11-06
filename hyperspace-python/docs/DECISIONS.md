@@ -624,6 +624,12 @@ nuance). Built so far: D1, D2, D3, D4.
 | **The panel calls it the analyzer** (the owner, 2026-11-04: "Band is a ridiculous name for this thing"; wave 4 AZ, rows 737–738). The fixture on the graph and its tuning read "analyzer"; a named part reads its name (SUB … AIR), a numbered one "analyzer 3"; "band" is only the plain audio word for one slice of the spectrum ("6 bands", "Add analyzer band"). Words only: every saved `band` name stays. `groupwords.py` holds what the panel says for a group: a short word, a title and a part. | `groupwords.py`, `graphview.py`, `ui.py`, `ui_desk.py`, `library.py` | rows 737–738 |
 | **The rail is gone; `ui.page` is the focus** (plan 49, stage 3): GRAPH is always drawn, so `Panel.graph_selected` is live on every frame the panel draws; VIEW, ROUTING, HANDS and SYSTEM fold in too, so no page is left. `ui.PAGE_KEYS` keeps its sixteen slots in their order (append-only): a saved index names the section of the name its page had (FX the fx section), and GRAPH's slot lets go of the focus. `Panel.page` is its one owner; selecting a node does not move it. The focus shows a section however it is folded, scrolled to the pane's top, with the room down to the headers after it, and leaves the fold alone: a click folds, a focus does not. In the narrow band the focused section is alone and the band leaves `CANVAS_MIN` of canvas. A section scrolls in its body: "every page fits the window" is no longer a rule. While a desk control is picked the canvas and every body but ROUTING's are dimmed; the headers stay live. | `ui.py`, `ui_pane.py`, `ui_graph.py` | rows 668–672 |
 
+## The dial
+
+| Decision | Who |
+|---|---|
+| The dial's readings (`pad.dial.*`) are the patch's, one per `Deck`, and a pad reads the `Deck` it drives; `config.toml`'s `dial_left` / `dial_right` are what a loadable patch naming none gets. Two more saved values, no schema bump. | owner, rows 729–730 |
+
 ## Process
 
 | Decision | Who |

@@ -666,7 +666,8 @@ class PadDevice(Base):
         self.io.hid = bool(self.entry.get("hid", True))
         self.io.controller = str(self.entry.get("controller", "any") or "any")
         self.io.tape = tape if isinstance(tape, str) and tape else None
-        # where each stick's dial reading starts (`dial_left` / `dial_right`)
+        # alone, where each stick's dial reading starts (`dial_left` / `dial_right`);
+        # with a registry, `poll` reads the deck's (`params.dial_readings`)
         for stick, key in (("L", "dial_left"), ("R", "dial_right")):
             mode = self.entry.get(key)
             if mode in DIAL_MODES:
@@ -839,6 +840,11 @@ class PadDevice(Base):
         if self.io is not None:
             self.io.dt_hint = dt       # the touch and motion lanes' time (plan 42)
             self.io.poll()
+            # a pad reads the `Deck` it drives: that deck's loadable patch's dials
+            from .params import dial_readings
+            readings = dial_readings(self.reg)
+            if readings is not None:
+                self.io.dial_modes = readings
 
     def learn(self, learn) -> bool:
         if self.io is None:

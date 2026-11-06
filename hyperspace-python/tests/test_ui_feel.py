@@ -12,7 +12,7 @@ from imgui_bundle import imgui
 from test_ui_shell import CONTROL_SIZE, build_rig, page_frame
 
 import hyperspace.gamepad as gp
-from hyperspace import app, modifiers, motion, ui_feel, ui_graph, ui_routing
+from hyperspace import modifiers, motion, ui_feel, ui_graph, ui_routing
 from hyperspace.motion import Motion
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.ui_feel import (
@@ -255,7 +255,6 @@ def test_the_sticks_feel_plots_inside_the_system_body(tmp_path, monkeypatch, mod
     with build_rig(tmp_path) as r:
         pad = gp.Pad()
         r.panel.pad = pad
-        app._register_dial(r.reg, pad)
         r.reg["desk.pad.feel"].set(motion.MODES.index(mode))
         imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
         for _ in range(3):
