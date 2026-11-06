@@ -170,7 +170,30 @@ from ease import mix
 # itself #ffffff26. Lengths are CSS px at dpr 1.
 
 COMBOBOX = {
-    # ---- trigger: Button variant=outline, size=default ------------------
+    # ---- trigger: an INPUT. You type INTO it. ---------------------------
+    # Re-measured against the real `combobox.tsx`, which is Base UI and
+    # whose `ComboboxInput` IS the trigger - an InputGroup wrapping a real
+    # <input> with a ghost chevron in an inline-end addon. The kit first
+    # shipped the OLD Popover+Command recipe, a Button that opens a panel
+    # with a search box inside it, because I told the agent that building it
+    # that `shadcn has no combobox component`. It does.
+    #
+    # Measured: 320x32, radius 10, border 1px `input`, bg transparent in
+    # light and `input/30` in dark - which is exactly tokens.INPUT - with
+    # padding-left 10 and padding-RIGHT 6 (the chevron's addon takes the
+    # rest). Font 14/20.
+    "input_pad_l": T.SPACE[2.5],          # pl-2.5 = 10
+    "input_pad_r": T.SPACE[1.5],          # pr-1.5 = 6, then the addon
+    "side_offset": T.SPACE[1.5],          # sideOffset 6, not the Select's 4
+    # the panel's rows are MENU rows: h 28, rounded-md, px 6, gap 8 - all
+    # three measured equal to menu.py's, so they are not restated here
+    "row_h": 28.0,
+    "row_radius": "md",
+    "row_pad_x": T.SPACE[1.5],
+    "row_gap": T.SPACE[2],
+    "list_pad": T.SPACE[1],               # p-1
+    "list_max_h": 252.0,                  # max-h measured
+    # ---- the old recipe's trigger, kept for reference --------------------
     # Its (height, radius key) is T.SELECT_SIZES, NOT a second table: the
     # Button and the SelectTrigger measured identical there (32, rounded-lg
     # = 10). Only `default` is measured; `sm` is the Select's, borrowed.
@@ -213,7 +236,9 @@ COMBOBOX = {
     "radius": "lg",                       # 10, the same as menu.py's panel
     "bg": ("popover", 1.0),               # as menu.py
     "ring": ("foreground", 0.10),         # ring-1 ring-foreground/10, as menu.py
-    "side_offset": T.SPACE[1],            # sideOffset 4, then ROUNDED
+    # superseded: the real component declares sideOffset 6. Kept only as a
+    # record of what the OLD Popover+Command recipe used.
+    "_old_recipe_side_offset": T.SPACE[1],
     "align": "center",                    # popover.tsx's default
     "fade": 0.10,                         # animation: enter 0.1s, as menu.py
 
@@ -234,7 +259,7 @@ COMBOBOX = {
     "field_placeholder": ("foreground", 0.5),   # Chromium's own, measured
 
     # ---- CommandList ----------------------------------------------------
-    "list_max_h": 288.0,                  # max-h-72
+    "_old_recipe_list_max_h": 288.0,      # max-h-72
 
     # ---- CommandGroup ---------------------------------------------------
     "group_pad": T.SPACE[1],              # p-1
@@ -245,7 +270,9 @@ COMBOBOX = {
     "head_ink": ("muted-foreground", 1.0),
 
     # ---- CommandItem ----------------------------------------------------
-    "item_h": 32.0,                       # py-1.5 on a 20px line box
+    # The real component's rows are MENU rows: 28, not 32. `item_h` stays
+    # the name the rest of this module and its tests use.
+    "item_h": 28.0,                       # measured on combobox-item
     "item_pad_x": T.SPACE[2],             # px-2
     "item_radius": "sm",                  # rounded-sm = 6
     "item_gap": T.SPACE[2],               # gap-2
@@ -482,6 +509,59 @@ def command_score(string: str, query: str, keywords=()) -> float:
 
 
 def filter_items(items, query: str) -> list:
+    """Base UI's filter: SUBSTRING, case-insensitive, author's order kept.
+
+    This is what the real `combobox.tsx` does, and it is not what the kit
+    first shipped. Measured by typing into the component and reading its
+    rows back:
+
+        "dodec" -> Dodecahedron, Great Dodecahedron
+        "DODEC" -> the same two               (case-insensitive)
+        "ant"   -> Grand antiprism            (not anchored)
+        "dcd"   -> nothing
+        "grt"   -> nothing
+        "tsrct" -> nothing
+
+    The last three are the decisive ones: every one of them MATCHES under
+    cmdk's subsequence scoring. They return nothing, so the rule is
+    `contains`, and there is no ranking - rows keep the order they were
+    given.
+
+    `rank_items_cmdk` below is the other rule, kept because it is exact and
+    because a Command palette (ROADMAP, Tier 2) is cmdk's shape rather than
+    this one. It is not what a Combobox uses.
+    """
+    items = list(items)
+    if not query or not query.strip():
+        return items
+    q = _fold(query).strip()
+    out = []
+    for it in items:
+        kind = _k(it, "kind", "item")
+        if kind == "sep":
+            continue            # a separator means nothing in a filtered list
+        if kind == "label":
+            out.append(it)      # headings are resolved below
+            continue
+        hay = _fold(_k(it, "label", "") or str(_k(it, "id", "")))
+        for kw in _k(it, "keywords", ()) or ():
+            hay += " " + _fold(str(kw))
+        if q in hay:
+            out.append(it)
+    # drop a heading whose rows all went
+    keep, i = [], 0
+    while i < len(out):
+        it = out[i]
+        if _k(it, "kind", "item") == "label":
+            if i + 1 < len(out) and _k(out[i + 1], "kind", "item") != "label":
+                keep.append(it)
+        else:
+            keep.append(it)
+        i += 1
+    return keep
+
+
+def rank_items_cmdk(items, query: str) -> list:
     """Rank and filter `items` by `query`, the way cmdk does. Pure.
 
     * An EMPTY (or all-whitespace) query returns the list UNCHANGED — not

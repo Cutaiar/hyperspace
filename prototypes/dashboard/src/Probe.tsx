@@ -12,6 +12,10 @@
 // the answer (h-[18.4px]) is not one I would have guessed.
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import {
+  Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
@@ -276,6 +280,22 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
             <ContextMenuItem variant="destructive">Delete</ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
+      </P>
+
+      {/* ---- The REAL Combobox: Base UI, and the trigger IS the input.
+           Not the old Popover+Command recipe. ---- */}
+      <P id="combobox.real" w={320}>
+        <Combobox items={["Dodecahedron", "Great Dodecahedron", "Tesseract", "Grand antiprism"]} open>
+          <ComboboxInput placeholder="Filter planes" />
+          <ComboboxContent>
+            <ComboboxEmpty>No such plane.</ComboboxEmpty>
+            <ComboboxList>
+              {(item: string) => (
+                <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
       </P>
 
       {/* ---- Tooltip, forced open ---- */}

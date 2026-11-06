@@ -71,6 +71,22 @@ class Ui:
     def scroll(self) -> dict:
         return self.anim.store.setdefault("scroll", {})
 
+    @property
+    def focus_visible(self) -> bool:
+        """Whether a focus ring should show at all - CSS `:focus-visible`.
+
+        ImGui has one notion of focus and a mouse click sets it, so a button
+        clicked with the pointer kept its ring for ever and the ring walked
+        from one button to the next as you clicked them. The browser does
+        not do that: `:focus-visible` rings a control reached by KEYBOARD
+        and never one reached by pointer.
+
+        So the kit tracks which the last input was. Any mouse button press
+        turns it off; Tab or an arrow turns it on. That is the same
+        heuristic browsers use, and it is the whole of the difference.
+        """
+        return bool(self.anim.store.get("kbd", False))
+
     # -- the measured component tables, resolved for this theme ----------
     def __post_init__(self):
         self.slider_tbl = T.slider_table(self.theme_name)
@@ -124,10 +140,23 @@ class Ui:
     def _dt(self) -> float:
         return self.anim.store.get("dt", 1.0 / 60.0)
 
+    _NAV_KEYS = ("tab", "left_arrow", "right_arrow", "up_arrow",
+                 "down_arrow", "home", "end", "enter", "space")
+
     def frame_done(self, dt: float) -> None:
         self.anim.step(dt)
         self.anim.store["dt"] = dt
         self._seen.clear()
+        # see `focus_visible`: the last input decides whether a ring shows
+        io = imgui.get_io()
+        if any(imgui.is_mouse_clicked(b) for b in (0, 1, 2)):
+            self.anim.store["kbd"] = False
+        else:
+            for name in self._NAV_KEYS:
+                k = getattr(imgui.Key, name, None)
+                if k is not None and imgui.is_key_pressed(k):
+                    self.anim.store["kbd"] = True
+                    break
 
     def col(self, name, a: float = 1.0):
         return T.rgba(name, a, theme=self.theme)

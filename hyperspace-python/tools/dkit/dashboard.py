@@ -171,6 +171,8 @@ class Rects:
     routing_card: tuple = (0, 0, 0, 0)
     routing_rows: list = field(default_factory=list)
     controls_card: tuple = (0, 0, 0, 0)
+    buttons_card: tuple = (0, 0, 0, 0)
+    btn_rows: list = field(default_factory=list)
     ctl_rows: list = field(default_factory=list)
     table_tabs: tuple = (0, 0, 0, 0)
     table_rows: list = field(default_factory=list)
@@ -284,6 +286,14 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
                 bands,
                 N(dir="row", gap=CARD_GAP, key="cards",
                   kids=(routing, controls)),
+                # every Button variant and size, because a component with
+                # six variants shown in three of them is not demonstrated
+                N(dir="column", pad=CARD_PAD, gap=0.0, key="buttons", kids=(
+                    N(h=T.CARD_TITLE_H), N(h=T.CARD_TITLE_GAP),
+                    N(h=T.CARD_DESC_H), N(h=T.CARD_HEAD_GAP),
+                    N(dir="column", gap=T.SPACE[3], kids=tuple(
+                        N(h=40.0, key=("btn", i)) for i in range(3))),
+                )),
                 N(h=32.0, key="tabs"),
                 # The table is its NATURAL height - every row - and the PAGE
                 # scrolls. It used to take whatever was left and scroll
@@ -324,6 +334,8 @@ def lay_out(w: int, h: int, n_rows: int | None = None,
     r.routing_card = at["routing"].as_tuple()
     r.routing_rows = [at[("routing", i)].as_tuple() for i in range(N_BANDS)]
     r.controls_card = at["controls"].as_tuple()
+    r.buttons_card = at["buttons"].as_tuple()
+    r.btn_rows = [at[("btn", i)].as_tuple() for i in range(3)]
     r.ctl_rows = [at[("ctl", i)].as_tuple() for i in range(2 * CTL_ROWS)]
 
     tb = at["tabs"]
@@ -680,6 +692,34 @@ def _body(ui, r, w, h, series, state):
                     "Delete node", variant="destructive", size="sm",
                     disabled=off).clicked:
         state["said"] = "delete \u00b7 node"
+
+    # ---- every Button variant and size ------------------------------------
+    card_head(dl, r.buttons_card, "Buttons",
+              "Six variants and eight sizes - the press nudge is +1px, and "
+              "the focus ring is keyboard-only", faces, theme)
+    VARIANTS = ("default", "secondary", "outline", "ghost", "destructive",
+                "link")
+    SIZES = ("xs", "sm", "default", "lg")
+    ICONS = ("icon-xs", "icon-sm", "icon", "icon-lg")
+
+    def _strip(row, labels, *, variant=None, size="default", icon=False):
+        bx, by, _bw, bh = r.btn_rows[row]
+        for i, lab in enumerate(labels):
+            v = variant or lab
+            z = lab if variant else size
+            bw2, bh2 = CB.button_size(z, "" if icon else lab.title(), faces,
+                                      icon=icon)
+            st = CB.ui_button(ui, f"btn.{row}.{i}", bx, by + (bh - bh2) / 2,
+                              bw2, bh2, "" if icon else lab.title(),
+                              variant=v, size=z,
+                              icon="check" if icon else None)
+            if st.clicked:
+                state["said"] = f"{v} \u00b7 {z}"
+            bx += bw2 + T.SPACE[2]
+
+    _strip(0, VARIANTS)                                   # six variants
+    _strip(1, SIZES, variant="outline")                   # four text sizes
+    _strip(2, ICONS, variant="outline", icon=True)        # four icon sizes
 
     # ---- table ------------------------------------------------------------
     tx, ty, _, th = r.table_tabs

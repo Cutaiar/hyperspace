@@ -47,9 +47,28 @@ def DB():
     return dashboard
 
 
+def scrolled_to_bottom(DB):
+    """A script prefix that wheels the page to the end, and the Rects as
+    they then are.
+
+    The table lives below the fold at this window size, so a test that
+    wants a row has to scroll to it first - which is what a person does
+    too. Returns (prefix, rects) where the rects are laid out at that
+    scroll, so a caller reads screen positions straight off them.
+    """
+    px, py, pw, ph = page_view(DB)
+    mx, my = px + pw / 2, py + ph / 2
+    prefix = [(mx, my)] * 4 + [(mx, my, False, -3.0)] * 120 + [(mx, my)] * 4
+    DB.render("dark", W, H, script=prefix)
+    sy = DB.render.last_state["page_scroll"]
+    return prefix, DB.lay_out(W, H, body_dy=-sy)
+
+
 def kebab_xy(DB, row=1):
-    rx, ry, rw, rh = DB.lay_out(W, H).table_rows[row]
-    return rx + rw - 30 + 13, ry + rh / 2
+    """The kebab of a table row, and the script that scrolls it into view."""
+    prefix, r = scrolled_to_bottom(DB)
+    rx, ry, rw, rh = r.table_rows[row]
+    return prefix, rx + rw - 30 + 13, ry + rh / 2
 
 
 def menu_rect(key):
@@ -84,9 +103,11 @@ def test_kebab_stays_put_while_hovered(DB):
     kebab took the hover, the row lost it, the kebab was withdrawn, the row
     regained it — forever, at the easing's period.
     """
-    x, y = kebab_xy(DB)
-    frames = DB.render("dark", W, H, script=[(x, y)] * DWELL)
-    settled = [ink(f, x, y) for f in frames[12:]]      # past the fade-in
+    pre, x, y = kebab_xy(DB)
+    frames = DB.render("dark", W, H, script=pre + [(x, y)] * DWELL)
+    # from after the scroll prefix, or this averages in frames where the
+    # table had not been scrolled into view yet
+    settled = [ink(f, x, y) for f in frames[len(pre) + 12:]]
     assert min(settled) > 1.0, "the kebab vanished while being hovered"
     spread = max(settled) - min(settled)
     assert spread < 1.0, f"the kebab flickered: ink varied by {spread:.2f}"
@@ -95,8 +116,8 @@ def test_kebab_stays_put_while_hovered(DB):
 def test_kebab_opens_the_menu_after_a_long_hover(DB):
     """Press after dwelling — the case that was broken for a real person,
     who takes far longer than six frames to move and click."""
-    x, y = kebab_xy(DB)
-    script = [(x, y)] * DWELL + [(x, y, True)] * 2 + [(x, y, False)] * 14
+    pre, x, y = kebab_xy(DB)
+    script = pre + [(x, y)] * DWELL + [(x, y, True)] * 2 + [(x, y, False)] * 14
     frames = DB.render("dark", W, H, script=script)
     # Where the menu went comes from menu.LAST_RECT, not from a guessed
     # offset below the kebab: place_popover FLIPS a panel above its trigger
@@ -115,8 +136,8 @@ def test_kebab_opens_the_menu_after_a_long_hover(DB):
 
 def test_menu_item_can_be_chosen(DB):
     """Open the menu, move onto its first item, click, see the choice land."""
-    x, y = kebab_xy(DB)
-    open_script = [(x, y)] * 20 + [(x, y, True)] * 2 + [(x, y, False)] * 12
+    pre, x, y = kebab_xy(DB)
+    open_script = pre + [(x, y)] * 20 + [(x, y, True)] * 2 + [(x, y, False)] * 12
     DB.render("dark", W, H, script=open_script)
     ix, iy = menu_item_xy("rowmenu.1", 0)
     script = (open_script + [(ix, iy)] * 12
@@ -129,8 +150,8 @@ def test_menu_item_can_be_chosen(DB):
 def test_destructive_item_is_reachable(DB):
     """The last row, past a separator and a heading — the offsets a guessed
     coordinate gets wrong."""
-    x, y = kebab_xy(DB)
-    open_script = [(x, y)] * 20 + [(x, y, True)] * 2 + [(x, y, False)] * 12
+    pre, x, y = kebab_xy(DB)
+    open_script = pre + [(x, y)] * 20 + [(x, y, True)] * 2 + [(x, y, False)] * 12
     import menu as M
     DB.render("dark", W, H, script=open_script)
     r = menu_rect("rowmenu.1")
@@ -147,7 +168,7 @@ def test_destructive_item_is_reachable(DB):
 def test_escape_dismisses_the_menu(DB):
     """ImGui owns dismissal; this checks the kit has not broken it."""
     from imgui_bundle import imgui
-    x, y = kebab_xy(DB)
+    pre, x, y = kebab_xy(DB)
     script = [(x, y)] * 20 + [(x, y, True)] * 2 + [(x, y, False)] * 12
     DB.render("dark", W, H, script=script,
               keys=[(len(script) - 6, imgui.Key.escape)])
@@ -534,22 +555,25 @@ def test_the_thumb_lands_where_the_geometry_says(DB):
 def test_right_click_opens_the_context_menu(DB):
     """The gesture a node editor wants. A left click must NOT open it."""
     import menu as M
-    rx, ry, rw, rh = DB.lay_out(W, H).table_rows[1]
+    pre, r = scrolled_to_bottom(DB)
+    rx, ry, rw, rh = r.table_rows[1]
     x, y = rx + 200, ry + rh / 2
     DB.render("dark", W, H,
-              script=[(x, y)] * 8 + [(x, y, True)] * 2 + [(x, y, False)] * 14)
+              script=pre + [(x, y)] * 8 + [(x, y, True)] * 2
+              + [(x, y, False)] * 14)
     assert not M.LAST_RECT.get("##ctx.ctx.1"), "a LEFT click opened it"
     DB.render("dark", W, H,
-              script=[(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
+              script=pre + [(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
               + [(x, y, False, 0.0, False)] * DWELL)
     assert M.LAST_RECT.get("##ctx.ctx.1"), "right-click did not open the menu"
 
 
 def test_a_context_menu_choice_lands(DB):
     import menu as M
-    rx, ry, rw, rh = DB.lay_out(W, H).table_rows[1]
+    pre, r = scrolled_to_bottom(DB)
+    rx, ry, rw, rh = r.table_rows[1]
     x, y = rx + 200, ry + rh / 2
-    openit = ([(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
+    openit = (pre + [(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
               + [(x, y, False, 0.0, False)] * 14)
     DB.render("dark", W, H, script=openit)
     r = M.LAST_RECT.get("##ctx.ctx.1")
@@ -618,3 +642,28 @@ def test_the_destructive_button_is_clickable(DB):
               script=[(x, y)] * 10 + [(x, y, True)] * 2 + [(x, y, False)] * 8)
     said = DB.render.last_state.get("said")
     assert said and said.startswith("delete"), f"got {said!r}"
+
+
+def test_a_mouse_click_leaves_no_focus_ring(DB):
+    """`:focus-visible`, not `:focus`.
+
+    ImGui has ONE notion of focus and a mouse click sets it, so a clicked
+    button kept its 3px ring for ever and the ring walked from one button to
+    the next as you clicked along a group. The browser rings a control
+    reached by keyboard and never one reached by pointer.
+
+    Dwells 40 frames after the release, well past the 150ms the ring would
+    have taken to ease in.
+    """
+    r = DB.lay_out(W, H)
+    rx, ry, _rw, rh = r.ctl_rows[11]            # the destructive Button
+    x, y = rx + DB.CTL_LABEL_W + 40, ry + rh / 2
+    before = DB.render("dark", W, H, script=[(x, y)] * 4)[-1]
+    after = DB.render("dark", W, H,
+                      script=[(x, y)] * 6 + [(x, y, True)] * 2
+                      + [(x, y, False)] * DWELL)[-1]
+    # a ring would paint 3px outside the button's box, so compare the band
+    # just outside it rather than the button itself (whose hover DOES change)
+    band = (slice(int(ry) - 6, int(ry) - 1), slice(int(x) - 40, int(x) + 40))
+    assert np.array_equal(before[band], after[band]), (
+        "a mouse click left a focus ring behind")

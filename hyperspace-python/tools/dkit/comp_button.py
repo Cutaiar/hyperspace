@@ -770,13 +770,16 @@ def ui_button(ui, key, x, y, w, h, label, *, variant="default",
     still submitted (so the driver can still see the control) and the click is
     swallowed instead, which is what `interact.switch` does.
 
-    `focus_f` comes from `imgui.is_item_focused()`, which is ImGui's nav
-    focus. That is close to `:focus-visible` but not identical — ImGui has no
-    notion of "focused by pointer versus by keyboard", so a control ImGui has
+    `focus_f` is `imgui.is_item_focused()` gated on `ui.focus_visible`,
+    which tracks whether the last input was the keyboard. ImGui itself has
+    no notion of "focused by pointer versus by keyboard", so a control ImGui has
     given nav focus to will show the ring where the browser might not.
     """
     st = ui.hit(key, x, y, w, h)
-    focused = imgui.is_item_focused() and not disabled
+    # `:focus-visible`, not `:focus`: a control reached with the POINTER
+    # gets no ring. Without this the ring stuck to whichever button was
+    # clicked last and walked along behind the pointer.
+    focused = (imgui.is_item_focused() and ui.focus_visible and not disabled)
     focus_f = ui.anim.to(f"{key}:focus", 1.0 if focused else 0.0)
     # `disabled:pointer-events-none`: no hover and no press, so the eased
     # values are driven to 0 rather than read off the widget
