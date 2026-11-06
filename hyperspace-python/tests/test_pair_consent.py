@@ -489,6 +489,13 @@ def depth(s) -> tuple[int, int]:
 
 
 def z(s, meta: bool) -> None:
+    """A step taken off that stack, whichever a press would reach: the latch's
+    answer to a press (row 753) has its own test below."""
+    (s.meta.undo if meta else s.r.deck.undo).undo()
+    go(s)
+
+
+def press_z(s, meta: bool) -> None:
     s.inside["meta"] = meta
     undo.undo()
     go(s)
@@ -608,9 +615,9 @@ def test_under_the_latch_a_taken_meta_row_comes_back_over_a_meta_section(stacks)
     undo.by_hand(True)
     settle_pair(spring(s), TAKE_OVER, s.reg)
     go(s)
-    z(s, meta=True)
+    press_z(s, meta=True)
     undo.by_hand(False)
     assert {"hat:UP", "hat:DOWN"} <= hat_rows(s.table)
     assert s.table.owner(TARGET).source == UP_DOWN
-    z(s, meta=False)                                 # the deck is shut: it says so
+    press_z(s, meta=False)                           # the deck is shut: it says so
     assert s.table.owner(TARGET).source == UP_DOWN

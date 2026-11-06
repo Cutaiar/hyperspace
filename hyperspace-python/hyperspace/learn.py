@@ -565,9 +565,8 @@ def propose_row(table: Bindings, new: Binding, land: Callable[[], object],
     the road's own second question has been asked by then). `moving`: the row in
     the table being re-pointed to be `new`; its own source again asks nothing."""
     skip = () if moving is None else (moving,)
-    if moving is None or moving.source != new.source:
-        if pole_rows(table, new, skip):
-            return PairAsk(table, new, answered or land, skip, table.routes_replaced_n)
+    if (moving is None or moving.source != new.source) and pole_rows(table, new, skip):
+        return PairAsk(table, new, answered or land, skip, table.routes_replaced_n)
     return land()
 
 
