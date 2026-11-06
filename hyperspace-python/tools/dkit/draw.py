@@ -346,20 +346,67 @@ def hrule(dl, x, y, w, theme, col="border"):
     fill(dl, x, y, w, 1, rgba(col, theme=theme))
 
 
-def trend_arrow(dl, x, y, size, up: bool, col) -> None:
-    """A small up/down triangle.
 
-    Geist's latin subset has no arrows, and ImGui draws a missing glyph as a
-    box or nothing - so trend marks are drawn, not typed. The panel already
-    takes this approach for device glyphs (ui_players.py:421-539).
+# --------------------------------------------------------------------------
+# icons
+# --------------------------------------------------------------------------
+
+try:
+    from icons import BOX as ICON_BOX, ICONS, STROKE as ICON_STROKE
+except ImportError:                       # not built yet
+    ICONS, ICON_BOX, ICON_STROKE = {}, 24.0, 2.0
+
+
+def icon(dl, name, x, y, size, col, *, width=None) -> bool:
+    """Stroke a Lucide icon into `size` x `size` at (x, y).
+
+    Vector, so it stays crisp at any size and takes its colour from a token:
+    no atlas, no texture, no runtime dependency. Lucide's geometry is stroked
+    paths on a 24x24 box with round caps and joins, which is what ImGui's
+    path API draws natively.
+
+    Returns False for an unknown name rather than raising, so a missing icon
+    degrades to a gap instead of taking the frame down (the panel's draws are
+    individually guarded — ARCHITECTURE.md:168 — and a kit should not fight
+    that).
     """
-    h = size * 0.5
-    cx, cy = x + size / 2.0, y + size / 2.0
-    if up:
-        pts = [(cx, cy - h * 0.7), (cx + h * 0.8, cy + h * 0.5),
-               (cx - h * 0.8, cy + h * 0.5)]
-    else:
-        pts = [(cx, cy + h * 0.7), (cx + h * 0.8, cy - h * 0.5),
-               (cx - h * 0.8, cy - h * 0.5)]
-    dl.add_triangle_filled(imgui.ImVec2(*pts[0]), imgui.ImVec2(*pts[1]),
-                           imgui.ImVec2(*pts[2]), _u32(col))
+    subs = ICONS.get(name.replace("-", "_"))
+    if not subs or col[3] <= 0.0:
+        return False
+    s = size / ICON_BOX
+    w = (width if width is not None else ICON_STROKE) * s
+    c = _u32(col)
+    for ops in subs:
+        dl.path_clear()
+        closed = False
+        first = last = None
+        for op in ops:
+            k = op[0]
+            if k in ("M", "L"):
+                dl.path_line_to(imgui.ImVec2(x + op[1] * s, y + op[2] * s))
+                last = (op[1], op[2])
+            elif k == "C":
+                dl.path_bezier_cubic_curve_to(
+                    imgui.ImVec2(x + op[1] * s, y + op[2] * s),
+                    imgui.ImVec2(x + op[3] * s, y + op[4] * s),
+                    imgui.ImVec2(x + op[5] * s, y + op[6] * s))
+                last = (op[5], op[6])
+            elif k == "Z":
+                closed = True
+            if first is None and last is not None:
+                first = last
+        # A path whose last point IS its first point is already closed.
+        # Asking ImGui to close it too adds a zero-length segment, which under
+        # round joins draws a visible tick - it showed up on every circle.
+        if closed and first and last and \
+                abs(first[0] - last[0]) < 1e-6 and abs(first[1] - last[1]) < 1e-6:
+            closed = False
+        # imgui_bundle orders this (col, thickness, flags) - the third time
+        # this binding reverses the C++ order; always pass these by keyword
+        dl.path_stroke(c, thickness=w,
+                       flags=imgui.ImDrawFlags_.closed if closed else 0)
+    return True
+
+
+def icon_centred(dl, name, cx, cy, size, col, **kw) -> bool:
+    return icon(dl, name, cx - size / 2.0, cy - size / 2.0, size, col, **kw)

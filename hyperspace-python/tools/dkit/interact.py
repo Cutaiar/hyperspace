@@ -117,8 +117,7 @@ def sidebar_item(ui: Ui, key, x, y, w, h, s, *, active=False, icon=None) -> Stat
     ink = mix(ui.col("muted-foreground"), ui.col("foreground"),
               1.0 if active else f)
     tx = x + 10
-    if icon is not None:
-        icon(ui.dl, x + 10, y + h / 2.0 - 8, 16, ink)
+    if icon and D.icon(ui.dl, icon, x + 10, y + h / 2.0 - 8, 16, ink):
         tx = x + 34
     D.label(ui.dl, tx, y, s, ui.faces, "medium", 14, ink, baseline_box=h)
     return st
@@ -159,12 +158,13 @@ def row(ui: Ui, key, x, y, w, h) -> State:
     return st
 
 
-def icon_button(ui: Ui, key, x, y, size, icon) -> State:
+def icon_button(ui: Ui, key, x, y, size, icon, *, glyph=16) -> State:
     """A square ghost button holding one icon — the kebab trigger's shape."""
     st = ui.hit(key, x, y, size, size)
     f = min(1.0, st.hot + st.down * 0.4)
     D.fill(ui.dl, x, y, size, size,
            mix(ui.col("transparent"), ui.col("accent"), f), T.RADII["md"])
     ink = mix(ui.col("muted-foreground"), ui.col("foreground"), f)
-    icon(ui.dl, x + (size - 16) / 2, y + (size - 16) / 2, 16, ink)
+    D.icon(ui.dl, icon, x + (size - glyph) / 2, y + (size - glyph) / 2,
+           glyph, ink)
     return st

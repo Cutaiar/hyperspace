@@ -151,6 +151,35 @@ list — `replay.keep` (`hyperspace/replay.py:91`) only carries the page
 window's own list into the canvas tap, so background-list chrome would be
 missing from `panel:graph`.
 
+## Icons
+
+Lucide — the set shadcn uses — is a good fit for a draw list: every icon is a
+24x24 box of *stroked* paths, 2px wide, round caps and joins, which is
+`path_line_to` / `path_bezier_cubic_curve_to` + `path_stroke` almost exactly.
+So they are vector at any size, take their colour from a token, and need no
+atlas, no texture and no new runtime dependency.
+
+`dump_icons.js` reads lucide-react's own node data (better than parsing SVG
+files: no markup, and the same geometry the React oracle renders),
+`build_icons.py` resolves everything awkward ahead of time, and `icons.py` is
+the generated table — 38 icons, 553 ops, 16 KB. `icon_sheet.py` renders them
+all, which is how three bugs were caught that no amount of staring at the
+code would have found:
+
+* **a circle written as two 180-degree arcs** hits the one case where SVG's
+  large-arc flag is ambiguous. It put a notch in `circle` and mangled the
+  dots in `ellipsis`, `grip-vertical` and `info`. Circles are built from four
+  cubics now.
+* **a path that already ends where it began** must not also be given ImGui's
+  `Closed` flag — that adds a zero-length segment which, under round joins,
+  draws a visible tick. Every circle had one.
+* **quadratics.** My first survey of the path commands said there were none;
+  it had been run before alias-following was added, and four of the aliased
+  icons use them.
+
+Lucide dropped brand icons, so there is no `github`; the header button is
+text. ISC licence in `Lucide-LICENSE.txt`.
+
 ## Running it
 
 Nothing here needs `HYPERSPACE_HOME` — dkit touches none of the app's state.
@@ -161,6 +190,16 @@ On a Mac, after the usual `uv sync`, that is the whole setup.
 ```bash
 cd hyperspace-python
 uv run python tools/dkit/dashboard.py --live
+```
+
+Icons are generated; to rebuild them after changing the wanted list:
+
+```bash
+cd prototypes/dashboard
+node ../../hyperspace-python/tools/dkit/dump_icons.js > /tmp/lucide.json
+cd ../../hyperspace-python
+uv run python tools/dkit/build_icons.py /tmp/lucide.json
+uv run python tools/dkit/icon_sheet.py --out /tmp/dkit   # and look at it
 ```
 
 Opens a window and runs until you close it. Hover the sidebar and the table

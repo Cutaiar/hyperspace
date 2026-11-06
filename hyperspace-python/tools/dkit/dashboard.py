@@ -49,8 +49,10 @@ BANDS = [("SUB", "ZW", 20, 60, 1), ("BASS", "XW", 60, 160, 1),
          ("UPR", "XZ", 1200, 4000, 1), ("AIR", "YZ", 4000, 14000, -1)]
 CEIL = 2.6
 
-NAV = ["Overview", "Catalog", "Scenes", "Analyzer", "Routing"]
-SOURCES = ["Audio in", "Solids", "Compounds", "Effects"]
+NAV = [("Overview", "gauge"), ("Catalog", "shapes"), ("Scenes", "layers"),
+       ("Analyzer", "activity"), ("Routing", "waves")]
+SOURCES = [("Audio in", "music"), ("Solids", "box"), ("Compounds", "boxes"),
+           ("Effects", "sparkles")]
 TABS = ["All", "4-polytopes", "Regular", "Stars", "Solids"]
 FILTERS = [
     lambda s: True,
@@ -200,14 +202,14 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     D.label(dl, 54, 31, "4D polytope visualizer", faces, "regular", 12,
             T.rgba("muted-foreground", theme=theme), baseline_box=14)
 
-    for i, (name, rect) in enumerate(zip(NAV, r.nav)):
-        if I.sidebar_item(ui, f"nav.{i}", *rect, name,
+    for i, ((name, ic), rect) in enumerate(zip(NAV, r.nav)):
+        if I.sidebar_item(ui, f"nav.{i}", *rect, name, icon=ic,
                           active=(i == state["nav"])).clicked:
             state["nav"] = i
     D.label(dl, 18, r.sources[0][1] - 22, "Sources", faces, "medium", 12,
             T.rgba("muted-foreground", theme=theme), baseline_box=16)
-    for i, (name, rect) in enumerate(zip(SOURCES, r.sources)):
-        I.sidebar_item(ui, f"src.{i}", *rect, name)
+    for i, ((name, ic), rect) in enumerate(zip(SOURCES, r.sources)):
+        I.sidebar_item(ui, f"src.{i}", *rect, name, icon=ic)
 
     # ---- header -----------------------------------------------------------
     hx, hy, hw, hh = r.header
@@ -236,14 +238,16 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         dwid = D.text_w(delta, faces, "medium", 12, True) + 26
         D.box(dl, x + cw - 20 - dwid, y + 14, dwid, 20,
               border_col=T.rgba("border", theme=theme), radius=T.RADII["4xl"])
-        D.trend_arrow(dl, x + cw - 20 - dwid + 7, y + 19, 10, up,
-                      T.rgba("foreground", theme=theme))
+        D.icon(dl, "trending-up" if up else "trending-down",
+               x + cw - 20 - dwid + 6, y + 16, 14,
+               T.rgba("foreground", theme=theme))
         D.label(dl, x + cw - 20 - dwid + 19, y + 14, delta, faces, "medium", 12,
                 T.rgba("foreground", theme=theme), baseline_box=20, tabular=True)
         hwid = D.label(dl, x + 20, y + ch - 52, head, faces, "medium", 14,
                        T.rgba("foreground", theme=theme), baseline_box=20)
-        D.trend_arrow(dl, x + 26 + hwid, y + ch - 47, 10, up,
-                      T.rgba("foreground", theme=theme))
+        D.icon(dl, "trending-up" if up else "trending-down",
+               x + 26 + hwid, y + ch - 50, 15,
+               T.rgba("foreground", theme=theme))
         D.label(dl, x + 20, y + ch - 32, detail, faces, "regular", 13,
                 T.rgba("muted-foreground", theme=theme), baseline_box=18,
                 max_w=cw - 40)
