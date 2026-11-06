@@ -113,8 +113,10 @@ plan in the same PR as the first item, and tell the owner only what changes scop
   slots), or let CI be their last check once H2 lands. You run `--all` serially, `fast-tier.sh --all -rs`, on a PR's
   head before merging anything that touches the render path, the loader or `graphmigrate`. **Goldens must not move
   anywhere in this wave.** A golden that moves is a bug, or a stop-and-ask.
-- **A keeper agent** in its own worktree does each queue step, as in wave 4, until H1 lands. After H1, doc tails
-  should merge on their own: confirm it on the first few, and keep `tools/sort_register.py`.
+- **A keeper agent** in its own worktree, or the PR's own builder, does each queue step for the rest of the wave,
+  as in wave 4. Doc tails merge on their own in a local merge only: GitHub's server doesn't honour the attribute
+  (retested 2026-11-06, plan 58 §3), so a PR showing doc conflicts still needs main merged locally and pushed,
+  which union then resolves with no hand work. Keep `tools/sort_register.py`.
 - **Merging:** the owner authorised merging on green for wave 5, but for CL1, which waits for their dry run, and RT1, which waits for the unplug. `main` has no required checks, so `--auto` merges at once: wait first with
   `~/.claude/handoffs/wave4/wait-green.sh <pr> <head>`, or its replacement from H2, then call `gh pr ready` and `gh pr merge <pr>
   --squash --delete-branch --body-file <file>` directly, with the review and test counts and the trailer lines in the

@@ -171,6 +171,7 @@ def test_undo_on_either_deck_never_moves_a_meta_param(rig, which):
     while deck.undo.stack:
         rig.reg["edit.undo"].fire()
         fired += 1
+        assert fired <= 2, f"the stack isn't going down: {deck.undo.status}"   # (latched: it never would)
         assert deck.reg.snapshot(part="shared_meta") == tuned
     assert fired == 2 and deck.undo.status != "nothing to undo"
     rig.reg["edit.undo"].fire()                        # nothing left here: nothing crosses

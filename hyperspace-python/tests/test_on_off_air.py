@@ -548,7 +548,7 @@ def test_the_on_air_inset_and_red_frame_draw_only_off_air(shell_rig):  # noqa: F
     asked = []
     mon = NS(tex=NS(glo=7, size=(160, 90)), want=lambda: asked.append(True))
     one, two = object(), object()
-    panel = NS(meta=NS(panel=two, on_air=one), monitor=mon)
+    panel = NS(meta=NS(panel=two, on_air=one, deck_name=lambda deck: "deck 1"), monitor=mon)
     imgui.new_frame()
     imgui.begin("probe")
     try:

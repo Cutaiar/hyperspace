@@ -79,7 +79,6 @@ def rig(air_rig):  # noqa: F811
     hands.register(r.one.reg, settings)
     if "output.monitor" not in r.one.reg:
         Output(None, None).register(r.one.reg)
-    app._register_dial(r.one.reg, ScriptedPad())
     totem.register(r.one.reg, totem.TotemState())
     poi.register(r.one.reg, poi.PoiState(), {})
     app._share_experiments(r.one.reg, r.two.reg, poi_cfg={})
@@ -127,7 +126,12 @@ def test_every_param_of_the_app_is_in_exactly_one_layer(rig):
     assert any(p.group == "fx" for p in rig.one.reg)
     assert {"hands", "output", "desk", "totem", "poi", "deck", "preset"} <= {
         p.group for p in rig.one.reg}
-    assert "desk.pad.dial.left" in rig.one.reg
+    # the dial's readings: in the patch layer, one per `Deck`, and each deck's own
+    for d in (rig.one, rig.two):
+        assert layer_of(d.reg["pad.dial.left"]) == "patch"
+        assert layer_of(d.reg["pad.dial.right"]) == "patch"
+        assert layer_of(d.reg["pad.dial.swap"]) == "patch"
+    assert rig.one.reg["pad.dial.left"] is not rig.two.reg["pad.dial.left"]
 
 
 def test_every_param_of_the_panels_registry_is_in_exactly_one_layer(shell_rig):  # noqa: F811

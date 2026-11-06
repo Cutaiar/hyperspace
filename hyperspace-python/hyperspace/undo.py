@@ -61,7 +61,8 @@ first push after that opens it, and ⌘Z then goes all the way down, older steps
 included. Focus (`_focused`) is not where the mouse is: `here` follows the mouse, and
 one passing over a section is no event. It moves on three acts only: the panel moving
 the stack ⌘Z reaches (`install`), a ⌘Z pressed at a stack, and the person's own change
-in the panel (`by_hand`), whose stack is the edited param's own, so a popup over another
+in the panel (`by_hand`, read from the panel's input and reported by a text field's own
+writers, row 757), whose stack is the edited param's own, so a popup over another
 section cannot mislead it. A controller's change opens the stack in focus and never
 moves the focus, wherever the mouse is; a held step (`keep_open`) opens nothing. A
 change out of focus opens nothing, and coming back latches it again. Two things shut the
@@ -432,6 +433,8 @@ class Undo:
                 if self._open is None:
                     self._begin(Step("", self._settled, lands=self._lands))
                     self.redos.clear()
+                elif _hand and self._open is not self._kept:   # the person joins a step under way
+                    self._opens = _begun_on(self) or self._opens
                 return True
         return False
 
@@ -858,8 +861,10 @@ def _begun_on(u: Undo) -> bool:
 
 
 def by_hand(on: bool) -> None:
-    """Is the person working the panel, as of its latest draw (`ui_pane.left`)? No
-    panel: never, and a change opens only the stack in focus."""
+    """Is the person working the panel, as of its latest draw (`ui_pane.left`), or has a
+    text field just written (its writer, row 757)? It holds to the next draw's `left`, so
+    a stack's tick, which comes first in the frame, reads it. No panel: never, and a
+    change opens only the stack in focus."""
     global _hand
     _hand = bool(on)
 
