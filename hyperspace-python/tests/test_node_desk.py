@@ -763,3 +763,14 @@ def test_above_layers_is_what_dispatch_answers_first(rig):
     t.rows_serial += 1
     assert t.above_layers("cc", 0, number, DESK) == [] == t.dispatch("cc", 0, number, DESK)
     assert t.above_layers("cc", 0, K2, DESK) is None
+
+
+def test_a_narrower_list_gives_above_layers_the_same_answer(rig):
+    t = rig.one.table
+    t.bindings.append(Binding(f"cc:*:{FADER}", "view.speed", "abs", ring=0))
+    t.rows_serial += 1
+    pool = [b for b in t.bindings if b.is_midi and b.layer is None]
+    for number in (K1, D1, FADER, int(apc40.META_CONTROLS[0].rpartition(":")[2])):
+        for ch in range(16):
+            assert (t.above_layers("cc", ch, number, DESK, pool)
+                    == t.above_layers("cc", ch, number, DESK))
