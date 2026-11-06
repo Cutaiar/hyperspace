@@ -589,8 +589,22 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     # imgui to be adding in the first place and the cursor becomes exactly
     # the text's top-left.
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
+    # The SAME font `draw.label` draws the placeholder with. Without this
+    # the stock widget renders the value in imgui's CURRENT font at imgui's
+    # current size, which is not the Geist face at `font * FONT_SPAN_EM` -
+    # so the value and the placeholder, one line of one field, had
+    # different metrics and did not land on the same rows. Measured 1 px
+    # apart on Mesa at density 1; far wider on a Retina Mac, where the
+    # atlas is rasterised at 2x, which is where it was spotted.
+    #
+    # And it is why centring on `font * 1.3` by hand was wrong even after
+    # FramePadding went to zero: that is the size the KIT would have used,
+    # not the size imgui was about to draw at. `get_font_size()` with the
+    # face pushed is the same number for both.
+    D.push_css_font(ui.faces, "regular", tbl["font"])
     imgui.set_cursor_screen_pos(
-        imgui.ImVec2(x + tbl["pad_x"], y + (hh - tbl["font"] * 1.3) / 2.0))
+        imgui.ImVec2(x + tbl["pad_x"],
+                     y + (hh - imgui.get_font_size()) / 2.0))
     imgui.push_item_width(w - 2.0 * tbl["pad_x"])
     if disabled:
         imgui.begin_disabled()
@@ -598,6 +612,7 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     if disabled:
         imgui.end_disabled()
     imgui.pop_item_width()
+    imgui.pop_font()
     imgui.pop_style_var()
     # NOT gated on `ui.focus_visible`, and that is measured rather than
     # sloppy: a text field is the one control Chromium matches

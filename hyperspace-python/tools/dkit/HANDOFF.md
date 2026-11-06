@@ -13,6 +13,12 @@ Branch: `claude/magical-ritchie-fkh5e0`. Tree clean at `2df969b`.
 
 ## Read in this order
 
+> **[`RETRO.md`](RETRO.md) is the shortest useful thing here.** Twenty-one
+> defects from one session, each with what would have caught it. Most were
+> found by a person looking at the running app while the pixel diff, the
+> browser oracle and 673 tests all said it was fine.
+
+
 1. **`ROADMAP.md`** — what to build next and the constraints each component
    has to respect. The four rules at the end are the important part.
 2. **This file** — current state, the traps, and how the work is organised.

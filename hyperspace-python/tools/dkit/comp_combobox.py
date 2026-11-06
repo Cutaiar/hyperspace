@@ -884,14 +884,23 @@ def _field(ui, key, x, y, w, h, tbl, text, placeholder, *, focus: bool):
     # IS the text's top-left on both axes, which the y-only subtraction
     # never fixed for x.
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
+    # The SAME font `draw.label` draws every other string in the kit with.
+    # Without it the stock widget renders the value in imgui's CURRENT font
+    # at imgui's current size, which is not the Geist face at
+    # `font * FONT_SPAN_EM` - so the value and the placeholder, one line of
+    # one field, had different metrics and did not land on the same rows.
+    # Measured 1 px apart on Mesa at density 1; far wider on a Retina Mac,
+    # where the atlas is rasterised at 2x, which is where it was spotted.
+    D.push_css_font(ui.faces, "regular", tbl["field_font"])
     imgui.set_cursor_screen_pos(imgui.ImVec2(
-        tx, y + (h - tbl["field_line"]) / 2.0))
+        tx, y + (h - imgui.get_font_size()) / 2.0))
     imgui.push_item_width(w - tbl["field_text_x"] - tbl["field_text_r"])
     if focus:
         # a fresh Popover mounts its Command with the input focused
         imgui.set_keyboard_focus_here()
     changed, out = imgui.input_text(f"##{key}", text)
     imgui.pop_item_width()
+    imgui.pop_font()
     imgui.pop_style_var()
     imgui.pop_style_color(2)
     I._sandwich_end(ui, cols)
@@ -992,8 +1001,16 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # value lines up with `input_pad_l` and the selection band is centred
     # in the field rather than sitting 3 px low.
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
+    # The SAME font `draw.label` draws every other string in the kit with.
+    # Without it the stock widget renders the value in imgui's CURRENT font
+    # at imgui's current size, which is not the Geist face at
+    # `font * FONT_SPAN_EM` - so the value and the placeholder, one line of
+    # one field, had different metrics and did not land on the same rows.
+    # Measured 1 px apart on Mesa at density 1; far wider on a Retina Mac,
+    # where the atlas is rasterised at 2x, which is where it was spotted.
+    D.push_css_font(ui.faces, "regular", tbl["field_font"])
     imgui.set_cursor_screen_pos(
-        imgui.ImVec2(x + pl, y + (h - tbl["field_font"] * 1.3) / 2.0))
+        imgui.ImVec2(x + pl, y + (h - imgui.get_font_size()) / 2.0))
     imgui.push_item_width(w - pl - pr - cz)
     if grab_focus:
         # The popup window has the keyboard the moment it appears, but
@@ -1007,6 +1024,7 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     if disabled:
         imgui.end_disabled()
     imgui.pop_item_width()
+    imgui.pop_font()
     imgui.pop_style_var()
     # `interact.text_input`'s rule, and measured on this control too: the
     # trigger is an InputGroup that rings on
@@ -1210,14 +1228,25 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
             if imgui.is_key_pressed(imgui.Key.up_arrow, True):
                 s["sel"] = (s["sel"] - 1) % len(rows)
 
-        lx, ly, lw = px + pad, py + pad, w - 2 * pad
+        # The scroll child spans the WHOLE panel and the rows are inset
+        # inside it, rather than the child BEING the rows' box.
+        #
+        # ImGui clips a child window to its own rect, and a rounded rect
+        # whose edge lands exactly on that boundary loses the outer column
+        # of its corner arc - so a row that filled the child read as square
+        # on whichever side the clip touched. Giving the child the panel's
+        # full width puts the clip `pad` away from every row edge, where it
+        # cannot touch an arc, and the rows keep the geometry the browser
+        # measures: inset 4 from the panel, both sides, `rounded-md`.
+        lx, ly, lw = px, py + pad, w
         # `no-scrollbar` on the real list, measured as a zero-width
         # scrollbar in every state - including one scrolled 204px. It
         # scrolls and shows nothing.
         with I.scroll_area(ui, f"{key}.list", lx, ly, lw, lh, ch,
                            bars=False) as view:
             node = _rows_node(shown, lambda *a: 0.0, tbl, empty=empty)
-            place = B.lay(node, B.Rect(view.x, view.y, view.w, ch))
+            place = B.lay(node, B.Rect(view.x + pad, view.y,
+                                       view.w - 2 * pad, ch))
 
             # the pointer takes the highlight only when it MOVES, which is
             # cmdk's `onPointerMove` selection. Taking it every frame would

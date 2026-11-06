@@ -1261,36 +1261,84 @@ def test_the_disabled_range_slider_ignores_a_track_click(DB):
         "a disabled range slider moved"
 
 
-def test_the_inputs_text_sits_where_the_kit_put_it(DB):
-    """ImGui draws an InputText's text at the cursor PLUS `FramePadding`,
-    default (4, 3). The kit's frame is its own and the stock one is
-    transparent, so that padding was pure offset: the value sat 4 right and
-    3 down of the placeholder, and the selection band measured 9px above / 4
-    below in a 32px field instead of 6.5 either side.
+def test_the_inputs_value_sits_on_the_placeholders_line(DB):
+    """The value and the placeholder are one line of one field, so their ink
+    must land on the same rows. Nothing else about an input is worth
+    asserting here: this is the thing a person looks at.
 
-    Asserted on the SELECTION, because it is the one part of an input whose
-    box is visible without reading glyphs: double-click to select a word,
-    then measure the band's position in the field.
+    The first version of this test measured the SELECTION BAND - imgui's own
+    line box - and the band was centred while the glyphs were not, so it
+    passed on text that visibly sat high. A proxy for the observable is not
+    the observable.
+
+    Two causes, both now fixed. ImGui draws an InputText's text at the
+    cursor PLUS `FramePadding`, default (4, 3), which the kit's own frame
+    does not want; and the stock widget renders in imgui's CURRENT font,
+    which is not the Geist face at `font * FONT_SPAN_EM` that `draw.label`
+    draws the placeholder with - so the two had different metrics. The
+    second is why this looked far worse on a Retina Mac, where the atlas is
+    rasterised at 2x, than the 1px it measures here.
     """
     import numpy as np
-    r = DB.lay_out(W, H)
-    kx, ky, _kw, kh = r.ctl_rows[5]          # "Find", the combobox field
-    fx, fy = kx + DB.CTL_LABEL_W, ky
-    fh = 32.0
-    cx, cy = fx + 30, fy + fh / 2
-    script = [(10, 10, False)] * 8
-    script += [(cx, cy, False)] * 4 + [(cx, cy, True)] * 2 \
-        + [(cx, cy, False)] * 3
-    script += [(cx, cy, True)] * 2 + [(cx, cy, False)] * 2      # double-click
-    script += [(cx, cy, True)] * 2 + [(cx, cy, False)] * DWELL
-    f = np.asarray(DB.render("dark", W, H, script=script,
+    import comp_gallery as CG
+    import tokens as T
+
+    TALL = 2600
+    spots = {}
+    # boot, measure, tear down, THEN render - `render()` ends in
+    # `glfw.terminate()` and that destroys the atlas a held `faces` points
+    # at. test_gallery.py carries the same helper and the same note.
+    from imgui_bundle import imgui as _im
+    import glfw as _glfw
+    win, impl, _io, fc, _grad = DB._boot("dark", 320, 240, visible=False,
+                                         retina=False)
+    try:
+        gw = (W - DB.SIDEBAR_W) - 2 * DB.GUT
+        _total, secs = CG.plan(gw, fc, "dark")
+    finally:
+        impl.shutdown()
+        _im.destroy_context()
+        _glfw.terminate()
+    ox, oy = DB.SIDEBAR_W + DB.GUT, DB.HEADER_H + DB.GUT
+    head = (T.CARD_TITLE_H + T.CARD_TITLE_GAP + T.CARD_DESC_H
+            + T.CARD_HEAD_GAP)
+    yy = oy
+    for title, _b, card_h, placed in secs:
+        by = yy + CG.PAD + head
+        for cap, sx, sy, sw, sh, _d in placed:
+            if title == "Input":
+                spots[cap] = (ox + CG.PAD + sx,
+                              by + sy + CG.CAP_H + CG.CAP_GAP, sw, sh)
+        yy += card_h + CG.GAP
+    assert {"placeholder", "value"} <= set(spots), spots
+
+    r = DB.lay_out(W, TALL)
+    nx, ny, nw, nh = r.nav[DB.NAV_GALLERY]
+    gx, gy = nx + nw / 2, ny + nh / 2
+    script = [(10, 10, False)] * 6 + [(gx, gy, False)] * 4 \
+        + [(gx, gy, True)] * 3 + [(gx, gy, False)] * DWELL
+    f = np.asarray(DB.render("dark", W, TALL, script=script,
                              keep="last")[-1])[:, :, :3].astype(int)
 
-    reg = f[int(fy):int(fy + fh), int(fx):int(fx + 150)]
-    blue = (reg[:, :, 2] - reg[:, :, 0] > 40) & (reg[:, :, 2] > 60)
-    rows = np.nonzero(blue.any(axis=1))[0]
-    assert len(rows), "nothing was selected - the field did not take a click"
-    above, below = int(rows.min()), int(fh - 1 - rows.max())
-    assert abs(above - below) <= 2, (
-        f"the selection band is {above} from the top and {below} from the "
-        f"bottom of a {fh:.0f}px field")
+    def ink_top(cap):
+        x, y, w, h = spots[cap]
+        # clear of the field's own border and of the caret at the far right
+        reg = f[int(y) + 1:int(y + h) - 1, int(x) + 4:int(x + w) - 24]
+        bg = np.median(reg.reshape(-1, 3), axis=0)
+        d = np.abs(reg - bg).max(axis=2)
+        rows = np.nonzero((d > 40).any(axis=1))[0]
+        assert len(rows), f"no ink in the {cap} field"
+        return int(rows.min()), int(rows.max())
+
+    ph_top, ph_bot = ink_top("placeholder")
+    v_top, _v_bot = ink_top("value")
+    assert v_top == ph_top, (
+        f"the value's ink starts at row {v_top} and the placeholder's at "
+        f"{ph_top} - they are one line of one field")
+    # and that line is centred in the field, which is what makes BOTH right
+    # rather than equally wrong
+    h = spots["placeholder"][3]
+    above, below = ph_top, (h - 2) - ph_bot
+    assert abs(above - below) <= 1, (
+        f"the line is {above} from the top and {below} from the bottom of a "
+        f"{h:.0f}px field")
