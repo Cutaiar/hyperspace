@@ -813,3 +813,20 @@ def test_the_pad_picture_follows_a_controller_connected_after_launch():
     joy.io.on = False
     reg.poll(1 / 60, 0.0)
     assert panel.pad is generic.io
+
+
+def test_a_device_that_is_its_own_io_takes_a_pointer():
+    """A live media kind is its own adapter once open (`LiveKind.open`:
+    ``self.io = self``). `Base.point` handed the pointer on to
+    ``type(self.io).point`` — itself — and the app died at start of a
+    RecursionError with a camera, NDI or Syphon listed (2026-11-05)."""
+    from hyperspace.devices import Base
+
+    class Own(Base):
+        pass
+
+    d = Own("cam", {})
+    d.io = d
+    ptr = object()
+    d.point(ptr, None)
+    assert d.pointer is ptr

@@ -172,6 +172,20 @@ def test_discovery_off_the_frame_thread():
         k.close()
 
 
+def test_an_open_kind_takes_a_pointer():
+    """A live kind is its own io once open (`LiveKind.open`), so `Base.point`
+    must not hand the pointer on to `self.io` — that was itself, and the app
+    died at start of a RecursionError with a camera, NDI or Syphon listed."""
+    k = FakeKind("ndi", {})
+    k.open()
+    try:
+        ptr = object()
+        k.point(ptr, None)
+        assert k.pointer is ptr
+    finally:
+        k.close()
+
+
 def test_feed_closed_when_unheld():
     clk = Clock()
     k = FakeKind("ndi", {}, clock=clk)

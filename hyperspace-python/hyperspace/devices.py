@@ -289,7 +289,10 @@ class Base:
         """This controller's own pointer, and the panel's for what follows
         the panel (the learn); handed on to an adapter that reads a deck."""
         self.pointer = pointer
-        point = getattr(type(self.io), "point", None)
+        # a device that is its own adapter (a live media kind once open:
+        # `LiveKind.open` sets io to self) has nothing to hand on to —
+        # calling its own point again recursed until the app died at start
+        point = getattr(type(self.io), "point", None) if self.io is not self else None
         if point is not None:
             point(self.io, pointer, panel)
 

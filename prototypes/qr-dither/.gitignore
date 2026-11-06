@@ -1,0 +1,11 @@
+# scratch from the generators: intermediate target bitmaps and contact sheets
+work/
+# the other four texture blobs; regenerate with gen/export_js.py (see README)
+web/solver.bin
+web/solver.json
+web/solver-centre.*
+web/solver-clump.*
+web/solver-streak.*
+# the app
+app/node_modules/
+app/dist/
