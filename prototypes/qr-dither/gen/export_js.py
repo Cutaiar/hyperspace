@@ -2,7 +2,7 @@
 import argparse, json, pathlib, struct
 from basis import Affine
 
-from paths import WEB, WORK
+from paths import LEGACY as WEB, WORK
 
 
 def pack_bits(vals, L):

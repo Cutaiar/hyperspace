@@ -18,7 +18,7 @@ from PIL import Image
 
 import tesseract
 
-from paths import WEB, WORK
+from paths import LEGACY as WEB, WORK
 
 OUT = WEB
 

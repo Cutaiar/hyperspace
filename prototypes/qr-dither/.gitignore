@@ -6,3 +6,6 @@ web/solver.json
 web/solver-centre.*
 web/solver-clump.*
 web/solver-streak.*
+# the app
+app/node_modules/
+app/dist/
