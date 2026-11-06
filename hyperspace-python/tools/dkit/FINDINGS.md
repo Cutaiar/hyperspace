@@ -2,9 +2,9 @@
 
 **Yes, to within a pixel — and the reason is narrower than it sounds.**
 
-*(Updated after four follow-on projects: interaction and easing, icons,
-menus, and the font bake. The verdict below still holds; "what is built"
-now reflects all four.)*
+*(Updated after five follow-on projects: interaction and easing, icons,
+menus, the font bake, and Tier 1 — Slider, Switch, Input, Select, Tooltip.
+The verdict below still holds; "what is built" reflects all five.)*
 
 shadcn's chrome is a small, closed vocabulary: a rounded rect, a 1px border,
 an outside ring, a vertical gradient, a soft shadow, and eight greys. Five
@@ -12,14 +12,21 @@ operations. Dear ImGui lacks a primitive for two of them, and both turned out
 to be reconstructible to within a level. Nothing in the result depends on a new
 dependency, a different renderer, or a fork of ImGui.
 
-Measured across 14 chrome cells spanning four Badge variants, two Card
-variants, six geometries and both themes:
+Measured across 33 chrome cells — four Badge variants, two Card variants,
+nine Sliders, four Switches, three Inputs, two Select triggers and a Tooltip
+panel — in both themes:
 
 | | light | dark |
 |---|---|---|
-| straight edges, borders, fills, gradients, rings, shadows | **0–1 levels**, 0 pixels over threshold | **0–1 levels**, 0 over |
+| straight edges, borders, fills, gradients, rings, shadows | **0–2 levels**, 0 pixels over threshold | **0–1 levels**, 0 over |
 | rounded corners (geometric displacement) | **0.776 px** worst, 0.28 mean | **0.776 px** worst |
 | background | 0 pixels differ | 0 differ |
+
+Tier 1 did not loosen the figure: 0.776 px is exactly what the first
+fourteen cells gave. Light's worst flat delta is 2 rather than 1, on eight
+pixels *inside* the tooltip panel, where Chromium composites the arrow's
+antialiased edge over an identically coloured panel 2 levels darker than the
+token — ImGui draws one layer and gets the token exactly.
 
 The bar was "chrome within ~1px, glyphs may differ". It is met with room.
 
@@ -34,6 +41,21 @@ ImGui's small-radius arcs sit about a third of a pixel outside Chromium's
 the two rasterizers differing rather than geometry waiting to be fixed. It is
 invisible at 1× and will not compound, because it is bounded by the arc, not
 by accumulation.
+
+## The thing that reaches past the gallery
+
+**The browser paints on whole pixels.** Chromium lays out on a 1/64 px grid
+but pixel-snaps what it *paints* to whole device pixels. ImGui antialiases
+instead — a more faithful rendering of the stated geometry, and the wrong
+answer against this bar. A Switch's fractional bottom row came out **91
+levels** off, the largest single disagreement the diff has ever reported,
+and a thumb at 33.3% was half a pixel adrift.
+
+This is not a gallery curiosity. 292 of the registry's 427 params are
+continuous, so a slider thumb sits on a fraction almost always. The kit
+keeps layout exact and snaps only paint, which is what the browser does;
+snapping an integer size is exact under translation, so a dragged thumb
+never breathes a pixel.
 
 ## The four things that had to be got right
 
@@ -90,6 +112,9 @@ Built, and demonstrable in `dashboard.py --live`:
 | | |
 |---|---|
 | primitives | Card, Badge, Button, Tabs, Table, SidebarItem, meter, sparkline, menu, icon button |
+| Tier 1 | Slider, Switch, Input, Select, Tooltip — 412 of the 427 measured params, plus every tooltip |
+| layout | flex (27 cases vs Chromium), a box model, Radix's popover placement |
+| clipping | rounded `overflow-hidden`, both the rect-child case and the corner-cover case |
 | interaction | hover / press / active, on shadcn's 150ms `cubic-bezier(.4,0,.2,1)`, pinned to Chromium's own curve to 1e-5 |
 | icons | 38 Lucide icons as vector paths — crisp at any size, coloured by token, no atlas |
 | menus | dropdowns on ImGui's popup stack: icons, shortcuts, separators, section labels, destructive items, checked items |
@@ -98,17 +123,24 @@ Built, and demonstrable in `dashboard.py --live`:
 
 Not built, and worth being plain about:
 
-- **Layout is still hand-written.** There is no flex or grid. The house
-  pattern exists and is the right one (`ui_players.lay_out`,
-  `ui_players.py:122-176` — a pure width→rects function, unit-tested without
-  imgui), but every dkit layout is rects computed by hand.
-- **No text input.** A node editor needs renaming and numeric entry. The
-  behaviour would come from `imgui.input_text` under the same sandwich; the
-  chrome is in the kit's vocabulary already. It is simply not written.
-- **No scroll container, focus ring, or keyboard navigation.** The panel
-  scrolls (`REVIEW.md`: "A section stays inside the pane; it may scroll
-  down"), shadcn rings focus at `focus-visible:ring-[3px]`, and a live
-  performance tool wants keys. None of it is here.
+- **No scroll container.** The panel scrolls (`REVIEW.md`: "A section stays
+  inside the pane; it may scroll down"). Rounded clipping — the thing that
+  made it impossible — is now built, so this is next and no longer blocked.
+- **No focus ring or keyboard navigation.** shadcn rings focus at
+  `focus-visible:ring-[3px]`; `draw.ring` draws exactly that and the Input
+  already eases it in on real focus, but nothing orders a tab sequence and
+  no other control is reachable by keyboard. A live performance tool wants
+  keys.
+- **No intrinsic sizing.** `Flow` measures one row; there is still no "how
+  big is this subtree", so every container is hand-sized.
+- **No variant resolver.** Variants are ad-hoc dicts (`tokens.BADGE`,
+  `tokens.SWITCH`); cva's job is still unfilled and each component invents
+  its own shape.
+- **The Tooltip's arrow is close, not exact.** Chromium paints the union of
+  a rotated `rounded-[2px]` box and Radix's own svg polygon. The straight
+  edges agree to 0.27 px of width and the area to 7%, but the exact union is
+  not modelled — that would be fitting to an artifact rather than measuring
+  one.
 - **One density.** The kit assumes the panel's size. `REVIEW.md` says
   "widgets fit their narrowest width", and GRAPH's side pane is 240–320px.
   `Ui.scale` exists and is unused.

@@ -322,8 +322,12 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
     # many frames, so last frame's answer is good enough: the only cost is
     # that the first frame of entry draws the caret invisibly.
     texting = ui.texting.get(key, False)
-    if not texting:
-        imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0, 0, 0, 0))
+    imgui.push_style_color(
+        imgui.Col_.text,
+        # transparent normally; the theme's ink while text entry is up, since
+        # imgui's own default is white and would vanish on the light theme
+        imgui.ImVec4(*ui.col("foreground")) if texting
+        else imgui.ImVec4(0, 0, 0, 0))
     imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
     imgui.push_item_width(w)
     if disabled:
@@ -334,8 +338,7 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
         imgui.end_disabled()
     imgui.pop_item_width()
     active, hovered = imgui.is_item_active(), imgui.is_item_hovered()
-    if not texting:
-        imgui.pop_style_color()
+    imgui.pop_style_color()
     ui.texting[key] = bool(active and imgui.get_io().want_text_input)
     _sandwich_end(ui, cols)
 
@@ -403,6 +406,11 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     tbl = ui.input_tbl
     hh = tbl["h"] if h is None else h
     cols = _sandwich_begin(ui, clear_grab=False)
+    # The stock widget draws the text itself, with imgui's own Col_.text -
+    # which is WHITE by default. On the dark theme that happens to look
+    # right; on the light one the value is invisible against the field. The
+    # theme has to be pushed explicitly rather than relied on.
+    imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(*ui.col("foreground")))
     imgui.set_cursor_screen_pos(
         imgui.ImVec2(x + tbl["pad_x"], y + (hh - tbl["font"] * 1.3) / 2.0))
     imgui.push_item_width(w - 2.0 * tbl["pad_x"])
@@ -413,6 +421,7 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
         imgui.end_disabled()
     imgui.pop_item_width()
     focused = imgui.is_item_active()
+    imgui.pop_style_color()
     _sandwich_end(ui, cols)
 
     focus_f = ui.anim.to(f"{key}:focus", 1.0 if focused else 0.0)

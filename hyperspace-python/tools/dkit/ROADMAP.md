@@ -46,7 +46,9 @@ that has worked all the way through this.
 | layout (flex: direction, grow/shrink, justify, align, gap) | done — 27 cases vs Chromium |
 | interaction (hit, eased state, the `_track` sandwich) | done |
 | popover placement (side/align/offset, flip, shift) | done |
-| components | in progress |
+| rounded clipping (`overflow-hidden`) | done — both the rect-child and corner-cover cases |
+| pixel snapping (the browser paints on whole pixels) | done — and it was worth 91 levels |
+| components | Tier 1 done; Tier 2 next |
 
 ## Still missing, after flex
 
@@ -55,17 +57,17 @@ will keep running into:
 
 | missing | why it matters | hit yet? |
 |---|---|---|
-| **rounded clipping** (`overflow-hidden`) | ImGui clips to rectangles only; a card with an image or a scroll area has square corners | yes — the popup shadow needed a widened clip rect |
-| **text wrapping / multi-line measure** | descriptions, tooltips, node summaries. `push_text_wrap_pos` exists but `label()` is single-line | not yet |
-| **intrinsic sizing** (`fit-content`, `min-content`) | `Flow` measures one row; there is no "how big is this subtree" | yes — every container is hand-sized |
-| **scroll container** | REVIEW.md: "a section may scroll down". ImGui child windows scroll but the bars need restyling | not yet |
-| **focus ring + tab order** | `focus-visible:ring-[3px]`; nav is enabled now but nothing is styled or ordered | not yet |
-| **variant resolver** (cva) | variants are ad-hoc dicts (`tokens.BADGE`); components will each invent their own | yes, mildly |
-| **transform transitions** | shadcn menus `zoom-in-95`; the ease store does colour only | no — faded instead |
-| **density / scale** | `Ui.scale` exists and is unused; the side pane is 240–320px | not yet |
+| ~~**rounded clipping**~~ | **done.** The Slider needed it at once: its track is `overflow-hidden rounded-full` and the range is a plain rect | yes — built |
+| **text wrapping / multi-line measure** | descriptions, tooltips, node summaries. `push_text_wrap_pos` exists but `label()` is single-line | a tooltip truncates rather than wraps |
+| **intrinsic sizing** (`fit-content`, `min-content`) | `Flow` measures one row; there is no "how big is this subtree" | yes — every container is hand-sized, Tier 1 included |
+| **scroll container** | REVIEW.md: "a section may scroll down". ImGui child windows scroll but the bars need restyling | not yet — but no longer blocked |
+| **focus ring + tab order** | `focus-visible:ring-[3px]` | half: `draw.ring` draws it and the Input eases it in on real focus, but nothing orders a tab sequence |
+| **variant resolver** (cva) | variants are ad-hoc dicts (`tokens.BADGE`, now `SWITCH`, `INPUT`, `SELECT` too); each component invents its own | yes, and getting worse |
+| **transform transitions** | shadcn menus `zoom-in-95`; the ease store does colour only | no — the Switch's thumb slides by hand off an eased scalar |
+| **density / scale** | `Ui.scale` exists and is unused; the side pane is 240–320px | the demo pins its control column to 280 by hand |
 
-Rounded clipping and intrinsic sizing are the two that will bite hardest,
-in that order.
+Intrinsic sizing is now the one that will bite hardest, and the variant
+resolver is next after it — Tier 1 added four more ad-hoc tables.
 
 ## Components, against Hyperspace's real control inventory
 
@@ -95,11 +97,14 @@ modifiers and graph instances declare theirs.
 
 ### Order
 
-**Tier 1 — unblocks the most surface.** Slider, Input, Select, Switch,
-Tooltip. Those five cover 412 of the 427 measured params plus every tooltip.
+**Tier 1 — DONE.** Slider, Input, Select, Switch, Tooltip — 412 of the 427
+measured params plus every tooltip. All five are diffed against the real
+component in both themes and driven by real imgui widgets underneath, so
+`tests/ui_driver.py` can still find and drive them.
 
-**Tier 2 — what the node editor needs.** ScrollArea, ContextMenu,
-Collapsible, Resizable, Command.
+**Tier 2 — next, and what the node editor needs.** ScrollArea, ContextMenu,
+Collapsible, Resizable, Command. ScrollArea is no longer blocked: rounded
+clipping was pulled forward and built.
 
 **Tier 3 — polish.** AlertDialog/Dialog, Toast, Kbd, HoverCard,
 Sheet/Drawer, Breadcrumb, ButtonGroup, RadioGroup, Pagination.
@@ -144,20 +149,30 @@ this order:
 
 A reasonable opening message:
 
-> Read `hyperspace-python/tools/dkit/ROADMAP.md` and `README.md`. Build
-> Tier 1, starting with Slider — 292 of 427 params are continuous, so it is
-> the single biggest win. Use the browser-oracle pattern: add the component
-> to `prototypes/dashboard`, measure it there, then match it in the kit.
+> Read `hyperspace-python/tools/dkit/ROADMAP.md` and `README.md`. Tier 1 is
+> done — build ScrollArea, which rounded clipping has unblocked. Use the
+> browser-oracle pattern: add the component to `prototypes/dashboard`,
+> measure it on the `?probe` route, then match it in the kit and diff it.
+> Do not implement from a reading of the spec — `?probe` exists because
+> reading the Tailwind classes is how the Slider, the Switch and the Select
+> each came out wrong the first time.
 
-### The order I would take
+### The order I would take from here
 
-**Slider → Input → Select → Switch → Tooltip**, then Tier 2.
+Tier 1 and rounded clipping are done. Next:
 
-One amendment to the tier list: **do rounded clipping before ScrollArea.**
-A scroll area is a clipped region with rounded corners, and ImGui clips to
-rectangles only, so ScrollArea cannot be done properly without it. It is
-also the gap most likely to be hit by something else in the meantime —
-a card with an image, a progress track, any `overflow-hidden`.
+1. **ScrollArea**, now unblocked — and the first thing that will want
+   `cover_corners` rather than `fill_clipped`, since its content is not a
+   rect.
+2. **Intrinsic sizing**, because every container in the kit is still
+   hand-sized and ScrollArea will make that worse.
+3. **Collapsible / Accordion** — 17 folding sections in `ui_pane.SECTIONS`.
+4. **A variant resolver**, before a sixth ad-hoc table is written.
+
+And the one thing none of this answers: **nothing is adopted yet.** The kit
+now covers 412 of 427 params, which is the whole reason Tier 1 came first;
+porting one real `ui_pane.py` section is the test that matters, and until
+that happens the hypothesis is still untested where it counts.
 
 ### The method that has worked
 
@@ -170,7 +185,18 @@ reasoning:
   shrink factor by base size but not the grow factor);
 - the interaction bugs, against tests that **dwell past the animation
   period** — the kebab flicker survived a six-frame check because the
-  transition is nine frames long.
+  transition is nine frames long;
+- Tier 1, against the real components on `?probe`, which caught that a
+  Slider's range and thumb use different mappings, that a Switch is
+  18.390625 px tall, that the thumb's white is a literal rather than a
+  token, and — the one that reaches past the gallery — that **the browser
+  snaps what it paints to whole pixels** while laying out on fractions.
+
+Composing them into the demo caught two more that no diff could: the stock
+slider draws its format string across the track, and per-widget state kept
+on the per-frame `Ui` was thrown away before it could be read, so the
+tooltip could never reach its delay. Measure, then compose; they find
+different bugs.
 
 When something looks right but is not measured, it is usually wrong in a
 way nobody will see until it ships. Build the oracle first.

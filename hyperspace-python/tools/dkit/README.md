@@ -36,6 +36,13 @@ change a box width and the diff only ever measures chrome.
 |---|---|---|
 | straight edges, fills, flat areas | per-pixel value delta, must be **0** | catches a systematic sub-pixel or whole-pixel misalignment |
 | rounded corners | radial contour displacement in **pixels** (`contour.py`) | the bar is geometric; a value delta is not |
+| icon strokes, the tooltip arrow | the feature's own shape — ink **area**, in px² | a round line cap and a 45° edge are not axis-aligned either |
+
+The third row is `vector_mask`, and it earns its place the same way the
+second does. The Select's chevron lands on the right pixels and its body
+matches to 2 levels, but the outermost pixel of each round line cap differs
+by up to 59 — a cap a third of a pixel longer in one renderer. Nothing is
+dropped silently: each masked region says what measures it instead.
 
 That split is load-bearing. A 0.3px geometric difference across a
 black-on-white corner is a ~115-level value delta, while the identical 0.3px on
@@ -54,13 +61,17 @@ bounds — which is exactly CSS `border-box`, and the correct inset is **none**.
 Filled (unrounded) rect edges snap by pixel centre; rounded fills are
 antialiased and land exactly.
 
-## Results — Badge and Card, 14 chrome cells
+## Results — 33 chrome cells, both themes
 
 ```
-flat: edges+fills   max 0-1 levels, 0 pixels over threshold, all 14 cells
+flat: edges+fills   max 0-2 levels, 0 pixels over threshold, all 33 cells
 corners             worst displacement 0.776 px   (bar 1.0)
 background          0 pixels differ
 ```
+
+Badge, Card, Slider, Switch, Input, Select and the Tooltip panel. The worst
+corner figure is the same 0.776 px the first fourteen cells gave, so Tier 1
+is no looser than the chrome that came before it.
 
 Straight edges, borders, radii, fills, gradients, rings, shadows and colours
 are **pixel-exact to within a level**. The whole residual is corner-arc
@@ -101,6 +112,117 @@ Two findings worth carrying forward:
   long string drifts by a few px either way. This is the irreducible text
   difference, and it is why `text.num14` sits -6px against the oracle.
 
+## Measuring a component before building it
+
+`spec.json` + the `?gallery` route is the pixel diff. `?probe` is the step
+*before* that: it renders the real shadcn components at their own intrinsic
+sizes and `probe_react.js` dumps every `data-slot`'s rect and chrome styles,
+including the hover and focus states that do not exist in a computed style
+until the pseudo-class matches.
+
+```bash
+node tools/dkit/probe_react.js "http://localhost:4173/?probe" --json /tmp/p.json
+node tools/dkit/probe_react.js "http://localhost:4173/?probe&dark"   # theme traps
+node tools/dkit/probe_react.js "http://localhost:4173/?probe&open"   # open popovers
+```
+
+It is worth the detour because reading the Tailwind classes is how you get
+it wrong. Everything below came out of the dump and none of it is guessable:
+
+* **a Slider's range and its thumb use different mappings.** The range runs
+  edge to edge (`f·W`); the thumb is inset by its own width (`f·(W−12)`), so
+  it can never overhang the track. They agree only at 50% — at 25% on a
+  240px track the range ends at 60 while the thumb's centre is at 63, and at
+  100% the range reaches 240 while the thumb's centre stops at 234. One
+  mapping for both puts the thumb half its own width from the end of its own
+  fill, and looks right until you check it anywhere but the middle.
+* **a Switch is 18.390625 px tall.** The class says `h-[18.4px]`; Chromium
+  lays out on a 1/64 px grid.
+* **the Slider thumb's `bg-white` is a literal, not a token.** It stays pure
+  white on Hyperspace's `#0a0a0a` ground while every other fill swaps.
+* **the Switch thumb inverts in dark** — `foreground` off,
+  `primary-foreground` on. In light both states are white.
+* **the Select trigger has no hover tint in light at all**, and does have one
+  in dark (`input/30` → `input/50`).
+* **the Select trigger's radius is not constant across sizes** — default is
+  `rounded-lg` (10), `sm` is `rounded-md` (8).
+* **Radix reserves the arrow's full declared size** between a tooltip and its
+  anchor, so `panel bottom = anchor top − 10`, while the rendered diamond
+  only uses 5.071 px of it.
+
+Two of the numbers chased in this round turned out to be the *harness*, and
+both were fixed rather than tolerated: Radix's default `step` is 1, which
+silently snapped a spec fraction of 0.375 to 0.38; and the arc metric walked
+cell corners, which is nowhere near where a slider thumb's arcs actually are.
+
+## Pixel snapping — the browser paints on whole pixels
+
+The one finding that reaches past the gallery. **Chromium lays out on
+fractions but snaps what it PAINTS to whole device pixels.** ImGui
+antialiases instead, which is the more faithful rendering of the stated
+geometry and the wrong answer if the bar is "match the browser".
+
+Measured on the two shapes that have fractional edges:
+
+* the Switch's box runs `y 790 .. 808.390625`; the background is painted into
+  rows 790–807 and row 808 is left completely empty. Unsnapped that was **91
+  levels** on a dark switch — the largest single disagreement the diff has
+  ever reported.
+* a Slider thumb at 33.3% lands at `x 102.604 .. 114.604`. The browser paints
+  it at 103 .. 115 — snapped at both edges, width preserved at 12 — and puts
+  no ink at all in column 102, where ImGui put 133.
+
+This matters in the app, not just here: 292 of the registry's 427 params are
+continuous, so a thumb sits on a fraction almost always. So **layout keeps
+the fraction and only paint snaps** — `box.slider_geom` and
+`box.switch_geom` stay exact, because the thumb's placement depends on them.
+Snapping an integer size is exact under translation, so a dragged thumb
+never breathes a pixel.
+
+One related trap: a slider's *range* has fractional edges too, but they are
+never visible — the 12px thumb always covers the 4px track at the range's
+end.
+
+## Rounded clipping
+
+ImGui clips to rectangles only, and a draw list cannot erase, so CSS
+`overflow: hidden` on a rounded box has exactly two honest techniques. Both
+are in `draw.py`:
+
+* **`fill_clipped`** — for an axis-aligned rect child, round the child's own
+  corners by the container's radius, but only the corners it actually
+  reaches. That is not an approximation of the clip, it **is** the clip: the
+  intersection of a rect with a rounded rect is a rect whose touched corners
+  carry the container's arc. It covers what `overflow-hidden` actually meets
+  most of the time — a slider range, a progress fill, a selected row inside a
+  rounded card.
+* **`cover_corners`** — for arbitrary content (text, icons, a scrolling
+  subtree), clip to the rect and then paint the four corner notches back in
+  the colour *behind* the container. Exact whenever that backdrop is a known
+  flat colour, which inside a panel it is.
+
+This was pulled ahead of ScrollArea because the Slider needed it at once:
+the track is `overflow-hidden rounded-full` and the range is a plain rect, so
+the range's ends are shaped entirely by the track.
+
+## Rings, and where ImGui puts a stroke
+
+shadcn's `ring-3` is a box-shadow, and CSS never paints an outer shadow under
+its own element — so on an Input with a transparent background a filled
+expanded rect would show through the middle. It has to be a true annulus,
+which means a stroke, which means knowing where ImGui puts one:
+
+```
+thickness 1   covers [p, p + 1)        <- wholly inside, the finding above
+thickness 3   covers [p - 1, p + 2)
+```
+
+**ImGui centres a rect stroke on `p + 0.5`, not on `p`.** So a band of
+`width` px landing wholly outside the box needs the path expanded by
+`0.5 + width/2` — 2.0 for the 3px ring, which is neither 3 nor 1.5. The same
+formula gives 1.0 at width 1, which is the expansion the Card's ring was
+already measured to need.
+
 ## The demo
 
 `dashboard.py` composes the primitives into the Hyperspace dashboard — the
@@ -112,7 +234,8 @@ Layout follows the house pattern (`ui_players.lay_out`,
 no imgui in it, drawn in a second pass.
 
 Primitives now in the kit: Badge, Card, Button, Tabs, SidebarItem, Table,
-meter, sparkline, trend arrow, plus `label`/`fit_text` for type. Three were
+meter, sparkline, trend arrow, Slider, Switch, Input, Select and Tooltip,
+plus `label`/`fit_text` for type. Three were
 added by the demo rather than by the diff, because composing is what exposes
 them:
 
@@ -145,6 +268,38 @@ behaviour and paints its own chrome. Two rules it keeps:
 `ease.cubic_bezier` is pinned to Chromium's own Web Animations output to
 1e-5 (`test_ease.py`), because this curve is what everything in the kit
 moves on.
+
+### Tier 1, over stock widgets
+
+Slider, Switch, Input, Select and Tooltip each run a **real imgui widget**
+for behaviour and paint dkit chrome under it. That is not a shortcut, it is
+the constraint: `tests/ui_driver.py:43-46` finds controls by wrapping stock
+widgets, and its `enter()` action drives a slider by Ctrl+clicking it into a
+text field — behaviour only `imgui.slider_float` has. Twenty-two test files
+depend on it.
+
+Three things that fell out of wiring them up, none of which the diff could
+have caught:
+
+* **the stock slider draws its format string across the middle of the
+  track.** shadcn's has no inline text — a readout is a separate label — so
+  `Col_.text` is pushed transparent, except while Ctrl+click entry is up,
+  which is the one time those glyphs are the thing being typed into.
+* **a `Ui` is rebuilt every frame**, so per-widget state kept on it is thrown
+  away before it can be read. The Shift-fine value, the text-entry flag and
+  the tooltip's hover clock live on `Anim` instead — the one object the kit
+  already threads across frames. The tooltip could never reach its delay
+  until this was fixed.
+* **a tooltip must not have a hit target of its own.** It takes `hovered`
+  from the control's own `State`, because one that took the hover would
+  steal it from the thing it describes and blink at the easing's period —
+  exactly the trap `row_action` exists to close.
+
+**Taper is deliberately not in the kit.** `_track` takes a `norm` in 0..1
+along the throw and lets the caller own the mapping, because a taper belongs
+to the param model rather than to the chrome; `interact.slider` follows that.
+Detents and Shift-fine *are* here, since both are about the drag rather than
+about the param.
 
 `ease.mix` interpolates **premultiplied**, and that is not a detail: a
 straight RGBA lerp from `transparent` goes through transparent *black*, so a
@@ -247,8 +402,15 @@ than the state of one frame. A bug that needs time to appear needs a test
 that spends time.
 
 ```bash
-uv run python -m pytest tools/dkit/test_interaction.py tools/dkit/test_ease.py -q
+uv run python -m pytest tools/dkit/ -q          # 277 with tests/test_ui_shell.py
 ```
+
+`test_components.py` pins the measured geometry laws — the slider's two
+mappings, the switch's fractional height, the snapping rule and the rounded-
+clip corner flags — as pure functions, no GL and no display, the way
+`test_box.py` and `test_flex.py` are. `test_interaction.py` drives the real
+thing: eighteen tests, every one dwelling 40 frames against a 9-frame
+transition.
 
 Two seams make it possible: `render(..., script=[(x, y[, down])],
 keys=[(frame, key)])` drives the pointer and the keyboard a frame at a time,

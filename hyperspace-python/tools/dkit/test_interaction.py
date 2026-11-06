@@ -341,3 +341,20 @@ def test_input_takes_typing(DB):
     got = DB.render.last_state["name"]
     assert got != "600-cell", f"typing did not reach the input ({got!r})"
     assert "Z" in got and "9" in got, f"typed characters missing from {got!r}"
+
+
+def test_input_text_is_visible_in_both_themes(DB):
+    """The stock widget draws the value with imgui's OWN Col_.text, which is
+    white by default. On dark that happens to look right and on light the
+    value is simply invisible - so the theme has to be pushed explicitly.
+
+    Caught by looking at the demo, not by the diff: the gallery's Input cells
+    carry no text, because the whole point of the spec is that chrome is
+    measured without glyphs.
+    """
+    rx, ry, _, rh = ctl_rect(DB, 3)
+    x, y = rx + 92.0 + 40.0, ry + rh / 2
+    for theme in ("light", "dark"):
+        frames = DB.render(theme, W, H, script=[(0.0, 0.0)] * 4)
+        assert ink(frames[-1], x, y) > 2.0, (
+            f"the input's value is invisible on the {theme} theme")
