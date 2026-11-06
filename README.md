@@ -40,3 +40,9 @@ and a prototype:
   vector logo as the subject (the Wispr Flow mark), flat or as 3D capsules,
   under a set of materials. Not part of the app; its shapes are, as the
   Flow mark and Flow capsules.
+
+- **[`prototypes/qr-dither/`](prototypes/qr-dither/)** — a tesseract drawn in
+  the data of a QR code rather than over one, foldable through 4D with the
+  code re-solved every update (0.2 ms a solve) and always scanning to
+  `hyperspace.cutaiar.io`. Reed-Solomon is linear, so the picture is the
+  payload. Not part of the app.
