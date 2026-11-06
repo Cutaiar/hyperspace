@@ -37,6 +37,7 @@ import gradient as G      # noqa: E402
 import box as B           # noqa: E402
 import comp_button as CB
 import comp_combobox as CC
+import comp_gallery as CG
 import comp_context_menu as CX
 import interact as I      # noqa: E402
 import menu as M          # noqa: E402
@@ -64,8 +65,13 @@ ROW_MENU = [
            variant="destructive"),
 ]
 
-NAV = [("Overview", "gauge"), ("Catalog", "shapes"), ("Scenes", "layers"),
-       ("Analyzer", "activity"), ("Routing", "waves")]
+NAV = [("Overview", "gauge"), ("Gallery", "boxes"), ("Catalog", "shapes"),
+       ("Scenes", "layers"), ("Analyzer", "activity"), ("Routing", "waves")]
+# Which nav row shows the contact sheet rather than the dashboard body.
+# Named rather than written as a 1 at the branch, because the only thing
+# worse than a magic number is a magic number that moves when somebody adds
+# a nav item above it.
+NAV_GALLERY = 1
 SOURCES = [("Audio in", "music"), ("Solids", "box"), ("Compounds", "boxes"),
            ("Effects", "sparkles")]
 TABS = ["All", "4-polytopes", "Regular", "Stars", "Solids"]
@@ -425,9 +431,12 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     # ---- header -----------------------------------------------------------
     hx, hy, hw, hh = r.header
     D.fill(dl, hx, hy + hh - 1, hw, 1, T.rgba("border", theme=theme))
-    D.label(dl, hx + GUT, hy, "Overview", faces, "medium", 16,
+    # the header names the section the sidebar is on, rather than a typed
+    # "Overview" that went on saying Overview from every other tab
+    sect = NAV[state.get("nav", 0)][0]
+    D.label(dl, hx + GUT, hy, sect, faces, "medium", 16,
             T.rgba("foreground", theme=theme), baseline_box=hh)
-    bw = D.text_w("Overview", faces, "medium", 16)
+    bw = D.text_w(sect, faces, "medium", 16)
     bx = hx + GUT + bw + 12
     D.box(dl, bx, hy + (hh - 20) / 2, 86, 20,
           border_col=T.rgba("border", theme=theme), radius=T.RADII["4xl"])
@@ -459,6 +468,20 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     # scrolls as a page.
     bx, by = SIDEBAR_W, HEADER_H
     bw, bh = w - SIDEBAR_W, h - HEADER_H
+    if state.get("nav") == NAV_GALLERY:
+        # The contact sheet. Its height comes from its own content, which is
+        # text-dependent and so cannot be worked out in `lay_out` (which has
+        # no faces) - so it is planned here, before the scroll area opens,
+        # and the same plan is handed to the paint. One call, so the scroll
+        # range and what is on screen cannot disagree.
+        gw = bw - 2 * GUT
+        pre = CG.plan(gw, faces, ui.theme_name)
+        with I.scroll_area(ui, "page", bx, by, bw, bh, pre[0] + 2 * GUT,
+                           backdrop=T.rgba("background", theme=theme)) as view:
+            CG.paint(ui, view.x + GUT, view.y + GUT, gw, state, pre=pre)
+        state["page_scroll"], state["page_max"] = I.scrolled(ui, "page")
+        return
+
     with I.scroll_area(ui, "page", bx, by, bw, bh, r.body_h,
                        backdrop=T.rgba("background", theme=theme)) as view:
         # re-lay-out at this frame's scroll, so there is no frame of lag

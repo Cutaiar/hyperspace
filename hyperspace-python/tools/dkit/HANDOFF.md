@@ -120,6 +120,48 @@ chrome diff: flat 0-2 levels across 33 cells, worst corner 0.776 px, both themes
   each frame, so anything stored on it is discarded before it can be read —
   a tooltip could never reach its own delay. State goes in `anim.store`.
 
+### The focus model, which is one model and not seven
+
+Measured on the current registry components — button (default / outline /
+destructive), Input, Switch, SelectTrigger and the Slider thumb — and it is
+the same answer every time:
+
+```
+box-shadow: <ring> 0 0 0 3px      a solid 3px band immediately outside the
+                                  border box. No blur. No offset. No spread
+                                  past the 3.
+border-color: <ring>              the element's own 1px border swaps colour
+outline-style: none               in every state, on every control. The ring
+                                  is NEVER a CSS outline.
+```
+
+`destructive` is the only variant that differs: band `destructive/20`, border
+`destructive/40`. In dark, an `outline` button keeps `border-input` under
+focus, because `dark:border-input` sorts after `focus-visible:border-ring` in
+Tailwind's output — measured 46 where `ring` would be 115. Do not generalise
+that one to other components without measuring.
+
+Two things follow that are easy to get wrong:
+
+- **The rect does not change.** A ring is a shadow; it takes no layout space
+  and nothing reflows.
+- **It is `:focus-visible` only.** At mouse-down a control matches `:focus`
+  and NOT `:focus-visible`, so a control reached with the pointer is never
+  ringed at all. `interact.Ui.focus_visible` models this: any mouse press
+  turns it off, Tab or an arrow turns it on. Without it the ring stuck to
+  whichever control was clicked last and walked along behind the pointer.
+
+What was actually wrong was not the ring but what sat under it: **ImGui draws
+its own blue `nav_cursor` rectangle** around whatever holds keyboard focus,
+and shadcn has nothing of the kind. It is cleared in `interact.chrome()`,
+held for the whole frame so popups inherit it, and again in
+`_sandwich_begin` so a component used alone in a test or the gallery is
+covered too. Text selection goes the same way: ImGui's own is a pale
+`(0.26, 0.59, 0.98, 0.35)`; the browser's, measured on a focused Input with
+its value selected, is `rgba(0, 65, 198, 0.8)` in BOTH themes — nothing in
+the registry declares `::selection`, so a shadcn app gets the UA default, and
+`tokens.SELECTION` is it.
+
 ### Measuring
 
 - **Chromium lays out on a 1/64 px grid and snaps what it PAINTS to whole
@@ -171,6 +213,23 @@ chrome diff: flat 0-2 levels across 33 cells, worst corner 0.776 px, both themes
 
 These are changes to **how** the work is done, and each replaced something
 that had already failed once.
+
+### 0. Get the current shadcn, then probe it — before anything else
+
+```bash
+tools/dkit/refresh_shadcn.sh
+```
+
+Pulls every component the kit uses from the live registry, overwrites the
+prototype's copies, and prints what actually moved (it ignores `"use client"`
+churn, which is inert under Vite). A clean run says "no component changed",
+which is an answer worth having rather than an assumption worth keeping.
+
+The reason this is rule zero: the registry moves. `radix-nova` has changed
+its menu treatment, its focus ring and the entire shape of its Combobox
+inside this project's lifetime. A measurement of a vendored copy nobody
+refreshed is exact and useless, which is the same failure as (2) below and
+the one that cost the most.
 
 ### 1. The oracle comes before the implementation, without exception
 
@@ -258,6 +317,24 @@ reasoning. The palette does not: the app is one red and three greys on
 black, which is its own language and a deliberate one.
 
 ---
+
+## The Gallery tab
+
+`dashboard.py --live`, second item in the sidebar. Every component the kit
+has, in every state it can be in, drawn with the real interactive widgets —
+thirteen sections from Button to the colour swatches.
+
+It is not `gallery.py`, and the difference matters. `gallery.py` is the pixel
+diff: a fixed set of cells pinned to `spec.json` so the ImGui side and the
+React side can be subtracted. It proves chrome to a pixel and it cannot see
+that a control is unclickable. The tab is the contact sheet: it shows how a
+disabled Select feels under the pointer and it cannot tell you its border is
+a level off. Keep both; they find different things.
+
+Layout is `box.Node`, measured then placed, so adding a specimen makes its
+section grow rather than making the specimen land outside it —
+`test_gallery.py` asserts exactly that, plus that the height handed to the
+scroll area is the height drawn (they come out of one call for that reason).
 
 ## Running it
 

@@ -150,7 +150,8 @@ this order:
 1. **`ROADMAP.md`** (this file) — what to build, why that order, and the
    constraints each component has to respect.
 2. **`HANDOFF.md`** — where the work actually got to, every trap that cost
-   a round of rework, and the process revisions each of them forced.
+   a round of rework, and the process revisions each of them forced. Also
+   the Gallery tab, which is where you look at all of this running.
 3. **`README.md`** — how the kit works, how to run it, how to test it, and
    the calibration findings that are easy to rediscover the hard way
    (ImGui's stroke is not centred on the path; its font size is not a CSS
@@ -214,9 +215,24 @@ on the per-frame `Ui` was thrown away before it could be read, so the
 tooltip could never reach its delay. Measure, then compose; they find
 different bugs.
 
-### The four rules this has settled into
+### The five rules this has settled into
 
 Each one is here because breaking it cost a round of rework.
+
+0. **Get the current shadcn first, then probe it.** Before any component:
+   `tools/dkit/refresh_shadcn.sh`, read whatever it says moved, and re-probe.
+   The registry is a moving target — inside this project's lifetime
+   `radix-nova` has changed its menu treatment, its focus ring and the whole
+   shape of its Combobox — so a kit measured against a vendored copy nobody
+   has refreshed is measured against nothing, and every number downstream
+   inherits the staleness silently. The script is thirty seconds and the
+   answer you want from it is "no component changed". That is a measurement
+   too, and worth having made.
+
+   This is rule zero rather than rule six because it comes before rule one:
+   an oracle built on a stale component is a confident wrong answer, which
+   is worse than no answer. It is the same failure as the Combobox — an
+   exact measurement of the wrong thing.
 
 1. **Build the oracle first.** Never implement from a reading of the spec.
    The Tailwind classes say `h-[18.4px]`; the browser says 18.390625. They
