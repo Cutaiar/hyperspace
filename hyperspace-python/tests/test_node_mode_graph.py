@@ -8,7 +8,7 @@ import pytest
 from test_node_desk import K1, K2, pick_node
 from test_node_desk import rig as desk_rig  # noqa: F401 — the fixture, under its name
 
-from hyperspace import graphview, node_desk, routing, ui_desk, ui_graph
+from hyperspace import apc40, graphview, routing, ui_desk, ui_graph
 from hyperspace.routing import Binding
 
 NM = graphview.NODE_MODE
@@ -151,7 +151,7 @@ def test_the_words_are_the_map_then_the_kept_then_the_over(rig, monkeypatch):
     node, params = pick_node(rig.one, 4)
     t = rig.one.table
     t.bind(Binding("cc:*:20", params[0], "abs", layer="preset"), write=False)
-    monkeypatch.setattr(node_desk.apc40, "degrees_of_freedom",
+    monkeypatch.setattr(apc40, "degrees_of_freedom",
                         lambda: [(f"cc:0:{K1}",), ("cc:*:20",), (f"cc:0:{K2}",)])
     rig.nd1.enter(rig.desk.role, node)
     h = next(x for x in rig.nd1.held() if x.role == rig.desk.role)

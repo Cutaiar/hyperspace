@@ -257,7 +257,7 @@ class NodeDesk:
 
     def control_word(self, role: str, b: Binding) -> str:
         """What a person calls row `b`'s control: "K3"."""
-        glyph = getattr(PROFILES.get(self._profile(role)), "glyph", None)
+        glyph = getattr(self._profile(role), "glyph", None)
         return (glyph(b.bare) if glyph is not None else None) or b.describe()
 
     def key(self) -> tuple[Any, ...]:
