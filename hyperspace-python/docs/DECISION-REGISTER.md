@@ -757,6 +757,7 @@ here; overturn → the change, then the same.
 | 750 | Plan 56: the factory's `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows and act exactly as they did; no saved-format change, an older build reads a pair's row as dormant | 748 | (rec) — pending the owner |
 | 751 | Plan 56: not built, poles on keys or MIDI notes; a route on a pair leaves its poles' own rows alone, and both act | 748 | (rec) — pending the owner |
 | 752 | Plan 44 D5d: no preset may carry a row on a library verb, a load (`is_load_verb`) or a save (`is_save_verb`: `preset.save.<k>`, `preset.save_new`). `routing.meta_refusal` refuses a desk row or route on one at every door, dropped with a note on load and gone at the next save; the meta controller's own rows pass, so a person's saves are as they were. `preset.*` stays out of `is_session_id` until SEM. Not a format change | 700, 743 | owner — 2026-11-06: "no patch can affect another patch" |
+| 753 | The undo latch: whenever focus comes to a stack it latches shut, ⌘Z and ⇧⌘Z there refuse in words and touch no history, and the first push after the focus event opens it, down to the oldest step. One rule for the decks and the meta stack. A mouse passing over is no focus event; a press is, and so is a change where you are | 691, 700 | answered, the owner, 2026-11-06 |
 
 "—": no hand check shows it; tests only.
 
@@ -13083,10 +13084,11 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   (`bars_load`, `MetaController.mixing`, which copy asks too).
 - **Not changed.** The panel's own load, which is the plain `Project`'s, on the deck the panel looks at. A save, on the deck
   its row is on, so a held empty pad on air saves the look on air. An empty pad's words.
-- **What the person sees.** The status line: "TRIP loaded off air on deck 2; the room still sees deck 1; to take it back, put
-  the panel on deck 2, then ⌘Z" ("⌘Z takes it back" with the panel already there). The cheat sheet says "load off air".
-- **A mis-pressed pad and ⌘Z.** The step is on the off-air stack and ⌘Z goes by where the panel is (rows U1, U2, as the owner chose),
-  so with the panel on air ⌘Z undoes the room's last step and leaves the load. Not changed; the words say how. For the owner.
+- **What the person sees.** The status line: "TRIP loaded off air on deck 2; the room still sees deck 1", and "; ⌘Z takes it back"
+  only where ⌘Z reaches that deck, so with the panel already there (row 753). The cheat sheet says "load off air".
+- **A mis-pressed pad and ⌘Z.** The step is on the off-air stack and ⌘Z goes by where you are. Row 753 settles what that took back:
+  with the panel on air ⌘Z now refuses, and the room's last step stays. Coming to the deck that loaded latches it too, so the load
+  goes back by a change there and a double undo.
 - **The light.** `preset.select` reads `DeckProject.lit`: green is what the deck off air holds, on every controller and the
   on-screen desk, since that is what a press changes; every other filled slot is amber, the room's included. Nothing on the
   pads says which the room is on: the chip and the title do. A held pad's save blinks regardless of the light (`_fire_holds`).
@@ -13674,3 +13676,36 @@ still wins, as does a sink row.
   a held empty pad and SAVE plus a pad on the invariant row, ⇧F1–F8, and the Edge's hold-to-save (`pad@edge:MENU`, row 723), all the
   meta controller's rows. `preset.save_new` can no longer be learned onto a desk control, as with `preset.list.*` above.
 - **Judge it.** 578.
+
+### 753. The undo latch
+
+- **Answer.** The owner, 2026-11-06: "when you focus on a new deck (like when you change which undo stack you are focused on and routing
+  undo commands to), before you can start popping from that stack, you should have to push to that stack at least once after a focus
+  event happens. That way, you can't accidentally switch what you're focused on and then press Control-Z and have it undo an action that
+  you took 10 minutes ago. If you truly do want to do that, you can just do some minor action on that deck and then double undo, and it
+  will get to that. I think a warning is fine, but I think a more mechanical latch would be a more ergonomic choice here."
+- **Built.** `undo.undo` and `undo.redo`, the road the key rows take: a latched stack says "nothing to undo here yet: make a change on
+  deck 2 first" and stops, its history untouched. The first new step on it opens the latch and ⌘Z then goes all the way down. A step
+  which closes empty (a refused load) is no push and opens nothing. `Undo.undo` on the instance knows no latch.
+- **What a focus event is: `here` follows the mouse, so this was a finding.** ⌘Z's stack changes merely by hovering (D5b, row 691), and the
+  owner's hazard is real there: a mouse wandering into the analyzer and a ⌘Z took an hour-old tweak. Latching on the hover itself would refuse
+  a ⌘Z after the mouse had only crossed the canvas. So focus is held apart from `here` (`undo._focused`) and moves on real acts only: the panel moving
+  deck (`install`), a ⌘Z pressed at a stack, or a change made at the stack `here` names. A mouse passing over does nothing; where it is at the
+  press decides. Going to a meta section and pressing is the focus change, and it refuses.
+- **A popup.** A combo's choice is made with nothing under the mouse, so the step begins with `here` on the deck. It counts as a
+  change where you are if `here` names its stack when it closes, the settle time later, with the mouse back in its section.
+- **Landing out of focus.** A change on a stack out of focus opens nothing, and coming back latches it whatever happened in between, a step still
+  open included. So a pad's load off air, then the panel on that deck, is latched; hence no "⌘Z" in the pad's words unless ⌘Z reaches that deck.
+- **(rec) — pending the owner: a load off air takes the focus away.** With the panel on air and open, the latch alone would not have stopped
+  a mis-pressed pad and ⌘Z: no stack changed. So a pad's load or a copy on air landing on a stack ⌘Z does not go to sends focus nowhere
+  (`landed_elsewhere`), and the next ⌘Z refuses. This goes one step past the owner's sentence, for the case that made this row: the cost is a
+  ⌘Z meant for the room just after a pad needs a touch first. One line each in `_say_loaded` and `copy_on_air` to take it out.
+- **Redo.** A latched stack refuses it too: the same stack and the same surprise. The push that opens it clears the redos, as any new change does,
+  so no redo crosses a focus change. ⌘Z then ⇧⌘Z with no focus change is as it was.
+- **Launch, a show, a reset.** At launch the panel's deck has the focus and is latched, like any focus event; its stack is empty, so nothing is different
+  but the words. A show load is two pushes: the deck's, where you are, opens it; the meta stack's, out of focus unless you are in a meta section, does not (row 693's
+  second ⌘Z now wants a meta change first). `Undo.clear` is no push and no focus event: the latch stays as it was. A new `Undo` installed is a focus event. A hot
+  reload keeps the focus, and a stack from before it reads open, so a reload refuses nothing.
+- **Over the player screen** no stack answers, so a press there moves no focus.
+- **Words.** Row 700's status line and `preset.home`'s and `edit.undo`'s tips. The cheat sheet's "undo · ⇧ redo" stays true and is unchanged, as is `ui_players.over`.
+- **Judge it.** 579, and 524, 525, 578 as amended.

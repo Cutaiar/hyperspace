@@ -2,13 +2,14 @@
 Copy on air to off air, the panel moved to the deck off air (the red head chip, the
 red frame, the inset of what is on air), a look loaded there, a timed fade across, the
 fader by hand to the middle and home, then a press on air, which loads off air (row
-700). Each step says what it left, on stderr.
+700), and a ⌘Z, which takes nothing back from the room (row 753). Each step says what it left, on stderr.
 
     uv run python tools/app_driver.py tools/drive_decks.py --out <scratch>/run --every 20
 """
 
 import sys
 
+from hyperspace import undo as undos
 from hyperspace.library import PRESETS
 
 
@@ -73,3 +74,12 @@ def script(d, panel):
     print(f"status line: {panel.library.status}", file=sys.stderr)
     assert one.presets.current == on_air and two.presets.current != off_air
     assert "loaded off air on deck 2" in panel.library.status
+    assert "⌘Z" not in panel.library.status      # the panel is on air: ⌘Z does not reach it
+
+    held = one.reg.snapshot(part="performance")
+    panel.reg["edit.undo"].fire()     # a mis-pressed pad and ⌘Z: the latch (row 753)
+    yield from d.wait(10)
+    at = undos.here()
+    print(f"status line: {at.status}", file=sys.stderr)
+    assert at.status.startswith("nothing to undo here yet")
+    assert one.reg.snapshot(part="performance") == held

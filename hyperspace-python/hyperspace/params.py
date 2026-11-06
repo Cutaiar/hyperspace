@@ -2222,9 +2222,12 @@ def build_session(control, audio, restart=None, media=None) -> SessionRegistry:
     r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
               tip="Take back the last gesture or the last load, learn or delete on the "
                   "deck the panel is on; with the mouse on a rig setting, or in the output, "
-                  "audio, analyzer or hands section, the last rig change (Cmd+Z or Ctrl+Z).")
+                  "audio, analyzer or hands section, the last rig change (Cmd+Z or Ctrl+Z). "
+                  "After you come to a deck or a meta section it takes nothing back until "
+                  "you change something there; after that it goes all the way down.")
     r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,
-              tip="Put back what the last undo took (Cmd+Shift+Z or Ctrl+Shift+Z).")
+              tip="Put back what the last undo took (Cmd+Shift+Z or Ctrl+Shift+Z). Not "
+                  "straight after you come to a deck or a meta section, as Undo.")
     if hasattr(audio, "toggle_play"):
         r.toggle("audio.play", "Play",
                  lambda: bool(getattr(audio, "playing", False)),
@@ -2818,6 +2821,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
                   lit=lambda: bool(bank.startup),
                   tip="Home: load this show's startup preset into the deck off air — "
                       "the Home key (fn ← on a laptop) and OVERDUB (B11) on the desk. "
-                      "Undo on that deck brings back what was up.")
+                      "The room does not move. With the panel already on that deck, "
+                      "Undo brings back what was up.")
 
     return r

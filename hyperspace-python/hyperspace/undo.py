@@ -54,6 +54,16 @@ in a meta section or on a meta param (`where`), which takes the meta stack. Neve
 ago, and never the panel's focus, which says nothing of where you are an hour on.
 Pressing it never crosses over: a stack with nothing says so.
 
+**The latch** (the owner, 2026-11-06, row 753): a stack you have just come to takes
+nothing back until you change something on it. Whenever focus comes to a stack it
+latches shut (`latched`); ⌘Z and ⇧⌘Z there refuse, in words, and touch no history; the
+first push after that opens it, and ⌘Z then goes all the way down, older steps
+included. Focus (`_focused`) is not where the mouse is: `here` follows the mouse, and
+one passing over a section is no event. Focus moves when the panel moves deck
+(`install`), when a ⌘Z or a change is made at a stack `here` names, or goes nowhere when
+a verb lands on a stack ⌘Z does not go to (`landed_elsewhere`). So a change that lands
+on a stack out of focus opens nothing, and coming back to it latches it again.
+
 The band layout: a band added, removed or moved re-declares every
 `band.*` param and is **not** a step. Each state is tagged with the shape
 its `tagged` ids live on (`tag()`: the bands' names in strip order), and
@@ -228,6 +238,9 @@ class Undo:
     """
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
+    latched = False  # …and these: ⌘Z refuses here until a new push (row 753)
+    called = "here"  # how the refusal names this stack ("on deck 2"; `MetaController`)
+    _opens = False   # the open step began on focus: when it lands it opens the latch
 
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
                  on_restore=None, banks=None, only=None):
@@ -420,6 +433,7 @@ class Undo:
         to put back — a refused unbind or a load that fails changes
         nothing and must not cost the redo."""
         self._open = step
+        self._opens = _changed_here(self)
         self.stack.append(step)
         del self.stack[:-LIMIT]
 
@@ -437,9 +451,12 @@ class Undo:
         empty = not ids and not parts and step.before.tag == now.tag
         if empty and step.load and self.marks is not None:
             empty = self._marks_equal(step.before.marks)
+        opens, self._opens = self._opens, False
         if empty:
             self.stack[:] = [s for s in self.stack if s is not step]
             return
+        if opens or _came_here(self):
+            self.latched = False
         if step.action:
             self.redos.clear()
         if not step.label:
@@ -524,6 +541,7 @@ class Undo:
         self.stack.clear()
         self.redos.clear()
         self._open, self._absorb, self._action_frame = None, 0, -1
+        self._opens = False               # (the latch stays as it was: a clear is no push)
         if self._kept is not None:
             self._end_kept()
         self._fp = self._fingerprint()
@@ -698,6 +716,7 @@ class Undo:
 _installed: Undo | None = globals().get("_installed")
 _meta: Undo | None = globals().get("_meta")
 _where = globals().get("_where")
+_focused: Undo | None = globals().get("_focused", _installed)   # what the latch goes by
 
 
 # each registry's own `Undo`, a deck's whether or not it is the installed one, so
@@ -723,15 +742,19 @@ def watching(reg) -> Undo | None:
 
 def install(u: Undo | None) -> None:
     """Make `u` the stack of the panel's `Deck` (app.main,
-    `MetaController.point_panel`); None uninstalls."""
+    `MetaController.point_panel`); None uninstalls. A new one has the focus."""
     global _installed
+    if u is not _installed:
+        _focus(u)
     _installed = u
 
 
 def install_meta(u: Undo | None) -> None:
     """Make `u` the meta controller's stack (`MetaController`); None uninstalls,
     and with it `where`."""
-    global _meta, _where
+    global _meta, _where, _focused
+    if u is None and _focused is _meta:
+        _focused = None
     _meta = u
     if u is None:
         _where = None
@@ -774,6 +797,54 @@ def _on_no_stack() -> None:
     nothing, as before, and has no player to drag back."""
     if _inside() is None:
         _meta._say(NOTHING_HERE)
+
+
+def _focus(u: Undo | None) -> None:
+    """Focus comes to `u`, from elsewhere: it latches, whatever happened in between,
+    and a step already open on it opens nothing. Already there: nothing."""
+    global _focused
+    if u is not _focused:
+        _focused = u
+        if u is not None:
+            u.latched, u._opens = True, False
+
+
+def _changed_here(u: Undo) -> bool:
+    """A step begins on `u`. A change where you are takes the focus there, and the
+    step opens the latch; on a stack with the focus, too. Anywhere else it opens nothing."""
+    if u is here():
+        _focus(u)
+    return u is _focused
+
+
+def _came_here(u: Undo) -> bool:
+    """A step that began elsewhere lands on `u`, and that is where you are now: a
+    choice in a popup is made with nothing under the mouse, which is back in its
+    section when the step closes. As `_changed_here`. Not for a stack with the focus:
+    a focus event since the step began (the panel moved here) is not a push."""
+    if u is not _focused and u is here():
+        _focus(u)
+        return True
+    return False
+
+
+def landed_elsewhere(u: Undo) -> None:
+    """A verb has landed on `u` (a pad's load, a copy): unless ⌘Z goes there, focus
+    goes nowhere, so what ⌘Z next reaches is latched. A mis-pressed pad and a ⌘Z must
+    not take back the room's last step (row 753)."""
+    global _focused
+    if here() is not u:
+        _focused = None
+
+
+def _refused(at: Undo, verb: str) -> bool:
+    """The press at `at`: it is a focus event of its own, what it finds is what lands
+    first, and a latched stack says so and goes no further."""
+    _focus(at)
+    at._flush()
+    if at.latched:
+        at._say(f"nothing to {verb} here yet: make a change {at.called} first")
+    return at.latched
 
 
 def installed() -> Undo | None:
@@ -828,18 +899,21 @@ def let_close(on: Undo) -> None:
 
 
 def undo() -> None:
-    """`Undo.undo` on the stack `here` names (the `edit.undo` trigger)."""
+    """`Undo.undo` on the stack `here` names (the `edit.undo` trigger), unless it is
+    latched. `Undo.undo` itself knows no latch."""
     at = here()
     if at is not None:
-        _guarded("undo", lambda u: u.undo(), on=at)
+        _guarded("undo", lambda u: _refused(u, "undo") or u.undo(), on=at)
     else:
         _on_no_stack()
 
 
 def redo() -> None:
-    """`Undo.redo` on the stack `here` names (the `edit.redo` trigger)."""
+    """`Undo.redo` on the stack `here` names (the `edit.redo` trigger), unless it is
+    latched: the same stack and the same surprise. The push that opens one clears its
+    redos, as any new change does, so a redo cannot cross a focus change."""
     at = here()
     if at is not None:
-        _guarded("redo", lambda u: u.redo(), on=at)
+        _guarded("redo", lambda u: _refused(u, "redo") or u.redo(), on=at)
     else:
         _on_no_stack()

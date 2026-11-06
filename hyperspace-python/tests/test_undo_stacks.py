@@ -97,9 +97,15 @@ def test_edit_undo_follows_the_panels_deck_and_a_stack_stays_with_its_deck(rig):
     held = (rig.one.undo, rig.two.undo)
     rig.meta.point_panel(rig.two)
     assert (rig.one.undo, rig.two.undo) == held and undo.here() is rig.two.undo
+    b.step(1)                                          # (the latch: `test_undo_latch.py`)
+    go(rig)
+    rig.reg["edit.undo"].fire()
     rig.reg["edit.undo"].fire()
     assert b.base == was[1] and a.base == was[0] + 0.1
     rig.meta.point_panel(rig.one)
+    a.step(1)
+    go(rig)
+    rig.reg["edit.undo"].fire()
     rig.reg["edit.undo"].fire()
     assert a.base == was[0]
 
@@ -130,6 +136,7 @@ def test_a_meta_knob_is_one_step_on_the_meta_stack(rig):
     p = rig.reg["master.gain"]
     assert rig.two.reg["master.gain"] is p
     was = p.base
+    here_is_meta(rig)
     for k in range(20):
         p.set(was + 0.01 * (k + 1))
         go(rig, 1)
@@ -137,7 +144,6 @@ def test_a_meta_knob_is_one_step_on_the_meta_stack(rig):
     m = rig.meta.undo
     assert [s.label for s in m.stack] == [f"{p.label} {p.fmt(was)} → {p.fmt(p.base)}"]
     assert rig.one.undo.stack == [] and rig.two.undo.stack == []
-    here_is_meta(rig)
     rig.reg["edit.undo"].fire()
     assert p.base == was and m.status.startswith("undid ")
     rig.reg["edit.redo"].fire()
@@ -180,13 +186,20 @@ def test_undo_in_a_meta_section_never_moves_a_deck(rig, which):
     rig.meta.point_panel(deck)
     p = rig.reg["hands.smooth"]
     was = p.base
+    here_is_meta(rig)
     p.step(3)
     go(rig)
+    here_is_meta(rig, False)                           # (and past: a pass of the mouse)
     deck.reg["view.bright"].step(3)                    # newer, and not what is meant
     go(rig)
     looks = (bases(rig.one), bases(rig.two))
     steps = (len(rig.one.undo.stack), len(rig.two.undo.stack))
     here_is_meta(rig)
+    rig.reg["edit.undo"].fire()                        # the deck had the focus: latched
+    assert p.base != was
+    rig.reg["master.gain"].step(1)                     # one change here opens it
+    go(rig)
+    rig.reg["edit.undo"].fire()
     rig.reg["edit.undo"].fire()
     assert p.base == was
     assert (bases(rig.one), bases(rig.two)) == looks
@@ -252,10 +265,18 @@ def test_the_shows_mark_is_on_the_meta_stack(rig):
     assert rig.two.undo.stack == []
     look = bases(one)
     here_is_meta(rig)
+    rig.reg["edit.undo"].fire()                        # the latch: the deck had the focus
+    assert pr.name == "house" and "make a change on the meta controller" in rig.meta.undo.status
+    rig.reg["hands.smooth"].step(1)
+    go(rig)
+    rig.reg["edit.undo"].fire()
     rig.reg["edit.undo"].fire()
     assert pr.name == "party" and bases(one) == look
     here_is_meta(rig, False)
     assert one.undo.stack
+    one.reg["view.bright"].step(1)
+    go(rig)
+    rig.reg["edit.undo"].fire()
     rig.reg["edit.undo"].fire()
     assert one.presets.current == "TUMBLE" and pr.name == "party"
 
@@ -518,7 +539,7 @@ def test_a_where_that_raises_is_not_inside_a_meta_section(rig):
     undo.where(boom)
     assert undo.here() is rig.one.undo
     rig.reg["edit.undo"].fire()                        # says so; no raise
-    assert rig.one.undo.status == "nothing to undo"
+    assert rig.one.undo.status == "nothing to undo here yet: make a change on deck 1 first"
 
 
 def test_a_decks_step_across_a_show_change_that_changes_nothing_of_it_drops(rig):

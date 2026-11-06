@@ -53,7 +53,8 @@ one on air by `Fade.k`, the other's share. Two verbs, and no others (the owner,
 `copy_on_air`. D5d wires them: `app.frame` ticks the meta controller first, the
 desk's crossfader is `output.xfade`, and GRAPH's head has both verbs and which
 deck the panel is on. A bank verb from a row never changes what is on air: it
-loads off air (`row_load`, the owner, 2026-11-06).
+loads off air (`row_load`, the owner, 2026-11-06). Every change of stack latches the
+stack you come to (`undo`'s latch, row 753).
 """
 
 from __future__ import annotations
@@ -544,6 +545,10 @@ class MetaController:
         self.on_panel: list[Callable[[Deck], Any]] = []   # told after the panel moves
         self.undo = meta_stack(first)
         undos.install_meta(self.undo)
+        self.undo.called = "on the meta controller"       # (the latch's words)
+        for deck in self.decks:
+            if hasattr(deck, "undo"):                     # (a stand-in second deck has none)
+                deck.undo.called = f"on {self.deck_name(deck)}"
 
     @property
     def on_air(self) -> Deck:
@@ -592,13 +597,12 @@ class MetaController:
         return (None, why) if why is not None else (self.off_air_project(), None)
 
     def loaded_words(self, name: str) -> str:
-        """The status line after a row's load: what, where, that the room is as it was,
-        and how to take it back: the step is on that deck's stack, and ⌘Z goes by where
-        the panel is (the owner: "by where you are"), which may be the room."""
+        """The status line after a row's load: what, where, and that the room is as it
+        was. ⌘Z only where it is true, ⌘Z here reaching that deck: there the load was a
+        push on the stack in focus. Coming to it later latches it (`undo`, row 753)."""
         off = self.deck_name(self.off_air)
-        back = ("⌘Z takes it back" if self.panel is self.off_air
-                else f"to take it back, put the panel on {off}, then ⌘Z")
-        return f"{name} loaded off air on {off}; the room still sees {self.deck_name(self.on_air)}; {back}"
+        back = "; ⌘Z takes it back" if undos.here() is self.off_air.undo else ""
+        return f"{name} loaded off air on {off}; the room still sees {self.deck_name(self.on_air)}{back}"
 
     def deck_name(self, deck: Deck) -> str:
         return f"deck {1 if deck is self.decks[0] else 2}"
@@ -797,6 +801,7 @@ class MetaController:
         name, presets = src.presets.current, dst.presets
         empty = presets.current is None and dst.graph.spec is None and not dst.undo.stack
         doc = src.presets.document(name or "untitled")
+        undos.landed_elsewhere(dst.undo)      # (a ⌘Z next must not take back the room's)
         undos.push_on(dst.reg, f"copy {name or 'untitled'} from on air", load=True)
         missing = presets.load_doc(doc)
         _carry(src, dst)
