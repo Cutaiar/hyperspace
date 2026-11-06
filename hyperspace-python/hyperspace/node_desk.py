@@ -169,26 +169,31 @@ class NodeDesk:
             return None
         return not self.on_here(role)
 
-    def _standing(self, role: str, wanted: set[str], freedoms) -> list[tuple[str, str]]:
-        """The rows `fill` is told of: any controller's on the node's params, and this
-        desk's invariant ones, which never give way. This desk's other rows are
-        shadowed where the fill lands, so they are left out (`nodemode.fill`). A desk's
-        own row is spelled as the freedom it overlaps (`cc:0:16` is on `cc:*:16`)."""
+    def _free(self, role: str, wanted: set[str], freedoms) -> list[tuple[str, ...]]:
+        """The freedoms a row here would really be reached on, by `dispatch`'s own rule:
+        not a control held above the layers on any channel it can arrive on
+        (`Bindings.above_layers`), and not one of this desk's patch-layer rows on the
+        node's params, which stay, on every control they name (an any-channel row on the
+        faders stays on all eight). The desk's other patch-layer rows give way."""
         t = self.deck.table
-        q = "" if t.is_primary(role) else role
+        kept = [b for b in t.bindings if b.enabled and b.is_midi and b.layer == "preset"
+                and b.target in wanted and t.serves(role, b)]
         out = []
-        for b in t.bindings:
-            if not b.enabled or b.is_sink or b.scheme in MODULATORS:
-                continue
-            mine = b.is_midi and t.serves(role, b)
-            if b.target not in wanted and not (mine and b.layer is None):
-                continue
-            spelled = b.source
-            if mine:
-                spelled = next((_address(f[0], q) for f in freedoms if same_control(f[0], b)),
-                               b.source)
-            out.append((spelled, b.target))
+        for f in freedoms:
+            probe = Binding(f[0], "")
+            channels = range(16) if probe.channel is None else (probe.channel,)
+            if not any(same_control(f[0], b) for b in kept) and all(
+                    t.above_layers(probe.kind, ch, probe.number, role) is None for ch in channels):
+                out.append(f)
         return out
+
+    def _kept(self, wanted: set[str]) -> list[tuple[str, str]]:
+        """Any controller's enabled row on the node's params: `fill` keeps those params
+        out. With no source, since `_free` has settled which freedoms are taken (a pad's
+        row takes no knob, and a SHIFT layer row takes no patch-layer control)."""
+        return [("", b.target) for b in self.deck.table.bindings
+                if b.enabled and not b.is_sink and b.scheme not in MODULATORS
+                and b.target in wanted]
 
     def _follow(self, role: str) -> _Now:
         """`role`'s rows, derived again only when what they are made of moved."""
@@ -206,8 +211,8 @@ class NodeDesk:
         if node is not None:
             freedoms = freedoms_of(self._profile(role))
             params = nodemode.fillable(deck.reg, self.params_of(node))
-            fit = nodemode.fill(params, freedoms, self._standing(role, set(params), freedoms),
-                                "" if t.is_primary(role) else role)
+            wanted = set(params)
+            fit = nodemode.fill(params, self._free(role, wanted, freedoms), self._kept(wanted))
             rows = self._rows_of(role, fit, now.rows)
         if [(b.source, b.target) for b in rows] != [(b.source, b.target) for b in now.rows]:
             now.serial += 1
