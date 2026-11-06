@@ -52,6 +52,17 @@ CEIL = 2.6
 NAV = ["Overview", "Catalog", "Scenes", "Analyzer", "Routing"]
 SOURCES = ["Audio in", "Solids", "Compounds", "Effects"]
 TABS = ["All", "4-polytopes", "Regular", "Stars", "Solids"]
+FILTERS = [
+    lambda s: True,
+    lambda s: s["dims"] == 4,
+    lambda s: s["family"] == "Regular polytopes",
+    lambda s: s["family"].startswith("Star"),
+    lambda s: s["family"].endswith("solids"),
+]
+
+
+def filtered(tab: int) -> list:
+    return [s for s in SHAPES if FILTERS[tab](s)]
 
 STATS = [
     ("Shapes in catalog", "101", "+43", True, "Catalog complete",
@@ -107,7 +118,7 @@ GUT = 24
 CARD_GAP = 16
 
 
-def lay_out(w: int, h: int, n_rows: int = 8) -> Rects:
+def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
     r = Rects()
     r.sidebar = (0, 0, SIDEBAR_W, h)
 
@@ -149,6 +160,8 @@ def lay_out(w: int, h: int, n_rows: int = 8) -> Rects:
     y += 32 + 12
     r.table_head = (inner_x, y, inner_w, 36)
     y += 36
+    if n_rows is None:                      # fill whatever height is left
+        n_rows = max(1, int((h - y - GUT) // 34))
     for i in range(n_rows):
         r.table_rows.append((inner_x, y + i * 34, inner_w, 34))
 
@@ -287,8 +300,9 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     picked, _tabs_w = I.tabs(ui, "tab", tx, ty, th, TABS, state["tab"])
     if picked is not None:
         state["tab"] = picked
-    shown = len(r.table_rows)
-    D.label(dl, tx, ty, f"Showing {shown} of {len(SHAPES)}", faces, "regular", 13,
+    rows = filtered(state["tab"])
+    shown = min(len(r.table_rows), len(rows))
+    D.label(dl, tx, ty, f"Showing {shown} of {len(rows)}", faces, "regular", 13,
             T.rgba("muted-foreground", theme=theme), align="right",
             box_w=r.table_head[2], baseline_box=th)
 
@@ -301,7 +315,7 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         D.label(dl, cxp, hy, head, faces, "medium", 13, ink, align=al,
                 box_w=cwid - (COL_PAD if al == "right" else 0), baseline_box=hh)
 
-    for ri, (row, rect) in enumerate(zip(SHAPES[:shown], r.table_rows)):
+    for ri, (row, rect) in enumerate(zip(rows[:shown], r.table_rows)):
         rx, ry, rw, rh = rect
         I.row(ui, f"row.{ri}", rx, ry, rw, rh)
         D.fill(dl, rx, ry + rh - 1, rw, 1, T.rgba("border", theme=theme))
@@ -334,12 +348,102 @@ WIN_FLAGS = (imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_resize
              | imgui.WindowFlags_.no_background)
 
 
+def _boot(theme_name, w, h, *, visible: bool):
+    """A window, a context, the fonts and the gradient ramp."""
+    if not glfw.init():
+        raise SystemExit("GLFW failed to initialise (no display?)")
+    for hint, v in ((glfw.CONTEXT_VERSION_MAJOR, 3), (glfw.CONTEXT_VERSION_MINOR, 3),
+                    (glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE),
+                    (glfw.OPENGL_FORWARD_COMPAT, True), (glfw.VISIBLE, visible),
+                    (glfw.SAMPLES, 0),
+                    # 1:1 pixels on a Retina Mac too, or the framebuffer comes
+                    # back at 2x and every rect in the spec is half the size it
+                    # claims. No-op off macOS.
+                    (glfw.COCOA_RETINA_FRAMEBUFFER, False)):
+        glfw.window_hint(hint, v)
+    win = glfw.create_window(w, h, "Hyperspace \u00b7 dkit", None, None)
+    if not win:
+        glfw.terminate()
+        raise SystemExit("could not create the window")
+    glfw.make_context_current(win)
+    imgui.create_context()
+    impl = GlfwRenderer(win)
+    io = imgui.get_io()
+    faces = {k: io.fonts.add_font_from_file_ttf(str(HERE / "fonts" / fn), 16.0)
+             for k, fn in (("regular", "Geist-Regular.ttf"),
+                           ("medium", "Geist-Medium.ttf"),
+                           ("semibold", "Geist-SemiBold.ttf"))}
+    LL = T.LIGHT_L if theme_name == "light" else T.DARK_L
+    grad = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))
+    return win, impl, io, faces, grad
+
+
+def _draw(ui_box, rects, w, h, series, state, bgc):
+    """One frame, inside the full-window imgui window. Returns the Ui."""
+    GL.glViewport(0, 0, w, h)
+    GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
+    GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+    imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+    imgui.set_next_window_size(imgui.ImVec2(w, h))
+    imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
+    imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+    imgui.begin("##dkit", None, WIN_FLAGS)
+    # a real window's list, not the background list: replay.keep
+    # (hyperspace/replay.py:91) only carries the page window's own list into
+    # the canvas tap
+    ui_box.dl = imgui.get_window_draw_list()
+    paint(ui_box, rects, w, h, series, state)
+    imgui.end()
+    imgui.pop_style_var(2)
+    return ui_box
+
+
+def live(theme_name: str, w: int, h: int) -> None:
+    """Open the dashboard and run it until the window is closed.
+
+    A real event loop with real timing, so the 150ms transitions run off the
+    clock rather than off a scripted dt. Resizing re-lays-out; the table
+    grows and shrinks with the window.
+    """
+    import time
+    win, impl, io, faces, grad = _boot(theme_name, w, h, visible=True)
+    glfw.swap_interval(1)
+    theme = T.LIGHT if theme_name == "light" else T.DARK
+    bgc = T.rgba("background", theme=theme)
+    series = ticks()
+    state = {"tab": 0, "nav": 0}
+    ui = I.Ui(None, faces, theme, Anim(), grad)
+    rects, last_size = None, None
+    prev = time.perf_counter()
+
+    while not glfw.window_should_close(win):
+        glfw.poll_events()
+        impl.process_inputs()
+        now = time.perf_counter()
+        dt = min(now - prev, 0.05)          # a stall must not jump the easing
+        prev = now
+        fw, fh = glfw.get_framebuffer_size(win)
+        if (fw, fh) <= (0, 0):
+            continue
+        if (fw, fh) != last_size:
+            rects, last_size = lay_out(fw, fh), (fw, fh)
+        imgui.new_frame()
+        _draw(ui, rects, fw, fh, series, state, bgc)
+        imgui.render()
+        impl.render(imgui.get_draw_data())
+        ui.frame_done(dt)
+        glfw.swap_buffers(win)
+
+    impl.shutdown()
+    glfw.terminate()
+
+
 def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
     """Draw the dashboard, optionally stepping a script of mouse positions.
 
-    `script` is a list of (x, y) — one per frame — so a hover transition can
-    be captured headlessly. Returns a list of frames (the last one only, if
-    no script was given).
+    `script` is a list of (x, y) or (x, y, down) — one per frame — so a hover
+    or a click can be driven headlessly. Returns a list of frames (the last
+    one only, if no script was given).
     """
     theme = T.LIGHT if theme_name == "light" else T.DARK
     if not glfw.init():
@@ -374,6 +478,7 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
     bgc = T.rgba("background", theme=theme)
     anim = Anim()
     state = {"tab": 0, "nav": 0}
+    render.last_state = state           # so a caller can read what the script did
 
     # two warm-up frames settle the backend and the font atlas, and let the
     # animation store see every widget once before anything is scripted
@@ -384,6 +489,8 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
         impl.process_inputs()
         if mouse is not None:
             io.add_mouse_pos_event(float(mouse[0]), float(mouse[1]))
+            if len(mouse) > 2:            # (x, y, down) drives the button too
+                io.add_mouse_button_event(0, bool(mouse[2]))
         imgui.new_frame()
         GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
@@ -427,7 +534,12 @@ def main() -> None:
     ap.add_argument("--height", type=int, default=1100)
     ap.add_argument("--hover", action="store_true",
                     help="emit a frame sequence of a hover easing in and out")
+    ap.add_argument("--live", action="store_true",
+                    help="open a window and run it until you close it")
     a = ap.parse_args()
+    if a.live:
+        live(a.theme, a.width, a.height)
+        return
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     if a.hover:

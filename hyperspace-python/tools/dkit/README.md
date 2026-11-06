@@ -149,10 +149,25 @@ missing from `panel:graph`.
 Nothing here needs `HYPERSPACE_HOME` — dkit touches none of the app's state.
 On a Mac, after the usual `uv sync`, that is the whole setup.
 
-### The demo, which needs nothing but the venv
+### Use it
 
 ```bash
 cd hyperspace-python
+uv run python tools/dkit/dashboard.py --live
+```
+
+Opens a window and runs until you close it. Hover the sidebar and the table
+rows, click the nav items, click the tabs — they filter the catalog for real
+(All 101, 4-polytopes 61, Regular 6, Stars 8, Solids 13). Resize it and the
+layout follows; the table grows and shrinks with the window. `--theme light`
+for the light palette.
+
+Transitions run off the wall clock here, not off a fixed dt, so what you see
+is the real 150ms.
+
+### Stills, if you want them
+
+```bash
 uv run python tools/dkit/dashboard.py --out /tmp/dkit --theme dark
 uv run python tools/dkit/dashboard.py --out /tmp/dkit --theme light
 ```
