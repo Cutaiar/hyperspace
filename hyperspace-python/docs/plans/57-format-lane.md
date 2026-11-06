@@ -205,7 +205,8 @@ file. Row 521, closed by 576, and row 394 both say so and both accept it.
 - **`modules` in a show is a live value:** it holds the analyzer scene in 5 of the 6 shows, and must reach the
   install file. `layout`, `startup`, `scene.select` and `last_show` need homes too. The show `mine` has no tuning
   and `startup: "MIGRATED"`.
-- **`trash/presets` moves too** (`TRASH`, `restore_trash`), and a reader accepts the old word for the run.
+- **The Drive's `trash/presets` is deleted in the run, not converted** (owner, 2026-11-06: "just delete the trash
+items"), after the backup, along with `presets-backup-2026-10-14`. `TRASH` and `restore_trash` use the new word.
 - **Tidy in the same run:** delete `fx/`, empty folders and `.bak-v2-*`; report bank slots pointing at nothing
   (five shows have 10 of 24 such slots).
 - **`scenes/band` files say `hyperspace.preset/1` and are analyzer tunings.** Rename their kind in the run, or

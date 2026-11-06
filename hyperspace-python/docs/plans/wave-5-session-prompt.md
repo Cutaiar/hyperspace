@@ -21,7 +21,6 @@ Stop and tell the owner plainly if any of these is not true. Do not start around
 2. **The owner says they ran the migration, and that both Macs have opened the new library.** Only the owner
    can say this, so ask. Hand check 467–468 is the same fact. Stage 1 removes the code that reads old files;
    this is the one gate you must never assume.
-3. **"The owner's answers" below is filled in.** Any left blank: ask, in plain words, with a recommendation.
 
 H1, H2 and SM1 need none of this.
 
@@ -50,20 +49,30 @@ H1, H2 and SM1 need none of this.
 
 ## The owner's answers
 
-*Filled in by the planning session once the owner has answered `58-wave-5.md` §8.*
+Given 2026-11-06. These overrule every other document.
 
-| | Question | Answer |
-| --- | --- | --- |
-| 1 | Venues: each screen remembers its job, no places | |
-| 2 | A screen's memory: in the Drive, or on each Mac | |
-| 3 | A screen plugged in during a show, with no restart (SC3) | |
-| 4 | A new controller waits until dragged to a player | |
-| 5 | On-air video sound reaching the off-air look | |
-| 6 | `dkit`; a date for Dylan's UI pass | |
-| 7 | When old-file reading goes; the 12 trashed looks | |
-| 8 | This wave's scope | |
-| 9 | One nod on the pending rows | |
-| 10 | A mis-pressed pad then ⌘Z with the panel on air: is #380's warning enough | |
+- **Screens:** "It needs to be extremely easy for us to just quickly set up the screens for the thing that we're doing. I
+  don't think we need a whole configuration layer called venues for it." The output tab "shouldn't be a dropdown. Each
+  connected display should get its own row there, and you should be able to choose what targets that display, like the
+  control window or any of our renders."
+- **"Share the screen memory between Macs. We want to make this thing as interoperable as possible."**
+- **Hot-plug is required:** if a display "gets accidentally unplugged and then plugged back in, we cannot restart the app in
+  order to pick up that change. It has to be hot-pluggable."
+- **A new controller** waits until it is dragged to a player.
+- **Video sound** reaching the off-air look through the analyzer is accepted; say so on the toggle.
+- **Old files:** the reader goes only once the owner says both Macs have opened the new library. They coordinate that.
+- **Trash:** "Just delete the trash items." Done in the migration, not converted.
+- **Scope is right:** no new looks or controllers. **`dkit` is orthogonal:** "we don't need to worry about that", so no UI
+  preparation in this wave.
+- **Merge on green holds** for this wave.
+
+[[RULINGS]]
+
+## Synopsis
+
+Delete what only existed to read old files. Close the last ways one look reaches another. Give every display its own row,
+remembered by name and shared by both Macs, surviving an unplug with no restart. Set up controllers in the app. Stop doc
+conflicts, and stop the type errors growing.
 
 ## The work
 
@@ -74,8 +83,9 @@ H1, H2 and SM1 need none of this.
 | Any time | H1, H2, SM1 |
 | 1 | CL1, then CL3 and CL4 together; LY1, LY2; SC1; SM2, SM3 |
 | 2 | CL2, alone among anything touching tests' builders; TY1, TY2; SM4 |
+| 2b | SC3a, alone on the render loop, after a short spike |
 | 3 | SC2, CT1, LY3, SM5 |
-| 4 | RT1; SC3 if the owner said so |
+| 4 | SC3b, then RT1 |
 | 5 | TY3, then TY4 |
 
 **Numbers:** plan 58 is this; rows from 770, checks from 600, groups from DA. Pre-assign each item's block when
@@ -104,8 +114,7 @@ plan in the same PR as the first item, and tell the owner only what changes scop
   anywhere in this wave.** A golden that moves is a bug, or a stop-and-ask.
 - **A keeper agent** in its own worktree does each queue step, as in wave 4, until H1 lands. After H1, doc tails
   should merge on their own: confirm it on the first few, and keep `tools/sort_register.py`.
-- **Merging:** the owner authorised merging on green for wave 4. **Confirm the same holds for wave 5 before the first
-  merge.** `main` has no required checks, so `--auto` merges at once: wait first with
+- **Merging:** the owner authorised merging on green for wave 5. `main` has no required checks, so `--auto` merges at once: wait first with
   `~/.claude/handoffs/wave4/wait-green.sh <pr> <head>`, or its replacement from H2, then call `gh pr ready` and `gh pr merge <pr>
   --squash --delete-branch --body-file <file>` directly, with the review and test counts and the trailer lines in the
   body. A wrapper around `gh pr merge` gets refused. If `gh` then errors that `main` is used by a worktree, the merge
@@ -121,7 +130,7 @@ plan in the same PR as the first item, and tell the owner only what changes scop
 ## Reporting
 
 Nothing in wave 4 had been tried on real hardware when this was written, and CL1 is the point of no return for
-old files. Say what's been tried at the machine whenever it matters. CL1's PR body must say in its first line
+old files. SC3b can only be proved by unplugging a real display, so nothing about hot-plug is done until that has happened. Say what's been tried at the machine whenever it matters. CL1's PR body must say in its first line
 that old files stop opening, and what to do if a Mac hasn't updated.
 
 ## After the last merge

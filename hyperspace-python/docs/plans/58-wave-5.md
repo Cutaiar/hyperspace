@@ -50,8 +50,7 @@ These belong in wave 4, and are also written into its documents.
 - **`modules` in a show is not cruft [V].** It holds the analyzer scene in 5 of the 6 shows, and must
   reach the install file. `layout`, `startup`, `scene.select` and `last_show` need homes too. `mine` has no
   tuning and `startup: "MIGRATED"`.
-- **`trash/presets` moves as well** (`TRASH`, `restore_trash`), and a reader must accept the old word for
-  the run.
+- **The Drive's trash is deleted in the run, not converted** (owner, 2026-11-06), after the backup.
 - **The run should also tidy:** delete `fx/`, empty folders and `.bak-v2-*`, and report bank slots that
   point at nothing. Five shows have 10 of 24 such slots [V].
 - **`scenes/band` files say `hyperspace.preset/1` and are analyzer tunings [V].** After the rename they
@@ -101,7 +100,7 @@ Numbers are in §7. "Saved?" says whether files on disk change.
 | --- | --- | --- | --- | --- | --- | --- |
 | **LY1** | One mirror: `ghost.N.mirror` follows `ghost.mirror`, so an extra hands node no longer adds a param to what's shared and leaves it behind (`params.py:935`) | ghost, params, deck | S | wave 4 | drops an id no file holds (0 in Drive [V]) | Leak test both ways |
 | **LY2** | Honest flags: 87 meta params say `modulatable=True` and are refused anyway; `tempo.nudge` stops being saved; `output.bg` and `.alpha` move with SC2 | params, library | S | wave 4 | install file changes slightly | `test_meta_rule` |
-| **LY3** | The video-sound path, per question 5: as a named limit in words, or closed | media, ui | S | question 5 | no | A test that names the path |
+| **LY3** | Say it on the toggle: the analyzer hears what the room hears, so the on-air look's video sound reaches what the off-air look reads from it. The owner accepts this as not a breach (2026-11-06) | media, ui | S | wave 4 | no | A test that names the path |
 
 ### The grand cleanup (row 585)
 
@@ -110,7 +109,7 @@ item is empty.
 
 | Id | What | Files | Size | After | Saved? | Proof |
 | --- | --- | --- | --- | --- | --- | --- |
-| **CL1** | Refuse old files in words: `forward` refuses anything below `/11`, and the silent load steps go (`palettecompat.py`, `pan_world`, `retaper_depths`, the old-show readers) | preset, library, graphmigrate, palettecompat, params | M | §2's gate, question 7 | no | Goldens unmoved; a dry run of the loader over the Drive, read-only, by the owner |
+| **CL1** | Refuse old files in words: `forward` refuses anything below `/11`, and the silent load steps go (`palettecompat.py`, `pan_world`, `retaper_depths`, the old-show readers) | preset, library, graphmigrate, palettecompat, params | M | §2's gate | no | Goldens unmoved; a dry run of the loader over the Drive, read-only, by the owner |
 | **CL2** | **Harder than it reads [V]:** `graphmigrate` is also what the tests are built with (50 test files; `tools/golden_frames.py`; `render.py:3718`, `graphview.py`, `graph.py:1996` at runtime), so its 1,778 lines can't just go. Surviving builders move to `tests/wiredframe.py` and the golden tool; the 118 fixtures below `/10` are deleted or converted | graphmigrate, tests, tools | L | CL1 | no | Goldens unmoved; `frame-signatures.json` holds |
 | **CL3** | Readers of each Mac's old files: `MIGRATED_FILES`, `LEGACY_MIDI_FILE`, bindings V1/V2, `Carried`, `LEGACY_OUTPUT`, `DEVICE_TABLES`, `_seed_sinks`, `overlay.*` aliases | library, routing, config, devices, overlay | S–M | §2's gate | no | Home-file tests |
 | **CL4** | `RETIRED_MODULES`, and tools whose job is finished: `retaper_routes`, `meta_routes`, `calm_lanes`, most of `migrate_library` (763 lines). Keep its backup and check, and keep `move_library` | library, preset, ui_presets, tools | S | §2's gate, and `fx/` deleted | no | `groups()` test |
@@ -122,23 +121,26 @@ app). Displays don't: there's no monitor callback, slots last the whole run, `ou
 and screens are numbers that shift when HDMI re-syncs. Nothing writes `config.toml`. The Drive already
 holds a `venues/` folder with three files, using `monitor = "MStar"`, which `main` reads as "not a screen".
 
-**The smallest version [I]: each display remembers its job, by its name.** There's no notion of a place.
-The TV, the U28E590 (flip Y) and the LW551i each hold their output number, fullscreen and flips. Plug in
-the same screens and the job comes back, so laptop-plus-TV and the rig coexist with no switching.
+**The owner, 2026-11-06:** "It needs to be extremely easy for us to just quickly set up the screens for the
+thing that we're doing. I don't think we need a whole configuration layer called venues." **Each connected display
+gets its own row on the output section, not a dropdown, and you choose what targets it: the control window or any of
+the renders.** Each display remembers its job by name, in the Drive, so both Macs share it. **And it must be
+hot-pluggable:** a display accidentally unplugged and plugged back in can't need a restart.
 
 | Id | What | Files | Size | After | Saved? | Proof |
 | --- | --- | --- | --- | --- | --- | --- |
-| **SC1** | Screens by name: port `placement.match` from #223. Fixes swapped outputs on its own | placement, config | S | nothing | config only | `test_placement`; replugging HDMI by hand |
-| **SC2** | Displays composed on the OUTPUT section: connected screens listed and assigned, with fullscreen and flips; written to one app-owned file; "restart to apply" is the existing ⌘R. Includes fullscreen remembered (plan 23's last piece) | ui, app, config, new store | M | SC1, questions 1, 2 | new file `/1` | Headless panel test; `drive-the-app` |
-| **SC3** | Live: a screen plugged in lights up with no restart. Output 1 holds the GL context and paces the loop, so **it can't close live** | app, outputs, overlay | L | SC2, question 3 | no | Hand check only, the rig needed |
-| **CT1** | Controllers composed: `devices.json`, with `[[devices]]` read once as a seed; dragging from the tray adopts one; it also looks for MIDI; stable automatic roles, since roles are row addresses | devices, config, ui_players | M | question 4 | new file `/1` | `test_players`; `tools/drive_players.py` |
-| **RT1** | Retire: rename `RigWires` to bus cuts if SEM left it; stop reading `[[output.screens]]`; delete `config.toml.rig`; close #223 with Dillon | config, graph | S | SC2, CT1, question 1 | one-time seed | Launch from an empty home |
+| **SC1** | Screens by name: port `placement.match` from #223, the one part of it worth keeping. Fixes swapped outputs on its own | placement, config | S | nothing | config only | `test_placement`; replugging HDMI by hand |
+| **SC2** | **One row per connected display** on the output section: its name, what targets it (the control window, a render, or nothing), fullscreen and flips. Written to `<library>/displays.json`, shared by both Macs. Includes fullscreen remembered (plan 23's last piece) | ui, app, config, new store | M | SC1, SC3a | new file `/1` | Headless panel test; `drive-the-app` |
+| **SC3a** | **The picture stops depending on any one display.** Output 1 holds the GL context and paces the loop today [V], so it can't close while running. Both move to something no unplug can take away. No behaviour change. **The riskiest step in the wave: start with a short spike** | app, outputs, render | L | SC1 | no | Goldens unmoved; frame pacing measured before and after |
+| **SC3b** | **Hot-plug:** a monitor callback, outputs opened and closed while running, the same job back when the same display returns; pictures keep rendering meanwhile; a control window whose display goes moves to one still there | app, outputs, overlay | M–L | SC2, SC3a | no | Tests over a stand-in monitor list; a hand check with a real unplug on the rig |
+| **CT1** | Controllers composed: `devices.json`, with `[[devices]]` read once as a seed; dragging from the tray adopts one; it also looks for MIDI; stable automatic roles, since roles are row addresses | devices, config, ui_players | M | wave 4 | new file `/1` | `test_players`; `tools/drive_players.py` |
+| **RT1** | Retire: rename `RigWires` to bus cuts if SEM left it; stop reading `[[output.screens]]`; delete `config.toml.rig`; close #223 with a note to Dillon | config, graph | S | SC2, CT1 | one-time seed | Launch from an empty home |
 
 `[library]`, `[dream]` and `[totem]` stay in `config.toml`: the library's path must be known before the
 library can be read. So "no planned config files" is true of displays and peripherals, not of everything.
 
-**What dropping venues loses [V]:** overriding any setting per place (render cap, hands mode, `keep_awake`);
-two arrangements of the same screens; `--venue` and the restart picker; Dillon's three files.
+**What dropping venues loses, accepted by the owner [V]:** overriding any setting per place (render cap, hands mode,
+`keep_awake`); two arrangements of the same screens; `--venue` and the restart picker; the three venue files in the Drive.
 
 ### Types: stop the drift
 
@@ -171,8 +173,9 @@ answered. It decides whether "per-face through an effect chain" is a real item.
 | Any time | H1, H2, SM1 | green |
 | 1 | **CL1**, then CL3 and CL4 together; LY1, LY2; SC1; SM2, SM3 | §2's gate; green |
 | 2 | **CL2, alone among anything touching tests' builders**; TY1, TY2; SM4 | green, goldens unmoved |
+| 2b | **SC3a, alone** on the render loop | green, goldens unmoved, pacing measured |
 | 3 | SC2, CT1, LY3, SM5 | green |
-| 4 | RT1; SC3 if question 3 says so | green |
+| 4 | SC3b, then RT1 | green; SC3b's hand check before the wave ends |
 | 5 | TY3, then TY4: last, so they annotate what survived | green, `--all` |
 
 Peak width is about five builders, at stage 1. CL1 first because it decides what CL3 and CL4 may assume.
@@ -204,7 +207,7 @@ row 653 is still pending, and the fifth round said no second dream worker.
 **Hand checks.** Numbered to 577, and only 425 is recorded as run [V]. Most needed before a show: 489–492's
 matters on the #380 build, 506–509, 467–468 and 485, the players screen (CL, CN), and 514–519.
 
-**Rows.** 89 pending the owner by status text [V]. Question 9 asks for one nod rather than a walk.
+**Rows.** Bulk accepted on 2026-11-06, marked so in the register; only 417, 609 and 751 went to the owner.
 
 ## 7. Numbers
 
@@ -212,22 +215,23 @@ Wave 4's remainder keeps rows from 752 and checks from 578. Wave 5 starts well c
 770, checks from 600, groups from DA.** Pre-assign per item at launch. `CHANGELOG` #374, the Edge lab #340 and
 the QR sticker PR #383 are their authors', and outside this wave.
 
-## 8. Questions for the owner
+## 8. The owner's answers, 2026-11-06
 
-The owner answers these in the launch prompt's "The owner's answers". Until then this plan assumes the
-recommendations. Plain wording is in the session report of 2026-11-06.
+They overrule anything above. The wording is in `wave-5-session-prompt.md`.
 
-1. Venues: each screen remembers its job, and no places (recommended), with Dillon's confirmation.
-2. Does a screen's memory live in the Drive, shared by both Macs (recommended), or on each Mac?
-3. Must a screen plugged in during a show light up with no restart? Recommended: restart first; SC3 optional.
-4. Does a new controller act at once, or wait until dragged to a player (recommended)?
-5. On-air video sound reaching the off-air look through the analyzer.
-6. `dkit`, and whether Dylan's UI pass has a date.
-7. When old-file reading goes, and what happens to the 12 trashed looks.
-8. Is this wave's scope right, with no new looks or controllers?
-9. One nod on the rows pending.
-10. Whether a mis-pressed pad followed by ⌘Z, with the panel on air, is fine with #380's warning in words.
+1. **Venues go.** One row per display on the output section, choosing what targets it (SC2).
+2. **A display's memory is shared by both Macs,** in the Drive.
+3. **Hot-plug is required,** not optional (SC3a, SC3b).
+4. A new controller waits until it is dragged to a player.
+5. Video sound reaching the analyzer is accepted (LY3).
+6. Old-file reading goes only after the owner says both Macs have opened the new library; the owner coordinates that.
+7. The 12 trashed looks are deleted in the migration, not converted.
+8. **This scope is right:** no new looks or controllers.
+9. `dkit` is orthogonal. No UI preparation in this wave.
+10. Pending rows bulk accepted and marked so; 417, 609, 751 go to the owner.
+11. Merge on green holds for this wave too.
 
 Assumed unless the owner objects: patches may read `master.gain` (457 saved rows do), since reading is not
 writing; a tapped BPM comes back at launch and a nudge does not; totem and poi are meta, following the player's
-`Deck`; a new type-checker complaint fails a PR, old ones don't, from TY1 on; no trial split of `graph.py`.
+`Deck`; a new type-checker complaint fails a PR, old ones don't, from TY1 on; no trial split of `graph.py`; #223 closes
+with a note to Dillon once RT1 lands.
