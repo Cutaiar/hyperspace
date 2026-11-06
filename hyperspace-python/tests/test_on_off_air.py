@@ -20,7 +20,8 @@ import numpy as np
 import pytest
 from conftest import seed
 from test_graph_legible import party as _party
-from test_midi import cc, push
+from test_midi import cc, note, push
+from test_presets import put
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from test_undo import DT, boot
@@ -44,7 +45,17 @@ from hyperspace.learn import blocked
 from hyperspace.library import PRESETS
 from hyperspace.outputs import Preview, PreviewTextures, Switches, View, preview_size
 from hyperspace.params import POSE_IDS, part_of
-from hyperspace.routing import CHASE_PARAM, Binding, Bindings
+from hyperspace.routing import (
+    CHASE_PARAM,
+    Binding,
+    Bindings,
+    factory_desk,
+    is_load_verb,
+    is_session_row,
+    led_shade,
+    meta_refusal,
+    meta_row_refusal,
+)
 
 CORPUS = Path(__file__).parent / "corpus" / "presets"
 SIZE = (160, 100)
@@ -664,7 +675,7 @@ def test_a_fader_a_step_off_its_end_is_at_its_end(rig, x, k):
     assert fade.k == pytest.approx(k)
     assert between_ends(x) == (k == 0.5)
     if k == 0.0:
-        assert rig.meta.bars_load(rig.two) is None and rig.meta.bars_copy() is None
+        assert rig.meta.bars_load() is None and rig.meta.bars_copy() is None
 
 
 def _timed_rig(tmp_path):
@@ -740,7 +751,8 @@ def test_the_sheet_says_what_the_keys_do():
     from hyperspace.ui import CHEATSHEET
 
     words = dict(row for row in CHEATSHEET if isinstance(row, tuple) and len(row) == 2)
-    assert "refused on air" in words["F1–F8"] and "refused on air" in words["Home"]
+    assert "off air" in words["F1–F8"] and "off air" in words["Home"]
+    assert not any("refused" in w for w in words.values())
 
 
 def test_the_crossfader_keeps_its_catch_and_a_timed_fade_is_not_undoable(rig):
@@ -758,74 +770,183 @@ def test_the_crossfader_keeps_its_catch_and_a_timed_fade_is_not_undoable(rig):
 
 # ----------------------------------------------------------------- the library verbs
 
-@pytest.mark.parametrize("verb", ["preset.select", "preset.next", "preset.prev", "preset.load.0",
-                                  "preset.list.next", "preset.home"])
-def test_a_library_verb_from_a_row_on_air_is_refused_in_words(rig, verb):
-    """The owner, 2026-11-04: no preset changes on air from the desk or a pad. A row acts
-    on the deck its player is on, and that deck is on air."""
-    d = rig.one
-    project = d.presets.lib.project
-    project.bank[0], project.bank[1] = "party-wake", "party-tumble"
-    project.startup = "party-wake"
-    theirs = _state(d)
-    rig.lib.warning = ""
+VERBS = ["preset.select", "preset.next", "preset.prev", "preset.load.0",
+         "preset.list.next", "preset.list.prev", "preset.home"]
+
+
+def _press(reg, verb, k=0):
     if verb == "preset.select":
-        d.reg[verb].set(0)
+        reg[verb].set(k)
     else:
-        d.reg[verb].fire()
-    assert _state(d) == theirs
-    assert "on air" in rig.lib.warning and "not loaded" in rig.lib.warning
+        reg[verb].fire()
 
 
-def test_the_same_pad_off_air_loads_there_with_its_light(rig):
-    project = rig.two.presets.lib.project
-    project.bank[0] = "party-wake"
-    rig.two.reg["preset.select"].set(0)
-    assert rig.two.presets.current == "WAKE" and project.active == 0
-    assert rig.one.presets.lib.project.active != 0
-
-
-def test_the_pad_follows_the_crossfader_off_the_air(rig):
-    """Across the middle the deck that was on air takes a pad, and the other refuses."""
+def _bank(rig, *names):
     project = rig.one.presets.lib.project
-    project.bank[0] = "party-wake"
+    project.bank[:] = [None] * len(project.bank)
+    for k, name in enumerate(names):
+        project.bank[k] = name
+    project.startup = names[0]
+    return project
+
+
+def _quiet(d):
+    d.undo.tick(50.0)
+    d.undo.tick(51.0)
+
+
+@pytest.mark.parametrize("verb", VERBS)
+def test_a_library_verb_from_either_deck_loads_off_air_and_the_room_is_as_it_was(rig, verb):
+    """The owner, 2026-11-06, row 700: a press "always loads into the off-air Deck, never
+    touching the room". Whichever deck's param was pressed; nothing on air moves, its
+    undo stack included; the off-air stack has the step; the status line says so."""
+    _bank(rig, "party-wake", "party-tumble")
+    for pressed in (rig.one, rig.two):
+        rig.two.presets.load("party-trip")
+        _quiet(rig.two)
+        theirs, steps = _state(rig.one), len(rig.two.undo.stack)
+        rig.lib.status = ""
+        _press(pressed.reg, verb)
+        _quiet(rig.two)
+        assert rig.two.presets.current != "TRIP"
+        assert _state(rig.one) == theirs
+        assert len(rig.two.undo.stack) == steps + 1
+        assert rig.lib.status.endswith(" loaded off air on deck 2; the room still sees deck 1")
+
+
+def test_next_and_prev_step_from_what_the_deck_off_air_holds(rig):
+    project = _bank(rig, "party-wake", "party-tumble", "party-acid")
+    rig.one.reg["preset.load.2"].fire()              # (off air: ACID, slot 2)
+    assert rig.two.presets.current == "ACID"
+    rig.one.presets.active_slot = 1                  # on air on slot 1: not what is read
+    rig.one.reg["preset.next"].fire()
+    assert rig.two.presets.current == "WAKE", "it wraps from slot 2 to slot 0"
+    assert rig.two.presets.active_slot == 0 and project.active == 1
+    rig.one.reg["preset.prev"].fire()
+    assert rig.two.presets.current == "ACID"
+    listing = rig.lib.list(PRESETS)
+    held = rig.two.presets.lib.current(PRESETS)
+    rig.one.reg["preset.list.next"].fire()
+    assert rig.two.presets.lib.current(PRESETS) == listing[(listing.index(held) + 1) % len(listing)]
+
+
+def test_the_landing_follows_the_crossfader(rig):
+    """On air went across, so deck 1 is off air: it takes the press, whichever is pressed."""
+    _bank(rig, "party-wake", "party-tumble")
     rig.mix.xfade = 1.0
     rig.meta.tick(T, DT)
-    rig.one.reg["preset.select"].set(0)
-    assert rig.one.presets.current == "WAKE"
-    was = rig.two.presets.current
+    assert rig.meta.on_air is rig.two
+    theirs = _state(rig.two)
     rig.two.reg["preset.select"].set(0)
-    assert rig.two.presets.current == was
+    assert rig.one.presets.current == "WAKE" and _state(rig.two) == theirs
+    rig.one.reg["preset.select"].set(1)
+    assert rig.one.presets.current == "TUMBLE" and _state(rig.two) == theirs
+    assert "on deck 1; the room still sees deck 2" in rig.lib.status
 
 
-def test_between_the_ends_both_decks_are_on_air_and_a_pad_is_refused(rig):
-    project = rig.two.presets.lib.project
-    project.bank[0] = "party-wake"
+@pytest.mark.parametrize("verb", VERBS)
+@pytest.mark.parametrize("who", [0, 1], ids=["pressed on air", "pressed off air"])
+def test_between_the_ends_both_decks_are_on_air_and_a_press_is_refused(rig, verb, who):
+    _bank(rig, "party-wake", "party-tumble")
     rig.mix.xfade = 0.3
-    was = rig.two.presets.current
+    states = _state(rig.one), _state(rig.two)
     rig.lib.warning = ""
-    rig.two.reg["preset.select"].set(0)
-    assert rig.two.presets.current == was and "between its ends" in rig.lib.warning
+    _press((rig.one, rig.two)[who].reg, verb)
+    assert (_state(rig.one), _state(rig.two)) == states
+    assert "between its ends" in rig.lib.warning and "not loaded" in rig.lib.warning
 
 
 def test_a_pad_is_refused_from_the_first_frame_of_a_timed_fade(rig):
     """Still within `ENDS` the deck off air is about to come up: a load there would
     be a look changed from the desk, in front of the room."""
-    project = rig.two.presets.lib.project
-    project.bank[0] = "party-wake"
+    _bank(rig, "party-wake")
     rig.one.reg["output.xfade_s"].set(30.0)
     rig.meta.crossfade()
     was = rig.two.presets.current
     for t in (0.0, 0.1):                               # asked for; then running, inside ENDS
         rig.meta.tick(t, DT)
         assert rig.mix.xfade < deck.ENDS and rig.meta.timed is not None
-        rig.lib.warning = ""
-        rig.two.reg["preset.select"].set(0)
-        assert rig.two.presets.current == was and "not loaded" in rig.lib.warning
+        for d in (rig.one, rig.two):
+            rig.lib.warning = ""
+            d.reg["preset.select"].set(0)
+            assert rig.two.presets.current == was and "not loaded" in rig.lib.warning
     rig.one.reg["output.xfade_s"].set(0.0)
     rig.meta.crossfade()
     rig.meta.tick(1.0, DT)
-    assert rig.meta.timed is None and rig.meta.bars_load(rig.one) is None      # it arrived
+    assert rig.meta.timed is None and rig.meta.bars_load() is None      # it arrived
+
+
+def _clip(k):
+    n, ch = apc40.BANK_PADS[k]
+    return n, ch
+
+
+def test_the_apc_on_air_loads_off_air_by_a_real_press_and_lights_that(rig):
+    """The default the owner met: player 1, on air. A pad works, QUANT and OVERDUB too,
+    and the pads are lit for the deck a press lands on, on the wire as on the panel's desk."""
+    _bank(rig, "party-wake", "party-tumble")
+    assert rig.meta.pointer("apc40").deck is rig.one
+    theirs = _state(rig.one)
+    n, ch = _clip(1)
+    push(rig.r, note(n, channel=ch), note(n, 0, channel=ch))
+    assert rig.two.presets.current == "TUMBLE" and _state(rig.one) == theirs
+    pads = {int(b.value): b for b in rig.one.table.active() if b.target == "preset.select"}
+    reg = rig.one.reg
+    assert led_shade(pads[1], reg["preset.select"]) == "on"
+    assert led_shade(pads[0], reg["preset.select"]) == "held"
+    sent = [m for m in rig.r.out.sent if m.type == "note_on" and m.note == n and m.channel == ch]
+    assert sent[-1].velocity == apc40.GREEN
+    push(rig.r, note(apc40.N_QUANT), note(apc40.N_QUANT, 0))
+    assert rig.two.presets.current == "WAKE" and _state(rig.one) == theirs
+    assert led_shade(pads[0], reg["preset.select"]) == "on"
+    rig.two.presets.load("party-trip")
+    push(rig.r, note(apc40.N_OVERDUB), note(apc40.N_OVERDUB, 0))
+    assert rig.two.presets.current == "WAKE" and _state(rig.one) == theirs
+
+
+def test_the_pads_light_says_the_deck_off_air_from_both_decks_and_follows_the_fader(rig):
+    _bank(rig, "party-wake", "party-tumble")
+    rig.two.reg["preset.select"].set(0)
+    rig.one.presets.lib.project.active = 1
+    for d in (rig.one, rig.two):
+        assert d.reg["preset.select"].value == 0, "the slot off air, whoever reads it"
+    rig.mix.xfade = 1.0
+    rig.meta.tick(T, DT)
+    for d in (rig.one, rig.two):
+        assert d.reg["preset.select"].value == 1
+
+
+def test_f_keys_and_home_load_off_air(rig):
+    """The keys sit on the picture, and go the same road (row 700's second question)."""
+    import glfw
+
+    _bank(rig, "party-wake", "party-tumble")
+    theirs = _state(rig.one)
+
+    rig.r.router.keys(NS(pressed=lambda code: code == glfw.KEY_F2))
+    assert rig.two.presets.current == "TUMBLE"
+    rig.r.router.keys(NS(pressed=lambda code: code == glfw.KEY_HOME))
+    assert rig.two.presets.current == "WAKE"
+    assert _state(rig.one) == theirs
+
+
+def test_a_held_empty_pad_on_air_still_saves_there_and_blinks(rig):
+    """A save is not changed, and its pad's light is about the other deck, so the
+    blink that confirms it does not wait for the light to change."""
+    from hyperspace import midi
+
+    project = rig.one.presets.lib.project
+    empty = project.next_empty()
+    n, ch = _clip(empty)
+    t = [0.0]
+    rig.r.midi.clock = lambda: t[0]
+    theirs = _state(rig.two)
+    push(rig.r, note(n, channel=ch))
+    t[0] = midi.HOLD_S + 0.01
+    rig.r.midi.poll()
+    assert project.bank[empty] is not None and rig.one.presets.active_slot == empty
+    assert _state(rig.two) == theirs
+    assert rig.r.midi._hold_state()[1], "the pad blinks"
 
 
 def test_an_empty_pad_says_how_to_fill_it_and_a_hold_still_saves_on_air(rig):
@@ -844,6 +965,89 @@ def test_an_empty_pad_says_how_to_fill_it_and_a_hold_still_saves_on_air(rig):
 def test_the_panels_own_load_on_air_is_the_intentional_one(rig):
     rig.lib.load(PRESETS, "party-wake")
     assert rig.one.presets.current == "WAKE"
+    assert rig.two.presets.current == "TRIP"
+    rig.meta.point_panel(rig.two)
+    rig.lib.load(PRESETS, "party-tumble")
+    assert rig.two.presets.current == "TUMBLE" and rig.one.presets.current == "WAKE"
+
+
+# ------------------------------------------- no preset's row can press a load (row 752)
+
+CARRIED = ["preset.select", "preset.next", "preset.prev", "preset.home", "preset.load.0",
+           "preset.list.next", "preset.list.prev"]
+
+
+@pytest.mark.parametrize("verb", CARRIED)
+def test_a_preset_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
+    """The absolute rule: from a row a verb lands on the other deck, so a row a preset
+    carries would be one patch changing another. Refused in words at each door."""
+    t = Bindings()
+    for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
+                Binding("seq:0", verb, "push", 1.0), Binding("lfo:0", verb, "position", 1.0)):
+        assert not is_session_row(row) and "no preset row" in meta_row_refusal(row)
+        with pytest.raises(ValueError, match="no preset row"):
+            t.add(row)
+    assert t.set_desk([Binding("note:0:60", verb, "toggle")]) and not t.desk()
+    assert meta_refusal(verb) is not None
+    # (the meta controller's own rows pass: invariant, global layer, a key, a pad)
+    for row in (Binding("note:0:61", verb, "toggle"), Binding("note:0:62", verb, "toggle", layer="global"),
+                Binding("key:F9", verb, "fire"), Binding("pad:A", verb, "fire")):
+        assert is_session_row(row) and meta_row_refusal(row) is None
+
+
+@pytest.mark.parametrize("carrier", [0, 1], ids=["on air carries", "off air carries"])
+def test_a_preset_carrying_load_rows_reaches_no_other_deck(rig, carrier):
+    """A file holding them all, loaded on either deck: the rows drop, with a note; its
+    pressed control, its fired lanes and a whole pass move nothing on the other deck."""
+    d, other = (rig.one, rig.two) if carrier == 0 else (rig.two, rig.one)
+    _bank(rig, "party-wake", "party-tumble")
+    put(rig.lib.home, "CARRIES",
+        desk=[{"source": f"note:8:{k}", "target": v, "op": "toggle"}
+              for k, v in enumerate(CARRIED)],
+        routes=[{"source": f"seq:{k % 5}", "target": v, "op": "push", "value": 1.0}
+                for k, v in enumerate(CARRIED)])
+    d.presets.load("CARRIES")
+    assert d.presets.current == "CARRIES"
+    assert not [b for b in d.table.bindings if is_load_verb(b.target) and not is_session_row(b)]
+    desk_notes = [n for n in d.presets.notes if n.startswith("dropped note:8:") and "no preset row" in n]
+    assert len(desk_notes) == len(CARRIED)
+    assert all(any(f"→ {v}" in n for n in d.presets.notes) for v in CARRIED), "each route said"
+    passing = NS(meta=rig.meta, chain=rig.r.chain)
+    _pass(passing)
+    theirs = _state(other)
+    rig.meta.pointer("apc40").deck = d
+    push(rig.r, *(note(k, channel=8) for k in range(len(CARRIED))))
+    _pass(passing)
+    assert _state(other) == theirs and d.presets.current == "CARRIES"
+
+
+def test_a_learn_will_not_put_a_presets_row_on_a_library_verb(rig):
+    """A desk Learn lands a preset-layer row, so it refuses, in words. A pad button's
+    row is the meta controller's own, and takes one."""
+    from hyperspace.ui_routing import desk_target, pad_target
+
+    p = rig.one.reg["preset.next"]
+    assert not desk_target(p) and pad_target(p)
+    assert meta_refusal("preset.save.0") is None and meta_refusal("preset.save_new") is None
+
+
+def test_no_factory_row_or_corpus_preset_carries_a_load_row():
+    """What item 4 asked: the factory's load rows are all invariant, so the meta
+    controller's; no corpus preset has one."""
+    rows = [b for b in factory_desk() if is_load_verb(b.target)]
+    assert len(rows) > 24 and all(b.layer is None for b in rows)
+    root = Path(__file__).parent / "corpus"
+    files = [*root.rglob("*.json"), *Path(app.__file__).parent.rglob("*.json")]
+    assert files
+    for f in files:
+        try:
+            doc = json.loads(f.read_text())
+        except ValueError:
+            continue
+        if not isinstance(doc, dict):
+            continue
+        for row in (*(doc.get("desk") or ()), *(doc.get("routes") or ())):
+            assert not (isinstance(row, dict) and is_load_verb(row.get("target"))), (f, row)
 
 
 # --------------------------------------------------------- the frame and the panel

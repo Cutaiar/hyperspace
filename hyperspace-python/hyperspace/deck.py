@@ -52,7 +52,8 @@ one on air by `Fade.k`, the other's share. Two verbs, and no others (the owner,
 2026-11-04): the crossfade, by hand or timed (`crossfade`, `tick`), and
 `copy_on_air`. D5d wires them: `app.frame` ticks the meta controller first, the
 desk's crossfader is `output.xfade`, and GRAPH's head has both verbs and which
-deck the panel is on. A bank verb never changes what is on air (`bars_load`).
+deck the panel is on. A bank verb from a row never changes what is on air: it
+loads off air (`row_load`, the owner, 2026-11-06).
 """
 
 from __future__ import annotations
@@ -514,8 +515,8 @@ class MetaController:
 
     `mix` is the crossfader (`output.xfade`, `output.xfade_s`): `tick` runs a
     timed `crossfade` and follows the fader, and `parked` is the one list of decks
-    off air, what `Host.off_air` reads. `bars_load` is what a bank verb from a row
-    asks each deck's `DeckProject`."""
+    off air, what `Host.off_air` reads. `row_load` is where a bank verb from a row
+    lands (each deck's `DeckProject` asks it), and `bars_load` why it may not now."""
 
     # (class-level: read by a meta controller from before a hot reload)
     timed: TimedFade | None = None
@@ -526,7 +527,7 @@ class MetaController:
         for deck in self.decks:
             project = getattr(getattr(getattr(deck, "presets", None), "lib", None), "project", None)
             if isinstance(project, DeckProject):     # (a stand-in deck has none)
-                project.barred = lambda deck=deck: self.bars_load(deck)
+                project.meta = self
         reg = getattr(first, "reg", None)
         fader = reg.get("output.xfade") if reg is not None else None
         if fader is not None:         # (a lambda: a bound method would outlast a hot reload)
@@ -558,8 +559,7 @@ class MetaController:
 
     def words(self, deck: Deck) -> str:
         """`deck` as the panel says it: "deck 1 · on air", "deck 2 · off air"."""
-        n = 1 if deck is self.decks[0] else 2
-        return f"deck {n} · {'on air' if deck is self.on_air else 'off air'}"
+        return f"{self.deck_name(deck)} · {'on air' if deck is self.on_air else 'off air'}"
 
     @property
     def mixing(self) -> bool:
@@ -567,19 +567,37 @@ class MetaController:
         ends, or a timed fade asked for, even while it is still within `ENDS`?"""
         return self.timed is not None or between_ends(self.mix.xfade)
 
-    def bars_load(self, deck: Deck) -> str | None:
-        """Why a bank verb from a row may not load onto `deck`, or None when it may
-        (the owner, 2026-11-04: changing what is on air is intentional, never from the
-        desk). The panel's own load is the intentional one and never asks. A row acts on
-        the deck its player is on, so a controller on the deck on air is refused, and
-        while the crossfader is between its ends both decks are on air."""
-        if deck is self.on_air:
-            return ("not loaded: that deck is on air. Move this controller's player off "
-                    "air, or load it from the panel")
+    def bars_load(self) -> str | None:
+        """Why a bank verb from a row may not load now, or None when it may (the owner,
+        2026-11-04: changing what is on air is intentional, never from the desk). While
+        the crossfader is between its ends both decks are on air. The panel's own load
+        is the intentional one and never asks."""
         if self.mixing:
             return ("not loaded: the crossfader is between its ends or fading, so both decks "
                     "are on air. Let it reach one end first")
         return None
+
+    def off_air_project(self) -> DeckProject | None:
+        """The deck off air's bank view (a stand-in deck has none)."""
+        project = getattr(getattr(getattr(self.off_air, "presets", None), "lib", None), "project", None)
+        return project if isinstance(project, DeckProject) else None
+
+    def row_load(self) -> tuple[DeckProject | None, str | None]:
+        """Where a bank verb from a row lands, and why it may not: (where, None) or
+        (None, why). The owner, 2026-11-06, row 700: a press always loads into the deck
+        off air, whichever deck its player or the keys are on, and never touches the room.
+        A load is the meta controller's verb, the named exception to "a row acts only on
+        the `Deck` its player is on"; no preset's row can reach it (`routing.meta_refusal`)."""
+        why = self.bars_load()
+        return (None, why) if why is not None else (self.off_air_project(), None)
+
+    def loaded_words(self, name: str) -> str:
+        """The status line after a row's load: what, where, and that the room is as it was."""
+        return (f"{name} loaded off air on {self.deck_name(self.off_air)}; "
+                f"the room still sees {self.deck_name(self.on_air)}")
+
+    def deck_name(self, deck: Deck) -> str:
+        return f"deck {1 if deck is self.decks[0] else 2}"
 
     def bars_copy(self) -> str | None:
         """Why "copy on air to off air" may not run now, or None. Between the fader's

@@ -1545,6 +1545,11 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
 
 # the words every door refuses a preset's row on a meta param in (row 743)
 META_WORDS = "{pid} is the meta controller's, tuned before the show; no preset row may drive it"
+LOAD_WORDS = ("{pid} loads a patch onto the deck off air, which is the meta controller's to do; "
+              "no preset row may drive it")
+# the library verbs: a load is a meta controller verb (the owner, 2026-11-06, row 700)
+LOAD_VERBS = frozenset({"preset.select", "preset.next", "preset.prev", "preset.home",
+                        "preset.list.next", "preset.list.prev"})
 
 
 def is_session_id(pid: str | None) -> bool:
@@ -1554,6 +1559,14 @@ def is_session_id(pid: str | None) -> bool:
     return bool(pid) and part_of_id(pid) == "session"
 
 
+def is_load_verb(pid: str | None) -> bool:
+    """Does `pid` load a patch (`LOAD_VERBS`, `preset.load.<k>`)? From any row or key it
+    lands on the deck off air (`library.DeckProject`). `preset.*` stays out of
+    `is_session_id` until SEM: a session param is one object both decks share."""
+    return bool(pid) and (pid in LOAD_VERBS or (
+        pid.startswith("preset.load.") and pid.rpartition(".")[2].isdigit()))
+
+
 def meta_refusal(pid: str | None) -> str | None:
     """Why no row of a preset may drive `pid`, or None when one may. The hard
     rule (the owner, 2026-11-04, register row 743; overturns the old "a route
@@ -1561,7 +1574,11 @@ def meta_refusal(pid: str | None) -> str | None:
     the show, and the refusal says which params belong in the preset. By the
     id (`is_session_id`), so a table with no registry and a param this build
     has not made yet are still classed; it says what `part_of` says of every
-    param a registry holds."""
+    param a registry holds. And a library verb (`is_load_verb`, row 700): from a
+    row it lands on the other deck, so a preset's row on one would be one preset
+    changing another, which the absolute rule forbids."""
+    if is_load_verb(pid):
+        return LOAD_WORDS.format(pid=pid)
     return META_WORDS.format(pid=pid) if is_session_id(pid) else None
 
 

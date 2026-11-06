@@ -2763,7 +2763,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
         # meta-controls: they *apply* presets, so no preset stores them
         # every slot is a choice (plan 19 WP1: twenty-four); `has` says
         # which hold a preset, for a pad's "filled" light
-        r.enum("preset.select", "Preset", lambda: bank.active, bank.load_slot, names,
+        r.enum("preset.select", "Preset", lambda: bank.lit, bank.load_slot, names,
                group=g, persist=False, modulatable=False,
                has=lambda k: 0 <= k < len(bank.bank) and bank.bank[k] is not None,
                # a pad held on an empty slot saves the live state into it
@@ -2778,8 +2778,9 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
                    "performance: the look, its routes, its LFOs and macros, never the "
                    "tempo, the hands or the analyzer. Hold SAVE (track 8's clip stop) "
                    "and tap a pad to save the live state into it as a new preset, or "
-                   "hold an empty pad. A pad loads only into the deck off air: on the "
-                   "deck on air it is refused, and the panel's own load is how.")
+                   "hold an empty pad. A pad always loads into the deck off air and never "
+                   "touches the room; it is lit for what that deck holds. The panel's "
+                   "own load goes to the deck the panel is on.")
         # the F-keys' slots have a load and a save trigger each; slots past
         # them are reached through `preset.select` and the page (plan 19
         # fork 1: no params added)
@@ -2799,8 +2800,8 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
         # the preset list, not the bank (2026-10-14): they step what the PRESETS
-        # page lists, saved ones included. No factory row: Learn puts them on a
-        # control (the owner, 2026-11-04, no swapping presets from a pad)
+        # page lists, saved ones included. No factory row: a pad button's Learn or
+        # the bindings file puts them on a control, never a preset's row (row 700)
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
                   tip="Load the next preset of the PRESETS page's list — every "
@@ -2814,8 +2815,8 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
                   lit=lambda: bool(bank.startup),
-                  tip="Home: load this show's startup preset — the Home key "
-                      "(fn ← on a laptop) and OVERDUB (B11) on the desk. "
-                      "Undo brings back what was up.")
+                  tip="Home: load this show's startup preset into the deck off air — "
+                      "the Home key (fn ← on a laptop) and OVERDUB (B11) on the desk. "
+                      "Undo on that deck brings back what was up.")
 
     return r

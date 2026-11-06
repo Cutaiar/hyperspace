@@ -866,7 +866,7 @@ class MidiIO:
                 self._log_press(source, f"save into slot {k + 1}: did not land there", layer)
                 continue
             blinks[b.control] = self._now() + BLINK_S
-            self._log_press(source, f"saved into slot {k + 1}: {p.text()}", layer)
+            self._log_press(source, f"saved into slot {k + 1}: {p.names[k]}", layer)
         return True
 
     def _log(self) -> DeskLog:
@@ -952,10 +952,13 @@ class MidiIO:
                         " (a filled pad only loads)" if filled else ""), layer)
                     continue
                 self._log_press(b.source, f"held: {p.label}" if b.op == "hold" else
-                                f"held: saved into slot {int(b.value) + 1}: {p.text()}", layer)
+                                f"held: saved into slot {int(b.value) + 1}: {p.names[int(b.value)]}", layer)
                 bar = {x.control for x in self._active()
                        if x.op == "hold" and x.target == b.target and x.feedback == "led"}
-                for c in (self._leds_on() - before) | bar:
+                # (a pad held: its light says the deck off air, and the save is this
+                # deck's, so it may not come on; a save blinks its pad regardless)
+                held = {b.control} if b.op != "hold" else set()
+                for c in (self._leds_on() - before) | bar | held:
                     blinks[c] = now + BLINK_S
         if fired:
             for key in [k for k, (_t, rows) in holds.items()
