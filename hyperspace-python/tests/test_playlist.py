@@ -9,24 +9,29 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from test_on_off_air import rig as on_off_air_rig
 
 from hyperspace import app, hotreload, playlist
 from hyperspace.library import PLAYLISTS, Library, LibraryError, group_folder
+from hyperspace.params import is_shared_meta_id
 from hyperspace.playlist import LEAD_S, Entry, Playing, Playlist
+from hyperspace.routing import meta_refusal
 
 ROOT = Path(app.__file__).resolve().parents[1]
+air = on_off_air_rig     # the fixture: two decks, the desk, the library
 
 
 class StandInMeta:
     """Two stand-in decks, a fader and the fade asked for."""
 
-    def __init__(self, broken=()):
-        self.broken = broken
+    def __init__(self, broken=(), gone=()):
+        self.broken, self.gone = broken, gone
         self.decks = (self._deck(1), self._deck(2))
         self.on_air, self.off_air = self.decks
         self.fades: list = []
@@ -38,6 +43,8 @@ class StandInMeta:
         deck = NS(n=n, loads=[])
 
         def load(name):
+            if name in self.gone:
+                raise LibraryError(f"presets: no preset {name!r}")
             if name in self.broken:
                 raise LibraryError(f"{name}.json is not a preset")
             deck.loads.append(name)
@@ -54,10 +61,10 @@ class StandInMeta:
 
 
 class StandInLib:
-    """A library's say, and every file there is but those named gone."""
+    """A library's say and one playlist's file, by the names it answers to."""
 
-    def __init__(self, playlist_doc=None, gone=()):
-        self.doc, self.gone = playlist_doc, gone
+    def __init__(self, playlist_doc=None):
+        self.doc, self.asked = playlist_doc, []
         self.status, self.warnings = [], []
 
     def say(self, status=None, *, warning=None):
@@ -66,10 +73,8 @@ class StandInLib:
         if warning:
             self.warnings.append(warning)
 
-    def path_of(self, group, name, *, loose=False):
-        return None if name in self.gone else Path(f"{name}.json")
-
     def read(self, group, name):
+        self.asked.append(name)
         if self.doc is None:
             raise LibraryError(f"no playlist {name}")
         return json.loads(json.dumps(self.doc))
@@ -81,7 +86,7 @@ def lst(*entries, name="cart"):
 
 def playing(*entries, gone=(), broken=(), fade=None):
     pl = lst(*entries)
-    lib, meta = StandInLib(pl.to_doc(), gone), StandInMeta(broken)
+    lib, meta = StandInLib(pl.to_doc()), StandInMeta(broken, gone)
     p = Playing(meta, lib, fade)
     assert p.select("cart")
     return p, meta, lib
@@ -100,6 +105,32 @@ def test_the_file_round_trips(tmp_path):
     assert doc["entries"][0] == {"loadable": "party/trip", "dwell_s": 300.0}   # no fade: the panel's
     assert lib.list(PLAYLISTS) == ["The Cart"]
     assert playlist.read(lib, "The Cart") == pl
+
+
+def test_a_save_goes_over_the_file_the_name_resolves_to(tmp_path):
+    """One file for one name (as `Library.save_as`), and never `<slug>.json` beside it."""
+    lib = Library(tmp_path / "home", period=0.0)
+    folder = tmp_path / "home" / "playlists"
+    folder.mkdir(parents=True)
+    named = folder / "my cart v2.json"
+    named.write_text(json.dumps(lst("a", name="Cart").to_doc()))
+    playlist.save(lib, lst("b", name="Cart"))
+    assert [f.name for f in folder.glob("*.json")] == ["my cart v2.json"]
+    assert playlist.read(lib, "Cart").entries[0].loadable == "b"
+
+
+def test_a_save_by_the_key_keeps_a_conflict_copy_itself(tmp_path):
+    lib = Library(tmp_path / "home", period=0.0)
+    folder = tmp_path / "home" / "playlists"
+    folder.mkdir(parents=True)
+    (folder / "cart.json").write_text(json.dumps(lst("real").to_doc()))
+    copy = "cart (Dan's conflicted copy)"
+    (folder / f"{copy}.json").write_text(json.dumps(lst("theirs").to_doc()))
+    listed = next(n for n in lib.list(PLAYLISTS) if n != "cart")
+    pl = playlist.read(lib, listed)
+    playlist.save(lib, Playlist(pl.name, [Entry("edited")]), listed)
+    assert playlist.read(lib, "cart").entries[0].loadable == "real"
+    assert playlist.read(lib, listed).entries[0].loadable == "edited"
 
 
 def test_a_playlist_is_never_landed_and_says_so(tmp_path):
@@ -125,19 +156,64 @@ def test_a_file_of_another_kind_or_a_newer_build_is_refused(tmp_path):
 
 @pytest.mark.parametrize(("row", "words"), [
     ({"dwell_s": 3}, "names no loadable patch"),
-    ({"loadable": "a", "dwell_s": 0.25}, "dwell_s must be a number of seconds"),
+    ({"loadable": "  "}, "names no loadable patch"),
+    ("a line", "not an entry"),
+    ({"loadable": "a", "dwell_s": 0.25}, "dwell_s must be seconds"),
     ({"loadable": "a", "dwell_s": "long"}, "dwell_s must be"),
-    ({"loadable": "a", "fade_s": -1}, "fade_s must be"),
     ({"loadable": "a", "dwell_s": True}, "dwell_s must be"),
+    ({"loadable": "a", "dwell_s": math.inf}, "dwell_s must be"),
+    ({"loadable": "a", "dwell_s": 10 ** 400}, "dwell_s must be"),
+    ({"loadable": "a", "fade_s": -1}, "fade_s must be"),
+    ({"loadable": "a", "fade_s": math.inf}, "fade_s must be"),
+    ({"loadable": "a", "fade_s": math.nan}, "fade_s must be"),
+    ({"loadable": "a", "fade_s": 31}, "fade_s must be"),
 ])
-def test_a_bad_entry_is_said_in_words(tmp_path, row, words):
+def test_a_bad_row_is_left_out_and_said_and_the_rest_plays(row, words):
+    """A file that says `"fade_s": 1e999` must not fade for ever, or hang a cart in `mixing`."""
+    doc = {"schema": playlist.SCHEMA, "name": "bad",
+           "entries": [row, {"loadable": "good", "dwell_s": 9}]}
+    pl = Playlist.from_doc(doc)
+    assert [e.loadable for e in pl.entries] == ["good"]
+    assert len(pl.skipped) == 1 and pl.skipped[0].startswith("entry 1: ") and words in pl.skipped[0]
+    lib = StandInLib(doc)
+    p = Playing(StandInMeta(), lib)
+    assert p.select("bad")
+    assert [w for w in lib.warnings if words in w and "left out entry 1" in w]
+    p.play()
+    p.tick(0.0)
+    p.tick(0.0)
+    assert p.meta.off_air.loads == ["good"] and len(lib.warnings) == 1     # said once
+
+
+def test_it_cannot_write_what_it_will_not_read():
+    for bad in ({"dwell_s": math.inf}, {"dwell_s": 0.0}, {"fade_s": 1e999}, {"fade_s": 31.0}):
+        with pytest.raises(ValueError, match="must be seconds"):
+            Entry("a", **bad)
+    with pytest.raises(ValueError, match="names no"):
+        Entry("")
+
+
+def test_a_huge_number_in_a_real_file_is_only_a_row_left_out(tmp_path):
     lib = Library(tmp_path / "home", period=0.0)
     folder = tmp_path / "home" / "playlists"
     folder.mkdir(parents=True)
-    (folder / "bad.json").write_text(json.dumps(
-        {"schema": playlist.SCHEMA, "name": "bad", "entries": [row]}))
-    with pytest.raises(LibraryError, match=words):
-        playlist.read(lib, "bad")
+    (folder / "big.json").write_text('{"schema": "hyperspace.playlist/1", "name": "big", "entries": ['
+                                     '{"loadable": "a", "fade_s": 1e999}, {"loadable": "b", "dwell_s": 1' +
+                                     "0" * 400 + '}, {"loadable": "c"}]}')
+    assert [e.loadable for e in playlist.read(lib, "big").entries] == ["c"]
+
+
+def test_its_top_fade_is_the_crossfaders_own():
+    from hyperspace.deck import Mix, register_xfade
+    from hyperspace.params import Registry
+    reg = Registry()
+    register_xfade(reg, Mix())
+    assert reg["output.xfade_s"].hi == playlist.FADE_MAX_S
+
+
+def test_no_patchs_row_may_press_one_on_this_head_too():
+    """The module's docstring says so: true by the group, before any param is made."""
+    assert meta_refusal("playlist.next") is not None and is_shared_meta_id("playlist.play")
 
 
 def test_a_missing_dwell_is_five_minutes():
@@ -241,7 +317,7 @@ def test_a_missing_patch_is_skipped_and_said_and_the_next_plays():
     p.play()
     p.tick(0.0)
     assert meta.off_air.loads == ["b"]
-    assert any("skipped gone: there is no such patch" in w for w in lib.warnings)
+    assert any("skipped gone: presets: no preset 'gone'" in w for w in lib.warnings)
     p.tick(0.0)
     assert p.at == 1 and p.on
 
@@ -253,12 +329,39 @@ def test_a_bad_file_is_skipped_too():
     assert meta.off_air.loads == ["b"] and any("skipped bad" in w for w in lib.warnings)
 
 
-def test_every_entry_missing_stops_and_what_is_on_air_stays():
-    p, meta, lib = playing("x", "y", gone=("x", "y"))
+def test_every_entry_missing_stays_on_says_once_and_plays_when_they_are_back():
+    """Drive offline: an install runs on. It never stops itself."""
+    p, meta, lib = playing(("x", 20.0), ("y", 20.0), gone=("x", "y"))
     p.play()
     p.tick(0.0)
-    assert not p.on and meta.fades == [] and meta.off_air.loads == []
-    assert "none of its 2 entries will play" in lib.warnings[-1]
+    assert p.on and meta.fades == [] and meta.off_air.loads == []
+    said = [w for w in lib.warnings if "none of its 2 entries will play" in w]
+    assert len(said) == 1 and "What is on air stays" in said[0]
+    count = len(lib.warnings)
+    p.tick(19.9)
+    assert p.load_at > 19.9                       # waits a dwell, with no spinning
+    for t in (20.0, 40.0, 60.0):
+        p.tick(t)
+    assert len(lib.warnings) == count and p.on    # said once
+    meta.gone = ()                                # …and Drive is back
+    p.tick(80.0)
+    p.tick(80.0)
+    assert meta.off_air.loads and len(meta.fades) == 1 and not p.lost
+    p.meta.across()
+    meta.gone = ("x", "y")                        # lost again: said again
+    p.tick(200.0)
+    assert len([w for w in lib.warnings if "none of its 2" in w]) == 2
+
+
+def test_an_empty_list_stays_on_and_plays_when_it_has_something():
+    p, meta, lib = playing(("a", 10.0))
+    lib.doc = lst().to_doc()
+    p.play()
+    p.tick(0.0)
+    assert p.on and "it has nothing in it" in lib.warnings[-1]
+    lib.doc = lst(("a", 10.0)).to_doc()
+    p.tick(300.0)
+    assert meta.off_air.loads == ["a"]
 
 
 def test_an_advance_waits_for_a_fade_or_a_fader_between_its_ends():
@@ -274,16 +377,18 @@ def test_an_advance_waits_for_a_fade_or_a_fader_between_its_ends():
     assert meta.off_air.loads == ["a"]
 
 
-def test_on_air_moved_by_hand_after_a_load_loads_again_on_the_new_deck_off_air():
-    p, meta, _ = playing(("a", 10.0), ("b", 10.0))
+def test_a_hand_across_to_the_look_armed_has_played_it_and_it_moves_on():
+    p, meta, _ = playing(("a", 10.0), ("b", 20.0), ("c", 10.0))
     p.play()
     p.tick(0.0)
     assert meta.decks[1].loads == ["a"]
     meta.across()                                 # a hand on the fader, past the middle
-    p.tick(0.0)
-    assert meta.decks[0].loads == ["a"]           # …never fades back to what was on air
-    p.tick(0.0)
-    assert len(meta.fades) == 1
+    p.tick(1.0)
+    assert p.at == 0 and p.armed is None and meta.fades == []     # no fade into itself
+    assert p.fade_at == 11.0                      # its dwell, from the hand
+    assert meta.decks[0].loads == []
+    p.tick(11.0 - LEAD_S)
+    assert meta.decks[0].loads == ["b"]           # …and on to the next
 
 
 def test_step_goes_on_or_back_now():
@@ -303,6 +408,63 @@ def test_step_goes_on_or_back_now():
     assert p.at == 0 and meta.decks[1].loads == ["a", "a"]
 
 
+def _on_b():
+    """Four entries, b on air."""
+    p, meta, _ = playing(("a", 100.0), ("b", 100.0), ("c", 100.0), ("d", 100.0))
+    p.play()
+    p.tick(0.0)
+    p.tick(0.0)
+    meta.across()
+    p.step(1)
+    p.tick(1.0)
+    p.tick(1.0)
+    meta.across()
+    assert p.at == 1
+    return p, meta
+
+
+def test_two_quick_steps_back_go_back_two():
+    p, meta = _on_b()
+    p.step(-1)
+    p.step(-1)
+    p.tick(2.0)
+    assert meta.off_air.loads[-1] == "d"          # b, a, d
+
+
+def test_two_quick_steps_on_go_on_two():
+    p, meta = _on_b()
+    p.step(1)
+    p.step(1)
+    p.tick(2.0)
+    assert meta.off_air.loads[-1] == "d"          # b, c, d
+
+
+def test_a_step_when_a_look_is_armed_fades_to_it_and_a_second_goes_past():
+    p, meta = _on_b()
+    p.tick(100.0 - LEAD_S + 1.0)                  # c armed
+    armed = meta.off_air.loads[-1]
+    assert armed == "c"
+    count = len(meta.off_air.loads)
+    p.step(1)
+    p.tick(100.0)
+    assert len(meta.off_air.loads) == count and p.at == 2
+
+
+def test_a_step_while_stopped_moves_where_play_goes_on_from():
+    p, meta, _ = playing(("a", 10.0), ("b", 10.0), ("c", 10.0))
+    p.step(1)
+    p.step(1)
+    assert meta.fades == [] and meta.off_air.loads == []
+    p.play()
+    p.tick(0.0)
+    assert meta.off_air.loads == ["c"]
+    p.stop()
+    p.step(-1)
+    p.play()
+    p.tick(1.0)
+    assert meta.off_air.loads == ["c", "b"]
+
+
 def test_an_edit_to_the_file_lands_at_the_next_load():
     p, meta, lib = playing(("a", 10.0), ("b", 10.0))
     p.play()
@@ -312,6 +474,16 @@ def test_an_edit_to_the_file_lands_at_the_next_load():
     lib.doc = lst(("a", 10.0), ("z", 10.0)).to_doc()
     p.tick(10.0 - LEAD_S)
     assert meta.off_air.loads == ["z"]
+
+
+def test_it_reads_again_by_the_name_it_was_chosen_by_not_the_name_inside():
+    """A Drive conflict copy holds the name `cart`: reading by that would swap files."""
+    lib = StandInLib(lst(("a", 10.0), ("b", 10.0), name="cart").to_doc())
+    p = Playing(StandInMeta(), lib)
+    assert p.select("cart (Dan's conflicted copy)")
+    p.play()
+    p.tick(0.0)
+    assert set(lib.asked) == {"cart (Dan's conflicted copy)"}
 
 
 def test_a_file_that_has_gone_keeps_the_last_list_and_says_so():
@@ -362,6 +534,30 @@ def test_the_warm_draw_is_waited_for_and_a_look_that_will_not_draw_is_skipped():
     assert meta.off_air.loads == ["bad", "b"] and fade.warm_error == ""
     p.tick(0.0)
     assert p.at == 1 and len(meta.fades) == 1
+
+
+# ------------------------------------------------------------------ the real fader
+
+def test_crossfade_seconds_zero_is_a_cut_on_the_real_meta_controller(air):
+    meta = air.meta
+    air.one.reg["output.xfade_s"].set(5.0)
+    meta.crossfade(seconds=0)
+    meta.tick(1.0, 0.05)
+    assert air.mix.xfade == 1.0 and meta.timed is None and meta.on_air is air.two
+
+
+def test_crossfade_seconds_write_nothing_over_output_xfade_s(air):
+    meta = air.meta
+    air.one.reg["output.xfade_s"].set(5.0)
+    meta.crossfade(seconds=1.0)
+    assert meta.timed.seconds == 1.0 and air.one.reg["output.xfade_s"].base == 5.0
+    meta.tick(1.0, 0.0)
+    meta.tick(1.5, 0.5)
+    assert 0.0 < air.mix.xfade < 1.0
+    meta.tick(2.0, 0.5)
+    assert air.mix.xfade == 1.0 and air.mix.seconds == 5.0
+    meta.crossfade()                              # and with none, the param's
+    assert meta.timed.seconds == 5.0
 
 
 # ------------------------------------------------------------------ what it is not
