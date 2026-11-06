@@ -8044,11 +8044,24 @@ Register rows 703, 704, 2026-11-06. Restart first (a param's label and tips are 
 4. With the panel on air, Home, then ⌘Z. *Pass:* refused in words; the room does not move. The foot's line after Home did not offer ⌘Z.
 *Fail:* a word that describes the old hold, or a load landing on air.
 ## CC. The playlist's file (plan 44 D6a)
-Register rows 705–707, 2026-11-06. No behaviour yet: nothing plays one until group CD. Headless: `tests/test_playlist.py`, over stand-ins.
+Register rows 705–707, 2026-11-06. Nothing plays one until group CD. Headless: `tests/test_playlist.py`, over stand-ins.
 **537. The folder is harmless.** Put a `playlists/` folder with one `.json` in a scratch library, as `tests/test_playlist.py` writes one, and launch on it.
 *Pass:* the presets section lists nothing new, the footer says nothing, and a dry run of `tools/migrate_library.py` on that library leaves the folder out.
 **538. Read the plan's model.** No machine needed. `playlist.py`'s docstring against what you want from a cart left running.
 *Judge:* a dwell of 300 is a fade starting every 300 s, whatever the fade takes (row 706), not 300 s alone on air. Right?
+
+## CD. The playlist plays (plan 44 D6b)
+Register rows 708–709, 2026-11-06. Restart first. Headless: `tests/test_playlist.py`, on the real two decks. In the app: `tools/drive_playlist.py`. **One thing is new on purpose:** it writes over the deck off air, whatever is there.
+**539. A cart left running.** (a laptop, then the projector)
+1. In the playlist section at the pane's narrowest, type a name, new, add three looks and one you then delete from the library. Set each dwell to 20.
+   *Pass:* nothing passes the pane's edge, and a file appears in `<library>/playlists/`.
+2. Play. *Pass:* the first look fades in, each comes every 20 s, and the deleted one is skipped with a footer line naming it.
+3. Leave it ten minutes. *Pass:* no hitch you can see at a load or at a fade's first frame, on the projector. Try a look with a heavy shader and a dream look.
+4. Stop. *Pass:* what is on air stays.
+*Fail:* a hitch at a fade you would mind in a room, or a fade into black with a look to show.
+**540. ⌘Z at a running cart.** While it plays, change something on the panel's deck, wait for an advance, ⌘Z.
+*Pass:* refused, in words, and the room does not change. Change something, ⌘Z twice or more: the steps go back in order.
+*Judge:* far enough back, ⌘Z reaches a look the playlist loaded on that deck, and takes it off if that deck is on air (row 709). Right for an install, where nobody is at the panel?
 
 ## CF. Node mode's saved form (plan 57)
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round

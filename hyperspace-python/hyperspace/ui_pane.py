@@ -73,7 +73,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_loadable, ui_players, undo
+from . import library, ui, ui_fx, ui_loadable, ui_players, ui_playlist, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -124,6 +124,7 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("audio", "audio", ("master",), _paged("audio")),
     ("camera", "camera", ("camera",), _paged("camera")),
     ("output", "output", ("output",), _paged("output")),
+    ("playlist", "playlist", (), _paged("playlist")),
     ("system", "system", (), _wrapped("system")),
     # last, so focused it has the pane: a body has the room under the headers after it
     ("players", "players", (), _paged("players")),
@@ -135,7 +136,9 @@ DEFAULT_OPEN = {k: k in ("selection", "presets") for k in KEYS}
 DEFAULT_BELOW = {k: k == "selection" for k in KEYS}     # the narrow page's band
 LAYOUTS = {"open": DEFAULT_OPEN, "below": DEFAULT_BELOW}   # ui.json's pane.<layout>
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)
-MIN_BODY_H = 150.0       # beside the canvas, an open body is never shorter (the pane scrolls)
+MIN_BODY_H = 150.0       # beside the canvas, an open body is never shorter (the pane scrolls)…
+FRESH_BODY_H = 120.0     # …but with no more open than a fresh launch has, so it fits 900 px
+FRESH_OPEN = 2
 CHIP_MAX = 220.0         # px: the most a band header's words take
 WRITE_AFTER_S = 0.5      # a fold is written this long after the last click
 COST_KEEP = 0.9          # a body's running mean: this much the last mean, the rest the newest
@@ -322,9 +325,11 @@ def flush(st: dict, now: float | None = None, force: bool = False) -> bool:
     return True
 
 
-def body_height(room: float, n_open: int, floor: float = MIN_BODY_H) -> float:
-    """Each open body's height: the room under the headers shared evenly,
-    never under `floor`."""
+def body_height(room: float, n_open: int, floor: float | None = None) -> float:
+    """Each open body's height: the room under the headers shared evenly, never under
+    `floor`, by default `MIN_BODY_H`, or `FRESH_BODY_H` with no more open than a fresh launch."""
+    if floor is None:
+        floor = FRESH_BODY_H if n_open <= FRESH_OPEN else MIN_BODY_H
     return max(floor, room / n_open) if n_open else 0.0
 
 
@@ -446,6 +451,8 @@ def _said(panel, key: str, said: str) -> str:
     the players' who is where, so it reads folded."""
     if key == "selection":
         return said
+    if key == "playlist" and getattr(panel, "playing", None) is not None:
+        return ui_playlist.where(panel.playing)
     return ui_players.summary(panel) if key == "players" else ""
 
 
