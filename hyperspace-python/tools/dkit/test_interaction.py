@@ -511,3 +511,101 @@ def test_the_thumb_lands_where_the_geometry_says(DB):
     assert abs(min(lit) - t.y) <= 2.0, f"thumb top {min(lit)} vs {t.y:.1f}"
     assert abs(max(lit) + 1 - (t.y + t.h)) <= 2.0, (
         f"thumb bottom {max(lit) + 1} vs {t.y + t.h:.1f}")
+
+
+# --------------------------------------------------------------------------
+# The components the agents built, driven in the demo
+# --------------------------------------------------------------------------
+# They had unit tests and gallery chrome, but nothing exercised them with a
+# pointer until they were composed into the dashboard. That gap is the whole
+# reason the demo is the dashboard: three of the bugs in this file's history
+# were invisible to the diff by construction.
+
+
+def test_right_click_opens_the_context_menu(DB):
+    """The gesture a node editor wants. A left click must NOT open it."""
+    import menu as M
+    rx, ry, rw, rh = DB.lay_out(W, H).table_rows[1]
+    x, y = rx + 200, ry + rh / 2
+    DB.render("dark", W, H,
+              script=[(x, y)] * 8 + [(x, y, True)] * 2 + [(x, y, False)] * 14)
+    assert not M.LAST_RECT.get("##ctx.ctx.1"), "a LEFT click opened it"
+    DB.render("dark", W, H,
+              script=[(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
+              + [(x, y, False, 0.0, False)] * DWELL)
+    assert M.LAST_RECT.get("##ctx.ctx.1"), "right-click did not open the menu"
+
+
+def test_a_context_menu_choice_lands(DB):
+    import menu as M
+    rx, ry, rw, rh = DB.lay_out(W, H).table_rows[1]
+    x, y = rx + 200, ry + rh / 2
+    openit = ([(x, y)] * 8 + [(x, y, False, 0.0, True)] * 2
+              + [(x, y, False, 0.0, False)] * 14)
+    DB.render("dark", W, H, script=openit)
+    r = M.LAST_RECT.get("##ctx.ctx.1")
+    assert r, "the menu did not open"
+    mx, my, mw, _mh = r
+    ix, iy = mx + mw / 2, my + M.PAD + M.LABEL_H + M.ITEM_H / 2   # first item
+    DB.render("dark", W, H,
+              script=openit + [(ix, iy)] * 10 + [(ix, iy, True)] * 2
+              + [(ix, iy, False)] * 6)
+    assert DB.render.last_state["ctx"], "no choice landed"
+
+
+def test_the_combobox_opens_and_filters(DB):
+    """Typing must narrow the list, and the surviving row must be the right
+    one - the thing a Select cannot do, and the reason this exists for a
+    panel with 600-900 params.
+
+    The panel shrinks as rows are filtered out, so its HEIGHT is the
+    assertion: six planes to one is a real, measurable difference.
+    """
+    import comp_combobox as CC
+    rx, ry, _rw, rh = DB.lay_out(W, H).ctl_rows[5]
+    x, y = rx + DB.CTL_LABEL_W + 40, ry + rh / 2
+    openit = [(x, y)] * 8 + [(x, y, True)] * 2 + [(x, y, False)] * 16
+    DB.render("dark", W, H, script=openit)
+    r = CC.LAST_RECT.get("##cb.ctl.find")
+    assert r, "the combobox panel did not open"
+    full_h = r[3]
+
+    # "yw" is a subsequence of YW only - not of XY, XZ, XW, YZ or ZW
+    typed = openit + [(x, y)] * 30
+    DB.render("dark", W, H, script=typed,
+              keys=[(len(openit) + 4, "y"), (len(openit) + 8, "w")])
+    narrowed = CC.LAST_RECT.get("##cb.ctl.find")
+    assert narrowed, "the panel closed while typing"
+    assert narrowed[3] < full_h - 20.0, (
+        f"the list did not narrow: {narrowed[3]} against {full_h}")
+
+
+def test_the_button_group_picks_the_member_that_was_clicked(DB):
+    """Three members abutting with one shared border column, so a click a
+    third of the way along must land on the FIRST, not the second."""
+    import comp_button as CB
+    r = DB.lay_out(W, H)
+    hx, hy, hw, hh = r.header
+    # the demo's own right-aligned placement, read back from it rather than
+    # recomputed here - a copied layout constant goes stale
+    DB.render("dark", W, H, script=[(0.0, 0.0)] * 4)
+    assert DB.render.last_state["range"] == "Week", "the default moved"
+    gw = DB.render.last_group_w
+    gx = hx + hw - DB.GUT - DB.render.last_github_w - 8.0 - gw
+    by = hy + (hh - 32) / 2
+    # the middle of the first member
+    cx, cy = gx + gw / 6.0, by + 14
+    DB.render("dark", W, H,
+              script=[(cx, cy)] * 8 + [(cx, cy, True)] * 2
+              + [(cx, cy, False)] * 8)
+    assert DB.render.last_state["range"] == "Day", (
+        f"clicking the first member gave {DB.render.last_state['range']!r}")
+
+
+def test_the_destructive_button_is_clickable(DB):
+    rx, ry, _rw, rh = DB.lay_out(W, H).ctl_rows[11]
+    x, y = rx + DB.CTL_LABEL_W + 40, ry + rh / 2
+    DB.render("dark", W, H,
+              script=[(x, y)] * 10 + [(x, y, True)] * 2 + [(x, y, False)] * 8)
+    said = DB.render.last_state.get("said")
+    assert said and said.startswith("delete"), f"got {said!r}"

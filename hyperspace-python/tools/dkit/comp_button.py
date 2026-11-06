@@ -792,6 +792,24 @@ def ui_button(ui, key, x, y, w, h, label, *, variant="default",
     return st
 
 
+def group_size(items, faces, *, orientation="horizontal", size="default"):
+    """A ButtonGroup's intrinsic (w, h), without drawing it.
+
+    So a caller can right-align a group, or hand it to the layout tree,
+    without laying it out twice - which is what the dashboard did first, and
+    it put a second group at x=0.
+    """
+    norm = [(it, None) if isinstance(it, str) else it for it in items]
+    joins = button_group(norm, orientation)
+    sizes = [button_size(size, lab, faces, icon=ic is not None, drop=j.drop)
+             for (lab, ic), j in zip(norm, joins)]
+    rects = button_group_place(sizes, 0.0, 0.0, orientation=orientation)
+    if not rects:
+        return 0.0, 0.0
+    return (max(r[0] + r[2] for r in rects),
+            max(r[1] + r[3] for r in rects))
+
+
 def ui_button_group(ui, key, x, y, items, *, orientation="horizontal",
                     size="default", variant="outline", disabled=()):
     """A ButtonGroup. Returns (clicked_index_or_None, (x, y, w, h)).

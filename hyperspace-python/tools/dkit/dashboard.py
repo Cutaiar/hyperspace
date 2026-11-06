@@ -35,6 +35,9 @@ sys.path.insert(0, str(HERE))
 import draw as D          # noqa: E402
 import gradient as G      # noqa: E402
 import box as B           # noqa: E402
+import comp_button as CB
+import comp_combobox as CC
+import comp_context_menu as CX
 import interact as I      # noqa: E402
 import menu as M          # noqa: E402
 import tokens as T        # noqa: E402
@@ -121,6 +124,13 @@ CTL_LABEL_W = 74.0
 # bug.
 ROW_H = 34.0
 
+# Rows per column in the Controls card. Adding one grows the card on its own
+# - intrinsic sizing - where before it would have needed the card's height
+# edited to match.
+CTL_ROWS = 6
+
+
+PLANES = ("XY", "XZ", "XW", "YZ", "YW", "ZW")
 
 CTL_STATE = {
     "cutoff": 2400.0,
@@ -137,6 +147,8 @@ CTL_STATE = {
     "tip_now": False,
     "table_scroll": 0.0,
     "table_max": 0.0,
+    "range": "Week",
+    "ctx": "",
 }
 
 
@@ -211,8 +223,8 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
     # Two columns of five: live controls left, every state right.
     controls = titled(
         *(N(dir="column", gap=ROW_GAP, grow=1.0, basis=0.0,
-            kids=tuple(N(h=CTL_ROW_H, key=("ctl", c * 5 + i))
-                       for i in range(5)))
+            kids=tuple(N(h=CTL_ROW_H, key=("ctl", c * CTL_ROWS + i))
+                       for i in range(CTL_ROWS)))
           for c in range(2)),
         key="controls", dir="row", gap=T.SPACE[6])
     controls.grow, controls.basis = 1.0, 0.0
@@ -288,7 +300,7 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
     r.routing_card = at["routing"].as_tuple()
     r.routing_rows = [at[("routing", i)].as_tuple() for i in range(N_BANDS)]
     r.controls_card = at["controls"].as_tuple()
-    r.ctl_rows = [at[("ctl", i)].as_tuple() for i in range(10)]
+    r.ctl_rows = [at[("ctl", i)].as_tuple() for i in range(2 * CTL_ROWS)]
 
     tb = at["tabs"]
     r.table_tabs = (tb.x, tb.y, 0, tb.h)
@@ -391,8 +403,24 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     _dot(dl, bx + 8, hy + hh / 2, (0.20, 0.83, 0.60, 1.0), 3.0)
     D.label(dl, bx + 20, hy + (hh - 20) / 2, "Rendering", faces, "medium", 12,
             T.rgba("foreground", theme=theme), baseline_box=20)
-    I.button(ui, "hdr.github", hx + hw - GUT - 72, hy + (hh - 32) / 2, 72, 32,
-             "GitHub", variant="ghost")
+    # The measured Button (comp_button), not the old three-variant stub: six
+    # variants, a size-dependent radius, a per-variant hover and the +1px
+    # press nudge. Sized from its own label rather than a typed 72.
+    by = hy + (hh - 32) / 2
+    gw, _gh = CB.button_size("default", "GitHub", faces)
+    CB.ui_button(ui, "hdr.github", hx + hw - GUT - gw, by, gw, 32,
+                 "GitHub", variant="ghost")
+    # A ButtonGroup: one shared border column at each seam, outer corners
+    # rounded and inner ones square. Measured first so it can be
+    # right-aligned, rather than laid out twice.
+    RANGES = ("Day", "Week", "Month")
+    rgw, _rgh = CB.group_size(list(RANGES), faces, size="sm")
+    picked, _gr = CB.ui_button_group(
+        ui, "hdr.range", hx + hw - GUT - gw - T.SPACE[2] - rgw, by,
+        list(RANGES), size="sm")
+    if picked is not None:
+        state["range"] = RANGES[picked]
+    render.last_group_w, render.last_github_w = rgw, gw
 
     # ---- stat cards -------------------------------------------------------
     for (title, value, delta, up, head, detail), rect, part in zip(
@@ -534,8 +562,8 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     ex, ey, ew, _ = _row(2, "Plane")
     chosen, _open = I.select(
         ui, "ctl.plane", ex, ey, min(ew, 130.0), state["plane"],
-        [M.Item(id=p, label=p, checked=(p == state["plane"]))
-         for p in ("XY", "XZ", "XW", "YZ", "YW", "ZW")], disabled=off)
+        [M.Item(id=p, label=p, checked=(p == state["plane"])) for p in PLANES],
+        disabled=off)
     if chosen:
         state["plane"] = chosen
 
@@ -553,10 +581,21 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     D.label(dl, gx + gw - 44, gy, f"{state['mix']:.2f}", faces, "regular", 12,
             muted, align="right", box_w=44, baseline_box=gh, tabular=True)
 
+    # A Combobox: a filterable Select. With 600-900 live params this is the
+    # shape the panel actually needs - typing beats scanning well before
+    # then. Type in it to filter; the ranking is cmdk's own commandScore.
+    kx, ky, kw, _ = _row(5, "Find")
+    got, _o = CC.combobox(
+        ui, "ctl.find", kx, ky, min(kw, 150.0), state["plane"],
+        [CC.Item(id=p, label=p) for p in PLANES], disabled=off,
+        search="Filter planes", empty="No such plane.")
+    if got:
+        state["plane"] = got
+
     # --- right: every state the gallery diffs ------------------------------
     # a two-thumb range. Its two handles drag independently, which is the
     # half of the Radix law a still frame cannot show.
-    rx2, ry2, rw2, rh2 = _row(5, "Window")
+    rx2, ry2, rw2, rh2 = _row(6, "Window")
     _, state["win_lo"], state["win"] = I.range_slider(
         ui, "ctl.win", rx2, ry2, rw2 - 46, rh2,
         state["win_lo"], state["win"], 0.0, 1.0, disabled=off)
@@ -565,12 +604,12 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
             baseline_box=rh2, tabular=True)
 
     # the small switch
-    mx, my, _, mh = _row(6, "Mute")
+    mx, my, _, mh = _row(7, "Mute")
     _, state["mute"] = I.switch(ui, "ctl.mute", mx, my + (mh - 14.0) / 2,
                                 state["mute"], size="sm", disabled=off)
 
     # the small select - rounded-md (8) rather than rounded-lg (10)
-    ox, oy, ow, _ = _row(7, "Mode")
+    ox, oy, ow, _ = _row(8, "Mode")
     chosen2, _o2 = I.select(
         ui, "ctl.mode", ox, oy, min(ow, 130.0), state["mode"],
         [M.Item(id=m, label=m, checked=(m == state["mode"]))
@@ -579,18 +618,27 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         state["mode"] = chosen2
 
     # aria-invalid: a destructive border AND a 3px destructive ring
-    tx2, ty2, tw2, _ = _row(8, "Tag")
+    tx2, ty2, tw2, _ = _row(9, "Tag")
     _, state["tag"] = I.text_input(ui, "ctl.tag", tx2, ty2, min(tw2, 160.0),
                                    state["tag"], invalid=True, disabled=off)
 
     # disabled: the whole element at opacity 50, composited as a GROUP - the
     # thing that cannot be done by scaling each layer's alpha
-    dx, dy, dw, dh = _row(9, "Gain", dim=True)
+    dx, dy, dw, dh = _row(10, "Gain", dim=True)
     I.slider(ui, "ctl.gain", dx, dy, dw - 46, dh, 0.62, 0.0, 1.0,
              disabled=True, fmt="%.2f")
     D.label(dl, dx + dw - 44, dy, "0.62", faces, "regular", 12,
             T.rgba("muted-foreground", 0.5, theme=theme), align="right",
             box_w=44, baseline_box=dh, tabular=True)
+
+    # The measured Button in a variant nothing else here shows. Sized from
+    # its own label, and it carries the +1px press nudge.
+    ax, ay, _aw, ah = _row(11, "Action")
+    abw, _abh = CB.button_size("sm", "Delete node", faces)
+    if CB.ui_button(ui, "ctl.delete", ax, ay + (ah - 28) / 2, abw, 28,
+                    "Delete node", variant="destructive", size="sm",
+                    disabled=off).clicked:
+        state["said"] = "delete \u00b7 node"
 
     # ---- table ------------------------------------------------------------
     tx, ty, _, th = r.table_tabs
@@ -652,6 +700,13 @@ def _table_rows(ui, rows, view, vy, vh, r, faces, theme, ink, state):
         picked = M.popup(ui, mkey, ROW_MENU, anchor=kb)
         if picked:
             state["said"] = f"{picked} \u00b7 {row['name']}"
+        # The same menu on a right-click anywhere in the row - which is the
+        # gesture a node editor wants. `allow_overlap` is on by default, so
+        # the row's target does not swallow the kebab's hover.
+        got = CX.context_menu(ui, f"ctx.{ri}", (rx, ry, rw, rh), ROW_MENU)
+        if got:
+            state["ctx"] = f"{got} \u00b7 {row['name']}"
+            state["said"] = state["ctx"]
         D.fill(dl, rx, ry + rh - 1, rw, 1, T.rgba("border", theme=theme))
         cells = [row["name"], row["kind"], row["schlafli"] or "—",
                  f"{row['dims']}D",
@@ -795,8 +850,10 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
            keys=None):
     """Draw the dashboard, optionally stepping a script of mouse positions.
 
-    `script` is a list of (x, y), (x, y, down) or (x, y, down, wheel) — one
-    per frame — so a hover, a click or a scroll can be driven headlessly.
+    `script` is a list of (x, y), (x, y, down), (x, y, down, wheel) or
+    (x, y, down, wheel, right) — one per frame — so a hover, a click, a
+    scroll or a RIGHT-click can be driven headlessly. The last is what a
+    context menu needs.
     Returns a list of frames (the last one only, if no script was given).
     """
     theme = T.LIGHT if theme_name == "light" else T.DARK
@@ -855,6 +912,8 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
                 io.add_mouse_button_event(0, bool(mouse[2]))
             if len(mouse) > 3:            # (x, y, down, wheel) drives scroll
                 io.add_mouse_wheel_event(0.0, float(mouse[3]))
+            if len(mouse) > 4:            # ..., right) drives button 1
+                io.add_mouse_button_event(1, bool(mouse[4]))
         for k in keymap.get(i, ()):
             if isinstance(k, str):
                 for ch in k:
