@@ -8,9 +8,17 @@
    "note": "Four nested squares: the w- and z-divisions compose.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 28347,
+   "bytes": 28242,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_nested",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.5,
+   "flash": 1.2,
+   "matrix": "/oAAAAAABT/BQAAAggACUG6gAAAAAZGrt1AAAAAAAGXboAAAPgACSuwUAAARACIxB/qqqqqqqqr+AMan/H//+ADORDxn+EdBl4JwO34EQQHoAN/oiVgd/8wAJbCDX3O84gBzwAAAAAl3ACn/7///+7qMCF/////7vUIC7////9/uYwOn//////cwgMP+0Got+hkA8fa4DWw9jAAU+gEAANKrgDZ+AAAAeySAAjkAAAANtYAP3wAAABbbIAFvwAAAAWhgA2egAAAAtFAA0+gAAAAaqADV8AAAAA3MABD4AAAANIoAu30AAAAbcQAMPAAAAA3ihD+egA+ABv/iEe+ABEAA6RIKh6ACoAD2qYRzwAEQAHvFA/HwAvgBDX4ApvQAAABmooA1fgAAAEtzAAu9AAAADbmAD98AAAAC3sACT0AAAAFvYAPH4AAAALVAAJPAAAAAOqQA3eAAAAAtHgAA8AAAADaHAC94AAAAG0cABb4AAAADa4gIX0AAAAOZxgBvtIjb5+hjD+f6xjUv9TAAO//21rf6qwOt//////3MATf9////86KAI8AAAAAD0wAB//////35gNn+34kB0fzBI/8CJjSR/+BrwAAD4AAB+ABiv8sXNvjEP57fta///qoQV///x//+0QuoAAA+AAofhdAAAQAAAICC6AAAAAAEIEcFAAAAAAAAE/6AAAAAAAAJAA=="
   },
   {
    "id": "tess-tilt",
@@ -19,9 +27,17 @@
    "note": "The same solid on the diagonal \u2014 every edge still lands on a grid line.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 23353,
+   "bytes": 23223,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.4,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAACUG6AAABIARCrt1AAADAAQOXboAAAPgBESuwUAAARwAExB/qqqqqqqqr+AAAAzEQAAAD7gACf5AAAVQAAAEX6wAAAAIAAff4AAAAAAAAN/tgBBAAgAM3dxQgCAAAA/d9wCAAECAAl39kkAYAAAG3f9yAAAgIADd/95gABgAAV3691wAIAgD3WhdsAAAAAfd9Yd4BAgCCF3yGdrDjgAInfQHdu+IAIHd8AD9yCQABd30AG90wAAnXeoAF90QAALd5AAH92wAC13oAAA90wADXeAAAFxVwAfd8gAAN8XQCt38AAAF90zD/fgA+AGd/gMf9ABEAN/x8q/7ACoAPfrIR/wAEQAH/GB/3kAPgAvf4AB3gAAAAVRIB33EAAAB3rYA/3UAAAvvQADS3wAAAshgAAS38AAN2nAAIbuGAAXciAAAwXMAD950QAhw3oAF2tAAAAd3oA7YsAACA232HdPAAAABp32X2AwAAIAX3zXfQgBAABn3094AACAgB93/2yAGEAAA13/bYAAACADF3d/AAAAAAAt32iAESAIAA13dUEQGAAABF/zwIwANgACR/2AYABIAAA18oAAwBqAAA3+gAA+ABAABsQAABEP6AABKgAACoQQAACRQADEQuoAAA/gAkPhdQAAAiAAACK6gAABAACACUFAAAAAAAAIv6AAAAAAAAIAA=="
   },
   {
    "id": "tess-wide",
@@ -30,9 +46,17 @@
    "note": "w 9.0 / z 2.6. The nesting tightens as the camera pulls back.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 27945,
+   "bytes": 28097,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_wide",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG6gAAAAAJGrt0AAAAAASGXbr/////+byuwXfv/x/87xB/qqqqqqqqr+AQGinEHTAADTcr/////fuwZ7///////MArziAAAAHeIBnwaH2nIR9wDhg08/uQnNgGdc+wkz9kHAK5/Mu9W57mYbz/9Px6/jMg/H92vkX/OYhn3IAEAAeM0DsOAAAAC8ZoGocAAAANKzgOSwAAAATXngalAAAAAkgEA7JwAAAAtEQBmHAAAAIOMwDtmAAAAA8ZgG70AAAAB4zAO0AAAAABxmAZkQAAAAPT8A/EgAAAAfGYBO5AAAAAtMzD/gAA+AAafmEc0ABEAB4xIK9YACoADxqQRiAAEQAHjEA/fAAPgAPH+BGRAAAAAaN0D8KAAAAG95wG6UAAAABozAP0UAAAAC1mAZhoAAAADhMA5fgAAAAPEABqIgAAAAeIAD8MAAAAA8IAGrEAAAAD4zAP3AAAAAD5mAZj4AAAAPzMA/noAAAA3mYBvfAAAAAeMyC8f/Rvcf8ZiE8/qN7Tv5nAKR/K9aT/x+ARzQLAAre6cA5cW0bchjyYBHw1pW1xFswNvUgAAAAUZhIf//////3zBr/Hf////O+ABA3cEfCgDEP6Bd6a/wgGoQQe//x//fsQun/////+7vhdQAAAAADEBO6AAAAAAGYGMFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "tess-deep",
@@ -41,9 +65,17 @@
    "note": "w 4.2 / z 2.2. Strong perspective pushes the inner cell small.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 26741,
+   "bytes": 26699,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_deep",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/oAAAQAAAT/BAAAAAAACUG6AAAAAAYCrt0AAAAAAhOXboAAAPgBGCuwQAAARADERB/qqqqqqqqr+Af/7/H///wDaWAAD4AABoID3NXQgACXwAN8UJggACEwABZaQAQMiygA7sz++frjZAAl/+PI0e6KMDd/////9oUICDwAAAAHwYQNn//////IxgIF/////zBoAzbw0ymHmDYAn3+lQhz9EQDAt/6e4maqgCTbQAALf/YANG0AAAZ5wgAJd8AAAC3BgA0rIAAANGDAAvXwAAAbcGADDvgAAA24MACrfAAABSgIANGyAAACOBQAINsAAAFeDgD57YA+AHWPiESWQBEAacREKjsgCoAy4qARpdAEQBixHA/iyAPgDBj6ALdgAAAH3yoAxbwAAArujAApWQAAAXfGADLsAAAAl4sACndAAABEyYAMK2AAAC7gwAJ1/AAAGjFwA0bZAAA1uTAAvWoABBIUEADQt79h+2oMACnf6i1fwAQwNy8HNsBggxAJN/87V/xBhA1/+uBn/+FGAr8BBQiB4KwDJ4nA5rj4NAC/2/383FkrAN9f////+g0AAUAAAAAJVgN/AAAAAABLBIcAAAAAABMBqyAAD4AAF+AB4AAEQAABEP5v//6///yoQR///x//s0QuoAAA+ABmfxdQAAAAAAICC6AAAAAACICcFAAAAAAAAIf6AAAAAAAAYAA=="
   },
   {
    "id": "tess-tiltdeep",
@@ -52,9 +84,17 @@
    "note": "The diamond with the inner cells spaced wide apart.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 23451,
+   "bytes": 23225,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_tilt_deep",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.4,
+   "flash": 1.1,
+   "matrix": "/gBAAAAAAT/BAAAAAAACUG6AAAAAARCrt1AAAAwAhOXbqAAAPgBESuwQAAARACExB/qqqqqqqqr+AAAAXHgAAADHAABP7gAADAAAAFj/gAAAAIAAFlbgAAAAAAATPhgDDAAgAD6/jhiAAAAADV8HCIIMCAACX9SEAYAAAClbsjgAAQIAADvqkgABgAAlm/qIAAIAgAGr/vjAAYAAHmv/viBAgCATG/ftpDjgAC778fqfPIAIArvlPtriQAAVO+AfrqgAAhs70AvpPAAANJvQAvqggACoK8gAfpggAD87yAAPjnAAPLvgAAP8LABse/AAAv/6BD478A+AvOPiMf/wBEAf+REK//QCoBf5qIRf/wEQH/nHA+W+APgD7D4BOu/AAA+mbIA8i+gAB6svAA4O+gAPqj4AC4K+gAvuhgAAwa/AB+4OAAI5+8AL7w6AAA7q+gPvDkQAgku86+sORAAAwa+x6w0AACAj2/fuHgAAAAji/+gCAAwIAou/6iwgBAAAM+/oDgAAAgAvO+kOAEGAAAxW7IoAIACAA8n9hgAAAAAAUX3GBEjAIAAjnuoEQGAAAAaLqgIwANgAAjK+ABIBIAAATc4AAwBqAAA75gAA+ABAABsWAABEP6AAAK4AACoQUAAARgABEQugAAA/ABmfhdAAAAoAAICC6AAAAAACACUFAAAAAAAAIf6AAAAAAAAIAA=="
   },
   {
    "id": "tess-shallow",
@@ -63,9 +103,17 @@
    "note": "w 14 / z 4: the four cells collapse towards two. The minimal reading.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 30204,
+   "bytes": 29963,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_shallow",
+   "stroke": 3,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.5,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BAAAAAAAAUG6gAAAAAJirt0AAAAAASGXboCGY/gImSuwQkWix84/RB/qqqqqqqqr+AX+//H///gDv/7sH////4gL////////4Af////////gBP4AAAAAx9AA//////+/8AE////+7NzwED78U2zAd7gYB38A4XEP3kgrtA7+FlfvgADZAAYAAfeAB+5AAAAAe9IEt0AAAAIu/AGbQAAAAR7bAJ2AAAAAgw0ALuQAAAAJhQAPfAAAAAnbAB+6AAAABO/AA9oAAAAA94AD7MAAAAGbwAD3QAAAAMXwA/vgAAAAZuwAvYAAAAABcDD+kAA+AAa/mEdcABEAAtxMK70ACoAC7qQR0wAEQAE3EA/vAAPgAJv6BvaAAAAAftgA22AAAAGf+wC90AAAAAM/AD70AAAAAZUAD2oAAAAN1sAdswAAAAdpgArYAAAAAfegB2zAAAAB+uAG9+AAAADN7AH7kAAAAG7wAL3AAAAAO3wAfuAAAAATPAgveAADAAbfCD+23glZue4CE99mvdT/9wgD78DBMUH78gb////83+7QAf///////30BP4AAAAADPwN///////2cBIf///////eBqf/2H///++ABfS3Mf///EP6mpsa5XWioQUERcxQf/cQuogmR+kYiPhdAAAAAADABK6gAAAAACYCMFAAAAAAAAEv6AAAAAAAAJgA=="
   },
   {
    "id": "c16-star",
@@ -74,9 +122,17 @@
    "note": "The tesseract's dual. Four of its eight vertices project to the origin, so it reads as a cross inside a diamond. Wants a 5-module stroke: its arms converge on a point, and anything thinner dissolves into the halo.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 25814,
+   "bytes": 25507,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_star",
+   "stroke": 5,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.1,
+   "matrix": "/gAQAAAAAT/BAAAAAAACUG6AAABYARCrt1AAAEgAhOXbqAAA/gBESuwQAAAxICExB/qqqqqqqqr+AAAAvGAAAADHAAD/+IAADAAAAL/+gAAAAIAAD//IAAAAAADv/+YDDAAgAH++/BiAAAAADp8/yIIMCAB/P9OUAYAAAB+n3/AAAQIArw/dfwABgAA/ROR/QAIAgM9BcAfwAYAA38AcATBAgCBuAHQDPDjgAE9AOsAf/IAIHmADwB7CQAA/wAOgBeQAAh6ABcABeAAAD6AF5AB/QADPgAJ4AAPgAD+AAPwABvAAP7oAfliafQBPg22fsg7+xH/w07/d/P/iUf///Hv//xEa///+v///rIx///8f///HB//D2/6en/4Bvky09ZKEfoD/9ACeQDK7gAP4AH9AAvqAC/gAB0AA5gAA/wAPwAC+AAKPoAbwAPyAAB/AAugBekQAhOoCcAC8RAAA+gA/As0AACCfwH6BfAAAABPQD0GwAAwIC+AHo30gBAABvBfR9wAAAgB/Xdz+AEGAAAvp+3wAIACAB/36fwAAAAAB/nw6BEjAIAC7vv4EQGAAAAv//wIwANgABv/9ABIBIAACv/8AAwBqAAB7+QAA+ABAAAMYAABEP6AAC6wAACoQUAACRQABEQugAAA/ABmfhdAAABuAAICC6AAABQACACUFAAAAAAAAIf6AAAAAAAAIAA=="
   },
   {
    "id": "c16-tilt",
@@ -85,9 +141,17 @@
    "note": "The same solid as a square with an X \u2014 the boldest silhouette here.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 17508,
+   "bytes": 17634,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "duo48-flat",
@@ -96,9 +160,17 @@
    "note": "A square ring times an octagonal one.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 22094,
+   "bytes": 21566,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "duo48_flat",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.4,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG6gAAAAAJGrt0AAAAAASGXbqAAAPgACSuwUAAAxgAIxB/qqqqqqqqr+AQAAHGAAAADTAAA38AAAOwAAAAjiAAAAAIAAGPqAAAAAAAAz/6ARBAAgAAb/PAmEAAAAFe7gBEEACAAj77nAYAYAAADv7pgAAgIAFu/7vAAAgAAA7+bygAEAgDTu/7uAAIAAKmzBbsCDgCAG7sD7xHngABHvIObgAEAIAe8gPKlEQAAs4UAJb8MAAhf0gAA70AAABuXgAC76gACtaeAAE7uAAALsAAABffwANO+AACHbKAAm7eAAAKpsjD/vgA+ACbvmEf9gBEAN/xIK//ACoAH/qQR/+AEQBn/EA+7mAPgCu7+AM7EAAAIbJkAw78AAA3/4QAL7MAABmoAACP9IAAD6tgAAN7mAATuRAAIFsOAAW7EAAACruAF73IAAgV6yAdvUAAAA06GDa7oDACAVb6ArKYAAAA17yZsMwAAIAB7ke5xgAAAAO7570gACAgAR7/u4AACAAAa7+/oAEACAAP77yAAYAAAAi7vQCIQAIAAW/5YCQAAAAAA/ogEgANgAAf+IAQIBIAAAY5gAAwBqAAA38AAA+ABAAAUQAADEP6AAAa4AAGoQQAAAxAATMQugAAA+AAiPhdQAAAAADEBO6AAAAAAGYGMFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "duo88-flat",
@@ -107,9 +179,17 @@
    "note": "Two octagons multiplied. Octagon edges sit on 45s, so they survive the grid.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 22775,
+   "bytes": 22759,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "duo88_flat",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BAAAAAAAAUG6gAAAAAJirt0AAAAAASGXboAAAPgAmSuwQAAAxgAMRB/qqqqqqqqr+AQABLHYAAgDvgAND4mAAYgAAD8HyHAAAAIAfYf/jwAAAAEEkvkqxBAAgwvscdCuEAABppx8aNgAECDzmP+ON4AYAD9j//jfgAgIBwfh/wcwAAAf37Qy95wAAi9/nCb/6gIAMR/AAQ4uDACdn1AAB1jDAA8PwAANogEAK6/gAACRAQAGRkAAAHyIAAzj4AAAHlUAA8OAAAAfiIADecAAAAHOwACZ0AAAA+ewAPzIAAAA/ogBDnAAAAANwjD+cgA+ACa/mEf4ABEAD/xMK/8ACoAB/qQR/4AEQAP/EA/nAAPgAnP6ALmAAAAAMpAAxPAAAAG5iQAgcgAAAPEUACMdAAAASIYACk+AAAAuZgAJk6AAABYBAAI9iAAAHzcgAgD4AAAfigAAIr4AAAfejACOn2AAD+9AAArH3ABP/6AAIjfzhZ/3YAgBX35gd99ACAjHB+O/BzACAF/o//4X6AgCHzqP+AJ0YgAHpQHwsyIQAIKleHEtnwEAAC6N+gTAAANgA6r/4DQIBIAAV58KwAQBqAALz5GAA+ABAAAEbwADEP6AAAq8AACoQUAAAxgAzMQuoAAA+AAiPhdAAAAAADABK6gAAAAACYCMFAAAAAAAAEv6AAAAAAAAJgA=="
   },
   {
    "id": "duo88-tilt",
@@ -118,9 +198,17 @@
    "note": "Half a step of rotation and the rings line up vertex to edge.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 27346,
+   "bytes": 27532,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "duo88_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/oAAAgQABT/BQAAAAAACUG6gAAAZEZGrt1AAQAAMAGXboAB///4CSuwUAbjxleIxB/qqqqqqqqr+AAA8BEB6AADOAJf77faAF4ABU7cBeWAAAIDT+x3+UAAAAGLwAB+wAAAg09wAHe8GAACzz//+ebIMCUvPv1+aPQIBM8/yd+frAwIfz8U7+fyAgAoPkGaeecEBtc/gAP+eeAGz78AACeOfgLPPwAAC+6aAL8uAAACNd4A/z8AAABaboAH/AAAAC/wwDv/QAAAD/4AGd8AAAAD91AOL8AAAAFzOBZ3wAAAANFsA6vgAAAAdCIBBegAAAA/CRD69AA+AB2PiEV+ABEADJRIK78ACoABwqYR3gAEQAFnFA/vgAPgALD4BjeAAAABGsYCm+AAAAEtygEd+AAAACbBAK72AAAAC3mAZ34AAAAf3EC7/0AAAAP8AHn/IAAAB/4QC/PAAAAL5vgM/PQAAAXr/AHPPwAAA+WYATPPIAAHxZ8gfLP8ACnuGhgHDP2O3efXDAw3P7K/596AANPL3K/nn4wCFPP+e+fwIAAXPP//54YCAIJPcAB3iQAAABfwAB+VwANgDP04v5ZgBIAZPUzXlAwBqARfL7fYB+ABAbwEQHwDEP4AJpq1MgCoQUANfx58yEQuoAff/9EgfhdAAAAAAAICC6AAABiAEIEcFAAAAAAAAE/6AAAAAAAAJAA=="
   },
   {
    "id": "c24-tilt",
@@ -129,9 +217,17 @@
    "note": "Self-dual, 96 edges \u2014 the densest subject that still reads. A rosette rather than a silhouette.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 33824,
+   "bytes": 33501,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c24_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.5,
+   "flash": 1.0,
+   "matrix": "/gAAAAAABT/BAAAAAAAAUG6gAAAAAJirt0AAAAAASGXboAAAPgAmSuwQAAAxgAMRB/qqqqqqqqr+AQAADFAAAgDvgAFP/gAAYgAAADwn0AAAAIABf5P0AAAAAAT/z/7xBAAgA/+T/4mEAAAE/7I/9QAECA//+v/9YAYAD//////gAgIB/////9gAAAH//////gAAhf/////9AIAB/////7uDACJ///n/3zDAAf//7z/swEAIP/0GBeZgQAI//+AT//4AAj/80ADf/4AA3/+gAc//EAC//6AAZ//IAC//1wBN/ewAZb8ByIH/+gBGn9wkI/NkTD9H2B/g+TvmEb/yHHCvlRMa3v8GoF/CrQxx/YMYG+/EA+X+w/0d8T6Akn+xUg8/tQB/v7HmR/79QA//6QDzfM0ACf/gQBA+ZQAD//9AAj/9gAK//DgDX/5AAA//xBX//8gAj//Efx//AAAJ//5ef/8jACD//6f///AAAX//////4AAIH/////3AAgAH/////+gCAg3/////6ACAAH//v//0AgCA//8///gYgAAD/iL/6IQAIAb/6/9GQEAAAU///1AAANgAJ+d/IQIBIAAK9D6AAQBqAADT/QAA+ABAAC8TgADEP6AABq2AACoQUAABRIAzMQuoAAA/AAiPhdAAAAIADABK6gAAAAACYCMFAAAAAAAAEv6AAAAAAAAJgA=="
   },
   {
    "id": "cube-flat",
@@ -140,9 +236,17 @@
    "note": "A plain cube for contrast: square in square, corners joined.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 18900,
+   "bytes": 19537,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "cube_flat",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/oAAAAAAAT/BQAAAAAACUG6AAAAAAYmrt0AAAAAAwOXbqAAAPgBiCuwUASARACExB/qqqqqqqqr+AV3z/H//8ADm+dF///+l+YBVi4AAAHoAAJ42QAAAfagAqOAAAAATfABjEAAAABigAA1JAAAAD74MDtFAAAAIqQIDXb////VqgAOkj////pHBAmMIAAACiGIAyeQAAAF0MYAEwAAAAAAZgD54AAAACmWAJggAAAAGKsAIBgAAABMVAAPDQAAAAYCAByWAAAAAwMACIeAAAABgYAHA4AAAADAwAITwAAAAGxQAZFoAAAAMjgAjDAAAAArGBD+OAA+ABWPiEQsABEABgREK44ACoADAqARjwAEQAGBGA+jgAPgAMD+ALLAAAACUHIBuOAAAACosAAkIAAAABiYAHYIAAAADEQAKjcAAAAGDgAPFIAAAAMFQAPKAAAAAYGAAqXAAAAAwdACgzAAAABkZADx6AAAADIwALhUAAAAWRggdiQAAABADBgiA4AAAC+GABwY////+g8GCf2f///xg4ACokAAAAcxJgICoAAAAQiyALtAAAAADmgAlOAAAAAJjAN/YkAAAAleBIAOAgAABbwBrfx7f///t+ABTFm8f/9pEP5MEQKhAAmoQV+wARAAREQugAAA+ABmfhdAAAAAABIDC6gAAAAAGIGcFAAAAAAAAMP6AAAAAAAAYgA=="
   },
   {
    "id": "cube-tilt",
@@ -151,9 +255,17 @@
    "note": "The same cube on the diagonal.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 14922,
+   "bytes": 14938,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "cube_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.4,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BAAAAAAAAUG6gAAAAAJirt0AAAAAASGXboAAAPgAmSuwQAAARAAMRB/qqqqqqqqr+AQAADEAAAgDvgAAP8AAAYgAAAAf4AAAAAIAAAHUAAAAAAAAFu8AxBAAgAAZhsAmEAAAAAmvUBAAECAAEPicEYAYAAAYJIEAAAgIABAv4MAAAAAAEBIgEAAAAgAaOHgEAAIAAAnCBgYiDACABz8BSVjDAAAG3AA0sAEAIBm+AAIQAQAAGbkAByMIAAgZTAABIcAAABj/AAAGMAACFDUAADOEAAAfrAAAAcUwAKHcAAAE/wgAPMcAAABNIDD+yQA+AGKvmEePABEADIRMKp6ACoAJXqQRHwAEQAAjEA/foAPgAdX6ACIwAAAANlAAioAAAAGbwQAFvgAAAYEAACDDQAABoAAAAC4wAAGBRAAIEHYAAQBAAAADf8ABwUMgAgBTsAFAwAAAAFAwAUzMDACAHkQB4WYAAAACOwKT8wAAIACWpgBRAAgAADBMAMAACAgAHBvAQAACAAAECJFAAAgCAAEHkMAAYgAAAEE0wCIQAIAAD/vAGQEAAAAHC0AAAANgAAFEwAQIBIAAABuAAAQBqAAAH4AAA+ABAAAEYAADEP6AAAKgAACoQUAAARAAzMQuoAAA+AAiPhdAAAAAADABK6gAAAAACYCMFAAAAAAAAEv6AAAAAAAAJgA=="
   },
   {
    "id": "tess-tilt-v15",
@@ -162,9 +274,17 @@
    "note": "77 modules instead of 65. More of the code is free, so the halo is finer grained \u2014 and every module is smaller for a camera to resolve.",
    "section": "shapes",
    "modules": 77,
-   "bytes": 36941,
+   "bytes": 37043,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_tilt",
+   "stroke": 3,
+   "version": 15,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.4,
+   "flash": 1.2,
+   "matrix": "/gAAAAAAAAAD/BAAAAAAAAABUG6gAAAB4AAEArt0AAAANoAAMBXboAAPgJ4+AIOuwQAARD/xEAkRB/qqqqqqqqqqr+AQABEj+0QAAADvgAD5X//gAAYgAAAAO7uoAAAAAIAAAfvrACAAAAAAAAe/vQgAgAAgAAJz/n5gAgAAAAAIP/vLQCMwCAAA09/tzAEIgAAAB733qUAAwAIAAwvf3owAAEAAAB29/3loAAAAgADb3/3sACAAAAAzvf335gEQACAAG99z3ooBAAAAP738r3mwjAAIAAPfRX3lICAAABk954P3sQAAD4N7/4AP/tQPgEQ0vHMBEXtYRMKim+oQAq3qoqYRLb0fABR3nBEw+hvfgAA/3oT5ABe96oAAH38IAAh73oAAB/2+oAAVffMAAAD3tpADm9+QAAAv3sqAC73rAAAAH3uUAbveQAAABD3uoCO97QAAAAn3uQB73rAAAAAH2PIC//MAAAAAv/9Av//4AAAADf9+gr/+wAAAAP//0je/+wAAAAb97sBu9+gAAABP3twA298QAAAGfe8ACO94gAAAe92IADI99QAABnvogADG95AAAA/+rgA+k9/wAA/9an4BHG9xAABH3vkQCre/qgAGve0agERG9GwAMd6YxAPgm/+gB/3po+IAD398QGPeUCAgIBy94gY94kEAgAC099x73v4AAAgCe54VPeiwAAAAEa96997gAAACACK94X3u4AAAAAAK9//esAAAAIAC29/97+AAAAAADm9/3skAgAAgAB39/e2IBhAAAABm997uQCAACACBr93t5AECgAAADi/+6gAEIIIAADG/7iAAAEIAAABO/swAAAATgAADW+zAAAAAEAAACW7sAIEAB6AAD83+vgYA+ABAAERv9RAgBEP6AAKgXkqBgCoQUAARATxEAAEQuoAA+CfD4AAPhdAAAAAMAAAAAK6gAAAAEAAAAAMFAAAACAAAGDQv6AAAAAAAAGHBgA=="
   },
   {
    "id": "duo88-heavy",
@@ -173,9 +293,17 @@
    "note": "The same octagons at a 3-module stroke: solid rings, almost no interior.",
    "section": "shapes",
    "modules": 65,
-   "bytes": 31880,
+   "bytes": 31272,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "duo88_tilt",
+   "stroke": 3,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAACUG6AAAZSmRCrt1AASPw0QOXboAD2vhdESuwUAZTR+4ExB/qqqqqqqqr+AAF+BED/AAD7gff///dAVQABg///+cAAAIEz///+YAAAAPP4AD6BBAAgb////+gCAAE7z//+eDAECR/P//+dEYAAC8///+feAgMWz/MD+ewBgPpP+Gd+f+IBl6/8AJ+eaACT79gAI6NcgLPPkAAHvb7gL8vgAABue4B/7/AAAD6j0CP/kAAAF3zIJv+AAAAH/6AYf/gAAAP/0AW74AAAAH7oAJ38AAAADW3DbvAAAAAePMBneAAAAA9UjP+8AA+AAc/oUd+ABEAB9xsK74ACoAB7rJR34AEQAO3GA/vQAPgAXv4AHegAAAAHdoAu+AAAAAX6YOd4AAAAGvxAa78AAAAG5oAx/4AAAAv/cCb/4AAAB/6kHP/4AAAD/3QK/voAAAHzuAE/PsAAB8v8gHPP0AABeGYAbPPwAAfx5kAKKPwAA/2lRADyP+p5+eVCA8fP+Qv58mEALvP/f/nqAACGPP//+fPAAAbfP//5o0SAIZf////cwGAAZf4AD+owANgFv///48ABIAKP///ngwBqAPf///bA+ABAH4EQP0BEP6AZ/6/+wCoQQATUxrRDEQuoAXW+FwkPhdQABeD1AACK6gAHsSACACUFAAAAAAAAIv6AAAAAAAAIAA=="
   },
   {
    "id": "sty-square",
@@ -184,9 +312,17 @@
    "note": "dot square \u00b7 eye square/square",
    "section": "styles",
    "modules": 65,
-   "bytes": 17508,
+   "bytes": 17634,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "sty-rounded",
@@ -195,9 +331,17 @@
    "note": "dot rounded \u00b7 eye rounded/rounded",
    "section": "styles",
    "modules": 65,
-   "bytes": 46394,
+   "bytes": 46261,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "rounded",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "sty-extra-rounded",
@@ -206,9 +350,17 @@
    "note": "dot extra-rounded \u00b7 eye extra-rounded/extra-rounded",
    "section": "styles",
    "modules": 65,
-   "bytes": 42255,
+   "bytes": 42160,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "extra-rounded",
+   "min_ppm": 2,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "sty-dots",
@@ -217,9 +369,17 @@
    "note": "dot dots \u00b7 eye dot/dot",
    "section": "styles",
    "modules": 65,
-   "bytes": 36344,
+   "bytes": 36515,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "dots",
+   "min_ppm": 2,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "sty-dots-tight",
@@ -228,9 +388,17 @@
    "note": "dot dots-tight \u00b7 eye dot/dot",
    "section": "styles",
    "modules": 65,
-   "bytes": 37282,
+   "bytes": 37457,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "dots-tight",
+   "min_ppm": 3,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "sty-classy",
@@ -239,9 +407,17 @@
    "note": "dot classy \u00b7 eye rounded/square",
    "section": "styles",
    "modules": 65,
-   "bytes": 42330,
+   "bytes": 42579,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "classy",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "sty-classy-rounded",
@@ -250,9 +426,17 @@
    "note": "dot classy-rounded \u00b7 eye rounded/rounded",
    "section": "styles",
    "modules": 65,
-   "bytes": 64932,
+   "bytes": 65296,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "classy-rounded",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "pal-ink",
@@ -261,9 +445,17 @@
    "note": "The safe one. Maximum contrast, every reader's best case.",
    "section": "palettes",
    "modules": 65,
-   "bytes": 51778,
+   "bytes": 52694,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_tilt_deep",
+   "stroke": 2,
+   "version": 12,
+   "dot": "extra-rounded",
+   "min_ppm": 1,
+   "blur": 0.4,
+   "flash": 1.1,
+   "matrix": "/gBAAAAAAT/BAAAAAAACUG6AAAAAARCrt1AAAAwAhOXbqAAAPgBESuwQAAARACExB/qqqqqqqqr+AAAAXHgAAADHAABP7gAADAAAAFj/gAAAAIAAFlbgAAAAAAATPhgDDAAgAD6/jhiAAAAADV8HCIIMCAACX9SEAYAAAClbsjgAAQIAADvqkgABgAAlm/qIAAIAgAGr/vjAAYAAHmv/viBAgCATG/ftpDjgAC778fqfPIAIArvlPtriQAAVO+AfrqgAAhs70AvpPAAANJvQAvqggACoK8gAfpggAD87yAAPjnAAPLvgAAP8LABse/AAAv/6BD478A+AvOPiMf/wBEAf+REK//QCoBf5qIRf/wEQH/nHA+W+APgD7D4BOu/AAA+mbIA8i+gAB6svAA4O+gAPqj4AC4K+gAvuhgAAwa/AB+4OAAI5+8AL7w6AAA7q+gPvDkQAgku86+sORAAAwa+x6w0AACAj2/fuHgAAAAji/+gCAAwIAou/6iwgBAAAM+/oDgAAAgAvO+kOAEGAAAxW7IoAIACAA8n9hgAAAAAAUX3GBEjAIAAjnuoEQGAAAAaLqgIwANgAAjK+ABIBIAAATc4AAwBqAAA75gAA+ABAABsWAABEP6AAAK4AACoQUAAARgABEQugAAA/ABmfhdAAAAoAAICC6AAAAAACACUFAAAAAAAAIf6AAAAAAAAIAA=="
   },
   {
    "id": "pal-red",
@@ -272,9 +464,17 @@
    "note": "#ff2b2b on white. Red is dark enough in the luminance channel to binarise.",
    "section": "palettes",
    "modules": 65,
-   "bytes": 51778,
+   "bytes": 52694,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_tilt_deep",
+   "stroke": 2,
+   "version": 12,
+   "dot": "extra-rounded",
+   "min_ppm": 1,
+   "blur": 0.4,
+   "flash": 0.6,
+   "matrix": "/gBAAAAAAT/BAAAAAAACUG6AAAAAARCrt1AAAAwAhOXbqAAAPgBESuwQAAARACExB/qqqqqqqqr+AAAAXHgAAADHAABP7gAADAAAAFj/gAAAAIAAFlbgAAAAAAATPhgDDAAgAD6/jhiAAAAADV8HCIIMCAACX9SEAYAAAClbsjgAAQIAADvqkgABgAAlm/qIAAIAgAGr/vjAAYAAHmv/viBAgCATG/ftpDjgAC778fqfPIAIArvlPtriQAAVO+AfrqgAAhs70AvpPAAANJvQAvqggACoK8gAfpggAD87yAAPjnAAPLvgAAP8LABse/AAAv/6BD478A+AvOPiMf/wBEAf+REK//QCoBf5qIRf/wEQH/nHA+W+APgD7D4BOu/AAA+mbIA8i+gAB6svAA4O+gAPqj4AC4K+gAvuhgAAwa/AB+4OAAI5+8AL7w6AAA7q+gPvDkQAgku86+sORAAAwa+x6w0AACAj2/fuHgAAAAji/+gCAAwIAou/6iwgBAAAM+/oDgAAAgAvO+kOAEGAAAxW7IoAIACAA8n9hgAAAAAAUX3GBEjAIAAjnuoEQGAAAAaLqgIwANgAAjK+ABIBIAAATc4AAwBqAAA75gAA+ABAABsWAABEP6AAAK4AACoQUAAARgABEQugAAA/ABmfhdAAAAoAAICC6AAAAAACACUFAAAAAAAAIf6AAAAAAAAIAA=="
   },
   {
    "id": "pal-grad",
@@ -283,9 +483,17 @@
    "note": "A diagonal gradient. The light end is where a reader will struggle first.",
    "section": "palettes",
    "modules": 65,
-   "bytes": 46553,
+   "bytes": 46420,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "rounded",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "pal-invert",
@@ -294,9 +502,17 @@
    "note": "White on black, for the page's own background. Most modern readers invert happily; some older ones refuse outright.",
    "section": "palettes",
    "modules": 65,
-   "bytes": 18524,
+   "bytes": 18650,
    "decodes": true,
-   "dark": true
+   "dark": true,
+   "pose": "c16_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "square",
+   "min_ppm": 3,
+   "blur": 0.35,
+   "flash": 1.0,
+   "matrix": "/gAAAAAABT/BQAAAAAAAUG69pCjKyLOrt0wAAAAASGXbqf////+byuwUP+/x/87xB/qqqqqqqqr+ARxABEAAOADTYAAD4AAHuw5YAAAAAAEeD/IAAAAAALCFO4AAAAARpQLrQAAAAAmNgOhAAAAABUHAzBwAAAAAYG5YCIAAAAJgMi4DAAAAA6AalgBYAAAAIA0LgBoAAAKABoGgDQAAAcCDgvAAYAADxHngaAAIAABgAFA8ABYAA6kEQBgABIACwAMwPgAAIAOAABgWAADwAsAADA+AAAgBwAAGhwAACoCgMQ8AoAACkkAZAYEAAAAxoAhA3H4AAC+gACPuUQAABGAAARYqgAAGuAAAqQRAAAEYAABEC+AAAf4AAD+EAAAB/4AIB0DgAAGwgGZhwWAAAKAoAgDAOAACwCYAkmAYAAKgAgABMC8AAsACgAECFgACQADgAIELwAHgAD4AAIWAAaAABDIDAOABYAABCYGgYAJAAAAcwNC4AyAAAARgaBgAgAAACQA2IgKgAAADgBiAAWAAAAC4HAjDoAAAACIeAABAAAAACIcA+kAAAAADQYBsAAAAAAEkwNuAAAAAAQapIoAAAAAAA8xqGAAD4AAM/gBGfgEQABnGP64GAKgAAuoQSv3/x//fMQuk/////+7vhdQAAAAADEVO6DH4LFze/2MFAAAAAAAAEv6AAAAAAAAJAA=="
   },
   {
    "id": "pal-redpap",
@@ -305,9 +521,17 @@
    "note": "Circular modules drop the ink fill fraction, the hardest combination to read.",
    "section": "palettes",
    "modules": 65,
-   "bytes": 55845,
+   "bytes": 56284,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "duo88_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "dots",
+   "min_ppm": 1,
+   "blur": 0.5,
+   "flash": 0.8,
+   "matrix": "/oAAAgQABT/BQAAAAAACUG6gAAAZEZGrt1AAQAAMAGXboAB///4CSuwUAbjxleIxB/qqqqqqqqr+AAA8BEB6AADOAJf77faAF4ABU7cBeWAAAIDT+x3+UAAAAGLwAB+wAAAg09wAHe8GAACzz//+ebIMCUvPv1+aPQIBM8/yd+frAwIfz8U7+fyAgAoPkGaeecEBtc/gAP+eeAGz78AACeOfgLPPwAAC+6aAL8uAAACNd4A/z8AAABaboAH/AAAAC/wwDv/QAAAD/4AGd8AAAAD91AOL8AAAAFzOBZ3wAAAANFsA6vgAAAAdCIBBegAAAA/CRD69AA+AB2PiEV+ABEADJRIK78ACoABwqYR3gAEQAFnFA/vgAPgALD4BjeAAAABGsYCm+AAAAEtygEd+AAAACbBAK72AAAAC3mAZ34AAAAf3EC7/0AAAAP8AHn/IAAAB/4QC/PAAAAL5vgM/PQAAAXr/AHPPwAAA+WYATPPIAAHxZ8gfLP8ACnuGhgHDP2O3efXDAw3P7K/596AANPL3K/nn4wCFPP+e+fwIAAXPP//54YCAIJPcAB3iQAAABfwAB+VwANgDP04v5ZgBIAZPUzXlAwBqARfL7fYB+ABAbwEQHwDEP4AJpq1MgCoQUANfx58yEQuoAff/9EgfhdAAAAAAAICC6AAABiAEIEcFAAAAAAAAE/6AAAAAAAAJAA=="
   },
   {
    "id": "pal-plate",
@@ -316,9 +540,52 @@
    "note": "A rounded white plate, for dropping on the black page as a sticker.",
    "section": "palettes",
    "modules": 65,
-   "bytes": 52649,
+   "bytes": 51538,
    "decodes": true,
-   "dark": false
+   "dark": false,
+   "pose": "tess_tilt",
+   "stroke": 2,
+   "version": 12,
+   "dot": "extra-rounded",
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 1.2,
+   "matrix": "/gAAAAAABT/BQAAAAAACUG6AAABIARCrt1AAADAAQOXboAAAPgBESuwUAAARwAExB/qqqqqqqqr+AAAAzEQAAAD7gACf5AAAVQAAAEX6wAAAAIAAff4AAAAAAAAN/tgBBAAgAM3dxQgCAAAA/d9wCAAECAAl39kkAYAAAG3f9yAAAgIADd/95gABgAAV3691wAIAgD3WhdsAAAAAfd9Yd4BAgCCF3yGdrDjgAInfQHdu+IAIHd8AD9yCQABd30AG90wAAnXeoAF90QAALd5AAH92wAC13oAAA90wADXeAAAFxVwAfd8gAAN8XQCt38AAAF90zD/fgA+AGd/gMf9ABEAN/x8q/7ACoAPfrIR/wAEQAH/GB/3kAPgAvf4AB3gAAAAVRIB33EAAAB3rYA/3UAAAvvQADS3wAAAshgAAS38AAN2nAAIbuGAAXciAAAwXMAD950QAhw3oAF2tAAAAd3oA7YsAACA232HdPAAAABp32X2AwAAIAX3zXfQgBAABn3094AACAgB93/2yAGEAAA13/bYAAACADF3d/AAAAAAAt32iAESAIAA13dUEQGAAABF/zwIwANgACR/2AYABIAAA18oAAwBqAAA3+gAA+ABAABsQAABEP6AABKgAACoQQAACRQADEQuoAAA/gAkPhdQAAAiAAACK6gAABAACACUFAAAAAAAAIv6AAAAAAAAIAA=="
   }
- ]
+ ],
+ "baselines": [
+  {
+   "ecc": "L",
+   "version": 2,
+   "modules": 25,
+   "min_ppm": 1,
+   "blur": 0.45,
+   "flash": 0.9
+  },
+  {
+   "ecc": "M",
+   "version": 3,
+   "modules": 29,
+   "min_ppm": 1,
+   "blur": 0.5,
+   "flash": 1.2
+  },
+  {
+   "ecc": "Q",
+   "version": 3,
+   "modules": 29,
+   "min_ppm": 1,
+   "blur": 0.5,
+   "flash": 1.2
+  },
+  {
+   "ecc": "H",
+   "version": 4,
+   "modules": 33,
+   "min_ppm": 1,
+   "blur": 0.5,
+   "flash": 1.2
+  }
+ ],
+ "matrix_encoding": "base64, row-major, MSB first, bit i = y*n + x"
 }

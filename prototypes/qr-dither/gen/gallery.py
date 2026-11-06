@@ -17,6 +17,7 @@ import subprocess
 import sys
 
 import polytopes
+import robust
 import style as sty
 
 from paths import WEB, WORK
@@ -160,14 +161,21 @@ def main():
         got = decode(png)
         ok = bool(got) and got.split("#", 1)[0] == base
         n = len(m)
+        # measured on the rasterised SVG, so the dot style is part of the answer
+        rb = robust.measure(png, n, base) if ok else {"min_ppm": None, "blur": 0.0, "flash": 0.0}
         items.append({"id": ident, "file": f"gallery/{ident}.svg", "title": title,
                       "note": blurb, "section": section, "modules": n,
                       "bytes": len(svg), "decodes": ok,
-                      "dark": kw.get("bg", "#ffffff").lower() in ("#000000", "#000")})
+                      "dark": kw.get("bg", "#ffffff").lower() in ("#000000", "#000"),
+                      "pose": pose, "stroke": stroke, "version": version,
+                      "dot": kw.get("dot", "square"),
+                      "min_ppm": rb["min_ppm"], "blur": rb["blur"], "flash": rb["flash"],
+                      "matrix": robust.pack(m)})
         if not ok:
             bad.append((ident, got))
-        print(f"  {ident:16} {n}x{n}  {side}px  {len(svg):>6}B  "
-              f"{'scans' if ok else 'NO SCAN'}")
+        print(f"  {ident:16} {n}x{n}  {len(svg):>6}B  "
+              f"{'scans' if ok else 'NO SCAN':8} min {str(rb['min_ppm']):>4} px/mod  "
+              f"blur {rb['blur']:.2f}  flash {rb['flash']:.1f}")
 
     print("\nshapes")
     for ident, pose, stroke, ver, title, blurb in SHAPES:
@@ -187,8 +195,18 @@ def main():
              fg=fg, fg2=fg2, bg=bg,
              plate_radius=6 if ident == "pal-plate" else 0)
 
+    # the controls: boring codes for the same destination, measured the same way,
+    # so every verdict on this page has something to be a verdict against
+    print("\nbaselines")
+    baselines = [robust.plain(base, e) for e in ("L", "M", "Q", "H")]
+    for b in baselines:
+        print(f"  plain ECC {b['ecc']:2} v{b['version']:<3} {b['modules']}x{b['modules']}"
+              f"  min {str(b['min_ppm']):>4} px/mod  blur {b['blur']:.2f}  flash {b['flash']:.1f}")
+
     (OUT / "manifest.json").write_text(
-        json.dumps({"url": base, "items": items}, indent=1), encoding="utf-8")
+        json.dumps({"url": base, "items": items, "baselines": baselines,
+                    "matrix_encoding": "base64, row-major, MSB first, bit i = y*n + x"},
+                   indent=1), encoding="utf-8")
 
     if not args.keep:
         shutil.rmtree(RAST, ignore_errors=True)

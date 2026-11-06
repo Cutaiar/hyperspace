@@ -159,11 +159,48 @@ uv run --with pyqart --with pillow --with numpy --with zxing-cpp \
 Nothing here is trusted on looks. `gen/verify_affine.py` checks the affine
 reconstruction against zxing in Python; the browser's own output was pulled out
 of the running page and decoded the same way (24/24 orientations, 15/15 across
-all five textures, 16/16 across every dot and eye style, including a near-solid
-blob and a zero-margin bleed). `gen/stress.py` measures blur and glare
-tolerance against plain high-ECC codes — worth reading before printing anything,
-because QArt runs at **ECC L** by design and has roughly a third the absolute
-blur tolerance of a plain ECC-H code at the same physical size.
+all five textures, 16/16 across every dot and eye style). `gen/gallery.py`
+rasterises each SVG it writes with headless Chrome and decodes *that* — the
+shipped file, not a model of it.
+
+[`gen/robust.py`](gen/robust.py) measures the three things that actually kill a
+code in the world: minimum camera pixels per module, blur tolerance, and a
+specular hotspot from a phone flash. It measures the **rendered** code, never
+the bare matrix — styling cannot change what a code says, but it very much
+changes whether a camera can read it, and measuring the matrix would report one
+number for all seven dot styles and hide the entire effect. It does not:
+
+| | min px/module | blur | flash |
+| --- | --- | --- | --- |
+| square | 1 | 0.45 | 1.2 |
+| extra-rounded | 2 | 0.45 | 1.2 |
+| dots | 2 | 0.45 | 1.2 |
+| **dots-tight** | **3** | 0.45 | 1.2 |
+| **inverted** | **3** | **0.35** | 1.0 |
+| **red on white** | 1 | 0.40 | **0.6** |
+| plain ECC M control | 1 | 0.50 | 1.2 |
+
+Circular modules cost resolution; inversion costs both; red costs half the glare
+headroom, which is the luminance argument showing up as a number.
+
+Read `blur` carefully: it is a Gaussian sigma in **modules**, so it compares
+fairly across versions but *not* across physical sizes. A 65-module code's
+modules are 29/65 the width of a 29-module one printed the same size, so its
+real blur budget is about 0.4× the control's — which is the honest reason an
+art code needs to be physically bigger, not a reason it is fragile.
+
+## The manifest
+
+`web/gallery/manifest.json` (33 KB) is the single source of truth for what
+exists. Each item carries its pose, stroke, version and dot style; its measured
+`min_ppm`, `blur` and `flash`; and `matrix` — the module grid itself, base64,
+row-major, MSB first, bit `i = y * n + x`. The grid is there because the next
+consumers do not want an SVG: a Hyperspace node wants a texture, and a sticker
+sheet wants to re-render at a physical size. All 29 were unpacked and decoded
+as a check that the packed grid is the same code the SVG draws.
+
+`manifest.baselines` holds plain ECC L/M/Q/H codes for the same URL, measured
+identically, so every verdict on the page has something to be a verdict against.
 
 ## Shape and projection
 
