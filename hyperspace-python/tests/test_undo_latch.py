@@ -79,6 +79,7 @@ def test_a_redo_is_refused_on_a_latched_stack_and_a_new_push_clears_it_as_ever(r
     change(rig.one.reg)
     go(rig)
     press(rig)
+    go(rig)
     back = p.base
     assert rig.one.undo.redos
     rig.meta.point_panel(rig.two)
@@ -221,6 +222,7 @@ def test_meta_is_one_rule_with_the_decks(rig):
     """A press in a meta section, from the deck in focus, latches the meta stack; a change
     there opens it, down to the old step; a press back on the deck latches the deck."""
     m, q = rig.meta.undo, rig.reg[META]
+    undo.by_hand(True)
     here_is_meta(rig)
     was = q.base
     change(rig.reg, META)
@@ -248,15 +250,22 @@ def test_meta_is_one_rule_with_the_decks(rig):
     assert bases(rig.one) == held
 
 
+def _meta_step(rig):
+    """An old meta step, made by hand; then the person lets go."""
+    undo.by_hand(True)
+    here_is_meta(rig)
+    change(rig.reg, META)
+    go(rig)
+    undo.by_hand(False)
+    here_is_meta(rig, False)
+
+
 def test_the_mouse_passing_over_is_no_focus_event(rig):
     """A change in a meta section, the mouse across the canvas and back, with no press and
     no change on the way: ⌘Z takes the change back."""
     q = rig.reg[META]
-    here_is_meta(rig)
     was = q.base
-    change(rig.reg, META)
-    go(rig)
-    here_is_meta(rig, False)
+    _meta_step(rig)
     go(rig, 3)
     here_is_meta(rig)
     press(rig)
@@ -279,11 +288,8 @@ def test_the_mouse_passing_then_a_press_is_where_the_latch_bites(rig):
     """The mouse goes by no event, but where it is at the press decides: the old meta
     step cannot be had by wandering into a section and pressing."""
     q = rig.reg[META]
-    here_is_meta(rig)
-    change(rig.reg, META)
-    go(rig)
+    _meta_step(rig)
     moved = q.base
-    here_is_meta(rig, False)
     press(rig)  # on the canvas: the deck, latched
     here_is_meta(rig)
     press(rig)  # and back: latched again
@@ -291,17 +297,301 @@ def test_the_mouse_passing_then_a_press_is_where_the_latch_bites(rig):
     assert q.base == moved
 
 
-def test_a_change_made_with_a_popup_over_the_section_lands_as_a_change_there(rig):
-    """A combo's choice is made with nothing under the mouse: the step begins with `here`
-    on the deck and closes with the mouse back in its section."""
+@pytest.mark.parametrize("back_in_time", [True, False])
+def test_a_change_from_a_popup_is_the_persons_wherever_the_mouse_is(rig, back_in_time):
+    """Finding 3. A combo's choice with `here` on the deck, the list hanging over another
+    section. It opens by the step's own stack, however long the mouse takes to come back."""
     q = rig.reg[META]
     was = q.base
+    undo.by_hand(True)
     change(rig.reg, META)
     go(rig, 1)
+    undo.by_hand(False)
+    go(rig, 2)
+    if back_in_time:
+        here_is_meta(rig)
+    go(rig)
     here_is_meta(rig)
+    press(rig)
+    assert q.base == was
+
+
+def test_riding_a_meta_fader_then_crossing_a_section_opens_nothing(rig):
+    """Finding 1, the owner's hazard. `master.gain` on the APC, with the mouse crossing the
+    analyzer inside the settle time. Focus stays on the deck, whose own step is still
+    open to ⌘Z, and the meta stack's old step is out of reach."""
+    q = rig.reg[META]
+    _meta_step(rig)
+    moved = q.base
+    p = rig.one.reg[BRIGHT]
+    undo.by_hand(True)
+    change(rig.one.reg)  # the deck has the focus, and a step
+    go(rig)
+    undo.by_hand(False)
+    rig.reg["master.gain"].step(2)
+    go(rig, 2)
+    here_is_meta(rig)  # crossing
+    go(rig)
+    here_is_meta(rig, False)
+    assert not rig.one.undo.latched and undo._focused is rig.one.undo
+    deck_moved = p.base
+    press(rig)
+    assert p.base != deck_moved, "the deck's own step, not latched by the crossing"
+    here_is_meta(rig)
+    press(rig)
+    refused_on(rig.meta.undo, "undo", "on the meta controller")
+    assert q.base == moved
+
+
+def test_a_show_loaded_then_crossing_a_section_opens_nothing(rig):
+    """Finding 1, a show: no sample of the mouse as its steps close."""
+    pr = rig.lib.project
+    pr.load("house")
+    go(rig, 2)
+    here_is_meta(rig)
+    go(rig)
+    assert undo._focused is rig.one.undo
+    press(rig)
+    refused_on(rig.meta.undo, "undo", "on the meta controller")
+    assert pr.name == "house"
+
+
+def test_a_controllers_change_opens_the_stack_in_focus_and_moves_no_focus(rig):
+    """Finding 2, (rec). A real change on the focused deck opens it: the owner's "some minor
+    action on that deck" is often on the APC. On another stack it opens nothing there,
+    moves no focus and leaves what the focused stack can do, whatever `here` says."""
+    p = rig.one.reg[BRIGHT]
+    press(rig)
+    assert rig.one.undo.latched
+    was = p.base
+    change(rig.one.reg)  # a knob, no hand on the panel
+    go(rig)
+    assert not rig.one.undo.latched
+    rig.reg["master.gain"].step(1)  # another layer's fader, the mouse in its section
+    here_is_meta(rig)
+    go(rig)
+    assert undo._focused is rig.one.undo and rig.meta.undo.stack
+    here_is_meta(rig, False)
+    press(rig)
+    assert p.base == was
+
+
+def test_within_the_tolerance_is_no_change_and_opens_nothing(rig):
+    """Finding 2: a performer's last-bits round-off, under `REL_TOL`, makes no step."""
+    press(rig)
+    p = rig.one.reg[BRIGHT]
+    p.set(p.base * (1.0 + undo.REL_TOL / 10))
+    go(rig)
+    assert rig.one.undo.latched and rig.one.undo.stack == []
+
+
+def test_a_held_step_opens_nothing_and_a_refusal_does_not_end_it(rig):
+    """Findings 2 and 6. A base chase held on a latched deck: its writes open nothing, and
+    a refused ⌘Z leaves the hold on and the step open."""
+    u, ended = rig.one.undo, []
+    press(rig)
+    u.keep_open("base chase", on_end=lambda: ended.append(1))
+    change(rig.one.reg)
+    go(rig)
+    press(rig)
+    refused_on(u, "undo", "on deck 1")
+    assert u._kept is not None and not ended, "still held"
+    change(rig.one.reg, "view.speed", 1)
+    go(rig)
+    assert len(u.stack) == 1, "one hold, one step"
+    u.let_close()
+    assert ended and u.latched, "and it opened nothing"
+    change(rig.one.reg)  # a change of its own does
+    go(rig)
+    assert not u.latched
+
+
+def test_a_refusal_does_not_cut_a_gesture_in_two(rig):
+    """Finding 6. A step begun out of focus, still open: the press that finds it latched
+    leaves it open, so the knob still turning is one step."""
+    rig.meta.point_panel(rig.two)
+    change(rig.one.reg)
+    go(rig, 1)
+    rig.meta.point_panel(rig.one)
+    press(rig)
+    refused_on(rig.one.undo, "undo", "on deck 1")
+    assert rig.one.undo._open is not None
+    change(rig.one.reg)
+    go(rig)
+    assert len(rig.one.undo.stack) == 1
+
+
+def test_a_pad_leaves_a_meta_stack_in_focus_alone(rig):
+    """Finding 4. An analyzer nudge, a pad, ⌘Z with the mouse unmoved: the nudge goes back."""
+    _pad_rig(rig)
+    q = rig.reg[META]
+    undo.by_hand(True)
+    here_is_meta(rig)
+    was = q.base
+    change(rig.reg, META)
+    go(rig)
+    undo.by_hand(False)
+    rig.one.reg["preset.load.0"].fire()
     go(rig)
     press(rig)
     assert q.base == was
+
+
+def test_a_pad_with_the_mouse_over_a_section_still_shuts_the_room(rig):
+    """The room's deck open, the mouse passing a meta section as the pad lands."""
+    _pad_rig(rig)
+    p = rig.one.reg[BRIGHT]
+    change(rig.one.reg)
+    go(rig)
+    moved = p.base
+    here_is_meta(rig)
+    rig.one.reg["preset.load.0"].fire()
+    go(rig)
+    here_is_meta(rig, False)
+    press(rig)
+    refused_on(rig.one.undo, "undo", "on deck 1")
+    assert p.base == moved
+
+
+def test_moving_the_panel_with_the_mouse_in_a_meta_section_leaves_meta_as_it_was(rig):
+    """Finding 5. The stack ⌘Z reaches never changed. But the deck left is still left:
+    coming back to it, even so, is coming back."""
+    q = rig.reg[META]
+    p = rig.one.reg[BRIGHT]
+    change(rig.one.reg)
+    go(rig)
+    moved = p.base
+    undo.by_hand(True)
+    here_is_meta(rig)
+    was = q.base
+    change(rig.reg, META)
+    go(rig)
+    undo.by_hand(False)
+    rig.meta.point_panel(rig.two)
+    assert not rig.meta.undo.latched
+    press(rig)
+    assert q.base == was
+
+    change(rig.one.reg, "view.speed", 1)  # (nothing here on deck 1 opens: panel elsewhere)
+    go(rig)
+    here_is_meta(rig, False)
+    rig.meta.point_panel(rig.one)
+    press(rig)
+    refused_on(rig.one.undo, "undo", "on deck 1")
+    assert p.base == moved
+
+
+def test_away_and_back_with_the_mouse_in_a_meta_section_relatches_the_deck(rig):
+    """Finding 5's other side: focus on the deck, the mouse resting in a meta section while
+    the panel goes away and back, then to the canvas."""
+    change(rig.one.reg)
+    go(rig)
+    moved = rig.one.reg[BRIGHT].base
+    here_is_meta(rig)
+    rig.meta.point_panel(rig.two)
+    rig.meta.point_panel(rig.one)
+    here_is_meta(rig, False)
+    press(rig)
+    refused_on(rig.one.undo, "undo", "on deck 1")
+    assert rig.one.reg[BRIGHT].base == moved
+
+
+def test_the_words_promise_cmd_z_only_where_a_load_is_a_push(rig):
+    """Finding 7. The pad of the unedited look already loaded is no push: on a latched
+    stack the words name no ⌘Z, and ⌘Z refuses."""
+    _pad_rig(rig)
+    rig.one.reg["preset.load.0"].fire()
+    go(rig)
+    rig.meta.point_panel(rig.two)
+    rig.one.reg["preset.load.0"].fire()
+    assert "⌘Z" not in rig.lib.status
+    go(rig)
+    press(rig)
+    refused_on(rig.two.undo, "undo", "on deck 2")
+
+
+def test_a_pad_with_focus_on_meta_names_no_cmd_z(rig):
+    """The panel on that deck, focus on meta, the mouse in its section: ⌘Z is elsewhere."""
+    _pad_rig(rig)
+    rig.meta.point_panel(rig.two)
+    undo.by_hand(True)
+    here_is_meta(rig)
+    change(rig.reg, META)
+    go(rig)
+    undo.by_hand(False)
+    rig.one.reg["preset.load.0"].fire()
+    assert "⌘Z" not in rig.lib.status
+
+
+def _fade_across(rig):
+    rig.meta.mix.xfade = 1.0
+    assert rig.meta.follow_fader()
+
+
+def test_a_fade_latches_the_panels_deck(rig):
+    """Finding 8. A tweak off air long ago, fade across: that tweak is now the room's look."""
+    rig.meta.point_panel(rig.two)
+    p = rig.two.reg[BRIGHT]
+    change(rig.two.reg)
+    go(rig)
+    moved = p.base
+    assert not rig.two.undo.latched
+    _fade_across(rig)
+    assert rig.meta.on_air is rig.two
+    press(rig)
+    refused_on(rig.two.undo, "undo", "on deck 2")
+    assert p.base == moved
+    change(rig.two.reg, "view.speed", 1)  # no focus moved: a knob opens it
+    go(rig)
+    assert not rig.two.undo.latched
+
+
+def test_a_fade_off_air_latches_it_too_and_leaves_meta_alone(rig):
+    p = rig.one.reg[BRIGHT]
+    change(rig.one.reg)
+    go(rig)
+    moved = p.base
+    q = rig.reg[META]
+    undo.by_hand(True)
+    here_is_meta(rig)
+    was = q.base
+    change(rig.reg, META)
+    go(rig)
+    undo.by_hand(False)
+    _fade_across(rig)
+    press(rig)
+    assert q.base == was, "meta in focus is as it was"
+    here_is_meta(rig, False)
+    press(rig)
+    refused_on(rig.one.undo, "undo", "on deck 1")
+    assert p.base == moved
+
+
+def test_one_check_on_the_road_every_load_takes(rig):
+    """Finding 9. Any `push_on(load=True)` onto the other deck with the panel on air shuts
+    it; a push that is no load, or with the panel off air, does not."""
+    change(rig.one.reg)
+    go(rig)
+    undo.push_on(rig.two.reg, "a verb that is no load")
+    assert not rig.one.undo.latched
+    undo.push_on(rig.two.reg, "a future verb", load=True)
+    assert rig.one.undo.latched
+    go(rig)
+
+    rig.meta.point_panel(rig.two)
+    change(rig.two.reg)
+    go(rig)
+    undo.push_on(rig.one.reg, "panel off air", load=True)
+    assert not rig.two.undo.latched
+
+
+def test_the_words_name_each_stack_from_birth(rig):
+    """Finding 10: `called` is given at construction, with no fallback words."""
+    assert (rig.one.undo.called, rig.two.undo.called, rig.meta.undo.called) == (
+        "on deck 1",
+        "on deck 2",
+        "on the meta controller",
+    )
 
 
 def test_over_the_player_screen_nothing_moves_the_focus(rig):

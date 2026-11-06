@@ -73,7 +73,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_players, ui_presets
+from . import library, ui, ui_fx, ui_players, ui_presets, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -264,6 +264,8 @@ def left(panel) -> None:
     """A frame's draw begins: nothing is under the mouse until the draw says so, so
     a panel hidden or collapsed says nothing is (`where`, `Panel.in_meta_section`)."""
     from . import ui_graph  # (late: ui_graph imports this module)
+    undo.by_hand(imgui.is_any_item_active()
+                 or any(imgui.is_mouse_down(b) or imgui.is_mouse_released(b) for b in (0, 1)))
     panel._param_under = None
     st = panel.__dict__.get(ui_graph.STATE)
     if st is not None:

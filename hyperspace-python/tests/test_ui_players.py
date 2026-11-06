@@ -35,7 +35,8 @@ def _with_meta(r, tmp_path, monkeypatch, roles=("pad", "p2", "apc40", "leap")):
     """The real meta controller over stand-in decks, and a list of controllers."""
     monkeypatch.setattr(deck_mod, "meta_stack", lambda first: SimpleNamespace())
     monkeypatch.setattr(deck_mod.undos, "install_meta", lambda u: None)
-    meta = MetaController(SimpleNamespace(name="one"), SimpleNamespace(name="two"),
+    meta = MetaController(SimpleNamespace(name="one", undo=SimpleNamespace()),
+                          SimpleNamespace(name="two", undo=SimpleNamespace()),
                           Players.load(tmp_path))
     ctx = devices.Context(players=meta.players)
     kinds = {"apc40": "midi", "leap": "hands"}
@@ -591,7 +592,8 @@ def test_undo_over_the_board_takes_nothing_back_and_says_so(rig, monkeypatch):
     said, touched = [], []
     meta_stack = SimpleNamespace(_say=said.append, undo=lambda: touched.append("meta"))
     deck_stack = SimpleNamespace(undo=lambda: touched.append("deck"), latched=False,
-                                 _flush=lambda: None)
+                                 _opens=False, _fingerprint=lambda: None,
+                                 _observe=lambda fp: None)
     monkeypatch.setattr(undo, "_meta", meta_stack)
     monkeypatch.setattr(undo, "_installed", deck_stack)
     monkeypatch.setattr(undo, "_focused", deck_stack)     # (the latch has its own file)

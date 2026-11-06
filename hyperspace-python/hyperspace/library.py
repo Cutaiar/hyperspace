@@ -3670,10 +3670,8 @@ class DeckProject(Project):
 
     def _say_loaded(self, where: Project) -> None:
         name = getattr(where._loader(), "current", None)    # the look's own name
-        if self.meta is not None:
-            undo.landed_elsewhere(self.meta.off_air.undo)   # (row 753: not the room's)
-            if name:
-                where.lib.say(status=self.meta.loaded_words(name))
+        if self.meta is not None and name:
+            where.lib.say(status=self.meta.loaded_words(name))
 
     @property
     def lit(self) -> int:

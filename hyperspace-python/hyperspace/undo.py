@@ -59,10 +59,15 @@ nothing back until you change something on it. Whenever focus comes to a stack i
 latches shut (`latched`); ⌘Z and ⇧⌘Z there refuse, in words, and touch no history; the
 first push after that opens it, and ⌘Z then goes all the way down, older steps
 included. Focus (`_focused`) is not where the mouse is: `here` follows the mouse, and
-one passing over a section is no event. Focus moves when the panel moves deck
-(`install`), when a ⌘Z or a change is made at a stack `here` names, or goes nowhere when
-a verb lands on a stack ⌘Z does not go to (`landed_elsewhere`). So a change that lands
-on a stack out of focus opens nothing, and coming back to it latches it again.
+one passing over a section is no event. It moves on three acts only: the panel moving
+the stack ⌘Z reaches (`install`), a ⌘Z pressed at a stack, and the person's own change
+in the panel (`by_hand`), whose stack is the edited param's own, so a popup over another
+section cannot mislead it. A controller's change opens the stack in focus and never
+moves the focus, wherever the mouse is; a held step (`keep_open`) opens nothing. A
+change out of focus opens nothing, and coming back latches it again. Two things shut the
+stack ⌘Z reaches without moving focus, since what it would take back has changed under
+you: the panel's deck going on or off air (`on_air`), and, with the panel on air, a load
+landing on the other deck (`push_on`).
 
 The band layout: a band added, removed or moved re-declares every
 `band.*` param and is **not** a step. Each state is tagged with the shape
@@ -243,8 +248,10 @@ class Undo:
     _opens = False   # the open step began on focus: when it lands it opens the latch
 
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
-                 on_restore=None, banks=None, only=None):
+                 on_restore=None, banks=None, only=None, called=None):
         self.reg, self.table = reg, table
+        if called is not None:
+            self.called = called
         try:
             _watching[reg] = ref(self)
         except TypeError:                 # a stand-in registry: found only by `installed`
@@ -370,6 +377,7 @@ class Undo:
         never more than one step."""
         self._flush()
         self.push(label)
+        self._opens = False               # a held control's writes open no latch
         self._action_frame = -1           # the next push is an action of its own
         self._kept, self._on_end = self._open, on_end
 
@@ -433,7 +441,7 @@ class Undo:
         to put back — a refused unbind or a load that fails changes
         nothing and must not cost the redo."""
         self._open = step
-        self._opens = _changed_here(self)
+        self._opens = _begun_on(self)
         self.stack.append(step)
         del self.stack[:-LIMIT]
 
@@ -448,19 +456,24 @@ class Undo:
         if step is self._kept:
             self._end_kept()
         ids, parts, _left = self._differs(step.before, now, tagged=False)
-        empty = not ids and not parts and step.before.tag == now.tag
-        if empty and step.load and self.marks is not None:
-            empty = self._marks_equal(step.before.marks)
+        empty = self._empty(step, now, ids, parts)
         opens, self._opens = self._opens, False
         if empty:
             self.stack[:] = [s for s in self.stack if s is not step]
             return
-        if opens or _came_here(self):
+        if opens:
             self.latched = False
         if step.action:
             self.redos.clear()
         if not step.label:
             step.label = self._label(step.before, now, ids, parts)
+
+    def _empty(self, step: Step, now: State, ids, parts) -> bool:
+        """Has `step` nothing to put back, with `ids` and `parts` what differs?"""
+        empty = not ids and not parts and step.before.tag == now.tag
+        if empty and step.load and self.marks is not None:
+            empty = self._marks_equal(step.before.marks)
+        return empty
 
     def _marks_equal(self, mark) -> bool:
         try:
@@ -717,6 +730,8 @@ _installed: Undo | None = globals().get("_installed")
 _meta: Undo | None = globals().get("_meta")
 _where = globals().get("_where")
 _focused: Undo | None = globals().get("_focused", _installed)   # what the latch goes by
+_hand: bool = globals().get("_hand", False)   # the person is working the panel (`by_hand`)
+_room: Undo | None = globals().get("_room")   # the stack of the deck on air (`on_air`)
 
 
 # each registry's own `Undo`, a deck's whether or not it is the installed one, so
@@ -742,11 +757,17 @@ def watching(reg) -> Undo | None:
 
 def install(u: Undo | None) -> None:
     """Make `u` the stack of the panel's `Deck` (app.main,
-    `MetaController.point_panel`); None uninstalls. A new one has the focus."""
-    global _installed
-    if u is not _installed:
+    `MetaController.point_panel`); None uninstalls. Focus goes with it if this changes
+    the stack ⌘Z reaches. With the mouse in a meta section it does not, and meta stays
+    as it was; focus on the deck left goes nowhere, so coming back is still coming back."""
+    global _installed, _focused
+    old, _installed = _installed, u
+    if u is old:
+        return
+    if u is None or here() is u:
         _focus(u)
-    _installed = u
+    elif _focused is old:
+        _focused = None
 
 
 def install_meta(u: Undo | None) -> None:
@@ -809,42 +830,60 @@ def _focus(u: Undo | None) -> None:
             u.latched, u._opens = True, False
 
 
-def _changed_here(u: Undo) -> bool:
-    """A step begins on `u`. A change where you are takes the focus there, and the
-    step opens the latch; on a stack with the focus, too. Anywhere else it opens nothing."""
-    if u is here():
+def _begun_on(u: Undo) -> bool:
+    """A step begins on `u`: does it open the latch when it lands? The person's own
+    change in the panel takes the focus there (only a stack ⌘Z can reach: a bank pad on
+    the on-screen desk loads off air), by the step's own stack and not by the mouse. A
+    controller's opens the stack in focus and moves nothing."""
+    if _hand and (u is _installed or u is _meta):
         _focus(u)
     return u is _focused
 
 
-def _came_here(u: Undo) -> bool:
-    """A step that began elsewhere lands on `u`, and that is where you are now: a
-    choice in a popup is made with nothing under the mouse, which is back in its
-    section when the step closes. As `_changed_here`. Not for a stack with the focus:
-    a focus event since the step began (the panel moved here) is not a push."""
-    if u is not _focused and u is here():
-        _focus(u)
-        return True
-    return False
+def by_hand(on: bool) -> None:
+    """Is the person working the panel, as of its latest draw (`ui_pane.left`)? No
+    panel: never, and a change opens only the stack in focus."""
+    global _hand
+    _hand = bool(on)
 
 
-def landed_elsewhere(u: Undo) -> None:
-    """A verb has landed on `u` (a pad's load, a copy): unless ⌘Z goes there, focus
-    goes nowhere, so what ⌘Z next reaches is latched. A mis-pressed pad and a ⌘Z must
-    not take back the room's last step (row 753)."""
-    global _focused
-    if here() is not u:
-        _focused = None
+def on_air(u: Undo) -> None:
+    """`u`'s deck has gone on air (`MetaController`). The panel's deck has just gone on or
+    off air, so what ⌘Z reaches there is another thing than it was: its stack latches.
+    A meta stack in focus is as it was."""
+    global _room
+    if u is not _room:
+        _room = u
+        _shut(_installed)
+
+
+def _shut(u: Undo | None) -> None:
+    """Latch `u` where it stands: no focus moves, so the next change on it opens it."""
+    if u is not None:
+        u.latched, u._opens = True, False
+
+
+def takes_back(u: Undo) -> bool:
+    """Would ⌘Z here take back the step just begun on `u`? For words which promise it:
+    only a step that opens the latch and will not close empty."""
+    step = u._open
+    if here() is not u or u is not _focused or step is None or not u._opens:
+        return False
+    now = u._take()
+    ids, parts, _left = u._differs(step.before, now, tagged=False)
+    return not u._empty(step, now, ids, parts)
 
 
 def _refused(at: Undo, verb: str) -> bool:
-    """The press at `at`: it is a focus event of its own, what it finds is what lands
-    first, and a latched stack says so and goes no further."""
+    """The press at `at`: an edit its tick has not seen lands first, then the press is a
+    focus event of its own. A latched stack says so and touches nothing: no step is
+    closed, so a hold or a gesture under way goes on."""
+    at._observe(at._fingerprint())
     _focus(at)
-    at._flush()
-    if at.latched:
+    if at.latched and not at._opens:
         at._say(f"nothing to {verb} here yet: make a change {at.called} first")
-    return at.latched
+        return True
+    return False
 
 
 def installed() -> Undo | None:
@@ -878,6 +917,8 @@ def push_on(reg, label: str, *, load: bool = False) -> None:
     if u is None or u is _installed:
         push(label, load=load)
     else:
+        if load and _installed is _room:      # with the panel on air: a pad, a copy (row 753)
+            _shut(_installed)
         _guarded("push", lambda v: v.push(label, load=load), on=u)
 
 

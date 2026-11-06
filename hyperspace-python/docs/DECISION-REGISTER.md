@@ -757,7 +757,7 @@ here; overturn → the change, then the same.
 | 750 | Plan 56: the factory's `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows and act exactly as they did; no saved-format change, an older build reads a pair's row as dormant | 748 | (rec) — pending the owner |
 | 751 | Plan 56: not built, poles on keys or MIDI notes; a route on a pair leaves its poles' own rows alone, and both act | 748 | (rec) — pending the owner |
 | 752 | Plan 44 D5d: no preset may carry a row on a library verb, a load (`is_load_verb`) or a save (`is_save_verb`: `preset.save.<k>`, `preset.save_new`). `routing.meta_refusal` refuses a desk row or route on one at every door, dropped with a note on load and gone at the next save; the meta controller's own rows pass, so a person's saves are as they were. `preset.*` stays out of `is_session_id` until SEM. Not a format change | 700, 743 | owner — 2026-11-06: "no patch can affect another patch" |
-| 753 | The undo latch: whenever focus comes to a stack it latches shut, ⌘Z and ⇧⌘Z there refuse in words and touch no history, and the first push after the focus event opens it, down to the oldest step. One rule for the decks and the meta stack. A mouse passing over is no focus event; a press is, and so is a change where you are | 691, 700 | answered, the owner, 2026-11-06 |
+| 753 | The undo latch: whenever focus comes to a stack it latches shut, ⌘Z and ⇧⌘Z there refuse in words and touch no history, and the first push after the focus event opens it, down to the oldest step. One rule for the decks and the meta stack. A mouse passing over is no focus event; a press is, and so is the person's own change in the panel. A controller opens the stack in focus and moves no focus (rec); a load onto the other deck with the panel on air, and a fade, latch the panel's deck in place (rec) | 691, 700 | answered, the owner, 2026-11-06 |
 
 "—": no hand check shows it; tests only.
 
@@ -13689,23 +13689,23 @@ still wins, as does a sink row.
   which closes empty (a refused load) is no push and opens nothing. `Undo.undo` on the instance knows no latch.
 - **What a focus event is: `here` follows the mouse, so this was a finding.** ⌘Z's stack changes merely by hovering (D5b, row 691), and the
   owner's hazard is real there: a mouse wandering into the analyzer and a ⌘Z took an hour-old tweak. Latching on the hover itself would refuse
-  a ⌘Z after the mouse had only crossed the canvas. So focus is held apart from `here` (`undo._focused`) and moves on real acts only: the panel moving
-  deck (`install`), a ⌘Z pressed at a stack, or a change made at the stack `here` names. A mouse passing over does nothing; where it is at the
-  press decides. Going to a meta section and pressing is the focus change, and it refuses.
-- **A popup.** A combo's choice is made with nothing under the mouse, so the step begins with `here` on the deck. It counts as a
-  change where you are if `here` names its stack when it closes, the settle time later, with the mouse back in its section.
+  a ⌘Z after the mouse had only crossed the canvas. So focus is held apart from `here` (`undo._focused`) and moves on three acts only: the panel moving
+  the stack ⌘Z reaches (`install`; moving deck with the mouse in a meta section leaves meta as it was), a ⌘Z pressed at a stack, and the person's own change in the panel.
+  Going to a meta section and pressing is the focus change, and it refuses.
+- **The person's own change.** The panel says whether a button is down, just released, or an item live, as of its latest draw (`ui_pane.left`, `undo.by_hand`). A step begun then takes
+  the focus to its own stack, which already says the edited param's layer, so a combo hanging over another section is no matter. It never samples the mouse's place.
+- **(rec) — pending the owner: controllers.** A controller's real change on the stack in focus opens it, whoever's it is, another player's included, since "some minor action on that deck" is often on the
+  APC. It never moves focus, wherever the mouse is. So a change on the APC right after the mouse went elsewhere is refused once, and the next opens. What is not a change opens nothing: a difference within `REL_TOL` makes no step at all, and
+  a held step (`keep_open`: a base chase, a `turn` row's clutch) opens nothing and is not cut by a refusal. A pot's whole CC of jitter, or stick drift past its deadzone, writes the base, so it is a step today and opens too; there is no threshold in undo to hold it under, and adding one would change what is a step.
 - **Landing out of focus.** A change on a stack out of focus opens nothing, and coming back latches it whatever happened in between, a step still
-  open included. So a pad's load off air, then the panel on that deck, is latched; hence no "⌘Z" in the pad's words unless ⌘Z reaches that deck.
-- **(rec) — pending the owner: a load off air takes the focus away.** With the panel on air and open, the latch alone would not have stopped
-  a mis-pressed pad and ⌘Z: no stack changed. So a pad's load or a copy on air landing on a stack ⌘Z does not go to sends focus nowhere
-  (`landed_elsewhere`), and the next ⌘Z refuses. This goes one step past the owner's sentence, for the case that made this row: the cost is a
-  ⌘Z meant for the room just after a pad needs a touch first. One line each in `_say_loaded` and `copy_on_air` to take it out.
+  open included. So a pad's load off air, then the panel on that deck, is latched; hence no "⌘Z" in the pad's words unless `undo.takes_back` says it would: a load that closes empty (the pad of the unedited look already loaded) is no push.
+- **(rec) — pending the owner: what shuts the stack in place.** The latch alone stops neither of these, since no stack changes. With the panel on air, a load landing on the other deck: one check at the road every load takes, `push_on(..., load=True)` where the stack is not the panel's, so a pad, a copy and any future verb are all covered, and it is one line to remove. And the panel's deck going on or off air by the fader (`undo.on_air`): a tweak made off air long ago, fade across, ⌘Z would take back the room's look. Both shut only the panel's deck: a meta stack in focus is as it was. The cost: a ⌘Z meant for the room just after a pad or a fade needs a touch first.
 - **Redo.** A latched stack refuses it too: the same stack and the same surprise. The push that opens it clears the redos, as any new change does,
   so no redo crosses a focus change. ⌘Z then ⇧⌘Z with no focus change is as it was.
 - **Launch, a show, a reset.** At launch the panel's deck has the focus and is latched, like any focus event; its stack is empty, so nothing is different
   but the words. A show load is two pushes: the deck's, where you are, opens it; the meta stack's, out of focus unless you are in a meta section, does not (row 693's
   second ⌘Z now wants a meta change first). `Undo.clear` is no push and no focus event: the latch stays as it was. A new `Undo` installed is a focus event. A hot
-  reload keeps the focus, and a stack from before it reads open, so a reload refuses nothing.
+  reload keeps the focus, and a stack from before it reads open, so a reload refuses nothing; what is on air and the panel's by-hand signal arrive with a restart.
 - **Over the player screen** no stack answers, so a press there moves no focus.
 - **Words.** Row 700's status line and `preset.home`'s and `edit.undo`'s tips. The cheat sheet's "undo · ⇧ redo" stays true and is unchanged, as is `ui_players.over`.
 - **Judge it.** 579, and 524, 525, 578 as amended.

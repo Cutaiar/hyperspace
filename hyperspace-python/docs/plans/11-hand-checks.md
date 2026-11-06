@@ -7947,7 +7947,8 @@ a ⌘Z no longer takes back a meta edit made while you were elsewhere.
    section, and say whether audio should count as a meta section.
 5. Load the wrong preset, ⌘Z on the canvas. *Pass:* the earlier preset is back with its unsaved edits.
 6. Tweak a band, then press the key row that focuses the analyzer. Move the mouse to the desk diagram,
-   turn a desk knob, ⌘Z. *Pass:* the knob goes back and the band stays.
+   turn a desk knob, ⌘Z. *Pass:* refused, since a controller moves no focus (row 753), and the band stays.
+   Turn it again, ⌘Z. *Pass:* the knob goes back and the band stays.
 7. In the hands section, change a `ghost` row and ⌘Z, then change a shaping knob and ⌘Z. *Pass:* the first
    takes the deck's, the second the last hands change.
 *Fail:* any ⌘Z that moves the other layer, or a knob or an orbit that ends up as two steps.
@@ -8234,9 +8235,12 @@ Register row 753, 2026-11-06. Restart first. Headless: `tests/test_undo_latch.py
    the footer refuses. Click to the deck off air, ⌘Z. *Pass:* refused too, and the load stands. Change something, ⌘Z twice. *Pass:* the load goes back.
 4. Mouse on the analyzer section, move a threshold. Run the mouse over the canvas and back, with no press, ⌘Z. *Pass:* it goes back: passing over is no focus change.
 5. Move a threshold again, on the canvas turn a knob, back on the analyzer ⌘Z. *Pass:* refused; the threshold stays.
-6. Pick a value from a combo in the audio or hands section, the first change there, with the mouse then back in the section; ⌘Z. *Pass:* it goes back.
+6. Pick a value from a combo in the audio or hands section, the first change there, where the list hangs over another section. Bring the mouse back to that section, ⌘Z. *Pass:* it goes back.
+7. Ride `master.gain` on the APC, and straight after run the mouse across the analyzer and back to the canvas. ⌘Z in the analyzer: *Pass:* refused, the old meta step stays. Then, again from a change on the deck, the same ride and pass, ⌘Z on the canvas. *Pass:* it takes the deck's step.
+8. Hold BACK (a base chase) on deck 1 with deck 1 latched, ⌘Z. *Pass:* refused, and the hold goes on. Let go: the latch is still shut. Turn an APC knob on that deck, ⌘Z. *Pass:* it goes back.
+9. Panel on the deck off air, a change, fade across, ⌘Z. *Pass:* refused. Nudge an analyzer threshold with the mouse there, press a bank pad, ⌘Z, the mouse unmoved. *Pass:* the threshold goes back.
 *Fail:* any ⌘Z that takes back a step you made before you came to that stack, or a refusal right after a change you just made there.
-*Judge:* with the panel on air and open, a pad's load shuts it (step 3, a choice past the owner's sentence, row 753). Right, or should ⌘Z there still reach your last on-air step?
+*Judge:* with the panel on air and open, a pad's load shuts it (step 3), and any fade shuts the panel's deck (step 9): both past the owner's sentence, row 753. Right? And a controller's change opens the stack in focus, whoever's it is: another player's knob counts (row 753). Right, or only your own player's?
 
 ## What no test covers
 
