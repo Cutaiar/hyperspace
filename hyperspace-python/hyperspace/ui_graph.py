@@ -1220,13 +1220,13 @@ def panel_wants(panel) -> list:
     (cached on the panel by imgui's frame count); [] with no registry or
     no router (a panel from a test)."""
     from . import devices  # (late: the GRAPH page's imports stay as they are)
-    rig, router = getattr(panel, "devices", None), getattr(panel, "router", None)
-    if rig is None or router is None:
+    device_reg, router = getattr(panel, "devices", None), getattr(panel, "router", None)
+    if device_reg is None or router is None:
         return []
-    key = (imgui.get_frame_count(), id(rig), id(router.table))
+    key = (imgui.get_frame_count(), id(device_reg), id(router.table))
     got = panel.__dict__.get("_wants_cache")
     if got is None or got[0] != key:
-        got = panel.__dict__["_wants_cache"] = (key, devices.wants(router.table, rig))
+        got = panel.__dict__["_wants_cache"] = (key, devices.wants(router.table, device_reg))
     return got[1]
 
 
@@ -2133,17 +2133,17 @@ def group_status(panel, view: graphview.View, g) -> str:
     device is there, or with no device registry (a panel from a test).
     Once a frame per group."""
     from . import devices  # (late, as `panel_wants`)
-    rig, router = getattr(panel, "devices", None), getattr(panel, "router", None)
-    if rig is None or router is None:
+    device_reg, router = getattr(panel, "devices", None), getattr(panel, "router", None)
+    if device_reg is None or router is None:
         return ""
-    key = (imgui.get_frame_count(), id(rig), id(router.table), id(view))
+    key = (imgui.get_frame_count(), id(device_reg), id(router.table), id(view))
     cache = panel.__dict__.get("_group_wants")
     if cache is None or cache[0] != key:
         cache = panel.__dict__["_group_wants"] = (key, {})
     got = cache[1].get(g.id)
     if got is None:
         got = cache[1][g.id] = devices.want_words(
-            devices.wants_for(router.table, rig, graphview.group_params(g)))
+            devices.wants_for(router.table, device_reg, graphview.group_params(g)))
     return got
 
 
@@ -4880,7 +4880,7 @@ def _value_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -
         remove_node(panel, n.id)
 
 
-def _rig_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
+def _fixture_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
     """Delete pressed on the rig's node (a device, the analyzer, an LFO, a
     group): kept, said."""
     ed.reject_deleted_item()
@@ -4963,7 +4963,7 @@ def _delete(panel, st: dict, view: graphview.View) -> None:
                     if g is not None:
                         _note(st, graphview.GROUP_NO_DELETE.format(name=g.name))
                     continue
-                DELETE_NODE.get(n.kind, _rig_node_cut)(panel, st, view, n)
+                DELETE_NODE.get(n.kind, _fixture_node_cut)(panel, st, view, n)
             lk = ed.LinkId()
             while ed.query_deleted_link(lk):
                 cid = names.get(lk.id(), "")[2:]

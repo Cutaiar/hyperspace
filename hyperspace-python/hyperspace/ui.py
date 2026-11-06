@@ -75,7 +75,7 @@ from .graph import (
     layer_words,
     output_placement_words,
     output_ports,
-    rig_of,
+    bus_cuts_of,
     through_layer,
     through_of,
     wire_words,
@@ -334,7 +334,7 @@ OPEN_ON_GRAPH = "open on GRAPH"                 # a window's block: its node sel
 NAME_ROOM = 64.0     # px: an OUTPUT block name needs this beside its ticks, or they go under it
 
 
-def shows_line(spec, n: int | None, slots=(), rig=None) -> str:
+def shows_line(spec, n: int | None, slots=(), bus_cuts=None) -> str:
     """The OUTPUT page's "shows:" (plan 35 U), read off the wired frame
     (`graphview.page_spec`: None is the factory frame): window `n`'s
     picture port — its own wire's source by its title (`graphview.
@@ -349,19 +349,19 @@ def shows_line(spec, n: int | None, slots=(), rig=None) -> str:
     if n is None:
         now = alls
     else:
-        now = graphview.picture_now(spec, f"output.{n}.image", rig)
+        now = graphview.picture_now(spec, f"output.{n}.image", bus_cuts)
         if now == graphview.AS_ALL and alls == graphview.NOTHING:
             now = graphview.NOTHING
     words = GROUND_WORDS if now == graphview.NOTHING else graphview.picture_label(
         spec, now, slots)
-    if n is not None and graphview.is_through(spec, n, rig):
+    if n is not None and graphview.is_through(spec, n, bus_cuts):
         words += f" · the {THROUGH_WORDS}"
     return f"shows: {words}"
 
 
 def output_shows(sw, fx_on: bool, visible: bool, master: float,
                  wiring: Wiring | None = None, n: int | None = None,
-                 rig=None) -> tuple[str, str]:
+                 bus_cuts=None) -> tuple[str, str]:
     """What one render output shows, in words, and why it is black ("" when
     it is not) — plan 21 WP4, fork F8: words, no picture; plan 35 T6: the
     picture combo's hover, its black words after `shows_line`'s, and the
@@ -385,8 +385,8 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     w = wiring if wiring is not None else EMPTY
     k = n if n is not None else 1
     shown = bool(sw.hands) and bool(visible)
-    thru = through_of(w, k, rig)
-    got = output_ports(w, k, rig)
+    thru = through_of(w, k, bus_cuts)
+    got = output_ports(w, k, bus_cuts)
     through = thru is not None
     bent = through and shown and fx_on
     # (a through over nothing is the hands alone: no scene in its picture)
@@ -435,7 +435,7 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     else:
         words = "hands"
     if inside:
-        words = "scene + " + hands_words(w, sw, k, rig)
+        words = "scene + " + hands_words(w, sw, k, bus_cuts)
     elif after or bent:
         # a layer laid on: its node, "as lines", its blend
         words += layer_words(w, thru[0] if bent else got["hands"])
@@ -2198,11 +2198,11 @@ class Panel:
         nid = getattr(self, "graph_selected", None)
         return [] if nid is None else ui_graph.node_params(self, nid)
 
-    def rig_now(self):
+    def bus_cuts_now(self):
         """The loaded preset's bus cuts (plan 44 D3; plan 36 T1's were the show's:
         `graph.RigWires`), what the OUTPUT page's words and edits read;
         with no presets, every cable standing."""
-        return rig_of(getattr(getattr(self, "library", None), "presets", None))
+        return bus_cuts_of(getattr(getattr(self, "library", None), "presets", None))
 
     def black_outputs(self) -> list[int]:
         """The opened outputs showing nothing for a reason other than the
@@ -2210,10 +2210,10 @@ class Panel:
         on every page (plan 21 WP4)."""
         fx_on, visible, master = self._outputs_now()
         wiring, _ = self.graph_now()
-        rig = self.rig_now()
+        bus_cuts = self.bus_cuts_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
                 if getattr(sl, "drawn", sl.opened) and output_shows(sl.switches, fx_on, visible, master, wiring,
-                                         n=sl.n, rig=rig)[1]
+                                         n=sl.n, bus_cuts=bus_cuts)[1]
                 not in ("", "master")]
 
     @staticmethod
@@ -2246,7 +2246,7 @@ class Panel:
         # loaded preset's `graph` section, or the default; plan 35 U: the
         # wired frame the pages read and edit (`graphview.page_spec`)
         wiring, spec = self.graph_now()
-        rig = self.rig_now()
+        bus_cuts = self.bus_cuts_now()
         frame = graphview.page_spec(spec)
         said = graph_words(spec, getattr(getattr(self.renderer, "_graph", None),
                                          "dormant", None))
@@ -2291,7 +2291,7 @@ class Panel:
             beside(check_w("hands"))
             self._check(f"{pre}.hands", "hands")
             beside(check_w(THROUGH_WORDS))
-            self._through_check(frame, sl.n, slots, rig)
+            self._through_check(frame, sl.n, slots, bus_cuts)
             # the mirror (plan 23 WP1): two ticks at the right of the dim row,
             # or of the "shows:" line when the output has no dim of its own
             flips = [(pid, t) for pid, t in ((f"{pre}.flip_x", "flip X"),
@@ -2314,7 +2314,7 @@ class Panel:
                 why.append("hands: ghost hands are off (HANDS page)")
             elif sw.hands and getattr(self, "hands", None) is None:
                 why.append("hands: no tracker")
-            if through_layer(wiring, sl.n, rig) is not None and not fx_on:
+            if through_layer(wiring, sl.n, bus_cuts) is not None and not fx_on:
                 why.append("through: no effect on")
             # one line for what is wrong: its present's error first (warning
             # colour, the whole on hover), then why a switch can do nothing
@@ -2335,17 +2335,17 @@ class Panel:
             # say it, and the combo that sets it (`graphview.set_picture`);
             # the retired route table's words (`output_shows`) on its hover,
             # and after the words when it is black or dimmed
-            words, black = output_shows(sw, fx_on, visible, master, wiring, n=sl.n, rig=rig)
-            line = shows_line(frame, sl.n, slots, rig)
+            words, black = output_shows(sw, fx_on, visible, master, wiring, n=sl.n, bus_cuts=bus_cuts)
+            line = shows_line(frame, sl.n, slots, bus_cuts)
             factor = min(1.0, master * float(sw.dim))
             if black:
                 line += f" · {words}"
             elif 0.0 < factor < 1.0:
                 line += f" · {min(99, max(1, round(factor * 100)))}%"
-            tip = f"{words}\n{hands_words(wiring, sw, sl.n, rig)}\n{said}"
+            tip = f"{words}\n{hands_words(wiring, sw, sl.n, bus_cuts)}\n{said}"
             gw = chip_w(OPEN_ON_GRAPH) + st.item_spacing.x
             self._picture_combo(frame, f"{pre}.image", line, -(gw + (fw + 8 if flips else 0)),
-                                bool(black), tip, slots, rig=rig)
+                                bool(black), tip, slots, bus_cuts=bus_cuts)
             imgui.same_line()
             if chip(f"{OPEN_ON_GRAPH}##graph.{pre}"):
                 ui_graph.select_node(self, pre)
@@ -2391,7 +2391,7 @@ class Panel:
                 tooltip(line)
 
     def _picture_combo(self, frame, port: str, line: str, width: float, warn: bool,
-                       tip: str, slots=(), key: str = "output_said", rig=None) -> None:
+                       tip: str, slots=(), key: str = "output_said", bus_cuts=None) -> None:
         """A picture port as a combo (plan 35 U): closed, `line` (its
         "shows:" or "records:" words, in the warning colour when `warn`);
         open, `graphview.picture_choices` by their titles, the pick a
@@ -2410,7 +2410,7 @@ class Panel:
             imgui.pop_style_color()
         pick = None
         if opened:
-            now = graphview.picture_now(frame, port, rig)
+            now = graphview.picture_now(frame, port, bus_cuts)
             # (R17: an output's combo also offers each channel with a source)
             for item in graphview.picture_choices(frame, port, self.reg):
                 chosen = item == now
@@ -2425,13 +2425,13 @@ class Panel:
         if pick is not None:
             self._graph_edit(lambda e: graphview.set_picture(e, port, pick), key)
 
-    def _through_check(self, frame, n: int, slots=(), rig=None) -> None:
+    def _through_check(self, frame, n: int, slots=(), bus_cuts=None) -> None:
         """Window `n`'s "hands through the effects" (plan 35 O): ticked while
         its picture is a chain over the hands layer laid on; a tick is
         `graphview.set_through`. Drawn disabled, with why on its hover,
         where it can do nothing (`graphview.through_refusal`)."""
-        on = graphview.is_through(frame, n, rig)
-        why = None if on else graphview.through_refusal(frame, n, slots, rig)
+        on = graphview.is_through(frame, n, bus_cuts)
+        why = None if on else graphview.through_refusal(frame, n, slots, bus_cuts)
         imgui.begin_disabled(why is not None)
         changed, v = imgui.checkbox(f"{THROUGH_WORDS}##through.{n}", on)
         imgui.end_disabled()

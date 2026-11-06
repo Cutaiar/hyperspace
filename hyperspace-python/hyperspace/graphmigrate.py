@@ -1326,7 +1326,7 @@ def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
         for pid, v in look.items():
             values.setdefault(pid, v)
         out["values"] = values
-    got = cuts.to_json() if isinstance(cuts, G.RigWires) else {}
+    got = cuts.to_json() if isinstance(cuts, G.BusCuts) else {}
     if got and BUS_KEY not in out:
         out[BUS_KEY] = got
     return out
@@ -1671,7 +1671,7 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
 
 
 
-def through_wires(spec: G.GraphSpec, n: int, rig: G.RigWires | None = None) -> list[dict]:
+def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) -> list[dict]:
     """OUTPUT's "hands through the effects" on window `n` as the wires it
     names (plan 36 T1, the live edit — `output_wires` stays the migration's
     word for the retired switch): a `composite.k` (the lowest free
@@ -1697,8 +1697,8 @@ def through_wires(spec: G.GraphSpec, n: int, rig: G.RigWires | None = None) -> l
         head = _src_into(pictures, f"{head}.image")
     port = f"output.{n}."
     own = _src_into(wires, port + "image")
-    alone = own == G.GROUND or (own is None and rig is not None
-                                and not rig.has(G.bus_wire(n, "image")))
+    alone = own == G.GROUND or (own is None and bus_cuts is not None
+                                and not bus_cuts.has(G.bus_wire(n, "image")))
     k = _next_composite(spec)
     comp = _named("composite", k)
     entries = [G.CompositeAt(k, spec.laid).to_json()]

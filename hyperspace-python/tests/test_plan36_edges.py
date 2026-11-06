@@ -47,13 +47,13 @@ def spec_of(*pairs, nodes=()):
     return spec
 
 
-def build(spec, n=1, clouds=(), rig=None, effects=()):
+def build(spec, n=1, clouds=(), bus_cuts=None, effects=()):
     return G.build_graph([View(Switches(), SIZE) for _ in range(n)], spec.wiring(),
-                         tuple(clouds), tuple(effects), rig)
+                         tuple(clouds), tuple(effects), bus_cuts)
 
 
-def view_of(spec, g, rig=None):
-    return graphview.build(Bindings(), Registry(), None, None, g, spec, rig=rig)
+def view_of(spec, g, bus_cuts=None):
+    return graphview.build(Bindings(), Registry(), None, None, g, spec, bus_cuts=bus_cuts)
 
 
 def cable(view, src: str, dst: str):
@@ -122,19 +122,19 @@ def test_the_canvas_draws_the_faces_pattern_cable():
     assert c.ref == G.Wire("pattern", "shape.faces") and c.type == graphview.IMAGE
 
 
-def test_plain_faces_draw_no_pattern_and_the_wire_draws_it(ctx, rig):
+def test_plain_faces_draw_no_pattern_and_the_wire_draws_it(ctx, bus_cuts):
     """GL: with a pattern on, the faces wired `pattern → shape.faces` draw
     it; unwired the same frame draws plain faces — another picture."""
     from test_graph_frame import _draw, _land
 
-    rig.reg["view.pattern"].set(3)
-    rig.reg["view.pattern_mix"].set(1.0)
-    _land(rig, migrated())
-    patterned, = _draw(ctx, rig, [Switches()])
-    assert G.Wire("pattern", "shape.faces") in rig.renderer.wiring.wires
-    _land(rig, M.drawn_edges(wired(*FRAME)) | {"wires": [
+    bus_cuts.reg["view.pattern"].set(3)
+    bus_cuts.reg["view.pattern_mix"].set(1.0)
+    _land(bus_cuts, migrated())
+    patterned, = _draw(ctx, bus_cuts, [Switches()])
+    assert G.Wire("pattern", "shape.faces") in bus_cuts.renderer.wiring.wires
+    _land(bus_cuts, M.drawn_edges(wired(*FRAME)) | {"wires": [
         w for w in M.drawn_edges(wired(*FRAME))["wires"] if w["to"] != "shape.faces"]})
-    plain, = _draw(ctx, rig, [Switches()])
+    plain, = _draw(ctx, bus_cuts, [Switches()])
     assert patterned[..., :3].max() > 20 and not (patterned == plain).all()
 
 
@@ -230,22 +230,22 @@ def test_the_canvas_draws_the_hands_cable():
     assert c.type == graphview.GEOMETRY
 
 
-def test_an_unwired_layer_draws_nothing_on_the_golden_rig(ctx, rig):
+def test_an_unwired_layer_draws_nothing_on_the_golden_rig(ctx, bus_cuts):
     """GL, hands present: the layer with its hands wire draws them; without
     it, nothing — the frame is the one with no hands laid over at all."""
     from test_graph_frame import _draw, _land
 
-    _land(rig, migrated(wired(*OLD_FRAME), values=TRACERS))
-    lit, = _draw(ctx, rig, [Switches()])
-    assert rig.renderer.stats["layer"]
+    _land(bus_cuts, migrated(wired(*OLD_FRAME), values=TRACERS))
+    lit, = _draw(ctx, bus_cuts, [Switches()])
+    assert bus_cuts.renderer.stats["layer"]
     # (plan 36 T4: the scene shown straight — a look-back drawn is on, and
     # its trail would grow between the two draws)
     plain = [("shape", "scene.geometry"), ("scene", "output.all.image")]
-    _land(rig, wired(*plain, *FRAME[3:], ("pattern", "shape.faces")))
-    empty, = _draw(ctx, rig, [Switches()])
-    assert not rig.renderer.stats["layer"]
-    _land(rig, wired(*plain, ("pattern", "shape.faces")))
-    bare, = _draw(ctx, rig, [Switches()])
+    _land(bus_cuts, wired(*plain, *FRAME[3:], ("pattern", "shape.faces")))
+    empty, = _draw(ctx, bus_cuts, [Switches()])
+    assert not bus_cuts.renderer.stats["layer"]
+    _land(bus_cuts, wired(*plain, ("pattern", "shape.faces")))
+    bare, = _draw(ctx, bus_cuts, [Switches()])
     assert (empty == bare).all() and not (lit == bare).all()
 
 
@@ -258,14 +258,14 @@ def test_a_cloud_is_in_the_scene_by_the_rigs_wire_and_cut_it_is_not():
     assert [c.name for c in clouds] == ["cloud", "cloud.2"]
     assert G.cloud_wires(("scan", "desk")) == (G.Wire("cloud", "scene.geometry"),
                                                G.Wire("cloud.2", "scene.geometry"))
-    rig = G.RigWires().cutting(G.cloud_wire(0))
-    g = build(spec, clouds=("scan", "desk"), rig=rig)
+    bus_cuts = G.BusCuts().cutting(G.cloud_wire(0))
+    g = build(spec, clouds=("scan", "desk"), bus_cuts=bus_cuts)
     clouds = [n for n in g.nodes["scene"].geometries() if isinstance(n, G.PointCloud)]
     assert [c.name for c in clouds] == ["cloud.2"]
-    assert G.is_rig(G.cloud_wire(1)) and not G.is_rig(G.Wire("hands", "scene.geometry"))
+    assert G.is_fixture_wire(G.cloud_wire(1)) and not G.is_fixture_wire(G.Wire("hands", "scene.geometry"))
     # (a show from before T2 cut nothing: every cloud's wire stands)
-    assert G.RigWires.read({}).present(G.cloud_wires(("scan",))) == (G.cloud_wire(0),)
-    assert G.RigWires.read(rig.to_json()) == rig
+    assert G.BusCuts.read({}).present(G.cloud_wires(("scan",))) == (G.cloud_wire(0),)
+    assert G.BusCuts.read(bus_cuts.to_json()) == bus_cuts
 
 
 def test_the_canvas_draws_the_clouds_wire_and_a_cut_one_is_gone():
@@ -273,8 +273,8 @@ def test_the_canvas_draws_the_clouds_wire_and_a_cut_one_is_gone():
     view = view_of(spec, build(spec, clouds=("scan",)))
     c = cable(view, "cloud", "scene.geometry")
     assert c.ref == G.cloud_wire(0) and c.type == graphview.GEOMETRY and not c.dormant
-    rig = G.RigWires().cutting(G.cloud_wire(0))
-    view = view_of(spec, build(spec, clouds=("scan",), rig=rig), rig)
+    bus_cuts = G.BusCuts().cutting(G.cloud_wire(0))
+    view = view_of(spec, build(spec, clouds=("scan",), bus_cuts=bus_cuts), bus_cuts)
     assert not [c for c in view.cables if c.ref == G.cloud_wire(0)]
     assert "render:cloud" in {n.id for n in view.nodes}                 # to join again
 
@@ -286,7 +286,7 @@ def test_the_clouds_wire_is_cut_and_joined_on_graph(tmp_path):
     spec = app.presets.graph.spec
     before = spec.to_json()
     g = G.build_graph([View(Switches(), SIZE)], spec.wiring(), ("scan",), (),
-                      G.rig_of(app.presets))
+                      G.bus_cuts_of(app.presets))
     c = cable(graphview.build(Bindings(), Registry(), None, None, g, spec),
               "cloud", "scene.geometry")
     # (plan 44 D3: the cut is the preset's, its dot the preset's)
@@ -322,8 +322,8 @@ def test_wired_the_scenes_depth_goes_to_a_composite_and_an_output():
     assert g.nodes["composite"].inputs["depth"] is scene
     # each window by the bus cable from All outputs' depth
     assert g.outputs[0].inputs["depth"] is scene and g.outputs[1].inputs["depth"] is scene
-    cut = G.RigWires().cutting(G.bus_wire(1, "depth"))
-    assert build(spec, n=2, rig=cut).outputs[0].inputs["depth"] is None
+    cut = G.BusCuts().cutting(G.bus_wire(1, "depth"))
+    assert build(spec, n=2, bus_cuts=cut).outputs[0].inputs["depth"] is None
     # only the scene's depth goes into a depth port
     got = G.read_graph(wired(*FRAME, ("scene", "output.all.depth")))
     assert got.notes == ("wire scene → output.all.depth — "
@@ -393,7 +393,7 @@ def test_an_old_sections_loop_through_its_frame_is_left_out_by_the_migration():
 
 
 @pytest.fixture
-def rig(ctx):
+def bus_cuts(ctx):
     from test_graph_frame import _tool
 
     got = _tool().Rig("legacy6", "present", ctx)

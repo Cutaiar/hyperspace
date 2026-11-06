@@ -157,7 +157,7 @@ from .graph import (
     graph_key,
     param_prefix,
     picture,
-    rig_of,
+    bus_cuts_of,
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
@@ -1173,7 +1173,7 @@ class Renderer:
         self.deck_reg = None
         # plan 36 T1: whoever holds the rig's own wires (the open show,
         # `library.Project.rig`, by `app`); None: every bus cable standing
-        self.rig_source = None
+        self.bus_source = None
         # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
         # …), handed over by whoever declared their params (the preset's
         # graph section, `preset.GraphSection`); their Ghosts, made on
@@ -1834,17 +1834,17 @@ class Renderer:
         wiring = getattr(self, "wiring", None) or EMPTY
         key = graph_key(views)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
-        rig = rig_of(getattr(self, "rig_source", None))
+        bus_cuts = bus_cuts_of(getattr(self, "bus_source", None))
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
-                or getattr(graph, "rig", None) != rig
+                or getattr(graph, "bus_cuts", None) != bus_cuts
                 or frozenset(getattr(graph, "effects", ())) != effects):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
-                                              rig)
+                                              bus_cuts)
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does

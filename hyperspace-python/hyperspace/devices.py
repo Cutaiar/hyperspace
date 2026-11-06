@@ -2403,7 +2403,7 @@ def _desk_glyph(source: str) -> str | None:
     return apc40.glyph(source)
 
 
-def _rig(registry, table) -> tuple[dict[str, str], str, dict[str, str], dict[str, str],
+def _device_facts(registry, table) -> tuple[dict[str, str], str, dict[str, str], dict[str, str],
                                    dict[str, str]]:
     """What `wants` reads of the registry, once a call: role → status (each
     device's own `status`, read directly — not through `lines()`, which
@@ -2474,7 +2474,7 @@ def wants(table, registry, only=None) -> list[Want]:
     [('apc40', 'lost', ('K1', 'K2')), ('leap', 'missing', ('right hand y',))]
     """
     from .routing import base_scheme, row_words
-    status, midi_first, prim, listed, profile = _rig(registry, table)
+    status, midi_first, prim, listed, profile = _device_facts(registry, table)
     table_profile = str(getattr(table, "profile", "") or "apc40")
     by_role: dict[str, tuple[str, list[str]]] = {}
     for source, where in _rows_of(table):

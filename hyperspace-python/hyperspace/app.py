@@ -91,7 +91,7 @@ from . import undo as undos
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
-from .deck import KEYS, MOUSE, Deck, Fade, MetaController, Mix, RigMade, register_xfade
+from .deck import KEYS, MOUSE, Deck, Fade, MetaController, Mix, DeckHooksMade, register_xfade
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotreload import HotReloader
 from .learn import Learn
@@ -1108,7 +1108,7 @@ class _DevicesMade(NamedTuple):
     device registry, the dream worker (or None), the keep-awake and the
     segment workers' closer."""
 
-    rig: devices.DeviceRegistry
+    device_reg: devices.DeviceRegistry
     dream_io: object | None
     awake: object
     segmenters: object
@@ -1533,7 +1533,7 @@ def main(argv: list[str] | None = None) -> None:
     # built by `Deck.build` in the order these lines had here. The rig
     # objects built between its lines — the hands' setup, the outputs, the
     # panel, the devices — are the hooks below, each run at its old place
-    made = RigMade()          # what each hook below returned, filled by Deck.build
+    made = DeckHooksMade()          # what each hook below returned, filled by Deck.build
     mix = Mix()               # output.xfade and its seconds (plan 44 D4)
     rendering = [renderer]    # the renderers whose segment workers an exit closes
 
@@ -1610,37 +1610,37 @@ def main(argv: list[str] | None = None) -> None:
         # holds an adapter — the panel (Learn's hints, the desk page, the HANDS
         # page, the Learn pad menu) and the ghost renderer (the tracker's
         # skeletons) — is pointed at it now and again whenever the list changes
-        rig = _open_devices(cfg, devices.Context(reg=reg, table=router.table, learn=learn,
+        device_reg = _open_devices(cfg, devices.Context(reg=reg, table=router.table, learn=learn,
                                                  audio=audio, hand_settings=hand_settings,
                                                  notes=cfg.setdefault("notes", []), home=home,
                                                  players=players),
                             home)
 
         def point_at_devices() -> None:
-            panel.midi = rig.adapter("midi")         # the first desk listed: the APC40's page
+            panel.midi = device_reg.adapter("midi")         # the first desk listed: the APC40's page
             # the pad window's and the menu's "Learn pad": the first pad
             # with a controller behind it now, re-picked on every connect
-            panel.pad = rig.live_adapter("gamepad")
-            panel.hands = rig.adapter("hands")
+            panel.pad = device_reg.live_adapter("gamepad")
+            panel.hands = device_reg.adapter("hands")
             for r in rendering:                      # either deck can be on air (D5c)
                 r.ghost.source = panel.hands         # no tracker, nothing draws
             router.follow_devices()                  # the MIDI roles and row schemes, again
         # schemes from the registry (plan 27 B2): the router asks it which
         # sources are lanes and in what order the pages offer them, the learn
         # what can be armed — each handed the registry, importing nothing
-        router.use(rig)
-        learn.devices = rig
-        rig.listeners.append(point_at_devices)
+        router.use(device_reg)
+        learn.devices = device_reg
+        device_reg.listeners.append(point_at_devices)
         # plan 40 T4: a device coming or going, said in the footer with what it brings
-        rig.said = lambda role, was, now: library.say(
-            devices.arrival(rig.table_of(role, router.table), rig, role, was, now) or None)
+        device_reg.said = lambda role, was, now: library.say(
+            devices.arrival(device_reg.table_of(role, router.table), device_reg, role, was, now) or None)
         point_at_devices()
-        panel.devices = rig                        # the SYSTEM page's device lines
+        panel.devices = device_reg                        # the SYSTEM page's device lines
         panel.media = media                        # the MEDIA page: the folder and the channels
         renderer.ghost.router = router           # the guide lights what the table routes
-        renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
+        renderer.cloud_source = device_reg              # cloud:<role> → the scene's point clouds (A4b)
         # (the bus cuts: the renderer reads the presets, `Deck.build` — plan 44 D3)
-        media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
+        media.state.resolver.devices = device_reg       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
         # the GRAPH canvas (2026-11-02); `on_page` is the panel's own fact, read
         media.state.resolver.builtin[PANEL_GRAPH] = PanelSource(
             panel.canvas_tap, on_page=lambda: panel.canvas_px is not None)
@@ -1653,9 +1653,9 @@ def main(argv: list[str] | None = None) -> None:
         segmenters = _Closer(lambda: _close_each([r.close for r in rendering]))
         # the sticks as dials (gamepad.dial, a prototype): session params on
         # whichever pad is the primary now
-        _register_dial(reg, lambda: rig.adapter("gamepad"))
+        _register_dial(reg, lambda: device_reg.adapter("gamepad"))
         awake = _open_awake(cfg)               # no screensaver over the show
-        return _DevicesMade(rig, dream_io, awake, segmenters)
+        return _DevicesMade(device_reg, dream_io, awake, segmenters)
 
     deck = Deck.build(library=library, control=control, audio=audio, table=load_table,
                       renderer=renderer, media=media.state,
@@ -1663,7 +1663,7 @@ def main(argv: list[str] | None = None) -> None:
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
                       devices=devices_setup, made=made, warm=True)
     hand_settings, output, panel = made.hands, made.outputs, made.panel
-    rig, dream_io, awake, segmenters = made.devices
+    device_reg, dream_io, awake, segmenters = made.devices
     s, reg, router = deck.view, deck.reg, deck.router
     clock, presets, undo_obj = deck.clock, deck.presets, deck.undo
     panel.undo = undo_obj              # the footer's message slot
@@ -1686,7 +1686,7 @@ def main(argv: list[str] | None = None) -> None:
     media.off_air.append(channels2)
     deck2 = Deck.beside(deck, renderer=renderer2, media=channels2)
     renderer2.ghost.router = deck2.router       # the guide lights what its table routes
-    deck2.learn.devices = rig                   # what can be armed, on either deck's Learn
+    deck2.learn.devices = device_reg                   # what can be armed, on either deck's Learn
     _share_experiments(deck.reg, deck2.reg, poi_cfg=poi.configured(cfg))
     # the owner of the two decks (plan 44 D5a): every holder's pointer, each on
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
@@ -1701,13 +1701,13 @@ def main(argv: list[str] | None = None) -> None:
     # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())
-    rig.point(meta.pointer, meta.panel_pointer)
+    device_reg.point(meta.pointer, meta.panel_pointer)
     # plan 55: who holds what names a pad's rows, so the list is read again when it
     # changes; a mapping on either deck moves the controller mapped
-    meta.on_players.append(lambda: rig.apply(rig.entries))
-    rig.listeners.append(lambda: meta.reseat())    # the list can change who holds a role
+    meta.on_players.append(lambda: device_reg.apply(device_reg.entries))
+    device_reg.listeners.append(lambda: meta.reseat())    # the list can change who holds a role
     for on in meta.decks:
-        on.learn.mapped = lambda b, on=on: rig.mapped(on, b)
+        on.learn.mapped = lambda b, on=on: device_reg.mapped(on, b)
     # panel state and chain must stay one object even after source changes
     # the live objects that get re-classed on a hot reload; re-evaluated
     # each swap so recreated ones (the chain after a source attach) count
@@ -1747,7 +1747,7 @@ def main(argv: list[str] | None = None) -> None:
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
         # the devices' adapters, the shims and the registry (devices.py):
         # re-evaluated each swap, so a device the list brought in counts
-        *rig.targets(),
+        *device_reg.targets(),
     ], watchers=[library])
     panel.reloader = reloader
     panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
@@ -1834,7 +1834,7 @@ def main(argv: list[str] | None = None) -> None:
                                          ctrl_win,
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
-                devices=rig, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
+                devices=device_reg, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
                 undo=deck.undo, media=media,
                 outputs=[sl.output for sl in slots if sl.output is not None], deck=deck,
                 off_air=meta.parked, stacks=meta.stacks, on_air_pointer=meta.on_air_pointer,

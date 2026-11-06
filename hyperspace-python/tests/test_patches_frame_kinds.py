@@ -77,8 +77,8 @@ def test_a_patch_holds_the_frames_kinds(name):
 
 @pytest.mark.parametrize("name, words", [
     ("output.all", patches.WINDOW_WORDS), ("output.2", patches.WINDOW_WORDS),
-    ("channel.a", patches.CHANNEL_WORDS), ("cloud", patches.RIG_WORDS),
-    ("cloud.2", patches.RIG_WORDS), ("camera", patches.CAMERA_WORDS),
+    ("channel.a", patches.CHANNEL_WORDS), ("cloud", patches.FIXTURE_WORDS),
+    ("cloud.2", patches.FIXTURE_WORDS), ("camera", patches.CAMERA_WORDS),
     ("fx", patches.NOT_HELD_WORDS), ("lookback.echo.1", patches.NOT_HELD_WORDS),
 ])
 def test_the_rig_and_the_one_camera_stay_refused(name, words):
@@ -88,7 +88,7 @@ def test_the_rig_and_the_one_camera_stay_refused(name, words):
 def test_every_frame_kind_is_held_and_every_rig_kind_refused():
     """The lists stay honest as a kind is added."""
     assert set(G.FRAME_KINDS) <= set(patches.MAY_HOLD)
-    assert not set(patches.RIG_KINDS) & set(patches.MAY_HOLD)
+    assert not set(patches.FIXTURE_KINDS) & set(patches.MAY_HOLD)
     assert set(patches.ONE_PER_FRAME) <= set(patches.MAY_HOLD)
 
 

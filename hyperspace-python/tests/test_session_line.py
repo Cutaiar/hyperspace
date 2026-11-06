@@ -163,7 +163,7 @@ def test_an_old_preset_opened_with_an_old_show_takes_its_look_and_cuts_end_to_en
     assert pre.load("OLD") == []
     assert reg["ghost.alpha"].value == 0.25 and reg["cloud.size"].value == 3.5
     assert reg["ghost.style"].value == 2
-    assert pre.bus.cut == {CUT} and G.rig_of(pre).cut == {CUT}
+    assert pre.bus.cut == {CUT} and G.bus_cuts_of(pre).cut == {CUT}
     assert rig.lib.current("dream") is None                   # no module label
     assert not rig.lib.is_dirty("presets")
     doc = pre.document("OLD")
@@ -179,7 +179,7 @@ def test_an_old_preset_opened_with_an_old_show_takes_its_look_and_cuts_end_to_en
     assert (path.parent / f"{path.name}.bak-v{LOOK_BACKUP}").read_bytes() == before
     # a /10 preset: its own look and no cut — a load moves the hands' look
     pre.load("DIAL")
-    assert pre.bus == G.RigWires() and reg["ghost.alpha"].value == 0.6
+    assert pre.bus == G.BusCuts() and reg["ghost.alpha"].value == 0.6
     assert reg["ghost.mirror"].value is True                  # the room's stays
     # a fresh launch on the /3 show: the old look still from its backup
     again = boot(home, show="rig")
@@ -205,7 +205,7 @@ def test_a_cut_is_the_presets_undone_with_it_and_held_in_its_dot(tmp_path):
     settle(rig)
     rig.lib.load("presets", "party-trip")
     settle(rig)
-    assert pre.bus == G.RigWires()
+    assert pre.bus == G.BusCuts()
     assert rig.undo.undo()
     assert pre.bus.cut == {CUT} and pre.current == "cut trip"
 
@@ -213,7 +213,7 @@ def test_a_cut_is_the_presets_undone_with_it_and_held_in_its_dot(tmp_path):
 def test_the_window_a_rig_lacks_is_asked_for():
     from hyperspace import graphview
     spec = G.read_graph({"frame": "wired", "wires": [{"from": "scene", "to": "output.4.image"}]})
-    assert graphview.wanted_windows(spec, G.RigWires().cutting(G.bus_wire(6, "hands")), 2) == [
+    assert graphview.wanted_windows(spec, G.BusCuts().cutting(G.bus_wire(6, "hands")), 2) == [
         4, 6]
     assert graphview.wanted_windows(spec, None, 4) == []
     assert "Output 4" in graphview.WINDOW_WANTED.format(n=4)

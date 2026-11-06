@@ -257,7 +257,7 @@ def test_a_group_never_holds_the_rigs_kinds_one_list_with_graphview():
     Group refuses them, so a group never carries what no patch can."""
     from hyperspace import graph as G
     from hyperspace import graphview
-    assert graphview.RIG_KINDS is patches.RIG_KINDS
+    assert graphview.FIXTURE_KINDS is patches.FIXTURE_KINDS
     spec = G.read_graph({"frame": "wired", "wires": [
         {"from": "channel.a", "to": "warp.image"}, {"from": "warp", "to": "output.all.image"}]})
     held, said = patches.groupable(spec, None, ["render:channel.a", "render:warp",

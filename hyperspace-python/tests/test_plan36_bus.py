@@ -45,7 +45,7 @@ def _build(app, n: int = 2):
     """(the render graph the renderer would build, the canvas over it)."""
     spec = app.presets.graph.spec
     g = G.build_graph(_views(n), spec.wiring(), (), tuple(sorted(app.presets.graph.fx.specs))
-                      if app.presets.graph.fx is not None else (), G.rig_of(app.presets))
+                      if app.presets.graph.fx is not None else (), G.bus_cuts_of(app.presets))
     return g, graphview.build(Bindings(), Registry(), None, None, g, spec)
 
 
@@ -83,7 +83,7 @@ def test_rewiring_output_1_changes_that_one_port_and_nothing_else(tmp_path):
     into_after = {w.dst: w.src for w in after}
     assert {d: s for d, s in into_after.items() if d != "output.1.image"} == into_before
     assert app.presets.graph.spec.effects == spec.effects        # no placement moved
-    assert app.presets.bus == G.RigWires()                       # no rig cable moved
+    assert app.presets.bus == G.BusCuts()                       # no rig cable moved
     g, view = _build(app)
     assert G.signature(g)[1] == out2                             # output 2: as it was
     # output 1's ports: its own picture; its hands and guide by the bus,
@@ -135,12 +135,12 @@ def test_cutting_a_bus_cable_persists_in_the_preset_and_empties_the_port(tmp_pat
     assert "rig" not in json.loads(show.save("bus show").read_text())
     assert not app.lib.is_dirty("presets")
     app.lib.load("presets", "party-trip")                        # another preset: no cut
-    assert pre.bus == G.RigWires()
+    assert pre.bus == G.BusCuts()
     app.lib.load("presets", "bus test")
     assert pre.bus.cut == {G.bus_wire(1, "hands")} and not app.lib.is_dirty("presets")
     # joined again by a drag from the bus's pin: the preset dirty
     assert e.wire("rout:output.all.hands", "rin:output.1/hands") is None
-    assert pre.bus == G.RigWires() and app.lib.is_dirty("presets")
+    assert pre.bus == G.BusCuts() and app.lib.is_dirty("presets")
     # a port's name alone: whatever is wired into it — here the bus cable
     assert e.unwire("output.2.guide") is None
     assert pre.bus.cut == {G.bus_wire(2, "guide")}
@@ -149,14 +149,14 @@ def test_cutting_a_bus_cable_persists_in_the_preset_and_empties_the_port(tmp_pat
 def test_a_show_with_every_cable_standing_writes_no_rig():
     """The rig as it ships writes nothing (a factory show's file is as it
     was); a hand-edited `rig` that is not wires is left out, never an error."""
-    assert G.RigWires().to_json() == {}
-    rig = G.RigWires().cutting(G.bus_wire(2, "image")).cutting(G.bus_wire(1, "guide"))
-    assert rig.to_json() == {"cut": [{"from": "output.all.guide", "to": "output.1.guide"},
+    assert G.BusCuts().to_json() == {}
+    bus_cuts = G.BusCuts().cutting(G.bus_wire(2, "image")).cutting(G.bus_wire(1, "guide"))
+    assert bus_cuts.to_json() == {"cut": [{"from": "output.all.guide", "to": "output.1.guide"},
                                      {"from": "output.all.image", "to": "output.2.image"}]}
-    assert G.RigWires.read(rig.to_json()) == rig
-    assert G.RigWires.read({"cut": [{"from": "x"}, 3, {"from": "a", "to": "b"},
+    assert G.BusCuts.read(bus_cuts.to_json()) == bus_cuts
+    assert G.BusCuts.read({"cut": [{"from": "x"}, 3, {"from": "a", "to": "b"},
                                     {"from": "a", "to": "b.c"}]}).cut == {G.Wire("a", "b.c")}
-    assert G.RigWires.read(None) == G.RigWires.read([]) == G.RigWires()
+    assert G.BusCuts.read(None) == G.BusCuts.read([]) == G.BusCuts()
 
 
 def test_a_window_port_is_its_own_wire_else_the_bus_cable_else_nothing():
@@ -170,7 +170,7 @@ def test_a_window_port_is_its_own_wire_else_the_bus_cable_else_nothing():
                                         "depth": None}
     assert G.window_ports(wires, 2) == {"image": wires[0], "hands": wires[1], "guide": None,
                                         "depth": None}
-    cut = G.RigWires().cutting(G.bus_wire(2, "image")).cutting(G.bus_wire(1, "image"))
+    cut = G.BusCuts().cutting(G.bus_wire(2, "image")).cutting(G.bus_wire(1, "image"))
     assert G.window_ports(wires, 2, cut)["image"] is None
     assert G.window_ports(wires, 1, cut)["image"] == wires[2]   # its own wire stands
     assert G.is_bus(G.bus_wire(3, "guide"))
@@ -234,7 +234,7 @@ def test_an_undo_puts_a_cut_bus_cable_back(tmp_path):
     assert rig.presets.bus.cut == {G.bus_wire(1, "image")}
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
-    assert rig.presets.bus == G.RigWires()
+    assert rig.presets.bus == G.BusCuts()
 
 
 def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
@@ -261,14 +261,14 @@ def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
         sec = landed({})
         sec["wires"] += wires_of([("ground", "output.3.hands"), ("ground", "output.3.guide")])
         _land(rig, sec)
-        show = SimpleNamespace(rig=G.RigWires())
-        rig.renderer.rig_source = show
+        show = SimpleNamespace(bus_cuts=G.BusCuts())
+        rig.renderer.bus_source = show
         _, standing, grounded = _draw(ctx, rig, [Switches()] * 3)
         first = rig.renderer._graph
         assert rig.renderer.stats["layer"] and not np.array_equal(standing, grounded)
-        show.rig = show.rig.cutting(G.bus_wire(2, "hands")).cutting(G.bus_wire(2, "guide"))
+        show.bus_cuts = show.bus_cuts.cutting(G.bus_wire(2, "hands")).cutting(G.bus_wire(2, "guide"))
         _, cut, grounded = _draw(ctx, rig, [Switches()] * 3)
-        assert rig.renderer._graph is not first and rig.renderer._graph.rig == show.rig
+        assert rig.renderer._graph is not first and rig.renderer._graph.bus_cuts == show.bus_cuts
         assert np.array_equal(cut, grounded)
     finally:
         rig.close()

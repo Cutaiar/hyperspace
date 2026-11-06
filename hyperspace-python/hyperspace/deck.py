@@ -87,7 +87,7 @@ def in_patch(p) -> bool:
 
 
 @dataclass
-class RigMade:
+class DeckHooksMade:
     """What the caller's hooks returned, as `Deck.build` called them: the
     rig's objects built between the deck's lines (the hands' setup, the
     outputs, the panel, the devices). `build` threads each to the hooks
@@ -159,7 +159,7 @@ class Deck:
               outputs: Callable[[Registry], Any] | None = None,
               panel: Callable[..., Any] | None = None,
               devices: Callable[..., Any] | None = None,
-              made: RigMade | None = None,
+              made: DeckHooksMade | None = None,
               attach: bool = True, startup: bool = True, install: bool = True,
               on_air: bool = True, tag: Callable[[], Any] | None = None,
               warm: bool = False) -> Deck:
@@ -227,7 +227,7 @@ class Deck:
             # (review of #351: the deck on air lands the session's params —
             # named, never "whichever registry followed first")
             reg.meta_reg.on_air_reg = reg
-        made = made if made is not None else RigMade()
+        made = made if made is not None else DeckHooksMade()
         if hands is not None:
             made.hands = hands(reg)            # before attach: "default" includes them
         # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
@@ -279,7 +279,7 @@ class Deck:
             presets.graph.attach(renderer)
             # plan 44 D3: the bus cuts are the loaded preset's — the renderer
             # reads them off the presets (`graph.rig_of`: `Presets.rig`)
-            renderer.rig_source = presets
+            renderer.bus_source = presets
             renderer.deck_reg = reg            # whose picture it is (the poi's guide)
         # one Learn over the live table, whatever the MIDI gate says: a knob
         # or a hand completes it, the panel's prompt settles what the referee
@@ -881,13 +881,13 @@ def register_xfade(reg, mix: Mix) -> list[str]:
     like `output.dim` — group `output`, never persisted, not modulatable (a band
     on the fade would cut the room on every kick) — so they cross no file. The
     desk's crossfader is the first (D5d, `apc40.META_CONTROLS`)."""
-    rig = {"group": "output", "persist": False, "modulatable": False}
+    settings = {"group": "output", "persist": False, "modulatable": False}
     reg.continuous("output.xfade", "Deck fade", lambda: mix.xfade,
                    lambda v: setattr(mix, "xfade", min(1.0, max(0.0, float(v)))),
-                   lo=0.0, hi=1.0, tip=XFADE_TIP, **rig)
+                   lo=0.0, hi=1.0, tip=XFADE_TIP, **settings)
     reg.continuous("output.xfade_s", "Fade seconds", lambda: mix.seconds,
                    lambda v: setattr(mix, "seconds", min(30.0, max(0.0, float(v)))),
-                   lo=0.0, hi=30.0, tip=XFADE_S_TIP, **rig)
+                   lo=0.0, hi=30.0, tip=XFADE_S_TIP, **settings)
     return ["output.xfade", "output.xfade_s"]
 
 

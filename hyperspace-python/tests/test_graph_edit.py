@@ -702,7 +702,7 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
     assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut", "_voice_node_cut",
                                             "_delete_render_cable", "_delete_render_node"}
     assert where["reject_deleted_item"] <= {"_value_cut", "_unknown_cut", "_delete",
-                                            "_rig_node_cut", "_delete_render_cable",
+                                            "_fixture_node_cut", "_delete_render_cable",
                                             "_voice_node_cut", "_lane_cut",   # plan 31 G1
                                             "_delete_render_node", "delete_bundle",
                                             "delete_through",   # N9: a through wire
@@ -785,7 +785,7 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     assert st["note"] == graphview.CAMERA_KEPT.format(label="Camera")
     assert ui_graph.DELETE_NODE["output"] is ui_graph._delete_render_node
     group = graphview.VNode("group:tempo", "group", "tempo")
-    ui_graph.DELETE_NODE.get(group.kind, ui_graph._rig_node_cut)(rig.panel, st, None, group)
+    ui_graph.DELETE_NODE.get(group.kind, ui_graph._fixture_node_cut)(rig.panel, st, None, group)
     assert st["note"] == graphview.NOT_REMOVABLE.format(label="tempo")
     # plan 31 G1: an LFO and an envelope go through their bank; a lane
     # envelope is kept, said
@@ -827,7 +827,7 @@ def test_a_render_edit_s_line_goes_at_the_next_edit_or_refusal(rig, monkeypatch)
     assert ui_graph._render_said(panel, landed, lambda e: "a loop", st) == "a loop"
     assert st["said"] == "" and st["note"] == "a loop"
     said_once()
-    ui_graph._rig_node_cut(panel, st, None, graphview.VNode("lfo.1", "lfo", "LFO 1"))
+    ui_graph._fixture_node_cut(panel, st, None, graphview.VNode("lfo.1", "lfo", "LFO 1"))
     assert st["said"] == "" and st["note"] == graphview.NOT_REMOVABLE.format(label="LFO 1")
 
 

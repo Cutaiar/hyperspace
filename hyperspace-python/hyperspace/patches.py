@@ -156,7 +156,7 @@ REPLACEABLE = ("dream",)
 # plan 43 C2) and the clouds (the rig's, `NOT_REMOVABLE`); the windows are
 # refused by kind, `output`. Copied, not imported (graphview is the app's);
 # tests/test_patches.py holds the two lists equal
-RIG_NODES = ("camera", "cloud")
+FIXTURE_NODES = ("camera", "cloud")
 # the modulation banks a patch carries voices of, and the canvas ids
 LFO, ENV, MOD, MACRO = "lfo", "env", modmod.SCHEME, "macro"
 VOICES = (LFO, ENV)
@@ -174,7 +174,7 @@ ONE_OWNER = ("hand", "axis")
 
 # the refusals' words (P1: name the thing and why)
 WINDOW_WORDS = "{name} is the rig's window; left out — a patch's picture leaves by a port"
-RIG_WORDS = "{name} is the rig's; left out"
+FIXTURE_WORDS = "{name} is the rig's; left out"
 CAMERA_WORDS = "{name} is the look's one camera, never a patch's; left out"   # plan 43 C2
 CHANNEL_WORDS = ("{name} is a media channel, this Mac's files; left out — a patch reads one "
                  "through a port")
@@ -198,7 +198,7 @@ NO_INPUT_NOTE = "{mid}: its input {k} read {vid}, which did not spawn — left e
 CROSSES_WORDS = "wire {wire} crosses the edge: a port says it"
 # a node entry of a kind that is no node a section declares but names a
 # thing a patch may not hold (`check`): said as that thing
-_KIND_WORDS = {"output": WINDOW_WORDS, "camera": CAMERA_WORDS, "cloud": RIG_WORDS,
+_KIND_WORDS = {"output": WINDOW_WORDS, "camera": CAMERA_WORDS, "cloud": FIXTURE_WORDS,
                "channel": CHANNEL_WORDS, "media": CHANNEL_WORDS}
 
 
@@ -376,8 +376,8 @@ def held_words(name: str) -> str | None:
     kind = _kind(name)
     if kind == "camera":
         return CAMERA_WORDS.format(name=name)
-    if kind in RIG_NODES:
-        return RIG_WORDS.format(name=name)
+    if kind in FIXTURE_NODES:
+        return FIXTURE_WORDS.format(name=name)
     if kind == "output":
         return WINDOW_WORDS.format(name=name)
     if kind == "channel":
@@ -769,7 +769,7 @@ class Patch:
     envs: tuple[int, ...]
     layout: dict[str, list[float]]
     ports: tuple[dict, ...]
-    rig_rows: tuple[dict, ...]
+    control_rows: tuple[dict, ...]
     host_ports: tuple[dict, ...]
     # plan 50: the param group a patch of one group is (`GROUP_KEY`), "" for
     # a canvas fragment
@@ -837,7 +837,7 @@ def read(doc: Mapping) -> Patch:
               if isinstance(v, Mapping)}
     ports = tuple(sorted((dict(p) for p in doc.get("ports") or () if isinstance(p, Mapping)),
                          key=_port_order))
-    rig: list[dict] = []
+    control: list[dict] = []
     host: list[dict] = list(ports)
     k = 0
 
@@ -849,8 +849,8 @@ def read(doc: Mapping) -> Patch:
     for r in (*routes, *desk):
         src, tgt = r.get("source"), r.get("target")
         where = side(m, src, tgt)
-        if where == RIG:
-            rig.append(r)                         # a knob, a hand, a band: verbatim
+        if where == CONTROL:
+            control.append(r)                         # a knob, a hand, a band: verbatim
         elif where == INTO:
             value_port(to=tgt, was=src, row=r)    # a host lane onto a member
         elif where == OUT:
@@ -878,7 +878,7 @@ def read(doc: Mapping) -> Patch:
                  nodes=nodes, wires=wires, values=dict(doc.get("values") or {}),
                  modifiers=mods, routes=routes, desk=desk, macros=macros,
                  lfos=tuple(sorted(m.lfos)), envs=tuple(sorted(m.envs)), layout=layout,
-                 ports=ports, rig_rows=tuple(rig), host_ports=tuple(host),
+                 ports=ports, control_rows=tuple(control), host_ports=tuple(host),
                  group=str(doc.get(GROUP_KEY) or ""))
 
 
@@ -969,7 +969,7 @@ def check(doc: Any) -> list[str]:
                 continue
             # (the rig's own ends said as such; any other end — the scene, a
             # host effect — is simply across the edge)
-            why = held_words(end) if _kind(end) in ("output", "channel", *RIG_NODES) else None
+            why = held_words(end) if _kind(end) in ("output", "channel", *FIXTURE_NODES) else None
             out.append(f"wire {src} → {dst}: {why}" if why is not None
                        else CROSSES_WORDS.format(wire=f"{src} → {dst}"))
             break
@@ -1042,15 +1042,15 @@ def check(doc: Any) -> list[str]:
 # knob, a hand, a band) onto a member; from the host onto a member (a host
 # lane, a host macro, a picture into a member's port); from a member out
 # to the host
-INSIDE, RIG, INTO, OUT = "inside", "rig", "into", "out"
+INSIDE, CONTROL, INTO, OUT = "inside", "rig", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
 # the rig's own render kinds, always there — its windows (an output, All
 # outputs), its media channels (this Mac's files) and its clouds — which no
 # preset file holds as a node; `graphview.RIG_KINDS` is this list. Plan 50
 # (review fix 1): no group holds one either, so a group can never carry what
 # no patch can
-RIG_KINDS = ("output", "channel", "cloud")
-NEVER_GROUPED = RIG_KINDS
+FIXTURE_KINDS = ("output", "channel", "cloud")
+NEVER_GROUPED = FIXTURE_KINDS
 
 
 def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
@@ -1109,7 +1109,7 @@ def _select(spec: G.GraphSpec | None, table, node_ids: Iterable[str], *, save: b
         elif re.fullmatch(r"group\.\d+", nid):
             refused.append(NESTED_WORDS.format(name=nid))
         elif vo is None:
-            refused.append(RIG_WORDS.format(name=nid))
+            refused.append(FIXTURE_WORDS.format(name=nid))
         elif save and vo[0] == ENV and vo[1] in LANE_ENVS:
             refused.append(LANE_ENV_WORDS.format(name=nid, first=FIRST_ENV))
         elif vo[0] == MOD and nid not in mods_held:
@@ -1173,7 +1173,7 @@ def side(members: _Members, source: Any, target: Any) -> str:
     nothing of the region is none of these."""
     own_src = members.own_lane(source)
     if not own_src and _lane(source) is None:
-        return RIG
+        return CONTROL
     if not own_src:
         return INTO
     if not members.owns(target):
@@ -1201,7 +1201,7 @@ def input_side(members: _Members, mid: Any, addr: Any) -> str | None:
     own_m = modmod.number(mid) in members.mods
     own_lane = members.own_lane(addr)
     if own_m:
-        return INSIDE if own_lane else RIG if _lane(addr) is None else INTO
+        return INSIDE if own_lane else CONTROL if _lane(addr) is None else INTO
     return OUT if own_lane else None
 
 
@@ -1744,14 +1744,14 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
                    taken=tuple(singles))
 
 
-def is_rig_source(addr: str) -> bool:
+def is_control_source(addr: str) -> bool:
     """Is `addr` a rig-side source — not a modulation lane (``mod:``,
     ``lfo:``, ``env:``)? Open-ended, as `routing.is_continuous` is: any
     other scheme, a ``cc:`` or an OSC role, qualified or not."""
     return _lane(addr) is None
 
 
-__all__ = ["INSIDE", "INTO", "KIND", "OUT", "RIG", "SCHEMA", "Conflict", "Host", "Landing",
+__all__ = ["INSIDE", "INTO", "KIND", "OUT", "CONTROL", "SCHEMA", "Conflict", "Host", "Landing",
            "Patch", "check", "crossing", "entry_name", "held_words", "input_side",
-           "is_rig_source", "lift", "read", "replace_key", "select", "side", "slug", "spawn",
+           "is_control_source", "lift", "read", "replace_key", "select", "side", "slug", "spawn",
            "spec_names", "sub_side", "touches", "wire_type"]

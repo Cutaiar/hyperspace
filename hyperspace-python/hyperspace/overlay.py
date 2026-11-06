@@ -225,34 +225,34 @@ class Output:
 
     def register(self, reg: Registry) -> None:
         g = "output"
-        rig = {"persist": False, "modulatable": False}
+        settings = {"persist": False, "modulatable": False}
         # index 0 is "follow window" (monitor −1: the screen holding the
         # window, resolved by _target_monitor); the screens follow (audit P3)
         reg.enum("output.monitor", "Screen", lambda: self.monitor + 1,
                  lambda i: setattr(self, "monitor", int(i) - 1), self.screen_names, group=g,
                  tip="Which screen fullscreen and overlay cover: the one the window is "
-                     "on, or a screen by name.", **rig)
+                     "on, or a screen by name.", **settings)
         reg.toggle("output.fullscreen", "Fullscreen", lambda: self.fullscreen,
                    lambda v: setattr(self, "fullscreen", bool(v)), group=g,
                    tip="Borderless, covering the chosen screen — for the projector. "
-                       "No video-mode switch.", **rig)
+                       "No video-mode switch.", **settings)
         reg.enum("output.render", "Render size", lambda: self.render,
                  lambda i: setattr(self, "render", min(max(int(i), 0), len(RENDER_CAPS) - 1)),
                  RENDER_NAMES, group=g,
                  tip="The most pixels a frame is drawn at; every output shows it scaled. "
                      "1080p (the default) keeps a HiDPI screen from rendering at 4K. "
                      "full: output 1's whole framebuffer. Launch value: [output] render.",
-                 **rig)
+                 **settings)
         reg.toggle("output.overlay", "Overlay", lambda: self.overlay,
                    self._set_overlay, group=g,
                    tip="Float the render, frameless and see-through, over the whole "
-                       "screen — above a fullscreen video. T toggles.", **rig)
+                       "screen — above a fullscreen video. T toggles.", **settings)
         reg.toggle("output.passthrough", "Click-through", lambda: self.passthrough,
                    lambda v: setattr(self, "passthrough", bool(v)), group=g,
                    tip="On (the default): in overlay, clicks go to whatever is underneath, "
                        "so you can run the video behind. The render window then never "
                        "takes focus — keys still work from the control window; to orbit "
-                       "again press G there, or use the pan button on the APC40.", **rig)
+                       "again press G there, or use the pan button on the APC40.", **settings)
         reg.continuous("output.bg", "Ground", lambda: self.bg,
                        lambda v: setattr(self, "bg", float(v)), lo=0.0, hi=1.0,
                        fmt=lambda v: "clear" if v <= 0 else f"{v:.2f} black", group=g,
@@ -269,7 +269,7 @@ class Output:
                        tip="Dims the whole finished picture — the scene, the effects "
                            "and the ghost hands alike: 0 black, 1 full. The APC40's "
                            "MASTER fader. Never saved; a launch starts "
-                           "at full and a preset load never moves it.", **rig)
+                           "at full and a preset load never moves it.", **settings)
         # the pre-split ids: views onto the params above, never saved or
         # driven. The factory table and apc40.py bind these (overlay.on /
         # .passthrough), so they are what the rows name
@@ -459,7 +459,7 @@ def register_switches(reg: Registry, slots) -> list[str]:
     until the restart. They can be learned onto a desk button like any
     toggle. An output that did not open gets none; a publish-only one
     (plan 32 T9: drawn, with no window) gets them all. Returns the ids."""
-    rig = {"persist": False, "modulatable": False}
+    settings = {"persist": False, "modulatable": False}
     several = len(slots) > 1
     ids: list[str] = []
     for sl in slots:
@@ -483,11 +483,11 @@ def register_switches(reg: Registry, slots) -> list[str]:
                    tip=f"The picture wired into this window{whose} (GRAPH, OUTPUT). Off: "
                        "this window ignores the picture wired into it and shows its "
                        "ground, the hands over. A mute, not the preset: a rig setting, "
-                       "the config's launch value comes back at a restart.", **rig)
+                       "the config's launch value comes back at a restart.", **settings)
         reg.toggle(f"{pre}.hands", label("hands"), *flag("hands"), group="output",
                    tip=f"The hands and the guide wired into this window{whose}. Off: "
                        "a mute — this window ignores them. Ghost hands (HANDS page) is "
-                       "the switch for every output at once.", **rig)
+                       "the switch for every output at once.", **settings)
         # plan 23 WP1: this output's mirror, its last step — the scene, the
         # hands and the readout together, to undo a Pepper's Ghost glass
         mirror = ("Ghost mirror (HANDS page) flips the hands only: with this on, "
@@ -496,10 +496,10 @@ def register_switches(reg: Registry, slots) -> list[str]:
         reg.toggle(f"{pre}.flip_x", label("flip X"), *flag("flip_x"), group="output",
                    tip=f"Mirror the whole picture left-right{whose} — the scene, the "
                        "ghost hands and the guide's text together — for a glass that "
-                       f"reflects it. {mirror}", **rig)
+                       f"reflects it. {mirror}", **settings)
         reg.toggle(f"{pre}.flip_y", label("flip Y"), *flag("flip_y"), group="output",
                    tip=f"Mirror the whole picture top-bottom{whose} — for a screen lying "
-                       f"flat under a 45° glass. {mirror}", **rig)
+                       f"flat under a 45° glass. {mirror}", **settings)
         ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.flip_x", f"{pre}.flip_y"]
         # one output: the master dim is its dim — unless the config gave it a
         # launch dim of its own, which must then have a fader (review of #124)
@@ -509,6 +509,6 @@ def register_switches(reg: Registry, slots) -> list[str]:
                            lo=0.0, hi=1.0, fmt=Output._dim_text, group="output",
                            tip=f"Dims {sl.label} alone, after everything, times the master "
                                "dim: 0 black, 1 full. Its launch value is the config's (never "
-                               "under 10%).", **rig)
+                               "under 10%).", **settings)
             ids.append(f"{pre}.dim")
     return ids

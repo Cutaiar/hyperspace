@@ -744,7 +744,7 @@ class HandSettings:
     def from_config(cls, cfg: dict | None = None) -> HandSettings:
         """The axes a rig config asks for: `dofs` per hand, left then
         right, on consecutive CCs from `cc` on `channel`."""
-        cfg = rig(cfg)
+        cfg = filled_config(cfg)
         dofs = list(cfg["dofs"])
         bad = [d for d in dofs if d not in FEATURES]
         if bad:
@@ -765,7 +765,7 @@ class HandSettings:
         return cls(axes)
 
 
-def rig(cfg: dict | None) -> dict:
+def filled_config(cfg: dict | None) -> dict:
     """A ``[hands]`` section with every default filled in, as a copy that
     shares nothing with the table. Idempotent: config.load fills the
     section from the same DEFAULTS, and `from_config` and `HandsIO` each
@@ -1424,7 +1424,7 @@ class HandsIO:
     def __init__(self, settings: HandSettings, cfg: dict | None = None, *, source=None,
                  out=None, cal_path: Path | None = None, clock=time.monotonic):
         self.settings = settings
-        self.cfg = rig(cfg)
+        self.cfg = filled_config(cfg)
         self.cal_path = cal_path
         self.clock = clock
         cal = load_calibration(cal_path)

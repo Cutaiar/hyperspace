@@ -1261,14 +1261,14 @@ def is_cloud_wire(w: Wire) -> bool:
             and (not n or (n.isdecimal() and int(n) >= 2)))
 
 
-def is_rig(w: Wire) -> bool:
+def is_fixture_wire(w: Wire) -> bool:
     """Whether `w` is one of the rig's own wires (plan 36: a bus cable, a
     cloud's wire) — the show's to cut and join, never a preset's."""
     return is_bus(w) or is_cloud_wire(w)
 
 
 @dataclass(frozen=True)
-class RigWires:
+class BusCuts:
     """The rig's own drawn wires as a preset holds them (plan 36 T1; plan 44
     D3 made them the preset's, `preset.Presets.bus`, where they were the
     show's): the defaults the preset has `cut` — every other default
@@ -1287,11 +1287,11 @@ class RigWires:
         """The `defaults` that stand, in their order."""
         return tuple(w for w in defaults if w not in self.cut)
 
-    def cutting(self, w: Wire) -> RigWires:
-        return RigWires(self.cut | {w})
+    def cutting(self, w: Wire) -> BusCuts:
+        return BusCuts(self.cut | {w})
 
-    def joining(self, w: Wire) -> RigWires:
-        return RigWires(self.cut - {w})
+    def joining(self, w: Wire) -> BusCuts:
+        return BusCuts(self.cut - {w})
 
     def to_json(self) -> dict:
         if not self.cut:
@@ -1299,7 +1299,7 @@ class RigWires:
         return {"cut": [w.to_json() for w in sorted(self.cut, key=lambda w: (w.dst, w.src))]}
 
     @classmethod
-    def read(cls, value: Any) -> RigWires:
+    def read(cls, value: Any) -> BusCuts:
         """A show file's ``rig`` value; what is not a wire is left out (a
         hand-edited file never stops a show from opening)."""
         cut = value.get("cut") if isinstance(value, dict) else None
@@ -1312,24 +1312,24 @@ class RigWires:
         return cls(frozenset(got))
 
 
-def rig_of(source: Any) -> RigWires:
+def bus_cuts_of(source: Any) -> BusCuts:
     """The rig wires `source` holds (duck-typed: its `rig`, as the loaded
     preset `preset.Presets` has, plan 44 D3) — the renderer's `rig_source`; None, or a source
     with none, is the rig as it ships: every default standing."""
-    got = getattr(source, "rig", None)
-    return got if isinstance(got, RigWires) else RigWires()
+    got = getattr(source, "bus_cuts", None)
+    return got if isinstance(got, BusCuts) else BusCuts()
 
 
-def window_ports(wires, n: int, rig: RigWires | None = None) -> dict[str, Wire | None]:
+def window_ports(wires, n: int, bus_cuts: BusCuts | None = None) -> dict[str, Wire | None]:
     """Window `n`'s four ports (`BUS_PORTS`) → the one wire into each, or
     None: its own wire of `wires` (the preset's), else the bus cable when
     `rig` has it standing — then the wire into All outputs' same port (the
     bus carries it; None while nothing is wired there). Plan 36 W1: nothing
     else reaches a window."""
-    rig = rig if rig is not None else RigWires()
+    bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()
     own = {w.port: w for w in wires if w.node == f"output.{n}"}
     alls = {w.port: w for w in wires if w.node == ALL_OUTPUTS}
-    return {p: own[p] if p in own else (alls.get(p) if rig.has(bus_wire(n, p)) else None)
+    return {p: own[p] if p in own else (alls.get(p) if bus_cuts.has(bus_wire(n, p)) else None)
             for p in BUS_PORTS}
 
 # V2 (row 373, "approve, but rename ids too"): old wire name → new, for
@@ -2854,13 +2854,13 @@ def _reached_edges(edges: tuple[Wire, ...], run: tuple[str, ...],
 
 # ---------------------------------------------------------------- in words
 
-def output_ports(wiring: Wiring, n: int, rig: RigWires | None = None
+def output_ports(wiring: Wiring, n: int, bus_cuts: BusCuts | None = None
                  ) -> dict[str, str | None]:
     """Output `n`'s three ports under a wired frame (plan 35 T4):
     each port's source by `window_ports` (plan 36 T1: its own wire, else
     All outputs' by the bus cable `rig` has standing) — None where nothing
     is wired or `ground` is."""
-    got = window_ports(wiring.wires, n, rig)
+    got = window_ports(wiring.wires, n, bus_cuts)
     return {p: None if w is None or w.src == GROUND else w.src for p, w in got.items()}
 
 
@@ -2876,14 +2876,14 @@ def _picture_head(wiring: Wiring, src: str | None) -> str | None:
     return src
 
 
-def through_of(wiring: Wiring, n: int, rig: RigWires | None = None
+def through_of(wiring: Wiring, n: int, bus_cuts: BusCuts | None = None
                ) -> tuple[str, str | None] | None:
     """(the hands layer output `n` puts through the effects, what it is laid
     over — None: nothing, the hands alone) — plan 35 M: its picture a chain
     over a composite whose `over` is a layer, "hands through the effects"
     as wiring — or None. `rig`: the bus cables standing (`output_ports`)."""
     w = wiring
-    head = _picture_head(w, output_ports(w, n, rig)["image"])
+    head = _picture_head(w, output_ports(w, n, bus_cuts)["image"])
     if wire_node_kind(head or "", wired=True) != "composite":
         return None
     over = next((x.src for x in w.wires if x.dst == f"{head}.over"), None)
@@ -2892,9 +2892,9 @@ def through_of(wiring: Wiring, n: int, rig: RigWires | None = None
     return over, next((x.src for x in w.wires if x.dst == f"{head}.under"), None)
 
 
-def through_layer(wiring: Wiring, n: int, rig: RigWires | None = None) -> str | None:
+def through_layer(wiring: Wiring, n: int, bus_cuts: BusCuts | None = None) -> str | None:
     """The hands layer output `n` puts through the effects (`through_of`), or None."""
-    got = through_of(wiring, n, rig)
+    got = through_of(wiring, n, bus_cuts)
     return got[0] if got is not None else None
 
 
@@ -2904,7 +2904,7 @@ def in_scene_hands(wiring: Wiring) -> list[int]:
                   if x.dst == "scene.geometry" and wire_node_kind(x.src, wired=True) == "hands")
 
 
-def hands_words(wiring: Wiring, sw, n: int = 1, rig: RigWires | None = None) -> str:
+def hands_words(wiring: Wiring, sw, n: int = 1, bus_cuts: BusCuts | None = None) -> str:
     """Where output `n`'s hands come from, in words (the OUTPUT page, plan
     26 A4; plan 35 T4: read off the wires): `hands: in the scene`
     (a hands node wired into `scene.geometry`, while its picture shows),
@@ -2917,8 +2917,8 @@ def hands_words(wiring: Wiring, sw, n: int = 1, rig: RigWires | None = None) -> 
     so whatever its mute. `rig`: the bus cables standing (`output_ports`)."""
     w = wiring
     inside = in_scene_hands(w)
-    thru = through_of(w, n, rig)
-    ports = output_ports(w, n, rig)
+    thru = through_of(w, n, bus_cuts)
+    ports = output_ports(w, n, bus_cuts)
     if (inside and sw.scene and ports["image"] is not None
             and not (thru is not None and thru[1] is None)):
         # the scene holds the hands whatever this window's hands mute says
@@ -6616,7 +6616,7 @@ def _upstream(node: Node) -> set[int]:
 # ---------------------------------------------------------------- the wired frame (plan 35 B)
 
 def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[str, ...] = (),
-                effects: tuple[str, ...] = (), rig: RigWires | None = None) -> Graph:
+                effects: tuple[str, ...] = (), bus_cuts: BusCuts | None = None) -> Graph:
     """A wired frame as a graph (plan 35 B, rows 372 and 379): only what the
     wires reach (`reaches`: a path to an output's port, All outputs', or
     the look-back's capture) is built — `{"frame": "wired"}` alone is the
@@ -6660,8 +6660,8 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)
     g.effects = tuple(effects)
-    g.rig = rig if rig is not None else RigWires()
-    _Build(g, wiring, len(views), g.rig).build()
+    g.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()
+    _Build(g, wiring, len(views), g.bus_cuts).build()
     return g
 
 
@@ -6739,9 +6739,9 @@ class _Build:
     run, each through's composite and copies, the ends, the capture, the
     outputs), so the passes run as today's frame ran them."""
 
-    def __init__(self, g: Graph, wiring: Wiring, count: int, rig: RigWires | None = None):
+    def __init__(self, g: Graph, wiring: Wiring, count: int, bus_cuts: BusCuts | None = None):
         self.g, self.wiring, self.count = g, wiring, count
-        self.rig = rig if rig is not None else RigWires()     # plan 36 T1: the bus cables
+        self.bus_cuts = bus_cuts if bus_cuts is not None else BusCuts()     # plan 36 T1: the bus cables
         self.have = set(g.effects)
         wires = tuple(getattr(wiring, "wires", ()))
         # plan 35 T4: a wire into an output this rig has not open (`output.3`
@@ -6768,7 +6768,7 @@ class _Build:
         # (`cloud_wire`), while the show has not cut it — and the scene is
         # reached by the section's own wires
         self.clouds = ([PointCloud(cloud_name(i), role) for i, role in enumerate(g.clouds)
-                        if self.rig.has(cloud_wire(i))] if "scene" in self.reached else [])
+                        if self.bus_cuts.has(cloud_wire(i))] if "scene" in self.reached else [])
         # the layers' blends (plan 36 T2: `laid` is the hands entry's own word,
         # how its layer is laid on wherever an output lays it — not one
         # global over every output)
@@ -7098,7 +7098,7 @@ class _Build:
         ports = []
         for i in range(self.count):
             got = {}
-            for p, w in window_ports(self.wires, i + 1, self.rig).items():
+            for p, w in window_ports(self.wires, i + 1, self.bus_cuts).items():
                 got[p] = (self._taken(self.node(w.src), w)
                           if w is not None and w.src != GROUND else None)
             ports.append(got)

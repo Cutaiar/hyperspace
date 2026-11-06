@@ -280,7 +280,7 @@ def test_a_reseat_leaves_a_controller_mapped_elsewhere_alone(rig):
 
 def test_main_reseats_on_a_list_change():
     import inspect
-    assert "rig.listeners.append(lambda: meta.reseat())" in inspect.getsource(app.main)
+    assert "device_reg.listeners.append(lambda: meta.reseat())" in inspect.getsource(app.main)
 
 
 def test_only_a_controller_is_held(tmp_path):

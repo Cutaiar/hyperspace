@@ -491,7 +491,7 @@ def test_nine_leaves_values_that_are_no_map_to_the_load():
 def test_the_camera_node_is_the_looks():
     """GRAPH: the camera is no rig node any more — its position is the
     preset's and its refusal says it is the look's one camera."""
-    assert "camera" not in graphview.RIG_KINDS and "camera" in graphview.ALWAYS_KINDS
+    assert "camera" not in graphview.FIXTURE_KINDS and "camera" in graphview.ALWAYS_KINDS
     cam = graphview.VNode("render:camera", "render", "Camera")
     assert graphview.home(cam) == graphview.PRESET
     got, why = graphview.spec_name("render:camera")

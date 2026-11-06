@@ -583,7 +583,7 @@ def test_every_pointer_on_deck_1_lands_every_corpus_preset_as_before(tmp_path):
 def test_main_points_every_holder_and_moves_none():
     src = inspect.getsource(app.main)
     for line in ("MetaController(deck, deck2, players, mix=mix)", "panel.pointer = library.pointer",
-                 "rig.point(meta.pointer, meta.panel_pointer)", "pointer=meta.pointer(MOUSE)",
+                 "device_reg.point(meta.pointer, meta.panel_pointer)", "pointer=meta.pointer(MOUSE)",
                  "on_air_pointer=meta.on_air_pointer", "panel_pointer=meta.panel_pointer",
                  "keys_pointer=meta.pointer(KEYS)", "on_air = meta.on_air",
                  "_draw_render(on_air.renderer, ctx, on_air.view,",

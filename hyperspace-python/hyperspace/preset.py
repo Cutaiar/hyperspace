@@ -150,7 +150,7 @@ from .graph import (
     WIRED_FRAME,
     GraphError,
     GraphSpec,
-    RigWires,
+    BusCuts,
     Wiring,
     channel_name,
     read_graph,
@@ -818,7 +818,7 @@ class Presets:
 
     # on the class: a `Presets` from before a hot reload has them
     landing: tuple = (None, None, None)
-    bus: RigWires = RigWires()
+    bus: BusCuts = BusCuts()
 
     def __init__(self, lib, reg, router):
         self.reg, self.router = reg, router
@@ -859,7 +859,7 @@ class Presets:
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
         # plan 44 D3: the bus cuts the loaded preset holds (`graph.RigWires`)
-        self.bus = RigWires()
+        self.bus = BusCuts()
         self.landing = (None, None, None)
         # row 563: membership is settled where what the preset holds changes
         # — a landing, the table's modifiers, a bank's voices
@@ -915,7 +915,7 @@ class Presets:
         return ref is not None and not undo.alike(self.signature(), ref)
 
     @property
-    def rig(self) -> RigWires:
+    def bus_cuts(self) -> BusCuts:
         """The bus cuts, as `graph.rig_of` reads a renderer's
         `rig_source` (plan 44 D3: the presets are it)."""
         return self.bus
@@ -1288,7 +1288,7 @@ class Presets:
                 continue
             lib.label(group, None)
         # 6¼. the bus cuts (plan 44 D3): the file's, else every cable standing
-        self.bus = RigWires.read(doc.get(BUS_KEY))
+        self.bus = BusCuts.read(doc.get(BUS_KEY))
         # 6½. where the GRAPH page's nodes sit (plan 28 N2): none is the
         #     automatic layout; an entry that is not a name and two numbers
         #     is dropped with a note; an old canvas id is read in today's

@@ -673,12 +673,12 @@ def test_the_hooks_hand_their_objects_on_and_into_the_record(tmp_path):
     """Each hook returns what it made; `build` hands the hands' setup and
     the panel to the devices hook and records every return on `made`, so
     `main` reads its rig objects from one record, not from sentinels."""
-    from hyperspace.deck import RigMade
+    from hyperspace.deck import DeckHooksMade
 
     lib = Library(seed(tmp_path / "home"), period=0.0)
     chain = Analyzer(Analyser())
     got: dict = {}
-    made = RigMade()
+    made = DeckHooksMade()
     deck = Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),
                       table=lambda reg: Bindings(), hands=lambda reg: "settings",
                       outputs=lambda reg: "output", panel=lambda reg, view, **kw: "panel",

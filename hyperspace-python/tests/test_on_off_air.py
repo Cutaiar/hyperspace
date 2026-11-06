@@ -303,7 +303,7 @@ def test_on_gl_a_bus_cable_cut_off_air_stays_off_the_picture_on_air(ctx, tmp_pat
     before = _picture(ctx, rig.one)
     assert (_picture(ctx, rig.two) == before).all()
     rig.two.presets.bus = rig.two.presets.bus.cutting(graph.bus_wire(1, "image"))
-    assert rig.two.renderer.rig_source is rig.two.presets
+    assert rig.two.renderer.bus_source is rig.two.presets
     assert _picture(ctx, rig.two)[..., :3].max() == 0
     assert (_picture(ctx, rig.one) == before).all()
     _close(rig)

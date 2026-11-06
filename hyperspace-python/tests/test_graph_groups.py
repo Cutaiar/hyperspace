@@ -1209,8 +1209,8 @@ def test_a_landing_refused_after_its_dry_run_leaves_no_undo_step(rig, monkeypatc
     with_patch(rig, doc, "quiet-wash")
     before = state(rig)
     real = graphview._land
-    monkeypatch.setattr(graphview, "_land", lambda edit, d, label, said, dry=False, rig=None:
-                        real(edit, d, label, said, dry=dry, rig=rig) if dry else "refused")
+    monkeypatch.setattr(graphview, "_land", lambda edit, d, label, said, dry=False, bus_cuts=None:
+                        real(edit, d, label, said, dry=dry, bus_cuts=bus_cuts) if dry else "refused")
     u = watch(rig)
     try:
         n = len(u.stack)

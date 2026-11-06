@@ -110,7 +110,7 @@ def same(a: dict, b: dict) -> None:
     a, b = {**a, "name": "", "note": ""}, {**b, "name": "", "note": ""}
     ra, rb = read(a), read(b)
     for f in ("nodes", "wires", "values", "modifiers", "routes", "desk", "macros", "lfos",
-              "envs", "layout", "ports", "rig_rows", "host_ports"):
+              "envs", "layout", "ports", "control_rows", "host_ports"):
         assert getattr(ra, f) == getattr(rb, f), f
     assert ra == rb
 
@@ -144,12 +144,12 @@ def test_the_rig_nodes_are_graphviews_not_removable():
     (`graphview.spec_name`): the clouds as the rig's (`NOT_REMOVABLE`), the
     camera as the look's one (`CAMERA_KEPT`, plan 43 C2); the two lists
     agree, and the patch reads a name's kind as the canvas does."""
-    assert set(patches.RIG_NODES) == {graphview.CAMERA, "cloud"}
+    assert set(patches.FIXTURE_NODES) == {graphview.CAMERA, "cloud"}
     for name in ("camera", "cloud", "cloud.2"):
         got, why = graphview.spec_name(f"render:{name}")
         said = graphview.CAMERA_KEPT if name == "camera" else graphview.NOT_REMOVABLE
         assert got is None and why == said.format(label=graphview.label_of(name)), (name, why)
-        words = patches.CAMERA_WORDS if name == "camera" else patches.RIG_WORDS
+        words = patches.CAMERA_WORDS if name == "camera" else patches.FIXTURE_WORDS
         assert patches.held_words(name) == words.format(name=name)
     for name in ("acid", "acid.2", "composite.3", "hands.2", "hands.2.layer", "segment.fg",
                  "output.all", "output.2", "channel.a", "scene", "lookback.2", "camera",
@@ -250,8 +250,8 @@ def test_read_classifies_the_example():
     route is the patch's own, inside."""
     doc = example()
     p = read(doc)
-    assert [r["source"] for r in p.rig_rows] == ["lane:0", "cc:0:48"]
-    assert p.rig_rows == (doc["routes"][1], doc["desk"][0])
+    assert [r["source"] for r in p.control_rows] == ["lane:0", "cc:0:48"]
+    assert p.control_rows == (doc["routes"][1], doc["desk"][0])
     assert [h["id"] for h in p.host_ports] == ["in", "out"]
     assert p.host_ports == tuple(sorted(doc["ports"], key=lambda x: x["id"]))
     assert p.members.render == ("acid", "delay", "wobble")
@@ -274,7 +274,7 @@ def test_read_derives_the_value_ports():
     assert [(h.get("from"), h.get("to"), h["was"]) for h in values] == [
         ("lfo:0", None, "view.bright"), (None, "fx.wobble.freq", "lfo:3"),
         ("macro.2", None, "view.speed"), (None, "mod.2.in2", "env:6")]
-    assert [r["source"] for r in p.rig_rows] == ["lane:0", "cc:0:48"]
+    assert [r["source"] for r in p.control_rows] == ["lane:0", "cc:0:48"]
 
 
 # ---------------------------------------------------------------- lift
@@ -304,7 +304,7 @@ def test_lift_of_noitas_core():
     assert [n["file"] for n in doc["nodes"]] == ["doublevision", "fractals", "warp"]
     assert doc["layout"] == {} and doc["lfos"] == doc["envs"] == []
     p = read(doc)
-    assert len(p.rig_rows) == len(doc["desk"]) + len(doc["routes"])
+    assert len(p.control_rows) == len(doc["desk"]) + len(doc["routes"])
 
 
 def test_a_lift_that_names_the_rigs_refuses_it_and_keeps_the_rest():
@@ -667,7 +667,7 @@ def test_crossing_and_the_sides_classify_what_crosses_a_region():
                      ("doublevision", "fractals.image"): (patches.INSIDE, "image"),
                      ("fractals", "tripcolour.image"): (patches.OUT, "image")}
     m = patches._Members(("acid",), mods=(2,), lfos=(5,), macros=(1,))
-    assert patches.side(m, "cc:0:48", "fx.acid.speed") == patches.RIG
+    assert patches.side(m, "cc:0:48", "fx.acid.speed") == patches.CONTROL
     assert patches.side(m, "lfo:0", "fx.acid.speed") == patches.INTO      # a host LFO
     assert patches.side(m, "lfo:4", "view.bright") == patches.OUT          # its own, out
     assert patches.side(m, "mod:2", "fx.acid.mix") == patches.INSIDE
@@ -677,7 +677,7 @@ def test_crossing_and_the_sides_classify_what_crosses_a_region():
     assert patches.sub_side(m, "macro.4", "fx.acid.mix") == patches.INTO
     assert patches.sub_side(m, "macro.4", "view.bright") is None
     assert patches.input_side(m, "mod.2", "lfo:4") == patches.INSIDE
-    assert patches.input_side(m, "mod.2", "hand:right.y") == patches.RIG
+    assert patches.input_side(m, "mod.2", "hand:right.y") == patches.CONTROL
     assert patches.input_side(m, "mod.2", "lfo:0") == patches.INTO
     assert patches.input_side(m, "mod.7", "lfo:4") == patches.OUT
     assert patches.input_side(m, "mod.7", "lfo:0") is None

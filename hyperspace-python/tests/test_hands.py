@@ -1149,7 +1149,7 @@ def test_one_defaults_table_for_the_rig(tmp_path):
     assert cfg["calibration"] == str(tmp_path / "hands.json")
     cfg["dofs"].append("grab")                             # a copy: the table is untouched
     assert hands.DEFAULTS["dofs"] == hands.core.DEFAULT_DOFS and "grab" not in hands.core.DEFAULT_DOFS
-    filled = hands.core.rig({"dofs": ["x"]})
+    filled = hands.core.filled_config({"dofs": ["x"]})
     filled["dofs"].append("y")
     assert hands.DEFAULTS["dofs"][:2] == ["x", "y"] and len(hands.DEFAULTS["dofs"]) == 6
     s = HandSettings.from_config()

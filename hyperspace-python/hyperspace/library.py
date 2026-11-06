@@ -138,7 +138,7 @@ from typing import Any
 
 from . import patches as patchdoc
 from . import undo
-from .graph import RigWires
+from .graph import BusCuts
 from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
 from .groupwords import group_word
 from .palettecompat import palette_slice
@@ -537,17 +537,17 @@ def _look_ids(session: dict) -> list[str]:
     return [k for k in session if is_look_id(k)]
 
 
-def show_look(doc: Any) -> tuple[dict[str, Any], RigWires]:
+def show_look(doc: Any) -> tuple[dict[str, Any], BusCuts]:
     """What a `/2` show held of the look (plan 44 D3): the hands' and the
     clouds' values in its `session` (`_look_ids`) and its bus cuts (`rig`,
     `graph.RigWires`) — ({}, no cut) for neither, and for any `/3`. The one
     reader: `Project._take`, `kept_look`, `headless.show_seed` and the
     migration tool all ask it."""
     if not isinstance(doc, dict) or doc.get("schema") not in (PROJECT_V2, None):
-        return {}, RigWires()
+        return {}, BusCuts()
     session = doc.get("session")
     session = session if isinstance(session, dict) else {}
-    return ({k: session[k] for k in _look_ids(session)}, RigWires.read(doc.get(RIG)))
+    return ({k: session[k] for k in _look_ids(session)}, BusCuts.read(doc.get(RIG)))
 
 
 def show_without_look(doc: dict) -> dict | None:
@@ -856,7 +856,7 @@ class Project:
         # `_take` and handed to every preset before `/10` a load reads while
         # this show is open (`graphmigrate.ten`); never written back
         self.old_look: dict[str, Any] = {}
-        self.old_cuts = RigWires()
+        self.old_cuts = BusCuts()
         # plan 43 C2: what an old show (before the eye was the preset's) kept
         # of the camera — the eye in its `session`, the camera node's GRAPH
         # position in its `layout` — read out of the file by `_take` and
@@ -957,7 +957,7 @@ class Project:
                 # plan 43 C2: what an old show kept of the camera, for its presets
                 dict(getattr(self, "old_eye", {})), getattr(self, "camera_at", None),
                 # plan 44 D3: and of the look
-                dict(getattr(self, "old_look", {})), getattr(self, "old_cuts", RigWires()))
+                dict(getattr(self, "old_look", {})), getattr(self, "old_cuts", BusCuts()))
 
     # the mark's fixed head, and where its later parts start
     MARK_LAYOUT = 9          # the GRAPH page's layout, and as on disk (plan 28 N2)
@@ -1600,10 +1600,10 @@ def kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
     return dict(found[0]), found[1]
 
 
-_KEPT_LOOKS: dict[tuple[str, int], tuple[dict[str, Any], RigWires]] = {}
+_KEPT_LOOKS: dict[tuple[str, int], tuple[dict[str, Any], BusCuts]] = {}
 
 
-def kept_look(path: Path) -> tuple[dict[str, Any], RigWires]:
+def kept_look(path: Path) -> tuple[dict[str, Any], BusCuts]:
     """What a show's ``.bak-v2-look`` copy kept of the look (`show_look`)
     — the oldest copy — or ({}, no cut): a `/2` show whose first write on
     this build made it `/3` still hands its old look to the presets before
@@ -1612,11 +1612,11 @@ def kept_look(path: Path) -> tuple[dict[str, Any], RigWires]:
     try:
         key = (str(path), path.parent.stat().st_mtime_ns)
     except OSError:
-        return {}, RigWires()
+        return {}, BusCuts()
     hit = _KEPT_LOOKS.get(key)
     if hit is not None:
         return dict(hit[0]), hit[1]
-    found: tuple[dict[str, Any], RigWires] = ({}, RigWires())
+    found: tuple[dict[str, Any], BusCuts] = ({}, BusCuts())
     for bak in sorted(path.parent.glob(f"{path.name}.bak-v{LOOK_BACKUP}*")):
         try:
             found = show_look(json.loads(bak.read_text()))
