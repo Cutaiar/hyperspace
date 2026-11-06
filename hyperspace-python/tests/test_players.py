@@ -1066,7 +1066,10 @@ def _run_sticks(r, *, players):
         devs.feed(r.deck.sources)
         router.modulate(None, DT, k * DT)
         r.deck.reg.apply()
-        out.append({p.id: repr(p.value) for p in r.deck.reg if p.group not in ("ui", "panel")})
+        # (`preset.select` reads the deck off air's slot once there are two decks: a pad's
+        # light, row 700, nothing of this deck's)
+        out.append({p.id: repr(p.value) for p in r.deck.reg
+                    if p.group not in ("ui", "panel") and p.id != "preset.select"})
     return out
 
 

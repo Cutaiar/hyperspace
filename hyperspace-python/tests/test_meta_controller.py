@@ -284,7 +284,7 @@ def test_a_bank_pad_on_deck_2_loads_on_deck_2_and_its_light_is_deck_2s(rig):
     meta, one, two, lib = rig.meta, rig.one, rig.two, rig.r.lib
     bank = lib.project.bank
     k = next(i for i, n in enumerate(bank[:8]) if n and n != one.presets.current)
-    two.table.add(Binding("note:0:71", f"preset.load.{k}", "fire", layer="preset"))
+    two.table.add(Binding("note:0:71", f"preset.load.{k}", "fire"))     # (the meta controller's)
     meta.point(DESK, two)
     before = _look(one)
     _send(rig, note(71), note(71, 0))
