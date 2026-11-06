@@ -19,9 +19,8 @@ from test_hands import make_app, v3
 from test_hands_room import FPS, lane, play, pose
 from test_undo import boot, settle
 
-from hyperspace import graph as G
-from hyperspace import hold as H
 from hyperspace import learn, preset, ui_routing, undo
+from hyperspace.deck import Deck
 from hyperspace.hands import core as hc
 from hyperspace.hands import room as R
 from hyperspace.hands import tape as T
@@ -811,39 +810,17 @@ def test_what_an_older_build_does_with_the_row(deck, tmp_path, monkeypatch):
     assert deck.reg["camera.pitch"].base == pytest.approx(0.5)
 
 
-def _hold(deck):
-    deck.renderer = SimpleNamespace(wiring=G.EMPTY, ghost_states={}, rig_source=deck.presets)
-    deck.presets.graph.attach(deck.renderer)
-    hold = H.Hold(deck.reg, deck.renderer, undo=deck.undo, section=deck.presets.graph)
-    settle(deck)
-    return hold
-
-
-def test_under_the_hold_it_moves_the_preview_as_a_knob_would(deck, tmp_path):
-    """The base is the operator's side: the projector keeps the held camera."""
-    hold = _hold(deck)
-    assert hold.engage(deck.t)
+def test_an_orbit_moves_the_deck_it_is_on_and_no_other(deck, tmp_path):
+    """Row 684 reversed (plan 44 D5d): a turn writes the base of the deck it acts on,
+    on air or off, and the deck beside it has its own camera. Plan 55: where the row
+    acts is the player's duty (`test_players`)."""
+    beside = Deck.beside(deck.deck)
+    other = beside.reg["camera.yaw"]
+    was = other.base
     Run(deck, tmp_path, closing() + [fist(yaw=float(k)) for k in range(31)] + opening(yaw=30.0),
         steps=deck.undo)
-    yaw = deck.reg["camera.yaw"]
-    assert math.degrees(yaw.base) == pytest.approx(30.0, abs=0.3)
-    with hold.program():
-        assert yaw.value == pytest.approx(0.0, abs=1e-6)
-    assert "camera.yaw" in hold.changed()
-
-
-def test_engaging_the_hold_mid_orbit_cuts_it_with_the_step_closed(deck, tmp_path):
-    hold = _hold(deck)
-    n = len(closing()) + 21
-
-    def each(io, k):
-        if k == n:
-            assert hold.engage(deck.t)
-
-    script = closing() + [fist(yaw=float(k)) for k in range(41)]
-    r = Run(deck, tmp_path, script, steps=deck.undo, each=each)
-    assert r.yaw[-1] == pytest.approx(r.yaw[n])              # cut until the fist opens
-    assert deck.undo._kept is None
+    assert math.degrees(deck.reg["camera.yaw"].base) == pytest.approx(30.0, abs=0.3)
+    assert other.base == was and not beside.undo.stack
 
 
 # ------------------------------------------------------------ with the base chase (plan 52)

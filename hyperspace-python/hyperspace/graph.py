@@ -5082,7 +5082,7 @@ class SegmentNode(Node):
 
     `segment.feather` blurs the matte (`MaskPasses.feather`). Before the
     first matte, with `segment.on` off, with no worker (a renderer given no
-    `segment_cfg`: the hold's preview), on a worker's error, or with an
+    `segment_cfg`), on a worker's error, or with an
     input reading nothing, it makes no matte: `fg` is the input whole,
     `bg` nothing, `mask` nothing — and off, the worker is not fed (it
     sleeps). Fed nothing on `image`, it is not built and says so."""

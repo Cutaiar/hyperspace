@@ -3,8 +3,8 @@
 A sequencer is a source like the LFOs (plan 31 §S): `Sequencer.step` runs
 once a frame, fires each lane's envelope on the steps it crosses, and
 `publish` hands the router five trigger-kind lanes, ``seq:<i>``, that
-pulse on the frame a lane fires, so a lane can drive ``preset.next`` or a
-strobe as well as its envelope. Every step is a registry param —
+pulse on the frame a lane fires, so a lane can drive a strobe as well as its
+envelope (not ``preset.next``: `routing.meta_refusal`, no preset's row loads). Every step is a registry param —
 ``seq.<l>.<s>``, a toggle in v1 — so the APC40's clip grid is a plain
 toggle row with LED feedback, and Learn, undo, the preset and "a
 performer owns a step" all come with it (decision 4). The model stores a

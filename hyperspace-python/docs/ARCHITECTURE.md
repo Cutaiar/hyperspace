@@ -54,7 +54,7 @@ runs the one frame loop.
 | **Media** | `media/` (`frame`, `source`, `ids`, `pool`, `adapters`, `still`, `video`, `proxy`, `transport`, `mixer`, `channels`, `folder`, `thumbs`, `live`, `ndi`, `syphon`, `camera`, `panel`, `publish`), `media_tex.py`, `ui_media.py` | the eight channels (`MediaState`: bins, sources, transports), the media folder (`MediaFolder`), live kinds, the built-in `panel:graph` (`media.panel.PanelSource`, 2026-11-02: the GRAPH canvas off `outputs.CanvasTap`, answered by `app.MediaResolver.builtin` before the devices' feeds; `media.live.SharedSource` is what it and `LiveSource` share — holders under one lock, the newest frame, the status words; whether GRAPH is drawing is read from the panel, `Panel.canvas_px`, through `on_page`), the publishers; `MediaTextures` (a texture per channel; one wrapper per distinct GPU texture — name, size and the source's generation, every channel's together) on the renderer | nothing in the registry: `media.<c>.*` params are read when a channel polls; `MediaTextures` writes textures, `publish` hands finished frames to Syphon / NDI | `import hyperspace.app` imports none of `av`, `pillow_heif`, `syphon`, `cyndilib`, `AVFoundation`: each adapter library is imported inside the function that opens a source (`tests/test_app_boundary.py`); the render graph reaches a channel duck-typed (`graph.MEDIA_CHANNELS`, held equal to `channels.CHANNELS` by a test); the frame thread never decodes, resizes, scans or joins (below); a `segment` (plan 39) wired straight from a channel whose newest `MediaFrame` has CPU pixels (a camera, NDI) and a cover fit hands the worker that array (`Renderer.media_now`) and no readback runs — the shortcut changes where the worker reads, never what is wired |
 | **Library** | `library.py`, `preset.py`, `patches.py`, `config.py` | the library root (`Library.home`: module presets, presets, patches (plan 40, §3.11), shows (projects) — the home, or the folder `[library] path` names; one tier since 2026-10-28: nothing ships with the app, every preset is yours; presets in folders, plan 48), the machine home (`Library.machine`: `last_show`, the trash since plan 48), the desk's bank of twenty-four, `config.toml` (its `[[devices]]` list checked per entry, the old device tables translated; `config.read_devices` for the registry's watch) | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `config` (`tests/test_app_boundary.py::test_the_library_never_imports_config`) |
 | **Undo** | `undo.py` (with `keep_open` / `let_close`, a step a held control or a clutch keeps open; `watching`, a registry's own `Undo`) | the undo and redo stacks, the last settled state | bases (`Registry.restore`) and the table's preset parts, on ⌘Z / Ctrl+Z only | a leaf: imports nothing from the package and never touches `modulate` or `feed` (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`) |
-| **Host** | `app.py`, `hotreload.py`, `placement.py`, `watchdog.py`, `hold.py` | construction order, the frame loop, the windows and render outputs, the hold (plan 38: the program's held wiring, rig cables and values, the preview renderer), the reload watch list, the stall log, where the library is (`[library] path` → `Library(path, machine=home)`) | bases for the relative writers (↑ / ↓; the pad's sticks are the pad device's own, `gamepad.steer`); no key of its own but `app.LOOP_KEYS` | builds the device registry (`app._open_devices`: every device behind its own `[[devices]]` entry) and the dream worker behind `[dream] enabled` (`_open_dream`, the one gate left); `Host.devices`, one close list `Host.adapters == (media, devices, dream_io)` (the media close first); importing `app` imports no gated adapter, no `osc`, no `pythonosc`, no `torch`, no `leap`, and (plan 39) no `hyperspace.segment`, `Vision`, `CoreML` or `torchvision` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); the host hands the program renderer `[segment]` (`renderer.segment_cfg`) and closes its segment workers beside the dream's, at quit and restart; `placement` is a leaf (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`) |
+| **Host** | `app.py`, `hotreload.py`, `placement.py`, `watchdog.py` | construction order, the frame loop, the windows and render outputs, the hold (plan 38: the program's held wiring, rig cables and values, the preview renderer), the reload watch list, the stall log, where the library is (`[library] path` → `Library(path, machine=home)`) | bases for the relative writers (↑ / ↓; the pad's sticks are the pad device's own, `gamepad.steer`); no key of its own but `app.LOOP_KEYS` | builds the device registry (`app._open_devices`: every device behind its own `[[devices]]` entry) and the dream worker behind `[dream] enabled` (`_open_dream`, the one gate left); `Host.devices`, one close list `Host.adapters == (media, devices, dream_io)` (the media close first); importing `app` imports no gated adapter, no `osc`, no `pythonosc`, no `torch`, no `leap`, and (plan 39) no `hyperspace.segment`, `Vision`, `CoreML` or `torchvision` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); the host hands the program renderer `[segment]` (`renderer.segment_cfg`) and closes its segment workers beside the dream's, at quit and restart; `placement` is a leaf (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`) |
 
 **Everything points at the registry; the registry points at nothing
 above it.** Devices and sources feed the router; the router writes
@@ -246,35 +246,17 @@ THEN in app._draw_render: glFlush (only with a later output); each later output
   Presenter.present then swap; output 1 swapped last
 ```
 
-**The program and the preview: a hold** (plan 38). With the projector
-held (`hold.Hold`, built in `app.main` beside the output switches, its
-undo and `presets.graph` handed over), `app._draw_render` runs the one
-`draw_outputs` inside `with hold.program(renderer)`: the renderer is
-handed the held wiring, a stand-in `rig_source` carrying the rig's bus
-cables as they stood (`hold._HeldRig`) and the held extra hands states,
-and each held param whose base moved since HOLD is written to its object
-with `Param.put`, never `set` — no base moves, so undo, the dirty dot and
-the desk lights do not see it — as the held base plus this frame's offset
-(`hold.program_value`, so modulation rides on both); the live values,
-wiring and rig are put back in a `finally`. Only `hold.HELD_GROUPS` are
-held; the turn (`rot.*`, `view.three_d`, `view.speed`, `view.plane.*`),
-the media channels, the modulators and the clouds are one for both. Every
-output is the program; nothing else in the frame loop changes. After the
-outputs, and only on frames the GRAPH page shows the preview
-(`preview.take()`), `app._draw_preview` draws the live wiring with a
-second `Renderer` on the same context (`hold.preview_renderer`, its
-inputs copied by `hold.mirror` each draw, `rig_source` among them, so it
-never reads a default cable) into the backdrop tap at `hold.preview_size`
-(output 1's size under the render cap, at most 1280 px), with output 1's
-mutes and flips at full dim; output 1 publishes into a second `Preview`
-(the PROJECTOR inset). A `GraphSection` landing while held keeps the
-program's effect instances, switches, resizes and look-backs
-(`Hold.keep`, consulted by `GraphSection._settle`); a load's delay reset
-goes to the preview; the canvas reads the preview's graph
-(`hold.canvas_renderer`), and its node pictures through it
-(`ui_graph.picture_sources`). Take releases and settles to the live graph;
-Drop is one `Undo.revert` to the hold point, the preset's part only
-(`tests/test_hold.py`; plan 38, register rows 430–439, 461–470).
+**On air and off air** (plan 44 D5, the owner, 2026-11-04). `deck.MetaController` owns two
+fixed `Deck`s, each a whole look with its own renderer on one context. `output.xfade`, the
+desk's crossfader, decides: 0 deck 1 alone, 1 deck 2 alone, on air the one it is closer to
+(`follow_fader`). `app.frame` ticks it first of all, so every handle reads the frame's deck
+from the frame's first line. Above 0 the other deck draws too and `Renderer._compose` mixes it
+before the dim (`deck.Fade`). The panel looks at either (`point_panel`): on the deck off air
+its backdrop is that deck's picture (`Fade.preview`), output 1 rides a second `Preview` (the
+ON AIR inset), and GRAPH frames its canvas red. Two verbs and no others: the crossfade, by
+hand or timed, and `copy_on_air`. HOLD, TAKE and DROP are gone (plan 38's program and preview,
+`hold.py`), since with two decks there is nothing to hold. No patch reaches the other deck:
+`tests/test_on_off_air.py::test_no_patch_reaches_the_other_deck`.
 
 A Scene or Layer node *makes* a texture; the history, composite and
 effect nodes *paint* into the framebuffer their consumer hands them, so
@@ -570,11 +552,6 @@ compiled once, each into its own `_frame_target`, never reading what it writes).
   the squared-alpha cut-through blend only when the window is see-through
   (`Renderer.bg_alpha < 1`), never for a laid-over scene's zero ground, so
   a translucent face over a bright under or backdrop is honest.
-- **Under a hold** (plan 38, at the integration merge): the three declares
-  settle in `GraphSection._settle` through `hold.keep`; `matte`, `cut` and
-  `segment` are in `hold.HELD_GROUPS` and `hold.PROGRAM_IDS`. The preview
-  renderer has no `segment_cfg`, so it makes no worker: a person segment
-  there passes its picture through.
 
 What the order guarantees, each held by tests in `tests/test_render.py`,
 `tests/test_outputs.py`, `tests/test_ghost.py`, `tests/test_graph.py` and

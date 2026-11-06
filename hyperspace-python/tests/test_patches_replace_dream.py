@@ -3,7 +3,7 @@ the dream owning its own params.
 
 - a spawn holding a dream into a host with one puts up the sheet: one press,
   one undo step, what the host's loses said in words; every other
-  single-instance node, and what only the hold keeps, stays refused;
+  single-instance node stays refused;
 - `dream.*` is drawn where the save has it: a look-back's knobs on the
   look-back, the rest on the dream, through `graphview.OWNERS`, a node's
   `node_params`, the pane's sections and `patches._param_rows`.
@@ -16,7 +16,7 @@ import json
 import pytest
 from conftest import CORPUS
 from test_graph_groups import files, state, watch, wires
-from test_patches import parts, preset
+from test_patches import parts
 from test_patches_frame_kinds import cut, on_graph, put, rig, wake_doc  # noqa: F401
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -70,16 +70,9 @@ def test_only_the_dream_is_replaceable_for_now():
     assert set(patches.REPLACEABLE) <= set(patches.ONE_PER_FRAME)
 
 
-def test_a_dream_only_the_hold_keeps_stays_refused_with_the_hold_words():
-    spec, table = parts(preset("party-noita"))[:2]
-    landing = spawn(cut("dreamy"), Host.of(spec, table, held=("dream",)))
-    assert landing.replacing == ()
-    assert landing.refusal == patches.HELD_TAKEN_WORDS.format(name="dreamy", nodes="dream")
-
-
-def test_a_dream_on_the_preset_is_replaceable_whatever_the_hold_keeps():
+def test_a_dream_on_the_preset_is_replaceable():
     spec, table = parts(wake_doc())[:2]
-    landing = spawn(cut("dreamy"), Host.of(spec, table, held=("dream",)))
+    landing = spawn(cut("dreamy"), Host.of(spec, table))
     assert landing.replacing == ("dream",) and landing.refusal is None
 
 
@@ -394,16 +387,6 @@ def test_the_edit_lands_no_replace_nobody_asked_for(rig):  # noqa: F811
     assert state(rig) == before
     assert e.spawn(landing, {KEY: "patch"}) is None
     assert ("dream", "composite.over") not in wires(rig)
-
-
-def test_the_only_dream_the_hold_keeps_refuses_with_nothing_to_replace(rig):  # noqa: F811
-    on_graph(rig, "party-noita")
-    e = ui_graph.group_edit(rig.panel)
-    landing = spawn(cut("dreamy"), Host.of(*rig.lib.presets.parts()[:2], held=("dream",)))
-    before = state(rig)
-    assert e.spawn(landing, {KEY: "patch"}) == landing.refusal
-    assert landing.refusal == patches.HELD_TAKEN_WORDS.format(name="dreamy", nodes="dream")
-    assert state(rig) == before
 
 
 def test_a_splice_onto_the_replaced_dreams_own_cable_is_refused_before_the_sheet(rig):  # noqa: F811

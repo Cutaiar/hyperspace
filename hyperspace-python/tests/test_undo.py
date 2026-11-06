@@ -25,7 +25,7 @@ from hyperspace import devices, hands, lfo, routing, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
-from hyperspace.deck import Deck, meta_stack
+from hyperspace.deck import Deck, Mix, meta_stack, register_xfade
 from hyperspace.library import PRESETS, Library
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
@@ -59,7 +59,7 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sour
     the corpus first (conftest.seed: the shipped presets and the party
     show, which the home then opens with its startup preset, TUMBLE).
     The deck is `Deck.build`'s, the one order `app.main` runs too (plan 44
-    D1); the rig around it is stand-ins: no GL (no renderer, no hold), a
+    D1); the rig around it is stand-ins: no GL (no renderer), a
     namespace for the audio engine, a bare `Output`, the panel's params
     without imgui, and one `MidiIO` over fake ports. `sources`: shared
     sources (routing_sources.Sources) for the deck's router to read, as a
@@ -87,6 +87,8 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None, sour
     def outputs_setup(reg):
         r.output = Output(None, None)
         r.output.register(reg)
+        r.mix = Mix()
+        register_xfade(reg, r.mix)
         return r.output
 
     def load_table(reg):

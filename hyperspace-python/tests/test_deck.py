@@ -415,13 +415,13 @@ def test_a_clock_other_than_the_shared_sources_is_refused_before_anything_regist
 
 def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     """`boot`'s handles are the deck's objects; a headless deck has no GL:
-    no renderer, no hold, and the installed undo is the deck's."""
+    no renderer, and the installed undo is the deck's."""
     r = boot(tmp_path / "home")
     d = r.deck
     assert (d.reg, d.view, d.table, d.router, d.lfos, d.presets, d.learn, d.undo) == (
         r.reg, r.view, r.table, r.router, r.lfos, r.presets, r.learn, r.undo)
     assert d.table is d.router.table and d.graph is d.presets.graph
-    assert d.renderer is None and d.hold is None
+    assert d.renderer is None
     assert d.clock is r.clock is d.router.clock
     # plan 44 D2: the router reads the deck's sources (its own while there
     # is one deck), and the clock the banks step on is theirs
@@ -470,7 +470,7 @@ def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
     # nothing of the deck's is still built in main
     src = inspect.getsource(app.main)
     for line in ("build_registry(", "Router(reg, table)", "Presets(library", "Learn(reg",
-                 "undo.Undo(", "Hold(reg", "library.attach(reg)", "ViewState()"):
+                 "undo.Undo(", "library.attach(reg)", "ViewState()"):
         assert line not in src, line
     assert "deck=deck" in src and "*deck.targets()" in src
     log: list[str] = []
@@ -487,7 +487,7 @@ def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
 def test_the_build_keeps_mains_order():
     """`Deck.build`'s lines in the order `main` had them at 749be48: the
     registry, the band hooks, the hands, the clock and banks, the outputs,
-    the hold, the table, attach, the panel, the router and its banks, the
+    the table, attach, the panel, the router and its banks, the
     presets, learn, the devices, the startup preset, the marks and undo."""
     src = textwrap.dedent(inspect.getsource(Deck.build))
     src = src[src.index('"""', src.index('"""') + 3) + 3:]       # the body, not the docstring
@@ -495,15 +495,14 @@ def test_the_build_keeps_mains_order():
            "hands(reg)",
            "tempo.register(reg, clock)", "lfo.register(reg, lfos, clock)",
            "envelope.register(reg, envs, clock)", "sequencer.register(reg, seq, clock)",
-           "made.outputs = outputs(reg)", "Hold(reg, renderer", "register_hold(reg, hold",
+           "made.outputs = outputs(reg)",
            "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
            "Router(reg, bindings, sources=sources)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
            "Presets(on_deck, reg, router", "presets.graph.attach(renderer)",
-           "hold.section = presets.graph", "Learn(reg, router.table", "devices(reg, router, learn, panel=",
+           "Learn(reg, router.table", "devices(reg, router, learn, panel=",
            "library.project.load_startup()", "geometry.warm_all(first=s.shape)",
-           "Marks(presets.lib)", "undos.Undo(reg, router.table", "undos.install(undo_obj)",
-           "hold.undo = undo_obj"]
+           "Marks(presets.lib)", "undos.Undo(reg, router.table", "undos.install(undo_obj)"]
     at = [src.index(s) for s in seq]
     assert at == sorted(at), [s for s, a, b in zip(seq, at, sorted(at), strict=True) if a != b]
 
@@ -569,7 +568,7 @@ def test_a_save_of_deck_py_re_classes_the_live_deck_and_back_fills_a_new_field(
     try:
         hot = HotReloader(deck.targets, modules=("deck",), period=0.0)
         assert "added" not in vars(deck)
-        anchor = "    hold: Hold | None = None\n"
+        anchor = "    renderer: Any = None\n"
         assert src.count(anchor) == 1
         copy.write_text(src.replace(anchor, anchor + "    added: int = 7\n"))
         st = copy.stat()
@@ -652,7 +651,7 @@ def test_a_renderer_and_a_stand_in_state_together_are_refused(tmp_path):
 
 def test_the_panel_hook_gets_what_the_outputs_hook_returned(tmp_path):
     """The panel hook runs after the outputs hook and is handed its result
-    (`output=`) with the clock, the banks and the hold, so the panel has
+    (`output=`) with the clock and the banks, so the panel has
     its handles at the place `main` gave them before D1."""
     seen: dict = {}
     marker = object()
@@ -662,8 +661,8 @@ def test_the_panel_hook_gets_what_the_outputs_hook_returned(tmp_path):
                       table=lambda reg: Bindings(), outputs=lambda reg: marker,
                       panel=lambda reg, view, **kw: seen.update(kw, view=view))
     assert seen["output"] is marker and seen["view"] is deck.view
-    assert (seen["clock"], seen["lfos"], seen["envs"], seen["seq"], seen["hold"]) == (
-        deck.clock, deck.lfos, deck.envs, deck.seq, None)
+    assert (seen["clock"], seen["lfos"], seen["envs"], seen["seq"]) == (
+        deck.clock, deck.lfos, deck.envs, deck.seq)
     seen.clear()
     Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),
                table=lambda reg: Bindings(), panel=lambda reg, view, **kw: seen.update(kw))

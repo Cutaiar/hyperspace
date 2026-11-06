@@ -103,7 +103,7 @@ def test_every_factory_row_on_a_meta_param_is_the_meta_controllers():
     their layer, and the factory's preset layer holds none, with no id listed."""
     table = Bindings.factory()
     on_meta = [b for b in table.bindings if meta_refusal(b.target) is not None]
-    assert any(b.target == "master.gain" for b in on_meta) and len(on_meta) > 40
+    assert any(b.target == "output.dim" for b in on_meta) and len(on_meta) > 40
     assert all(is_session_row(b) and meta_row_refusal(b) is None for b in on_meta)
     assert not [b for b in factory_desk() if b.layer == "preset"
                 and meta_refusal(b.target) is not None]
@@ -112,13 +112,13 @@ def test_every_factory_row_on_a_meta_param_is_the_meta_controllers():
 def test_the_masters_row_survives_a_load_that_drops_a_presets(tmp_path):
     r = boot(tmp_path)
     table = r.router.table
-    master = [b for b in table.bindings if b.target == "master.gain" and is_session_row(b)]
+    master = [b for b in table.bindings if b.target == "output.dim" and is_session_row(b)]
     assert master
     put(tmp_path, "LEANS", routes=[
-        {"source": "hand:left.y", "target": "master.gain", "op": "push", "value": 0.375}])
+        {"source": "hand:left.y", "target": "output.dim", "op": "push", "value": 0.375}])
     r.presets.load("LEANS")
     assert all(any(x is b for x in table.bindings) for b in master)
-    assert not table.routes_to("master.gain")
+    assert not table.routes_to("output.dim")
 
 
 def test_a_presets_row_moved_or_woken_onto_a_meta_param_is_refused():
@@ -262,7 +262,7 @@ def test_a_drag_from_an_invariant_control_says_invariant_not_the_rule(rig):
     table = rig.router.table
     view = graphview.build(table, rig.reg, rig.router, None, None, None)
     e = graphview.Edit(table, rig.reg, rig.router, view)
-    fader = next(b.source for b in table.invariant_rows() if b.target == "master.gain")
+    fader = next(b.source for b in table.invariant_rows() if b.target == "output.dim")
     why = e._value_refusal(f"out:{fader}", "base:tempo.bpm")
     assert "invariant" in why and "meta controller" not in why
     lrn = Learn(rig.reg, table)
@@ -329,8 +329,8 @@ def test_the_graph_lists_no_mod_port_for_a_meta_param_but_a_meta_row_stands(rig)
     view = graphview.build(table, rig.reg, rig.router, None, None, None)
     ports = {p.id for n in view.nodes for p in n.ports}
     assert "param:view.bright" in ports and "param:tempo.bpm" not in ports
-    assert any(b.target == "master.gain" for b in table.bindings)
-    assert "param:master.gain" in ports
+    assert any(b.target == "output.dim" for b in table.bindings)
+    assert "param:output.dim" in ports
 
 
 def test_a_route_end_moved_onto_a_meta_param_is_refused(rig):

@@ -18,7 +18,7 @@ window-system state is three settings and the params that drive them:
   output.bg           0–1      in overlay: ground darkness, 0 clear … 1 black
   output.alpha        0–1      in overlay: whole-window opacity
   output.dim          0–1      master dim of the finished frame, in every
-                               mode: 0 black … 1 full (the crossfader)
+                               mode: 0 black … 1 full (the desk's MASTER fader)
 
 and, per opened render output N (plan 21 WP4, `register_switches`; the
 config's ``[[output.screens]]``, one output with no list):
@@ -268,7 +268,7 @@ class Output:
                        fmt=self._dim_text, group=g,
                        tip="Dims the whole finished picture — the scene, the effects "
                            "and the ghost hands alike: 0 black, 1 full. The APC40's "
-                           "crossfader (left is black). Never saved; a launch starts "
+                           "MASTER fader. Never saved; a launch starts "
                            "at full and a preset load never moves it.", **rig)
         # the pre-split ids: views onto the params above, never saved or
         # driven. The factory table and apc40.py bind these (overlay.on /

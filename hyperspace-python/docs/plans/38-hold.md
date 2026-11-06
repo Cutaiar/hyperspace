@@ -1,5 +1,7 @@
 # Plan 38 — hold the projector: the program stays up while the next look is built
 
+**Removed 2026-11-04 (plan 44 D5d, the owner).** History: the hold, TAKE and DROP are gone, for two `Deck`s, the crossfade and copy on air.
+
 **Status: built (2026-10-27)** on `plan-38-hold`, rebased by B1 onto
 `plan-37-38-39-integration` (the first cut's commit kept), with B2's
 hand-check tests and B3's review fixes merged (cd56b6f); it lands on the

@@ -114,11 +114,13 @@ def _state(panel) -> dict:
 
 
 def media_of(panel):
-    """The channels (`MediaState`): the app's (`panel.media.state`), else the
-    registry's own (`build_registry` keeps the one its params write)."""
-    io = getattr(panel, "media", None)
-    state = getattr(io, "state", None)
-    return state if state is not None else getattr(panel.reg, "media", None)
+    """The channels (`MediaState`) of the deck the panel is on: its registry's own
+    (`build_registry` keeps the one its params write), else the app's
+    (`panel.media.state`: a stand-in registry has none)."""
+    state = getattr(getattr(panel, "reg", None), "media", None)
+    if state is not None:
+        return state
+    return getattr(getattr(panel, "media", None), "state", None)
 
 
 def folder_of(panel):
