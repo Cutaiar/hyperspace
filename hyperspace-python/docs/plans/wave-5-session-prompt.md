@@ -15,7 +15,7 @@ checkouts in the owner's checkout.
 
 Stop and tell the owner plainly if any of these is not true. Do not start around them.
 
-1. **Wave 4 is merged:** #380, SEM, D5e, N1, N2, D6, #287, #365, NSEW, the one migration. Check with
+1. **Wave 4 is merged:** SEM, D5e, N1, N2, D6, #287, #365, NSEW, the one migration. Check with
    `git log` and `gh pr list`. If not, wave 4's remainder comes first, by `docs/plans/wave-4-session-prompt.md`
    and the handoff at `~/.claude/handoffs/wave4/HANDOFF.md`. Say so and ask whether to finish it.
 2. **The owner says they ran the migration, and that both Macs have opened the new library.** Only the owner
@@ -63,6 +63,7 @@ H1, H2 and SM1 need none of this.
 | 7 | When old-file reading goes; the 12 trashed looks | |
 | 8 | This wave's scope | |
 | 9 | One nod on the pending rows | |
+| 10 | A mis-pressed pad then ⌘Z with the panel on air: is #380's warning enough | |
 
 ## The work
 

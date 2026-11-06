@@ -1,6 +1,6 @@
 # Plan 58 — wave 5: the cleanup, the rig's last piece, and cheaper changes
 
-**Status: planned 2026-11-06, none of it built.** Read against `main` at 34caf3c, by three independent
+**Status: planned 2026-11-06, none of it built.** Read against `main` at 34caf3c, before #380 merged (463b154), by three independent
 planners, reconciled by the wave 4 orchestrator. Its launch prompt is
 [`wave-5-session-prompt.md`](wave-5-session-prompt.md). Tags: **[V]** read or run, **[I]** inferred.
 
@@ -28,7 +28,7 @@ files or it runs twice.
 
 | Must be true | Why |
 | --- | --- |
-| Wave 4 merged: #380, SEM, D5e, N1, N2, D6, #287, #365, NSEW, the migration | Every item here is built on the renamed code and the `/11` library |
+| Wave 4 merged: SEM, D5e, N1, N2, D6, #287, #365, NSEW, the migration | Every item here is built on the renamed code and the `/11` library |
 | **The owner ran the migration, and both Macs have opened the new library** | Stage 1 removes the code that reads the old files. Only the owner can say this |
 | Hand check 467–468 passed (the other Mac) | The same fact, checked |
 
@@ -43,8 +43,8 @@ These belong in wave 4, and are also written into its documents.
   the meta list [V].** `Registry.add` makes a session param one object shared by both `Deck`s
   (`params.py:930–936`), and these close over one `Deck`. They need a class of "meta, one per `Deck`":
   counted as meta for the refusal and for the one-layer test. SEM's own test forces this.
-- **A patch's desk row on `preset.save.N` can write another patch's file today [I].** Nothing in the
-  Drive does it (0 rows [V]). The class above closes it; #380 covers only loads.
+- A patch's row can no longer press a load or a save: #380 refuses both (row 752), so the class above
+  replaces that refusal rather than adding to it.
 
 **The format lane (plan 57):**
 - **`modules` in a show is not cruft [V].** It holds the analyzer scene in 5 of the 6 shows, and must
@@ -226,6 +226,7 @@ recommendations. Plain wording is in the session report of 2026-11-06.
 7. When old-file reading goes, and what happens to the 12 trashed looks.
 8. Is this wave's scope right, with no new looks or controllers?
 9. One nod on the rows pending.
+10. Whether a mis-pressed pad followed by ⌘Z, with the panel on air, is fine with #380's warning in words.
 
 Assumed unless the owner objects: patches may read `master.gain` (457 saved rows do), since reading is not
 writing; a tapped BPM comes back at launch and a nudge does not; totem and poi are meta, following the player's
