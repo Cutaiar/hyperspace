@@ -364,7 +364,7 @@ def macro_hay(panel, router: Router, p: Param) -> tuple[str, ...]:
     return tuple(hay)
 
 
-def _session_rows(table) -> tuple[list[Binding], list[Binding]]:
+def _meta_rows(table) -> tuple[list[Binding], list[Binding]]:
     """The session's MIDI rows: (invariant, global layer)."""
     midi = table.midi()
     return [b for b in midi if b.layer is None], [b for b in midi if b.layer == "global"]
@@ -378,7 +378,7 @@ def found(panel, router: Router) -> tuple[int, int]:
     hays = [control_hay(panel, router, b) for b in table.desk()]
     hays += [control_hay(panel, router, f, mapped=False) for f in unmapped(table)]
     hays += [macro_hay(panel, router, p) for p in panel.reg.group("macro")]
-    inv, glob = _session_rows(table)
+    inv, glob = _meta_rows(table)
     hays += [control_hay(panel, router, b) for b in (*inv, *glob)]
     hays += [sink_hay(panel, router, b) for b in table.sinks(enabled=False)]
     return sum(matches(panel, router, text, *h) for h in hays), len(hays)
@@ -1999,12 +1999,12 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
 
 # ---- the session's rows, read-only ----
 
-def session(panel, router: Router) -> None:
+def meta_rows(panel, router: Router) -> None:
     """The invariant and global-layer MIDI rows: bindings.json's, shown so a
     preset mapping one of them (dropped at load, in the head's notes) can
     be seen; never learned or edited here (D5, D6)."""
     table = router.table
-    inv, glob = _session_rows(table)
+    inv, glob = _meta_rows(table)
     ui._micro("session")
     imgui.same_line()
     imgui.text_disabled("the session's — edit bindings.json")
@@ -2149,7 +2149,7 @@ def page(panel, dt: float) -> None:
         imgui.separator()
         macros(panel, router)
         imgui.separator()
-        session(panel, router)
+        meta_rows(panel, router)
         imgui.separator()
         sinks(panel, router)
         # every line is drawn: a control with no line (dark on the global

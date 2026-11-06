@@ -72,7 +72,7 @@ from .learn import Learn
 from .library import DeckProject, Marks, MetaMarks
 from .lookback import DreamState
 from .outputs import Offscreen, View, preview_size
-from .params import Registry, SessionRegistry, build_registry, part_of
+from .params import Registry, MetaRegistry, build_registry, part_of
 from .players import Duty, Players
 from .pointer import Pointer
 from .preset import Presets
@@ -136,17 +136,17 @@ class Deck:
         return self.presets.graph
 
     @property
-    def session(self) -> SessionRegistry | None:
+    def meta_reg(self) -> MetaRegistry | None:
         """The rig's params this deck's registry holds by reference (plan 44
         D3, `params.SessionRegistry`): one for every deck."""
-        return self.reg.session
+        return self.reg.meta_reg
 
     @property
-    def session_table(self):
+    def meta_table(self):
         """The rig's half of the binding table this deck's table holds by
         reference (plan 44 D3, `routing.SessionTable`): the session rows
         and `bindings.json`."""
-        return self.table.session
+        return self.table.meta_table
 
     @classmethod
     def build(cls, *, library, control, audio, table: Callable[[Registry], Bindings],
@@ -154,7 +154,7 @@ class Deck:
               dream=None, fx=None, ghost=None,
               clock: tempo.Clock | None = None, lfos: lfo.LFOs | None = None,
               sources: Sources | None = None,
-              session: SessionRegistry | None = None,
+              meta_reg: MetaRegistry | None = None,
               hands: Callable[[Registry], Any] | None = None,
               outputs: Callable[[Registry], Any] | None = None,
               panel: Callable[..., Any] | None = None,
@@ -221,12 +221,12 @@ class Deck:
                              dream=dream if dream is not None else DreamState(),
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
-                             media=media, restart=restart, session=session)
-        beside = session is not None and not on_air    # a deck beside the first (`beside`)
-        if on_air and reg.session is not None:
+                             media=media, restart=restart, meta_reg=meta_reg)
+        beside = meta_reg is not None and not on_air    # a deck beside the first (`beside`)
+        if on_air and reg.meta_reg is not None:
             # (review of #351: the deck on air lands the session's params —
             # named, never "whichever registry followed first")
-            reg.session.lead = reg
+            reg.meta_reg.on_air_reg = reg
         made = made if made is not None else RigMade()
         if hands is not None:
             made.hands = hands(reg)            # before attach: "default" includes them
@@ -337,9 +337,9 @@ class Deck:
         moves them. Nothing points at it yet."""
         return cls.build(
             library=first.presets.lib, control=None, audio=None,
-            table=lambda reg: Bindings([], session=first.table.session),
+            table=lambda reg: Bindings([], meta_table=first.table.meta_table),
             renderer=renderer, media=media, lfos=lfos,
-            session=first.session, sources=first.sources,
+            meta_reg=first.meta_reg, sources=first.sources,
             attach=False, startup=False, install=False, on_air=False,
             tag=first.band_shape)
 
@@ -366,8 +366,8 @@ class Deck:
             (self.reg, "params", "Registry"),
             # plan 44 D3: the rig's params this deck holds by reference (listed
             # here while there is one deck; D4+ hands the rig's in)
-            *([(sr, "params", "SessionRegistry")]
-              if (sr := getattr(self.reg, "session", None)) is not None else []),
+            *([(sr, "params", "MetaRegistry")]
+              if (sr := getattr(self.reg, "meta_reg", None)) is not None else []),
             *[(p, "params", "Param") for p in self.reg],
             (self.marks, "library", "Marks"),
             (self.undo, "undo", "Undo"),
@@ -415,15 +415,15 @@ class MetaRows:
     bindings: tuple = ()
     macros: dict = {}  # noqa: RUF012 — never mutated: there are none
 
-    def __init__(self, session):
-        self.session = session
+    def __init__(self, table):
+        self.table = table
 
     @property
     def rows(self) -> list:
-        return self.session.rows
+        return self.table.rows
 
     def set_rows(self, rows) -> None:
-        self.session.set_rows(rows)
+        self.table.set_rows(rows)
 
     def routes(self) -> tuple:
         return ()
@@ -440,7 +440,7 @@ def meta_stack(first: Deck) -> undos.Undo:
     `SessionRegistry` and the `SessionTable` every deck holds by reference, what
     is loaded through the library's `MetaMarks`. `first` is whichever deck has
     the band hooks; the stack is no deck's."""
-    return undos.Undo(first.session, MetaRows(first.session_table),
+    return undos.Undo(first.meta_reg, MetaRows(first.meta_table),
                       called="on the meta controller",
                       marks=MetaMarks(first.presets.lib.base), tag=first.band_shape)
 
@@ -725,9 +725,9 @@ class MetaController:
         self.on_air_pointer.deck = deck
         undos.on_air(deck.undo)
         self.parked[0] = left
-        session = deck.session
-        if session is not None:
-            session.lead = deck.reg
+        meta_reg = deck.meta_reg
+        if meta_reg is not None:
+            meta_reg.on_air_reg = deck.reg
         self.place_players()
         for holder in (KEYS, MOUSE):
             p = self.pointers.get(holder)

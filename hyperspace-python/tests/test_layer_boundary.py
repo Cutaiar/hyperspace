@@ -47,7 +47,7 @@ from hyperspace.params import (
     SHARED_META_KEYS,
     Kind,
     Param,
-    SessionRegistry,
+    MetaRegistry,
     is_meta_id,
     is_per_deck_meta_id,
     part_of,
@@ -218,7 +218,7 @@ def test_they_stay_one_object_per_deck_and_a_shared_param_stays_one(rig):
     assert {p.id for p in per_deck(one)} == {p.id for p in per_deck(two)}
     for p in per_deck(one):
         assert p is not two[p.id], p.id
-        assert p.id not in one.session
+        assert p.id not in one.meta_reg
     assert one["master.gain"] is two["master.gain"]
 
 
@@ -232,9 +232,9 @@ def test_none_is_saved_and_no_stack_watches_one(rig):
 
 
 def test_the_shared_registry_refuses_one():
-    session = SessionRegistry()
+    meta_reg = MetaRegistry()
     with pytest.raises(ValueError, match="closes over one deck"):
-        session.add(Param("deck.x", "x", Kind.TOGGLE, group="deck"))
+        meta_reg.add(Param("deck.x", "x", Kind.TOGGLE, group="deck"))
 
 
 def test_an_id_this_build_lacks_is_still_classed():
@@ -508,18 +508,18 @@ SURFACE = {
     ("render", "poi_guide"): ({"PoiGuide"}, "LISTED, should not cross: drawn over the outputs"),
 }
 # The meta controller's names inside `BOTH_LAYERS`, and who may import them
-META_NAMES = ("SESSION_", "PER_DECK_", "META_", "SessionRegistry", "SessionTable", "MetaMarks",
-              "DeckProject", "is_session_", "is_meta_", "is_per_deck_", "meta_", "push_meta",
+META_NAMES = ("SHARED_META_", "PER_DECK_", "META_", "MetaRegistry", "MetaTable", "MetaMarks",
+              "DeckProject", "is_shared_meta_", "is_meta_", "is_per_deck_", "meta_", "push_meta",
               "install_meta")
 SURFACE_NAMES = {
-    "preset": {"SESSION_GROUPS": "which groups a file's values may not hold",
+    "preset": {"SHARED_META_GROUPS": "which groups a file's values may not hold",
                "is_meta_id": "a route's row goes on to the referee, in its words",
                "meta_row_refusal": "a save filters a row no load would land"},
     "patches": {"meta_refusal": "a patch file naming a meta param is refused (row 744)"},
     "nodemode": {"meta_refusal": "a node's meta params fill no degree of freedom"},
 }
 # …and the handles at run time. (`Project.session` goes with the shows, in plan 57 §5.)
-META_ATTRS = {"meta", "decks", "meta_stack", "push_meta", "players", "session"}
+META_ATTRS = {"meta", "decks", "meta_stack", "push_meta", "players", "session", "meta_reg", "meta_table"}
 SURFACE_ATTRS = {
     ("preset", "project.session"): "seeds a landing group's params from the open show",
     ("dream", "w.meta"): "not ours: a model file's download record",

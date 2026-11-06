@@ -1032,7 +1032,7 @@ class Panel:
         if table is None:
             return [], []
         # the same question `Learn.unbind` asks, so the lines are what it removes
-        desk, routes, session = learn.bound(table, (a.id, p.id))
+        desk, routes, meta_rows = learn.bound(table, (a.id, p.id))
         for b in desk:
             op = "" if b.op in ("abs", "rel") else f" · {ui_routing._op_text(b)}"
             imgui.text(self._row_name(b) + op)
@@ -1040,7 +1040,7 @@ class Panel:
         for b in routes:                # ctx_rows drew the hand's rows on the real param
             if b.scheme != "hand" or b.target != p.id or self.router is None:
                 imgui.text(self._row_name(b) + ("" if b.enabled else " (off)"))
-        for b in session:
+        for b in meta_rows:
             where = "global layer" if b.layer == "global" else "invariant"
             imgui.text_disabled(f"{self._row_name(b)} · {where}")
         for b in learn.sinks_of(table, (a.id, p.id)):     # the session's, out (plan 27 B3)

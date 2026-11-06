@@ -1141,7 +1141,7 @@ def _routing_probe(monkeypatch) -> dict:
     from hyperspace.ui import Panel
 
     out: dict = {"lines": []}
-    page, session, mark = Panel._page_routing, ui_routing.session, ui_routing._mark_line
+    page, meta_rows, mark = Panel._page_routing, ui_routing.meta_rows, ui_routing._mark_line
 
     def page_(self, dt):
         out["lines"] = []
@@ -1149,7 +1149,7 @@ def _routing_probe(monkeypatch) -> dict:
         out["page"] = (imgui.get_scroll_y(), imgui.get_scroll_max_y())
 
     def session_(panel, router):
-        session(panel, router)
+        meta_rows(panel, router)
         out["child"] = (imgui.get_scroll_y(), imgui.get_scroll_max_y())
 
     def mark_(panel, table, b, section, y0):
@@ -1159,7 +1159,7 @@ def _routing_probe(monkeypatch) -> dict:
             top = imgui.get_window_pos().y
             out["lines"].append((b, section, y0, top, top + imgui.get_window_height()))
     monkeypatch.setattr(Panel, "_page_routing", page_)
-    monkeypatch.setattr(ui_routing, "session", session_)
+    monkeypatch.setattr(ui_routing, "meta_rows", session_)
     monkeypatch.setattr(ui_routing, "_mark_line", mark_)
     return out
 

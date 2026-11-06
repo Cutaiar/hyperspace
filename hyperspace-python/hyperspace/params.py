@@ -895,14 +895,14 @@ class Registry:
     # plan 44 D3: the session registry this deck's registry follows — None
     # for a registry of its own (a bare one, the tests'; and one from
     # before a hot reload, on the class)
-    session: SessionRegistry | None = None
+    meta_reg: MetaRegistry | None = None
     # the base chase (plan 52): held now; this deck's `undo.Undo`
     # (`Deck.build`), None: a bare registry has no steps
     chasing: bool = False
     chase_undo: Any = None
     _chase_steps: Any = None             # the `undo.Undo` the press opened its step on
 
-    def __init__(self, session: SessionRegistry | None = None):
+    def __init__(self, meta_reg: MetaRegistry | None = None):
         self._p: dict[str, Param] = {}
         self.nonfinite: list[str] = []   # params that dropped a NaN / inf last apply()
         # the one rule for what an alias stands for right now (band.sel.*
@@ -913,22 +913,22 @@ class Registry:
         # now (hands.sel.* → the selected hand axis, hands/core.py), asked
         # after `real_of`; a module that declares an alias adds its rule
         self.aliases: dict[str, Callable[[Param], Param | None]] = {}
-        if session is not None:
-            self.follow(session)
+        if meta_reg is not None:
+            self.follow(meta_reg)
 
-    def follow(self, session: SessionRegistry) -> None:
+    def follow(self, meta_reg: MetaRegistry) -> None:
         """Hold `session`'s params by reference from now on (plan 44 D3): the
         ones it has now, added here in its order, and every one it gains or
         loses later — one `Param` object in every deck's registry, so
         `reg["output.dim"]` reads and writes the room's from any deck. A
         session param declared on this registry goes to `session` (`add`)."""
-        if self.session is session:
+        if self.meta_reg is meta_reg:
             return
-        if self.session is not None:
+        if self.meta_reg is not None:
             raise ValueError("a deck's registry follows one session")
-        self.session = session
-        session._follow(self)
-        for p in list(session):
+        self.meta_reg = meta_reg
+        meta_reg._follow(self)
+        for p in list(meta_reg):
             self._put(p)
 
     def real(self, p: Param) -> Param:
@@ -944,9 +944,9 @@ class Registry:
         for prefix, rule in self.aliases.items():
             if p.id.startswith(prefix):
                 return rule(p) or p
-        session = self.session
-        if session is not None and session is not self:
-            return session.real(p)
+        meta_reg = self.meta_reg
+        if meta_reg is not None and meta_reg is not self:
+            return meta_reg.real(p)
         return p
 
     def _put(self, p: Param) -> Param:
@@ -963,9 +963,9 @@ class Registry:
         """Declare `p`. On a deck's registry (one that follows a session) a
         session param (`part_of`) is the session's: added there, and so to
         every deck that follows it — declared once (plan 44 D3)."""
-        session = self.session
-        if session is not None and session is not self and part_of(p) == "shared_meta":
-            return session.add(p)            # (its one duplicate check, every deck)
+        meta_reg = self.meta_reg
+        if meta_reg is not None and meta_reg is not self and part_of(p) == "shared_meta":
+            return meta_reg.add(p)            # (its one duplicate check, every deck)
         return self._put(p)
 
     def __getitem__(self, pid: str) -> Param:
@@ -993,11 +993,11 @@ class Registry:
         """Drop a param (a band that was deleted). Bindings to it go dormant —
         every adapter already treats an unknown id as a no-op. A session
         param is the session's to drop (plan 44 D3): it leaves every deck."""
-        session = self.session
-        if session is not None and session is not self:
-            q = session.get(pid)
+        meta_reg = self.meta_reg
+        if meta_reg is not None and meta_reg is not self:
+            q = meta_reg.get(pid)
             if q is not None and q is self._p.get(pid):
-                return session.remove(pid)
+                return meta_reg.remove(pid)
         p = self._p.pop(pid, None)
         if p is not None:
             self.serial += 1
@@ -1023,30 +1023,30 @@ class Registry:
         session param a pass landed is never landed again that frame by
         another deck, and two registries' counters can never meet by
         chance on a shared `Param`."""
-        session = self.session
-        if session is not None and session is not self:
-            if self.frame == session.frame:      # this deck is the first this frame
-                session.frame += 1
-            self.frame = session.frame
-            session.landed = session.frame       # (the session's own apply dedups by it)
+        meta_reg = self.meta_reg
+        if meta_reg is not None and meta_reg is not self:
+            if self.frame == meta_reg.frame:      # this deck is the first this frame
+                meta_reg.frame += 1
+            self.frame = meta_reg.frame
+            meta_reg.landed = meta_reg.frame       # (the session's own apply dedups by it)
         else:
             self.frame += 1
         self.landed = self.frame
         return self.frame
 
-    def _owned_by_session(self, p: Param) -> bool:
+    def _owned_by_meta(self, p: Param) -> bool:
         """Whether `p` is a session param this deck holds by reference."""
-        session = self.session
-        return (session is not None and session is not self
-                and session._p.get(p.id) is p)
+        meta_reg = self.meta_reg
+        return (meta_reg is not None and meta_reg is not self
+                and meta_reg._p.get(p.id) is p)
 
     def lands(self, p: Param) -> bool:
         """Does this deck land `p`? All its own, and the session's only when
         it is the session's lead (`apply`). Plan 44 D4: a row of a deck that
         does not land its target is dormant (`Router.modulate`)."""
-        session = self.session
-        return (session is None or session is self or session.lead is self
-                or not self._owned_by_session(p))
+        meta_reg = self.meta_reg
+        return (meta_reg is None or meta_reg is self or meta_reg.on_air_reg is self
+                or not self._owned_by_meta(p))
 
     def apply(self) -> None:
         """Once per frame, after every source has called modulate(): base +
@@ -1070,12 +1070,12 @@ class Registry:
         # `nonfinite`: the params that dropped a NaN / inf this frame (the
         # stall log names each once, app.py) — those the pass landed too
         mark, self.landed = self.landed, None
-        session = self.session
-        follower = (session is not None and session is not self
-                    and session.lead is not self)
+        meta_reg = self.meta_reg
+        follower = (meta_reg is not None and meta_reg is not self
+                    and meta_reg.on_air_reg is not self)
         bad: list[str] = []
         for p in list(self._p.values()):
-            if follower and self._owned_by_session(p):
+            if follower and self._owned_by_meta(p):
                 continue
             if p._base is not None:
                 p.apply(mark)
@@ -1241,7 +1241,7 @@ class Registry:
                               persist=persist))
 
 
-class SessionRegistry(Registry):
+class MetaRegistry(Registry):
     """The rig's params, one set for every deck (plan 44 D3): the session
     groups (`SESSION_GROUPS`, `SESSION_KEYS`) and the params of no part
     that only the rig declares (`app.restart`, the undo keys). Built by
@@ -1257,8 +1257,8 @@ class SessionRegistry(Registry):
     def _follow(self, deck: Registry) -> None:
         import weakref
         self._decks.append(weakref.ref(deck))
-        if self.lead is None:             # nobody named yet: the first deck, until one is
-            self.lead = deck
+        if self.on_air_reg is None:             # nobody named yet: the first deck, until one is
+            self.on_air_reg = deck
 
     @property
     def decks(self) -> list[Registry]:
@@ -1271,7 +1271,7 @@ class SessionRegistry(Registry):
         return live
 
     @property
-    def lead(self) -> Registry | None:
+    def on_air_reg(self) -> Registry | None:
         """The deck whose `apply` lands the session's params, once a frame
         (review of #351, round 2): **named** — the deck on air, which
         `Deck.build(on_air=True)` (the host's one deck today) sets — held
@@ -1282,10 +1282,10 @@ class SessionRegistry(Registry):
         ref = self.__dict__.get("_lead")
         return ref() if ref is not None else None
 
-    @lead.setter
-    def lead(self, deck: Registry | None) -> None:
+    @on_air_reg.setter
+    def on_air_reg(self, deck: Registry | None) -> None:
         import weakref
-        if deck is not None and deck.session is not self:
+        if deck is not None and deck.meta_reg is not self:
             raise ValueError("the lead is a deck that follows this session")
         self.__dict__["_lead"] = weakref.ref(deck) if deck is not None else None
 
@@ -2049,7 +2049,7 @@ def dream_speed_text(k: float) -> str:
 
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                    restart=None, ghost=None, media=None, *,
-                   session: SessionRegistry | None = None) -> Registry:
+                   meta_reg: MetaRegistry | None = None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
@@ -2070,13 +2070,13 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     without a host. Only the panel's own state (``ui.*``) is added by the
     panel once it exists.
     """
-    if session is None:
-        session = build_meta(control, audio, restart, media=media)
+    if meta_reg is None:
+        meta_reg = build_meta(control, audio, restart, media=media)
     return build_patch(view, bank, dream=dream, fx=fx, ghost=ghost, media=media,
-                             session=session)
+                             meta_reg=meta_reg)
 
 
-def build_meta(control, audio, restart=None, media=None) -> SessionRegistry:
+def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     """Declare the rig's params once (plan 44 D3): the analyzer's (`master`,
     `scene`, `band` — the bands rebuilt on a layout change, `band.sel.*`
     the selected band's views), the audio transport, `app.restart` and the
@@ -2088,7 +2088,7 @@ def build_meta(control, audio, restart=None, media=None) -> SessionRegistry:
     rig's media sources (`media.channels.MediaSources`, or the deck's
     `Channels` that reads through them), whose mixer `audio.mix` listens to
     — none, a stand-in nobody feeds, and the toggle is not declared."""
-    r = SessionRegistry()
+    r = MetaRegistry()
     chain = lambda: audio.chain
 
     # ---- master faders ----
@@ -2273,7 +2273,7 @@ def build_meta(control, audio, restart=None, media=None) -> SessionRegistry:
 
 
 def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
-                      session: SessionRegistry | None = None) -> Registry:
+                      meta_reg: MetaRegistry | None = None) -> Registry:
     """Declare a deck's own params (plan 44 D3): the look's — the view, the
     media channels' (`media`, the deck's `Channels`), the backdrop, the
     turn, the camera and the eye, the clouds' and the hands' looks, the
@@ -2282,7 +2282,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
     registry that follows `session` (the rig's params by reference: one
     `Param` in every deck). `session` None: a fresh one of its own. The
     other arguments are `build_registry`'s."""
-    r = Registry(session=session if session is not None else SessionRegistry())
+    r = Registry(meta_reg=meta_reg if meta_reg is not None else MetaRegistry())
     dream = dream if dream is not None else DreamState()
     media = media if media is not None else media_channels.MediaState()
     r.media = media

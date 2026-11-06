@@ -127,7 +127,7 @@ def test_a_learn_on_a_band_sel_alias_is_refused_as_the_bands_are(rig):
     assert reg.real(reg["band.sel.thr"]) is reg["band.2.thr"]
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.2.thr"
     reg.real_of = None
-    reg.session.real_of = None           # (plan 44 D3: the session declares the rule)
+    reg.meta_reg.real_of = None           # (plan 44 D3: the session declares the rule)
     assert Learn(reg, t).target_for("band.sel.thr").id == "band.sel.thr"
 
 
@@ -871,8 +871,8 @@ def bound_rig(home):
     table.add(Binding("hand:right.y", pid, "position"))
     table.add(Binding("lfo:0", pid, "push", 0.3, enabled=False))
     table.macros["macro.1"] = Macro("Wobble", [Sub(depth=("lfo:0", pid), lo=0.0, hi=0.6)])
-    r.session = Binding("cc:0:119", pid, "abs")              # no layer: invariant
-    table.bindings.append(r.session)
+    r.meta_row = Binding("cc:0:119", pid, "abs")              # no layer: invariant
+    table.bindings.append(r.meta_row)
     table.write()
     settle(r)
     r.undo.clear()
@@ -896,12 +896,12 @@ def test_unbind_removes_the_presets_desk_rows_and_every_route(tmp_path):
     r = bound_rig(tmp_path / "home")
     table, lrn, pid = r.table, r.learn, r.pid
     serial = table.redraw_serial
-    desk, routes, session = lrn.bound((pid,))
+    desk, routes, meta_rows = lrn.bound((pid,))
     assert len(desk) == 3 and [b.scheme for b in routes] == ["hand", "lfo"]
-    assert session == [r.session]
+    assert meta_rows == [r.meta_row]
     gone = lrn.unbind((pid, pid))                            # an id given twice is one id
     assert len(gone) == 5 and not lrn.refused
-    assert left(table, pid) == [r.session]                   # the keys' rows are not Unbind's
+    assert left(table, pid) == [r.meta_row]                   # the keys' rows are not Unbind's
     assert table.redraw_serial > serial                      # an adapter redraws: dark (D8)
     assert not table.depth_subs(routes[1]) and not table.macros["macro.1"].subs
     assert lrn.last.startswith(f"unbound {pid} from ") and " and LFO" not in lrn.last
@@ -981,7 +981,7 @@ def test_unbind_is_one_undo_step_and_none_when_nothing_goes(tmp_path):
     assert labels(r) == [f"unbind {pid}"]
     assert u.undo() and u.status == f"undid unbind {pid}"
     assert sorted(map(str, state()[0])) == sorted(map(str, was[0])) and state()[1] == was[1]
-    assert u.redo() and left(table, pid) == [r.session]
+    assert u.redo() and left(table, pid) == [r.meta_row]
     assert u.undo()
     frames(r, 3)
     # by kind: still one step each

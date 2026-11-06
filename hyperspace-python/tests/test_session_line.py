@@ -33,7 +33,7 @@ from hyperspace import graph as G
 from hyperspace import graphmigrate, preset
 from hyperspace.library import LOOK_BACKUP, PROJECT_SUFFIX, PROJECT_V2, PROJECTS
 from hyperspace.media.channels import Channels, MediaSources, MediaState, NoResolver
-from hyperspace.routing import Binding, Bindings, SessionTable
+from hyperspace.routing import Binding, Bindings, MetaTable
 from hyperspace.routing_sources import Sources
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,10 +53,10 @@ def test_two_decks_tables_hold_the_session_rows_by_reference():
     holds the session rows once, whichever deck writes it; the sources
     follow the session table once."""
     a = Bindings.factory()
-    s = a.session
-    assert isinstance(s, SessionTable) and s.tables == [a]
-    b = Bindings([Binding("hand:7", "view.speed", "push", 0.3)], session=s)
-    assert b.session is s and s.tables == [a, b]
+    s = a.meta_table
+    assert isinstance(s, MetaTable) and s.tables == [a]
+    b = Bindings([Binding("hand:7", "view.speed", "push", 0.3)], meta_table=s)
+    assert b.meta_table is s and s.tables == [a, b]
     shared = [x for x in a.bindings if x.op not in ("push", "position") and x.layer != "preset"]
     assert all(any(y is x for y in b.bindings) for x in shared)
     assert b.routes() and not a.routes()
@@ -81,17 +81,17 @@ def test_the_session_table_reads_and_writes_the_file(tmp_path):
     """`Bindings.load(path).session` is the file's session table (the old
     migrations and the backup through the load); `write` writes the session
     rows only. Its descriptors are made from `SESSION_ATTRS`, one list."""
-    from hyperspace.routing import SESSION_ATTRS
+    from hyperspace.routing import META_TABLE_ATTRS
     path = tmp_path / "bindings.json"
     t = Bindings.load(path, legacy_midi=None)
-    assert isinstance(t.session, SessionTable) and t.session.path == path
-    assert not hasattr(SessionTable, "load")
-    assert all(isinstance(getattr(Bindings, n), property) for n in SESSION_ATTRS)
+    assert isinstance(t.meta_table, MetaTable) and t.meta_table.path == path
+    assert not hasattr(MetaTable, "load")
+    assert all(isinstance(getattr(Bindings, n), property) for n in META_TABLE_ATTRS)
     t.add(Binding("hand:7", "view.speed", "push", 0.3))
     t.write()
     doc = json.loads(path.read_text())
     assert all(x.get("op") not in ("push", "position") for x in doc["bindings"])
-    assert SessionTable.backup is not None and SessionTable.migrate_v1 is not None
+    assert MetaTable.backup is not None and MetaTable.migrate_v1 is not None
 
 
 # ---------------------------------------------------------------- the media
@@ -300,9 +300,9 @@ def _two_decks():
     from hyperspace.params import build_patch, build_meta
     from hyperspace.view import ViewState
     chain = Analyzer(Analyser())
-    session = build_meta(Control(chain), SimpleNamespace(chain=chain))
-    return session, build_patch(ViewState(), session=session), \
-        build_patch(ViewState(), session=session)
+    meta_reg = build_meta(Control(chain), SimpleNamespace(chain=chain))
+    return meta_reg, build_patch(ViewState(), meta_reg=meta_reg), \
+        build_patch(ViewState(), meta_reg=meta_reg)
 
 
 def test_a_session_param_is_applied_once_a_frame_whichever_deck_applies():
@@ -310,10 +310,10 @@ def test_a_session_param_is_applied_once_a_frame_whichever_deck_applies():
     router modulated (no flicker to the bare base); the lead deck lands it
     once a frame, B's offset riding into the next; every deck's pass in one
     frame shares one mark."""
-    session, a, b = _two_decks()
-    p = session["master.gain"]
+    meta_reg, a, b = _two_decks()
+    p = meta_reg["master.gain"]
     base = p.value
-    assert session.lead is a
+    assert meta_reg.on_air_reg is a
     for _ in range(3):
         a.begin_frame()
         p.modulate(0.1)                      # deck A's router
@@ -346,7 +346,7 @@ def test_a_part_is_cached_on_the_param_and_a_duplicate_is_refused_once():
     """Findings 6, 7: `part_of` reads the param's cached part; a second
     declaration of a session id on any deck is refused by the session."""
     from hyperspace.params import part_of
-    _session, a, b = _two_decks()
+    _meta_table, a, b = _two_decks()
     p = a["ghost.mirror"]
     assert p._part == "shared_meta" == part_of(p)
     assert a["view.bright"]._part == "patch"
@@ -357,9 +357,9 @@ def test_a_part_is_cached_on_the_param_and_a_duplicate_is_refused_once():
 def test_a_table_given_a_new_session_keeps_its_own_session_rows(tmp_path):
     """Finding 2: `Bindings(rows, session=)` over a session no table follows
     yet keeps the rows given — they seed the session — and writes them."""
-    s = SessionTable(path=tmp_path / "bindings.json")
+    s = MetaTable(path=tmp_path / "bindings.json")
     key = Binding("key:F9", "view.lines", "toggle")
-    t = Bindings([key, Binding("hand:7", "view.speed", "push", 0.3)], session=s)
+    t = Bindings([key, Binding("hand:7", "view.speed", "push", 0.3)], meta_table=s)
     assert t.bindings[0] is key and s.rows == [key]
     t.write()
     rows = json.loads((tmp_path / "bindings.json").read_text())["bindings"]
@@ -374,8 +374,8 @@ def test_the_mirror_is_the_rooms_one_setting_and_a_rebuilt_deck_lets_its_old_sta
 
     from hyperspace.ghost import GhostState, RoomSetting
     from hyperspace.ghost import register as declare_ghost
-    session, _a, b = _two_decks()         # (deck a held: it stays live)
-    p = session["ghost.mirror"]
+    meta_reg, _a, b = _two_decks()         # (deck a held: it stays live)
+    p = meta_reg["ghost.mirror"]
     room = p.room
     assert isinstance(room, RoomSetting) and len(room.states) == 2
     p.set(True)
@@ -386,7 +386,7 @@ def test_the_mirror_is_the_rooms_one_setting_and_a_rebuilt_deck_lets_its_old_sta
     from hyperspace.params import build_patch
     from hyperspace.view import ViewState
     fresh = GhostState()
-    c = build_patch(ViewState(), ghost=fresh, session=session)
+    c = build_patch(ViewState(), ghost=fresh, meta_reg=meta_reg)
     assert fresh.mirror is True and c["ghost.mirror"] is p and len(room.states) == 2
     p.set(False)
     assert fresh.mirror is False and p.value is False
@@ -454,11 +454,11 @@ def test_the_lead_is_named_and_a_stale_follower_never_lands_the_session():
     holds) lands nothing once another is named."""
     from hyperspace.params import build_patch
     from hyperspace.view import ViewState
-    session, stale, _b = _two_decks()
-    assert session.lead is stale                 # nobody named: the first
-    live = build_patch(ViewState(), session=session)
-    session.lead = live
-    p = session["master.gain"]
+    meta_reg, stale, _b = _two_decks()
+    assert meta_reg.on_air_reg is stale                 # nobody named: the first
+    live = build_patch(ViewState(), meta_reg=meta_reg)
+    meta_reg.on_air_reg = live
+    p = meta_reg["master.gain"]
     base = p.value
     live.begin_frame()
     p.modulate(0.1)
@@ -467,21 +467,21 @@ def test_the_lead_is_named_and_a_stale_follower_never_lands_the_session():
     live.apply()
     assert p.value != pytest.approx(base)
     with pytest.raises(ValueError):
-        session.lead = build_patch(ViewState())        # not a follower
+        meta_reg.on_air_reg = build_patch(ViewState())        # not a follower
 
 
 def test_deck_build_names_its_registry_the_lead(tmp_path):
     from test_undo import boot as undo_boot
     rig = undo_boot(tmp_path / "home")
-    assert rig.reg.session.lead is rig.reg
+    assert rig.reg.meta_reg.on_air_reg is rig.reg
 
 
 def test_the_sessions_own_apply_lands_each_param_once_a_frame():
     """Round 2, finding 2: `session.apply()` in the same frame as the lead's
     apply — after it or before it — lands each session param once (the
     frame's shared mark), never releasing the modulation."""
-    session, a, _b = _two_decks()
-    p = session["master.gain"]
+    meta_reg, a, _b = _two_decks()
+    p = meta_reg["master.gain"]
     base = p.value
     for order in ("lead first", "session first"):
         a.begin_frame()
@@ -489,14 +489,14 @@ def test_the_sessions_own_apply_lands_each_param_once_a_frame():
         if order == "lead first":
             a.apply()
             moved = p.value
-            session.apply()
+            meta_reg.apply()
         else:
-            session.apply()
+            meta_reg.apply()
             moved = p.value
             a.apply()
         assert p.modulated and p.value == pytest.approx(moved) != pytest.approx(base), order
     a.begin_frame()
-    session.apply()                              # no source: the base back, once
+    meta_reg.apply()                              # no source: the base back, once
     assert not p.modulated and p.value == pytest.approx(base)
 
 
@@ -506,9 +506,9 @@ def test_a_param_with_no_group_is_unclassified():
     from hyperspace.params import Kind, Param, part_of
     p = Param("master.thing", "x", Kind.TOGGLE, group=None)
     assert part_of(p) is None and p._part is None
-    session, a, _b = _two_decks()
+    meta_reg, a, _b = _two_decks()
     a.add(p)
-    assert "master.thing" in a and "master.thing" not in session
+    assert "master.thing" in a and "master.thing" not in meta_reg
 
 
 def test_the_ghost_groups_roads_leave_the_mirror_alone(tmp_path):
@@ -543,17 +543,17 @@ def test_a_second_table_shares_the_session_rows_it_brings_and_refuses_another_fi
     the session rows it brings that the session lacks — every deck gets
     them — and one naming another file or profile is refused, named."""
     a = Bindings.factory(path=tmp_path / "bindings.json")
-    s = a.session
+    s = a.meta_table
     key = Binding("key:F10", "view.lines", "toggle")
-    b = Bindings([key, Binding("hand:7", "view.speed", "push", 0.3)], session=s)
+    b = Bindings([key, Binding("hand:7", "view.speed", "push", 0.3)], meta_table=s)
     assert any(x is key for x in a.bindings) and any(x is key for x in b.bindings)
     assert key in s.rows
-    again = Bindings([Binding("key:F10", "view.lines", "toggle")], session=s)
+    again = Bindings([Binding("key:F10", "view.lines", "toggle")], meta_table=s)
     assert sum(1 for x in again.bindings if x.source == "key:F10") == 1   # not twice
     with pytest.raises(ValueError, match="the session's"):
-        Bindings([], session=s, path=tmp_path / "other.json")
+        Bindings([], meta_table=s, path=tmp_path / "other.json")
     with pytest.raises(ValueError, match="the session's"):
-        Bindings([], session=s, profile="launchpad")
+        Bindings([], meta_table=s, profile="launchpad")
 
 
 # ---------------------------------------------------------------- review of #351, round 3
@@ -565,14 +565,14 @@ def test_a_mirror_from_before_the_room_is_given_one_never_declared_twice():
     it a `RoomSetting` with its setting kept, and never re-declares it."""
     from hyperspace.ghost import GhostState, RoomSetting
     from hyperspace.ghost import register as declare_ghost
-    from hyperspace.params import Registry, SessionRegistry
-    s = SessionRegistry()
+    from hyperspace.params import Registry, MetaRegistry
+    s = MetaRegistry()
     old = GhostState(mirror=True)
-    a = Registry(session=s)
+    a = Registry(meta_reg=s)
     a.toggle("ghost.mirror", "Ghost mirror", lambda: old.mirror,
              lambda v: setattr(old, "mirror", bool(v)), group="ghost", modulatable=False)
     assert "room" not in s["ghost.mirror"].__dict__
-    b = Registry(session=s)
+    b = Registry(meta_reg=s)
     st = GhostState()
     declare_ghost(b, st)                         # (no duplicate param id)
     p = s["ghost.mirror"]

@@ -158,8 +158,8 @@ class SeqPage:
 def of(reg) -> SeqPage | None:
     """The one page `register` made, from either deck's registry: it is the
     session's, as `seq.page` is, so it is kept there."""
-    session = getattr(reg, "session", None)
-    return getattr(session if session is not None else reg, "seq_page", None)
+    meta_reg = getattr(reg, "meta_reg", None)
+    return getattr(meta_reg if meta_reg is not None else reg, "seq_page", None)
 
 
 def page_of(table) -> SeqPage | None:
@@ -178,8 +178,8 @@ def register(reg, table) -> SeqPage | None:
     if PARAM in reg:
         return None
     page = SeqPage(reg)
-    session = getattr(reg, "session", None)
-    (session if session is not None else reg).seq_page = page
+    meta_reg = getattr(reg, "meta_reg", None)
+    (meta_reg if meta_reg is not None else reg).seq_page = page
 
     def put(v) -> None:
         table.set_page(page if v and page.ready() else None)

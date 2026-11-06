@@ -67,7 +67,7 @@ def test_there_are_three_stacks_and_they_watch_apart(rig):
         # (between them, every watched param of the deck: nothing fell through)
         assert ids | m == {p.id for p in deck.reg if undo.watched(p)}
     assert all(part_of(rig.reg[i]) != "patch" for i in m)
-    assert meta.reg is rig.one.session and meta.table.session is rig.one.session_table
+    assert meta.reg is rig.one.meta_reg and meta.table.table is rig.one.meta_table
 
 
 def test_undo_is_per_deck(rig):
@@ -290,8 +290,8 @@ def test_the_meta_controllers_rows_are_a_step_and_their_undo_writes_their_file(r
     is a step on its stack, undone in every deck's table and in the file, which is
     where the row lives. No deck's stack sees it."""
     t1, t2 = rig.one.table, rig.two.table
-    session = t1.session
-    path = session.path
+    meta_table = t1.meta_table
+    path = meta_table.path
     row = Binding("key:F13", "view.points", "toggle")
     assert routing.is_meta_row(row)
     t1.add(row)
@@ -364,7 +364,7 @@ def test_the_chase_and_a_turn_stay_on_the_decks_stack(rig):
     deck the performer writes keeps the step, and `watching` finds it."""
     assert undo.watching(rig.one.reg) is rig.one.undo
     assert undo.watching(rig.two.reg) is rig.two.undo
-    assert undo.watching(rig.one.session) is rig.meta.undo
+    assert undo.watching(rig.one.meta_reg) is rig.meta.undo
     assert rig.two.chase(True)
     assert rig.two.undo._kept is not None and rig.one.undo._kept is None
     assert rig.meta.undo._kept is None
@@ -599,7 +599,7 @@ def test_undoing_a_tidys_positions_stays_within_one_show(rig):
 def test_the_session_table_has_no_decks_table_face():
     """`deck.MetaRows` is what `Undo` reads; `SessionTable` holds rows, and nothing
     on it pretends to be a deck's table."""
-    from hyperspace.routing import SessionTable
+    from hyperspace.routing import MetaTable
 
     for name in ("bindings", "routes", "desk", "macros", "macros_doc"):
-        assert not hasattr(SessionTable, name), name
+        assert not hasattr(MetaTable, name), name

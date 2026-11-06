@@ -637,7 +637,7 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
     — over `values` naming the same param (the macro is the scene-setter
     of record); an explicit `desk: []` leaves every preset control dark."""
     lib, reg, table = rig.lib, rig.reg, rig.router.table
-    session = [b.to_json() for b in table.midi() if b.layer != "preset"]
+    meta_rows = [b.to_json() for b in table.midi() if b.layer != "preset"]
     table.set_layer("global")
     put(rig.home, "DESKED", values={"macro.1": 0.5, "view.depth4": 1.0},
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
@@ -648,7 +648,7 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
     assert preset.desk_json(table.desk()) == DESK and table.layer == "preset"
     assert any("cc:0:14 → view.bright" in n and "invariant" in n for n in rig.presets.notes)
     assert rig.presets.desk_notes and "cc:0:14" in rig.presets.desk_notes[0]
-    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
+    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == meta_rows
     assert table.macros_doc() == MACROS
     depth4 = reg["view.depth4"]
     assert depth4.norm == pytest.approx(0.5, abs=1e-6)        # 0.2 + 0.5 · (0.8 − 0.2)
@@ -657,7 +657,7 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
     put(rig.home, "DARK", desk=[], macros={})
     rig.presets.load("DARK")
     assert table.desk() == [] and table.macros_doc() == {}
-    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
+    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == meta_rows
 
 
 def test_a_preset_without_a_desk_gets_the_fresh_preset_layer(rig):

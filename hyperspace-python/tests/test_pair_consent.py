@@ -296,12 +296,12 @@ def test_a_split_keeps_the_rows_gate(rig):
 def test_a_step_rows_take_over_writes_the_file_once(rig, monkeypatch):
     asked = by_learn_pair(rig)
     written = []
-    real = routing.SessionTable.write
+    real = routing.MetaTable.write
 
     def write(self, rows=None):
         written.append(1)
         real(self, rows)
-    monkeypatch.setattr(routing.SessionTable, "write", write)
+    monkeypatch.setattr(routing.MetaTable, "write", write)
     settle_pair(asked, TAKE_OVER, rig.reg)
     assert len(written) == 1
 

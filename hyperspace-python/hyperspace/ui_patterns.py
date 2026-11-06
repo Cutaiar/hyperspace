@@ -308,7 +308,7 @@ def drivers(panel, pid: str) -> str:
     if table is None:
         return ""
     router = ui_routing.router_of(panel)
-    desk, routes, session = learn.bound(table, (pid,))
+    desk, routes, meta_rows = learn.bound(table, (pid,))
     macros = getattr(table, "macros", {}) or {}
     said = []
     for b in routes:
@@ -316,7 +316,7 @@ def drivers(panel, pid: str) -> str:
         for mid, _sub in table.depth_subs(b):
             line += f" × {macros[mid].label or mid}"
         said.append(line if b.enabled else f"{line} (off)")
-    said += [f"{ui_routing.control_glyph(table, b)} sets it" for b in desk + session]
+    said += [f"{ui_routing.control_glyph(table, b)} sets it" for b in desk + meta_rows]
     said += [f"{m.label or mid} sets its base" for mid, m in macros.items()
              if any(s.base == pid for s in m.subs)]
     return " · ".join(said)

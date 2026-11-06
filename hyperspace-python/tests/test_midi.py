@@ -438,7 +438,7 @@ def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
     assert not lib.is_dirty("presets")
     path = m.table.path
     before = path.read_bytes() if path.exists() else None
-    session = [b.to_json() for b in m.table.bindings if b.layer != "preset"]
+    meta_rows = [b.to_json() for b in m.table.bindings if b.layer != "preset"]
     rows = [b for b in m.table.desk() if b.target == "view.bright"]
     assert {b.kind for b in rows} == {"cc", "note"}               # the knob and ▲ ▼
     m.unbind("view.bright")
@@ -446,7 +446,7 @@ def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
     assert not m.learner.refused and "unbound view.bright" in m.learner.last
     assert (path.read_bytes() if path.exists() else None) == before
     assert lib.is_dirty("presets")
-    assert [b.to_json() for b in m.table.bindings if b.layer != "preset"] == session
+    assert [b.to_json() for b in m.table.bindings if b.layer != "preset"] == meta_rows
     push(rig, cc(0x30, 10))                                       # nothing listens now
     assert rig.view.bright == pytest.approx(lib.read("presets", "BIG BLUE WAVE")["values"]
                                             .get("view.bright", 1.0))

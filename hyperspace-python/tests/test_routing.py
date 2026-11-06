@@ -402,13 +402,13 @@ def test_table_file_round_trip_and_path(tmp_path):
     assert bindings_path() == Path("bindings.json")
     t = Bindings.factory(path=path)
     n = len(t.bindings)
-    session = [b for b in t.bindings if routing.is_meta_row(b)]
+    meta_rows = [b for b in t.bindings if routing.is_meta_row(b)]
     t.add(Binding("lane:2", "view.bright", "push", 0.4))
     t.write()
     text = path.read_text()
     # one row per line — the session's controls only: a performer row and
     # the preset layer are the loaded preset's (plan 13 §2.2, WP5)
-    assert text.count("\n  {") == len(session) < n
+    assert text.count("\n  {") == len(meta_rows) < n
     doc = json.loads(text)
     assert set(doc) == {"schema", "profile", "bindings", "units"}   # (units: wave 0 T1)
     t2 = Bindings.load(path)

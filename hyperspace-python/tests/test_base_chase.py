@@ -403,31 +403,31 @@ def test_a_restore_brings_the_ledger_of_the_base_it_brings(reg):
 
 def test_the_verb_reaches_continuous_modulatable_look_params():
     chain = Analyzer(Analyser())
-    session = build_meta(Control(chain), SimpleNamespace(chain=chain))
-    reg = build_patch(ViewState(), session=session)
+    meta_reg = build_meta(Control(chain), SimpleNamespace(chain=chain))
+    reg = build_patch(ViewState(), meta_reg=meta_reg)
     reached = {p.id for p in reg if chase_reaches(p)}
     assert "view.bright" in reached and "rot.rate.XY" in reached and "camera.yaw" in reached
     for p in reg:
         if p.id in reached:
             assert p.modulatable and p.kind.value == "continuous"
     assert "master.gain" not in reached, "a session param is the room's"
-    assert not any(p.id in reached for p in session)
+    assert not any(p.id in reached for p in meta_reg)
     reg["macro.1"]                             # declared
     assert not any(i.startswith("macro.") for i in reached), "a macro's base moves its subscribers"
     assert CHASE_PARAM not in reached and not reg[CHASE_PARAM].persist
-    assert CHASE_PARAM not in session, "every deck has its own"
+    assert CHASE_PARAM not in meta_reg, "every deck has its own"
 
 
 def test_two_decks_chase_alone_and_leave_the_session_alone():
     chain = Analyzer(Analyser())
-    session = build_meta(Control(chain), SimpleNamespace(chain=chain))
-    a = build_patch(ViewState(), session=session)
-    b = build_patch(ViewState(), session=session)
+    meta_reg = build_meta(Control(chain), SimpleNamespace(chain=chain))
+    a = build_patch(ViewState(), meta_reg=meta_reg)
+    b = build_patch(ViewState(), meta_reg=meta_reg)
     a[CHASE_PARAM].set(True)
     assert a.chasing and not b.chasing and not b[CHASE_PARAM].value
     pa, pb = a["view.bright"], b["view.bright"]
     was_a, was_b = pa.base, pb.base
-    m = session["master.gain"]
+    m = meta_reg["master.gain"]
     gain = m.base
     for q in (pa, pb, m):
         q.modulate(0.05)

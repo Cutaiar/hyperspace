@@ -56,13 +56,13 @@ def _pass(*pairs, chain=None, t=100.0):
 
 def test_a_deck_beside_shares_the_rig_and_holds_its_own_look(tmp_path):
     a, b = _pair(tmp_path)
-    assert b.session is a.deck.session and b.sources is a.deck.sources
-    assert b.clock is a.deck.clock and b.table.session is a.table.session
+    assert b.meta_reg is a.deck.meta_reg and b.sources is a.deck.sources
+    assert b.clock is a.deck.clock and b.table.meta_table is a.table.meta_table
     assert b.reg is not a.reg and b.view is not a.view and b.router is not a.router
     assert b.lfos is not a.lfos and b.undo is not a.deck.undo and b.presets is not a.deck.presets
     assert b.reg["output.dim"] is a.reg["output.dim"]             # the room's, by reference
     assert b.reg["view.bright"] is not a.reg["view.bright"]       # the look's, its own
-    assert a.deck.session.lead is a.reg                           # the first stays the lead
+    assert a.deck.meta_reg.on_air_reg is a.reg                           # the first stays the lead
 
 
 def test_a_deck_beside_leaves_the_library_the_strip_and_undo_with_the_first(tmp_path):

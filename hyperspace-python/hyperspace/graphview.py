@@ -167,7 +167,7 @@ CABLE_KINDS = ("route", "setter", "sub", "input", "render", "lane")
 IN, OUT = "in", "out"
 BASE, MOD, DEPTH = "base", "mod", "depth"
 # which layout map a node's position is saved in
-PRESET, SESSION = "preset", "session"
+PRESET, META_SECTION = "preset", "session"
 
 ANALYZER = "analyzer"
 CAMERA = "camera"            # the shared camera's node: `render:camera` (plan 35 V2: was `eye`)
@@ -2696,8 +2696,8 @@ def home(n: VNode) -> str:
         return PRESET
     if n.kind == "group":
         group = n.id.partition(":")[2]
-        return PRESET if group in PATCH_GROUPS else SESSION
-    return SESSION
+        return PRESET if group in PATCH_GROUPS else META_SECTION
+    return META_SECTION
 
 
 def split(view: View, positions: Mapping[str, Any]) -> tuple[dict, dict]:
@@ -3601,7 +3601,7 @@ NO_LANE = "{what} is no lane: it cannot feed a modifier"
 KEY_ROWS = "keys are the session's rows: map them on ROUTING"
 MOD_ONLY_ROUTE = "a modifier goes onto a route or a modifier's input"
 ROUTE_END = "a route's end moves to another param's mod"
-SESSION_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
+META_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
 SHIFT_NODE = "{addr} on the SHIFT node is the session's (bindings.json): map it on ROUTING"
 NOT_REMOVABLE = "{label}: the rig's, not the preset's (nothing to delete)"
 # plan 43 C2: the camera is the preset's, and every look has exactly one
@@ -4230,7 +4230,7 @@ class Edit:
         if cable.kind == "setter":
             b = cable.ref
             if is_meta_row(b):
-                return Refusal(SESSION_ROW.format(what=b.source))
+                return Refusal(META_ROW.format(what=b.source))
             table.remove(b)
             table.redraw_serial += 1
             return None

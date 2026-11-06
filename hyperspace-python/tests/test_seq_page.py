@@ -230,18 +230,18 @@ def test_a_power_cycle_with_the_page_up_resends_the_page(rig, seq):
 
 
 def test_older_files_get_send_a_unless_it_is_taken(tmp_path):
-    session = [b for b in Bindings.factory().bindings
+    meta_rows = [b for b in Bindings.factory().bindings
                if routing.is_meta_row(b) and b.target != routing.SEQ_PAGE_PARAM]
     path = bindings_path(tmp_path / "a")
     (tmp_path / "a").mkdir()
-    Bindings(session, path=path).write()
+    Bindings(meta_rows, path=path).write()
     t = Bindings.load(path, legacy_midi=None)
     assert [b.target for b in t.route("note", 0, SEND_A)] == [routing.SEQ_PAGE_PARAM]
     assert "added note:0:88 → seq.page (the APC40 map of plan 31)" in t.notes
     mine = Binding(f"note:0:{SEND_A}", "view.points", "toggle", feedback="led")
     path = bindings_path(tmp_path / "b")
     (tmp_path / "b").mkdir()
-    Bindings([*session, mine], path=path).write()
+    Bindings([*meta_rows, mine], path=path).write()
     t = Bindings.load(path, legacy_midi=None)
     assert [b.target for b in t.route("note", 0, SEND_A)] == ["view.points"]
     assert "the sequencer page not added: note:0:88 is yours (view.points)" in t.said

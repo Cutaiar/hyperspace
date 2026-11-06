@@ -1402,13 +1402,13 @@ def test_unbind_is_not_offered_on_a_session_only_param(rig, monkeypatch):
     lines, items = menu(panel, monkeypatch, "output.dim", "output")
     assert "SM (MASTER fader) · invariant" in lines
     assert not any(i.startswith("Unbind") for i in items)
-    session = [b.to_json() for b in table.midi() if b.layer != "preset"]
+    meta_rows = [b.to_json() for b in table.midi() if b.layer != "preset"]
     # (no door lets this row in since row 743: one a hot reload left in the table)
     table.bindings.append(Binding("lfo:0", "output.dim", "push", 0.1))
     lines, items = menu(panel, monkeypatch, "output.dim", "output", click="Unbind")
     assert "Unbind" in items and "Unbind ▸" not in items
     assert not table.routes_to("output.dim")
-    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
+    assert [b.to_json() for b in table.midi() if b.layer != "preset"] == meta_rows
 
 
 def _learn_items(items: list[str]) -> list[str]:

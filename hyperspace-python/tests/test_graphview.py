@@ -192,11 +192,11 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     assert port.pins[:2] == ("base:view.bright", "mod:view.bright")
     # where each node's position lives
     assert graphview.home(view.node("render:shape")) == graphview.PRESET
-    assert graphview.home(view.node("render:output.1")) == graphview.SESSION
+    assert graphview.home(view.node("render:output.1")) == graphview.META_SECTION
     # plan 31 G1: an LFO is the preset's (a bank's membership is preset content)
     assert graphview.home(view.node("lfo.1")) == graphview.PRESET
-    assert graphview.home(view.node(graphview.ANALYZER)) == graphview.SESSION
-    assert graphview.home(view.node("group:tempo")) == graphview.SESSION
+    assert graphview.home(view.node(graphview.ANALYZER)) == graphview.META_SECTION
+    assert graphview.home(view.node("group:tempo")) == graphview.META_SECTION
 
 
 class FakeDevice(devices.Base):

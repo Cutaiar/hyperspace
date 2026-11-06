@@ -155,8 +155,8 @@ def test_nothing_can_latch_save(rig, tmp_path):
     # a hand-edited bindings.json
     path = bindings_path(tmp_path / "h")
     (tmp_path / "h").mkdir()
-    session = [b for b in Bindings.factory().bindings if routing.is_meta_row(b)]
-    Bindings([*session, Binding("key:S", SAVE_PARAM, "toggle")], path=path).write()
+    meta_rows = [b for b in Bindings.factory().bindings if routing.is_meta_row(b)]
+    Bindings([*meta_rows, Binding("key:S", SAVE_PARAM, "toggle")], path=path).write()
     loaded = Bindings.load(path, legacy_midi=None)
     assert "dropped key:S → desk.save (toggle): desk.save takes only a momentary row " \
            "(held, never latched)" in loaded.notes
@@ -169,12 +169,12 @@ def test_save_not_added_is_said(tmp_path):
     clip stop keeps it, and SAVE is not added there (`APC_NEW_ROWS` only
     takes a free control) — said on the SYSTEM page line (`said`) and on
     stderr at every launch, never silent."""
-    session = [b for b in Bindings.factory().bindings
+    meta_rows = [b for b in Bindings.factory().bindings
                if routing.is_meta_row(b) and b.target != SAVE_PARAM]
     mine = Binding(f"note:{SAVE_CH}:{STOP}", "view.points", "toggle", feedback="led")
     path = bindings_path(tmp_path / "a")
     (tmp_path / "a").mkdir()
-    Bindings([*session, mine], path=path).write()
+    Bindings([*meta_rows, mine], path=path).write()
     t = Bindings.load(path, legacy_midi=None)
     assert [b.target for b in t.route("note", SAVE_CH, STOP)] == ["view.points"]
     assert "SAVE not added: note:7:52 is yours (view.points)" in t.said

@@ -96,8 +96,8 @@ def test_the_glyph_resolves_a_row_on_any_channel():
 def _shipped_midi_rows() -> list[str]:
     srcs = [r["source"] for r in apc40.DEFAULT_MAP]
     srcs += [b.source for b in routing.factory_desk("apc40")]
-    session = json.loads(routing.FACTORY_FILE.read_text())
-    srcs += [r["source"] for r in session["bindings"]]
+    meta_file = json.loads(routing.FACTORY_FILE.read_text())
+    srcs += [r["source"] for r in meta_file["bindings"]]
     for f in sorted((CORPUS / "presets").glob("*.json")):
         srcs += [r["source"] for r in json.loads(f.read_text()).get("desk") or []]
     return [s for s in srcs if s.startswith(("cc:", "note:"))]

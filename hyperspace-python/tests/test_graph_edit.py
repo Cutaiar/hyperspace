@@ -273,7 +273,7 @@ def test_deleting_a_cable_removes_the_route_and_undo_puts_it_back(tmp_path):
     # the session's rows are bindings.json's: refused, kept
     key = next(c for c in cables(view, "setter") if is_meta_row(c.ref))
     res = ui_graph.disconnect(panel, key)
-    assert res == graphview.SESSION_ROW.format(what=key.ref.source)
+    assert res == graphview.META_ROW.format(what=key.ref.source)
     assert key.ref in table.bindings
     assert ui_graph._state(panel)["note"] == res
 

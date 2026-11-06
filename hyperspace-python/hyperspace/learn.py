@@ -1272,11 +1272,11 @@ class Learn:
             return []
         real = ids[-1]
         name = name if name is not None else Binding.describe
-        mine, routed, session = self.bound(ids)
+        mine, routed, meta_rows = self.bound(ids)
         gone = (mine if desk else []) + (routed if routes else [])
         if not gone:
-            if desk and session:
-                b = session[0]
+            if desk and meta_rows:
+                b = meta_rows[0]
                 where = "on the global layer" if b.layer == "global" else "invariant"
                 self.refuse(f"{name(b)} → {b.target} is {where} (the session's, "
                             "edited in bindings.json) — not unbound")

@@ -482,9 +482,9 @@ def test_a_show_load_and_its_startup_preset_are_one_step_each(rig):
     assert pr.name == "house" and lib.current(PRESETS) != "TUMBLE"
     assert meta.undo() and meta.status == "undid show house"
     assert rig.undo.undo()                             # …and the preset it started on
-    session = reg.snapshot(part="shared_meta")
+    meta_values = reg.snapshot(part="shared_meta")
     assert (pr.name, list(pr.bank), pr.startup, pr.path) == party[:4]
-    assert same_look(look(rig), party[4]) and session == party[5]
+    assert same_look(look(rig), party[4]) and meta_values == party[5]
     assert (lib.current(PRESETS), lib.current("band")) == party[6:]
     assert pr.active == 0 and lib.last_show() != last  # `last_show` is not rewritten
     assert meta.redo() and rig.undo.redo()

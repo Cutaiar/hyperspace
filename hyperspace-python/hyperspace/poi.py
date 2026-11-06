@@ -400,8 +400,8 @@ def guides(state: PoiState, reg) -> bool:
         return True
     if state.on_reg is not None:
         return state.on_reg is reg
-    session = getattr(reg, "session", None)
-    return session is None or session.lead is None or session.lead is reg
+    meta_reg = getattr(reg, "meta_reg", None)
+    return meta_reg is None or meta_reg.on_air_reg is None or meta_reg.on_air_reg is reg
 
 
 def _live(pad) -> bool:

@@ -625,7 +625,7 @@ def test_no_preset_may_learn_or_bind_the_reserved_controls(rig, control):
     extensions". Refused whatever the table holds on it, so a deleted row frees nothing."""
     table = rig.two.table
     assert blocked(table, control) == "invariant"
-    table.session.set_rows([b for b in table.session.rows if b.source != control])
+    table.meta_table.set_rows([b for b in table.meta_table.rows if b.source != control])
     assert not any(b.source == control for b in table.bindings)
     assert blocked(table, control) == "invariant"
     notes = table.set_desk([Binding(control, "view.bright", "abs")])

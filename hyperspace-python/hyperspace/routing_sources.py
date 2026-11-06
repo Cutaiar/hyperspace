@@ -313,7 +313,7 @@ class Sources:
         table is followed through its session table (`table.session`, a
         `routing.SessionTable`) — every deck over one session is told at
         once, and the session is written once."""
-        table = getattr(table, "session", None) or table
+        table = getattr(table, "meta_table", None) or table
         if any(r() is table for r in self._tables):
             return
         self._tables.append(weakref.ref(table))

@@ -2021,13 +2021,13 @@ class Carried:
 # the attributes of a deck's table that are the session table's (plan 44
 # D3): one value for every deck, read and written through the deck's
 # table as before (`Bindings.<name>` is a property onto `session`)
-SESSION_ATTRS = ("path", "profile", "slew", "pad_feel", "unbacked", "said", "midi_roles",
+META_TABLE_ATTRS = ("path", "profile", "slew", "pad_feel", "unbacked", "said", "midi_roles",
                  "primaries", "row_schemes", "carried", "error", "migrated", "read_at",
                  "changed", "sinks_seeded", "layer", "layers", "layer_serial",
                  "page", "page_serial")
 
 
-class SessionTable:
+class MetaTable:
     """The rig's half of the binding table (plan 44 D3): the session's rows
     and the file they live in — `bindings.json`, which holds only them
     (`is_session_row`: key, pad, hat, invariant and global-layer MIDI rows,
@@ -2195,7 +2195,7 @@ class SessionTable:
             self.error = f"bindings: {e}"
 
 
-def _session_attr(name: str) -> property:
+def _meta_table_attr(name: str) -> property:
     """A deck table's view of the session table's `name` (plan 44 D3)."""
     return property(lambda self: getattr(self._sess(), name),
                     lambda self, v: setattr(self._sess(), name, v),
@@ -2239,20 +2239,20 @@ class Bindings:
     # list below the class (review of #351: one list, one copy)
 
     @property
-    def session(self) -> SessionTable:
+    def meta_table(self) -> MetaTable:
         """The session table this deck's table follows (plan 44 D3)."""
         return self._sess()
 
-    def _sess(self) -> SessionTable:
+    def _sess(self) -> MetaTable:
         """The session table — made here, from what the table held itself,
         for a table from before a hot reload (re-classed, never re-inited)."""
-        s = self.__dict__.get("_session")
+        s = self.__dict__.get("_meta_table")
         if s is None:
-            s = SessionTable()
-            for name in SESSION_ATTRS:
+            s = MetaTable()
+            for name in META_TABLE_ATTRS:
                 if name in self.__dict__:
                     setattr(s, name, self.__dict__.pop(name))
-            self.__dict__["_session"] = s
+            self.__dict__["_meta_table"] = s
             s.follow(self)
         return s
 
@@ -2270,25 +2270,25 @@ class Bindings:
             t.rows_serial = getattr(t, "rows_serial", 0) + 1
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
-                 profile: str | None = None, session: SessionTable | None = None):
+                 profile: str | None = None, meta_table: MetaTable | None = None):
         # plan 44 D3: the session table this deck's table follows — given,
         # its rows are this table's first (by reference) and `path` and
         # `profile` are its (one naming another is refused: the file is the
         # session's); else a new one over `path` and `profile`
         own = list(bindings)
         shared = False
-        if session is None:
-            session = SessionTable(path=path, profile=profile or "apc40")
+        if meta_table is None:
+            meta_table = MetaTable(path=path, profile=profile or "apc40")
             self.bindings: list[Binding] = own
-        elif (path is not None and path != session.path) or (
-                profile is not None and profile != session.profile):
+        elif (path is not None and path != meta_table.path) or (
+                profile is not None and profile != meta_table.profile):
             raise ValueError("Bindings(session=): the path and profile are the session's — "
-                             f"{session.path} / {session.profile}")
-        elif session.tables:
+                             f"{meta_table.path} / {meta_table.profile}")
+        elif meta_table.tables:
             # (review of #351, round 2: a session row given that the session
             # lacks is shared, never dropped — added after the session's,
             # and handed to every deck by the `_share` below)
-            have = session.rows
+            have = meta_table.rows
             known = {json.dumps(b.to_json(), sort_keys=True) for b in have}
             extra = [b for b in own if is_meta_row(b)
                      and json.dumps(b.to_json(), sort_keys=True) not in known]
@@ -2298,8 +2298,8 @@ class Bindings:
             # (review of #351: a session no table follows yet holds no rows —
             # the first table to follow it seeds them, its own given ones)
             self.bindings = own
-        self.__dict__["_session"] = session
-        session.follow(self)
+        self.__dict__["_meta_table"] = meta_table
+        meta_table.follow(self)
         # the preset content an older file carried (`Carried`), until the
         # first-launch migration moves it into presets; None once it has
         # (or for a file that never had any)
@@ -3140,8 +3140,8 @@ class Bindings:
 # plan 44 D3 (review of #351): every name of `SESSION_ATTRS` a property of
 # a deck's table onto its session — generated from the one list, which
 # `Bindings._sess` also migrates on a hot reload
-for _name in SESSION_ATTRS:
-    setattr(Bindings, _name, _session_attr(_name))
+for _name in META_TABLE_ATTRS:
+    setattr(Bindings, _name, _meta_table_attr(_name))
 del _name
 
 
@@ -4087,8 +4087,8 @@ class Router:
         one standing until the next load (row 745)."""
         dt = 1 / 60 if dt is None else dt
         reg = self.reg
-        session = getattr(reg, "session", None)
-        follower = session is not None and session is not reg and session.lead is not reg
+        meta_reg = getattr(reg, "meta_reg", None)
+        follower = meta_reg is not None and meta_reg is not reg and meta_reg.on_air_reg is not reg
         self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
         self.modgraph                                # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]

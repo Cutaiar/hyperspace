@@ -73,8 +73,8 @@ def _performance(deck) -> dict:
             if part_of(p) == "patch" and p.group != "ui"}
 
 
-def _session(deck) -> dict:
-    return {p.id: repr(p.value) for p in deck.session if p.group != "ui"}
+def _meta_table(deck) -> dict:
+    return {p.id: repr(p.value) for p in deck.meta_reg if p.group != "ui"}
 
 
 def _diff(a: dict, b: dict) -> dict:
@@ -86,16 +86,16 @@ def _diff(a: dict, b: dict) -> dict:
 def test_at_0_exactly_today_and_on_air_is_the_side_the_fader_is_on(rig):
     meta, one, two = rig.meta, rig.one, rig.two
     assert meta.on_air is one and meta.off_air is two and meta.parked == [two]
-    assert one.session.lead is one.reg
+    assert one.meta_reg.on_air_reg is one.reg
     assert not meta.follow_fader()
     rig.mix.xfade = 0.5
     assert not meta.follow_fader() and meta.on_air is one
     rig.mix.xfade = 1.0
     assert meta.follow_fader()
     assert meta.on_air is two and meta.off_air is one and meta.parked == [one]
-    assert one.session.lead is two.reg
+    assert one.meta_reg.on_air_reg is two.reg
     rig.mix.xfade = 0.0
-    assert meta.follow_fader() and meta.on_air is one and one.session.lead is one.reg
+    assert meta.follow_fader() and meta.on_air is one and one.meta_reg.on_air_reg is one.reg
 
 
 def test_a_fader_sitting_at_the_middle_does_not_flap(rig):
@@ -173,13 +173,13 @@ def test_no_session_param_jumps_at_the_middle(rig):
     meta.copy_on_air()
     for _ in range(20):
         _frame(rig)
-    was = _session(one)
+    was = _meta_table(one)
     rig.mix.xfade = 1.0
     meta.tick(rig.r.t, DT)
-    assert one.session.lead is two.reg
+    assert one.meta_reg.on_air_reg is two.reg
     for k in range(10):
         _frame(rig)
-        moved = {i: v for i, v in _diff(was, _session(two)).items() if i != "output.xfade"}
+        moved = {i: v for i, v in _diff(was, _meta_table(two)).items() if i != "output.xfade"}
         assert not moved, (k, moved)
 
 

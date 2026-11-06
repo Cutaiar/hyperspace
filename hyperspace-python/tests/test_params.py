@@ -18,7 +18,7 @@ from hyperspace.params import (
     SHARED_META_GROUPS,
     Kind,
     Registry,
-    SessionRegistry,
+    MetaRegistry,
     build_patch,
     build_registry,
     build_meta,
@@ -522,13 +522,13 @@ def test_two_decks_hold_the_session_params_by_reference():
     from hyperspace import tempo
     chain = Analyzer(Analyser())
     control, audio = Control(chain), SimpleNamespace(chain=chain)
-    session = build_meta(control, audio)
-    a = build_patch(ViewState(), session=session)
-    b = build_patch(ViewState(), session=session)
-    assert isinstance(session, SessionRegistry) and a.session is session is b.session
-    assert a["master.gain"] is b["master.gain"] is session["master.gain"]
+    meta_reg = build_meta(control, audio)
+    a = build_patch(ViewState(), meta_reg=meta_reg)
+    b = build_patch(ViewState(), meta_reg=meta_reg)
+    assert isinstance(meta_reg, MetaRegistry) and a.meta_reg is meta_reg is b.meta_reg
+    assert a["master.gain"] is b["master.gain"] is meta_reg["master.gain"]
     assert a["view.bright"] is not b["view.bright"]
-    assert "view.bright" not in session
+    assert "view.bright" not in meta_reg
     a["master.gain"].set(1.7)
     assert b["master.gain"].base == pytest.approx(1.7)
     a["view.bright"].set(0.3)
@@ -536,9 +536,9 @@ def test_two_decks_hold_the_session_params_by_reference():
     # a session param declared on one deck is the session's, and the other's
     clock = tempo.Clock()
     tempo.register(a, clock)
-    assert a["tempo.bpm"] is b["tempo.bpm"] is session["tempo.bpm"]
+    assert a["tempo.bpm"] is b["tempo.bpm"] is meta_reg["tempo.bpm"]
     tempo.register(b, clock)                # declared once: the session has it already
-    assert b["tempo.bpm"] is session["tempo.bpm"]
+    assert b["tempo.bpm"] is meta_reg["tempo.bpm"]
     with pytest.raises(ValueError):         # …and a second declaration is refused
         b.continuous("tempo.bpm", "BPM", lambda: 1.0, lambda v: None, group="tempo")
     # the mirror's one setting reaches both decks' hands states
@@ -546,17 +546,17 @@ def test_two_decks_hold_the_session_params_by_reference():
     states = a["ghost.mirror"].room.states
     assert len(states) == 2 and all(st.mirror for st in states)
     # the mirror is the session's even though its group is a deck's
-    assert a["ghost.mirror"] is b["ghost.mirror"] is session["ghost.mirror"]
+    assert a["ghost.mirror"] is b["ghost.mirror"] is meta_reg["ghost.mirror"]
     assert a["ghost.alpha"] is not b["ghost.alpha"]
     # the aliases the session declares are answered from any deck
-    assert a.real(a["band.sel.f"]) is session.real(session["band.sel.f"])
+    assert a.real(a["band.sel.f"]) is meta_reg.real(meta_reg["band.sel.f"])
     # a band removed leaves every deck
-    gone = next(p.id for p in session if p.id.startswith("band.0."))
+    gone = next(p.id for p in meta_reg if p.id.startswith("band.0."))
     a.remove(gone)
-    assert gone not in session and gone not in a and gone not in b
+    assert gone not in meta_reg and gone not in a and gone not in b
     # the session never takes a deck's param
     with pytest.raises(ValueError):
-        session.continuous("view.x", "x", lambda: 0.0, lambda v: None, group="view")
+        meta_reg.continuous("view.x", "x", lambda: 0.0, lambda v: None, group="view")
 
 
 def test_core_does_not_import_the_midi_adapter():
