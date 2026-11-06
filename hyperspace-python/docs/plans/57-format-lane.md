@@ -1,7 +1,7 @@
 # Plan 57 — the format lane, and node mode's saved form (wave 4 NM0, 2026-11-04)
 
-**Status: NM0's data built; the lane is a plan, not started.** No schema moved and no
-migration was written: the owner decides (§6). Register rows 715–717; hand checks 546–548,
+**Status: NM0's data built; the lane is a plan, not started. The owner answered §6 on 2026-11-06, and §6 and §7 overrule the open wording in §1–§5.** No schema moved and no
+migration was written yet. Register rows 715–717; hand checks 546–548,
 group CF. Read at origin/main 4daa1b4. Tags: **[V]** run or read in the code, **[I]**
 inferred, **[Rec]** a recommendation.
 
@@ -13,8 +13,7 @@ inferred, **[Rec]** a recommendation.
    next show, once the owner has answered §6.
 3. **`band.*` stays.** Nothing in §3's table is cheaper for renaming it, and the owner has
    since said the word is right for one band.
-4. **The lane's two big items are open, and they are the owner's.** Patch words in the files
-   and shows going away each need a design answer before a line is built.
+4. **The lane's two big items are answered** (§6): patch words in the files, and shows going away.
 
 ## 2. NM0: the saved form
 
@@ -115,7 +114,7 @@ controller keeps anything. The seventh round says "'Band' is right for one bin: 
 word", and `band.0.atk` is one band's attack. AZ fixed what a person reads. If it must go, it
 goes when the tuning moves to its new file (§5), and no preset is touched.
 
-## 4. Patch words in the files: what must be decided
+## 4. Patch words in the files
 
 The word is the owner's and settled for text. In files, three things collide [V]:
 - **`patches.shape_of` tells a whole patch from a fragment by the schema's kind.** With one
@@ -132,11 +131,11 @@ The word is the owner's and settled for text. In files, three things collide [V]
 **[Rec]** `hyperspace.patch` is at `/2` and the preset at `/10`, so one kind would mean merging
 two ladders. Keep one kind per ladder: **`hyperspace.loadable/11`**, the old ladder read
 through, in **`<library>/loadable/`**. It names what it is, collides with nothing, and `shape_of`
-needs only one more word. The lighter option is to leave both as they are and let the glossary
+needs only one more word. The lighter option, not taken, was to leave both as they are and let the glossary
 say so, which its own rule allows ("if a saved name cannot change cheaply, it stays"). That
 costs nothing and leaves the word `presets` in the Drive.
 
-## 5. Shows going: what must be decided
+## 5. Shows going
 
 The eighth round: "Shows and sessions go. Tuning moves to one meta controller file per
 install, with the bank beside it. **Open:** where the bank belongs." `hyperspace.project/3` is
@@ -151,7 +150,7 @@ today `session` (the tuning), `modules` (the session groups' labels), `bank`, `s
   goes.
 - **Several shows into one file.** The library holds more than one. [Rec] each becomes an
   install, and the owner deletes what he does not want. Merging by machine would guess.
-- **#223 venues and `config.toml.rig`,** Dillon's and "probably" going. Ask him at the same time.
+- **#223 venues and `config.toml.rig`,** Dillon's and "probably" going: wave 5's plan, not this run.
 
 **Size:** L. `Project`, `MetaMarks`, the bank's callers, `last_show` and the shows tests all
 move. It is the largest item here by far and shares no code with the others. **[Rec]** it
@@ -161,11 +160,11 @@ changes for it. The owner, 2026-11-06: one run; the second-migration fallback is
 ## 6. Questions for the owner
 
 **All answered: FQ1 and FQ2 landed with #377; the owner answered FQ3–FQ7 on 2026-11-06, as
-recommended.** FQ4: "'loadable' is accurate to what the thing within the folder is, so I think
+recommended but for FQ6.** FQ4: "'loadable' is accurate to what the thing within the folder is, so I think
 that's fine": `hyperspace.loadable/11` in `<library>/loadable/`. FQ5: "as recommended", as §5 reads.
 FQ6: **one migration**, overruling the rec's fallback: "coordinating the migration is not hard", so
 shows' move is inside the one run and does not split off. FQ7: those spellings; "546 and 552 look
-good". Where the bank belongs is answered with FQ5: in the install file. The venues half of §5 is not:
+good". Where the bank belongs is answered with FQ5: in the install file, and `startup` goes with it. The venues half of §5 is not:
 it goes to wave 5's plan.
 
 | | Question | Rec |
@@ -178,15 +177,13 @@ it goes to wave 5's plan.
 | FQ6 | Is shows' move inside the one run, or may it be a second? | Inside if ready; a second rather than miss the show |
 | FQ7 | NSEW's spellings (`pad:N`, `hat:N`, `pair:N/S`) and rows 546, 552 | Those spellings; 546, 552 per Q3 |
 
-## 7. `/11`, if the owner says go
+## 7. `/11`
 
-- Preset: `pair:` route poles in N/S/E/W (`graphmigrate.eleven`), and the kind and folder if
-  FQ4 says so. `node_mode` is already legal and is simply part of the description. If FQ4
-  says leave it, `/11` is only the pole words, and is still a bump: row 394's "saves in
-  today's words" means a reader must know the old ones.
+- Preset: `pair:` route poles in N/S/E/W (`graphmigrate.eleven`), and the kind and folder (FQ4).
+  `node_mode` is already legal and is simply part of the description.
 - `bindings/4`: the words, the stamp.
 - `hyperspace.patch`: unmoved. Group and fragment patches name no pad button.
-- A new file kind `/1`, if FQ5 is ready.
+- A new file kind `/1`, in this run.
 
 **The run, in this order, because of what reads what:**
 1. Both Macs closed. One backup (`library-backup-<stamp>`, the tool's).

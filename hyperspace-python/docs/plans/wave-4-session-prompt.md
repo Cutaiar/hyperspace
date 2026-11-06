@@ -29,7 +29,7 @@ branch proving the PRs together before anything merges.
 5. `REVIEW.md`, `docs/ENGINEERING.md` §15 and §16, `docs/ARCHITECTURE.md`
    §3–§4, and plans 49, 51, 52.
 
-## The owner's answers, 2026-11-04 (these overrule anything below)
+## The owner's answers, 2026-11-04 to 06 (these overrule anything below)
 
 **The preset is the authority; a deck is a device.** A deck is the mechanism for
 swapping quickly between presets and choosing which graph renders, holding only
@@ -221,7 +221,7 @@ stay, and load only into the off-air `Deck`. If they should go too, it is a one-
 **Ninth round, 2026-11-06.**
 - **The gate on D5d is dropped:** "we can drop the gate". Checks 489–492 no longer hold #380; try
   #380 on the rig before SEM starts, if that can be done.
-- **Bank pads and F-keys load off air** (row 700, option (b)): always into the off-air `Deck`, never
+- **Bank pads and F-keys load off air** (row 700, on #380, option (b)): always into the off-air `Deck`, never
   touching the room, and refused while the crossfader is between its ends. A load is a meta
   controller verb. The panel's own load still goes to the `Deck` the panel is looking at.
 - **The glossary is signed**, reviewed with Dillon. `docs/GLOSSARY.md` now says patch and loadable
@@ -270,7 +270,7 @@ the wall it adds (below) is not, so it is sized M–L, and it may be two PRs.
 | --- | --- | --- |
 | meta controller | `session` (486 uses; `SessionRegistry`, `SessionTable`, `part_of == "session"`), `rig` (517 uses; `RigWires`, `RigMade`), lowercase "deck" in prose | **One concept, settled 2026-11-04.** The word `rig` goes |
 | `Deck` | `Deck` | **Stays:** a loaded preset, living inside the meta controller. "Slot" is not a type: on air and off air say which `Deck` |
-| analyzer | `band` (336 uses) | Words in AZ; ids in the format lane or never |
+| analyzer | `band` (336 uses) | Words in AZ; ids stay (FQ3) |
 | player, duty | none yet | New: named right from PL |
 | patch, loadable patch | preset, and "performance" (`part_of`) | The eighth round's words, replacing "one word: preset". Old names stay until SEM |
 
@@ -288,7 +288,7 @@ Three rules, starting now:
    must not. Name it from the glossary, and PL's `Player` and `Duty` likewise. Old names
    stay until SEM, so no PR renames in passing.
 3. **Code in SEM; files in the format lane.** A saved key or id (`session` in a show,
-   `band.*`) is a format move and rides the one migration. SEM touches only names in code.
+   and so on) is a format move and rides the one migration. SEM touches only names in code.
    If a saved name cannot change cheaply, it stays and the glossary says so.
 
 Merge order is unchanged by it. It holds the lanes between D5d and stage 5.
@@ -301,7 +301,7 @@ owner's hand checks and show dates, not build time.
 
 | Stage | Serial spine | In parallel | Merges when |
 | --- | --- | --- | --- |
-| 0 | Owner: sign the glossary at D5a | #363; #365 when its pad charges | now |
+| 0 | Owner: sign the glossary (**signed 2026-11-06**) | #363; #365 when its pad charges | now |
 | 1 | **D5a** pointers, with one deck pointer per player; `docs/GLOSSARY.md` (**merged**, #370) | B2, PA, AZ, MR, PC, NSEW design | green |
 | 2 | **D5b** per-slot and meta undo (**merged**, #373) → **PL** players and duties | NSEW build | green |
 | 3 | **D5c** copy, swap, take | **PS** the select screen; NM0 (needs PL); the format lane | green |
@@ -316,7 +316,7 @@ owner's hand checks and show dates, not build time.
   D5a and D5b are merged; PL is next on the spine.
 - **The spine is serial on purpose.** D5a–D5d freeze `deck.py`, `app.frame` and the
   handles, then `ui_graph.py` and `preset.py`. Everything else stays off them.
-- **One format lane, one migration.** NSEW, NM0 and any `band` id rename all touch saved
+- **One format lane, one migration.** NSEW, the patch words and shows going all touch saved
   files. Build them apart, land them as one bump with one backup, between shows, both
   Macs together. Two bumps in a week is what the rule warns against.
 - **Players go before node mode and after undo:** NM0 saves player names, and D5a's
@@ -384,7 +384,7 @@ Details are in the two plan documents.
 
 **Asked once, wave-wide:**
 - **Q1.** Merge authority for the wave. **Answered, 2026-11-04:** merge on green.
-- **Q2.** The merge gates. **Answered:** 489–492 before D5d, 506–509 before N1;
+- **Q2.** The merge gates. **Answered:** 506–509 before N1 (the gate of 489–492 before D5d was dropped 2026-11-06);
   build freely, gate merges only.
 - **Q3.** NSEW in this wave, after #365? Rec yes. And row 546 (`controller =`'s
   form), row 552 (the pad draws its own face), which it touches.
