@@ -340,3 +340,85 @@ def test_cover_corners_covers_the_notch_and_spares_the_middle():
     cx, cy = x + r, y + r
     px, py = cx - r * math.cos(math.pi / 4) + 0.6, cy - r * math.sin(math.pi / 4) + 0.6
     assert not inside_any(px, py), "the cover ate into the rounded rect"
+
+
+# --------------------------------------------------------------------------
+# The layout tree, against the demo
+# --------------------------------------------------------------------------
+
+def _dashboard():
+    import dashboard
+    return dashboard
+
+
+def test_a_card_grows_when_a_row_is_added_to_it():
+    """The whole point of intrinsic sizing, stated as a test.
+
+    Before this the card's height was a number somebody typed, so a seventh
+    row did not make the card taller - it landed outside it, silently, and
+    nothing failed.
+    """
+    rows = tuple(B.Node(h=24.0) for _ in range(6))
+    card = B.Node(dir="column", pad=(16.0,) * 4, gap=12.0, kids=rows)
+    before = B.wants(card)[1]
+    card.kids = rows + (B.Node(h=24.0),)
+    after = B.wants(card)[1]
+    assert after - before == 24.0 + 12.0, "the card did not grow by a row"
+
+
+def test_flex_basis_zero_gives_equal_halves():
+    """`flex-grow: 1` on an auto basis does NOT split a row evenly: grow only
+    hands out what is left after each item's own content. Two cards with
+    different contents came out 556 and 580. Equal halves need basis 0,
+    which is what CSS calls `flex-1`."""
+    def card(n):
+        return B.Node(grow=1.0, dir="column", pad=(16.0,) * 4,
+                      kids=tuple(B.Node(h=20.0, w=float(40 * n))
+                                 for _ in range(n)))
+    auto = B.Node(dir="row", gap=16.0, key="r",
+                  kids=(card(2), card(5)))
+    for i, k in enumerate(auto.kids):
+        k.key = i
+    got = B.lay_auto(auto, 0, 0, 800)
+    assert got[0].w != got[1].w, "the auto-basis case is supposed to differ"
+
+    zero = B.Node(dir="row", gap=16.0, kids=(card(2), card(5)))
+    for i, k in enumerate(zero.kids):
+        k.key, k.basis = i, 0.0
+    got = B.lay_auto(zero, 0, 0, 800)
+    assert got[0].w == got[1].w == 392.0
+
+
+def test_stat_card_parts_are_inside_the_card_and_do_not_overlap():
+    """The regression this cost me.
+
+    Paint used to place a stat card's last two lines at `ch - 52` and
+    `ch - 32`, derived from the card's own height. The moment layout gave
+    the card its real height those offsets put the figure on top of the
+    footnote. Layout and paint have to read the SAME rects; this asserts
+    they do.
+    """
+    r = _dashboard().lay_out(1440, 1100)
+    for card, part in zip(r.stats, r.stat_parts):
+        cx, cy, cw, ch = card
+        lines = [part[k] for k in ("title", "value", "head", "detail")]
+        for x, y, w, h in lines:
+            assert cx <= x and x + w <= cx + cw + 0.01, "a line left the card"
+            assert cy <= y and y + h <= cy + ch + 0.01, "a line left the card"
+        for (ax, ay, aw, ah), (bx, by, bw, bh) in zip(lines, lines[1:]):
+            assert ay + ah <= by + 0.01, (
+                f"stat card lines overlap: {ay + ah} > {by}")
+
+
+def test_the_page_fits_the_window():
+    """Nothing hangs off the bottom, at several window sizes."""
+    D = _dashboard()
+    for w, h in ((1440, 1100), (1280, 900), (1680, 1200)):
+        r = D.lay_out(w, h)
+        # 1280x900 leaves room for no table rows at all, which is the honest
+        # answer until ScrollArea lands - a row that does not fit is not a
+        # row, and forcing one hung it 10 px off the bottom.
+        bottom = (r.table_rows[-1][1] + r.table_rows[-1][3] if r.table_rows
+                  else r.table_head[1] + r.table_head[3])
+        assert bottom <= h + 0.01, f"the page overflows at {w}x{h}"
+        assert r.controls_card[0] + r.controls_card[2] <= w + 0.01

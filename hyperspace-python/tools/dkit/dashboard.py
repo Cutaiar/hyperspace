@@ -140,6 +140,9 @@ class Rects:
     sources: list = field(default_factory=list)
     header: tuple = (0, 0, 0, 0)
     stats: list = field(default_factory=list)
+    # each stat card's four lines, so paint never re-derives them from the
+    # card's height - see stat_card()
+    stat_parts: list = field(default_factory=list)
     bands_card: tuple = (0, 0, 0, 0)
     facets: list = field(default_factory=list)
     routing_card: tuple = (0, 0, 0, 0)
@@ -160,89 +163,152 @@ CARD_GAP = 16
 
 
 def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
+    """The whole page as a layout TREE, measured then placed.
+
+    Every card's height here comes from what is in it. The old version typed
+    them - the bands card was 258 because somebody measured a picture and
+    wrote 258, the stat cards were 136 on three adjacent lines - so adding a
+    row to a card did not make the card grow, it made the row land outside
+    it, silently. `box.Node` + `box.lay` is the fix CSS calls `height: auto`:
+    measure the tree bottom-up for what each subtree wants, place it
+    top-down with what there is. 0.1 ms for this page, so it can run on
+    every resize without a thought.
+
+    The function still returns the same `Rects`, so paint and the tests see
+    exactly the contract they saw before; only the numbers are derived now.
+    """
     r = Rects()
-    r.sidebar = (0, 0, SIDEBAR_W, h)
+    N = B.Node
 
-    y = 16 + 56
+    # ---- the two cards whose content IS a stack of rows -----------------
+    ROW_H, ROW_GAP, N_BANDS = 24.0, T.SPACE[3], 6
+    CARD_PAD = (T.CARD_PAD,) * 4
+
+    def titled(*rows, key=None, gap=ROW_GAP, dir="column"):
+        """A Card: its measured header, then its content. Auto height."""
+        return N(dir="column", pad=CARD_PAD, gap=0.0, key=key, kids=(
+            N(h=T.CARD_TITLE_H),
+            N(h=T.CARD_TITLE_GAP),
+            N(h=T.CARD_DESC_H),
+            N(h=T.CARD_HEAD_GAP),
+            N(dir=dir, gap=gap, kids=rows),
+        ))
+
+    routing = titled(*(N(h=ROW_H, key=("routing", i)) for i in range(N_BANDS)),
+                     key="routing", )
+    routing.grow, routing.basis = 1.0, 0.0
+    # Two columns of five: live controls left, every state right.
+    controls = titled(
+        *(N(dir="column", gap=ROW_GAP, grow=1.0, basis=0.0,
+            kids=tuple(N(h=ROW_H, key=("ctl", c * 5 + i)) for i in range(5)))
+          for c in range(2)),
+        key="controls", dir="row", gap=T.SPACE[6])
+    controls.grow, controls.basis = 1.0, 0.0
+
+    # ---- the cards whose content is drawn rather than stacked -----------
+    # Their height is still a composition of named parts rather than one
+    # number: a stat card is its label, its figure and its footnote; the
+    # bands card is its header and two rows of facets.
+    FACET_H, FACET_GAP = 60.0, T.SPACE[6] + 2.0
+
+    def stat_card(i):
+        """A stat card's four stacked lines, each keyed so PAINT reads them.
+
+        This is the half that matters. Giving the card an auto height is no
+        use if paint still works out where its contents go from the card's
+        own height - the first version of this modelled the card as 20/30/16
+        and got 114, paint kept drawing its last two lines at `ch - 52` and
+        `ch - 32`, and the figure landed on top of the footnote. Layout and
+        paint have to read the same rects or they drift the moment either
+        moves. Modelled off what paint actually draws, the card comes back to
+        136 - the number that used to be typed, now derived.
+        """
+        return N(grow=1.0, basis=0.0, dir="column", pad=CARD_PAD,
+                 key=("stat", i), kids=(
+                     N(h=20.0, key=("stat.title", i)),
+                     N(h=T.SPACE[0.5]),
+                     N(h=36.0, key=("stat.value", i)),
+                     N(h=T.SPACE[2] + 2.0),
+                     N(h=20.0, key=("stat.head", i)),
+                     N(h=18.0, key=("stat.detail", i)),
+                 ))
+
+    bands = titled(
+        *(N(dir="row", gap=T.SPACE[6],
+            kids=tuple(N(h=FACET_H, grow=1.0, basis=0.0,
+                         key=("facet", row * 3 + c))
+                       for c in range(3)))
+          for row in range(2)),
+        key="bands", gap=FACET_GAP)
+
+    # ---- the page -------------------------------------------------------
+    page = N(dir="row", key="page", kids=(
+        N(w=SIDEBAR_W, key="sidebar"),
+        N(grow=1.0, dir="column", key="main", kids=(
+            N(h=HEADER_H, key="header"),
+            N(grow=1.0, dir="column", gap=CARD_GAP, key="body",
+              pad=(GUT, GUT, GUT, GUT), kids=(
+                N(dir="row", gap=CARD_GAP, key="stats",
+                  kids=tuple(stat_card(i) for i in range(4))),
+                bands,
+                N(dir="row", gap=CARD_GAP, key="cards",
+                  kids=(routing, controls)),
+                N(h=32.0, key="tabs"),
+                # the table takes whatever is left, which is what grow MEANS
+                N(grow=1.0, dir="column", key="table", kids=(
+                    N(h=36.0, key="head"),
+                    N(grow=1.0, key="rows"),
+                )),
+            )),
+        )),
+    ))
+
+    at = B.lay(page, B.Rect(0, 0, w, h))
+
+    r.sidebar = at["sidebar"].as_tuple()
+    r.header = at["header"].as_tuple()
+    r.stats = [at[("stat", i)].as_tuple() for i in range(4)]
+    r.stat_parts = [{k: at[(f"stat.{k}", i)].as_tuple()
+                     for k in ("title", "value", "head", "detail")}
+                    for i in range(4)]
+    r.bands_card = at["bands"].as_tuple()
+    r.facets = [at[("facet", i)].as_tuple() for i in range(6)]
+    r.routing_card = at["routing"].as_tuple()
+    r.routing_rows = [at[("routing", i)].as_tuple() for i in range(N_BANDS)]
+    r.controls_card = at["controls"].as_tuple()
+    r.ctl_rows = [at[("ctl", i)].as_tuple() for i in range(10)]
+
+    tb = at["tabs"]
+    r.table_tabs = (tb.x, tb.y, 0, tb.h)
+    hd = at["head"]
+    r.table_head = hd.as_tuple()
+
+    # the sidebar's own stack, which never depended on content height
+    ny = 16 + 56
     for i, _ in enumerate(NAV):
-        r.nav.append((8, y + i * 34, SIDEBAR_W - 16, 32))
-    y2 = y + len(NAV) * 34 + 28
+        r.nav.append((8, ny + i * 34, SIDEBAR_W - 16, 32))
+    sy = ny + len(NAV) * 34 + 28
     for i, _ in enumerate(SOURCES):
-        r.sources.append((8, y2 + i * 34, SIDEBAR_W - 16, 32))
+        r.sources.append((8, sy + i * 34, SIDEBAR_W - 16, 32))
 
-    cx = SIDEBAR_W
-    cw = w - SIDEBAR_W
-    r.header = (cx, 0, cw, HEADER_H)
-
-    inner_x = cx + GUT
-    inner_w = cw - 2 * GUT
-    y = HEADER_H + GUT
-
-    r.stats = [b.as_tuple() for b in B.flex(
-        B.Rect(inner_x, y, inner_w, 136),
-        [B.Item(0, 136, grow=1) for _ in range(4)], gap=CARD_GAP)]
-    y += 136 + CARD_GAP
-
-    r.bands_card = (inner_x, y, inner_w, 258)
-    fy = y + 84
-    for row in range(2):
-        r.facets.extend(b.as_tuple() for b in B.flex(
-            B.Rect(inner_x + 20, fy + row * 86, inner_w - 40, 60),
-            [B.Item(0, 60, grow=1) for _ in range(3)], gap=24))
-    y += 258 + CARD_GAP
-
-    # Routing and the Tier 1 controls share a row. Side by side rather than
-    # stacked because the control column is held to 280px whatever the window
-    # does - REVIEW.md puts GRAPH's side pane at 240-320 - so a full-width
-    # card would be mostly empty, and stacking them cost the table its rows.
-    # Both cards' rhythm comes off the spacing scale now, not off pitches
-    # written by hand. `card_body` knows where a Card's content starts
-    # because tokens measured it (16 pad, 22 title, 4, 20 description, 16),
-    # and `stack` lays the rows out with a real gap - the demo used to say
-    # `y + 14`, `y + 34`, `y + 52` and `i * 27`, which is a 24px control on a
-    # 27px pitch: a 3px gutter, and it read as cramped as it was.
-    ROW_H, ROW_GAP = 24.0, T.SPACE[3]
-    N_ROWS = 6
-    body_h = N_ROWS * ROW_H + (N_ROWS - 1) * ROW_GAP
-    rowh = (B.card_body(B.Rect(0, 0, 0, 0)).y + body_h + T.CARD_PAD)
-
-    routing_box, controls_box = B.flex(
-        B.Rect(inner_x, y, inner_w, rowh),
-        [B.Item(0, rowh, grow=1), B.Item(0, rowh, grow=1)], gap=CARD_GAP)
-
-    r.routing_card = routing_box.as_tuple()
-    for b in B.stack(B.card_body(routing_box), N_ROWS, ROW_H, gap=ROW_GAP):
-        r.routing_rows.append(b.as_tuple())
-
-    # Two columns of five. The demo IS the demo - every variant the gallery
-    # diffs has to be reachable here too, or it is only ever seen as a pixel
-    # in a contact sheet. Left column is the live controls, right column the
-    # states: a two-thumb range, both small sizes, and the disabled and
-    # invalid chrome.
-    r.controls_card = controls_box.as_tuple()
-    cbody = B.card_body(controls_box)
-    for col in B.flex(cbody, [B.Item(grow=1), B.Item(grow=1)],
-                      gap=T.SPACE[6]):
-        for b in B.stack(col, 5, ROW_H, gap=ROW_GAP):
-            r.ctl_rows.append(b.as_tuple())
-    y += rowh + CARD_GAP
-
-    r.table_tabs = (inner_x, y, 0, 32)
-    y += 32 + 12
-    r.table_head = (inner_x, y, inner_w, 36)
-    y += 36
-    if n_rows is None:                      # fill whatever height is left
-        n_rows = max(1, int((h - y - GUT) // 34))
+    rows = at["rows"]
+    if n_rows is None:
+        # However many fit in what is left, and NO forced minimum: a window
+        # short enough to leave less than one row used to get one anyway,
+        # hanging 10 px off the bottom at 1280x900. A row that does not fit
+        # is not a row - it is the case ScrollArea exists for, and until that
+        # lands the honest answer is to draw none rather than to overflow.
+        n_rows = max(0, int(rows.h // 34))
     for i in range(n_rows):
-        r.table_rows.append((inner_x, y + i * 34, inner_w, 34))
+        r.table_rows.append((rows.x, rows.y + i * 34, rows.w, 34))
 
     # Shape | Kind | Schlafli | Dim | Cells | Family — weights, and flex
     # resolves them. The old version hand-summed six fractions that had to
     # add to 1.0, which is a constraint nothing checked.
     weights = [22, 28, 13, 6, 8, 20]
     r.cols = [(b.x, b.w) for b in B.flex(
-        B.Rect(inner_x, y, inner_w, 1),
-        [B.Item(0, 1, grow=w) for w in weights], pad=(0, 12, 0, 12))]
+        B.Rect(rows.x, rows.y, rows.w, 1),
+        [B.Item(0, 1, grow=wt) for wt in weights], pad=(0, 12, 0, 12))]
     return r
 
 
@@ -316,21 +382,25 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
              "GitHub", variant="ghost")
 
     # ---- stat cards -------------------------------------------------------
-    for (title, value, delta, up, head, detail), rect in zip(STATS, r.stats):
+    for (title, value, delta, up, head, detail), rect, part in zip(
+            STATS, r.stats, r.stat_parts):
         x, y, cw, ch = rect
         D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "gradient"},
                theme, grad_tex)
-        D.label(dl, x + 20, y + 16, title, faces, "regular", 14,
-                T.rgba("muted-foreground", theme=theme), baseline_box=20)
-        D.label(dl, x + 20, y + 38, value, faces, "semibold", 30,
-                T.rgba("foreground", theme=theme), baseline_box=36, tabular=True)
+        tt = part["title"]
+        D.label(dl, tt[0], tt[1], title, faces, "regular", 14,
+                T.rgba("muted-foreground", theme=theme), baseline_box=tt[3])
+        vv = part["value"]
+        D.label(dl, vv[0], vv[1], value, faces, "semibold", 30,
+                T.rgba("foreground", theme=theme), baseline_box=vv[3],
+                tabular=True)
         # shadcn's badge: gap-1 (4), px-2 (8) but pl-1.5 (6) with a leading
         # icon, and [&>svg]:size-3 (12). Measured, not guessed - the hand
         # offsets this replaces put the label a pixel inside the icon.
         f = B.Flow(gap=4).icon("trending-up" if up else "trending-down", 12)
         D.flow_text(f, delta, faces, "medium", 12, tabular=True)
         pill_w = f.width() + 6 + 8
-        pill = B.Rect(x + cw - 20 - pill_w, y + 14, pill_w, 20)
+        pill = B.Rect(x + cw - T.CARD_PAD - pill_w, tt[1] - 2.0, pill_w, 20)
         D.box(dl, *pill.as_tuple(),
               border_col=T.rgba("border", theme=theme), radius=T.RADII["4xl"])
         D.draw_flow(dl, f.place(pill.pad(0, 8, 0, 6), "start"), faces,
@@ -338,12 +408,13 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         g = B.Flow(gap=6)
         D.flow_text(g, head, faces, "medium", 14)
         g.icon("trending-up" if up else "trending-down", 15)
-        D.draw_flow(dl, g.place(B.Rect(x + 20, y + ch - 52, cw - 40, 20),
-                                "start"), faces,
+        hh = part["head"]
+        D.draw_flow(dl, g.place(B.Rect(*hh), "start"), faces,
                     T.rgba("foreground", theme=theme))
-        D.label(dl, x + 20, y + ch - 32, detail, faces, "regular", 13,
-                T.rgba("muted-foreground", theme=theme), baseline_box=18,
-                max_w=cw - 40)
+        dd = part["detail"]
+        D.label(dl, dd[0], dd[1], detail, faces, "regular", 13,
+                T.rgba("muted-foreground", theme=theme), baseline_box=dd[3],
+                max_w=dd[2])
 
     # ---- band levels ------------------------------------------------------
     x, y, cw, ch = r.bands_card
