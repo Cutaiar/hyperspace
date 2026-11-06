@@ -416,33 +416,68 @@ def _sandwich_end(ui: Ui, cols: list) -> None:
     ui.dl.channels_set_current(0)
 
 
+# Has this session ever seen a FRACTIONAL wheel delta? One is proof of a
+# pixel-precise device - a trackpad, a Magic Mouse - because a notched wheel
+# only ever sends whole units. It is sticky: a trackpad emits plenty of
+# whole-unit deltas mid-gesture, and deciding per event put a 10x jump in
+# the middle of every swipe (see tame_wheel).
+_PRECISE = {"seen": False}
+
+
+def wheel_px_per_unit() -> float:
+    """How many pixels one unit of `io.mouse_wheel` should move.
+
+    `DKIT_SCROLL_PX` overrides it, so this can be dialled on the machine
+    that can feel it without editing code. The default is a guess until
+    somebody runs `dashboard.py --wheel-probe` on a Mac and tells us what
+    the trackpad actually sends; see that mode.
+    """
+    import os
+    env = os.environ.get("DKIT_SCROLL_PX")
+    if env:
+        try:
+            return float(env)
+        except ValueError:
+            pass
+    return T.SCROLL["px_per_unit"] if _PRECISE["seen"] else T.SCROLL["notch_px"]
+
+
 def tame_wheel(io, *, font_size: float | None = None) -> None:
     """Rescale this frame's wheel so a gesture moves what a browser moves.
 
     Call it once, right after the backend has filled `io`, before
-    `new_frame`. ImGui scrolls `5 * font_size` per unit of `io.mouse_wheel`
-    - about 90 px here - and on macOS GLFW hands it `scrollingDeltaY * 0.1`
-    from a precise trackpad, where `scrollingDeltaY` is points of finger
-    travel. So a 100 pt swipe arrived as 10 units and moved the page 900 px
-    against the browser's 100. Nine times too fast, everywhere, which is
-    exactly what it felt like.
+    `new_frame`.
 
-    `SCROLL["px_per_unit"]` is the target. A unit-sized delta is treated as
-    a discrete notch instead and gets `notch_px`, so a mouse wheel is not
-    left crawling.
+    WHAT A BROWSER DOES, measured rather than recalled. On macOS a trackpad
+    sends PIXEL-PRECISE deltas and the browser applies them 1:1 with no
+    smoothing of its own - one 300px wheel lands at exactly 300 in a single
+    step, checked in Chromium. Inertia is the OS too: AppKit keeps sending
+    events with `momentumPhase` set and decaying deltas after the finger
+    lifts, and the browser just keeps receiving them. A notched mouse wheel
+    is the other path - non-precise line deltas, about 120px a tick, and
+    that one does get an animated glide.
+
+    So the target is finger travel, 1:1, unsmoothed, and this is only a
+    scale factor. ImGui moves `5 * font_size` per unit - about 90px at this
+    type scale - which is where "far too fast" came from.
+
+    THE DISCONTINUITY THIS NO LONGER HAS. The first version decided per
+    EVENT: a delta of 1.0 or more was "a notch" and got `notch_px`, ten
+    times the precise rate. A trackpad sends whole-unit deltas constantly
+    once you move at any speed, so every swipe crossed that threshold
+    mid-gesture and sped up tenfold. The device is decided ONCE instead, by
+    whether a fractional delta has ever arrived, and never changes under a
+    gesture.
     """
     wheel = io.mouse_wheel
     if not wheel:
         return
-    want = T.SCROLL["px_per_unit"] * wheel
-    if abs(wheel) >= 0.999:
-        # a whole unit in one event is a wheel notch, not finger travel
-        want = T.SCROLL["notch_px"] * wheel
+    if abs(wheel - round(wheel)) > 1e-4:
+        _PRECISE["seen"] = True
     # `font_size` is injectable so the arithmetic is testable with no GL -
     # the same reason `combobox_size` takes a `measure`.
     fs = imgui.get_font_size() if font_size is None else font_size
-    step = 5.0 * max(fs, 1.0)
-    io.mouse_wheel = want / step
+    io.mouse_wheel = wheel_px_per_unit() * wheel / (5.0 * max(fs, 1.0))
 
 
 FINE = 0.1          # Shift scales a drag to a tenth, as the panel's does

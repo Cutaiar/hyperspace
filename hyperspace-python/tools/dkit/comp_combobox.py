@@ -995,10 +995,74 @@ def _state(ui, key) -> dict:
               "was_focused": False, "side": ""})
 
 
+# Where each field's caret was last seen, keyed the same way `_state` is.
+# It cannot live in `_state` because it is read back on the frame the popup
+# OPENS, before `_state` has been touched for that frame, and because the
+# two halves of the split field write it from two different call sites.
+_CARET: dict = {}
+
+
+def _read_caret(item_id) -> int | None:
+    """The cursor offset inside an `input_text`, or None.
+
+    `imgui.internal.get_input_text_state` is private API and the only way
+    to ask. It is wrapped rather than trusted: if a binding stops exposing
+    it the field keeps working and only the caret handover is lost, which
+    is the behaviour the kit had before this.
+    """
+    try:
+        st = imgui.internal.get_input_text_state(item_id)
+        if st is None or st.id_ != item_id:
+            return None
+        return int(st.get_cursor_pos())
+    except Exception:
+        return None
+
+
+def _place_caret(item_id, pos: int) -> bool:
+    """Put the cursor at `pos` with nothing selected.
+
+    This is what undoes ImGui's select-all. `set_keyboard_focus_here()`
+    activates an InputText the way a Tab does, and ImGui selects the whole
+    value on that path - so the popup's copy of the field came up with the
+    value highlighted and the caret at the end, and the click's caret was
+    thrown away. Measured in Chromium: clicking a combobox that holds
+    `Gamma` at +18px leaves `selectionStart == selectionEnd == 1`. There is
+    no select-all anywhere in the real component.
+    """
+    try:
+        st = imgui.internal.get_input_text_state(item_id)
+        if st is None or st.id_ != item_id:
+            return False
+        at = max(0, min(int(pos), int(st.text_len)))
+        st.set_selection(at, at)
+        return True
+    except Exception:
+        return False
+
+
 def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
-                   disabled=False, open_=False, grab_focus=False):
+                   disabled=False, open_=False, grab_focus=False,
+                   chrome=True, ink=True, focus_hint=False, caret=None):
     """The trigger, which IS an input. Returns (changed, text, focused,
     clicked).
+
+    `chrome` / `ink` split the field in two, and that split is what keeps
+    the focus ring off ImGui's clip edge. See THE SPLIT FIELD in
+    `combobox`: the copy drawn in the PARENT window owns the chrome (the
+    box, the ring, the placeholder, the chevron) and the copy drawn inside
+    the POPUP owns the widget (the caret, the selection, the keyboard and
+    the clipboard). Exactly one of them paints the glyphs, or the two
+    passes stack and the value comes out bolder than the theme's
+    foreground - measured at 255 against a `foreground` of 250.
+
+    `focus_hint` rings the field although THIS copy's `input_text` is not
+    the active one, which is the parent's case while the list is open: the
+    keyboard is in the popup, and the browser rings a focused input group
+    whether or not its list is up.
+
+    `caret` is a character offset to put the cursor at instead of letting
+    `set_keyboard_focus_here` select the whole value.
 
     This is the whole shape of the real component: Base UI's
     `ComboboxInput` is an InputGroup wrapping a real <input>, with a ghost
@@ -1017,20 +1081,25 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
 
     cols = I._sandwich_begin(ui, clear_grab=False)
     # imgui's own Col_.text is WHITE by default, which is invisible on the
-    # light theme - the same trap interact.text_input records
-    imgui.push_style_color(imgui.Col_.text,
-                           imgui.ImVec4(*ui.col("foreground")))
+    # light theme - the same trap interact.text_input records.
+    #
+    # `ink=False` pushes it TRANSPARENT instead, which is how the parent's
+    # copy stops painting a second set of glyphs over the popup's. The
+    # selection band goes with it: an inactive InputText draws no band, but
+    # saying so costs one call and does not depend on that staying true.
+    dim = 0.5 if disabled else 1.0
+    imgui.push_style_color(
+        imgui.Col_.text,
+        imgui.ImVec4(*ui.col("foreground")) if ink
+        else imgui.ImVec4(0, 0, 0, 0))
+    if not ink:
+        imgui.push_style_color(imgui.Col_.text_selected_bg,
+                               imgui.ImVec4(0, 0, 0, 0))
     # ImGui draws a blue nav-cursor rectangle around a keyboard-focused
     # item. No shadcn component has one, and it is very visible on the
     # field the moment the list opens - which is exactly when the kit asks
     # for that focus.
     imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
-    # ImGui draws an InputText's text at the cursor PLUS `FramePadding`,
-    # default (4, 3), and the frame it would pad is the stock one, which is
-    # transparent here. Zeroed, so the cursor IS the text's top-left: the
-    # value lines up with `input_pad_l` and the selection band is centred
-    # in the field rather than sitting 3 px low.
-    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
     # The SAME font `draw.label` draws every other string in the kit with.
     # Without it the stock widget renders the value in imgui's CURRENT font
     # at imgui's current size, which is not the Geist face at
@@ -1039,9 +1108,31 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # Measured 1 px apart on Mesa at density 1; far wider on a Retina Mac,
     # where the atlas is rasterised at 2x, which is where it was spotted.
     D.push_css_font(ui.faces, "regular", tbl["field_font"])
-    imgui.set_cursor_screen_pos(
-        imgui.ImVec2(x + pl, y + (h - imgui.get_font_size()) / 2.0))
-    imgui.push_item_width(w - pl - pr - cz)
+    fs = imgui.get_font_size()
+    # `FramePadding` IS the field's padding, and that is the point.
+    #
+    # It used to be zeroed, so that the cursor was the text's top-left. The
+    # cost was that an InputText's HIT AREA is its frame, and the frame was
+    # then the text box alone: the field's leading 10 px and everything
+    # right of the text box were dead. Measured on the dashboard's Find
+    # combobox (w 150): a press at x+2 or x+120 neither focused the field
+    # nor opened the list, where the browser treats the whole padded box as
+    # the input - `cursor: text` on the group, and clicking the left pad
+    # puts the caret at offset 0.
+    #
+    # So the frame is the input's own box, x .. x + w - <the addon>, and
+    # the padding puts the glyphs back at `input_pad_l` and centres them:
+    # the frame comes out `fs + 2 * (h - fs)/2` = h, and the text's
+    # top-left is unchanged from the zeroed version.
+    #
+    # ImGui's FramePadding.x is symmetric, so the text's RIGHT inset is 10
+    # where the browser's is 6 (`pr-1.5` from the inline-end addon). That
+    # clips a very long value four pixels earlier than Chromium would; it
+    # is the deliberate half of the trade.
+    imgui.push_style_var(imgui.StyleVar_.frame_padding,
+                         imgui.ImVec2(pl, max(0.0, (h - fs) / 2.0)))
+    imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    imgui.push_item_width(w - cz)
     if grab_focus:
         # The popup window has the keyboard the moment it appears, but
         # nothing in it is ACTIVE - so characters went nowhere and the list
@@ -1053,6 +1144,17 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     changed, out = imgui.input_text(f"##{key}.q", text)
     if disabled:
         imgui.end_disabled()
+    wid = imgui.get_item_id()
+    # NOT gated on `grab_focus`. Measured: on the frame
+    # `set_keyboard_focus_here()` is called, `get_input_text_state` still
+    # reports no state for this id - ImGui activates the widget but has not
+    # adopted it as the one being edited until the frame after - so a
+    # single attempt on the open frame always failed and the select-all
+    # stood. The caller retries with a budget; `caret_set` says when to
+    # stop.
+    caret_set = False if caret is not None else None
+    if caret is not None:
+        caret_set = _place_caret(wid, caret)
     imgui.pop_item_width()
     imgui.pop_font()
     imgui.pop_style_var()
@@ -1069,26 +1171,41 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # has to hang off the click rather than off the focus, which is what the
     # kit had and why tabbing to it opened the list.
     clicked = imgui.is_item_clicked()
-    imgui.pop_style_color(2)
+    if ink:
+        _CARET[key] = _read_caret(wid)
+    imgui.pop_style_color(3 if not ink else 2)
     I._sandwich_end(ui, cols)
 
     # the Input's own chrome: measured identical to tokens.INPUT, ring
     # included - the InputGroup's band and border measure as the Input's
-    it = T.input_table(ui.theme_name)
-    focus_f = ui.anim.to(f"{key}:focus", 1.0 if focused else 0.0)
-    D.field(ui.dl, x, y, w, h, ui.theme, it, focus_f=focus_f,
-            disabled=disabled, radius=T.RADII["lg"])
-    if not out and not focused:
-        D.label(ui.dl, x + pl, y, placeholder, ui.faces, "regular",
-                tbl["field_font"], ui.col(*it["placeholder"]), baseline_box=h)
-    g = tbl["field_icon"]
-    D.icon(ui.dl, "chevron-down", x + w - 1.0 - T.SPACE[1] - g,
-           y + (h - g) / 2.0, g, ui.col("muted-foreground", 0.5))
+    if chrome:
+        it = T.input_table(ui.theme_name)
+        focus_f = ui.anim.to(f"{key}:focus",
+                             1.0 if (focused or focus_hint) else 0.0)
+        D.field(ui.dl, x, y, w, h, ui.theme, it, focus_f=focus_f,
+                disabled=disabled, radius=T.RADII["lg"])
+        # The placeholder shows whenever the VALUE is empty, focused or
+        # not. Measured in Chromium on the real component: the placeholder
+        # ink is there at rest, under a keyboard focus, and with the list
+        # open - `::placeholder` keys off the value, not the focus. The kit
+        # hid it on focus, so clicking an empty combobox blanked the field.
+        if not out:
+            D.label(ui.dl, x + pl, y, placeholder, ui.faces, "regular",
+                    tbl["field_font"],
+                    ui.col(it["placeholder"][0],
+                           it["placeholder"][1] * dim), baseline_box=h)
+        g = tbl["field_icon"]
+        # `has-disabled:opacity-50` is on the input GROUP, so it dims the
+        # chevron and the placeholder along with the box - measured, the
+        # addon's button computes `opacity: 0.5`. Only the box was dimmed.
+        D.icon(ui.dl, "chevron-down", x + w - 1.0 - T.SPACE[1] - g,
+               y + (h - g) / 2.0, g,
+               ui.col("muted-foreground", 0.5 * dim))
     # MERGE. `_sandwich_end` only restores the channel; leaving the split
     # open makes the next one nest, which ImGui asserts on rather than
     # tolerates ("Nested channel splitting is not supported").
     ui.dl.channels_merge()
-    return changed, out, focused, clicked
+    return changed, out, focused, clicked, caret_set
 
 
 # The KEYBOARD, measured on the real Base UI component rather than
@@ -1163,10 +1280,40 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     # come back on its own: the close asks for it and this hands it over on
     # the one frame after.
     regrab = bool(s.pop("refocus", False))
-    changed, q, focused, clicked = _input_trigger(
+    # THE SPLIT FIELD.
+    #
+    # The field is drawn twice - once here in the parent window and once
+    # inside the popup - and which half does what is the fix for the
+    # clipped focus ring.
+    #
+    # Why there are two at all: ImGui hands a popup the keyboard the
+    # instant it appears, so an `input_text` left behind in the parent
+    # stops receiving characters exactly when the list opens. The copy
+    # inside the popup is the one that can hold the caret.
+    #
+    # What went wrong: that copy used to draw the field's CHROME as well,
+    # and ImGui clips a window's draw list to the window. The popup starts
+    # at the field's top-left and is exactly `w` wide, so the 3px ring
+    # drawn OUTSIDE the field's box was cut off on three sides. Measured
+    # on the dashboard's Find combobox, dark, pointer parked off the
+    # control: with the list CLOSED the band reads 46 at d=1,2,3 on all
+    # four sides; with it OPEN it reads 0 left, 0 right, 0 top and 46 only
+    # at the bottom, where the window carries on down toward the panel.
+    # Tab and click differ in nothing but whether the list opens, which is
+    # what localises the fault to this one window.
+    #
+    # So: this copy owns the CHROME - the box, the ring, the placeholder
+    # and the chevron - and it is in the parent window, where nothing
+    # clips it. The popup's copy owns the WIDGET: the caret, the
+    # selection, the keyboard and the clipboard. `ink` hands the glyphs to
+    # whichever of them has the caret, because both were painting them and
+    # the value came out at 255 against a `foreground` of 250.
+    open_now = imgui.is_popup_open(pid)
+    changed, q, focused, clicked, _cs = _input_trigger(
         ui, key, tbl, x, y, w, hh, s["q"], placeholder,
-        disabled=disabled, open_=imgui.is_popup_open(pid),
-        grab_focus=regrab)
+        disabled=disabled, open_=open_now,
+        grab_focus=regrab, chrome=True, ink=not open_now,
+        focus_hint=open_now)
     focused = focused or regrab
 
     def _open(sel):
@@ -1177,6 +1324,12 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         # later in the same frame, moves it on by one. Measured as an
         # off-by-one at both ends.
         s["sel"], s["focus"], s["armed"] = sel, True, True
+        # Hand the parent copy's caret over to the popup's, so a click into
+        # the middle of the value leaves the cursor where it was clicked
+        # rather than selecting the whole value. Measured in Chromium:
+        # clicking `Gamma` at +18px gives selectionStart == selectionEnd ==
+        # 1, at +3px gives 0, past the text gives 5. Never a selection.
+        s["caret"] = _CARET.get(key)
         imgui.open_popup(pid)
 
     if not disabled:
@@ -1335,12 +1488,25 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         py = p.y + (at.y - win_y)            # the panel, below the trigger
         LAST_RECT[pid] = (px, py, w, ph)
         saved, ui.dl = ui.dl, dl
-        # the field, redrawn here so its caret is in the focused window
-        changed2, q2, _f2, _c2 = _input_trigger(
-            ui, f"{key}.open", tbl, px, p.y + (y - win_y), w, hh, s["q"],
+        # The widget half: the caret, the selection, the keyboard and the
+        # clipboard, and NO chrome - see THE SPLIT FIELD above. Placed at
+        # the field's own (x, y) rather than at the popup-relative one, so
+        # the glyphs and the caret land exactly where the parent drew the
+        # box even when the trigger's x is fractional.
+        want = s.get("caret")
+        changed2, q2, _f2, _c2, caret_set = _input_trigger(
+            ui, f"{key}.open", tbl, x, y, w, hh, s["q"],
             placeholder, disabled=disabled, open_=True,
-            grab_focus=s.get("focus", False))
+            grab_focus=s.get("focus", False), chrome=False, ink=True,
+            caret=want)
         s["focus"] = False
+        if want is not None:
+            # a budget, so a binding that stops exposing the state cannot
+            # leave this pinning the caret every frame
+            s["caret_try"] = s.get("caret_try", 0) + 1
+            if caret_set or s["caret_try"] > 4:
+                s.pop("caret", None)
+                s.pop("caret_try", None)
         if changed2:
             # typing clears the highlight, here as well as on the closed
             # field - measured, and the two paths have to agree or the

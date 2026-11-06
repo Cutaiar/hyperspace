@@ -816,43 +816,82 @@ def test_a_region_with_no_border_gets_no_border_inset():
 # --------------------------------------------------------------------------
 # the wheel
 # --------------------------------------------------------------------------
-def test_the_wheel_is_scaled_to_the_browsers_response():
-    """ImGui moves `5 * font_size` per unit of `io.mouse_wheel` - about 90px
-    here. macOS GLFW hands it `scrollingDeltaY * 0.1` from a precise
-    trackpad, and `scrollingDeltaY` is points of FINGER TRAVEL, so a 100pt
-    swipe arrived as 10 units and moved 900px where a browser moves 100.
+def test_the_wheel_has_no_discontinuity_under_a_gesture():
+    """What a browser does, measured: on macOS a trackpad sends
+    pixel-precise deltas and the browser applies them 1:1 with no smoothing
+    - one 300px wheel lands at exactly 300 in a single step, checked in
+    Chromium. So this is only a scale factor, and the one thing it must not
+    have is a step in it.
 
-    `tame_wheel` rescales so a unit is `px_per_unit`. This checks the
-    arithmetic without a GL context by standing in for `get_font_size`.
+    The first version decided per EVENT - a delta of 1.0 or more was "a
+    notch" and got ten times the precise rate. A trackpad sends whole-unit
+    deltas constantly once you move at any speed, so every swipe crossed
+    that threshold mid-gesture and sped up tenfold. That is what "still too
+    fast" was.
+
+    The device is decided ONCE now, by whether a fractional delta has ever
+    arrived. This checks the mapping is linear across the old threshold.
     """
     import interact as I
 
     class _IO:
         mouse_wheel = 0.0
 
-    io = _IO()
-    font = 18.2
+    io, font = _IO(), 18.2
     step = 5.0 * font
-
-    # a precise trackpad: ten small events, 100pt of finger travel in all
-    total = 0.0
-    for _ in range(10):
-        io.mouse_wheel = 0.1
+    I._PRECISE["seen"] = False
+    try:
+        # one fractional delta marks the device precise, for good
+        io.mouse_wheel = 0.3
         I.tame_wheel(io, font_size=font)
-        total += io.mouse_wheel * step
-    # ten events of 0.1 units at 10 px a unit is 10 px of page, which is
-    # the 10 pt of finger that produced them: 1:1, as the browser is
-    assert abs(total - 10 * 0.1 * T.SCROLL["px_per_unit"]) < 1e-6
-    # and against what it used to be, which is the size of the complaint
-    assert abs(total * (step / T.SCROLL["px_per_unit"]) - 10 * 0.1 * step) < 1e-6
-    assert step / T.SCROLL["px_per_unit"] > 8.0
+        assert I._PRECISE["seen"]
 
-    # a discrete wheel notch is a notch, not a tenth of a finger
-    io.mouse_wheel = -1.0
-    I.tame_wheel(io, font_size=font)
-    assert abs(io.mouse_wheel * step + T.SCROLL["notch_px"]) < 1e-6
+        def px(raw):
+            io.mouse_wheel = raw
+            I.tame_wheel(io, font_size=font)
+            return io.mouse_wheel * step
 
-    # nothing in, nothing out
-    io.mouse_wheel = 0.0
-    I.tame_wheel(io, font_size=font)
-    assert io.mouse_wheel == 0.0
+        # linear through the old 1.0 cliff, in both directions
+        for a, b in ((0.9, 1.0), (1.0, 1.1), (0.5, 1.5), (-0.9, -1.1)):
+            ra, rb = px(a) / a, px(b) / b
+            assert abs(ra - rb) < 1e-6, (
+                f"the rate changes between {a} and {b}: {ra} vs {rb}")
+        # and the rate is the precise one
+        assert abs(px(1.0) - T.SCROLL["px_per_unit"]) < 1e-6
+    finally:
+        I._PRECISE["seen"] = False
+
+
+def test_a_notched_wheel_keeps_the_notch_rate():
+    """A device that has only ever sent whole units is a notched wheel, and
+    a browser gives one of those about 120px a tick, not 10."""
+    import interact as I
+
+    class _IO:
+        mouse_wheel = 0.0
+
+    io, font = _IO(), 18.2
+    I._PRECISE["seen"] = False
+    try:
+        io.mouse_wheel = -1.0
+        I.tame_wheel(io, font_size=font)
+        assert abs(io.mouse_wheel * 5.0 * font + T.SCROLL["notch_px"]) < 1e-6
+    finally:
+        I._PRECISE["seen"] = False
+
+
+def test_the_scroll_rate_can_be_dialled_without_an_edit():
+    """`DKIT_SCROLL_PX`, because this is the one constant in the kit that
+    cannot be measured on the machine that builds it - the units a trackpad
+    sends per point are a property of the GLFW build and the platform."""
+    import os
+    import interact as I
+    old = os.environ.get("DKIT_SCROLL_PX")
+    os.environ["DKIT_SCROLL_PX"] = "3.5"
+    try:
+        assert I.wheel_px_per_unit() == 3.5
+    finally:
+        if old is None:
+            os.environ.pop("DKIT_SCROLL_PX", None)
+        else:
+            os.environ["DKIT_SCROLL_PX"] = old

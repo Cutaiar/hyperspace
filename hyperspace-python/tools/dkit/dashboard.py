@@ -860,6 +860,84 @@ def _draw(ui_box, rects, w, h, series, state, bgc):
     return ui_box
 
 
+def wheel_probe(theme_name: str, w: int, h: int) -> None:
+    """Open the dashboard and print every raw wheel delta the OS sends.
+
+    This exists because the scroll constant is the one number in the kit
+    that cannot be measured on this machine. `interact.tame_wheel` has to
+    turn `io.mouse_wheel` into pixels of finger travel, and how many units
+    a trackpad produces per point is a property of the GLFW build and the
+    platform - on macOS it comes out of `scrollingDeltaY` and a factor I
+    have only ever recalled, never checked.
+
+    Run it on the machine that can feel it, scroll once, and read three
+    things off the output:
+
+      * the MAGNITUDE of the deltas - one slow swipe of about 100 points
+        tells you the units-per-point factor directly;
+      * whether they are FRACTIONAL - any fractional delta means a
+        pixel-precise device, which is what picks the precise rate;
+      * whether they CONTINUE after your finger lifts - that is the OS's
+        momentum phase, and its arrival is the whole of inertial scrolling.
+        If the deltas stop dead when the finger does, GLFW is dropping the
+        momentum events and no constant will bring the inertia back.
+
+    `DKIT_SCROLL_PX=<n>` then dials the rate without an edit.
+    """
+    import time
+    win, impl, io, faces, grad = _boot(theme_name, w, h, visible=True,
+                                       retina=True)
+    glfw.swap_interval(1)
+    io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
+    theme = T.LIGHT if theme_name == "light" else T.DARK
+    bgc = T.rgba("background", theme=theme)
+    ui = I.Ui(None, faces, theme, Anim(), grad, theme_name=theme_name)
+    state = dict(CTL_STATE, tab=0, nav=0)
+    series = ticks()
+    print("wheel probe: scroll, then let go. Ctrl+C to stop.")
+    print(f"{'t (ms)':>8}  {'raw':>10}  {'kind':>9}  {'-> px':>8}")
+    t0 = time.perf_counter()
+    last = None
+    try:
+        rects, last_size = None, None
+        prev = time.perf_counter()
+        while not glfw.window_should_close(win):
+            glfw.poll_events()
+            impl.process_inputs()
+            raw = io.mouse_wheel
+            if raw:
+                now = (time.perf_counter() - t0) * 1000.0
+                gap = "" if last is None else f"  (+{now - last:.0f}ms)"
+                kind = ("precise" if abs(raw - round(raw)) > 1e-4
+                        else "whole")
+                px = I.wheel_px_per_unit() * raw
+                print(f"{now:8.0f}  {raw:10.4f}  {kind:>9}  {px:8.1f}{gap}")
+                last = now
+            I.tame_wheel(io)
+            now2 = time.perf_counter()
+            dt = min(now2 - prev, 0.05)
+            prev = now2
+            lw, lh = glfw.get_window_size(win)
+            fw, fh = glfw.get_framebuffer_size(win)
+            if lw <= 0 or lh <= 0:
+                continue
+            if (lw, lh) != last_size:
+                rects, last_size = lay_out(lw, lh), (lw, lh)
+            imgui.new_frame()
+            GL.glViewport(0, 0, fw, fh)
+            _draw(ui, rects, lw, lh, series, state, bgc)
+            imgui.render()
+            impl.render(imgui.get_draw_data())
+            ui.frame_done(dt)
+            glfw.swap_buffers(win)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        impl.shutdown()
+        imgui.destroy_context()
+        glfw.terminate()
+
+
 def live(theme_name: str, w: int, h: int) -> None:
     """Open the dashboard and run it until the window is closed.
 
@@ -1066,7 +1144,13 @@ def main() -> None:
                     help="emit a frame sequence of a hover easing in and out")
     ap.add_argument("--live", action="store_true",
                     help="open a window and run it until you close it")
+    ap.add_argument("--wheel-probe", action="store_true",
+                    help="print every raw wheel delta the OS sends, to set "
+                         "the scroll constant from data rather than memory")
     a = ap.parse_args()
+    if a.wheel_probe:
+        wheel_probe(a.theme, a.width, a.height)
+        return
     if a.live:
         live(a.theme, a.width, a.height)
         return

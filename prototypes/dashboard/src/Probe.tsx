@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button"
 import {
   Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem,
-  ComboboxList,
+  ComboboxList, ComboboxGroup, ComboboxLabel, ComboboxSeparator,
 } from "@/components/ui/combobox"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
@@ -346,6 +346,74 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
           </ComboboxContent>
         </Combobox>
       </P>
+
+      {/* ---- Sixteen items, NOT forced open, with a committed value.
+           This is the ERGONOMICS block, and it is the only one that can
+           answer: does the keyboard highlight SCROLL the list to follow
+           itself past the 252px clamp; does opening the list select the
+           field's text; where does the caret land on a click into the
+           middle of the value; does a parked mouse over another row steal
+           the highlight from the arrows; and does blur / Escape / Tab /
+           click-away each revert the query to the committed value.
+
+           Every one of those questions needs the component to be driven,
+           so a forced-open block cannot answer any of them. ---- */}
+      <P id="combobox.many" w={320}>
+        <Combobox
+          items={["Alpha","Beta","Gamma","Delta","Epsilon","Zeta","Eta","Theta",
+                  "Iota","Kappa","Lambda","Mu","Nu","Xi","Omicron","Pi"]}
+          defaultValue="Gamma"
+        >
+          <ComboboxInput placeholder="Sixteen" />
+          <ComboboxContent>
+            <ComboboxEmpty>None.</ComboboxEmpty>
+            <ComboboxList>
+              {(item: string) => (
+                <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+      </P>
+
+      {/* ---- Disabled, not forced open. The kit derives the disabled state
+           from `opacity-50` on the class list and has never measured it. ---- */}
+      <P id="combobox.dis" w={320}>
+        <Combobox items={["Alpha", "Beta", "Gamma"]} defaultValue="Beta" disabled>
+          <ComboboxInput placeholder="Disabled" disabled />
+          <ComboboxContent>
+            <ComboboxEmpty>None.</ComboboxEmpty>
+            <ComboboxList>
+              {(item: string) => (
+                <ComboboxItem key={item} value={item}>{item}</ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+      </P>
+
+      {/* ---- A group label and a separator, forced open so both are in the
+           dump. `combobox.tsx`'s separator is `-mx-1 my-1 h-px bg-border` —
+           it DOES carry a margin block, where `command.tsx`'s (the old
+           recipe's, which is what the kit's table recorded) does not. ---- */}
+      <div data-probe-grp style={{ position: "fixed", left: 1000, top: 40, width: 320, zIndex: 1 }}>
+       <div data-probe="combobox.grp" style={{ width: 320 }}>
+        <Combobox items={["Alpha", "Beta", "Gamma"]} open>
+          <ComboboxInput placeholder="Grouped" />
+          <ComboboxContent>
+            <ComboboxEmpty>None.</ComboboxEmpty>
+            <ComboboxList>
+              <ComboboxGroup>
+                <ComboboxLabel>Planes</ComboboxLabel>
+                <ComboboxItem value="Alpha">Alpha</ComboboxItem>
+                <ComboboxSeparator />
+                <ComboboxItem value="Beta">Beta</ComboboxItem>
+              </ComboboxGroup>
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+       </div>
+      </div>
 
       {/* ---- Tooltip, forced open ---- */}
       <P id="tooltip.open">
