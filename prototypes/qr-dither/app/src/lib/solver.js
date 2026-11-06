@@ -94,20 +94,43 @@ export function project(angles, wDist = 7.0, zDist = 3.0) {
   });
 }
 
+// The circumradius of {-1,1}^4.  A rotation can put all of a vertex's length
+// on one axis, so after rotating, |p[3]| reaches this and so does |p[2]| once
+// the w-projection has scaled it.  Both cameras must stay outside that reach
+// or the projection has a pole.
+export const RADIUS = 2;
+
+/** Nearest the z camera may sit, given where the w camera is.
+ *  k_w peaks at wDist / (wDist - RADIUS), so |p[2]| reaches RADIUS times that. */
+export function minZDist(wDist) {
+  return wDist <= RADIUS ? Infinity : (RADIUS * wDist) / (wDist - RADIUS);
+}
+
 // The widest the shape ever gets, for a given projection setting.  Without
 // this the scale is recomputed per frame and the shape visibly snaps to refill
 // the frame as it folds; sampling the worst case once keeps it still.
+//
+// Samples that land on or behind a camera plane are skipped rather than
+// averaged in.  They are not large, they are infinite: one vertex grazing the
+// camera returns a span in the thousands, and every ordinary pose then scales
+// to well under a module, erasing the drawing.  The UI keeps the sliders out
+// of that range; this is the backstop for anything that calls in regardless.
 const SPAN_CACHE = new Map();
 export function maxSpan(wDist = 7.0, zDist = 3.0, samples = 3000) {
   const key = wDist + ':' + zDist;
   if (SPAN_CACHE.has(key)) return SPAN_CACHE.get(key);
   const PL = [[0,1],[0,2],[1,2],[0,3],[1,3],[2,3]];
+  const LIMIT = 24;                       // a span no sane camera exceeds
   let best = 0;
   for (let s = 0; s < samples; s++) {
     const a = PL.map(p => [p, Math.random() * Math.PI * 2]);
-    for (const [x, y] of project(a, wDist, zDist))
-      best = Math.max(best, Math.abs(x), Math.abs(y));
+    for (const [x, y] of project(a, wDist, zDist)) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const m = Math.max(Math.abs(x), Math.abs(y));
+      if (m <= LIMIT) best = Math.max(best, m);
+    }
   }
+  if (!best) best = 1;                    // every sample was degenerate
   SPAN_CACHE.set(key, best);
   return best;
 }

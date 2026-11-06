@@ -87,7 +87,8 @@ def main():
     good = sum(1 for r in rows if r[2] == "scans")
     print(f"\n{good}/{len(rows)} decoded back to the exact URL")
     print(f"images: {OUT}")
-    return 0 if good else 1
+    # a batch with any failed variant is a failed batch; automation reads this
+    return 0 if good == len(rows) else 1
 
 
 if __name__ == "__main__":

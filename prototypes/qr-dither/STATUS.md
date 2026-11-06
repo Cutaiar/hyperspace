@@ -73,6 +73,12 @@ See STICKERS.md for the detail. In short, each needs one cheap real-world test:
 
 ## Smaller opens, in the code
 
+- **Exports carry geometry, not style.** A sheet of `pal-red` or `sty-dots`
+  previews styled and downloads as plain black squares, because the exporters
+  re-render from the module grid and the grid has no palette in it. The UI says
+  so. A real fix means porting `gen/style.py`'s renderer to TypeScript so the
+  exporters can draw dots, eyes and colours at a physical size.
+
 - Four of five texture blobs are gitignored (358 KB each). Only `gothic` ships;
   the live solver's texture picker prints the command for the others.
 - The builder preview draws codes with `preserveAspectRatio="none"`. Harmless

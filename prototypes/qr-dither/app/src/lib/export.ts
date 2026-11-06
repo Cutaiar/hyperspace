@@ -55,8 +55,11 @@ export function sheetSvg({ layout: lay, placed, codes, cutline }: SheetExport): 
     const code = codes[p.id]
     if (!code) continue
     if (code.dark) {
-      art.push(`<rect x="${f(p.cut.x)}" y="${f(p.cut.y)}" width="${f(p.cut.w)}" ` +
-               `height="${f(p.cut.h)}" fill="#000"/>`)
+      // over the ART rect, not the cut: bleed exists so a cut that lands a
+      // millimetre out still hits printed black instead of white paper. The
+      // modules stay positioned against the cut, so the quiet zone is intact.
+      art.push(`<rect x="${f(p.art.x)}" y="${f(p.art.y)}" width="${f(p.art.w)}" ` +
+               `height="${f(p.art.h)}" fill="#000"/>`)
     }
     const fill = code.dark ? '#fff' : '#000'
     const rects = moduleRects(code, p.cut.x, p.cut.y, p.cut.w)
@@ -99,9 +102,9 @@ export function sheetPdf({ layout: lay, placed, codes, cutline }: SheetExport): 
     const code = codes[p.id]
     if (!code) continue
     if (code.dark) {
-      s.push('0 0 0 rg',
-        `${f(p.cut.x * MM_TO_PT)} ${f(up(p.cut.y, p.cut.h))} ` +
-        `${f(p.cut.w * MM_TO_PT)} ${f(p.cut.h * MM_TO_PT)} re f`)
+      s.push('0 0 0 rg',                     // the art rect, so the bleed is black too
+        `${f(p.art.x * MM_TO_PT)} ${f(up(p.art.y, p.art.h))} ` +
+        `${f(p.art.w * MM_TO_PT)} ${f(p.art.h * MM_TO_PT)} re f`)
     }
     s.push(code.dark ? '1 1 1 rg' : '0 0 0 rg')
     for (const [x, y, rw, rh] of moduleRects(code, p.cut.x, p.cut.y, p.cut.w))

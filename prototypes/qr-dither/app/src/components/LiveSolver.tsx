@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useMirror } from '@/lib/useMirror'
-import { QArtSolver, rasterise, maxSpan } from '@/lib/solver.js'
+import { QArtSolver, rasterise, maxSpan, minZDist } from '@/lib/solver.js'
 import { drawStyled, DOT_TYPES, EYE_TYPES } from '@/lib/render.js'
 
 // Six planes, named as hyperspace names them. W rotations apply first so the
@@ -212,6 +212,11 @@ export function LiveSolver() {
   }
   const onUp = () => { eng.current.down = false }
 
+  // Keep both cameras outside the solid. minZDist is the pole; a little margin
+  // past it keeps the span finite rather than merely defined.
+  const zFloorFor = (w: number) => Math.ceil(minZDist(w) * 1.06 * 10) / 10
+  const zFloor = zFloorFor(cfg.opt.wDist)
+
   const num = (v: number, d = 2) => v.toFixed(d)
   const setOpt = (p: Partial<Cfg['opt']>) => patch(c => ({ opt: { ...c.opt, ...p } }))
   const setSty = (p: Record<string, unknown>) => patch(c => ({ sty: { ...c.sty, ...p } }))
@@ -280,11 +285,17 @@ export function LiveSolver() {
                       onValueChange={v => setOpt({ stroke: v[0] })} />
             </Row>
             <Row name="w-dist" value={num(cfg.opt.wDist, 1)}>
-              <Slider value={[cfg.opt.wDist]} min={2} max={14} step={0.1}
-                      onValueChange={v => setOpt({ wDist: v[0] })} />
+              <Slider value={[cfg.opt.wDist]} min={2.6} max={14} step={0.1}
+                      onValueChange={v => {
+                        const w = v[0]
+                        // moving the w camera moves the z floor with it
+                        setOpt({ wDist: w, zDist: Math.max(cfg.opt.zDist, zFloorFor(w)) })
+                      }} />
             </Row>
             <Row name="z-dist" value={num(cfg.opt.zDist, 1)}>
-              <Slider value={[cfg.opt.zDist]} min={2} max={14} step={0.1}
+              {/* the z camera has to clear the solid after the w-projection has
+                  stretched it, or the span blows up and the drawing vanishes */}
+              <Slider value={[cfg.opt.zDist]} min={zFloor} max={14} step={0.1}
                       onValueChange={v => setOpt({ zDist: v[0] })} />
             </Row>
             <Row name="margin" value={num(cfg.opt.margin)}>

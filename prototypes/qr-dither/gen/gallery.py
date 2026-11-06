@@ -142,11 +142,19 @@ def solve(url, pose, stroke, version, cache):
     return m
 
 
+# Chrome headless will not lay out a window below a few hundred pixels. A small
+# symbol asked for in a smaller window renders larger than the shot and gets
+# clipped, which reads as "does not decode" when the file is perfectly fine --
+# a 29-module control at 10 px/module (370 px) failed this way while the same
+# file decoded at 16. The floor below is well clear of it.
+MIN_RASTER = 700
+
+
 def rasterise(svg_path, png_path, px=10, quiet=4):
-    side = 0
     txt = svg_path.read_text()
-    vb = txt.split('viewBox="0 0 ', 1)[1].split(" ", 1)[0]
-    side = int(float(vb)) * px
+    units = int(float(txt.split('viewBox="0 0 ', 1)[1].split(" ", 1)[0]))
+    px = max(px, -(-MIN_RASTER // units))        # ceil division
+    side = units * px
     subprocess.run(
         [find_chrome(), "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
          "--force-device-scale-factor=1", f"--window-size={side},{side}",
@@ -220,6 +228,23 @@ def main():
              dot=dot, eye_frame="rounded", eye_core="rounded",
              fg=fg, fg2=fg2, bg=bg,
              plate_radius=6 if ident == "pal-plate" else 0)
+
+    # The control has to be a code for the URL you actually asked for. It used
+    # to be a committed file, which silently kept pointing at the old
+    # destination after a --url change, so the gallery compared against a code
+    # that scanned somewhere else.
+    import segno
+    ctl = segno.make(base, error="M")
+    ctl_m = [[bool(v) for v in row] for row in ctl.matrix]
+    (WEB / "current-plain.svg").write_text(sty.to_svg(ctl_m), encoding="utf-8")
+    ctl_png = RAST / "current-plain.png"
+    rasterise(WEB / "current-plain.svg", ctl_png, px=args.px)
+    ctl_got = decode(ctl_png)
+    ctl_ok = ctl_got == base
+    print(f"\ncontrol: current-plain.svg  {len(ctl_m)}x{len(ctl_m)}  "
+          f"{'scans' if ctl_ok else 'NO SCAN'}  -> {ctl_got!r}")
+    if not ctl_ok:
+        bad.append(("current-plain", ctl_got))
 
     # the controls: boring codes for the same destination, measured the same way,
     # so every verdict on this page has something to be a verdict against

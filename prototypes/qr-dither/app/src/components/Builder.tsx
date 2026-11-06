@@ -63,7 +63,10 @@ export function Builder() {
   // the exporters re-render from the module grid, so they need the codes, not the files
   const codes = useMemo(() => Object.fromEntries(items.map(i =>
     [i.id, { id: i.id, modules: i.modules, matrix: i.matrix, dark: i.dark } as Code])), [items])
-  const bundle = { layout: lay, placed, codes, cutline }
+  // A cutter takes its geometry from registration marks, so a printed cut line
+  // is just ink on the sticker. Only a vendor wants one in the artwork.
+  const cutlineApplies = mode === 'vendor'
+  const bundle = { layout: lay, placed, codes, cutline: cutlineApplies && cutline }
   const stem = `qr-dither-${paperId}-${sticker}mm-${placed.length}up`
 
   if (!man) return <div className="py-10 text-sm text-muted-foreground">loading…</div>
@@ -163,16 +166,25 @@ export function Builder() {
               <Download className="size-3" /> PDF
             </Button>
           </div>
-          <label className="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-muted-foreground">
-            <input type="checkbox" checked={cutline} onChange={e => setCutline(e.target.checked)}
-                   className="accent-primary" />
+          <label className={`flex items-center gap-2 font-mono text-[10px] ${
+                   cutlineApplies ? 'cursor-pointer text-muted-foreground'
+                                  : 'cursor-not-allowed text-muted-foreground/40'}`}>
+            <input type="checkbox" disabled={!cutlineApplies}
+                   checked={cutlineApplies && cutline}
+                   onChange={e => setCutline(e.target.checked)} className="accent-primary" />
             include the cut layer
+            {!cutlineApplies && <span className="ml-1">— vendor only</span>}
           </label>
           <p className="text-[10px] leading-relaxed text-muted-foreground/70">
             Codes are re-rendered from the module grid at the exact size, never by scaling the
             published SVG. The SVG carries the cuts in a <code>#cutline</code> group; the PDF
             draws them as magenta strokes — it has no spot plate or true layers, so a vendor who
             needs those wants the SVG.
+          </p>
+          <p className="text-[10px] leading-relaxed text-primary/80">
+            Exports carry the code’s <b>geometry only</b> — black modules on white, or white on
+            black for an inverted one. Dot styles and palettes are preview-only for now, so a
+            sheet of <code>pal-red</code> downloads as plain black squares.
           </p>
         </div>
 
