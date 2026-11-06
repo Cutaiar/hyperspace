@@ -150,7 +150,7 @@ today `session` (the tuning), `modules` (the session groups' labels), `bank`, `s
   goes.
 - **Several shows into one file.** The library holds more than one. [Rec] each becomes an
   install, and the owner deletes what he does not want. Merging by machine would guess.
-- **#223 venues and `config.toml.rig`,** Dillon's and "probably" going: wave 5's plan, not this run.
+- **#223 venues and `config.toml.rig`:** the owner decided venues go (2026-11-06): plan 58, not this run.
 
 **Size:** L. `Project`, `MetaMarks`, the bank's callers, `last_show` and the shows tests all
 move. It is the largest item here by far and shares no code with the others. **[Rec]** it
@@ -199,6 +199,20 @@ it goes to wave 5's plan.
 **Before the show, after:** #365 (NSEW builds on it), SEM (code words first, so the lane writes
 each file word once), N1 and N2 are free of it. Once `/11` lands, the older Mac refuses every
 file. Row 521, closed by 576, and row 394 both say so and both accept it.
+
+## 7a. Found by wave 5's planning, 2026-11-06 (plan 58 §2): the run must carry these
+
+- **`modules` in a show is a live value:** it holds the analyzer scene in 5 of the 6 shows, and must reach the
+  install file. `layout`, `startup`, `scene.select` and `last_show` need homes too. The show `mine` has no tuning
+  and `startup: "MIGRATED"`.
+- **The Drive's `trash/presets` is deleted in the run, not converted** (owner, 2026-11-06: "just delete the trash
+items"), after the backup, along with `presets-backup-2026-10-14`. `TRASH` and `restore_trash` use the new word.
+- **Tidy in the same run:** delete `fx/`, empty folders and `.bak-v2-*`; report bank slots pointing at nothing
+  (five shows have 10 of 24 such slots).
+- **The run needs a hand check of its own,** on both Macs: every file opens at `/11`. Wave 5's first stage is gated on the
+  owner's word and this check.
+- **`scenes/band` files say `hyperspace.preset/1` and are analyzer tunings.** Rename their kind in the run, or
+  rung `/1` must stay.
 
 ## 8. Not verified
 
