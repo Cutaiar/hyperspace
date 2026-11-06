@@ -13227,7 +13227,18 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 
 ### 709. Ready before the fade, and the latch
 
-- **Measured.** The real app, `tools/drive_playlist.py`, on the shared Mac with load averages of 7 to 11, three runs, 16 fades each, eight corpus looks, frames about 8 ms. A load: median 13 ms, worst 101 ms. A warm draw: median 3 ms, worst 15 ms. A fade's first frame: median 8 ms, worst 12, 49 and 87 ms across the runs, the frame the warm draw is for. A frame in a fade: median 9 ms. **What is left:** frames over 100 ms all came in the first round, 5 or 6 a run, up to 352 ms, in a fade or just after it; a second round of the same looks had none. Timed by part, most have only a few ms in both renderers' draws (309 ms with 5 ms of draw), so the time is outside the draw code, in the panel, the swap or the driver, and one had 115 ms in the draw. Not explained further, and this Mac's load may be part of it: for check 539 on the rig. No fade or warm error in any run.
+- **Measured.** The real app, `tools/drive_playlist.py`, on the shared Mac with load averages of 7 to 11, nine runs, 16 fades each, eight
+  corpus looks, frames about 8 ms. A load: median 13 ms, worst 101 ms. A warm draw: median 3 ms, worst 27 ms. A fade's first frame, the
+  frame the warm draw is for: median 8 ms, worst 10 to 87 ms in eight runs and 205 ms in one. A frame in a fade: median 9 ms.
+- **What is left.** Frames over 100 ms, up to 365 ms: in the six runs that were counted, 38, 25 of them in a fade and 13 just after, all in
+  the first round; a second round of the same looks had none. So a cart hitches the first time it shows each look, and then not. Timed by
+  part, most have only a few ms in both renderers' draws (309 ms with 5 ms of draw), so the time is outside the draw code, in the panel, the
+  swap or the driver, and one had 115 ms in the draw. Not explained further, and this Mac's load may be part of it: for check 539 on the rig.
+  No fade or warm error in any run.
+- **One run that did not end.** The first full run, killed after 11 minutes with no output and no shot. Its stall log has it through ACID and
+  WAKE in its first 7 s, and 4.5 GB fits the leak at about 220 advances, so the room was very likely still playing and only the script had
+  stopped, which is what `Panel.draw` raising under the frame guard would do. Not proven: it left no words, and six further runs with a watchdog
+  thread that would catch it did not repeat it, 6 of 6 clean. An unexplained wedge on a cart: the driver now says what it finds if it recurs.
 - **⌘Z over the section.** Takes back nothing and says so (`undo.NOTHING_HERE`), as over the player screen, and moves no focus
   (rows 753, 757). Chosen over leaving it out of `META_SECTIONS` alone, which would send it to the panel's deck, since nothing in the
   section is on any stack: a ⌘Z after a × must not take back something unrelated, on air.
