@@ -1,7 +1,8 @@
 """tools/app_driver.py script: the two verbs in the real app, by mouse (plan 44 D5d).
 Copy on air to off air, the panel moved to the deck off air (the red head chip, the
 red frame, the inset of what is on air), a look loaded there, a timed fade across, the
-fader by hand to the middle and home. Each step says what it left, on stderr.
+fader by hand to the middle and home, then a press on air, which loads off air (row
+700). Each step says what it left, on stderr.
 
     uv run python tools/app_driver.py tools/drive_decks.py --out <scratch>/run --every 20
 """
@@ -64,3 +65,11 @@ def script(d, panel):
     yield from d.wait(30)
     say(panel, "home")
     assert meta.panel is one and meta.on_air is one
+
+    on_air, off_air = one.presets.current, two.presets.current
+    one.reg["preset.next"].fire()     # the press a pad or a key makes, from the deck on air
+    yield from d.wait(40)
+    say(panel, "a press on air")
+    print(f"status line: {panel.library.status}", file=sys.stderr)
+    assert one.presets.current == on_air and two.presets.current != off_air
+    assert "loaded off air on deck 2" in panel.library.status

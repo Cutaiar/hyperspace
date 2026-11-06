@@ -811,7 +811,18 @@ def test_a_library_verb_from_either_deck_loads_off_air_and_the_room_is_as_it_was
         assert rig.two.presets.current != "TRIP"
         assert _state(rig.one) == theirs
         assert len(rig.two.undo.stack) == steps + 1
-        assert rig.lib.status.endswith(" loaded off air on deck 2; the room still sees deck 1")
+        assert rig.lib.status == (f"{rig.two.presets.current} loaded off air on deck 2; "
+                                  "the room still sees deck 1")
+
+
+def test_the_strip_reads_the_panels_deck_whichever_deck_a_press_loaded(rig):
+    _bank(rig, "party-wake")
+    strip = rig.lib.current(PRESETS)
+    rig.one.reg["preset.load.0"].fire()
+    assert rig.lib.current(PRESETS) == strip, "the panel is on deck 1"
+    rig.meta.point_panel(rig.two)
+    assert rig.lib.current(PRESETS) != strip
+    assert rig.lib.current(PRESETS) == rig.two.presets.lib.current(PRESETS)
 
 
 def test_next_and_prev_step_from_what_the_deck_off_air_holds(rig):

@@ -492,8 +492,8 @@ head of `frame`, beside `clock.tick`, so the deck arriving gets this frame's `di
 
 **D5d, built:** `hold.py` is gone; `meta.tick` is `frame`'s first act; the APC's crossfader is
 `output.xfade`, MASTER `output.dim`, both reserved (`apc40.META_CONTROLS`), and `master.gain` the panel's;
-GRAPH's head has the deck chip, copy, the slider and a timed fade; a library verb from a row is refused on air
-(`DeckProject.barred`); `tests/test_on_off_air.py` holds the leak test and what `test_hold.py` promised (registers
+GRAPH's head has the deck chip, copy, the slider and a timed fade; a library verb from a row or a key always loads off air, the owner, 2026-11-06, row 700
+(`MetaController.row_load`, `DeckProject`); `tests/test_on_off_air.py` holds the leak test and what `test_hold.py` promised (registers
 697–702). **§4 and §5 below are history, as is every mention of HOLD, TAKE, DROP and `hold.py` in this plan.**
 
 The first PR a performer notices. **New** `deck.Decks`: the list, `on_air`

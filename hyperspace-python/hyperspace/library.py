@@ -3666,7 +3666,8 @@ class DeckProject(Project):
             return None
         return where if where is not None else self
 
-    def _say_loaded(self, where: Project, name: str | None) -> None:
+    def _say_loaded(self, where: Project) -> None:
+        name = getattr(where._loader(), "current", None)    # the look's own name
         if self.meta is not None and name:
             where.lib.say(status=self.meta.loaded_words(name))
 
@@ -3684,7 +3685,7 @@ class DeckProject(Project):
             return None
         done = Project.load_slot(where, k)
         if done:
-            self._say_loaded(where, self.bank[k])
+            self._say_loaded(where)
         return done
 
     def cycle(self, step: int = 1) -> None:
@@ -3697,7 +3698,8 @@ class DeckProject(Project):
         if where is None:
             return None
         name = Project.walk(where, step)
-        self._say_loaded(where, name)
+        if name:
+            self._say_loaded(where)
         return name
 
     def home(self) -> bool | None:
@@ -3708,7 +3710,7 @@ class DeckProject(Project):
             return None
         done = Project.home(where)
         if done:
-            self._say_loaded(where, self.startup)
+            self._say_loaded(where)
         return done
 
 

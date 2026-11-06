@@ -729,7 +729,7 @@ here; overturn → the change, then the same.
 | 697 | Plan 44 D5d: HOLD, TAKE and DROP go: `hold.py`, `output.hold`/`.take`/`.drop`, `GraphSection.hold`, `keep`, `hold_pose`, the `_values`/`parts` filters, `chase_guard`, `Undo.checkpoint`/`revert`, `Landing.held_taken`. A learned row on one drops at the next load, with a note and a backup | 656, 684 | owner — 2026-11-04: "HOLD, TAKE and DROP go away entirely" |
 | 698 | Plan 44 D5d: the APC crossfader is `output.xfade`, MASTER is `output.dim`, `master.gain` has no desk row; old factory rows move at the next load; both are reserved (`apc40.META_CONTROLS`, `Bindings.is_invariant`): no preset learns or binds them whatever the table holds | 559 | owner — 2026-11-04: the crossfader is a DJ mixer's; the APC "inherits our generic controller setup... and it should have extensions" |
 | 699 | Plan 44 D5d (DQ7): GRAPH's head: "deck N · on air", red off air, a click for the other deck; copy; the crossfade slider, a timed fade and its seconds. The same words in the control window's title; a red canvas frame and an ON AIR inset on the deck off air, whose backdrop is forced on | — | owner — 2026-11-04: DQ7 as recommended |
-| 700 | Plan 44 D5d (DQ6): a library verb from a row (`preset.select`, `.next`, `.prev`, `.load.N`, `.list.*`, `.home`) is refused in words on the deck on air and while the crossfader is between its ends; the panel's load is not asked; a save is not asked | — | owner — 2026-11-04: no preset changes on air from the desk or a pad; (rec) on what a press on air does, and on F-keys — pending the owner |
+| 700 | Plan 44 D5d (DQ6): a library verb from a row or a key (`preset.select`, `.next`, `.prev`, `.load.N`, `.list.*`, `.home`, F1–F8, Home) always loads into `MetaController.off_air`, whichever deck its player or the keys are on, and nothing on air changes; refused in words while the crossfader is between its ends or a timed fade runs; the panel's load and a save are not changed. A load is a meta controller verb, the named exception to row 733 | — | owner — 2026-11-06: "always loads into the off-air Deck, never touching the room" |
 | 701 | Plan 44 D5d: `meta.tick` is the frame's first act; `ui_media.media_of` reads the panel's deck's channels; an orbit moves the deck it is on (684 reversed); a chase is refused by nothing (656 gone) | 656, 684 | owner — 2026-11-04: a row acts only on the `Deck` its player is on |
 | 702 | Plan 44 D5d: `test_no_patch_reaches_the_other_deck`: nine roads each way round, no leak found. The accepted limits: the shared dream worker (DQ8); a Drive sync lands on the panel's deck | — | owner — 2026-11-04: "no preset can affect another preset"; the absolute rule |
 | 715 | Plan 57 NM0: a loadable patch saves node mode as `{"player", "controller", "node"}`, the rows derived; `controller` is a device kind | 546 | owner — 2026-11-04 on saving it and on naming a player; (rec) — pending the owner on `controller` |
@@ -756,6 +756,7 @@ here; overturn → the change, then the same.
 | 749 | Plan 56: the step-or-spring choice is the row's op: `step`, the neutral default and the meta controller's, or a route with a feel, the preset's; Learn pair and Learn pair (spring), two presses | 748 | (rec) — pending the owner; the owner, 2026-11-04: the choice "is immaterial to what I'm saying right now" |
 | 750 | Plan 56: the factory's `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows and act exactly as they did; no saved-format change, an older build reads a pair's row as dormant | 748 | (rec) — pending the owner |
 | 751 | Plan 56: not built, poles on keys or MIDI notes; a route on a pair leaves its poles' own rows alone, and both act | 748 | (rec) — pending the owner |
+| 752 | Plan 44 D5d: no preset may carry a row on a library verb. `routing.meta_refusal` refuses a desk row or route on one at every door (`is_load_verb`), dropped with a note on load, gone at the next save; the meta controller's own rows pass. `preset.*` stays out of `is_session_id` until SEM. Not a format change | 700, 743 | owner — 2026-11-06: "no patch can affect another patch" |
 
 "—": no hand check shows it; tests only.
 
@@ -13066,18 +13067,28 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Not here.** The preset strip's name and the desk diagram's line are D5e.
 - **Judge it.** 531.
 
-### 700. A library verb from a row
+### 700. A library verb from a row always loads off air
 
-- **Answer.** The owner, 2026-11-04: no preset changes on air from the desk or a pad; bank pads and `preset.next` load only
-  into the off-air `Deck`.
-- **Built.** `DeckProject.barred`, asked by `load_slot`, `walk`, `home`. The row acts on its player's deck (row 733), so a
-  controller on air is refused and one off air loads there. Between the fader's ends or in a timed fade both decks are on air, or are about to be (`MetaController.mixing`, which copy asks too), so that is refused too.
-- **Still allowed.** An empty pad's words and hold-to-save; a save moves no picture. The panel's load.
-- **The question.** (rec) As built, the APC on air (the default: player 1) refuses every pad until its player is moved off air.
-  The alternative loads a press on air into the deck off air instead, which breaks "a row acts only on the `Deck` its player
-  is on". One line in `DeckProject`. **Recommended:** as built; the words say what to do.
-- **F-keys** go the same road, since keys sit on the picture, so F1–F8 are refused on air. (rec) — pending the owner.
-- **Judge it.** 532.
+- **Answer.** The owner, 2026-11-06, choosing option (b): a bank pad or F-key press "always loads into the off-air Deck,
+  never touching the room". And 2026-11-04: "nothing on the desk changes what is on air; bank pads, D-pad list and
+  preset.next load off air only".
+- **Built.** `DeckProject.load_slot`, `cycle`, `walk`, `home`, whichever deck's param was pressed, land on
+  `MetaController.row_load()`'s project, the deck off air's. So the APC on air (the default: player 1) and F1–F8, Home
+  on the keys load off air. Next and prev step from what that deck holds (`active` is the deck's). The step goes on the off-air
+  stack; the deck on air gains none.
+- **A load is a meta controller verb.** The named exception to "a row acts only on the `Deck` its player is on" (row 733,
+  plan 55, DECISIONS). Row 752 is what makes that safe.
+- **Still refused, in words.** Between the fader's ends or in a timed fade, both decks are on air, or are about to be
+  (`bars_load`, `MetaController.mixing`, which copy asks too).
+- **Not changed.** The panel's own load, which is the plain `Project`'s, on the deck the panel looks at. A save, on the deck
+  its row is on, so a held empty pad on air saves the look on air. An empty pad's words.
+- **What the person sees.** The status line: "TRIP loaded off air on deck 2; the room still sees deck 1". The cheat sheet says
+  "load off air".
+- **The light.** `preset.select` reads `DeckProject.lit`: green is what the deck off air holds, on every controller and the
+  on-screen desk, since that is what a press changes; every other filled slot is amber, the room's included. Nothing on the
+  pads says which the room is on: the chip and the title do. A held pad's save blinks regardless of the light (`_fire_holds`).
+- **The preset strip** is the panel's deck's, so it moves only when the panel looks at the deck that loaded.
+- **Judge it.** 532, 578.
 
 ### 701. The frame's first line, and two seams
 
@@ -13640,3 +13651,21 @@ still wins, as does a sink row.
 - **A control something else holds is no pole** (`models.control_free`), whether the
   totem's `skip` or, with #365, a model's own layout.
 - **Judge it.** 576.
+
+### 752. No preset's row can press a load
+
+- **Answer.** The owner, 2026-11-06: "no patch can affect another patch." Under row 700 a row a preset carries on a verb would
+  let the on-air preset load the other deck.
+- **Built.** `meta_refusal` says so for every `is_load_verb` id, so each door row 743 closed closes for these: a `desk` row, a
+  route on any op and any source (a `seq:` lane included), `add`, `bind`, `move_route`, `replace_owner`, `set_desk`, the referee at a
+  load, both Learns, the GRAPH and ROUTING pickers, Save as patch. The file is left alone, the row drops with a note, and a
+  later save removes it. `tools/meta_routes.py` lists them with the others.
+- **Found.** The factory's preset layer holds none: every factory row on a verb (the 24 bank pads, QUANT, OVERDUB, F1–F8, Home) is
+  invariant or a key, so the meta controller's. No corpus preset or shipped JSON carries one (`test_no_factory_row_or_corpus_preset_carries_a_load_row`).
+  The Drive library was not read: any preset there with such a row loses it with a note on load.
+- **A consequence.** `preset.list.*` has no factory row, and "Learn puts them on a control" meant a preset-layer row on a desk control.
+  That is refused now; a pad button's Learn still takes one, and a row in `bindings.json` works. SEM can give the desk a Learn for it.
+- **Not closed, reported.** A preset's row on `preset.save.<k>` or `preset.save_new` is still allowed: it saves its own deck, but
+  `save_slot` writes over the file slot k names, which can be another preset. Item 4 of the row 700 brief named load verbs; SEM
+  moves `preset.*` wholly. `preset.select`'s `held` and `save_into` are reached only through a row on `preset.select`, so closed.
+- **Judge it.** 578.

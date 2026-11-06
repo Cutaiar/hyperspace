@@ -7538,6 +7538,7 @@ preset and an **Update patch** write `patch/2`. Fail: "is not a
 hyperspace.patch".
 
 ## BN. Deck 2 offscreen and the one fade (plan 44 D4)
+*These describe the fade before #380 (plan 44 D5d), and no longer gate it (the owner, 2026-11-06). Re-try the same matters with #380 on the rig before the rename (SEM).*
 Register rows 648–653, 2026-11-03. Headless and on GL:
 `tests/test_deck_fade.py` (deck 2 at `xfade` 1 equals deck 1 on the same
 preset byte for byte over the corpus, half white over black within one step,
@@ -7979,7 +7980,7 @@ calls the new verbs until D5d.
 6. Time a 5-second fade by the clock. Grab the fader mid-way. *Pass:* it stops there and is yours.
 
 ## CA. The crossfader, copy, and the panel on either deck (plan 44 D5d)
-Register rows 697–702, 2026-11-04. Restart first. HOLD, TAKE and DROP are gone, so group AI's checks are retired. **This
+Register rows 697–702 and 752, 2026-11-04 and 2026-11-06. Restart first. HOLD, TAKE and DROP are gone, so group AI's checks are retired. **This
 replaces the mechanism a show relies on: run it at the rig before one.** 528 goes with it.
 **529. The verbs that replaced the hold.** (the rig)
 1. GRAPH's head. *Pass:* no hold, take or drop; a chip, "copy on air to off air", a slider, "fade" and seconds.
@@ -8002,12 +8003,11 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 3. Fade across without clicking. *Pass:* the chip reads "deck 2 · on air", the frame goes.
 *Judge:* can you tell from across the room? Does the inset cover too much?
 **532. No pad changes what is on air.** (the rig, with the APC40)
-1. APC on air, press a filled bank pad, QUANT, OVERDUB. *Pass:* nothing changes; the footer says why.
-2. Press F1. *Pass:* the same. Say if you want F-keys kept (row 700).
-3. Move the APC's player off air. Press a pad. *Pass:* deck 2 loads, its light on; the room does not move.
+1. APC on air, press a filled bank pad, QUANT, OVERDUB. *Pass:* the room does not move; deck 2 loads each time and the footer says so.
+2. Press F1, then Home. *Pass:* the same.
+3. Move the APC's player off air. Press a pad. *Pass:* the same: deck 2 loads, its light on.
 4. Fader at the middle, press again, and press **copy**. *Pass:* both refused in words. Fader a hair off its end. *Pass:* neither is.
-5. Hold an empty pad on air. *Pass:* it saves; the picture does not move.
-*Judge:* is refusing on air right, or should a press on air load the deck off air (row 700)?
+5. Hold an empty pad on air. *Pass:* it saves deck 1's look and blinks; the picture does not move.
 **533. Fading in practice.** (the rig)
 1. Fade into an empty deck after a launch. *Pass:* black, and allowed.
 2. Fade with dim down, a render cap set and sound on. *Pass:* no flash of a wrong size or brightness at the middle.
@@ -8018,6 +8018,13 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
    *Pass:* it never moves.
 2. Fade across, panel on the other, the same. *Pass:* the same, both ways.
 *Fail:* any edit shows on the other deck. The owner's absolute rule: report it.
+**578. A press always loads off air.** (the rig, with the APC40; rows 700, 752)
+1. Player 1 on air as it starts, deck 2 on another look. Press a filled bank pad. *Pass:* the room does not move. The footer reads "<name> loaded off air on deck 2; the room still sees deck 1". That pad is lit green and the rest of the filled ones amber; the pad deck 1's look came from is amber too.
+2. Click the chip to deck 2. *Pass:* the strip and the canvas show what the pad loaded. ⌘Z there takes it back. Back on deck 1, ⌘Z never undoes a pad.
+3. QUANT several times. *Pass:* it walks the pads from the one lit, wrapping. F-keys and Home the same.
+4. Fade across. *Pass:* the pads' light moves to what deck 1 holds; the next press loads deck 1, and the footer says so.
+5. In ROUTING or Learn, try to put a desk knob or button on `preset.next`. *Pass:* refused, in words, "no preset row may drive it". A pad button's Learn takes it, and works.
+*Judge:* is green for off air right, with nothing on the pads saying what the room is on? The panel's chip and the OS title say that.
 
 ## CF. Node mode's saved form (plan 57)
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round
