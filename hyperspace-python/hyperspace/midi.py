@@ -477,7 +477,7 @@ class MidiIO:
         # where the faders were is forgotten too: one moved while the cable
         # was out would otherwise seed a false pickup crossing (`redraw`)
         self.__dict__["_hw"] = {}
-        for b in self.bindings:
+        for b in self._own_rows():
             b.last_out = None
             b.caught = False
             if b.kind in ("cc", "pitch"):
@@ -533,6 +533,15 @@ class MidiIO:
         `route`, `for_param`, `write`) are the table's own."""
         role, t = self._role(), self.table
         return [b for b in t.midi() if t.serves(role, b)]
+
+    def _node_rows(self) -> list[Binding]:
+        """What node mode derives for this desk on the deck it is on (N1a)."""
+        return self.table.node_rows(self._role())
+
+    def _own_rows(self) -> list[Binding]:
+        """Every row of this desk's whose knob or fader state this adapter keeps:
+        the table's and the ones node mode derives (never in the table)."""
+        return [*self.bindings, *self._node_rows()]
 
     def _role(self) -> str | None:
         """This device's role (None: the first MIDI role) — read here for
@@ -662,22 +671,25 @@ class MidiIO:
         seen = self._serials()
         if seen != self._seen:
             load = seen[1] != self._seen[1]
-            switch = seen[0] != self._seen[0]
-            if seen[3:] != self._seen[3:]:
+            # (node mode's rows came or went, N1a: each fader on them picks up from
+            # where it is, as across a layer switch, so leaving never jumps a saved row)
+            switch = seen[0] != self._seen[0] or seen[4] != self._seen[4]
+            if seen[3] != self._seen[3]:
                 self._drop_page_holds()
             self._seen = seen
             self.redraw(load=load, switch=switch)
 
-    def _serials(self) -> tuple[int, int, int, int]:
+    def _serials(self) -> tuple[int, int, int, int, int]:
         """(this desk's layer serial, the desk serial, the redraw serial,
-        the surface page's serial): the layer serial is this role's own
-        (plan 27 B2), so SHIFT on the APC40 never re-arms a second desk's
-        faders; the page is the first role's only (plan 31 §A)."""
+        the surface page's serial, node mode's rows' serial): the layer serial is
+        this role's own (plan 27 B2), so SHIFT on the APC40 never re-arms a second
+        desk's faders; the page is the first role's only (plan 31 §A)."""
         t = self.table
         of = getattr(t, "layer_serial_of", None)
         layer = of(self._role()) if of is not None else t.layer_serial
         page = getattr(t, "page_serial", 0) if t.is_primary(self._role()) else 0
-        return layer, t.desk_serial, getattr(t, "redraw_serial", 0), page
+        return (layer, t.desk_serial, getattr(t, "redraw_serial", 0), page,
+                t.node_rows_serial(self._role()))
 
     def _page_rows(self) -> list[Binding]:
         """The surface page's rows, on the first MIDI role's desk only."""
@@ -699,7 +711,7 @@ class MidiIO:
 
     def _uncatch_moved(self) -> None:
         """A param that moved without us re-arms pickup on its knob."""
-        for b in self.bindings:
+        for b in self._own_rows():
             if b.kind not in ("cc", "pitch") or b.op != "abs" or not b.pickup:
                 continue
             p = self.reg.get(b.target)
@@ -1126,7 +1138,7 @@ class MidiIO:
         there). Where rings do not re-base the catch stays let go: soft
         pickup, as the faders."""
         moved = self.__dict__.setdefault("_fine_moved", set())
-        for b in self.bindings:
+        for b in self._own_rows():        # (a knob node mode fills is one too, row 609)
             if b.control in moved:
                 b.last_out, b.caught = None, False
         moved.clear()
@@ -1366,7 +1378,7 @@ class MidiIO:
         hw = self.__dict__.setdefault("_hw", {})
         for b in self._page_rows():         # the surface page's rows: re-sent too
             b.last_out = None
-        for b in self.bindings:
+        for b in self._own_rows():
             b.last_out = None
             if b.kind in ("cc", "pitch") and b.op == "abs" and b.last_hw is None:
                 b.last_hw = hw.get(b.control)        # a fresh row: where its control is
@@ -1435,5 +1447,5 @@ class MidiIO:
         """Hot reload: re-send everything so the surface matches the code."""
         register_desk(self.reg, self.table)
         self._fine_out = None
-        for b in (*self.bindings, *self._page_rows()):
+        for b in (*self._own_rows(), *self._page_rows()):
             b.last_out = None

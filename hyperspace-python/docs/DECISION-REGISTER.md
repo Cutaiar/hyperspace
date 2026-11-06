@@ -734,6 +734,8 @@ here; overturn → the change, then the same.
 | 700 | Plan 44 D5d (DQ6): a library verb from a row or a key (`preset.select`, `.next`, `.prev`, `.load.N`, `.list.*`, `.home`, F1–F8, Home) always loads into `MetaController.off_air`, whichever deck its player or the keys are on, and nothing on air changes; refused in words while the crossfader is between its ends or a timed fade runs; the panel's load and a save are not changed. A load is a meta controller verb, the named exception to row 733 | — | owner — 2026-11-06: "always loads into the off-air Deck, never touching the room" |
 | 701 | Plan 44 D5d: `meta.tick` is the frame's first act; `ui_media.media_of` reads the panel's deck's channels; an orbit moves the deck it is on (684 reversed); a chase is refused by nothing (656 gone) | 656, 684 | owner — 2026-11-04: a row acts only on the `Deck` its player is on |
 | 702 | Plan 44 D5d: `test_no_patch_reaches_the_other_deck`: nine roads each way round, no leak found. The accepted limits: the shared dream worker (DQ8); a Drive sync lands on the panel's deck | — | owner — 2026-11-04: "no preset can affect another preset"; the absolute rule |
+| 710 | Plan 53 N1a: a desk's node mode rows are patch-layer rows on the deck the patch is on, derived per player's first desk; K1–K8, D1–D8, S1–S8; shadow only what they fill; SHIFT's layer untouched | 541, 542 | (rec) — pending the owner |
+| 711 | Plan 53 N1a: "a mapping stays" means a controller's row on the node's params; a modulator's route (LFO, envelope, lane, sequencer, modifier) is no mapping, so the knob still fills that param's base | 541 | (rec) — pending the owner |
 | 715 | Plan 57 NM0: a loadable patch saves node mode as `{"player", "controller", "node"}`, the rows derived; `controller` is a device kind | 546 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on saving it and on naming a player; (rec) — pending the owner on `controller` |
 | 716 | Plan 57 NM0: the fill: what stays, what fills, what is listed; a `NODE_MODE` cable kind in green | 546, 548 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on the rule; (rec) — pending the owner on the colour and on a row elsewhere taking its freedom |
 | 717 | Plan 57: NM0 is an optional key, no bump; the rest is one migration, whose order and questions are in plan 57 | 547 | owner — 2026-11-06: yes, and all of it in one migration: "coordinating the migration is not hard" (`plans/57-format-lane.md` §6) |
@@ -13120,6 +13122,47 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Known limits, not preset to preset.** The shared dream worker (DQ8). A file changed from outside, the other Mac's save,
   re-lands on the deck the panel is on if that deck holds that name (the reading §4).
 - **Judge it.** 534.
+
+### 710. A desk's node mode rows
+
+The owner, 2026-11-04: "a node's params fill the controller's degrees of freedom, faders and
+knobs both", and "no latch button and no paging". `node_desk.NodeDesk`, one on each `Deck`'s
+table, reads that deck's `LoadedPatch.node_mode`, and for each player's first desk derives rows
+by `nodemode.fill`: the track knobs, then the device knobs, then the track faders
+(`apc40.degrees_of_freedom`). Knobs first because a ring says where a param is and re-bases
+the knob; a fader has to be brought there.
+
+- **Patch-layer rows, so SHIFT is untouched.** Plan 53's page shadowed the layers; this does
+  not. Tuning under SHIFT is the meta controller's and no patch has a say there.
+- **They shadow only what they fill.** A three-param node leaves K4–K8 on their saved rows.
+- **Per `Deck`.** A desk reads the table of the deck its pointer is on, so a patch on the other
+  deck reaches no knob: its rows wait, and the cable is dormant (row 712). A load moves no
+  pointer. `NodeDesk.enter`, the panel's verb, is an edit of the patch looked at and brings the
+  desk there; the player's duty stays, and moving the player brings the desk back. Undoing the
+  edit does not move the desk: the pointer is the meta controller's.
+- **Not in the table.** So not in the file, the dirty dot, `routes()` or a pair's question
+  (row 754): nobody made them. A learn may land on a filled knob, and is told it sits under
+  node mode until the desk leaves its node.
+- **FINE (row 609, the owner: SEND B stays FINE) works on a filled knob:** `_fine_release`
+  reads these rows too, or the next coarse detent would jump.
+- **Leaving re-arms every fader** as a layer switch does, so a saved fader under node mode
+  picks up and never jumps.
+- **A player's second desk** gets no rows: a saved entry reaches a player's first of a kind
+  (plan 57). The chip says so; give the second desk to another player.
+
+**Judge it.** 541, 542.
+
+### 711. What counts as a mapping that stays
+
+The owner, 2026-11-04: "a mapping already on that node's params stays, and the rest fill what
+is left." `fill` says "whoever's it is", and N1 had to say whose. **Rec:** a row from a
+controller (a desk, a pad, a hand) stays and keeps the param from filling. A route from a
+modulator (an LFO, an envelope, an analyzer lane, the sequencer, a modifier) is not a mapping:
+the party looks wire most effect params from the analyzer, and leaving those out would empty
+the node on the looks it is most wanted on. The knob sets the base under the route, as any
+knob on a performed param does. **If not:** one line, `node_desk.MODULATORS` emptied.
+
+**Judge it.** 541.
 
 ### 715. What a loadable patch saves of node mode
 

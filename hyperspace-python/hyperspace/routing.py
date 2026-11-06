@@ -2234,6 +2234,12 @@ class Bindings:
     # Learnable. `page_serial` counts the flips (`set_page`): midi.py
     # redraws the whole desk on one. The meta table's (`META_TABLE_ATTRS`)
 
+    # N1a (plan 53, `node_desk.NodeDesk`): the rows this deck's loadable patch's node
+    # mode derives for a desk. The deck's own, never the meta table's: one patch's
+    # pointing is no row of the other's. Never in `bindings`, so never saved, no
+    # learn's, and no pair asks over one (`Learn`, row 754). None: no rows
+    node_desk: object | None = None
+
     # plan 44 D3: the meta table's state (`META_TABLE_ATTRS`) is read and
     # written through this table — one property per name, made from the
     # list below the class (review of #351: one list, one copy)
@@ -2661,7 +2667,10 @@ class Bindings:
         (plan 27 B2: the latch is per role) — nothing else (D8: no
         fall-through; a control the up layer does not map does nothing).
         A surface page's rows come first (plan 31 §A): on a page control
-        they are all there is, and a disabled one does nothing."""
+        they are all there is, and a disabled one does nothing. Node mode's
+        rows (N1a) are the patch layer's, ahead of its saved rows on the same
+        control: under SHIFT the global layer is as it was, since a patch has
+        no say there."""
         if self.is_primary(role):
             page = [b for b in self.page_rows if b.matches(kind, channel, number)]
             if page:
@@ -2676,6 +2685,10 @@ class Bindings:
                 or any(x.matches(kind, channel, number) for x in _reserved(self.profile))):
             return []                # (their row disabled: still no layer's, `is_invariant`)
         layer = self.layer_of(role)
+        if layer == "preset":
+            node = [b for b in self.node_rows(role) if b.matches(kind, channel, number)]
+            if node:
+                return node
         return [b for b in rows if b.layer == layer]
 
     def active(self, role: str | None = None) -> list[Binding]:
@@ -2692,7 +2705,11 @@ class Bindings:
         if page:
             under = self._controls(page, shift=False)
             rows = [b for b in rows if not self._on(b, under)]
-        return [*page, *(b for b in rows
+        node = self.node_rows(role) if layer == "preset" else []
+        if node:
+            under = self._controls(node, shift=False)
+            rows = [b for b in rows if b.layer != "preset" or not self._on(b, under)]
+        return [*page, *node, *(b for b in rows
                          if b.layer is None or (b.layer == layer and not self._on(b, index)))]
 
     @property
@@ -2707,6 +2724,17 @@ class Bindings:
         if page is not self.page:
             self.page = page
             self.page_serial = getattr(self, "page_serial", 0) + 1
+
+    def node_rows(self, role: str | None = None) -> list[Binding]:
+        """The rows node mode derives for the desk of `role` on this deck (N1a,
+        `node_desk`), as they stand: the same objects until what they say moves."""
+        nd = self.node_desk
+        return nd.rows(role) if nd is not None else []
+
+    def node_rows_serial(self, role: str | None = None) -> int:
+        """How many times those rows have changed: a desk redraws on one."""
+        nd = self.node_desk
+        return nd.serial(role) if nd is not None else 0
 
     def layer_of(self, role: str | None = None) -> str:
         """The layer up on the device of `role`: the first role's is

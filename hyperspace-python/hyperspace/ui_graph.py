@@ -1049,25 +1049,14 @@ def still_held(panel, nid: str, spec) -> bool:
 
 
 def node_params(panel, nid: str) -> list[str]:
-    """The registry ids under canvas node `nid` (`Panel.
-    graph_selected_params`): the ids with `graphview.params_of`'s prefix —
-    a copy's are its original's (`fx.<of>`), as its side-panel header says
-    — the continuous ones first and then the rest, each run in registry
-    order; an alias is left out, as the side panel leaves it. [] for a node
-    with no param (a device's, a lane's). A scan of the registry when
-    asked, never per frame."""
-    reg = panel.reg
+    """The registry ids under canvas node `nid` (`Panel.graph_selected_params`):
+    `graphview.param_ids`, a copy's being its original's, as its side-panel
+    header says."""
     view = _state(panel).get("view")
     n = view.node(nid) if view is not None else None
     name = nid.partition(":")[2] if nid.startswith("render:") else nid
     of = getattr(n.ref, "effect", "") if n is not None and graphview.kind_of(name) == "copy" else ""
-    pre = graphview.params_of(name, of)
-    head = pre + "."
-    # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key; no other
-    # node's prefix starts so)
-    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
-           and (not p.id.startswith("dream.") or patches.dream_owner(p.id) == name)]
-    return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
+    return graphview.param_ids(panel.reg, nid, of)
 
 
 def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:

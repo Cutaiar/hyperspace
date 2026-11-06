@@ -8029,6 +8029,22 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 6. Save three ways: the panel's "as…", a held empty pad, and the Edge's hold on MENU if you have one. *Pass:* each saves, as before.
 *Judge:* is green for off air right, with nothing on the pads saying what the room is on? The panel's chip and the OS title say that.
 
+## CE. Node mode on the APC (plan 53 N1)
+Register rows 710–714, 2026-11-06. Restart first, on one build on both Macs. The merge waits on
+506–509. Headless: `tests/test_node_desk.py` (N1a), `tests/test_node_mode_graph.py` (N1b).
+Work on a throwaway copy of a preset. Never the shared library's own file.
+**541. The knobs follow the node.** (the rig's APC40, GRAPH on the control window)
+1. Select an effect with several knobs, say acid. In the side pane's selection, press
+   **point apc40 here**.
+*Pass:* K1 onward's rings jump to that effect's values; turning K1 moves its first param on the
+picture; K1–K8 then D1–D8 then S1–S8 fill in order; the footer's dirty dot is lit. What does not
+fit is listed in the side pane, by name. An LFO on one of its params: the knob still sets the base.
+2. Press SHIFT. *Pass:* the knobs and faders are the global layer as ever (K1 hand smooth).
+3. Learn another param of acid onto D8 first and enter again. *Pass:* D8 stays; the rest fill.
+**542. FINE and node mode, on the same knob.** (row 609)
+Hold SEND B and turn a filled K1 slowly, let go, and turn on. *Pass:* it creeps while held, its
+LED lit; when let go the value does not jump, and the next detent is one detent.
+
 ## CF. Node mode's saved form (plan 57)
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round
 trip over the corpus, the fill, the kind). **No panel writes the key until N1b,** so 546 and 547

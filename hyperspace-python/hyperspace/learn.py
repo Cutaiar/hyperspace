@@ -891,8 +891,10 @@ class Learn:
         let_go = list(dict.fromkeys(
             (glyph(x.bare) if glyph is not None else None) or named(x)
             for x in gone if not x.overlaps(b)))
+        under = any(x.overlaps(b) for x in table.node_rows(b.device or None))
         self.said(f"learned {pid} ← {named(b)} (into the preset)"
-                  + (f"; {', '.join(let_go)} let go" if let_go else ""))
+                  + (f"; {', '.join(let_go)} let go" if let_go else "")
+                  + ("; under node mode until that desk leaves its node" if under else ""))
         return True
 
     # ---- click a control, then a param ----
