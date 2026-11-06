@@ -8094,6 +8094,33 @@ yours: without it the row is the old factory row, and the next load takes it (ro
 save from another pad, or the row gone. A Joy-Con's chase, L on the left and R on the right, is
 checked with #365's layout, not here.
 
+## CJ. The dial's readings: the patch's, on the pad node (wave 4 #287)
+Register rows 729–730, 2026-11-06, after Dillon's #287. Headless: `tests/test_dial.py` (a load
+on the other deck, both ways round; two pads on two decks; save and load; the launch readings;
+the pad node's pane). Picture: `assets/28-gamepad-dial/dial-pad-node.png`.
+**559. A preset keeps its sticks' readings.** (a pad; GRAPH, PRESETS)
+1. Copy `tests/corpus/presets/dial.json` into the library's `presets/` and load DIAL. Open
+   GRAPH and click the **pad** node.
+2. Read its details under the pad's picture: both faces, **Left dial**, **Right dial**, **Swap
+   dials**. Move each stick round the rim. Read the pad's picture: the wells and their X / Y lanes.
+3. Set Left dial to blend and Right dial to petal. Save as a new preset. Load another, then the new one.
+4. Press ⌘Z. Open SYSTEM.
+*Pass:* (2) each face fills under the stick, each sector named in full; each well shows eight
+sectors; the lanes read "Left dial · petal" / "Right dial · blend", not the orbit. (3) It comes
+back left blend, right petal, and the sticks read that way; DIAL comes back petal / blend. (4)
+The last reading change is undone; SYSTEM has only the sticks' feel. Fail: a preset that comes
+back with the last one's readings (`pad` not in `params.PATCH_GROUPS`), or the picture still
+saying the orbit on a dialed stick (`ui_pad.says`).
+**560. A load off air does not touch the pad on air.** (a pad on air; a preset with dial routes on both decks)
+1. On air, DIAL, and push the left stick slowly round the rim: petal, one parameter at a time.
+2. Panel to the deck off air. Load a preset saved with left blend (check 559's). Push the stick round again.
+3. On GRAPH, click the pad node with the panel still on the deck off air.
+4. Move the pad's player to off air, on the player select screen. Push the stick round.
+*Pass:* (2) nothing in the room or the stick's feel changes: still petal. (3) The faces rest,
+the drop-downs say blend, and the node says the pad is on the other deck. (4) Now it crossfades
+and the faces fill. Fail: the stick on air turning to blend at (2), the one thing that may never
+happen (`PadDevice.poll`, `Registry.dial_modes`), or a face moving at (3).
+
 ## CK. Pane paper cuts (wave 4 PC)
 Register rows 731–732, 2026-11-04. Headless: `tests/test_ui_fine.py` (every raw slider's drag,
 its tip), `tests/test_ui_pane.py` (nothing past the pane, nothing colliding, at 240 px and the

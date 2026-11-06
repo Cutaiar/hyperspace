@@ -3630,6 +3630,10 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
         if "ui.pad_view" in panel.reg:          # its readout (map, faithful, lanes, cockpit),
             panel._combo("ui.pad_view", width=-1)   # as on SYSTEM; the header steps them too
         ui_pad.inline(panel)
+        if "pad.dial.left" in panel.reg:        # …and its sticks as dials, this deck's
+            imgui.spacing()
+            ui._micro("dials")
+            panel._dials()
         return                                  # — the picture says what the port lines would
     if _param_rows(panel, st, n):
         return

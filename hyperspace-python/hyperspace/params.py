@@ -166,9 +166,13 @@ F_KEYS = 8
 # them, a load lands them — but for the one setting each hands node keeps
 # for the room (`SHARED_META_KEYS`: `ghost.mirror`, a real mirror in front of
 # the performer's hands; the owner's answer of 2026-11-02, kept 2026-11-03)
+# `pad` (plan 28, rows 729-730): how each stick reads as a dial, petal or blend
+# (`pad.dial.left` / `.right`, `declare_dial`): the loadable patch's, since a reading
+# changes what its own `axis:L.*` / `axis:R.*` routes do. The pad's feel (`desk.pad.*`)
+# is about the hardware, and stays the meta controller's
 PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media",
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "ghost",
-                      "cloud", "lfo", "env", "seq", "macro", "mod")
+                      "cloud", "lfo", "env", "seq", "macro", "pad", "mod")
 SHARED_META_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk")
 # plan 44 D3 (row 612): the shared meta params inside a patch group, by
@@ -879,6 +883,10 @@ def is_instance_id(pid: str) -> bool:
 class Registry:
     """An ordered map of Param by id."""
 
+    # this deck's dial readings, {"L": "petal", "R": "blend"} (`declare_dial`); None: a
+    # registry with no dial
+    dial_modes: dict[str, str] | None = None
+
     @staticmethod
     def group_word(group: str) -> str:
         """`groupwords.group_word`, for `undo.py`, a leaf that holds a registry."""
@@ -1241,6 +1249,51 @@ class Registry:
                               persist=persist))
 
 
+# the sticks' dial readings (plan 28, rows 729-730). Restated from `gamepad`
+# (`DIAL_MODES`, `DIAL_DEFAULT`): the import wall forces it, `params` being both layers'
+# and `gamepad` the meta controller's, and it imports glfw. tests/test_dial.py holds them equal
+DIAL_READINGS = ("petal", "blend")
+DIAL_SIDES = (("L", "left", "petal"), ("R", "right", "blend"))   # stick, its id's word, default
+
+
+def dial_id(stick: str) -> str:
+    """The param of stick "L" or "R"'s dial reading."""
+    return f"pad.dial.{'left' if stick == 'L' else 'right'}"
+
+
+def declare_dial(r: Registry) -> None:
+    """The sticks' dial readings on one deck's registry: `pad.dial.left` and `.right`,
+    saved and landed with its loadable patch like its routes, and `pad.dial.swap`, which
+    trades them. Each registry holds its own (`Registry.dial_modes`, {"L": "petal", …}), so
+    a load on one `Deck` changes nothing a pad on the other reads: a pad reads that dict
+    of the `Deck` it drives (`devices.PadDevice.poll`). They start at the launch readings,
+    the meta controller's (`MetaRegistry.dial_launch`). Not a performer's: no lane rides a
+    reading, though a row can set one."""
+    launch = r.meta_reg.dial_launch or {}
+    modes = r.dial_modes = {stick: launch.get(stick, fresh) for stick, _, fresh in DIAL_SIDES}
+
+    def set_mode(stick: str, i) -> None:
+        modes[stick] = DIAL_READINGS[int(i) % len(DIAL_READINGS)]
+
+    tip = ("How the {} stick reads as a dial (its axis:{}.* lanes): petal, the sector it "
+           "points into gets the whole push; blend, neighbouring sectors crossfade as it "
+           "sweeps round. The loadable patch's: saved with its routes.")
+    for stick, side, _ in DIAL_SIDES:
+        r.enum(dial_id(stick), f"{side.capitalize()} dial",
+               lambda s=stick: DIAL_READINGS.index(modes[s]),
+               lambda i, s=stick: set_mode(s, i),
+               list(DIAL_READINGS), group="pad", modulatable=False,
+               tip=tip.format(side, stick))
+
+    def swap() -> None:
+        left, right = r[dial_id("L")], r[dial_id("R")]
+        a, b = left.value, right.value
+        left.set(b)
+        right.set(a)
+    r.trigger("pad.dial.swap", "Swap dials", swap, group="pad", modulatable=False,
+              tip="Swap the two sticks' dial readings, petal and blend.")
+
+
 class MetaRegistry(Registry):
     """The meta controller's params, one set for every deck (plan 44 D3): the meta controller
     groups (`SHARED_META_GROUPS`, `SHARED_META_KEYS`) and the params of no part
@@ -1249,6 +1302,11 @@ class MetaRegistry(Registry):
     and holds these `Param` objects by reference — a param added or removed
     here is added to or removed from every deck at once, in the order it
     came. A patch param is refused: it is a deck's."""
+
+    # the launch readings of the sticks' dials ({"L": …, "R": …}; `app._dial_launch`), set
+    # before any deck's registry is built: where each deck's start, and so the fresh values
+    # a loadable patch naming none gets. None: `DIAL_SIDES`'s defaults
+    dial_launch: dict[str, str] | None = None
 
     def __init__(self):
         super().__init__()
@@ -2773,6 +2831,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
     r.fx_state = fx
     # the ghost hands' display (ghost.py; the renderer's Ghost.state)
     declare_ghost(r, ghost if ghost is not None else GhostState())
+    declare_dial(r)                     # the sticks' dial readings, this deck's
 
     # ---- macros: the chaining knobs (plan 09, decision 7) ----
     # Nothing reads a macro but the router, through the macro's subscribers
