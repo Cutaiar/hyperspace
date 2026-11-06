@@ -367,10 +367,26 @@ SEL_FIRST = object()
 SEL_LAST = object()
 
 # How much room the popup window keeps around its content for the field's
-# focus ring. `draw.ring` expands by `0.5 + width/2` and strokes `width`
-# wide about that path, so a 3px ring reaches 3.5px past the box; 6 is the
-# next whole step up and costs nothing but a transparent margin.
-RING_PAD = 6.0
+# focus ring.
+#
+# ZERO, deliberately, and the reason is worth keeping. The ring is a 3px
+# band drawn OUTSIDE the field's box, and ImGui clips a window's draw list
+# to the window - so with the window ending at the field's edge the ring is
+# cut off square on whichever side it reaches. Inflating the window by 6 on
+# every side fixed that here and produced visible artifacts around the top
+# and bottom edges of the panel on a Retina Mac, which this machine (Mesa,
+# density 1) does not reproduce. A cosmetic clip on a ring that only shows
+# when the list is reached by Tab is the smaller of the two faults, so the
+# inflation is off until the real fix lands.
+#
+# The real fix is not a bigger window: it is not putting the trigger inside
+# the popup at all. The trigger is in there because ImGui hands a popup the
+# keyboard the moment it appears, so an input left in the parent stops
+# receiving characters - see the note in `combobox`. A list drawn as an
+# ordinary window with `no_focus_on_appearing` would leave the caret where
+# it is and need no inflation, at the cost of hand-rolling the dismissal
+# and z-order that the popup stack gives for free.
+RING_PAD = 0.0
 
 VP_PAD = T.SPACE[2]
 

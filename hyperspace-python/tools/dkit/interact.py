@@ -853,8 +853,14 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
     matches to the pixel; only the reveal differs.
     """
     imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    # `no_background` as well as `no_scrollbar`: a child window paints
+    # `Col_.ChildBg` behind its content, and inside a popup that is a SQUARE
+    # rectangle over whatever rounded chrome the popup drew - the corners go
+    # first. It is transparent in the default dark style, which is exactly
+    # the kind of thing that holds until a theme changes it.
     imgui.begin_child(f"##{key}", imgui.ImVec2(w, h), 0,
-                      imgui.WindowFlags_.no_scrollbar)
+                      imgui.WindowFlags_.no_scrollbar
+                      | imgui.WindowFlags_.no_background)
     # ImGui works a child's scroll range out from the extent its CURSOR
     # reached, and chrome drawn straight into a draw list never moves the
     # cursor - so without this the content measures 0 tall, scroll_max_y is
