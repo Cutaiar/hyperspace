@@ -1740,9 +1740,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             p = reg.get(b.target)
             # onto the node pointed at: a copy's knobs live on its original, and the pane
             # says the copy's name, so the copy gets a port of its own for this row
-            dst, at, there = f"{BASE}:{b.target}", nodes.get(h.node or ""), None
-            there = view.pins.get(dst, ("",))[0]
-            if at is not None and there != h.node:
+            dst, at = f"{BASE}:{b.target}", nodes.get(h.node or "")
+            if at is not None and view.pins.get(dst, ("",))[0] != h.node:
                 dst = f"{NODE_PIN}:{h.node}|{b.target}"
                 if dst not in view.pins:
                     add_port(at, VPort(f"node:{h.node}|{b.target}",
@@ -3333,8 +3332,8 @@ def _boundary(view: View, g: VGroup, mem) -> None:
             continue
         side = None
         if c.kind == NODE_MODE:
-            b = c.ref[1]
-            if patches.touches(mem, b.source, b.target):
+            b = c.ref[1] if c.ref is not None else None
+            if b is not None and patches.touches(mem, b.source, b.target):
                 side = patches.side(mem, b.source, b.target)
         elif c.kind in ("route", "setter") and isinstance(c.ref, Binding):
             b = c.ref

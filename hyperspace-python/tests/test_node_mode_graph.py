@@ -141,6 +141,18 @@ def test_an_expanded_end_draws_each_cable_and_a_folded_view_keeps_them_apart(rig
     assert sum(1 for c, _a, _b in singles if c.kind == NM) == len(rig.nd1.rows())
 
 
+def test_a_node_mode_cable_with_no_row_is_passed_over_by_a_group(rig):
+    """`node_mode_cable`'s `ref` defaults to None, as `refresh` and the menus allow."""
+    node, _ = pick_node(rig.one)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    view = view_of(rig.one, rig.devs)
+    bare = cables(view)[0]
+    bare.ref = None
+    graphview.attach_groups(view, [{"id": "g1", "name": "g", "nodes": [node], "open": False}],
+                            rig.one.table)
+    assert bare.id not in view.groups[0].ends
+
+
 def test_nothing_drops_a_node_onto_a_node_mode_cable():
     assert NM not in graphview.CABLE_KINDS
 
