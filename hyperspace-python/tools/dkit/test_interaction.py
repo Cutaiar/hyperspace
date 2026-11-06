@@ -602,11 +602,15 @@ def test_the_combobox_opens_and_filters(DB):
     r = CC.LAST_RECT.get("##cb.ctl.find")
     assert r, "the combobox panel did not open"
     full_h = r[3]
+    # the panel sits BELOW the field now - the trigger IS the input
+    rr = DB.lay_out(W, H)
+    fy = rr.ctl_rows[5][1]
+    assert r[1] > fy, "the list did not open below the field"
 
     # "yw" is a subsequence of YW only - not of XY, XZ, XW, YZ or ZW
-    typed = openit + [(x, y)] * 30
+    typed = openit + [(x, y)] * 34
     DB.render("dark", W, H, script=typed,
-              keys=[(len(openit) + 4, "y"), (len(openit) + 8, "w")])
+              keys=[(len(openit) + 4, "y"), (len(openit) + 10, "w")])
     narrowed = CC.LAST_RECT.get("##cb.ctl.find")
     assert narrowed, "the panel closed while typing"
     assert narrowed[3] < full_h - 20.0, (

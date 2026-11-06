@@ -893,7 +893,74 @@ def _state(ui, key) -> dict:
     trap the tooltip's hover clock already fell into.
     """
     return ui.anim.store.setdefault("combobox", {}).setdefault(
-        key, {"q": "", "sel": 0, "focus": True})
+        key, {"q": "", "sel": 0, "focus": True, "typed": False,
+              "was_focused": False})
+
+
+def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
+                   disabled=False, open_=False, grab_focus=False):
+    """The trigger, which IS an input. Returns (changed, text, focused).
+
+    This is the whole shape of the real component: Base UI's
+    `ComboboxInput` is an InputGroup wrapping a real <input>, with a ghost
+    chevron in an inline-end addon. You type into the thing you clicked.
+    The kit first shipped a Button that opened a panel with a separate
+    search box inside it - the old Popover+Command recipe - and that is what
+    this replaces.
+
+    The sandwich is `interact.text_input`'s: a real `imgui.input_text` for
+    the caret, the selection, the keyboard and the clipboard, with its own
+    frame pushed transparent and dkit's drawn underneath.
+    """
+    import interact as I
+    cz = tbl["field_icon"] + 2 * T.SPACE[1]        # the chevron's addon
+    pl, pr = tbl["input_pad_l"], tbl["input_pad_r"]
+
+    cols = I._sandwich_begin(ui, clear_grab=False)
+    # imgui's own Col_.text is WHITE by default, which is invisible on the
+    # light theme - the same trap interact.text_input records
+    imgui.push_style_color(imgui.Col_.text,
+                           imgui.ImVec4(*ui.col("foreground")))
+    # ImGui draws a blue nav-cursor rectangle around a keyboard-focused
+    # item. No shadcn component has one, and it is very visible on the
+    # field the moment the list opens - which is exactly when the kit asks
+    # for that focus.
+    imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
+    imgui.set_cursor_screen_pos(
+        imgui.ImVec2(x + pl, y + (h - tbl["field_font"] * 1.3) / 2.0))
+    imgui.push_item_width(w - pl - pr - cz)
+    if grab_focus:
+        # The popup window has the keyboard the moment it appears, but
+        # nothing in it is ACTIVE - so characters went nowhere and the list
+        # never filtered. This hands the caret to the field on the frame it
+        # opens, and only then, or it would fight the user every frame.
+        imgui.set_keyboard_focus_here()
+    if disabled:
+        imgui.begin_disabled()
+    changed, out = imgui.input_text(f"##{key}.q", text)
+    if disabled:
+        imgui.end_disabled()
+    imgui.pop_item_width()
+    focused = imgui.is_item_active()
+    imgui.pop_style_color(2)
+    I._sandwich_end(ui, cols)
+
+    # the Input's own chrome: measured identical to tokens.INPUT
+    it = T.input_table(ui.theme_name)
+    focus_f = ui.anim.to(f"{key}:focus", 1.0 if focused else 0.0)
+    D.field(ui.dl, x, y, w, h, ui.theme, it, focus_f=focus_f,
+            disabled=disabled, radius=T.RADII["lg"])
+    if not out and not focused:
+        D.label(ui.dl, x + pl, y, placeholder, ui.faces, "regular",
+                tbl["field_font"], ui.col(*it["placeholder"]), baseline_box=h)
+    g = tbl["field_icon"]
+    D.icon(ui.dl, "chevron-down", x + w - 1.0 - T.SPACE[1] - g,
+           y + (h - g) / 2.0, g, ui.col("muted-foreground", 0.5))
+    # MERGE. `_sandwich_end` only restores the channel; leaving the split
+    # open makes the next one nest, which ImGui asserts on rather than
+    # tolerates ("Nested channel splitting is not supported").
+    ui.dl.channels_merge()
+    return changed, out, focused
 
 
 def combobox(ui, key, x, y, w, label, items, *, size="default",
@@ -924,46 +991,76 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     hh, rkey = T.SELECT_SIZES[size]
     pid = f"##cb.{key}"
 
-    st = ui.hit(key, x, y, w, hh)
-    if st.clicked and not disabled:
-        imgui.open_popup(pid)
+    s = _state(ui, key)
+    # The input shows the chosen label until you type over it, which is
+    # what Base UI does: the query and the value live in one field.
+    if not s.get("typed"):
+        s["q"] = label or ""
+
+    changed, q, focused = _input_trigger(
+        ui, key, tbl, x, y, w, hh, s["q"], placeholder,
+        disabled=disabled, open_=imgui.is_popup_open(pid))
+    if changed and not disabled:
+        s["q"], s["sel"], s["typed"] = q, 0, True
+        if not imgui.is_popup_open(pid):
+            s["focus"] = True
+            imgui.open_popup(pid)
+    # Clicking the field opens the list, which is what Base UI does - the
+    # input is the trigger, so focusing it IS opening it. Edge-triggered on
+    # focus, or it would reopen the moment you dismissed it.
+    if focused and not s.get("was_focused") and not disabled:
+        if not imgui.is_popup_open(pid):
+            s["focus"] = True
+            imgui.open_popup(pid)
+    s["was_focused"] = focused
+    # the chevron's own target, so clicking it toggles without stealing the
+    # caret from the field
+    cz = tbl["field_icon"] + 2 * T.SPACE[1]
+    if ui.hit(f"{key}.chev", x + w - cz, y, cz, hh).clicked and not disabled:
+        if imgui.is_popup_open(pid):
+            imgui.close_current_popup()
+        else:
+            s["typed"], s["focus"] = False, True
+            imgui.open_popup(pid)
     open_ = imgui.is_popup_open(pid)
-    hot = ui.anim.to(f"{key}:hot",
-                     1.0 if st.hovered and not disabled else 0.0)
-    # `transition-all` 150ms on the standard curve, measured on the
-    # trigger — so both of its states ease, unlike the panel's rows
-    open_f = ui.anim.to(f"{key}:open", 1.0 if open_ else 0.0)
-    _trigger(ui, tbl, x, y, w, hh, T.RADII[rkey], label, placeholder,
-             hot=hot, open_f=open_f, disabled=disabled)
 
     if not open_:
         LAST_RECT.pop(pid, None)
         ui.anim.to(f"{pid}:open", 0.0)
-        # the Popover unmounts its Command, so neither the query nor the
-        # keyboard focus survives a close
-        ui.anim.store.setdefault("combobox", {}).pop(key, None)
+        s["typed"] = False               # the field goes back to the value
         return None, False
 
-    s = _state(ui, key)
-    shown = filter_items(items, s["q"])
+    # filtered on what is IN the field, unless it still holds the value
+    shown = filter_items(items, s["q"] if s.get("typed") else "")
     rows = [i for i, it in enumerate(shown)
             if _is_row(it) and _k(it, "enabled", True)]
     if s["sel"] >= len(rows):
         s["sel"] = 0
 
-    pad, fp = tbl["pad"], tbl["field_pad"]
+    pad = tbl["pad"]
     ch = list_content_h(shown, tbl)
     lh = min(ch, tbl["list_max_h"])
-    ph = pad + fp + tbl["field_h"] + lh + pad
+    # no search row: the panel is the list and its padding, because the
+    # search field IS the trigger
+    ph = pad + lh + pad
 
+    # The popup spans the TRIGGER as well as the panel. ImGui gives a popup
+    # window the keyboard focus, so an input left behind in the parent stops
+    # receiving characters the moment the list opens - you could click the
+    # field, see the list, and type into nothing. Covering the trigger puts
+    # the field inside the focused window, which is where the caret has to
+    # be. Base UI has the same field doing both jobs; this is how that works
+    # on ImGui's popup stack.
     at, _side = B.place_popover(B.Rect(x, y, w, hh), w, ph, ui.viewport,
                                 side="bottom", align=tbl["align"],
                                 offset=tbl["side_offset"])
+    win_y = min(at.y, y)
+    win_h = (at.y + ph) - win_y
     # Radix rounds its own transform, so the panel's origin is integral and
     # the gap off a fractional trigger runs 3.625 … 4.5 rather than a
     # constant 4. Measured; see the module docstring.
-    imgui.set_next_window_pos(imgui.ImVec2(round_px(at.x), round_px(at.y)))
-    imgui.set_next_window_size(imgui.ImVec2(w, ph))
+    imgui.set_next_window_pos(imgui.ImVec2(round_px(at.x), round_px(win_y)))
+    imgui.set_next_window_size(imgui.ImVec2(w, win_h))
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
     imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
     imgui.push_style_var(imgui.StyleVar_.popup_rounding,
@@ -977,17 +1074,19 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         a = ui.anim.to(f"{pid}:open", 1.0)
         dl = imgui.get_window_draw_list()
         p = imgui.get_window_pos()
-        px, py = p.x, p.y
+        px = p.x
+        py = p.y + (at.y - win_y)            # the panel, below the trigger
         LAST_RECT[pid] = (px, py, w, ph)
         saved, ui.dl = ui.dl, dl
-        _panel_chrome(ui, dl, px, py, w, ph, a, tbl)
-
-        _ch, q = _field(ui, f"{key}.q", px + pad + fp, py + pad + fp,
-                        w - 2 * (pad + fp), tbl["field_h"], tbl, s["q"],
-                        search, focus=s["focus"])
+        # the field, redrawn here so its caret is in the focused window
+        changed2, q2, _f2 = _input_trigger(
+            ui, f"{key}.open", tbl, px, p.y + (y - win_y), w, hh, s["q"],
+            placeholder, disabled=disabled, open_=True,
+            grab_focus=s.get("focus", False))
         s["focus"] = False
-        if q != s["q"]:
-            s["q"], s["sel"] = q, 0      # a new query re-ranks; next frame
+        if changed2:
+            s["q"], s["sel"], s["typed"] = q2, 0, True
+        _panel_chrome(ui, dl, px, py, w, ph, a, tbl)
 
         # one highlight, moved by EITHER the pointer or the keyboard, which
         # is what cmdk's single `data-selected` attribute means
@@ -997,7 +1096,7 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
             if imgui.is_key_pressed(imgui.Key.up_arrow, True):
                 s["sel"] = (s["sel"] - 1) % len(rows)
 
-        lx, ly, lw = px + pad, py + pad + fp + tbl["field_h"], w - 2 * pad
+        lx, ly, lw = px + pad, py + pad, w - 2 * pad
         with I.scroll_area(ui, f"{key}.list", lx, ly, lw, lh, ch) as view:
             node = _rows_node(shown, lambda *a: 0.0, tbl, empty=empty)
             place = B.lay(node, B.Rect(view.x, view.y, view.w, ch))
