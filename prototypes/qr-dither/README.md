@@ -17,26 +17,23 @@ discards, so no DNS or redirect is involved.
 ## Get started
 
 ```sh
-cd web && python3 -m http.server 8777
+cd app && npm install && npm run dev
 ```
 
-Open <http://127.0.0.1:8777>. That is the entire run process for *looking* at it:
-no install, no build step, no package manager. A `file://` open will not work —
-the pages `fetch` their data and use ES modules, and both need an origin.
+Then <http://localhost:5181>. Vite 8 binds IPv6 only, so `127.0.0.1` will not
+answer — use `localhost`. Three views:
 
-Four tabs:
-
-- **live solver** — re-derives the whole code per update, **0.2 ms** a solve.
-- **sprite** — 216 precomputed frames, 106 KB, every one decode-verified.
-- **tiles** — the original stills, next to the plain `qr.svg` for comparison.
 - **gallery** — 29 stills across eight 4D subjects, seven dot styles and six
-  palettes. Click one to fill the screen and scan it.
+  palettes. Pick a destination and every code gets a verdict against it.
+- **live solver** — re-derives the whole code per update, **0.2 ms** a solve.
+  Grab it and fold it.
+- **sprite** — 216 precomputed frames, 94 KB, every one decode-verified.
 
-Nothing is generated at page load. `web/` holds finished artefacts, and each is
-rebuilt by one command:
+Nothing is generated at page load. `app/public/data` holds finished artefacts,
+served at `/data`, and each is rebuilt by one command:
 
 ```sh
-uv run --with pyqart --with pillow --with numpy --with zxing-cpp \
+uv run --with pyqart --with pillow --with numpy --with segno --with zxing-cpp \
   python3 gen/gallery.py --url https://hyperspace.cutaiar.io
 ```
 
@@ -44,15 +41,24 @@ uv run --with pyqart --with pillow --with numpy --with zxing-cpp \
 activate. That one also shells out to headless Chrome, which it uses to check
 its own output; it fails loudly if Chrome is not where it expects.
 
+`npm run build` emits a static `dist/` that any server can host with no Node
+involved — the app needs the toolchain, the thing it builds does not.
+
 ## Architecture
 
-![Python generators write static artefacts; the browser only reads them](shots/architecture.svg)
+![Python generators write artefacts; one app reads them](shots/architecture.svg)
 
-Two layers that meet at `web/`. Solving is slow, offline and rare; viewing is
-static and has no dependencies at all. The one asymmetry worth knowing is that
-only `export_js.py` takes the fast path through `basis.py` — everything else
-calls pyqart directly and pays the ~2 s elimination per image, which is fine
-for a still and impossible for a frame.
+Two layers that meet at `app/public/data`. Solving is slow, offline and rare;
+the app only reads what the solve left behind. The one asymmetry worth knowing
+is that only `export_js.py` takes the fast path through `basis.py` —
+everything else calls pyqart directly and pays the ~2 s elimination per image,
+which is fine for a still and impossible for a frame.
+
+`src/lib/solver.js` and `src/lib/render.js` moved out of the old static pages
+unchanged. They touch no DOM globals — `ctx`, `mods` and `n` all arrive as
+arguments — which is why the port was a move rather than a rewrite, and why
+React stays out of the 60 Hz path: the loop reads a ref and writes its readouts
+straight to the DOM, so a slider re-renders but a frame never does.
 
 ## What makes it live
 

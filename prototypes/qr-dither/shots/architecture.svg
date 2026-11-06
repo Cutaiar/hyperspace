@@ -20,13 +20,13 @@
 
 <rect width="1200" height="600" fill="#0a0a0a"/>
 <text class="mono ttl" x="40" y="44">QR DITHER · ARCHITECTURE</text>
-<text class="mono sub" x="40" y="66">Solving happens offline and rarely. The browser only reads what the solve left behind.</text>
+<text class="mono sub" x="40" y="66">Solving happens offline and rarely. The app only reads what the solve left behind.</text>
 
 <!-- ================= column headers ================= -->
 <text class="mono hdr" x="40"  y="112">gen/ — PYTHON, ON DEMAND VIA uv</text>
-<text class="mono hdr" x="440" y="112">web/ — COMMITTED ARTIFACTS</text>
-<text class="mono hdr" x="840" y="112">BROWSER — NO BUILD STEP</text>
-<text class="mono hsub" x="840" y="128">index.html · tab shell, lazy iframes</text>
+<text class="mono hdr" x="440" y="112">app/public/data — SERVED AT /data</text>
+<text class="mono hdr" x="840" y="112">app/ — VITE + REACT + SHADCN</text>
+<text class="mono hsub" x="840" y="128">one app, three views</text>
 
 <!-- ================= column A : generators ================= -->
 <rect class="bx" x="40" y="140" width="330" height="50"/>
@@ -71,8 +71,8 @@
 
 <rect class="bx" x="440" y="294" width="330" height="50"/>
 <rect x="440" y="294" width="3" height="50" fill="#ff2b2b" opacity=".55"/>
-<text class="mono bt" x="458" y="316">hyperspace-qr-*.svg</text>
-<text class="mono bs" x="458" y="333">4 files · svg.py</text>
+<text class="mono bt" x="458" y="316">current-plain.svg</text>
+<text class="mono bs" x="458" y="333">the control · svg.py</text>
 
 <rect class="bx" x="440" y="366" width="330" height="50"/>
 <rect x="440" y="366" width="3" height="50" fill="#ff2b2b" opacity=".55"/>
@@ -86,19 +86,19 @@
 
 <!-- ================= column C : pages ================= -->
 <rect class="bx" x="840" y="150" width="320" height="50"/>
-<text class="mono bt" x="856" y="172">sprite.html</text>
+<text class="mono bt" x="856" y="172">sprite</text>
 <text class="mono bs" x="856" y="189">no solver on the client</text>
 
 <rect class="bx" x="840" y="222" width="320" height="50"/>
-<text class="mono bt" x="856" y="244">gallery.html</text>
-<text class="mono bs" x="856" y="261">reads the manifest, builds cards</text>
+<text class="mono bt" x="856" y="244">gallery</text>
+<text class="mono bs" x="856" y="261">medium selector · verdict per code</text>
 
 <rect class="bx" x="840" y="294" width="320" height="50"/>
-<text class="mono bt" x="856" y="316">stills.html</text>
-<text class="mono bs" x="856" y="333">next to the plain qr.svg</text>
+<text class="mono bt" x="856" y="316">(the control, in the gallery)</text>
+<text class="mono bs" x="856" y="333">a plain QR, judged by the same rule</text>
 
 <rect class="bx" x="840" y="366" width="320" height="50"/>
-<text class="mono bt" x="856" y="388">live.html → solver.js · render.js</text>
+<text class="mono bt" x="856" y="388">live solver → src/lib</text>
 <text class="mono bs" x="856" y="405">XOR per update · 0.2 ms a solve</text>
 
 <path class="ar" d="M774 175 L836 175"/>
@@ -109,9 +109,9 @@
 <!-- ================= verification band ================= -->
 <rect class="vb" x="40" y="452" width="1120" height="62"/>
 <text class="mono hdr" x="58" y="474">VERIFICATION</text>
-<text class="mono bs" x="58" y="494">Every generator decodes its own output before writing it. gallery.py rasterises each SVG with headless Chrome, then zxing reads it back —</text>
-<text class="mono bs" x="58" y="508">so what is checked is the shipped file, not a model of it. 29/29 stills · 216/216 sprite frames · 16/16 styles. Nothing ships on looks.</text>
+<text class="mono bs" x="58" y="494">Every generator decodes its own output before writing it. gallery.py rasterises each SVG with headless Chrome, then zxing reads it back, and</text>
+<text class="mono bs" x="58" y="508">robust.py measures the rendered file, not the matrix. 29/29 stills · 216/216 sprite frames · the live solver pulled from the canvas and decoded.</text>
 
-<text class="mono bs" x="40" y="548">No bundler, no package.json, no lockfile. Python resolves per run through uv; the browser loads ES modules natively; CSS is inline in each page.</text>
+<text class="mono bs" x="40" y="548">The app needs Node; the artefacts do not. Python resolves per run through uv, and every code is reconstructible from manifest.json alone.</text>
 <text class="mono bs" x="40" y="566">The URL is baked into the factorisation — point it elsewhere and every artifact in web/ has to be rebuilt.</text>
 </svg>
