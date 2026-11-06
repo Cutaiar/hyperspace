@@ -7,7 +7,7 @@ built** (2026-11-03, wave 2: rows 611–625, hand checks 461–470, group BJ);
 **D4 built** (2026-11-03, wave 3: rows 648–653, hand checks 489–493, group
 BN); **D5a built** (2026-11-04, wave 4: `deck.MetaController` and a pointer per
 holder, every one on deck 1, rows 688–690, hand checks 522–523, group BX); **D5b** and
-**D5c built** (rows 691–696, groups BY, BZ); D5d, D5e and D6, a plan, not built. Written 2026-11-02 as
+**D5c built** (rows 691–696, groups BY, BZ); **D5d built** (rows 697–702, group CA, overruling §4 and §5 below); D5e and D6, a plan, not built. Written 2026-11-02 as
 wave 0 item D0 of the post-show sequencing. Written against `main` at 72da1ed: every symbol below is in
 the code today unless the text says it is new. Its four decisions are
 register rows 556–559, answered by the owner on 2026-11-02 (as recommended; 558 with a nuance, §7). The build is six PRs,
@@ -489,6 +489,12 @@ through its pointer, `k` is the other deck's share, and `preview` and `warm` are
 head of `frame`, beside `clock.tick`, so the deck arriving gets this frame's `dim`, `bands` and `max_frame`;
 `ui_media.media_of` reads deck 1's channels whichever deck the panel is on; `XFADE_TIP` and
 `test_the_crossfader_is_still_the_dim` are yours to change; `Fade.warm` is asked by a preset listener in `app.main` already, on a new graph off air.
+
+**D5d, built:** `hold.py` is gone; `meta.tick` is `frame`'s first act; the APC's crossfader is
+`output.xfade`, MASTER `output.dim`, both reserved (`apc40.META_CONTROLS`), and `master.gain` the panel's;
+GRAPH's head has the deck chip, copy, the slider and a timed fade; a library verb from a row or a key always loads off air, the owner, 2026-11-06, row 700
+(`MetaController.row_load`, `DeckProject`); `tests/test_on_off_air.py` holds the leak test and what `test_hold.py` promised (registers
+697–702). **§4 and §5 below are history, as is every mention of HOLD, TAKE, DROP and `hold.py` in this plan.**
 
 The first PR a performer notices. **New** `deck.Decks`: the list, `on_air`
 and `panel` indices, `take(seconds)`, `copy(src, dst)`. The retargets:

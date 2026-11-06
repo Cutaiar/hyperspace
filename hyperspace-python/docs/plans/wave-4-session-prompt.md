@@ -112,8 +112,8 @@ tuned to facilitate a performance and should not be actively modified during one
   copied down from `party-tumble`; 2 more are `axis:RX → master.dyn`. So the rule's first
   visible result is that the left hand stops driving audio in those looks.
 - **U1, U2 as recommended:** ⌘Z by where you are; a load is a step on the slot's stack.
-- **Q1, Q2 as recommended:** merge on green for wave 4; checks 489–492 before D5d, and
-  506–509 before N1.
+- **Q1, Q2 as recommended:** merge on green for wave 4; 506–509 before N1. (Checks 489–492
+  before D5d too, until the owner dropped that gate, 2026-11-06.)
 - **The names (SEM).** The code's concepts must come to follow the owner's words, once.
   See "The semantic migration" below.
 
@@ -141,6 +141,8 @@ tuned to facilitate a performance and should not be actively modified during one
 - **The absolute rule: no preset can affect another preset.** Not a question to ask. Any
   path by which one can is a bug, or a sign the thing belongs in the preset. D5d's leak
   test runs both ways. A row acts only on the `Deck` its player is on, which answers DQ4.
+  (A load is the named exception: a meta controller verb, always into the off-air `Deck`.
+  The owner, 2026-11-06, row 700.)
   The one accepted exception is the shared dream worker (DQ8), a known limitation.
 - **The dim and the crossfade are separate controls.** The master dim is the meta
   controller's. Overturns row 559 and plan 44 §5. **A crossfade may fade into an empty
@@ -311,7 +313,7 @@ owner's hand checks and show dates, not build time.
 | 1 | **D5a** pointers, with one deck pointer per player; `docs/GLOSSARY.md` (**merged**, #370) | B2, PA, AZ, MR, PC, NSEW design | green |
 | 2 | **D5b** per-slot and meta undo (**merged**, #373) → **PL** players and duties | NSEW build | green |
 | 3 | **D5c** copy, swap, take | **PS** the select screen; NM0 (needs PL); the format lane | green |
-| 4 | **D5d** controls, `hold.py` gone | none on `ui_graph.py`, `preset.py`, chase lines | checks 489–492, between shows |
+| 4 | **D5d** controls, `hold.py` gone | none on `ui_graph.py`, `preset.py`, chase lines | green (the owner, 2026-11-06: checks 489–492 no longer gate it) |
 | 4.5 | **SEM**, the rename, alone | nothing open | green, goldens unmoved |
 | 5 | **N1a + N1b**, stacked | D5e; D6a; #287 | N1: checks 506–509 |
 | 6 | **N2a + N2b** | D6b | green |
@@ -356,7 +358,7 @@ owner's hand checks and show dates, not build time.
 | D5a | `Decks`, read-through pointers, both on deck 1 | Core | M–L | P3 merged | yes |
 | D5b | Each deck's undo and dot; the session rule (256 of 548 watched params are session) | Core | M | D5a | yes while panel = on air |
 | D5c | `copy`, the timed fade, on air by the fader's side, the preview road, no caller but tests | Core | M | D5b | yes |
-| D5d | The crossfader and MASTER fader rows; **`hold.py` and its three controls deleted**; the leak test, both ways | Core | M–L | D5c; **merge gate: checks 489–492** | no: the first thing the owner sees |
+| D5d | The crossfader and MASTER fader rows; **`hold.py` and its three controls deleted**; the leak test, both ways | Core | M–L | D5c; no check gates it (the owner, 2026-11-06, of 489–492) | no: the first thing the owner sees |
 | D5e | Deck indicator, ROUTING's dormant words, desk diagram, SYSTEM | UI | S | D5d, DQ7 | UI only |
 | D6a | `playlist.py`, its file kind, `tick` over stand-ins | Library | M | D5d, DQ5 | no behaviour yet |
 | D6b | Triggers, the frame hook, a pane section, the warm draw | Library | S–M | D6a | |
@@ -379,8 +381,8 @@ deck question is only testable once D5d exists, so it waits. While D5d is open,
 `ui_graph.py`, `preset.py` and `params.py`'s chase lines are frozen. While
 D5a–D5c are open, `deck.py`, `app.frame` and the `Host` / `Panel` handles are.
 
-**Land D5d between shows**, with HOLD, TAKE and DROP exercised at the rig before
-one: it replaces a mechanism a show relies on. Until D5d, raising `output.xfade`
+**Land D5d between shows.** It replaces a mechanism a show relies on. The owner,
+2026-11-06: checks 489–492 no longer gate it. Until D5d, raising `output.xfade`
 fades to black, so learn no fader on it for a show.
 
 ## Decisions for the owner
@@ -445,7 +447,7 @@ BW. Pre-assign (unused ones are fine; do not reuse 602–604 or 633–635):
 | D5a | 688–690 | 522–523 | BX |
 | D5b | 691–693 | 524–525 | BY |
 | D5c | 694–696 | 526–528 | BZ |
-| D5d | 697–702 | 529–534 | CA |
+| D5d | 697–702, 752 | 529–534, 578 | CA |
 | D5e | 703–704 | 535–536 | CB |
 | D6a | 705–707 | 537–538 | CC |
 | D6b | 708–709 | 539–540 | CD |

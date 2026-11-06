@@ -63,7 +63,6 @@ def test_a_deck_beside_shares_the_rig_and_holds_its_own_look(tmp_path):
     assert b.reg["output.dim"] is a.reg["output.dim"]             # the room's, by reference
     assert b.reg["view.bright"] is not a.reg["view.bright"]       # the look's, its own
     assert a.deck.session.lead is a.reg                           # the first stays the lead
-    assert b.hold is None
 
 
 def test_a_deck_beside_leaves_the_library_the_strip_and_undo_with_the_first(tmp_path):
@@ -114,13 +113,15 @@ def test_the_mix_controls_are_rig_controls_that_nothing_saves():
     assert reg.snapshot("output") == {}
 
 
-def test_the_crossfader_is_still_the_dim():
-    """Plan 44 §5, row 559: no desk row on the fade by default."""
+def test_the_crossfader_is_the_decks_and_master_the_dim():
+    """The owner, 2026-11-04, overturning row 559: a DJ mixer's crossfader, the MASTER
+    fader the dim, and `master.gain` on the panel with no desk row."""
     from hyperspace import apc40
 
     rows = {b.source: b.target for b in Bindings.factory().bindings}
-    assert rows[f"cc:0:{apc40.CC_XFADE}"] == "output.dim"
-    assert "output.xfade" not in rows.values()
+    assert rows[f"cc:0:{apc40.CC_XFADE}"] == "output.xfade"
+    assert rows[f"cc:0:{apc40.CC_MASTER}"] == "output.dim"
+    assert "master.gain" not in rows.values()
 
 
 # ----------------------------------------------- each deck its own lanes (591)
@@ -484,7 +485,7 @@ def test_the_one_dream_worker_is_lent_for_the_fade_and_back():
     fade.lend()
     fade.lend()                                  # once a fade
     assert lent == ["reg b"] and b.dreamer.source is worker and a.dreamer.source is None
-    fade.mix.xfade = 0.01                        # on its way down: still lent
+    fade.mix.xfade = 0.02                        # on its way down: still lent
     fade.lend()
     assert lent == ["reg b"]
     fade.mix.xfade = 0.0

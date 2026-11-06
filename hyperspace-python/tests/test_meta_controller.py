@@ -2,7 +2,7 @@
 """Plan 44 D5a: `deck.MetaController` owns the two `Deck`s and a pointer per holder.
 
 Everything in the app stays on deck 1 (the D1 and D2 same-state tests, the
-frame's ORDER and all of test_hold say nothing moved); here each handle is moved
+frame's ORDER says nothing moved); here each handle is moved
 to deck 2 by hand, and no row or base crosses.
 """
 
@@ -30,7 +30,6 @@ from hyperspace import (
     undo,
 )
 from hyperspace.deck import KEYS, MOUSE, Deck, MetaController
-from hyperspace.hold import canvas_renderer
 from hyperspace.hotreload import MODULES
 from hyperspace.library import PRESETS
 from hyperspace.pointer import Pointer, Through
@@ -38,8 +37,7 @@ from hyperspace.routing import Binding
 from hyperspace.ui import Panel
 
 DESK = "apc40"
-PANEL_HANDLES = ("reg", "view", "renderer", "router", "learn", "undo", "lfos", "envs", "seq",
-                 "hold")
+PANEL_HANDLES = ("reg", "view", "renderer", "router", "learn", "undo", "lfos", "envs", "seq")
 
 
 def _pointed(r) -> SimpleNamespace:
@@ -78,7 +76,7 @@ def _panel(rig) -> Panel:
     panel = Panel.__new__(Panel)
     panel.reg, panel.view, panel.renderer = one.reg, one.view, one.renderer
     panel.router, panel.learn, panel.undo = one.router, one.learn, one.undo
-    panel.lfos, panel.envs, panel.seq, panel.hold = one.lfos, one.envs, one.seq, one.hold
+    panel.lfos, panel.envs, panel.seq = one.lfos, one.envs, one.seq
     panel.deck, panel.library = one, rig.r.lib
     panel.pointer = rig.meta.panel_pointer
     return panel
@@ -165,7 +163,6 @@ def test_pointing_the_panel_at_deck_2_sends_every_panel_handle_there(rig):
         assert getattr(panel, h) is getattr(two, h), h
     assert panel.deck is two and lib.presets is two.presets and lib.reg is two.reg
     assert undo.installed() is two.undo
-    assert panel.hold is None and canvas_renderer(panel) is two.renderer       # no GL here
     # the controllers and the outputs stayed: the desk's rows; only its learn follows
     assert rig.r.midi.reg is one.reg and rig.r.midi.table is one.table
     assert rig.r.midi.learner is two.learn
@@ -287,7 +284,7 @@ def test_a_bank_pad_on_deck_2_loads_on_deck_2_and_its_light_is_deck_2s(rig):
     meta, one, two, lib = rig.meta, rig.one, rig.two, rig.r.lib
     bank = lib.project.bank
     k = next(i for i, n in enumerate(bank[:8]) if n and n != one.presets.current)
-    two.table.add(Binding("note:0:71", f"preset.load.{k}", "fire", layer="preset"))
+    two.table.add(Binding("note:0:71", f"preset.load.{k}", "fire"))     # (the meta controller's)
     meta.point(DESK, two)
     before = _look(one)
     _send(rig, note(71), note(71, 0))
@@ -359,18 +356,20 @@ def test_a_momentary_held_when_the_desk_moves_is_let_go_on_the_deck_it_held(rig)
 def test_a_session_fader_keeps_its_catch_across_a_move(rig):
     """A session param is one object on both decks: the fader on it is still caught."""
     meta, one, two, midi = rig.meta, rig.one, rig.two, rig.r.midi
-    gain = one.reg["master.gain"]
-    assert two.reg["master.gain"] is gain
+    gain = one.reg["output.dim"]
+    assert two.reg["output.dim"] is gain
+    gain.set_norm(0.5)
+    midi.poll()
     one.table.add(Binding("cc:0:60", "view.pattern_mix", "abs", layer="preset", pickup=False))
     row = next(b for b in midi.table.bindings if b.source == "cc:0:14")      # MASTER's
     at = round(gain.norm * 127)
     _send(rig, cc(14, at), cc(14, at + 1), cc(60, 90))
     midi._land_all()
     assert row.caught is True
-    assert "master.gain" in midi._writes and "view.pattern_mix" in midi._writes
+    assert "output.dim" in midi._writes and "view.pattern_mix" in midi._writes
     meta.point(DESK, two)
     midi.poll()
-    assert "master.gain" in midi._writes and "view.pattern_mix" not in midi._writes
+    assert "output.dim" in midi._writes and "view.pattern_mix" not in midi._writes
     assert row.caught is True                                # the same row on both tables
     was = gain.norm
     _send(rig, cc(14, at + 3))
@@ -587,7 +586,7 @@ def test_main_points_every_holder_and_moves_none():
                  "rig.point(meta.pointer, meta.panel_pointer)", "pointer=meta.pointer(MOUSE)",
                  "on_air_pointer=meta.on_air_pointer", "panel_pointer=meta.panel_pointer",
                  "keys_pointer=meta.pointer(KEYS)", "on_air = meta.on_air",
-                 "_draw_render(on_air.renderer, ctx, on_air.view,", "hold=on_air.hold",
+                 "_draw_render(on_air.renderer, ctx, on_air.view,",
                  "for on in meta.decks", "meta.on_air.presets.current"):
         assert line in src, line
     for gone in ("_draw_render(renderer, ctx, s,", "presets.listeners.append(dream_check)"):

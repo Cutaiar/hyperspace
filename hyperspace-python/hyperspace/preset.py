@@ -379,11 +379,6 @@ class GraphSection:
         self.free: dict | None = None
         self.states: dict[str, GhostState] = {}  # extra hands nodes' states, by node name
         self.declared: set[str] = set()         # the extra hands nodes whose params exist
-        # plan 38 B3: the hold, while the projector is held (`hold.Hold`,
-        # duck-typed: `keep(kind, names)`, `reset_delays()`) — every landing
-        # keeps the held program's nodes too; None: a landing is exactly
-        # its graph
-        self.hold = None
         # 2026-11-02 (G0, row 563): told after every landing — `Presets`
         # points it at `settle_groups`, so a group's member list loses a
         # deleted node in the same operation, never on the next draw or save
@@ -471,16 +466,13 @@ class GraphSection:
         if self.on_land is not None:
             self.on_land()
 
-    def names(self, spec: GraphSpec | None = None) -> dict[str, Any]:
-        """The node instances `spec` (the landed one by default) declares,
-        by kind — what a landing settles: ``fx`` (the effect instances that
-        exist, `FxState.held`'s word: None for every file), ``switch``,
-        ``resize``, ``lookback``, and (plan 39 T2–T4) ``matte``, ``cut``,
-        ``segment``. Plan 38 B3: what a hold keeps."""
-        spec = self.spec if spec is None else spec
+    def names(self, spec: GraphSpec | None) -> dict[str, Any]:
+        """The node instances `spec` declares (None: none), by kind — what a landing
+        settles: ``fx`` (the effect instances that exist, `FxState.held`'s word),
+        ``switch``, ``resize``, ``lookback``, and (plan 39 T2–T4) ``matte``, ``cut``,
+        ``segment``."""
         if spec is None:
-            fx = getattr(self.fx, "held", None) if self.fx is not None else frozenset()
-            return {"fx": fx, "switch": [], "resize": [], "lookback": [],
+            return {"fx": frozenset(), "switch": [], "resize": [], "lookback": [],
                     "matte": [], "cut": [], "segment": []}
         return {"fx": frozenset(spec.effect_names()),
                 "switch": [sw.name for sw in spec.switches],
@@ -491,24 +483,9 @@ class GraphSection:
                 "cut": [c.name for c in spec.cuts],
                 "segment": [x.name for x in spec.segments]}
 
-    def settle(self) -> None:
-        """Settle the instances to the landed graph again (plan 38 B3: at
-        Take, once the hold no longer keeps the program's — the live set
-        wins: what only the program had goes)."""
-        self._settle(self.spec)
-
     def _settle(self, spec: GraphSpec | None) -> None:
-        """Declare `spec`'s instances and drop the others' — each kind's
-        names through the hold's `keep` while the projector is held (plan
-        38 B3: the program's effects, switch picks, resizes and look-backs
-        — and plan 39's mattes, cuts and segments — stay, with their
-        values, phases and states, until Take or Drop)."""
-        reg, names = self.reg, self.names(spec) if spec is not None else {
-            "fx": frozenset(), "switch": [], "resize": [], "lookback": [],
-            "matte": [], "cut": [], "segment": []}
-        hold = getattr(self, "hold", None)
-        if hold is not None:
-            names = {kind: hold.keep(kind, n) for kind, n in names.items()}
+        """Declare `spec`'s instances and drop the others'."""
+        reg, names = self.reg, self.names(spec)
         if self.fx is not None:
             # plan 36 T3 (W3): the effects the section names, and no others
             changed = self.fx.hold(names["fx"])
@@ -563,13 +540,8 @@ class GraphSection:
 
     def mark(self) -> tuple:
         """What is landed, for an undo of a load (`library.Marks`) — and
-        (plan 36 T3) which effect instances exist (`FxState.held`). Plan 38
-        B3: while the projector is held, the landed graph's own instances —
-        not those kept for the program, which an undo after Take must not
-        bring back onto a graph that lacks them (unheld the two are one)."""
+        (plan 36 T3) which effect instances exist (`FxState.held`)."""
         held = getattr(self.fx, "held", None)
-        if getattr(self, "hold", None) is not None and self.spec is not None:
-            held = frozenset(self.spec.effect_names())
         return (self.spec, copy.deepcopy(self.doc), copy.deepcopy(getattr(self, "free", None)),
                 held)
 
@@ -585,9 +557,6 @@ class GraphSection:
         # had landed), as they were
         fx = self.fx
         held = mark[3] if len(mark) > 3 else None
-        hold = getattr(self, "hold", None)
-        if hold is not None and len(mark) > 3:          # plan 38 B3: an undo while held
-            held = hold.keep("fx", held)
         if len(mark) > 3 and fx is not None and getattr(fx, "held", None) != held:
             changed = fx.hold(held)
             if changed:
@@ -946,7 +915,7 @@ class Presets:
 
     @property
     def rig(self) -> RigWires:
-        """The bus cuts, as `graph.rig_of` and the hold read a renderer's
+        """The bus cuts, as `graph.rig_of` reads a renderer's
         `rig_source` (plan 44 D3: the presets are it)."""
         return self.bus
 
@@ -1214,8 +1183,7 @@ class Presets:
             gs.land(spec, section)
             # R19 (row 354: "rebuilds, not loads"): a load's delays start
             # empty — no trail of the preset before in this one
-            # (plan 38 B3: while held, the preview's — the projector's at Take)
-            reset = getattr(getattr(gs, "hold", None) or gs.renderer, "reset_delays", None)
+            reset = getattr(gs.renderer, "reset_delays", None)
             if callable(reset):
                 reset()
             # the modifiers and their params (plan 28 N1), landed with the
@@ -1261,16 +1229,9 @@ class Presets:
             except (ValueError, TypeError) as e:
                 self._restore(before)
                 raise ValueError(f"a value would not land ({e}); nothing loaded") from e
-            # 2. and the turn (plan 43 C2): set to the file's pose. The one
-            #    view is what both renderers draw (hold.ONE_FOR_BOTH), so
-            #    while the projector is held the pose waits on the hold and
-            #    lands at Take (Drop forgets it: review 2.3) — the held
-            #    projector never jumps to another turn mid-set
+            # 2. and the turn (plan 43 C2): set to the file's pose
             view = getattr(reg, "view", None)
-            hold = getattr(gs, "hold", None)
-            if callable(getattr(hold, "hold_pose", None)):
-                hold.hold_pose(turn)          # (None: a load with no pose clears it)
-            elif turn is not None and callable(getattr(view, "set_pose", None)):
+            if turn is not None and callable(getattr(view, "set_pose", None)):
                 view.set_pose(turn)
                 reg.forget_commits(POSE_IDS)    # (a load's pose holds no commit: plan 52)
         except BaseException:
@@ -1450,26 +1411,18 @@ class Presets:
     def _pose(self) -> dict[str, float]:
         """The spin's pose, the `pose` section (plan 43 C2): the view's six
         angles, its body folded in (`ViewState.pose`), by `POSE_IDS` — none
-        on a registry with no view (a test's, one from before C2). While the
-        projector is held with a loaded pose waiting (review 2.3), that pose:
-        it is the loaded preset's turn, not the program's."""
+        on a registry with no view (a test's, one from before C2)."""
         view = getattr(self.reg, "view", None)
         if not callable(getattr(view, "pose", None)):
             return {}
-        waiting = getattr(getattr(self._graph_section(), "hold", None), "pose", None)
-        if waiting is not None:
-            return {pid: pose_angle(a) for pid, a in zip(POSE_IDS, waiting, strict=True)}
         return {pid: pose_angle(a) for pid, a in zip(POSE_IDS, view.pose(), strict=True)}
 
     def _values(self) -> dict[str, Any]:
         """The preset's `values`: every performance base but the modifiers'
         params, which their entries hold (so a file saved here loads on an
         older build with no unknown id)."""
-        # (plan 38 B3: nor a held program's own nodes, kept while held)
-        hold = getattr(self._graph_section(), "hold", None)
-        only = hold.program_only() if hold is not None else frozenset()
         return {k: v for k, v in self.reg.snapshot(part="performance").items()
-                if not k.startswith(modifiers.PREFIX) and k not in only}
+                if not k.startswith(modifiers.PREFIX)}
 
     def _modifiers_part(self, name: str | None = None) -> dict:
         """What a save writes for the modifiers: ``{"modifiers": entries}``
@@ -1499,13 +1452,10 @@ class Presets:
         (*save as patch*): the landed section (`GraphSpec`, None with none),
         the table (`routing.Bindings`: its routes, preset-layer desk,
         modifiers, macros), the registry's snapshot of the performance
-        params (a modifier's params among them; a held program's own nodes
-        not, as `_values`) and the GRAPH page's layout. Reads only."""
-        hold = getattr(self._graph_section(), "hold", None)
-        only = hold.program_only() if hold is not None else frozenset()
-        values = {k: v for k, v in self.reg.snapshot(part="performance").items()
-                  if k not in only}
-        return (getattr(self._graph_section(), "spec", None), self.router.table, values,
+        params (a modifier's params among them) and the GRAPH page's
+        layout. Reads only."""
+        return (getattr(self._graph_section(), "spec", None), self.router.table,
+                self.reg.snapshot(part="performance"),
                 dict(getattr(self, "layout", None) or {}))
 
     def _held_canvas(self) -> set[str]:

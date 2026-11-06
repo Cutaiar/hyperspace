@@ -222,7 +222,6 @@ from . import (
     ui_routing,
     undo,
 )
-from . import hold as holdmod
 from .bands import CEIL
 from .graph import Effect
 from .groupwords import group_title
@@ -310,10 +309,22 @@ BACKDROP_ALPHA = 0.35    # how strongly it shows by default
 # — and ⌘ with them zooms. GLFW gives a trackpad's scroll as a tenth of
 # its pixels, so 10 px a unit follows the fingers; a mouse's notch is one unit
 PAN_PX = 10.0
-# plan 38: while the projector is held, the projector's own picture in the
-# canvas's top-right corner, this share of the canvas's width, framed red
+# while the panel is on the deck off air, what is on air in the canvas's
+# top-right corner, this share of the canvas's width, framed red
 MONITOR_W = 0.22
-MONITOR_TIP = "What the projector shows: the held look. TAKE puts the preview behind the nodes there."
+MONITOR_TIP = "What is on air: output 1, as the room sees it. Behind the nodes is the deck off air."
+# plan 44 D5d: the head's deck row
+DECK_TIP = ("Which deck this panel shows and edits. Click for the other. Red: it is off air, "
+            "so nothing here reaches the room until the crossfader brings it up. Controllers "
+            "go where their players' duties say, whichever you look at.")
+COPY_LABEL = "copy on air to off air"
+COPY_TIP = ("Replace the deck off air with the look on air, running from where it is now, so "
+            "the two are one until someone touches either. The deck on air does not move. "
+            "One undo step on the deck off air.")
+FADE_TIP = ("Run the crossfader to the far end over the seconds beside this. A hand on the "
+            "desk's crossfader ends it there. Fading into an empty deck is black.")
+OFF_AIR_FRAME = 3.0     # the red canvas frame's thickness, in points, while the panel is off air
+XFADE_MIN_W, SECONDS_W = 120.0, 56.0     # the head's crossfade slider and its seconds
 # plan 37 C1 (P1): a picture node's body is the picture it makes — its
 # thumbnail (`outputs.PreviewTextures`) in a box at the node's width
 # (`graphview.THUMB_H` tall), fitted whole; a geometry's scene picture is
@@ -475,8 +486,7 @@ def view_of(panel) -> graphview.View | None:
     st = _state(panel)
     reg, table = panel.reg, router.table
     devices = getattr(panel, "devices", None)
-    # (plan 38 B3: while held, the preview's graph — the edited one)
-    rgraph = getattr(holdmod.canvas_renderer(panel), "_graph", None)
+    rgraph = getattr(getattr(panel, "renderer", None), "_graph", None)
     gs = getattr(getattr(getattr(panel, "library", None), "presets", None), "graph", None)
     # (plan 35 G: the wired frame itself, in the new ids)
     spec = getattr(gs, "spec", None)
@@ -766,8 +776,10 @@ def page(panel, dt: float) -> None:
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     with _dimmed(panel):
         _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
-    # the held projector's inset: in the canvas's corner, left of the pane
-    # beside it, above the band under it (a narrow page)
+    # off air: the red frame and what is on air's inset, in the canvas's corner, left
+    # of the pane beside it, above the band under it (a narrow page)
+    page_list = imgui.get_window_draw_list()
+    i0 = page_list.idx_buffer.size()         # (`replay` cuts these out, with the pane's ground)
     _monitor(panel, (origin.x, origin.y), (canvas.x - size[0], canvas.y) if wide
              else (canvas.x, canvas.y - size[1]))
     # the pane, always on (plan 49): its bottom is the canvas's, so the page ends where it did
@@ -777,8 +789,6 @@ def page(panel, dt: float) -> None:
     # scrollbar — on the parent's list inside `begin_child` (one draw
     # call fewer); on the page's list they would be in the canvas's
     # picture, so the indices they take are noted for `replay` to cut out
-    page_list = imgui.get_window_draw_list()
-    i0 = page_list.idx_buffer.size()
     opened = imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders)
     omit = (i0, page_list.idx_buffer.size())
     st["pane_window"] = imgui.internal.get_current_window().name   # (the tests find it by it)
@@ -797,6 +807,7 @@ def page(panel, dt: float) -> None:
     times = st["times"]
     times.append(time.perf_counter() - t0)
     del times[:-TIMES]
+    _arrive(panel, st)
 
 
 def pinch_wheel(magnification: float) -> float:
@@ -1150,8 +1161,7 @@ def head_line(st: dict, view: graphview.View) -> str:
 
 def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None:
     width = imgui.get_content_region_avail().x
-    if _hold_chips(panel):
-        imgui.same_line()
+    _deck_row(panel, st)
     if _patches_chip(panel):                # plan 40 T3: the browser
         imgui.same_line()
     any_open = bool(st["open"])
@@ -1195,9 +1205,6 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     _area_chips(st)
     for want in window_wants(panel):       # plan 44 D3: a window the rig lacks
         imgui.text_colored(ui.WARN, want)
-    hold = getattr(panel, "hold", None)
-    if hold is not None and hold.on:        # plan 38: first, in red, while it lasts
-        imgui.text_colored(ui.WARN, hold_line(hold, time.perf_counter()))
     if st["note"]:
         imgui.text_colored(ui.WARN, st["note"])
     elif st["said"]:                        # plan 28 N4: the last render edit
@@ -1254,51 +1261,85 @@ def _wants_chip(panel, beside: bool = True) -> None:
                               *devices.want_lines(ws)]))
 
 
-def _hold_chips(panel) -> bool:
-    """Plan 38, first on the head: **hold** — or, held, a lit **held** and
-    **take** · **drop**. False with no hold (a panel from a test)."""
-    hold = getattr(panel, "hold", None)
-    if hold is None:
-        return False
-    if not hold.on:
-        if ui.chip("hold##graph"):
-            hold.engage(time.perf_counter())
-        if imgui.is_item_hovered():
-            ui.tooltip(holdmod.ENGAGE_TIP)
-        return True
-    ui.lit_chip("held##graph", True)
-    if imgui.is_item_hovered():
-        ui.tooltip(holdmod.ENGAGE_TIP)
-    imgui.same_line()
-    if ui.chip("take##graph"):
-        hold.take()
-    if imgui.is_item_hovered():
-        ui.tooltip(holdmod.TAKE_TIP)
-    imgui.same_line()
-    if ui.chip("drop##graph"):
-        hold.drop()
-    if imgui.is_item_hovered():
-        ui.tooltip(holdmod.DROP_TIP)
-    return True
+def panel_off_air(panel) -> bool:
+    """Is the panel on the deck off air (plan 44 D5d)? False with no meta controller
+    (a panel from a test)."""
+    meta = getattr(panel, "meta", None)
+    return meta is not None and meta.panel is not meta.on_air
 
 
-def hold_line(hold, now: float) -> str:
-    """The head's red line while the projector is held (plan 38): for how
-    long, what the canvas's backdrop is, and what the preview has that the
-    projector has not."""
-    t = max(int(now - hold.since), 0)
-    what = []
-    n = len(hold.changed())
-    if n:
-        what.append(f"{n} setting{'s' if n != 1 else ''} changed")
-    if hold.rewired():
-        what.append("the graph changed")
-    line = (f"HELD {t // 60}:{t % 60:02d} — the projector keeps its look; behind the nodes "
-            "is the preview, what TAKE puts on it")
-    line += " · " + " · ".join(what) if what else " · nothing changed yet"
-    if hold.error:
-        line += f" · preview: {hold.error}"
-    return line
+def _wrap_for(width: float) -> None:
+    """Beside the last item when `width` fits on the line, else on the next."""
+    imgui.same_line()
+    if imgui.get_content_region_avail().x < width:
+        imgui.new_line()
+
+
+def _deck_row(panel, st: dict) -> None:
+    """The head's first line (plan 44 D5d): which `Deck` the panel is on, the same
+    words as the window's title, red off air, a click for the other; then the two
+    verbs, "copy on air to off air" and the crossfade, by hand and timed. Nothing with
+    no meta controller (a panel from a test). A click moves the panel at the page's end
+    (`_arrive`): this frame's view and selection are of the deck it is on."""
+    meta = getattr(panel, "meta", None)
+    if meta is None:
+        return
+    words = meta.words(meta.panel)
+    if ui.lit_chip(f"{words}##graph.deck", panel_off_air(panel)):
+        st["panel_to"] = meta.decks[1] if meta.panel is meta.decks[0] else meta.decks[0]
+    if imgui.is_item_hovered():
+        ui.tooltip(DECK_TIP)
+    _wrap_for(ui.chip_w(COPY_LABEL))
+    if ui.chip(f"{COPY_LABEL}##graph.copy"):
+        copy_on_air(panel)
+    if imgui.is_item_hovered():
+        ui.tooltip(COPY_TIP)
+    reg = panel.reg
+    if "output.xfade" not in reg:           # (a rig with no outputs hook)
+        return
+    _wrap_for(XFADE_MIN_W + ui.chip_w("fade") + SECONDS_W)
+    room = imgui.get_content_region_avail().x - ui.chip_w("fade") - SECONDS_W
+    panel._slider("output.xfade", max(XFADE_MIN_W, room - 2 * imgui.get_style().item_spacing.x))
+    imgui.same_line()
+    if ui.lit_chip("fade##graph.fade", meta.timed is not None):
+        meta.crossfade()
+    if imgui.is_item_hovered():
+        ui.tooltip(FADE_TIP)
+    imgui.same_line()
+    panel._slider("output.xfade_s", SECONDS_W)
+
+
+def _arrive(panel, st: dict) -> None:
+    """The page is drawn: the panel goes to the deck its chip was clicked for."""
+    to = st.pop("panel_to", None)
+    if to is not None:
+        panel.meta.point_panel(to)
+
+
+def copy_on_air(panel) -> None:
+    """The head's second verb: said in the footer, with what the deck lacked. Refused
+    while the deck off air is in the picture (`bars_copy`). A look that will not land
+    is said, and the panel goes on: a refused load leaves that deck as it was, and its
+    step, with nothing to put back, closes empty."""
+    meta, say = panel.meta, panel.library.say
+    why = meta.bars_copy()
+    if why is not None:
+        say(warning=why)
+        return
+    src, dst = meta.on_air, meta.off_air
+    try:
+        missing = meta.copy_on_air()
+    except Exception as e:  # noqa: BLE001 — a panel click must not take the frame down
+        say(warning=f"not copied: {type(e).__name__}: {e}"[:160])
+        return
+    words = (f"copied {src.presets.current or 'the look'} from {meta.words(src)} "
+             f"to {meta.words(dst)}")
+    if missing:
+        say(warning=f"{words}; {len(missing)} id(s) it lacks: " + ", ".join(missing[:4]))
+    else:
+        say(status=words)
+
+
 def _tint_chip(st: dict) -> None:
     """The head's **pictures · tint cables** chip (plan 37 C2, D3): off by
     default; lit, the picture cables are tinted (`tint`)."""
@@ -1378,9 +1419,8 @@ def _backdrop(panel, st: dict, origin, avail) -> bool:
     the editor's ground — faded by `_canvas` — and every node lie over it.
     True when it was drawn."""
     pv = getattr(panel, "preview", None)
-    hold = getattr(panel, "hold", None)
-    held = hold is not None and hold.on          # plan 38: the preview is the point of it
-    if not (st["backdrop"] or held) or pv is None:
+    # off air it is always behind the canvas: nothing else draws that deck
+    if not (st["backdrop"] or panel_off_air(panel)) or pv is None:
         return False
     pv.want()
     tex = pv.tex
@@ -1395,7 +1435,7 @@ def _backdrop(panel, st: dict, origin, avail) -> bool:
 
 def monitor_rect(origin: tuple[float, float], avail: tuple[float, float],
                  pic: tuple[int, int]) -> tuple[tuple[float, float], tuple[float, float]]:
-    """Where the projector's inset lies (plan 38): `MONITOR_W` of the
+    """Where the on-air inset lies: `MONITOR_W` of the
     canvas's width at its top-right corner, a margin in, the picture's
     aspect kept — and no taller than `avail`'s height leaves, a margin in
     (plan 49: on a narrow page `avail` stops above the side pane's band),
@@ -1410,21 +1450,39 @@ def monitor_rect(origin: tuple[float, float], avail: tuple[float, float],
 
 
 def _monitor(panel, origin, avail) -> None:
-    """While the projector is held, its picture in the canvas's corner —
-    over the nodes, framed red — and asked for again next frame."""
-    hold, mon = getattr(panel, "hold", None), getattr(panel, "monitor", None)
-    if hold is None or not hold.on or mon is None:
+    """While the panel is on the deck off air (plan 44 D5d, DQ7): a red frame round
+    the canvas, and what is on air in its corner — over the nodes, framed red — and
+    asked for again next frame. On the page's list, clipped to the canvas, so a popup
+    or a tooltip lies over them; `replay` cuts them out (`panel:graph` is no place
+    for either)."""
+    mon = getattr(panel, "monitor", None)
+    if not panel_off_air(panel):
         return
+    dl = imgui.get_window_draw_list()
+    edge = OFF_AIR_FRAME / 2
+    dl.push_clip_rect(imgui.ImVec2(*origin),
+                      imgui.ImVec2(origin[0] + avail[0], origin[1] + avail[1]), True)
+    try:
+        dl.add_rect(imgui.ImVec2(origin[0] + edge, origin[1] + edge),
+                    imgui.ImVec2(origin[0] + avail[0] - edge, origin[1] + avail[1] - edge),
+                    imgui.get_color_u32(ui.RED), 0.0, OFF_AIR_FRAME)
+        if mon is not None:
+            _inset(mon, dl, origin, avail)
+    finally:
+        dl.pop_clip_rect()
+
+
+def _inset(mon, dl, origin, avail) -> None:
+    """What is on air, in the canvas's corner."""
     mon.want()
     tex = mon.tex
     if tex is None or getattr(tex, "glo", 0) == 0:
         return
     a, b = monitor_rect(origin, avail, tuple(tex.size))
-    dl = imgui.get_foreground_draw_list()
     dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                  imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
     dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 2.0)
-    dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), "PROJECTOR")
+    dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), "ON AIR")
     m = imgui.get_mouse_pos()
     if a[0] <= m.x < b[0] and a[1] <= m.y < b[1]:
         ui.tooltip(MONITOR_TIP)
@@ -2556,18 +2614,6 @@ def view_centre(panel) -> tuple[float, float]:
     return (round((x0 + x1) / 2 - px), round((y0 + y1) / 2 - py))
 
 
-def _held_names(gs) -> frozenset[str]:
-    """The instance names a held program keeps (plan 38 B3: a spawned node
-    takes none of them)."""
-    hold = getattr(gs, "hold", None)
-    if hold is None or not getattr(hold, "on", False):
-        return frozenset()
-    out: set[str] = set()
-    for names in (getattr(hold, "kept", None) or {}).values():
-        out |= set(names or ())
-    return frozenset(out)
-
-
 def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     """Spawn patch `slug` (plan 40 P3): `Library.read_patch`, then
     `patches.spawn` over a `Host` of the live parts, its layout placed at
@@ -2596,7 +2642,7 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     stem = path.name[:-5] if path is not None else patches.slug(str(doc.get("name") or slug))
     at = view_centre(panel) if at is None else (float(at[0]), float(at[1]))
     gs = pre.graph
-    host = patches.Host.of(gs.spec, e.table, pre.banks(), _held_names(gs))
+    host = patches.Host.of(gs.spec, e.table, pre.banks())
     landing = patches.spawn(doc, host, at, patch=stem)
     if landing.refusal is not None:      # (wave 3 P1) before any sheet could ask
         _note(st, landing.refusal)
@@ -2982,28 +3028,14 @@ def thumb_tip(st: dict, n: graphview.VNode) -> str:
 
 
 def picture_sources(panel):
-    """(the thumbnails, output 1's picture, the GPU medians) the canvas
-    reads this frame: plan 37's thumbnails through plan 38's
-    `hold.canvas_renderer` — the renderer whose graph the canvas draws.
-    Held, with the preview drawn, that is the preview renderer: the page
-    wants its nodes from the preview's own `PreviewTextures` (never shared
-    with the main renderer's: `hold.MIRRORED` hands over no `thumbs`), the
-    main renderer copies none, the hue read and the hover's GPU times are
-    the preview's. Unheld (and after Take or Drop) it is the main one again.
-
-    Output 1's thumbnail is the exception: while held it stays the
-    **program's** picture, `panel.monitor` (what the PROJECTOR inset
-    shows), because output 1 is the projector — what output 1 shows,
-    not what TAKE would put on it. Unheld it is `panel.preview`, the
-    backdrop's picture (plan 37 C1)."""
-    r = holdmod.canvas_renderer(panel)
+    """(the thumbnails, the picture of this deck's output 1, the GPU medians) the
+    canvas reads this frame: all of the renderer of the deck the panel is on, whose
+    graph the canvas draws. Each deck's `PreviewTextures` are its own; on the deck
+    off air its output's thumbnail is what that deck would put on the output, the
+    backdrop's picture, and what is on air is the inset's (`panel.monitor`)."""
+    r = getattr(panel, "renderer", None)
     stats = getattr(r, "stats", None) or {}
-    hold = getattr(panel, "hold", None)
-    held = hold is not None and bool(getattr(hold, "on", False))
-    pv = getattr(panel, "monitor", None) if held else None
-    if pv is None:
-        pv = getattr(panel, "preview", None)
-    return getattr(r, "thumbs", None), pv, stats.get("gpu_ms") or {}
+    return getattr(r, "thumbs", None), getattr(panel, "preview", None), stats.get("gpu_ms") or {}
 
 
 def thumbnail_line(panel) -> str:
@@ -3011,9 +3043,8 @@ def thumbnail_line(panel) -> str:
     N copied · K repainted · M kept" — the copies the last frame made, how
     many of those painted a node again at the frame's size (one that paints
     into its consumer: the cost AH.2 reads), and the thumbnails held; ""
-    with no renderer that keeps any. Held, the preview renderer's while
-    the canvas reads it (`picture_sources`)."""
-    th = getattr(holdmod.canvas_renderer(panel), "thumbs", None)
+    with no renderer that keeps any. The panel's deck's (`picture_sources`)."""
+    th = getattr(getattr(panel, "renderer", None), "thumbs", None)
     if th is None or not hasattr(th, "count"):
         return ""
     return (f"thumbnails · {th.count} copied · {getattr(th, 'repainted', 0)} repainted · "
@@ -3189,7 +3220,7 @@ def render_edit(panel) -> graphview.Edit:
     pins named through the renderer's last graph, one undo step each."""
     lib = getattr(panel, "library", None)
     gs = getattr(getattr(lib, "presets", None), "graph", None)
-    rg = getattr(holdmod.canvas_renderer(panel), "_graph", None)      # (plan 38 B3)
+    rg = getattr(getattr(panel, "renderer", None), "_graph", None)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
     e.show = getattr(lib, "project", None)
@@ -3627,9 +3658,8 @@ def _wireframe(panel) -> None:
     """The shape node's side panel: a black square as wide as the column
     (at most `WIRE_MAX`) holding the renderer's wireframe of the shape
     (`Renderer.want_wire`: the edges alone, drawn on the GPU at the end of
-    each frame while this asks) — the renderer the canvas reads
-    (`holdmod.canvas_renderer`: held, the preview's, as the sliders under
-    it are). Black until its first picture, or with no renderer."""
+    each frame while this asks) — the renderer of the deck the panel is on.
+    Black until its first picture, or with no renderer."""
     side = min(imgui.get_content_region_avail().x, WIRE_MAX)
     if side < 16.0:
         return
@@ -3640,7 +3670,7 @@ def _wireframe(panel) -> None:
     p1 = imgui.ImVec2(p0.x + side, p0.y + side)
     dl = imgui.get_window_draw_list()
     dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
-    r = holdmod.canvas_renderer(panel)
+    r = getattr(panel, "renderer", None)
     if r is None or not hasattr(r, "want_wire"):
         return
     r.want_wire(wire_px(side, imgui.get_io().display_framebuffer_scale.x))
@@ -3978,7 +4008,7 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
     lib = getattr(panel, "library", None)
     e = graphview.Edit(table, panel.reg, router, view, profile,
                        graph=getattr(getattr(lib, "presets", None), "graph", None),
-                       render=getattr(holdmod.canvas_renderer(panel), "_graph", None))
+                       render=getattr(getattr(panel, "renderer", None), "_graph", None))
     e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
     # row 563: a modifier or a voice deleted leaves its group at once
     e.presets = getattr(lib, "presets", None)

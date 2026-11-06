@@ -1099,28 +1099,36 @@ class Project:
         else:
             self.__dict__["active"] = k
 
-    def load_slot(self, k: int) -> None:
+    @property
+    def lit(self) -> int:
+        """The slot a bank pad shows lit: `active`. `DeckProject`'s is the deck
+        off air's, the deck a press would load."""
+        return self.active
+
+    def load_slot(self, k: int) -> bool | None:
         """Slot k (F<k+1> for the first eight): the preset it names,
         through the one loader. An empty slot, or a name with no file,
         loads nothing and says so. `active` is the slot that was asked
-        for, so a preset on two slots lights the one pressed."""
+        for, so a preset on two slots lights the one pressed. True when
+        it loaded."""
         if not 0 <= k < len(self.bank):
-            return
+            return None
         lib, name, key = self.lib, self.bank[k], slot_key(k)
         presets = self._loader()
         if name is None:
             lib.say(warning=f"{key}: an empty slot — hold its pad" + (
                 f" (or ⇧{key})" if k < F_KEYS else "") + " to save the live state into it")
-            return
+            return None
         if presets is None or lib.path_of(PRESETS, name, loose=True) is None:
             lib.say(warning=f"{key}: no preset {name!r}")
-            return
+            return None
         try:
             presets.load(name)
         except LibraryError as e:                     # a bad file: said, never fatal
             lib.error = f"library: {e}"
-            return
+            return None
         self.active = k
+        return True
 
     def save_slot(self, k: int) -> None:
         """⇧F<k+1>: the live state as the preset slot k names — a new one,
@@ -1341,38 +1349,40 @@ class Project:
             lib.error = f"library: {e}"
             return None
 
-    def load_startup(self) -> None:
+    def load_startup(self) -> bool | None:
         """The project's startup preset (D11), if it names one: a launch
         and a project load bring it up. A name with no file says so and
-        the app keeps running on what it has."""
+        the app keeps running on what it has. True when it loaded."""
         lib, presets, name = self.lib, self._loader(), self.startup
         if presets is None or not name:
-            return
+            return None
         if lib.path_of(PRESETS, name, loose=True) is None:
             lib.say(warning=f"startup: no preset {name!r}")
-            return
+            return None
         try:
             presets.load(name)
         except LibraryError as e:
             lib.error = f"library: {e}"
+            return None
+        return True
 
-    def home(self) -> None:
+    def home(self) -> bool | None:
         """Home (plan 15 WP2, decision 27): load the show's startup preset
         — the `preset.home` trigger, on the Home key and the desk's
         OVERDUB. It is a load like any other (D2), and one undo step under
         its own label: the push inside `Presets.load_doc` is the same
         frame's and is ignored (undo.py). A show that names no startup
         preset says so and loads nothing; so does a name with no file, in
-        `load_startup`'s words (neither opens a step)."""
+        `load_startup`'s words (neither opens a step). True when it loaded."""
         lib, name = self.lib, self.startup
         if not name:
             lib.say(warning=HOME_UNSET)
-            return
+            return None
         if lib.warning == HOME_UNSET:                 # it names one now
             lib.warning = ""
         if self._loader() is not None and lib.path_of(PRESETS, name, loose=True) is not None:
             undo.push_on(lib.reg, f"home → {name}", load=True)
-        self.load_startup()
+        return self.load_startup()
 
     # ---- API ----
 
@@ -3627,13 +3637,83 @@ class DeckProject(Project):
     """The one show as one deck sees it: every field is the show's (it shares
     the show's `__dict__`), but `lib` is that deck's `DeckLibrary`, so a bank
     verb this object does (a pad on that deck's table) loads, saves and lights
-    on that deck. What a deck's `preset.*` params close over."""
+    on that deck. What a deck's `preset.*` params close over, so what a row reaches.
 
-    __slots__ = ("lib",)
+    A load is a meta controller verb (the owner, 2026-11-06, register row 700), the
+    named exception to "a row acts only on the `Deck` its player is on": `load_slot`,
+    `cycle`, `walk` and `home`, whichever deck's param was pressed, land on the deck
+    off air and step from what it holds; nothing on air changes. `meta` (the
+    `MetaController`) says where (`row_load`), or why not. No preset can press a load
+    or a save: `routing.meta_refusal` refuses a preset's row on either at every door. A
+    person's save does not change the picture, so it stays on its own deck, as does the panel's load,
+    which is the plain `Project`'s and the intentional one. `meta` None (no second
+    deck): a load lands on this deck."""
+
+    __slots__ = ("lib", "meta")
 
     def __init__(self, lib: DeckLibrary):        # never `Project.__init__`: nothing is new
         self.__dict__ = lib.base.project.__dict__
         self.lib = lib
+        self.meta = None
+
+    def _landing(self, what: str) -> Project | None:
+        """The view a row's load lands on; None when it may not, and that is said."""
+        if self.meta is None:
+            return self
+        where, why = self.meta.row_load()
+        if why is None and where is None:     # never this deck: it may be on air (row 700)
+            why = "not loaded: there is no deck off air to load"
+        if why is not None:
+            self.lib.say(warning=f"{what}: {why}")
+            return None
+        return where
+
+    def _say_loaded(self, where: Project) -> None:
+        name = getattr(where._loader(), "current", None)    # the look's own name
+        if self.meta is not None and name:
+            where.lib.say(status=self.meta.loaded_words(name))
+
+    @property
+    def lit(self) -> int:
+        # (a press lands off air, so that is the deck a bank pad's light is about)
+        where = self.meta.off_air_project() if self.meta is not None else None
+        return self.active if where is None else where.active
+
+    def load_slot(self, k: int) -> bool | None:
+        if not (0 <= k < len(self.bank) and self.bank[k] is not None):
+            return Project.load_slot(self, k)   # loads nothing: it says how to fill it
+        where = self._landing(slot_key(k))
+        if where is None:
+            return None
+        done = Project.load_slot(where, k)
+        if done:
+            self._say_loaded(where)
+        return done
+
+    def cycle(self, step: int = 1) -> None:
+        where = self._landing("the pads")
+        if where is not None:
+            Project.cycle(where, step)        # (its `load_slot` says what loaded)
+
+    def walk(self, step: int = 1) -> str | None:
+        where = self._landing("the preset list")
+        if where is None:
+            return None
+        name = Project.walk(where, step)
+        if name:
+            self._say_loaded(where)
+        return name
+
+    def home(self) -> bool | None:
+        if not self.startup:
+            return Project.home(self)           # loads nothing: it says so
+        where = self._landing("home")
+        if where is None:
+            return None
+        done = Project.home(where)
+        if done:
+            self._say_loaded(where)
+        return done
 
 
 class DeckLibrary(Library):

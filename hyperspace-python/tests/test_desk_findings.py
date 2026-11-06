@@ -138,6 +138,9 @@ def test_the_owners_file_holds_the_factory_session_rows_and_nothing_else():
     owner's file is a factory map row (the session part); what the
     factory has beyond it is the preset layer, which lives in presets."""
     own = json.loads(OWNER.read_text())["bindings"]
+    # (the file as a load moves it: plan 44 D5d's crossfader and MASTER)
+    own = [b.to_json() | {"op": b.op, "value": b.value, "layer": b.layer}
+           for b in routing.remap_factory(routing.Binding.from_json(r) for r in own)[0]]
 
     def key(r):
         return (r["source"], r["target"], r.get("op"), float(r.get("value", 1.0)),

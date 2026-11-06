@@ -82,8 +82,8 @@ def test_the_faders_are_the_presets_and_the_audio_strip_is_shifts():
         (k, t, "global") for k, t in enumerate(SHIFT_TARGETS)]
     assert apc40.SHIFT_FADERS == SHIFT_TARGETS
     assert all(b.feedback is None and b.pickup and b.op == "abs" for b in on_faders)
-    (gain,) = [b for b in rows if b.target == "master.gain"]
-    (dim,) = [b for b in rows if b.target == "output.dim"]
+    (gain,) = [b for b in rows if b.target == "output.dim"]
+    (dim,) = [b for b in rows if b.target == "output.xfade"]
     assert (gain.number, gain.layer) == (apc40.CC_MASTER, None)
     assert (dim.number, dim.layer) == (apc40.CC_XFADE, None)
     assert not [b for b in preset.fresh_desk() if b.number == FADER and b.kind == "cc"]
@@ -202,7 +202,7 @@ def test_a_power_up_forgets_where_a_fader_was_on_every_layer(rig):
     is known, so only an on-value catch counts). The same for MASTER, an
     invariant fader, through the power-up alone."""
     reg = rig.reg
-    band, gain = reg["band.0.post"], reg["master.gain"]
+    band, gain = reg["band.0.post"], reg["output.dim"]
     shift(rig)
     band.set_norm(0.5)
     gain.set_norm(0.5)

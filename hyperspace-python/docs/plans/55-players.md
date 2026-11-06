@@ -8,7 +8,9 @@ The owner, 2026-11-04: "Controllers are generic; the actors are named: player 1,
 4." A player "registers any number of controllers and holds a duty: on air or off air.
 It stays until someone moves it." "An off-air player stays with the off-air preset."
 And the absolute rule: "no preset can affect another preset", of which "a row acts only
-on the `Deck` its player is on" is the performers' half.
+on the `Deck` its player is on" is the performers' half. **The one exception, named by the
+owner, 2026-11-06:** a load is a meta controller verb, and goes to the off-air `Deck` whichever
+deck its player is on (below; register row 700).
 
 ## What a player is
 
@@ -99,6 +101,12 @@ always has a holder, so a drag to the tray cannot be: the tray shows the pads no
 (row 741). **A pad's lights follow its player** (`PadDevice.identity`, row 742).
 
 ## A row acts only on its player's `Deck`
+
+**Except a load.** The owner, 2026-11-06: a bank pad or F-key press "always loads into the
+off-air Deck, never touching the room". So `preset.select`, `.next`, `.prev`, `.load.N`,
+`.list.*` and `.home` are the meta controller's verbs, not a row's on its player's patch
+(`MetaController.row_load`). That is why no preset may carry a row on one (row 752): it
+would be one patch changing another. Everything below is every other row.
 
 `Router.feeds` hides a shared scheme whose controller's pointer is on another deck
 (`Sources.away_from`, asking `DeviceRegistry.holders`; kept on the router until a pointer

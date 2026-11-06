@@ -182,7 +182,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     assert owner_of(view, out1) == "render:output.1"
     assert owner_of(view, "lfo.1.depth") == "lfo.1"
     assert owner_of(view, "tempo.bpm") == "group:tempo"
-    assert owner_of(view, "master.gain") == "group:master"
+    assert owner_of(view, "master.dyn") == "group:master"
     # no render graph: the same params fall to their groups' nodes
     bare = build(rig)
     assert owner_of(bare, "view.bright") == "group:view"

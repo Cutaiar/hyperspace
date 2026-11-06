@@ -518,11 +518,11 @@ def test_a_load_lets_go_of_every_fader_the_preset_binds(rig):
     t.set_desk([*t.desk(), speed])
     rig.midi.poll()
     reg["view.speed"].set_norm(0.5)
-    reg["output.dim"].set_norm(0.5)
+    reg["output.xfade"].set_norm(0.5)
     rig.midi.poll()
     push(rig, cc(apc40.CC_FADER, 64), cc(apc40.CC_XFADE, 64))
     s1 = next(b for b in t.desk() if b.source == speed.source)
-    xf = next(b for b in t.bindings if b.target == "output.dim")
+    xf = next(b for b in t.bindings if b.target == "output.xfade")
     assert s1.caught and xf.caught
     t.set_desk(t.desk())                       # a load that moves neither param
     rig.midi.poll()

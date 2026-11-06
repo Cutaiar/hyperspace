@@ -10,6 +10,7 @@ from hyperspace import apc40, hands, lfo, midi, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
+from hyperspace.deck import Mix, register_xfade
 from hyperspace.library import Library
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
@@ -62,6 +63,7 @@ def rig(tmp_path):
     reg.trigger("audio.stop", "Stop", lambda: None)
     reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
     Output(None, None).register(reg)
+    register_xfade(reg, Mix())
     clock = tempo.Clock(now=lambda: 0.0)       # the transport corner: tap, nudge, trigger
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
@@ -166,12 +168,12 @@ def test_a_fader_moved_while_its_row_is_disabled_has_to_pick_up_again(rig):
 
 def test_fader_without_pickup_jumps(rig):
     for x in rig.midi.bindings:
-        if x.target == "master.gain":
+        if x.target == "output.xfade":
             x.pickup = False
-    g = rig.reg["master.gain"]
-    push(rig, cc(apc40.CC_MASTER, 0))
+    g = rig.reg["output.xfade"]
+    push(rig, cc(apc40.CC_XFADE, 0))
     assert g.value == 0.0
-    push(rig, cc(apc40.CC_MASTER, 127))
+    push(rig, cc(apc40.CC_XFADE, 127))
     assert g.norm == 1.0
 
 
@@ -449,7 +451,7 @@ def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
     assert rig.view.bright == pytest.approx(lib.read("presets", "BIG BLUE WAVE")["values"]
                                             .get("view.bright", 1.0))
     # the session's rows: refused, kept
-    for pid, why in (("master.gain", "invariant"), ("band.0.post", "global layer"),
+    for pid, why in (("output.xfade", "invariant"), ("band.0.post", "global layer"),
                      ("band.sel.trim", "global layer")):
         m.unbind(pid)
         assert m.learner.refused and why in m.learner.last, pid
@@ -522,10 +524,10 @@ def test_an_invariant_control_works_through_a_desk_learn(rig):
         x.pickup = False
     rows = [(b.to_json(), b.layer) for b in m.table.bindings]
     lrn.arm("view.depth4", "desk")
-    post = reg["master.gain"]                                # MASTER (S1–S8 are layered, C2)
-    push(rig, cc(apc40.CC_MASTER, 0))                        # a fader's jitter
+    post = reg["output.xfade"]                                # the crossfader (S1–S8 are layered, C2)
+    push(rig, cc(apc40.CC_XFADE, 0))                        # a fader's jitter
     low = post.norm
-    push(rig, cc(apc40.CC_MASTER, 127))
+    push(rig, cc(apc40.CC_XFADE, 127))
     assert post.norm > low
     assert lrn.learning == "view.depth4" and not lrn.refused and lrn.last == ""
     shift(rig)                                               # SHIFT latches through it
@@ -619,39 +621,39 @@ def test_an_unbind_is_one_undo_step(tmp_path):
 # ---------------------------------------------------------------- the master dim
 
 def test_the_crossfader_dims_with_soft_pickup(rig):
-    """Plan 15 WP3: the crossfader is the master dim on both layers, CC 0
+    """Plan 15 WP3, plan 44 D5d: MASTER is the master dim on both layers, CC 0
     black. A launch is at full with the fader wherever it was left: parked
     at the left it does nothing — it cannot black the rig out by being
     touched — until it is brought up to the value; then it follows."""
     dim = rig.reg["output.dim"]
-    b = next(x for x in rig.midi.bindings if x.source == f"cc:0:{apc40.CC_XFADE}")
+    b = next(x for x in rig.midi.bindings if x.source == f"cc:0:{apc40.CC_MASTER}")
     assert (b.target, b.op, b.layer, b.pickup, b.feedback) == ("output.dim", "abs", None,
                                                                True, None)
     # invariant (D6): a preset's row on the control would never act
     assert rig.midi.table.is_invariant(Binding(b.source, "view.bright", "abs", layer="preset"))
     assert dim.value == 1.0 and not b.caught
     for v in (0, 0, 3, 40, 90, 120):               # parked at black, then on the way up
-        push(rig, cc(apc40.CC_XFADE, v))
+        push(rig, cc(apc40.CC_MASTER, v))
         assert dim.value == 1.0 and not b.caught, v
-    push(rig, cc(apc40.CC_XFADE, 127))             # reached it
+    push(rig, cc(apc40.CC_MASTER, 127))             # reached it
     assert b.caught and dim.value == 1.0
-    push(rig, cc(apc40.CC_XFADE, 64))
+    push(rig, cc(apc40.CC_MASTER, 64))
     assert dim.value == pytest.approx(64 / 127, abs=PICKUP_TOL)
     shift(rig)                                     # the same on the global layer
     assert b.caught
-    push(rig, cc(apc40.CC_XFADE, 20))
+    push(rig, cc(apc40.CC_MASTER, 20))
     assert dim.value == pytest.approx(20 / 127, abs=PICKUP_TOL)
-    push(rig, cc(apc40.CC_XFADE, 0))               # the left end
+    push(rig, cc(apc40.CC_MASTER, 0))               # the left end
     assert dim.value == 0.0 and dim.text() == "black"
-    push(rig, cc(apc40.CC_XFADE, 127))
+    push(rig, cc(apc40.CC_MASTER, 127))
     assert dim.value == 1.0
     # the panel's fader moved it: pickup again, no jump
     dim.set_norm(0.5)
     rig.midi.poll()
     assert not b.caught
-    push(rig, cc(apc40.CC_XFADE, 126))
+    push(rig, cc(apc40.CC_MASTER, 126))
     assert dim.value == pytest.approx(0.5)
-    push(rig, cc(apc40.CC_XFADE, 40))              # swept through it
+    push(rig, cc(apc40.CC_MASTER, 40))              # swept through it
     assert dim.value == pytest.approx(40 / 127, abs=PICKUP_TOL)
 
 
@@ -1080,13 +1082,13 @@ def test_a_fader_keeps_its_catch_through_a_glide_and_an_uncaught_one_writes_noth
     (`_note_written`), so `_uncatch_moved` never reads them as "moved
     without us" and a caught fader stays caught while its value arrives;
     a fader that has not reached its param's value starts no glide."""
-    dim, gain = rig.reg["output.dim"], rig.reg["master.gain"]
-    x = next(b for b in rig.midi.bindings if b.source == f"cc:0:{apc40.CC_XFADE}")
-    m = next(b for b in rig.midi.bindings if b.target == "master.gain")
-    push(rig, cc(apc40.CC_XFADE, 127))             # brought up to the value: caught
+    dim, gain = rig.reg["output.dim"], rig.reg["output.xfade"]
+    x = next(b for b in rig.midi.bindings if b.source == f"cc:0:{apc40.CC_MASTER}")
+    m = next(b for b in rig.midi.bindings if b.target == "output.xfade")
+    push(rig, cc(apc40.CC_MASTER, 127))             # brought up to the value: caught
     assert x.caught and x.pickup and dim.value == 1.0
     at = slew_rig(rig)
-    at(TICK, cc(apc40.CC_XFADE, 0))
+    at(TICK, cc(apc40.CC_MASTER, 0))
     seen = []
     for k in range(2, 9):
         at(k * TICK)
@@ -1095,14 +1097,14 @@ def test_a_fader_keeps_its_catch_through_a_glide_and_an_uncaught_one_writes_noth
     assert seen == sorted(seen, reverse=True) and 0.0 < seen[-1] < seen[0] < 1.0
     at(9 * TICK)
     assert dim.value == 0.0 and x.caught and rig.midi._slews == {}
-    at(10 * TICK, cc(apc40.CC_XFADE, 64))          # still caught: it follows, gliding
+    at(10 * TICK, cc(apc40.CC_MASTER, 64))          # still caught: it follows, gliding
     assert x.caught and 0.0 < dim.norm < 0.2
     # master.gain's fader has not been brought to its value: nothing
     was = gain.value
     assert m.pickup and not m.caught
     far = 0 if gain.norm > 0.5 else 127
-    at(11 * TICK, cc(apc40.CC_MASTER, far))
-    assert not m.caught and gain.value == was and "master.gain" not in rig.midi._slews
+    at(11 * TICK, cc(apc40.CC_XFADE, far))
+    assert not m.caught and gain.value == was and "output.xfade" not in rig.midi._slews
     for k in range(12, 24):
         at(k * TICK)
     assert gain.value == was and dim.norm == round(64 / 127 * 100) / 100
@@ -1277,9 +1279,9 @@ def test_closing_the_adapter_lands_every_glide(rig):
     """Review of PR #98: nothing is left between detents when the app
     quits inside the glide's time."""
     dim = rig.reg["output.dim"]
-    push(rig, cc(apc40.CC_XFADE, 127))
+    push(rig, cc(apc40.CC_MASTER, 127))
     at = slew_rig(rig)
-    at(TICK, cc(apc40.CC_XFADE, 64))
+    at(TICK, cc(apc40.CC_MASTER, 64))
     at(2 * TICK)
     assert 0.5 < dim.norm < 1.0
     rig.midi.close()
@@ -1618,9 +1620,9 @@ def test_fine_leaves_discrete_targets_and_faders_coarse(rig):
     push(rig, note(FINE))
     push(rig, cc(0x13, 127))
     assert pattern.value == len(pattern.names) - 1
-    dim = rig.reg["output.dim"]                     # the crossfader: a pot, soft pickup
+    dim = rig.reg["output.dim"]                     # MASTER: a pot, soft pickup
     dim.set_norm(0.0)
-    push(rig, cc(apc40.CC_XFADE, 0), cc(apc40.CC_XFADE, 127))
+    push(rig, cc(apc40.CC_MASTER, 0), cc(apc40.CC_MASTER, 127))
     assert dim.norm == pytest.approx(1.0)
 
 

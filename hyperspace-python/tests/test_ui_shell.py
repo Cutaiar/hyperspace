@@ -1399,15 +1399,15 @@ def test_unbind_is_not_offered_on_a_session_only_param(rig, monkeypatch):
     refuse. A route on it brings a plain Unbind for the route alone."""
     panel, table = rig.panel, rig.router.table
     _learn_over(rig)
-    lines, items = menu(panel, monkeypatch, "master.gain", "audio")
+    lines, items = menu(panel, monkeypatch, "output.dim", "output")
     assert "SM (MASTER fader) · invariant" in lines
     assert not any(i.startswith("Unbind") for i in items)
     session = [b.to_json() for b in table.midi() if b.layer != "preset"]
     # (no door lets this row in since row 743: one a hot reload left in the table)
-    table.bindings.append(Binding("lfo:0", "master.gain", "push", 0.1))
-    lines, items = menu(panel, monkeypatch, "master.gain", "audio", click="Unbind")
+    table.bindings.append(Binding("lfo:0", "output.dim", "push", 0.1))
+    lines, items = menu(panel, monkeypatch, "output.dim", "output", click="Unbind")
     assert "Unbind" in items and "Unbind ▸" not in items
-    assert not table.routes_to("master.gain")
+    assert not table.routes_to("output.dim")
     assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
 
 
@@ -1544,7 +1544,7 @@ def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch
     lrn.unbind("view.depth4", name=panel._row_name)          # as the menu's item calls it
     assert footer("view")[0][0].startswith("·  unbound view.depth4 from K1 (track knob 1)")
     clock[0] += 1.0
-    lrn.unbind("master.gain")
+    lrn.unbind("output.dim")
     (said,) = footer("output")
     assert "invariant" in said[0] and said[1] == rgb(ui.WARN)
     # a panel with no learn object still draws its footer
@@ -1620,7 +1620,7 @@ def test_a_rows_label_opens_its_params_menu(rig, monkeypatch):
     opened, items = _popups(monkeypatch)
     for page, pid in (("camera", "camera.zoom"),      # a `_row`
                       ("view", "view.bright"),        # a `_fader`
-                      ("audio", "master.gain"),       # a fader whose row is the session's
+                      ("audio", "master.gain"),       # a fader with no desk row, the panel's
                       ("lfo", "tempo.bpm"),           # a `half`, in a table cell
                       ("lookback", "dream.tint_hue")):
         labels.clear()

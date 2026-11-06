@@ -273,6 +273,10 @@ class Param:
     # its slot, filled or empty) — True when it saved, so the pad blinks;
     # None: under SAVE the press is an ordinary press
     save_into: Callable[[int], bool] | None = field(repr=False, default=None)
+    # told a desk fader's position on every message, caught or not (soft pickup
+    # drops an uncaught one before anything else hears it); True: the message goes
+    # no further, nothing is written. None: nobody asks
+    touched: Callable[[float], bool] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a preset or a project's session (part_of)
     modulatable: bool = True     # a lane may drive it
@@ -861,12 +865,9 @@ class Registry:
     # for a registry of its own (a bare one, the tests'; and one from
     # before a hot reload, on the class)
     session: SessionRegistry | None = None
-    # the base chase (plan 52): held now; who may refuse a press (the
-    # projector's hold, one for the rig: `hold.register` sets it on the
-    # session), None: nobody; this deck's `undo.Undo` (`Deck.build`), None: a
-    # bare registry has no steps
+    # the base chase (plan 52): held now; this deck's `undo.Undo`
+    # (`Deck.build`), None: a bare registry has no steps
     chasing: bool = False
-    chase_guard: Callable[[], bool] | None = None
     chase_undo: Any = None
     _chase_steps: Any = None             # the `undo.Undo` the press opened its step on
 
@@ -1063,13 +1064,9 @@ class Registry:
         One hold is one undo step on `steps` (a `undo.Undo`; None: this
         deck's, `chase_undo`), remembered at the press so any
         let-go closes that one; what closes the step otherwise (an undo, a
-        load, a learn under the verb) ends the verb with it. A press under
-        the projector's hold is refused (`chase_guard`, row 656). Returns
+        load, a learn under the verb) ends the verb with it. Returns
         whether the verb is on now."""
         on = bool(on)
-        rig = self.session if self.session is not None else self
-        if on and rig.chase_guard is not None and rig.chase_guard():
-            on = False
         if on == self.chasing:
             return on
         if on:
@@ -2273,7 +2270,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
              group="deck", persist=False, modulatable=False,
              tip="While held, whatever the performers are doing to the look is written "
                  "into its values; let go and the look stays where they left it. One undo "
-                 "step per hold. Refused while the projector is held.")
+                 "step per hold.")
     # plan 34 Z: the resizes' values likewise (`ViewState.resize`)
     sizes = getattr(view, "resize", None)
     if not isinstance(sizes, dict):
@@ -2767,7 +2764,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
         # meta-controls: they *apply* presets, so no preset stores them
         # every slot is a choice (plan 19 WP1: twenty-four); `has` says
         # which hold a preset, for a pad's "filled" light
-        r.enum("preset.select", "Preset", lambda: bank.active, bank.load_slot, names,
+        r.enum("preset.select", "Preset", lambda: bank.lit, bank.load_slot, names,
                group=g, persist=False, modulatable=False,
                has=lambda k: 0 <= k < len(bank.bank) and bank.bank[k] is not None,
                # a pad held on an empty slot saves the live state into it
@@ -2782,7 +2779,9 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
                    "performance: the look, its routes, its LFOs and macros, never the "
                    "tempo, the hands or the analyzer. Hold SAVE (track 8's clip stop) "
                    "and tap a pad to save the live state into it as a new preset, or "
-                   "hold an empty pad.")
+                   "hold an empty pad. A pad always loads into the deck off air and never "
+                   "touches the room; it is lit for what that deck holds. The panel's "
+                   "own load goes to the deck the panel is on.")
         # the F-keys' slots have a load and a save trigger each; slots past
         # them are reached through `preset.select` and the page (plan 19
         # fork 1: no params added)
@@ -2792,7 +2791,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
             r.trigger(f"preset.save.{k}", f"Save preset {k + 1}",
                       lambda k=k: bank.save_slot(k), group=g, modulatable=False)
         # save-as into the next empty slot (plan 15 WP4): no desk row any
-        # more, learnable onto any button
+        # more, learnable onto a pad button, never a preset's row (row 752)
         r.trigger("preset.save_new", "Save as a new preset", bank.save_new,
                   group=g, modulatable=False,
                   tip="Save the live state as a new preset, named from the loaded "
@@ -2802,8 +2801,8 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
         # the preset list, not the bank (2026-10-14): they step what the PRESETS
-        # page lists, saved ones included. No factory row: Learn puts them on a
-        # control (the owner, 2026-11-04, no swapping presets from a pad)
+        # page lists, saved ones included. No factory row: a pad button's Learn or
+        # the bindings file puts them on a control, never a preset's row (row 700)
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
                   tip="Load the next preset of the PRESETS page's list — every "
@@ -2817,8 +2816,8 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
                   lit=lambda: bool(bank.startup),
-                  tip="Home: load this show's startup preset — the Home key "
-                      "(fn ← on a laptop) and OVERDUB (B11) on the desk. "
-                      "Undo brings back what was up.")
+                  tip="Home: load this show's startup preset into the deck off air — "
+                      "the Home key (fn ← on a laptop) and OVERDUB (B11) on the desk. "
+                      "Undo on that deck brings back what was up.")
 
     return r

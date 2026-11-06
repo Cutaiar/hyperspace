@@ -28,7 +28,6 @@ from hyperspace.deck import (
     MetaController,
     Mix,
     draw_size,
-    register_xfade,
 )
 from hyperspace.library import PRESETS
 from hyperspace.outputs import Preview, Switches, View
@@ -43,8 +42,7 @@ CORPUS = Path(__file__).parent / "corpus" / "presets"
 def rig(tmp_path):
     r = boot(tmp_path / "home")
     two = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
-    mix = Mix()
-    register_xfade(r.reg, mix)
+    mix = r.mix
     meta = MetaController(r.deck, two, mix=mix)
     yield SimpleNamespace(r=r, meta=meta, one=r.deck, two=two, mix=mix, chain=r.chain)
     undo.install(None)
@@ -199,7 +197,9 @@ def test_a_desk_fader_on_a_session_param_reads_on_across_the_middle(rig):
     meta, one, two = rig.meta, rig.one, rig.two
     midi = rig.r.midi
     midi.point(meta.pointer("apc40"), meta.panel_pointer)
-    gain = one.reg["master.gain"]
+    gain = one.reg["output.dim"]
+    gain.set_norm(0.5)
+    midi.poll()
     row = next(b for b in midi.table.bindings if b.source == "cc:0:14")
     at = round(gain.norm * 127)
     rig.r.inp.queue.extend([cc(14, at), cc(14, at + 1)])
@@ -505,20 +505,6 @@ def test_the_poi_guide_is_on_the_picture_of_the_deck_its_pad_is_on(rig):
     assert poi.guides(state, None)                # a renderer with no deck behind it
 
 
-def test_the_guide_asks_the_renderers_own_deck_whatever_a_hold_swapped_in(rig):
-    """`Hold.program` swaps `rig_source` for its `_HeldRig`, which has no `reg`."""
-    from hyperspace.hold import _HeldRig
-    from hyperspace.render import Renderer
-
-    state = poi.PoiState()
-    state.on, state.on_reg = True, rig.two.reg
-    guide = SimpleNamespace(shown=True, layer=lambda *a: pytest.fail("drew on the other's"))
-    r = SimpleNamespace(poi_source=state, poi_guide=guide, rig_source=_HeldRig("cables"),
-                        deck_reg=rig.one.reg)
-    Renderer._poi_layer(r, None, (8, 8), None, None)
-    assert guide.shown is False
-
-
 def test_main_puts_the_rigs_wires_on_both_renderers():
     src = inspect.getsource(app.main)
     assert "renderer2.cloud_source, renderer2.poi_source = " in src
@@ -585,7 +571,7 @@ def test_a_fade_back_short_of_the_far_end_returns_the_worker_once():
 
 def test_a_deck_with_no_dream_coming_in_leaves_the_worker_until_the_end():
     f = _fading(dreams=(True, False))
-    for x in np.linspace(0.0, 0.99, 50):
+    for x in np.linspace(0.0, 0.98, 50):
         f.mix.xfade = float(x)
         if x >= 0.5 + MIDDLE:
             f.pointer.deck = f.b

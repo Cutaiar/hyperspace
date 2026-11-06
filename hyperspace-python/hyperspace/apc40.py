@@ -44,7 +44,8 @@ and the row stays a plain trigger row that Learn can move like any other.
 
 Two layers under a latched SHIFT (plan 13 §3). Every MIDI row carries a
 ``layer``: none is **invariant** (the session defines the control; one
-meaning on both layers — the MASTER fader, the crossfader as the master dim,
+meaning on both layers — the MASTER fader as the master dim, the crossfader
+as the decks' (`META_CONTROLS`),
 the bank's twenty-four pads — clip row 1 and, since plan 19, clip rows 4
 and 5 (`BANK_PADS`), each a tap to load and, on an empty slot, a hold to
 save into it — SHIFT, the clock and transport corner, OVERDUB as home, the track buttons,
@@ -86,6 +87,11 @@ PORT_MATCH = "APC40"
 DEVICE_KNOBS = range(0x10, 0x18)
 TRACK_KNOBS = range(0x30, 0x38)
 CC_FADER, CC_MASTER, CC_XFADE, CC_CUE = 0x07, 0x0E, 0x0F, 0x2F
+# The desk's extension to the generic controller (plan 44 D5d, the owner: as the
+# DualSense Edge has its own): controls reserved for the meta controller, which no
+# preset may learn or bind, whatever the table holds on them. See routing's
+# `is_invariant`; another desk like it names its own there.
+META_CONTROLS = (f"cc:0:{CC_MASTER}", f"cc:0:{CC_XFADE}")
 
 # The protocol table: every note, ring mode and LED velocity the APC40 mk1
 # speaks, whether or not DEFAULT_MAP below uses it (N_DEV_L/R, N_SEND_B/C,
@@ -540,13 +546,14 @@ DEFAULT_MAP: list[dict] = [
     # the loaded preset's (`TRACK_FADERS`): none here, so a fresh preset and
     # every factory one leaves them dark. Soft pickup across the latch (D7)
     *[_cc(t, CC_FADER, i, ring=0, layer=G) for i, t in enumerate(SHIFT_FADERS)],
-    # MASTER (invariant): the audio drive, the same on both layers
-    _cc("master.gain", CC_MASTER, 0, ring=0),
-    # crossfader: the master dim (plan 15 WP3, decision 28) — black (left,
-    # CC 0) ↔ full (right); invariant, soft pickup like every fader, so one
-    # parked at the left does nothing until it is brought up to the value.
-    # That CC 0 is the left end is not hand-checked (check 55)
-    _cc("output.dim", CC_XFADE, 0, ring=0),
+    # MASTER: the master dim — black (down, CC 0) ↔ full; the crossfader: the
+    # decks', a DJ mixer's, deck 1 left ↔ deck 2 right (the owner, 2026-11-04,
+    # overturning row 559: `master.gain` is pre-show tuning, on the panel).
+    # Invariant and reserved (`META_CONTROLS`), soft pickup like every fader, so one
+    # parked away from the value does nothing until it is brought to it. That
+    # CC 0 is the left end is not hand-checked (check 55)
+    _cc("output.dim", CC_MASTER, 0, ring=0),
+    _cc("output.xfade", CC_XFADE, 0, ring=0),
     _cc("view.shape", CC_CUE, 0, op="rel", ring=0, layer=P),
     # SHIFT latches the layer (routing's `desk.shift`); its LED is lit while
     # the global layer is up

@@ -82,7 +82,6 @@ from .graph import (
 )
 from .groupwords import group_title
 from .hands import panel as ui_hands
-from .hold import canvas_renderer
 from .media import publish
 from .params import PLANES, Kind, Param, Registry, build_registry, part_of
 from .pointer import Through
@@ -370,7 +369,7 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     whether an effect is on, whether a hand shows (`visible`: the ghost
     hands are on and the layer drew, fork F7), with master × its own dim.
     The reasons: "nothing" (both muted), "no hand" (the picture muted and no
-    hand showing), "dim" (its own dim at 0), "master" (the crossfader at
+    hand showing), "dim" (its own dim at 0), "master" (the MASTER fader at
     black — the footer already says "dim black").
 
     Plan 35 T4: the words read the wires (plan 36 T3: None is the empty
@@ -643,10 +642,10 @@ CHEATSHEET = [
     ("M", "mic on/off"),
     ("K / 0", "play-pause / restart track"),
     ("R", "reset view + camera"),
-    ("F1–F8", "load preset · ⇧ saves"),
+    ("F1–F8", "load off air · ⇧ saves"),
     ("B", "tap tempo · ⇧B LFO trigger"),
     ("Cmd+Z", "undo · ⇧ redo (or Ctrl+Z)"),
-    ("Home", "home preset (fn ←)"),
+    ("Home", "home preset, off air (fn ←)"),
     ("Cmd+R", "restart process"),
     ("Cmd+[ ]", "panel page back · forward"),
     ("H / ?", "panel / this sheet"),
@@ -740,7 +739,6 @@ class Panel:
     lfos = Through("lfos")
     envs = Through("envs")
     seq = Through("seq")
-    hold = Through("hold")
     deck = Through(None)
 
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
@@ -807,7 +805,7 @@ class Panel:
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.meta_undo = None  # the meta controller's stack (plan 44 D5b): so does its
-        self.meta = None       # set by app.py (deck.MetaController): the player screen's moves
+        self.meta = None       # set by app.py (deck.MetaController): GRAPH's head, the player screen
         self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
         self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
@@ -2120,7 +2118,7 @@ class Panel:
         if self.output is None or "output.overlay" not in self.reg:
             imgui.text_disabled("no render window attached")
             return
-        if "output.dim" in self.reg:        # the master dim: the crossfader (plan 15 WP3)
+        if "output.dim" in self.reg:        # the master dim: the desk's MASTER fader (plan 44 D5d)
             self._row("output.dim")
             # a driver that refused the dim's program: the fader moves and
             # the picture does not — say so here (Renderer.dim_error)
@@ -2250,7 +2248,7 @@ class Panel:
         wiring, spec = self.graph_now()
         rig = self.rig_now()
         frame = graphview.page_spec(spec)
-        said = graph_words(spec, getattr(getattr(canvas_renderer(self), "_graph", None),
+        said = graph_words(spec, getattr(getattr(self.renderer, "_graph", None),
                                          "dormant", None))
         # (the blocks' rows closer together: four windows of four rows each,
         # and All outputs', fit the page unscrolled — popped after the loop)
@@ -2359,7 +2357,7 @@ class Panel:
                 self._check(pid, t)
         imgui.pop_style_var()
         # plan 30 D1: a placed effect that runs nowhere this frame, and why
-        for line in dormant_lines(getattr(canvas_renderer(self), "_graph", None)):
+        for line in dormant_lines(getattr(self.renderer, "_graph", None)):
             imgui.text_colored(FAINT, fit_text(line, imgui.get_content_region_avail().x))
             if imgui.is_item_hovered():
                 tooltip(line)
