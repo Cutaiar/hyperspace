@@ -1738,8 +1738,19 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         for b in h.rows:
             src = row_pin(b)[0]
             p = reg.get(b.target)
+            # onto the node pointed at: a copy's knobs live on its original, and the pane
+            # says the copy's name, so the copy gets a port of its own for this row
+            dst, at, there = f"{BASE}:{b.target}", nodes.get(h.node or ""), None
+            there = view.pins.get(dst, ("",))[0]
+            if at is not None and there != h.node:
+                dst = f"{NODE_PIN}:{h.node}|{b.target}"
+                if dst not in view.pins:
+                    add_port(at, VPort(f"node:{h.node}|{b.target}",
+                                       (p.label if p is not None else "") or b.target, IN, VALUE,
+                                       group=_sub_group(b.target, p), pins=(dst,),
+                                       param=b.target, live=_norm(p)))
             view.cables.append(node_mode_cable(
-                h.player, src, f"{BASE}:{b.target}", node_desk.control_word(h.role, b),
+                h.player, src, dst, node_desk.control_word(h.role, b),
                 (p.label if p is not None else "") or b.target, dormant=not h.on_here,
                 live=_norm(p), addr=b.source, ref=(h.role, b)))
     keyed = {(b.source, b.target) for b in routes}
@@ -2356,7 +2367,12 @@ def idle_id(area: str) -> str:
 SHADER_ROW = 4         # the effects' chain wraps into rows of this many columns (Z rows)
 THROUGH = "through"    # a display-only wire over a run of hidden (off) effects
 NODE_MODE = "node_mode"    # a controller's control on a node's param (plan 57, `nodemode`)
+NODE_PIN = "node"          # the pin such a cable lands on when its param's port is another node's
 UNDER_NODE_MODE = "  (under node mode)"
+# its colour, read by the canvas and the on-screen desk (not in `ui`: `ui_graph` is made
+# while `ui` is being imported, and reads this at its top)
+NODE_MODE_RGB = (0.30, 0.90, 0.55)
+LEAVE_WORDS = "a node mode cable is no row: leave the node to end it (right-click, or the side pane)"
 
 
 def throughs(view: View, shown: Callable[[VNode], bool]) -> list[VCable]:
@@ -3316,7 +3332,11 @@ def _boundary(view: View, g: VGroup, mem) -> None:
                                         c.src_port), None)
             continue
         side = None
-        if c.kind in ("route", "setter") and isinstance(c.ref, Binding):
+        if c.kind == NODE_MODE:
+            b = c.ref[1]
+            if patches.touches(mem, b.source, b.target):
+                side = patches.side(mem, b.source, b.target)
+        elif c.kind in ("route", "setter") and isinstance(c.ref, Binding):
             b = c.ref
             if patches.touches(mem, b.source, b.target):
                 side = patches.side(mem, b.source, b.target)

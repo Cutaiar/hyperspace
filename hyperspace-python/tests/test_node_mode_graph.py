@@ -4,11 +4,15 @@ in its own bundle, on the deck whose patch says so, faint when its player is els
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
+from imgui_bundle import imgui
 from test_node_desk import K1, K2, pick_node
 from test_node_desk import rig as desk_rig  # noqa: F401 — the fixture, under its name
+from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import apc40, graphview, routing, ui_desk, ui_graph
+from hyperspace import apc40, graphview, nodemode, routing, ui, ui_desk, ui_graph
 from hyperspace.routing import Binding
 
 NM = graphview.NODE_MODE
@@ -53,7 +57,7 @@ def test_a_param_with_no_port_of_its_own_gets_one(rig):
     rig.one.loaded_patch.point_node_mode(1, "midi", node)
     view = view_of(rig.one, rig.devs)
     assert f"{graphview.BASE}:{free}" in view.pins
-    assert [c.dst_port for c in cables(view)] == [f"{graphview.BASE}:{free}"]
+    assert [view.owner(c.dst_port)[0].id for c in cables(view)] == [node]
 
 
 def test_the_key_moves_when_the_pointing_and_the_deck_do(rig):
@@ -137,14 +141,89 @@ def test_an_expanded_end_draws_each_cable_and_a_folded_view_keeps_them_apart(rig
     assert sum(1 for c, _a, _b in singles if c.kind == NM) == len(rig.nd1.rows())
 
 
-def test_a_node_mode_cable_cannot_be_deleted_only_left(rig):
-    assert NM not in ui_graph.DELETE
-    assert NM not in graphview.CABLE_KINDS      # nothing drops a node onto one, either
+def test_nothing_drops_a_node_onto_a_node_mode_cable():
+    assert NM not in graphview.CABLE_KINDS
 
 
-def test_the_desks_colour_is_the_cables():
+def test_a_bundle_says_leave_not_expand(rig, monkeypatch):
+    node, _ = pick_node(rig.one)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    _, bundles = graphview.wiring(view_of(rig.one, rig.devs), lambda _nid: True)
+    mine = next(b for b in bundles if b.id.endswith("|node"))
+    assert ui_graph._node_mode_roles(mine) == [rig.desk.role]
+    monkeypatch.setattr(ui_graph.ed, "reject_deleted_item", lambda: None)
+    st = {}
+    assert ui_graph.delete_bundle(st, mine) == graphview.LEAVE_WORDS == st["note"]
+    other = next(b for b in bundles if not b.id.endswith("|node"))
+    assert ui_graph.delete_bundle({}, other) == graphview.EXPAND_TO_EDIT
+
+
+def test_a_node_of_a_copy_gets_its_cables_on_the_copy(rig):
+    """The pane says the copy's name, and its params' ports live on the original."""
+    node, params = pick_node(rig.one)
+    view0 = view_of(rig.one, rig.devs)
+    other = next(n.id for n in view0.nodes if n.id.startswith("render:") and n.id != node
+                 and view0.pins.get(f"{graphview.BASE}:{params[0]}", ("",))[0] != n.id)
+    rig.one.loaded_patch.pointable = lambda _n: True
+    rig.one.loaded_patch._pointable = lambda *_a: {other, node}
+    rig.one.loaded_patch.node_params = lambda n: params[:2] if n == other else params
+    assert rig.one.loaded_patch.point_node_mode(1, "midi", other) is None
+    view = view_of(rig.one, rig.devs)
+    got = cables(view)
+    assert got and all(view.owner(c.dst_port)[0].id == other for c in got)
+    assert got[0].dst_port == f"{graphview.NODE_PIN}:{other}|{params[0]}"
+    port = view.owner(got[0].dst_port)[1]
+    assert port.param == params[0] and port.patched
+    graphview.refresh(view, rig.one.reg, rig.one.router, None)
+    # …which takes no drag: nothing can wire a row onto a pin only node mode lands on
+    before = list(rig.one.table.bindings)
+    edit = graphview.Edit(rig.one.table, rig.one.reg, rig.one.router, view)
+    got_said = edit.connect(got[0].src_port, got[0].dst_port)
+    assert isinstance(got_said, graphview.Refusal)
+    assert list(rig.one.table.bindings) == before
+
+
+def test_the_desks_colour_is_the_cables_and_faint_when_the_desk_is_elsewhere(rig):
     k = ui_graph.KIND_COLOURS[NM]
-    assert ui_desk.NODE_INK == pytest.approx((k.x, k.y, k.z, k.w), abs=1e-5)
+    here, away = ui_desk._node_ink(False), ui_desk._node_ink(True)
+    assert (here.x, here.y, here.z, here.w) == (k.x, k.y, k.z, k.w)
+    assert away.w == pytest.approx(ui_desk.NODE_FAINT)
+    node, _ = pick_node(rig.one)
+    rig.nd1.enter(rig.desk.role, node)
+    row = rig.nd1.rows()[0]
+    assert rig.one.table.node_row_away(row) is False
+    rig.meta.point(rig.desk.role, rig.two)
+    assert rig.one.table.node_row_away(row) is True
+    saved = next(b for b in rig.one.table.desk())
+    assert rig.one.table.node_row_away(saved) is None
+
+
+def test_the_panel_asks_once_a_selection_not_once_a_frame(rig, monkeypatch):
+    """`refusal` and `pointable` are each frame's while a node is selected; the scan is not."""
+    node, _ = pick_node(rig.one)
+    scans = []
+    real = graphview.param_ids
+    monkeypatch.setattr(graphview, "param_ids", lambda *a, **k: (scans.append(1), real(*a, **k))[1])
+    for _ in range(5):
+        assert rig.nd1.refusal(rig.desk.role, node) is None
+        assert rig.nd1.pointable(node)
+    assert len(scans) == 1
+    rig.nd1.deck.reg.serial += 1                    # a param added: asked again
+    rig.nd1.refusal(rig.desk.role, node)
+    assert len(scans) == 2
+
+
+def test_a_folded_group_gives_each_node_mode_cable_its_boundary_pin(rig):
+    node, _ = pick_node(rig.one)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    view = view_of(rig.one, rig.devs)
+    entries = [{"id": "g1", "name": "g", "nodes": [node], "open": False}]
+    graphview.attach_groups(view, entries, rig.one.table)
+    g = view.groups[0]
+    mine = [c for c in cables(view) if c.id in g.ends]
+    assert mine and all(g.ends[c.id][1] for c in mine)
+    _, bundles = graphview.wiring(view, lambda _nid: True, folded=graphview.folded(view))
+    assert any(b.dst == g.id and b.id.endswith("|node") and b.in_pin for b in bundles)
 
 
 def test_the_words_are_the_map_then_the_kept_then_the_over(rig, monkeypatch):
@@ -176,3 +255,72 @@ def test_the_on_screen_desk_shows_the_row_and_rebuilds_on_a_change(rig):
     assert b is rig.nd1.rows()[0] and b.target == params[0]
     assert ui_desk.text(rig.one.reg, b) == b.words == rig.one.reg[params[0]].label
     assert ui_desk.mappable(t, next(c for c in ui_desk.apc40.LAYOUT if c.glyph == "K1")) is None
+
+
+# ---------------------------------------------------------------- the chips, in a real frame
+
+
+@pytest.fixture()
+def panel_rig(shell_rig):  # noqa: F811
+    return shell_rig
+
+
+def _block(panel, nd, monkeypatch, chips, press=None):
+    """`node_mode_block` drawn on a stand-in desk; `press`: the chip label to press."""
+    monkeypatch.setattr(ui_graph, "_node_desk", lambda _p: nd)
+
+    def chip(label, size=None):
+        chips.append(label.split("##")[0])
+        return press is not None and label.startswith(press)
+    monkeypatch.setattr(ui, "chip", chip)
+    monkeypatch.setattr(ui, "lit_chip", lambda label, lit, color=None, size=None: chip(label))
+    imgui.new_frame()
+    imgui.begin("t")
+    ui_graph.node_mode_block(panel, SimpleNamespace(id="render:acid"))
+    imgui.end()
+    imgui.end_frame()
+
+
+def _nd(**kw):
+    h = SimpleNamespace(role="apc40", player=1, node="render:acid", on_here=False,
+                        fit=nodemode.Fit(), rows=())
+    h.__dict__.update(kw)
+    entered = []
+    return SimpleNamespace(pointable=lambda _n: True, held=lambda: [h], refusal=lambda *_a: None,
+                           enter=lambda *a: entered.append(a), leave=lambda _r: None,
+                           control_word=lambda *_a: "K1", entered=entered)
+
+
+def test_a_bring_that_is_refused_says_so_and_a_grey_chip_does_nothing(panel_rig, monkeypatch):
+    p = panel_rig.panel
+    said = []
+    monkeypatch.setattr(p.library, "say", lambda **k: said.append(k["warning"]))
+    nd = _nd()
+    nd.enter = lambda *_a: "no such node"
+    _block(p, nd, monkeypatch, [], press="bring")
+    assert said == ["no such node"]
+    nd = _nd()
+    nd.refusal = lambda *_a: "because"
+    _block(p, nd, monkeypatch, [], press="bring")
+    assert nd.entered == []
+
+
+def test_what_did_not_fit_is_listed_whole_at_any_width(panel_rig, monkeypatch):
+    p = panel_rig.panel
+    over = tuple(f"fx.long.param.number.{k}" for k in range(12))
+    nd = _nd(fit=nodemode.Fit(over=over), on_here=True)
+    lines = []
+    monkeypatch.setattr(imgui, "text_wrapped", lambda s: lines.append(s))
+    _block(p, nd, monkeypatch, [])
+    assert any(all(x in line for x in over) for line in lines)
+
+
+def test_the_chip_says_point_move_bring_and_leave(panel_rig, monkeypatch):
+    p = panel_rig.panel
+    for h, want in (({"node": None, "on_here": True}, ["point apc40 here"]),
+                    ({"node": "render:b", "on_here": True}, ["move apc40 here"]),
+                    ({"on_here": True}, ["apc40 on this node · leave"]),
+                    ({"on_here": False}, ["apc40 on this node · leave", "bring apc40 here"])):
+        chips = []
+        _block(p, _nd(**h), monkeypatch, chips)
+        assert chips == want

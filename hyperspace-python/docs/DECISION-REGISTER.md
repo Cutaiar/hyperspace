@@ -13244,6 +13244,11 @@ controls with an outline in that colour and says "node · 7" in its head, and `L
 
 **Judge it.** 543, 545.
 
+The review of #397 added: Delete on one, or on its bundle, says how to leave; the bundle's menu
+offers leave. A node of a copy gets its cables on the copy, on a port of its own (`NODE_PIN`), as the
+pane names it. The on-screen desk's outlines go faint with the cable when the desk is on the other
+`Deck`, and its head says so. A chip that may not enter is grey, with why on hover.
+
 ### 715. What a loadable patch saves of node mode
 
 - **Asked.** What is saved, and whether rows are.

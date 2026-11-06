@@ -81,7 +81,7 @@ from dataclasses import dataclass, replace
 
 from imgui_bundle import imgui
 
-from . import apc40, learn, ui, ui_pane, ui_routing
+from . import apc40, graphview, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .groupwords import group_part, group_word
 from .params import PATCH_GROUPS, Kind
@@ -149,14 +149,18 @@ def _key(table) -> tuple:
 
 
 PAGE_OWNS = "the sequencer page owns this"
-NODE_INK = (0.30, 0.90, 0.55, 1.0)      # a node mode cable's colour (`ui_graph.KIND_COLOURS`)
+NODE_FAINT = 0.3        # a filled control while the desk is on the other `Deck` (row 712)
 
 
-def _edge(b: Binding | None, on: bool) -> int:
-    """A control's outline: a row node mode fills is in its cable's colour."""
-    if b is not None and getattr(b, "node_mode", False):
-        return ui.u32(imgui.ImVec4(*NODE_INK))
-    return ui.u32(ui.DIM if on else ui.LINE)
+def _node_ink(away: bool) -> imgui.ImVec4:
+    return imgui.ImVec4(*graphview.NODE_MODE_RGB, NODE_FAINT if away else 1.0)
+
+
+def _edge(table, b: Binding | None, on: bool) -> int:
+    """A control's outline: a row node mode fills is in its cable's colour, faint when
+    the desk is on the other `Deck`, as the cable is."""
+    away = table.node_row_away(b) if b is not None and table is not None else None
+    return ui.u32(ui.DIM if on else ui.LINE) if away is None else ui.u32(_node_ink(away))
 
 
 def on_page(table, c: apc40.Control) -> bool:
@@ -919,7 +923,7 @@ def _draw(panel, dl, table, c: apc40.Control, b: Binding | None,
           x0: float, y0: float, x1: float, y1: float) -> None:
     """One control at the small size: its glyph on its face."""
     on = b is not None and not empty(panel.reg, b)     # an empty bank slot's pad is dark
-    edge = _edge(b, on)
+    edge = _edge(table, b, on)
     ink = ui.u32(ui.TEXT if on else ui.FAINT)
     w, h = x1 - x0, y1 - y0
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -983,7 +987,7 @@ def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
     height. A dark control gets no label (D8), and an empty bank slot's
     pad is drawn as one (`empty`)."""
     on = b is not None and not empty(panel.reg, b)
-    edge = _edge(b, on)
+    edge = _edge(table, b, on)
     small = ui.u32(ui.DIM if on else ui.FAINT)          # the glyph: small and dim
     # whose row it is: the up layer's in the bright ink, an invariant one grey
     ink = ui.u32(ui.TEXT if on and b.layer is not None else ui.DIM)
@@ -1192,10 +1196,14 @@ def _header(panel, table) -> None:
         filled = table.node_rows()
         if filled and not glob:             # node mode (plan 53 N1b): saved, and said here
             imgui.same_line()
-            ui._micro(f"node · {len(filled)}", imgui.ImVec4(*NODE_INK))
+            away = table.node_row_away(filled[0])
+            ui._micro(f"node · {len(filled)}" + (" · other deck" if away else ""),
+                      _node_ink(bool(away)))
             if imgui.is_item_hovered():
                 ui.tooltip("This patch points the desk at a node: the controls outlined in "
-                           "its colour are that node's. Under SHIFT the global layer is as ever.")
+                           "its colour are that node's. Under SHIFT the global layer is as ever."
+                           + (" The desk is on the other Deck now, so turning them moves "
+                              "that Deck's rows, not these." if away else ""))
         imgui.same_line()
         if deck:        # with the panel hidden this is all that says which deck this is
             room_ = end - imgui.get_cursor_pos_x()

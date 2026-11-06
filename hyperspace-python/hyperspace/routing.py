@@ -2758,6 +2758,12 @@ class Bindings:
         nd = self.node_desk
         return nd is not None and nd.under(b)
 
+    def node_row_away(self, b: Binding) -> bool | None:
+        """`b` as the on-screen desk asks: None when node mode did not derive it, else
+        whether the first desk is on the other `Deck` (`NodeDesk.away`)."""
+        nd = self.node_desk
+        return nd.away(b) if nd is not None else None
+
     def node_rows_serial(self, role: str | None = None) -> int:
         """How many times those rows have changed: a desk redraws on one."""
         nd = self.node_desk
