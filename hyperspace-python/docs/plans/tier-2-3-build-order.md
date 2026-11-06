@@ -7,6 +7,43 @@
 > figure did not export. Wave 2's checkpoint against it is in
 > [`wave-2-session-prompt.md`](wave-2-session-prompt.md).
 
+## Where we are, 2026-11-06
+
+**Waves 0–3 are merged. Wave 4 is most of the way through and being finished now. Wave 5, which this document never had, is
+planned.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section,
+this section is right. Nothing in wave 4 has been tried on real hardware. Hand checks 419–580 are unrun but for 425.
+
+| Wave | State | PRs |
+| --- | --- | --- |
+| 0 | **Merged** 2026-11-02 | #313, #316, #317, #319, #320, #321, #322, #324, #315 the Joy-Con, #323. See below |
+| 1 | **Merged** 2026-11-03 | D1 #327, C2 #333, K2 #325, K3 #328, K4 #326, V2 #329, L1 #334, plus #331 |
+| 2 | **Merged** 2026-11-04 | D2 #346, D3 #351, F1 #352, U1 #345, U2 #350, L2 #349, T2 #348, T3 #344, V3 #343, I1 #347 |
+| 3 | **Merged** 2026-11-04 | U3 #360, V4 #357, O1 #358, O2 #362, D4 #359, B1 #356, P1 #355, P2 #361, P3 #364, plus #366 |
+| 4 | **Being finished** | Below |
+| 5 | **Planned, not started** | [`58-wave-5.md`](58-wave-5.md), launched by [`wave-5-session-prompt.md`](wave-5-session-prompt.md) |
+
+**Wave 4 as it changed.** The owner's answers replaced much of rows 4.1–4.7: two fixed `Deck`s and a DJ crossfader instead of
+hold-as-copy, named players, node mode saved in the patch, N3 gone. Authority is
+[`wave-4-session-prompt.md`](wave-4-session-prompt.md), "The owner's answers".
+
+| Item | State |
+| --- | --- |
+| Plan #367; AZ #368, MR #371, B2 #369, PA #372, CI #363, PC #375 | Merged |
+| D5a #370, D5b #373, PL #376, D5c #378, PS #379, NM0 #377, **D5d #380** (HOLD, TAKE and DROP gone) | Merged |
+| UL undo latch #386; PC2 pair consent | In build or review; both land before SEM |
+| **SEM**, the rename to the signed glossary, alone | Next |
+| D5e words, D6a + D6b playlist, #287 rewritten by us | After SEM |
+| N1a + N1b node mode on the APC | After SEM; merge waits on the owner's hand checks 506–509 |
+| #365 Joy-Con v0 | Waits on the owner's Joy-Con hand check, 520–521 |
+| N2a + N2b node mode on pads; NSEW | After #365 |
+| **The one migration:** `/11`, `loadable/`, shows into install files, trash deleted | After NSEW. The owner runs it; both Macs together |
+
+**Wave 5** runs after that, and after the owner says both Macs have opened the migrated library. Its order: delete what only
+read old files; close the last paths from one look to another; one row per display with hot-plug; controllers set up in the
+app; stop doc conflicts and the growth of type errors.
+
+**Waiting on the owner now:** the Joy-Con check and hand checks 506–509. Those two hold up the end of wave 4, and so all of wave 5.
+
 Nov 2, 2026 · @Robert
 
 Branch from `main` at 72da1ed. Dillon's two PRs from last night (#306 controllers, #312 pad readouts) are merged there, their branches are deleted, and the fast suite passes on that commit (4410 tests). No integration branch is needed: every PR below branches from `main` and merges to `main`. Our own open PR #313 needs a two-file rebase and goes first. The twelve remaining tier 2 and tier 3 asks become 39 PRs in six lanes over five waves. The two refactors with the most gravity, the Deck object and the preset contract, open wave 1, and they turn out to be one line: what belongs to a look is what belongs to a deck.
@@ -156,17 +193,17 @@ Within a wave every row is independent unless "waits on" says otherwise, so each
 
 Each of these blocks one PR, and the wave it sits in. None blocks wave 0 except the echo starter's.
 
-- [ ] **One camera in the preset** (gates 1.2, C2). Merge `camera.*` and `eye.*` into one orbit camera owned by the preset. Overturns the recorded "camera is the rig" decision. Recommend yes; it is also the first contract step.
-- [ ] **Skip the hold hotfix** (shapes 1.1 and 4.1). Recommend yes: hold becomes "copy A into B" in D5, and a stopgap now is a third partial snapshot to remove later. Until D5 lands, hold leaks as it did on 2026-10-30.
-- [ ] **What is per-deck and what is shared** (settled in 0.3, plan 44, before 1.1). Recommend: one dream worker and one segment worker shared, lent to the on-air deck; media channels and the analyzer shared; tempo shared; everything that renders per deck. The deck bench already said one dream per on-air deck is the limit.
-- [ ] **Delay loops are the trails mechanism** (gates 0.8, E1). The look-back keeps the dream, so the two never compete.
-- [ ] **Register row 521, schema on every save** (touches 2.3, F1). Recommend every save writes the newest schema; that is already the rule since 2026-10-25.
+- [x] **One camera in the preset** (gates 1.2, C2; yes, #333). Merge `camera.*` and `eye.*` into one orbit camera owned by the preset. Overturns the recorded "camera is the rig" decision. Recommend yes; it is also the first contract step.
+- [x] **Skip the hold hotfix** (shapes 1.1 and 4.1; skipped, and hold is gone, #380). Recommend yes: hold becomes "copy A into B" in D5, and a stopgap now is a third partial snapshot to remove later. Until D5 lands, hold leaks as it did on 2026-10-30.
+- [x] **What is per-deck and what is shared** (settled in 0.3, plan 44, before 1.1). Recommend: one dream worker and one segment worker shared, lent to the on-air deck; media channels and the analyzer shared; tempo shared; everything that renders per deck. The deck bench already said one dream per on-air deck is the limit.
+- [x] **Delay loops are the trails mechanism** (gates 0.8, E1; landed as the feedback starter, #319). The look-back keeps the dream, so the two never compete.
+- [x] **Register row 521, schema on every save** (touches 2.3, F1; closed by row 576). Recommend every save writes the newest schema; that is already the rule since 2026-10-25.
 - [x] **Register row 524, wire-as-saved take-over** (gates 3.4, P3). Free ports only, or a take-over chip. Owner, 2026-11-04: yes, the take-over chip.
-- [ ] **Which gamepad button is base chase** (gates 4.6, B2). GUIDE is free but opens the OS overlay over Bluetooth; plan 42's `pad:LP` / `RP` back buttons on the Edge are the obvious candidates now.
-- [ ] **The APC crossfader stays dim** (assumed by 3.1, D4) until dim has another home.
-- [ ] **Plan 42 D1–D10** (register rows 544–553) are still "(rec), pending the owner" after last night's merges. Not a gate here, but they are Dillon's and open.
-- [ ] **Dillon's #287** (dial readings into the preset): merge after 1.2 as a contract step, or fold its pane layout into U1. Dillon's call.
-- [ ] **Render check at the machine** before anyone touches face code: flip the face map on a dragonfly preset and unwire the backdrop on logo-wobble. Tier 4, but it is the only way the per-face question gets answered.
+- [x] **Which gamepad button is base chase** (gates 4.6, B2; BACK, #369). GUIDE is free but opens the OS overlay over Bluetooth; plan 42's `pad:LP` / `RP` back buttons on the Edge are the obvious candidates now.
+- [x] **The APC crossfader stays dim** (overturned: the crossfader crossfades and MASTER dims, #380) (assumed by 3.1, D4) until dim has another home.
+- [x] **Plan 42 D1–D10** (answered or bulk accepted, 2026-11-06) (register rows 544–553) are still "(rec), pending the owner" after last night's merges. Not a gate here, but they are Dillon's and open.
+- [x] **Dillon's #287** (rewritten by us on `main` after SEM, owner 2026-11-06) (dial readings into the preset): merge after 1.2 as a contract step, or fold its pane layout into U1. Dillon's call.
+- [ ] **Render check at the machine** (still not run; in plan 58) before anyone touches face code: flip the face map on a dragonfly preset and unwire the backdrop on logo-wobble. Tier 4, but it is the only way the per-face question gets answered.
 
 ## Rules every PR follows
 

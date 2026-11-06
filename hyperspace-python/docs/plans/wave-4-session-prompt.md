@@ -238,6 +238,9 @@ stay, and load only into the off-air `Deck`. If they should go too, it is a one-
   Control-Z and have it undo an action that you took 10 minutes ago". A warning is fine, "but a more mechanical latch
   would be a more ergonomic choice". Row 753, check 579, group CR.
 - **The pending rows are bulk accepted,** marked so in the register, but for 417, 609 and 751.
+- **Rulings on those three:** all 17 face patterns stay; SEND B stays FINE; creating a pair over an existing mapping must
+  ask (PC2: "you should have to explicitly consent to either keeping both mappings on that control or the option to remove
+  the existing mapping and let the pair take over that axis"). Row 754, check 580, group CS. **UL and PC2 land before SEM.**
 
 ## Joy-Con version 0 (#365), from another session, 2026-11-04
 

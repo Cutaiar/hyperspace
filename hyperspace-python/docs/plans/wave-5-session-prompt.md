@@ -66,7 +66,9 @@ Given 2026-11-06. These overrule every other document.
   preparation in this wave.
 - **Merge on green holds** for this wave.
 
-[[RULINGS]]
+- **A display has one target, and a target may go to several displays.**
+- **Rows pending the owner were bulk accepted,** and marked so. All 17 face patterns stay; SEND B stays FINE; creating a pair
+  over an existing mapping asks (wave 4).
 
 ## Synopsis
 

@@ -130,7 +130,7 @@ hot-pluggable:** a display accidentally unplugged and plugged back in can't need
 | Id | What | Files | Size | After | Saved? | Proof |
 | --- | --- | --- | --- | --- | --- | --- |
 | **SC1** | Screens by name: port `placement.match` from #223, the one part of it worth keeping. Fixes swapped outputs on its own | placement, config | S | nothing | config only | `test_placement`; replugging HDMI by hand |
-| **SC2** | **One row per connected display** on the output section: its name, what targets it (the control window, a render, or nothing), fullscreen and flips. Written to `<library>/displays.json`, shared by both Macs. Includes fullscreen remembered (plan 23's last piece) | ui, app, config, new store | M | SC1, SC3a | new file `/1` | Headless panel test; `drive-the-app` |
+| **SC2** | **One row per connected display** on the output section: its name, what targets it (the control window, a render, or nothing), fullscreen and flips. One target per display; **a target may go to several displays** (owner, 2026-11-06). Written to `<library>/displays.json`, shared by both Macs. Includes fullscreen remembered (plan 23's last piece) | ui, app, config, new store | M | SC1, SC3a | new file `/1` | Headless panel test; `drive-the-app` |
 | **SC3a** | **The picture stops depending on any one display.** Output 1 holds the GL context and paces the loop today [V], so it can't close while running. Both move to something no unplug can take away. No behaviour change. **The riskiest step in the wave: start with a short spike** | app, outputs, render | L | SC1 | no | Goldens unmoved; frame pacing measured before and after |
 | **SC3b** | **Hot-plug:** a monitor callback, outputs opened and closed while running, the same job back when the same display returns; pictures keep rendering meanwhile; a control window whose display goes moves to one still there | app, outputs, overlay | M–L | SC2, SC3a | no | Tests over a stand-in monitor list; a hand check with a real unplug on the rig |
 | **CT1** | Controllers composed: `devices.json`, with `[[devices]]` read once as a seed; dragging from the tray adopts one; it also looks for MIDI; stable automatic roles, since roles are row addresses | devices, config, ui_players | M | wave 4 | new file `/1` | `test_players`; `tools/drive_players.py` |
@@ -192,7 +192,7 @@ No migration in this wave: SC2 and CT1 add new files, seeded on first launch, an
 - **Cheaper goldens yet.** There's no current cost figure. H2's measurement decides. The likely candidate is
   sampling the 51 re-save redraws, but those guard the migrations, so it would be the owner's call.
 
-**Later, recorded:** faces per instance, face list (row 417), "across" face map, dream fidelity, plan 40's
+**Later, recorded:** faces per instance, **a unifying primitive for face patterns and the general shaders** (the owner is thinking about it, 2026-11-06: patterns are "just kind of shaders" and useful as textures and displacement maps), "across" face map, dream fidelity, plan 40's
 follow-ups, pad rows in patches, pad feedback and trigger effects, Joy-Con acceleration object, paired poles'
 later choice, output warp, plan 29 (DMX, bulbs, Kinect, drums), touchscreen panel, Dante, tempo-synced
 springs, audio delay compensation, creative pass.
@@ -201,7 +201,7 @@ springs, audio delay compensation, creative pass.
 (the rail is gone); wands and Wiimotes as such; an IMU prop (the totem covers it [I]).
 
 **Stale records to fix when next touched:** `CHECKPOINT.md` lists DJ Link as an idea; `11-hand-checks.md`
-says "none run", and 425 ran; row 417 and CHECKPOINT say a face list is awaited, and the owner kept all 17;
+says "none run", and 425 ran; CHECKPOINT says a face list is awaited, and the owner closed it (row 417);
 row 653 is still pending, and the fifth round said no second dream worker.
 
 **Hand checks.** Numbered to 577, and only 425 is recorded as run [V]. Most needed before a show: 489–492's
@@ -228,8 +228,9 @@ They overrule anything above. The wording is in `wave-5-session-prompt.md`.
 7. The 12 trashed looks are deleted in the migration, not converted.
 8. **This scope is right:** no new looks or controllers.
 9. `dkit` is orthogonal. No UI preparation in this wave.
-10. Pending rows bulk accepted and marked so; 417, 609, 751 go to the owner.
+10. Pending rows bulk accepted and marked so. Row 417: all 17 face patterns stay. Row 609: SEND B stays FINE. Row 751: pairs ask (wave 4 PC2).
 11. Merge on green holds for this wave too.
+12. A display's target may go to several displays.
 
 Assumed unless the owner objects: patches may read `master.gain` (457 saved rows do), since reading is not
 writing; a tapped BPM comes back at launch and a nudge does not; totem and poi are meta, following the player's
