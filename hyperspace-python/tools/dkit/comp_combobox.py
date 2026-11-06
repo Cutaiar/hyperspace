@@ -117,10 +117,25 @@ What the measurements said, and what surprised me
   real in light. Measured `Button variant="outline" size="default"`: h 32,
   `rounded-lg` 10, px-2.5 both sides (a Select is px-2.5 / pr-2), text 14
   at weight **500**, `justify-between`, `gap-1.5`. Light: `bg-background`
-  #ffffff at rest and `bg-accent` #f5f5f5 hovered — where `tokens.SELECT`
+  #ffffff at rest and `bg-muted` #f5f5f5 hovered — where `tokens.SELECT`
   records, correctly for a Select, *no light hover tint at all*. Dark is
-  identical to `SELECT_DARK`: `input/30` → `input/50` over a full-strength
-  `input` border.
+  `SELECT_DARK` exactly: `input/30` → `input/50`.
+
+* **Opening the panel tints the trigger in light and NOT in dark.** The
+  Button carries `aria-expanded:bg-muted`, and a `PopoverTrigger` is
+  `aria-expanded="true"` while its panel is up. Measured with the pointer
+  parked off the control: light goes #ffffff → #f5f5f5 on open, dark stays
+  at `input/30` and only moves on hover, because `dark:bg-input/30` wins.
+  So the open state is a fill in one theme and nothing at all in the other
+  — not something a reading of the class list produces.
+
+* **A mouse-opened trigger has no focus ring**, measured `box-shadow:
+  none` in both themes, open and closed, hovered and not. Its
+  `focus-visible:ring-3` needs keyboard focus, which this kit does not
+  route yet (the gap `interact.switch` already records). `interact.select`
+  drives its ring off `open_`; on this control that would paint a ring the
+  browser does not. So `focus_f` is 0 here and the open state is the fill
+  above.
 
 Where a value equals one the kit already has, it says so rather than
 restating it: `T.SELECT_SIZES` gives the trigger's (height, radius) — the
@@ -164,11 +179,23 @@ COMBOBOX = {
     "trigger_weight": "medium",           # font-medium = 500  (Select: 400)
     "trigger_gap": T.SPACE[1.5],          # gap-1.5 = 6
     "trigger_bg": ("background", 1.0),    # light bg-background, opaque white
-    "trigger_hover": ("accent", 1.0),     # light DOES tint; a Select's does not
-    "trigger_border": ("input", 1.0),
-    # NOT MEASURED: no keyboard-focus pass was taken on this trigger. The
-    # class is `focus-visible:ring-3 focus-visible:ring-ring/50`, which is
-    # the ring tokens.INPUT was measured to carry, so draw.field's is used.
+    "trigger_hover": ("muted", 1.0),      # light DOES tint; a Select's does not
+    # `aria-expanded:bg-muted`: in LIGHT the trigger is tinted the whole
+    # time its panel is open, hovered or not. In dark it is not — measured,
+    # `dark:bg-input/30` wins and the open trigger is byte-identical to the
+    # closed one. An asymmetry no reading of the class list produces.
+    "trigger_open": ("muted", 1.0),
+    # `border-border` in light and `dark:border-input` in dark. The two
+    # tokens are the SAME #e5e5e5 in light, so the measurement cannot tell
+    # them apart there; in dark it can, and says input: measured
+    # `oklch(1 0 0 / 0.15)` is #ffffff26 (input), not #ffffff1a (border).
+    "trigger_border": ("border", 1.0),
+    # NOT MEASURED, and deliberately NOT drawn: `focus-visible:ring-3
+    # ring-ring/50` needs keyboard focus, which this kit does not route yet
+    # (the same gap interact.switch records). A mouse-opened trigger was
+    # measured with `box-shadow: none` in both themes and at every state
+    # below, so `combobox` passes focus_f=0 and the open state is a FILL
+    # change, not a ring. The entry is kept because draw.field wants one.
     "trigger_ring": ("ring", 0.5),
     # DERIVED, not measured — the probe's trigger carries no icon. The
     # recipe's is `<ChevronsUpDownIcon className="opacity-50"/>`, 16px by
@@ -247,13 +274,16 @@ COMBOBOX = {
     "empty_ink": ("popover-foreground", 1.0),   # NOT muted-foreground
 }
 
-# The only two values that move with the theme — and they are exactly
-# tokens.SELECT_DARK's two, because a dark Button-outline and a dark
-# SelectTrigger measure the same. Everything else above is a token that
-# swaps itself.
+# The only values that move with the theme, and all four are the trigger's.
+# The first two are tokens.SELECT_DARK's two exactly, because a dark
+# Button-outline and a dark SelectTrigger measure the same. Everything else
+# in the table above is a token that swaps itself.
 COMBOBOX_DARK = {
     "trigger_bg": ("input", 0.3),         # dark:bg-input/30
     "trigger_hover": ("input", 0.5),      # dark:hover:bg-input/50
+    # measured: an OPEN dark trigger is byte-identical to a closed one
+    "trigger_open": ("input", 0.3),
+    "trigger_border": ("input", 1.0),     # dark:border-input
 }
 
 
@@ -645,7 +675,7 @@ def _panel_chrome(ui, dl, x, y, w, h, a, tbl) -> None:
 
 
 def _trigger(ui, tbl, x, y, w, h, radius, label, placeholder, *,
-             hot=0.0, focus_f=0.0, disabled=False) -> None:
+             hot=0.0, open_f=0.0, disabled=False) -> None:
     """The recipe's trigger: a Button variant="outline".
 
     `draw.field` draws the box — genuinely shared chrome, measured identical
@@ -666,12 +696,17 @@ def _trigger(ui, tbl, x, y, w, h, radius, label, placeholder, *,
         "ring": tbl["trigger_ring"],
         "disabled_opacity": 0.5,
     }
-    D.field(ui.dl, x, y, w, h, ui.theme, ft, focus_f=focus_f,
+    # focus_f=0: measured, a mouse-opened trigger carries no ring at all,
+    # in either theme. The open state is the FILL, below.
+    D.field(ui.dl, x, y, w, h, ui.theme, ft, focus_f=0.0,
             disabled=disabled, radius=radius)
+    # open first, then hover on top of it: in light they are the same
+    # colour so the order cannot show, and in dark `open` is the rest fill
+    # and hover is the only tint — which is what the measurement says.
+    bg = mix(_col(ui, tbl["trigger_bg"]), _col(ui, tbl["trigger_open"]),
+             open_f)
     D.fill(ui.dl, x, y, w, h,
-           mix(_col(ui, tbl["trigger_bg"]), _col(ui, tbl["trigger_hover"]),
-               hot),
-           radius)
+           mix(bg, _col(ui, tbl["trigger_hover"]), hot), radius)
 
     pad, cs = tbl["trigger_pad_x"], tbl["chevron"]
     # `justify-between`: the icon's right edge is the content box's right
@@ -707,9 +742,9 @@ def _field(ui, key, x, y, w, h, tbl, text, placeholder, *, focus: bool):
     # and `set_keyboard_focus_here` below guarantees that is this field.
     # Measured, the real one has no focus chrome at all — the InputGroup's
     # ring selector never matches a `command-input` — so it is cleared
-    # rather than restyled. A rectangle no shadcn component has is the
-    # single most obvious tell, and nothing else in the kit hits it,
-    # because nothing else in the kit takes focus on its own.
+    # rather than restyled. It showed up at once in a headless drive: a
+    # blue rectangle no shadcn component has, around the one field in the
+    # kit that takes the keyboard without being asked.
     imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
     tx = x + tbl["field_text_x"]
     # the CSS line box is 20 in a 32 field, so the glyphs sit 6 down;
@@ -815,9 +850,11 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     open_ = imgui.is_popup_open(pid)
     hot = ui.anim.to(f"{key}:hot",
                      1.0 if st.hovered and not disabled else 0.0)
-    focus_f = ui.anim.to(f"{key}:focus", 1.0 if open_ else 0.0)
+    # `transition-all` 150ms on the standard curve, measured on the
+    # trigger — so both of its states ease, unlike the panel's rows
+    open_f = ui.anim.to(f"{key}:open", 1.0 if open_ else 0.0)
     _trigger(ui, tbl, x, y, w, hh, T.RADII[rkey], label, placeholder,
-             hot=hot, focus_f=focus_f, disabled=disabled)
+             hot=hot, open_f=open_f, disabled=disabled)
 
     if not open_:
         LAST_RECT.pop(pid, None)
@@ -916,7 +953,14 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
                 chk = _k(it, "checked", None)
                 if chk is None:
                     chk = bool(label) and _k(it, "label", "") == label
-                if _row(ui, it, r, f"{key}.r{i}", tbl,
+                # keyed by the item's OWN id, not by its index: a re-rank
+                # moves rows, and an index-keyed hit target would hand one
+                # row's held/hover state to whichever row took its place —
+                # React keeps a node's identity across a re-order, and this
+                # is the immediate-mode equivalent. Falls back to the index
+                # for rows with no id, which keeps `ui.hit`'s duplicate-id
+                # guard from firing on a list of blanks.
+                if _row(ui, it, r, f"{key}.r{_k(it, 'id', '') or i}", tbl,
                         selected=bool(rows) and rows[s["sel"]] == i,
                         checked=bool(chk)):
                     chosen = _k(it, "id", "")
@@ -930,6 +974,15 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
                      or imgui.is_key_pressed(imgui.Key.keypad_enter, False)):
             chosen = _k(shown[rows[s["sel"]]], "id", "")
         if chosen is not None:
+            imgui.close_current_popup()
+        elif imgui.is_key_pressed(imgui.Key.escape, False):
+            # ImGui dismisses a popup on Escape on its own — but NOT while
+            # an InputText inside it has the keyboard, because the field
+            # takes the first Escape to cancel its own edit. Measured in a
+            # headless drive: one Escape left the panel open, two closed
+            # it. Radix closes on the first, so the popup is closed here by
+            # hand. `is_key_pressed` ignores key ownership, which is what
+            # lets this see a key the field has claimed.
             imgui.close_current_popup()
         ui.dl = saved
         imgui.end_popup()

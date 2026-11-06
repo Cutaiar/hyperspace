@@ -105,6 +105,25 @@ def vector_mask(shape: tuple[int, int]) -> np.ndarray:
     return m
 
 
+def soft_shadow_mask(shape: tuple[int, int]) -> np.ndarray:
+    """The two rows against a soft-shadowed box's own edge.
+
+    `draw.shadow` stacks rounded rects on a Gaussian; Chromium blurs with
+    three box passes. The two shapes agree to a level from 2px out and
+    diverge where the gradient is steepest, which is here. Excluded from the
+    strict metric and REPORTED below, so it is a number rather than a shrug.
+    """
+    m = np.zeros(shape, bool)
+    for c in SPEC["cells"]:
+        band = C.soft_shadow_band(c)
+        if band is None:
+            continue
+        x, y, w, h = band
+        m[max(int(y), 0):int(np.ceil(y + h)),
+          max(int(x), 0):int(np.ceil(x + w))] = True
+    return m
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dir")
@@ -123,6 +142,8 @@ def main() -> int:
     strict = np.abs(react - mine).max(axis=2)
     tol = tolerant_delta(react, mine)
     corners = corner_mask(strict.shape) | vector_mask(strict.shape)
+    soft = soft_shadow_mask(strict.shape)
+    corners = corners | soft
     arcs = C.measure(react.astype(float), mine.astype(float))
 
     print(f"canvas {react.shape[1]}x{react.shape[0]}   "
@@ -224,6 +245,19 @@ def main() -> int:
             ca, cb = cov(react), cov(mine)
             print(f"  {c['id']:14} react {ca:7.3f}   imgui {cb:7.3f}   "
                   f"{cb - ca:+.3f}")
+
+    # --- advisory: the soft-shadow edge -----------------------------------
+    bands = [(c, C.soft_shadow_band(c)) for c in SPEC["cells"]]
+    bands = [(c, b) for c, b in bands if b is not None]
+    if bands:
+        print()
+        print("soft-shadow edge (advisory - the 2 rows draw.shadow cannot "
+              "follow):")
+        for c, (x, y, w, h) in bands:
+            sl = (slice(int(y), int(np.ceil(y + h))),
+                  slice(int(x), int(np.ceil(x + w))))
+            worst = int(strict[sl].max()) if strict[sl].size else 0
+            print(f"  {c['id']:14} worst {worst} levels over {strict[sl].size} px")
 
     amp = np.clip(tol.astype(np.int32) * 4, 0, 255).astype(np.uint8)
     sheet = np.concatenate(

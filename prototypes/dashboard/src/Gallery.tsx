@@ -9,6 +9,10 @@
 // ?gallery&text    the same grid with text, advisory only
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
@@ -200,6 +204,38 @@ export default function Gallery({
             >
               <div style={{ height: c.content }} />
             </ScrollArea>
+          ) : c.kind === "menu" ? (
+            // The panel is portalled, so the TRIGGER is pinned instead and
+            // Radix places the content below it at sideOffset 4 - the same
+            // way the tooltip cell works. The cell rect IS the panel.
+            <DropdownMenu defaultOpen modal={false}>
+              <DropdownMenuTrigger
+                style={{
+                  position: "absolute", left: 0, top: -4,
+                  width: c.w, height: 0, padding: 0, border: 0,
+                }}
+              />
+              <DropdownMenuContent
+                align="start"
+                sideOffset={4}
+                // every descendant, not just the content: the destructive
+                // item and the shortcut carry colours of their OWN
+                // (`text-destructive`, `text-muted-foreground`) and ignore
+                // an inherited transparent, so they painted 255-level text
+                // against an ImGui side drawing none.
+                className="[&_*]:text-transparent!"
+                style={{ width: c.w, animation: "none", opacity: 1,
+                         color: "transparent" }}
+              >
+                <DropdownMenuLabel>Node</DropdownMenuLabel>
+                <DropdownMenuItem>
+                  Open<DropdownMenuShortcut>K</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : c.kind === "card" ? (
             <Card
               className={

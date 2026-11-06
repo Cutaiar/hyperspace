@@ -107,8 +107,25 @@ def box(dl, x, y, w, h, *, fill_col=None, border_col=None, radius=0.0,
 # A CSS blur radius is 2 sigma. Stacking rounded rects at integer expansions
 # with these weights reproduces 1 - Phi(d / sigma), the coverage of a blurred
 # straight edge, to within a level at the alphas shadcn uses.
-def _blur_layers(sigma: float, reach: int = 3):
-    from math import erf, sqrt
+def _blur_layers(sigma: float, reach: int | None = None):
+    """Integer-expansion layers approximating a Gaussian falloff.
+
+    `reach` is how far out the stack goes, and it MUST scale with sigma. It
+    was fixed at 3, which is ample for the 2px shadows the kit was first
+    calibrated on (sigma 1, so 3 sigma) but truncates anything softer:
+    shadow-md's blur 6 is sigma 3 and reaches ~9px, so two thirds of its
+    falloff was simply not drawn. Measured on a menu panel, that was 5
+    levels down the sides and under the bottom edge - the whole of the only
+    cell in the gallery that was failing.
+    """
+    from math import ceil, erf, sqrt
+    if reach is None:
+        reach = max(3, int(ceil(3.0 * sigma)))
+    # Integer steps. Half-steps were tried on the soft end and came out a
+    # level WORSE for twice the draw calls, which says the residual is not
+    # quantisation: Chromium blurs with three box passes (Skia), not a true
+    # Gaussian, and the two shapes diverge most against the box's own edge.
+    # Modelling the triple box is the way to close it, and is not done.
     phi = lambda z: 0.5 * (1.0 + erf(z / sqrt(2.0)))
     cum = {e: 1.0 - phi((e + 0.5) / sigma) for e in range(-1, reach + 1)}
     out = []
@@ -122,8 +139,19 @@ def shadow(dl, x, y, w, h, col, radius, dx=0.0, dy=0.0, blur=0.0, spread=0.0) ->
     """A CSS box-shadow, as stacked rounded rects.
 
     ImGui has no shadow primitive and NanoVG (which does, via box_gradient) is
-    off headless with no fallback, so it cannot back the diff harness. For the
-    shadows shadcn actually uses - 2px blur at 5% - stacking is within a level.
+    off headless with no fallback, so it cannot back the diff harness.
+
+    Measured accuracy, rather than asserted:
+
+        shadow-xs   blur 2 (sigma 1)   within 1 level everywhere (the cards)
+        shadow-md   blur 6 (sigma 3)   within 1 level from 2px out, and up
+                                       to 7 levels on the TWO rows against
+                                       the box's own edge
+
+    Chromium blurs with three box passes, not a true Gaussian, and the two
+    shapes diverge most where the gradient is steepest. Half-step layers
+    make it a level worse, so the fix is to model the triple box; until
+    then the limit is this, and `diff.py` reports it rather than hiding it.
     """
     if col[3] <= 0.0:
         return

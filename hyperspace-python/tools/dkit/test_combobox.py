@@ -345,12 +345,15 @@ def test_the_row_is_not_a_menu_row():
     that a Command list is not a dropdown menu with a search box."""
     import menu
     t = C.COMBOBOX
-    assert (t["item_h"], menu.ITEM_H) == (32.0, 26.0)
+    # menu.py's item was 26 and its icon 14 when this was written; both
+    # were wrong and have since been corrected to the browser's 28 and 16.
+    # The rows still differ on every axis, which is the claim here.
+    assert (t["item_h"], menu.ITEM_H) == (32.0, 28.0)
     assert (t["item_pad_x"], menu.ITEM_PAD_X) == (8.0, 6.0)
     assert (t["item_gap"], menu.GAP) == (8.0, 6.0)
     assert T.RADII[t["item_radius"]] == 6.0          # rounded-sm
     assert T.RADII["md"] == 8.0                      # menu.py's row radius
-    assert (t["check"], menu.ICON) == (16.0, 14.0)
+    assert t["check"] == menu.ICON == 16.0           # the one they share
 
 
 def test_the_panel_chrome_is_the_menus():
@@ -377,13 +380,33 @@ def test_the_trigger_borrows_the_selects_measured_size():
     assert T.SELECT_SIZES["default"] == (32.0, "lg")
     assert T.RADII["lg"] == 10.0
     # ...but NOT the Select's fills: light hovers here and does not there
-    assert C.COMBOBOX["trigger_hover"] == ("accent", 1.0)
+    assert C.COMBOBOX["trigger_hover"] == ("muted", 1.0)
     assert T.SELECT["hover_bg"] == ("transparent", 1.0)
     # dark is the same pair for both
-    assert C.COMBOBOX_DARK == {"trigger_bg": ("input", 0.3),
-                               "trigger_hover": ("input", 0.5)}
-    assert T.SELECT_DARK["bg"] == ("input", 0.3)
-    assert T.SELECT_DARK["hover_bg"] == ("input", 0.5)
+    assert T.SELECT_DARK["bg"] == C.COMBOBOX_DARK["trigger_bg"] == \
+        ("input", 0.3)
+    assert T.SELECT_DARK["hover_bg"] == C.COMBOBOX_DARK["trigger_hover"] == \
+        ("input", 0.5)
+
+
+def test_opening_the_panel_tints_the_trigger_in_light_only():
+    """`aria-expanded:bg-muted` on the Button, measured with the pointer
+    parked away: light #ffffff -> #f5f5f5 on open, dark unchanged because
+    `dark:bg-input/30` wins. An asymmetry the class list does not show."""
+    light, dark = C.combobox_table("light"), C.combobox_table("dark")
+    assert light["trigger_bg"] != light["trigger_open"]
+    assert dark["trigger_bg"] == dark["trigger_open"] == ("input", 0.3)
+
+
+def test_the_triggers_border_token_differs_by_theme():
+    """`border-border` light, `dark:border-input` dark. In LIGHT the two
+    tokens are the same #e5e5e5, so no measurement can tell them apart; in
+    dark they differ and the measured 0.15 alpha names `input`."""
+    assert C.combobox_table("light")["trigger_border"] == ("border", 1.0)
+    assert C.combobox_table("dark")["trigger_border"] == ("input", 1.0)
+    assert T.LIGHT["border"] == T.LIGHT["input"] == "#e5e5e5"
+    assert T.DARK["border"] != T.DARK["input"]
+    assert T.DARK["input"] == "#ffffff26"       # the 0.15 that was measured
 
 
 def test_the_search_field_is_tinted_in_both_themes():

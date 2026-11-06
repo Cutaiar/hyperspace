@@ -265,13 +265,19 @@ def test_the_values_shared_with_menu_py_are_not_silent_duplicates():
     assert CONTEXT_MENU["gap"] == menu.GAP
 
 
-def test_the_rows_where_menu_py_and_the_browser_disagree():
-    """Pinned so the disagreement is a fact rather than a memory. These are
-    menu.py's numbers to fix — the item classes are identical between the
-    two components, so the browser's answer is the same for both."""
+def test_menu_py_now_agrees_with_the_browser():
+    """This test was written to pin a DISAGREEMENT: menu.py had an item at
+    26 and an icon at 14 where the browser measures 28 and 16, and it had
+    shipped that way. The fix has landed, so the test now asserts agreement
+    instead - and keeps asserting it, which is the point.
+
+    The item classes are byte-identical between ContextMenu and
+    DropdownMenu, so the browser's answer is the same for both.
+    """
     import menu
-    assert menu.ITEM_H == 26.0 and CONTEXT_MENU["item_h"] == 28.0
-    assert menu.ICON == 14.0 and CONTEXT_MENU["icon"] == 16.0
+    assert menu.ITEM_H == CONTEXT_MENU["item_h"] == 28.0
+    assert menu.ICON == CONTEXT_MENU["icon"] == 16.0
+    assert menu.LABEL_H == 24.0          # text-xs 16/16 + py-1, not an item
 
 
 def test_destructive_hover_alpha_is_themed_not_the_token():

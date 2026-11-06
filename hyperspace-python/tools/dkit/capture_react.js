@@ -11,7 +11,12 @@ const out = process.argv[3] || "/tmp/dkit"
 
 ;(async () => {
   const b = await chromium.launch({ args: ["--no-sandbox", "--force-device-scale-factor=1"] })
-  const p = await b.newPage({ viewport: { width: 1200, height: 700 }, deviceScaleFactor: 1 })
+  // The viewport must COMFORTABLY exceed the spec canvas. Anything placed
+  // by floating-ui - a menu, a tooltip, a popover - asks the live viewport
+  // whether it fits, and flips if it does not. With a 700px viewport and a
+  // 1300px canvas the menu cell was off-screen, so Radix placed its panel
+  // ABOVE the trigger and the diff compared two different sides.
+  const p = await b.newPage({ viewport: { width: 1200, height: 1600 }, deviceScaleFactor: 1 })
   const errs = []
   p.on("pageerror", (e) => errs.push(String(e)))
   await p.goto(url, { waitUntil: "networkidle", timeout: 60000 })

@@ -28,10 +28,20 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import draw as D          # noqa: E402
+from ease import Anim     # noqa: E402
 import gradient as G      # noqa: E402
 import tokens as T        # noqa: E402
 
 SPEC = json.loads((HERE / "spec.json").read_text())
+
+
+def _menu_items():
+    import menu as M
+    return [M.heading("Node"),
+            M.Item(id="open", label="Open", shortcut="K"),
+            M.Item(id="dup", label="Duplicate"),
+            M.sep(),
+            M.Item(id="del", label="Delete", variant="destructive")]
 
 # Geist ships only as a variable woff2, which stb_truetype can read neither of.
 # tools/dkit/fonts holds static instances cut from that exact file at the
@@ -75,6 +85,8 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     grad_tex = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))
     faces = load_faces()
     badges = T.badge_table(theme_name)
+    global MENU_CELL_ITEMS
+    MENU_CELL_ITEMS = _menu_items()
     sliders = T.slider_table(theme_name)
     switches = T.switch_table(theme_name)
     inputs = T.input_table(theme_name)
@@ -129,6 +141,18 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 D.scroll_bar(dl, cell["x"] + 1.0, cell["y"] + 1.0,
                              cell["w"] - 2.0, vp, vp, float(cell["content"]),
                              cell["frac"] * (cell["content"] - vp), theme)
+            elif cell["kind"] == "menu":
+                # The chrome that menu.popup draws, without the popup - the
+                # one component the kit shipped with NO cell here, which is
+                # how six wrong row metrics survived in it.
+                import menu as M
+                import interact as I
+                mui = I.Ui(dl, faces, theme, Anim(), theme_name=theme_name)
+                M.panel_chrome(mui, dl, cell["x"], cell["y"],
+                               cell["w"], cell["h"])
+                M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
+                       cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
+                       "gallery.menu", chrome_only=True)
             elif cell["kind"] == "text":
                 D.text_cell(dl, cell, faces, ink)
         imgui.render()

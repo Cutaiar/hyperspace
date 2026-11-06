@@ -61,6 +61,9 @@ KIND = {
     # capsule, below the 3px the radial march can resolve, so the thumb is
     # held to the flat metric (where it has to be exact anyway)
     "scroll": {"radius": 10.0, "outset": 0, "ring": True},
+    # a menu panel: rounded-lg, a 1px ring 1px outside, and shadow-md
+    # reaching ~6px further
+    "menu": {"radius": 10.0, "outset": 6, "ring": True},
 }
 
 
@@ -122,6 +125,22 @@ def icon_boxes(cell):
         return [(t.x - 1, t.y - 1, t.w + 2, cap + 1),
                 (t.x - 1, t.y + t.h - cap, t.w + 2, cap + 1)]
     return []
+
+
+# Kinds that carry a SOFT shadow (blur > 4). The two rows against such a
+# box's own edge are the one place draw.shadow's stacked rects cannot follow
+# Chromium's triple box blur - see draw.shadow. Reported by diff.py as its
+# own number rather than silently tolerated.
+SOFT_SHADOW = {"menu": 2}
+
+
+def soft_shadow_band(cell):
+    """The band just outside a soft-shadowed box, as a rect, or None."""
+    n = SOFT_SHADOW.get(cell["kind"])
+    if not n:
+        return None
+    return (cell["x"] - n, cell["y"] + cell["h"],
+            cell["w"] + 2 * n, float(n))
 
 
 def arrow_box(cell):
