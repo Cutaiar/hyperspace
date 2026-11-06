@@ -1547,6 +1547,8 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
 META_WORDS = "{pid} is the meta controller's, tuned before the show; no preset row may drive it"
 LOAD_WORDS = ("{pid} loads a patch onto the deck off air, which is the meta controller's to do; "
               "no preset row may drive it")
+SAVE_WORDS = ("{pid} writes a library file, which a person's save does; "
+              "no preset row may drive it")
 # the library verbs: a load is a meta controller verb (the owner, 2026-11-06, row 700)
 LOAD_VERBS = frozenset({"preset.select", "preset.next", "preset.prev", "preset.home",
                         "preset.list.next", "preset.list.prev"})
@@ -1567,6 +1569,14 @@ def is_load_verb(pid: str | None) -> bool:
         pid.startswith("preset.load.") and pid.rpartition(".")[2].isdigit()))
 
 
+def is_save_verb(pid: str | None) -> bool:
+    """Does `pid` write a library file (`preset.save_new`, `preset.save.<k>`)? `save_slot`
+    writes over the file slot k names, which can be another preset's. A person's save is
+    the meta controller's row or the panel's, and stays."""
+    return pid == "preset.save_new" or (bool(pid) and pid.startswith("preset.save.")
+                                        and pid.rpartition(".")[2].isdigit())
+
+
 def meta_refusal(pid: str | None) -> str | None:
     """Why no row of a preset may drive `pid`, or None when one may. The hard
     rule (the owner, 2026-11-04, register row 743; overturns the old "a route
@@ -1574,11 +1584,14 @@ def meta_refusal(pid: str | None) -> str | None:
     the show, and the refusal says which params belong in the preset. By the
     id (`is_session_id`), so a table with no registry and a param this build
     has not made yet are still classed; it says what `part_of` says of every
-    param a registry holds. And a library verb (`is_load_verb`, row 700): from a
-    row it lands on the other deck, so a preset's row on one would be one preset
-    changing another, which the absolute rule forbids."""
+    param a registry holds. And a library verb (row 752): from a row a load lands on
+    the other deck (`is_load_verb`, row 700) and a save writes over a slot's file
+    (`is_save_verb`), so a preset's row on one would be one preset changing another,
+    which the absolute rule forbids."""
     if is_load_verb(pid):
         return LOAD_WORDS.format(pid=pid)
+    if is_save_verb(pid):
+        return SAVE_WORDS.format(pid=pid)
     return META_WORDS.format(pid=pid) if is_session_id(pid) else None
 
 

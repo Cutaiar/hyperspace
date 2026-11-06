@@ -2790,7 +2790,7 @@ def build_performance(view, bank=None, dream=None, fx=None, ghost=None, media=No
             r.trigger(f"preset.save.{k}", f"Save preset {k + 1}",
                       lambda k=k: bank.save_slot(k), group=g, modulatable=False)
         # save-as into the next empty slot (plan 15 WP4): no desk row any
-        # more, learnable onto any button
+        # more, learnable onto a pad button, never a preset's row (row 752)
         r.trigger("preset.save_new", "Save as a new preset", bank.save_new,
                   group=g, modulatable=False,
                   tip="Save the live state as a new preset, named from the loaded "

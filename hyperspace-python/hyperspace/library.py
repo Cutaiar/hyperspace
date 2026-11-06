@@ -3643,9 +3643,9 @@ class DeckProject(Project):
     named exception to "a row acts only on the `Deck` its player is on": `load_slot`,
     `cycle`, `walk` and `home`, whichever deck's param was pressed, land on the deck
     off air and step from what it holds; nothing on air changes. `meta` (the
-    `MetaController`) says where (`row_load`), or why not. No preset can press one:
-    `routing.meta_refusal` refuses a preset's row on a verb at every door. A save does
-    not change the picture, so it stays on its own deck, as does the panel's load,
+    `MetaController`) says where (`row_load`), or why not. No preset can press a load
+    or a save: `routing.meta_refusal` refuses a preset's row on either at every door. A
+    person's save does not change the picture, so it stays on its own deck, as does the panel's load,
     which is the plain `Project`'s and the intentional one. `meta` None (no second
     deck): a load lands on this deck."""
 

@@ -8023,7 +8023,8 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 2. Click the chip to deck 2. *Pass:* the strip and the canvas show what the pad loaded. ⌘Z there takes it back. Back on deck 1, ⌘Z never undoes a pad.
 3. QUANT several times. *Pass:* it walks the pads from the one lit, wrapping. F-keys and Home the same.
 4. Fade across. *Pass:* the pads' light moves to what deck 1 holds; the next press loads deck 1, and the footer says so.
-5. In ROUTING or Learn, try to put a desk knob or button on `preset.next`. *Pass:* refused, in words, "no preset row may drive it". A pad button's Learn takes it, and works.
+5. In ROUTING or Learn, try to put a desk knob or button on `preset.next`, then on `preset.save_new`. *Pass:* each refused, in words, "no preset row may drive it". A pad button's Learn takes one, and works.
+6. Save three ways: the panel's "as…", a held empty pad, and the Edge's hold on MENU if you have one. *Pass:* each saves, as before.
 *Judge:* is green for off air right, with nothing on the pads saying what the room is on? The panel's chip and the OS title say that.
 
 ## CF. Node mode's saved form (plan 57)

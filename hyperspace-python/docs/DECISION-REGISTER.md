@@ -756,7 +756,7 @@ here; overturn → the change, then the same.
 | 749 | Plan 56: the step-or-spring choice is the row's op: `step`, the neutral default and the meta controller's, or a route with a feel, the preset's; Learn pair and Learn pair (spring), two presses | 748 | (rec) — pending the owner; the owner, 2026-11-04: the choice "is immaterial to what I'm saying right now" |
 | 750 | Plan 56: the factory's `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows and act exactly as they did; no saved-format change, an older build reads a pair's row as dormant | 748 | (rec) — pending the owner |
 | 751 | Plan 56: not built, poles on keys or MIDI notes; a route on a pair leaves its poles' own rows alone, and both act | 748 | (rec) — pending the owner |
-| 752 | Plan 44 D5d: no preset may carry a row on a library verb. `routing.meta_refusal` refuses a desk row or route on one at every door (`is_load_verb`), dropped with a note on load, gone at the next save; the meta controller's own rows pass. `preset.*` stays out of `is_session_id` until SEM. Not a format change | 700, 743 | owner — 2026-11-06: "no patch can affect another patch" |
+| 752 | Plan 44 D5d: no preset may carry a row on a library verb, a load (`is_load_verb`) or a save (`is_save_verb`: `preset.save.<k>`, `preset.save_new`). `routing.meta_refusal` refuses a desk row or route on one at every door, dropped with a note on load and gone at the next save; the meta controller's own rows pass, so a person's saves are as they were. `preset.*` stays out of `is_session_id` until SEM. Not a format change | 700, 743 | owner — 2026-11-06: "no patch can affect another patch" |
 
 "—": no hand check shows it; tests only.
 
@@ -13652,7 +13652,7 @@ still wins, as does a sink row.
   totem's `skip` or, with #365, a model's own layout.
 - **Judge it.** 576.
 
-### 752. No preset's row can press a load
+### 752. No preset's row can press a load or a save
 
 - **Answer.** The owner, 2026-11-06: "no patch can affect another patch." Under row 700 a row a preset carries on a verb would
   let the on-air preset load the other deck.
@@ -13660,12 +13660,14 @@ still wins, as does a sink row.
   route on any op and any source (a `seq:` lane included), `add`, `bind`, `move_route`, `replace_owner`, `set_desk`, the referee at a
   load, both Learns, the GRAPH and ROUTING pickers, Save as patch. The file is left alone, the row drops with a note, and a
   later save removes it. `tools/meta_routes.py` lists them with the others.
-- **Found.** The factory's preset layer holds none: every factory row on a verb (the 24 bank pads, QUANT, OVERDUB, F1–F8, Home) is
-  invariant or a key, so the meta controller's. No corpus preset or shipped JSON carries one (`test_no_factory_row_or_corpus_preset_carries_a_load_row`).
+- **Found.** The factory's preset layer holds none: every factory row on a verb (the 24 bank pads, QUANT, OVERDUB, F1–F8, ⇧F1–F8, Home) is
+  invariant or a key, so the meta controller's. No corpus preset or shipped JSON carries one (`test_no_factory_row_or_corpus_preset_carries_a_load_or_save_row`).
   The Drive library was not read: any preset there with such a row loses it with a note on load.
 - **A consequence.** `preset.list.*` has no factory row, and "Learn puts them on a control" meant a preset-layer row on a desk control.
   That is refused now; a pad button's Learn still takes one, and a row in `bindings.json` works. SEM can give the desk a Learn for it.
-- **Not closed, reported.** A preset's row on `preset.save.<k>` or `preset.save_new` is still allowed: it saves its own deck, but
-  `save_slot` writes over the file slot k names, which can be another preset. Item 4 of the row 700 brief named load verbs; SEM
-  moves `preset.*` wholly. `preset.select`'s `held` and `save_into` are reached only through a row on `preset.select`, so closed.
+- **Saves too.** A look's own row on `preset.save.<k>` would write over the file slot k names, which can be another look's, so
+  `is_save_verb` is refused beside it; `preset.select`'s `held` and `save_into` are reached only through a row on `preset.select`, so
+  closed with it. `desk.save` is a session param already. No other param writes a library file. **A person's saves stay:** the panel's,
+  a held empty pad and SAVE plus a pad on the invariant row, ⇧F1–F8, and the Edge's hold-to-save (`pad@edge:MENU`, row 723), all the
+  meta controller's rows. `preset.save_new` can no longer be learned onto a desk control, as with `preset.list.*` above.
 - **Judge it.** 578.
