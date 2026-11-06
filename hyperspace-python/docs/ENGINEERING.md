@@ -3416,6 +3416,28 @@ uv run ruff check .
   device bound itself) and `tests/test_clouds.py`.
   `tests/test_app_boundary.py`'s `ORDER` pins the three device slots.
 
+### Doc tails
+
+`DECISION-REGISTER.md`, `DECISIONS.md`, `plans/11-hand-checks.md` and
+`plans/README.md` merge by union (`.gitattributes` at the repo's root, plan 58 H1):
+two PRs that each add a row at the tail merge clean, both rows kept. Most replayed
+conflicts were these files, not code.
+
+- **What it costs.** Git no longer stops two PRs that took one number, so
+  `tests/test_doc_numbers.py` does: register rows and sections, hand-check group
+  letters and check numbers each unique. Take the next free number after merging main.
+- **What it can't see.** Two PRs that edit one prose line keep both versions, so read
+  the merged preamble of a doc you edited. Each side's added lines stay in one block,
+  but a line both ends share, usually the blank between them, is kept once.
+- **Order.** Rows land in merge order. `uv run python tools/sort_register.py` puts the
+  register back; it changes no text.
+- **A branch from before `.gitattributes`.** `git merge` reads the attribute from the
+  tree you're on, so merging main into such a branch still conflicts. Run
+  `git checkout origin/main -- .gitattributes` first.
+- **On GitHub.** With the attribute only on the branches, not on `main`, its merge API
+  and a PR's mergeable state both said conflict where a local merge was clean. If a PR
+  shows a conflict in these files alone, merge main locally and push.
+
 ### CI
 
 `.github/workflows/tests.yml` runs on every pull request and every push

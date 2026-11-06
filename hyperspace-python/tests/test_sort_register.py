@@ -2,6 +2,7 @@
 numbered sections sorted, no text changed; an unnumbered `### ` and a tail
 after the last section do not break it or travel."""
 
+import runpy
 import subprocess
 import sys
 from pathlib import Path
@@ -53,6 +54,16 @@ def test_unnumbered_headings_stay_with_their_section_and_the_tail_stays_last(tmp
                                     "## What no row covers", "the tail")]
     assert order == sorted(order), out
     assert out.endswith("the tail\n")
+
+
+def test_importing_it_sorts_nothing(tmp_path, monkeypatch):
+    """Importing it once re-sorted the register. Aimed at a scratch file, so if the
+    guard ever goes this fails there and not on the real one."""
+    path = tmp_path / "REGISTER.md"
+    path.write_text(REGISTER)
+    monkeypatch.setattr(sys, "argv", ["sort_register.py", "1", str(path)])
+    runpy.run_path(str(TOOL), run_name="sort_register")
+    assert path.read_text() == REGISTER
 
 
 def test_a_second_run_changes_nothing_and_first_leaves_older_sections(tmp_path):
