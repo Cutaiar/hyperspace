@@ -334,6 +334,35 @@ def flex(container: Rect, items, *, direction: str = "row", gap: float = 0.0,
 # tools/dkit/probe_react.js rather than derived from the Tailwind classes,
 # and two of them are not what the classes suggest.
 
+def card_body(card, *, description: bool = True):
+    """A Card's content box: inside its padding and below its header.
+
+    Both numbers come from tokens, which measured them off a real shadcn
+    Card - 16px of padding, a 22px title, a 4px gap, a 20px description, 16
+    to the content. Written out by hand in the demo they came to +14, +34
+    and +52, three constants that did not agree with the component.
+    """
+    from tokens import CARD_PAD, card_body_y
+    top = card_body_y(card.y, description=description)
+    return Rect(card.x + CARD_PAD, top,
+                card.w - 2 * CARD_PAD,
+                card.y + card.h - CARD_PAD - top)
+
+
+def stack(box, n, item_h, *, gap=8.0):
+    """`n` rows of `item_h` down `box`, `gap` apart. The vertical Flow.
+
+    A thin wrapper over flex, and it exists because the demo kept writing
+    `y + i * pitch` instead - which is how a 24px control ended up on a 27px
+    pitch with a 3px gutter, and why the card read cramped.
+    """
+    # shrink=0: a stack that overflows its box must overflow, not quietly
+    # compress every row. Flex's default shrink is 1, which silently turned
+    # 24px rows into 16.5px ones the first time this was written.
+    return flex(box, [Item(h=item_h, shrink=0.0) for _ in range(n)],
+                direction="column", gap=gap)
+
+
 def slider_geom(x, y, w, h, fracs, *, track_h=4.0, thumb=12.0):
     """(track, range, [thumb, ...]) for a slider, in CSS pixels.
 

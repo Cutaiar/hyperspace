@@ -10,6 +10,7 @@
 // spec.json rects for the pixel diff. This one lets the components size
 // THEMSELVES, which is the question "how big is a switch, actually" — and
 // the answer (h-[18.4px]) is not one I would have guessed.
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
@@ -140,6 +141,24 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
           </Select>
         </P>
       ) : null}
+
+      {/* ---- Card + a stack of labelled fields: the SPACING, which is the
+           thing the dashboard has been guessing. Card's own padding and
+           header gap, and the rhythm between a label and its control. ---- */}
+      <P id="card.header" w={360}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Controls</CardTitle>
+            <CardDescription>Slider, Switch, Select, Input</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div data-probe-field className="grid gap-2">
+              <label data-slot="label">Cutoff</label>
+              <Input defaultValue="2400" />
+            </div>
+          </CardContent>
+        </Card>
+      </P>
 
       {/* ---- Tooltip, forced open ---- */}
       <P id="tooltip.open">

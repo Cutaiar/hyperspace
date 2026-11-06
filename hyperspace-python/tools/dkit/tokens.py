@@ -62,6 +62,54 @@ LIGHT_L = {"primary": 0.205, "card": 1.0}
 DARK_L = {"primary": 0.922, "card": 0.205}
 
 
+# --------------------------------------------------------------------------
+# spacing
+# --------------------------------------------------------------------------
+#
+# Tailwind's 4px base, which is what shadcn spaces everything on. This exists
+# because the dashboard was written without it and read cramped: rows on a
+# 27px pitch carrying 24px controls, a 3px gutter, and a card header whose
+# title and description were 20px apart where shadcn puts them 4.
+#
+# That is the same failure box.py was written to stop one layer down - "the
+# answer is not better constants; it is not writing constants" - so the
+# numbers below are measured off a real Card + Field on the ?probe route
+# rather than chosen:
+#
+#     card padding            16    (px-4 py-4)
+#     title -> description     4    (gap-1)
+#     header -> content       16    (gap-4)
+#     label -> its control     8    (gap-2)
+#
+# Use SPACE[n], and reach for box.flex(direction="column", gap=...) rather
+# than writing `i * pitch`: the kit has had that since flex landed.
+# Half steps included because shadcn leans on them for control padding:
+# px-2.5 is the Input's 10 and py-1.5 is the Tooltip's 6. Without them those
+# read as arbitrary numbers instead of as points on one scale.
+SPACE = {0: 0.0, 0.5: 2.0, 1: 4.0, 1.5: 6.0, 2: 8.0, 2.5: 10.0, 3: 12.0,
+         3.5: 14.0, 4: 16.0, 5: 20.0, 6: 24.0, 8: 32.0, 10: 40.0, 12: 48.0}
+
+
+def sp(n):
+    """A point on the spacing scale. `sp(2.5)` is Tailwind's px-2.5 = 10."""
+    return SPACE[n]
+
+# The Card's own measured rhythm, so a header is not re-derived per card.
+CARD_PAD = SPACE[4]          # 16, all four sides
+CARD_TITLE_GAP = SPACE[1]    # 4, title baseline box -> description
+CARD_HEAD_GAP = SPACE[4]     # 16, description -> first content row
+CARD_TITLE_H = 22.0          # text-base, line-height 22
+CARD_DESC_H = 20.0           # text-sm, line-height 20
+
+
+def card_body_y(card_y: float, *, description: bool = True) -> float:
+    """Where a Card's content starts, measured rather than guessed."""
+    y = card_y + CARD_PAD + CARD_TITLE_H
+    if description:
+        y += CARD_TITLE_GAP + CARD_DESC_H
+    return y + CARD_HEAD_GAP
+
+
 # --radius: 0.625rem = 10px, and the scale shadcn derives from it.
 RADIUS = 10.0
 RADII = {
@@ -179,7 +227,7 @@ SWITCH_DARK = {
 INPUT = {
     "h": 32.0,               # h-8
     "radius": "lg",          # rounded-lg = 10
-    "pad_x": 10.0,           # px-2.5
+    "pad_x": SPACE[2.5],     # px-2.5 = 10
     "font": 14.0,            # md:text-sm
     "bg": ("transparent", 1.0),
     "border": ("input", 1.0),
@@ -202,8 +250,8 @@ INPUT_DARK = {
 # (10) and sm is rounded-md (8).
 SELECT_SIZES = {"default": (32.0, "lg"), "sm": (28.0, "md")}
 SELECT = {
-    "pad_l": 10.0,
-    "pad_r": 8.0,
+    "pad_l": SPACE[2.5],     # px-2.5 on the left
+    "pad_r": SPACE[2],       # pr-2, tighter: the chevron needs less room
     "chevron": 16.0,
     "font": 14.0,
     "bg": ("transparent", 1.0),
@@ -218,8 +266,8 @@ SELECT_DARK = {
 
 TOOLTIP = {
     "radius": "md",          # rounded-md = 8
-    "pad_x": 12.0,           # px-3
-    "pad_y": 6.0,            # py-1.5
+    "pad_x": SPACE[3],       # px-3 = 12
+    "pad_y": SPACE[1.5],     # py-1.5 = 6
     "font": 12.0,            # text-xs
     "bg": ("foreground", 1.0),
     "fg": ("background", 1.0),

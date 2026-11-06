@@ -504,3 +504,50 @@ def tooltip(ui: Ui, key, anchor, text, *, hovered: bool, side="top",
     D.label(ui.dl, r.x + tbl["pad_x"], r.y, text, ui.faces, "regular",
             tbl["font"], ui.col(*tbl["fg"]), baseline_box=r.h, max_w=tw)
     return True
+
+
+def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
+                 disabled=False, thumb=None) -> tuple:
+    """A two-thumb Slider. Returns (changed, lo, hi).
+
+    Separate from `slider` because one `imgui.slider_float` drives one value:
+    a range needs two handles that drag independently, which is the half of
+    the Radix law a still frame cannot show. So this one does its own drag
+    maths over two `invisible_button`s - still widgets `tests/ui_driver.py`
+    can find, since it keys off the text after `##`.
+
+    The cost of not using the stock widget is Ctrl+click numeric entry, which
+    a range has no single number for anyway. Everything else - the inset
+    thumb law, pixel snapping, the hover ring - is shared with `slider`,
+    because both draw through `draw.slider`.
+    """
+    span = float(vmax - vmin) or 1.0
+    flo = min(max((lo - vmin) / span, 0.0), 1.0)
+    fhi = min(max((hi - vmin) / span, 0.0), 1.0)
+    tz = ui.slider_tbl["thumb"] if thumb is None else thumb
+    _track, _rng, thumbs = __import__("box").slider_geom(
+        x, y, w, h, [flo, fhi], track_h=ui.slider_tbl["track_h"], thumb=tz)
+
+    changed = False
+    hot = 0.0
+    for i, (name, val) in enumerate((("lo", lo), ("hi", hi))):
+        t = thumbs[i]
+        st = ui.hit(f"{key}.{name}", t.x, t.y, t.w, t.h)
+        hot = max(hot, st.hot, st.down)
+        if st.held and not disabled:
+            # the thumb is inset by its own width, so the pointer maps back
+            # through the SAME span its position was laid out on
+            at = (imgui.get_io().mouse_pos.x - x - tz / 2.0) / max(w - tz, 1.0)
+            v = vmin + span * min(max(at, 0.0), 1.0)
+            if name == "lo":
+                lo = min(v, hi)
+            else:
+                hi = max(v, lo)
+            changed = True
+
+    flo = min(max((lo - vmin) / span, 0.0), 1.0)
+    fhi = min(max((hi - vmin) / span, 0.0), 1.0)
+    ring_f = ui.anim.to(f"{key}:ring", 0.0 if disabled else min(hot, 1.0))
+    D.slider(ui.dl, x, y, w, h, [flo, fhi], ui.theme, ui.slider_tbl,
+             ring_f=ring_f, disabled=disabled)
+    return changed, lo, hi

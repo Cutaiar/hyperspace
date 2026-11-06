@@ -110,11 +110,26 @@ def ticks(n=180, seed=0x4d21):
 
 # The Tier 1 controls' starting values, in one place so `live` and `render`
 # cannot drift apart.
+# The control rows' label column. A module constant because the interaction
+# tests need to know where a control starts, and a number copied into them
+# by hand is a number that goes stale the moment the layout moves - which is
+# exactly what happened when this went from 92 to 74.
+CTL_LABEL_W = 74.0
+
+
 CTL_STATE = {
     "cutoff": 2400.0,
     "bypass": False,
     "plane": "XW",
     "name": "600-cell",
+    "mix": 0.35,
+    "win_lo": 0.25,
+    "win": 0.70,
+    "mute": True,
+    "mode": "Locked",
+    "tag": "bad id",
+    "tip_frames": 0,
+    "tip_now": False,
 }
 
 
@@ -180,24 +195,36 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
     # stacked because the control column is held to 280px whatever the window
     # does - REVIEW.md puts GRAPH's side pane at 240-320 - so a full-width
     # card would be mostly empty, and stacking them cost the table its rows.
-    rowh = 196
+    # Both cards' rhythm comes off the spacing scale now, not off pitches
+    # written by hand. `card_body` knows where a Card's content starts
+    # because tokens measured it (16 pad, 22 title, 4, 20 description, 16),
+    # and `stack` lays the rows out with a real gap - the demo used to say
+    # `y + 14`, `y + 34`, `y + 52` and `i * 27`, which is a 24px control on a
+    # 27px pitch: a 3px gutter, and it read as cramped as it was.
+    ROW_H, ROW_GAP = 24.0, T.SPACE[3]
+    N_ROWS = 6
+    body_h = N_ROWS * ROW_H + (N_ROWS - 1) * ROW_GAP
+    rowh = (B.card_body(B.Rect(0, 0, 0, 0)).y + body_h + T.CARD_PAD)
+
     routing_box, controls_box = B.flex(
         B.Rect(inner_x, y, inner_w, rowh),
-        [B.Item(0, rowh, grow=3), B.Item(0, rowh, grow=2)], gap=CARD_GAP)
-    r.routing_card = routing_box.as_tuple()
-    ry = y + 56
-    for i in range(6):
-        r.routing_rows.append((routing_box.x + 20, ry + i * 22,
-                               routing_box.w - 40, 18))
+        [B.Item(0, rowh, grow=1), B.Item(0, rowh, grow=1)], gap=CARD_GAP)
 
-    # Composing them is what exposes the gaps - truncation, the drawn trend
-    # marks and the per-segment area fill all came out of doing this rather
-    # than out of the diff.
+    r.routing_card = routing_box.as_tuple()
+    for b in B.stack(B.card_body(routing_box), N_ROWS, ROW_H, gap=ROW_GAP):
+        r.routing_rows.append(b.as_tuple())
+
+    # Two columns of five. The demo IS the demo - every variant the gallery
+    # diffs has to be reachable here too, or it is only ever seen as a pixel
+    # in a contact sheet. Left column is the live controls, right column the
+    # states: a two-thumb range, both small sizes, and the disabled and
+    # invalid chrome.
     r.controls_card = controls_box.as_tuple()
-    cyy = y + 52
-    for i in range(4):
-        r.ctl_rows.append((controls_box.x + 20, cyy + i * 32,
-                           min(280.0, controls_box.w - 40), 28))
+    cbody = B.card_body(controls_box)
+    for col in B.flex(cbody, [B.Item(grow=1), B.Item(grow=1)],
+                      gap=T.SPACE[6]):
+        for b in B.stack(col, 5, ROW_H, gap=ROW_GAP):
+            r.ctl_rows.append(b.as_tuple())
     y += rowh + CARD_GAP
 
     r.table_tabs = (inner_x, y, 0, 32)
@@ -222,6 +249,26 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
 # --------------------------------------------------------------------------
 # drawing
 # --------------------------------------------------------------------------
+
+def card_head(dl, card, title, desc, faces, theme):
+    """A Card's title and description, on the measured rhythm.
+
+    16px of padding, a 22px title, a 4px gap, a 20px description - all from
+    tokens, which read them off a real shadcn Card. Three cards were each
+    writing `y + 14` and `y + 34` instead, which is a 20px gap where the
+    component uses 4, and is why the headers read loose while the rows below
+    them read tight.
+    """
+    x, y, _w, _h = card
+    tx = x + T.CARD_PAD
+    D.label(dl, tx, y + T.CARD_PAD, title, faces, "medium", 16,
+            T.rgba("foreground", theme=theme), baseline_box=T.CARD_TITLE_H)
+    if desc:
+        D.label(dl, tx, y + T.CARD_PAD + T.CARD_TITLE_H + T.CARD_TITLE_GAP,
+                desc, faces, "regular", 13,
+                T.rgba("muted-foreground", theme=theme),
+                baseline_box=T.CARD_DESC_H)
+
 
 def _dot(dl, cx, cy, col, rad=3.0):
     dl.add_circle_filled(imgui.ImVec2(cx + rad, cy), rad, D._u32(col))
@@ -323,11 +370,8 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     # ---- plane routing ----------------------------------------------------
     x, y, cw, ch = r.routing_card
     D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "plain"}, theme, None)
-    D.label(dl, x + 20, y + 14, "Plane routing", faces, "medium", 16, ink,
-            baseline_box=20)
-    D.label(dl, x + 20, y + 34, "Band to rotation plane, with the latest level",
-            faces, "regular", 13, T.rgba("muted-foreground", theme=theme),
-            baseline_box=18)
+    card_head(dl, r.routing_card, "Plane routing",
+              "Band to rotation plane, with the latest level", faces, theme)
     last = series[-1]
     for i, (rect, (name, plane, lo, hi, direction)) in enumerate(zip(r.routing_rows, BANDS)):
         rx, ry, rw, rh = rect
@@ -350,56 +394,119 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     # Every one of these runs a real widget underneath (see interact.py), so
     # they drag, type, open and toggle for real - and stay reachable to
     # tests/ui_driver.py, which finds controls by the text after `##`.
+    #
+    # The right column is the STATES. They are here rather than only in the
+    # gallery because the gallery is a contact sheet: it proves the chrome to
+    # a pixel and shows you nothing about how a disabled control feels under
+    # the pointer, or whether a two-thumb range drags the handle you meant.
+    import menu as M
     x, y, cw, ch = r.controls_card
     D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "plain"}, theme, None)
-    D.label(dl, x + 20, y + 14, "Controls", faces, "medium", 16, ink,
-            baseline_box=20)
-    D.label(dl, x + 20, y + 34,
-            "Slider, Switch, Select, Input - at the 280px the side pane gets",
-            faces, "regular", 13, T.rgba("muted-foreground", theme=theme),
-            baseline_box=18)
+    card_head(dl, r.controls_card, "Controls",
+              "Tier 1 live on the left, every state on the right - "
+              "Bypass disables them", faces, theme)
     muted = T.rgba("muted-foreground", theme=theme)
-    LBL = 92.0
 
-    def _row(i, name):
+    def _row(i, name, dim=False):
         rx, ry, rw, rh = r.ctl_rows[i]
-        D.label(dl, rx, ry, name, faces, "medium", 13, ink, baseline_box=rh,
-                max_w=LBL - 8)
-        return rx + LBL, ry, rw - LBL, rh
+        D.label(dl, rx, ry, name, faces, "medium", 13,
+                muted if dim else ink, baseline_box=rh,
+                max_w=CTL_LABEL_W - T.SPACE[2])
+        return rx + CTL_LABEL_W, ry, rw - CTL_LABEL_W, rh
 
+    # --- left: the live controls ------------------------------------------
     # a continuous param: 292 of the registry's 427 are this shape
     sx, sy, sw, sh = _row(0, "Cutoff")
-    changed, state["cutoff"] = I.slider(
-        ui, "ctl.cutoff", sx, sy, sw - 54, sh, state["cutoff"], 20.0, 20000.0,
+    _, state["cutoff"] = I.slider(
+        ui, "ctl.cutoff", sx, sy, sw - 46, sh, state["cutoff"], 20.0, 20000.0,
         detents=(1000.0,), fmt="%.0f Hz")
-    D.label(dl, sx + sw - 50, sy, f"{state['cutoff']:.0f}", faces, "regular",
-            12, muted, align="right", box_w=50, baseline_box=sh, tabular=True)
+    D.label(dl, sx + sw - 44, sy, f"{state['cutoff']:.0f}", faces, "regular",
+            12, muted, align="right", box_w=44, baseline_box=sh, tabular=True)
     # the tooltip hangs off the slider's own rect and takes no hit target of
     # its own, so it cannot steal the hover from the control it describes
-    I.tooltip(ui, "ctl.cutoff.tip", (sx, sy, sw - 54, sh),
-              "Low-pass cutoff, 20 Hz - 20 kHz",
-              hovered=imgui.is_mouse_hovering_rect(
-                  imgui.ImVec2(sx, sy), imgui.ImVec2(sx + sw - 54, sy + sh)))
+    shown = I.tooltip(ui, "ctl.cutoff.tip", (sx, sy, sw - 46, sh),
+                      "Low-pass cutoff, 20 Hz - 20 kHz",
+                      hovered=imgui.is_mouse_hovering_rect(
+                          imgui.ImVec2(sx, sy),
+                          imgui.ImVec2(sx + sw - 46, sy + sh)))
+    # Counted rather than sampled from pixels. A tooltip floats OVER whatever
+    # is above it - here the card's own description - so ink at a guessed
+    # point cannot tell the two apart. The count also makes the flicker test
+    # exact instead of inferred: if it blinks, the frames simply do not add
+    # up.
+    state["tip_frames"] = state.get("tip_frames", 0) + (1 if shown else 0)
+    state["tip_now"] = shown
 
-    # a toggle param: 47 of them
+    # a toggle param: 47 of them. It GATES the rest, which is what a bypass
+    # does - and it means the disabled chrome is something you can toggle and
+    # watch ease rather than a dead row to look at. Every Tier 1 component
+    # below takes `disabled` from it.
     wx, wy, _, wh = _row(1, "Bypass")
     _, state["bypass"] = I.switch(ui, "ctl.bypass", wx, wy + (wh - 18.4) / 2,
                                   state["bypass"])
+    off = state["bypass"]
 
     # an enum param: 73 of them
     ex, ey, ew, _ = _row(2, "Plane")
-    import menu as M
     chosen, _open = I.select(
-        ui, "ctl.plane", ex, ey, min(ew, 150.0), state["plane"],
+        ui, "ctl.plane", ex, ey, min(ew, 130.0), state["plane"],
         [M.Item(id=p, label=p, checked=(p == state["plane"]))
-         for p in ("XY", "XZ", "XW", "YZ", "YW", "ZW")])
+         for p in ("XY", "XZ", "XW", "YZ", "YW", "ZW")], disabled=off)
     if chosen:
         state["plane"] = chosen
 
     # a text param - a node rename, say
     ix, iy, iw, _ = _row(3, "Name")
-    _, state["name"] = I.text_input(ui, "ctl.name", ix, iy, min(iw, 180.0),
-                                    state["name"], placeholder="Node name")
+    _, state["name"] = I.text_input(ui, "ctl.name", ix, iy, min(iw, 160.0),
+                                    state["name"], placeholder="Node name",
+                                    disabled=off)
+
+    # a second continuous param, to show two sliders do not share state
+    gx, gy, gw, gh = _row(4, "Mix")
+    _, state["mix"] = I.slider(ui, "ctl.mix", gx, gy, gw - 46, gh,
+                               state["mix"], 0.0, 1.0, detents=(0.5,),
+                               fmt="%.2f", disabled=off)
+    D.label(dl, gx + gw - 44, gy, f"{state['mix']:.2f}", faces, "regular", 12,
+            muted, align="right", box_w=44, baseline_box=gh, tabular=True)
+
+    # --- right: every state the gallery diffs ------------------------------
+    # a two-thumb range. Its two handles drag independently, which is the
+    # half of the Radix law a still frame cannot show.
+    rx2, ry2, rw2, rh2 = _row(5, "Window")
+    _, state["win_lo"], state["win"] = I.range_slider(
+        ui, "ctl.win", rx2, ry2, rw2 - 46, rh2,
+        state["win_lo"], state["win"], 0.0, 1.0, disabled=off)
+    D.label(dl, rx2 + rw2 - 44, ry2, f"{state['win_lo']:.2f}-{state['win']:.2f}",
+            faces, "regular", 11, muted, align="right", box_w=44,
+            baseline_box=rh2, tabular=True)
+
+    # the small switch
+    mx, my, _, mh = _row(6, "Mute")
+    _, state["mute"] = I.switch(ui, "ctl.mute", mx, my + (mh - 14.0) / 2,
+                                state["mute"], size="sm", disabled=off)
+
+    # the small select - rounded-md (8) rather than rounded-lg (10)
+    ox, oy, ow, _ = _row(7, "Mode")
+    chosen2, _o2 = I.select(
+        ui, "ctl.mode", ox, oy, min(ow, 130.0), state["mode"],
+        [M.Item(id=m, label=m, checked=(m == state["mode"]))
+         for m in ("Free", "Locked", "Follow")], size="sm", disabled=off)
+    if chosen2:
+        state["mode"] = chosen2
+
+    # aria-invalid: a destructive border AND a 3px destructive ring
+    tx2, ty2, tw2, _ = _row(8, "Tag")
+    _, state["tag"] = I.text_input(ui, "ctl.tag", tx2, ty2, min(tw2, 160.0),
+                                   state["tag"], invalid=True, disabled=off)
+
+    # disabled: the whole element at opacity 50, composited as a GROUP - the
+    # thing that cannot be done by scaling each layer's alpha
+    dx, dy, dw, dh = _row(9, "Gain", dim=True)
+    I.slider(ui, "ctl.gain", dx, dy, dw - 46, dh, 0.62, 0.0, 1.0,
+             disabled=True, fmt="%.2f")
+    D.label(dl, dx + dw - 44, dy, "0.62", faces, "regular", 12,
+            T.rgba("muted-foreground", 0.5, theme=theme), align="right",
+            box_w=44, baseline_box=dh, tabular=True)
 
     # ---- table ------------------------------------------------------------
     tx, ty, _, th = r.table_tabs

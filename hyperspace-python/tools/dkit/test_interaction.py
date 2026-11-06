@@ -98,10 +98,18 @@ def test_kebab_opens_the_menu_after_a_long_hover(DB):
     x, y = kebab_xy(DB)
     script = [(x, y)] * DWELL + [(x, y, True)] * 2 + [(x, y, False)] * 14
     frames = DB.render("dark", W, H, script=script)
-    before = ink(frames[DWELL - 1], x - 90, y + 70)
-    after = ink(frames[-1], x - 90, y + 70)
+    # Where the menu went comes from menu.LAST_RECT, not from a guessed
+    # offset below the kebab: place_popover FLIPS a panel above its trigger
+    # when there is no room below, so a fixed probe point stops finding it
+    # the moment the table's last rows move up the window.
+    r = menu_rect("rowmenu.1")
+    assert r, f"no menu opened after a {DWELL}-frame hover and a press"
+    mx, my, mw, mh = r
+    cx, cy = mx + mw / 2, my + mh / 2
+    before = ink(frames[DWELL - 1], cx, cy)
+    after = ink(frames[-1], cx, cy)
     assert after > before + 2.0, (
-        f"no menu appeared below the kebab after a {DWELL}-frame hover "
+        f"the menu rect is empty after a {DWELL}-frame hover and a press "
         f"(ink {before:.2f} -> {after:.2f})")
 
 
@@ -186,10 +194,15 @@ def ctl_rect(DB, i):
 
 
 def slider_track(DB):
-    """The Cutoff slider's track, as dashboard.paint lays it out."""
+    """The Cutoff slider's track, as dashboard.paint lays it out.
+
+    The label column comes from the module rather than being copied here:
+    a number duplicated into a test goes stale the moment the layout moves,
+    and this one did exactly that when the spacing was put on the scale.
+    """
     rx, ry, rw, rh = ctl_rect(DB, 0)
-    sx = rx + 92.0                      # the label column
-    return sx, ry, rw - 92.0 - 54.0, rh
+    sx = rx + DB.CTL_LABEL_W
+    return sx, ry, rw - DB.CTL_LABEL_W - 46.0, rh
 
 
 def test_slider_drag_moves_the_value(DB):
@@ -248,7 +261,7 @@ def test_switch_toggles_and_settles(DB):
     """Click it, then dwell: the thumb slides on the 150ms curve and must
     come to rest, not oscillate."""
     rx, ry, _, rh = ctl_rect(DB, 1)
-    x, y = rx + 92.0 + 16.0, ry + rh / 2
+    x, y = rx + DB.CTL_LABEL_W + 16.0, ry + rh / 2
     before = DB.render("dark", W, H, script=[(x, y)] * 4)
     script = ([(x, y)] * 6 + [(x, y, True)] * 2 + [(x, y, False)] * DWELL)
     frames = DB.render("dark", W, H, script=script)
@@ -262,7 +275,7 @@ def test_switch_toggles_and_settles(DB):
 def test_switch_does_not_toggle_twice_on_one_click(DB):
     """A press held down for many frames is still one click."""
     rx, ry, _, rh = ctl_rect(DB, 1)
-    x, y = rx + 92.0 + 16.0, ry + rh / 2
+    x, y = rx + DB.CTL_LABEL_W + 16.0, ry + rh / 2
     script = [(x, y)] * 6 + [(x, y, True)] * DWELL + [(x, y, False)] * 6
     DB.render("dark", W, H, script=script)
     assert DB.render.last_state["bypass"] is True, (
@@ -273,7 +286,7 @@ def test_select_opens_and_stays_open(DB):
     """The kebab bug's shape again: open the panel, then dwell on it. It has
     to still be there, and steady, forty frames later."""
     rx, ry, _, rh = ctl_rect(DB, 2)
-    x, y = rx + 92.0 + 40.0, ry + rh / 2
+    x, y = rx + DB.CTL_LABEL_W + 40.0, ry + rh / 2
     script = [(x, y)] * 10 + [(x, y, True)] * 2 + [(x, y, False)] * DWELL
     frames = DB.render("dark", W, H, script=script)
     import menu as M
@@ -286,7 +299,7 @@ def test_select_opens_and_stays_open(DB):
 def test_select_choice_lands(DB):
     """Open it, move onto an item, click: the state must change."""
     rx, ry, _, rh = ctl_rect(DB, 2)
-    x, y = rx + 92.0 + 40.0, ry + rh / 2
+    x, y = rx + DB.CTL_LABEL_W + 40.0, ry + rh / 2
     open_script = [(x, y)] * 10 + [(x, y, True)] * 2 + [(x, y, False)] * 14
     DB.render("dark", W, H, script=open_script)
     import menu as M
@@ -302,39 +315,52 @@ def test_select_choice_lands(DB):
 
 
 def test_tooltip_waits_for_the_delay_then_holds(DB):
-    """A tooltip opens on a delay and must then STAY open.
+    """A tooltip opens on a delay and must then STAY open, every frame.
+
+    Counted, not sampled: a tooltip floats over whatever is above it - here
+    the card's own description - so ink at a guessed point cannot tell the
+    two apart. dashboard.paint tallies the frames it actually drew on, which
+    also makes the flicker check exact rather than inferred. If it blinks at
+    the easing's period the frames simply do not add up.
 
     Both halves matter. Appearing instantly is wrong, and a tooltip that
-    takes the hover from the control it describes would blink at the easing's
-    period - the trap `row_action` exists to close, which a tooltip would
-    walk straight back into if it had a hit target of its own.
+    took the hover from the control it describes would blink - the trap
+    `row_action` exists to close, which a tooltip would walk straight back
+    into if it had a hit target of its own.
     """
     sx, sy, sw, sh = slider_track(DB)
     x, y = sx + sw * 0.5, sy + sh / 2
-    # TOOLTIP_DELAY is 0.4s; render steps a fixed 1/60 dt, so 24 frames
-    frames = DB.render("dark", W, H, script=[(x, y)] * 70)
-    above = [ink(f, x, y - 34) for f in frames]
-    assert max(above[:12]) < 2.0, "the tooltip appeared before its delay"
-    tail = above[-20:]
-    assert min(tail) > 2.0, "the tooltip did not appear, or did not stay"
-    assert max(tail) - min(tail) < 1.0, "the tooltip flickered once open"
+    # TOOLTIP_DELAY is 0.4s and render steps a fixed 1/60, so ~24 frames
+    N = 70
+    DB.render("dark", W, H, script=[(x, y)] * N)
+    shown = DB.render.last_state["tip_frames"]
+    import interact as I
+    delay_frames = round(I.TOOLTIP_DELAY * 60)
+    expected = N - delay_frames
+    assert shown > 0, "the tooltip never appeared"
+    assert shown <= expected + 2, (
+        f"the tooltip appeared before its delay: {shown} frames of a "
+        f"possible {expected}")
+    assert shown >= expected - 2, (
+        f"the tooltip blinked: drawn on {shown} frames, not {expected}")
 
 
 def test_tooltip_goes_away_when_the_pointer_leaves(DB):
     sx, sy, sw, sh = slider_track(DB)
     x, y = sx + sw * 0.5, sy + sh / 2
     away = (sx + sw * 0.5, sy - 220)
-    script = [(x, y)] * 50 + [away] * 20
-    frames = DB.render("dark", W, H, script=script)
-    assert ink(frames[49], x, y - 34) > 2.0, "the tooltip never opened"
-    assert ink(frames[-1], x, y - 34) < 2.0, "the tooltip outlived the hover"
+    DB.render("dark", W, H, script=[(x, y)] * 50)
+    assert DB.render.last_state["tip_now"], "the tooltip never opened"
+    DB.render("dark", W, H, script=[(x, y)] * 50 + [away] * 20)
+    assert not DB.render.last_state["tip_now"], (
+        "the tooltip outlived the hover")
 
 
 def test_input_takes_typing(DB):
     """Click into the field and type: the sandwich must pass the keyboard
     through to the real input_text underneath."""
     rx, ry, _, rh = ctl_rect(DB, 3)
-    x, y = rx + 92.0 + 40.0, ry + rh / 2
+    x, y = rx + DB.CTL_LABEL_W + 40.0, ry + rh / 2
     script = [(x, y)] * 6 + [(x, y, True)] * 2 + [(x, y, False)] * 30
     # characters, not keys: input_text is fed by character events
     DB.render("dark", W, H, script=script, keys=[(12, "Z"), (16, "9")])
@@ -353,7 +379,7 @@ def test_input_text_is_visible_in_both_themes(DB):
     measured without glyphs.
     """
     rx, ry, _, rh = ctl_rect(DB, 3)
-    x, y = rx + 92.0 + 40.0, ry + rh / 2
+    x, y = rx + DB.CTL_LABEL_W + 40.0, ry + rh / 2
     for theme in ("light", "dark"):
         frames = DB.render(theme, W, H, script=[(0.0, 0.0)] * 4)
         assert ink(frames[-1], x, y) > 2.0, (

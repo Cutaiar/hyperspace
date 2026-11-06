@@ -228,3 +228,115 @@ def test_zero_width_range_draws_nothing():
     1px sliver or an inverted rect."""
     _, rng, _ = B.slider_geom(0, 0, 200, 16, [0.0])
     assert rng.w == 0.0
+
+
+# --------------------------------------------------------------------------
+# Spacing
+# --------------------------------------------------------------------------
+# The numbers come from a real shadcn Card + Field on the ?probe route, not
+# from the Tailwind docs. They are here because the dashboard was first
+# written without a scale and read cramped - 24px controls on a 27px pitch.
+
+def test_space_is_tailwinds_4px_scale():
+    assert T.SPACE[1] == 4.0 and T.SPACE[2] == 8.0 and T.SPACE[4] == 16.0
+    # the half steps matter: shadcn uses them for control padding
+    assert T.SPACE[1.5] == 6.0 and T.SPACE[2.5] == 10.0
+    for k, v in T.SPACE.items():
+        assert v == k * 4.0, f"SPACE[{k}] is {v}, off the 4px scale"
+
+
+def test_control_padding_is_on_the_scale():
+    """Tokenized padding, which is the point: a control's padding is a point
+    on the same scale as a gap, not a literal that happens to look right."""
+    assert T.INPUT["pad_x"] == T.SPACE[2.5]       # px-2.5
+    assert T.SELECT["pad_l"] == T.SPACE[2.5]
+    assert T.SELECT["pad_r"] == T.SPACE[2]        # pr-2
+    assert T.TOOLTIP["pad_x"] == T.SPACE[3]       # px-3
+    assert T.TOOLTIP["pad_y"] == T.SPACE[1.5]     # py-1.5
+
+
+def test_card_rhythm_matches_the_browser():
+    """Measured: 16 pad, a 22px title, 4, a 20px description, 16 to content.
+
+    The demo wrote `y + 14` and `y + 34` instead - a 20px title-to-
+    description gap where the component uses 4, which is why the headers read
+    loose while the rows under them read tight.
+    """
+    assert T.CARD_PAD == 16.0
+    assert T.CARD_TITLE_GAP == 4.0
+    assert T.CARD_HEAD_GAP == 16.0
+    assert T.card_body_y(0.0) == 16 + 22 + 4 + 20 + 16 == 78.0
+    # a card with no description loses exactly the description and its gap
+    assert T.card_body_y(0.0, description=False) == 16 + 22 + 16
+
+
+def test_card_body_is_inside_the_padding():
+    c = B.Rect(100.0, 500.0, 400.0, 300.0)
+    body = B.card_body(c)
+    assert body.x == c.x + T.CARD_PAD
+    assert body.w == c.w - 2 * T.CARD_PAD
+    assert body.y == T.card_body_y(c.y)
+    assert body.y + body.h == c.y + c.h - T.CARD_PAD
+
+
+def test_stack_leaves_a_real_gutter():
+    """The bug this exists to stop: flex shrinks by default, so a stack that
+    does not fit silently compressed every row - 24px controls came back as
+    16.5px ones rather than overflowing visibly."""
+    rows = B.stack(B.Rect(0.0, 0.0, 200.0, 1000.0), 5, 24.0, gap=T.SPACE[3])
+    assert [r.h for r in rows] == [24.0] * 5
+    gaps = [b.y - (a.y + a.h) for a, b in zip(rows, rows[1:])]
+    assert gaps == [12.0] * 4
+
+    # and it overflows rather than compressing when the box is too small
+    tight = B.stack(B.Rect(0.0, 0.0, 200.0, 40.0), 5, 24.0, gap=T.SPACE[3])
+    assert [r.h for r in tight] == [24.0] * 5
+
+
+# --------------------------------------------------------------------------
+# cover_corners — the other half of rounded clipping
+# --------------------------------------------------------------------------
+
+def test_cover_corners_covers_the_notch_and_spares_the_middle():
+    """`fill_clipped` handles a rect child; this handles everything else, and
+    it is what ScrollArea will need.
+
+    The geometry is `corner_notches`, which carries no imgui - pulled out of
+    `cover_corners` so it could be tested at all. Point-in-polygon rather
+    than by eye: inside the rounded rect must be untouched, and the corner
+    outside it must be covered.
+    """
+    import math
+
+    x, y, w, h, r = 0.0, 0.0, 40.0, 30.0, 8.0
+    polys = D.corner_notches(x, y, w, h, r)
+    assert len(polys) == 4, "one notch per corner"
+
+    def inside_any(px, py):
+        for poly in polys:
+            n, j = 0, len(poly) - 1
+            for i in range(len(poly)):
+                xi, yi = poly[i]
+                xj, yj = poly[j]
+                if (yi > py) != (yj > py) and \
+                        px < (xj - xi) * (py - yi) / (yj - yi + 1e-12) + xi:
+                    n += 1
+                j = i
+            if n % 2:
+                return True
+        return False
+
+    # the box's own middle, and the centre of each edge, are never covered
+    for px, py in ((w / 2, h / 2), (w / 2, 0.5), (0.5, h / 2),
+                   (w - 0.5, h / 2), (w / 2, h - 0.5)):
+        assert not inside_any(px, py), f"({px}, {py}) was covered"
+
+    # the extreme corner pixels, which lie outside the rounded rect, are
+    for px, py in ((0.3, 0.3), (w - 0.3, 0.3), (0.3, h - 0.3),
+                   (w - 0.3, h - 0.3)):
+        assert inside_any(px, py), f"corner ({px}, {py}) was left showing"
+
+    # a point just inside the arc is spared
+    cx, cy = x + r, y + r
+    px, py = cx - r * math.cos(math.pi / 4) + 0.6, cy - r * math.sin(math.pi / 4) + 0.6
+    assert not inside_any(px, py), "the cover ate into the rounded rect"

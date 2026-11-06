@@ -589,6 +589,32 @@ def fill_clipped(dl, x, y, w, h, col, box, radius) -> None:
                        _u32(col), r, flags)
 
 
+def corner_notches(x, y, w, h, r, *, seg: int = 0):
+    """The four corner notches of a rounded rect, as point lists.
+
+    Pure geometry, no imgui - so it is unit-tested the way box.py is, and
+    `cover_corners` is left with nothing but the draw call. One notch is a
+    square of side r with a quarter disc taken out of it, so the region is
+    CONCAVE: the arc bulges into it.
+    """
+    n = seg or max(6, int(r * 2))
+    # (outer corner, arc centre, the angle the arc starts at) per corner
+    corners = (
+        ((x, y), (x + r, y + r), 180.0),                  # top-left
+        ((x + w, y), (x + w - r, y + r), 270.0),          # top-right
+        ((x + w, y + h), (x + w - r, y + h - r), 0.0),    # bottom-right
+        ((x, y + h), (x + r, y + h - r), 90.0),           # bottom-left
+    )
+    out = []
+    for (ox, oy), (cx, cy), a0 in corners:
+        pts = [(ox, oy)]
+        for i in range(n + 1):
+            a = math.radians(a0 + 90.0 * i / n)
+            pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        out.append(pts)
+    return out
+
+
 def cover_corners(dl, x, y, w, h, radius, backdrop, *, seg: int = 0) -> None:
     """Paint back the four corner notches of a rounded box.
 
@@ -598,30 +624,18 @@ def cover_corners(dl, x, y, w, h, radius, backdrop, *, seg: int = 0) -> None:
     the bounding rect but outside the rounded rect. Exact whenever that
     backdrop is a known flat colour, which inside a panel it is.
 
-    One notch is a square of side r with a quarter disc taken out of it, so
-    the region is CONCAVE - the arc bulges into it. It goes up as an explicit
-    polygon through add_concave_poly_filled (the call ui_bands.py:261 already
-    uses for the spectrogram) rather than through the path API's convex fill,
-    which would bridge the arc and cover the box's own corner.
+    The shape is `corner_notches`; this is only the draw. Each notch goes up
+    as an explicit polygon through add_concave_poly_filled (the call
+    ui_bands.py:261 already uses for the spectrogram) rather than through the
+    path API's convex fill, which would bridge the arc and cover the box's
+    own corner.
     """
     r = css_radius(radius, w, h)
     if r <= 0.0 or backdrop[3] <= 0.0:
         return
     c = _u32(backdrop)
-    n = seg or max(6, int(r * 2))
-    # (outer corner, arc centre) per corner, and the angle the arc starts at
-    corners = (
-        ((x, y), (x + r, y + r), 180.0),              # top-left
-        ((x + w, y), (x + w - r, y + r), 270.0),      # top-right
-        ((x + w, y + h), (x + w - r, y + h - r), 0.0),   # bottom-right
-        ((x, y + h), (x + r, y + h - r), 90.0),       # bottom-left
-    )
-    for (ox, oy), (cx, cy), a0 in corners:
-        pts = [imgui.ImVec2(ox, oy)]
-        for i in range(n + 1):
-            a = math.radians(a0 + 90.0 * i / n)
-            pts.append(imgui.ImVec2(cx + r * math.cos(a), cy + r * math.sin(a)))
-        dl.add_concave_poly_filled(pts, c)
+    for poly in corner_notches(x, y, w, h, r, seg=seg):
+        dl.add_concave_poly_filled([imgui.ImVec2(px, py) for px, py in poly], c)
 
 
 # --------------------------------------------------------------------------
