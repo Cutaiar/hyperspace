@@ -127,3 +127,50 @@ nearly free to build and changes how the app is used.
   menu and tooltip from `panel:graph`.
 - **A persisted param id is a file format** (`REVIEW.md`), so a component
   that renames anything needs the migration rules.
+
+## Picking this up in a fresh session
+
+Everything needed to resume is in the repo, not in a chat log. Read, in
+this order:
+
+1. **`ROADMAP.md`** (this file) — what to build, why that order, and the
+   constraints each component has to respect.
+2. **`README.md`** — how the kit works, how to run it, how to test it, and
+   the calibration findings that are easy to rediscover the hard way
+   (ImGui's stroke is not centred on the path; its font size is not a CSS
+   px; three bindings reverse the C++ argument order).
+3. **`FINDINGS.md`** — what is built, what is not, and what every number
+   was measured on.
+
+A reasonable opening message:
+
+> Read `hyperspace-python/tools/dkit/ROADMAP.md` and `README.md`. Build
+> Tier 1, starting with Slider — 292 of 427 params are continuous, so it is
+> the single biggest win. Use the browser-oracle pattern: add the component
+> to `prototypes/dashboard`, measure it there, then match it in the kit.
+
+### The order I would take
+
+**Slider → Input → Select → Switch → Tooltip**, then Tier 2.
+
+One amendment to the tier list: **do rounded clipping before ScrollArea.**
+A scroll area is a clipped region with rounded corners, and ImGui clips to
+rectangles only, so ScrollArea cannot be done properly without it. It is
+also the gap most likely to be hit by something else in the meantime —
+a card with an image, a progress track, any `overflow-hidden`.
+
+### The method that has worked
+
+Every part of this that came out right came out of measuring rather than
+reasoning:
+
+- the chrome, against a screenshot of the real component;
+- the easing curve, against Chromium's Web Animations output;
+- flex, against Chromium's own layout (which caught that CSS scales the
+  shrink factor by base size but not the grow factor);
+- the interaction bugs, against tests that **dwell past the animation
+  period** — the kebab flicker survived a six-frame check because the
+  transition is nine frames long.
+
+When something looks right but is not measured, it is usually wrong in a
+way nobody will see until it ships. Build the oracle first.

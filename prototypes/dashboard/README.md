@@ -8,6 +8,20 @@ renderer — it is a look at a toolkit, not a proposed UI.
 
 ![The dashboard](shots/overview.png)
 
+## It is also an oracle
+
+This dashboard is the ground truth for
+[`hyperspace-python/tools/dkit/`](../../hyperspace-python/tools/dkit/), which
+rebuilds the same surface in Dear ImGui and diffs itself against it. Three
+things here are load-bearing for that and should not be changed casually:
+
+- `src/Gallery.tsx` renders the real shadcn components pinned to the rects in
+  `tools/dkit/spec.json`, reachable at `?gallery` (`&dark`, `&text`);
+- `tools/dkit/flex_oracle.js` uses this project's browser to lay out the flex
+  conformance cases;
+- `node_modules/@fontsource-variable/geist` and `lucide-react` are where the
+  kit's fonts and icons are cut from.
+
 ## What it shows
 
 Four panels, each fed from the real catalog rather than invented numbers:

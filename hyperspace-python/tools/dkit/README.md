@@ -2,6 +2,11 @@
 
 Can Dear ImGui, on this project's own stack, be made to look like shadcn/ui?
 
+**Picking this up fresh?** Start with [`ROADMAP.md`](ROADMAP.md) — what to
+build next, in what order, why, and the constraints each component has to
+respect. [`FINDINGS.md`](FINDINGS.md) has the verdict and the honest list of
+what is not built.
+
 This is the measuring rig for that question, plus the primitive kit it measures.
 Nothing here is imported by the app — it lives in `tools/` on purpose.
 
