@@ -7,7 +7,7 @@ built** (2026-11-03, wave 2: rows 611–625, hand checks 461–470, group BJ);
 **D4 built** (2026-11-03, wave 3: rows 648–653, hand checks 489–493, group
 BN); **D5a built** (2026-11-04, wave 4: `deck.MetaController` and a pointer per
 holder, every one on deck 1, rows 688–690, hand checks 522–523, group BX); **D5b** and
-**D5c built** (rows 691–696, groups BY, BZ); **D5d built** (rows 697–702, group CA, overruling §4 and §5 below); **D6a, D6b built** (rows 705–709, groups CC, CD: the playlist); D5e, a plan, not built. **Where §3 D6 and §6 say "never written" or the reading says "pauses", read the owner: no guards, no pausing (row 707).** Written 2026-11-02 as
+**D5c built** (rows 691–696, groups BY, BZ); **D5d built** (rows 697–702, group CA, overruling §4 and §5 below); **D5e built** (rows 703–704, group CB); **D6a, D6b built** (rows 705–709, groups CC, CD: the playlist). **Where §3 D6 and §6 say "never written" or the reading says "pauses", read the owner: no guards, no pausing (row 707).** Written 2026-11-02 as
 wave 0 item D0 of the post-show sequencing. Written against `main` at 72da1ed: every symbol below is in
 the code today unless the text says it is new. Its four decisions are
 register rows 556–559, answered by the owner on 2026-11-02 (as recommended; 558 with a nuance, §7). The build is six PRs,
