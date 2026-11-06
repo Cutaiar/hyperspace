@@ -11,6 +11,16 @@
 // THEMSELVES, which is the question "how big is a switch, actually" — and
 // the answer (h-[18.4px]) is not one I would have guessed.
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command"
+import {
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel,
+  ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
@@ -179,6 +189,93 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
         <ScrollArea className="h-[120px] w-full rounded-lg border">
           <div style={{ height: 600 }} />
         </ScrollArea>
+      </P>
+
+      {/* ---- Button: 6 variants x 8 sizes. The radius is size-dependent
+           (`rounded-[min(var(--radius-md),10px)]` on the small ones), the
+           hover is per-variant, and there is an `active:translate-y-px`
+           press nudge. ---- */}
+      {["default", "outline", "secondary", "ghost", "destructive", "link"].map((v) => (
+        <P key={`bv${v}`} id={`button.${v}`} w={420}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <Button variant={v as never}>Button</Button>
+          </div>
+        </P>
+      ))}
+      {["xs", "sm", "default", "lg", "icon-xs", "icon-sm", "icon", "icon-lg"].map((z) => (
+        <P key={`bz${z}`} id={`button.size.${z}`} w={420}>
+          <Button size={z as never}>{z.startsWith("icon") ? "✕" : "Button"}</Button>
+        </P>
+      ))}
+      <P id="button.disabled" w={420}>
+        <Button disabled>Button</Button>
+      </P>
+
+      {/* ---- ButtonGroup: the joins are the thing. Inner corners square,
+           outer ones rounded, and the shared border is not doubled. ---- */}
+      <P id="buttongroup.horizontal" w={420}>
+        <ButtonGroup>
+          <Button variant="outline">One</Button>
+          <Button variant="outline">Two</Button>
+          <Button variant="outline">Three</Button>
+        </ButtonGroup>
+      </P>
+      <P id="buttongroup.vertical" w={420}>
+        <ButtonGroup orientation="vertical">
+          <Button variant="outline">One</Button>
+          <Button variant="outline">Two</Button>
+        </ButtonGroup>
+      </P>
+
+      {/* ---- Combobox = Popover + Command, which is how shadcn builds it:
+           there is no `combobox` component. Behind ?probe&open because a
+           Popover is a modal layer and swallows every hover. ---- */}
+      {open ? (
+        <P id="combobox.open" w={420}>
+          <Popover defaultOpen>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[220px] justify-between">
+                Pick a plane
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0">
+              <Command>
+                <CommandInput placeholder="Search..." />
+                <CommandList>
+                  <CommandEmpty>Nothing found.</CommandEmpty>
+                  <CommandGroup heading="Planes">
+                    <CommandItem value="xy">XY</CommandItem>
+                    <CommandItem value="xz">XZ</CommandItem>
+                    <CommandItem value="xw">XW</CommandItem>
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </P>
+      ) : null}
+
+      {/* ---- ContextMenu: no defaultOpen on Radix's, so it is opened with
+           a real right-click from playwright. Its content is the same
+           chrome DropdownMenu uses, which menu.py already draws. ---- */}
+      <P id="contextmenu.target" w={420}>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
+              data-probe-ctx
+              style={{ height: 60, border: "1px dashed #999", borderRadius: 8 }}
+            />
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuLabel>Node</ContextMenuLabel>
+            <ContextMenuItem>
+              Open<ContextMenuShortcut>⌘O</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuItem>Duplicate</ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant="destructive">Delete</ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
       </P>
 
       {/* ---- Tooltip, forced open ---- */}
