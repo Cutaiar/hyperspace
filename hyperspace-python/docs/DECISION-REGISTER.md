@@ -1,6 +1,6 @@
 # Decision register — the open decisions
 
-**Bulk acceptance, 2026-11-06.** The owner accepted every row still marked pending, in one nod and without reading each: "these were bulk accepted by Dan and not really reviewed that heavily". Such a row says so in the table, and the table overrules an `Answer` line in its section. Rows 417, 609 and 751 were kept out for the owner to see. A bulk-accepted row should be easy to reopen.
+**Bulk acceptance, 2026-11-06.** The owner accepted every row still marked pending, in one nod and without reading each: "these were bulk accepted by Dan and not really reviewed that heavily". Such a row says so in the table, and the table overrules an `Answer` line in its section. Rows 417, 609 and 751 were kept out for the owner to see. A bulk-accepted row should be easy to reopen. **Rows 417, 609 and 751 were answered the same day: for them too the table overrules the section.**
 
 Rows 34–88 were each decided during an unattended build on 2026-10-04,
 rows 89–108 during plan 22's run on 2026-10-06, rows 110–139 during

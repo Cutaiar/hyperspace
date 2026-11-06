@@ -15,11 +15,11 @@ checkouts in the owner's checkout.
 
 Stop and tell the owner plainly if any of these is not true. Do not start around them.
 
-1. **Wave 4 is merged:** SEM, D5e, N1, N2, D6, #287, #365, NSEW, the one migration. Check with
+1. **Wave 4 is merged:** SEM, D5e, N1, N2, D6, #287's content (rewritten by us, so the original PR may close unmerged), #365, NSEW, the one migration. Check with
    `git log` and `gh pr list`. If not, wave 4's remainder comes first, by `docs/plans/wave-4-session-prompt.md`
    and the handoff at `~/.claude/handoffs/wave4/HANDOFF.md`. Say so and ask whether to finish it.
 2. **The owner says they ran the migration, and that both Macs have opened the new library.** Only the owner
-   can say this, so ask. Hand check 467–468 is the same fact. Stage 1 removes the code that reads old files;
+   can say this, so ask. They coordinate the other Mac. Stage 1 removes the code that reads old files;
    this is the one gate you must never assume.
 
 H1, H2 and SM1 need none of this.
@@ -29,7 +29,7 @@ H1, H2 and SM1 need none of this.
 1. **"The owner's answers" below: they overrule every other document.**
 2. `docs/plans/58-wave-5.md`, all of it.
 3. `docs/GLOSSARY.md`, signed 2026-11-06. New code uses its words. After SEM, the code does too.
-4. `docs/plans/wave-4-session-prompt.md`: "The owner's answers" (nine rounds), which still hold, and "Lessons
+4. `docs/plans/wave-4-session-prompt.md`: "The owner's answers" (ten rounds), which still hold, and "Lessons
    from wave 3".
 5. `docs/plans/57-format-lane.md` for what the migration did. `REVIEW.md`, `docs/ENGINEERING.md` §15–§16,
    `docs/ARCHITECTURE.md` §3–§4.
@@ -83,11 +83,11 @@ conflicts, and stop the type errors growing.
 | Stage | Items |
 | --- | --- |
 | Any time | H1, H2, SM1 |
-| 1 | CL1, then CL3 and CL4 together; LY1, LY2; SC1; SM2, SM3 |
-| 2 | CL2, alone among anything touching tests' builders; TY1, TY2; SM4 |
-| 2b | SC3a, alone on the render loop, after a short spike |
+| 1 | CL2, alone among anything touching tests' builders; beside it LY1, LY2, SC1, SM2, SM3 |
+| 2 | CL1, once the owner's dry run is clean; then CL3 and CL4 together; TY1, TY2; SM4 |
+| 2b | SC3a, alone on the render loop, after a short spike. If the spike fails, stop and tell the owner |
 | 3 | SC2, CT1, LY3, SM5 |
-| 4 | SC3b, then RT1 |
+| 4 | SC3b, then RT1 only after SC3b's hand check with a real unplug |
 | 5 | TY3, then TY4 |
 
 **Numbers:** plan 58 is this; rows from 770, checks from 600, groups from DA. Pre-assign each item's block when
@@ -100,9 +100,8 @@ plan in the same PR as the first item, and tell the owner only what changes scop
 ## How to run it
 
 - **One builder per item,** on Opus (`model: "opus"`), `isolation: "worktree"`, `run_in_background: true`. Give
-  each the shared brief, its item, the files it owns and its numbers, and **this session's commit trailer lines**.
-  The brief is `~/.claude/handoffs/wave4/wave4-brief.md`; copy it to a `wave5-brief.md`, change its branch prefix to
-  `wave5/` and its wave, and drop its freeze and "old names stay until SEM" lines. Do not use Fable for builders.
+  each the shared brief, `docs/plans/wave-5-builder-brief.md`, and its item, the files it owns, its numbers and **this
+  session's commit trailer lines**. Do not use Fable for builders.
 - **Every PR gets an independent review** before its merge: `/code-review medium <PR>` from your scratch worktree,
   one at a time, findings sent to the same builder. A `low` second pass when fixes were large; a third when the
   second found real bugs. Reviewers are sometimes wrong; builders verify, and a disproved finding gets a test, not
@@ -116,7 +115,7 @@ plan in the same PR as the first item, and tell the owner only what changes scop
   anywhere in this wave.** A golden that moves is a bug, or a stop-and-ask.
 - **A keeper agent** in its own worktree does each queue step, as in wave 4, until H1 lands. After H1, doc tails
   should merge on their own: confirm it on the first few, and keep `tools/sort_register.py`.
-- **Merging:** the owner authorised merging on green for wave 5. `main` has no required checks, so `--auto` merges at once: wait first with
+- **Merging:** the owner authorised merging on green for wave 5, but for CL1, which waits for their dry run, and RT1, which waits for the unplug. `main` has no required checks, so `--auto` merges at once: wait first with
   `~/.claude/handoffs/wave4/wait-green.sh <pr> <head>`, or its replacement from H2, then call `gh pr ready` and `gh pr merge <pr>
   --squash --delete-branch --body-file <file>` directly, with the review and test counts and the trailer lines in the
   body. A wrapper around `gh pr merge` gets refused. If `gh` then errors that `main` is used by a worktree, the merge
@@ -134,6 +133,8 @@ plan in the same PR as the first item, and tell the owner only what changes scop
 Nothing in wave 4 had been tried on real hardware when this was written, and CL1 is the point of no return for
 old files. SC3b can only be proved by unplugging a real display, so nothing about hot-plug is done until that has happened. Say what's been tried at the machine whenever it matters. CL1's PR body must say in its first line
 that old files stop opening, and what to do if a Mac hasn't updated.
+
+**In your first status message to the owner,** ask for the per-face render check (`58-wave-5.md` §4), and list §8's "Assumed unless the owner objects", so they can object.
 
 ## After the last merge
 

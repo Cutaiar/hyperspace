@@ -42,7 +42,7 @@ hold-as-copy, named players, node mode saved in the patch, N3 gone. Authority is
 read old files; close the last paths from one look to another; one row per display with hot-plug; controllers set up in the
 app; stop doc conflicts and the growth of type errors.
 
-**Waiting on the owner now:** the Joy-Con check and hand checks 506–509. Those two hold up the end of wave 4, and so all of wave 5.
+**Waiting on the owner now:** the Joy-Con check and hand checks 506–509. Those two hold up the end of wave 4, and so all of wave 5 but its housekeeping (H1, H2, SM1).
 
 Nov 2, 2026 · @Robert
 
