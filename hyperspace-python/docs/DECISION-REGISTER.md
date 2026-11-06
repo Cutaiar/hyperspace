@@ -736,6 +736,9 @@ here; overturn → the change, then the same.
 | 702 | Plan 44 D5d: `test_no_patch_reaches_the_other_deck`: nine roads each way round, no leak found. The accepted limits: the shared dream worker (DQ8); a Drive sync lands on the panel's deck | — | owner — 2026-11-04: "no preset can affect another preset"; the absolute rule |
 | 710 | Plan 53 N1a: a desk's node mode rows are patch-layer rows on the deck the patch is on, derived per player's first desk; K1–K8, D1–D8, S1–S8; shadow only what they fill; SHIFT's layer untouched | 541, 542 | (rec) — pending the owner |
 | 711 | Plan 53 N1a: "a mapping stays" means a controller's row on the node's params; a modulator's route (LFO, envelope, lane, sequencer, modifier) is no mapping, so the knob still fills that param's base | 541 | (rec) — pending the owner |
+| 712 | Plan 53 N1b: a node mode cable: drawn whenever the patch points, on the deck whose patch it is; its reading is its param; faint with the desk elsewhere; a saved row under a filled control drawn faint and said | 543, 544 | (rec) — pending the owner |
+| 713 | Plan 53 N1b: node mode's rows have their own bundle per node pair; where a saved bundle joins the same two collapsed nodes the two lie on one line, the green on top | 543 | (rec) — pending the owner |
+| 714 | Plan 53 N1b: entered from a chip per desk in the selection section: point, move, bring, leave; the side pane lists the map, what stayed, what did not fit; the on-screen desk outlines the filled controls; no delete on the cable | 543, 545 | (rec) — pending the owner |
 | 715 | Plan 57 NM0: a loadable patch saves node mode as `{"player", "controller", "node"}`, the rows derived; `controller` is a device kind | 546 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on saving it and on naming a player; (rec) — pending the owner on `controller` |
 | 716 | Plan 57 NM0: the fill: what stays, what fills, what is listed; a `NODE_MODE` cable kind in green | 546, 548 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on the rule; (rec) — pending the owner on the colour and on a row elsewhere taking its freedom |
 | 717 | Plan 57: NM0 is an optional key, no bump; the rest is one migration, whose order and questions are in plan 57 | 547 | owner — 2026-11-06: yes, and all of it in one migration: "coordinating the migration is not hard" (`plans/57-format-lane.md` §6) |
@@ -13163,6 +13166,44 @@ the node on the looks it is most wanted on. The knob sets the base under the rou
 knob on a performed param does. **If not:** one line, `node_desk.MODULATORS` emptied.
 
 **Judge it.** 541.
+
+### 712. What a node mode cable says
+
+The owner, 2026-11-04: "drawn and labelled", a colour other than the white control cables,
+saved. `graphview.build` asks the table's `NodeDesk` and draws a `NODE_MODE` cable per row, from
+the desk's patch-layer node to the param's base pin, adding the port if the param had none. Its
+label names the player and the control ("node mode: player 1, K1 → Pattern scale"). A knob
+publishes no lane, so its thickness reads the param. **Faint** when the desk is on the other
+`Deck` (the owner's "drawn dormant"), when the desk is lost, and under SHIFT, as any row of a
+layer that is down. A saved patch-layer row on a control node mode fills does nothing until it
+leaves, so its cable is faint too, "(under node mode)": rows that do not act say so.
+
+**Judge it.** 543, 544.
+
+### 713. Their own bundle
+
+The brief, from the owner's rule: a mixed bundle on a collapsed node reads white. `wiring` keys
+node mode's cables apart (`bundle:<a>>z|node`). **What this does not fix:** where a saved bundle
+joins the same two collapsed nodes, both lie on the same line between the same two stubs; the
+green is drawn second and is what you see, and the white shows only past its width. **Rec:** live
+with it, since hovering lists each and expanding parts them. If it reads badly at the machine,
+the fix is a pin of its own on the node, which is a small change to the stubs.
+
+**Judge it.** 543.
+
+### 714. How you enter, and how you see it
+
+The owner: "you enter from the panel, with a node already selected", and the operator may attach
+a held controller from the on-air graph. In the selection section, a chip per desk a patch can
+point: **point apc40 here**, **move apc40 here** when it is on another node, **apc40 on this node
+· leave** in the cable's colour, and **bring apc40 here** when the patch says this node and the
+desk is on the other `Deck`. Each acts on the patch of the deck the panel looks at. A node nothing
+can fill greys the chip, and hovering says why (`nodemode.enter_refusal`). Below it, the map in the
+same colour: "K1 → Pattern scale", then what stayed, then `Fit.too_many`'s list. A cable's right-click
+offers leave, and ⌫ refuses (`ui_graph.DELETE` has no such kind). The on-screen desk draws the filled
+controls with an outline in that colour and says "node · 7" in its head, and `Learn` is free on them.
+
+**Judge it.** 543, 545.
 
 ### 715. What a loadable patch saves of node mode
 

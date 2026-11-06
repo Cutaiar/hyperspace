@@ -3595,6 +3595,7 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     param (`_param_rows`); a node with no param keeps its patched ports'
     readings in words."""
     _open_chip(panel, n)
+    node_mode_block(panel, n)
     if isinstance(n.ref, Effect):
         ui_fx.strip(panel, n.ref.effect)
         return
@@ -3624,6 +3625,72 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
+
+
+def _node_desk(panel):
+    """The panel's deck's `node_desk.NodeDesk`; None in a rig with none."""
+    router = ui_routing.router_of(panel)
+    return getattr(router.table, "node_desk", None) if router is not None else None
+
+
+NODE_CHIP = "node mode"
+OTHER_DECK_TIP = "It is on the other Deck: this brings it here. Its player stays where it is, and moving the player brings it back."
+ASLEEP = "dormant: {role} is on the other Deck"
+
+
+def node_mode_words(nd, h, nid: str) -> list[str]:
+    """What the side pane says of desk `h` on node `nid`: its map, in control order,
+    then what stayed and what did not fit (`Fit.too_many`). Nothing is paged."""
+    if h.node != nid:
+        return []
+    fit = h.fit
+    out = [f"{nd.control_word(h.role, b)} → {b.words}" for b in h.rows]
+    if fit.kept:
+        out.append("mapped already: " + ", ".join(fit.kept))
+    said = fit.too_many(nid)
+    if said:
+        out.append(said)
+    if not h.on_here:
+        out.append(ASLEEP.format(role=h.role))
+    return out
+
+
+def node_mode_block(panel, n: graphview.VNode) -> None:
+    """Entering node mode (plan 53 N1b): a chip per desk a patch can point, on a
+    selected node it can point at. An edit of the patch on the deck the panel looks
+    at, one undo step; the desk comes here. The map below it, in the cable's colour."""
+    nd = _node_desk(panel)
+    if nd is None or not nd.deck.loaded_patch.pointable(n.id):
+        return
+    ink = KIND_COLOURS[graphview.NODE_MODE]
+    for h in nd.held():
+        cid = f"graph.side.node_mode.{h.role}"
+        if h.node == n.id:
+            if ui.lit_chip(f"{h.role} on this node · leave##{cid}", False, ink):
+                nd.leave(h.role)
+                continue
+            # saved here, its player elsewhere: the operator's "you're on this for a while"
+            if not h.on_here and ui.chip(f"bring {h.role} here##{cid}.bring"):
+                nd.enter(h.role, n.id)
+            if not h.on_here and imgui.is_item_hovered():
+                ui.tooltip(OTHER_DECK_TIP)
+        else:
+            why = nd.refusal(h.role, n.id)
+            word = f"move {h.role} here" if h.node else f"point {h.role} here"
+            imgui.begin_disabled(why is not None)
+            hit = ui.chip(f"{word}##{cid}")
+            imgui.end_disabled()
+            if hit:
+                said = nd.enter(h.role, n.id)
+                if said:
+                    panel.library.say(warning=said)
+            if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+                ui.tooltip(why or (OTHER_DECK_TIP if not h.on_here else
+                                   f"Fill {h.role}'s knobs and faders with this node's params, "
+                                   "saved in this patch. One undo step."))
+            continue
+        for line in node_mode_words(nd, h, n.id):
+            imgui.text_colored(ink, ui.fit_text(line, imgui.get_content_region_avail().x))
 
 
 def is_pad_node(panel, n: graphview.VNode) -> bool:
@@ -4421,7 +4488,7 @@ def _cold(panel, st: dict, view: graphview.View, n: graphview.VNode,
     e = render_edit(panel) if n.kind in graphview.FRAME_VKINDS and never is None else None
     for c in view.cables:
         if n.kind == "modifier":
-            if c.kind == "render" or not c.addr:
+            if c.kind in ("render", graphview.NODE_MODE) or not c.addr:
                 cold.add(c.id)
         elif c.kind != "render" or never is not None or graphview.onto_refusal(e, c) is not None:
             cold.add(c.id)
@@ -5073,6 +5140,11 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> No
     in one undo step, a composite or a switch asked its inlet — the
     starters, delete."""
     imgui.text_disabled(cable_tip(view, c).splitlines()[0])
+    if c.kind == graphview.NODE_MODE:           # not a row: leaving the node is what ends it
+        role = c.ref[0] if c.ref is not None else None
+        if role is not None and imgui.menu_item_simple(f"{role}: leave node mode"):
+            _node_desk(panel).leave(role)
+        return
     if c.kind in ("route", "input") and imgui.begin_menu("insert"):
         for kind in modifiers.KINDS:
             if imgui.menu_item_simple(kind):

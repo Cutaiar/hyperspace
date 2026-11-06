@@ -181,6 +181,7 @@ class NodeDesk:
                 if fb:
                     b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
                 b.words = reg[slot.param].label or slot.param     # the on-screen desk's
+                b.node_mode = True                                # …which draws it as one
             out.append(b)
         return out
 
@@ -237,6 +238,11 @@ class NodeDesk:
     def leave(self, role: str) -> None:
         """Desk `role` off its node here, an edit too. It stays on this `Deck`."""
         self.deck.loaded_patch.leave_node_mode(self.player_of(role), KIND)
+
+    def control_word(self, role: str, b: Binding) -> str:
+        """What a person calls row `b`'s control: "K3"."""
+        glyph = getattr(PROFILES.get(self._profile(role)), "glyph", None)
+        return (glyph(b.bare) if glyph is not None else None) or b.describe()
 
     def key(self) -> tuple[Any, ...]:
         """What a drawing of these rows is made of, for `graphview.key`."""

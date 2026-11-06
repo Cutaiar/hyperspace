@@ -8044,6 +8044,23 @@ fit is listed in the side pane, by name. An LFO on one of its params: the knob s
 **542. FINE and node mode, on the same knob.** (row 609)
 Hold SEND B and turn a filled K1 slowly, let go, and turn on. *Pass:* it creeps while held, its
 LED lit; when let go the value does not jump, and the next detent is one detent.
+**543. It is drawn, in its own colour.** (GRAPH)
+With 541's node pointed. *Pass:* a green bundle from the apc40 to the node, apart from white ones
+(hover says each row: "K1 → …"; expand both ends and each is its own green cable). Green is
+easy to tell from white, amber, blue and violet. Its K1 cable thickens as the param rises. A saved
+row on K1 goes faint and says "(under node mode)". Right-click: leave; ⌫ does nothing. Say if a
+white bundle lying under the green one between the same two nodes reads badly (row 713).
+**544. Saved, per `Deck`.** (two `Deck`s; throwaway copies)
+1. Save, load another, load it back. *Pass:* pointed again, with no click.
+2. Undo a re-point. *Pass:* one ⌘Z, the rows follow; the desk stays on its `Deck`.
+3. With a second copy off air, and the panel on it, press **move apc40 here** with player 1 on air.
+*Pass:* the off-air patch moves under the knobs and the room does not change. Move the player on
+the select screen. *Pass:* the desk goes back; deck 2's cables go faint and its file does not change.
+4. From the on-air graph, press **bring apc40 here**. *Pass:* the knobs act on air again.
+**545. The on-screen desk, and a learn.** (desk diagram)
+*Pass:* filled knobs outlined green, named for their params; "node · n" in its head; dark under
+SHIFT. Learn another param onto a filled knob. *Pass:* the footer says it is under node mode, and
+when you leave the knob it does that job.
 
 ## CF. Node mode's saved form (plan 57)
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round

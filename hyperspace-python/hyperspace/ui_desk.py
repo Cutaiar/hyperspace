@@ -144,10 +144,19 @@ def _key(table) -> tuple:
             getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings),
             getattr(table, "rows_serial", 0),
             getattr(table, "page_serial", 0),
-            id(table.page_rows) if getattr(table, "page", None) is not None else None)
+            id(table.page_rows) if getattr(table, "page", None) is not None else None,
+            table.node_rows_serial())
 
 
 PAGE_OWNS = "the sequencer page owns this"
+NODE_INK = (0.30, 0.90, 0.55, 1.0)      # a node mode cable's colour (`ui_graph.KIND_COLOURS`)
+
+
+def _edge(b: Binding | None, on: bool) -> int:
+    """A control's outline: a row node mode fills is in its cable's colour."""
+    if b is not None and getattr(b, "node_mode", False):
+        return ui.u32(imgui.ImVec4(*NODE_INK))
+    return ui.u32(ui.DIM if on else ui.LINE)
 
 
 def on_page(table, c: apc40.Control) -> bool:
@@ -883,7 +892,7 @@ def _draw(panel, dl, table, c: apc40.Control, b: Binding | None,
           x0: float, y0: float, x1: float, y1: float) -> None:
     """One control at the small size: its glyph on its face."""
     on = b is not None and not empty(panel.reg, b)     # an empty bank slot's pad is dark
-    edge = ui.u32(ui.DIM if on else ui.LINE)
+    edge = _edge(b, on)
     ink = ui.u32(ui.TEXT if on else ui.FAINT)
     w, h = x1 - x0, y1 - y0
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -947,7 +956,7 @@ def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
     height. A dark control gets no label (D8), and an empty bank slot's
     pad is drawn as one (`empty`)."""
     on = b is not None and not empty(panel.reg, b)
-    edge = ui.u32(ui.DIM if on else ui.LINE)
+    edge = _edge(b, on)
     small = ui.u32(ui.DIM if on else ui.FAINT)          # the glyph: small and dim
     # whose row it is: the up layer's in the bright ink, an invariant one grey
     ink = ui.u32(ui.TEXT if on and b.layer is not None else ui.DIM)
@@ -1142,6 +1151,13 @@ def _header(panel, table) -> None:
                 ui.tooltip("The sequencer page is up — SEND A lets it go. The clip "
                                   "grid is the lanes' steps, scene 1–5 the lanes, clip stop "
                                   "k the length.")
+        filled = table.node_rows()
+        if filled and not glob:             # node mode (plan 53 N1b): saved, and said here
+            imgui.same_line()
+            ui._micro(f"node · {len(filled)}", imgui.ImVec4(*NODE_INK))
+            if imgui.is_item_hovered():
+                ui.tooltip("This patch points the desk at a node: the controls outlined in "
+                           "its colour are that node's. Under SHIFT the global layer is as ever.")
         imgui.same_line()
         room_ = end - imgui.get_cursor_pos_x()
         imgui.text_colored(ui.TEXT, ui.fit_text(_loadable_name(panel), max(0.0, room_)))

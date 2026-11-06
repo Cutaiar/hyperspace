@@ -382,6 +382,17 @@ def test_enter_is_an_edit_of_the_patch_looked_at_and_brings_the_desk(rig):
     assert rig.meta.pointer(DESK).deck is rig.one
 
 
+def test_entering_where_it_is_already_saved_brings_the_desk_and_edits_nothing(rig):
+    """The operator's attach: the patch already says this node, its player is elsewhere."""
+    node, _ = pick_node(rig.two)
+    patch = rig.two.loaded_patch
+    patch.point_node_mode(1, "midi", node)
+    steps = len(rig.two.undo.stack)
+    assert not rig.nd2.on_here(DESK)
+    assert rig.nd2.enter(DESK, node) is None
+    assert rig.nd2.on_here(DESK) and len(rig.two.undo.stack) == steps
+
+
 def test_two_patches_point_the_desk_each_on_its_own_deck(rig):
     node, params = pick_node(rig.one)
     rig.one.loaded_patch.point_node_mode(1, "midi", node)
