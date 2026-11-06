@@ -232,14 +232,14 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         D.label(dl, x + 20, y + 16, title, faces, "regular", 14,
                 T.rgba("muted-foreground", theme=theme), baseline_box=20)
         D.label(dl, x + 20, y + 38, value, faces, "semibold", 30,
-                T.rgba("foreground", theme=theme), baseline_box=36)
-        dwid = D.text_w(delta, faces, "medium", 12) + 26
+                T.rgba("foreground", theme=theme), baseline_box=36, tabular=True)
+        dwid = D.text_w(delta, faces, "medium", 12, True) + 26
         D.box(dl, x + cw - 20 - dwid, y + 14, dwid, 20,
               border_col=T.rgba("border", theme=theme), radius=T.RADII["4xl"])
         D.trend_arrow(dl, x + cw - 20 - dwid + 7, y + 19, 10, up,
                       T.rgba("foreground", theme=theme))
         D.label(dl, x + cw - 20 - dwid + 19, y + 14, delta, faces, "medium", 12,
-                T.rgba("foreground", theme=theme), baseline_box=20)
+                T.rgba("foreground", theme=theme), baseline_box=20, tabular=True)
         hwid = D.label(dl, x + 20, y + ch - 52, head, faces, "medium", 14,
                        T.rgba("foreground", theme=theme), baseline_box=20)
         D.trend_arrow(dl, x + 26 + hwid, y + ch - 47, 10, up,
@@ -266,7 +266,7 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         vals = [t[i] for t in series]
         D.label(dl, fx, fy - 18, f"{vals[-1]:.2f}", faces, "regular", 12,
                 T.rgba("muted-foreground", theme=theme), align="right",
-                box_w=fw, baseline_box=14)
+                box_w=fw, baseline_box=14, tabular=True)
         D.fill(dl, fx, fy + fh, fw, 1, T.rgba("border", theme=theme))
         D.sparkline(dl, fx, fy, fw, fh, vals, ink, lo=0.0, hi=CEIL)
 
@@ -291,9 +291,10 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         D.meter(dl, bar_x, ry + rh / 2 - 4, bar_w, 8, last[i] / CEIL, theme)
         D.label(dl, rx + rw - 186, ry, f"{lo}–{hi} Hz", faces, "regular", 12,
                 T.rgba("muted-foreground", theme=theme), align="right",
-                box_w=110, baseline_box=rh)
+                box_w=110, baseline_box=rh, tabular=True)
         D.label(dl, rx + rw - 60, ry, f"{'+' if direction > 0 else '−'}{last[i]:.2f}",
-                faces, "regular", 12, ink, align="right", box_w=60, baseline_box=rh)
+                faces, "regular", 12, ink, align="right", box_w=60, baseline_box=rh,
+                tabular=True)
 
     # ---- table ------------------------------------------------------------
     tx, ty, _, th = r.table_tabs
@@ -304,7 +305,7 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     shown = min(len(r.table_rows), len(rows))
     D.label(dl, tx, ty, f"Showing {shown} of {len(rows)}", faces, "regular", 13,
             T.rgba("muted-foreground", theme=theme), align="right",
-            box_w=r.table_head[2], baseline_box=th)
+            box_w=r.table_head[2], baseline_box=th, tabular=True)
 
     hx, hy, hw, hh = r.table_head
     D.fill(dl, hx, hy, hw, hh, T.rgba("muted", theme=theme), 0.0)
@@ -337,7 +338,8 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
                 variant = "medium" if val == row["name"] else "regular"
                 D.label(dl, cxp, ry, val, faces, variant, 13, col, align=al,
                         box_w=cwid - (COL_PAD if al == "right" else 0),
-                        baseline_box=rh, max_w=cwid - COL_PAD)
+                        baseline_box=rh, max_w=cwid - COL_PAD,
+                        tabular=al != "left")
 
 
 WIN_FLAGS = (imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_resize
@@ -377,9 +379,7 @@ def _boot(theme_name, w, h, *, visible: bool, retina: bool = False):
     fw, _ = glfw.get_framebuffer_size(win)
     density = (fw / ww) if ww else 1.0
     faces = {}
-    for k, fn in (("regular", "Geist-Regular.ttf"),
-                  ("medium", "Geist-Medium.ttf"),
-                  ("semibold", "Geist-SemiBold.ttf")):
+    for k, fn in D.FACE_FILES:
         cfg = imgui.ImFontConfig()
         # glyphs are rasterized at the display's real pixel density; without
         # this they are cut at logical size and scaled up, which is the other
@@ -490,9 +490,7 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
 
     io = imgui.get_io()
     faces = {k: io.fonts.add_font_from_file_ttf(str(HERE / "fonts" / fn), 16.0)
-             for k, fn in (("regular", "Geist-Regular.ttf"),
-                           ("medium", "Geist-Medium.ttf"),
-                           ("semibold", "Geist-SemiBold.ttf"))}
+             for k, fn in D.FACE_FILES}
 
     LL = T.LIGHT_L if theme_name == "light" else T.DARK_L
     grad_tex = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))

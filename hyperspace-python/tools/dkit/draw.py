@@ -134,13 +134,31 @@ def card(dl, cell, theme, grad_tex: int | None) -> None:
 FONT_SPAN_EM = {"regular": 1.30, "medium": 1.30, "semibold": 1.30}
 
 
+# The six faces build_fonts.py produces: three weights, each with and
+# without Geist's tabular figures frozen into the cmap.
+FACE_FILES = [(f"{v}{t}", f"Geist-{w}{t}.ttf")
+              for v, w in (("regular", "Regular"), ("medium", "Medium"),
+                           ("semibold", "SemiBold"))
+              for t in ("", "-tnum")]
+
+
+def face_key(variant: str, tabular: bool) -> str:
+    """The face to use. `-tnum` carries Geist's tabular figures, frozen into
+    the cmap at build time because stb_truetype applies no OpenType feature.
+    Numbers that change in place — a readout, a table column — want it; words
+    do not, exactly as shadcn turns `tabular-nums` on selectively."""
+    return f"{variant}-tnum" if tabular else variant
+
+
 def text_cell(dl, cell, faces, col) -> None:
     """One pinned string, vertically centred in its box like CSS line-height.
 
     ImGui 1.92 renders any face at any size through push_font(face, size), so
     the size comes from the spec rather than from a baked atlas entry.
     """
-    face = faces.get(cell["variant"])
+    # the oracle sets font-variant-numeric: tabular-nums on every text cell,
+    # so the kit must use the frozen faces to compare like with like
+    face = faces.get(face_key(cell["variant"], True)) or faces.get(cell["variant"])
     # ImGui's font size is NOT a CSS px. stb_truetype scales so that
     # ascent - descent equals the requested size; CSS maps the em square to
     # font-size. Geist is upem 1000 with ascent 1005 / descent -295, so its
@@ -174,25 +192,27 @@ def badge(dl, cell, theme, variant_table) -> None:
 # text
 # --------------------------------------------------------------------------
 
-def push_css_font(faces, variant: str, css_px: float):
+def push_css_font(faces, variant: str, css_px: float, tabular: bool = False):
     """Push a face at a size that means what CSS means by it.
 
     See FONT_SPAN_EM: stb_truetype sizes by ascent-descent, CSS by the em.
     """
-    imgui.push_font(faces.get(variant), css_px * FONT_SPAN_EM.get(variant, 1.0))
+    key = face_key(variant, tabular)
+    face = faces.get(key) or faces.get(variant)
+    imgui.push_font(face, css_px * FONT_SPAN_EM.get(variant, 1.0))
 
 
-def fit_text(s, faces, variant, size, max_w) -> str:
+def fit_text(s, faces, variant, size, max_w, tabular=False) -> str:
     """The longest prefix of `s` that fits in max_w, with an ellipsis.
 
     shadcn leans on `truncate` / `line-clamp-1`; ImGui clips nothing by
     itself. Same binary search ui.py:317-329 uses."""
-    if max_w <= 0 or text_w(s, faces, variant, size) <= max_w:
+    if max_w <= 0 or text_w(s, faces, variant, size, tabular) <= max_w:
         return s
     lo, hi = 0, len(s)
     while lo < hi:
         mid = (lo + hi + 1) // 2
-        if text_w(s[:mid] + "\u2026", faces, variant, size) <= max_w:
+        if text_w(s[:mid] + "\u2026", faces, variant, size, tabular) <= max_w:
             lo = mid
         else:
             hi = mid - 1
@@ -200,13 +220,13 @@ def fit_text(s, faces, variant, size, max_w) -> str:
 
 
 def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
-          baseline_box=0.0, max_w=0.0):
+          baseline_box=0.0, max_w=0.0, tabular=False):
     """Draw `s` at (x, y). With baseline_box, centre it vertically in that
     height the way a CSS line box would; with align/box_w, align horizontally.
     Returns the advance width."""
     if max_w:
-        s = fit_text(s, faces, variant, size, max_w)
-    push_css_font(faces, variant, size)
+        s = fit_text(s, faces, variant, size, max_w, tabular)
+    push_css_font(faces, variant, size, tabular)
     try:
         ext = imgui.calc_text_size(s)
         tx = x
@@ -221,8 +241,8 @@ def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
         imgui.pop_font()
 
 
-def text_w(s, faces, variant, size) -> float:
-    push_css_font(faces, variant, size)
+def text_w(s, faces, variant, size, tabular=False) -> float:
+    push_css_font(faces, variant, size, tabular)
     try:
         return float(imgui.calc_text_size(s).x)
     finally:

@@ -36,9 +36,7 @@ SPEC = json.loads((HERE / "spec.json").read_text())
 # Geist ships only as a variable woff2, which stb_truetype can read neither of.
 # tools/dkit/fonts holds static instances cut from that exact file at the
 # three weights shadcn uses, so the comparison is the same typeface.
-FACES = {"regular": "Geist-Regular.ttf",
-         "medium": "Geist-Medium.ttf",
-         "semibold": "Geist-SemiBold.ttf"}
+FACES = dict(D.FACE_FILES)
 
 
 def load_faces():

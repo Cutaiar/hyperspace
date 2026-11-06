@@ -67,13 +67,14 @@ the two rasterizers differing, not geometry to be fixed.
 ### Text (advisory)
 
 Geist ships only as a variable woff2, which stb_truetype can read neither of,
-so `fonts/` holds static instances cut from that exact file at wght 400/500/600.
-With those, ink extents land within a few px on a 110-170px string:
+so `fonts/` holds six faces cut from that exact file by `build_fonts.py`:
+wght 400/500/600, each with and without tabular figures frozen in. With
+those, ink extents land within a few px on a 110-170px string:
 
 ```
-text.title30   144x29  vs  144x29   (exact)
-text.body14    113x11  vs  115x10
-text.num14     138x12  vs  132x12   <- tabular-nums, -4%
+text.body14    113x11  vs  113x10   (exact)
+text.title30   144x29  vs  146x29
+text.num14     138x12  vs  132x12   <- advance rounding, not tnum
 ```
 
 Two findings worth carrying forward:
@@ -84,10 +85,16 @@ Two findings worth carrying forward:
   is 1.30em and ImGui renders 14px CSS text at 77% unless asked for 14 x 1.30.
   The ratio is a property of the font, so the kit keeps it per face
   (`draw.FONT_SPAN_EM`).
-* **No OpenType features.** `tabular-nums` is the one shadcn leans on, and
-  stb_truetype cannot apply it — hence -6px on a digit-heavy string. The
-  project already solves this the other way, with a mono face for readouts
-  (`ui.py:126-129`).
+* **No OpenType features at runtime** — so `tnum` is frozen into the cmap at
+  build time instead (`build_fonts.py`), producing a parallel `-tnum` face.
+  Proportional Geist digits are 384-663 units wide; frozen they are all 600.
+  A live readout cycling 1.36 / 0.50 / 2.08 **jitters by 9px** proportional
+  and is **stable at 23px** tabular. That is the reason to do it — not width
+  parity with the browser, which it does not buy.
+* **ImGui rounds every glyph advance to a whole pixel** (9.0, 5.0, 8.0 at
+  14px; still 66.0, 38.0 at 100px). Browsers use fractional advances, so a
+  long string drifts by a few px either way. This is the irreducible text
+  difference, and it is why `text.num14` sits -6px against the oracle.
 
 ## The demo
 
