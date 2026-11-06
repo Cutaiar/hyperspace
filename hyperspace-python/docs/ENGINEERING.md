@@ -3415,9 +3415,10 @@ conflicts were these files, not code.
 - **A branch from before `.gitattributes`.** `git merge` reads the attribute from the
   tree you're on, so merging main into such a branch still conflicts. Run
   `git checkout origin/main -- .gitattributes` first.
-- **On GitHub.** With the attribute only on the branches, not on `main`, its merge API
-  and a PR's mergeable state both said conflict where a local merge was clean. If a PR
-  shows a conflict in these files alone, merge main locally and push.
+- **On GitHub.** The server doesn't honour the attribute, on `main` or not: its merge API
+  and a PR's mergeable state both said conflict on a pair that merges clean locally
+  (retested 2026-11-06 with it on `main`). So a PR showing a conflict in these files
+  alone needs main merged locally and pushed; union resolves them with no hand work.
 
 ### CI
 
