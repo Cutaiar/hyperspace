@@ -151,17 +151,17 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
     inner_w = cw - 2 * GUT
     y = HEADER_H + GUT
 
-    sw = (inner_w - 3 * CARD_GAP) / 4.0
-    for i in range(4):
-        r.stats.append((inner_x + i * (sw + CARD_GAP), y, sw, 136))
+    r.stats = [b.as_tuple() for b in B.flex(
+        B.Rect(inner_x, y, inner_w, 136),
+        [B.Item(0, 136, grow=1) for _ in range(4)], gap=CARD_GAP)]
     y += 136 + CARD_GAP
 
     r.bands_card = (inner_x, y, inner_w, 258)
-    fx, fy = inner_x + 20, y + 84
-    fw = (inner_w - 40 - 2 * 24) / 3.0
-    for i in range(6):
-        col, row = i % 3, i // 3
-        r.facets.append((fx + col * (fw + 24), fy + row * 86, fw, 60))
+    fy = y + 84
+    for row in range(2):
+        r.facets.extend(b.as_tuple() for b in B.flex(
+            B.Rect(inner_x + 20, fy + row * 86, inner_w - 40, 60),
+            [B.Item(0, 60, grow=1) for _ in range(3)], gap=24))
     y += 258 + CARD_GAP
 
     r.routing_card = (inner_x, y, inner_w, 196)
@@ -179,13 +179,13 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
     for i in range(n_rows):
         r.table_rows.append((inner_x, y + i * 34, inner_w, 34))
 
-    # Shape | Kind | Schlafli | Dim | Cells | Family
-    fracs = [0.22, 0.28, 0.13, 0.06, 0.08, 0.20]
-    cxx = inner_x + 12
-    for f in fracs:
-        cwid = (inner_w - 24) * f
-        r.cols.append((cxx, cwid))
-        cxx += cwid
+    # Shape | Kind | Schlafli | Dim | Cells | Family — weights, and flex
+    # resolves them. The old version hand-summed six fractions that had to
+    # add to 1.0, which is a constraint nothing checked.
+    weights = [22, 28, 13, 6, 8, 20]
+    r.cols = [(b.x, b.w) for b in B.flex(
+        B.Rect(inner_x, y, inner_w, 1),
+        [B.Item(0, 1, grow=w) for w in weights], pad=(0, 12, 0, 12))]
     return r
 
 

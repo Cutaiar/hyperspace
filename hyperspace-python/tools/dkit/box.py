@@ -219,3 +219,107 @@ def place_popover(anchor: Rect, w: float, h: float, avail: Rect, *,
     y = min(y, avail.bottom - pad - h)
     y = max(y, avail.y + pad)
     return Rect(x, y, w, h), side
+
+
+# --------------------------------------------------------------------------
+# flex
+# --------------------------------------------------------------------------
+
+@dataclass
+class Item:
+    """One flex child. `w`/`h` are the content size; None means 'auto',
+    which on the cross axis stretches and on the main axis starts at 0."""
+    w: float | None = None
+    h: float | None = None
+    grow: float = 0.0
+    shrink: float = 1.0
+    align: str | None = None        # align-self
+    key: object = None
+
+
+def _dist(free, items, base, grow: bool):
+    """Hand out `free` main-axis space. CSS scales the SHRINK factor by the
+    item's base size (so a bigger item gives up more) but does NOT scale
+    grow. Getting that backwards is the classic flex bug — the oracle case
+    `shrink.weighted` pins it: 120px holding two 80px items at shrink 1 and
+    3 resolves to 70 and 50, not 65 and 55."""
+    if not items:
+        return [0.0] * len(base)
+    fac = [(i.grow if grow else i.shrink * b) for i, b in zip(items, base)]
+    total = sum(fac)
+    if total <= 0:
+        return [0.0] * len(base)
+    return [free * f / total for f in fac]
+
+
+def flex(container: Rect, items, *, direction: str = "row", gap: float = 0.0,
+         justify: str = "start", align: str = "stretch",
+         pad=(0, 0, 0, 0)) -> list[Rect]:
+    """CSS flexbox for one line. Returns a Rect per item, in order.
+
+    A pure function of (container, items, options) — so it is cacheable on
+    the container's size and never needs to run per frame. That matters:
+    Taffy's Python bindings cost 1.4-2.3ms a frame for 180 boxes, which is
+    ~10% of a 16.7ms budget. This is arithmetic.
+
+    Conformance is measured, not assumed: `flex_oracle.js` lays the same
+    cases out in Chromium and `test_flex.py` asserts agreement.
+
+    Supported: direction, gap, justify (start/center/end/between/around/
+    evenly), align (start/center/end/stretch) plus per-item align-self,
+    grow, shrink, padding. Not supported: wrap, order, baseline alignment.
+    """
+    inner = container.pad(*pad) if any(pad) else container
+    row = direction == "row"
+    main_size = inner.w if row else inner.h
+    cross_size = inner.h if row else inner.w
+    n = len(items)
+    if n == 0:
+        return []
+
+    base = [((it.w if row else it.h) or 0.0) for it in items]
+    used = sum(base) + gap * (n - 1)
+    free = main_size - used
+    if free > 0:
+        base = [b + d for b, d in zip(base, _dist(free, items, base, True))]
+    elif free < 0:
+        base = [max(b + d, 0.0)
+                for b, d in zip(base, _dist(free, items, base, False))]
+    used = sum(base) + gap * (n - 1)
+    slack = max(main_size - used, 0.0)
+
+    # justify: where the line starts, and how much goes between items
+    lead, between = 0.0, gap
+    if justify in ("center",):
+        lead = slack / 2.0
+    elif justify in ("end", "flex-end"):
+        lead = slack
+    elif justify == "space-between":
+        between = gap + (slack / (n - 1) if n > 1 else 0.0)
+    elif justify == "space-around":
+        each = slack / n if n else 0.0
+        lead, between = each / 2.0, gap + each
+    elif justify == "space-evenly":
+        each = slack / (n + 1) if n else 0.0
+        lead, between = each, gap + each
+
+    out, at = [], lead
+    for it, b in zip(items, base):
+        a = it.align or align
+        other = (it.h if row else it.w)
+        if a == "stretch" and other is None:
+            c_size, c_at = cross_size, 0.0
+        else:
+            c_size = other if other is not None else cross_size
+            if a in ("center",):
+                c_at = (cross_size - c_size) / 2.0
+            elif a in ("end", "flex-end"):
+                c_at = cross_size - c_size
+            else:                                   # start / stretch-with-size
+                c_at = 0.0
+        if row:
+            out.append(Rect(inner.x + at, inner.y + c_at, b, c_size))
+        else:
+            out.append(Rect(inner.x + c_at, inner.y + at, c_size, b))
+        at += b + between
+    return out

@@ -43,10 +43,29 @@ that has worked all the way through this.
 | tokens (colour, radius, type scale) | done |
 | draw primitives (fill, border, shadow, gradient, icon, text) | done |
 | box model (`Rect`, padding, cuts, align) | done |
-| **layout (flex: direction, wrap, grow/shrink, justify, align, gap)** | **next** |
+| layout (flex: direction, grow/shrink, justify, align, gap) | done — 27 cases vs Chromium |
 | interaction (hit, eased state, the `_track` sandwich) | done |
 | popover placement (side/align/offset, flip, shift) | done |
 | components | in progress |
+
+## Still missing, after flex
+
+Primitives the browser gives free that ImGui does not, which components
+will keep running into:
+
+| missing | why it matters | hit yet? |
+|---|---|---|
+| **rounded clipping** (`overflow-hidden`) | ImGui clips to rectangles only; a card with an image or a scroll area has square corners | yes — the popup shadow needed a widened clip rect |
+| **text wrapping / multi-line measure** | descriptions, tooltips, node summaries. `push_text_wrap_pos` exists but `label()` is single-line | not yet |
+| **intrinsic sizing** (`fit-content`, `min-content`) | `Flow` measures one row; there is no "how big is this subtree" | yes — every container is hand-sized |
+| **scroll container** | REVIEW.md: "a section may scroll down". ImGui child windows scroll but the bars need restyling | not yet |
+| **focus ring + tab order** | `focus-visible:ring-[3px]`; nav is enabled now but nothing is styled or ordered | not yet |
+| **variant resolver** (cva) | variants are ad-hoc dicts (`tokens.BADGE`); components will each invent their own | yes, mildly |
+| **transform transitions** | shadcn menus `zoom-in-95`; the ease store does colour only | no — faded instead |
+| **density / scale** | `Ui.scale` exists and is unused; the side pane is 240–320px | not yet |
+
+Rounded clipping and intrinsic sizing are the two that will bite hardest,
+in that order.
 
 ## Components, against Hyperspace's real control inventory
 
