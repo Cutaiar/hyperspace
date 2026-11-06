@@ -736,6 +736,9 @@ here; overturn → the change, then the same.
 | 702 | Plan 44 D5d: `test_no_patch_reaches_the_other_deck`: nine roads each way round, no leak found. The accepted limits: the shared dream worker (DQ8); a Drive sync lands on the panel's deck | — | owner — 2026-11-04: "no preset can affect another preset"; the absolute rule |
 | 703 | Plan 44 D5e (DQ7): which `Deck` you look at, in every place that shows its rows: the head chip and title (#380), over the loaded look's strip ("deck 2 · off air", red), the desk diagram's header ("deck 2 · off air · the desk plays deck 1"), ROUTING's desk section, the ON AIR inset names its deck, SYSTEM's GPU blocks by number | — | owner — 2026-11-04: "DQ7 as recommended" |
 | 704 | Plan 44 D5e: the words checked against #380, #386, #387 and #388: a row's dormant line says which of two reasons, the verbs' tips and the sheet say off air, the Home tip and the sheet's ⌘Z say the latch, the sheet loses pad B, a per-`Deck` meta control is not "tuned", the footer's chip says players, `output.xfade`'s label is Crossfade | 650's rough edge | (rec) — pending the owner |
+| 705 | Plan 44 D6a: a playlist is a file kind of the library's, `<library>/playlists/<slug>.json`, `hyperspace.playlist/1`, `{name, entries: [{loadable, dwell_s, fade_s?}]}`; `read` checks it, nothing lands it, a load of one is refused in words | — | owner — 2026-11-04: "seconds, `playlists/`, no pausing" |
+| 706 | Plan 44 D6a: an advance is `LEAD_S` (2 s) of load and warm on the deck off air, then `MetaController.crossfade`; dwell runs fade start to fade start; `fade_s` absent is `output.xfade_s`; a missing patch is skipped and said, every entry in a row stays on, says so once and retries a dwell later; the file is read again before each load, by the name it was chosen by | — | owner — 2026-11-04: "a new look every five minutes"; the reading's DQ5 |
+| 707 | Plan 44 D6a: no guards against the operator. It does not wait on a dirty deck, an open undo step or the panel; it does wait while the crossfader is between its ends, a fact of the mixer, and a hand across to the look armed has played it. No third deck; no second dream worker | — | owner — 2026-11-04: "it needs no guards against the operator"; overrules plan 44 §6 and the reading's DQ5 rec |
 | 715 | Plan 57 NM0: a loadable patch saves node mode as `{"player", "controller", "node"}`, the rows derived; `controller` is a device kind | 546 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on saving it and on naming a player; (rec) — pending the owner on `controller` |
 | 716 | Plan 57 NM0: the fill: what stays, what fills, what is listed; a `NODE_MODE` cable kind in green | 546, 548 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on the rule; (rec) — pending the owner on the colour and on a row elsewhere taking its freedom |
 | 717 | Plan 57: NM0 is an optional key, no bump; the rest is one migration, whose order and questions are in plan 57 | 547 | owner — 2026-11-06: yes, and all of it in one migration: "coordinating the migration is not hard" (`plans/57-format-lane.md` §6) |
@@ -13161,6 +13164,45 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 - **Left.** "no worker in the preview" (`graph.py`): only a renderer with no `segment_cfg` says it, and both decks have
   one, so it is unreachable in the app. "preset", "session" and "rig" are the owner's question, in the PR.
 - **Judge it.** 536.
+### 705. The playlist's file
+
+- **Answer.** The owner, 2026-11-04, DQ5: "seconds, `playlists/`, no pausing".
+- **Built.** `library.PLAYLISTS` is a document kind, as the patches are: `read` checks the schema, and `load`, `save_as` and
+  the file watch land nothing (`PLAYLIST_LANDED`). `Library.save_playlist` writes one as `save_patch` writes a patch.
+  `tools/migrate_library.py` skips the folder (`NOT_MODULES`), and `tools/move_library.py` carries it. An entry's key is
+  `loadable`, the signed word, and its value a name under the loadable patches' folder, so the format lane's folder move
+  (plan 57) changes nothing in a playlist. A new folder, so no schema moves. An older build lists it as a group and does
+  nothing with it (the reading, §4).
+- **Bounds.** `Entry` refuses what could not be played, so nothing writes what would not read: a dwell from 1 s to a week, a
+  fade from 0 to `output.xfade_s`'s own 30 s. `1e999` is refused, not a fade that never ends. A bad row is left out and said, and
+  the rest plays, as with a missing patch. A save goes over the file the name resolves to, as `save_as` does.
+- **Judge it.** 537.
+
+### 706. One advance
+
+- **Answer.** The owner, 2026-11-04, and the owner's "A playlist loads the next loadable patch into the off-air `Deck` and
+  crossfades".
+- **Built.** `Playing.tick`, duck-typed over the meta controller and the fade. `LEAD_S` before the fade the next entry
+  loads by the deck off air's own `LoadedPatch.load`, the road a bank pad takes; it fades when due and warm. `crossfade`
+  takes `seconds`, so an entry's `fade_s` writes nothing over `output.xfade_s`.
+- **Why fade to fade.** "A new look every five minutes" is 300, whatever the fade takes.
+- **Nothing will play.** An install runs on: Drive offline makes every patch missing, so it says so once, what is on air stays,
+  and it tries again a dwell later, and plays when they are back. It never stops itself.
+- **A hand on the fader.** Taken across to the look armed, that look has played: its dwell starts there, and it moves on.
+- **Why read the file each time.** It reads by the name it was chosen by, so a conflict copy stays itself. A save on the other Mac lands at the next advance, with no restart. `Library.read` keeps
+  the parse until the mtime moves. If the file has gone, the last list plays on, said.
+- **Judge it.** 538.
+
+### 707. No guards
+
+- **Answer.** The owner, 2026-11-04: "The playlist is for installations ... it needs no guards against the operator".
+- **Overruled.** Plan 44 §6's "never written while the operator is editing it", and the reading's "pauses under hold" and
+  "pauses on the dot", and its panel following on air: the panel stays where it was put (`MetaController`).
+- **Kept, and why they are no guards.** It waits while `MetaController.mixing`: the deck off air is in the picture then, and
+  a load would jump the room; row 700 refuses a pad there for the same reason. A load armed on a deck that has since gone
+  on air has played, and it moves on: otherwise the fade would run back to what was on air.
+- **DQ8.** No second dream worker: `test_an_advance_is_one_mix_pass` holds that the module imports only `library` and
+  names no fade, draw or worker of its own.
 
 ### 715. What a loadable patch saves of node mode
 

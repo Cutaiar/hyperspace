@@ -8043,6 +8043,12 @@ Register rows 703, 704, 2026-11-06. Restart first (a param's label and tips are 
 3. The footer's chip starts "players:". On the desk diagram, X reads "Crossfade".
 4. With the panel on air, Home, then ⌘Z. *Pass:* refused in words; the room does not move. The foot's line after Home did not offer ⌘Z.
 *Fail:* a word that describes the old hold, or a load landing on air.
+## CC. The playlist's file (plan 44 D6a)
+Register rows 705–707, 2026-11-06. No behaviour yet: nothing plays one until group CD. Headless: `tests/test_playlist.py`, over stand-ins.
+**537. The folder is harmless.** Put a `playlists/` folder with one `.json` in a scratch library, as `tests/test_playlist.py` writes one, and launch on it.
+*Pass:* the presets section lists nothing new, the footer says nothing, and a dry run of `tools/migrate_library.py` on that library leaves the folder out.
+**538. Read the plan's model.** No machine needed. `playlist.py`'s docstring against what you want from a cart left running.
+*Judge:* a dwell of 300 is a fade starting every 300 s, whatever the fade takes (row 706), not 300 s alone on air. Right?
 
 ## CF. Node mode's saved form (plan 57)
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round

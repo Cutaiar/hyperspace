@@ -639,7 +639,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     panel, lib = rig.panel, rig.panel.library
     router = rig.router                             # the one the rig's Loadable patches loads into
     frame(panel, "routing")
-    assert lib.kinds == ("patches", "presets")     # plan 40 T1: patches are spawned
+    assert lib.kinds == ("patches", "playlists", "presets")     # plan 40 T1: patches are spawned
     listing = lib.list("presets")
     assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(listing)
     assert [k for k in lib.load("presets", "lfo-breathe")
