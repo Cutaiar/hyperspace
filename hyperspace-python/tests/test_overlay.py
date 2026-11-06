@@ -75,22 +75,22 @@ def test_params_registered(rig):
     assert all(p.group == "output" for p in r.group("output"))
 
 
-def test_rig_settings_never_persist_or_modulate(rig):
+def test_meta_settings_never_persist_or_modulate(rig):
     r = rig.reg
     for pid in ("output.monitor", "output.fullscreen", "output.overlay", "output.passthrough"):
         assert not r[pid].persist, pid
         assert not r[pid].modulatable, pid
-    # ground and opacity are a look: a preset keeps them, a lane may drive them
+    # ground and opacity are a look: a loadable patch keeps them, a lane may drive them
     for pid in ("output.bg", "output.alpha"):
         assert r[pid].persist and r[pid].modulatable, pid
     saved = r.snapshot("output")
     assert set(saved) == {"output.bg", "output.alpha"}
 
 
-def test_dim_is_a_rig_setting_that_starts_bright(rig):
+def test_dim_is_a_meta_setting_that_starts_bright(rig):
     """Plan 15 WP3 (decision 28): the master dim is the operator's — 1 on a
     fresh Output whatever the config says (there is no key), never saved,
-    never modulated, the session's by group, no `overlay.*` alias — and it
+    never modulated, the meta controller's by group, no `overlay.*` alias — and it
     is not a window-system setting: `apply` pushes nothing for it."""
     from hyperspace.params import part_of
 
@@ -99,7 +99,7 @@ def test_dim_is_a_rig_setting_that_starts_bright(rig):
     p = r["output.dim"]
     assert p.kind is Kind.CONTINUOUS and (p.lo, p.hi) == (0.0, 1.0) and p.value == 1.0
     assert not p.persist and not p.modulatable and not p.alias
-    assert p.group == "output" and part_of(p) == "session"
+    assert p.group == "output" and part_of(p) == "shared_meta"
     assert "overlay.dim" not in r
     assert "output.dim" not in r.snapshot("output") and "output.dim" not in r.snapshot()
     assert p.text() == "100%"
@@ -383,7 +383,7 @@ def test_overlay_is_shut_by_default():
 def test_overlay_refuses_every_road_while_the_config_shuts_it(gated):
     """The T key and the APC40's MASTER select are rows on `overlay.on`
     (the factory table, apc40.DEFAULT_MAP); the panel sets `output.overlay`;
-    a preset restores values. Every one lands on the one param, and it
+    a loadable patch restores values. Every one lands on the one param, and it
     stays off — the window never leaves window mode."""
     from hyperspace import apc40, routing
 
@@ -396,7 +396,7 @@ def test_overlay_refuses_every_road_while_the_config_shuts_it(gated):
     routing.act(r, routing.Binding.from_json(master))         # MASTER select
     r["output.overlay"].set(True)                             # the panel's toggle
     r["overlay.on"].toggle()
-    r.restore({"output.overlay": True, "overlay.on": True})   # a preset naming it
+    r.restore({"output.overlay": True, "overlay.on": True})   # a loadable patch naming it
     out.apply()
     assert out.overlay is False and out.mode == "window"
     assert r["output.overlay"].get() is False
@@ -431,10 +431,10 @@ def _slots(*names, missing=()):
                  win=None if k + 1 in missing else f"w{k + 1}") for k, n in enumerate(names)]
 
 
-def test_the_output_switches_are_rig_settings():
-    """Fork F4: output.N.scene / .hands / .dim are rig settings (plan 35 T4:
+def test_the_output_switches_are_meta_settings():
+    """Fork F4: output.N.scene / .hands / .dim are meta settings (plan 35 T4:
     the two mutes, no `.through`) —
-    group `output` (the session's), never persisted (no preset, show or
+    group `output` (the meta controller's), never persisted (no loadable patch, show or
     undo step holds them: `undo.watched` needs persist), not modulatable
     (no lane rides them) — and they write the output's `Switches`, which
     the renderer reads. Generated for the outputs that opened, numbered by
@@ -454,10 +454,10 @@ def test_the_output_switches_are_rig_settings():
     assert not any(p.id.startswith("output.2.") for p in reg)       # not opened: none
     for pid in ids:
         p = reg[pid]
-        assert p.group == "output" and part_of(p) == "session"
+        assert p.group == "output" and part_of(p) == "shared_meta"
         assert not p.persist and not p.modulatable and not p.alias and not undo.watched(p)
     assert not any(pid in reg.snapshot() for pid in ids)
-    assert not any(pid in reg.snapshot(part="session") for pid in ids)
+    assert not any(pid in reg.snapshot(part="shared_meta") for pid in ids)
     assert reg["output.1.scene"].kind is Kind.TOGGLE and reg["output.1.dim"].kind is Kind.CONTINUOUS
     assert reg["output.1.scene"].label == "Glass picture"
     assert reg["output.3.hands"].label == "Wall hands"
@@ -501,7 +501,7 @@ def test_output_switches_are_picture_and_hands():
     """Plan 35 O (row 374): a window's two mutes — `output.N.scene`
     (labelled "picture": the id is kept for the bindings) and `.hands` —
     with its mirror, and no `.through`: "hands through the effects" is the
-    preset's wiring now. A mute says what it ignores."""
+    loadable patch's wiring now. A mute says what it ignores."""
     from hyperspace.overlay import register_switches
 
     reg = _registry()

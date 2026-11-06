@@ -5,7 +5,7 @@ frame and `publish` hands the outputs to the router as ``lfo:<i>``
 (plan 09, decisions 7 and 8). Every knob on an LFO — shape, rate, sync,
 depth, phase — is a registry param, modulatable and persistent, which is
 what makes them chainable: a hand can own LFO 1's depth while LFO 1 owns
-brightness, and a preset carries the whole arrangement. Layering is a
+brightness, and a loadable patch carries the whole arrangement. Layering is a
 property of the graph, never two performers on one knob.
 
 Per LFO:
@@ -56,7 +56,7 @@ paths, no partial phase on any.
 from where the wave is — the accumulator takes the current phase rather
 than resuming from a stale one — and a random LFO keeps its held value.
 Switching *to* a division is not carried: a division lands on the clock's
-beat, whether a knob or a preset set it, so a bar-long wave is on the bar
+beat, whether a knob or a loadable patch set it, so a bar-long wave is on the bar
 the moment it is chosen.
 
 Addresses: the router's source addresses are 0-based (``lfo:0`` is
@@ -65,8 +65,8 @@ Addresses: the router's source addresses are 0-based (``lfo:0`` is
 **N of them** (plan 31 B): the bank is a `modbank.Bank` — four by
 default (`N`), up to 16, each added or removed by its stable id. Ids
 never compact: with LFO 2 removed, LFO 3 is still ``lfo:2`` and
-``lfo.3.*``, so every route and preset keeps its meaning, and
-LFO 2's lane reads NaN (dormant). The membership is the preset's
+``lfo.3.*``, so every route and loadable patch keeps its meaning, and
+LFO 2's lane reads NaN (dormant). The membership is the loadable patch's
 ``"lfos"`` key and part of undo; `declare` is this kind's half of
 `Bank.bind`.
 
@@ -163,7 +163,7 @@ class LFO:
                 carried = True
             else:
                 # into a division: on the clock's beat, whether a knob or a
-                # preset set it — an earlier per-LFO reset's offset belonged
+                # loadable patch set it — an earlier per-LFO reset's offset belonged
                 # to the old ratio and goes
                 self.shift = 0.0
         self.last_sync = self.sync
@@ -266,7 +266,7 @@ class LFOs(Bank):
 def register(reg, lfos: LFOs, clock) -> None:
     """Every LFO knob as a param in the ``lfo`` group, plus the global
     trigger. All of them modulatable and persistent: a performer can own
-    an LFO's depth, and a preset carries the arrangement. The bank is
+    an LFO's depth, and a loadable patch carries the arrangement. The bank is
     bound to `reg` (modbank.Bank.bind), so an LFO added later declares its
     knobs the same way and one removed drops them."""
     if f"{GROUP}.trigger" in reg:

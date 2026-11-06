@@ -6,13 +6,13 @@ title and at most five short lines, nothing per port); one wire between
 two nodes while either end is collapsed, however many params are mapped
 between them, the real cables appearing when both ends are expanded; and
 the GRAPH page takes over the routes and the modifiers from ROUTING,
-whose desk, macros, session and sinks stay where they are.
+whose desk, macros, meta controller and sinks stay where they are.
 
 Headless, on the harness N2 and N3 used: the shell's rig
 (tests/test_ui_shell.py) with the corpus's party-trip loaded, a render graph built by
 `graph.default_graph`, the APC40 as a real `devices.MidiDevice` over a
 stand-in adapter (tests/test_graphview_devices.py), and the page drawn
-for real on `imgui_node_editor`. No preset is edited or added."""
+for real on `imgui_node_editor`. No loadable patch is edited or added."""
 
 import json
 import math
@@ -48,9 +48,9 @@ def party(rig):
     """party-trip (the corpus's, seeded into the scratch library) on the
     page: its rows, a render graph with effects, the APC40 listed. Returns
     the page's state after two frames. Plan 35 T5: the canvas is the
-    preset's wired frame, so the frame the render graph is built from —
+    loadable patch's wired frame, so the frame the render graph is built from —
     acid and palette in the run, output 2 the hands through them — is
-    landed as the preset's graph too."""
+    landed as the loadable patch's graph too."""
     seed(rig.lib.home)
     rig.lib.load("presets", "party-trip")
     spec = land_frame(rig, stacked(("acid", "palette")), Shows(), Shows(through=True))
@@ -65,12 +65,12 @@ def party(rig):
 
 def land_frame(rig, src, *shows):
     """The wired frame of `src` with output k's overrides for `shows[k - 1]`
-    (`tests/wiredframe.shown`) landed as the loaded preset's graph."""
+    (`tests/wiredframe.shown`) landed as the loaded patch's graph."""
     from wiredframe import shown
     section = shown(src, *shows)
     spec = G.read_graph(section)
     assert not spec.notes, spec.notes
-    rig.lib.presets.graph.land(spec, spec.to_json())
+    rig.lib.loaded_patch.graph.land(spec, spec.to_json())
     return spec
 
 
@@ -312,7 +312,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     frame(rig.panel, "graph")
     assert st["said"] == ui_graph.ALREADY_TIDY
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.presets.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
     frame(rig.panel, "graph")
     assert st["applied"]["render:camera"] == (900.0, 40.0)
     st["tidy"] = True
@@ -321,7 +321,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     k = len({n.area for n in view.nodes if not n.idle})     # (plan 35 G: by primitive)
     assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in {k} areas, every one "
                           f"collapsed · {idle} idle off the canvas")
-    assert st["open"] == set() and rig.lib.presets.layout == {}
+    assert st["open"] == set() and rig.lib.loaded_patch.layout == {}
     auto = ui_graph.layout_of(st, view)
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
                if not n.idle)                           # N9: an idle node is not placed
@@ -425,7 +425,7 @@ def test_a_right_click_on_the_details_opens_no_graph_menu(rig, monkeypatch):
 def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
         rig, monkeypatch):
     """ROUTING draws a pointer line where its routes and its MODIFIERS strip
-    were, then its desk, macros, session and sinks as before; the functions
+    were, then its desk, macros, meta controller and sinks as before; the functions
     of the two sections stay and keep working (the canvas and the tests
     call them)."""
     panel, router = rig.panel, rig.router
@@ -512,7 +512,7 @@ def test_the_smoothed_energy_times_band_patch_from_graph_alone(rig, monkeypatch)
     editor. Played, it is what N1's is."""
     panel, reg, router = rig.panel, rig.reg, rig.router
     st = party(rig)
-    router.table.set_routes([])                     # a preset with no routes yet
+    router.table.set_routes([])                     # a loadable patch with no routes yet
     hands(router, 0.0)
     frame(panel, "graph")
     smooth = ui_graph.add_modifier(panel, "smooth", at=(300, 40))
@@ -739,7 +739,7 @@ def spy_rows(monkeypatch):
 
 
 def undo_watch(rig):
-    """An undo watcher over the rig's registry and table (app.main's, without
+    """An undo watcher over the meta controller's registry and table (app.main's, without
     the marks), ticked by hand: `tick()` one frame on, `settle()` past
     `SETTLE_S`."""
     from hyperspace import undo
@@ -897,7 +897,7 @@ def test_every_nodes_side_panel_draws(rig):
     — a toggle's checkbox, a trigger's chip and a combo beside the sliders."""
     st = party(rig)
     # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
-    e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
+    e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
     # (plan 36 T2: the pattern is in already — the faces' wire says it;
     # T4: an echo is the look-back's pin — its item adds the look-back)
     for kind, f in (("backdrop", None), ("guide", None), ("echo", "2"),
@@ -1027,7 +1027,7 @@ def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
     select row with its Learn menu sits under them, and the canvas's
     summary says the pick."""
     st = party(rig)
-    e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
+    e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
     assert e.add_node("switch") is None and e.added == "switch"
     assert e.wire("rout:channel.a", "rin:switch/in1") is None
     assert e.wire("rout:channel.c", "rin:switch/in3") is None

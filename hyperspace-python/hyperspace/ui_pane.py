@@ -34,7 +34,7 @@ section has the whole band.
 
 Which sections are open is this Mac's, kept in ``<machine>/ui.json``
 beside the pane's width (``graph.side_w``): ``pane.open`` for the column
-beside the canvas (selection and presets open at first), ``pane.below``
+beside the canvas (selection and loadable patches open at first), ``pane.below``
 for the narrow page's band (selection alone at first). A click is
 written `WRITE_AFTER_S` after the last one (`flush`; `ui_graph.close`
 writes what is left), atomically (`library._write_text`). A selection
@@ -47,7 +47,7 @@ selected.
 Learn's framing and the right-click menu find it as on the page. imgui's
 own id is the label hashed under the id stack, and each section's body
 is drawn under ``push_id("pane.<key>")`` inside the pane's child, so a
-section's ids never collide with another's (the presets section and the
+section's ids never collide with another's (the loadable patches section and the
 lookback section both draw preset strips). Each header is ``##pane.<key>``
 for the driver.
 
@@ -73,7 +73,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_players, ui_presets, undo
+from . import library, ui, ui_fx, ui_loadable, ui_players, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -105,9 +105,9 @@ def _wrapped(key: str) -> Callable:
 
 # (key, title, the groups for its dirty dot, the body — the page's own
 # draw; None for selection, whose body `draw` is handed): down the pane,
-# the graph's own things first (what is selected, the preset, the shape,
+# the graph's own things first (what is selected, the loadable patch, the shape,
 # its effects and pictures), then the voices that move them and the desk's
-# rows, then the room and the rig
+# rows, then the room and the meta controller
 SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("selection", "selection", (), None),
     ("presets", "presets", ("presets",), _paged("presets")),
@@ -129,7 +129,7 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("players", "players", (), _paged("players")),
 )
 KEYS = tuple(k for k, *_ in SECTIONS)
-# beside the canvas: selection and presets open at first (stage 1); every
+# beside the canvas: selection and loadable patches open at first (stage 1); every
 # section stages 2 and 3 added folded (rec: a fresh Mac's pane reads as it did)
 DEFAULT_OPEN = {k: k in ("selection", "presets") for k in KEYS}
 DEFAULT_BELOW = {k: k == "selection" for k in KEYS}     # the narrow page's band
@@ -166,7 +166,7 @@ def write_doc(machine, doc: dict, who: str = "panel") -> None:
 
 def write_key(machine, key: str, value, who: str = "panel") -> None:
     """Keep `value` as ui.json's top-level `key`, the rest of the file as
-    it was — for another module's own key beside the pane's (the presets'
+    it was — for another module's own key beside the pane's (the loadable patches'
     folds, ``presets``, plan 48 stage 2), deferred by its caller as
     `flush` defers the pane's (`WRITE_AFTER_S`)."""
     doc = read_doc(machine)
@@ -445,10 +445,10 @@ def _header(panel, key: str, title: str, on: bool, said: str, groups,
             chip: bool = False, first: bool = True) -> bool:
     """One section's header: ▾ / ▸ and its title in the micro face (the
     selection's named after it), a dot where the section's group has moved
-    off its preset. `chip`: as wide as its words (the
+    off its loadable patch. `chip`: as wide as its words (the
     band's rows), lit while open, on the row of the chip before it (`first`:
     there is none) unless it would pass the edge. True when clicked."""
-    dot = any(ui_presets.dirty(panel, g, polled=True) for g in groups)
+    dot = any(ui_loadable.dirty(panel, g, polled=True) for g in groups)
     room = 2 * ui.HEADER_DOT_R + 12 if dot else 0.0
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)   # measured in the face it is drawn in
     try:

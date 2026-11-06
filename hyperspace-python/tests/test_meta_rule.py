@@ -1,5 +1,5 @@
 """The hard rule (the owner, 2026-11-04; register rows 743–745): no row of a
-preset may drive a meta controller param (`part_of(p) == "session"`). Every door
+loadable patch may drive a meta controller param (`part_of(p) == "session"`). Every door
 refuses it in words, a saved one drops with a note and the next save removes it,
 and the meta controller's own rows stay.
 """
@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 from conftest import seed
 from test_graph_groups import BREATH
+from test_loadable import boot, put
 from test_pad_learn import ScriptedPad
-from test_presets import boot, put
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import gamepad, graphview, headless, patches, ui_graph, ui_routing, undo
@@ -29,7 +29,7 @@ from hyperspace.routing import (
     Macro,
     Sub,
     factory_desk,
-    is_session_row,
+    is_meta_row,
     meta_refusal,
     meta_row_refusal,
 )
@@ -79,8 +79,8 @@ def test_the_five_with_a_foreign_prefix_are_refused_at_the_doors(pid):
     Binding("pad:A", "tempo.tap", "fire"),
     Binding("key:space", "audio.play", "toggle"),
 ])
-def test_the_meta_controllers_own_rows_are_not_a_presets(row):
-    assert is_session_row(row) and meta_row_refusal(row) is None
+def test_the_meta_controllers_own_rows_are_not_a_loadables(row):
+    assert is_meta_row(row) and meta_row_refusal(row) is None
     assert Bindings().add(row) is row
 
 
@@ -89,8 +89,8 @@ def test_the_meta_controllers_own_rows_are_not_a_presets(row):
     Binding("hand:left.y", "master.gain", "push", 0.375, enabled=False),
     Binding("cc:0:14", "master.gain", "abs", layer="preset"),
 ])
-def test_a_presets_rows_are_refused_at_the_one_door(row):
-    assert not is_session_row(row)
+def test_a_loadables_rows_are_refused_at_the_one_door(row):
+    assert not is_meta_row(row)
     assert WORDS in meta_row_refusal(row)
     t = Bindings()
     with pytest.raises(ValueError, match=WORDS):
@@ -100,28 +100,28 @@ def test_a_presets_rows_are_refused_at_the_one_door(row):
 
 def test_every_factory_row_on_a_meta_param_is_the_meta_controllers():
     """The line is mechanical: the factory's rows on a meta param all pass by
-    their layer, and the factory's preset layer holds none, with no id listed."""
+    their layer, and the factory's patch layer holds none, with no id listed."""
     table = Bindings.factory()
     on_meta = [b for b in table.bindings if meta_refusal(b.target) is not None]
     assert any(b.target == "output.dim" for b in on_meta) and len(on_meta) > 40
-    assert all(is_session_row(b) and meta_row_refusal(b) is None for b in on_meta)
+    assert all(is_meta_row(b) and meta_row_refusal(b) is None for b in on_meta)
     assert not [b for b in factory_desk() if b.layer == "preset"
                 and meta_refusal(b.target) is not None]
 
 
-def test_the_masters_row_survives_a_load_that_drops_a_presets(tmp_path):
+def test_the_masters_row_survives_a_load_that_drops_a_loadables(tmp_path):
     r = boot(tmp_path)
     table = r.router.table
-    master = [b for b in table.bindings if b.target == "output.dim" and is_session_row(b)]
+    master = [b for b in table.bindings if b.target == "output.dim" and is_meta_row(b)]
     assert master
     put(tmp_path, "LEANS", routes=[
         {"source": "hand:left.y", "target": "output.dim", "op": "push", "value": 0.375}])
-    r.presets.load("LEANS")
+    r.loaded_patch.load("LEANS")
     assert all(any(x is b for x in table.bindings) for b in master)
     assert not table.routes_to("output.dim")
 
 
-def test_a_presets_row_moved_or_woken_onto_a_meta_param_is_refused():
+def test_a_loadables_row_moved_or_woken_onto_a_meta_param_is_refused():
     t = Bindings()
     b = t.add(Binding("hand:left.y", "view.bright", "push", 0.3))
     for call in (lambda: t.move_route(b, target="master.gain"),
@@ -152,8 +152,8 @@ def test_a_saved_row_drops_with_a_note_and_a_later_save_removes_it(tmp_path):
             {"depth": {"source": "hand:left.y", "target": "master.gain"}, "from": 0.0, "to": 1.0},
             {"base": "view.bright", "from": 0.0, "to": 0.5}]}})
     before = path.read_bytes()
-    r.presets.load("LEANS")
-    table, notes = r.router.table, r.presets.notes
+    r.loaded_patch.load("LEANS")
+    table, notes = r.router.table, r.loaded_patch.notes
     assert any(n.startswith("dropped hand:left.y → master.gain: " + WORDS) for n in notes)
     assert any(n.startswith("dropped axis:RX → master.dyn: master.dyn is") for n in notes)
     assert any(n.startswith("dropped cc:0:48 → tempo.bpm: tempo.bpm is") for n in notes)
@@ -166,8 +166,8 @@ def test_a_saved_row_drops_with_a_note_and_a_later_save_removes_it(tmp_path):
     assert [x["target"] for x in doc["routes"]] == ["view.speed"]
     assert [x["target"] for x in doc["desk"]] == ["view.bright"]
     assert doc["macros"]["macro.1"]["subs"] == [{"base": "view.bright", "from": 0.0, "to": 0.5}]
-    r.presets.load("LEANS")
-    assert not [n for n in r.presets.notes if "meta controller" in n]
+    r.loaded_patch.load("LEANS")
+    assert not [n for n in r.loaded_patch.notes if "meta controller" in n]
 
 
 def test_no_corpus_file_holds_a_row_on_a_meta_param():
@@ -199,7 +199,7 @@ def test_a_hand_or_a_stick_learn_on_a_meta_param_is_refused_in_words(tmp_path):
 
 
 def test_a_desk_learn_on_a_meta_param_ends_and_a_pad_button_still_lands(tmp_path):
-    """The desk's preset layer is refused, wherever the control. A pad button is
+    """The desk's patch layer is refused, wherever the control. A pad button is
     the meta controller's own row, which stays allowed: the learn it answers
     was armed bare, so the refusal leaves it armed for that."""
     r = boot(tmp_path)
@@ -232,7 +232,7 @@ def test_a_row_a_hot_reload_left_is_not_saved(tmp_path):
     table = r.router.table
     table.bindings.append(Binding("hand:left.y", "master.gain", "push", 0.375))
     table.bindings.append(Binding("cc:3:16", "tempo.bpm", "abs", layer="preset"))
-    doc = r.presets.document("LEFT")
+    doc = r.loaded_patch.document("LEFT")
     assert not [x for x in doc["routes"] if x["target"] == "master.gain"]
     assert not [x for x in doc["desk"] if x["target"] == "tempo.bpm"]
 
@@ -276,7 +276,7 @@ def test_a_drag_from_an_invariant_control_says_invariant_not_the_rule(rig):
 def test_routing_and_the_desk_combo_offer_no_meta_param(rig):
     panel, reg = rig.panel, rig.reg
     for offered in (ui_routing._targets(panel), ui_routing._desk_targets(panel)):
-        assert offered and not [p for p in offered if part_of(p) == "session"]
+        assert offered and not [p for p in offered if part_of(p) == "shared_meta"]
     gain = reg["master.gain"]
     assert not ui_routing.route_target(gain) and not ui_routing.desk_target(gain)
     assert ui_routing.pad_target(gain)
@@ -322,7 +322,7 @@ def test_a_graph_cable_onto_a_meta_param_is_refused_in_words(rig):
 
 def test_the_graph_lists_no_mod_port_for_a_meta_param_but_a_meta_row_stands(rig):
     """A meta param gets no stub of its own, and a row of the meta controller's
-    still draws: it is not a preset's."""
+    still draws: it is not a loadable patch's."""
     table = rig.router.table
     table.set_routes([])
     table.bindings = [b for b in table.bindings if b.target != "tempo.bpm"]
@@ -348,7 +348,7 @@ def test_a_route_end_moved_onto_a_meta_param_is_refused(rig):
 
 def test_macro_base_and_depth_subscribers_on_a_meta_param_are_dropped():
     """Decided: both, at `set_macros`. A base already was (D9); a depth has no
-    route to scale. A depth on a preset's route stays."""
+    route to scale. A depth on a loadable patch's route stays."""
     t = Bindings()
     notes = t.set_macros({"macro.1": {"subs": [
         {"base": "master.gain"},
@@ -398,13 +398,13 @@ def test_a_spawn_lands_the_rest_and_says_what_it_refused(tmp_path):
     the referee refuses at a spawn does."""
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-trip")
-    pre, table, reg = app.presets, app.router.table, app.reg
+    pre, table, reg = app.loaded_patch, app.router.table, app.reg
     u = undo.Undo(reg, table, banks=pre.banks)
     undo.install(u)
     try:
         e = graphview.Edit(table, reg, app.router, graph=pre.graph,
                            push=lambda label: undo.push(label, load=True))
-        e.presets = pre
+        e.loaded_patch = pre
         doc = _with(routes=[{"source": "lfo:0", "target": "master.gain", "op": "push",
                              "value": 0.2}],
                     desk=[{"source": "cc:3:16", "target": "tempo.bpm", "op": "abs"}])

@@ -23,7 +23,7 @@ In Claude Code, `/deep-review` runs this review on the current branch
 - **A saved id or key is part of a file format.** The same applies to any
   change in a stored value's units. Ids and keys means:
   - a `persist=True` param's id;
-  - a key in a preset, patch, show or `bindings.json`.
+  - a key in a loadable patch, patch, show or `bindings.json`.
 
   Renaming or removing one needs three things:
   - a mapping that reads an old file as it was;
@@ -33,7 +33,7 @@ In Claude Code, `/deep-review` runs this review on the current branch
   - a test that opens an old file end to end, not only a unit test of the
     converter.
 
-  Shows store every persisted session param, so renaming a session param
+  Shows store every persisted shared meta param, so renaming a shared meta param
   reaches every saved show. PR #289 renamed the stick spring's
   `desk.pad.hz` to `desk.pad.duration` and was caught here.
 - **What a build from before makes of a file this branch writes.** Either

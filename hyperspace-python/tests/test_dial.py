@@ -13,8 +13,8 @@ from test_routing import rig as full_rig
 
 import hyperspace.gamepad as gp
 from hyperspace import app
+from hyperspace.loadable import LoadedPatch
 from hyperspace.params import Registry
-from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Router
 
 
@@ -145,10 +145,10 @@ def test_a_stick_that_is_no_dial_still_learns_its_axis(rig):  # noqa: F811
 
 
 def test_the_dial_preset_fills_both_clocks(tmp_path):
-    seed(tmp_path)                        # the corpus: DIAL among the shipped presets
+    seed(tmp_path)                        # the corpus: DIAL among the shipped loadable patches
     r = full_rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
-    assert Presets(r.lib, r.reg, router).load("DIAL") == []
+    assert LoadedPatch(r.lib, r.reg, router).load("DIAL") == []
     assert router.table.dropped == []
     dialed = {b.source for b in router.table.routes() if b.scheme == "axis"}
     assert dialed == {f"axis:{n}" for n in gp.DIAL_LANES}
@@ -156,9 +156,9 @@ def test_the_dial_preset_fills_both_clocks(tmp_path):
     assert router.table.owner("fx.wobble.amount").source == "axis:L.NE"
 
 
-# ---- the session params ----
+# ---- the shared meta params ----
 
-def test_the_readings_are_session_params_and_swap():
+def test_the_readings_are_meta_params_and_swap():
     reg, pad = Registry(), gp.Pad()
     app._register_dial(reg, pad)
     assert pad.dial_modes == gp.DIAL_DEFAULT
@@ -216,7 +216,7 @@ def test_the_system_page_draws_both_clocks(tmp_path, monkeypatch):
         r.panel.pad = pad
         app._register_dial(r.reg, pad)
         frame(r.panel, "system")                 # no dial routes: the hint
-        assert [k for k in Presets(r.lib, r.reg, r.router).load("DIAL")
+        assert [k for k in LoadedPatch(r.lib, r.reg, r.router).load("DIAL")
                 if not k.startswith(("env.", "seq."))] == []  # (plan 36 T3: the `/7`'s envelope ids, this rig has none)
         x, y = at(100)
         pad.frame(axes=[x, -y, -x, y, -1.0, -1.0])

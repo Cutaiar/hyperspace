@@ -5,9 +5,9 @@ table holds (D1, D4–D6, D12); nothing in apc40.py or midi.py is touched.
 The desk is a real `devices.MidiDevice` over a stand-in adapter that
 carries the APC40 profile (its `LAYOUT` is the device's ports), on the
 shell rig's factory table (tests/test_ui_shell.py), so the invariant, the
-global and the preset layer are the factory's. (Plan 24 C3's desk templates are
-retired, plan 44 D3.) Every preset is the corpus's or made here in the rig's
-scratch library: no preset is edited or added."""
+global and the patch layer are the factory's. (Plan 24 C3's desk templates are
+retired, plan 44 D3.) Every loadable patch is the corpus's or made here in the rig's
+scratch library: no loadable patch is edited or added."""
 
 
 import pytest
@@ -23,7 +23,7 @@ SHIFT = "note:0:98"
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
@@ -48,7 +48,7 @@ class FakeDevice(devices.Base):
 
 
 def rig_devices(rig, *more, desk=True):
-    """A device registry over the rig's table: the APC40 (first MIDI role,
+    """A device registry over the meta controller's table: the APC40 (first MIDI role,
     so it has the two layers) and any `more`."""
     ctx = devices.Context(table=rig.router.table)
     listed = ([devices.MidiDevice("apc40", {"profile": "apc40"}, ctx, io=DeskIO())]
@@ -72,7 +72,7 @@ def desk_cables(view):
 # ---------------------------------------------------------------- the two nodes
 
 def test_the_apc40_is_two_nodes_and_each_row_hangs_off_its_layers_node(rig):
-    """*apc40* holds the preset layer's rows and the invariant ones,
+    """*apc40* holds the patch layer's rows and the invariant ones,
     *apc40 (SHIFT)* the global layer's; each cable leaves the node of the
     layer its row is on. Each port is lit while its layer is up — the
     table's latch, which SHIFT flips (`desk.shift`) — and a cable from a
@@ -104,12 +104,12 @@ def test_the_apc40_is_two_nodes_and_each_row_hangs_off_its_layers_node(rig):
     p = next(c for c in cables if c.ref.layer == "preset")
     assert p.src_port == f"out:{p.ref.source}"
 
-    # the latch: the preset layer up
+    # the latch: the patch layer up
     assert table.layer_of() == "preset"
     assert first.up and not shift.up
     assert all(c.dormant for c in cables if c.ref.layer == "global")
     assert all(port.up for port in first.ports)
-    # SHIFT latched: the global layer up, the preset layer's ports faint,
+    # SHIFT latched: the global layer up, the patch layer's ports faint,
     # the invariant ports lit on either layer
     rig.reg["desk.shift"].set(True)
     graphview.refresh(view, rig.reg, rig.router)
@@ -202,10 +202,10 @@ def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig)
 
 
 # ---------------------------------------------------------------- desk templates
-# (plan 44 D3: retired — no library held one; a preset names none)
+# (plan 44 D3: retired — no library held one; a loadable patch names none)
 
-def test_a_corpus_preset_draws_no_template_node(rig):
-    """Every corpus preset has a plain desk section: no template node."""
+def test_a_corpus_loadable_draws_no_template_node(rig):
+    """Every corpus loadable patch has a plain desk section: no template node."""
     rig.lib.load("presets", "party-trip")
     assert not hasattr(ui_graph, "template_of") and not hasattr(graphview, "TEMPLATE")
     view = build(rig, rig_devices(rig))

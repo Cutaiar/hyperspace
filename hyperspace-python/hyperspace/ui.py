@@ -17,7 +17,7 @@ Unbind.
 The surface is GRAPH, always drawn, with a side pane of folding sections
 (ui_pane.py, plan 49): each section is a page's body, one per registry
 group or two, and a block in it whose group the library knows carries its
-preset strip (ui_presets.py) under the title. `ui.page` is the focus: the
+preset strip (ui_loadable.py) under the title. `ui.page` is the focus: the
 section a key row, a pad or ⌘[ / ⌘] unfolds and scrolls to (`PAGE_KEYS`,
 `Panel.go_page`). A modulated param
 draws its *base* as the handle and a white ghost bar at the *effective*
@@ -48,13 +48,13 @@ from . import (
     ui_feel,
     ui_graph,
     ui_lfo,
+    ui_loadable,
     ui_lookback,
     ui_media,
     ui_pad,
     ui_pane,
     ui_patterns,
     ui_players,
-    ui_presets,
     ui_routing,
     ui_seq,
     undo,
@@ -69,13 +69,13 @@ from .graph import (
     EMPTY,
     GROUND,
     Wiring,
+    bus_cuts_of,
     graph_words,
     hands_words,
     in_scene_hands,
     layer_words,
     output_placement_words,
     output_ports,
-    rig_of,
     through_layer,
     through_of,
     wire_words,
@@ -115,8 +115,8 @@ LABEL_GAP = 12   # px between a label cell's text room and its control (Panel._l
 SCENE_COMBO_MIN = 100   # px; the analyzer's scene combo keeps this beside its label and Reset all
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 # the dirty dot (plan 19 WP5): a filled red disc 12 px across beside a
-# preset's name — where the "●" glyph left about 7 px of ink — and the
-# header's dot, radius 5, on a section whose group has moved off its preset
+# loadable patch's name — where the "●" glyph left about 7 px of ink — and the
+# header's dot, radius 5, on a section whose group has moved off its loadable patch
 DOT_R = 6.0
 HEADER_DOT_R = 5.0
 
@@ -334,7 +334,7 @@ OPEN_ON_GRAPH = "open on GRAPH"                 # a window's block: its node sel
 NAME_ROOM = 64.0     # px: an OUTPUT block name needs this beside its ticks, or they go under it
 
 
-def shows_line(spec, n: int | None, slots=(), rig=None) -> str:
+def shows_line(spec, n: int | None, slots=(), bus_cuts=None) -> str:
     """The OUTPUT page's "shows:" (plan 35 U), read off the wired frame
     (`graphview.page_spec`: None is the factory frame): window `n`'s
     picture port — its own wire's source by its title (`graphview.
@@ -342,26 +342,26 @@ def shows_line(spec, n: int | None, slots=(), rig=None) -> str:
     "nothing — its ground" for a `ground` wire or nothing anywhere; a
     window putting the hands through the effects says so after. `n` None:
     All outputs' own picture. The mutes are not read: they are the
-    window's ticks beside the words. `rig` (plan 36 T1): the show's rig
+    window's ticks beside the words. `bus_cuts` (plan 36 T1): the loaded patch's
     wires — a window whose bus cable is cut shows nothing by it."""
     spec = graphview.page_spec(spec)
     alls = graphview.picture_now(spec, f"{graphview.rgraph.ALL_OUTPUTS}.image")
     if n is None:
         now = alls
     else:
-        now = graphview.picture_now(spec, f"output.{n}.image", rig)
+        now = graphview.picture_now(spec, f"output.{n}.image", bus_cuts)
         if now == graphview.AS_ALL and alls == graphview.NOTHING:
             now = graphview.NOTHING
     words = GROUND_WORDS if now == graphview.NOTHING else graphview.picture_label(
         spec, now, slots)
-    if n is not None and graphview.is_through(spec, n, rig):
+    if n is not None and graphview.is_through(spec, n, bus_cuts):
         words += f" · the {THROUGH_WORDS}"
     return f"shows: {words}"
 
 
 def output_shows(sw, fx_on: bool, visible: bool, master: float,
                  wiring: Wiring | None = None, n: int | None = None,
-                 rig=None) -> tuple[str, str]:
+                 bus_cuts=None) -> tuple[str, str]:
     """What one render output shows, in words, and why it is black ("" when
     it is not) — plan 21 WP4, fork F8: words, no picture; plan 35 T6: the
     picture combo's hover, its black words after `shows_line`'s, and the
@@ -381,12 +381,12 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     two, "as lines", a blend that is not plainly over; a picture or hands
     by a wire of the output's own (plan 28 N4); the effects placed on what
     it shows (plan 30 D1, `graph.output_placement_words`). Plan 36 T1:
-    `rig`, the show's rig wires — a port whose bus cable is cut is empty."""
+    `rig`, the show's bus wires — a port whose bus cable is cut is empty."""
     w = wiring if wiring is not None else EMPTY
     k = n if n is not None else 1
     shown = bool(sw.hands) and bool(visible)
-    thru = through_of(w, k, rig)
-    got = output_ports(w, k, rig)
+    thru = through_of(w, k, bus_cuts)
+    got = output_ports(w, k, bus_cuts)
     through = thru is not None
     bent = through and shown and fx_on
     # (a through over nothing is the hands alone: no scene in its picture)
@@ -395,7 +395,7 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     inside = bool(in_scene_hands(w)) and picture
     after = shown and not bent and not inside and got["hands"] is not None
     own = float(sw.dim)
-    # plan 28 N4: the preset's wires into this output's own ports (a
+    # plan 28 N4: the loadable patch's wires into this output's own ports (a
     # through's chain and a port wired to show nothing are not "a wire")
     ports = ({x.port: x for x in w.wires if x.node == f"output.{k}" and x.src != GROUND}
              if n is not None else {})
@@ -435,7 +435,7 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     else:
         words = "hands"
     if inside:
-        words = "scene + " + hands_words(w, sw, k, rig)
+        words = "scene + " + hands_words(w, sw, k, bus_cuts)
     elif after or bent:
         # a layer laid on: its node, "as lines", its blend
         words += layer_words(w, thru[0] if bent else got["hands"])
@@ -533,7 +533,7 @@ def device_lines(registry) -> list[str]:
 
 def wanted_lines(registry, table) -> list[str]:
     """Plan 40 T4: the SYSTEM page's lines under the device lines, one per
-    device role the loaded preset's rows want and the rig lacks — "wanted
+    device role the loaded patch's rows want and the meta controller lacks — "wanted
     by the preset: leap — not in this rig; 3 rows wait" (`devices.wants`,
     `devices.wanted_lines`); none without a registry or a table."""
     if registry is None or table is None:
@@ -555,7 +555,7 @@ def learn_wants(lrn) -> list[str]:
 
 def sink_items(lrn) -> list[tuple[str, str]]:
     """The param menu's "Learn sink ▸" items (plan 27 B3): (port address,
-    item text) for every sink port the rig lists (`Learn.sinks`) —
+    item text) for every sink port the meta controller lists (`Learn.sinks`) —
     ``bridge:3  ·  pitch ch4``; none without a registry or a sink."""
     sinks = getattr(lrn, "sinks", None)
     ports = sinks() if callable(sinks) else ()
@@ -683,7 +683,7 @@ CHEATSHEET = [
 # go of the focus.
 # the sections that hold the meta controller's params: ⌘Z there takes its stack
 # (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
-# output; audio holds the master faders and nothing of a preset (row 692)
+# output; audio holds the master faders and nothing of a loadable patch (row 692)
 META_SECTIONS = ("output", "audio", "analyzer", "hands")
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
@@ -759,14 +759,14 @@ class Panel:
         # while nothing, a cable, a bundle, a group or several nodes are
         # selected. Written by `ui_graph.publish` every frame the panel draws
         # (plan 49 stage 3: GRAPH is always drawn), and let go by
-        # `ui_graph.settle` when a preset lands without the node. With the
+        # `ui_graph.settle` when a loadable patch lands without the node. With the
         # panel hidden it is as of the last frame drawn. An effect's node is
         # `fx_selected` as well (`ui_graph.share`).
         # `graph_selected_at`: imgui's frame count when it last changed.
         self.graph_selected: str | None = None
         self.graph_selected_at: int = 0
         self.library = library      # library.Library, or None: no strips, no project row
-        # the F1–F8 preset bank is the open project's (library.Project)
+        # the F1–F8 loadable patch bank is the open project's (library.Project)
         self.bank = bank if bank is not None else (
             library.project if library is not None else None
         )
@@ -830,10 +830,10 @@ class Panel:
         quit and on ⌘R, before imgui shuts down; a panel that never drew
         the page holds none — the GRAPH canvas's tap (`canvas_tap`,
         2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
-        while the control window's GL is up. Safe to call twice. A presets
+        while the control window's GL is up. Safe to call twice. A loadable patches
         fold clicked under `WRITE_AFTER_S` ago is written first (plan 48
         stage 2, as `ui_graph.close` flushes the pane's)."""
-        ui_presets.flush_folds(self, force=True)
+        ui_loadable.flush_folds(self, force=True)
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
         if tap is not None:
@@ -887,12 +887,12 @@ class Panel:
         """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
         panel's deck's. **What is under the mouse decides:** a param undo watches
         says by its own layer, wherever it is drawn (a mixed section: hands with
-        `ghost.*`, SYSTEM with `desk.slew`, a rig node in the selection); else the
+        `ghost.*`, SYSTEM with `desk.slew`, a fixture node in the selection); else the
         section under it (`ui_pane.where`); else the deck. None over the player
         screen: no stack, since a move is on none of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
-            return part_of(p) != "performance"
+            return part_of(p) != "patch"
         if ui_players.over(self):
             return None
         return ui_pane.where(self) in META_SECTIONS
@@ -1024,15 +1024,15 @@ class Panel:
 
     def _ctx_lines(self, a: Param, p: Param) -> tuple[list, list]:
         """The menu's lines, one per thing bound to the param, read from
-        the table: the loaded preset's desk rows, the routes ("(off)" when
-        disabled; the hand rows through hands/panel.py), then the session's
+        the table: the loaded patch's desk rows, the routes ("(off)" when
+        disabled; the hand rows through hands/panel.py), then the meta controller's
         rows, dim — those are never an item (D5, D6). Returns (the desk
         rows, the routes) an Unbind would remove."""
         table = self._table()
         if table is None:
             return [], []
         # the same question `Learn.unbind` asks, so the lines are what it removes
-        desk, routes, session = learn.bound(table, (a.id, p.id))
+        desk, routes, meta_rows = learn.bound(table, (a.id, p.id))
         for b in desk:
             op = "" if b.op in ("abs", "rel") else f" · {ui_routing._op_text(b)}"
             imgui.text(self._row_name(b) + op)
@@ -1040,10 +1040,10 @@ class Panel:
         for b in routes:                # ctx_rows drew the hand's rows on the real param
             if b.scheme != "hand" or b.target != p.id or self.router is None:
                 imgui.text(self._row_name(b) + ("" if b.enabled else " (off)"))
-        for b in session:
+        for b in meta_rows:
             where = "global layer" if b.layer == "global" else "invariant"
             imgui.text_disabled(f"{self._row_name(b)} · {where}")
-        for b in learn.sinks_of(table, (a.id, p.id)):     # the session's, out (plan 27 B3)
+        for b in learn.sinks_of(table, (a.id, p.id)):     # the meta controller's, out (plan 27 B3)
             imgui.text_disabled(f"→ {b.target} · sink" + ("" if b.enabled else " (off)"))
         return desk, routes
 
@@ -1051,7 +1051,7 @@ class Panel:
         """The one Unbind (plan 17 WP1): drawn only when it would remove
         something — a plain item with one kind bound, a submenu (desk /
         route / both) with both. `Learn.unbind` does it: one undo step, the
-        loaded preset edited, no file written."""
+        loaded patch edited, no file written."""
         if not desk and not routes:
             return
         ids, lrn = (a.id, p.id), self.learn
@@ -1093,7 +1093,7 @@ class Panel:
         SHIFT's own param, not a meta param (what `ui_routing._desk_targets`
         leaves out) — with or without a MIDI adapter. **Learn hand ▸ left /
         right**: only with a tracker, on a param a hand can drive (the real
-        one is modulatable and no meta param), for the sides the rig's
+        one is modulatable and no meta param), for the sides the meta controller's
         axes have. **Learn pad**: while a gamepad is connected, wherever a
         pad button can go (`ui_routing.pad_target`, a meta param too) — a
         button, the D-pad, a stick or a trigger completes it
@@ -1103,7 +1103,7 @@ class Panel:
         modulatable param that is no trigger, **LFO ▸** and **envelope ▸**
         — the bank's voices, the one already driving it checked, then new
         LFO / new envelope — and on a param a base subscriber may name,
-        **macro ▸** — the rig's knobs by label, one already setting it
+        **macro ▸** — the meta controller's knobs by label, one already setting it
         checked; a pick is the cable a drag on GRAPH makes
         (`ui_graph.route_from_menu`). It sits after the Learn items, before
         Learn sink, and is no Learn: an LFO has no gesture to wait for."""
@@ -1140,9 +1140,9 @@ class Panel:
         # gesture to wait for, so not a Learn; the cable a drag on GRAPH
         # makes (`ui_graph.route_from_menu`)
         ui_graph.route_from_menu(self, p)
-        # plan 27 B3: the param *out* to a sink port — the rig's ports
-        # (`Learn.sinks`), a pick lands at once as a session row
-        # (`Learn.learn_sink`): no prompt, no undo step, no preset dirt
+        # plan 27 B3: the param *out* to a sink port — the meta controller's ports
+        # (`Learn.sinks`), a pick lands at once as a meta row
+        # (`Learn.learn_sink`): no prompt, no undo step, no loadable patch dirt
         ports = sink_items(lrn) if p.kind is not Kind.TRIGGER else []
         if ports and imgui.begin_menu("Learn sink"):
             for address, text in ports:
@@ -1151,7 +1151,7 @@ class Panel:
             imgui.end_menu()
 
     def _hand_sides(self) -> list[str]:
-        """The hands this rig's axes belong to, left first; none without a
+        """The hands this meta controller's axes belong to, left first; none without a
         tracker."""
         axes = getattr(self.hands, "axes", None) or []
         return [s for s in ("left", "right") if any(getattr(x, "side", None) == s for x in axes)]
@@ -1675,7 +1675,7 @@ class Panel:
     def _shape_combo(self) -> bool:
         """view.shape as a menu grouped by kind (geometry.menu): 4D, 3D and
         Scenes, each in families — regular polytopes, Platonic solids … —
-        in index order. The index stays the shape's identity — a preset
+        in index order. The index stays the shape's identity — a loadable patch
         holds it — so only the menu groups them."""
         a = self.reg["view.shape"]
         p = self._real(a)
@@ -1731,7 +1731,7 @@ class Panel:
 
     def _lit_button(self, pid: str, label: str, lit: bool, color: imgui.ImVec4 | None = None,
                     width: float = 0.0) -> bool:
-        """A toggle drawn as a chip that goes solid red while on (plane keys, the preset bank)."""
+        """A toggle drawn as a chip that goes solid red while on (plane keys, the loadable patch bank)."""
         p = self.reg[pid]
         # its own id space: the same param often has a check or slider on the
         # same page (the FX strip under its chip), and two visible items with
@@ -1775,7 +1775,7 @@ class Panel:
             _micro(note, FAINT)
         lib = self.library
         if group is not None and lib is not None and lib.reg is not None:
-            ui_presets.strip(self, group)
+            ui_loadable.strip(self, group)
         imgui.separator()
         imgui.dummy(imgui.ImVec2(0, 1))
 
@@ -1929,7 +1929,7 @@ class Panel:
         ui_routing.modal(self)
         self.canvas_px = None   # the GRAPH page sets it when it draws (replay.grab reads it)
         ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
-        ui_graph.settle(self)   # a preset landed without the published node: let it go
+        ui_graph.settle(self)   # a loadable patch landed without the published node: let it go
         if self.cheatsheet:
             self._draw_cheatsheet()
         # the pad first: the desk reads its height to keep clear of it (ui_desk.room)
@@ -2126,7 +2126,7 @@ class Panel:
             if err:
                 imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
         self._output_blocks()
-        for want in ui_graph.window_wants(self):   # plan 44 D3: a window the rig lacks
+        for want in ui_graph.window_wants(self):   # plan 44 D3: a window the meta controller lacks
             imgui.text_colored(WARN, want)
         if len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
@@ -2170,14 +2170,14 @@ class Panel:
         return fx_on, visible, (dim.value if dim is not None else 1.0)
 
     def graph_now(self):
-        """(the renderer's wiring, the loaded preset's graph spec or None):
+        """(the renderer's wiring, the loaded patch's graph spec or None):
         what the OUTPUT page says in words (plan 26 A4). Any piece missing
-        (no renderer, no presets) reads as the empty frame (plan 36 T3:
+        (no renderer, no loadable patches) reads as the empty frame (plan 36 T3:
         `graph.EMPTY`). Plan 35 T5: the wired frame itself, in the new ids,
         on every page."""
-        presets = getattr(getattr(self, "library", None), "presets", None)
-        gs = getattr(presets, "graph", None)
-        # (no renderer: the landed preset's own wiring — what it would hand one)
+        loaded_patch = getattr(getattr(self, "library", None), "loaded_patch", None)
+        gs = getattr(loaded_patch, "graph", None)
+        # (no renderer: the landed loadable patch's own wiring — what it would hand one)
         wiring = (getattr(self.renderer, "wiring", None) or getattr(gs, "wiring", None)
                   or EMPTY)
         return wiring, getattr(gs, "spec", None)
@@ -2198,11 +2198,11 @@ class Panel:
         nid = getattr(self, "graph_selected", None)
         return [] if nid is None else ui_graph.node_params(self, nid)
 
-    def rig_now(self):
-        """The loaded preset's bus cuts (plan 44 D3; plan 36 T1's were the show's:
-        `graph.RigWires`), what the OUTPUT page's words and edits read;
-        with no presets, every cable standing."""
-        return rig_of(getattr(getattr(self, "library", None), "presets", None))
+    def bus_cuts_now(self):
+        """The loaded patch's bus cuts (plan 44 D3; plan 36 T1's were the show's:
+        `graph.BusCuts`), what the OUTPUT page's words and edits read;
+        with no loadable patches, every cable standing."""
+        return bus_cuts_of(getattr(getattr(self, "library", None), "loaded_patch", None))
 
     def black_outputs(self) -> list[int]:
         """The opened outputs showing nothing for a reason other than the
@@ -2210,10 +2210,10 @@ class Panel:
         on every page (plan 21 WP4)."""
         fx_on, visible, master = self._outputs_now()
         wiring, _ = self.graph_now()
-        rig = self.rig_now()
+        bus_cuts = self.bus_cuts_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
                 if getattr(sl, "drawn", sl.opened) and output_shows(sl.switches, fx_on, visible, master, wiring,
-                                         n=sl.n, rig=rig)[1]
+                                         n=sl.n, bus_cuts=bus_cuts)[1]
                 not in ("", "master")]
 
     @staticmethod
@@ -2226,8 +2226,8 @@ class Panel:
     def _output_blocks(self) -> None:
         """One block per render output the config lists (plan 21 WP4), a
         view of the wires (plan 35 U): its number and name, its two mutes
-        ("picture", "hands": the window's, never the preset) and "hands
-        through the effects" (the preset's wiring, `graphview.set_through`),
+        ("picture", "hands": the window's, never the loadable patch) and "hands
+        through the effects" (the loadable patch's wiring, `graphview.set_through`),
         its own dim and flips (with two or more outputs), why a tick can do
         nothing, and "shows:" — its picture port's source in words
         (`shows_line`) as a combo of the graph's pictures that sets it
@@ -2243,10 +2243,10 @@ class Panel:
         fx_on, visible, master = self._outputs_now()
         ghost = self.reg.get("ghost.on")
         # plan 26 A4: the render graph the outputs are wired by — the
-        # loaded preset's `graph` section, or the default; plan 35 U: the
+        # loaded patch's `graph` section, or the default; plan 35 U: the
         # wired frame the pages read and edit (`graphview.page_spec`)
         wiring, spec = self.graph_now()
-        rig = self.rig_now()
+        bus_cuts = self.bus_cuts_now()
         frame = graphview.page_spec(spec)
         said = graph_words(spec, getattr(getattr(self.renderer, "_graph", None),
                                          "dormant", None))
@@ -2284,14 +2284,14 @@ class Panel:
             imgui.text(labels[sl.n])
             if not narrow:
                 imgui.same_line(col)
-            # plan 35 O (row 374): the window's two mutes (the rig's, never
-            # the preset); "hands through the effects" is the preset's
+            # plan 35 O (row 374): the window's two mutes (the meta controller's, never
+            # the loadable patch); "hands through the effects" is the loadable patch's
             # wiring, written from here (T6, `graphview.set_through`)
             self._check(f"{pre}.scene", "picture")
             beside(check_w("hands"))
             self._check(f"{pre}.hands", "hands")
             beside(check_w(THROUGH_WORDS))
-            self._through_check(frame, sl.n, slots, rig)
+            self._through_check(frame, sl.n, slots, bus_cuts)
             # the mirror (plan 23 WP1): two ticks at the right of the dim row,
             # or of the "shows:" line when the output has no dim of its own
             flips = [(pid, t) for pid, t in ((f"{pre}.flip_x", "flip X"),
@@ -2314,7 +2314,7 @@ class Panel:
                 why.append("hands: ghost hands are off (HANDS page)")
             elif sw.hands and getattr(self, "hands", None) is None:
                 why.append("hands: no tracker")
-            if through_layer(wiring, sl.n, rig) is not None and not fx_on:
+            if through_layer(wiring, sl.n, bus_cuts) is not None and not fx_on:
                 why.append("through: no effect on")
             # one line for what is wrong: its present's error first (warning
             # colour, the whole on hover), then why a switch can do nothing
@@ -2327,7 +2327,7 @@ class Panel:
                 if imgui.is_item_hovered():
                     tooltip(line)
             # plan 26 A4: the words say the wiring too — the switches above
-            # and the loaded preset's graph set it (`hands: in the scene`);
+            # and the loaded patch's graph set it (`hands: in the scene`);
             # the whole graph in words on the line's hover
             # plan 30 D1: the effects placed on what it shows, and on hover
             # why a placed one runs nowhere this frame (`Graph.dormant`)
@@ -2335,17 +2335,17 @@ class Panel:
             # say it, and the combo that sets it (`graphview.set_picture`);
             # the retired route table's words (`output_shows`) on its hover,
             # and after the words when it is black or dimmed
-            words, black = output_shows(sw, fx_on, visible, master, wiring, n=sl.n, rig=rig)
-            line = shows_line(frame, sl.n, slots, rig)
+            words, black = output_shows(sw, fx_on, visible, master, wiring, n=sl.n, bus_cuts=bus_cuts)
+            line = shows_line(frame, sl.n, slots, bus_cuts)
             factor = min(1.0, master * float(sw.dim))
             if black:
                 line += f" · {words}"
             elif 0.0 < factor < 1.0:
                 line += f" · {min(99, max(1, round(factor * 100)))}%"
-            tip = f"{words}\n{hands_words(wiring, sw, sl.n, rig)}\n{said}"
+            tip = f"{words}\n{hands_words(wiring, sw, sl.n, bus_cuts)}\n{said}"
             gw = chip_w(OPEN_ON_GRAPH) + st.item_spacing.x
             self._picture_combo(frame, f"{pre}.image", line, -(gw + (fw + 8 if flips else 0)),
-                                bool(black), tip, slots, rig=rig)
+                                bool(black), tip, slots, bus_cuts=bus_cuts)
             imgui.same_line()
             if chip(f"{OPEN_ON_GRAPH}##graph.{pre}"):
                 ui_graph.select_node(self, pre)
@@ -2372,7 +2372,7 @@ class Panel:
     # ---- plan 35 U: the pages' graph edits (OUTPUT, LOOKBACK) ----
 
     def _graph_edit(self, fn, key: str) -> None:
-        """Page edit `fn(edit)` on the loaded preset's graph — GRAPH's own
+        """Page edit `fn(edit)` on the loaded patch's graph — GRAPH's own
         `render_edit`: one undo step, its refusals — its words (a refusal,
         or what it did) kept under `key` for the page's line."""
         e = ui_graph.render_edit(self)
@@ -2391,12 +2391,12 @@ class Panel:
                 tooltip(line)
 
     def _picture_combo(self, frame, port: str, line: str, width: float, warn: bool,
-                       tip: str, slots=(), key: str = "output_said", rig=None) -> None:
+                       tip: str, slots=(), key: str = "output_said", bus_cuts=None) -> None:
         """A picture port as a combo (plan 35 U): closed, `line` (its
         "shows:" or "records:" words, in the warning colour when `warn`);
         open, `graphview.picture_choices` by their titles, the pick a
         `graphview.set_picture` edit. `tip` on the closed combo's hover;
-        `rig` the show's rig wires (plan 36 T1: "as All outputs" is the
+        `rig` the show's bus wires (plan 36 T1: "as All outputs" is the
         bus cable while it stands)."""
         imgui.set_next_item_width(width)
         if warn:
@@ -2410,7 +2410,7 @@ class Panel:
             imgui.pop_style_color()
         pick = None
         if opened:
-            now = graphview.picture_now(frame, port, rig)
+            now = graphview.picture_now(frame, port, bus_cuts)
             # (R17: an output's combo also offers each channel with a source)
             for item in graphview.picture_choices(frame, port, self.reg):
                 chosen = item == now
@@ -2425,13 +2425,13 @@ class Panel:
         if pick is not None:
             self._graph_edit(lambda e: graphview.set_picture(e, port, pick), key)
 
-    def _through_check(self, frame, n: int, slots=(), rig=None) -> None:
+    def _through_check(self, frame, n: int, slots=(), bus_cuts=None) -> None:
         """Window `n`'s "hands through the effects" (plan 35 O): ticked while
         its picture is a chain over the hands layer laid on; a tick is
         `graphview.set_through`. Drawn disabled, with why on its hover,
         where it can do nothing (`graphview.through_refusal`)."""
-        on = graphview.is_through(frame, n, rig)
-        why = None if on else graphview.through_refusal(frame, n, slots, rig)
+        on = graphview.is_through(frame, n, bus_cuts)
+        why = None if on else graphview.through_refusal(frame, n, slots, bus_cuts)
         imgui.begin_disabled(why is not None)
         changed, v = imgui.checkbox(f"{THROUGH_WORDS}##through.{n}", on)
         imgui.end_disabled()
@@ -2575,9 +2575,9 @@ class Panel:
         self._row("camera.pan.x")
         self._row("camera.pan.y")
         imgui.spacing()
-        # plan 43 C2: one orbit camera, the preset's — zoom and pan move the
+        # plan 43 C2: one orbit camera, the loadable patch's — zoom and pan move the
         # shape in the world, the eye (plan 26 A2) is what the world is seen
-        # through; one section, saved with the preset
+        # through; one section, saved with the loadable patch
         self._row("eye.fov")
         self._row("eye.distance")
         imgui.spacing()
@@ -2699,16 +2699,16 @@ class Panel:
 
     def _page_presets(self, dt: float) -> None:
         """The PRESETS page, 2026-10-28, top to bottom
-        (ui_presets.page): the preset strip — ◀ name ● ▶ · new · save ·
-        as… — then every preset as a list that fills the room it has, its
+        (ui_loadable.page): the preset strip — ◀ name ● ▶ · new · save ·
+        as… — then every loadable patch as a list that fills the room it has, its
         trash at the foot, the patches fold, one line for the show, and the
-        library's notes. GRAPH's side pane draws it as its presets section
+        library's notes. GRAPH's side pane draws it as its loadable patches section
         (ui_pane.py, plan 49)."""
         if self.library is None:
             self._section("presets")
             imgui.text_disabled("no library attached")
             return
-        ui_presets.page(self)
+        ui_loadable.page(self)
 
     def library_lines(self) -> list[tuple[str, bool]]:
         """The SYSTEM page's library lines (plan 25), each with whether it
@@ -2832,7 +2832,7 @@ class Panel:
         if "desk.pad.feel" in self.reg:    # the sticks' feel (routing._register_pad_feel)
             imgui.spacing()
             self._section("gamepad")
-            # the feel (a spring's preset beside it) and its two knobs, the
+            # the feel (a spring's loadable patch beside it) and its two knobs, the
             # feel's shape over the feel working live beside them, as tall as
             # they are (ui_feel) — beside, since the page has no height to spare
             feel = self.router.source_feel("axis") if self.router is not None else None
@@ -2848,7 +2848,7 @@ class Panel:
                 feel_w = max(ctl * 0.45, 60.0)
                 self._row("desk.pad.feel", feel_w)
                 imgui.same_line()
-                spring = self.reg["desk.pad.spring"]      # its presets drawn as their curves
+                spring = self.reg["desk.pad.spring"]      # its loadable patches drawn as their curves
                 picked = ui_feel.spring_picker("##desk.pad.spring", feel, ctl - feel_w - sp)
                 self._tip(spring)
                 self._ctx(spring)
@@ -3071,11 +3071,11 @@ class Panel:
         if not len(regs):
             imgui.text_disabled("no devices — [[devices]] in config.toml")
         for line in devices.wanted_lines(ui_graph.panel_wants(self)):
-            imgui.text_colored(WARN, line)          # plan 40 T4: what the preset waits for
+            imgui.text_colored(WARN, line)          # plan 40 T4: what the loadable patch waits for
 
     def _publish_lines(self) -> None:
         """Plan 32 T9: one line per output published out (a sink of the
-        rig's): `<kind> out <name> — <fps> fps, readback <ms> ms`, or its
+        meta controller's): `<kind> out <name> — <fps> fps, readback <ms> ms`, or its
         error in the warning colour (media/publish.py)."""
         for line in publish.lines(getattr(self, "outputs", None)):
             if " — error" in line:

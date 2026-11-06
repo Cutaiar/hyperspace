@@ -2,11 +2,11 @@
 controls rig (tests/test_ui_shell.py), on a home seeded with the corpus
 (the party show open: ACID on F6), driven by the mouse and the keys.
 
-The top-level presets first, then a folding header per folder,
+The top-level loadable patches first, then a folding header per folder,
 alphabetically, nested folders nested; a header folds by a click and the
 fold is this Mac's (``presets.folded`` in ``<machine>/ui.json``, beside
 the pane's); a row's right-click **move to ▸** and a drag onto a header
-move the preset (its bytes kept, the bank's slot following); a folder's
+move the loadable patch (its bytes kept, the bank's slot following); a folder's
 right-click makes a folder inside, renames it, removes it (empty only);
 **new folder** at the list's foot makes one at the top."""
 
@@ -16,13 +16,13 @@ import time
 from imgui_bundle import imgui
 from test_ui_shell import CONTROL_SIZE, _click, _mouse, frame, rig  # noqa: F401 — the fixture
 
-from hyperspace import ui_pane, ui_presets
+from hyperspace import ui_loadable, ui_pane
 
 TALL = (CONTROL_SIZE[0], 2400)      # every row in view: the folders sit after the top level
 
 
 def _folders(lib, layout: dict[str, list[str]]) -> None:
-    """Move corpus presets into folders: {"party": ["DIAL", "FIELD"], …};
+    """Move corpus loadable patches into folders: {"party": ["DIAL", "FIELD"], …};
     an empty list makes an empty folder."""
     for folder, names in layout.items():
         d = lib.home / "presets" / folder
@@ -38,7 +38,7 @@ def _page(panel, n: int = 2):
     frame(panel, "presets")
     for _ in range(n - 1):
         frame(panel)
-    return ui_presets._state(panel)
+    return ui_loadable._state(panel)
 
 
 def _type(panel, text: str) -> None:
@@ -91,12 +91,12 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     assert not [n for n, _ in page["rows"] if n.startswith("party/")]
     # written WRITE_AFTER_S after the click, as the pane's folds are (review of #349)
     assert "presets" not in json.loads(ui_json.read_text())
-    assert ui_presets.flush_folds(panel, now=time.monotonic() + ui_pane.WRITE_AFTER_S + 0.1)
-    assert not ui_presets.flush_folds(panel, force=True)            # nothing left to write
+    assert ui_loadable.flush_folds(panel, now=time.monotonic() + ui_pane.WRITE_AFTER_S + 0.1)
+    assert not ui_loadable.flush_folds(panel, force=True)            # nothing left to write
     doc = json.loads(ui_json.read_text())
     assert doc["presets"] == {"folded": ["party"]}
     assert doc["pane"] == {"open": {"presets": False}} and doc["graph"] == {"side": 300}
-    # a fresh panel state reads it back: still folded, the loaded preset said
+    # a fresh panel state reads it back: still folded, the loaded patch said
     st.pop("folded")
     labels = []
     real = imgui.tree_node_ex
@@ -110,14 +110,14 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     _click(panel, st["page"]["rects"]["folder.party"])               # and open again
     frame(panel)
     assert ("party", True) in st["page"]["folders"]
-    ui_presets.flush_folds(panel, force=True)
+    ui_loadable.flush_folds(panel, force=True)
     assert json.loads(ui_json.read_text())["presets"] == {"folded": []}
     # a fold clicked just before quitting is written by the panel's close
     _click(panel, st["page"]["rects"]["folder.party"])
     assert json.loads(ui_json.read_text())["presets"] == {"folded": []}   # not yet
     panel.close()
     assert json.loads(ui_json.read_text())["presets"] == {"folded": ["party"]}
-    assert not ui_presets.flush_folds(panel, force=True)              # nothing left
+    assert not ui_loadable.flush_folds(panel, force=True)              # nothing left
 
 
 def test_a_fold_read_before_the_machine_is_known_is_read_again(rig):  # noqa: F811
@@ -127,16 +127,16 @@ def test_a_fold_read_before_the_machine_is_known_is_read_again(rig):  # noqa: F8
     panel, lib = rig.panel, rig.lib
     (lib._machine() / "ui.json").write_text(json.dumps({"presets": {"folded": ["party"]}}))
     panel.library = None
-    assert ui_presets.folded(panel) == set()
-    ui_presets.set_folded(panel, "ambient", True)
+    assert ui_loadable.folded(panel) == set()
+    ui_loadable.set_folded(panel, "ambient", True)
     panel.library = lib
-    assert ui_presets.folded(panel) == {"party", "ambient"}
-    ui_presets.flush_folds(panel, force=True)
+    assert ui_loadable.folded(panel) == {"party", "ambient"}
+    ui_loadable.flush_folds(panel, force=True)
     doc = json.loads((lib._machine() / "ui.json").read_text())
     assert doc["presets"] == {"folded": ["ambient", "party"]}
 
 
-def test_the_no_presets_hint_shows_while_only_empty_folders_are_there(rig):  # noqa: F811
+def test_the_no_loadables_hint_shows_while_only_empty_folders_are_there(rig):  # noqa: F811
     panel, lib = rig.panel, rig.lib
     for p in list((lib.home / "presets").glob("*.json")):
         p.unlink()
@@ -149,7 +149,7 @@ def test_the_no_presets_hint_shows_while_only_empty_folders_are_there(rig):  # n
     finally:
         imgui.text_disabled = real
     assert "no presets — new, then save as… makes one" in got
-    assert ("ambient", True) in ui_presets._state(panel)["page"]["folders"]
+    assert ("ambient", True) in ui_loadable._state(panel)["page"]["folders"]
 
 
 def test_remove_is_off_for_a_folder_holding_a_hidden_file_and_says_what(rig):  # noqa: F811

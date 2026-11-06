@@ -47,7 +47,7 @@ a scene-setter (`Param.set`, as the totem's pan and the sticks' orbit):
 the poi keeps the base it found (`pan_home`, `zoom_home`) and writes home
 + its offset each frame. Anyone else's write on the pan or the zoom (a
 reset, a knob, a load) becomes the new home. Off, the base goes back to
-home. The writes land in undo and light the preset's dirty dot, as an
+home. The writes land in undo and light the loadable patch's dirty dot, as an
 orbit with the stick does — and a save while the weight is out saves it
 out.
 
@@ -268,7 +268,7 @@ def readout(state: PoiState) -> str:
 # ---------------------------------------------------------------- the params
 
 def register(reg, state: PoiState, cfg: dict | None = None) -> None:
-    """The `poi.*` params: rig switches, never saved (persist off) and
+    """The `poi.*` params: meta switches, never saved (persist off) and
     never a performer's (modulatable off), as the totem's. `cfg`, the
     config's `[poi]` table, gives the dials' starting values (the only
     way they outlast a launch). `reg.poi` is the state the pad reads."""
@@ -394,14 +394,14 @@ def owns_pan(reg) -> bool:
 
 def guides(state: PoiState, reg) -> bool:
     """Is its guide on the picture of the deck over `reg`? The deck its pad is on,
-    or with no pad driving, the deck on air (the session's lead). A renderer with
+    or with no pad driving, the deck on air (the meta controller's lead). A renderer with
     no deck behind it (`reg` None: a test's) draws it."""
     if reg is None:
         return True
     if state.on_reg is not None:
         return state.on_reg is reg
-    session = getattr(reg, "session", None)
-    return session is None or session.lead is None or session.lead is reg
+    meta_reg = getattr(reg, "meta_reg", None)
+    return meta_reg is None or meta_reg.on_air_reg is None or meta_reg.on_air_reg is reg
 
 
 def _live(pad) -> bool:

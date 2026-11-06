@@ -158,7 +158,7 @@ def page(layout: str = "HEX", motion: str = "ORBIT", name: str = "view-page-layo
 
     for _ in range(8):
         if driven:
-            # a lane on every plane rate, as the party presets route them:
+            # a lane on every plane rate, as the party loadable patches route them:
             # the cells read `base → effective`
             for k, plane in enumerate(("XY", "XZ", "YZ", "XW", "YW", "ZW")):
                 reg[f"rot.rate.{plane}"].modulate(0.05 * (k + 1) * (-1) ** k)

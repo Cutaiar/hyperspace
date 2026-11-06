@@ -127,7 +127,7 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
     assert t.bindings[0].scale is None
     assert t.macros_doc() == {"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
     assert any("depth subscriber of macro.1" in n for n in t.notes)
-    # the route and its macro are a preset's (plan 13 WP5): the table
+    # the route and its macro are a loadable patch's (plan 13 WP5): the table
     # carries them as one, the same subscriber, the same depth (nothing
     # reads `carried` since the one-tier library of 2026-10-28 retired
     # plan 13 §6's migration; the next write leaves it out)
@@ -157,9 +157,9 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
     assert "scale" not in json.dumps(lfo_breathe["routes"])
 
 
-def test_a_scale_on_a_session_param_is_left_alone():
+def test_a_scale_on_a_meta_param_is_left_alone():
     """Decision register row 18 (a): a route keeps a `scale` that names a
-    session param — the drive fader reaches the rotation as `scale:
+    shared meta param — the drive fader reaches the rotation as `scale:
     master.gain` on the six legacy6 rate rows — and nothing migrates it."""
     row = {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625,
            "scale": "master.gain"}
@@ -172,11 +172,11 @@ def test_a_scale_on_a_session_param_is_left_alone():
                if b.target.startswith("rot.rate."))
 
 
-def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
-    """Decision register row 18 (a): a `scale` naming a performance param
-    (one a preset load could move under the route) is dropped with a note
-    — in the live table and in a preset's load — the depth kept; a macro's
-    becomes a depth subscriber and a session param's stays, as before."""
+def test_a_scale_on_a_patch_param_is_refused_with_a_note(tmp_path):
+    """Decision register row 18 (a): a `scale` naming a patch param
+    (one a loadable patch load could move under the route) is dropped with a note
+    — in the live table and in a loadable patch's load — the depth kept; a macro's
+    becomes a depth subscriber and a shared meta param's stays, as before."""
     rows = [{"source": "hand:1", "target": "view.bright", "op": "push", "value": 0.3,
              "scale": "view.speed"},                                  # performance: dropped
             {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3,
@@ -190,31 +190,31 @@ def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
     assert any("dropped the scale view.speed of hand:1 → view.bright" in n and "18 (a)" in n
                for n in t.notes)
     assert t.macros_doc() == {"macro.4": {"subs": [depth_sub("lfo:1", "fx.mix")]}}
-    # a preset's load
-    from test_presets import boot, put
+    # a loadable patch's load
+    from test_loadable import boot, put
     r = boot(tmp_path)
     put(tmp_path, "SCALED", routes=rows, macros={})
-    r.presets.load("SCALED")
+    r.loaded_patch.load("SCALED")
     assert [b.scale for b in r.router.table.routes()] == [None, None, "master.gain"]
-    assert any("dropped the scale view.speed" in n for n in r.presets.notes)
+    assert any("dropped the scale view.speed" in n for n in r.loaded_patch.notes)
     assert r.router.table.macros_doc()["macro.4"]["subs"] == [depth_sub("lfo:1", "fx.mix")]
-    # the ROUTING page's combo offers session params only
+    # the ROUTING page's combo offers shared meta params only
     from types import SimpleNamespace
 
     from hyperspace import ui_routing
     offered = {q.id for q in ui_routing._scales(SimpleNamespace(reg=r.reg), "rot.rate.ZW")}
     assert "master.gain" in offered and "view.speed" not in offered
     assert not any(pid.startswith("macro.") for pid in offered)
-    assert all(routing.is_session_id(pid) for pid in offered)
+    assert all(routing.is_shared_meta_id(pid) for pid in offered)
 
 
-def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):
-    """D9, review of PR #67: a base subscriber names a performance param —
-    persisted, not an alias — never a session one, so a preset load never
-    writes a session base through a macro. `set_macros` drops any other
+def test_a_base_subscriber_on_a_meta_param_is_dropped_with_a_note(tmp_path):
+    """D9, review of PR #67: a base subscriber names a patch param —
+    persisted, not an alias — never a meta controller one, so a loadable patch load never
+    writes a meta controller base through a macro. `set_macros` drops any other
     with a note (the load's notes, and the migration's), and a depth
     subscriber on a route onto one goes with that route (register row 743)."""
-    from test_presets import boot, put
+    from test_loadable import boot, put
 
     r = boot(tmp_path)
     reg, table = r.reg, r.router.table
@@ -228,14 +228,14 @@ def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):
         depth_sub("hand:1", "master.gain", 0.0, 1.0)]}}              # a depth: dropped
     routes = [{"source": "hand:1", "target": "master.gain", "op": "push", "value": 0.3}]
     put(tmp_path, "MIXED", routes=routes, macros=macros, values={"macro.1": 0.5})
-    r.presets.load("MIXED")
+    r.loaded_patch.load("MIXED")
     assert reg["tempo.bpm"].value == pytest.approx(bpm)              # never written
     assert real.value == pytest.approx(trim)
     assert reg["view.bright"].norm == pytest.approx(0.3, abs=1e-6)
     assert table.macros_doc()["macro.1"] == {"label": "Mixed", "subs": [
         {"base": "view.bright", "from": 0.0, "to": 0.6}]}
     assert not table.routes_to("master.gain")
-    notes = r.presets.notes
+    notes = r.loaded_patch.notes
     assert any("macro.1's depth subscriber on hand:1 → master.gain" in n for n in notes)
     assert any("macro.1's base subscriber tempo.bpm" in n and "D9" in n for n in notes)
     assert any("macro.1's base subscriber band.sel.trim" in n for n in notes)

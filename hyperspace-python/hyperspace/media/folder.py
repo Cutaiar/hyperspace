@@ -100,7 +100,7 @@ class MediaFolder:
         if e is not None and e.status not in (MISSING, FETCHING):
             return e.path
         if sid.startswith("file:") and sid not in self._files:
-            self.add_file(sid[5:])   # a preset named it: put it on the books
+            self.add_file(sid[5:])   # a loadable patch named it: put it on the books
         return None
 
     def live(self, sid: str):

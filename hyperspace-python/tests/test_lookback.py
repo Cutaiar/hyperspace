@@ -1,5 +1,5 @@
 """WP6a — the look-back core: history ring, age-weighted composite, the
-dream slot's copy path, the dream.* params and their presets, the page.
+dream slot's copy path, the dream.* params and their loadable patches, the page.
 
 Everything runs offscreen on a standalone GL context (skipped where there
 is none). The composite is checked against a numpy transcription of the
@@ -118,7 +118,7 @@ def _trail(ctx, hz: float, seconds: float, **dream):
     return ages, weights
 
 
-def test_the_same_preset_gives_the_same_trail_at_60_and_120_hz(ctx):
+def test_the_same_loadable_gives_the_same_trail_at_60_and_120_hz(ctx):
     """Plan 14 WP6: echo time is seconds. TRACER's set (24 echoes every
     1/15 s, a 0.76 s half-life) keeps the same trail on a 120 Hz screen as
     on a 60 Hz one — the same echoes, as old, as bright — where the old
@@ -655,22 +655,22 @@ def test_cut_through_still_cuts_in_overlay_mode(ctx):
 
 
 def _preset_rig(ctx, tmp_path):
-    """The app's construction order (tests/test_presets.py `boot`), the
+    """The app's construction order (tests/test_loadable.py `boot`), the
     renderer's own dream and fx states on the registry."""
     from hyperspace import lfo, tempo
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
     from hyperspace.library import Library
+    from hyperspace.loadable import LoadedPatch
     from hyperspace.params import build_registry
-    from hyperspace.preset import Presets
     from hyperspace.routing import Bindings, Router
 
     chain = Analyzer(Analyser())
     control = Control(chain)
     view = ViewState()
     r = Renderer(ctx)
-    seed(tmp_path)                   # (the corpus: the presets the build once shipped)
+    seed(tmp_path)                   # (the corpus: the loadable patches the build once shipped)
     lib = Library(tmp_path, period=0.0)
     reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
                          dream=r.lookback.state, fx=r.fx.state)
@@ -680,8 +680,8 @@ def _preset_rig(ctx, tmp_path):
     lfo.register(reg, lfo.LFOs(), clock)
     lib.attach(reg)
     router = Router(reg, Bindings())
-    presets = Presets(lib, reg, router)
-    return SimpleNamespace(lib=lib, reg=reg, view=view, r=r, presets=presets)
+    loaded_patch = LoadedPatch(lib, reg, router)
+    return SimpleNamespace(lib=lib, reg=reg, view=view, r=r, loaded_patch=loaded_patch)
 
 
 def _final_alpha(ctx, b, bg_alpha, w=240, h=160, frames=4):
@@ -700,8 +700,8 @@ def _final_alpha(ctx, b, bg_alpha, w=240, h=160, frames=4):
     return a
 
 
-def _corpus_presets():
-    """The presets the build once shipped (tests/corpus/presets), by slug."""
+def _corpus_loadables():
+    """The loadable patches the build once shipped (tests/corpus/presets), by slug."""
     return sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 
 
@@ -710,18 +710,18 @@ def _corpus_presets():
 STRESS = ["effects", "multiply"]
 
 
-@pytest.mark.parametrize("name", _corpus_presets() + STRESS)
-def test_every_corpus_preset_renders_opaque_in_window_mode(ctx, tmp_path, name):
+@pytest.mark.parametrize("name", _corpus_loadables() + STRESS)
+def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name):
     """Plan 14 WP1: the render window is a Pepper's Ghost screen — in window
     mode (and fullscreen, the same opaque ground) every pixel of the final
-    frame is alpha 255 for every corpus preset, and for a preset with
+    frame is alpha 255 for every corpus loadable patch, and for a loadable patch with
     cut-through, faces, points, the look-back and every effect on, through
     the FX chain and the look-back composite."""
     b = _preset_rig(ctx, tmp_path)
-    first = _corpus_presets()[0] if name in STRESS else name
+    first = _corpus_loadables()[0] if name in STRESS else name
     path = b.lib.path_of("presets", first)
     assert path is not None, first
-    b.presets.load(json.loads(path.read_text())["name"])
+    b.loaded_patch.load(json.loads(path.read_text())["name"])
     assert b.lib.current("presets") is not None
     if name in STRESS:
         # (plan 36 T3: every effect file exists for the stress, as before a
@@ -871,7 +871,7 @@ def test_copy_path_round_trip_under_budget(ctx):
     rig.release()
 
 
-# ---------------------------------------------------------------- params & presets
+# ---------------------------------------------------------------- params & loadable patches
 
 def registry(dream=None):
     from hyperspace.analysis import Analyser
@@ -918,7 +918,7 @@ def test_dream_params_declared():
 def test_a_route_on_the_dream_layer_is_dormant():
     """Plan 16 WP5: `dream.layer` is not a performer's — a change makes the
     worker load another trunk. A route onto it does nothing, quietly; a
-    scene-setter (the panel, a preset, a key or desk row) still sets it."""
+    scene-setter (the panel, a loadable patch, a key or desk row) still sets it."""
     import glfw
 
     from hyperspace.bands import CEIL
@@ -940,7 +940,7 @@ def test_a_route_on_the_dream_layer_is_dormant():
         reg.apply()
     assert mix.modulated and mix.eff_norm == pytest.approx(min(mix0 + 0.2, 1.0))
     assert not layer.modulated and d.layer == before and layer.value == before
-    # the scene-setters: the panel's write, a preset's restore, a key row
+    # the scene-setters: the panel's write, a loadable patch's restore, a key row
     layer.set(2)
     assert d.layer == 2
     snap = reg.snapshot("dream")
@@ -987,7 +987,7 @@ def test_the_dream_module_presets_load(tmp_path):
     assert not d.on and d.echoes == 8 and d.mix == 0.0 and d.echo_mix > 0
     assert lib.load("dream", "default") == []
     assert not d.on and d.echoes == 8 and d.mix == pytest.approx(0.7)
-    # the default preset is the fresh state: loading it leaves nothing dirty
+    # the default loadable patch is the fresh state: loading it leaves nothing dirty
     assert not lib.is_dirty("dream")
     fresh = DreamState()
     for pid, v in lib.read("dream", "default")["values"].items():
@@ -1081,7 +1081,7 @@ DREAM_FROZEN = [
     ("dream.step", "CONTINUOUS", 0.005, 0.06, 0.03, True, True, False, False, False, None),
     ("dream.k", "CONTINUOUS", 0.03, 0.3, 0.05, True, True, False, False, False, None),
     # the layer's first six keep their indices; every other layer of both
-    # nets is appended after them (a preset stores the index)
+    # nets is appended after them (a loadable patch stores the index)
     ("dream.layer", "ENUM", 0.0, 1.0, 1, True, False, False, False, False,
      ("conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e",
       "conv1_1", "conv1_2", "conv2_1", "conv3_1", "conv3_2", "conv4_1", "conv4_2",
@@ -1468,7 +1468,7 @@ def test_dream_speed_is_dream_k(lbpage):
     # right is faster: the slider's value is k itself, and it writes the state
     k.set_value(0.2)
     assert lbpage.dream.k == pytest.approx(0.2)
-    # ROUTING lists it under the new name; a preset still carries the old id
+    # ROUTING lists it under the new name; a loadable patch still carries the old id
     assert {p.id: p.label for p in ui_routing._targets(SimpleNamespace(reg=reg))}[
         "dream.k"] == "Dream speed"
     assert reg.snapshot("dream")["dream.k"] == pytest.approx(0.2)
@@ -1541,8 +1541,8 @@ def test_the_worker_status_is_never_taller_than_its_room(lbpage):
     imgui.end_frame()
 
 
-def test_the_relabel_reaches_no_preset_file(tmp_path):
-    """Labels are not in preset files: the dream module presets name ids
+def test_the_relabel_reaches_no_loadable_file(tmp_path):
+    """Labels are not in loadable patch files: the dream module presets name ids
     only."""
     from hyperspace.library import Library
 

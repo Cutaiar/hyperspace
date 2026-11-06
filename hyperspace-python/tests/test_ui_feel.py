@@ -90,7 +90,7 @@ def test_a_curve_runs_out_to_a_given_end_past_its_window():
 
 # ---- the spring picker ----
 
-def test_the_pickers_axis_is_the_slowest_presets_window():
+def test_the_pickers_axis_is_the_slowest_loadables_window():
     windows = [window(Motion("spring", dur=d, bounce=b)) for d, b in motion.SPRINGS.values()]
     assert presets_axis() == pytest.approx(max(windows))
     snappy = curve(Motion("spring", dur=0.3, bounce=0.15), 32, end=presets_axis())
@@ -99,9 +99,9 @@ def test_the_pickers_axis_is_the_slowest_presets_window():
     assert snappy[halfway][1] > lazy[halfway][1]     # snappy lands earlier than lazy
 
 
-def test_the_spring_picker_draws_each_preset_and_returns_the_one_picked(tmp_path, monkeypatch):
-    """The open list: one row per preset, each a selectable with the
-    preset's curve drawn on it; picking one returns its name."""
+def test_the_spring_picker_draws_each_loadable_and_returns_the_one_picked(tmp_path, monkeypatch):
+    """The open list: one row per loadable patch, each a selectable with the
+    loadable patch's curve drawn on it; picking one returns its name."""
     shapes, opened = [], []
     want = list(motion.SPRINGS).index("wobbly")
     rows = iter(range(100))
@@ -117,7 +117,7 @@ def test_the_spring_picker_draws_each_preset_and_returns_the_one_picked(tmp_path
         got = ui_feel.spring_picker("##spring", Motion("spring", dur=0.5, bounce=0.3), 96.0)
         imgui.end()
         imgui.end_frame()
-    assert got == "wobbly" and opened == ["bouncy"]        # closed, it reads the preset
+    assert got == "wobbly" and opened == ["bouncy"]        # closed, it reads the loadable patch
     assert [(m.dur, m.bounce) for m, _ in shapes] == list(motion.SPRINGS.values())
     assert all(k == {"end": presets_axis(), "label": False} for _, k in shapes)
 

@@ -280,7 +280,7 @@ def test_a_reseat_leaves_a_controller_mapped_elsewhere_alone(rig):
 
 def test_main_reseats_on_a_list_change():
     import inspect
-    assert "rig.listeners.append(lambda: meta.reseat())" in inspect.getsource(app.main)
+    assert "device_reg.listeners.append(lambda: meta.reseat())" in inspect.getsource(app.main)
 
 
 def test_only_a_controller_is_held(tmp_path):
@@ -349,10 +349,10 @@ def test_a_player_off_air_at_launch_starts_there(rig, tmp_path):
 
 
 def test_a_patch_carries_no_player(rig):
-    """Remembered by the meta controller on this Mac: nothing of it in a saved preset."""
+    """Remembered by the meta controller on this Mac: nothing of it in a saved loadable patch."""
     rig.meta.move_player(2, Duty.OFF_AIR)
     for deck in rig.meta.decks:
-        text = deck.presets.save_as("saved with a player off air").read_text()
+        text = deck.loaded_patch.save_as("saved with a player off air").read_text()
         assert "off_air" not in text and '"players"' not in text
 
 
@@ -1046,7 +1046,7 @@ def test_the_poi_owns_the_pan_only_on_its_own_deck(shared):
 # ---------------------------------------------------------------- every player on air: as before
 
 def _run_sticks(r, *, players):
-    """One rig through a corpus preset and pushed sticks, with or without the players."""
+    """One rig through a corpus loadable patch and pushed sticks, with or without the players."""
     second = Deck.beside(r.deck)
     ctx = devices.Context(reg=r.deck.reg, table=r.deck.table)
     pad = Stick()
@@ -1081,7 +1081,7 @@ def test_every_player_on_air_is_to_the_bit_what_no_players_was(tmp_path):
     assert pointed == plain
 
 
-def test_every_corpus_preset_lands_as_before_with_players_and_a_list(tmp_path):
+def test_every_corpus_loadable_lands_as_before_with_players_and_a_list(tmp_path):
     """D5a's walk, its proof extended: a registry whose controllers are all player
     1's, on air, on deck 1."""
     home = tmp_path / "home"

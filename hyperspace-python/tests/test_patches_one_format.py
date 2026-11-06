@@ -1,4 +1,4 @@
-"""Plan 50: one saved format — a patch, a group and a preset are one
+"""Plan 50: one saved format — a patch, a group and a loadable patch are one
 document shape (`patches.shape_of`); every fragment comes in through one
 ladder (`patches.forward`: a ``patch/1`` and a ``hyperspace.preset/1``
 module preset read as their ``patch/2``); a module preset is a **patch of
@@ -9,8 +9,8 @@ shape, a backup first.
 
 Old files are opened end to end (REVIEW.md: not only the converter): an
 old module preset in a group's folder loads from the strip, an old
-``patch/1`` spawns from GRAPH's library door, and a corpus preset
-round-trips byte for byte through the preset's one loader."""
+``patch/1`` spawns from GRAPH's library door, and a corpus loadable patch
+round-trips byte for byte through the loadable patch's one loader."""
 
 from __future__ import annotations
 
@@ -70,13 +70,13 @@ def test_the_one_ladder_reads_every_fragment_as_its_patch_2():
 
 
 def test_shape_of_reads_the_one_shape_three_ways():
-    preset_doc = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
-    assert patches.shape_of(preset_doc) == patches.PRESET_SHAPE
+    loadable_doc = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
+    assert patches.shape_of(loadable_doc) == patches.LOADABLE_SHAPE
     assert patches.shape_of(json.loads(ACID_WASH.read_text())) == patches.PATCH_SHAPE
     assert patches.shape_of(json.loads(WAKE.read_text())) == patches.GROUP_SHAPE
     assert patches.shape_of(patches.forward(OLD_MODULE)) == patches.GROUP_SHAPE
-    # a preset is a patch that fills the frame: it writes no ports
-    assert "ports" not in preset_doc
+    # a loadable patch is a patch that fills the frame: it writes no ports
+    assert "ports" not in loadable_doc
 
 
 def test_a_group_patch_spawns_as_its_values_replacing_its_group():
@@ -102,14 +102,14 @@ def test_the_corpus_is_in_the_one_shape():
         assert b'"modules"' not in path.read_bytes(), path.name
 
 
-def test_the_presets_ladder_is_one_function_the_load_reads_through():
-    """A whole preset's steps (`seven`, `nine`, `ten`) are one function,
+def test_the_loadables_ladder_is_one_function_the_load_reads_through():
+    """A whole loadable patch's steps (`seven`, `nine`, `ten`) are one function,
     `graphmigrate.forward`, which the load runs: a `/10` passes untouched,
     a `/2` comes out `/7`-shaped and said."""
     import inspect
 
-    from hyperspace import graphmigrate, preset
-    assert "graphmigrate.forward(" in inspect.getsource(preset.Presets.load_doc)
+    from hyperspace import graphmigrate, loadable
+    assert "graphmigrate.forward(" in inspect.getsource(loadable.LoadedPatch.load_doc)
     new = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
     fwd = graphmigrate.forward(copy.deepcopy(new), {})
     assert fwd.doc == new and fwd.notes == () and fwd.migrated == ""
@@ -122,7 +122,7 @@ def test_the_presets_ladder_is_one_function_the_load_reads_through():
 
 # ---------------------------------------------------------------- end to end
 
-def test_a_corpus_preset_round_trips_byte_for_byte_through_the_one_loader(tmp_path):
+def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_path):
     for k, name in enumerate(("party-trip", "party-noita", "seq-demo")):
         data = (CORPUS / "presets" / f"{name}.json").read_bytes()
         again, notes, _ = headless.resave(CORPUS / "presets" / f"{name}.json", tmp_path / str(k))
@@ -176,7 +176,7 @@ def test_an_old_patch_1_reads_as_its_2_through_the_library(tmp_path):
     app = headless.make_app(tmp_path)
     doc = app.lib.read_patch("acid-wash")
     assert doc["schema"] == "hyperspace.patch/2"
-    host = patches.Host.of(app.presets.graph.spec, app.router.table, app.presets.banks())
+    host = patches.Host.of(app.loaded_patch.graph.spec, app.router.table, app.loaded_patch.banks())
     landing = patches.spawn(doc, host)
     assert {e.get("file") for e in landing.nodes if e.get("kind") == "effect"} == {
         "acid", "wobble"}
@@ -251,13 +251,13 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
 
 # ---------------------------------------------------------------- review fixes (PR #352)
 
-def test_a_group_never_holds_the_rigs_kinds_one_list_with_graphview():
+def test_a_group_never_holds_the_meta_kinds_one_list_with_graphview():
     """Review fix 1: a media channel, a window, All outputs and a cloud are
-    the rig's (`patches.RIG_KINDS`, `graphview.RIG_KINDS` the same list):
+    the rig's (`patches.FIXTURE_KINDS`, `graphview.FIXTURE_KINDS` the same list):
     Group refuses them, so a group never carries what no patch can."""
     from hyperspace import graph as G
     from hyperspace import graphview
-    assert graphview.RIG_KINDS is patches.RIG_KINDS
+    assert graphview.FIXTURE_KINDS is patches.FIXTURE_KINDS
     spec = G.read_graph({"frame": "wired", "wires": [
         {"from": "channel.a", "to": "warp.image"}, {"from": "warp", "to": "output.all.image"}]})
     held, said = patches.groupable(spec, None, ["render:channel.a", "render:warp",
@@ -280,7 +280,7 @@ def test_an_empty_group_key_is_one_refusal_and_one_reading():
 
 
 def test_a_groups_folder_refuses_what_is_no_patch_of_that_group(tmp_path):
-    """Review fix 7: in `patches/dream/`, a whole preset, a canvas patch and
+    """Review fix 7: in `patches/dream/`, a whole loadable patch, a canvas patch and
     another group's patch are each refused, the mismatch named — never
     landed as dream values."""
     folder = tmp_path / PATCHES / "dream"
@@ -323,10 +323,10 @@ def test_a_headless_resave_sees_the_librarys_patches(tmp_path):
 
 
 def test_to_moves_no_patch_with_or_without_apply(tmp_path, monkeypatch, capsys):
-    """Review round 2: `--to` moves none — alone it writes only presets into
+    """Review round 2: `--to` moves none — alone it writes only loadable patches into
     the folder; with `--apply` the tool refuses the pair before anything is
     read (and the apply path guards its plan the same way), so the module
-    presets and the `/1` patch are left as they were."""
+    loadable patches and the `/1` patch are left as they were."""
     tool = _tool()
     root = _old_library(tmp_path / "lib")
     monkeypatch.setenv("HYPERSPACE_HOME", str(tmp_path / "machine"))

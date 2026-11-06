@@ -20,9 +20,9 @@ import numpy as np
 import pytest
 from conftest import seed
 from test_graph_legible import party as _party
+from test_loadable import put
 from test_midi import cc, note, push
 from test_pad_learn import ScriptedPad
-from test_presets import put
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from test_undo import DT, boot
@@ -36,7 +36,7 @@ from hyperspace import (
     graphview,
     hotreload,
     lfo,
-    preset,
+    loadable,
     routing,
     ui_graph,
     ui_media,
@@ -44,7 +44,7 @@ from hyperspace import (
 )
 from hyperspace.deck import Deck, Fade, MetaController, Mix
 from hyperspace.learn import blocked
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.outputs import Preview, PreviewTextures, Switches, View, preview_size
 from hyperspace.params import POSE_IDS, part_of
 from hyperspace.routing import (
@@ -52,7 +52,7 @@ from hyperspace.routing import (
     Binding,
     Bindings,
     factory_desk,
-    is_session_row,
+    is_meta_row,
     led_shade,
     meta_refusal,
     meta_row_refusal,
@@ -86,9 +86,9 @@ def rig(tmp_path):
 
 def _looks(first, second) -> None:
     """Each deck on a look of its own, each undo stack quiet after it."""
-    first.presets.load("party-acid")
-    second.presets.load("party-trip")
-    assert (first.presets.current, second.presets.current) == ("ACID", "TRIP")
+    first.loaded_patch.load("party-acid")
+    second.loaded_patch.load("party-trip")
+    assert (first.loaded_patch.current, second.loaded_patch.current) == ("ACID", "TRIP")
     for d in (first, second):
         d.undo.tick(1.0)
         d.undo.tick(2.0)
@@ -111,7 +111,7 @@ def _gl(ctx, home, *, empty: bool = False):
     seeded.lib.pointer = meta.panel_pointer
     fade = Fade(first, second, mix, ctx, pointer=meta.on_air_pointer)
     if empty:
-        first.presets.load("party-acid")
+        first.loaded_patch.load("party-acid")
     else:
         _looks(first, second)
     return NS(r=seeded, lib=seeded.lib, meta=meta, one=first, two=second, fade=fade, mix=mix,
@@ -151,14 +151,14 @@ def _pass(rig) -> None:
 def _state(d) -> dict:
     """What a patch is, on one deck: nothing here may move when the other acts."""
     t = d.table
-    return {"bases": d.reg.snapshot(part="performance"),
+    return {"bases": d.reg.snapshot(part="patch"),
             "routes": [b.to_json() for b in t.routes()],
             "desk": [b.to_json() for b in t.desk()],
             "modifiers": t.modifiers_doc(d.reg),
             "macros": t.macros_doc(),
             "modgraph": d.router._modgraph_key(),
-            "spec": d.presets.graph.spec,
-            "name": d.presets.current,
+            "spec": d.loaded_patch.graph.spec,
+            "name": d.loaded_patch.current,
             "turn": list(d.view.ang),
             "steps": [s.label for s in d.undo.stack]}
 
@@ -184,11 +184,11 @@ def _macro(rig, d):
 
 
 def _load(rig, d):
-    rig.lib.load(PRESETS, "party-wake")
+    rig.lib.load(LOADABLE, "party-wake")
 
 
 def _graph_edit(rig, d):
-    e = graphview.Edit(graph=d.presets.graph, push=lambda label: undo.push(label, load=True))
+    e = graphview.Edit(graph=d.loaded_patch.graph, push=lambda label: undo.push(label, load=True))
     assert e.add_node("effect", "kaleido") is None
 
 
@@ -197,7 +197,7 @@ def _pattern_reset(rig, d):
 
 
 def _pattern_road(rig, d):
-    p = next(p for p in d.reg if p.group == "pattern" and p.persist and part_of(p) == "performance"
+    p = next(p for p in d.reg if p.group == "pattern" and p.persist and part_of(p) == "patch"
              and getattr(p.kind, "value", "") == "continuous")
     p.set_norm(0.5 if p.norm != 0.5 else 0.25)
 
@@ -218,7 +218,7 @@ def _save(rig, d):
     with the panel on the other deck, which would land a file it saw change."""
     other = rig.meta.decks[0] if d is rig.meta.decks[1] else rig.meta.decks[1]
     d.reg["view.bright"].set(0.33)
-    d.presets.save_as(d.presets.current)
+    d.loaded_patch.save_as(d.loaded_patch.current)
     rig.meta.point_panel(other)
     rig.lib.poll(now=10_000.0)
     rig.meta.point_panel(d)
@@ -242,7 +242,7 @@ def test_no_patch_reaches_the_other_deck(ctx, tmp_path, road, who):
     d, other = rig.decks[who], rig.decks[1 - who]
     act, ready = ROADS[road]
     if road == "save":                     # the same name on both: the file is shared
-        other.presets.load(d.presets.current)
+        other.loaded_patch.load(d.loaded_patch.current)
     rig.meta.point_panel(d)
     if ready is not None:
         ready(rig, d)
@@ -265,9 +265,9 @@ def test_a_pad_press_on_the_off_air_deck_reaches_only_it(rig):
     rig.meta.register("apc40", 2)
     rig.meta.move_player(2, "off_air")
     theirs = _state(rig.one)
-    rig.two.presets.lib.project.bank[0] = "party-wake"
+    rig.two.loaded_patch.lib.project.bank[0] = "party-wake"
     rig.two.reg["preset.select"].set(0)
-    assert rig.two.presets.current == "WAKE"
+    assert rig.two.loaded_patch.current == "WAKE"
     assert _state(rig.one) == theirs
 
 
@@ -276,13 +276,13 @@ def test_a_pad_press_on_the_off_air_deck_reaches_only_it(rig):
 @pytest.mark.empty_frame
 def test_on_gl_on_air_keeps_its_frame_while_the_other_deck_is_edited(ctx, tmp_path):
     """Was `..._the_projector_keeps_the_held_frame_while_the_preview_shows_the_edit`:
-    a new preset and a turned knob on the deck off air, and on air is the same bytes;
+    a new loadable patch and a turned knob on the deck off air, and on air is the same bytes;
     the fader across, the outputs show the edit."""
     rig = _gl(ctx, tmp_path / "rig")
     rig.meta.point_panel(rig.two)
     before = _picture(ctx, rig.one)
     assert before[..., :3].max() > 0
-    rig.two.presets.load("party-wake")
+    rig.two.loaded_patch.load("party-wake")
     rig.two.reg["view.bright"].set(0.2)
     assert (_picture(ctx, rig.one) == before).all()
     edited = _picture(ctx, rig.two)
@@ -297,13 +297,13 @@ def test_on_gl_on_air_keeps_its_frame_while_the_other_deck_is_edited(ctx, tmp_pa
 @pytest.mark.empty_frame
 def test_on_gl_a_bus_cable_cut_off_air_stays_off_the_picture_on_air(ctx, tmp_path):
     """Was `..._a_bus_cable_cut_after_the_hold_stays_off_the_projector`: the cuts are
-    the preset's (plan 44 D3), so each deck's renderer reads its own."""
+    the loadable patch's (plan 44 D3), so each deck's renderer reads its own."""
     rig = _gl(ctx, tmp_path / "rig")
-    rig.two.presets.load("party-acid")
+    rig.two.loaded_patch.load("party-acid")
     before = _picture(ctx, rig.one)
     assert (_picture(ctx, rig.two) == before).all()
-    rig.two.presets.bus = rig.two.presets.bus.cutting(graph.bus_wire(1, "image"))
-    assert rig.two.renderer.rig_source is rig.two.presets
+    rig.two.loaded_patch.bus = rig.two.loaded_patch.bus.cutting(graph.bus_wire(1, "image"))
+    assert rig.two.renderer.bus_source is rig.two.loaded_patch
     assert _picture(ctx, rig.two)[..., :3].max() == 0
     assert (_picture(ctx, rig.one) == before).all()
     _close(rig)
@@ -315,7 +315,7 @@ def test_on_gl_a_graph_edit_off_air_leaves_the_wiring_on_air(ctx, tmp_path):
     rig = _gl(ctx, tmp_path / "rig")
     rig.meta.point_panel(rig.two)
     wiring, built = rig.one.renderer.wiring, _picture(ctx, rig.one)
-    e = graphview.Edit(graph=rig.two.presets.graph, push=lambda s: undo.push(s, load=True))
+    e = graphview.Edit(graph=rig.two.loaded_patch.graph, push=lambda s: undo.push(s, load=True))
     assert e.add_node("effect", "kaleido") is None
     _picture(ctx, rig.two)
     assert rig.one.renderer.wiring is wiring
@@ -328,7 +328,7 @@ def test_on_gl_a_blank_graph_off_air_leaves_on_air_whole_and_a_fade_into_it_is_b
     """Was `..._a_blank_graph_landed_while_held_leaves_the_projector_whole`. And the
     owner, 2026-11-04: a crossfade may fade into an empty deck, which is black."""
     rig = _gl(ctx, tmp_path / "rig", empty=True)
-    assert rig.two.presets.current is None and rig.two.presets.graph.spec is None
+    assert rig.two.loaded_patch.current is None and rig.two.loaded_patch.graph.spec is None
     before = _picture(ctx, rig.one)
     assert before[..., :3].max() > 0
     assert _picture(ctx, rig.two)[..., :3].max() == 0
@@ -343,13 +343,13 @@ def test_a_bus_cut_off_air_is_on_that_deck_and_its_undo_puts_it_back(rig):
     """Was `test_a_bus_cable_cut_after_the_hold...` and `test_drop_puts_a_bus_cable_cut...`,
     headless: one step on the deck it was cut on, the other deck's cuts as they were."""
     rig.meta.point_panel(rig.two)
-    cuts = rig.one.presets.bus
+    cuts = rig.one.loaded_patch.bus
     undo.push("cut", load=True)
-    rig.two.presets.bus = rig.two.presets.bus.cutting(graph.bus_wire(1, "image"))
-    assert rig.one.presets.bus is cuts
-    assert graph.bus_wire(1, "image") in rig.two.presets.bus.cut
+    rig.two.loaded_patch.bus = rig.two.loaded_patch.bus.cutting(graph.bus_wire(1, "image"))
+    assert rig.one.loaded_patch.bus is cuts
+    assert graph.bus_wire(1, "image") in rig.two.loaded_patch.bus.cut
     assert undo.here().undo()
-    assert graph.bus_wire(1, "image") not in rig.two.presets.bus.cut
+    assert graph.bus_wire(1, "image") not in rig.two.loaded_patch.bus.cut
 
 
 def test_edits_off_air_come_back_one_step_at_a_time_and_on_air_never_moves(rig):
@@ -371,22 +371,22 @@ def test_a_whole_new_look_off_air_is_one_step_back_and_one_forward(rig):
     """Was `test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward`."""
     rig.meta.point_panel(rig.two)
     was, n = _state(rig.two)["bases"], len(rig.two.undo.stack)
-    rig.lib.load(PRESETS, "party-wake")
-    assert rig.two.presets.current == "WAKE" and len(rig.two.undo.stack) == n + 1
+    rig.lib.load(LOADABLE, "party-wake")
+    assert rig.two.loaded_patch.current == "WAKE" and len(rig.two.undo.stack) == n + 1
     assert undo.here().undo()
-    assert rig.two.presets.current == "TRIP" and _state(rig.two)["bases"] == was
+    assert rig.two.loaded_patch.current == "TRIP" and _state(rig.two)["bases"] == was
     assert undo.here().redo()
-    assert rig.two.presets.current == "WAKE"
-    assert rig.one.presets.current == "ACID"
+    assert rig.two.loaded_patch.current == "WAKE"
+    assert rig.one.loaded_patch.current == "ACID"
 
 
 def test_a_load_resets_the_delays_of_its_own_deck_only(rig):
     """Was `test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take`."""
     reset = []
     for d, name in ((rig.one, "one"), (rig.two, "two")):
-        d.presets.graph.attach(NS(wiring=None, ghost_states={}, name=name,
+        d.loaded_patch.graph.attach(NS(wiring=None, ghost_states={}, name=name,
                                   reset_delays=lambda name=name: reset.append(name)))
-    rig.two.presets.load("party-wake")
+    rig.two.loaded_patch.load("party-wake")
     assert reset == ["two"]
 
 
@@ -399,11 +399,11 @@ def test_a_load_off_air_keeps_the_eye_and_turn_on_air_and_brings_its_own(rig):
     doc = _doc("dial")
     doc["values"]["eye.fov"] = 70.0
     pose = [0.1, -0.2, 0.3, 0.4, -0.5, 0.6]
-    doc[preset.POSE_KEY] = dict(zip(POSE_IDS, pose, strict=True))
-    rig.two.presets.load_doc(doc)
+    doc[loadable.POSE_KEY] = dict(zip(POSE_IDS, pose, strict=True))
+    rig.two.loaded_patch.load_doc(doc)
     assert rig.two.view.ang == pose and rig.two.reg["eye.fov"].base == 70.0
     assert one.view.ang == turn and one.reg["eye.fov"].base == fov
-    saved = rig.two.presets.document("x")[preset.POSE_KEY]
+    saved = rig.two.loaded_patch.document("x")[loadable.POSE_KEY]
     assert [saved[k] for k in POSE_IDS] == pose
 
 
@@ -413,11 +413,11 @@ def test_the_output_controls(rig):
     reg = rig.one.reg
     for pid in ("output.xfade", "output.xfade_s"):
         p = reg[pid]
-        assert p is rig.two.reg[pid] and part_of(p) == "session"
+        assert p is rig.two.reg[pid] and part_of(p) == "shared_meta"
         assert p.group == "output" and not p.persist and not p.modulatable
     for pid in ("output.hold", "output.take", "output.drop"):
         assert pid not in reg
-    assert not hasattr(rig.one, "hold") and not hasattr(rig.one.presets.graph, "hold")
+    assert not hasattr(rig.one, "hold") and not hasattr(rig.one.loaded_patch.graph, "hold")
     assert not hasattr(reg, "chase_guard")
     assert not (Path(deck.__file__).parent / "hold.py").exists()
     assert "hold" not in hotreload.MODULES
@@ -590,7 +590,7 @@ def test_the_page_wants_its_thumbnails_from_the_panels_deck(shell_rig):  # noqa:
     mine, theirs = PreviewTextures(None), PreviewTextures(None)
     r.panel.renderer = NS(_graph=g, thumbs=mine, stats={})
     r.panel.preview, r.panel.monitor = Preview(), Preview()
-    st["preset_only"], st["pan"] = False, (-1600.0, 0.0)
+    st["patch_only"], st["pan"] = False, (-1600.0, 0.0)
     frame(r.panel, "graph")
     frame(r.panel, "graph")
     got = ui_graph._state(r.panel)
@@ -620,12 +620,12 @@ def test_on_gl_each_deck_makes_its_own_thumbnails(ctx, tmp_path):
 # ------------------------------------------------------- the reserved desk controls
 
 @pytest.mark.parametrize("control", apc40.META_CONTROLS)
-def test_no_preset_may_learn_or_bind_the_reserved_controls(rig, control):
+def test_no_loadable_may_learn_or_bind_the_reserved_controls(rig, control):
     """The owner: the APC "inherits our generic controller setup ... and it should have
     extensions". Refused whatever the table holds on it, so a deleted row frees nothing."""
     table = rig.two.table
     assert blocked(table, control) == "invariant"
-    table.session.set_rows([b for b in table.session.rows if b.source != control])
+    table.meta_table.set_rows([b for b in table.meta_table.rows if b.source != control])
     assert not any(b.source == control for b in table.bindings)
     assert blocked(table, control) == "invariant"
     notes = table.set_desk([Binding(control, "view.bright", "abs")])
@@ -740,7 +740,7 @@ def test_a_copy_that_will_not_land_is_said_and_leaves_no_step(rig, monkeypatch):
     def refuse(doc):
         raise ValueError("a value would not land")
 
-    monkeypatch.setattr(rig.two.presets, "load_doc", refuse)
+    monkeypatch.setattr(rig.two.loaded_patch, "load_doc", refuse)
     ui_graph.copy_on_air(panel)                       # no raise out of the panel's draw
     assert "not copied" in said[0] and "would not land" in said[0]
     rig.two.undo.tick(10.0)
@@ -783,7 +783,7 @@ def _press(reg, verb, k=0):
 
 
 def _bank(rig, *names):
-    project = rig.one.presets.lib.project
+    project = rig.one.loaded_patch.lib.project
     project.bank[:] = [None] * len(project.bank)
     for k, name in enumerate(names):
         project.bank[k] = name
@@ -803,43 +803,43 @@ def test_a_library_verb_from_either_deck_loads_off_air_and_the_room_is_as_it_was
     undo stack included; the off-air stack has the step; the status line says so."""
     _bank(rig, "party-wake", "party-tumble")
     for pressed in (rig.one, rig.two):
-        rig.two.presets.load("party-trip")
+        rig.two.loaded_patch.load("party-trip")
         _quiet(rig.two)
         theirs, steps = _state(rig.one), len(rig.two.undo.stack)
         rig.lib.status = ""
         _press(pressed.reg, verb)
         _quiet(rig.two)
-        assert rig.two.presets.current != "TRIP"
+        assert rig.two.loaded_patch.current != "TRIP"
         assert _state(rig.one) == theirs
         assert len(rig.two.undo.stack) == steps + 1
-        assert rig.lib.status == (f"{rig.two.presets.current} loaded off air on deck 2; "
+        assert rig.lib.status == (f"{rig.two.loaded_patch.current} loaded off air on deck 2; "
                                   "the room still sees deck 1")
 
 
 def test_the_strip_reads_the_panels_deck_whichever_deck_a_press_loaded(rig):
     _bank(rig, "party-wake")
-    strip = rig.lib.current(PRESETS)
+    strip = rig.lib.current(LOADABLE)
     rig.one.reg["preset.load.0"].fire()
-    assert rig.lib.current(PRESETS) == strip, "the panel is on deck 1"
+    assert rig.lib.current(LOADABLE) == strip, "the panel is on deck 1"
     rig.meta.point_panel(rig.two)
-    assert rig.lib.current(PRESETS) != strip
-    assert rig.lib.current(PRESETS) == rig.two.presets.lib.current(PRESETS)
+    assert rig.lib.current(LOADABLE) != strip
+    assert rig.lib.current(LOADABLE) == rig.two.loaded_patch.lib.current(LOADABLE)
 
 
 def test_next_and_prev_step_from_what_the_deck_off_air_holds(rig):
     project = _bank(rig, "party-wake", "party-tumble", "party-acid")
     rig.one.reg["preset.load.2"].fire()              # (off air: ACID, slot 2)
-    assert rig.two.presets.current == "ACID"
-    rig.one.presets.active_slot = 1                  # on air on slot 1: not what is read
+    assert rig.two.loaded_patch.current == "ACID"
+    rig.one.loaded_patch.active_slot = 1                  # on air on slot 1: not what is read
     rig.one.reg["preset.next"].fire()
-    assert rig.two.presets.current == "WAKE", "it wraps from slot 2 to slot 0"
-    assert rig.two.presets.active_slot == 0 and project.active == 1
+    assert rig.two.loaded_patch.current == "WAKE", "it wraps from slot 2 to slot 0"
+    assert rig.two.loaded_patch.active_slot == 0 and project.active == 1
     rig.one.reg["preset.prev"].fire()
-    assert rig.two.presets.current == "ACID"
-    listing = rig.lib.list(PRESETS)
-    held = rig.two.presets.lib.current(PRESETS)
+    assert rig.two.loaded_patch.current == "ACID"
+    listing = rig.lib.list(LOADABLE)
+    held = rig.two.loaded_patch.lib.current(LOADABLE)
     rig.one.reg["preset.list.next"].fire()
-    assert rig.two.presets.lib.current(PRESETS) == listing[(listing.index(held) + 1) % len(listing)]
+    assert rig.two.loaded_patch.lib.current(LOADABLE) == listing[(listing.index(held) + 1) % len(listing)]
 
 
 def test_the_landing_follows_the_crossfader(rig):
@@ -850,9 +850,9 @@ def test_the_landing_follows_the_crossfader(rig):
     assert rig.meta.on_air is rig.two
     theirs = _state(rig.two)
     rig.two.reg["preset.select"].set(0)
-    assert rig.one.presets.current == "WAKE" and _state(rig.two) == theirs
+    assert rig.one.loaded_patch.current == "WAKE" and _state(rig.two) == theirs
     rig.one.reg["preset.select"].set(1)
-    assert rig.one.presets.current == "TUMBLE" and _state(rig.two) == theirs
+    assert rig.one.loaded_patch.current == "TUMBLE" and _state(rig.two) == theirs
     assert "on deck 1; the room still sees deck 2" in rig.lib.status
 
 
@@ -874,14 +874,14 @@ def test_a_pad_is_refused_from_the_first_frame_of_a_timed_fade(rig):
     _bank(rig, "party-wake")
     rig.one.reg["output.xfade_s"].set(30.0)
     rig.meta.crossfade()
-    was = rig.two.presets.current
+    was = rig.two.loaded_patch.current
     for t in (0.0, 0.1):                               # asked for; then running, inside ENDS
         rig.meta.tick(t, DT)
         assert rig.mix.xfade < deck.ENDS and rig.meta.timed is not None
         for d in (rig.one, rig.two):
             rig.lib.warning = ""
             d.reg["preset.select"].set(0)
-            assert rig.two.presets.current == was and "not loaded" in rig.lib.warning
+            assert rig.two.loaded_patch.current == was and "not loaded" in rig.lib.warning
     rig.meta.tick(100.0, DT)
     assert rig.meta.timed is None and rig.meta.bars_load() is None      # it arrived
 
@@ -899,7 +899,7 @@ def test_the_apc_on_air_loads_off_air_by_a_real_press_and_lights_that(rig):
     theirs = _state(rig.one)
     n, ch = _clip(1)
     push(rig.r, note(n, channel=ch), note(n, 0, channel=ch))
-    assert rig.two.presets.current == "TUMBLE" and _state(rig.one) == theirs
+    assert rig.two.loaded_patch.current == "TUMBLE" and _state(rig.one) == theirs
     pads = {int(b.value): b for b in rig.one.table.active() if b.target == "preset.select"}
     reg = rig.one.reg
     assert led_shade(pads[1], reg["preset.select"]) == "on"
@@ -907,17 +907,17 @@ def test_the_apc_on_air_loads_off_air_by_a_real_press_and_lights_that(rig):
     sent = [m for m in rig.r.out.sent if m.type == "note_on" and m.note == n and m.channel == ch]
     assert sent[-1].velocity == apc40.GREEN
     push(rig.r, note(apc40.N_QUANT), note(apc40.N_QUANT, 0))
-    assert rig.two.presets.current == "WAKE" and _state(rig.one) == theirs
+    assert rig.two.loaded_patch.current == "WAKE" and _state(rig.one) == theirs
     assert led_shade(pads[0], reg["preset.select"]) == "on"
-    rig.two.presets.load("party-trip")
+    rig.two.loaded_patch.load("party-trip")
     push(rig.r, note(apc40.N_OVERDUB), note(apc40.N_OVERDUB, 0))
-    assert rig.two.presets.current == "WAKE" and _state(rig.one) == theirs
+    assert rig.two.loaded_patch.current == "WAKE" and _state(rig.one) == theirs
 
 
 def test_the_pads_light_says_the_deck_off_air_from_both_decks_and_follows_the_fader(rig):
     _bank(rig, "party-wake", "party-tumble")
     rig.two.reg["preset.select"].set(0)
-    rig.one.presets.lib.project.active = 1
+    rig.one.loaded_patch.lib.project.active = 1
     for d in (rig.one, rig.two):
         assert d.reg["preset.select"].value == 0, "the slot off air, whoever reads it"
     rig.mix.xfade = 1.0
@@ -934,9 +934,9 @@ def test_f_keys_and_home_load_off_air(rig):
     theirs = _state(rig.one)
 
     rig.r.router.keys(NS(pressed=lambda code: code == glfw.KEY_F2))
-    assert rig.two.presets.current == "TUMBLE"
+    assert rig.two.loaded_patch.current == "TUMBLE"
     rig.r.router.keys(NS(pressed=lambda code: code == glfw.KEY_HOME))
-    assert rig.two.presets.current == "WAKE"
+    assert rig.two.loaded_patch.current == "WAKE"
     assert _state(rig.one) == theirs
 
 
@@ -945,7 +945,7 @@ def test_a_held_empty_pad_on_air_still_saves_there_and_blinks(rig):
     blink that confirms it does not wait for the light to change."""
     from hyperspace import midi
 
-    project = rig.one.presets.lib.project
+    project = rig.one.loaded_patch.lib.project
     empty = project.next_empty()
     n, ch = _clip(empty)
     t = [0.0]
@@ -954,31 +954,31 @@ def test_a_held_empty_pad_on_air_still_saves_there_and_blinks(rig):
     push(rig.r, note(n, channel=ch))
     t[0] = midi.HOLD_S + 0.01
     rig.r.midi.poll()
-    assert project.bank[empty] is not None and rig.one.presets.active_slot == empty
+    assert project.bank[empty] is not None and rig.one.loaded_patch.active_slot == empty
     assert _state(rig.two) == theirs
     assert rig.r.midi._hold_state()[1], "the pad blinks"
 
 
 def test_an_empty_pad_says_how_to_fill_it_and_a_hold_still_saves_on_air(rig):
     d = rig.one
-    project = d.presets.lib.project
+    project = d.loaded_patch.lib.project
     empty = project.next_empty()
     rig.lib.warning = ""
     d.reg["preset.select"].set(empty)
     assert "an empty slot" in rig.lib.warning
-    was = d.presets.current
+    was = d.loaded_patch.current
     assert d.reg["preset.select"].held(empty)
-    assert project.bank[empty] is not None and d.presets.current != was
-    assert rig.two.presets.current == "TRIP"
+    assert project.bank[empty] is not None and d.loaded_patch.current != was
+    assert rig.two.loaded_patch.current == "TRIP"
 
 
 def test_the_panels_own_load_on_air_is_the_intentional_one(rig):
-    rig.lib.load(PRESETS, "party-wake")
-    assert rig.one.presets.current == "WAKE"
-    assert rig.two.presets.current == "TRIP"
+    rig.lib.load(LOADABLE, "party-wake")
+    assert rig.one.loaded_patch.current == "WAKE"
+    assert rig.two.loaded_patch.current == "TRIP"
     rig.meta.point_panel(rig.two)
-    rig.lib.load(PRESETS, "party-tumble")
-    assert rig.two.presets.current == "TUMBLE" and rig.one.presets.current == "WAKE"
+    rig.lib.load(LOADABLE, "party-tumble")
+    assert rig.two.loaded_patch.current == "TUMBLE" and rig.one.loaded_patch.current == "WAKE"
 
 
 def _library_verb(pid):
@@ -993,13 +993,13 @@ CARRIED = ["preset.select", "preset.next", "preset.prev", "preset.home", "preset
 
 
 @pytest.mark.parametrize("verb", CARRIED)
-def test_a_preset_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
-    """The absolute rule: from a row a verb lands on the other deck, so a row a preset
+def test_a_loadable_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
+    """The absolute rule: from a row a verb lands on the other deck, so a row a loadable patch
     carries would be one patch changing another. Refused in words at each door."""
     t = Bindings()
     for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
                 Binding("seq:0", verb, "push", 1.0), Binding("lfo:0", verb, "position", 1.0)):
-        assert not is_session_row(row) and "no patch's row" in meta_row_refusal(row)
+        assert not is_meta_row(row) and "no patch's row" in meta_row_refusal(row)
         with pytest.raises(ValueError, match="no patch's row"):
             t.add(row)
     assert t.set_desk([Binding("note:0:60", verb, "toggle")]) and not t.desk()
@@ -1007,11 +1007,11 @@ def test_a_preset_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
     # (the meta controller's own rows pass: invariant, global layer, a key, a pad)
     for row in (Binding("note:0:61", verb, "toggle"), Binding("note:0:62", verb, "toggle", layer="global"),
                 Binding("key:F9", verb, "fire"), Binding("pad:A", verb, "fire")):
-        assert is_session_row(row) and meta_row_refusal(row) is None
+        assert is_meta_row(row) and meta_row_refusal(row) is None
 
 
 @pytest.mark.parametrize("carrier", [0, 1], ids=["on air carries", "off air carries"])
-def test_a_preset_carrying_load_rows_reaches_no_other_deck(rig, carrier):
+def test_a_loadable_carrying_load_rows_reaches_no_other_deck(rig, carrier):
     """A file holding them all, loaded on either deck: the rows drop, with a note; its
     pressed control, its fired lanes and a whole pass move nothing on the other deck."""
     d, other = (rig.one, rig.two) if carrier == 0 else (rig.two, rig.one)
@@ -1021,23 +1021,23 @@ def test_a_preset_carrying_load_rows_reaches_no_other_deck(rig, carrier):
               for k, v in enumerate(CARRIED)],
         routes=[{"source": f"seq:{k % 5}", "target": v, "op": "push", "value": 1.0}
                 for k, v in enumerate(CARRIED)])
-    d.presets.load("CARRIES")
-    assert d.presets.current == "CARRIES"
-    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_session_row(b)]
-    desk_notes = [n for n in d.presets.notes if n.startswith("dropped note:8:") and "no patch's row" in n]
+    d.loaded_patch.load("CARRIES")
+    assert d.loaded_patch.current == "CARRIES"
+    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_meta_row(b)]
+    desk_notes = [n for n in d.loaded_patch.notes if n.startswith("dropped note:8:") and "no patch's row" in n]
     assert len(desk_notes) == len(CARRIED)
-    assert all(any(f"→ {v}" in n for n in d.presets.notes) for v in CARRIED), "each route said"
+    assert all(any(f"→ {v}" in n for n in d.loaded_patch.notes) for v in CARRIED), "each route said"
     passing = NS(meta=rig.meta, chain=rig.r.chain)
     _pass(passing)
     theirs = _state(other)
     rig.meta.pointer("apc40").deck = d
     push(rig.r, *(note(k, channel=8) for k in range(len(CARRIED))))
     _pass(passing)
-    assert _state(other) == theirs and d.presets.current == "CARRIES"
+    assert _state(other) == theirs and d.loaded_patch.current == "CARRIES"
 
 
-def test_a_learn_will_not_put_a_presets_row_on_a_library_verb(rig):
-    """A desk Learn lands a preset-layer row, so it refuses, in words. A pad button's
+def test_a_learn_will_not_put_a_loadables_row_on_a_library_verb(rig):
+    """A desk Learn lands a patch-layer row, so it refuses, in words. A pad button's
     row is the meta controller's own, and takes one."""
     from hyperspace.ui_routing import desk_target, pad_target
 
@@ -1052,42 +1052,42 @@ SAVES = ["preset.save.0", "preset.save.7", "preset.save_new"]
 
 
 @pytest.mark.parametrize("verb", SAVES)
-def test_a_preset_cannot_carry_a_row_on_a_save_verb_by_any_door(verb):
+def test_a_loadable_cannot_carry_a_row_on_a_save_verb_by_any_door(verb):
     """A look's own row writing over another look's file breaks the absolute rule."""
     t = Bindings()
     for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
                 Binding("note:0:60", verb, "hold", layer="preset"),
                 Binding("seq:0", verb, "push", 1.0), Binding("lfo:0", verb, "position", 1.0)):
-        assert not is_session_row(row) and "no patch's row" in meta_row_refusal(row)
+        assert not is_meta_row(row) and "no patch's row" in meta_row_refusal(row)
         with pytest.raises(ValueError, match="no patch's row"):
             t.add(row)
     assert t.set_desk([Binding("note:0:60", verb, "toggle")]) and not t.desk()
     for row in (Binding("note:0:61", verb, "hold"), Binding("note:0:62", verb, "hold", layer="global"),
                 Binding("key:SHIFT+F9", verb, "fire"), Binding("pad@edge:MENU", verb, "hold")):
-        assert is_session_row(row) and meta_row_refusal(row) is None
+        assert is_meta_row(row) and meta_row_refusal(row) is None
 
 
 def _files(rig) -> dict:
-    """Every preset file and the show's, byte for byte, with the bank."""
+    """Every loadable patch file and the show's, byte for byte, with the bank."""
     home = rig.lib.home
     return {"files": {str(f): f.read_bytes() for f in home.rglob("*.json")},
-            "bank": list(rig.one.presets.lib.project.bank)}
+            "bank": list(rig.one.loaded_patch.lib.project.bank)}
 
 
 @pytest.mark.parametrize("carrier", [0, 1], ids=["on air carries", "off air carries"])
-def test_a_preset_carrying_save_rows_loses_them_with_a_note_and_writes_nothing(rig, carrier):
+def test_a_loadable_carrying_save_rows_loses_them_with_a_note_and_writes_nothing(rig, carrier):
     d = (rig.one, rig.two)[carrier]
     put(rig.lib.home, "SAVER",
         desk=[{"source": f"note:8:{k}", "target": v, "op": "toggle"} for k, v in enumerate(SAVES)],
         routes=[{"source": f"seq:{k}", "target": v, "op": "push", "value": 1.0}
                 for k, v in enumerate(SAVES)])
-    d.presets.load("SAVER")
-    assert d.presets.current == "SAVER"
-    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_session_row(b)]
+    d.loaded_patch.load("SAVER")
+    assert d.loaded_patch.current == "SAVER"
+    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_meta_row(b)]
     for v in SAVES:
         assert any(n.startswith("dropped note:8:") and f"→ {v}" in n and "no patch's row" in n
-                   for n in d.presets.notes), v
-        assert any(n.startswith("dropped seq:") and v in n for n in d.presets.notes), v
+                   for n in d.loaded_patch.notes), v
+        assert any(n.startswith("dropped seq:") and v in n for n in d.loaded_patch.notes), v
     passing = NS(meta=rig.meta, chain=rig.r.chain)
     _pass(passing)
     before = _files(rig)
@@ -1099,15 +1099,15 @@ def test_a_preset_carrying_save_rows_loses_them_with_a_note_and_writes_nothing(r
 
 def test_the_panels_save_still_saves(rig):
     """The owner's "a save is not changed" is the person's: this, the two below."""
-    rig.lib.save_as(PRESETS, "KEPT BY HAND")
-    assert rig.lib.path_of(PRESETS, "KEPT BY HAND") is not None
-    assert rig.one.presets.current == "KEPT BY HAND" and rig.two.presets.current == "TRIP"
+    rig.lib.save_as(LOADABLE, "KEPT BY HAND")
+    assert rig.lib.path_of(LOADABLE, "KEPT BY HAND") is not None
+    assert rig.one.loaded_patch.current == "KEPT BY HAND" and rig.two.loaded_patch.current == "TRIP"
 
 
 def test_a_held_empty_pad_on_the_invariant_row_writes_its_file(rig):
     from hyperspace import midi
 
-    project = rig.one.presets.lib.project
+    project = rig.one.loaded_patch.lib.project
     empty = project.next_empty()
     n, ch = _clip(empty)
     row = next(b for b in rig.one.table.active() if b.target == "preset.select" and int(b.value) == empty)
@@ -1117,28 +1117,28 @@ def test_a_held_empty_pad_on_the_invariant_row_writes_its_file(rig):
     push(rig.r, note(n, channel=ch))
     t[0] = midi.HOLD_S + 0.01
     rig.r.midi.poll()
-    assert rig.lib.path_of(PRESETS, project.bank[empty]) is not None
+    assert rig.lib.path_of(LOADABLE, project.bank[empty]) is not None
 
 
 def test_the_edges_hold_to_save_still_saves(rig):
     """The Edge's factory row (row 723): `pad@edge:MENU`, a hold, the meta controller's."""
     row = Binding("pad@edge:MENU", "preset.save_new", "hold")
-    assert is_session_row(row) and rig.one.table.add(row) is row
+    assert is_meta_row(row) and rig.one.table.add(row) is row
     rig.one.table.primaries = {"pad": "edge"}
-    listed = set(rig.lib.list(PRESETS))
+    listed = set(rig.lib.list(LOADABLE))
     pad = ScriptedPad()
     for now in (1.0, 1.0 + routing.HOLD_S):      # the real road: held for `HOLD_S`
         pad.frame(held={gamepad.MENU})
         rig.one.router.pad(pad, now=now)
-    assert len(set(rig.lib.list(PRESETS)) - listed) == 1
+    assert len(set(rig.lib.list(LOADABLE)) - listed) == 1
 
 
-def test_no_factory_row_or_corpus_preset_carries_a_load_or_save_row():
+def test_no_factory_row_or_corpus_loadable_carries_a_load_or_save_row():
     """The factory's load rows are all invariant and its save rows are keys, so the
-    meta controller's; no corpus preset or shipped JSON's `desk` or `routes` has one."""
+    meta controller's; no corpus loadable patch or shipped JSON's `desk` or `routes` has one."""
     rows = [b for b in factory_desk() if _library_verb(b.target)]
     assert len(rows) > 24 and all(b.layer is None for b in rows)
-    assert all(is_session_row(b) for b in Bindings.factory().bindings if _library_verb(b.target))
+    assert all(is_meta_row(b) for b in Bindings.factory().bindings if _library_verb(b.target))
     root = Path(__file__).parent / "corpus"
     files = [*root.rglob("*.json"), *Path(app.__file__).parent.rglob("*.json")]
     assert files
@@ -1296,9 +1296,9 @@ def test_the_words_after_a_press_name_cmd_z_only_where_it_is_true(rig):
     assert undo.here() is rig.two.undo
     rig.one.reg["preset.load.1"].fire()
     assert rig.lib.status.endswith("; ⌘Z takes it back")
-    now = rig.two.presets.current
+    now = rig.two.loaded_patch.current
     rig.r.reg["edit.undo"].fire()
-    assert rig.two.presets.current != now
+    assert rig.two.loaded_patch.current != now
     undo.where(lambda: True)
     rig.one.reg["preset.load.1"].fire()
     assert rig.lib.status.endswith("the room still sees deck 1")
@@ -1331,7 +1331,7 @@ def test_a_click_on_the_fade_chip_during_a_run_does_nothing(rig):
 
 def test_a_load_with_nowhere_to_land_is_refused_never_this_deck(rig):
     """Finding 7: it fails closed."""
-    project = rig.one.presets.lib.project
+    project = rig.one.loaded_patch.lib.project
     _bank(rig, "party-wake")
     project.meta = NS(row_load=lambda: (None, None))
     theirs = _state(rig.one)
@@ -1362,6 +1362,6 @@ def test_is_invariant_parses_nothing_once_it_has_seen_a_control(rig, monkeypatch
 
 def test_names_is_settles_one_road(rig):
     """Finding 10: `spec` None is no instances, `fx` an empty set; there is no fallback."""
-    gs = rig.one.presets.graph
+    gs = rig.one.loaded_patch.graph
     assert gs.names(None)["fx"] == frozenset() and "spec" in inspect.signature(gs.names).parameters
     assert inspect.signature(gs.names).parameters["spec"].default is inspect.Parameter.empty

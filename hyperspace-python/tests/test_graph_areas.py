@@ -14,12 +14,12 @@ show them, and the chain a through wire over the off effects. The head's
 area chips and a click on a title frame an area.
 
 Headless, on N7's harness (tests/test_graph_legible.py): the shell's rig
-with a corpus preset loaded through the scratch library, a render graph
+with a corpus loadable patch loaded through the scratch library, a render graph
 built by `graph.default_graph` — party-trip's two-effect graph, and the
 real chain of every effect file this build has, wired by each graph
 fixture under tests/fixtures/presets — the APC40 as a real
 `devices.MidiDevice` over a stand-in adapter, the page drawn for real on
-`imgui_node_editor`. No preset is edited or added."""
+`imgui_node_editor`. No loadable patch is edited or added."""
 
 import json
 from itertools import pairwise
@@ -42,15 +42,15 @@ from hyperspace.graphmigrate import Shows
 from hyperspace.outputs import Switches
 from hyperspace.routing import Binding
 
-# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
-CORPUS_PRESETS = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
+# the corpus: the loadable patches the build once shipped (tests/corpus/presets, one tier)
+CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 # (plan 33 T6: the `/5` fixtures — T4's and T5's proofs, a channel's own
 # shaders into the faces, the backdrop, a switch — are laid out with the rest)
 WIRED = sorted(p.stem for p in FIXTURES.glob("*.json")
                if "graph" in json.loads(p.read_text()))
 FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch-faces")
-# every effect file, by its @order: the chain an old preset with every one
+# every effect file, by its @order: the chain an old loadable patch with every one
 # on lands as (plan 33 T7: `names()` is by name — there is no stack)
 REAL = tuple(sorted(FxState().specs, key=lambda n: (FxState().specs[n].order, n)))
 CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, graphview.EFFECTS_AREA,
@@ -64,18 +64,18 @@ def rig(shell_rig):  # noqa: F811
 
 
 def load(rig, name, graph=None):
-    """Corpus preset `name` on the page (party-trip's render graph and
+    """Corpus loadable patch `name` on the page (party-trip's render graph and
     devices, `party`, or render graph `graph`), its state after two frames."""
     party(rig)
     if graph is not None:
         rig.panel.renderer = NS(_graph=graph)
     rig.lib.load("presets", name)
-    # (plan 35 T5: the canvas is the preset's wired frame — party-trip's is
+    # (plan 35 T5: the canvas is the loadable patch's wired frame — party-trip's is
     # the render graph's own frame, landed again after the load)
     section = getattr(rig.panel.renderer._graph, "section", None)
     if name == "party-trip" and section is not None:
         spec = G.read_graph(section)
-        rig.lib.presets.graph.land(spec, spec.to_json())
+        rig.lib.loaded_patch.graph.land(spec, spec.to_json())
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     return ui_graph._state(rig.panel)
@@ -98,7 +98,7 @@ def real_graph(fixture=None):
 
 
 def load_fixture(rig, fixture):
-    """Graph fixture `fixture` loaded as the preset (its spec the view's),
+    """Graph fixture `fixture` loaded as the loadable patch (its spec the view's),
     on its own render graph (`real_graph`): the page's state after two frames."""
     party(rig)
     dst = rig.lib.home / "presets" / f"{fixture}.json"
@@ -145,7 +145,7 @@ def back_wires(view, idle_open=()):
 # ---------------------------------------------------------------- the areas
 
 def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
-    """Over every corpus preset on party-trip's graph, and over party-trip
+    """Over every corpus loadable patch on party-trip's graph, and over party-trip
     on the app's whole chain wired by each graph fixture: every node is in
     one area of `ORDER`, by the one table; the areas' columns run left to
     right and never share a column — but *other*, under the audio in its
@@ -154,7 +154,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     no drawn wire runs back or within a column but the returns
     (`graphview.returns`: the effects' wrapped rows, the capture's).
 
-    Plan 33 T6: the free graph's `/5` fixtures, each loaded as the preset
+    Plan 33 T6: the free graph's `/5` fixtures, each loaded as the loadable patch
     on its own graph, hold too. The rule that keeps them right-running: a
     picture made of the media alone (every path back from it starts at a
     channel or the pattern — `media.a → acid.2 → huecycle.2`) is a branch
@@ -163,7 +163,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     (shaders); a picture the scene made, taken back into a switch with the
     media, runs back by design (`graphview.returns`)."""
     assert set(FREE) <= set(WIRED)
-    cases = [(name, None) for name in CORPUS_PRESETS]
+    cases = [(name, None) for name in CORPUS_LOADABLES]
     cases += [("party-trip", f) for f in (None, *WIRED) if f not in FREE]
     cases += [(f, f) for f in FREE]
     for name, fixture in cases:
@@ -281,7 +281,7 @@ def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
     # (2026-10-26: no layout runs on its own; only tidy lays out again)
     below = next(n.id for n in drawn if n.column == view.node("render:shape").column
                  and lay.nodes[n.id][1] > lay.nodes["render:shape"][1])
-    rig.lib.presets.layout["render:shape"] = [4000, 4000]
+    rig.lib.loaded_patch.layout["render:shape"] = [4000, 4000]
     frame(rig.panel, "graph")
     assert st["applied"]["render:shape"] == (4000.0, 4000.0)
     assert st["applied"][below] == lay.nodes[below]
@@ -295,7 +295,7 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     view = st["view"]
     ui_graph.toggle_idle(st, graphview.MODULATION)
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.presets.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
@@ -308,7 +308,7 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     k = len({n.area for n in view.nodes if not n.idle})
     assert st["said"] == (f"laid out {len(view.nodes) - 26} nodes in {k} areas, every one "
                           "collapsed · 26 idle off the canvas")
-    assert st["idle_open"] == set() and st["open"] == set() and rig.lib.presets.layout == {}
+    assert st["idle_open"] == set() and st["open"] == set() and rig.lib.loaded_patch.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
     assert st["applied"][graphview.idle_id(graphview.MODULATION)] == lay.lines[
@@ -652,18 +652,18 @@ def backward_across_areas(view):
     return out
 
 
-@pytest.mark.parametrize("name", [*(("corpus", n) for n in CORPUS_PRESETS),
+@pytest.mark.parametrize("name", [*(("corpus", n) for n in CORPUS_LOADABLES),
                                   *(("fixture", n) for n in WIRED)],
                          ids=lambda t: f"{t[0]}:{t[1]}")
 def test_no_cable_runs_backwards_across_areas(rig, name):
-    """Plan 37 P3, D5 (the rules): every corpus preset, and every graph
-    fixture, loaded as the preset on a fresh canvas (none carries a saved
+    """Plan 37 P3, D5 (the rules): every corpus loadable patch, and every graph
+    fixture, loaded as the loadable patch on a fresh canvas (none carries a saved
     position): no cable runs from an area into one left of it. Before C3,
     `acid-scene` drew `wire:acid.2>lookback/occluder` from EFFECTS back
     into LOOK-BACK — acid.2 sits between the scene and the look-back."""
-    where, preset = name
-    view = (load(rig, preset) if where == "corpus" else load_fixture(rig, preset))["view"]
-    assert backward_across_areas(view) == [], preset
+    where, loadable = name
+    view = (load(rig, loadable) if where == "corpus" else load_fixture(rig, loadable))["view"]
+    assert backward_across_areas(view) == [], loadable
 
 
 def test_a_node_is_laid_where_its_consumers_are(rig):
@@ -685,7 +685,7 @@ def test_a_node_is_laid_where_its_consumers_are(rig):
     lay = ui_graph.areas_of(st, view)
     assert lay.nodes["render:acid.2"][0] < lay.nodes["render:lookback"][0]
     # a saved position wins: the rule names an area, it moves no placed node
-    rig.lib.presets.layout["render:acid.2"] = [4000, 4000]
+    rig.lib.loaded_patch.layout["render:acid.2"] = [4000, 4000]
     frame(rig.panel, "graph")
     assert st["applied"]["render:acid.2"] == (4000.0, 4000.0)
 
@@ -749,12 +749,12 @@ def test_the_areas_run_by_primitive(rig):
         assert graphview.area_of(V(f"render:{ref.name}", "render", ref.name, ref=ref)) == want
 
 
-def test_a_blank_preset_draws_only_the_outputs(rig, monkeypatch):
+def test_a_blank_loadable_draws_only_the_outputs(rig, monkeypatch):
     """`{"frame": "wired"}` with every bin empty: the canvas's render nodes
     are All outputs and the windows — the eight channels idle on MEDIA's
     line ("8 empty channels"), no pattern and no backdrop drawn. A source in
     channel a's bin draws it; a wire from channel b draws that one too."""
-    from test_presets import put
+    from test_loadable import put
     party(rig)
     reg = rig.reg
 
@@ -767,7 +767,7 @@ def test_a_blank_preset_draws_only_the_outputs(rig, monkeypatch):
             ch.bin = [None] * len(ch.bin)
             if c in filled:
                 ch.bin[0] = "local:still.png"
-        spec = rig.lib.presets.graph.spec
+        spec = rig.lib.loaded_patch.graph.spec
         rig.panel.renderer = NS(_graph=G.build_graph(views(Switches(), Switches()),
                                                      spec.wiring()))
         frame(rig.panel, "graph")
@@ -857,7 +857,7 @@ def test_insert_effect_lands_where_the_cable_was_clicked(rig):
     view = st["view"]
     c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
     assert ui_graph.insert_effect(rig.panel, c, "kaleido", (321.0, 654.0)) is None
-    placed = {k: v for k, v in rig.lib.presets.layout.items() if v == [321, 654]}
+    placed = {k: v for k, v in rig.lib.loaded_patch.layout.items() if v == [321, 654]}
     assert len(placed) == 1 and next(iter(placed)).startswith("render:kaleido")
 
 
@@ -908,11 +908,11 @@ def test_a_panned_canvas_moves_every_node_and_saves_where_they_lie(rig):
     moved = [k for k, v in before.items() if k in st["applied"]]
     assert moved and all(st["applied"][k] == (before[k][0] + 100.0, before[k][1] - 50.0)
                          for k in moved)
-    assert rig.lib.presets.layout == {}
+    assert rig.lib.loaded_patch.layout == {}
     view = st["view"]
     c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
     assert ui_graph.insert_effect(rig.panel, c, "kaleido", (400.0, 300.0)) is None
-    assert [300, 350] in rig.lib.presets.layout.values()
+    assert [300, 350] in rig.lib.loaded_patch.layout.values()
 
 
 def test_a_pinch_zooms_by_just_what_the_fingers_spread(monkeypatch):
@@ -964,7 +964,7 @@ def test_a_fractional_pan_moves_nothing_it_saves(rig):
     for k in range(30):
         st["pan"] = (37.3 * k - 400.6, -21.7 * k + 150.45)
         frame(rig.panel, "graph")
-    assert rig.lib.presets.layout == {}
+    assert rig.lib.loaded_patch.layout == {}
 
 
 def test_esc_closes_the_details(rig):
@@ -1093,10 +1093,10 @@ def test_deleting_the_published_node_clears_it(rig):
     assert rig.panel.graph_selected is None and rig.panel.graph_selected_params() == []
 
 
-def test_a_preset_landing_without_the_node_lets_it_go(rig):
+def test_a_loadable_landing_without_the_node_lets_it_go(rig):
     """Off the GRAPH page the value is as of the last frame it drew — until
-    a preset lands (`ui_graph.settle`, on any page): one that still names
-    the node keeps it, a new preset (the scene chain alone) lets it go."""
+    a loadable patch lands (`ui_graph.settle`, on any page): one that still names
+    the node keeps it, a new loadable patch (the scene chain alone) lets it go."""
     st = load(rig, "party-trip")
     panel = rig.panel
     st["select_node"] = "render:pattern"
@@ -1109,6 +1109,6 @@ def test_a_preset_landing_without_the_node_lets_it_go(rig):
     frame(panel, "view")
     assert panel.graph_selected == "render:pattern"
     at = panel.graph_selected_at
-    rig.lib.presets.new()                                 # shape → scene → output: no pattern
+    rig.lib.loaded_patch.new()                                 # shape → scene → output: no pattern
     frame(panel, "view")
     assert panel.graph_selected is None and panel.graph_selected_at > at

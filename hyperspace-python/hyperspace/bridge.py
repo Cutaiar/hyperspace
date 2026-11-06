@@ -65,7 +65,7 @@ beat-grid lock) waits for a beat source; nothing here derives ticks yet.
 **Sinks (plan 27 B3).** On the device registry the bridge is one device
 with two halves (devices.BridgeDevice): its `receive` stays a source (the
 ``ext`` vector, with its labels and rests published, `publish`) and its out
-half is a *sink*: what goes out is the session's sink rows on the
+half is a *sink*: what goes out is the meta controller's sink rows on the
 bridge's role (routing.py, ``param:view.bright → bridge:3``, `sink_values`),
 read after ``reg.apply()`` — so a param lane carries this frame's effective
 value, no longer one frame behind — and sent through `send_values`. The

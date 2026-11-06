@@ -7,7 +7,7 @@ silence and back on the next message.
 Every message here is sent in-process by `pythonosc`'s own client to
 127.0.0.1 on an ephemeral port the device bound itself (``port = 0``), so
 no fixed port can be busy and nothing leaves the machine. Every home is a
-scratch one; the routes come from a fixture preset loaded through it
+scratch one; the routes come from a fixture loadable patch loaded through it
 (tests/fixtures/osc/phone-routes.json)."""
 
 from __future__ import annotations
@@ -44,11 +44,11 @@ hits = ["/hit", "/pad"]
 """
 
 
-def _show(tmp_path, devices_toml: str = PHONE, *, preset: bool = True):
+def _show(tmp_path, devices_toml: str = PHONE, *, loadable: bool = True):
     """The app's construction order over a scratch home whose config.toml
     lists `devices_toml` and nothing else (no [library]): the registry made
     from the config's entries alone, handed to the router and the Learn as
-    app.main does, opened, the fixture preset loaded."""
+    app.main does, opened, the fixture loadable patch loaded."""
     home = tmp_path / "home"
     (home / "presets").mkdir(parents=True)
     shutil.copyfile(FIXTURE, home / "presets" / FIXTURE.name)
@@ -64,9 +64,9 @@ def _show(tmp_path, devices_toml: str = PHONE, *, preset: bool = True):
     app.router.use(rig)
     lrn.devices = rig
     rig.open_all()
-    if preset:
-        assert app.presets.load(FIXTURE.stem) == []
-        assert app.presets.notes == [] and app.router.table.dropped == []
+    if loadable:
+        assert app.loaded_patch.load(FIXTURE.stem) == []
+        assert app.loaded_patch.notes == [] and app.router.table.dropped == []
     return NS(app=app, rig=rig, learn=lrn, cfg=cfg, home=home, now=[0.0])
 
 
@@ -111,7 +111,7 @@ def test_an_osc_entry_alone_adds_the_device_and_a_fader_moves_a_routed_param(tmp
     assert [p.address for p in d.sources] == ["phone:x", "phone:y", "phone:hit", "phone:pad"]
     assert [p.kind for p in d.sources] == ["value", "value", "trigger", "trigger"]
     assert all(p.velocity for p in d.sources if p.kind == "trigger")
-    # nothing heard: `lost`, the routes dormant, the camera where the preset put it
+    # nothing heard: `lost`, the routes dormant, the camera where the loadable patch put it
     yaw0, pitch0 = reg["camera.yaw"].norm, reg["camera.pitch"].norm
     for _ in range(5):
         _frame(s)
@@ -217,7 +217,7 @@ def test_a_learn_armed_for_the_role_takes_a_hit_as_a_row_and_a_fader_as_a_route(
     (row,) = [b for b in table.bindings if b.source == "phone:pad"]
     assert (row.target, row.op) == ("view.points", "toggle")
     assert reg["view.points"].value == points        # the learning press acts on nothing
-    assert "phone:pad" in (s.home / "bindings.json").read_text()     # the session's, as a pad's
+    assert "phone:pad" in (s.home / "bindings.json").read_text()     # the meta controller's, as a pad's
     c.send_message("/pad", 1.0)
     _until(s, lambda: reg["view.points"].value != points, "the learned row")
     # a fader moved from its rest becomes a route
@@ -283,7 +283,7 @@ def test_a_bad_entry_is_an_error_line_never_a_crash(entry, why):
 def test_an_osc_role_on_a_fed_scheme_is_refused_and_an_off_one_still_lists_its_scheme():
     """The role is the scheme, so `make` checks it like any fed scheme: an
     OSC device called `axis` after the pad is refused (B1's rule). An off
-    entry still lists its scheme and its hit rows, so a preset row naming
+    entry still lists its scheme and its hit rows, so a patch row naming
     it waits rather than being refused."""
     entries = [{"role": "axis", "kind": "gamepad", "enabled": True},
                {"role": "axis2", "kind": "osc", "enabled": True}]
@@ -365,7 +365,7 @@ def test_the_osc_value_mapping():
     assert osc._number([float("nan"), 0.25]) == 0.25
 
 
-def test_a_session_hit_row_waits_while_its_device_is_not_listed(tmp_path):
+def test_a_meta_hit_row_waits_while_its_device_is_not_listed(tmp_path):
     """Decision 11 for a hit row: `bindings.json` keeps a ``phone:hit``
     toggle row — loaded and written back unchanged — while no phone is
     listed (`Bindings.load` runs only the referee). The one refusal tied

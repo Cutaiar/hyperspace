@@ -28,7 +28,7 @@ legacy layout is `i + 1` (and the top band reads itself), as before.
 
 Band → plane and `dir` are not the analyzer's business — the output is
 `lanes`, and what they drive is the routing table's (routing.py; the
-legacy table lives there as the "legacy6" preset).
+legacy table lives there as the "legacy6" loadable patch).
 
 Spectrum history: a ring of the last HIST_S seconds of spectra on a
 log-frequency axis, for the heat map (WP5b). One column every HIST_DT of
@@ -288,7 +288,7 @@ class Analyzer:
         return self.spec[i].edges()
 
     def layout(self) -> dict:
-        """{"bands": [{"f", "q", "curve"(, "name")}, …]} — the preset's layout key."""
+        """{"bands": [{"f", "q", "curve"(, "name")}, …]} — the loadable patch's layout key."""
         rows = []
         for s in self.spec:
             row = {"f": s.f, "q": s.q, "curve": CURVES[s.curve].tag}
@@ -300,7 +300,7 @@ class Analyzer:
     def apply_layout(self, layout: dict, params: list[Params] | None = None) -> None:
         """Take the band set from a layout. Trackers of bands that keep their
         index carry on; new indices start fresh. Params are kept by index
-        (a preset restores its values after the layout) unless given."""
+        (a loadable patch restores its values after the layout) unless given."""
         specs = [_spec_of(r) for r in layout["bands"]]
         if not 1 <= len(specs) <= N_MAX:
             raise ValueError(f"a layout has 1..{N_MAX} bands, not {len(specs)}")

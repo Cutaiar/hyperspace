@@ -3,7 +3,7 @@
 **One vocabulary for every pad.** A row names a control by what it is on
 an Xbox pad — ``pad:A``, ``axis:LT`` — whatever pad is in the hand: the
 DualSense's cross is ``pad:A``, its L2 ``axis:LT``, its Create
-``pad:VIEW`` (SDL's positional mapping), so a preset made on one pad
+``pad:VIEW`` (SDL's positional mapping), so a loadable patch made on one pad
 plays on the other. `CANON` is that vocabulary as indices into a pad's
 button list: the Xbox's raw GLFW indices as they always were
 (gamepad.py's map, captured on a Series S), then the controls an Xbox

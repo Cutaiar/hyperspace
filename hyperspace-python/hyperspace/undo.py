@@ -3,7 +3,7 @@
 Nothing tells this module that a parameter was written. Once a frame
 `Undo.tick` compares a cheap **fingerprint** of what the user sets — the
 *base* of every watched param, the table's performer rows, the desk's
-preset layer and the macros — with last frame's. A change opens a step
+patch layer and the macros — with last frame's. A change opens a step
 that holds the state as it was; the step stays open while changes keep
 coming and closes after `SETTLE_S` of quiet. So one slider drag, one knob
 turn on the desk, one typed value or one toggle is one step, whatever
@@ -18,7 +18,7 @@ move in its last bits (the norm round trip in `Param.modulate` /
 `Param.apply`), so two fingerprints are *the same* when every float pair
 is within `REL_TOL` / `ABS_TOL`.
 
-A **replacing action** — a preset or show load, a Learn landing, an
+A **replacing action** — a loadable patch or show load, a Learn landing, an
 Unbind, a route or macro delete, Replace in the Replace / Keep prompt —
 calls `push(label)` *before* it changes anything: the step is then named
 by the caller and, with `load=True`, carries "what is loaded" (`marks`),
@@ -37,15 +37,15 @@ What is watched (`watched`): a param that is persisted, not an alias, not
 a trigger, and not in `EXCLUDED_GROUPS` (the clock: a tap burst rewrites
 `tempo.bpm` on every tap, slower than the settle time). The integrated
 angles (`rot.phase.*`), selections, the panel's own state, transport and
-the rig's output settings are all `persist=False`.
+the meta controller's output settings are all `persist=False`.
 
 **Three stacks** (plan 44 D5b, the owner's design, 2026-11-04): one `Undo` per
-`Deck`, scoped to its preset (`only`: `deck.in_preset`), and one for the meta
-controller over `SessionRegistry` and `SessionTable` (`install_meta`,
+`Deck`, scoped to its loadable patch (`only`: `deck.in_patch`), and one for the meta
+controller over `MetaRegistry` and `MetaTable` (`install_meta`,
 `deck.meta_stack`). The second watches the meta params, whose tuning is done before a performance and
 not during one, and the meta controller's rows of the table (keys, pad,
 invariant and global-layer MIDI rows, sinks). Those rows live in `bindings.json`
-the moment they change, so their restore (`SessionTable.set_rows`) writes that
+the moment they change, so their restore (`MetaTable.set_rows`) writes that
 file: the one write a restore makes.
 
 **⌘Z goes by where you are** (`here`): the panel's `Deck`, except with the mouse
@@ -185,7 +185,7 @@ def _macros(table) -> tuple:
 @dataclass(frozen=True)
 class State:
     """What a step puts back: the watched bases by id, copies of the
-    performer rows and of the preset-layer rows, the macros' document, the
+    performer rows and of the patch-layer rows, the macros' document, the
     tag as it read then, and — for a load step — the marks."""
 
     bases: dict[str, Any]
@@ -238,7 +238,7 @@ class Undo:
     a step holds their membership and a restore puts it back before the
     bases, so a voice's params exist before their values land. `only`
     (optional) narrows `watched` to the params this stack is for: a `Deck`'s
-    takes those of its preset (plan 44 D5b). A `table` with `rows` and
+    takes those of its loadable patch (plan 44 D5b). A `table` with `rows` and
     `set_rows(rows)` (`deck.MetaRows`) has those watched too.
     """
 
@@ -301,7 +301,7 @@ class Undo:
         return self._watched
 
     def _mods(self) -> list:
-        """The table's modifiers as a preset holds them, their params at
+        """The table's modifiers as a loadable patch holds them, their params at
         their bases (plan 28 N1); [] for a table with none or no such call."""
         doc = getattr(self.table, "modifiers_doc", None)
         return doc(self.reg) if doc is not None else []
@@ -314,7 +314,7 @@ class Undo:
         return dict(banks or {})
 
     def _bank_ids(self) -> dict:
-        """Each bank's membership as a preset holds it: scheme → ids."""
+        """Each bank's membership as a loadable patch holds it: scheme → ids."""
         return {scheme: list(b.doc()) for scheme, b in self._banks().items()}
 
     def _table_rows(self) -> list:
@@ -324,7 +324,7 @@ class Undo:
 
     def _fingerprint(self) -> tuple:
         """(ids, bases, routes, desk, macros, tag, modifiers, banks, rows) as of now — the cheap
-        read `tick` makes every frame. The preset layer is read as the
+        read `tick` makes every frame. The patch layer is read as the
         table's rows whose `layer` is "preset" (what `table.desk()`
         returns, without asking every row whether it is a MIDI row)."""
         ps = self._params()
@@ -513,7 +513,7 @@ class Undo:
         Called **before** the change. `load`: the step also carries what
         is loaded (the library's names and references; a band layout).
         A second push with no tick since is the same action from the inside
-        (a show load that loads its startup preset; Replace landing a held
+        (a show load that loads its startup loadable patch; Replace landing a held
         learn): the outer label stands. Not so a load pushed under an open
         action that is no load — nothing nests that way, so it is another
         action (a delete at the end of one frame, an F-key at the start of
@@ -646,7 +646,7 @@ class Undo:
             # 2. the routes, through the table's own call (the referee runs)
             if _rows(table.routes()) != _rows(state.routes):
                 table.set_routes(self._rows_for(state.routes, table.routes()))
-            # 3. the preset layer: a redraw, the layer and the faders' catch stay
+            # 3. the patch layer: a redraw, the layer and the faders' catch stay
             if _rows(table.desk()) != _rows(state.desk):
                 table.set_desk(self._rows_for(state.desk, table.desk()), load=False)
             # 4. the macros
@@ -955,7 +955,7 @@ def push_on(reg, label: str, *, load: bool = False) -> None:
 
 
 def push_meta(label: str, *, load: bool = False) -> None:
-    """`Undo.push` on the meta controller's stack (a show, an analyzer preset);
+    """`Undo.push` on the meta controller's stack (a show, an analyzer loadable patch);
     none installed: a no-op."""
     if _meta is not None:
         _guarded("push", lambda u: u.push(label, load=load), on=_meta)

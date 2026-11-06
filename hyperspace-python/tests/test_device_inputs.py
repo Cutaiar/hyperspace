@@ -19,7 +19,7 @@ fake bus, so a desk can be missing at launch and plugged in later):
   hands feed `hand` and `hands` through `hands/device.py`;
 - **schemes from the registry**: the router's continuous schemes and their
   order, the learn's wants, the referee's row schemes;
-- **nothing old moves**: a pre-run `bindings.json` and every corpus preset
+- **nothing old moves**: a pre-run `bindings.json` and every corpus loadable patch
   load with no note and no dirt with two desks listed.
 """
 
@@ -38,9 +38,9 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.learn import Learn, blocked
 from hyperspace.library import Library
+from hyperspace.loadable import LoadedPatch
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
 from hyperspace.routing import SHIFT_PARAM, Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
@@ -149,7 +149,7 @@ def build(tmp_path, monkeypatch):
         chain = Analyzer(Analyser())
         control = Control(chain)
         audio = NS(chain=chain, on=False)
-        seed(tmp_path)                 # the corpus: the shipped presets, the party show
+        seed(tmp_path)                 # the corpus: the shipped loadable patches, the party show
         lib = Library(tmp_path)
         reg = build_registry(ViewState(), control, audio, lib.project)
         lib.attach(reg)
@@ -176,9 +176,9 @@ def build(tmp_path, monkeypatch):
         router.use(rig)
         learn.devices = rig
         rig.open_all()
-        presets = Presets(lib, reg, router)
+        loaded_patch = LoadedPatch(lib, reg, router)
         return NS(reg=reg, table=table, router=router, learn=learn, devices=rig, lib=lib,
-                  presets=presets, bus=bus, notes=notes, path=path, tracker=tracker)
+                  loaded_patch=loaded_patch, bus=bus, notes=notes, path=path, tracker=tracker)
     return make
 
 
@@ -276,8 +276,8 @@ def test_two_desks_open_each_with_its_profile_and_its_own_rows(build):
 
 def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     """The acceptance: Learn desk, a knob on the second controller — the
-    row is `cc@launch:…`, a preset-layer `abs` row with soft pickup and no
-    feedback, into the loaded preset (dirty, no file written) — and from
+    row is `cc@launch:…`, a patch-layer `abs` row with soft pickup and no
+    feedback, into the loaded patch (dirty, no file written) — and from
     then on that knob drives the param while the same CC on the APC40 does
     not, and the reverse. A note learns as a toggle; the same Learn
     completes from the APC40 too."""
@@ -295,7 +295,7 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
         "cc@launch:0:21", "abs", "preset", None, True)
     assert r.learn.learning is None and "learned view.inst_amp" in r.learn.last
-    assert lib.is_dirty("presets")                                 # into the preset…
+    assert lib.is_dirty("presets")                                 # into the loadable patch…
     assert (r.path.read_bytes() if r.path.exists() else None) == before   # …not the file
     amp = r.reg["view.inst_amp"]
     for v in (60, 40):                     # soft pickup: crossing the base catches it
@@ -312,7 +312,7 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     push(r, LAUNCH, note(40), note(40, 0))
     assert r.reg["view.points"].value != pts
     assert r.bus.ports[LAUNCH].sent == []          # still nothing sent to it
-    # the preset's desk carries the qualified rows through a save and a load
+    # the loadable patch's desk carries the qualified rows through a save and a load
     rows = [x.to_json() for x in t.desk()]
     assert {"source": "cc@launch:0:21", "target": "view.inst_amp", "op": "abs",
             "layer": "preset"} in rows
@@ -321,10 +321,10 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
 
 def test_the_latch_is_per_role(build):
     """SHIFT is the first role's latch (`desk.shift`): with the APC40 on
-    its global layer, the second desk is still on its preset layer — its
+    its global layer, the second desk is still on its patch layer — its
     rows act and a learn on it lands (D5 refuses only the APC40's). Its
-    layer is its own (`set_layer(…, role)`); a preset load drops every
-    role to the preset layer (D4); a press and its release on the second
+    layer is its own (`set_layer(…, role)`); a loadable patch load drops every
+    role to the patch layer (D4); a press and its release on the second
     desk belong to the layer that was up at the press (D12)."""
     r = build(entries())
     t, shift = r.table, r.reg[SHIFT_PARAM]
@@ -352,7 +352,7 @@ def test_the_latch_is_per_role(build):
     assert lines.value is True and faces.value is False
     push(r, LAUNCH, note(50, 0))
     assert lines.value is False and faces.value is False    # each release let its own go
-    t.drop_layer()                                   # a preset load: every desk back (D4)
+    t.drop_layer()                                   # a loadable patch load: every desk back (D4)
     assert t.layer_of("launch") == "preset" and t.layer_of("apc40") == "preset"
     assert shift.value is False
 
@@ -478,7 +478,7 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
     assert r.router.schemes()[-1] == "wand1"
     r.learn.arm("view.bright", "wand1")
     assert r.learn.accepts("wand1:tilt") and not r.learn.accepts("hand:left.x")
-    # a preset row on a scheme no device of this rig publishes is a dormant
+    # a patch row on a scheme no device of this rig publishes is a dormant
     # performer, not dropped (decision 11), and the page still offers it
     r.table.add(Binding("osc:3", "view.inst_amp", "push", 0.5))
     assert r.table.owner("view.inst_amp").source == "osc:3"
@@ -487,10 +487,10 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
 
 # ---------------------------------------------------------------- nothing old moves
 
-def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(build):
+def test_a_pre_run_bindings_json_and_every_loadable_load_quietly_with_two_desks(build):
     """The acceptance's other half: a `bindings.json` written before plan
     27 (today's factory file) loads with no note, no rewrite, nothing
-    said; every corpus preset then loads with no desk note and no dirt
+    said; every corpus loadable patch then loads with no desk note and no dirt
     with two desks and the pad listed; the APC40's rows are exactly the
     file's, unqualified."""
     text = routing.FACTORY_FILE.read_text()
@@ -503,9 +503,9 @@ def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(bu
     assert len(r.devices.get("apc40").io.bindings) == len(t.midi())
     lib = r.lib
     for name in lib.list("presets"):
-        lib.presets.load(name)
+        lib.loaded_patch.load(name)
         frame(r)
-        assert lib.presets.desk_notes == [], name
+        assert lib.loaded_patch.desk_notes == [], name
         assert not lib.is_dirty("presets"), name
     assert r.path.read_text() == text                # never rewritten
     assert not r.notes                               # the registry said nothing either
@@ -526,7 +526,7 @@ def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build)
     assert rows and all(not b.device and t.role_of(b) == "pad" for b in rows)
     lib = r.lib
     for name in lib.list("presets"):
-        lib.presets.load(name)
+        lib.loaded_patch.load(name)
         frame(r)
         assert not lib.is_dirty("presets"), name
     one, two = r.devices.get("pad").io, r.devices.get("p2").io

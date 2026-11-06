@@ -9,7 +9,7 @@ scene. Knob edits and transfer changes never move the scene selection.
 
 A scene is a band preset's document (plan 11, audit A1): the eleven files
 in hyperspace/scenes/band/*.json — code data, shipped with the build and
-never a library preset (2026-10-28: the library has one tier, the
+never a library loadable patch (2026-10-28: the library has one tier, the
 user's) — named here in combo order (SCENES) because the APC40's clip
 grid and every saved project address them by index. The combo, the grid
 and Reset re-tune whatever bands are loaded from the scene's values —
@@ -22,7 +22,7 @@ tells the combo when its name is a scene's. The scene files are read
 without a library (library.scene_doc), so the headless tests need none.
 
 The analyzer has N bands (plan 07), so the panel also adds, removes and
-moves them and applies a preset's layout. Every one of those changes the
+moves them and applies a loadable patch's layout. Every one of those changes the
 set of `band.*` ids the registry declares; `on_layout` is the hook
 build_registry installs to rebuild them, and every path that can change
 the layout — including a scene or an undo that carries one — calls it.
@@ -41,7 +41,7 @@ from .library import scene_doc, slug
 
 UNDO_S = 8.0
 BAND_GROUP = "band"
-# the scene files: code data beside this module, never a library preset
+# the scene files: code data beside this module, never a library loadable patch
 SCENES_DIR = Path(__file__).with_name("scenes") / BAND_GROUP
 # the scenes, in combo order — the index is what scene.select, the APC40's
 # clip grid and a project's values hold, so this list is append-only
@@ -76,7 +76,7 @@ class Control:
             self._layout_changed()
 
     def apply_layout(self, layout: dict) -> None:
-        """A preset's layout: applied before its values (plan 07 contract)."""
+        """A loadable patch's layout: applied before its values (plan 07 contract)."""
         self.clear_undo()        # the snapshot's bands may no longer exist
         self.chain.apply_layout(layout)
         self._layout_changed()
@@ -137,7 +137,7 @@ class Control:
 
     def scene_loaded(self, name: str) -> None:
         """The strip loaded a band preset: if it is a scene, the combo follows
-        (Library.on_load); a user preset that is not one leaves it."""
+        (Library.on_load); a user loadable patch that is not one leaves it."""
         if name in SCENES:
             self.clear_undo()
             self.scene = SCENES.index(name)
@@ -183,7 +183,7 @@ class Control:
             self._reset_all()
 
     def _reset_all(self) -> None:
-        # the snapshot carries the layout and the strip's current preset
+        # the snapshot carries the layout and the strip's current loadable patch
         # too, so an undo is whole
         lib = self.library
         snap = (self.chain.layout(), [replace(p) for p in self.chain.params],

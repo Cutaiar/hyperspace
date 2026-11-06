@@ -10,14 +10,14 @@ fader by hand to the middle and home, then a press on air, which loads off air (
 import sys
 
 from hyperspace import undo as undos
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 
 
 def say(panel, what: str) -> None:
     meta = panel.meta
     print(f"{what}: {panel.meta.words(meta.panel)} | on air deck "
           f"{1 if meta.on_air is meta.decks[0] else 2} | xfade {meta.mix.xfade:.3f} | "
-          f"deck 1 {meta.decks[0].presets.current} | deck 2 {meta.decks[1].presets.current}", file=sys.stderr)
+          f"deck 1 {meta.decks[0].loaded_patch.current} | deck 2 {meta.decks[1].loaded_patch.current}", file=sys.stderr)
 
 
 def script(d, panel):
@@ -28,13 +28,13 @@ def script(d, panel):
     yield from d.park()
     yield from d.wait(40)         # deck 1 on air, deck 2 empty
     say(panel, "start")
-    assert two.presets.current is None and meta.on_air is one
+    assert two.loaded_patch.current is None and meta.on_air is one
 
     yield from d.click("graph.copy", frames=10)
     yield from d.park()
     yield from d.wait(40)
     say(panel, "copied")
-    assert two.presets.current == one.presets.current and meta.on_air is one
+    assert two.loaded_patch.current == one.loaded_patch.current and meta.on_air is one
 
     yield from d.click("graph.deck", frames=10)
     yield from d.park()
@@ -42,10 +42,10 @@ def script(d, panel):
     say(panel, "the panel on deck 2")
     assert meta.panel is two
 
-    panel.library.load(PRESETS, "party-trip")
+    panel.library.load(LOADABLE, "party-trip")
     yield from d.wait(60)         # deck 2 is another look; on air has not moved
     say(panel, "loaded off air")
-    assert two.presets.current != one.presets.current
+    assert two.loaded_patch.current != one.loaded_patch.current
 
     yield from d.click("graph.fade", frames=10)
     yield from d.park()
@@ -67,19 +67,19 @@ def script(d, panel):
     say(panel, "home")
     assert meta.panel is one and meta.on_air is one
 
-    on_air, off_air = one.presets.current, two.presets.current
+    on_air, off_air = one.loaded_patch.current, two.loaded_patch.current
     one.reg["preset.next"].fire()     # the press a pad or a key makes, from the deck on air
     yield from d.wait(40)
     say(panel, "a press on air")
     print(f"status line: {panel.library.status}", file=sys.stderr)
-    assert one.presets.current == on_air and two.presets.current != off_air
+    assert one.loaded_patch.current == on_air and two.loaded_patch.current != off_air
     assert "loaded off air on deck 2" in panel.library.status
     assert "⌘Z" not in panel.library.status      # the panel is on air: ⌘Z does not reach it
 
-    held = one.reg.snapshot(part="performance")
+    held = one.reg.snapshot(part="patch")
     panel.reg["edit.undo"].fire()     # a mis-pressed pad and ⌘Z: the latch (row 753)
     yield from d.wait(10)
     at = undos.here()
     print(f"status line: {at.status}", file=sys.stderr)
     assert at.status.startswith("nothing to undo here yet")
-    assert one.reg.snapshot(part="performance") == held
+    assert one.reg.snapshot(part="patch") == held

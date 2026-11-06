@@ -31,7 +31,7 @@ class Clock:
 def fake(tmp_path):
     clock = Clock()
     wd = Watchdog(tmp_path / "stall.log", clock=clock, wall=lambda: 1_790_000_000.0,
-                  preset=lambda: "TUMBLE")
+                  loadable=lambda: "TUMBLE")
     assert wd.open()           # the file, without the thread: check() is driven by hand
     yield wd, clock
     wd.close()

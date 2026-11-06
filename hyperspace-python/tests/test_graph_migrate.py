@@ -1,4 +1,4 @@
-"""Plan 33 M: old presets as wires (graphmigrate). Row 394: one way, on
+"""Plan 33 M: old loadable patches as wires (graphmigrate). Row 394: one way, on
 load — a save is always `/6`, so nothing writes the wires back as `/4`
 values any more."""
 
@@ -15,16 +15,16 @@ import pytest
 from conftest import CORPUS
 from test_plan31_wiring import make_app
 
-from hyperspace import fx, preset
+from hyperspace import fx, loadable
 from hyperspace import graph as G
 from hyperspace import graphmigrate as M
 from hyperspace.library import LibraryError
 
 ROOT = Path(__file__).parent.parent / "hyperspace"
-# plan 36 T3: the corpus presets' sources (the corpus files are their `/7`)
+# plan 36 T3: the corpus loadable patches' sources (the corpus files are their `/7`)
 SOURCES = Path(__file__).parent / "fixtures" / "factory-sources" / "presets"
 FILES = sorted(SOURCES.glob("*.json"))
-# the presets written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
+# the loadable patches written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
 # is the free graph's own: nothing to migrate, nothing `/4` can say; a `/6`
 # one, plan 35 T3's, the wired frame's)
 FIXTURES = sorted(p for p in [*SOURCES.glob("*.json"),
@@ -65,7 +65,7 @@ def wires_of(section: dict) -> set[tuple[str, str]]:
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
-def test_every_library_preset_migrates_without_a_note(path):
+def test_every_library_loadable_migrates_without_a_note(path):
     doc = load(path)
     section, notes = M.to_free(doc, SPECS)
     assert notes == []
@@ -75,9 +75,9 @@ def test_every_library_preset_migrates_without_a_note(path):
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
-def test_no_library_preset_routes_an_effect_it_leaves_out(path):
-    """The owner's reading (row 346): no preset routes an off effect. A
-    failure is a preset to look at, not a test to loosen."""
+def test_no_library_loadable_routes_an_effect_it_leaves_out(path):
+    """The owner's reading (row 346): no loadable patch routes an off effect. A
+    failure is a loadable patch to look at, not a test to loosen."""
     doc = load(path)
     section, _ = M.to_free(doc, SPECS)
     frame, faces = runs(section)
@@ -198,7 +198,7 @@ def test_a_route_onto_only_the_backdrop_takes_the_first_switch():
 
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_the_migrated_runs_are_the_old_stacks(path):
-    """Every preset from before plan 33: the runs its section is given are
+    """Every loadable patch from before plan 33: the runs its section is given are
     the ones the old stack ran from its values (orders, targets) — the
     migration's half of what `legacy_values` checked both ways until row
     394 retired the way back."""
@@ -219,14 +219,14 @@ def test_a_branch_saves_as_v6_and_reloads(tmp_path):
     doc = {"schema": "hyperspace.preset/2", "name": "t", "graph": BRANCH, "values": {}}
     assert G.read_graph(copy.deepcopy(BRANCH)).to_json() == BRANCH
     app = make_app(tmp_path)
-    assert app.presets.load_doc(copy.deepcopy(doc)) == []
-    saved = app.presets.document("t")
-    wired, _ = M.seven(doc, app.presets.graph.specs())
+    assert app.loaded_patch.load_doc(copy.deepcopy(doc)) == []
+    saved = app.loaded_patch.document("t")
+    wired, _ = M.seven(doc, app.loaded_patch.graph.specs())
     assert saved["schema"] == M.SAVE_SCHEMA
     assert saved["graph"] == G.read_graph(wired["graph"]).to_json()     # (plan 36 T3: hands)
     assert saved["graph"][G.FRAME_KEY] == G.WIRED_FRAME
-    assert app.presets.load_doc(copy.deepcopy(saved)) == []
-    assert app.presets.document("t") == saved                 # and reloads as it saved
+    assert app.loaded_patch.load_doc(copy.deepcopy(saved)) == []
+    assert app.loaded_patch.document("t") == saved                 # and reloads as it saved
 
 
 def test_v6_is_refused_by_the_ladder_below(tmp_path):
@@ -234,21 +234,21 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     All outputs) is refused, values and all, by a plan 33/34 build's ladder
     (2 … 5) in its own words."""
     app = make_app(tmp_path)
-    app.presets.load_doc({"schema": "hyperspace.preset/6", "name": "six", "values": {},
+    app.loaded_patch.load_doc({"schema": "hyperspace.preset/6", "name": "six", "values": {},
                           "graph": {"frame": "wired", "nodes": [],
                                     "wires": [{"from": "channel.a",
                                                "to": "output.all.image"}]}})
-    app.presets.save_as("six")
+    app.loaded_patch.save_as("six")
     lib = app.lib
     assert lib.read("presets", "six")["schema"] == M.SAVE_SCHEMA
     kinds = lib._kinds
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (plan 40 T2: /8; plan 43 C2: /9)
     try:
         kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
             lib.read("presets", "six")
     finally:
-        kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
+        kinds["presets"] = replace(kinds["presets"], versions=loadable.VERSIONS)
 
 
 def test_an_empty_run_is_written_as_frame_to_fx():
@@ -303,18 +303,18 @@ def _values_of(doc: dict) -> dict:
 # and the look-back's `holds` are the capture wire now.
 
 TESTS = Path(__file__).parent
-PRESET_FIXTURES = sorted([*(TESTS / "fixtures" / "presets").glob("*.json"),
+LOADABLE_FIXTURES = sorted([*(TESTS / "fixtures" / "presets").glob("*.json"),
                           *(TESTS / "fixtures" / "merge-31-32").glob("*.json")])
-# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
-CORPUS_PRESETS = sorted((CORPUS / "presets").glob("*.json"))
+# the corpus: the loadable patches the build once shipped (tests/corpus/presets, one tier)
+CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
 # a name that is only ever an old id (V2): `ghost[.n]`, `readout[.n]`,
 # `history`, `media.<c>` (`hands` is the geometry now, not the old layer)
 _OLD_ONLY = r"ghost(\.[0-9]+)?|readout(\.[0-9]+)?|history|media\.[a-h]"
 
 
 def loaded(tmp_path: Path, path: Path):
-    """`path` loaded as the rig loads it — a corpus preset by name (the
-    app is seeded with the corpus), a fixture copied in as a user's preset
+    """`path` loaded as the rig loads it — a corpus loadable patch by name (the
+    app is seeded with the corpus), a fixture copied in as a user's loadable patch
     — on the app's presets: (the graph section's spec, its free section,
     the load's notes)."""
     if path.parent != CORPUS / "presets":
@@ -322,8 +322,8 @@ def loaded(tmp_path: Path, path: Path):
         shutil.copyfile(path, tmp_path / "presets" / path.name)
     app = make_app(tmp_path)
     app.lib.load("presets", path.stem)
-    gs = app.presets.graph
-    return gs.spec, gs.free_doc(), list(app.presets.notes)
+    gs = app.loaded_patch.graph
+    return gs.spec, gs.free_doc(), list(app.loaded_patch.notes)
 
 
 def old_ends(spec: G.GraphSpec) -> list[str]:
@@ -343,10 +343,10 @@ def old_ends(spec: G.GraphSpec) -> list[str]:
     return out
 
 
-@pytest.mark.parametrize("path", [*CORPUS_PRESETS, *PRESET_FIXTURES],
+@pytest.mark.parametrize("path", [*CORPUS_LOADABLES, *LOADABLE_FIXTURES],
                          ids=lambda p: f"{p.parent.name}/{p.stem}")
 def test_every_section_loads_as_a_wired_frame(tmp_path, path):
-    """Every corpus preset, every fixture — and so every one of the byte
+    """Every corpus loadable patch, every fixture — and so every one of the byte
     test's 38 sources — lands `spec.wired`, in the new ids, with no graph
     note (a refused wire, an old id), no `into` or `holds` left in an entry
     and no retired value left in the registry's way."""
@@ -460,9 +460,9 @@ def test_a_driven_backdrop_history_is_dropped_with_a_note(how):
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
-def test_no_library_preset_drives_backdrop_history(path):
-    """Row 381: no library preset drives `backdrop.history` (a route on it
-    is dropped with a note), so retiring it costs no preset a look."""
+def test_no_library_loadable_drives_backdrop_history(path):
+    """Row 381: no library loadable patch drives `backdrop.history` (a route on it
+    is dropped with a note), so retiring it costs no loadable patch a look."""
     assert "backdrop.history" in M.RETIRED
     assert "backdrop.history" not in M.targets(load(path))
     out, notes = M.migrate(load(path), SPECS)

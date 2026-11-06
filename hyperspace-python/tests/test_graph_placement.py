@@ -1,4 +1,4 @@
-"""Plan 30 D1: placing an effect on any image edge from the preset.
+"""Plan 30 D1: placing an effect on any image edge from the loadable patch.
 
 Plan 36 T3 (W3): a placement is an old section's word only — the one-way
 migration writes it as the wires it stood for (`graphmigrate.placed_wires`)
@@ -7,7 +7,7 @@ and the builder places nothing. These tests read old sections, migrate them
 the builder placed on each output's state) and check the pictures and the
 nodes the wires build.
 
-A preset's `graph` section may say where an effect node sits:
+A loadable patch's `graph` section may say where an effect node sits:
 `{"kind": "effect", "file": "palette", "after": "hands"}` — on the hands'
 layer, every consumer of it reading the effect — or `"into":
 "output.2"` — on that output's picture alone. A placed effect is not in
@@ -16,7 +16,7 @@ vocabulary, both keys, a loop) is a note and the default placement; one
 on a node the built graph lacks this frame is dormant, said in words.
 
 The pure half first (the JSON, the vocabulary, the graph's shape, the
-words), then the preset loads over a scratch library, then the GL half:
+words), then the loadable patch loads over a scratch library, then the GL half:
 the hands fold and the shape does not, one output folds, the history
 captures the folded scene. The fixtures' pictures are
 `tests/test_golden_frames.py`'s.
@@ -31,19 +31,19 @@ from pathlib import Path
 import pytest
 from conftest import CORPUS
 from test_graph_json import Stub
-from test_presets import boot, put
+from test_loadable import boot, put
 from wiredframe import Shows, Thru, graph, wire_switches
 
 from hyperspace import graph as G
 from hyperspace import graphmigrate as M
-from hyperspace import preset
+from hyperspace import loadable
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.outputs import Switches, View
 
 S = Switches
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
-# the corpus presets' sources (plan 36 T3: the corpus files are their `/7`)
+# the corpus loadable patches' sources (plan 36 T3: the corpus files are their `/7`)
 SOURCES = Path(__file__).resolve().parent / "fixtures" / "factory-sources" / "presets"
 PLACED = ("palette-hands", "palette-glass", "acid-scene")
 RUN = ("warp", "acid", "acid.2", "palette", "palette.2")
@@ -51,7 +51,7 @@ FILES = {"warp", "acid", "palette", "kaleido"}
 
 
 def _run(placed=(), effects=RUN) -> tuple[str, ...]:
-    """The run a preset's wires give these effects (plan 33 R: the
+    """The run a loadable patch's wires give these effects (plan 33 R: the
     migration's, every effect not placed, in the order given)."""
     names = {e.name for e in placed}
     return tuple(e for e in effects if e not in names)
@@ -113,7 +113,7 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
     `history`, `output.<n>`, an effect this build has), a name that is not
     a string, `into` a node whose inputs are geometry, an effect sitting
     on itself or a loop of them: each a note in the section's words, that
-    effect at the default placement. Through a preset load: the note on
+    effect at the default placement. Through a loadable patch load: the note on
     the strip ("; the default placement"), the rest of the graph landed,
     the section kept as the file had it."""
     teapot = ("palette after 'teapot' — this build places after scene, hands, hands.2 …, "
@@ -170,19 +170,19 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
     g = G.build_graph([View(S(), (10, 10))], wired_wiring(w), effects=RUN)
     assert wired_wiring(w).placed == () and g.notes == []
     assert _run_names(g, _end(g)) == list(RUN)
-    # through a preset load: the migration's note and the refusal said, the
+    # through a loadable patch load: the migration's note and the refusal said, the
     # rest landed, the entry kept on no wire (the `/7` reads no placement)
     rig = boot(tmp_path)
     stub = Stub()
-    rig.presets.graph.attach(stub)
+    rig.loaded_patch.graph.attach(stub)
     section = {"nodes": [{"kind": "hands", "into": "scene"},
                          {"kind": "effect", "file": "palette", "after": "teapot"}]}
     put(rig.home, "Odd", values={"view.bright": 3.0}, graph=section)
-    rig.lib.load(PRESETS, "Odd")
-    assert rig.presets.notes == [f"{teapot}: not wired (plan 36)"]
+    rig.lib.load(LOADABLE, "Odd")
+    assert rig.loaded_patch.notes == [f"{teapot}: not wired (plan 36)"]
     assert G.in_scene_hands(stub.wiring) == [1] and rig.reg["view.bright"].value == 3.0
-    saved = rig.presets.document("Odd")[preset.GRAPH_KEY]
-    assert saved == rig.presets.graph.free_doc()
+    saved = rig.loaded_patch.document("Odd")[loadable.GRAPH_KEY]
+    assert saved == rig.loaded_patch.graph.free_doc()
     assert {"kind": "effect", "file": "palette"} in saved["nodes"]
     assert not any(k in e for e in saved["nodes"] for k in G.PLACE_KEYS)
 
@@ -213,29 +213,29 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
             "acid-scene": (G.EffectAt("acid", 2, after="scene"),)}
     rig = boot(tmp_path)
     stub = Stub()
-    rig.presets.graph.attach(stub)
+    rig.loaded_patch.graph.attach(stub)
     for slug in PLACED:
         doc = _fixture(slug)
         assert G.read_graph(doc["graph"]).to_json() == doc["graph"]
         dst = rig.home / "presets" / f"{slug}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text((FIXTURES / f"{slug}.json").read_text())
-        missing = rig.lib.load(PRESETS, slug)
-        assert missing == [] and rig.presets.notes == [] and rig.presets.migrated, slug
+        missing = rig.lib.load(LOADABLE, slug)
+        assert missing == [] and rig.loaded_patch.notes == [] and rig.loaded_patch.migrated, slug
         assert stub.wiring.placed == () and stub.wiring.wired, slug
         (e,) = want[slug]
         assert any(w.dst == f"{e.name}.image" for w in stub.wiring.wires), slug
-        assert not rig.lib.is_dirty(PRESETS), slug
-        saved = rig.presets.document(slug)
-        assert not any(k in n for n in saved[preset.GRAPH_KEY]["nodes"] for k in G.PLACE_KEYS)
-        assert saved[preset.GRAPH_KEY] == rig.presets.graph.free_doc()     # (row 394)
-        line = json.dumps(saved[preset.GRAPH_KEY]["nodes"][0])
-        assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {line}' in preset.dumps(saved)
+        assert not rig.lib.is_dirty(LOADABLE), slug
+        saved = rig.loaded_patch.document(slug)
+        assert not any(k in n for n in saved[loadable.GRAPH_KEY]["nodes"] for k in G.PLACE_KEYS)
+        assert saved[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()     # (row 394)
+        line = json.dumps(saved[loadable.GRAPH_KEY]["nodes"][0])
+        assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {line}' in loadable.dumps(saved)
     assert rig.reg["fx.acid.2.on"].value and rig.reg["dream.on"].value
 
 
-def test_no_corpus_preset_places_an_effect_and_the_default_graph_is_identical():
-    """No corpus preset places an effect (nor its source carries a graph); with no
+def test_no_corpus_loadable_places_an_effect_and_the_default_graph_is_identical():
+    """No corpus loadable patch places an effect (nor its source carries a graph); with no
     placement the frame is D0's — every effect in every run (the through
     outputs' copies too, plan 35 T4), no placed node, the readout split as
     before, the pool two — and a wiring whose placements were all refused

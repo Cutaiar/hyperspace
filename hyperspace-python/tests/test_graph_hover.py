@@ -39,7 +39,7 @@ class Clock:
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
@@ -112,15 +112,15 @@ def test_the_tint_switch_is_off_by_default_and_on_the_head_last(rig, monkeypatch
     assert ui_graph.cable_tints(st, st["view"]) == {}
 
 
-def test_the_tint_switch_reaches_neither_the_preset_nor_the_show(rig):
+def test_the_tint_switch_reaches_neither_the_loadable_nor_the_show(rig):
     st = party(rig)
     lib = rig.lib
-    plain = json.loads(lib.presets.save_as("UNTINTED").read_text())
+    plain = json.loads(lib.loaded_patch.save_as("UNTINTED").read_text())
     lib.project.save("plain-show")
     show_plain = json.loads(lib.project.path.read_text())
     st["tint"] = True
     frame(rig.panel, "graph")
-    tinted = json.loads(lib.presets.save_as("TINTED").read_text())
+    tinted = json.loads(lib.loaded_patch.save_as("TINTED").read_text())
     lib.project.save("tinted-show")
     show_tinted = json.loads(lib.project.path.read_text())
     for doc in (plain, tinted, show_plain, show_tinted):

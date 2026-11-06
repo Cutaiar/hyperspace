@@ -1,9 +1,9 @@
 """Plan 36 T6 (W6, D4): the **preset only** head chip, on by default.
 
-On, the canvas draws the preset section's nodes, what is wired to them
+On, the canvas draws the loadable patch section's nodes, what is wired to them
 (less the controllers and the modulation), whatever feeds those, the
 windows and (2026-10-31) the eight media channels; off, today's canvas. A
-drawing choice only: the state outlives a preset load, and hiding a node
+drawing choice only: the state outlives a loadable patch load, and hiding a node
 lays nothing else out. A node the picker added this session stays drawn
 (`ui_graph.reveal_node`): never saved, forgotten when it is deleted."""
 
@@ -20,12 +20,12 @@ from hyperspace import graphview, ui_graph
 
 @pytest.fixture(autouse=True)
 def _lit(monkeypatch):
-    monkeypatch.setattr(ui_graph, "PRESET_ONLY", True)     # (the app's default)
+    monkeypatch.setattr(ui_graph, "PATCH_ONLY", True)     # (the app's default)
 
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
@@ -34,7 +34,7 @@ def drawn(st):
 
 
 def upstream(view, seeds):
-    """`seeds` and whatever feeds them, to full depth (what `preset_only`
+    """`seeds` and whatever feeds them, to full depth (what `patch_only`
     walks since 2026-10-31)."""
     feeds = {}
     for c in view.cables:
@@ -52,7 +52,7 @@ def upstream(view, seeds):
 def test_on_by_default_the_drawn_set_is_the_sections_and_what_it_reaches(rig):
     st = party(rig)
     view = st["view"]
-    assert st["preset_only"] is True
+    assert st["patch_only"] is True
     section = {f"render:{n}" for n in graphview.frame_names(view.spec)}
     assert section and section <= {n.id for n in view.nodes}
     near = set()
@@ -79,42 +79,42 @@ def test_off_is_todays_canvas_and_the_view_is_untouched(rig):
     cables = [c.id for c in view.cables]
     hidden = len(st["hide"])
     assert hidden
-    st["preset_only"] = False
+    st["patch_only"] = False
     frame(rig.panel, "graph")
     assert st["hide"] == frozenset()
     assert drawn(st) == {n.id for n in view.nodes if not n.idle}
     assert " hidden" not in ui_graph.head_line(st, view)
-    st["preset_only"] = True
+    st["patch_only"] = True
     frame(rig.panel, "graph")
     assert [c.id for c in view.cables] == cables and len(st["hide"]) == hidden
 
 
-def test_state_survives_a_preset_load(rig):
+def test_state_survives_a_loadable_load(rig):
     st = party(rig)
-    st["preset_only"] = False
+    st["patch_only"] = False
     rig.lib.load("presets", "party-trip")
     frame(rig.panel, "graph")
-    assert ui_graph._state(rig.panel)["preset_only"] is False
-    st["preset_only"] = True
+    assert ui_graph._state(rig.panel)["patch_only"] is False
+    st["patch_only"] = True
     rig.lib.load("presets", "party-trip")
     frame(rig.panel, "graph")
-    assert ui_graph._state(rig.panel)["preset_only"] is True
+    assert ui_graph._state(rig.panel)["patch_only"] is True
 
 
 def test_hiding_lays_nothing_out(rig):
     """The layout still runs over the whole view: toggling moves no node."""
     st = party(rig)
-    st["preset_only"] = False
+    st["patch_only"] = False
     frame(rig.panel, "graph")
     open_sat = dict(st["sat"])
-    st["preset_only"] = True
+    st["patch_only"] = True
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     assert {k: v for k, v in st["sat"].items() if k in open_sat} == open_sat
 
 
 def test_default_is_on():
-    assert ui_graph.PRESET_ONLY is True
+    assert ui_graph.PATCH_ONLY is True
 
 
 def test_a_routed_lfo_is_drawn_and_an_unrouted_one_is_hidden(rig):
@@ -126,7 +126,7 @@ def test_a_routed_lfo_is_drawn_and_an_unrouted_one_is_hidden(rig):
         view.nodes.append(graphview.VNode(f"lfo.{k}", "lfo", f"LFO {k}"))
         view.pins[f"out:lfo.{k}"] = (f"lfo.{k}", "out")
     view.cables.append(graphview.VCable("c.lfo9", "out:lfo.9", target))
-    keep = graphview.preset_only(view)
+    keep = graphview.patch_only(view)
     assert "lfo.9" in keep and "lfo.8" not in keep
 
 
@@ -146,12 +146,12 @@ def test_what_feeds_the_section_is_drawn_to_full_depth_downstream_one_hop(rig):
                     graphview.VCable("c.2", "out:mod.9", target),
                     graphview.VCable("c.3", "out:dev.x", target),
                     graphview.VCable("c.4", "out:dev.x", "in:lfo.7")]
-    keep = graphview.preset_only(view)
+    keep = graphview.patch_only(view)
     assert {"lfo.8", "mod.9", "dev.x"} <= keep
     assert "lfo.7" not in keep
 
 
-def test_the_channels_are_always_in_the_preset_only_view(rig):
+def test_the_channels_are_always_in_the_loadable_only_view(rig):
     """The owner, after the show of 2026-10-30: with no channel wired to
     the faces "you can't actually spawn one, it just doesn't exist". The
     eight channels are drawn like the outputs, wired or not, filled or
@@ -160,11 +160,11 @@ def test_the_channels_are_always_in_the_preset_only_view(rig):
     view = st["view"]
     channels = {n.id for n in view.nodes if n.kind == "channel"}
     assert channels == {f"render:channel.{c}" for c in "abcdefgh"}
-    assert channels <= graphview.preset_only(view)
+    assert channels <= graphview.patch_only(view)
     assert not channels & st["hide"]
     unwired = {n.id for n in view.nodes if n.kind == "channel" and not n.wires}
     assert unwired, "party-trip leaves channels unwired"
-    assert unwired <= graphview.preset_only(view)
+    assert unwired <= graphview.patch_only(view)
 
 
 def test_picking_a_channel_selects_it_and_makes_nothing(rig):
@@ -189,17 +189,17 @@ def test_picking_a_channel_selects_it_and_makes_nothing(rig):
     assert {x.id for x in st["view"].nodes} == nodes
     assert [c.id for c in st["view"].cables] == cables
     assert len(rig.router.table.bindings) == rows
-    assert rig.lib.presets.layout[nid] == [300, 200]
+    assert rig.lib.loaded_patch.layout[nid] == [300, 200]
     # a channel the layout already places keeps its place
     ui_graph.pick_channel(rig.panel, "b", at=(50.0, 50.0))
-    assert rig.lib.presets.layout[nid] == [300, 200]
+    assert rig.lib.loaded_patch.layout[nid] == [300, 200]
 
 
 def test_a_picker_added_node_is_drawn_before_it_has_a_cable(rig):
     """A modifier from the picker has no cable yet, so preset only would
     hide it — and a node that is not drawn cannot be cabled. It stays
     drawn (`reveal_node`) until it is deleted; the reveal is the page's,
-    never the preset's."""
+    never the loadable patch's."""
     st = party(rig)
     m = ui_graph.add_modifier(rig.panel, "threshold", at=(100.0, 100.0))
     frame(rig.panel, "graph")
@@ -208,8 +208,8 @@ def test_a_picker_added_node_is_drawn_before_it_has_a_cable(rig):
     n = st["view"].node(m.id)
     assert n is not None and not n.wires
     assert m.id in st["revealed"] and m.id in drawn(st) and m.id not in st["hide"]
-    assert m.id not in graphview.preset_only(st["view"])     # the reveal alone draws it
-    saved = rig.lib.presets.save_as("fresh-node").read_text()
+    assert m.id not in graphview.patch_only(st["view"])     # the reveal alone draws it
+    saved = rig.lib.loaded_patch.save_as("fresh-node").read_text()
     assert m.id in saved and "revealed" not in saved
     assert not isinstance(ui_graph.remove_node(rig.panel, m.id), graphview.Refusal)
     assert m.id not in st["revealed"]

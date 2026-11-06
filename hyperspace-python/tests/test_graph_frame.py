@@ -231,7 +231,7 @@ def recorded():
 def test_the_wired_frame_builds_what_default_graph_builds(loader, recorded, key):
     """Every factory preset and fixture in the eight states (eight views at
     once, as the golden rig draws them), each WIRED variant over its
-    presets and states, the window alone and the clouded rigs: the
+    loadable patches and states, the window alone and the clouded rigs: the
     document through the load's migration, then `wired_section` and each
     view's `output_wires`, built by `build_graph` with every mute on — node
     for node the frame `default_graph` built from the switches, as recorded
@@ -390,11 +390,11 @@ def _px(f) -> np.ndarray:
 
 
 def _land(rig, section: dict) -> None:
-    """`section` landed through the preset's graph (plan 36 T3: its effects
+    """`section` landed through the loadable patch's graph (plan 36 T3: its effects
     exist only so — `FxState.hold`), which hands the renderer its wiring."""
     spec = G.read_graph(section, effects=set(rig.fx.files))
     assert spec.notes == (), spec.notes
-    rig.presets.graph.land(spec, spec.to_json())
+    rig.loaded_patch.graph.land(spec, spec.to_json())
     assert rig.renderer.wiring == spec.wiring()
 
 
@@ -611,7 +611,7 @@ def test_the_signature_follows_what_the_sinks_read():
 
 
 def test_the_proof_covers_one_window_and_the_clouds():
-    """The window's own frame alone (`SOLO`, and `SOLO_FX` for a preset
+    """The window's own frame alone (`SOLO`, and `SOLO_FX` for a loadable patch
     with an effect on) and the recorded point cloud (`CLOUDED`) are cases
     of the proof too, recorded from `default_graph`."""
     keys = set(_tool().signature_keys())

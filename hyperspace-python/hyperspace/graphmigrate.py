@@ -1,15 +1,15 @@
-"""Old presets as wires, and wires back as old values (plan 33 M).
+"""Old loadable patches as wires, and wires back as old values (plan 33 M).
 
 Until plan 33 an effect's place in the picture was a number: `fx.<n>.order`
 in the stack, `fx.<n>.target` (the frame or the faces), and the faces' and
 backdrop's channel were `view.media` / `backdrop.channel`. The free graph
-says all of that as wires, so a preset written before it has to be read as
+says all of that as wires, so a loadable patch written before it has to be read as
 wires (`to_free`, `migrate`). A save is always `hyperspace.preset/6`
 (`WIRED_SCHEMA`, row 394, the owner's 2026-10-25 decision: both Macs run
 the same build), so nothing here writes a graph back in older words —
 the migration is one way, on load.
 
-Pure data: it reads dicts and `graph.GraphSpec`, touches no params, preset
+Pure data: it reads dicts and `graph.GraphSpec`, touches no params, loadable patch
 or media module, and nothing here draws.
 
 Rows 346 and 350 are what it keeps and what it makes:
@@ -17,7 +17,7 @@ Rows 346 and 350 are what it keeps and what it makes:
 - Only the effects that are on with mix > 0 join a run (row 346): the owner
   reads the library as using no effect that is switched off, so an off
   effect drew nothing and leaving it out changes no picture. One left out
-  while something in the preset drives its params is said in a load note.
+  while something in the loadable patch drives its params is said in a load note.
 - `migrate(doc, specs)` is the whole-document entry point (the section, the
   values with the retired ones dropped, any switch's select, the retargeted
   rows, the notes); `to_free(doc, specs)` is its section and notes alone.
@@ -67,7 +67,7 @@ SIX_SCHEMA = "hyperspace.preset/6"
 WIRED_SCHEMA = "hyperspace.preset/7"
 SEVEN = 7
 # plan 40 T2 (D4, D7): `/8` is `/7` plus the GRAPH page's groups (`groups`,
-# preset.GROUPS_KEY) — written only by a preset that holds one, so a preset
+# loadable.GROUPS_KEY) — written only by a loadable patch that holds one, so a loadable patch
 # with none wrote `/7` byte for byte, until plan 43 C2 made every save `/9`
 GROUPS_SCHEMA = "hyperspace.preset/8"
 GROUPS_KEY = "groups"
@@ -80,8 +80,8 @@ EYE_SCHEMA = "hyperspace.preset/9"
 NINE = 9
 # plan 44 D3 (rows 611–625): `/10` is `/9` with the look made whole — the
 # hands' look (`ghost.*`, but `ghost.mirror`) and the clouds' (`cloud.*`)
-# in `values`, the bus cuts in `bus` (`BUS_KEY`: `graph.RigWires`'s JSON,
-# the cables from All outputs into each window this preset cuts), no
+# in `values`, the bus cuts in `bus` (`BUS_KEY`: `graph.BusCuts`'s JSON,
+# the cables from All outputs into each window this loadable patch cuts), no
 # `modules` labels and no `desk_template`. What every save writes; `/9`
 # and older are read through `ten`, the open show's look filled in
 LOOK_SCHEMA = "hyperspace.preset/10"
@@ -91,16 +91,16 @@ BUS_KEY = "bus"
 # the keys `/10` retired: the module labels (row 540, the owner, 2026-11-03)
 # and the desk templates (plan 24 C3: neither library held one)
 TEN_RETIRED = ("modules", "desk_template")
-# the look a /2 show held that /10 makes the preset's (review of #351: one
+# the look a /2 show held that /10 makes the loadable patch's (review of #351: one
 # id set, one place — `library.show_look` reads it out of an old show, `ten`
-# hands it to an old preset): the hands' and the clouds' groups, less the
-# room's mirror (`params.SESSION_KEYS`)
+# hands it to an old loadable patch): the hands' and the clouds' groups, less the
+# room's mirror (`params.SHARED_META_KEYS`)
 LOOK_GROUPS = ("ghost", "cloud")
 
 
 def is_look_id(pid: Any) -> bool:
     """Whether `pid` is one of the look ids `/10` moved from the show into
-    the preset (`LOOK_GROUPS`, but `ghost[.n].mirror`)."""
+    the loadable patch (`LOOK_GROUPS`, but `ghost[.n].mirror`)."""
     return (isinstance(pid, str) and pid.partition(".")[0] in LOOK_GROUPS
             and pid.rpartition(".")[2] != "mirror")
 EYE_IDS = ("eye.fov", "eye.distance")
@@ -117,7 +117,7 @@ def groups_of(doc: Any) -> list:
 
 def group_number(gid: Any) -> int:
     """`group.3` → 3; 0 for anything else (plan 40: a group's id, read by
-    the preset's load and by GRAPH's Group — the one rule, kept here, a
+    the loadable patch's load and by GRAPH's Group — the one rule, kept here, a
     leaf both import)."""
     head, dot, n = gid.partition(".") if isinstance(gid, str) else ("", "", "")
     return int(n) if head == "group" and dot and n.isdecimal() and int(n) >= 1 else 0
@@ -136,13 +136,13 @@ DEFAULT_ORDER, DEFAULT_MIX = 50, 1.0
 Specs = dict[str, tuple[int, float]]   # effect name -> its file's (@order, @mix)
 
 _RETIRED_FX = re.compile(r"fx\..+\.(order|target)")
-# the load note for an effect left out of a run while the preset drives it
+# the load note for an effect left out of a run while the loadable patch drives it
 LEFT_OUT = "{name} was off, so it is not in the run: wire it in on GRAPH to use it"
 
 
 def left_out_note(name: str) -> str:
     """The load note for effect `name` left out of a run (row 346) while
-    something in the preset drives one of its params."""
+    something in the loadable patch drives one of its params."""
     return LEFT_OUT.format(name=name)
 
 
@@ -192,7 +192,7 @@ def targets(doc: dict, desk: list | None = None) -> frozenset[str]:
     A modifier's output and a sequencer step drive through a route (their
     lane is the route's source), so the routes carry them. `desk`: rows the
     document's own `desk` stands over — a desk template's, which the load
-    expands (`preset.Presets.load_doc`) — counted as its desk rows."""
+    expands (`loadable.LoadedPatch.load_doc`) — counted as its desk rows."""
     out: set[str] = set()
     for row in (*_rows(doc, "routes"), *_rows(doc, "desk"), *_dicts(desk)):
         if isinstance(row.get("target"), str):
@@ -354,7 +354,7 @@ def _explicit_placements(spec: G.GraphSpec, nodes: list, wires: list) -> tuple[l
     "after" | "into": where}` — and that wire dropped. The owner,
     2026-10-24: a section with a run shortens no wire (`GraphSpec.wiring`),
     so the run `migrate` adds would otherwise turn an old placement into an
-    unreached branch; written out, the old preset draws as it did."""
+    unreached branch; written out, the old loadable patch draws as it did."""
     own = {e.name for e in spec.effects if e.placed}
     synth = [e for e in spec.wiring().placed if e.name not in own]
     if not synth:
@@ -412,7 +412,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     today's frame for the default switches into All outputs, the capture
     wire saying `backdrop.history` and the look-back's `holds`) — every
     readable section comes out `"frame": "wired"`, an empty one (or none)
-    the default frame. A section already wired is the preset's own and is
+    the default frame. A section already wired is the loadable patch's own and is
     kept as it is; an unreadable one is left as it is (the loader says so).
     A row that drives `backdrop.history` is dropped with a note
     (`DRIVEN_RETIRED_NOTE`): the capture is a wire, nothing to drive.
@@ -459,7 +459,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     except G.GraphError:
         spec = None                     # the loader says so and takes the default graph
     if spec is None or spec.wired:
-        # (plan 35: a wired frame is the preset's own words — nothing of
+        # (plan 35: a wired frame is the loadable patch's own words — nothing of
         # plan 33's to add, nothing to rename; plan 36 T2: but each hidden
         # edge its builder read is written as the wire it stood for)
         for pid in [p for p in values if retired(p)]:
@@ -503,7 +503,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
         if has:
             continue
         if old in driven:
-            # (row 350, R19: a preset that drives a channel choice loads
+            # (row 350, R19: a loadable patch that drives a channel choice loads
             # as a switch and saves as /5, which /4 cannot say)
             n = _next_switch(nodes)
             sw = G.SwitchAt(n).name
@@ -538,7 +538,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
 
 def to_free(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     """The section half of `migrate`: `doc`'s `graph` section with its runs and channel wires added
-    (unchanged when it already has them; `{}` for a preset with no section
+    (unchanged when it already has them; `{}` for a loadable patch with no section
     and nothing to add), and the load notes. `migrate` is the rest of the
     document: the values and rows this changes.
 
@@ -551,7 +551,7 @@ def to_free(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     return (section if isinstance(section, dict) else {}), notes
 
 
-# ---------------------------------------------------------------- a rig's run, as a load lands it
+# ---------------------------------------------------------------- a test rig's run, as a load lands it
 
 def specs_of(fx: Any) -> Specs:
     """An `FxState`'s effect instances as `Specs` — each one's file
@@ -563,8 +563,8 @@ def specs_of(fx: Any) -> Specs:
 
 
 def state_values(fx: Any) -> dict:
-    """An `FxState`'s settings as preset values (`fx.on`, `fx.mix`, every
-    `fx.<n>.<key>`): what a rig that set them by hand hands `wiring_for`."""
+    """An `FxState`'s settings as loadable patch values (`fx.on`, `fx.mix`, every
+    `fx.<n>.<key>`): what a meta controller that set them by hand hands `wiring_for`."""
     out: dict[str, Any] = {"fx.on": bool(getattr(fx, "on", True)),
                            "fx.mix": float(getattr(fx, "mix", 1.0))}
     for name, v in sorted((getattr(fx, "values", None) or {}).items()):
@@ -574,11 +574,11 @@ def state_values(fx: Any) -> dict:
 
 def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = None,
                *, wired: bool = True) -> G.Wiring:
-    """The wiring a preset's `values` (and its `section`, None for none)
-    land as — `migrate`, the path a preset load takes, read back
-    (`read_graph`). Plan 33 R23: with the order-built stack gone a rig, a
+    """The wiring a loadable patch's `values` (and its `section`, None for none)
+    land as — `migrate`, the path a loadable patch load takes, read back
+    (`read_graph`). Plan 33 R23: with the order-built stack gone a meta controller, a
     tool or a test that switches effects on by hand gets its run here, as
-    an old preset with those values would: the effects on, by `order` (the
+    an old loadable patch with those values would: the effects on, by `order` (the
     file's `@order` where the values name none), a faces-aimed one
     (`target` 1) onto the faces.
 
@@ -601,7 +601,7 @@ def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = 
 def wiring_of(fx: Any) -> G.Wiring:
     """`wiring_for` an `FxState` as it stands (`state_values`, `specs_of`):
     the run its switched-on effects make, by their files' `@order` — the
-    one line a rig that sets effects by hand needs (R23). Plan 36 T3: wired
+    one line a meta controller that sets effects by hand needs (R23). Plan 36 T3: wired
     as a load wires it (`wired_wiring`), what a renderer takes."""
     return wiring_for(state_values(fx), specs_of(fx))
 
@@ -769,7 +769,7 @@ def renamed_canvas_id(nid: str) -> str:
 
 
 def renamed_layout(layout: dict[str, Any]) -> dict[str, Any]:
-    """A GRAPH layout ({node id: [x, y]}, a preset's or a show's) in the
+    """A GRAPH layout ({node id: [x, y]}, a loadable patch's or a show's) in the
     wired frame's ids (R14): one that names an id only the old canvas had
     (`_OLD_CANVAS`) is renamed throughout (`renamed_canvas_id`), the
     first position kept where two old ids land on one; any other is as it
@@ -827,7 +827,7 @@ def with_output_wires(section: dict, n: int, shows: Shows) -> dict:
     the read refuses is kept after them as it stands (plan 35 T3: refused
     again at the load, it is said again, as plan 28 N4 says every refused
     wire). Plan 36 T2: then the hidden edges the new wires need
-    (`drawn_edges`: a window's depth for `laid: depth`) — the golden rig's
+    (`drawn_edges`: a window's depth for `laid: depth`) — the golden meta controller's
     word for a retired switch state over a section."""
     return drawn_edges(_output_wires_into(section, n, shows))
 
@@ -860,8 +860,8 @@ def _output_wires_into(section: dict, n: int, shows: Shows) -> dict:
 # the pattern, the look-back the scene's cover, a layer and a guide their
 # hands node, a composite and an output the scene's depth for the hands'
 # `laid: depth` — are ports now, and a frame from before says each as the
-# wire it stood for (`drawn_edges`), so it draws what it drew. (The rig's
-# own edge, a cloud in the scene, is the rig's wire: `graph.cloud_wire`.)
+# wire it stood for (`drawn_edges`), so it draws what it drew. (The meta controller's
+# own edge, a cloud in the scene, is the meta controller's wire: `graph.cloud_wire`.)
 
 DEPTH_PIN = "scene.depth"
 COVER_PIN = "scene.cover"
@@ -1041,7 +1041,7 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
 
 
 def section_of(wiring: G.Wiring) -> dict:
-    """An unwired `Wiring` (no preset's graph reached it: the app before its
+    """An unwired `Wiring` (no loadable patch's graph reached it: the app before its
     first load, a test rig's, a tool's — `wiring_for`'s run) said as the
     section before the wired frame that reads as it, in the old ids (plan
     35 T4): its hands entries, `laid`, `holds`, its placed effects and the
@@ -1083,14 +1083,14 @@ def section_of(wiring: G.Wiring) -> dict:
 
 
 def wired_of(wiring: G.Wiring, *, placements: bool = True, look: str = "off") -> dict:
-    """An unwired `Wiring` (the words before the wired frame: a rig's, a
+    """An unwired `Wiring` (the words before the wired frame: a meta controller's, a
     tool's, a test's) as the wired frame the one-way migration writes for
     it (plan 35 T4): `section_of` it, renamed and written as a wired frame
     (`wired_section`), its look-back recording the backdrop where
     `backdrop_history` says, and (plan 36 T3) its placements as the wires
     they stood for (`placed_wires`). `Wiring()` is the factory look,
     `frame_wires(read_graph({}))` — today's frame, what a section-less old
-    preset migrates to. `placements` False leaves D1's entries as they are
+    loadable patch migrates to. `placements` False leaves D1's entries as they are
     (the step before `placed_wires`: a test rig lays the retired switch
     states on first, as the builder placed on each output's state).
     Plan 36 T4: then the look-back split as `look` says the old values had
@@ -1228,7 +1228,7 @@ def placed_wires(section: Any, files: set[str] | None = None,
 # ---------------------------------------------------------------- the one-way migration to /7 (plan 36 T3)
 
 def schema_version(doc: Any) -> int | None:
-    """The `n` of a preset document's `hyperspace.preset/<n>`, else None."""
+    """The `n` of a loadable patch document's `hyperspace.preset/<n>`, else None."""
     schema = doc.get("schema") if isinstance(doc, dict) else None
     if not isinstance(schema, str):
         return None
@@ -1238,7 +1238,7 @@ def schema_version(doc: Any) -> int | None:
 
 def section_effects(section: Any) -> set[str]:
     """Every effect instance a wired `section` names — by an entry, a wire's
-    end, or a copy's `of` — the effects that exist in its preset (W3)."""
+    end, or a copy's `of` — the effects that exist in its loadable patch (W3)."""
     out: set[str] = set()
     if not isinstance(section, dict):
         return out
@@ -1264,13 +1264,13 @@ MIGRATED_NOTE = "{old} migrated to {new} (plan 36): every edge drawn as it ran �
 # ---------------------------------------------------------------- the one orbit camera (plan 43 C2)
 
 def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
-    """An older preset (before `/9`) as its `/9` reads it — pure, one way,
-    on load (`Presets.load_doc`) and so in tools/migrate_library.py's
+    """An older loadable patch (before `/9`) as its `/9` reads it — pure, one way,
+    on load (`LoadedPatch.load_doc`) and so in tools/migrate_library.py's
     resave: the eye written into `values` from `eye` (the open show's
     `session`, read out of an old show by `library.Project`; an id it lacks
     is left out, and the load fills it from the build's default), and the
     camera node's GRAPH position from `camera_at` (the old show's layout
-    entry, ``render:camera``) into the preset's `layout` where the file
+    entry, ``render:camera``) into the loadable patch's `layout` where the file
     places it nowhere. A value or a position the file already has stays;
     no pose is added (an old file keeps spinning: row 573). A `/9` and
     anything that is not a document come back as they are."""
@@ -1298,13 +1298,13 @@ def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
 
 
 def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
-    """An older preset (before `/10`) as its `/10` reads it (plan 44 D3) —
-    pure, one way, on load (`Presets.load_doc`, after `nine`) and so in
+    """An older loadable patch (before `/10`) as its `/10` reads it (plan 44 D3) —
+    pure, one way, on load (`LoadedPatch.load_doc`, after `nine`) and so in
     tools/migrate_library.py's resave: the hands' and the clouds' looks
     written into `values` from `look` (what the open show's `session` held,
     `library.Project.old_look`: an id the file already names stays, an id
     neither names takes the build's default at the load), the bus cuts into
-    `bus` from `cuts` (the open show's `rig`, a `graph.RigWires`; a file
+    `bus` from `cuts` (the open show's `rig`, a `graph.BusCuts`; a file
     that names its own keeps them), and the retired keys (`TEN_RETIRED`:
     the module labels, a desk template's name) dropped. A `/10` and
     anything that is not a document come back as they are."""
@@ -1326,7 +1326,7 @@ def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
         for pid, v in look.items():
             values.setdefault(pid, v)
         out["values"] = values
-    got = cuts.to_json() if isinstance(cuts, G.RigWires) else {}
+    got = cuts.to_json() if isinstance(cuts, G.BusCuts) else {}
     if got and BUS_KEY not in out:
         out[BUS_KEY] = got
     return out
@@ -1347,7 +1347,7 @@ OLD_MIX = 0.7                       # dream.mix's default, for a file that leave
 def look_of(values: dict | None) -> str:
     """What an old file's look-back drew (`LOOKS`), by its values: off
     without `dream.on`; with it, the dream too when `dream.mix` is above 0
-    (whether a worker is enabled is the config's, never the preset's), else
+    (whether a worker is enabled is the config's, never the loadable patch's), else
     the echoes alone."""
     vals = values or {}
     if vals.get("dream.on") is not True:
@@ -1671,7 +1671,7 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
 
 
 
-def through_wires(spec: G.GraphSpec, n: int, rig: G.RigWires | None = None) -> list[dict]:
+def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) -> list[dict]:
     """OUTPUT's "hands through the effects" on window `n` as the wires it
     names (plan 36 T1, the live edit — `output_wires` stays the migration's
     word for the retired switch): a `composite.k` (the lowest free
@@ -1697,8 +1697,8 @@ def through_wires(spec: G.GraphSpec, n: int, rig: G.RigWires | None = None) -> l
         head = _src_into(pictures, f"{head}.image")
     port = f"output.{n}."
     own = _src_into(wires, port + "image")
-    alone = own == G.GROUND or (own is None and rig is not None
-                                and not rig.has(G.bus_wire(n, "image")))
+    alone = own == G.GROUND or (own is None and bus_cuts is not None
+                                and not bus_cuts.has(G.bus_wire(n, "image")))
     k = _next_composite(spec)
     comp = _named("composite", k)
     entries = [G.CompositeAt(k, spec.laid).to_json()]
@@ -1725,7 +1725,7 @@ def through_wires(spec: G.GraphSpec, n: int, rig: G.RigWires | None = None) -> l
 # ---------------------------------------------------------------- the one ladder (plan 50)
 
 # what a load says of a file naming a desk template (retired, plan 44 D3;
-# `preset.TEMPLATE_RETIRED` is this)
+# `loadable.TEMPLATE_RETIRED` is this)
 TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired (plan 44 D3) — "
                     "this preset's own desk rows only")
 
@@ -1748,7 +1748,7 @@ class Forward:
 
 def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any = None,
             look: dict | None = None, cuts: Any = None) -> Forward:
-    """The one ladder for a whole preset (plan 50; the steps a load runs,
+    """The one ladder for a whole loadable patch (plan 50; the steps a load runs,
     in order, each only for a file older than it): before `/7` the one-way
     migration (`seven`, said), before `/9` the eye and the camera's GRAPH
     place the open show held (`nine`), before `/10` the look made whole

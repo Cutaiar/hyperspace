@@ -433,7 +433,7 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
     `lane` and `lfo` first, then the schemes the listed devices feed —
     the pad's `axis` (not its `pad` / `hat` rows), the hands' `hand`, the
     bridge's `ext`; MIDI feeds nothing; an `off` device's scheme is still
-    listed, so a preset row naming it is dormant, not unknown."""
+    listed, so a patch row naming it is dormant, not unknown."""
     io = SimpleNamespace(on=False, error="", last="", name="", profile=None, bindings=[])
     reg = devices.DeviceRegistry(devices=[
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
@@ -754,7 +754,7 @@ enabled = false
 '''
 
 
-def test_todays_rig_as_a_devices_list_equals_the_old_tables(tmp_path, capsys):
+def test_todays_meta_as_a_devices_list_equals_the_old_tables(tmp_path, capsys):
     """The exact `[[devices]]` block the owner pastes to get today's rig
     gives the same device entries as the old tables do, and nothing is
     said about it."""

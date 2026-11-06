@@ -1,5 +1,5 @@
 """Plan 49, stage 1: GRAPH's side pane is always on and holds folding
-sections — selection, presets, lookback, faces, analyzer — each drawing
+sections — selection, loadable patches, lookback, faces, analyzer — each drawing
 what its page draws, found by the panel driver by the ids its page uses;
 the fold state is this Mac's, in ui.json beside the pane's width."""
 
@@ -11,7 +11,7 @@ from imgui_bundle import imgui, implot
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import ui, ui_bands, ui_graph, ui_pane, ui_presets
+from hyperspace import ui, ui_bands, ui_graph, ui_loadable, ui_pane
 from hyperspace.analyzer import N_MAX
 from hyperspace.ui import PAGE_KEYS
 
@@ -19,7 +19,7 @@ WIDE = (1600, 900)      # a page wider than ui_graph.WIDE: the pane beside the c
 
 # a control each section draws, by the id its page draws it under
 SECTION_IDS = {
-    "presets": "new##new",           # the preset strip's new chip (ui_presets.strip)
+    "presets": "new##new",           # the preset strip's new chip (ui_loadable.strip)
     "lookback": "dream.on",
     "faces": "view.faces",
     "analyzer": "scene.select",
@@ -320,11 +320,11 @@ def test_the_strip_budgets_the_devices_missing_chip(tmp_path):
     with build_rig(tmp_path):
         imgui.new_frame()
         chips = ("new", "save", "as…")
-        full = ui_presets.strip_name_w(1000.0, chips, False)
-        assert full == ui_presets.name_w()
-        narrow = ui_presets.strip_name_w(300.0, chips, False)
-        assert ui_presets.strip_name_w(300.0, chips, False, 60.0) == max(
-            ui_presets.NAME_MIN, narrow - 60.0)
+        full = ui_loadable.strip_name_w(1000.0, chips, False)
+        assert full == ui_loadable.name_w()
+        narrow = ui_loadable.strip_name_w(300.0, chips, False)
+        assert ui_loadable.strip_name_w(300.0, chips, False, 60.0) == max(
+            ui_loadable.NAME_MIN, narrow - 60.0)
         imgui.end_frame()
 
 
@@ -557,7 +557,7 @@ def test_setting_the_same_slot_again_brings_the_section_back(pane):
 
 
 def test_the_focused_section_lands_at_the_top_of_the_pane_with_room(tmp_path, monkeypatch):
-    """Selection and presets open above it, the pane shorter than the lot:
+    """Selection and loadable patches open above it, the pane shorter than the lot:
     the focused header scrolls to the pane's top, its body runs down to the
     headers after it, and those stay in view."""
     with build_rig(tmp_path) as r:
@@ -790,7 +790,7 @@ def test_every_section_focused_lands_in_view_and_inside_the_pane(tmp_path, monke
 
 
 def test_a_fresh_launch_has_no_scrollbar_on_the_pane(pane):
-    """Selection and presets open, nothing focused: the sections fit the
+    """Selection and loadable patches open, nothing focused: the sections fit the
     pane exactly, with the spacing after each open body counted."""
     r, _d = pane
     win = imgui.internal.find_window_by_name(_st(r)["pane_window"])
@@ -906,7 +906,7 @@ def test_save_as_patch_and_update_patch_keep_inside_the_narrowest_pane(tmp_path,
     with build_rig(tmp_path) as r:
         r.panel.desk = False
         r.lib.load("presets", "party-noita")
-        r.lib.presets.groups = []
+        r.lib.loaded_patch.groups = []
         frame(r.panel, "graph")
         entry = ui_graph.group_nodes(r.panel, ["render:warp", "render:doublevision"])
         entry["patch"] = "noita-core"

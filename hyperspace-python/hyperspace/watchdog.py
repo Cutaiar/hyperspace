@@ -1,7 +1,7 @@
 """The stall log — a frozen show leaves a stack dump behind (plan 14 WP1).
 
 Everything below writes ``<home>/stall.log``, each entry a ``=== <kind>``
-header (the wall time, the loaded preset) and every thread's stack
+header (the wall time, the loaded patch) and every thread's stack
 (``faulthandler.dump_traceback(all_threads=True)``):
 
 **The whole loop stalls** (`Watchdog`). A daemon thread watches the frame
@@ -41,7 +41,7 @@ main thread:
 - ``non-finite`` — a param dropped a NaN / inf offset or value
   (`Registry.nonfinite`), once per param.
 - ``warning`` — a show problem worth a banner, once per message (a
-  preset that asks for the dream — `dream.on` with `dream.mix` above 0 —
+  loadable patch that asks for the dream — `dream.on` with `dream.mix` above 0 —
   with no worker to dream; dismissed, it does not come back).
 
 The banner keeps a render error after the render recovers — its last
@@ -92,16 +92,16 @@ def _quiet_call(fn: Callable | None, default=None):
 class Watchdog:
     """The log file and the whole-loop stall thread. One per process.
     `clock` is the loop's own (the `now` it pets with); `wall` stamps the
-    log; `preset` names what is loaded. All injectable, so a test drives a
+    log; `loadable` names what is loaded. All injectable, so a test drives a
     stall with a fake clock and `check()` and never sleeps."""
 
     def __init__(self, path: Path | str, *, limit: float = LIMIT, period: float = PERIOD,
                  clock: Callable[[], float] = time.perf_counter,
                  wall: Callable[[], float] = time.time,
-                 preset: Callable[[], str | None] | None = None):
+                 loadable: Callable[[], str | None] | None = None):
         self.path = Path(path)
         self.limit, self.period = float(limit), float(period)
-        self.clock, self.wall, self.preset = clock, wall, preset
+        self.clock, self.wall, self.loadable = clock, wall, loadable
         self.last = clock()          # the last completed frame, on `clock`
         self.stalls = 0              # stalls this process has logged
         self.error = ""
@@ -134,12 +134,12 @@ class Watchdog:
         return True
 
     def log(self, kind: str, headline: str, body: str = "") -> bool:
-        """One entry: the header (kind, wall time, preset, `headline`), then
+        """One entry: the header (kind, wall time, loadable patch, `headline`), then
         `body`, then every thread's stack. Never raises."""
         if self._file is None:
             return False
         try:
-            name = _quiet_call(self.preset)
+            name = _quiet_call(self.loadable)
             with self._lock:
                 f = self._file
                 f.write(f"\n=== {kind} {_stamp(self.wall())} · preset "

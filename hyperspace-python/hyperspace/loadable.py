@@ -1,19 +1,19 @@
-"""The preset — one file that holds everything a performance moment is
+"""The loadable patch — one file that holds everything a performance moment is
 (plan 13 D1, §2.1): ``hyperspace.preset/2``.
 
   {"schema": "hyperspace.preset/2", "name": "TRIP", "note": "…",
-   "values": {id: base, …},            the performance part (params.PARTS)
+   "values": {id: base, …},            the patch part (params.PARTS)
    "routes": [row, …],                 the performer rows (routing.Binding)
-   "desk":   [row, …],                 the APC40's preset layer (routing.Binding)
+   "desk":   [row, …],                 the APC40's patch layer (routing.Binding)
    "macros": {"macro.1": {…}, …}}     the macros' labels and subscribers
 
 (plan 44 D3, ``/10``: the module labels ``modules`` and plan 24 C3's
 ``desk_template`` are retired — a load of an older file drops both,
 `graphmigrate.ten` — and ``"bus": {"cut": [{"from", "to"}, …]}`` is the
-preset's bus cuts, `BUS_KEY`, below.)
+loadable patch's bus cuts, `BUS_KEY`, below.)
 
 (plan 57, NM0: ``"node_mode": [{"player", "controller", "node"}, …]``, what
-each player's controller points at: `nodemode`. Optional, so a preset with
+each player's controller points at: `nodemode`. Optional, so a loadable patch with
 none saves as it did, byte for byte; no schema of its own. The rows are derived,
 never saved: `nodemode.fill`.)
 
@@ -40,93 +40,93 @@ frame (plan 35), ``/8`` the groups (plan 40), ``/9`` the one orbit camera
 (plan 43 C2), ``/10`` the look made whole (plan 44 D3: the hands' and
 clouds' looks in ``values``, the bus cuts in ``bus``, read from the open
 show for an older file — `graphmigrate.ten`); a re-save is ``/10``.
-tools/migrate_library.py rewrites a library's presets that way, once.
+tools/migrate_library.py rewrites a library's loadable patches that way, once.
 
 **The look made whole** (plan 44 D3, plan 43 §6): the hands' look
 (``ghost.*`` but ``ghost.mirror``, the room's) and the clouds'
-(``cloud.*``) are performance params, saved and landed like any value;
-and the **bus cuts** — which of the rig's cables from All outputs into a
-window this preset cuts (`graph.RigWires`, plan 36 T1's ``rig``, once
-the show's) — are `Presets.bus`: read from ``bus`` by a load (none: every
+(``cloud.*``) are patch params, saved and landed like any value;
+and the **bus cuts** — which of the meta controller's cables from All outputs into a
+window this loadable patch cuts (`graph.BusCuts`, plan 36 T1's ``rig``, once
+the show's) — are `LoadedPatch.bus`: read from ``bus`` by a load (none: every
 cable stands), written by a save when any is cut, in the dirty dot and
-in a load's undo step, and what the renderer reads (`rig_source` is the
-presets, `graph.rig_of` reads `rig`).
+in a load's undo step, and what the renderer reads (`bus_source` is the
+loadable patches, `graph.bus_cuts_of` reads `rig`).
 
-**The one orbit camera** (plan 43 C2, the owner, 2026-11-02): a preset
+**The one orbit camera** (plan 43 C2, the owner, 2026-11-02): a loadable patch
 is a complete look, so the camera is all of it — `camera.*` (the shape's
 pose and scale in the world) and `eye.*` (the eye it is seen through),
 landed like any value — and the **spin's pose**: every save writes the
 six `rot.phase.*` (`params.POSE_IDS`) under ``"pose"`` (`POSE_KEY`, beside
 ``values``, which stays the bases: a phase is no base), `view.body`
 folded in (`ViewState.pose`), and a load **sets** the turn there
-(`set_pose`), so the same preset opens on the same turn. A file with no pose (every file
+(`set_pose`), so the same loadable patch opens on the same turn. A file with no pose (every file
 before ``/9``, and every file the migration rewrote: `headless.resave`)
 leaves the turn spinning, as it always did.
 
-One file per preset, ``<library>/presets/<slug>.json`` — one tier, every
-preset the user's (2026-10-28: nothing ships, nothing is "factory", nothing
-is hidden). `Presets` registers the folder with the library as a
+One file per loadable patch, ``<library>/presets/<slug>.json`` — one tier, every
+loadable patch the user's (2026-10-28: nothing ships, nothing is "factory", nothing
+is hidden). `LoadedPatch` registers the folder with the library as a
 **document kind** (`Library.kind`), so listing, load / save as / delete /
 rename, the dirty dot and the file watch are the library's, and the
-PRESETS page (ui_presets.py: the strip over ``presets`` and the list)
+PRESETS page (ui_loadable.py: the strip over ``presets`` and the list)
 drives it. The bank — the desk's pads, F1–F8 — names these files; the
 project holds the bank (library.Project, ``hyperspace.project/2``). Since
-plan 13 WP5 it is the only kind: the routing presets are presets now.
+plan 13 WP5 it is the only kind: the routing loadable patches are loadable patches now.
 
 A load is a scene-setter (docs/ARCHITECTURE.md §3): it writes bases and
 replaces rows, never an offset. In order (plan 13 §5):
 
-1. note what the file names that a preset may not: a session param
+1. note what the file names that a loadable patch may not: a shared meta param
    ("`tempo.bpm` is the session's, ignored"), an id nobody has, a
    ``routes`` row that is not a performer row or that aims at a param
    that is not modulatable (dropped), a row on a meta param (dropped: the
    hard rule, register row 743; the file is not rewritten, and the next
    save leaves it out), a second performer on one target (the referee's,
    below);
-2. land the values: **every** persisted param of every performance group
+2. land the values: **every** persisted param of every patch group
    gets the file's value or the value its object was built with
    (`Library._fresh_of` — never a group's ``default.json``, plan 44 D3),
-   in registry order, in one go (D2). A session param is never touched. The rotation
+   in registry order, in one go (D2). A shared meta param is never touched. The rotation
    phases (not persisted) are set to the file's pose when it has one
    (plan 43 C2), else left spinning;
 3. replace every performer row with ``routes`` (`Bindings.set_routes`;
    the referee is first-wins, the rest in ``table.dropped`` for the
    ROUTING page);
-4. replace the desk's preset layer with ``desk`` (`Bindings.set_desk`: a
+4. replace the desk's patch layer with ``desk`` (`Bindings.set_desk`: a
    row on an invariant control or a meta param is dropped and its note joins step 1's;
-   the desk drops to the preset layer, D4, and the MIDI adapter redraws
+   the desk drops to the patch layer, D4, and the MIDI adapter redraws
    every ring and LED with the faders' catch cleared). A file with **no**
-   ``desk`` key gets the default preset layer (`routing.factory_desk`'s
-   preset rows — a fresh preset, plan 13 §3.2); ``"desk": []`` is an
-   empty preset layer, every preset control dark (D8);
+   ``desk`` key gets the default patch layer (`routing.factory_desk`'s
+   patch rows — a fresh loadable patch, plan 13 §3.2); ``"desk": []`` is an
+   empty patch layer, every loadable patch control dark (D8);
 5. replace the macros' labels and subscribers with ``macros``
    (`Bindings.set_macros`: a base subscriber on anything but a
-   performance param — a session one, D9 — is dropped and its note joins
+   patch param — a meta controller one, D9 — is dropped and its note joins
    step 1's, as is a depth subscriber on a meta param's route, row 743) and land the base subscribers at once from the macros' bases
    just landed (`Router.follow_macros(force=True)`). The macro is the
    scene-setter of record: a param a base subscriber names ends at the
    subscriber's value even when ``values`` names it too;
-6. each performance group's strip is clean against the values just
+6. each patch group's strip is clean against the values just
    landed, naming no module preset (plan 44 D3: the ``modules`` labels
    are retired, row 540);
 7. the notes from step 1 are kept in ``notes`` and summed up in
    ``Library.warning`` for the panel.
 
 A save (`document`) writes the performance snapshot, every performer row
-(disabled ones too), the table's preset-layer rows (`Bindings.desk`, a
-row's ``layer`` left out: every desk row is the preset's), the table's
+(disabled ones too), the table's patch-layer rows (`Bindings.desk`, a
+row's ``layer`` left out: every desk row is the loadable patch's), the table's
 macros (`Bindings.macros_doc`), the bus cuts and the node mode. The dirty dot (`signature`) covers all of it, so a Learn,
 an Unbind or a ROUTING-page edit — which change the table and write no
-file — shows as the loaded preset edited; only a save (⇧F, a pad, the
+file — shows as the loaded patch edited; only a save (⇧F, a pad, the
 strip's save / as…) writes it.
 
-The twenty-five presets the build once shipped, and the generator that
+The twenty-five loadable patches the build once shipped, and the generator that
 made them, left the app on 2026-10-28 (one tier). The files live on as
 the golden frames' corpus (tests/corpus/presets/, tools/golden_frames.py),
 their old-schema sources beside the tests (tests/fixtures/factory-sources/)
 as the migration tests' inputs — neither is read by the app. Plan 13 §6's
-one-time home migration (schema-1 shows, routing presets, an old
-bindings.json's preset part) went with them: both Macs are long past it.
+one-time home migration (schema-1 shows, routing loadable patches, an old
+bindings.json's loadable patch part) went with them: both Macs are long past it.
 """
 
 from __future__ import annotations
@@ -148,16 +148,16 @@ from .graph import (
     FRAME_KEY,
     MEDIA_CHANNELS,
     WIRED_FRAME,
+    BusCuts,
     GraphError,
     GraphSpec,
-    RigWires,
     Wiring,
     channel_name,
     read_graph,
 )
 from .library import (
-    PERFORMANCE_SCHEMA,
-    PRESETS,
+    LOADABLE,
+    LOADABLE_SCHEMA,
     RETIRED_MODULES,
     DocKind,
     read_positions,
@@ -171,16 +171,16 @@ from .lookback import (
 from .media import channels as media_channels
 from .modifiers import Modifier
 from .palettecompat import palette_slice
-from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset.* names
+from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadable.* names
     CUT_GROUP,
     MATTE_GROUP,
     PAN_IDS,
-    PERFORMANCE_GROUPS,
+    PATCH_GROUPS,
     PLANES,
     POSE_IDS,
     RESIZE_GROUP,
     SEGMENT_GROUP,
-    SESSION_GROUPS,
+    SHARED_META_GROUPS,
     SWITCH_GROUP,
     UNITS,
     UNITS_KEY,
@@ -206,7 +206,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
 )
 from .routing import MOD_OPS, Binding, is_continuous, meta_row_refusal
 
-SCHEMA = PERFORMANCE_SCHEMA
+SCHEMA = LOADABLE_SCHEMA
 # the schemas a load reads (each migrated on load; row 394: a save writes
 # `SAVE_SCHEMA` only). /3 is /2 plus the envelopes and the sequencer (plan
 # 31 P), /4 /3 plus media (plan 32 S, D1), /5 /4 plus the free graph (plan
@@ -216,7 +216,7 @@ MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
 FREE_SCHEMA = graphmigrate.FREE_SCHEMA
 WIRED_SCHEMA = graphmigrate.WIRED_SCHEMA
 # plan 40 T2 (D4, D7): `/8` is `/7` plus `groups` — what a save wrote while
-# the preset held a group, until plan 43 C2 made every save `/9` (row 576)
+# the loadable patch held a group, until plan 43 C2 made every save `/9` (row 576)
 GROUPS_SCHEMA = graphmigrate.GROUPS_SCHEMA
 # plan 43 C2 (rows 572, 576): `/9` is `/8` with the eye and the pose — what
 # every save writes, groups or none
@@ -226,9 +226,9 @@ EYE_SCHEMA = graphmigrate.EYE_SCHEMA
 # labels, no desk template — what every save writes
 LOOK_SCHEMA = SAVE_SCHEMA = graphmigrate.LOOK_SCHEMA
 VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10)
-# plan 44 D3: the preset's bus cuts, `{"cut": [{"from", "to"}, …]}` — the
-# rig's cables from All outputs into a window that this preset cuts
-# (`graph.RigWires`); no key: every cable stands
+# plan 44 D3: the loadable patch's bus cuts, `{"cut": [{"from", "to"}, …]}` — the
+# meta controller's cables from All outputs into a window that this loadable patch cuts
+# (`graph.BusCuts`); no key: every cable stands
 BUS_KEY = graphmigrate.BUS_KEY
 # plan 57 (NM0): what the controllers point at, `nodemode.NodeMode`'s JSON; no
 # key: nothing does
@@ -244,12 +244,12 @@ POSE_KEY = "pose"
 POSE_UNREAD = "pose: not six numbers, ignored — the turn is left spinning"
 # the registry groups (and lane schemes) a /2 file never names
 V3_GROUPS = ("env", "seq")
-# the preset keys a bank writes only off its default (modbank, plan 31 B)
+# the loadable patch keys a bank writes only off its default (modbank, plan 31 B)
 V3_KEYS = ("lfos", "envs")
-GROUP = PRESETS                   # the library folder, and the strip's group
-# plan 35 T7 (row 387): the new preset — what the strip's `new` chip starts,
+GROUP = LOADABLE                   # the library folder, and the strip's group
+# plan 35 T7 (row 387): the new loadable patch — what the strip's `new` chip starts,
 # named until it is saved, and what it says
-UNTITLED_PRESET = "untitled"
+UNTITLED_PATCH = "untitled"
 NEW_SAID = "new preset: default values, shape → scene → All outputs — a shape on every window"
 # plan 36 T3 (W3): a `/7` with no graph section, or an empty one — the strip says so
 NO_GRAPH_SAID = "no graph: nothing is wired — black until something is wired to an output"
@@ -299,8 +299,8 @@ def read_pose(pose: Any) -> list[float] | None:
 
 
 def desk_json(rows) -> list[dict]:
-    """Preset-layer rows as a preset's ``desk``: each row's JSON without
-    its ``layer`` — in a preset every desk row is the preset layer's
+    """Patch-layer rows as a loadable patch's ``desk``: each row's JSON without
+    its ``layer`` — in a loadable patch every desk row is the patch layer's
     (`Bindings.set_desk` forces it on the way back in)."""
     out = []
     for b in rows:
@@ -311,11 +311,11 @@ def desk_json(rows) -> list[dict]:
 
 
 def fresh_desk(profile: str = "apc40") -> list[Binding]:
-    """A fresh preset's desk: the default map's preset layer (plan 13 §3.2)
+    """A fresh loadable patch's desk: the default map's patch layer (plan 13 §3.2)
     — what a file with no ``desk`` key gets. It holds
-    no track fader (plan 24 C2: the faders are a preset's own targets, with
-    no inherited default), so a fresh preset leaves S1–S8 dark; a fader row
-    a preset's desk holds (`track_fader`) loads, saves and lights like a
+    no track fader (plan 24 C2: the faders are a loadable patch's own targets, with
+    no inherited default), so a fresh loadable patch leaves S1–S8 dark; a fader row
+    a loadable patch's desk holds (`track_fader`) loads, saves and lights like a
     knob's."""
     return [b for b in routing.factory_desk(profile) if b.layer == "preset"]
 
@@ -327,9 +327,9 @@ FX_GROUP = "fx"          # the effects' param group (plan 40 T5: no module prese
 
 
 class GraphSection:
-    """The loaded preset's ``graph`` section, landed (plan 26 A4).
+    """The loaded patch's ``graph`` section, landed (plan 26 A4).
 
-    A preset may carry the render graph it wants as plain JSON
+    A loadable patch may carry the render graph it wants as plain JSON
     (`graph.GraphSpec`: node instances and their wiring — never a param).
     Plan 36 T3 (W3): the section is all there is. A `/7` with none (or an
     empty one) is the empty frame — black, said (`NO_GRAPH_SAID`); a
@@ -344,13 +344,13 @@ class GraphSection:
 
     - **the registry**: an extra effect instance's params, `fx.acid.2.*`
       (`FxState.set_instances` + `fx.declare`: its own on, mix, order,
-      clock — performance params, so the preset's `values` carry them),
+      clock — patch params, so the loadable patch's `values` carry them),
       and an extra hands node's, `ghost.2.*` (`ghost.register`: the
-      preset's, like `ghost.*`, its values in the preset's `values` — but
+      loadable patch's, like `ghost.*`, its values in the loadable patch's `values` — but
       `ghost.2.mirror`, the room's, which the open show keeps — on a
       `GhostState` of its own that is kept while the app runs); and (plan 33
       S) each switch's `switch[.n].select` (`params.declare_switches`: a
-      performance param, its pick in the preset's `values`); and (plan
+      patch param, its pick in the loadable patch's `values`); and (plan
       34 Z) each resize's `resize[.n].*` (`params.declare_resizes`, by its
       entry, reached or not); and (plan 39 T2) each matte's `matte[.n].*`
       (`params.declare_mattes`, likewise); and (plan 39 T3) each cut's
@@ -363,7 +363,7 @@ class GraphSection:
     - (plan 36 T3) **the effects**: exactly the instances the section
       names exist (`FxState.hold`) — instance 1 of a file too.
 
-    Owned by `Presets` (`Presets.graph`); the app and the tools attach the
+    Owned by `LoadedPatch` (`LoadedPatch.graph`); the app and the tools attach the
     renderer."""
 
     def __init__(self, reg, fx=None, renderer=None, lib=None):
@@ -380,7 +380,7 @@ class GraphSection:
         self.free: dict | None = None
         self.states: dict[str, GhostState] = {}  # extra hands nodes' states, by node name
         self.declared: set[str] = set()         # the extra hands nodes whose params exist
-        # 2026-11-02 (G0, row 563): told after every landing — `Presets`
+        # 2026-11-02 (G0, row 563): told after every landing — `LoadedPatch`
         # points it at `settle_groups`, so a group's member list loses a
         # deleted node in the same operation, never on the next draw or save
         self.on_land: Callable[[], None] | None = None
@@ -447,8 +447,8 @@ class GraphSection:
         T3; `/9` since plan 43 C2).
 
         An extra hands node declared for the first time this run takes
-        its room setting (`ghost.2.mirror`, the session's) from the open
-        show; its look is the preset's values (plan 44 D3)."""
+        its room setting (`ghost.2.mirror`, the meta controller's) from the open
+        show; its look is the loadable patch's values (plan 44 D3)."""
         wiring = spec.wiring() if spec is not None else EMPTY
         reg = self.reg
         want = {ghost_prefix(h.n): h.n for h in wiring.extra}
@@ -515,8 +515,8 @@ class GraphSection:
         return free if free is not None else self.doc
 
     def _seed(self, name: str) -> None:
-        """A newly declared hands node's session params (plan 44 D3: its
-        mirror, `params.SESSION_KEYS`; its look is the preset's) from the
+        """A newly declared hands node's shared meta params (plan 44 D3: its
+        mirror, `params.SHARED_META_KEYS`; its look is the loadable patch's) from the
         open show's session, where it holds them (`library.Project.session`)
         — once per show opened (`Project.opened`): after that the node's
         kept state is the live one."""
@@ -529,13 +529,13 @@ class GraphSection:
         session = getattr(project, "session", None) or {}
         held = {pid: v for pid, v in session.items()
                 if pid.startswith(name + ".") and pid in self.reg
-                and part_of(self.reg[pid]) == "session"}
+                and part_of(self.reg[pid]) == "shared_meta"}
         if held:
             self.reg.restore(held)
         if project is not None and isinstance(getattr(project, "session", None), dict):
             # an id the show lacks takes the state this landing left, as a
             # show's `_apply` does for a param added since: the show stays clean
-            for pid, v in self.reg.snapshot(part="session").items():
+            for pid, v in self.reg.snapshot(part="shared_meta").items():
                 if pid.startswith(name + "."):
                     project.session.setdefault(pid, v)
 
@@ -571,7 +571,7 @@ class GraphSection:
         r.ghost_states = {name: self.states[name] for name in sorted(self.declared)}
 
 
-# plan 28 N1: the preset's modifier nodes (`modifiers.Modifier`), a list of
+# plan 28 N1: the loadable patch's modifier nodes (`modifiers.Modifier`), a list of
 # entries after `routes` — ``{"id": "mod.1", "kind": "smooth", "in":
 # ["hand:right.energy"], "attack": 0.05, "release": 0.6}``. No schema bump:
 # an older build ignores the key (and a route on a ``mod:`` lane is a
@@ -580,7 +580,7 @@ MODIFIERS_KEY = "modifiers"
 # plan 28 N2: where the GRAPH page's nodes the look holds sit (the
 # modifiers, the macros, the render nodes and their params) —
 # ``{"<node id>": [x, y]}``, written after everything else, one node a
-# line; the rig's nodes are the show's (library.LAYOUT). No key: laid out
+# line; the meta controller's nodes are the show's (library.LAYOUT). No key: laid out
 # automatically, no note and no dirt. An older build ignores the key
 LAYOUT_KEY = "layout"
 # plan 40 T2 (P2, D4, D7): the GRAPH page's groups — a fold of the canvas
@@ -597,12 +597,12 @@ GROUP_REFUSED = "group {name}: {why}"
 GROUP_EMPTY = "group {name}: nothing of it is in the preset — left out"
 GROUP_TWICE = "group {name}: {node} is in group {other} already — left out"
 GROUP_BAD = "groups: an entry that is not a group, ignored"
-# the performance groups with no module presets: a macro's meaning is its
-# subscribers and a modifier's params are its entry, both the preset's
-# (plan 33 S: a switch's pick means nothing without the preset's graph;
+# the patch groups with no module presets: a macro's meaning is its
+# subscribers and a modifier's params are its entry, both the loadable patch's
+# (plan 33 S: a switch's pick means nothing without the loadable patch's graph;
 # plan 34 Z: nor a resize's values; plan 39 T2: nor a matte's; T3: nor a cut's)
 # (T4: nor a segment's) — and (plan 40 T5, D6) the effects', whose module
-# presets are retired outright: a save writes no fx label
+# loadable patches are retired outright: a save writes no fx label
 NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP, CUT_GROUP,
              SEGMENT_GROUP, FX_GROUP)
 # the groups whose module presets are retired (plan 40 T5, D6,
@@ -617,7 +617,7 @@ group_number = graphmigrate.group_number    # `group.3` → 3 (the one rule, GRA
 def group_entry(g: dict) -> dict:
     """A group's entry in the file's key order: id, name, patch (when it
     has one), nodes, open — and `kept_by_host` (plan 40 T3's rows a spawn's
-    conflict sheet gave the preset) when present."""
+    conflict sheet gave the loadable patch) when present."""
     out = {"id": g["id"], "name": g["name"]}
     if g.get("patch"):
         out["patch"] = g["patch"]
@@ -631,7 +631,7 @@ def group_entry(g: dict) -> dict:
 def read_groups(raw, held, refusal: Callable[[list[str]], tuple[set, list[str]]] | None = None
                 ) -> tuple[list[dict], list[str]]:
     """A file's `groups` (plan 40 T2, load step 6½) → (the groups, the
-    notes). A member id the preset does not hold (`held`, the canvas ids
+    notes). A member id the loadable patch does not hold (`held`, the canvas ids
     its graph, modifiers and voices make) is left out with a note ("group
     acid wash: acid.3 is not in the preset — left out"); one a group may
     not hold (`refusal(ids)` → (the ids kept, the words for the rest):
@@ -689,7 +689,7 @@ def _bank_prefix(pid: str) -> str:
 
 
 def dumps(doc: dict) -> str:
-    """A preset as file text: one route or desk row per line, so a diff
+    """A loadable patch as file text: one route or desk row per line, so a diff
     reads as a binding; the values one per line."""
     parts = []
     for key, v in doc.items():
@@ -744,7 +744,7 @@ def dumps(doc: dict) -> str:
 
 
 def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
-    """A preset document with the look-back's per-frame ids read as 60 Hz
+    """A loadable patch document with the look-back's per-frame ids read as 60 Hz
     frames and written in seconds (plan 14 WP6, `lookback.LEGACY`): its
     values, every route and desk row on one, a macro's base subscriber on
     one (its from / to converted too) and a depth subscriber naming such a
@@ -801,24 +801,24 @@ def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
     return out, notes
 
 
-class Presets:
-    """The loaded preset over one library, registry and router.
+class LoadedPatch:
+    """The loaded patch over one library, registry and router.
 
-    Built as ``Presets(lib, reg, router)`` once the router exists (app.main);
+    Built as ``LoadedPatch(lib, reg, router)`` once the router exists (app.main);
     it registers the ``presets`` document kind and makes itself
-    ``lib.presets``, which the project's bank (F-keys, the preset row)
+    ``lib.loaded_patch``, which the project's bank (F-keys, the patch row)
     loads and saves through. The kind's hooks look this object's methods
     up at call time, so a hot reload that re-classes it reaches them.
 
     Plan 44 D3: what is loaded is this object's own — `landing`, (the
-    loaded preset's name, what its load or save produced — the signature
+    loaded patch's name, what its load or save produced — the signature
     the dirty dot compares against —, how to re-apply it), which
-    `Library._landed` / `current` / `is_dirty` hand here for the presets
-    group (`Library._owner`) — and so are the preset's bus cuts (`bus`)."""
+    `Library._landed` / `current` / `is_dirty` hand here for the loadable patches
+    group (`Library._owner`) — and so are the loadable patch's bus cuts (`bus`)."""
 
-    # on the class: a `Presets` from before a hot reload has them
+    # on the class: a `LoadedPatch` from before a hot reload has them
     landing: tuple = (None, None, None)
-    bus: RigWires = RigWires()
+    bus: BusCuts = BusCuts()
 
     def __init__(self, lib, reg, router):
         self.reg, self.router = reg, router
@@ -827,10 +827,10 @@ class Presets:
         on_deck = getattr(lib, "on_deck", None)
         self.lib = lib = on_deck(self) if on_deck is not None else lib
         base = getattr(lib, "base", lib)
-        # the performance groups' landings (`Library._labels`) and the bank's
+        # the patch groups' landings (`Library._labels`) and the bank's
         # lit slot (`Project.active`) on this deck
         self.labels: dict[str, tuple] = {}
-        first = getattr(base, "presets", None) is None
+        first = getattr(base, "loaded_patch", None) is None
         self.active_slot = (getattr(base.project, "__dict__", {}).get("active", -1)
                             if first and hasattr(base, "project") else -1)
         self.note = ""
@@ -839,10 +839,10 @@ class Presets:
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 28 N2: the GRAPH page's positions of the look's nodes
         self.layout: dict[str, list[float]] = {}
-        # 2026-11-02 (G0, row 563): the highest group number this preset has
+        # 2026-11-02 (G0, row 563): the highest group number this loadable patch has
         # allotted since its load — the file's highest at the load, counting
         # entries the load dropped — so a group's id is never one a group
-        # of this preset's life had: the one authority for the next number
+        # of this loadable patch's life had: the one authority for the next number
         # (`graphview.Edit.land_group` takes `group_high + 1` and bumps it;
         # the `groups` setter raises it to the highest assigned; the marks
         # carry it beside the groups; not saved: a reload starts again from
@@ -851,25 +851,25 @@ class Presets:
         # plan 40 T2: the GRAPH page's groups (`GROUPS_KEY` entries; the
         # `groups` property, so an assignment seeds the floor)
         self.groups = []
-        # R17 (final review): the live preset came from `new` and has never
+        # R17 (final review): the live loadable patch came from `new` and has never
         # been saved — save names it (whatever a file of its name holds);
         # a load or a save clears it (`_landed`)
         self.unsaved = False
-        # plan 26 A4: the loaded preset's graph section (its instances'
+        # plan 26 A4: the loaded patch's graph section (its instances'
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
-        # plan 44 D3: the bus cuts the loaded preset holds (`graph.RigWires`)
-        self.bus = RigWires()
+        # plan 44 D3: the bus cuts the loaded patch holds (`graph.BusCuts`)
+        self.bus = BusCuts()
         self.landing = (None, None, None)
-        # row 563: membership is settled where what the preset holds changes
+        # row 563: membership is settled where what the loadable patch holds changes
         # — a landing, the table's modifiers, a bank's voices
         self.graph.on_land = self.settle_groups
         router.table.on_modifiers = self.settle_groups
         for bank in self.banks().values():
             bank.on_change = self.settle_groups
-        # this deck's hooks for the presets kind (`DeckLibrary._kinds`); the
-        # one library's read through `lib.presets`, the presets of the deck the
-        # panel is on (plan 44 D5a): the first `Presets` over a library declares
+        # this deck's hooks for the loadable patches kind (`DeckLibrary._kinds`); the
+        # one library's read through `lib.loaded_patch`, the loadable patches of the deck the
+        # panel is on (plan 44 D5a): the first `LoadedPatch` over a library declares
         # them and is that until a pointer takes over
         self.doc_kind = DocKind(SCHEMA.rpartition("/")[0], tuple(VERSIONS),
                                 lambda doc, path: self.load_doc(doc, path),
@@ -878,13 +878,13 @@ class Presets:
                                 lambda doc: dumps(doc))
         if first:
             base.kind(GROUP, SCHEMA.rpartition("/")[0],
-                      load=lambda doc, path: base.presets.load_doc(doc, path),
-                      document=lambda name: base.presets.document(name),
-                      signature=lambda: base.presets.signature(),
+                      load=lambda doc, path: base.loaded_patch.load_doc(doc, path),
+                      document=lambda name: base.loaded_patch.document(name),
+                      signature=lambda: base.loaded_patch.signature(),
                       versions=VERSIONS,
                       text=lambda doc: dumps(doc))
-            base.on_load(GROUP, lambda name: base.presets._landed(name))
-            base.presets = self
+            base.on_load(GROUP, lambda name: base.loaded_patch._landed(name))
+            base.loaded_patch = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
     # ---- the API ----
@@ -892,13 +892,13 @@ class Presets:
     @property
     def media(self):
         """The eight media channels the registry's ``media.*`` params write
-        (`build_registry`'s `media`, plan 32): their bins are this preset's
+        (`build_registry`'s `media`, plan 32): their bins are this loadable patch's
         ``media`` section. None on a registry from before plan 32."""
         return getattr(self.reg, "media", None)
 
     @property
     def current(self) -> str | None:
-        """The loaded preset's name (plan 44 D3: this object's own)."""
+        """The loaded patch's name (plan 44 D3: this object's own)."""
         return self.landing[0]
 
     @property
@@ -908,20 +908,20 @@ class Presets:
         return self.landing[1]
 
     def is_dirty(self) -> bool:
-        """Has the live look moved off what the loaded preset produced?
+        """Has the live look moved off what the loaded patch produced?
         Within undo's tolerance (`undo.alike`); nothing loaded is clean, a
-        new preset never saved (`land_unsaved`'s ()) is dirty."""
+        new loadable patch never saved (`land_unsaved`'s ()) is dirty."""
         ref = self.loaded
         return ref is not None and not undo.alike(self.signature(), ref)
 
     @property
-    def rig(self) -> RigWires:
-        """The bus cuts, as `graph.rig_of` reads a renderer's
-        `rig_source` (plan 44 D3: the presets are it)."""
+    def bus_cuts(self) -> BusCuts:
+        """The bus cuts, as `graph.bus_cuts_of` reads a renderer's
+        `bus_source` (plan 44 D3: the loadable patches are it)."""
         return self.bus
 
     def load(self, name: str) -> list[str]:
-        """Load a preset by name through the library (which records it as
+        """Load a loadable patch by name through the library (which records it as
         the strip's current and its clean reference); returns the ids the
         file names that nothing has."""
         missing = self.lib.load(GROUP, name)
@@ -929,40 +929,40 @@ class Presets:
         return missing
 
     def save_as(self, name: str) -> Path:
-        """The live state as a preset (a file of that name is written over,
+        """The live state as a loadable patch (a file of that name is written over,
         its old text kept in the trash)."""
         return self.lib.save_as(GROUP, name)
 
     def new(self, at: tuple[float, float] = (0.0, 0.0)) -> list[str]:
-        """A new preset (plan 35 T7, row 387): the library's fresh values
-        for every performance group (the reset `Project.new` uses, so
-        nothing of the preset loaded before survives), no routes, the desk
-        written out as the default preset layer (a file with no `desk` key
-        gets that layer and `"desk": []` an empty one — the blank preset
+        """A new loadable patch (plan 35 T7, row 387): the library's fresh values
+        for every patch group (the reset `Project.new` uses, so
+        nothing of the loadable patch loaded before survives), no routes, the desk
+        written out as the default patch layer (a file with no `desk` key
+        gets that layer and `"desk": []` an empty one — the blank loadable patch
         says which), and (plan 36 T5, W5) a section of the scene chain
         alone — `shape → scene → output.all.image`, plain faces
-        (`graphview.SCENE_CHAIN`) — so, with the rig's bus cables, a shape
+        (`graphview.SCENE_CHAIN`) — so, with the meta controller's bus cables, a shape
         on every window. Its three nodes are laid left to right in the
-        preset's layout map from `at` (layout units: the GRAPH page's
+        loadable patch's layout map from `at` (layout units: the GRAPH page's
         `ui_graph.in_view`), not left to the automatic layout. The
-        session's params stay. One undo step, named `untitled`, dirty and
+        meta controller's params stay. One undo step, named `untitled`, dirty and
         `unsaved` (R17) until it is saved."""
         lib, reg = self.lib, self.reg
         undo.push_on(self.reg, "new preset", load=True)    # the load below joins this step
         values = {k: v for k, v in lib._fresh_all().items()
-                  if k in reg and reg[k].group in PERFORMANCE_GROUPS
+                  if k in reg and reg[k].group in PATCH_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
                   and not is_resize_id(k) and not is_lookback_id(k)
                   and not is_matte_id(k) and not is_cut_id(k)
                   and not is_segment_id(k)}
-        doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PRESET, "values": values,
+        doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PATCH, "values": values,
                "routes": [], "macros": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
                GRAPH_KEY: read_graph({FRAME_KEY: WIRED_FRAME, "wires": [
                    {"from": a, "to": b} for a, b in graphview.SCENE_CHAIN]}).to_json(),
                LAYOUT_KEY: graphview.chain_layout(graphview.NEW_CHAIN, at)}
-        lib.land_unsaved(GROUP, UNTITLED_PRESET, doc)
+        lib.land_unsaved(GROUP, UNTITLED_PATCH, doc)
         self.unsaved = True               # (after the load hook cleared it)
         lib.say(NEW_SAID)
         return [NEW_SAID]
@@ -974,7 +974,7 @@ class Presets:
         reg.restore({p.id: values[p.id] for p in reg if p.id in values})
 
     def load_doc(self, doc: dict, path: Path | None = None) -> list[str]:
-        """Apply a preset document — the kind's loader (plan 13 §5).
+        """Apply a loadable patch document — the kind's loader (plan 13 §5).
         Returns the unknown ids; the notes land in `notes`."""
         lib, reg, table = self.lib, self.reg, self.router.table
         notes: list[str] = []
@@ -999,7 +999,7 @@ class Presets:
         #    the linear range. Silent, as the pan is — each row's real-unit
         #    reach is kept about its base (`params.retaper_depths`); a save
         #    writes the marker (`UNITS`), and tools/retaper_routes.py
-        #    rewrites a library once. Measured against this rig's own effect
+        #    rewrites a library once. Measured against this meta controller's own effect
         #    files (`self.fx`), the registry's when there is no state
         doc, _ = retaper_depths(doc, self._effect_files())
         # 0. and its render graph (plan 26 A4): read, not yet landed. Plan
@@ -1021,8 +1021,8 @@ class Presets:
         #    its desk template's name dropped — the template said.
         #    Plan 50: these steps are the one ladder, `graphmigrate.forward`
         #    (a fragment's is `patches.forward`). What the show handed on
-        #    for a node this preset's graph does not declare — another
-        #    preset's `ghost.2.*` — is the show's leftover, dropped quietly
+        #    for a node this loadable patch's graph does not declare — another
+        #    loadable patch's `ghost.2.*` — is the show's leftover, dropped quietly
         #    below, never an "unknown id" (review of #351); the migrated
         #    line is said on the strip (`_warn`), not one of `notes`
         gs = self._graph_section()
@@ -1036,11 +1036,11 @@ class Presets:
         notes += fwd.notes
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
         notes += graph_notes
-        # 1. what the file names that a preset may not carry — all parsed
+        # 1. what the file names that a loadable patch may not carry — all parsed
         #    before anything lands, so a bad row leaves the state alone. An
         #    id of a node instance (`fx.acid.2.mix`, `ghost.2.on`) is looked
         #    at once this file's graph has landed — against the params that
-        #    graph holds, never the ones the last preset's graph left
+        #    graph holds, never the ones the last loadable patch's graph left
         values: dict[str, Any] = {}
         unknown: list[str] = []
         later: dict[str, Any] = {}
@@ -1081,9 +1081,9 @@ class Presets:
             elif p is None:
                 if pid not in from_show:
                     unknown.append(pid)
-            elif part_of(p) == "session":
+            elif part_of(p) == "shared_meta":
                 notes.append(f"{pid} is the session's, ignored")
-            elif part_of(p) != "performance" or not p.persist:
+            elif part_of(p) != "patch" or not p.persist:
                 notes.append(f"{pid} is not part of a preset, ignored")
             else:
                 values[pid] = v
@@ -1119,8 +1119,8 @@ class Presets:
                 notes.append(f"dropped {b.source} → {b.target}: not modulatable")
                 continue
             routes.append(b)
-        # no `desk` key: a fresh preset's, the default preset layer; an
-        # explicit [] is an empty one (every preset control dark, D8)
+        # no `desk` key: a fresh loadable patch's, the default patch layer; an
+        # explicit [] is an empty one (every loadable patch control dark, D8)
         if "desk" in doc:
             desk = [Binding.from_json(row) for row in doc.get("desk") or []]
         else:
@@ -1158,7 +1158,7 @@ class Presets:
         routes = kept_routes
         # a bad subscriber raises before anything lands; a route's scale is
         # settled as the table's are (decision register row 18 (a)): on a
-        # macro a depth subscriber, on a performance param dropped, noted
+        # macro a depth subscriber, on a patch param dropped, noted
         held = routing.macros_of(doc.get("macros"))
         notes += routing.migrate_scales(routes, held)
         macros = {mid: m.to_json() for mid, m in held.items()}
@@ -1169,7 +1169,7 @@ class Presets:
                      load=True)
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
-        held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
+        held_graph, held_values = gs.mark(), reg.snapshot(part="patch")
         # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
         held_banks = {s: b.doc() for s, b in self.banks().items()}
@@ -1183,7 +1183,7 @@ class Presets:
         try:
             gs.land(spec, section)
             # R19 (row 354: "rebuilds, not loads"): a load's delays start
-            # empty — no trail of the preset before in this one
+            # empty — no trail of the loadable patch before in this one
             reset = getattr(gs.renderer, "reset_delays", None)
             if callable(reset):
                 reset()
@@ -1199,9 +1199,9 @@ class Presets:
                 if p is None:
                     if pid not in from_show:
                         late.append(pid)
-                elif part_of(p) == "session":
+                elif part_of(p) == "shared_meta":
                     notes.append(f"{pid} is the session's, ignored")
-                elif part_of(p) != "performance" or not p.persist:
+                elif part_of(p) != "patch" or not p.persist:
                     notes.append(f"{pid} is not part of a preset, ignored")
                 else:
                     values[pid] = v
@@ -1209,22 +1209,22 @@ class Presets:
                 unknown += late
                 notes.append(f"{len(late)} unknown id(s): " + ", ".join(late[:4])
                              + ("…" if len(late) > 4 else ""))
-            # 2. every performance param: the file's value, else the value its
+            # 2. every patch param: the file's value, else the value its
             #    object was built with (plan 44 D3: `_fresh_of`, never a
-            #    group's `default.json`; a session key of a performance
+            #    group's `default.json`; a shared meta key of a performance
             #    group, `ghost.mirror`, is never touched)
-            by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
+            by_group: dict[str, dict[str, Any]] = {g: {} for g in PATCH_GROUPS}
             for pid, v in values.items():
                 by_group[reg[pid].group][pid] = v
             landed: dict[str, Any] = {}
-            for group in PERFORMANCE_GROUPS:
+            for group in PATCH_GROUPS:
                 fresh = {k: v for k, v in lib._fresh_of(group).items()
-                         if k in reg and part_of(reg[k]) == "performance"}
+                         if k in reg and part_of(reg[k]) == "patch"}
                 landed.update({**fresh, **by_group[group]})
             # a value that will not take (a hand-edited "fast" on a number)
-            # must not leave half the look on this preset and half on the
+            # must not leave half the look on this loadable patch and half on the
             # last: the state as it was goes back and the load is refused whole
-            before = reg.snapshot(part="performance")
+            before = reg.snapshot(part="patch")
             try:
                 self._restore(landed)
             except (ValueError, TypeError) as e:
@@ -1260,14 +1260,14 @@ class Presets:
         # 3. every performer row replaced; the referee keeps the first
         table.set_routes(routes)
         notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in table.dropped]
-        # 4. the desk's preset layer replaced; the layer drops to it (D4)
+        # 4. the desk's patch layer replaced; the layer drops to it (D4)
         #    and the MIDI adapter redraws, the faders' catch cleared
         self.desk_notes = table.set_desk(desk)
         notes += self.desk_notes
         # 5. the macros replaced, their base subscribers landed now from the
         #    macro bases step 2 put down — the macro is the scene-setter of
         #    record, so its subscriber's value stands over `values`; a base
-        #    subscriber on a session param is dropped with a note (D9)
+        #    subscriber on a shared meta param is dropped with a note (D9)
         notes += table.set_macros(macros, reg)
         self.router.follow_macros(force=True)
         # 5½. plan 33 M: an effect the migration left out of the run, said
@@ -1281,14 +1281,14 @@ class Presets:
             if name is None or any(graphmigrate.effect_of(t) == name for t in driven):
                 notes.append(note)
         self.note = str(doc.get("note") or "")
-        # 6. each performance group's strip clean against what landed, naming
+        # 6. each patch group's strip clean against what landed, naming
         #    no module preset (plan 44 D3: the labels are retired, row 540)
-        for group in PERFORMANCE_GROUPS:
+        for group in PATCH_GROUPS:
             if group in NO_MODULE and group not in RETIRED_MODULES:
                 continue
             lib.label(group, None)
         # 6¼. the bus cuts (plan 44 D3): the file's, else every cable standing
-        self.bus = RigWires.read(doc.get(BUS_KEY))
+        self.bus = BusCuts.read(doc.get(BUS_KEY))
         # 6½. where the GRAPH page's nodes sit (plan 28 N2): none is the
         #     automatic layout; an entry that is not a name and two numbers
         #     is dropped with a note; an old canvas id is read in today's
@@ -1322,8 +1322,8 @@ class Presets:
 
     def point_node_mode(self, player: int, controller: str, node: str) -> str | None:
         """Player `player`'s `controller` on `node`, one undo step, the dot lit
-        (plan 53 NM1: an edit of the preset); another node just switches. Why
-        not (the words), when the preset does not have `node`."""
+        (plan 53 NM1: an edit of the loadable patch); another node just switches. Why
+        not (the words), when the loadable patch does not have `node`."""
         if node not in self._pointable():
             return nodemode.NODE_GONE.format(node=node.removeprefix("render:"))
         if self.node_mode.of(player, controller) != node:
@@ -1338,7 +1338,7 @@ class Presets:
             self.node_mode = self.node_mode.leaving(player, controller)
 
     def document(self, name: str) -> dict:
-        """The live state as a preset document, named — what a save writes."""
+        """The live state as a loadable patch document, named — what a save writes."""
         # row 394 (the owner, 2026-10-25): every save is the newest schema,
         # in today's words — both Macs run the same build, so nothing is
         # written down for an older one (D1's lowest-schema rule, R10 and
@@ -1347,7 +1347,7 @@ class Presets:
         if self.note:
             doc["note"] = self.note
         table = self.router.table
-        # plan 26 A4: the graph the loaded preset carried — plan 35 T3: the
+        # plan 26 A4: the graph the loaded patch carried — plan 35 T3: the
         # wired frame the load or the GRAPH page landed; plan 36 T3: with
         # none landed (nothing loaded yet) the empty frame the renderer
         # draws for none (`graph.EMPTY`), black, so what a save writes is
@@ -1358,14 +1358,14 @@ class Presets:
             section = read_graph({FRAME_KEY: WIRED_FRAME}).to_json()
         doc[GRAPH_KEY] = copy.deepcopy(section)
         # plan 31 B: a bank's membership, only where it is not the default —
-        # a preset of four LFOs writes the file it always did
+        # a loadable patch of four LFOs writes the file it always did
         for bank in self.banks().values():
             if bank.doc() != list(bank.DEFAULT):
                 doc[bank.KEY] = bank.doc()
         values = self._values()
         # plan 36 T3 (W3): an effect exists only where the section names it
-        # — the values of one it does not (a rig's, before any graph
-        # landed) are not the preset's
+        # — the values of one it does not (a meta controller's, before any graph
+        # landed) are not the loadable patch's
         held = graphmigrate.section_effects(doc[GRAPH_KEY])
         values = {k: v for k, v in values.items()
                   if graphmigrate.effect_of(k) in (None, *held)}
@@ -1385,15 +1385,15 @@ class Presets:
         if bus:
             doc[BUS_KEY] = bus
         layout = getattr(self, "layout", None)
-        if layout:                      # plan 28 N2: a preset with none writes none
+        if layout:                      # plan 28 N2: a loadable patch with none writes none
             doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
         # plan 40 T2 (D4, D7): the groups, after the layout, each of what the
-        # preset still holds; a preset with none writes none (the schema is
+        # loadable patch still holds; a loadable patch with none writes none (the schema is
         # `/9` either way: plan 43 C2, row 576)
         groups = self.live_groups()
         if groups:
             doc[GROUPS_KEY] = groups
-        # plan 57 (NM0): a preset that points at nothing writes nothing
+        # plan 57 (NM0): a loadable patch that points at nothing writes nothing
         if self.node_mode:
             doc[NODE_MODE_KEY] = self.node_mode.to_json()
         # plan 32 S: the channels' bins
@@ -1419,10 +1419,10 @@ class Presets:
         return {pid: pose_angle(a) for pid, a in zip(POSE_IDS, view.pose(), strict=True)}
 
     def _values(self) -> dict[str, Any]:
-        """The preset's `values`: every performance base but the modifiers'
+        """The loadable patch's `values`: every performance base but the modifiers'
         params, which their entries hold (so a file saved here loads on an
         older build with no unknown id)."""
-        return {k: v for k, v in self.reg.snapshot(part="performance").items()
+        return {k: v for k, v in self.reg.snapshot(part="patch").items()
                 if not k.startswith(modifiers.PREFIX)}
 
     def _modifiers_part(self, name: str | None = None) -> dict:
@@ -1433,14 +1433,14 @@ class Presets:
 
     def _effect_files(self) -> dict:
         """The effect files a document's depths are measured against (wave
-        0 T1, `params.retaper_depths`): this rig's own `FxState`'s (the
+        0 T1, `params.retaper_depths`): this meta controller's own `FxState`'s (the
         graph section's, `GraphSection.fx`), else the registry's, else the
         shader folder's once."""
         state = self._graph_section().fx
         return fx_files(state if state is not None else self.reg)
 
     def _graph_section(self) -> GraphSection:
-        """The graph section's lander; made here for a `Presets` from
+        """The graph section's lander; made here for a `LoadedPatch` from
         before plan 26 A4 (a hot reload re-classes, never re-inits)."""
         gs = self.__dict__.get("graph")
         if gs is None:
@@ -1449,18 +1449,18 @@ class Presets:
         return gs
 
     def parts(self) -> tuple:
-        """Plan 40 T3: the loaded preset's parts, as `patches.lift` reads them
+        """Plan 40 T3: the loaded patch's parts, as `patches.lift` reads them
         (*save as patch*): the landed section (`GraphSpec`, None with none),
-        the table (`routing.Bindings`: its routes, preset-layer desk,
+        the table (`routing.Bindings`: its routes, patch-layer desk,
         modifiers, macros), the registry's snapshot of the performance
         params (a modifier's params among them) and the GRAPH page's
         layout. Reads only."""
         return (getattr(self._graph_section(), "spec", None), self.router.table,
-                self.reg.snapshot(part="performance"),
+                self.reg.snapshot(part="patch"),
                 dict(getattr(self, "layout", None) or {}))
 
     def _held_canvas(self) -> set[str]:
-        """Plan 40 T2: the GRAPH canvas ids the loaded preset holds that a
+        """Plan 40 T2: the GRAPH canvas ids the loaded patch holds that a
         group may name — its section's render nodes (``render:acid.2``), its
         modifiers, its LFOs and envelopes (the bank's ids; with no bank —
         a test's bare router — the voices the registry holds, the canvas's
@@ -1479,7 +1479,7 @@ class Presets:
 
     def _pointable(self, held: set[str] | None = None) -> set[str]:
         """Plan 57: the canvas ids node mode may point at: what a group may name
-        (`held`, `_held_canvas`), and the nodes with params every preset has
+        (`held`, `_held_canvas`), and the nodes with params every loadable patch has
         and no group holds: the camera, the sequencer, the eight channels. A node
         with no params here is `nodemode.enter_refusal`'s."""
         return (self._held_canvas() if held is None else held) | {
@@ -1488,8 +1488,8 @@ class Presets:
 
     @property
     def node_mode(self) -> nodemode.NodeMode:
-        """What this preset's controllers point at (plan 57). By `__dict__`, as
-        `groups`: a `Presets` from before a hot reload has none, and points at nothing."""
+        """What this loadable patch's controllers point at (plan 57). By `__dict__`, as
+        `groups`: a `LoadedPatch` from before a hot reload has none, and points at nothing."""
         d = self.__dict__
         if "_node_mode" not in d:
             d["_node_mode"] = nodemode.NodeMode()
@@ -1501,7 +1501,7 @@ class Presets:
 
     def _groupable(self, ids: list[str]) -> tuple[set[str], list[str]]:
         """Plan 40 T2: of canvas ids `ids`, those a group may hold and the
-        words for the rest (`patches.groupable`, plan 50: any node the preset saves)."""
+        words for the rest (`patches.groupable`, plan 50: any node the loadable patch saves)."""
         members, refused = patches.groupable(getattr(self._graph_section(), "spec", None),
                                           self.router.table, ids)
         return set(members.canvas()), refused
@@ -1526,7 +1526,7 @@ class Presets:
 
     def settle_groups(self) -> None:
         """2026-11-02 (G0, row 563): membership updated at once. Every
-        member the preset no longer holds (`_held_canvas`: a render node
+        member the loadable patch no longer holds (`_held_canvas`: a render node
         the section just landed without, a modifier or a voice just removed)
         is taken out of its group's list, in place, and a group left with
         none is taken out of the list — in the same operation that removed
@@ -1554,7 +1554,7 @@ class Presets:
 
     def live_groups(self) -> list[dict]:
         """Plan 40 T2: the groups as a save writes them — each member the
-        preset no longer holds left out, a group left with none left out —
+        loadable patch no longer holds left out, a group left with none left out —
         in the file's key order. Since row 563 the lists are kept so as the
         nodes go (`settle_groups`); this stays the save's own guard."""
         groups = getattr(self, "groups", None) or []
@@ -1570,18 +1570,18 @@ class Presets:
 
     def _desk_part(self, name: str | None = None) -> dict:
         """What a save writes for the desk: ``{"desk": rows}``, the whole
-        preset layer (plan 44 D3: the desk templates are retired)."""
+        patch layer (plan 44 D3: the desk templates are retired)."""
         return {"desk": desk_json(b for b in self.router.table.desk()
                                   if meta_row_refusal(b) is None)}
 
     def signature(self) -> tuple:
         """What the strip's dirty dot compares: the performance bases, the
-        performer rows, the desk's preset layer and the macros, each as it
+        performer rows, the desk's patch layer and the macros, each as it
         would be written — and the graph section (plan 26 A4; None for a
-        preset with none, so a file from before it is never dirty)."""
+        loadable patch with none, so a file from before it is never dirty)."""
         table = self.router.table
         # (plan 33 M: in the free graph's words, so a change to the run alone
-        # — which a pre-33 section says in values — dirties the preset too)
+        # — which a pre-33 section says in values — dirties the loadable patch too)
         section = self._graph_section().free_doc()
         return (self._values(),
                 json.dumps([b.to_json() for b in table.routes()]),
@@ -1617,29 +1617,29 @@ class Presets:
     def _landed(self, name: str | None) -> None:
         """The library's load hook: the bank lights the slot that names
         what just loaded, whichever road it came in by (the strip, an F-key,
-        a file edited on disk); a preset the bank does not name lights none.
-        A save lands here too: either way the preset is no longer `unsaved`."""
+        a file edited on disk); a loadable patch the bank does not name lights none.
+        A save lands here too: either way the loadable patch is no longer `unsaved`."""
         self.unsaved = False
         self.lib.project.follow()
         for fn in getattr(self, "listeners", ()):
             try:
                 fn(name)
             except Exception as e:  # noqa: BLE001 — a listener must not fail a load
-                # the library's warning line, never `note` (the preset's own,
+                # the library's warning line, never `note` (the loadable patch's own,
                 # saved back into the file)
                 self.lib.say(warning=f"preset listener: {type(e).__name__}: {e}"[:160])
 
 
 
 def device_knob(k: int, target: str) -> Binding:
-    """Device knob `k` (1–8) on the preset layer: absolute, ring feedback —
+    """Device knob `k` (1–8) on the patch layer: absolute, ring feedback —
     the row the factory map gives a knob (apc40._cc)."""
     return Binding.from_json(apc40._cc(target, apc40.DEVICE_KNOBS[k - 1], layer="preset"))
 
 
 def track_fader(k: int, target: str) -> Binding:
-    """Track fader `k` (S1–S8) on the preset layer (plan 24 C2): absolute,
+    """Track fader `k` (S1–S8) on the patch layer (plan 24 C2): absolute,
     soft pickup, no light — the row the factory map gives a fader under
-    SHIFT (apc40._cc with ring 0), on this preset's target."""
+    SHIFT (apc40._cc with ring 0), on this loadable patch's target."""
     return Binding.from_json(apc40._cc(target, apc40.CC_FADER, apc40.TRACK_FADERS[k - 1],
                                        ring=0, layer="preset"))

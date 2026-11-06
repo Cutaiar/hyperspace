@@ -2,7 +2,7 @@
 """Save-as on the desk, shown headless (plan 15 WP4, decision 29).
 
 The APC40's clip-stop row is one SAVE AS bar: any of its eight buttons
-held 0.6 s saves the live state as a **new** preset, named from the
+held 0.6 s saves the live state as a **new** loadable patch, named from the
 loaded one, into the next empty bank slot, whose pad blinks. A tap does
 nothing; the desk never overwrites. This builds the app's objects the
 way `tools/undo_demo.py` does — no window, a `MidiIO` over fake ports,
@@ -15,7 +15,7 @@ the bar refuses.
 
 It always runs on a fresh temp home of its own (`undo_demo` sets
 `HYPERSPACE_HOME` on import, before anything reads it, and seeds it with
-the test corpus: the party show and its presets): it cannot touch
+the test corpus: the party show and its loadable patches): it cannot touch
 ~/Hyperspace.
 
   uv run python tools/save_as_demo.py [--out docs/plans/assets/15-safety-net/save-as-demo.txt]
@@ -39,7 +39,7 @@ from undo_demo import frames, say, settle, stack
 import mido
 
 from hyperspace import apc40, midi
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 
 STOP, PAD = apc40.N_CLIPSTOP, apc40.N_CLIP[0]
 
@@ -71,7 +71,7 @@ def wait(r, seconds: float) -> None:
 
 def where(r) -> str:
     lib, bright = r.lib, r.reg["view.bright"]
-    return (f"preset {lib.current(PRESETS)}{' •' if lib.is_dirty(PRESETS) else ''}, "
+    return (f"preset {lib.current(LOADABLE)}{' •' if lib.is_dirty(LOADABLE) else ''}, "
             f"{bright.label} {bright.fmt(bright.base)}")
 
 
@@ -86,7 +86,7 @@ def files(r) -> str:
 
 
 def leds(r, since: int, t0: float) -> None:
-    """Every LED message the desk was sent for the bar and the preset row
+    """Every LED message the desk was sent for the bar and the patch row
     since `since`, with the time since `t0`: the bar as one line when its
     eight buttons got the same velocity in the same poll."""
     by_time: dict[float, dict[tuple[int, int], int]] = {}
@@ -127,7 +127,7 @@ def main() -> None:
     say(f"home folder: {demo.HOME}  (a temp folder made by this script)")
     frames(r, 5)
     rows = [b for b in table.midi() if b.op == "hold"]
-    say(f"show: {proj.name}   preset: {lib.current(PRESETS)}   "
+    say(f"show: {proj.name}   preset: {lib.current(LOADABLE)}   "
         f"hold {midi.HOLD_S} s, blink {midi.BLINK_S} s")
     say(f"the bar: {len(rows)} rows, {r.midi.control_name(rows[0])} … "
         f"{r.midi.control_name(rows[-1])}  →  {rows[0].target}  op {rows[0].op}  "
@@ -143,7 +143,7 @@ def main() -> None:
     say(f"    footer: {footer(r)}")
     say(f"    bank: {bank(r)}")
     say(f"    the show's file now holds: {json.loads(show.read_text())['bank']}")
-    say(f"    ACID is still a preset: {'ACID' in lib.list(PRESETS)}   <home>/presets: {files(r)}")
+    say(f"    ACID is still a preset: {'ACID' in lib.list(LOADABLE)}   <home>/presets: {files(r)}")
 
     say()
     say("2. TRIP (pad G1·5), an edit, then a tap on the bar: pressed 0.3 s, let go")
@@ -183,7 +183,7 @@ def main() -> None:
     doc = json.loads((demo.HOME / "presets" / "trip-2.json").read_text())
     say(f"    trip-2.json: name {doc['name']!r}, view.bright {doc['values']['view.bright']:g} "
         f"(the edit); TRIP itself is untouched: "
-        f"{lib.read(PRESETS, 'TRIP')['values']['view.bright']:g}")
+        f"{lib.read(LOADABLE, 'TRIP')['values']['view.bright']:g}")
     stack(r)
 
     say()

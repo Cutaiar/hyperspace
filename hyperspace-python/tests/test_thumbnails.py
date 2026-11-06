@@ -294,7 +294,7 @@ def test_the_page_wants_the_picture_nodes_it_draws_on_screen(rig):
     assert pics and any(n.thumb == graphview.SCENE_PIC for n in pics)
     everywhere = ((-1e9, -1e9), (1e9, 1e9))
     st["seen_rect"] = everywhere
-    st["preset_only"] = False
+    st["patch_only"] = False
     st["hide"] = ui_graph.hidden_ids(st, view)
     got = ui_graph.thumb_wants(st, view, lambda nid: ((0.0, 0.0), (10.0, 10.0)))
     drawn = {ui_graph.thumb_name(n) for n in pics
@@ -308,7 +308,7 @@ def test_the_page_wants_the_picture_nodes_it_draws_on_screen(rig):
     # 2026-10-31 preset only keeps every channel, so party-trip leaves no
     # picture node off: one is left off by hand, as a folded group's member is
     st["seen_rect"] = everywhere
-    st["preset_only"] = True
+    st["patch_only"] = True
     st["hide"] = ui_graph.hidden_ids(st, view) | {pics[0].id}
     hidden = {ui_graph.thumb_name(n) for n in pics if n.id in st["hide"]}
     assert hidden

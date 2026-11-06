@@ -66,8 +66,8 @@ def test_send_a_does_nothing_until_the_sequencer_is_there(rig):
     assert rig.midi.table.page is None and not rig.reg["seq.page"].value
 
 
-def test_a_pad_toggles_a_step_and_loads_no_preset(rig, seq):
-    lib, pr = rig.presets.lib, rig.presets
+def test_a_pad_toggles_a_step_and_loads_no_loadable(rig, seq):
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     tap(rig, CLIP[0], channel=1)                               # off the page: slot 2 loads
     before, active = lib.current("presets"), pr.active
     enter(rig)
@@ -80,7 +80,7 @@ def test_a_pad_toggles_a_step_and_loads_no_preset(rig, seq):
     assert seq.lanes[4].steps[0] == 1.0 and pr.active == active
     tap(rig, CLIP[0], channel=4)
     assert seq.lanes[0].steps[4] == 0.0
-    # a preset load (QUANT) leaves the page up; the pattern is the preset's
+    # a loadable patch load (QUANT) leaves the page up; the pattern is the loadable patch's
     # (decision 8), so the grid redraws to whatever the loaded one holds
     tap(rig, apc40.N_QUANT)
     assert lib.current("presets") != before
@@ -150,7 +150,7 @@ def test_an_advancing_playhead_sends_only_the_diff(rig, seq):
 
 
 def test_leaving_restores_the_bank_the_toggles_and_save(rig, seq):
-    lib = rig.presets.lib
+    lib = rig.loaded_patch.lib
     before = state(rig)
     enter(rig)
     tap(rig, CLIP[3], channel=2)
@@ -163,7 +163,7 @@ def test_leaving_restores_the_bank_the_toggles_and_save(rig, seq):
     assert rig.reg[routing.SAVE_PARAM].value
     push(rig, note(STOP, 0, channel=7))
     tap(rig, CLIP[0], channel=0)                               # and the bank loads
-    assert lib.current("presets") == rig.presets.bank[0]
+    assert lib.current("presets") == rig.loaded_patch.bank[0]
 
 
 def test_the_render_toggle_comes_back_on_leaving(rig, seq):
@@ -180,7 +180,7 @@ def test_the_render_toggle_comes_back_on_leaving(rig, seq):
 def test_a_bank_pad_held_across_send_a_never_saves(rig, seq):
     t = [0.0]
     rig.midi.clock = lambda: t[0]
-    pr = rig.presets
+    pr = rig.loaded_patch
     pr.clear_slot(5)
     push(rig, note(CLIP[0], channel=5))                        # the empty pad, held…
     push(rig, note(SEND_A), note(SEND_A, 0))                   # …across the switch
@@ -230,18 +230,18 @@ def test_a_power_cycle_with_the_page_up_resends_the_page(rig, seq):
 
 
 def test_older_files_get_send_a_unless_it_is_taken(tmp_path):
-    session = [b for b in Bindings.factory().bindings
-               if routing.is_session_row(b) and b.target != routing.SEQ_PAGE_PARAM]
+    meta_rows = [b for b in Bindings.factory().bindings
+               if routing.is_meta_row(b) and b.target != routing.SEQ_PAGE_PARAM]
     path = bindings_path(tmp_path / "a")
     (tmp_path / "a").mkdir()
-    Bindings(session, path=path).write()
+    Bindings(meta_rows, path=path).write()
     t = Bindings.load(path, legacy_midi=None)
     assert [b.target for b in t.route("note", 0, SEND_A)] == [routing.SEQ_PAGE_PARAM]
     assert "added note:0:88 → seq.page (the APC40 map of plan 31)" in t.notes
     mine = Binding(f"note:0:{SEND_A}", "view.points", "toggle", feedback="led")
     path = bindings_path(tmp_path / "b")
     (tmp_path / "b").mkdir()
-    Bindings([*session, mine], path=path).write()
+    Bindings([*meta_rows, mine], path=path).write()
     t = Bindings.load(path, legacy_midi=None)
     assert [b.target for b in t.route("note", 0, SEND_A)] == ["view.points"]
     assert "the sequencer page not added: note:0:88 is yours (view.points)" in t.said

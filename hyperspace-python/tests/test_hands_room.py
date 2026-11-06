@@ -360,7 +360,7 @@ def test_a_room_entrys_mode_of_any_type_is_ignored_and_said(tmp_path, capsys, mo
 
 def test_a_tape_from_before_a_hot_reload_is_still_a_tape(tmp_path):
     """Both modules reload, so a playing tape is an instance of the old class:
-    still no levelling, and the rig's file untouched."""
+    still no levelling, and the meta controller's file untouched."""
     cal = _levelled(tmp_path, "desktop")
     before = cal.read_text()
     body = {k: v for k, v in T.TapeSource.__dict__.items() if k not in ("__dict__", "__weakref__")}
@@ -461,7 +461,7 @@ def test_a_levelling_from_another_mode_is_ignored_said_and_kept(tmp_path, capsys
     assert json.loads(cal.read_text())["room"]["mode"] == "desktop"
 
 
-def test_a_tape_plays_in_its_own_frame_and_never_touches_the_rigs_file(tmp_path):
+def test_a_tape_plays_in_its_own_frame_and_never_touches_the_meta_file(tmp_path):
     """A screentop tape on a desktop rig that has a levelling: the tape's
     mode, no levelling, and no way to make or clear one from it."""
     cal = _levelled(tmp_path, "desktop")

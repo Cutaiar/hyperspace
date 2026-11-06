@@ -1,20 +1,20 @@
-"""Plan 40 T2 (P2, D4, D7) — the group node: groups in the preset, folded
+"""Plan 40 T2 (P2, D4, D7) — the group node: groups in the loadable patch, folded
 by default, open in place, Group and Ungroup.
 
-A group is a region of the loaded preset (`preset.GROUPS_KEY`: ``{"id":
+A group is a region of the loaded patch (`loadable.GROUPS_KEY`: ``{"id":
 "group.1", "name", "patch"?, "nodes": [canvas ids], "open"}``) drawn on
 GRAPH as one node. Folded — the owner's one sanctioned exception to plan
 36's no-hidden-edge rule (D4) — its members are not drawn and neither is a
 cable with both ends inside; every cable with one end inside is drawn
 re-ended at the group node. Open, everything is drawn as if there were no
 group, in a titled region. The renderer never hears the word: a grouped
-preset's `graph.build_graph` has its ungrouped twin's `graph.signature`
+loadable patch's `graph.build_graph` has its ungrouped twin's `graph.signature`
 (the goldens' half of the proof is `test_golden_frames.py`'s).
 
 Headless, on the shell's rig (tests/test_ui_shell.py) with party-noita
 loaded — warp → doublevision → fractals, K-knobs and hand rows on them —
-and the page drawn for real on `imgui_node_editor`; the presets' half on
-`headless.make_app`. No preset is edited or added: the grouped twins are
+and the page drawn for real on `imgui_node_editor`; the loadable patches' half on
+`headless.make_app`. No loadable patch is edited or added: the grouped twins are
 written into scratch libraries, and one is the fixture
 tests/fixtures/groups/party-noita-grouped.json."""
 
@@ -33,7 +33,7 @@ from test_graphview import _in_editor
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import devices, graphmigrate, graphview, headless, patches, preset, ui_graph, undo
+from hyperspace import devices, graphmigrate, graphview, headless, loadable, patches, ui_graph, undo
 from hyperspace import graph as G
 from hyperspace.library import Marks
 from hyperspace.outputs import Switches, View
@@ -53,7 +53,7 @@ def noita(rig, groups=None):
     """party-noita on the GRAPH page (its `groups` set as a load would),
     drawn twice. Returns the page's state."""
     rig.lib.load("presets", "party-noita")
-    rig.lib.presets.groups = [{**g, "nodes": list(g["nodes"])} for g in groups or ()]
+    rig.lib.loaded_patch.groups = [{**g, "nodes": list(g["nodes"])} for g in groups or ()]
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     return ui_graph._state(rig.panel)
@@ -77,8 +77,8 @@ def watch(rig):
 
 def grouped_twin(doc: dict, ids: list[str], name: str = "main run") -> dict:
     """`doc` with one folded group of `ids` — what a save of it writes."""
-    out = {**doc, "schema": preset.SAVE_SCHEMA,
-           preset.GROUPS_KEY: [{"id": "group.1", "name": name, "nodes": ids, "open": False}]}
+    out = {**doc, "schema": loadable.SAVE_SCHEMA,
+           loadable.GROUPS_KEY: [{"id": "group.1", "name": name, "nodes": ids, "open": False}]}
     if "media" in out:                              # (`document`'s order: groups before media)
         out["media"] = out.pop("media")
     return out
@@ -90,69 +90,69 @@ def main_run(doc: dict) -> tuple[str, ...]:
     return G.run_back(G.read_graph(doc["graph"]), "output.all.image")
 
 
-# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
-CORPUS_PRESETS = sorted((CORPUS / "presets").glob("*.json"))
-RUNS = {p.stem: main_run(json.loads(p.read_text())) for p in CORPUS_PRESETS}
+# the corpus: the loadable patches the build once shipped (tests/corpus/presets, one tier)
+CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
+RUNS = {p.stem: main_run(json.loads(p.read_text())) for p in CORPUS_LOADABLES}
 NO_RUN = {slug for slug, run in RUNS.items() if not run}
 
 
-# ---------------------------------------------------------------- in the preset (D7)
+# ---------------------------------------------------------------- in the loadable patch (D7)
 
 def test_the_schema_is_eight_and_the_key_absent_is_no_groups():
     """D7: 37B took no `/8`, so `groups` is `/8`; the ladder reads it; the
     one migration step is "the key is absent → no groups"."""
-    assert preset.GROUPS_SCHEMA == "hyperspace.preset/8" and 8 in preset.VERSIONS
-    assert preset.GROUPS_KEY == "groups"
-    assert graphmigrate.groups_of({"schema": preset.WIRED_SCHEMA}) == []
+    assert loadable.GROUPS_SCHEMA == "hyperspace.preset/8" and 8 in loadable.VERSIONS
+    assert loadable.GROUPS_KEY == "groups"
+    assert graphmigrate.groups_of({"schema": loadable.WIRED_SCHEMA}) == []
     assert graphmigrate.groups_of({"groups": [ENTRY]}) == [ENTRY]
     assert graphmigrate.groups_of(None) == []
 
 
 def test_one_rule_reads_a_group_number_for_the_load_and_for_group():
-    """`graphmigrate.group_number` (a leaf both import) is the preset's and
+    """`graphmigrate.group_number` (a leaf both import) is the loadable patch's and
     GRAPH's: a group landed after `group.0` and a hand-edited `group.x`
     is `group.1`, after `group.7` is `group.8`."""
     gn = graphmigrate.group_number
-    assert preset.group_number is gn and not hasattr(graphview, "_group_n")
+    assert loadable.group_number is gn and not hasattr(graphview, "_group_n")
     assert [gn(x) for x in ("group.3", "group.0", "group.x", "mod.3", 3, None)] == [
         3, 0, 0, 0, 0, 0]
     from types import SimpleNamespace
     e = graphview.Edit()
-    e.presets = SimpleNamespace(groups=[{"id": "group.0"}, {"id": "group.x"}])
+    e.loaded_patch = SimpleNamespace(groups=[{"id": "group.0"}, {"id": "group.x"}])
     assert e.land_group({"nodes": ["render:warp"]})["id"] == "group.1"
-    assert e.presets.group_high == 1            # (row 563: the floor, seeded from held)
-    e.presets = SimpleNamespace(groups=[{"id": "group.7"}])
+    assert e.loaded_patch.group_high == 1            # (row 563: the floor, seeded from held)
+    e.loaded_patch = SimpleNamespace(groups=[{"id": "group.7"}])
     assert e.land_group({"nodes": ["render:acid"]})["id"] == "group.8"
 
 
-def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path):
+def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_path):
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-noita")
-    app.presets.groups = [dict(ENTRY, patch="noita-core")]
-    doc = app.presets.document("noita grouped")
+    app.loaded_patch.groups = [dict(ENTRY, patch="noita-core")]
+    doc = app.loaded_patch.document("noita grouped")
     assert doc["schema"] == "hyperspace.preset/10"          # (plan 43 C2: every save)
     assert doc["groups"] == [{"id": "group.1", "name": "noita core", "patch": "noita-core",
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
     assert keys.index("groups") == keys.index("media") - 1      # after layout, before media
-    text = preset.dumps(doc)
+    text = loadable.dumps(doc)
     assert '\n  {"id": "group.1"' in text                         # one group a line
     fresh = headless.make_app(tmp_path / "b")
-    assert fresh.presets.load_doc(json.loads(text)) == []
-    assert fresh.presets.notes == []
-    assert fresh.presets.groups == doc["groups"]
-    assert preset.dumps(fresh.presets.document("noita grouped")) == text
+    assert fresh.loaded_patch.load_doc(json.loads(text)) == []
+    assert fresh.loaded_patch.notes == []
+    assert fresh.loaded_patch.groups == doc["groups"]
+    assert loadable.dumps(fresh.loaded_patch.document("noita grouped")) == text
 
 
 def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     """The grouped fixture (party-noita and one group; `/9` since plan 43
     C2) loaded and saved untouched is the same bytes — and so is every
-    corpus preset, with no groups (a `/9` without the key)."""
+    corpus loadable patch, with no groups (a `/9` without the key)."""
     raw = FIXTURE.read_bytes()
     assert json.loads(raw)["schema"] == "hyperspace.preset/10"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
     assert notes == [] and again == raw
-    for k, path in enumerate(CORPUS_PRESETS):
+    for k, path in enumerate(CORPUS_LOADABLES):
         data = path.read_bytes()
         again, _, _ = headless.resave(path, tmp_path / f"f{k}")
         assert again == data and b'"groups"' not in again, path.name
@@ -168,17 +168,17 @@ def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
                                                                    "render:fractals"]},
                       {"id": "group.5", "name": "twice", "nodes": ["render:warp", "lfo.1"]},
                       "not a group"]
-    app.presets.load_doc(doc)
-    assert app.presets.notes == [
+    app.loaded_patch.load_doc(doc)
+    assert app.loaded_patch.notes == [
         "group acid wash: acid.3 is not in the preset — left out",
         "group gone: kaleido is not in the preset — left out",
         "group gone: nothing of it is in the preset — left out",
         "group frame: mod.9 is not in the preset — left out",
         "group twice: warp is in group acid wash already — left out",
         "groups: an entry that is not a group, ignored"]
-    # (plan 50: a group holds any node the preset saves — the scene too;
+    # (plan 50: a group holds any node the loadable patch saves — the scene too;
     # whether it saves as a patch is asked at the save)
-    assert app.presets.groups == [
+    assert app.loaded_patch.groups == [
         {"id": "group.1", "name": "acid wash", "nodes": ["render:warp"], "open": False},
         {"id": "group.4", "name": "frame", "nodes": ["render:scene", "render:fractals"],
          "open": False},
@@ -190,7 +190,7 @@ def test_with_no_bank_the_held_voices_are_the_ones_the_registry_holds(rig):
     group may hold are the ones the canvas draws (`graphview.bank_ids` over
     the registry), never any id up to 99 — a save drops a member no voice
     is."""
-    pre = rig.lib.presets
+    pre = rig.lib.loaded_patch
     rig.lib.load("presets", "party-noita")
     assert pre.banks() == {}
     lfos = graphview.bank_ids(None, rig.reg, "lfo")
@@ -205,18 +205,18 @@ def test_with_no_bank_the_held_voices_are_the_ones_the_registry_holds(rig):
 def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_member(tmp_path):
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-noita")
-    clean = app.presets.signature()
+    clean = app.loaded_patch.signature()
     assert not app.lib.is_dirty("presets")
-    app.presets.groups = [dict(ENTRY)]
-    assert app.presets.signature() != clean and app.lib.is_dirty("presets")
-    app.presets.groups = []
-    assert app.presets.signature() == clean and not app.lib.is_dirty("presets")
+    app.loaded_patch.groups = [dict(ENTRY)]
+    assert app.loaded_patch.signature() != clean and app.lib.is_dirty("presets")
+    app.loaded_patch.groups = []
+    assert app.loaded_patch.signature() == clean and not app.lib.is_dirty("presets")
     # a member deleted since: the save leaves it out, and the group with it
-    app.presets.groups = [dict(ENTRY, nodes=["render:warp", "render:acid.4"]),
+    app.loaded_patch.groups = [dict(ENTRY, nodes=["render:warp", "render:acid.4"]),
                           dict(ENTRY, id="group.2", nodes=["render:acid.4"])]
-    assert app.presets.document("x")["groups"] == [dict(ENTRY, nodes=["render:warp"])]
-    app.presets.groups = [dict(ENTRY, nodes=["render:acid.4"])]
-    doc = app.presets.document("x")
+    assert app.loaded_patch.document("x")["groups"] == [dict(ENTRY, nodes=["render:warp"])]
+    app.loaded_patch.groups = [dict(ENTRY, nodes=["render:acid.4"])]
+    doc = app.loaded_patch.document("x")
     assert "groups" not in doc and doc["schema"] == "hyperspace.preset/10"   # (C2: /9 either way)
 
 
@@ -226,10 +226,10 @@ def _views(n=2):
     return [View(Switches(), (64, 48)) for _ in range(n)]
 
 
-def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
-    """For every corpus preset, the section loaded with its main run
+def test_a_grouped_loadable_builds_the_graph_of_its_ungrouped_twin(tmp_path):
+    """For every corpus loadable patch, the section loaded with its main run
     grouped is its ungrouped twin's: the same section, and `build_graph`
-    of it the same `graph.signature`. The presets with no main run are
+    of it the same `graph.signature`. The loadable patches with no main run are
     named (T1's `NO_RUN`): none has an effect, so each is proved with every
     node a group may hold grouped instead (review fix) — party-tracer's and
     party-wake's look-back, composite (and dream); wave 3 P1: the other
@@ -240,10 +240,10 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
                       "strobe-cage", "woven-lattice", "party-tracer"}
     app = headless.make_app(tmp_path)
     done, others = [], []
-    for path in CORPUS_PRESETS:
+    for path in CORPUS_LOADABLES:
         doc = json.loads(path.read_text())
-        app.presets.load_doc(doc)
-        flat = app.presets.graph.spec
+        app.loaded_patch.load_doc(doc)
+        flat = app.loaded_patch.graph.spec
         ids = [f"render:{n}" for n in RUNS[path.stem]]
         if not ids:     # no main run (and no effect): every node a group may hold, grouped
             every = [f"render:{n}" for n in sorted(patches.spec_names(flat))]
@@ -254,14 +254,14 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
                 continue
             others.append(path.stem)
         want = G.signature(G.build_graph(_views(), flat.wiring()))
-        app.presets.load_doc(grouped_twin(doc, ids))
-        assert app.presets.notes == [], path.stem
-        assert app.presets.groups[0]["nodes"] == ids, path.stem
-        spec = app.presets.graph.spec
+        app.loaded_patch.load_doc(grouped_twin(doc, ids))
+        assert app.loaded_patch.notes == [], path.stem
+        assert app.loaded_patch.groups[0]["nodes"] == ids, path.stem
+        spec = app.loaded_patch.graph.spec
         assert spec.to_json() == flat.to_json(), path.stem
         assert G.signature(G.build_graph(_views(), spec.wiring())) == want, path.stem
         done.append(path.stem)
-    assert len(done) - len(others) == len(CORPUS_PRESETS) - len(NO_RUN) >= 9
+    assert len(done) - len(others) == len(CORPUS_LOADABLES) - len(NO_RUN) >= 9
     assert sorted(others) == sorted(NO_RUN)
 
 
@@ -319,7 +319,7 @@ def test_a_folded_group_hides_its_members_and_inside_cables_and_reends_the_rest(
     assert "group.1" in st["regions"]
 
 
-def test_a_rig_node_is_never_a_member_and_preset_only_keeps_the_group(rig):
+def test_a_meta_node_is_never_a_member_and_loadable_only_keeps_the_group(rig):
     st = noita(rig)
     assert ui_graph.group_nodes(rig.panel, ["device:apc40", "analyzer"]) is None
     assert st["note"] == ("device:apc40 is the rig's; left out; analyzer is the rig's; left "
@@ -327,7 +327,7 @@ def test_a_rig_node_is_never_a_member_and_preset_only_keeps_the_group(rig):
     st = noita(rig, [dict(ENTRY, nodes=[*NOITA_CORE, "device:apc40"])])
     (g,) = st["view"].groups
     assert g.ids == frozenset(NOITA_CORE)               # the rig's left out of the drawing too
-    assert set(NOITA_CORE) <= graphview.preset_only(st["view"])
+    assert set(NOITA_CORE) <= graphview.patch_only(st["view"])
     assert ui_graph._id(st, "n:group.1") in st["names"]   # the folded node is on the canvas
 
 
@@ -335,7 +335,7 @@ def test_a_rig_node_is_never_a_member_and_preset_only_keeps_the_group(rig):
 
 def test_a_group_holds_a_copy_alone_and_the_save_refuses_it_in_words(rig):
     """Plan 50 (harden-node-groups' second half): a group holds any node
-    the preset saves — a copy without its original too, which no patch can
+    the loadable patch saves — a copy without its original too, which no patch can
     carry — and the check that it can be saved as a patch runs at the save:
     refused in words, nothing written, the group as it was."""
     noita(rig)
@@ -347,9 +347,9 @@ def test_a_group_holds_a_copy_alone_and_the_save_refuses_it_in_words(rig):
         graphview.SAVE_REFUSED.format(name="group 1", why=patches.COPY_WORDS.format(
             name="copy", of="warp")))
     assert files(rig.lib.home) == home
-    assert rig.lib.presets.groups == [entry] and "patch" not in entry
-    # the preset saves it and reads it back as it was
-    doc = rig.lib.presets.document("x")
+    assert rig.lib.loaded_patch.groups == [entry] and "patch" not in entry
+    # the loadable patch saves it and reads it back as it was
+    doc = rig.lib.loaded_patch.document("x")
     assert doc["groups"] == [entry]
 
 
@@ -360,14 +360,14 @@ def test_group_from_a_selection_refuses_a_group_and_keeps_the_rest(rig):
     assert entry == {"id": "group.1", "name": "group 1",
                      "nodes": ["render:warp", "render:doublevision"], "open": False}
     assert st["note"] == "group.7 is a group: a group holds nodes, not groups; left out"
-    assert rig.lib.presets.groups == [entry]
+    assert rig.lib.loaded_patch.groups == [entry]
     frame(rig.panel, "graph")
     assert [g.id for g in st["view"].groups] == ["group.1"]
     # a second group takes fractals and moves doublevision over, said
     two = ui_graph.group_nodes(rig.panel, ["render:doublevision", "render:fractals"])
     assert two["id"] == "group.2" and two["name"] == "group 2"
     assert st["note"] == "doublevision left group 1 for this group"
-    assert [g["nodes"] for g in rig.lib.presets.groups] == [
+    assert [g["nodes"] for g in rig.lib.loaded_patch.groups] == [
         ["render:warp"], ["render:doublevision", "render:fractals"]]
     # its id is one past the highest held, never one held
     ui_graph.ungroup(rig.panel, "group.1")
@@ -392,7 +392,7 @@ def test_the_right_click_menus_offer_group_with_two_nodes_selected(rig, monkeypa
     imgui.end()
     imgui.end_frame()
     assert items[0] == "group 2 nodes"
-    assert rig.lib.presets.groups[0]["nodes"] == NOITA_CORE[:2]
+    assert rig.lib.loaded_patch.groups[0]["nodes"] == NOITA_CORE[:2]
     # the group's own menu: open / fold, rename…, ungroup
     frame(rig.panel, "graph")
     items.clear()
@@ -406,7 +406,7 @@ def test_the_right_click_menus_offer_group_with_two_nodes_selected(rig, monkeypa
     imgui.end_frame()
     # (plan 40 T3: and save as patch…; update patch only for a group with a patch)
     assert items == ["open", "rename…", "save as patch…", "ungroup"]
-    assert rig.lib.presets.groups[0]["open"] is True
+    assert rig.lib.loaded_patch.groups[0]["open"] is True
 
 
 def test_a_box_select_across_an_open_group_leaves_its_title_out_of_group(rig):
@@ -430,30 +430,30 @@ def test_a_box_select_across_an_open_group_leaves_its_title_out_of_group(rig):
 
 def test_ungroup_leaves_every_node_and_cable_where_it_was(rig):
     st = noita(rig)
-    flat = (rig.lib.presets.graph.spec.to_json(), [b.to_json() for b in rig.router.table.bindings],
-            dict(rig.lib.presets.layout), count(st["view"]))
+    flat = (rig.lib.loaded_patch.graph.spec.to_json(), [b.to_json() for b in rig.router.table.bindings],
+            dict(rig.lib.loaded_patch.layout), count(st["view"]))
     st = noita(rig, [ENTRY])
     assert ui_graph.ungroup(rig.panel, "group.1") is None
     assert st["said"] == "noita core taken apart: its 3 nodes stay where they are"
     frame(rig.panel, "graph")
     view = st["view"]
-    assert view.groups == [] and rig.lib.presets.groups == []
-    assert (rig.lib.presets.graph.spec.to_json(), [b.to_json() for b in rig.router.table.bindings],
-            dict(rig.lib.presets.layout), count(view)) == flat
+    assert view.groups == [] and rig.lib.loaded_patch.groups == []
+    assert (rig.lib.loaded_patch.graph.spec.to_json(), [b.to_json() for b in rig.router.table.bindings],
+            dict(rig.lib.loaded_patch.layout), count(view)) == flat
     assert ui_graph.ungroup(rig.panel, "group.1") == "no group group.1"
 
 
 def test_a_group_made_then_undone_is_gone_and_the_signature_is_back(rig):
     noita(rig)
-    sig = rig.lib.presets.signature()
+    sig = rig.lib.loaded_patch.signature()
     u = watch(rig)
     try:
         ui_graph.group_nodes(rig.panel, NOITA_CORE)
         assert u.stack[-1].label == "group 3 nodes"
-        assert rig.lib.presets.signature() != sig and rig.lib.is_dirty("presets")
+        assert rig.lib.loaded_patch.signature() != sig and rig.lib.is_dirty("presets")
         assert u.undo()
-        assert rig.lib.presets.groups == [] and rig.lib.presets.signature() == sig
-        assert u.redo() and len(rig.lib.presets.groups) == 1
+        assert rig.lib.loaded_patch.groups == [] and rig.lib.loaded_patch.signature() == sig
+        assert u.redo() and len(rig.lib.loaded_patch.groups) == 1
     finally:
         undo.install(None)
 
@@ -469,9 +469,9 @@ def test_rename_open_and_fold_are_each_one_step(rig):
         u.tick(4.0)
         assert ui_graph.set_open(rig.panel, "group.1", True) is None
         assert u.stack[-1].label == "open core"
-        assert rig.lib.presets.groups[0] == dict(ENTRY, name="core", open=True)
-        assert u.undo() and rig.lib.presets.groups[0]["open"] is False
-        assert u.undo() and rig.lib.presets.groups[0]["name"] == "noita core"
+        assert rig.lib.loaded_patch.groups[0] == dict(ENTRY, name="core", open=True)
+        assert u.undo() and rig.lib.loaded_patch.groups[0]["open"] is False
+        assert u.undo() and rig.lib.loaded_patch.groups[0]["name"] == "noita core"
     finally:
         undo.install(None)
 
@@ -484,7 +484,7 @@ def _moved(rig, st, nid, xy):
 
 def test_a_drag_of_the_title_moves_every_member_in_one_step(rig):
     """The open region's title dragged: every member by the same delta, in
-    the preset's layout, one undo step; ⌘Z puts every member back."""
+    the loadable patch's layout, one undo step; ⌘Z puts every member back."""
     st = noita(rig, [dict(ENTRY, open=True)])
     title = ui_graph.region_id("group.1")
     was = {m: tuple(st["applied"][m]) for m in NOITA_CORE}
@@ -492,15 +492,15 @@ def test_a_drag_of_the_title_moves_every_member_in_one_step(rig):
     u = watch(rig)
     try:
         _moved(rig, st, title, (at[0] + 40, at[1] - 30))
-        lay = rig.lib.presets.layout
+        lay = rig.lib.loaded_patch.layout
         px, py = ui_graph.panned(st)
         assert {m: tuple(lay[m]) for m in NOITA_CORE} == {
             m: (round(x - px + 40), round(y - py - 30)) for m, (x, y) in was.items()}
         assert u.stack[-1].label == "move noita core"
-        assert rig.lib.presets.groups[0]["nodes"] == NOITA_CORE   # nobody left
+        assert rig.lib.loaded_patch.groups[0]["nodes"] == NOITA_CORE   # nobody left
         frame(rig.panel, "graph")
         assert u.undo()
-        assert not any(m in rig.lib.presets.layout for m in NOITA_CORE)
+        assert not any(m in rig.lib.loaded_patch.layout for m in NOITA_CORE)
     finally:
         undo.install(None)
 
@@ -516,14 +516,14 @@ def test_a_drag_of_the_folded_node_moves_every_member(rig):
     try:
         n = len(u.stack)
         _moved(rig, st, "group.1", (at[0] + 100, at[1] + 10))
-        lay = rig.lib.presets.layout
+        lay = rig.lib.loaded_patch.layout
         assert {m: tuple(lay[m]) for m in NOITA_CORE} == {
             m: (round(x + 100), round(y + 10)) for m, (x, y) in was.items()}
         assert len(u.stack) == n + 1 and u.stack[-1].label == "move noita core"
         frame(rig.panel, "graph")
         assert tuple(st["applied"]["group.1"]) == (at[0] + 100, at[1] + 10)
         assert u.undo()
-        assert not any(m in rig.lib.presets.layout for m in NOITA_CORE)
+        assert not any(m in rig.lib.loaded_patch.layout for m in NOITA_CORE)
     finally:
         undo.install(None)
 
@@ -534,10 +534,10 @@ def test_a_member_dragged_out_leaves_the_group(rig):
     try:
         x, y = st["applied"]["render:fractals"]
         _moved(rig, st, "render:fractals", (x + 3000, y + 3000))
-        assert rig.lib.presets.groups[0]["nodes"] == NOITA_CORE[:2]
+        assert rig.lib.loaded_patch.groups[0]["nodes"] == NOITA_CORE[:2]
         assert st["said"] == "fractals left noita core"
         px, py = ui_graph.panned(st)
-        assert rig.lib.presets.layout["render:fractals"] == [round(x + 3000 - px),
+        assert rig.lib.loaded_patch.layout["render:fractals"] == [round(x + 3000 - px),
                                                              round(y + 3000 - py)]
         assert u.stack[-1].label == "render:fractals leaves noita core"
         frame(rig.panel, "graph")
@@ -546,7 +546,7 @@ def test_a_member_dragged_out_leaves_the_group(rig):
         # a member nudged inside its region stays
         x, y = st["applied"]["render:warp"]
         _moved(rig, st, "render:warp", (x + 5, y + 5))
-        assert rig.lib.presets.groups[0]["nodes"] == NOITA_CORE[:2]
+        assert rig.lib.loaded_patch.groups[0]["nodes"] == NOITA_CORE[:2]
     finally:
         undo.install(None)
 
@@ -567,14 +567,14 @@ def test_two_members_dragged_out_together_leave_in_one_step(rig):
                                      imgui.ImVec2(x + 3000, y + 3000))
         _in_editor(rig, drag)
         frame(rig.panel, "graph")
-        assert rig.lib.presets.groups[0]["nodes"] == NOITA_CORE[:1]
+        assert rig.lib.loaded_patch.groups[0]["nodes"] == NOITA_CORE[:1]
         assert len(u.stack) == n + 1 and u.stack[-1].label == "2 nodes leave noita core"
         assert st["said"] == "doublevision, fractals left noita core"
         px, py = ui_graph.panned(st)
-        assert {m: rig.lib.presets.layout[m] for m in at} == {
+        assert {m: rig.lib.loaded_patch.layout[m] for m in at} == {
             m: [round(x + 3000 - px), round(y + 3000 - py)] for m, (x, y) in at.items()}
         frame(rig.panel, "graph")
-        assert u.undo() and rig.lib.presets.groups[0]["nodes"] == NOITA_CORE
+        assert u.undo() and rig.lib.loaded_patch.groups[0]["nodes"] == NOITA_CORE
     finally:
         undo.install(None)
 
@@ -584,7 +584,7 @@ def test_the_last_member_leaving_takes_the_group():
     pre = SimpleNamespace(groups=[{"id": "group.1", "name": "one", "nodes": ["render:warp"],
                                    "open": True}], layout={})
     e = graphview.Edit()
-    e.presets = pre
+    e.loaded_patch = pre
     assert e.leave_group("group.1", "render:warp", (10, 20)) is None
     assert pre.groups == [] and pre.layout == {"render:warp": [10, 20]}
     assert e.said == "warp left one, the last of it: the group is gone"
@@ -596,8 +596,8 @@ def test_a_groups_number_is_never_handed_out_twice(rig):
     """Row 563: an ungrouped group's number is not the next group's. Before,
     `land_group` took one past the highest *held*, so ungrouping the newest
     group handed its id to the next one made — and the page's state keyed
-    by that id (its node, its selection) met a stranger. Now the preset
-    keeps the highest it has ever allotted (`Presets.group_high`), the
+    by that id (its node, its selection) met a stranger. Now the loadable patch
+    keeps the highest it has ever allotted (`LoadedPatch.group_high`), the
     file's highest at the load counting the entries the load dropped, and
     an undo that takes a group back does not give its number away."""
     noita(rig)
@@ -607,11 +607,11 @@ def test_a_groups_number_is_never_handed_out_twice(rig):
     assert ui_graph.ungroup(rig.panel, "group.2") is None
     three = ui_graph.group_nodes(rig.panel, NOITA_CORE[2:])
     assert three["id"] == "group.3"                     # (was group.2 again)
-    assert [g["id"] for g in rig.lib.presets.groups] == ["group.1", "group.3"]
+    assert [g["id"] for g in rig.lib.loaded_patch.groups] == ["group.1", "group.3"]
     u = watch(rig)
     try:
         ui_graph.ungroup(rig.panel, "group.3")
-        assert u.undo() and [g["id"] for g in rig.lib.presets.groups] == ["group.1", "group.3"]
+        assert u.undo() and [g["id"] for g in rig.lib.loaded_patch.groups] == ["group.1", "group.3"]
         ui_graph.ungroup(rig.panel, "group.3")
         four = ui_graph.group_nodes(rig.panel, NOITA_CORE[2:])
         assert four["id"] == "group.4"                  # not 3: an undo gives nothing away
@@ -619,12 +619,12 @@ def test_a_groups_number_is_never_handed_out_twice(rig):
         undo.install(None)
     # a reload starts from the file's own numbers — every id it names, kept
     # or dropped at the load (no counter is saved: the schema is as it was)
-    doc = rig.lib.presets.document("x")
-    assert "group_high" not in doc and doc["schema"] == preset.SAVE_SCHEMA
+    doc = rig.lib.loaded_patch.document("x")
+    assert "group_high" not in doc and doc["schema"] == loadable.SAVE_SCHEMA
     doc["groups"].append({"id": "group.9", "name": "gone", "nodes": ["render:kaleido"]})
-    rig.lib.presets.load_doc(doc)
-    assert [g["id"] for g in rig.lib.presets.groups] == ["group.1", "group.4"]
-    assert rig.lib.presets.group_high == 9
+    rig.lib.loaded_patch.load_doc(doc)
+    assert [g["id"] for g in rig.lib.loaded_patch.groups] == ["group.1", "group.4"]
+    assert rig.lib.loaded_patch.group_high == 9
     e = ui_graph.group_edit(rig.panel)
     assert e.land_group({"nodes": ["render:tripcolour"]})["id"] == "group.10"
 
@@ -636,7 +636,7 @@ def test_a_member_deleted_leaves_its_group_in_the_same_operation(rig):
     the dead id until `attach_groups` or `live_groups` filtered it); the
     last member going takes the group; and the undo of that delete puts
     the member back in its group (the step carries the marks)."""
-    pre, table = rig.lib.presets, rig.router.table
+    pre, table = rig.lib.loaded_patch, rig.router.table
     noita(rig, [ENTRY])
     m = table.add_modifier("scale", ["lane:1"], rig.reg)
     pre.groups = [*pre.groups, {"id": "group.2", "name": "mods", "nodes": [m.id], "open": False}]
@@ -675,7 +675,7 @@ def test_a_member_deleted_leaves_its_group_in_the_same_operation(rig):
 
 
 def _group_invariants(pre, seen: set[str]) -> None:
-    """What must hold of a preset's groups at every step: no dangling member,
+    """What must hold of a loadable patch's groups at every step: no dangling member,
     no id twice (a group's, a member's), every wire on a node the graph
     holds, and every group id one of this life's (`seen`)."""
     held = pre._held_canvas()
@@ -692,7 +692,7 @@ def _group_invariants(pre, seen: set[str]) -> None:
         assert w.node in names and graphview.kind_of(w.node) is not None, w
         assert (G.pin_node(w.src) or w.src) in names, w
     # a save writes exactly the live lists: nothing left for it to drop
-    assert pre.live_groups() == [preset.group_entry(g) for g in pre.groups]
+    assert pre.live_groups() == [loadable.group_entry(g) for g in pre.groups]
 
 
 def _stripped(doc: dict) -> dict:
@@ -700,33 +700,33 @@ def _stripped(doc: dict) -> dict:
 
 
 def _round_trip(pre, tmp_path, k: int) -> dict:
-    """The preset saved and loaded by a fresh app: its groups land whole
+    """The loadable patch saved and loaded by a fresh app: its groups land whole
     (every member there) and its document is the same again."""
     doc = pre.document("x")
     fresh = headless.make_app(tmp_path / f"rt{k}")
-    fresh.presets.load_doc(json.loads(preset.dumps(doc)))
-    assert [n for n in fresh.presets.notes if n.startswith("group")] == []
-    assert fresh.presets.groups == doc.get("groups", [])
-    assert fresh.presets.document("x") == doc
+    fresh.loaded_patch.load_doc(json.loads(loadable.dumps(doc)))
+    assert [n for n in fresh.loaded_patch.notes if n.startswith("group")] == []
+    assert fresh.loaded_patch.groups == doc.get("groups", [])
+    assert fresh.loaded_patch.document("x") == doc
     return doc
 
 
-@pytest.mark.parametrize("path", CORPUS_PRESETS, ids=lambda p: p.stem)
+@pytest.mark.parametrize("path", CORPUS_LOADABLES, ids=lambda p: p.stem)
 def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
-    """Row 563, the property: on every corpus preset, random eligible
+    """Row 563, the property: on every corpus loadable patch, random eligible
     subsets grouped, ungrouped, regrouped and members deleted (a render
     node, a voice, a modifier — whatever the pick lands on), headless;
     after every edit no member dangles, no id is twice, every wire is on a
-    live node, no group takes a number a group of this preset's life had,
-    and the preset round-trips through save and load with its groups
+    live node, no group takes a number a group of this loadable patch's life had,
+    and the loadable patch round-trips through save and load with its groups
     whole — and, while nothing was deleted, with everything else unchanged."""
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", path.stem)
-    pre, table = app.presets, app.router.table
+    pre, table = app.loaded_patch, app.router.table
     assert pre.groups == []
     before = _stripped(pre.document("x"))
     e = graphview.Edit(table, app.reg, app.router, graph=pre.graph)
-    e.presets = pre
+    e.loaded_patch = pre
     rng = random.Random(path.stem)
     seen: set[str] = set()
 
@@ -739,7 +739,7 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
         _group_invariants(pre, seen)
         return entry
 
-    # 1. group, ungroup, regroup: the preset is as it was, but for the groups
+    # 1. group, ungroup, regroup: the loadable patch is as it was, but for the groups
     for _ in range(12):
         group_some()
         if pre.groups and rng.random() < 0.5:
@@ -766,7 +766,7 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
             # the rig's and stays, so the node is still held — and a member
             assert cid in pre._held_canvas() and cid in g["nodes"]
         elif not isinstance(res, (str, graphview.Ask)) and cid in pre._held_canvas():
-            # plan 50: a group holds any node the preset saves — hands 1 too,
+            # plan 50: a group holds any node the loadable patch saves — hands 1 too,
             # which a wired frame always has: "deleted", it is still held,
             # so still a member (as a macro is)
             assert cid in g["nodes"], cid
@@ -784,17 +784,17 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     assert not {cid for g in doc.get("groups", []) for cid in g["nodes"]} & set(deleted)
 
 
-def test_a_refused_load_leaves_the_loaded_presets_groups_whole(tmp_path):
+def test_a_refused_load_leaves_the_loaded_loadables_groups_whole(tmp_path):
     """Review of PR #321 (1): a load lands its graph before it reads its
-    groups, and the landing settles the groups — the *loaded* preset's,
+    groups, and the landing settles the groups — the *loaded* loadable patch's,
     still in place. A load refused after that (a value that will not take)
     puts everything back, the groups and the floor with it."""
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.library import LibraryError
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-noita")
-    pre = app.presets
+    pre = app.loaded_patch
     pre.groups = [dict(ENTRY)]
     pre.group_high = 5
     put(app.lib.home, "BROKEN", schema="hyperspace.preset/7",
@@ -817,12 +817,12 @@ def test_every_road_that_removes_a_node_settles_its_group(tmp_path):
     from hyperspace import ui_lfo, ui_routing, ui_seq
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-noita")
-    pre, table = app.presets, app.router.table
+    pre, table = app.loaded_patch, app.router.table
     m1 = table.add_modifier("scale", ["lane:1"], app.reg)
     m2 = table.add_modifier("scale", ["lane:2"], app.reg)
     assert app.lfos.add() == 5 and app.envs.add() == 6
     e = graphview.Edit(table, app.reg, app.router, graph=pre.graph)
-    e.presets = pre
+    e.loaded_patch = pre
     entry, _ = e.group(["render:warp", m1.id, m2.id, "lfo.5", "env.6"])
     assert sorted(entry["nodes"]) == ["env.6", "lfo.5", m1.id, m2.id, "render:warp"]
     panel = SimpleNamespace(reg=app.reg, router=app.router, library=app.lib)
@@ -834,7 +834,7 @@ def test_every_road_that_removes_a_node_settles_its_group(tmp_path):
     assert "lfo.5" not in pre.groups[0]["nodes"] and 5 not in app.lfos
     assert ui_seq.remove_env(panel, app.envs, 6)
     assert pre.groups[0]["nodes"] == ["render:warp"]
-    assert pre.live_groups() == [preset.group_entry(pre.groups[0])]
+    assert pre.live_groups() == [loadable.group_entry(pre.groups[0])]
 
 
 def test_undoing_a_load_keeps_the_floor_under_the_groups_numbers(rig):
@@ -843,7 +843,7 @@ def test_undoing_a_load_keeps_the_floor_under_the_groups_numbers(rig):
     back with its two groups — and the next group is `group.4`, not the
     ungrouped 3 handed out again."""
     noita(rig)
-    pre = rig.lib.presets
+    pre = rig.lib.loaded_patch
     u = watch(rig)
     try:
         for nid in NOITA_CORE:
@@ -870,7 +870,7 @@ def test_a_members_removal_from_routing_undone_puts_it_back_in_its_group(rig):
     restore's reland prunes nothing it should not."""
     from hyperspace import ui_routing
     noita(rig, [ENTRY])
-    pre, table = rig.lib.presets, rig.router.table
+    pre, table = rig.lib.loaded_patch, rig.router.table
     m = table.add_modifier("scale", ["lane:1"], rig.reg)
     pre.groups = [dict(ENTRY, nodes=[*NOITA_CORE, m.id])]
     frame(rig.panel, "graph")
@@ -923,7 +923,7 @@ def test_the_group_node_side_pane_hover_and_status_draw(rig, monkeypatch):
     assert ui_graph._selection(st, st["view"])[0] == "group"
     frame(rig.panel, "graph")
     assert seams and seams[-1] == "group.1"
-    assert rig.lib.presets.groups[0]["open"] is True           # the chip opened it
+    assert rig.lib.loaded_patch.groups[0]["open"] is True           # the chip opened it
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     sel = ui_graph._selection(st, st["view"])
@@ -989,7 +989,7 @@ def test_deleting_a_group_node_is_refused_in_words(rig, monkeypatch):
     _in_editor(rig, delete)
     assert got == ["rejected"]
     assert st["note"] == graphview.GROUP_NO_DELETE.format(name="noita core")
-    assert rig.lib.presets.groups == [ENTRY]
+    assert rig.lib.loaded_patch.groups == [ENTRY]
 
 
 def test_one_selector_two_rules_the_save_and_the_canvas():
@@ -1017,7 +1017,7 @@ def test_one_selector_two_rules_the_save_and_the_canvas():
 # ---------------------------------------------------------------- plan 40 T3: save, browse, spawn
 #
 # A group becomes a file (save as patch: that file, nothing else) and a
-# file becomes a group in any preset (spawn: through today's doors in load
+# file becomes a group in any loadable patch (spawn: through today's doors in load
 # order, one undo step; the conflicts asked first — tests/test_ui_routing.py
 # drives the sheet — and nothing attached by itself, D2). The patch is the
 # spec's example, tests/fixtures/patches/acid-wash.json, put into the rig's
@@ -1053,12 +1053,12 @@ def trip(rig):
 
 
 def wires(rig) -> list[tuple[str, str]]:
-    return [(w.src, w.dst) for w in rig.lib.presets.graph.spec.wires]
+    return [(w.src, w.dst) for w in rig.lib.loaded_patch.graph.spec.wires]
 
 
 def state(rig) -> tuple:
     """Everything a spawn may add, as it stands."""
-    pre, table = rig.lib.presets, rig.router.table
+    pre, table = rig.lib.loaded_patch, rig.router.table
     return (pre.signature(), dict(pre.layout), [dict(g) for g in pre.groups],
             pre.graph.spec.to_json(), [b.to_json() for b in table.bindings],
             table.modifiers_doc(rig.reg), table.macros_doc())
@@ -1066,7 +1066,7 @@ def state(rig) -> tuple:
 
 def spawned(rig, slug="acid-wash", at=(100.0, 50.0), keep=False, splice=None):
     """Spawn `slug` and answer the sheet: every row the patch's, or (`keep`)
-    every row the preset's."""
+    every row the loadable patch's."""
     from hyperspace import ui_routing
     assert ui_graph.spawn(rig.panel, slug, at, splice=splice) is None
     if ui_routing.sheet(rig.panel) is not None:
@@ -1086,7 +1086,7 @@ def test_spawn_lands_through_the_doors_as_one_step_and_one_undo_takes_it_all(rig
     takes every part of it away: the signature, the layout and the groups
     are as they were."""
     st = trip(rig)
-    pre, table, reg = rig.lib.presets, rig.router.table, rig.reg
+    pre, table, reg = rig.lib.loaded_patch, rig.router.table, rig.reg
     before, wired, home = state(rig), wires(rig), files(rig.lib.home)
     u = watch(rig)
     try:
@@ -1150,7 +1150,7 @@ def test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks(tmp
     assert patches.check(BREATH) == []
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-trip")
-    pre, table, reg = app.presets, app.router.table, app.reg
+    pre, table, reg = app.loaded_patch, app.router.table, app.reg
     u = undo.Undo(reg, table, marks=Marks(app.lib), banks=pre.banks)
     undo.install(u)
     try:
@@ -1158,7 +1158,7 @@ def test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks(tmp
         u.tick(2.0)
         e = graphview.Edit(table, reg, app.router, graph=pre.graph,
                            push=lambda label: undo.push(label, load=True))
-        e.presets = pre
+        e.loaded_patch = pre
         before = (pre.signature(), dict(pre.layout), list(pre.groups), table.macros_doc())
         landing = patches.spawn(BREATH, patches.Host.of(pre.graph.spec, table, pre.banks()),
                                 (40.0, 60.0))
@@ -1192,7 +1192,7 @@ def test_a_spawn_with_no_conflict_lands_at_once(rig):
     with_patch(rig, doc, "quiet-wash")
     assert ui_graph.spawn(rig.panel, "quiet-wash", (0, 0)) is None
     assert ui_routing.sheet(rig.panel) is None
-    assert rig.lib.presets.groups[0]["patch"] == "quiet-wash"
+    assert rig.lib.loaded_patch.groups[0]["patch"] == "quiet-wash"
     st = ui_graph._state(rig.panel)
     assert st["said"].startswith("spawned acid wash: 4 nodes, its pins open")
     # P4: no sheet asked, so the spawn says what its rows wait for (this rig lists no leap)
@@ -1209,8 +1209,8 @@ def test_a_landing_refused_after_its_dry_run_leaves_no_undo_step(rig, monkeypatc
     with_patch(rig, doc, "quiet-wash")
     before = state(rig)
     real = graphview._land
-    monkeypatch.setattr(graphview, "_land", lambda edit, d, label, said, dry=False, rig=None:
-                        real(edit, d, label, said, dry=dry, rig=rig) if dry else "refused")
+    monkeypatch.setattr(graphview, "_land", lambda edit, d, label, said, dry=False, bus_cuts=None:
+                        real(edit, d, label, said, dry=dry, bus_cuts=bus_cuts) if dry else "refused")
     u = watch(rig)
     try:
         n = len(u.stack)
@@ -1258,8 +1258,8 @@ def test_a_spawn_whose_devices_are_all_there_says_no_wait(rig):
     assert said.startswith("spawned acid wash: 4 nodes") and "waits for" not in said
 
 
-def test_a_row_the_sheet_kept_for_the_preset_waits_for_nothing(rig):
-    """acid-wash's K1 kept for the preset (the sheet's **keep all existing**):
+def test_a_row_the_sheet_kept_for_the_loadable_waits_for_nothing(rig):
+    """acid-wash's K1 kept for the loadable patch (the sheet's **keep all existing**):
     the patch's K1 never landed, so only the hand's row is said to wait."""
     trip(rig)
     spawned(rig, keep=True)
@@ -1274,7 +1274,7 @@ def test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step(rig):
     undo step; no pin is left open. A patch with two inlets is no drop
     target: refused in words, nothing changed."""
     st = trip(rig)
-    pre = rig.lib.presets
+    pre = rig.lib.loaded_patch
     cable = next(c for c in st["view"].cables if c.kind == "render"
                  and (c.ref.src, c.ref.dst) == ("scene", "plasma.image"))
     e = ui_graph.render_edit(rig.panel)
@@ -1310,7 +1310,7 @@ def test_a_splice_that_raises_the_sheet_lands_the_splice_with_its_answers(rig):
     patch — with K1 left on brightness and kept by the group, one step."""
     from hyperspace import ui_routing
     st = trip(rig)
-    pre, table = rig.lib.presets, rig.router.table
+    pre, table = rig.lib.loaded_patch, rig.router.table
     cable = next(c for c in st["view"].cables if c.kind == "render"
                  and (c.ref.src, c.ref.dst) == ("scene", "plasma.image"))
     wired = wires(rig)
@@ -1341,7 +1341,7 @@ def test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one(rig):
     one undo step for the press; with the port freed, a second press lands
     it and no pin is open, so the chip is gone."""
     st = trip(rig)
-    pre = rig.lib.presets
+    pre = rig.lib.loaded_patch
     spawned(rig)
     u = watch(rig)
     try:
@@ -1365,7 +1365,7 @@ def test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one(rig):
         undo.install(None)
 
 
-def test_wire_as_saved_refuses_a_node_the_preset_lacks():
+def test_wire_as_saved_refuses_a_node_the_loadable_lacks():
     """A port whose `was` names a node the host does not have is refused,
     named, and nothing lands (pure, on the edit layer)."""
     spec = G.read_graph({"frame": "wired", "wires": [{"from": "shape", "to": "scene.geometry"}],
@@ -1388,7 +1388,7 @@ def test_wire_as_saved_refuses_a_node_the_preset_lacks():
         raise AssertionError("no undo step")
 
     e = graphview.Edit(graph=GS(), push=no_step)
-    e.presets = type("P", (), {"groups": [entry], "layout": {}})()
+    e.loaded_patch = type("P", (), {"groups": [entry], "layout": {}})()
     assert e.wire_as_saved("group.1") == "no node tripcolour"
 
 
@@ -1397,9 +1397,9 @@ def test_a_second_spawn_takes_the_next_ids_and_its_kept_rows_are_said(rig):
     its K1 collides with the first copy's, and **keep all existing** keeps
     the first's — the second's row is not in the table, it is in the
     group's `kept_by_host` and said on the node ("K1 kept by the preset");
-    the fresh ids are on the group's hover for the session (never saved)."""
+    the fresh ids are on the group's hover for the meta controller (never saved)."""
     st = trip(rig)
-    pre, table = rig.lib.presets, rig.router.table
+    pre, table = rig.lib.loaded_patch, rig.router.table
     spawned(rig)
     spawned(rig, at=(100.0, 400.0), keep=True)
     g1, g2 = pre.groups
@@ -1429,7 +1429,7 @@ def test_save_as_patch_writes_that_file_and_nothing_else(rig):
     the loaded parts, `Library.save_patch` — one new file, the spec's shape,
     listed — and the group names it (one undo step, the dirty dot); **update
     patch** writes it again with nothing else touched; a group holding what
-    no patch may (a hand-edited preset's `scene`) is refused in words and
+    no patch may (a hand-edited loadable patch's `scene`) is refused in words and
     nothing is written."""
     from hyperspace import library
     noita(rig, [ENTRY])
@@ -1448,13 +1448,13 @@ def test_save_as_patch_writes_that_file_and_nothing_else(rig):
         assert [(p["id"], p["was"]) for p in doc["ports"]] == [
             ("in", "scene"), ("out", "tripcolour.image")]
         assert "noita core" in rig.lib.list(library.PATCHES)
-        assert rig.lib.presets.groups[0]["patch"] == "noita-core"
+        assert rig.lib.loaded_patch.groups[0]["patch"] == "noita-core"
         assert u.stack[-1].label == "save noita core as patch noita core"
         assert ui_graph._state(rig.panel)["said"] == "saved noita core as a patch"
         assert ui_graph.save_patch(rig.panel, "group.1", "noita core", "the middle") is None
         assert files(rig.lib.home) == after             # the same text: nothing moved
         assert ui_graph._state(rig.panel)["said"] == "updated patch noita core"
-        rig.lib.presets.groups[0]["nodes"].append("env.2")
+        rig.lib.loaded_patch.groups[0]["nodes"].append("env.2")
         assert ui_graph.save_patch(rig.panel, "group.1", "bad", "") == (
             "noita core not saved as a patch: " + patches.LANE_ENV_WORDS.format(
                 name="env.2", first=patches.FIRST_ENV))
@@ -1473,8 +1473,8 @@ def test_save_as_patch_never_replaces_another_patch_of_that_name(rig):
     home = files(rig.lib.home)
     assert ui_graph.save_patch(rig.panel, "group.1", "Acid Wash", "") == (
         "a patch named Acid Wash exists — Update patch, or another name")
-    assert files(rig.lib.home) == home and "patch" not in rig.lib.presets.groups[0]
-    rig.lib.presets.groups[0]["patch"] = "acid-wash"
+    assert files(rig.lib.home) == home and "patch" not in rig.lib.loaded_patch.groups[0]
+    rig.lib.loaded_patch.groups[0]["patch"] = "acid-wash"
     assert ui_graph.save_patch(rig.panel, "group.1", "acid wash", "") is None
     after = files(rig.lib.home)
     assert after["patches/acid-wash.json"] != home["patches/acid-wash.json"]
@@ -1514,11 +1514,11 @@ def test_the_browser_lists_each_patch_with_its_boundary_in_words(rig, monkeypatc
 
 def test_the_spawn_menu_open_two_frames_lists_the_patches_once(rig, monkeypatch):
     """The canvas's **spawn ▸** (and a drag) asks for the list every frame:
-    the library is listed and each file looked up once per `ui_presets`
+    the library is listed and each file looked up once per `ui_loadable`
     poll, not once a frame; our own save re-lists at once."""
-    from hyperspace import ui_presets
+    from hyperspace import ui_loadable
     trip(rig)
-    ui_presets.invalidate(rig.panel, "patches")
+    ui_loadable.invalidate(rig.panel, "patches")
     lists, paths = [], []
     lib = rig.panel.library
     real_list, real_path = lib.list, lib.path_of
@@ -1530,7 +1530,7 @@ def test_the_spawn_menu_open_two_frames_lists_the_patches_once(rig, monkeypatch)
     assert lists == ["patches"] and first.count("acid wash") == 1
     ui_graph._spawn_menu(rig.panel, (0.0, 0.0))
     assert lists == ["patches"] and paths == first          # the second frame: no disk
-    ui_presets.invalidate(rig.panel, "patches")
+    ui_loadable.invalidate(rig.panel, "patches")
     assert [r["slug"] for r in ui_graph.patch_list(rig.panel)] == ["acid-wash"]
     assert lists == ["patches", "patches"]
 

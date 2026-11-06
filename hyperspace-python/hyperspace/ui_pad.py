@@ -21,10 +21,10 @@ What is lit is what a control **does**:
   zooms and its X rides the W planes' rates, the triggers ride the 4D
   depth). Such a lane is lit with its label in grey — nothing in the
   table, nothing to unbind, the app's own hand on it, as a grey label on
-  the desk is a row that is the session's;
+  the desk is a row that is the meta controller's;
 * every other control is dark: its glyph only.
 
-Pad rows are the session's, not a layer's (`learn.learn_pad_button`), so
+Pad rows are the meta controller's, not a layer's (`learn.learn_pad_button`), so
 there is nothing here like the desk's two layers, and no picture of a
 "preset" pad.
 

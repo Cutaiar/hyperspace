@@ -1,14 +1,14 @@
 """Wave 3 P1: frame kinds in patches — the dream, a look-back, the scene and
 the rest are held by a patch, so a "dream + fx + composite" patch exists.
 
-- what is refused still is the rig's (`RIG_KINDS`) and the look's one camera;
+- what is refused still is the rig's (`FIXTURE_KINDS`) and the look's one camera;
 - a frame kind's params are the ones the canvas says are its, the look-back's
   and the dream's split by key, the band scene's no node's;
 - what can be made twice is renamed (hands 1 lands as `hands.2`, a look-back
   as `lookback.2`); what a frame holds one of keeps its name, and a host that
   already has it refuses the spawn in words, nothing landed (the dream's is
   the sheet's since P2: tests/test_patches_replace_dream.py);
-- a spawn into an empty frame is the frame: every corpus preset, whole.
+- a spawn into an empty frame is the frame: every corpus loadable patch, whole.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import CORPUS, seed
 from test_graph_groups import files, spawned, state, watch, wires
-from test_patches import land, parts, preset
+from test_patches import land, loadable, parts
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -29,7 +29,7 @@ from hyperspace.library import PATCHES
 from hyperspace.patches import Host, spawn
 from hyperspace.routing import Bindings
 
-CORPUS_PRESETS = sorted((CORPUS / "presets").glob("*.json"))
+CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
 # the wired-frame nodes of party-wake a "dream + fx + composite" cut names
 DREAM_CUT = ["render:dream", "render:composite"]
 
@@ -41,7 +41,7 @@ def rig(shell_rig):  # noqa: F811
 
 
 def wake_doc() -> dict:
-    return preset("party-wake")
+    return loadable("party-wake")
 
 
 def cut(name: str = "wake", ids=None) -> dict:
@@ -77,18 +77,18 @@ def test_a_patch_holds_the_frames_kinds(name):
 
 @pytest.mark.parametrize("name, words", [
     ("output.all", patches.WINDOW_WORDS), ("output.2", patches.WINDOW_WORDS),
-    ("channel.a", patches.CHANNEL_WORDS), ("cloud", patches.RIG_WORDS),
-    ("cloud.2", patches.RIG_WORDS), ("camera", patches.CAMERA_WORDS),
+    ("channel.a", patches.CHANNEL_WORDS), ("cloud", patches.FIXTURE_WORDS),
+    ("cloud.2", patches.FIXTURE_WORDS), ("camera", patches.CAMERA_WORDS),
     ("fx", patches.NOT_HELD_WORDS), ("lookback.echo.1", patches.NOT_HELD_WORDS),
 ])
-def test_the_rig_and_the_one_camera_stay_refused(name, words):
+def test_the_meta_and_the_one_camera_stay_refused(name, words):
     assert patches.held_words(name) == words.format(name=name)
 
 
-def test_every_frame_kind_is_held_and_every_rig_kind_refused():
+def test_every_frame_kind_is_held_and_every_meta_kind_refused():
     """The lists stay honest as a kind is added."""
     assert set(G.FRAME_KINDS) <= set(patches.MAY_HOLD)
-    assert not set(patches.RIG_KINDS) & set(patches.MAY_HOLD)
+    assert not set(patches.FIXTURE_KINDS) & set(patches.MAY_HOLD)
     assert set(patches.ONE_PER_FRAME) <= set(patches.MAY_HOLD)
 
 
@@ -112,7 +112,7 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
     """Over the whole registry: where `patches._param_rows` gives a frame
     kind's param an owner it is the node the canvas puts it on
     (`graphview.OWNERS`, the dream's on the dream's since P2); no frame kind
-    owns a session group's param."""
+    owns a shared meta group's param."""
     app = headless.make_app(tmp_path)
     frame_kinds = ("scene", "shape", "backdrop", "pattern", "lookback", "dream")
     mem = patches._Members(frame_kinds)
@@ -123,7 +123,7 @@ def test_a_frame_kinds_params_are_the_canvas_owners(tmp_path):
         if who is None:
             continue
         owned += 1
-        assert p.group in params.PERFORMANCE_GROUPS, pid
+        assert p.group in params.PATCH_GROUPS, pid
         rule = graphview.OWNERS.get(p.group)
         got = rule(pid, None) if callable(rule) and p.group != "fx" else (
             "shape" if pid == "fx.face_map" else rule)
@@ -168,7 +168,7 @@ def test_a_dream_and_a_composite_lift_as_a_patch():
 
 
 def test_a_dream_patch_spawns_where_the_host_has_no_dream():
-    host = Host.of(*parts(preset("party-noita"))[:2])
+    host = Host.of(*parts(loadable("party-noita"))[:2])
     landing = spawn(cut(), host)
     assert landing.taken == () and landing.refusal is None
     assert "dream" in [patches.entry_name(e) for e in landing.nodes]
@@ -217,7 +217,7 @@ def test_a_landing_from_before_a_hot_reload_still_lands(rig):
     assert ui_graph.group_edit(rig.panel)._spawn_refusal(old) is None
 
 
-def test_a_spawn_of_a_shape_into_a_preset_with_one_refuses_nothing_landed(rig):
+def test_a_spawn_of_a_shape_into_a_loadable_with_one_refuses_nothing_landed(rig):
     on_graph(rig, "party-wake")
     slug = put(rig, cut("shapely", ["render:shape"]))
     before, home = state(rig), files(rig.lib.home)
@@ -258,13 +258,13 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     assert patches.check(doc) == []
     assert {patches.entry_name(n) for n in doc["nodes"]} == {"dream", "composite", "acid"}
 
-    # back on its own preset the sheet asks to replace that dream (P2), not here
+    # back on its own loadable patch the sheet asks to replace that dream (P2), not here
     assert ui_graph.spawn(rig.panel, "dream-wash") is None
     assert ui_routing.sheet(rig.panel)[0].replacing == ("dream",)
     assert ui_routing.settle_sheet(rig.panel, False) is None
 
     on_graph(rig, "party-noita")
-    pre = rig.lib.presets
+    pre = rig.lib.loaded_patch
     assert "dream" not in patches.spec_names(pre.graph.spec)
     rig.reg["dream.mix"].set_value(0.9)
     before, wired, home = state(rig), wires(rig), files(rig.lib.home)
@@ -297,7 +297,7 @@ def test_a_look_back_lands_as_a_second_look_back_with_its_own_knobs(rig):
     `dream.*` untouched. The section keeps the second one's entry though a
     wire names it (it is what declares it)."""
     on_graph(rig, "party-wake")
-    doc, refused = patches.lift(*rig.lib.presets.parts(), ["render:lookback"])
+    doc, refused = patches.lift(*rig.lib.loaded_patch.parts(), ["render:lookback"])
     assert refused == []
     doc["name"] = "ring"
     doc["values"] = {**doc["values"], "dream.gap": 3.0}
@@ -305,17 +305,17 @@ def test_a_look_back_lands_as_a_second_look_back_with_its_own_knobs(rig):
     slug = put(rig, doc)
     host_gap = rig.reg["dream.gap"].value
     assert spawned(rig, slug) is None, ui_graph._state(rig.panel).get("note")
-    spec = rig.lib.presets.graph.spec
+    spec = rig.lib.loaded_patch.graph.spec
     assert "lookback.2" in patches.spec_names(spec)
     assert rig.reg["dream.2.gap"].value == pytest.approx(3.0)
     assert rig.reg["dream.gap"].value == host_gap
     # wired: `_land` keeps the entry (it declares it), and the section reads
     e = ui_graph.group_edit(rig.panel)
-    assert e.wire_as_saved(rig.lib.presets.groups[-1]["id"]) is None, e.said
+    assert e.wire_as_saved(rig.lib.loaded_patch.groups[-1]["id"]) is None, e.said
     assert any(w.src == "scene" and w.dst == "lookback.2.image" for w in
-               rig.lib.presets.graph.spec.wires)
+               rig.lib.loaded_patch.graph.spec.wires)
     assert any(x.get("kind") == "lookback" and x.get("instance") == 2
-               for x in rig.lib.presets.graph.spec.to_json()["nodes"])
+               for x in rig.lib.loaded_patch.graph.spec.to_json()["nodes"])
 
 
 def test_hands_one_lifts_as_a_new_hands():
@@ -343,7 +343,7 @@ def test_a_hands_layer_is_taken_with_its_hands(rig):
     assert refused == [patches.LAYER_WORDS.format(name="hands.layer", of="hands")]
     assert [e["kind"] for e in doc["nodes"]] == ["composite"]
     on_graph(rig, "party-wake")
-    doc, refused = patches.lift(*rig.lib.presets.parts(), ["render:hands", "render:hands.layer"])
+    doc, refused = patches.lift(*rig.lib.loaded_patch.parts(), ["render:hands", "render:hands.layer"])
     assert refused == []
     doc["name"] = "ghosts"
     slug = put(rig, doc)
@@ -351,7 +351,7 @@ def test_a_hands_layer_is_taken_with_its_hands(rig):
     assert spawned(rig, slug) is None
     said = ui_graph._state(rig.panel)["said"]
     assert "no param" not in said, said
-    assert {"hands.2", "hands.2.layer"} <= patches.spec_names(rig.lib.presets.graph.spec)
+    assert {"hands.2", "hands.2.layer"} <= patches.spec_names(rig.lib.loaded_patch.graph.spec)
     assert rig.reg["ghost.2.alpha"].value == doc["values"]["ghost.2.alpha"]
 
 
@@ -396,15 +396,15 @@ def test_wire_as_saved_puts_a_scene_inlet_back_in_its_draw_order(rig):
     assert refused == []
     slug = put(rig, {**doc, "name": "three", "ports": [
         p for p in doc["ports"] if p["was"] == "shape"]})
-    host = preset("party-noita")
+    host = loadable("party-noita")
     host["graph"] = {"frame": "wired", "nodes": [{"kind": "shape"}]}
-    assert rig.lib.presets.load_doc(host) is not None
+    assert rig.lib.loaded_patch.load_doc(host) is not None
     assert spawned(rig, slug) is None, ui_graph._state(rig.panel).get("note")
-    gid = rig.lib.presets.groups[-1]["id"]
-    assert graphview.open_ports(rig.lib.presets.graph.spec, rig.lib.presets.groups[-1])
+    gid = rig.lib.loaded_patch.groups[-1]["id"]
+    assert graphview.open_ports(rig.lib.loaded_patch.graph.spec, rig.lib.loaded_patch.groups[-1])
     e = ui_graph.group_edit(rig.panel)
     assert e.wire_as_saved(gid) is None, e.said
-    into = [w.src for w in rig.lib.presets.graph.spec.all_wires() if w.dst == "scene.geometry"]
+    into = [w.src for w in rig.lib.loaded_patch.graph.spec.all_wires() if w.dst == "scene.geometry"]
     assert into == ["hands.3", "shape", "hands.2"]
 
 
@@ -441,14 +441,14 @@ def hands_moved(name: str) -> str:
     return name
 
 
-@pytest.mark.parametrize("path", CORPUS_PRESETS, ids=lambda p: p.stem)
-def test_a_whole_preset_spawned_into_an_empty_frame_is_that_preset(path):
-    """Every corpus preset's section lifted whole, spawned into a frame with
+@pytest.mark.parametrize("path", CORPUS_LOADABLES, ids=lambda p: p.stem)
+def test_a_whole_loadable_spawned_into_an_empty_frame_is_that_loadable(path):
+    """Every corpus loadable patch's section lifted whole, spawned into a frame with
     nothing in it, its pins wired as saved, is the section again (hands one
-    number on: the empty frame's own hands 1 is the rig's; `spec_names` is
+    number on: the empty frame's own hands 1 is the meta controller's; `spec_names` is
     what a load would hold). What is left out is the rig's alone. The literal
     "a load is a spawn into an empty frame" of plan 50 is therefore true of
-    the graph; `Presets.load_doc` stays the replace landing (row 660)."""
+    the graph; `LoadedPatch.load_doc` stays the replace landing (row 660)."""
     doc = json.loads(path.read_text())
     p = parts(doc)
     spec = p[0]
@@ -487,13 +487,13 @@ def test_a_whole_preset_spawned_into_an_empty_frame_is_that_preset(path):
     assert geometry(got) == geometry(spec, hands_moved), path.stem
 
 
-def test_a_new_preset_holds_a_scene_so_a_whole_frame_is_refused_there(tmp_path):
-    """A new preset's section is the scene chain: a whole frame says so,
+def test_a_new_loadable_holds_a_scene_so_a_whole_frame_is_refused_there(tmp_path):
+    """A new loadable patch's section is the scene chain: a whole frame says so,
     rather than land a second scene."""
     app = headless.make_app(tmp_path)
-    app.presets.new()
+    app.loaded_patch.new()
     p = parts(wake_doc())
     whole, _ = patches.lift(*p, everything(p))
     landing = spawn({**whole, "name": "x"},
-                    Host.of(app.presets.graph.spec, app.router.table))
+                    Host.of(app.loaded_patch.graph.spec, app.router.table))
     assert set(landing.taken) == {"scene", "shape"}

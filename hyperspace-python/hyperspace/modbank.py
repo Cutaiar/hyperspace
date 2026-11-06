@@ -4,7 +4,7 @@ A bank is a row of like voices (the LFOs; the envelopes next) that the
 router steps inside its modulation pass and publishes as one source
 scheme. Voice `n` (1-based, its params ``<scheme>.<n>.<key>``) is the
 lane ``<scheme>:<n-1>`` — the address every route, Learn row and factory
-preset already names (``lfo:0`` is LFO 1). Membership is preset content
+loadable patch already names (``lfo:0`` is LFO 1). Membership is loadable patch content
 and undoable, the rule plan 28 N1 set for the modifiers: ids are **one
 past the highest held this session** (`next_id`) and **never
 compact**, so removing LFO 2 leaves LFO 3 on ``lfo:2`` and a route left
@@ -13,7 +13,7 @@ up by the next one added. The count is capped at `MAX` (decision 1: 16).
 
 What the bank owns, and what a kind supplies:
 
-  membership   `ids` / `add` / `remove` / `set` / `doc` — the preset's
+  membership   `ids` / `add` / `remove` / `set` / `doc` — the loadable patch's
                ``"<KEY>": [ids]`` and undo's part; `parse` reads a file's
   params       through the kind's `declare(reg, n, voice)` (bound with
                `bind`): a voice added drops ``<scheme>.<n>.`` and
@@ -61,7 +61,7 @@ class Bank:
     # the kind's table — class-level, so a subclass is a few lines
     SCHEME = ""                    # the lanes' scheme and the params' group: ``lfo``
     LABEL = ""                     # a voice's name: "LFO" → "LFO 3"
-    KEY = ""                       # the preset's membership key: ``"lfos": [1, 2, 3, 4]``
+    KEY = ""                       # the loadable patch's membership key: ``"lfos": [1, 2, 3, 4]``
     DEFAULT: tuple[int, ...] = ()  # the membership a file without `KEY` gets
     REST = 0.0                     # where a lane rests (`Router.rests`)
     KNOBS: tuple[str, ...] = ()    # ``<scheme>.<n>.<knob>`` params that feed the voice's node
@@ -70,10 +70,10 @@ class Bank:
 
     # class-level so an instance from before a hot reload has them
     stepped_at: float | None = None   # the t of the bank's last step
-    high = 0                          # the session's highest id ever held (`next_id`)
+    high = 0                          # the meta controller's highest id ever held (`next_id`)
     serial = 0                        # moves on every membership change
-    # row 563 (2026-11-02): told on every membership change — the preset
-    # points it at `Presets.settle_groups`, so a voice removed by any road
+    # row 563 (2026-11-02): told on every membership change — the loadable patch
+    # points it at `LoadedPatch.settle_groups`, so a voice removed by any road
     # leaves its GRAPH group in the same call
     on_change: Callable[[], None] | None = None
     reg = None                        # the registry `bind` gave, or None
@@ -135,8 +135,8 @@ class Bank:
         a high-water mark never lowered): a removed voice's id — the top
         one too — is never handed out again, so a route left dormant on its
         lane is not picked up by the next voice added. An explicit `add(n)`
-        (an undo, a preset load) may still bring a removed id back. Not
-        saved: a fresh session starts from the highest id present."""
+        (an undo, a loadable patch load) may still bring a removed id back. Not
+        saved: a fresh run starts from the highest id present."""
         return max(self.width, getattr(self, "high", 0)) + 1
 
     def can_add(self) -> bool:
@@ -179,11 +179,11 @@ class Bank:
         return True
 
     def doc(self) -> list[int]:
-        """The membership as a preset holds it."""
+        """The membership as a loadable patch holds it."""
         return self.ids()
 
     def set(self, ids: Iterable[int]) -> list[str]:
-        """The membership becomes `ids` (a preset load, an undo): voices not
+        """The membership becomes `ids` (a loadable patch load, an undo): voices not
         in it go, missing ones come fresh at their defaults, the ones in
         both keep their state. Touches only what differs. Notes for what
         `parse` would refuse."""

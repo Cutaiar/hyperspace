@@ -7,7 +7,7 @@ trim instead.
 
 The chain itself lives in analyzer.py since plan 07 (N bands, not six);
 this module keeps what it is made of — the reference band table (the six
-edges, planes and directions the legacy6 preset and the parity oracle
+edges, planes and directions the legacy6 loadable patch and the parity oracle
 need), the headroom constants, the transfer functions and the per-band
 Params. The scenes are the band presets in library/band/*.json
 (control.SCENES names them). The reference's per-band attack / release

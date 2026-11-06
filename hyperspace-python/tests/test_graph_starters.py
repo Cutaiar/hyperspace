@@ -1,9 +1,9 @@
-"""Plan 36 T5 (W5): a new preset that starts somewhere, and the picker's
+"""Plan 36 T5 (W5): a new loadable patch that starts somewhere, and the picker's
 starters.
 
 **new** on the PRESET strip makes the scene chain — `shape →
 scene.geometry`, `scene → output.all.image`, plain faces — laid left to
-right in the preset's layout map where the GRAPH page is looking
+right in the loadable patch's layout map where the GRAPH page is looking
 (`ui_graph.in_view`). The picker's **starters ▸** each add a pre-wired
 group (`graphview.STARTERS`) in one undo step, its new nodes laid left to
 right from where the menu opened; a picture cable's menu has the tracers
@@ -18,7 +18,7 @@ from test_graph_edit import wired_rig, wired_wires
 from test_ui_shell import _click, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graphview, preset, ui_graph, ui_presets, undo
+from hyperspace import graphview, loadable, ui_graph, ui_loadable, undo
 from hyperspace.library import Marks
 
 ALL = "output.all.image"
@@ -29,13 +29,13 @@ SCENE = {"frame": "wired", "wires": [{"from": "shape", "to": "scene.geometry"},
 
 @pytest.fixture()
 def page(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
 def _entries(rig) -> list[dict]:
     """The section's node entries, less the hands entry every frame writes."""
-    return [e for e in rig.presets.graph.spec.to_json().get("nodes", [])
+    return [e for e in rig.loaded_patch.graph.spec.to_json().get("nodes", [])
             if e.get("kind") != "hands"]
 
 
@@ -46,15 +46,15 @@ def test_new_is_the_scene_chain_laid_out_where_you_look(tmp_path):
     its three nodes, left to right on one row from `at`."""
     rig, _, _ = wired_rig(tmp_path, {"frame": "wired",
                                      "wires": [{"from": "channel.b", "to": ALL}]})
-    assert rig.presets.new((120.0, -40.0)) == [preset.NEW_SAID]
-    spec = rig.presets.graph.spec
+    assert rig.loaded_patch.new((120.0, -40.0)) == [loadable.NEW_SAID]
+    spec = rig.loaded_patch.graph.spec
     assert wired_wires(rig) == CHAIN and len(spec.wires) == 2
     assert _entries(rig) == []                          # no pattern, nothing else
-    lay = rig.presets.layout
+    lay = rig.loaded_patch.layout
     assert lay == {"render:shape": [120, -40],
                    "render:scene": [120 + graphview.COL_W, -40],
                    "render:output.all": [120 + 2 * graphview.COL_W, -40]}
-    doc = rig.presets.document(preset.UNTITLED_PRESET)
+    doc = rig.loaded_patch.document(loadable.UNTITLED_PATCH)
     assert doc["layout"] == lay
     assert doc["graph"] == spec.to_json()
 
@@ -64,18 +64,18 @@ def test_new_undoes_its_section_and_layout_in_one_step(tmp_path):
     u = undo.Undo(rig.reg, rig.router.table, marks=Marks(rig.lib))
     undo.install(u)
     try:
-        rig.presets.layout = {"render:scene": [5, 5]}
+        rig.loaded_patch.layout = {"render:scene": [5, 5]}
         u.tick(1.0)
         u.tick(2.0)
-        was = rig.presets.graph.spec.to_json()
-        rig.presets.new((0.0, 0.0))
+        was = rig.loaded_patch.graph.spec.to_json()
+        rig.loaded_patch.new((0.0, 0.0))
         assert u.stack[-1].label == "new preset"
-        assert len(rig.presets.layout) == 3
+        assert len(rig.loaded_patch.layout) == 3
         assert u.undo()
     finally:
         undo.install(None)
-    assert rig.presets.graph.spec.to_json() == was
-    assert rig.presets.layout == {"render:scene": [5, 5]}
+    assert rig.loaded_patch.graph.spec.to_json() == was
+    assert rig.loaded_patch.layout == {"render:scene": [5, 5]}
 
 
 def test_new_from_the_strip_lays_out_at_the_page_s_view(page):
@@ -92,9 +92,9 @@ def test_new_from_the_strip_lays_out_at_the_page_s_view(page):
     frame(panel, "presets")
     frame(panel)
     at = ui_graph.in_view(panel)            # (GRAPH is always drawn: as it sees it now)
-    _click(panel, ui_presets._state(panel)["rects"]["strip.presets.new"])
-    assert page.lib.current("presets") == preset.UNTITLED_PRESET
-    assert page.lib.presets.layout["render:shape"] == list(at)
+    _click(panel, ui_loadable._state(panel)["rects"]["strip.presets.new"])
+    assert page.lib.current("presets") == loadable.UNTITLED_PATCH
+    assert page.lib.loaded_patch.layout["render:shape"] == list(at)
     assert wired_wires(page.lib) == CHAIN
 
 
@@ -109,7 +109,7 @@ def test_the_starters_are_their_own_submenu_first():
         "channel to backdrop", "cut-out"]               # (plan 39 T5: the cut-out)
 
 
-def test_scene_chain_on_a_blank_preset(tmp_path):
+def test_scene_chain_on_a_blank_loadable(tmp_path):
     rig, e, pushed = wired_rig(tmp_path, {"frame": "wired"})
     assert e.add_node("starter", "scene") is None
     assert wired_wires(rig) == CHAIN and _entries(rig) == []
@@ -201,10 +201,10 @@ def test_a_scene_feeding_two_ports_leaves_the_composite_unwired(tmp_path):
 ])
 def test_one_of_each_is_refused_in_words(tmp_path, which, section):
     rig, e, pushed = wired_rig(tmp_path, section)
-    was = rig.presets.graph.spec.to_json()
+    was = rig.loaded_patch.graph.spec.to_json()
     why = e.starter(which)
     assert why is not None and "in the graph already" in why
-    assert pushed == [] and rig.presets.graph.spec.to_json() == was and e.placed == ()
+    assert pushed == [] and rig.loaded_patch.graph.spec.to_json() == was and e.placed == ()
 
 
 def test_a_cable_starter_is_only_a_picture_one(tmp_path):
@@ -218,20 +218,20 @@ def test_a_cable_starter_is_only_a_picture_one(tmp_path):
 
 def test_a_starter_lands_at_the_point_as_one_undo_step(page):
     """From the picker on the panned canvas: the new nodes left to right
-    from the menu's point, in the preset's layout (canvas units less the
+    from the menu's point, in the loadable patch's layout (canvas units less the
     pan), and one ⌘Z takes the wires and the places back."""
     lib = page.lib
-    lib.presets.new((0.0, 0.0))
+    lib.loaded_patch.new((0.0, 0.0))
     u = undo.Undo(page.reg, page.router.table, marks=Marks(lib))
     undo.install(u)
     try:
         u.tick(1.0)
         u.tick(2.0)
-        was = (lib.presets.graph.spec.to_json(), dict(lib.presets.layout))
+        was = (lib.loaded_patch.graph.spec.to_json(), dict(lib.loaded_patch.layout))
         ui_graph._state(page.panel)["pan"] = (100.0, -50.0)
         e = ui_graph.render_edit(page.panel)
         assert ui_graph.add_render(page.panel, e, "starter", "tracers", (400.0, 300.0)) is None
-        lay = lib.presets.layout
+        lay = lib.loaded_patch.layout
         assert lay["render:lookback"] == [300, 350]
         assert lay["render:composite"] == [300 + graphview.COL_W, 350]
         assert len(lay) == len(was[1]) + 2              # nothing else placed or moved
@@ -239,7 +239,7 @@ def test_a_starter_lands_at_the_point_as_one_undo_step(page):
         assert u.undo()
     finally:
         undo.install(None)
-    assert (lib.presets.graph.spec.to_json(), dict(lib.presets.layout)) == was
+    assert (lib.loaded_patch.graph.spec.to_json(), dict(lib.loaded_patch.layout)) == was
 
 
 # ---------------------------------------------------------------- feedback (wave 0 E1, 2026-11-02)
@@ -275,7 +275,7 @@ def test_feedback_on_a_cable_splices_a_delay_loop_with_a_blend(tmp_path):
     rig, e, pushed = wired_rig(tmp_path, SCENE)
     assert e.starter("feedback", ("scene", ALL)) is None
     assert wired_wires(rig) == FED_BACK
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert {"kind": "composite"} in _entries(rig)            # (laid over)
     assert {"kind": "delay"} in _entries(rig)
     assert G.EffectAt("fade", 1) in spec.effects
@@ -323,11 +323,11 @@ def test_feedback_from_the_picker_takes_the_scene_s_one_picture(tmp_path):
     assert e.placed == ("delay", "fade", "composite")
     two = {"frame": "wired", "wires": [*SCENE["wires"], {"from": "scene", "to": "output.2.image"}]}
     rig, e, pushed = wired_rig(tmp_path / "c", two)
-    was = rig.presets.graph.spec.to_json()
+    was = rig.loaded_patch.graph.spec.to_json()
     assert e.starter("feedback") == graphview.FEEDBACK_MANY_FEEDS.format(src="scene", n=2) == (
         "scene feeds 2 picture ports: say which — starters ▸ feedback on that cable, or add "
         "feedback after on scene")
-    assert rig.presets.graph.spec.to_json() == was and pushed == [] and e.placed == ()
+    assert rig.loaded_patch.graph.spec.to_json() == was and pushed == [] and e.placed == ()
     assert graphview.picture_feeds(e, "scene") == [("scene", ALL), ("scene", "output.2.image")]
 
 
@@ -382,13 +382,13 @@ def test_feedback_undoes_in_one_step(tmp_path):
     """One ⌘Z takes the three nodes, the loop and the fade's values back."""
     from test_undo import settle
     rig, e, pushed = wired_rig(tmp_path, SCENE, undo_rig=True)
-    was = rig.presets.graph.spec.to_json()
+    was = rig.loaded_patch.graph.spec.to_json()
     assert e.starter("feedback", ("scene", ALL)) is None
     assert rig.reg["fx.fade.level"].value == 0.75
     settle(rig)
     assert pushed == ["starter: feedback"]
     assert rig.undo.undo()
-    assert rig.presets.graph.spec.to_json() == was
+    assert rig.loaded_patch.graph.spec.to_json() == was
     assert wired_wires(rig) == CHAIN
     assert "fx.fade.level" not in rig.reg or rig.reg["fx.fade.level"].value != 0.75
 
@@ -402,7 +402,7 @@ def test_add_feedback_after_lays_the_loop_below_the_node_s_box(page):
     with no box drawn, from where the menu opened."""
     from imgui_bundle import imgui_node_editor as ed
     lib = page.lib
-    lib.presets.new((0.0, 0.0))
+    lib.loaded_patch.new((0.0, 0.0))
     frame(page.panel, "graph")
     frame(page.panel, "graph")
     st = ui_graph._state(page.panel)
@@ -417,11 +417,11 @@ def test_add_feedback_after_lays_the_loop_below_the_node_s_box(page):
     try:
         u.tick(1.0)
         u.tick(2.0)
-        was = (lib.presets.graph.spec.to_json(), dict(lib.presets.layout))
+        was = (lib.loaded_patch.graph.spec.to_json(), dict(lib.loaded_patch.layout))
         st["pan"], st["menu_at"] = (0.0, 0.0), (400.0, 300.0)
         assert ui_graph.add_feedback_after(page.panel, "scene", ALL) is None
         assert wired_wires(lib) == FED_BACK
-        lay, (x, y) = lib.presets.layout, below
+        lay, (x, y) = lib.loaded_patch.layout, below
         assert lay["render:delay"] == [round(x), round(y)]
         assert lay["render:fade"] == [round(x + graphview.COL_W), round(y)]
         assert lay["render:composite"] == [round(x + 2 * graphview.COL_W), round(y)]
@@ -431,7 +431,7 @@ def test_add_feedback_after_lays_the_loop_below_the_node_s_box(page):
         assert u.undo()
     finally:
         undo.install(None)
-    assert (lib.presets.graph.spec.to_json(), dict(lib.presets.layout)) == was
+    assert (lib.loaded_patch.graph.spec.to_json(), dict(lib.loaded_patch.layout)) == was
     assert ui_graph.node_below(st, "render:nowhere") is None  # no box: the menu's point
 
 
@@ -442,7 +442,7 @@ def test_the_menus_offer_feedback(page, monkeypatch):
     starters ▸ has feedback."""
     from imgui_bundle import imgui
     panel = page.panel
-    page.lib.presets.new((0.0, 0.0))
+    page.lib.loaded_patch.new((0.0, 0.0))
     e = ui_graph.render_edit(panel)
     assert e.add_node("composite") is None                  # feeds nothing
     assert e.wire("scene", "lookback.image") is None        # the scene feeds two

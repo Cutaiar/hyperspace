@@ -4,7 +4,7 @@
 Not the app: a **hidden** GLFW window with the panel drawn over the same
 headless objects `tools/undo_demo.py` builds — no render window, no MIDI
 port, no audio device, no tracker — on a fresh temp home of its own. It
-drags a slider, loads a preset, presses undo twice, and reads the panel
+drags a slider, loads a loadable patch, presses undo twice, and reads the panel
 back after each, so the picture is what the footer's message slot draws.
 
   uv run python tools/undo_shot.py     # → docs/plans/assets/15-safety-net/undo-footer*.png
@@ -29,7 +29,7 @@ from PIL import Image
 
 from hyperspace import undo
 from hyperspace.app import CONTROL_SIZE
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "15-safety-net"
@@ -92,7 +92,7 @@ def main() -> None:
         bright.set(b0 * (1 + 0.02 * (k + 1)))
         draw(1)
     draw(40)
-    r.lib.load(PRESETS, "FACES")                      # a load
+    r.lib.load(LOADABLE, "FACES")                      # a load
     draw(40)
     undo.undo()                                       # what Cmd+Z fires
     draw()

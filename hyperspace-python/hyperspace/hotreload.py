@@ -34,7 +34,7 @@ A watched module that was never imported (an optional adapter behind its
 device entry — dream, bridge, midi) is skipped, not an error.
 
 Data is watched the same way: `watchers` are objects with a ``poll(now)``
-(the preset library) that get polled on the same cadence, so a preset
+(the loadable patch library) that get polled on the same cadence, so a loadable patch
 JSON saved in an editor lands like a module save does.
 """
 
@@ -57,8 +57,8 @@ MODULES = (
     "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media.thumbs", "media.folder", "media",
     "pointer", "players", "analysis", "tapers", "motion", "media.transport", "media.mixer", "media.channels", "modifiers", "palettecompat", "groupwords", "undo", "placement", "geometry", "bands", "analyzer", "audio", "tempo", "modbank", "lfo", "envelope", "sequencer", "glsl", "masks", "patterns",
     "lookback", "dream", "fx", "ghost", "outputs", "replay", "view", "field", "graph", "graphmigrate", "media_tex", "poi_guide", "render", "params", "library", "control", "config",
-    "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "modgraph", "seq_page", "routing_sources", "routing", "nodemode", "patches", "preset", "learn", "deck", "midi", "bridge",
-    "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "osc", "graphview", "ui_presets", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
+    "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "modgraph", "seq_page", "routing_sources", "routing", "nodemode", "patches", "loadable", "learn", "deck", "midi", "bridge",
+    "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "osc", "graphview", "ui_loadable", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
     "ui_lfo", "ui_media", "ui_desk", "ui_pad_lab", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_players", "ui_pane", "ui_graph", "ui_seq", "ui",
 )
 # (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before

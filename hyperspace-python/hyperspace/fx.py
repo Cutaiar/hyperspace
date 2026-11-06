@@ -5,7 +5,7 @@ An effect is one GLSL file in ``hyperspace/shaders/fx/``: a function
 registry can declare it. Nothing about an effect lives in Python — drop a
 file in the folder and it appears on the FX page with its faders, as
 ordinary registry params (``fx.<file>.<uniform>``): MIDI-learnable,
-routable from an audio lane, saved by presets and projects. Edit a file
+routable from an audio lane, saved by loadable patches and projects. Edit a file
 while the app runs and it recompiles on save; a compile error keeps the
 last good program and shows the message on the page.
 
@@ -70,11 +70,11 @@ scale step re-zooms the cells about the centre without sliding them
 phases do; ``tests/test_shader_time_lint.py`` holds every shipped shader
 to the rule.
 
-Plan 33 (rows 341–349): an effect exists where the preset's graph wires
+Plan 33 (rows 341–349): an effect exists where the loadable patch's graph wires
 it — the run ``frame → … → fx.image`` each pipeline draws, a branch onto
 the faces (``shape.faces``), the pattern's layer, the backdrop, an output
 or another effect's ``aux`` — and nowhere else. There is no stack: no
-``order`` and no ``target`` param (an old preset's are read as wires by
+``order`` and no ``target`` param (an old loadable patch's are read as wires by
 ``graphmigrate``, which is all a file's ``@order`` is still for), and the
 render graph runs each effect as a node (``graph.Effect``: one pass,
 ``FxChain.run_one``). With no effect wired the frame is bit-identical to
@@ -110,7 +110,7 @@ BLENDS = ["mix", "add", "screen", "multiply"]
 FACE_MAPS = ["per face", "screen"]   # fx.face_map's choices: how the faces show their picture
 PER_FACE, SCREEN = 0, 1
 # the per-effect params' names — and `order` / `target`, retired (plan 33)
-# but still in old presets as `fx.<n>.order`: a uniform of either name
+# but still in old loadable patches as `fx.<n>.order`: a uniform of either name
 # would read as the retired id, so neither is ever a key
 RESERVED = {"on", "mix", "speed", "blend", "order", "target"}
 SPEED_MAX = 8.0
@@ -195,7 +195,7 @@ class EffectSpec:
     source: str
     params: list[ParamSpec] = field(default_factory=list)
     # `@order`: no part in anything drawn (plan 33) — the stack position an
-    # old preset naming none had, which `graphmigrate` reads it as
+    # old loadable patch naming none had, which `graphmigrate` reads it as
     order: int = 50
     blend: int = 0
     speed: float = 1.0
@@ -424,7 +424,7 @@ class FxState:
     are kept across a reload of the file, so a value survives an edit that
     does not remove its uniform.
 
-    Plan 26 A4, instances: a preset's graph may hold an effect file more
+    Plan 26 A4, instances: a loadable patch's graph may hold an effect file more
     than once (`set_instances`). Instance n ≥ 2 of file `acid` is the
     effect named `acid.2` — in `specs` (the file's spec, labelled "Acid
     2"), `values`, `phase` and `names()` like any effect, so its params are
@@ -434,8 +434,8 @@ class FxState:
 
     Plan 36 T3 (W3): `files` is every effect file on disk (the library the
     GRAPH picker and the migration read); `specs` is the instances that
-    exist. Until a preset's graph lands that is every file once and the
-    extra instances `set_instances` counts (a rig's, a tool's); once one
+    exist. Until a loadable patch's graph lands that is every file once and the
+    extra instances `set_instances` counts (a test rig's, a tool's); once one
     does (`hold`), exactly the instances its section names — instance 1
     of a file included — and nothing else has params.
     """
@@ -557,7 +557,7 @@ class FxState:
 
     def set_instances(self, counts: dict[str, int]) -> set[str]:
         """Hold each effect file `counts` names that many times (plan 26 A4;
-        a file not named, once) — a rig's or a tool's, with no graph landed
+        a file not named, once) — a test rig's or a tool's, with no graph landed
         (plan 36 T3: it lets go of any `hold`). Returns the effect names
         whose params appeared or went (`acid.2`, …) — the registry
         re-declares those (`declare`). A file that is not on disk keeps its
@@ -817,7 +817,7 @@ def retaper_of(pid: str, files: dict[str, EffectSpec]
     """What wave 0 T1 changed under a route onto `pid`, or None when it
     changed nothing there: ``(lo, hi, default, taper)`` — the linear range
     the param had before (and still declares as `lo` / `hi`), its default
-    (the base a preset that does not name it takes), and the taper it is
+    (the base a loadable patch that does not name it takes), and the taper it is
     on now — for an effect's `speed` and for each `amount` param. What
     `params.retaper_depths` and tools/retaper_routes.py measure a saved
     depth against."""

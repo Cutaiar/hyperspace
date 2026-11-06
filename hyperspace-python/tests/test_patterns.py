@@ -291,7 +291,7 @@ def test_only_meter_and_pulse_read_the_bands_and_they_show_them():
         ctx.release()
 
 
-def test_new_modes_are_appended_so_preset_indices_keep_their_patterns():
+def test_new_modes_are_appended_so_loadable_indices_keep_their_patterns():
     """Presets hold `view.pattern` as an index: the first twelve stay put."""
     assert patterns.NAMES[:12] == ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
                                    "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER"]

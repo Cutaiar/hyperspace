@@ -3,16 +3,16 @@
 
 Builds the app's objects the way `app.main` does — library, registry,
 hands' settings, clock and LFOs, the router over the home's
-bindings.json, the presets, a Learn, a MidiIO over fake ports, a HandsIO
-over synthetic hands, the startup preset, then the `Undo` — with no
+bindings.json, the loadable patches, a Learn, a MidiIO over fake ports, a HandsIO
+over synthetic hands, the startup loadable patch, then the `Undo` — with no
 window, and prints a transcript: a slider drag, a knob sweep, a hand
-moving, a preset load, Ctrl+Z down the stack with the status line the
-footer shows, a redo, a save over a preset and a delete with the trash
+moving, a loadable patch load, Ctrl+Z down the stack with the status line the
+footer shows, a redo, a save over a loadable patch and a delete with the trash
 listed, and what `Undo.tick` costs a frame.
 
 It always runs on a fresh temp home of its own (`HYPERSPACE_HOME` is set
 here, before anything reads it), seeded with the test corpus
-(`tests/conftest.py::seed`: the presets, the dream module presets and the
+(`tests/conftest.py::seed`: the loadable patches, the dream module presets and the
 party show, which the home then opens): it cannot touch ~/Hyperspace.
 
   uv run python tools/undo_demo.py [--out docs/plans/assets/15-safety-net/undo-demo.txt]
@@ -58,12 +58,12 @@ from hyperspace.fx import FxState
 from hyperspace.ghost import GhostState
 from hyperspace.hands.core import features
 from hyperspace.learn import Learn
-from hyperspace.library import PRESETS, TRASH, Library, Marks
+from hyperspace.library import LOADABLE, TRASH, Library, Marks
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
 from hyperspace.routing import Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
@@ -155,7 +155,7 @@ def boot() -> SimpleNamespace:
     output.register(reg)
     lib.attach(reg)
     router = Router(reg, Bindings.load(bindings_path(HOME), legacy_midi=None))
-    presets = Presets(lib, reg, router)
+    loaded_patch = LoadedPatch(lib, reg, router)
     learn = Learn(reg, router.table, lane=router.lane)
     ports = Ports()
     midi = MidiIO(reg, router.table, inp=ports, out=ports, learner=learn)
@@ -166,7 +166,7 @@ def boot() -> SimpleNamespace:
                   tag=lambda: tuple(s.name for s in chain.spec),
                   on_restore=router.sync_macros)
     undo.install(u)
-    r.__dict__.update(lib=lib, reg=reg, view=view, chain=chain, router=router, presets=presets,
+    r.__dict__.update(lib=lib, reg=reg, view=view, chain=chain, router=router, loaded_patch=loaded_patch,
                       clock=clock, lfos=lfos, midi=midi, ports=ports, tracker=tracker,
                       hands_io=hands_io, learn=learn, undo=u, cost=[], control=control,
                       audio=audio, settings=settings, output=output)
@@ -222,7 +222,7 @@ def main() -> None:
     watched = [p for p in reg if undo.watched(p)]
     say("Hyperspace — undo and the trash, headless (tools/undo_demo.py; plan 15 WP1)")
     say(f"home: {HOME}  (a temp folder made by this script)")
-    say(f"show: {lib.project.name}   preset: {lib.current(PRESETS)}   "
+    say(f"show: {lib.project.name}   preset: {lib.current(LOADABLE)}   "
         f"registry: {len(reg)} params, {len(watched)} watched   "
         f"table: {len(r.router.table.routes())} routes, {len(r.router.table.desk())} desk rows")
     frames(r, 30)
@@ -293,7 +293,7 @@ def main() -> None:
     say()
     say("4. Load a preset (F2, a key row -> preset.load.1)")
     frames(r, keys=Keys(glfw.KEY_F2))
-    say(f"    preset: {lib.current(PRESETS)}   {bright.label}: {bright.fmt(bright.base)}   "
+    say(f"    preset: {lib.current(LOADABLE)}   {bright.label}: {bright.fmt(bright.base)}   "
         f"routes: {len(r.router.table.routes())}")
     settle(r)
     stack(r)
@@ -302,7 +302,7 @@ def main() -> None:
     say("5. Ctrl+Z down the stack (the key rows fire edit.undo); the footer's line each time")
 
     def where() -> str:
-        return (f"preset {lib.current(PRESETS)}, {bright.label} {bright.fmt(bright.base)}, "
+        return (f"preset {lib.current(LOADABLE)}, {bright.label} {bright.fmt(bright.base)}, "
                 f"{knob.target} {kp.fmt(kp.base)}")
     say(f"    before: {where()}")
     for _ in range(4):
@@ -321,14 +321,14 @@ def main() -> None:
 
     say()
     say("7. The trash: save over a user preset, then delete it")
-    path = r.presets.save_as("DEMO")
+    path = r.loaded_patch.save_as("DEMO")
     say(f"    saved {path}  (new: nothing to keep)")
     bright.set(bright.base * 0.5)
-    lib.overwrite(PRESETS)
+    lib.overwrite(LOADABLE)
     say(f"    saved over it with {bright.label} {bright.fmt(bright.base)}")
-    lib.overwrite(PRESETS)
+    lib.overwrite(LOADABLE)
     say("    saved again, nothing changed (trashes nothing)")
-    lib.delete(PRESETS, "DEMO")
+    lib.delete(LOADABLE, "DEMO")
     say(f"    deleted DEMO; {path.name} exists: {path.exists()}")
     say(f"    {HOME / TRASH}:")
     for f in sorted((HOME / TRASH).rglob("*")):

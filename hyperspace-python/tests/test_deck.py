@@ -3,7 +3,7 @@ bundle, built by `Deck.build` in `app.main`'s order, with no behaviour
 change. The proof: a rig built the way `tests/test_undo.boot` built it
 at 749be48 (a copy of that body, below) and one built through
 `Deck.build` (today's `boot`) reach the same state over every corpus
-preset; two registries share no frame state; `main` builds its deck once
+loadable patch; two registries share no frame state; `main` builds its deck once
 with the frame order unchanged; and every swap target the deck lists
 lives in a watched module, the deck itself included. Plan 44 D2 adds the
 second comparison: one `Sources` fed once drives two routers over two
@@ -14,7 +14,7 @@ never handed the router its banks (`use_lfos` / `use_bank` /
 `use_sequencer`, which `main` has called since plans 28 N0 and 31) and
 built its `Undo` without `banks=`. Today's `boot` runs `main`'s lines, so
 its LFOs, envelopes and sequencer step inside the pass and undo takes the
-banks' membership. On three corpus presets (TRIP, TUMBLE, seq-demo) a
+banks' membership. On three corpus loadable patches (TRIP, TUMBLE, seq-demo) a
 bank-driven row then leaves a base (`camera.zoom`, `view.bright`) a
 round-off apart from the old rig's after the undo, because undo puts
 back only a base that is not `undo.alike` its state (plan 15 §1 row 2).
@@ -44,17 +44,17 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import CEIL
 from hyperspace.control import Control
-from hyperspace.deck import Deck, in_preset
+from hyperspace.deck import Deck, in_patch
 from hyperspace.fx import FxState
 from hyperspace.ghost import GhostState
 from hyperspace.hotreload import MODULES
 from hyperspace.learn import Learn
-from hyperspace.library import PRESETS, Library, Marks
+from hyperspace.library import LOADABLE, Library, Marks
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Registry, build_registry, part_of
-from hyperspace.preset import Presets
 from hyperspace.routing import Bindings, Router, Sources, bindings_path
 from hyperspace.view import ViewState
 
@@ -98,7 +98,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     sequencer.register(reg, seq, clock)
     output = Output(None, None)
     output.register(reg)
-    # the desk's session params before attach, as app.main has them (plan 18
+    # the desk's shared meta params before attach, as app.main has them (plan 18
     # WP2): declared late, desk.slew would read as an unsaved show
     table = Bindings.load(bindings_path(home), legacy_midi=None)
     routing.register_desk(reg, table)
@@ -108,16 +108,16 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     Panel._register_panel_params(SimpleNamespace(reg=reg, open=True, cheatsheet=True,
                                                  desk=True, page=1))
     router = Router(reg, table)
-    presets = Presets(lib, reg, router)
+    loaded_patch = LoadedPatch(lib, reg, router)
     learn = Learn(reg, router.table, lane=router.lane)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
     lib.project.load_startup()
-    u = undo.Undo(reg, router.table, marks=Marks(lib), only=in_preset,
+    u = undo.Undo(reg, router.table, marks=Marks(lib), only=in_patch,
                   on_restore=router.sync_macros)
     undo.install(u)
     r.__dict__.update(lib=lib, reg=reg, view=view, control=control, chain=chain, audio=audio,
-                      router=router, table=router.table, presets=presets, clock=clock,
+                      router=router, table=router.table, loaded_patch=loaded_patch, clock=clock,
                       lfos=lfos, learn=learn, midi=midi, inp=inp, out=out, undo=u,
                       home=Path(home), settings=settings, output=output, envs=envs, seq=seq)
     return r
@@ -153,14 +153,14 @@ def _state(r) -> dict:
 
 
 def _walk(r) -> list[dict]:
-    """Every corpus preset in turn: load it, 120 frames with one fixed lane
+    """Every corpus loadable patch in turn: load it, 120 frames with one fixed lane
     vector, `view.bright` turned and settled into a step, `undo.undo()`."""
-    names = sorted(r.lib.list(PRESETS))
+    names = sorted(r.lib.list(LOADABLE))
     files = sorted((CORPUS / "presets").glob("*.json"))
     assert len(names) == len(files) > 0
     out = []
     for i, name in enumerate(names):
-        r.lib.load(PRESETS, name)
+        r.lib.load(LOADABLE, name)
         r.chain.out = CEIL * np.linspace(0.15, 0.85, len(r.chain.out))
         _frames(r, FRAMES)
         p = r.reg["view.bright"]
@@ -202,7 +202,7 @@ def _compare(old: list[dict], new: list[dict], *, exact: bool) -> None:
 def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path):
     """Plan 44 D1's proof: over one seeded home, the rig `boot` built at
     749be48 and the rig `Deck.build` builds (today's `boot`) land every
-    corpus preset to the same registry, table, routes, desk, macros,
+    corpus loadable patch to the same registry, table, routes, desk, macros,
     modifiers, banks and undo stack — so the bundle changed nothing.
 
     One drift the old `boot` had from `main`, which this PR ends: it never
@@ -210,7 +210,7 @@ def test_a_deck_built_the_old_way_and_the_new_way_reach_the_same_state(tmp_path)
     `use_sequencer`, which `main` has called since plans 28 N0 and 31), so
     its LFOs, envelopes and sequencer never stepped inside the pass. With
     those three lines added — what `main` ran — the old way and the deck
-    are equal to the bit; without them, three presets (TRIP, TUMBLE,
+    are equal to the bit; without them, three loadable patches (TRIP, TUMBLE,
     seq-demo) leave a base a round-off apart after the undo, which undo's
     own tolerance (`undo.alike`) calls the same value."""
     home = tmp_path / "home"
@@ -251,8 +251,8 @@ def _values(reg) -> dict:
 def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
     """Plan 44 D2's proof, the first thing decks promise: one `Sources`
     fed once a frame, two `Router`s over two registries both loaded with
-    the same preset, and every param of the two lands the value one router
-    over its own sources lands — every frame, over every corpus preset.
+    the same loadable patch, and every param of the two lands the value one router
+    over its own sources lands — every frame, over every corpus loadable patch.
     The pass of each reads the shared feeds (the hands, the pad, the
     analyzer's chain) and steps its own banks, modifiers and followers."""
     solo = boot(tmp_path / "solo")
@@ -262,16 +262,16 @@ def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
     assert b.router.sources is shared and b.deck.sources is shared
     assert solo.router.sources is not shared
     assert a.reg is not b.reg and a.router is not b.router
-    assert any(t is b.table.session for t in shared.tables)
+    assert any(t is b.table.meta_table for t in shared.tables)
     rigs = (solo, a, b)
-    names = sorted(a.lib.list(PRESETS))
-    assert names == sorted(solo.lib.list(PRESETS)) == sorted(b.lib.list(PRESETS))
+    names = sorted(a.lib.list(LOADABLE))
+    assert names == sorted(solo.lib.list(LOADABLE)) == sorted(b.lib.list(LOADABLE))
     chain = a.chain                                  # one analyzer, as the rig has
     frames = 0
     driven: dict[str, set[str]] = {"hand": set(), "axis": set(), "lane": set()}
     for name in names:
         for r in rigs:
-            r.lib.load(PRESETS, name)
+            r.lib.load(LOADABLE, name)
         chain.out = CEIL * np.linspace(0.15, 0.85, len(chain.out))
         for k in range(FRAMES // 2):
             for r in rigs:
@@ -301,8 +301,8 @@ def test_a_deck_beside_changes_nothing_on_air_and_lands_what_one_deck_lands(tmp_
     """Plan 44 D4, the same-state test extended. An empty deck beside the
     first, its pass and its apply in the frame in `app.frame`'s order, leaves
     the first where D1's walk leaves a deck alone, to the bit. And a deck
-    beside the first loaded with the same preset lands, every frame of every
-    corpus preset, the performance values a deck alone lands."""
+    beside the first loaded with the same loadable patch lands, every frame of every
+    corpus loadable patch, the performance values a deck alone lands."""
     solo = _walk(boot(tmp_path / "solo"))
     r = boot(tmp_path / "with")
     beside = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
@@ -324,17 +324,17 @@ def test_a_deck_beside_changes_nothing_on_air_and_lands_what_one_deck_lands(tmp_
     a = boot(tmp_path / "a")
     b = Deck.beside(a.deck, lfos=lfo.LFOs(seed=1))
     assert a.deck.sources is b.sources
-    names = sorted(a.lib.list(PRESETS))
+    names = sorted(a.lib.list(LOADABLE))
     moved = 0
 
     def looks(reg) -> dict:
-        return {p.id: repr(p.value) for p in reg if part_of(p) == "performance"}
+        return {p.id: repr(p.value) for p in reg if part_of(p) == "patch"}
 
     for name in names:
-        doc = json.loads(Path(a.lib.path_of(PRESETS, name)).read_text())
-        alone.lib.load(PRESETS, name)
-        a.lib.load(PRESETS, name)
-        b.presets.load_doc(doc)
+        doc = json.loads(Path(a.lib.path_of(LOADABLE, name)).read_text())
+        alone.lib.load(LOADABLE, name)
+        a.lib.load(LOADABLE, name)
+        b.loaded_patch.load_doc(doc)
         alone.chain.out = a.chain.out = CEIL * np.linspace(0.15, 0.85, len(a.chain.out))
         for k in range(FRAMES // 2):
             for rr in (alone, a):
@@ -413,20 +413,20 @@ def test_a_clock_other_than_the_shared_sources_is_refused_before_anything_regist
     assert called == []
 
 
-def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
+def test_the_deck_holds_the_meta_boot_hands_out(tmp_path):
     """`boot`'s handles are the deck's objects; a headless deck has no GL:
     no renderer, and the installed undo is the deck's."""
     r = boot(tmp_path / "home")
     d = r.deck
-    assert (d.reg, d.view, d.table, d.router, d.lfos, d.presets, d.learn, d.undo) == (
-        r.reg, r.view, r.table, r.router, r.lfos, r.presets, r.learn, r.undo)
-    assert d.table is d.router.table and d.graph is d.presets.graph
+    assert (d.reg, d.view, d.table, d.router, d.lfos, d.loaded_patch, d.learn, d.undo) == (
+        r.reg, r.view, r.table, r.router, r.lfos, r.loaded_patch, r.learn, r.undo)
+    assert d.table is d.router.table and d.graph is d.loaded_patch.graph
     assert d.renderer is None
     assert d.clock is r.clock is d.router.clock
     # plan 44 D2: the router reads the deck's sources (its own while there
     # is one deck), and the clock the banks step on is theirs
     assert d.sources is d.router.sources and d.sources.clock is d.clock
-    assert d.sources.tables == [d.table.session] and d.router.feeds.shared is d.sources.feeds
+    assert d.sources.tables == [d.table.meta_table] and d.router.feeds.shared is d.sources.feeds
     assert undo.installed() is d.undo
     assert d.router.lfos is d.lfos and d.router.bank("env") is d.envs
     assert d.router.sequencer is d.seq and d.undo.marks is d.marks
@@ -464,12 +464,12 @@ def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
     assert kw["panel"] == "panel_setup" and kw["devices"] == "devices_setup"
     assert kw["renderer"] == "renderer" and kw["table"] == "load_table"
     assert kw["made"] == "made"
-    # the hooks hand their objects on through `build` (RigMade), no shared
+    # the hooks hand their objects on through `build` (DeckHooksMade), no shared
     # sentinels in `main`
     assert "nonlocal" not in inspect.getsource(app.main)
     # nothing of the deck's is still built in main
     src = inspect.getsource(app.main)
-    for line in ("build_registry(", "Router(reg, table)", "Presets(library", "Learn(reg",
+    for line in ("build_registry(", "Router(reg, table)", "LoadedPatch(library", "Learn(reg",
                  "undo.Undo(", "library.attach(reg)", "ViewState()"):
         assert line not in src, line
     assert "deck=deck" in src and "*deck.targets()" in src
@@ -488,7 +488,7 @@ def test_the_build_keeps_mains_order():
     """`Deck.build`'s lines in the order `main` had them at 749be48: the
     registry, the band hooks, the hands, the clock and banks, the outputs,
     the table, attach, the panel, the router and its banks, the
-    presets, learn, the devices, the startup preset, the marks and undo."""
+    loadable patches, learn, the devices, the startup loadable patch, the marks and undo."""
     src = textwrap.dedent(inspect.getsource(Deck.build))
     src = src[src.index('"""', src.index('"""') + 3) + 3:]       # the body, not the docstring
     seq = ["s = ViewState()", "build_registry(s, control, audio, on_deck.project",
@@ -499,10 +499,10 @@ def test_the_build_keeps_mains_order():
            "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
            "Router(reg, bindings, sources=sources)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
-           "Presets(on_deck, reg, router", "presets.graph.attach(renderer)",
+           "LoadedPatch(on_deck, reg, router", "loaded_patch.graph.attach(renderer)",
            "Learn(reg, router.table", "devices(reg, router, learn, panel=",
            "library.project.load_startup()", "geometry.warm_all(first=s.shape)",
-           "Marks(presets.lib)", "undos.Undo(reg, router.table", "undos.install(undo_obj)"]
+           "Marks(loaded_patch.lib)", "undos.Undo(reg, router.table", "undos.install(undo_obj)"]
     at = [src.index(s) for s in seq]
     assert at == sorted(at), [s for s, a, b in zip(seq, at, sorted(at), strict=True) if a != b]
 
@@ -584,7 +584,7 @@ def test_a_save_of_deck_py_re_classes_the_live_deck_and_back_fills_a_new_field(
     assert type(deck) is Deck and "added" not in vars(deck) and mod.Deck is Deck
 
 
-def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, monkeypatch):
+def test_the_band_hooks_are_the_meta_and_two_decks_leave_them_once(tmp_path, monkeypatch):
     """The library's band hooks and `control.library` are rig-to-rig wiring
     (plan 44 §2: the analyzer and the library are shared): the caller sets
     them once, before `Deck.build`, which never touches them — so a second
@@ -594,7 +594,7 @@ def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, mon
     calls: list[str] = []
     ONCE = ["on_layout:band", "extra:band", "on_load:band"]
 
-    def band() -> list[str]:          # the presets kind's own on_load is the deck's
+    def band() -> list[str]:          # the loadable patches kind's own on_load is the deck's
         return [c for c in calls if c.endswith(":band")]
 
     for name in ("on_layout", "extra", "on_load"):
@@ -609,17 +609,17 @@ def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, mon
     real_startup = type(r.lib.project).load_startup
     monkeypatch.setattr(type(r.lib.project), "load_startup",
                         lambda self: (startups.append(1), real_startup(self))[1])
-    loaded = r.lib.current(PRESETS)
+    loaded = r.lib.current(LOADABLE)
     # a second deck leaves the process's one-of-a-kind steps alone (plan 44
     # D1: `attach`, `startup`, `install` off; D2+ decides their real shape)
     second = Deck.build(library=r.lib, control=r.control, audio=r.audio,
                         table=lambda reg: Bindings(),
                         attach=False, startup=False, install=False, on_air=False)
     assert r.lib.reg is r.reg and undo.installed() is r.undo      # the first deck's still
-    # (plan 44 D3: what is loaded is each deck's presets' own — the first's
+    # (plan 44 D3: what is loaded is each deck's loadable patches' own — the first's
     # is as it was; the kind stays the first until a pointer moves it, D5a)
-    assert startups == [] and r.presets.current == loaded         # nothing re-landed
-    assert second.presets.current is None and r.lib.presets is r.presets
+    assert startups == [] and r.loaded_patch.current == loaded         # nothing re-landed
+    assert second.loaded_patch.current is None and r.lib.loaded_patch is r.loaded_patch
     assert band() == ONCE                                                 # still once
     assert (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"],
             r.lib._load_hooks["band"]) == hooks
@@ -673,12 +673,12 @@ def test_the_hooks_hand_their_objects_on_and_into_the_record(tmp_path):
     """Each hook returns what it made; `build` hands the hands' setup and
     the panel to the devices hook and records every return on `made`, so
     `main` reads its rig objects from one record, not from sentinels."""
-    from hyperspace.deck import RigMade
+    from hyperspace.deck import DeckHooksMade
 
     lib = Library(seed(tmp_path / "home"), period=0.0)
     chain = Analyzer(Analyser())
     got: dict = {}
-    made = RigMade()
+    made = DeckHooksMade()
     deck = Deck.build(library=lib, control=Control(chain), audio=SimpleNamespace(chain=chain),
                       table=lambda reg: Bindings(), hands=lambda reg: "settings",
                       outputs=lambda reg: "output", panel=lambda reg, view, **kw: "panel",

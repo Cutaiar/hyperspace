@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from hyperspace import fx, headless, preset, tapers
+from hyperspace import fx, headless, loadable, tapers
 from hyperspace.fx import FxState, declare
 from hyperspace.params import (
     DEPTH_TAPER,
@@ -233,7 +233,7 @@ def test_a_migrated_position_lands_the_same_real_value_at_full_throw(files, targ
 
 def test_the_conversion_reads_a_missing_value_as_one_and_a_missing_base_as_the_default(files):
     """`Binding.value` defaults to 1.0 and `to_json` omits it, so a row
-    without one is a push of 1.0 (not 0); a preset that does not name the
+    without one is a push of 1.0 (not 0); a loadable patch that does not name the
     param pushes about the effect's default."""
     doc = {"values": {}, "routes": [
         {"source": "hand:right.y", "target": "fx.warp.amount", "op": "push"},
@@ -297,10 +297,10 @@ def test_a_marked_document_is_left_alone_and_the_marker_is_what_a_save_writes(fi
     assert retaper_depths(out, files) == (out, [])
 
 
-def test_an_old_preset_loads_as_the_tool_rewrites_it(tmp_path):
-    """End to end: a corpus preset with the marker taken off and its depths
+def test_an_old_loadable_loads_as_the_tool_rewrites_it(tmp_path):
+    """End to end: a corpus loadable patch with the marker taken off and its depths
     put back to the numbers it held before this change loads through the
-    app (`Presets.load_doc` converts, silently) and saves byte for byte
+    app (`LoadedPatch.load_doc` converts, silently) and saves byte for byte
     as the tool writes it — which is the corpus file itself."""
     t = _tool()
     data = (CORPUS / "party-acid.json").read_bytes()
@@ -314,14 +314,14 @@ def test_an_old_preset_loads_as_the_tool_rewrites_it(tmp_path):
             row["value"] = before.pop(row["target"])
     assert not before
     old = tmp_path / "party-acid.json"
-    old.write_text(preset.dumps(doc))
+    old.write_text(loadable.dumps(doc))
     again, notes, _ = headless.resave(old, tmp_path / "scratch")
     assert again == data and notes == []
     out, change = t.retaper(json.loads(old.read_text()), FxState().files, file=old.name)
     assert t.text(out).encode() == data and len(change.rows) == 4
 
 
-def test_every_corpus_preset_is_marked_and_a_run_on_the_corpus_is_a_no_op(files):
+def test_every_corpus_loadable_is_marked_and_a_run_on_the_corpus_is_a_no_op(files):
     t = _tool()
     for path in sorted(CORPUS.glob("*.json")):
         doc = json.loads(path.read_text())
@@ -393,7 +393,7 @@ def test_a_patch_carries_the_marker_and_an_old_one_is_read_as_it_was(tmp_path, f
     assert patches.check({**lifted, "name": "x"}) == []
 
 
-def test_the_session_table_is_read_as_it_was_marked_on_write_and_rewritten_once(tmp_path, files):
+def test_the_meta_table_is_read_as_it_was_marked_on_write_and_rewritten_once(tmp_path, files):
     """Review of #322 (9): `Bindings.from_json` converts an unmarked file's
     rows about the effect's default, counts it as a change (so `load` writes
     the file back once, backed up beside itself), `to_json` carries the
@@ -424,8 +424,8 @@ def test_the_session_table_is_read_as_it_was_marked_on_write_and_rewritten_once(
 def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(tmp_path, monkeypatch):
     """Review of #322 (1, 3, 6, 9): a dry run writes nothing and makes no
     backup; --write copies the library to the machine home first, keeps
-    bindings.json beside itself, then rewrites every unmarked preset, patch,
-    desk template and the session table as the app writes each, names a row
+    bindings.json beside itself, then rewrites every unmarked loadable patch, patch,
+    desk template and the meta table as the app writes each, names a row
     whose value is not a number instead of raising, leaves a marked file
     and a dot-file alone, and a second run changes nothing — a patch saved
     on this build included."""
@@ -445,9 +445,9 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
             del row["value"]                      # a push of 1.0, omitted
         if row["target"] == "fx.fractals.amount":
             row["value"] = "lots"                 # a hand-edited row: left, said
-    (library / "presets" / "party-noita.json").write_text(preset.dumps(src))
+    (library / "presets" / "party-noita.json").write_text(loadable.dumps(src))
     done = json.loads((CORPUS / "party-trip.json").read_text())
-    (library / "presets" / "party-trip.json").write_text(preset.dumps(done))
+    (library / "presets" / "party-trip.json").write_text(loadable.dumps(done))
     (library / "presets" / ".party-noita.json.tmp").write_text("{}")
     old_patch = json.loads(OLD_PATCH.read_text())
     (library / "patches" / "wash.json").write_text(json.dumps(old_patch, indent=1) + "\n")
@@ -475,7 +475,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     assert json.loads((backups[0] / "presets" / "party-noita.json").read_text()) == src
     text = (library / "presets" / "party-noita.json").read_text()
     out = json.loads(text)
-    assert text == preset.dumps(out)                    # as the app writes it
+    assert text == loadable.dumps(out)                    # as the app writes it
     assert out["units"][DEPTH_UNIT] == DEPTH_TAPER
     rows = {r["target"]: r for r in out["routes"] if r["target"].startswith("fx.")}
     assert rows["fx.warp.amount"]["value"] != 0.3
@@ -486,7 +486,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     for k in src:
         if k not in ("routes", "units"):
             assert out[k] == src[k]
-    assert (library / "presets" / "party-trip.json").read_text() == preset.dumps(done)
+    assert (library / "presets" / "party-trip.json").read_text() == loadable.dumps(done)
     assert (library / "presets" / ".party-noita.json.tmp").read_text() == "{}"
     # the old patch: its push moved, the marker in; the fresh one: the same bytes
     ptext = (library / "patches" / "wash.json").read_text()
@@ -498,7 +498,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     # the desk template: its set row moved, the marker in
     dout = json.loads((library / "desk" / "d.json").read_text())
     assert dout["desk"][0]["value"] != 0.75 and dout["units"] == {DEPTH_UNIT: DEPTH_TAPER}
-    # the session table: kept beside itself, its set row moved, as the app writes it
+    # the meta table: kept beside itself, its set row moved, as the app writes it
     assert len(list(home.glob("bindings.json.bak-v3*"))) == 1
     btext = (home / "bindings.json").read_text()
     bout = json.loads(btext)

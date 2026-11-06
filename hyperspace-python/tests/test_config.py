@@ -190,7 +190,7 @@ def test_no_screens_list_is_one_output_as_today(tmp_path, capsys):
 
 
 def test_a_through_key_is_said_once(tmp_path, capsys):
-    """Plan 35 M: `through` in `[[output.screens]]` is the preset's wiring
+    """Plan 35 M: `through` in `[[output.screens]]` is the loadable patch's wiring
     now — read, ignored, and said once (`THROUGH_IS_WIRING`); the entry
     carries no `through`."""
     p = tmp_path / "config.toml"
@@ -218,7 +218,7 @@ def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
                     "dim": 0.6}
     # output 1's entry is what the first window's readers see
     assert (oc["monitor"], oc["fullscreen"], oc["bg"]) == (1, True, 0.4)
-    # (plan 35 T4: the `through` key said once — the preset's wiring now)
+    # (plan 35 T4: the `through` key said once — the loadable patch's wiring now)
     assert cfg["notes"] == [config.THROUGH_IS_WIRING.format(n=2),
                             ("config: [[output.screens]] is listed, so [output] monitor and "
                              "fullscreen are ignored — output 1's entry says")]
@@ -411,7 +411,7 @@ def test_read_devices_reports_problems_and_prints_nothing(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
-def test_laptop_reads_a_rig_config_for_one_screen(tmp_path, capsys):
+def test_laptop_reads_a_meta_config_for_one_screen(tmp_path, capsys):
     """`hyperspace --laptop`: a config made for the projector rig must
     not cover the laptop black — output 1 a plain window, no overlay at
     launch, both windows on the primary screen, later outputs dropped;

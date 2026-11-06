@@ -37,7 +37,7 @@ def test_env_and_seq_are_node_kinds_in_the_modulation_area():
     assert seq is not None and seq.kind == "seq" and seq.label == "sequencer"
     for n in (*envs, seq):
         assert n.area == graphview.MODULATION
-        assert graphview.home(n) == graphview.PRESET     # the preset's layout
+        assert graphview.home(n) == graphview.PATCH_SECTION     # the loadable patch's layout
     # every envelope param on its envelope's node, the grid's on the sequencer
     assert view.owner("mod:env.3.decay")[0].id == "env.3"
     assert view.owner("base:env.3.fire")[0].id == "env.3"
@@ -230,7 +230,7 @@ def test_a_picker_added_lfo_is_drawn_off_its_idle_line(page, monkeypatch):
     area's idle line would hide it until opened — and preset only would
     too. The picker's add reveals it (`ui_graph.reveal_node`): drawn with
     the line closed, until it is deleted."""
-    monkeypatch.setattr(ui_graph, "PRESET_ONLY", True)
+    monkeypatch.setattr(ui_graph, "PATCH_ONLY", True)
     panel = page.panel
     nid = ui_graph.add_voice(panel, "lfo", at=(10, 20))
     assert nid == "lfo.5"

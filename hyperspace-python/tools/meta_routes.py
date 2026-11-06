@@ -4,17 +4,17 @@
     uv run python tools/meta_routes.py <library path>
 
 **Read-only. It writes nothing,** to the library or anywhere else, and the
-path has no default: **the owner runs this.** No preset row may drive a meta
+path has no default: **the owner runs this.** No patch row may drive a meta
 controller param (`params.is_meta_id`), so a load drops such a
 row with a note (`routing.referee`, `Bindings.set_desk`, `routing.settle_bases`)
-and the next save of that preset writes the file without it. This says, before
+and the next save of that loadable patch writes the file without it. This says, before
 any of that happens, which files hold one, and so which params to think about
-moving into the preset.
+moving into the loadable patch.
 
 The documents read, every folder down as the library lists them (plan 48; not
 ``trash/``, not a dot-folder):
 
-- the presets, ``<library>/presets/**/*.json``: their ``routes`` and ``desk``
+- the loadable patches, ``<library>/presets/**/*.json``: their ``routes`` and ``desk``
   rows and their macros' base and depth subscribers. Each is **dropped at load**;
 - the patches, ``<library>/patches/**/*.json``: the same keys. A patch naming
   one is **refused whole** when it is read (`patches.check`, register row 744),
@@ -42,7 +42,7 @@ if str(ROOT) not in sys.path:
 from hyperspace.library import _walk
 from hyperspace.routing import Binding, Macro, meta_row_refusal
 
-PRESETS, PATCHES = "presets", "patches"
+LOADABLE, PATCHES = "presets", "patches"
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     lines: list[str] = []
     bad: list[str] = []
-    for kind, then in ((PRESETS, "dropped at the next load of each"),
+    for kind, then in ((LOADABLE, "dropped at the next load of each"),
                        (PATCHES, "each patch refused whole when read")):
         n, found, unread = scan(a.library / kind)
         lines += report(a.library, kind, then, found, n)

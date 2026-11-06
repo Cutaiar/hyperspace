@@ -299,7 +299,7 @@ def test_a_graph_rebuild_keeps_the_delay(ctx):
 
 def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
     """R19 (final review, row 354 "rebuilds, not loads"): a delay holding
-    red, then `reset_delays` (what a preset load asks) — the next frame
+    red, then `reset_delays` (what a loadable patch load asks) — the next frame
     reads nothing, the ground, as a first frame does, then the picture
     again; with no reset a rebuild of the same graph still holds red."""
     size = (160, 120)
@@ -315,15 +315,15 @@ def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
     assert _mid(_frame(ctx, r, s, vs, size, 4)[1]) == RED
 
 
-def test_a_preset_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
-    """R19: `Presets.load_doc` landing a section asks the attached renderer
+def test_a_loadable_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
+    """R19: `LoadedPatch.load_doc` landing a section asks the attached renderer
     to reset its delays; a GRAPH edit (an `Edit` landing) does not."""
     from test_graph_edit import wired_rig
 
     rig, e, _ = wired_rig(tmp_path, slug="delay-trails")
     calls = []
-    rig.presets.graph.renderer.reset_delays = lambda: calls.append(1)
-    spec = rig.presets.graph.spec
+    rig.loaded_patch.graph.renderer.reset_delays = lambda: calls.append(1)
+    spec = rig.loaded_patch.graph.spec
     w = next(w for w in spec.wires if w.dst != "delay.image" and w.src != "delay")
     assert e.unwire(f"rout:{w.src}", f"rin:{w.node}/{w.port}") is None
     assert calls == []
@@ -406,7 +406,7 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
     vs = [View(Switches(), (240, 150))]
     graphs = [("default", G.build_graph(vs, wired_wiring(G.Wiring(run=()))), Renderer(ctx))]
     tool = _tool()
-    for slug in tool.FIXTURE_PRESETS:
+    for slug in tool.FIXTURE_LOADABLES:
         if slug in PLAN_34:
             continue
         rig = tool.Rig(slug, "absent", ctx)

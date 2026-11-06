@@ -1,20 +1,20 @@
-"""Plan 28 N1 — modifier nodes, in the preset.
+"""Plan 28 N1 — modifier nodes, in the loadable patch.
 
 A modifier (`modifiers.Modifier`) reads one or two source lanes, has a few
 params of its own (``mod.<n>.<p>``, group ``mod``, performance and
 modulatable), and publishes one output lane, ``mod:<n>``, which a route
-reads like any source. The preset holds them (``modifiers`` after
+reads like any source. The loadable patch holds them (``modifiers`` after
 ``routes``; decision 8); `bindings.json` never does. A desk template may
-carry them, a preset's own overriding by id. ROUTING's MODIFIERS strip
+carry them, a loadable patch's own overriding by id. ROUTING's MODIFIERS strip
 builds them.
 
 Each kind is proven on a scripted input; then the lane a route can
-source, the preset / bindings split, a route onto a missing modifier, the
+source, the loadable patch / bindings split, a route onto a missing modifier, the
 template override, the strip building "right hand energy, smoothed, times
-band 0, into acid mix" through the page's own functions, an older preset
-without the key, undo, and Learn. The presets are fixtures under
+band 0, into acid mix" through the page's own functions, an older loadable patch
+without the key, undo, and Learn. The loadable patches are fixtures under
 tests/fixtures/modifiers/, loaded through a scratch library beside the
-corpus's presets (tests/corpus, seeded).
+corpus's loadable patches (tests/corpus, seeded).
 """
 
 import json
@@ -26,7 +26,7 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 from imgui_bundle import imgui
-from test_presets import boot
+from test_loadable import boot
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -34,9 +34,9 @@ from hyperspace import modifiers as M
 from hyperspace import routing, ui_routing, undo
 from hyperspace.bands import CEIL
 from hyperspace.learn import Learn
+from hyperspace.loadable import MODIFIERS_KEY
 from hyperspace.modifiers import Modifier, ModState, step
-from hyperspace.params import PERFORMANCE_GROUPS, part_of
-from hyperspace.preset import MODIFIERS_KEY
+from hyperspace.params import PATCH_GROUPS, part_of
 from hyperspace.routing import Binding, Bindings, Router
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "modifiers"
@@ -177,15 +177,15 @@ def analyzer(band0: float) -> NS:
     return NS(lanes=np.array([band0 * CEIL, 0.0, 0.0]))
 
 
-def test_the_mod_group_is_performance_and_its_params_come_and_go(rig):
+def test_the_mod_group_is_patch_and_its_params_come_and_go(rig):
     reg, table = rig.reg, rig.router.table
-    assert PERFORMANCE_GROUPS[-1] == "mod"
+    assert PATCH_GROUPS[-1] == "mod"
     m = table.add_modifier("smooth", ["hand:right.energy"], reg, release=0.6)
     assert m.id == "mod.1"
     ids = [p.id for p in reg.group("mod")]
     assert ids == ["mod.1.attack", "mod.1.release", "mod.1.spring"]
     p = reg["mod.1.release"]
-    assert part_of(p) == "performance" and p.modulatable and p.value == 0.6
+    assert part_of(p) == "patch" and p.modulatable and p.value == 0.6
     p.set(1.2)
     assert table.modifier("mod.1").params["release"] == 1.2
     table.add_modifier("combine", (), reg)
@@ -263,7 +263,7 @@ def test_a_modifiers_param_is_modulatable_by_a_route(rig):
     assert table.modifiers_doc(reg)[0]["mul"] == 1.0           # the file keeps the base
 
 
-# ---------------------------------------------------------------- the preset
+# ---------------------------------------------------------------- the loadable patch
 
 def put(lib, *names: str) -> None:
     (lib.home / "presets").mkdir(parents=True, exist_ok=True)
@@ -271,57 +271,57 @@ def put(lib, *names: str) -> None:
         shutil.copy(FIXTURES / "presets" / f"{n}.json", lib.home / "presets" / f"{n}.json")
 
 
-def test_modifiers_live_in_the_preset_and_never_in_bindings_json(rig):
-    lib, reg, router, presets = rig.lib, rig.reg, rig.router, rig.presets
+def test_modifiers_live_in_the_loadable_and_never_in_bindings_json(rig):
+    lib, reg, router, loaded_patch = rig.lib, rig.reg, rig.router, rig.loaded_patch
     table = router.table
     put(lib, "mod-energy")
-    assert presets.load("mod-energy") == [] and presets.notes == []
+    assert loaded_patch.load("mod-energy") == [] and loaded_patch.notes == []
     assert [m.id for m in table.modifiers] == ["mod.1", "mod.2"]
     assert reg["mod.1.release"].value == 0.6 and reg["mod.2.how"].value == 1
-    # the session file: rows only — no modifier, no `mod.*` id anywhere
+    # the meta controller file: rows only — no modifier, no `mod.*` id anywhere
     text = json.dumps(table.to_json())
     assert "modifiers" not in table.to_json() and "mod." not in text and "mod:" not in text
     table.write()
     assert "mod" not in routing.bindings_path(lib.home).read_text().replace("mode", "")
     # the preset: the list after the routes, the params in their entries only
-    doc = presets.document("MOD ENERGY")
+    doc = loaded_patch.document("MOD ENERGY")
     keys = list(doc)
     assert keys.index(MODIFIERS_KEY) == keys.index("routes") + 1
     want = json.loads((FIXTURES / "presets" / "mod-energy.json").read_text())[MODIFIERS_KEY]
     assert doc[MODIFIERS_KEY] == [Modifier.from_json(d).to_json() for d in want]
     assert not any(k.startswith("mod.") for k in doc["values"])   # loads on an older build
     assert not lib.is_dirty("presets")
-    # an edit is the preset's: its dirty dot
+    # an edit is the loadable patch's: its dirty dot
     reg["mod.1.release"].set(1.0)
     assert lib.is_dirty("presets")
-    assert presets.document("X")[MODIFIERS_KEY][0]["release"] == 1.0
-    # a save, reloaded, is the same preset
-    presets.save_as("MOD ENERGY 2")
+    assert loaded_patch.document("X")[MODIFIERS_KEY][0]["release"] == 1.0
+    # a save, reloaded, is the same loadable patch
+    loaded_patch.save_as("MOD ENERGY 2")
     reg["mod.1.release"].set(0.2)
-    presets.load("MOD ENERGY 2")
-    assert reg["mod.1.release"].value == 1.0 and presets.notes == []
-    # another preset with none: every modifier and its params gone
+    loaded_patch.load("MOD ENERGY 2")
+    assert reg["mod.1.release"].value == 1.0 and loaded_patch.notes == []
+    # another loadable patch with none: every modifier and its params gone
     put(lib, "mod-missing")
-    presets.load("mod-missing")
+    loaded_patch.load("mod-missing")
     assert [m.kind for m in table.modifiers] == ["curve"] and "mod.1.release" not in reg
 
 
 def test_a_route_onto_a_missing_modifier_is_dropped_with_a_note(rig):
-    lib, presets, table = rig.lib, rig.presets, rig.router.table
+    lib, loaded_patch, table = rig.lib, rig.loaded_patch, rig.router.table
     put(lib, "mod-missing")
-    presets.load("mod-missing")
+    loaded_patch.load("mod-missing")
     assert [(b.source, b.target) for b in table.routes()] == [("mod:1", "view.speed")]
-    assert presets.notes == ["dropped mod:3 → view.bright: no modifier mod.3"]
+    assert loaded_patch.notes == ["dropped mod:3 → view.bright: no modifier mod.3"]
     # the file is left as it is
     assert len(json.loads((lib.home / "presets" / "mod-missing.json").read_text())["routes"]) == 2
 
 
-def test_a_modifier_whose_input_the_rig_lacks_is_dormant(rig):
+def test_a_modifier_whose_input_the_meta_lacks_is_dormant(rig):
     """A hand the rig never feeds: the modifier stays, its lane is not
     live, the route on it moves nothing, and nothing is noted."""
-    lib, reg, router, presets = rig.lib, rig.reg, rig.router, rig.presets
+    lib, reg, router, loaded_patch = rig.lib, rig.reg, rig.router, rig.loaded_patch
     put(lib, "mod-energy")
-    presets.load("mod-energy")
+    loaded_patch.load("mod-energy")
     base = reg["fx.acid.mix"].norm
     for _ in range(3):
         router.modulate(analyzer(0.9))
@@ -331,38 +331,38 @@ def test_a_modifier_whose_input_the_rig_lacks_is_dormant(rig):
     assert [m.id for m in router.table.modifiers] == ["mod.1", "mod.2"]
 
 
-def test_an_older_preset_without_the_key_loads_as_before(rig):
-    """Every corpus preset has no `modifiers`: it loads with no note,
+def test_an_older_loadable_without_the_key_loads_as_before(rig):
+    """Every corpus loadable patch has no `modifiers`: it loads with no note,
     holds none, and saves without the key — the same document as the
     base build's (no `mod.*` id among its values)."""
-    lib, presets, table = rig.lib, rig.presets, rig.router.table
+    lib, loaded_patch, table = rig.lib, rig.loaded_patch, rig.router.table
     for name in ("party-tumble", "lfo-breathe", "legacy6"):
-        presets.load(name)
-        assert presets.notes == [] and table.modifiers == ()
-        doc = presets.document(name)
+        loaded_patch.load(name)
+        assert loaded_patch.notes == [] and table.modifiers == ()
+        doc = loaded_patch.document(name)
         assert MODIFIERS_KEY not in doc
         assert not any(k.startswith("mod.") for k in doc["values"])
         assert not lib.is_dirty("presets")
-    # a modifier left by the last preset goes with any load
+    # a modifier left by the last loadable patch goes with any load
     put(lib, "mod-energy")
-    presets.load("mod-energy")
-    presets.load("party-tumble")
+    loaded_patch.load("mod-energy")
+    loaded_patch.load("party-tumble")
     assert table.modifiers == () and not rig.reg.group("mod")
     rig.router.modulate()
     assert "mod" not in rig.router.schemes()
 
 
 def test_a_bad_modifier_entry_is_a_note_and_the_rest_load(rig):
-    lib, presets, table = rig.lib, rig.presets, rig.router.table
+    lib, loaded_patch, table = rig.lib, rig.loaded_patch, rig.router.table
     (lib.home / "presets").mkdir(parents=True, exist_ok=True)
     doc = json.loads((FIXTURES / "presets" / "mod-energy.json").read_text())
     doc["name"] = "MOD BAD"
     doc[MODIFIERS_KEY] = [{"id": "mod.1", "kind": "wobble"}, *doc[MODIFIERS_KEY][1:], "junk"]
     (lib.home / "presets" / "mod-bad.json").write_text(json.dumps(doc))
-    presets.load("mod-bad")
+    loaded_patch.load("mod-bad")
     assert [m.id for m in table.modifiers] == ["mod.2"]
-    assert any("wobble" in n for n in presets.notes)
-    assert any("not an object" in n for n in presets.notes)
+    assert any("wobble" in n for n in loaded_patch.notes)
+    assert any("not an object" in n for n in loaded_patch.notes)
 
 
 # ---------------------------------------------------------------- undo, learn
@@ -404,15 +404,15 @@ def panel_of(rig) -> NS:
 def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     """"Right hand energy, smoothed, times band 0, into acid mix", from the
     MODIFIERS strip and the route list alone — and saved, it is the
-    fixture's preset."""
-    reg, router, presets = rig.reg, rig.router, rig.presets
+    fixture's loadable patch."""
+    reg, router, loaded_patch = rig.reg, rig.router, rig.loaded_patch
     panel = panel_of(rig)
     # (plan 36 T3: acid exists where the graph names it — every file, as
     # before a graph lands)
     from hyperspace.fx import declare
 
     declare(reg, reg.fx_state, reg.fx_state.hold(None))
-    router.table.set_routes([])                 # a preset with no routes yet
+    router.table.set_routes([])                 # a loadable patch with no routes yet
     hands(router, 0.0)
     offered = dict(ui_routing.modifier_sources(panel, router))
     assert "hand:right.energy" in offered and "lane:0" in offered
@@ -449,7 +449,7 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     reg.apply()
     assert ui_routing.modifier_output(router, "mod.2") is None and not p.modulated
     # saved, it is the fixture: the same modifiers, the same route
-    doc = presets.document("MOD ENERGY")
+    doc = loaded_patch.document("MOD ENERGY")
     fix = json.loads((FIXTURES / "presets" / "mod-energy.json").read_text())
     assert doc[MODIFIERS_KEY] == [Modifier.from_json(d).to_json() for d in fix[MODIFIERS_KEY]]
     assert doc["routes"] == [Binding.from_json(r).to_json() for r in fix["routes"]]

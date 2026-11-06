@@ -217,7 +217,7 @@ def _source(name: str) -> Path:
     import hyperspace
 
     root = Path(hyperspace.__file__).parent / name.replace(".", "/")
-    # `library.py` sits beside the `library/` preset folder: the file wins
+    # `library.py` sits beside the `library/` loadable patch folder: the file wins
     return root.with_suffix(".py") if root.with_suffix(".py").exists() else root / "__init__.py"
 
 
@@ -441,7 +441,7 @@ def test_reloading_params_keeps_kind_identity():
     """The same rule on the real module: a params.py reload through the
     reloader keeps `Kind`, and a live toggle still toggles. In a subprocess,
     because a real reload of hyperspace.params would leave this test
-    session's other modules holding stale classes."""
+    meta controller's other modules holding stale classes."""
     import subprocess
 
     out = subprocess.run([sys.executable, "-c", KIND_SCRIPT], capture_output=True, text=True,

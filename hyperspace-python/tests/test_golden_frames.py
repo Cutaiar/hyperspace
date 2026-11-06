@@ -1,7 +1,7 @@
 """Plan 26 A0: golden frames and GPU timing per pass.
 
 The goldens (`tests/golden/frames/frames.json`, written by
-`tools/golden_frames.py --record`) are every corpus preset in each of
+`tools/golden_frames.py --record`) are every corpus loadable patch in each of
 the eight output states, with the synthetic hands absent and present,
 plus one frame at the 1080p cap: a SHA-256 of the full-resolution RGBA
 frame each. The render test draws them all again and compares every
@@ -50,20 +50,20 @@ def _manifest() -> dict:
 
 # ---------------------------------------------------------------- no GL
 
-def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
-    """No preset or state is skipped silently: each corpus preset has a
+def test_every_corpus_loadable_has_every_state_recorded_and_nothing_else():
+    """No loadable patch or state is skipped silently: each corpus loadable patch has a
     golden for each of the eight `Switches` states, hands absent and
     present; the window's own frame alone (`solo`, the default state) for
-    each, and alone through (`solo-scene+hands+through`) for each preset
+    each, and alone through (`solo-scene+hands+through`) for each loadable patch
     with an effect on; and the one cap frame. Each names its pipeline and
-    a PNG that exists; every preset loaded with nothing missing. Plan 26
+    a PNG that exists; every loadable patch loaded with nothing missing. Plan 26
     A3: the graph's other wirings, hands present — the hands in the scene
-    and the depth-aware layer for every preset, the history holding the
-    hands for each preset with the look-back on — named
+    and the depth-aware layer for every loadable patch, the history holding the
+    hands for each loadable patch with the look-back on — named
     `<wiring>/<state>`. Plan 26 A4b: the recorded point cloud listed as a
     `cloud` device, hands present, named `cloud/<state>`, and nothing
     else."""
-    FACTORY_PRESETS = _tool().CORPUS_PRESETS
+    FACTORY_LOADABLES = _tool().CORPUS_LOADABLES
 
     doc = _manifest()
     eight = [(a, b, c) for a in (True, False) for b in (True, False) for c in (False, True)]
@@ -92,27 +92,27 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
     fx_on = {p for p, said in doc["presets"].items() if said["absent"]["effects_on"]}
     assert fx_on == {"party-trip", "party-acid", "party-mandala", "party-noita",
                      "lfo-breathe", "hands-fx", "seq-demo"}
-    # plan 31 P: seq-demo drawn with play pressed (`seq.run` is no preset's)
+    # plan 31 P: seq-demo drawn with play pressed (`seq.run` is no loadable patch's)
     assert doc["sequencer_running"] == ["seq-demo"] == list(_tool().RUNNING)
-    want = {(p, h, s) for p in FACTORY_PRESETS for h in ("absent", "present")
+    want = {(p, h, s) for p in FACTORY_LOADABLES for h in ("absent", "present")
             for s in [*doc["states"], "solo"]
             + (["solo-scene+hands+through"] if p in fx_on else [])}
     cap = doc["cap"]
     wired = {(p, "present", f"{name}/{s}") for name, w in doc["wired_states"].items()
-             for p in (w["presets"] or FACTORY_PRESETS) for s in w["states"]}
+             for p in (w["presets"] or FACTORY_LOADABLES) for s in w["states"]}
     capped = {(e["preset"], e["hands"], e["state"]) for e in doc["goldens"]
               if e["state"] not in doc["states"] and e["state"] not in doc["solo_states"]
               and "/" not in e["state"]}
     clouded = {(p, "present", f"{name}/{s}") for name, c in doc["cloud_states"].items()
                for p in c["presets"] for s in c["states"]}
-    # plan 26 A4: the proof presets, fixtures loaded through a scratch
-    # library (never corpus presets), hands present, all eight states
+    # plan 26 A4: the proof loadable patches, fixtures loaded through a scratch
+    # library (never corpus loadable patches), hands present, all eight states
     fixture = {(p, f["hands"], s) for p, f in doc["fixture_states"].items() for s in f["states"]}
     assert (keys - capped - wired - clouded - fixture == want and wired <= keys
             and clouded <= keys and fixture <= keys)
     # (plan 30 D1: + 3 × 8, the three placement fixtures' eight states;
     # plan 28 N4: + 2 × 8, the two wire fixtures'; plan 31 P: seq-demo, a
-    # 24th corpus preset and a 7th with an effect on; plan 32 T6: + 2 × 8,
+    # 24th corpus loadable patch and a 7th with an effect on; plan 32 T6: + 2 × 8,
     # the two media fixtures'; plan 32 T7: + 3 × 8, the faces' and the aux's;
     # plan 33 T4: + 3 × 8, the faces', the backdrop's and the two sizes' branches;
     # plan 33 T5: + 8, the switch onto the faces; plan 34 T2: + 2 × 8, the
@@ -142,26 +142,26 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
         assert e["route"] in routes, e
         assert len(e["sha256"]) == 64
         assert (MANIFEST.parent / e["png"]).is_file(), e["png"]
-    assert set(doc["presets"]) == set(FACTORY_PRESETS)
+    assert set(doc["presets"]) == set(FACTORY_LOADABLES)
     for slug, said in doc["presets"].items():
         for hands in ("absent", "present"):
             assert said[hands]["missing"] == [], slug
             assert said[hands]["hands_shown"] is (hands == "present"), slug
     # the fixtures: the tool's list, each a file under tests/fixtures/ and
-    # never a corpus preset, loaded with nothing missing and no note — (plan
+    # never a corpus loadable patch, loaded with nothing missing and no note — (plan
     # 36 T3) every fixture an old file, a migration input — its graph landed
     # as its `/7`
     tool = _tool()
-    assert list(doc["fixture_states"]) == list(doc["fixtures"]) == list(tool.FIXTURE_PRESETS)
+    assert list(doc["fixture_states"]) == list(doc["fixtures"]) == list(tool.FIXTURE_LOADABLES)
     for slug, f in doc["fixture_states"].items():
-        assert (ROOT / f["file"]).is_file() and slug not in FACTORY_PRESETS
+        assert (ROOT / f["file"]).is_file() and slug not in FACTORY_LOADABLES
         assert f["states"] == list(doc["states"])
         said = doc["fixtures"][slug]["present"]
         # (plan 35 T3: a wired fixture draws only what it wires — its states
         # are the windows' mutes, not switches emulated: the blank frame and
         # the channel alone wire no hands, so none is shown, and the blank
         # frame builds the outputs and nothing else)
-        from hyperspace.preset import NO_GRAPH_SAID
+        from hyperspace.loadable import NO_GRAPH_SAID
 
         # (the blank frame: the strip says it holds nothing, plan 36 T3)
         want = [NO_GRAPH_SAID] if slug == "blank-frame" else []
@@ -189,19 +189,19 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
     assert {e["route"] for e in doc["goldens"]} == routes
 
 
-def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on():
-    """The history-with-the-hands goldens cover exactly the corpus presets
+def test_the_history_wiring_is_recorded_for_every_loadable_with_the_look_back_on():
+    """The history-with-the-hands goldens cover exactly the corpus loadable patches
     whose file draws a look-back (elsewhere the history holds nothing the
     picture shows, so the frame is the default one). Plan 36 T4: a
     look-back is drawn — a wire into `lookback.image` — where the old file
     turned it on (`factory-sources`' `dream.on`, the old files)."""
-    FACTORY_PRESETS = _tool().CORPUS_PRESETS
+    FACTORY_LOADABLES = _tool().CORPUS_LOADABLES
 
     lib = _tool().CORPUS
-    drawn = [slug for slug in FACTORY_PRESETS
+    drawn = [slug for slug in FACTORY_LOADABLES
              if any(w.get("to") == "lookback.image" for w in json.loads(
                  (lib / f"{slug}.json").read_text())["graph"].get("wires", []))]
-    on = [slug for slug in FACTORY_PRESETS
+    on = [slug for slug in FACTORY_LOADABLES
           if json.loads((_tool().FACTORY_SOURCES / f"{slug}.json").read_text())
           .get("values", {}).get("dream.on")]
     assert sorted(drawn) == sorted(on) == sorted(_tool().LOOKBACK_ON)
@@ -214,7 +214,7 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 # Plan 36 T1 re-recorded four entries (the stand-down gone, a hands mute
 # inside a through chain: `party-trip`, `party-noita`, `lfo-breathe`
 # absent|hands+through and `through-one-output` present|scene+through) and
-# the route words of those presets' through states
+# the route words of those loadable patches' through states
 # (plan 39 T0's `edges-scene`, T2's `mask-as-picture`, T3's `cut-out` and
 # T4's `segment-motion`: new pictures — none of the 741 moved)
 GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture", "cut-out",
@@ -237,9 +237,9 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture"
 # wired-outputs, through-one-output, branch-two-sizes, resize-crop,
 # media-chain-faces and media-chain-backdrop, present, in every state that
 # draws their effect: each has an effect on whose `speed` (and for the
-# instances, bend/twist/breathe) the preset does not name, so it took the
+# instances, bend/twist/breathe) the loadable patch does not name, so it took the
 # new default, and the eight frames at 1/60 s land at a different phase.
-# Nothing structural moved; a corpus preset names every param and none
+# Nothing structural moved; a corpus loadable patch names every param and none
 # moved. sha256 and png only.)
 # (wave 0 T1, the tapers, 2026-11-02: re-pinned for the 70 goldens
 # re-recorded — party-acid, party-mandala, party-noita, party-trip (its
@@ -362,7 +362,7 @@ def _tool_free_job_of(e: dict) -> str:
 
 def test_every_golden_belongs_to_one_of_the_tools_jobs():
     """The goldens are drawn one job per test (`tool.jobs()`: a factory
-    preset with the hands absent or present, a fixture, the cap): every
+    loadable patch with the hands absent or present, a fixture, the cap): every
     entry belongs to exactly one job the tool draws, and every job has
     entries — so the jobs' tests together check every golden, and each
     job's test checks that it drew exactly its own entries."""
@@ -376,7 +376,7 @@ def test_every_golden_belongs_to_one_of_the_tools_jobs():
 
 @pytest.mark.parametrize("job_id", _job_ids())
 def test_every_golden_frame_is_drawn_byte_for_byte(exact, job_id, tmp_path):
-    """Each corpus preset in each state it reaches, hands absent and
+    """Each corpus loadable patch in each state it reaches, hands absent and
     present, each fixture, and the cap frame — one job per test: every
     full-resolution frame's SHA-256 is its golden's, and the job drew
     exactly its golden entries. Each frame is hashed as it is read and its
@@ -406,7 +406,7 @@ _SHIPPED_FIXTURES = ("palette-glass", "palette-hands", "acid-scene", "wired-outp
 
 
 def _resave_sources() -> list[tuple[str, bool]]:
-    """Every corpus preset and fixture, by the manifest (its `presets` and
+    """Every corpus loadable patch and fixture, by the manifest (its `presets` and
     `fixtures` are the tool's lists: the no-GL test above)."""
     doc = _manifest()
     return [*((slug, True) for slug in doc["presets"]),
@@ -415,8 +415,8 @@ def _resave_sources() -> list[tuple[str, bool]]:
 
 @pytest.mark.parametrize("slug,factory", _resave_sources(),
                          ids=[slug for slug, _ in _resave_sources()])
-def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, factory):
-    """Row 394: every corpus preset and every fixture, saved untouched as
+def test_every_loadable_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, factory):
+    """Row 394: every corpus loadable patch and every fixture, saved untouched as
     `/7` (`headless.resave`, the road tools/migrate_library.py takes; plan
     36 T3) and drawn from that file on the golden rig (`picture`: hands
     present, the eight states as wiring), draws exactly its recorded
@@ -453,7 +453,7 @@ def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, fa
 
 
 def _grouped_sources() -> list[str]:
-    """Plan 40 T2: every corpus preset with a main run (the effects wired
+    """Plan 40 T2: every corpus loadable patch with a main run (the effects wired
     one after another into All outputs' picture, T1's rule); the others —
     tests/test_graph_groups.py names them — have nothing to group."""
     from hyperspace import graph as G
@@ -467,26 +467,26 @@ def _grouped_sources() -> list[str]:
 
 
 @pytest.mark.parametrize("slug", _grouped_sources())
-def test_every_preset_with_its_main_run_grouped_draws_its_goldens(ctx, tmp_path, slug):
-    """Plan 40 T2 (D4: the renderer learns nothing): each corpus preset
+def test_every_loadable_with_its_main_run_grouped_draws_its_goldens(ctx, tmp_path, slug):
+    """Plan 40 T2 (D4: the renderer learns nothing): each corpus loadable patch
     with its main run grouped — a grouped twin in a scratch library, `/8`,
     never the corpus file — drawn on the golden rig (`picture`: hands
     present, the eight states as wiring) draws exactly its recorded
     goldens; on another renderer, exactly what the ungrouped file draws."""
     from hyperspace import graph as G
-    from hyperspace import preset
+    from hyperspace import loadable
 
     doc = _manifest()
     tool = _tool()
     path = tool.CORPUS / f"{slug}.json"
     src = json.loads(path.read_text())
     run = G.run_back(G.read_graph(src["graph"]), "output.all.image")
-    twin = {**src, "schema": preset.SAVE_SCHEMA,
+    twin = {**src, "schema": loadable.SAVE_SCHEMA,
             "groups": [{"id": "group.1", "name": "main run",
                         "nodes": [f"render:{n}" for n in run], "open": False}]}
     grouped = tmp_path / "grouped" / f"{slug}.json"
     grouped.parent.mkdir()
-    grouped.write_text(preset.dumps(twin))
+    grouped.write_text(loadable.dumps(twin))
     got, notes = tool.picture(grouped, slug=slug)
     assert not [n for n in notes if "group" in n], notes
     if tool.renderer_name(ctx) == doc["renderer"]:

@@ -296,12 +296,12 @@ def test_a_split_keeps_the_rows_gate(rig):
 def test_a_step_rows_take_over_writes_the_file_once(rig, monkeypatch):
     asked = by_learn_pair(rig)
     written = []
-    real = routing.SessionTable.write
+    real = routing.MetaTable.write
 
     def write(self, rows=None):
         written.append(1)
         real(self, rows)
-    monkeypatch.setattr(routing.SessionTable, "write", write)
+    monkeypatch.setattr(routing.MetaTable, "write", write)
     settle_pair(asked, TAKE_OVER, rig.reg)
     assert len(written) == 1
 
@@ -650,7 +650,7 @@ def stacks_as_they_are(s) -> tuple:
 @pytest.mark.parametrize("choice", [KEEP_BOTH, TAKE_OVER])
 @pytest.mark.parametrize("hand", [False, True])
 def test_a_refused_landing_leaves_every_stack_and_latch_as_it_was(stacks, choice, hand):
-    """The referee refuses at the answer (row 743: a preset's row on a meta param):
+    """The referee refuses at the answer (row 743: a loadable patch's row on a meta param):
     nothing is pushed, focus does not move, and no latch opens or shuts."""
     s = stacks
     go(s)

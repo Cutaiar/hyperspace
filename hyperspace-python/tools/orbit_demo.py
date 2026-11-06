@@ -2,9 +2,9 @@
 """Plan 18 WP4 — `hands-orbit`, two hands on the camera, shown headless.
 
 SYNTHETIC HANDS and OFFSCREEN RENDERS: no tracker and no window. The
-corpus preset (`tests/corpus/presets/hands-orbit.json`) is loaded through
-the real `Presets` over a `Router` on a throwaway library home
-(`tools/preset_shots.py`'s construction, so nothing touches ~/Hyperspace),
+corpus loadable patch (`tests/corpus/presets/hands-orbit.json`) is loaded through
+the real `LoadedPatch` over a `Router` on a throwaway library home
+(`tools/loadable_shots.py`'s construction, so nothing touches ~/Hyperspace),
 and two fake hands are driven through the
 real `HandsIO` chain (range → One Euro → dead zone → follower, the
 default feel and the default ranges, no interaction box), each reading
@@ -42,7 +42,7 @@ for _p in (ROOT, ROOT / "tools"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-import preset_shots as shots  # tools/preset_shots.py: Stage, the fake source, the poses
+import loadable_shots as shots  # tools/loadable_shots.py: Stage, the fake source, the poses
 
 from hyperspace.hands.core import default_range
 
@@ -63,8 +63,8 @@ ROWS = (("L low", 0.0), ("L half up", 0.5), ("L high", 1.0))
 
 
 class Stage(shots.Stage):
-    """`preset_shots.Stage` on a preset the list holds under its own name
-    (the party presets load by their upper-case slot name)."""
+    """`loadable_shots.Stage` on a loadable patch the list holds under its own name
+    (the party loadable patches load by their upper-case slot name)."""
 
     def __init__(self, ctx=None, mouse: dict[str, float] | None = None):
         super().__init__(NAME, ctx, load=NAME)
@@ -73,7 +73,7 @@ class Stage(shots.Stage):
 
 
 def rows():
-    """The preset's routes, as one load lands them (`Stage.routes`)."""
+    """The loadable patch's routes, as one load lands them (`Stage.routes`)."""
     return list(Stage().routes)
 
 

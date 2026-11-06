@@ -1,4 +1,4 @@
-"""Row 394: tools/migrate_library.py — a library's presets rewritten as
+"""Row 394: tools/migrate_library.py — a library's loadable patches rewritten as
 the newest schema (plan 44 D3: `hyperspace.preset/10`) once, through the
 app's own load and save, a picture check on the golden rig deciding what
 is written.
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "tests" / "corpus" / "presets"          # the shipped presets, as test data
+CORPUS = ROOT / "tests" / "corpus" / "presets"          # the shipped loadable patches, as test data
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"   # the corpus's /2s
 
@@ -35,23 +35,23 @@ def _tool():
 
 
 def _library(tmp_path: Path) -> Path:
-    """A library shaped like the owner's: a `/2` preset (party-trip's
+    """A library shaped like the owner's: a `/2` loadable patch (party-trip's
     source, under a file name of its own), a `/5` with an old GRAPH layout
     (glimmer-bug), one already at the newest, one this build refuses (a value that
     will not land), a module preset, the trash and a backup beside them."""
     from hyperspace import headless
 
     lib = tmp_path / "Drive" / "Hyperspace"
-    presets = lib / "presets"
-    presets.mkdir(parents=True)
-    shutil.copyfile(SOURCES / "party-trip.json", presets / "trip-night.json")
-    shutil.copyfile(FIXTURES / "glimmer-bug.json", presets / "glimmer-bug.json")
+    loadable_dir = lib / "presets"
+    loadable_dir.mkdir(parents=True)
+    shutil.copyfile(SOURCES / "party-trip.json", loadable_dir / "trip-night.json")
+    shutil.copyfile(FIXTURES / "glimmer-bug.json", loadable_dir / "glimmer-bug.json")
     seven, _, _ = headless.resave(FIXTURES / "acid-scene.json", tmp_path / "seven")
-    (presets / "acid-scene.json").write_bytes(seven)
-    (presets / "broken.json").write_text(json.dumps(
+    (loadable_dir / "acid-scene.json").write_bytes(seven)
+    (loadable_dir / "broken.json").write_text(json.dumps(
         {"schema": "hyperspace.preset/2", "name": "broken", "values": {"view.bright": "fast"}}))
-    (presets / "trip-night.json.bak-20261001").write_text("{}")
-    (presets / ".tmp.json").write_text("{}")
+    (loadable_dir / "trip-night.json.bak-20261001").write_text("{}")
+    (loadable_dir / ".tmp.json").write_text("{}")
     (lib / "trash" / "presets").mkdir(parents=True)
     (lib / "trash" / "presets" / "old.json").write_text(
         (CORPUS / "dial.json").read_text())
@@ -72,9 +72,9 @@ def same_picture(path, *, library=None, show=None):
     return ["x"] * 8, []
 
 
-def test_the_presets_it_finds(tmp_path):
+def test_the_loadables_it_finds(tmp_path):
     lib = _library(tmp_path)
-    got = [p.name for p in _tool().preset_files(lib)]
+    got = [p.name for p in _tool().loadable_files(lib)]
     assert got == ["acid-scene.json", "broken.json", "glimmer-bug.json", "trip-night.json"]
 
 
@@ -126,7 +126,7 @@ def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, c
 
 
 def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
-    """Plan 36 T3: `--to FOLDER` writes every preset that passed — the `/9`
+    """Plan 36 T3: `--to FOLDER` writes every loadable patch that passed — the `/9`
     already there too — into FOLDER under its own name; the library is
     read, never written, and no backup is made (how the corpus's `/7` were
     made from their sources)."""
@@ -148,7 +148,7 @@ def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
         _tool().main(["--library", str(lib), "--to", str(out_dir), "--apply"])
 
 
-def test_a_preset_whose_picture_moves_is_not_written_unless_forced(tmp_path, capsys):
+def test_a_loadable_whose_picture_moves_is_not_written_unless_forced(tmp_path, capsys):
     lib = _library(tmp_path)
     (lib / "presets" / "broken.json").unlink()
 
@@ -223,7 +223,7 @@ def test_the_library_defaults_to_the_configs(tmp_path, capsys):
     assert _tool().main(["--library", str(tmp_path / "nowhere")]) == 2
 
 
-def test_the_real_picture_check_passes_an_old_preset(tmp_path, capsys):
+def test_the_real_picture_check_passes_an_old_loadable(tmp_path, capsys):
     """The golden rig itself (no stand-in): party-trip and glimmer-bug draw
     the same as their `/9`, so `--apply` writes both."""
     pytest.importorskip("moderngl")
@@ -248,13 +248,13 @@ def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
     the library does — ``party/`` and ``party/deep/`` migrated in place,
     a hidden folder (``.cache``) never read; ``--to`` keeps the folders."""
     lib = _library(tmp_path)
-    presets = lib / "presets"
-    (presets / "party" / "deep").mkdir(parents=True)
-    shutil.copyfile(SOURCES / "party-trip.json", presets / "party" / "night.json")
-    shutil.copyfile(FIXTURES / "glimmer-bug.json", presets / "party" / "deep" / "bug.json")
-    (presets / ".cache").mkdir()
-    shutil.copyfile(SOURCES / "party-trip.json", presets / ".cache" / "x.json")
-    got = [p.relative_to(presets).as_posix() for p in _tool().preset_files(lib)]
+    loadable_dir = lib / "presets"
+    (loadable_dir / "party" / "deep").mkdir(parents=True)
+    shutil.copyfile(SOURCES / "party-trip.json", loadable_dir / "party" / "night.json")
+    shutil.copyfile(FIXTURES / "glimmer-bug.json", loadable_dir / "party" / "deep" / "bug.json")
+    (loadable_dir / ".cache").mkdir()
+    shutil.copyfile(SOURCES / "party-trip.json", loadable_dir / ".cache" / "x.json")
+    got = [p.relative_to(loadable_dir).as_posix() for p in _tool().loadable_files(lib)]
     assert got == ["acid-scene.json", "broken.json", "glimmer-bug.json", "trip-night.json",
                    "party/night.json", "party/deep/bug.json"]
     out_dir = tmp_path / "out"
@@ -262,11 +262,11 @@ def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
     assert json.loads((out_dir / "party" / "deep" / "bug.json").read_text())["schema"] \
         == "hyperspace.preset/10"
     capsys.readouterr()
-    hidden = (presets / ".cache" / "x.json").read_bytes()
+    hidden = (loadable_dir / ".cache" / "x.json").read_bytes()
     assert _tool().main(["--library", str(lib), "--apply"], picture=same_picture) == 1
     out = capsys.readouterr().out
     assert "party/night.json" in out and "party/deep/bug.json" in out
     for rel in ("party/night.json", "party/deep/bug.json"):
-        assert json.loads((presets / rel).read_text())["schema"] == "hyperspace.preset/10", rel
-    assert (presets / ".cache" / "x.json").read_bytes() == hidden
+        assert json.loads((loadable_dir / rel).read_text())["schema"] == "hyperspace.preset/10", rel
+    assert (loadable_dir / ".cache" / "x.json").read_bytes() == hidden
     assert "rewrote 4 as /10" in out

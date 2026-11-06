@@ -33,7 +33,7 @@ from hyperspace.routing import (
     Bindings,
     Router,
     Sources,
-    is_session_row,
+    is_meta_row,
     row_words,
 )
 
@@ -301,9 +301,9 @@ def test_other_button_ops_on_a_pair_are_refused(rig):
 
 # ---- the two shapes' homes, and a save ----
 
-def test_a_step_row_is_the_tables_and_a_route_is_the_presets():
-    assert is_session_row(Binding("pair:UP/DOWN", "view.bright", "step", 1.0))
-    assert not is_session_row(Binding("pair:UP/DOWN", "view.bright", "push", 0.5))
+def test_a_step_row_is_the_tables_and_a_route_is_the_loadables():
+    assert is_meta_row(Binding("pair:UP/DOWN", "view.bright", "step", 1.0))
+    assert not is_meta_row(Binding("pair:UP/DOWN", "view.bright", "push", 0.5))
 
 
 def test_a_saved_route_on_a_pair_survives_a_save_and_reload(rig, tmp_path):

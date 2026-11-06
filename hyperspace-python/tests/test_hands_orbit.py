@@ -19,12 +19,12 @@ from test_hands import make_app, v3
 from test_hands_room import FPS, lane, play, pose
 from test_undo import boot, settle
 
-from hyperspace import learn, preset, ui_routing, undo
+from hyperspace import learn, loadable, ui_routing, undo
 from hyperspace.deck import Deck
 from hyperspace.hands import core as hc
 from hyperspace.hands import room as R
 from hyperspace.hands import tape as T
-from hyperspace.routing import MOD_OPS, TURN_GRACE_S, TURN_OP, Binding, Owned, is_session_row
+from hyperspace.routing import MOD_OPS, TURN_GRACE_S, TURN_OP, Binding, Owned, is_meta_row
 
 YAW, PITCH = "hand:right.room.yaw", "hand:right.room.pitch"
 GRAB = "hand:right.grab"
@@ -373,9 +373,9 @@ def test_it_is_a_performer_and_the_referee_keeps_one(app):
         app.table.add(Binding(PITCH, "camera.yaw", "position"))
 
 
-def test_it_is_the_presets_row_never_the_rigs(app):
+def test_it_is_the_loadables_row_never_the_meta(app):
     row = app.table.owner("camera.yaw")
-    assert not is_session_row(row)
+    assert not is_meta_row(row)
     assert row.to_json()["op"] == TURN_OP and row.to_json()["when"] == GRAB
     assert Binding.from_json(row.to_json()) == row
     assert '"turn"' not in app.table.dumps()
@@ -703,13 +703,13 @@ def test_the_cut_is_each_rows_own(deck, tmp_path):
     assert r.yaw[-1] == pytest.approx(r.yaw[n + 1], abs=1e-6)
 
 
-def test_a_load_with_the_fist_closed_cuts_the_new_presets_row_only_until_it_opens(deck, tmp_path):
-    deck.presets.save_as("ORBIT")
+def test_a_load_with_the_fist_closed_cuts_the_new_loadables_row_only_until_it_opens(deck, tmp_path):
+    deck.loaded_patch.save_as("ORBIT")
     n = len(closing()) + 11
 
     def each(io, k):
         if k == n:
-            assert deck.presets.load("ORBIT") == []
+            assert deck.loaded_patch.load("ORBIT") == []
 
     script = (closing() + [fist(yaw=float(k)) for k in range(31)]
               + opening(yaw=30.0) + [opened(yaw=30.0)] * LONG_OPEN
@@ -781,10 +781,10 @@ def test_another_decks_turn_keeps_no_step_on_this_undo(deck, tmp_path):
 # ------------------------------------------------------------ saved and held
 
 def test_a_save_has_the_row_and_the_turned_camera(deck, tmp_path):
-    """The camera route is the preset's (plan 43 C2): saved, reloaded, it is there."""
+    """The camera route is the loadable patch's (plan 43 C2): saved, reloaded, it is there."""
     script = closing() + [fist(yaw=float(k)) for k in range(31)] + opening(yaw=30.0)
     Run(deck, tmp_path, script, steps=deck.undo)
-    path = deck.presets.save_as("ORBIT")
+    path = deck.loaded_patch.save_as("ORBIT")
     doc = json.loads(path.read_text())
     assert doc["schema"].endswith("/10")                  # no schema move
     assert doc["values"]["camera.yaw"] == pytest.approx(math.radians(30.0), abs=0.01)
@@ -792,7 +792,7 @@ def test_a_save_has_the_row_and_the_turned_camera(deck, tmp_path):
         r for r in doc["routes"] if r["target"] == "camera.yaw").items()
     deck.reg["camera.yaw"].set(0.0)
     orbit_rows(deck.table, Binding(PITCH, "camera.pitch", "position"))
-    assert deck.presets.load("ORBIT") == []
+    assert deck.loaded_patch.load("ORBIT") == []
     assert deck.table.owner("camera.yaw").op == TURN_OP
     assert deck.reg["camera.yaw"].base == pytest.approx(math.radians(30.0), abs=0.01)
 
@@ -801,10 +801,10 @@ def test_what_an_older_build_does_with_the_row(deck, tmp_path, monkeypatch):
     """An older build's `MOD_OPS` has no turn: the row goes with a note, the rest
     of the file lands, and nothing is refused. So no schema move (row 683)."""
     deck.reg["camera.pitch"].set(0.5)
-    deck.presets.save_as("ORBIT")
-    monkeypatch.setattr(preset, "MOD_OPS", ("push", "position"))
-    deck.presets.load("ORBIT")
-    notes = deck.presets.notes
+    deck.loaded_patch.save_as("ORBIT")
+    monkeypatch.setattr(loadable, "MOD_OPS", ("push", "position"))
+    deck.loaded_patch.load("ORBIT")
+    notes = deck.loaded_patch.notes
     assert any("(turn): not a performer row" in n for n in notes)
     assert deck.table.owner("camera.yaw") is None
     assert deck.reg["camera.pitch"].base == pytest.approx(0.5)

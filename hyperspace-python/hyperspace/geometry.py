@@ -1629,7 +1629,7 @@ def rot_matrix(ang) -> np.ndarray:
 def pose_angles(R) -> list[float]:
     """The six plane angles whose turn is the 4×4 rotation `R` —
     `rot_matrix(pose_angles(R)) == R` for any R in SO(4) (plan 43 C2, row
-    573: how a preset's save folds `ViewState.body` into the phases).
+    573: how a loadable patch's save folds `ViewState.body` into the phases).
     rot_matrix is G_ZW·G_YW·G_XW·G_YZ·G_XZ·G_XY on column points, so its
     w column is fixed by the three W planes alone (`G_ZW·G_YW·G_XW·e_w`)
     and, those undone, what is left turns x, y and z only: its z column by

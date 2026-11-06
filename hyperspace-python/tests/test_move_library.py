@@ -1,7 +1,7 @@
 """tools/move_library.py (plan 25 D8): an existing library copied into a
 shared folder — never over a file, the machine files left behind, nothing
 in the home touched. All on tmp_path. (The hidden lists' union went with
-hidden presets, 2026-10-28: a `hidden.json` is a machine file now.)"""
+hidden loadable patches, 2026-10-28: a `hidden.json` is a machine file now.)"""
 
 import importlib.util
 import json
@@ -117,7 +117,7 @@ def test_main_prints_the_config_lines_and_never_edits_config(tmp_path, capsys, m
     assert (dest / "presets" / "hi-frek.json").is_file()
 
 
-def test_a_preset_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path):
+def test_a_loadable_folder_is_copied_every_folder_down_hidden_ones_not(tmp_path):
     """Plan 48 stage 2: ``presets/`` is walked as the library lists it —
     ``party/`` and ``party/deep/`` copied, ``presets/.hidden/`` never; the
     other groups stay one level down."""

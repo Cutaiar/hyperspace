@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Home, shown headless (plan 15 WP2, decision 27).
 
-One press loads the preset the show starts on: the APC40's OVERDUB (B11),
+One press loads the loadable patch the show starts on: the APC40's OVERDUB (B11),
 the same on both desk layers, and the keyboard's Home key (fn ← on a
 laptop). This builds the app's objects the way `tools/undo_demo.py` does
 — no window, a `MidiIO` over fake ports, the key rows through
 `Router.keys` — and prints a transcript: load TRIP, edit it, go home by
 each road, the LED velocity the desk is sent, Ctrl+Z bringing the edited
-TRIP back, a show that names no startup preset, and a Learn that OVERDUB
+TRIP back, a show that names no startup loadable patch, and a Learn that OVERDUB
 refuses.
 
 It always runs on a fresh temp home of its own (`undo_demo` sets
 `HYPERSPACE_HOME` on import, before anything reads it, and seeds it with
 the test corpus: the party show, which starts on TUMBLE): it cannot touch
 ~/Hyperspace. Since 2026-10-28 nothing on the panel sets a show's startup
-preset (the PRESETS page's "starts on" went with its bank pills), so the
+loadable patch (the PRESETS page's "starts on" went with its bank pills), so the
 `--shot` of that page is gone; the show file's `startup` still works.
 
   uv run python tools/home_demo.py [--out docs/plans/assets/15-safety-net/home-demo.txt]
@@ -35,7 +35,7 @@ import glfw
 import mido
 
 from hyperspace import apc40
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 
 OVERDUB = apc40.N_OVERDUB
 
@@ -61,7 +61,7 @@ def led(r) -> str:
 def where(r) -> str:
     bright = r.reg["view.bright"]
     lib = r.lib
-    return (f"preset {lib.current(PRESETS)}{' •' if lib.is_dirty(PRESETS) else ''}, "
+    return (f"preset {lib.current(LOADABLE)}{' •' if lib.is_dirty(LOADABLE) else ''}, "
             f"{bright.label} {bright.fmt(bright.base)}, {len(r.router.table.routes())} routes, "
             f"layer {r.router.table.layer}")
 
@@ -92,7 +92,7 @@ def main() -> None:
     frames(r, 5)
     (row,) = table.route("note", 0, OVERDUB)
     key = next(b for b in table.of("key") if b.target == "preset.home")
-    say(f"show: {proj.name}   startup: {proj.startup}   preset: {lib.current(PRESETS)}")
+    say(f"show: {proj.name}   startup: {proj.startup}   preset: {lib.current(LOADABLE)}")
     say(f"desk row: {r.midi.control_name(row)}  {row.source} -> {row.target}  op {row.op}  "
         f"layer {row.layer} (None: invariant)   key row: {key.source} -> {key.target}  "
         f"op {key.op}")

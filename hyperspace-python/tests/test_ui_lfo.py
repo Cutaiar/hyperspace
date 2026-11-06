@@ -218,7 +218,7 @@ def test_sixteen_lfos_scroll_and_one_is_open(rig, monkeypatch):
 
 def test_the_selection_follows_the_bank(rig):
     """A removed open strip hands the open slot to the first; an added LFO
-    opens; the selection is the Panel's, never the preset's."""
+    opens; the selection is the Panel's, never the loadable patch's."""
     _bank(rig.lfos, [1, 3, 5, 7, 9])
     assert ui_lfo.selected(rig.panel, rig.lfos) == 1
     ui_lfo.select(rig.panel, 7)

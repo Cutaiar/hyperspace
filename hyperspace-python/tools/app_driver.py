@@ -15,14 +15,14 @@ them), and ``OUT/frames.json`` lists them with the mouse per frame, for a
 cursor overlay — imgui draws none of its own.
 
 A known start: a fresh home (``--home`` to keep one) seeded with the test
-corpus as the tests' homes are (`conftest.seed`: the corpus presets and
-the party show, opened at launch — an empty home opens an unwired preset
+corpus as the tests' homes are (`conftest.seed`: the corpus loadable patches and
+the party show, opened at launch — an empty home opens an unwired loadable patch
 and a black output), a config with no devices and no dream, the mouse
 parked. ``--empty`` skips the corpus. The panel opens where a fresh home
 opens it (GRAPH, nothing focused): a script focuses the section it wants
 first — ``panel.reg["ui.page"].set(PAGE_KEYS.index("view"))``, a frame or two
 before it looks for a control, or ``d.click("pane.view")`` on the header —
-and loads a preset with ``panel.presets.load(name)`` if it wants another.
+and loads a loadable patch with ``panel.loaded_patch.load(name)`` if it wants another.
 
 Off the Mac, run it under the virtual display (the cloud session's
 DISPLAY=:99, or ``xvfb-run -a``). The software rasteriser draws what the

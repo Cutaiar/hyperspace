@@ -53,7 +53,7 @@ MAX_SAMPLES = int(SPAN_MAX * 120)  # a trace's memory, at up to 120 frames a sec
 TRACES = "_feel_traces"            # the panel's dict of them
 KEEP = 64              # past this many traces, the ones not sampled lately go
 SHAPE_W = 140.0        # the shape beside the live plot, px at most
-THUMB_W, THUMB_H = 64.0, 32.0      # a preset's shape in the spring picker
+THUMB_W, THUMB_H = 64.0, 32.0      # a loadable patch's shape in the spring picker
 PICK_W = 250.0         # the spring picker's list, px at least: a thumbnail, a name, its knobs
 DASH = 4.0             # px, the reading's dashes on the shape
 FELT = imgui.ImVec4(0.92, 0.92, 0.92, 1.0)
@@ -116,7 +116,7 @@ def curve(m: Motion, n: int = SAMPLES,
 
 @lru_cache(maxsize=1)
 def presets_axis() -> float:
-    """The spring picker's one time axis: the slowest preset's window, so
+    """The spring picker's one time axis: the slowest loadable patch's window, so
     each thumbnail shows how soon its spring lands beside the others."""
     return max(window(Motion("spring", dur=d, bounce=b)) for d, b in motion.SPRINGS.values())
 
@@ -299,10 +299,10 @@ def shape(m: Motion, width: float, height: float) -> None:
 
 
 def spring_picker(label: str, m: Motion, width: float) -> str | None:
-    """A spring preset combo, `width` wide, whose list draws each preset's
+    """A spring preset combo, `width` wide, whose list draws each loadable patch's
     shape beside its name and knobs, all on one time axis (`presets_axis`),
     so what is picked can be seen: snappy lands early, lazy late, wobbly
-    rings. Closed, it reads the preset `m` is, or custom. Returns the name
+    rings. Closed, it reads the loadable patch `m` is, or custom. Returns the name
     picked this frame, None while none was."""
     name = motion.spring_name(m.dur, m.bounce)
     picked = None

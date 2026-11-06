@@ -4294,7 +4294,7 @@ Plan 36's tests: the fast tier is 3,941 passed (2 skipped) and the goldens
 128 passed over 757 pictures, nine of them re-recorded (hand check 369 and
 register rows 405, 406, 408, 414); `tests/test_plan36_bus.py`,
 `tests/test_plan36_lookback_dream.py`, `tests/test_graph_starters.py` and
-`tests/test_graph_preset_only.py` are its own. A new preset is no longer
+`tests/test_graph_patch_only.py` are its own. A new preset is no longer
 black: L158 above (check 342) describes the plan 35 build, and L170 is its
 replacement. The checks are 354-369 (group AG); a `/7` file is refused by an
 older build, so L173 is last.

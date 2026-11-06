@@ -4,7 +4,7 @@
 The layout (`apc40.LAYOUT`): one entry per control the protocol names,
 none overlapping, a unique short glyph each, and a glyph for every MIDI
 row shipped. The diagram (ui_desk.py): what it lights is the layer that
-is up — the loaded preset's desk plus the invariant controls, then the
+is up — the loaded patch's desk plus the invariant controls, then the
 global layer after SHIFT — read from the table with no MIDI device. The
 ROUTING rows print the glyph. Headless imgui, a library on tmp_path.
 """
@@ -96,16 +96,16 @@ def test_the_glyph_resolves_a_row_on_any_channel():
 def _shipped_midi_rows() -> list[str]:
     srcs = [r["source"] for r in apc40.DEFAULT_MAP]
     srcs += [b.source for b in routing.factory_desk("apc40")]
-    session = json.loads(routing.FACTORY_FILE.read_text())
-    srcs += [r["source"] for r in session["bindings"]]
+    meta_file = json.loads(routing.FACTORY_FILE.read_text())
+    srcs += [r["source"] for r in meta_file["bindings"]]
     for f in sorted((CORPUS / "presets").glob("*.json")):
         srcs += [r["source"] for r in json.loads(f.read_text()).get("desk") or []]
     return [s for s in srcs if s.startswith(("cc:", "note:"))]
 
 
 def test_every_midi_row_shipped_has_a_glyph():
-    """DEFAULT_MAP, the factory session table and every corpus preset's desk
-    (tests/corpus: the presets the build shipped until 2026-10-28)."""
+    """DEFAULT_MAP, the factory meta table and every corpus loadable patch's desk
+    (tests/corpus: the loadable patches the build shipped until 2026-10-28)."""
     srcs = _shipped_midi_rows()
     assert len(srcs) > 200
     assert [s for s in srcs if apc40.glyph(s) is None] == []
@@ -117,7 +117,7 @@ def _glyphs(rows) -> set[str]:
     return {c.glyph for b in rows for c in apc40.controls(b.source)}
 
 
-def test_the_diagram_lights_the_loaded_presets_desk_and_the_invariant_controls(rig):
+def test_the_diagram_lights_the_loaded_loadables_desk_and_the_invariant_controls(rig):
     lib, table, panel = rig.lib, rig.router.table, rig.panel
     lib.load("presets", "TRIP")
     assert table.layer == "preset" and table.desk()
@@ -129,7 +129,7 @@ def test_the_diagram_lights_the_loaded_presets_desk_and_the_invariant_controls(r
     fine = {_fine_control().glyph}                            # the adapter's, drawn (row 732)
     assert set(lit) == _glyphs(b for b in table.desk() if b.enabled) | inv | fine
     assert "D1" in lit and lit["D1"].layer == "preset"        # TRIP's device knobs
-    # SHIFT: the global layer's rows instead of the preset's
+    # SHIFT: the global layer's rows instead of the loadable patch's
     table.toggle_layer()
     frame(panel)
     lit = ui_desk.lit_cached(panel, table)
@@ -147,7 +147,7 @@ def test_the_diagram_follows_an_edit_and_needs_no_midi_device(rig):
     panel, table = rig.panel, rig.router.table
     assert panel.midi is None
     frame(panel)
-    assert "K6" in ui_desk.lit_cached(panel, table)           # the fresh preset's view faders
+    assert "K6" in ui_desk.lit_cached(panel, table)           # the fresh loadable patch's view faders
     k6 = next(b for b in table.desk() if b.source == "cc:0:53")
     table.remove(k6)
     assert "K6" not in ui_desk.lit_cached(panel, table)
@@ -253,7 +253,7 @@ def test_the_desk_does_not_jump_when_the_sheet_comes_up(rig, monkeypatch):
 
 
 def test_the_routing_rows_print_the_glyph(rig, monkeypatch):
-    """A desk row and a session row: the glyph first, the param after it."""
+    """A desk row and a meta row: the glyph first, the param after it."""
     texts: list[str] = []
     real_text, real_col = imgui.text, imgui.text_colored
     monkeypatch.setattr(imgui, "text", lambda s: (texts.append(s), real_text(s))[1])
@@ -264,7 +264,7 @@ def test_the_routing_rows_print_the_glyph(rig, monkeypatch):
     frame(rig.panel)
     desk = rig.router.table.desk()
     assert {apc40.glyph(b.source) for b in desk} <= set(texts)
-    assert "S1" in texts and "⇧" in texts                     # the session's rows
+    assert "S1" in texts and "⇧" in texts                     # the meta controller's rows
     assert "device knob 1" not in texts                       # Akai's names: tooltips only
 
 
@@ -390,12 +390,12 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
             assert any(head in v for v in says.values()), (layer, t)
         dark = [c.glyph for c in apc40.LAYOUT if c.glyph not in lit]
         assert dark and drawn.count(dark[0]) == 1
-    # the layer changes what is named: TRIP's knobs, then the session's
+    # the layer changes what is named: TRIP's knobs, then the meta controller's
     table.set_layer("preset")
     monkeypatch.setattr(ui_desk, "SAYS_S", 0.0)                  # (the texts are kept half a second)
     _desk_frames(rig, monkeypatch, 1)
     assert "FX mix" in ui_desk._state(panel)["labels"]
-    assert "TRIP" in ui_desk._state(panel)["labels"]             # the bank row: the presets' names
+    assert "TRIP" in ui_desk._state(panel)["labels"]             # the bank row: the loadable patches' names
     table.set_layer("global")
     _desk_frames(rig, monkeypatch, 1)
     labels = ui_desk._state(panel)["labels"]
@@ -442,7 +442,7 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("note:3:54", "scene.select", "set", 3.0)) == names[3]
     bank = reg["preset.select"].names
     assert text(reg, Binding("note:4:53", "preset.select", "set", 4.0)) == bank[4]
-    # a bank pad of rows 4–5 (plan 19 WP2): a filled slot its preset's name,
+    # a bank pad of rows 4–5 (plan 19 WP2): a filled slot its loadable patch's name,
     # an empty one nothing at all — not "SLOT 10"
     assert rig.lib.project.bank[8] and rig.lib.project.bank[9] is None
     assert text(reg, Binding("note:0:56", "preset.select", "set", 8.0)) == bank[8]
@@ -491,8 +491,8 @@ def test_a_controls_text(rig):
 
 def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
     """Plan 19 WP2, fork 5, on screen as on the device: a bank pad is the
-    loaded preset's (green), a filled slot's (amber at `FILLED` strength,
-    its preset's name in the bright ink) or an empty slot's — drawn as a
+    loaded patch's (green), a filled slot's (amber at `FILLED` strength,
+    its loadable patch's name in the bright ink) or an empty slot's — drawn as a
     dark control, its glyph and no label, on both layers. Its hover and
     the pick line still say what the pad is: an empty slot."""
     from hyperspace.learn import Learn
