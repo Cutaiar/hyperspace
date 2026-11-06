@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-04
+## v1.3 — 2026-11-05
 
 ### Panel
 
@@ -9,6 +9,14 @@
 - Hold Shift while dragging a panel slider or fader and it moves a tenth as far, with no jump when Shift goes down or up, one undo step a drag (#348)
 - The panel says "analyzer", not "band", for the audio analyzer and its tuning; nothing saved changes (#368)
 - `--laptop` (or `--single`) launches for one screen with no projector: the render window opens as a plain window, extra outputs and saved window spots are left alone, and the control panel comes to the front (#299)
+- Shift-drag fine control now reaches a route's depth, rest and feel knobs, a macro's from / to and GRAPH's backdrop too; those sliders draw filled with their value, like a param's (#375)
+- The side pane fits at its narrowest, 240 px: the analyzer section, its meter tags and the patch buttons no longer run into each other (#375)
+- ⌘Z takes back the last edit of the preset you're on, or, with the mouse over a rig-tuning section (the analyzer, hands …), that section's last edit, so a ⌘Z mid-set never undoes a tuning tweak from an hour ago; undoing a whole show load is now two ⌘Zs (#373)
+
+### Players
+
+- A player select screen: the footer chip reads who is on air and off air ("on air 1 4 · off air 2 3"); click it or press O for the board, then drag a player between ON AIR and OFF AIR, or a controller onto a player, with the mouse; it is also the last section of the side pane (#379)
+- A player's place and controllers are kept on this Mac in `players.json`, beside `bindings.json`; a pad's lights follow its player, and a patch row can name a player (`axis@p2`), drawn on GRAPH as its own placeholder when that player has no controller (#376, #379)
 
 ### Presets
 
@@ -34,11 +42,17 @@
 ### Desk
 
 - APC40: hold SEND B and every knob moves its param a tenth as far (`desk.fine`); let go and the next detent carries on with no jump (#344)
+- The on-screen APC40 draws SEND B as FINE, lit while held, rather than as a free button (#375)
+
+### Effects
+
+- New **Grow** effect: grass, sprouts, blobs, noodles, mould, coral or cells grow out of the picture and push its pixels (a lens-like bulge, or a lift along Angle); ride `fx.grow.grow` with an LFO to grow it in and out — at 0 the frame is untouched (#381)
 
 ### Media
 
 - The analyzer can listen to the video sound: AUDIO → **Listen to video sound** drives the bands and the beat from the media mix, as the mic does (#343)
 - A video's sound now follows its picture: no clicks at rate 1, any rate plays at that speed, reverse and scrubs are heard, and rate 0 is silent (#357)
+- Launching with a camera, NDI or Syphon source listed no longer crashes at start-up with a `RecursionError` (#381)
 
 ### Hands
 
@@ -50,6 +64,9 @@
 - Decks: the router's shared `Sources` (`routing_sources.py`) split from its per-deck evaluator, the rig's `SessionRegistry` beside each deck's `Registry`, and deck 2 drawn offscreen with `output.xfade` as the one mix pass — deck 2 runs empty until D5, so leave the fade at 0 (#346, #351, #359)
 - Tests run `--dist load --max-worker-restart=4` locally and in CI, so a crash costs one test; the live lock keeps live tests apart within a run; `tools/sort_register.py` sorts the register (#347, #363)
 - The golden tool frees its rig on its own GL context, so a stray free no longer fails a later test with `GL_INVALID_OPERATION` (#366)
+- Decks D5: `deck.MetaController` with a `Pointer` per holder (`pointer.py`) and `docs/GLOSSARY.md`; three undo stacks, one per `Deck` and `MetaController.undo`, with `library.MetaMarks`; `MetaController.follow_fader` (on air by the crossfader's side), timed fades via `output.xfade_s` and `copy_on_air` — not yet called from `app.main`, so deck 1 stays on air until D5d (#370, #373, #378)
+- `players.py` (`Players`, `Player`, `Duty`), and `Router.feeds` keeps a row quiet while its controller's pointer is on the other deck (#376)
+- Node mode's saved form: an optional `node_mode` key on presets (`nodemode.py`, `Presets.node_mode`), no schema bump and no caller yet; `docs/plans/57-format-lane.md` lays out the format lane (#377)
 
 ## v1.2 — 2026-11-02
 
