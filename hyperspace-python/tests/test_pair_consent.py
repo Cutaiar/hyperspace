@@ -606,7 +606,6 @@ def test_a_meta_answer_leaves_the_other_decks_patch_alone(stacks):
     assert any(x is theirs for x in s.two.table.bindings)
 
 
-@pytest.mark.skipif(not hasattr(undo, "takes_back"), reason="the latch is #386, not landed")
 def test_under_the_latch_a_taken_meta_row_comes_back_over_a_meta_section(stacks):
     """Row 753 shuts a stack you come to. The answer's meta push comes last, so that
     stack is in focus and open: the person's own click, then ⌘Z over a meta section."""

@@ -53,7 +53,8 @@ one on air by `Fade.k`, the other's share. Two verbs, and no others (the owner,
 `copy_on_air`. D5d wires them: `app.frame` ticks the meta controller first, the
 desk's crossfader is `output.xfade`, and GRAPH's head has both verbs and which
 deck the panel is on. A bank verb from a row never changes what is on air: it
-loads off air (`row_load`, the owner, 2026-11-06).
+loads off air (`row_load`, the owner, 2026-11-06). Every change of stack latches the
+stack you come to (`undo`'s latch, row 753).
 """
 
 from __future__ import annotations
@@ -306,7 +307,9 @@ class Deck:
                               on_restore=router.sync_macros,
                               # the LFOs' membership (plan 31 B), read off the
                               # router at each step, so a re-classed router counts
-                              banks=lambda: router._banks())
+                              banks=lambda: router._banks(),
+                              # (the first deck is the one installed; the latch's words)
+                              called=f"on deck {1 if install else 2}")
         reg.chase_undo = undo_obj          # one base chase hold, one step here (plan 52)
         if install:
             undos.install(undo_obj)        # what undo.push and the edit.* triggers reach
@@ -438,6 +441,7 @@ def meta_stack(first: Deck) -> undos.Undo:
     is loaded through the library's `MetaMarks`. `first` is whichever deck has
     the band hooks; the stack is no deck's."""
     return undos.Undo(first.session, MetaRows(first.session_table),
+                      called="on the meta controller",
                       marks=MetaMarks(first.presets.lib.base), tag=first.band_shape)
 
 
@@ -544,6 +548,7 @@ class MetaController:
         self.on_panel: list[Callable[[Deck], Any]] = []   # told after the panel moves
         self.undo = meta_stack(first)
         undos.install_meta(self.undo)
+        undos.on_air(first.undo)
 
     @property
     def on_air(self) -> Deck:
@@ -592,13 +597,12 @@ class MetaController:
         return (None, why) if why is not None else (self.off_air_project(), None)
 
     def loaded_words(self, name: str) -> str:
-        """The status line after a row's load: what, where, that the room is as it was,
-        and how to take it back: the step is on that deck's stack, and ⌘Z goes by where
-        the panel is (the owner: "by where you are"), which may be the room."""
+        """The status line after a row's load: what, where, and that the room is as it
+        was. ⌘Z only where it is true (`undo.takes_back`): coming to the deck later
+        latches it (row 753)."""
         off = self.deck_name(self.off_air)
-        back = ("⌘Z takes it back" if self.panel is self.off_air
-                else f"to take it back, put the panel on {off}, then ⌘Z")
-        return f"{name} loaded off air on {off}; the room still sees {self.deck_name(self.on_air)}; {back}"
+        back = "; ⌘Z takes it back" if undos.takes_back(self.off_air.undo) else ""
+        return f"{name} loaded off air on {off}; the room still sees {self.deck_name(self.on_air)}{back}"
 
     def deck_name(self, deck: Deck) -> str:
         return f"deck {1 if deck is self.decks[0] else 2}"
@@ -714,10 +718,12 @@ class MetaController:
         chase let go there (one step on its stack), every player where its duty now
         says, the keys and the mouse with the picture they act on. A press across
         the move ends on the deck it was made on, as any move's does
-        (`routing.let_go_lost`). The panel and the undo it reaches stay."""
+        (`routing.let_go_lost`). The panel and the undo it reaches stay, though that
+        stack latches: what ⌘Z would take back has gone on or off air (`undo.on_air`)."""
         left = self.on_air
         left.chase(False)
         self.on_air_pointer.deck = deck
+        undos.on_air(deck.undo)
         self.parked[0] = left
         session = deck.session
         if session is not None:
