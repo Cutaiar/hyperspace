@@ -350,10 +350,20 @@ def _no_undo_left_installed():
     """`undo.install` is one per process (the app has one Undo): a test
     that installs one must not leave it for the next test's push sites."""
     yield
+    leave_no_undo()
+
+
+def leave_no_undo() -> None:
+    """What the next test on this worker must not inherit from `undo`'s module state. A
+    panel drawn by a test sets `_hand` from live ImGui (`ui_pane.left`), and it moves the
+    latch's focus; a load inside its settle time leaves `_loading` on a dead stack, and
+    the next ⌘Z shuts whatever deck is installed."""
     from hyperspace import undo
 
     undo.install(None)
     undo.install_meta(None)
+    undo.by_hand(False)
+    undo._loading = None
 
 
 def opened_last(home, show: str = "house"):

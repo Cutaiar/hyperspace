@@ -2056,7 +2056,8 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
     drew, real = [], ui_pad.inline
     monkeypatch.setattr(ui_pad, "inline", lambda p: (drew.append(1), real(p)))
     picked, combo = [], panel._combo
-    monkeypatch.setattr(panel, "_combo", lambda pid, **k: (picked.append(pid), combo(pid, **k))[1])
+    monkeypatch.setattr(panel, "_combo",
+                        lambda pid, *a, **k: (picked.append(pid), combo(pid, *a, **k))[1])
     said, disabled = [], imgui.text_disabled
     monkeypatch.setattr(imgui, "text_disabled", lambda s: (said.append(s), disabled(s))[1])
     port = graphview.VPort("pad:A", "A", "out", patched=True)
@@ -2076,7 +2077,8 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
         imgui.end()
         imgui.end_frame()
         assert drew == want, role
-        assert picked == (["ui.pad_view"] if want else []), role   # the readout's drop-down
+        # the readout's drop-down, and under the picture the sticks' dials (rows 729-730)
+        assert picked == (["ui.pad_view", "pad.dial.left", "pad.dial.right"] if want else []), role
         assert ("A: not live" in said) is (not want), role         # the port lines: not under it
     assert ui_pad.rect(panel, gamepad.LAYOUT[0]) is not None    # it really laid the pad out
 
