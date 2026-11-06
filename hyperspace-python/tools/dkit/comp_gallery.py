@@ -157,8 +157,15 @@ def _s_select(faces, tn):
         hh = T.SELECT_SIZES[size][0]
 
         def draw(ui, k, x, y, w, h, st, key=key, size=size, kw=kw):
-            got, _o = I.select(ui, k, x, y, w, st.setdefault(key, OPTS[0]),
-                               OPTS, size=size, **kw)
+            # `interact.select` takes menu.Item, not bare strings - the row
+            # needs its own id and its checked state. Handing it a list of
+            # str raised `'str' object has no attribute 'kind'` the first
+            # time anybody CLICKED one, which no test here did.
+            cur = st.setdefault(key, OPTS[0])
+            got, _o = I.select(
+                ui, k, x, y, w, cur,
+                [M.Item(id=o, label=o, checked=(o == cur)) for o in OPTS],
+                size=size, **kw)
             if got:
                 st[key] = got
         return (cap, (170.0, hh), draw)
@@ -368,7 +375,7 @@ SECTIONS = (_s_button, _s_button_group, _s_input, _s_select, _s_combobox,
 # --------------------------------------------------------------------------
 # layout
 # --------------------------------------------------------------------------
-def plan(w: float, faces, theme_name: str) -> tuple:
+def plan(w: float, faces, theme_name: str, *, measure=None) -> tuple:
     """Where everything goes, at a content width of `w`.
 
     Returns `(height, [(title, blurb, card_h, [(caption, x, y, w, h, draw)])])`
@@ -376,7 +383,13 @@ def plan(w: float, faces, theme_name: str) -> tuple:
     origin. Measured bottom-up the way `box.wants` does it — a section's
     card is as tall as the rows that wrapped into it, and nothing here is a
     typed height.
+
+    `measure(text, variant, size) -> width` is injectable, exactly as
+    `comp_combobox.combobox_size` takes one, so the layout can be tested
+    with no GL and no display. Everything in here that needs a renderer
+    needs it only for a text width.
     """
+    mw = measure or (lambda t, v, size: D.text_w(t, faces, v, size))
     out, y = [], 0.0
     inner = w - 2 * PAD
     for build in SECTIONS:
@@ -393,7 +406,7 @@ def plan(w: float, faces, theme_name: str) -> tuple:
                 # specimens overlap each other - "icon-xs icon-sm icon" ran
                 # together under three 24px buttons, and the icon sheet was
                 # unreadable.
-                cw_ = max(sw, D.text_w(cap, faces, "regular", CAP_FONT))
+                cw_ = max(sw, mw(cap, "regular", CAP_FONT))
                 if cx > 0.0 and cx + cw_ > inner:
                     cx, cy, line_h = 0.0, cy + line_h + ROW_GAP, 0.0
                 placed.append((cap, cx, cy, sw, sh, draw))

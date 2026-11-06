@@ -130,12 +130,14 @@ What the measurements said, and what surprised me
   — not something a reading of the class list produces.
 
 * **A mouse-opened trigger has no focus ring**, measured `box-shadow:
-  none` in both themes, open and closed, hovered and not. Its
-  `focus-visible:ring-3` needs keyboard focus, which this kit does not
-  route yet (the gap `interact.switch` already records). `interact.select`
-  drives its ring off `open_`; on this control that would paint a ring the
-  browser does not. So `focus_f` is 0 here and the open state is the fill
-  above.
+  none` in both themes, open and closed, hovered and not — it is
+  `:focus-visible`, and a pointer does not match it. Under a real keyboard
+  focus the same trigger rings: `ring/50 0 0 0 3px`, with the border going
+  to `ring` in light and *staying* `input` in dark, which is the outline
+  Button's own dark anomaly measured again here. So `_trigger` takes a
+  `focus_f` and the open state is the fill above, not a ring.
+  `interact.select` used to drive its ring off `open_`, which paints one in
+  exactly the state that has none; it does not any more.
 
 Where a value equals one the kit already has, it says so rather than
 restating it: `T.SELECT_SIZES` gives the trigger's (height, radius) — the
@@ -222,13 +224,20 @@ COMBOBOX = {
     # them apart there; in dark it can, and says input: measured
     # `oklch(1 0 0 / 0.15)` is #ffffff26 (input), not #ffffff1a (border).
     "trigger_border": ("border", 1.0),
-    # NOT MEASURED, and deliberately NOT drawn: `focus-visible:ring-3
-    # ring-ring/50` needs keyboard focus, which this kit does not route yet
-    # (the same gap interact.switch records). A mouse-opened trigger was
-    # measured with `box-shadow: none` in both themes and at every state
-    # below, so `combobox` passes focus_f=0 and the open state is a FILL
-    # change, not a ring. The entry is kept because draw.field wants one.
+    # MEASURED, under a real keyboard focus on the probe's PopoverTrigger:
+    # `box-shadow: ring/50 0 0 0 3px`, the same band every other control in
+    # the kit gives. What a mouse-opened trigger has is still nothing - that
+    # measurement stands, it is `:focus-visible` and a pointer does not match
+    # it - so the open state is the FILL above and the ring is the keyboard's.
     "trigger_ring": ("ring", 0.5),
+    # The second half of the answer, and here it is THEMED. This trigger is a
+    # Button variant="outline", so it inherits that variant's one dark
+    # anomaly: measured focused, light swaps the border to `ring`
+    # (oklch(0.708 0 0)) and dark keeps `input` (oklch(1 0 0 / 0.15)),
+    # because `dark:border-input` sorts after `focus-visible:border-ring` in
+    # Tailwind's output. comp_button.BUTTON_DARK["outline"] records the same
+    # finding on the same component; this is it measured again on this one.
+    "trigger_focus_border": ("ring", 1.0),
     # DERIVED, not measured — the probe's trigger carries no icon. The
     # recipe's is `<ChevronsUpDownIcon className="opacity-50"/>`, 16px by
     # `[&_svg:not([class*='size-'])]:size-4`, and `justify-between` puts its
@@ -324,7 +333,7 @@ COMBOBOX = {
     "empty_ink": ("muted-foreground", 1.0),
 }
 
-# The only values that move with the theme, and all four are the trigger's.
+# The only values that move with the theme, and all five are the trigger's.
 # The first two are tokens.SELECT_DARK's two exactly, because a dark
 # Button-outline and a dark SelectTrigger measure the same. Everything else
 # in the table above is a token that swaps itself.
@@ -334,6 +343,9 @@ COMBOBOX_DARK = {
     # measured: an OPEN dark trigger is byte-identical to a closed one
     "trigger_open": ("input", 0.3),
     "trigger_border": ("input", 1.0),     # dark:border-input
+    # measured focused: the border does NOT move to `ring` in dark - see
+    # `trigger_focus_border` above. The 3px band is unthemed and stays.
+    "trigger_focus_border": ("input", 1.0),
 }
 
 
@@ -790,7 +802,7 @@ def _panel_chrome(ui, dl, x, y, w, h, a, tbl) -> None:
 
 
 def _trigger(ui, tbl, x, y, w, h, radius, label, placeholder, *,
-             hot=0.0, open_f=0.0, disabled=False) -> None:
+             hot=0.0, open_f=0.0, focus_f=0.0, disabled=False) -> None:
     """The recipe's trigger: a Button variant="outline".
 
     `draw.field` draws the box — genuinely shared chrome, measured identical
@@ -808,12 +820,15 @@ def _trigger(ui, tbl, x, y, w, h, radius, label, placeholder, *,
     ft = {
         "bg": ("#00000000", 1.0),      # painted below, after the ring
         "border": tbl["trigger_border"],
+        "focus_border": tbl["trigger_focus_border"],
         "ring": tbl["trigger_ring"],
         "disabled_opacity": 0.5,
     }
-    # focus_f=0: measured, a mouse-opened trigger carries no ring at all,
-    # in either theme. The open state is the FILL, below.
-    D.field(ui.dl, x, y, w, h, ui.theme, ft, focus_f=0.0,
+    # `focus_f` is `:focus-visible`, eased - `interact.Ui.focus_f`, which
+    # gates it on the last input having been the keyboard. A trigger opened
+    # with the POINTER passes 0 and carries no ring, which is what the
+    # browser does; the open state is the FILL, below.
+    D.field(ui.dl, x, y, w, h, ui.theme, ft, focus_f=focus_f,
             disabled=disabled, radius=radius)
     # open first, then hover on top of it: in light they are the same
     # colour so the order cannot show, and in dark `open` is the rest fill
@@ -981,11 +996,19 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     if disabled:
         imgui.end_disabled()
     imgui.pop_item_width()
-    focused = imgui.is_item_active()
+    # `interact.text_input`'s rule, and measured on this control too: the
+    # trigger is an InputGroup that rings on
+    # `has-[[data-slot=input-group-control]:focus-visible]`, and its control
+    # is a text field - so a POINTER click into it rings as well (measured
+    # `:focus-visible` true, band `ring/50 0 0 0 3px`, border -> `ring`, in
+    # both themes). That is why this one is not gated on `ui.focus_visible`.
+    focused = (imgui.is_item_active()
+               or (imgui.is_item_focused() and ui.focus_visible))
     imgui.pop_style_color(2)
     I._sandwich_end(ui, cols)
 
-    # the Input's own chrome: measured identical to tokens.INPUT
+    # the Input's own chrome: measured identical to tokens.INPUT, ring
+    # included - the InputGroup's band and border measure as the Input's
     it = T.input_table(ui.theme_name)
     focus_f = ui.anim.to(f"{key}:focus", 1.0 if focused else 0.0)
     D.field(ui.dl, x, y, w, h, ui.theme, it, focus_f=focus_f,
@@ -1130,6 +1153,18 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     imgui.set_next_window_size(imgui.ImVec2(w, win_h))
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
     imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+    # A POPUP's border is `PopupBorderSize`, which is 1.0 by default and
+    # which `WindowBorderSize` does not touch. That 1px ran down both sides
+    # of this window - and this window is deliberately taller than its panel,
+    # because it spans the trigger as well, so the border showed as two
+    # vertical lines bridging the 6px gap between the field and the list.
+    # Measured at 75 against a 23 ground, the full height of the gap, at
+    # exactly x+0 and x+w-1.
+    #
+    # Every other popup in the kit hides this by accident: their window IS
+    # their panel, so the border sits under chrome that covers it. This one
+    # does not, which is why it is the one that showed.
+    imgui.push_style_var(imgui.StyleVar_.popup_border_size, 0.0)
     imgui.push_style_var(imgui.StyleVar_.popup_rounding,
                          T.RADII[tbl["radius"]])
     imgui.push_style_color(imgui.Col_.popup_bg, imgui.ImVec4(0, 0, 0, 0))
@@ -1238,5 +1273,5 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         imgui.end_popup()
 
     imgui.pop_style_color()
-    imgui.pop_style_var(3)
+    imgui.pop_style_var(4)
     return chosen, open_

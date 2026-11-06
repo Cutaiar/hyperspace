@@ -484,3 +484,270 @@ def test_scroll_thumb_clamps_a_scroll_past_the_end():
     a = B.scroll_thumb(content_h=1200.0, scroll_y=1002.0, **BAR)
     b = B.scroll_thumb(content_h=1200.0, scroll_y=99999.0, **BAR)
     assert a.y == pytest.approx(b.y)
+
+
+# --------------------------------------------------------------------------
+# focus-visible: the ring every control gives the same answer about
+# --------------------------------------------------------------------------
+#
+# Measured in Chromium under a REAL keyboard focus (a key pressed first, so
+# the modality is keyboard, then `.focus()`), on every focusable component of
+# the registry, in both themes. Every one of them answers the same two-part
+# way:
+#
+#     box-shadow: <ring>/50 0 0 0 3px        a 3px band, no blur, no offset
+#     border:     1px <ring>                 the border colour swaps
+#
+# with `destructive` the only variant that differs (band /20, border /40),
+# `outline-style: none` everywhere in every state, and the element's rect
+# unchanged - a shadow takes no layout space.
+#
+# The colours live in each component's token table, so the tests below read
+# them out of `tokens` rather than restating them. What IS written out here
+# is the browser's own bytes, which is the oracle's answer and the only
+# number in the file that is not derived from another.
+
+RING_BYTES = {
+    # theme -> (the band composited over the page, the border)
+    "light": ((208, 208, 208), (161, 161, 161)),
+    "dark": ((63, 63, 63), (115, 115, 115)),
+}
+
+
+def composite(col, ground) -> tuple:
+    """`col` over an opaque `ground`, as sRGB bytes, the way the page does.
+    The same helper test_button.py uses, for the same reason: a token can be
+    checked as a byte without a GL context."""
+    r, g, b, a = col
+    return tuple(round((c * a + gc / 255.0 * (1.0 - a)) * 255.0)
+                 for c, gc in ((r, ground[0]), (g, ground[1]), (b, ground[2])))
+
+
+GROUND = {"light": (255, 255, 255), "dark": (10, 10, 10)}
+THEME = {"light": T.LIGHT, "dark": T.DARK}
+
+# Every control that rings, and the table it keeps its ring colours in. The
+# Slider is the odd one: its thumb's rest border is ALREADY `border-ring`, so
+# there is no swap to make and `thumb_border` is what the focused border is.
+RING_TABLES = {
+    "input": (T.input_table, "ring", "focus_border"),
+    "select": (T.select_table, "ring", "focus_border"),
+    "switch": (T.switch_table, "ring", "focus_border"),
+    "slider": (T.slider_table, "ring", "thumb_border"),
+}
+
+
+@pytest.mark.parametrize("control", sorted(RING_TABLES))
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_every_ringed_control_names_the_same_two_colours(control, theme_name):
+    """`ring/50` outside, `ring` on the border - and not one of them themed.
+
+    The Button's `outline` variant is the only control in the kit whose
+    focused border is NOT `ring` (`dark:border-input` outranks
+    `focus-visible:border-ring` in Tailwind's output); measured, nothing
+    here repeats that, so a table that overrode either colour in dark would
+    be wrong and this would catch it.
+    """
+    table, ring_key, border_key = RING_TABLES[control]
+    tbl = table(theme_name)
+    assert tbl[ring_key] == ("ring", 0.5), f"{control}: {tbl[ring_key]}"
+    assert tbl[border_key] == ("ring", 1.0), f"{control}: {tbl[border_key]}"
+
+
+@pytest.mark.parametrize("control", sorted(RING_TABLES))
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_the_ring_composites_to_the_browsers_bytes(control, theme_name):
+    """What those two entries actually paint, as the page sees them."""
+    table, ring_key, border_key = RING_TABLES[control]
+    tbl = table(theme_name)
+    theme, ground = THEME[theme_name], GROUND[theme_name]
+    want_band, want_border = RING_BYTES[theme_name]
+    band = composite(T.rgba(*tbl[ring_key], theme=theme), ground)
+    border = composite(T.rgba(*tbl[border_key], theme=theme), ground)
+    assert band == pytest.approx(want_band, abs=1), f"{control} band {band}"
+    assert border == pytest.approx(want_border, abs=1), \
+        f"{control} border {border}"
+
+
+def test_the_band_is_three_pixels_and_one_constant_says_so():
+    """`ring-3`, and the kit has one number for it rather than a 3 per
+    component - which is what let the Switch and the Select drift apart in
+    the first place."""
+    assert T.RING_W == 3.0
+    for table, ring_key, _b in RING_TABLES.values():
+        # no component carries a width of its own to disagree with it
+        assert "ring_w" not in table("light")
+
+
+# --------------------------------------------------------------------------
+# what draw.py actually paints, recorded rather than rasterized
+# --------------------------------------------------------------------------
+
+class Painted:
+    """A draw list that records instead of drawing.
+
+    With `draw._u32` patched to pass the colour straight through, every call
+    arrives as floats and no imgui context is needed - the same bargain
+    test_button.py makes by checking colour arithmetic rather than pixels.
+    """
+
+    def __init__(self):
+        self.strokes = []      # (x, y, w, h, col, rounding, thickness)
+        self.fills = []        # (x, y, w, h, col, rounding)
+
+    def add_rect(self, p_min, p_max, col, rounding=0.0, thickness=1.0,
+                 flags=0):
+        self.strokes.append((p_min.x, p_min.y, p_max.x - p_min.x,
+                             p_max.y - p_min.y, col, rounding, thickness))
+
+    def add_rect_filled(self, p_min, p_max, col, rounding=0.0, flags=0):
+        self.fills.append((p_min.x, p_min.y, p_max.x - p_min.x,
+                           p_max.y - p_min.y, col, rounding))
+
+
+@pytest.fixture
+def painted(monkeypatch):
+    monkeypatch.setattr(D, "_u32", lambda col: col)
+    return Painted()
+
+
+def band_of(rec, width=None):
+    """The one stroke in `rec` that is the ring: the thickness says so."""
+    want = T.RING_W if width is None else width
+    hits = [s for s in rec.strokes if s[6] == want]
+    assert len(hits) <= 1, f"more than one {want}px stroke: {hits}"
+    return hits[0] if hits else None
+
+
+def test_draw_ring_covers_exactly_the_columns_outside_the_box(painted):
+    """A box-shadow spread paints OUTSIDE the border box and nowhere else.
+
+    An add_rect stroke of thickness t straddles its path, so the expansion
+    that lands the band's inner edge on the box's own edge is
+    `0.5 + t / 2` - not t, and not t / 2. This derives the covered span back
+    out of the recorded call rather than restating that formula.
+    """
+    x, y, w, h, r = 20.0, 40.0, 80.0, 32.0, 10.0
+    D.ring(painted, x, y, w, h, (0.1, 0.2, 0.3, 1.0), r)
+    bx, by, bw, bh, _col, rounding, t = band_of(painted)
+    assert t == T.RING_W
+    # a stroke of thickness t centred on the path covers [p - t/2, p + t/2),
+    # and ImGui's own half-pixel offset is the other 0.5
+    left_outer = bx - t / 2.0 + 0.5
+    assert left_outer == pytest.approx(x - T.RING_W)
+    assert bx + bw + t / 2.0 - 0.5 == pytest.approx(x + w + T.RING_W)
+    assert by - t / 2.0 + 0.5 == pytest.approx(y - T.RING_W)
+    # concentric: the band's outer edge is radius + width, its inner one radius
+    assert rounding == pytest.approx(D.css_radius(r, w, h) + 0.5 + t / 2.0)
+    # and it takes no layout space - the box it was asked about is untouched
+    assert not painted.fills
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_the_switch_paints_both_halves_only_when_focused(painted, theme_name):
+    """The Switch drew neither half. Both come out of its table now, so this
+    checks the band's colour, the border's colour, and that `disabled`
+    suppresses them - the three things `focus_f` is for."""
+    theme = THEME[theme_name]
+    tbl = T.switch_table(theme_name)
+    kw = dict(theme=theme, tbl=tbl)
+
+    rest = Painted()
+    D.switch(rest, 10.0, 10.0, 0.0, focus_f=0.0, **kw)
+    assert band_of(rest) is None, "an unfocused switch painted a band"
+    # and no border either: `border-transparent` is a real 1px border in CSS
+    # and nothing at all in a draw list, which draw.border short-circuits
+    assert T.rgba(*tbl["border"], theme=theme)[3] == 0.0
+    assert not rest.strokes, f"an unfocused switch stroked {rest.strokes}"
+
+    D.switch(painted, 10.0, 10.0, 0.0, focus_f=1.0, **kw)
+    band = band_of(painted)
+    assert band, "a focused switch painted no band"
+    assert band[4] == pytest.approx(T.rgba(*tbl["ring"], theme=theme))
+    borders = [s for s in painted.strokes if s[6] == 1.0]
+    assert borders[-1][4] == pytest.approx(
+        T.rgba(*tbl["focus_border"], theme=theme))
+
+    off = Painted()
+    D.switch(off, 10.0, 10.0, 0.0, focus_f=1.0, disabled=True, **kw)
+    assert band_of(off) is None, "a disabled switch rang"
+
+
+def test_the_switchs_ring_eases_rather_than_snapping(painted):
+    """`transition-[color,box-shadow]` runs for 150ms, so half way through
+    the band is at half its alpha and the border is half swapped."""
+    from ease import mix
+    theme = T.LIGHT
+    tbl = T.switch_table("light")
+    D.switch(painted, 10.0, 10.0, 0.0, theme=theme, tbl=tbl, focus_f=0.5)
+    band = band_of(painted)
+    tok, al = tbl["ring"]
+    assert band[4][3] == pytest.approx(T.rgba(tok, al * 0.5, theme=theme)[3])
+    border = [s for s in painted.strokes if s[6] == 1.0][-1]
+    assert border[4] == pytest.approx(
+        mix(T.rgba(*tbl["border"], theme=theme),
+            T.rgba(*tbl["focus_border"], theme=theme), 0.5))
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_the_select_triggers_border_swaps_to_the_ring(painted, monkeypatch,
+                                                      theme_name):
+    """The entry that was missing. `tokens.SELECT` carried the band and not
+    the border, so `draw.field` fell back to leaving the border alone: the
+    trigger rang with a border still `input`, where the browser measures
+    `ring` in both themes."""
+    monkeypatch.setattr(D, "icon", lambda *a, **k: True)
+    theme = THEME[theme_name]
+    tbl = T.select_table(theme_name)
+    D.select_trigger(painted, 10.0, 10.0, 160.0, 32.0, theme, tbl, focus_f=1.0)
+    border = [s for s in painted.strokes if s[6] == 1.0][0]
+    assert border[4] == pytest.approx(T.rgba(*tbl["focus_border"], theme=theme))
+    assert border[4] != pytest.approx(T.rgba(*tbl["border"], theme=theme))
+    assert band_of(painted)[4] == pytest.approx(
+        T.rgba(*tbl["ring"], theme=theme))
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_the_combobox_trigger_rings_on_keyboard_focus(painted, monkeypatch,
+                                                      theme_name):
+    """The old Popover+Command trigger, whose table entry used to say the
+    ring was "NOT MEASURED, and deliberately NOT drawn".
+
+    It is measured now - `ring/50 0 0 0 3px` under a real keyboard focus on
+    the probe's PopoverTrigger - and the border half is the outline Button's
+    dark anomaly all over again: `ring` in light, still `input` in dark.
+    """
+    import comp_combobox as C
+
+    monkeypatch.setattr(D, "icon", lambda *a, **k: True)
+    monkeypatch.setattr(D, "label", lambda *a, **k: None)
+    theme = THEME[theme_name]
+    tbl = C.combobox_table(theme_name)
+
+    class FakeUi:
+        dl = None
+        faces = {}
+
+        def col(self, name, a=1.0):
+            return T.rgba(name, a, theme=theme)
+    ui = FakeUi()
+    ui.theme = theme
+
+    rest = Painted()
+    ui.dl = rest
+    C._trigger(ui, tbl, 10.0, 10.0, 200.0, 32.0, 10.0, "Pick", "Pick",
+               focus_f=0.0)
+    assert band_of(rest) is None, "an unfocused trigger rang"
+
+    ui.dl = painted
+    C._trigger(ui, tbl, 10.0, 10.0, 200.0, 32.0, 10.0, "Pick", "Pick",
+               focus_f=1.0)
+    band = band_of(painted)
+    assert band, "a keyboard-focused trigger painted no band"
+    assert band[4] == pytest.approx(T.rgba(*tbl["trigger_ring"], theme=theme))
+    border = [s for s in painted.strokes if s[6] == 1.0][0]
+    assert border[4] == pytest.approx(
+        T.rgba(*tbl["trigger_focus_border"], theme=theme))
+    # light swaps the border, dark does not - the Button's measured anomaly
+    swapped = tbl["trigger_focus_border"] != tbl["trigger_border"]
+    assert swapped == (theme_name == "light")

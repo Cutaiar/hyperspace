@@ -728,10 +728,14 @@ def slider(dl, x, y, w, h, fracs, theme, tbl, *, ring_f=0.0, disabled=False,
            track_h=None, thumb=None):
     """shadcn Slider.
 
-    `ring_f` is 0..1 for the thumb's hover/active ring, so a caller can ease
-    it rather than snap it; `fracs` is one fraction or two. The range is
-    clipped by the track exactly the way `overflow-hidden rounded-full`
-    clips it - see fill_clipped.
+    `ring_f` is 0..1 for the thumb's band, so a caller can ease it rather
+    than snap it. THREE states turn it on, which is why it is `ring_f` and
+    not `focus_f`: the thumb carries `hover:ring-3 focus-visible:ring-3
+    active:ring-3`, so it is the only control in the kit a bare HOVER rings.
+    `interact.slider` folds the three into one value.
+
+    `fracs` is one fraction or two. The range is clipped by the track exactly
+    the way `overflow-hidden rounded-full` clips it - see fill_clipped.
     """
     import box as B
     th = tbl["track_h"] if track_h is None else track_h
@@ -762,10 +766,22 @@ def slider(dl, x, y, w, h, fracs, theme, tbl, *, ring_f=0.0, disabled=False,
     return track, rng, thumbs
 
 
-def switch(dl, x, y, on_f, theme, tbl, *, size="default", ring_f=0.0,
+def switch(dl, x, y, on_f, theme, tbl, *, size="default", focus_f=0.0,
            disabled=False):
     """shadcn Switch. `on_f` is 0..1, so the thumb slides and the track
-    cross-fades on the same eased value rather than snapping."""
+    cross-fades on the same eased value rather than snapping.
+
+    `focus_f` is `:focus-visible`, eased, and it draws BOTH halves of the
+    answer shadcn gives: the 3px `ring/50` band outside the track, and the
+    track's own 1px border swapping from `transparent` to `ring`. Measured,
+    the band and the border arrive together; drawing only the band leaves the
+    control a shade short of the real one at the edge the eye lands on.
+
+    Keyboard only - a switch pressed with the pointer matches `:focus` and
+    not `:focus-visible` - which is `interact.switch`'s business, not this
+    function's. Both colours come out of `tbl`, never off a token spelled
+    here: tokens.SWITCH carries `ring` and `focus_border`.
+    """
     import box as B
     from ease import mix
     track, off, onr = B.switch_geom(x, y, size)
@@ -774,13 +790,16 @@ def switch(dl, x, y, on_f, theme, tbl, *, size="default", ring_f=0.0,
     # snapped to whole pixels while still laying the thumb out off the
     # fraction - so the TRACK snaps and the thumb does not. See draw.snap.
     px, py, pw, ph = snap(track.x, track.y, track.w, track.h)
-    if ring_f > 0.01:
-        ring(dl, px, py, pw, ph, rgba("ring", 0.5 * ring_f, theme=theme),
+    if focus_f > 0.01 and not disabled:
+        ring(dl, px, py, pw, ph,
+             rgba(tbl["ring"][0], tbl["ring"][1] * focus_f, theme=theme),
              ph / 2.0)
     bg = mix(rgba(tbl["off"][0], tbl["off"][1] * a, theme=theme),
              rgba(tbl["on"][0], tbl["on"][1] * a, theme=theme), on_f)
-    box(dl, px, py, pw, ph, fill_col=bg,
-        border_col=rgba(*tbl["border"], theme=theme),
+    bcol = mix(rgba(*tbl["border"], theme=theme),
+               rgba(*tbl.get("focus_border", tbl["border"]), theme=theme),
+               0.0 if disabled else focus_f)
+    box(dl, px, py, pw, ph, fill_col=bg, border_col=bcol,
         radius=ph / 2.0, border_w=1.0)
     tx = off.x + (onr.x - off.x) * on_f
     # the thumb's own colour is themed AND state-dependent: in dark it

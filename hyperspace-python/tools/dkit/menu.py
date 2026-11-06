@@ -256,6 +256,12 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
     imgui.set_next_window_size(imgui.ImVec2(w, h))
     imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
     imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+    # `PopupBorderSize` is a SEPARATE style var, 1.0 by default, and
+    # `WindowBorderSize` does not cover it. This panel fills its window
+    # exactly, so the stray 1px has always been hidden under the panel's
+    # own chrome - which is luck rather than a decision. The Combobox,
+    # whose window spans the trigger too, is where that luck ran out.
+    imgui.push_style_var(imgui.StyleVar_.popup_border_size, 0.0)
     imgui.push_style_var(imgui.StyleVar_.popup_rounding, T.RADII["lg"])
     imgui.push_style_color(imgui.Col_.popup_bg, imgui.ImVec4(0, 0, 0, 0))
     chosen = None
@@ -284,5 +290,5 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
         LAST_RECT.pop(key, None)
         ui.anim.to(f"{key}:open", 0.0)
     imgui.pop_style_color()
-    imgui.pop_style_var(3)
+    imgui.pop_style_var(4)
     return chosen

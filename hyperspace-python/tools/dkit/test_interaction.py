@@ -656,21 +656,40 @@ def test_a_mouse_click_leaves_no_focus_ring(DB):
     the next as you clicked along a group. The browser rings a control
     reached by keyboard and never one reached by pointer.
 
-    Dwells 40 frames after the release, well past the 150ms the ring would
-    have taken to ease in.
+    Rewritten, because the first version of this test could not fail: it
+    compared the rows 1..6 px above the control ROW, and a Button sits
+    centred inside its row, so the band it read was pixels no ring would ever
+    reach whatever the code did. It now reads the three columns immediately
+    outside the Button's own box - the strip `draw.ring` is calibrated to
+    cover - and checks the keyboard case in the same breath, so "no ring"
+    cannot pass by the ring being impossible.
+
+    Dwells 40 frames after the release, well past the 150ms the ring takes
+    to ease in.
     """
-    r = DB.lay_out(W, H)
-    rx, ry, _rw, rh = r.ctl_rows[11]            # the destructive Button
-    x, y = rx + DB.CTL_LABEL_W + 40, ry + rh / 2
-    before = DB.render("dark", W, H, script=[(x, y)] * 4)[-1]
-    after = DB.render("dark", W, H,
-                      script=[(x, y)] * 6 + [(x, y, True)] * 2
-                      + [(x, y, False)] * DWELL)[-1]
-    # a ring would paint 3px outside the button's box, so compare the band
-    # just outside it rather than the button itself (whose hover DOES change)
-    band = (slice(int(ry) - 6, int(ry) - 1), slice(int(x) - 40, int(x) + 40))
-    assert np.array_equal(before[band], after[band]), (
-        "a mouse click left a focus ring behind")
+    import comp_button as CBtn
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    w, h = 110.0, 32.0
+
+    def paint(ui):
+        CBtn.ui_button(ui, "b", PROBE_X, PROBE_Y, w, h, "Button",
+                       variant="outline")
+
+    ground = ground_of("dark")
+    on = (PROBE_X + w / 2, PROBE_Y + h / 2)
+    click = [on] * 6 + [(*on, True)] * 2 + [(*on, False)] * DWELL
+    clicked = one_widget("dark", paint, len(click), script=click)
+    kb = one_widget("dark", paint, DWELL, script=[FAR] * DWELL,
+                    keys=[(2, imgui.Key.tab)])
+
+    i_click = ring_ink(left_band(clicked[-1], PROBE_X, PROBE_Y, h), ground)
+    i_kb = ring_ink(left_band(kb[-1], PROBE_X, PROBE_Y, h), ground)
+    assert i_click < 1.0, f"a mouse click left a focus ring behind: {i_click:.1f}"
+    assert i_kb > 10.0, (
+        f"the keyboard did not ring the button either ({i_kb:.1f}), so the "
+        f"click assertion above proves nothing")
 
 
 def test_the_combobox_panel_keeps_its_side_while_you_type(DB):
@@ -778,3 +797,402 @@ def test_the_combobox_list_draws_no_scrollbar(DB):
     # per-region decision rather than the kit losing its scrollbars
     assert any(bars for key, bars in seen if not key.endswith(".list")), \
         f"nothing else drew a scrollbar: {seen}"
+
+
+# --------------------------------------------------------------------------
+# focus-visible: the ring, driven from the keyboard
+# --------------------------------------------------------------------------
+#
+# These ask for one thing the dashboard tests cannot: a control that the
+# KEYBOARD has reached. So they run one primitive in a window of its own and
+# read the pixels immediately outside its box, where a `box-shadow: 0 0 0 3px`
+# and nothing else can paint.
+#
+# Driving the keyboard is the whole point. `Ui.focus_visible` is only true
+# while the last input was a key, so a scripted CLICK is what proves the gate:
+# the same control, reached with the pointer, must come out with no ring at
+# all. A test that only clicked would pass against code that ringed on every
+# kind of focus, which is exactly the bug being fixed.
+#
+# Why its own harness rather than `dashboard.render`: ImGui's nav moves focus
+# between the items of the focused window in submission order, so "the switch"
+# in a window of 30 controls is however many arrow presses away the layout
+# happens to put it today. One widget per window makes the focused item the
+# only item. The window is torn down with its context at the end of each run -
+# leaking one poisons every later render in the process.
+
+PROBE_W, PROBE_H = 360, 140    # the probe window
+PROBE_X, PROBE_Y = 80.0, 60.0  # where the one control goes
+FAR = (5.0, 5.0)               # the pointer, parked clear of everything
+
+
+def _probe_flags():
+    from imgui_bundle import imgui
+    return (imgui.WindowFlags_.no_decoration | imgui.WindowFlags_.no_move
+            | imgui.WindowFlags_.no_scrollbar
+            | imgui.WindowFlags_.no_saved_settings
+            # the kit paints its own ground; imgui's window_bg would sit
+            # between the clear colour and the chrome and darken every read
+            | imgui.WindowFlags_.no_background)
+
+
+def one_widget(theme_name, paint, frames, *, script=None, keys=None):
+    """Render ONE dkit primitive for `frames` frames; return the frames.
+
+    `script` and `keys` are `dashboard.render`'s, so a test reads the same:
+    `script` is (x, y[, down]) per frame - the last entry holds for the rest -
+    and `keys` is [(frame, imgui.Key | str)], a str being a character.
+    """
+    import glfw
+    import OpenGL.GL as GL
+    from imgui_bundle import imgui
+    from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
+
+    import draw as D
+    import interact as I
+    import tokens as T
+    from ease import Anim
+
+    theme = T.LIGHT if theme_name == "light" else T.DARK
+    if not glfw.init():
+        pytest.skip("GLFW failed to initialise")
+    for hint, v in ((glfw.CONTEXT_VERSION_MAJOR, 3),
+                    (glfw.CONTEXT_VERSION_MINOR, 3),
+                    (glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE),
+                    (glfw.OPENGL_FORWARD_COMPAT, True),
+                    (glfw.VISIBLE, False), (glfw.SAMPLES, 0),
+                    (glfw.COCOA_RETINA_FRAMEBUFFER, False)):
+        glfw.window_hint(hint, v)
+    win = glfw.create_window(PROBE_W, PROBE_H, "dkit ring probe", None, None)
+    if not win:
+        glfw.terminate()
+        pytest.skip("could not create the hidden window")
+    glfw.make_context_current(win)
+    ctx = imgui.create_context()
+    impl = GlfwRenderer(win)
+    io = imgui.get_io()
+    # ImGui's nav is off by default, and without it no key moves focus at all
+    io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
+    faces = D.load_faces(io, HERE)
+    anim = Anim()
+    bgc = T.rgba("background", theme=theme)
+    keymap = {}
+    for at, k in (keys or []):
+        keymap.setdefault(at + 2, []).append(k)
+    sc = list(script or [])
+    out = []
+    try:
+        for i in range(frames + 2):        # two warm-up frames, as render's
+            glfw.poll_events()
+            impl.process_inputs()
+            if sc:
+                m = sc[min(max(i - 2, 0), len(sc) - 1)]
+                io.add_mouse_pos_event(float(m[0]), float(m[1]))
+                if len(m) > 2:
+                    io.add_mouse_button_event(0, bool(m[2]))
+            for k in keymap.get(i, ()):
+                if isinstance(k, str):
+                    for ch in k:
+                        io.add_input_character(ord(ch))
+                else:
+                    io.add_key_event(k, True)
+                    io.add_key_event(k, False)
+            imgui.new_frame()
+            GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
+            GL.glClear(GL.GL_COLOR_BUFFER_BIT)
+            imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+            imgui.set_next_window_size(imgui.ImVec2(PROBE_W, PROBE_H))
+            imgui.push_style_var(imgui.StyleVar_.window_padding,
+                                 imgui.ImVec2(0, 0))
+            imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+            imgui.begin("##ringprobe", None, _probe_flags())
+            ui = I.Ui(imgui.get_window_draw_list(), faces, theme, anim, None,
+                      theme_name=theme_name)
+            with I.chrome(ui):
+                paint(ui)
+            imgui.end()
+            imgui.pop_style_var(2)
+            imgui.render()
+            impl.render(imgui.get_draw_data())
+            GL.glFinish()
+            ui.frame_done(1.0 / 60.0)
+            if i >= 2:
+                fw, fh = glfw.get_framebuffer_size(win)
+                raw = GL.glReadPixels(0, 0, fw, fh, GL.GL_RGB,
+                                      GL.GL_UNSIGNED_BYTE)
+                px = np.frombuffer(raw, np.uint8).reshape(fh, fw, 3)[::-1]
+                out.append(px.copy())
+    finally:
+        impl.shutdown()
+        imgui.destroy_context(ctx)      # or the next render inherits it
+        glfw.terminate()
+    return out
+
+
+def left_band(frame, x, y, h, w=None):
+    """The mean level of the `w` columns immediately LEFT of the box.
+
+    That strip is where a CSS outer box-shadow paints and where nothing else
+    does: `draw.ring` is calibrated to cover exactly [x - width, x).
+    """
+    import tokens as T
+    w = int(T.RING_W if w is None else w)
+    return float(frame[int(y):int(y) + int(h), int(x) - w:int(x), :].mean())
+
+
+def top_band(frame, x, y, w, h=None):
+    """The same strip, ABOVE the box - for a control with something of its
+    own immediately to its left, like a slider thumb sitting on its track."""
+    import tokens as T
+    h = int(T.RING_W if h is None else h)
+    return float(frame[int(y) - h:int(y), int(x):int(x) + int(w), :].mean())
+
+
+def ring_ink(band, ground):
+    """How far the band is from the page's own colour. 0 is no ring."""
+    return abs(band - ground)
+
+
+def ground_of(theme_name):
+    import tokens as T
+    bg = T.rgba("background", theme=T.LIGHT if theme_name == "light" else T.DARK)
+    return sum(bg[:3]) / 3.0 * 255.0
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_the_switch_rings_from_the_keyboard_and_not_from_a_click(DB, theme_name):
+    """The Switch had no focus ring at all, in either theme.
+
+    Measured on the real one: keyboard focus paints a 3px `ring/50` band
+    outside the track AND swaps the track's border to `ring`; the pointer
+    paints neither, because `:focus-visible` does not match a mouse press.
+    Both halves of that are checked here - the band by these pixels, the
+    border colour by test_components - and the click case is what keeps the
+    gate honest.
+    """
+    import interact as I
+    import tokens as T
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    tw, th, _thumb = T.SWITCH_SIZES["default"]
+    state = {"on": False}
+
+    def paint(ui):
+        _c, state["on"] = I.switch(ui, "sw", PROBE_X, PROBE_Y, state["on"])
+
+    ground = ground_of(theme_name)
+    rest = one_widget(theme_name, paint, DWELL,
+                      script=[FAR] * DWELL)
+    state["on"] = False
+    # Tab both turns `focus_visible` on and, on a window of one item, leaves
+    # ImGui's nav on that item
+    kb = one_widget(theme_name, paint, DWELL, script=[FAR] * DWELL,
+                    keys=[(2, imgui.Key.tab)])
+    state["on"] = False
+    on_sw = (PROBE_X + tw / 2, PROBE_Y + th / 2)
+    click = ([on_sw] * 6 + [(*on_sw, True)] * 2 + [(*on_sw, False)] * DWELL)
+    clicked = one_widget(theme_name, paint, len(click), script=click)
+
+    i_rest = ring_ink(left_band(rest[-1], PROBE_X, PROBE_Y, th), ground)
+    i_kb = ring_ink(left_band(kb[-1], PROBE_X, PROBE_Y, th), ground)
+    i_click = ring_ink(left_band(clicked[-1], PROBE_X, PROBE_Y, th), ground)
+    assert i_rest < 1.0, f"an untouched switch painted outside its box: {i_rest:.1f}"
+    assert i_kb > 10.0, (
+        f"no focus ring on a keyboard-focused switch: band ink {i_kb:.1f} "
+        f"against {i_rest:.1f} at rest")
+    assert i_click < 1.0, (
+        f"a CLICKED switch rang: band ink {i_click:.1f}. `:focus-visible` "
+        f"does not match a pointer press")
+    # and it is there for the whole dwell, not just the frame the key landed
+    late = [ring_ink(left_band(f, PROBE_X, PROBE_Y, th), ground)
+            for f in kb[12:]]
+    assert min(late) > 10.0, f"the ring flickered: {min(late):.1f}..{max(late):.1f}"
+
+
+def test_a_disabled_switch_never_rings(DB):
+    """`disabled` is the other half of the gate, and it is cheap to lose:
+    the eased value has to be driven to 0, not read off the widget."""
+    import interact as I
+    import tokens as T
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    _tw, th, _t = T.SWITCH_SIZES["default"]
+
+    def paint(ui):
+        I.switch(ui, "sw", PROBE_X, PROBE_Y, False, disabled=True)
+
+    fs = one_widget("light", paint, DWELL, script=[FAR] * DWELL,
+                    keys=[(2, imgui.Key.tab)])
+    ink = ring_ink(left_band(fs[-1], PROBE_X, PROBE_Y, th), ground_of("light"))
+    assert ink < 1.0, f"a disabled switch rang under the keyboard: {ink:.1f}"
+
+
+def test_the_slider_rings_when_the_keyboard_reaches_it(DB):
+    """The thumb carries all three of `hover:ring-3 focus-visible:ring-3
+    active:ring-3`, so this pins the first and the third.
+
+    What it does NOT prove is the `focus-visible` term in `interact.slider`:
+    ImGui ACTIVATES a stock `slider_float` that is tabbed into (it is an
+    inputable item, so the keyboard takes it over), and `active` rings the
+    thumb on its own. Reverting the focus-visible term leaves this test
+    green, which is worth saying rather than hiding -
+    `test_the_range_sliders_thumb_rings_from_the_keyboard` is the one that
+    goes red, because a range's thumbs are `invisible_button`s that focus
+    without ever becoming active.
+
+    Read ABOVE the thumb, not beside it: the three columns to its left are
+    the track, which is painted either way.
+    """
+    import box as B
+    import interact as I
+
+    _gl_or_skip()
+    w, h = 200.0, 16.0
+    val = {"v": 0.5}
+
+    def paint(ui):
+        _c, val["v"] = I.slider(ui, "sl", PROBE_X, PROBE_Y, w, h, val["v"])
+
+    _track, _rng, thumbs = B.slider_geom(PROBE_X, PROBE_Y, w, h, [0.5])
+    t = thumbs[0]
+    ground = ground_of("light")
+    # The pointer is parked far away AND MOVED a pixel every frame, which is
+    # what makes this test able to fail. ImGui reports `is_item_hovered` true
+    # for a nav-focused item until the mouse next moves, so a still pointer
+    # would have rung the thumb through `hover` whatever the focus code did -
+    # the ring would have been there for the wrong reason and a broken
+    # version would still have passed.
+    jiggle = [(FAR[0] + (i % 2), FAR[1]) for i in range(DWELL)]
+    rest = one_widget("light", paint, DWELL, script=jiggle)
+    val["v"] = 0.5
+    from imgui_bundle import imgui
+    kb = one_widget("light", paint, DWELL, script=jiggle,
+                    keys=[(2, imgui.Key.tab)])
+    val["v"] = 0.5
+    # the pointer on the thumb: the hover ring, which must still work
+    hov = [(t.x + t.w / 2, t.y + t.h / 2)] * DWELL
+    hovered = one_widget("light", paint, DWELL, script=hov)
+
+    i_rest = ring_ink(top_band(rest[-1], t.x, t.y, t.w), ground)
+    i_kb = ring_ink(top_band(kb[-1], t.x, t.y, t.w), ground)
+    i_hov = ring_ink(top_band(hovered[-1], t.x, t.y, t.w), ground)
+    assert i_rest < 1.0, f"an untouched thumb rang: {i_rest:.1f}"
+    assert i_kb > 10.0, f"no ring on a keyboard-focused thumb: {i_kb:.1f}"
+    assert i_hov > 10.0, f"the hover ring went missing: {i_hov:.1f}"
+
+
+def test_a_mouse_opened_select_trigger_has_no_ring(DB):
+    """The measurement this reverses. `interact.select` drove its ring off
+    `open_`, and the browser does the opposite of that twice over: a trigger
+    opened with the POINTER never rings, and opening one with the KEYBOARD
+    moves focus into the listbox so the ring goes with it.
+
+    Read above the trigger rather than beside it, because the panel's own
+    `shadow-md` reaches a few rows up its left side.
+    """
+    import interact as I
+    import menu as M
+    import tokens as T
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    w = 160.0
+    hh, _rk = T.SELECT_SIZES["default"]
+    items = [M.Item(id="a", label="Alpha"), M.Item(id="b", label="Beta")]
+
+    def paint(ui):
+        I.select(ui, "se", PROBE_X, PROBE_Y, w, "Alpha", items)
+
+    ground = ground_of("light")
+    rest = one_widget("light", paint, DWELL, script=[FAR] * DWELL)
+    kb = one_widget("light", paint, DWELL, script=[FAR] * DWELL,
+                    keys=[(2, imgui.Key.tab), (6, imgui.Key.down_arrow)])
+    on = (PROBE_X + 40.0, PROBE_Y + hh / 2)
+    click = [on] * 6 + [(*on, True)] * 2 + [(*on, False)] * DWELL
+    opened = one_widget("light", paint, len(click), script=click,
+                        keys=[(2, imgui.Key.tab), (4, imgui.Key.down_arrow)])
+
+    i_rest = ring_ink(top_band(rest[-1], PROBE_X, PROBE_Y, w), ground)
+    i_kb = ring_ink(top_band(kb[-1], PROBE_X, PROBE_Y, w), ground)
+    i_open = ring_ink(top_band(opened[-1], PROBE_X, PROBE_Y, w), ground)
+    assert i_rest < 1.0, f"an untouched trigger rang: {i_rest:.1f}"
+    assert i_kb > 10.0, f"no ring on a keyboard-focused trigger: {i_kb:.1f}"
+    assert i_open < 1.0, (
+        f"a mouse-opened trigger rang: {i_open:.1f}. Measured, it carries no "
+        f"box-shadow at all")
+
+
+def test_the_input_rings_from_a_pointer_click(DB):
+    """The one measured exception to `:focus-visible`, and it has to survive
+    the gate going in everywhere else.
+
+    Chromium matches `:focus-visible` on anything that takes text however the
+    focus arrived: clicked with the pointer, the real Input rings - same
+    band, same border - where a clicked Button, Switch or SelectTrigger does
+    not. So `interact.text_input` must NOT be gated on `focus_visible`.
+    """
+    import interact as I
+    import tokens as T
+
+    _gl_or_skip()
+    w = 180.0
+    hh = T.INPUT["h"]
+    val = {"t": ""}
+
+    def paint(ui):
+        _c, val["t"] = I.text_input(ui, "in", PROBE_X, PROBE_Y, w, val["t"],
+                                    placeholder="Name")
+
+    ground = ground_of("light")
+    rest = one_widget("light", paint, DWELL, script=[FAR] * DWELL)
+    val["t"] = ""
+    on = (PROBE_X + 40.0, PROBE_Y + hh / 2)
+    click = [on] * 6 + [(*on, True)] * 2 + [(*on, False)] * DWELL
+    clicked = one_widget("light", paint, len(click), script=click)
+
+    i_rest = ring_ink(left_band(rest[-1], PROBE_X, PROBE_Y, hh), ground)
+    i_click = ring_ink(left_band(clicked[-1], PROBE_X, PROBE_Y, hh), ground)
+    assert i_rest < 1.0, f"an untouched input rang: {i_rest:.1f}"
+    assert i_click > 10.0, (
+        f"a clicked Input did not ring: {i_click:.1f}. A text field matches "
+        f"`:focus-visible` from the pointer too - measured")
+
+
+def test_the_range_sliders_thumb_rings_from_the_keyboard(DB):
+    """The two-thumb Slider, which is the case that can only come from
+    `focus-visible`.
+
+    A range does its own drag over two `invisible_button`s rather than a
+    stock `slider_float`, so a thumb the keyboard has reached is focused and
+    NOT active - neither `hover` nor `active` is true - and the band can only
+    be there because the focus term put it there.
+    """
+    import box as B
+    import interact as I
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    w, h = 200.0, 16.0
+    val = {"lo": 0.3, "hi": 0.7}
+
+    def paint(ui):
+        _c, val["lo"], val["hi"] = I.range_slider(
+            ui, "rs", PROBE_X, PROBE_Y, w, h, val["lo"], val["hi"])
+
+    _track, _rng, thumbs = B.slider_geom(PROBE_X, PROBE_Y, w, h, [0.3, 0.7])
+    t = thumbs[0]
+    ground = ground_of("light")
+    # moved every frame, so ImGui's nav-hover is cleared and `hot` is 0 -
+    # see the note in the single-thumb test
+    jiggle = [(FAR[0] + (i % 2), FAR[1]) for i in range(DWELL)]
+    rest = one_widget("light", paint, DWELL, script=jiggle)
+    val["lo"], val["hi"] = 0.3, 0.7
+    kb = one_widget("light", paint, DWELL, script=jiggle,
+                    keys=[(2, imgui.Key.tab)])
+
+    i_rest = ring_ink(top_band(rest[-1], t.x, t.y, t.w), ground)
+    i_kb = ring_ink(top_band(kb[-1], t.x, t.y, t.w), ground)
+    assert i_rest < 1.0, f"an untouched range thumb rang: {i_rest:.1f}"
+    assert i_kb > 10.0, f"no ring on a keyboard-focused range thumb: {i_kb:.1f}"

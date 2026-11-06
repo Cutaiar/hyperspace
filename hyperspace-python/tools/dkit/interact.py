@@ -6,7 +6,7 @@ is the one place in 20,800 lines of UI code that already does the right thing
 chrome on a lower draw channel — and the whole kit hangs off making it the
 normal way to build a widget rather than a one-off.
 
-Two rules it has to keep:
+Three rules it has to keep:
 
 * **Every interactive primitive carries an `invisible_button` with its
   `##id`.** `tests/ui_driver.py:43-46` finds controls by wrapping stock imgui
@@ -15,6 +15,17 @@ Two rules it has to keep:
   invisible to all of them.
 * **Chrome is drawn from eased state, not from the raw boolean.** ImGui holds
   nothing between frames, so the 150ms shadcn transition lives in `ease.Anim`.
+* **Every focusable control rings on `:focus-visible`, and only there.**
+  Measured on the whole registry, in both themes, every control gives the
+  same two-part answer: a 3px `ring/50` band immediately outside the border
+  box (`draw.ring`) and the 1px border swapping to `ring`. It needs a
+  KEYBOARD focus - a control reached with the pointer matches `:focus` and
+  not `:focus-visible` - so the strength comes from `Ui.focus_f`, which
+  gates it on `Ui.focus_visible` and eases it. Two measured exceptions: a
+  text field rings from a pointer click too (`text_input`), and a Slider's
+  thumb also rings on hover and while active (`hover:ring-3 active:ring-3`).
+  `ui.hit` has to pass `ButtonFlags_.enable_nav` for any of it to be
+  reachable at all; the comment there says why.
 """
 
 from __future__ import annotations
@@ -35,6 +46,7 @@ class State:
     hovered: bool = False
     held: bool = False
     clicked: bool = False
+    focused: bool = False   # raw imgui focus - see Ui.focus_f for the ring
     hot: float = 0.0        # eased hover, 0..1
     down: float = 0.0       # eased press, 0..1
 
@@ -128,11 +140,27 @@ class Ui:
         imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
         if allow_overlap:
             imgui.set_next_item_allow_overlap()
-        clicked = imgui.invisible_button(f"##{key}", imgui.ImVec2(w, h))
+        # `enable_nav`, and without it NONE of the kit's focus rings can ever
+        # appear. Measured in ImGui 1.92.9: an `invisible_button` submitted
+        # plainly is added with `ImGuiItemFlags_NoNav`, so `is_item_focused`
+        # is False for ever - under an arrow key, under Tab, and even after
+        # `set_keyboard_focus_here`, which is the one case that proves it is
+        # the item and not the input. `ImGuiButtonFlags_EnableNav` (1.91) is
+        # the supported way back in, and with it focus lands on the frame the
+        # window is navigated. The alternative - a real `imgui.button` with
+        # its three colours pushed transparent - would also take focus, but
+        # it reports `is_item_hovered` True while merely nav-focused, which
+        # would light every hover tint in the kit off the keyboard.
+        clicked = imgui.invisible_button(f"##{key}", imgui.ImVec2(w, h),
+                                         imgui.ButtonFlags_.enable_nav)
         hovered = imgui.is_item_hovered()
         held = imgui.is_item_active()
+        # read here or not at all: `is_item_focused` answers for the LAST
+        # submitted item, so a caller that asks two draw calls later gets
+        # whatever was submitted since. Ring strength is `Ui.focus_f`.
+        focused = imgui.is_item_focused()
         return State(
-            hovered=hovered, held=held, clicked=clicked,
+            hovered=hovered, held=held, clicked=clicked, focused=focused,
             hot=self.anim.to(f"{key}:hot", 1.0 if hovered else 0.0),
             down=self.anim.to(f"{key}:down", 1.0 if held else 0.0),
         )
@@ -158,6 +186,25 @@ class Ui:
                 if k is not None and imgui.is_key_pressed(k):
                     self.anim.store["kbd"] = True
                     break
+
+    def focus_f(self, key: str, focused: bool, *, disabled: bool = False
+                ) -> float:
+        """The eased `:focus-visible` ring strength for one control, 0..1.
+
+        The same three lines `comp_button.ui_button` writes out, which every
+        ringed control in the kit needs and four of them were missing:
+
+          * the ring is `:focus-visible`, so a control reached with the
+            POINTER never gets one - `focus_visible` is the gate;
+          * a `disabled` control never rings;
+          * it eases on shadcn's 150ms curve rather than snapping.
+
+        The Input is the one measured exception and does not come through
+        here: a text field matches `:focus-visible` from a pointer click too.
+        See `text_input` and tokens.INPUT.
+        """
+        on = bool(focused) and self.focus_visible and not disabled
+        return self.anim.to(f"{key}:focus", 1.0 if on else 0.0)
 
     def col(self, name, a: float = 1.0):
         return T.rgba(name, a, theme=self.theme)
@@ -405,6 +452,9 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
         imgui.end_disabled()
     imgui.pop_item_width()
     active, hovered = imgui.is_item_active(), imgui.is_item_hovered()
+    # `is_item_focused` answers for the item just submitted, so it is read
+    # here beside the other two rather than after the chrome is drawn.
+    kb_focus = imgui.is_item_focused() and ui.focus_visible
     imgui.pop_style_color()
     ui.texting[key] = bool(active and imgui.get_io().want_text_input)
     _sandwich_end(ui, cols)
@@ -431,8 +481,16 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
 
     frac = (out - lo) / span
     tbl = ui.slider_tbl
-    ring_f = ui.anim.to(f"{key}:ring",
-                        1.0 if (hovered or active) and not disabled else 0.0)
+    # The thumb is the one control whose band is not focus-only: it carries
+    # `hover:ring-3 focus-visible:ring-3 active:ring-3`, so THREE states turn
+    # the same `ring/50` band on. Measured hovered with the pointer,
+    # `:focus-visible` false and the band painted - and measured under a real
+    # keyboard focus, which is the state this was missing: hover and active
+    # were here and `focus-visible` was not, so a slider tabbed to showed
+    # nothing at all.
+    ring_f = ui.anim.to(
+        f"{key}:ring",
+        1.0 if (hovered or active or kb_focus) and not disabled else 0.0)
     D.slider(ui.dl, x, y, w, h, [min(max(frac, 0.0), 1.0)], ui.theme, tbl,
              ring_f=ring_f, disabled=disabled)
     ui.dl.channels_merge()
@@ -454,10 +512,14 @@ def switch(ui: Ui, key, x, y, on: bool, *, size="default", disabled=False) -> tu
         out = not on
     on_f = ui.anim.to(f"{key}:on", 1.0 if out else 0.0)
     # No hover chrome at all: measured, the track's fill is byte-identical
-    # hovered and at rest. The only ring it has is `focus-visible`, which
-    # needs keyboard focus the kit does not route yet.
+    # hovered and at rest. The one state that changes the chrome is
+    # `focus-visible`, and it is the WHOLE two-part answer - a 3px `ring/50`
+    # band outside the track and the track's own border swapping to `ring`.
+    # Measured keyboard-only in both themes: held under the pointer the
+    # switch matches `:focus` and not `:focus-visible`, and paints neither.
+    focus_f = ui.focus_f(key, st.focused, disabled=disabled)
     D.switch(ui.dl, x, y, on_f, ui.theme, ui.switch_tbl, size=size,
-             disabled=disabled)
+             focus_f=focus_f, disabled=disabled)
     return (st.clicked and not disabled), out
 
 
@@ -487,7 +549,16 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     if disabled:
         imgui.end_disabled()
     imgui.pop_item_width()
-    focused = imgui.is_item_active()
+    # NOT gated on `ui.focus_visible`, and that is measured rather than
+    # sloppy: a text field is the one control Chromium matches
+    # `:focus-visible` on however the focus arrived. Clicked with the
+    # pointer, the real Input rings - same `ring/50 0 0 0 3px` band, same
+    # `ring` border - where a clicked Button, Switch or SelectTrigger does
+    # not. `is_item_active` is imgui's "this field is being edited", which is
+    # what a pointer click into it produces; the second term catches a field
+    # the keyboard has navigated to but not yet activated.
+    focused = (imgui.is_item_active()
+               or (imgui.is_item_focused() and ui.focus_visible))
     imgui.pop_style_color()
     _sandwich_end(ui, cols)
 
@@ -517,7 +588,14 @@ def select(ui: Ui, key, x, y, w, label, items, *, size="default",
         imgui.open_popup(f"##sel.{key}")
     open_ = imgui.is_popup_open(f"##sel.{key}")
     hot = ui.anim.to(f"{key}:hot", 1.0 if st.hovered and not disabled else 0.0)
-    focus_f = ui.anim.to(f"{key}:focus", 1.0 if open_ else 0.0)
+    # Measured, and the opposite of what this used to do. A trigger reached
+    # with the KEYBOARD and still CLOSED rings: `ring/50 0 0 0 3px` and its
+    # border -> `ring`, both themes. Open it and Radix moves focus into the
+    # listbox, so the trigger's ring goes with it (`:focus-visible` false,
+    # box-shadow `none`, border back to `input`) and Escape brings it back. A
+    # trigger opened with the POINTER never rings at all. Driving `focus_f`
+    # off `open_` painted a ring in exactly the two states that have none.
+    focus_f = ui.focus_f(key, st.focused and not open_, disabled=disabled)
     D.select_trigger(ui.dl, x, y, w, hh, ui.theme, ui.select_tbl, size=size,
                      hot=hot, focus_f=focus_f, disabled=disabled, open_=open_)
     ink = "foreground" if label else "muted-foreground"
@@ -597,10 +675,12 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
 
     changed = False
     hot = 0.0
+    kb_focus = False
     for i, (name, val) in enumerate((("lo", lo), ("hi", hi))):
         t = thumbs[i]
         st = ui.hit(f"{key}.{name}", t.x, t.y, t.w, t.h)
         hot = max(hot, st.hot, st.down)
+        kb_focus = kb_focus or (st.focused and ui.focus_visible)
         if st.held and not disabled:
             # the thumb is inset by its own width, so the pointer maps back
             # through the SAME span its position was laid out on
@@ -614,7 +694,13 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
 
     flo = min(max((lo - vmin) / span, 0.0), 1.0)
     fhi = min(max((hi - vmin) / span, 0.0), 1.0)
-    ring_f = ui.anim.to(f"{key}:ring", 0.0 if disabled else min(hot, 1.0))
+    # `focus-visible` as well as hover and active, the same three states the
+    # single-thumb slider answers to. `draw.slider` takes one `ring_f` for
+    # every thumb it draws, so both thumbs ring together - which is what
+    # hovering one already did and is not changed here.
+    ring_f = ui.anim.to(
+        f"{key}:ring",
+        0.0 if disabled else max(min(hot, 1.0), 1.0 if kb_focus else 0.0))
     D.slider(ui.dl, x, y, w, h, [flo, fhi], ui.theme, ui.slider_tbl,
              ring_f=ring_f, disabled=disabled)
     return changed, lo, hi

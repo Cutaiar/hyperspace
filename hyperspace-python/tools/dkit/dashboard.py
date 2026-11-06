@@ -947,7 +947,7 @@ def live(theme_name: str, w: int, h: int) -> None:
 
 
 def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
-           keys=None):
+           keys=None, keep: str = "all"):
     """Draw the dashboard, optionally stepping a script of mouse positions.
 
     `script` is a list of (x, y), (x, y, down), (x, y, down, wheel) or
@@ -955,6 +955,11 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
     scroll or a RIGHT-click can be driven headlessly. The last is what a
     context menu needs.
     Returns a list of frames (the last one only, if no script was given).
+
+    `keep="last"` keeps ONLY the final frame. A frame is w*h*4 bytes - 15 MB
+    at 1440x2600 - so a sweep that drives a thousand of them accumulates
+    twenty gigabytes and the kernel kills the worker. A test that only looks
+    at the end should say so.
     """
     theme = T.LIGHT if theme_name == "light" else T.DARK
     if not glfw.init():
@@ -1050,6 +1055,8 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
             px = np.frombuffer(raw, np.uint8).reshape(fh, fw, 3)[::-1]
             if not px.any():
                 raise SystemExit("the hidden window read back black")
+            if keep == "last":
+                frames.clear()
             frames.append(px.copy())
 
     impl.shutdown()

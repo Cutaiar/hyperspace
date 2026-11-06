@@ -162,6 +162,16 @@ its value selected, is `rgba(0, 65, 198, 0.8)` in BOTH themes — nothing in
 the registry declares `::selection`, so a shadcn app gets the UA default, and
 `tokens.SELECTION` is it.
 
+### Measuring, and one thing that cannot be measured at all
+
+- **`invisible_button` cannot take keyboard focus** in ImGui 1.92.9 —
+  `is_item_focused()` is `False` for every `ui.hit` target, for ever. So the
+  focus ring the kit "already had" on Button had never painted, and copying
+  that implementation to the other controls would have delivered four more
+  rings that cannot appear and four tests that cannot fail. `Ui.hit` passes
+  `ButtonFlags_.enable_nav` now. The general version of this: before porting
+  a reference implementation, check that the reference WORKS.
+
 ### Measuring
 
 - **Chromium lays out on a 1/64 px grid and snaps what it PAINTS to whole
@@ -195,7 +205,47 @@ the registry declares `::selection`, so a shadcn app gets the UA default, and
   that flickered and was unclickable in practice. Every interaction test in
   `test_interaction.py` dwells 40 frames.
 
-### Mine, not the tools'
+### Mine, not the tools' — the expensive kind
+
+These four all cost the user a round of looking at something I should have
+caught, and each has the same shape: I had the instrument and did not use it.
+
+- **I tested the contact sheet the way the pixel diff would have.** The
+  Gallery exists because the diff "cannot see that a control is
+  unclickable" — that sentence is in `comp_gallery.py`'s own docstring. The
+  first `test_gallery.py` rendered the page and asserted it was not blank.
+  Not one test clicked anything. Three Select specimens were handing
+  `interact.select` a `list[str]` where it wants `menu.Item`, and every one
+  of them raised `'str' object has no attribute 'kind'` the moment anybody
+  pressed it. `test_every_specimen_can_be_clicked` drives all 101 now, and
+  reverting the fix turns it red.
+
+- **I saw the stray lines and wrote them off.** Reviewing my own capture of
+  the Combobox earlier in the same session I wrote "there appear to be two
+  short vertical light strokes at the panel's top corners… Minor." I named
+  the defect, called it minor without measuring it, and moved on. The whole
+  method of this project is that looking is how you get it wrong. Measuring
+  it took eight minutes and the fix was one line: ImGui's `PopupBorderSize`
+  is 1.0 and `WindowBorderSize` does not cover it, so the popup's own border
+  ran down both sides of the gap at 75 against a 23 ground.
+
+- **Every other popup in the kit was hiding that border by luck.** Their
+  window IS their panel, so the stray pixel sits under chrome that covers
+  it. The Combobox's window is deliberately taller — it spans the trigger so
+  the caret is inside the focused window — and that is the only reason it
+  ever showed. `menu.popup` turns it off too now, rather than going on
+  relying on the accident.
+
+- **I blamed a subagent for failures my own test file caused.** Eight tests
+  in `test_interaction.py` went red while an agent was working, and I
+  reported them as its in-flight state. They were my `test_gallery.py`
+  calling `DB._boot(...)` per test and never shutting any of them down,
+  which left the current GL context pointing at a dead window; later
+  `render()` calls in the same xdist worker stopped receiving clicks and
+  keys. The agent found it and said so. The lesson is not about the leak —
+  it is that "the other thing changed, so it is the other thing" is a guess,
+  and a `git diff` would have shown my file in the failing set.
+
 
 - **A local constant shadowed a module one.** `lay_out`'s `ROW_H = 24.0`
   shadowed the module's `ROW_H = 34.0`, so the table was laid out at a 24px

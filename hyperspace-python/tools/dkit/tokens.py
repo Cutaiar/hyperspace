@@ -210,6 +210,12 @@ SLIDER = {
     # literal, NOT a token - see the note above
     "thumb_fill": ("#ffffff", 1.0),
     "thumb_border": ("ring", 1.0),
+    # The thumb's band, `ring-ring/50`. THREE things turn it on - the thumb
+    # carries `hover:ring-3 focus-visible:ring-3 active:ring-3` - which makes
+    # it the only control in the kit a bare HOVER rings: measured hovered,
+    # `:focus-visible` false and box-shadow `ring/50 0 0 0 3px` painted.
+    # The border does NOT swap under focus: `border-ring` is already the rest
+    # border, measured oklch(0.708 0 0) at rest and focused alike.
     "ring": ("ring", 0.5),
     "disabled_opacity": 0.5,
 }
@@ -225,6 +231,15 @@ SWITCH = {
     "thumb_off": ("background", 1.0),
     "thumb_on": ("background", 1.0),
     "border": ("transparent", 1.0),
+    # `focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50`
+    # - the same two-part answer every other control gives, and measured
+    # identical in BOTH themes (light border oklch(0.708 0 0) = `ring`, dark
+    # oklch(0.556 0 0) = `ring`; the dark outline Button's "keeps its border"
+    # exception does not reach here). Keyboard only: measured with the pointer
+    # held down on the track, `:focus-visible` is false and box-shadow is
+    # `none`. draw.switch draws both halves off these two entries.
+    "focus_border": ("ring", 1.0),
+    "ring": ("ring", 0.5),
 }
 SWITCH_DARK = {
     "off": ("input", 0.8),              # dark:data-unchecked:bg-input/80
@@ -239,6 +254,12 @@ INPUT = {
     "font": 14.0,            # md:text-sm
     "bg": ("transparent", 1.0),
     "border": ("input", 1.0),
+    # The Input is the ONE control that rings under the POINTER as well.
+    # Measured: click into it and `:focus-visible` is true, with the same
+    # `ring/50 0 0 0 3px` band and `ring` border a keyboard focus gives -
+    # Chromium matches `:focus-visible` on anything that takes text whatever
+    # the focus came from. A clicked Button, Switch or SelectTrigger does not.
+    # So interact.text_input does NOT gate this on `ui.focus_visible`.
     "focus_border": ("ring", 1.0),
     "ring": ("ring", 0.5),
     "invalid_border": ("destructive", 1.0),
@@ -265,6 +286,16 @@ SELECT = {
     "bg": ("transparent", 1.0),
     "hover_bg": ("transparent", 1.0),   # light has no hover tint
     "border": ("input", 1.0),
+    # Measured on a keyboard-focused CLOSED trigger: box-shadow
+    # `ring/50 0 0 0 3px` AND border -> `ring`, in both themes. The border
+    # half was missing from this table, so draw.field fell back to leaving the
+    # border alone and the trigger rang without changing colour.
+    #
+    # The ring is on the trigger only while it is focused and CLOSED. Opening
+    # it with the keyboard moves focus into the listbox, and the trigger's
+    # ring goes with it (measured `:focus-visible` false, box-shadow `none`,
+    # border back to `input`); Escape brings it back. See interact.select.
+    "focus_border": ("ring", 1.0),
     "ring": ("ring", 0.5),
 }
 SELECT_DARK = {
