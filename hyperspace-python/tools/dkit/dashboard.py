@@ -348,18 +348,22 @@ WIN_FLAGS = (imgui.WindowFlags_.no_title_bar | imgui.WindowFlags_.no_resize
              | imgui.WindowFlags_.no_background)
 
 
-def _boot(theme_name, w, h, *, visible: bool):
-    """A window, a context, the fonts and the gradient ramp."""
+def _boot(theme_name, w, h, *, visible: bool, retina: bool = False):
+    """A window, a context, the fonts and the gradient ramp.
+
+    `retina` is the difference between looking at this and measuring it.
+    Screenshot paths want 1:1 pixels so the framebuffer matches the spec
+    rects, which on macOS means asking for a non-Retina framebuffer. A window
+    a person actually looks at wants the opposite: forcing 1:1 there makes
+    macOS upscale a logical-resolution image, and it looks grainy.
+    """
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise (no display?)")
     for hint, v in ((glfw.CONTEXT_VERSION_MAJOR, 3), (glfw.CONTEXT_VERSION_MINOR, 3),
                     (glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE),
                     (glfw.OPENGL_FORWARD_COMPAT, True), (glfw.VISIBLE, visible),
                     (glfw.SAMPLES, 0),
-                    # 1:1 pixels on a Retina Mac too, or the framebuffer comes
-                    # back at 2x and every rect in the spec is half the size it
-                    # claims. No-op off macOS.
-                    (glfw.COCOA_RETINA_FRAMEBUFFER, False)):
+                    (glfw.COCOA_RETINA_FRAMEBUFFER, retina)):
         glfw.window_hint(hint, v)
     win = glfw.create_window(w, h, "Hyperspace \u00b7 dkit", None, None)
     if not win:
@@ -369,18 +373,31 @@ def _boot(theme_name, w, h, *, visible: bool):
     imgui.create_context()
     impl = GlfwRenderer(win)
     io = imgui.get_io()
-    faces = {k: io.fonts.add_font_from_file_ttf(str(HERE / "fonts" / fn), 16.0)
-             for k, fn in (("regular", "Geist-Regular.ttf"),
-                           ("medium", "Geist-Medium.ttf"),
-                           ("semibold", "Geist-SemiBold.ttf"))}
+    ww, _ = glfw.get_window_size(win)
+    fw, _ = glfw.get_framebuffer_size(win)
+    density = (fw / ww) if ww else 1.0
+    faces = {}
+    for k, fn in (("regular", "Geist-Regular.ttf"),
+                  ("medium", "Geist-Medium.ttf"),
+                  ("semibold", "Geist-SemiBold.ttf")):
+        cfg = imgui.ImFontConfig()
+        # glyphs are rasterized at the display's real pixel density; without
+        # this they are cut at logical size and scaled up, which is the other
+        # half of looking grainy on a Retina screen
+        cfg.rasterizer_density = density
+        faces[k] = io.fonts.add_font_from_file_ttf(str(HERE / "fonts" / fn),
+                                                   16.0, cfg)
     LL = T.LIGHT_L if theme_name == "light" else T.DARK_L
     grad = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))
     return win, impl, io, faces, grad
 
 
 def _draw(ui_box, rects, w, h, series, state, bgc):
-    """One frame, inside the full-window imgui window. Returns the Ui."""
-    GL.glViewport(0, 0, w, h)
+    """One frame, inside the full-window imgui window. Returns the Ui.
+
+    w/h are LOGICAL points. The caller owns the GL viewport, which is in
+    framebuffer pixels and is not the same thing on a Retina display.
+    """
     GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
     GL.glClear(GL.GL_COLOR_BUFFER_BIT)
     imgui.set_next_window_pos(imgui.ImVec2(0, 0))
@@ -406,7 +423,8 @@ def live(theme_name: str, w: int, h: int) -> None:
     grows and shrinks with the window.
     """
     import time
-    win, impl, io, faces, grad = _boot(theme_name, w, h, visible=True)
+    win, impl, io, faces, grad = _boot(theme_name, w, h, visible=True,
+                                       retina=True)
     glfw.swap_interval(1)
     theme = T.LIGHT if theme_name == "light" else T.DARK
     bgc = T.rgba("background", theme=theme)
@@ -422,13 +440,18 @@ def live(theme_name: str, w: int, h: int) -> None:
         now = time.perf_counter()
         dt = min(now - prev, 0.05)          # a stall must not jump the easing
         prev = now
+        # layout in LOGICAL points (what imgui draws in); the GL viewport in
+        # pixels (what the framebuffer is). On a Retina screen they differ by
+        # 2x and conflating them halves every rect.
+        lw, lh = glfw.get_window_size(win)
         fw, fh = glfw.get_framebuffer_size(win)
-        if (fw, fh) <= (0, 0):
+        if lw <= 0 or lh <= 0 or fw <= 0 or fh <= 0:
             continue
-        if (fw, fh) != last_size:
-            rects, last_size = lay_out(fw, fh), (fw, fh)
+        if (lw, lh) != last_size:
+            rects, last_size = lay_out(lw, lh), (lw, lh)
         imgui.new_frame()
-        _draw(ui, rects, fw, fh, series, state, bgc)
+        GL.glViewport(0, 0, fw, fh)
+        _draw(ui, rects, lw, lh, series, state, bgc)
         imgui.render()
         impl.render(imgui.get_draw_data())
         ui.frame_done(dt)
