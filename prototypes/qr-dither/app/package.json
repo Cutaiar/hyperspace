@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "check": "esbuild check/sheet.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/check.mjs --log-level=warning && node node_modules/.tmp/check.mjs"
+    "check": "esbuild check/sheet.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/check.mjs --log-level=warning && node node_modules/.tmp/check.mjs && esbuild check/export.check.ts --bundle --format=esm --platform=node --outfile=node_modules/.tmp/exp.mjs --log-level=warning && node node_modules/.tmp/exp.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

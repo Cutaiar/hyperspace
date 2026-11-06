@@ -74,10 +74,22 @@ cd app && npm run check
    per-sheet count, and the warning that says what a size costs you: at 44 mm
    a version-12 code is 15 to a Letter sheet, and dropping to 40 mm buys 20 at
    0.548 mm per module, under the floor.
-3. **Selection** — pick from the gallery, set a count per code, fill the sheet
-   or repeat one code.
-4. **Export** — SVG first (it is already what the codes are). PDF via a vector
-   writer, not a raster. Cutline on its own layer, named as the vendor asks.
+3. ~~**Selection**~~ — done: pick codes from a thumbnail grid; the sheet fills
+   round-robin from whatever is selected.
+4. ~~**Export**~~ — done: `src/lib/export.ts`. SVG with the cuts in a
+   `#cutline` group, and a single-page vector PDF written by hand — no
+   dependency, no rasterisation. Both re-render from the manifest's `matrix` at
+   the exact physical size rather than scaling the published SVG, which is what
+   the grid is in the manifest for.
+
+   Verified end to end, not by inspection: a real 15-up Letter sheet was
+   exported, the PDF rasterised by macOS Quartz and the SVG by Chrome, and
+   zxing read **15/15 codes out of each file**, the seven inverted ones
+   included.
+
+   Not implemented, and not to be implied: PDF optional content groups (true
+   layers) and spot colours. The PDF's cuts are ordinary magenta strokes. A
+   vendor who needs a named spot plate wants the SVG.
 
 Codes come from `manifest.json`. Re-render from `matrix` rather than scaling the
 SVG when a code needs an exact physical size — the grid is in the manifest

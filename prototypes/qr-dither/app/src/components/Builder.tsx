@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Download } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { download, sheetPdf, sheetSvg, type Code } from '@/lib/export'
 import type { Item, Manifest } from '@/lib/manifest'
 import {
   DEFAULTS, PAPERS, assign, layout, minSticker, pitch,
@@ -24,6 +26,7 @@ export function Builder() {
   const [bleed, setBleed] = useState(DEFAULTS.bleed)
   const [floorMm, setFloorMm] = useState(0.6)
   const [chosen, setChosen] = useState<string[]>([])
+  const [cutline, setCutline] = useState(true)
 
   useEffect(() => {
     fetch('/data/gallery/manifest.json').then(r => r.json()).then((m: Manifest) => {
@@ -56,6 +59,12 @@ export function Builder() {
   const p = worst ? pitch(worst.modules, sticker) : 0
   const need = worst ? minSticker(worst.modules, floorMm) : 0
   const under = worst ? p < floorMm : false
+
+  // the exporters re-render from the module grid, so they need the codes, not the files
+  const codes = useMemo(() => Object.fromEntries(items.map(i =>
+    [i.id, { id: i.id, modules: i.modules, matrix: i.matrix, dark: i.dark } as Code])), [items])
+  const bundle = { layout: lay, placed, codes, cutline }
+  const stem = `qr-dither-${paperId}-${sticker}mm-${placed.length}up`
 
   if (!man) return <div className="py-10 text-sm text-muted-foreground">loading…</div>
   const paper = PAPERS[paperId]
@@ -138,6 +147,34 @@ export function Builder() {
             {lay.warnings.map(w => <Warn key={w}>{w}</Warn>)}
           </div>
         )}
+
+        <Separator />
+
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="flex-1 gap-1.5 text-[11px]"
+                    disabled={!placed.length}
+                    onClick={() => download(`${stem}.svg`, sheetSvg(bundle), 'image/svg+xml')}>
+              <Download className="size-3" /> SVG
+            </Button>
+            <Button size="sm" variant="outline" className="flex-1 gap-1.5 text-[11px]"
+                    disabled={!placed.length}
+                    onClick={() => download(`${stem}.pdf`, sheetPdf(bundle), 'application/pdf')}>
+              <Download className="size-3" /> PDF
+            </Button>
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-muted-foreground">
+            <input type="checkbox" checked={cutline} onChange={e => setCutline(e.target.checked)}
+                   className="accent-primary" />
+            include the cut layer
+          </label>
+          <p className="text-[10px] leading-relaxed text-muted-foreground/70">
+            Codes are re-rendered from the module grid at the exact size, never by scaling the
+            published SVG. The SVG carries the cuts in a <code>#cutline</code> group; the PDF
+            draws them as magenta strokes — it has no spot plate or true layers, so a vendor who
+            needs those wants the SVG.
+          </p>
+        </div>
 
         <Separator />
 
