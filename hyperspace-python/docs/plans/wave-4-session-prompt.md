@@ -231,6 +231,17 @@ stay, and load only into the off-air `Deck`. If they should go too, it is a one-
 - **FQ3–FQ7 as recommended, and one migration:** see `57-format-lane.md` §6.
 - **Wave 5 is to be planned now,** with its launch prompt. It runs after this wave lands.
 
+**Tenth round, 2026-11-06.**
+- **This session carries on with the rest of this wave.** #287 is ours to rewrite. Merge on green holds.
+- **An undo latch (UL):** "before you can start popping from that stack, you should have to push to that stack at
+  least once after a focus event happens", so "you can't accidentally switch what you're focused on and then press
+  Control-Z and have it undo an action that you took 10 minutes ago". A warning is fine, "but a more mechanical latch
+  would be a more ergonomic choice". Row 753, check 579, group CR.
+- **The pending rows are bulk accepted,** marked so in the register, but for 417, 609 and 751.
+- **Rulings on those three:** all 17 face patterns stay; SEND B stays FINE; creating a pair over an existing mapping must
+  ask (PC2: "you should have to explicitly consent to either keeping both mappings on that control or the option to remove
+  the existing mapping and let the pair take over that axis"). Row 754, check 580, group CS. **UL and PC2 land before SEM.**
+
 ## Joy-Con version 0 (#365), from another session, 2026-11-04
 
 The Joy-Con integration was scaled back to a workable control surface for an upcoming
@@ -275,6 +286,12 @@ the wall it adds (below) is not, so it is sized M–L, and it may be two PRs.
 | analyzer | `band` (336 uses) | Words in AZ; ids stay (FQ3) |
 | player, duty | none yet | New: named right from PL |
 | patch, loadable patch | preset, and "performance" (`part_of`) | The eighth round's words, replacing "one word: preset". Old names stay until SEM |
+
+**Found by wave 5's planning, 2026-11-06 (plan 58 §2), and SEM's to do:** `preset.*`, `deck.chase`, `totem.*` and
+`poi.*` are in neither layer, and can't just join the meta list: `Registry.add` makes a session param one object on
+both `Deck`s (`params.py:930–936`), and these close over one `Deck`. They need a class of "meta, one per `Deck`",
+counted as meta for the refusal and the one-layer test. #380 already refuses a patch's row on a load or a save
+(row 752); SEM's class replaces that refusal.
 
 **SEM must also make the line hold mechanically,** not only rename it: every param is in
 exactly one layer, a test fails on anything in neither or both, and an import wall keeps
