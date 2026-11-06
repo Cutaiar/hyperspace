@@ -2,6 +2,10 @@
 
 **Yes, to within a pixel — and the reason is narrower than it sounds.**
 
+*(Updated after four follow-on projects: interaction and easing, icons,
+menus, and the font bake. The verdict below still holds; "what is built"
+now reflects all four.)*
+
 shadcn's chrome is a small, closed vocabulary: a rounded rect, a 1px border,
 an outside ring, a vertical gradient, a soft shadow, and eight greys. Five
 operations. Dear ImGui lacks a primitive for two of them, and both turned out
@@ -79,27 +83,42 @@ reading documentation.
   (`ui_pad_nvg.py:119-128`), but it is off headless with no fallback, so it
   cannot back a diff harness. Worth reaching for only if the shadows grow.
 
-## What this does not yet prove
+## What is built, and what is not
 
-Honest scope. The kit covers **static chrome for six primitives**, composed into a
-demoable dashboard (`dashboard.py`, both themes). It does not cover:
+Built, and demonstrable in `dashboard.py --live`:
 
-- **Interaction states and transitions.** shadcn animates on a 150ms
-  cubic-bezier; ImGui is stateless per frame, so this needs an `id → (value,
-  target)` ease map stepped once a frame. That is the one piece of genuinely
-  new machinery and it is not built. The project has no UI easing today —
-  `motion.py`'s springs drive parameter values, not chrome.
-- **Layout.** There is no flex or grid. The house pattern already exists
-  (`ui_players.lay_out`, `ui_players.py:122-176` — a pure width→rects function,
-  unit-tested without imgui), and it is the right one, but the shadcn layouts
-  would have to be written out by hand.
-- **Interaction.** `dashboard.py` draws every state the primitives support,
-  but nothing is wired to a stock widget yet, so nothing is clickable and the
-  `##id` discipline below is still only designed for, not done.
-- **The Mac.** Every number here is Mesa/llvmpipe under Xvfb. The Mac is Metal
-  and will differ; the project already gates its render goldens on
-  `GL_RENDERER` for exactly this reason (`tests/test_golden_frames.py:336`).
-  Re-baseline there before trusting these figures on the rig.
+| | |
+|---|---|
+| primitives | Card, Badge, Button, Tabs, Table, SidebarItem, meter, sparkline, menu, icon button |
+| interaction | hover / press / active, on shadcn's 150ms `cubic-bezier(.4,0,.2,1)`, pinned to Chromium's own curve to 1e-5 |
+| icons | 38 Lucide icons as vector paths — crisp at any size, coloured by token, no atlas |
+| menus | dropdowns on ImGui's popup stack: icons, shortcuts, separators, section labels, destructive items, checked items |
+| type | six Geist faces, three weights x tabular figures frozen in |
+| themes | light and dark, a token swap, both diffed |
+
+Not built, and worth being plain about:
+
+- **Layout is still hand-written.** There is no flex or grid. The house
+  pattern exists and is the right one (`ui_players.lay_out`,
+  `ui_players.py:122-176` — a pure width→rects function, unit-tested without
+  imgui), but every dkit layout is rects computed by hand.
+- **No text input.** A node editor needs renaming and numeric entry. The
+  behaviour would come from `imgui.input_text` under the same sandwich; the
+  chrome is in the kit's vocabulary already. It is simply not written.
+- **No scroll container, focus ring, or keyboard navigation.** The panel
+  scrolls (`REVIEW.md`: "A section stays inside the pane; it may scroll
+  down"), shadcn rings focus at `focus-visible:ring-[3px]`, and a live
+  performance tool wants keys. None of it is here.
+- **One density.** The kit assumes the panel's size. `REVIEW.md` says
+  "widgets fit their narrowest width", and GRAPH's side pane is 240–320px.
+  `Ui.scale` exists and is unused.
+- **Nothing is adopted.** The kit lives in `tools/`, imported by nothing.
+  Colours are still duplicated across eight `ui_*` modules. Until one real
+  `ui_pane.py` section is ported, the hypothesis is untested in the only
+  place that matters.
+- **Every number is Mesa under Xvfb.** The Mac is Metal and will differ;
+  `tests/test_golden_frames.py:336` gates the render goldens on
+  `GL_RENDERER` for exactly this reason.
 
 ## The constraint to design around
 
