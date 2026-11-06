@@ -118,9 +118,10 @@ precisely so this does not go through a rasteriser.
 Measured, not assumed. `cd app && npm run check` writes eight sheets to
 `work/sheets/`; `gen/sheets.py` rasterises each one with a renderer that had
 nothing to do with writing it — headless Chrome for the SVG, poppler for the
-PDF, both at 384 dpi so the two columns compare the files and not the
-settings — decodes every sticker, then crops one sticker of each code and runs
-it through `gen/robust.py`.
+PDF (`brew install poppler`; `mutool` or `pypdfium2` if you would rather, and
+`QRD_PDFRAST` to pick), both at 384 dpi so the two columns compare the files
+and not the settings — decodes every sticker, then crops one sticker of each
+code and runs it through `gen/robust.py`.
 
 **276/276 stickers decoded** across those sixteen files, styled and plain,
 including 24/24 on the hostile sheet (vendor, zero gutter, `pal-red` and

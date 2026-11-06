@@ -18,12 +18,23 @@ because the answer there is what decides whether 44 mm is enough.
     uv run --with pillow --with numpy --with segno --with zxing-cpp \\
       python3 gen/sheets.py --url https://hyperspace.cutaiar.io
 
+Needs headless Chrome, as gen/gallery.py does, and one system package the rest
+of this prototype does not: poppler, for `pdftoppm` (`brew install poppler`,
+`apt-get install poppler-utils`). mupdf's `mutool` works too, and failing both
+it will use pypdfium2 if the uv command supplies it -- though that is Chrome's
+own PDF engine and the SVG half is already Chrome, so it is a fallback and not
+a peer. QRD_PDFRAST overrides the lookup, as QRD_CHROME does for the browser.
+
 Exit code is non-zero unless every sticker on every sheet, in both formats,
 decoded back to the URL.
 """
 import argparse
 import json
+import os
+import pathlib
+import shutil
 import subprocess
+import sys
 
 import robust
 from gallery import find_chrome
@@ -47,24 +58,83 @@ SVG_SCALE = 4
 PDF_DPI = round(CSS_PER_MM * SVG_SCALE * 25.4)
 
 
-def shoot_svg(path, png):
+def shoot_svg(path, png, chrome):
     import re
     txt = path.read_text()
     w = float(re.search(r'width="([\d.]+)mm"', txt).group(1))
     h = float(re.search(r'height="([\d.]+)mm"', txt).group(1))
     cw, ch = int(w * CSS_PER_MM) + 1, int(h * CSS_PER_MM) + 1
     subprocess.run(
-        [find_chrome(), "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
+        [chrome, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
          f"--force-device-scale-factor={SVG_SCALE}", f"--window-size={cw},{ch}",
          "--default-background-color=FFFFFFFF", f"--screenshot={png}", str(path)],
         check=True, capture_output=True, timeout=180)
     return CSS_PER_MM * SVG_SCALE          # px per mm
 
 
-def shoot_pdf(path, png):
+# Rasterising the PDF is the independent half of the check, so it wants a
+# renderer that had nothing to do with writing the file. poppler is the first
+# choice and mupdf the second; pdfium is a fallback rather than a peer, because
+# it is Chrome's own PDF engine and the SVG side is already Chrome.
+#
+# Same shape as gallery.py's Chrome lookup, and the same reason: nothing about
+# this prototype should be machine-specific, so the lookup is not either. Set
+# QRD_PDFRAST to any of these binaries to override it.
+def _poppler_argv(tool, path, stem):
+    return [tool, "-r", str(PDF_DPI), "-png", "-singlefile", str(path), stem]
+
+
+def _mutool_argv(tool, path, stem):
+    return [tool, "draw", "-r", str(PDF_DPI), "-o", f"{stem}.png", str(path)]
+
+
+PDF_CANDIDATES = [
+    ("pdftoppm", _poppler_argv),            # poppler, splash backend
+    ("pdftocairo", _poppler_argv),          # poppler, cairo backend
+    ("mutool", _mutool_argv),               # mupdf
+]
+
+
+def find_pdf_rasteriser():
+    """(label, callable) that turns a PDF into a PNG at PDF_DPI."""
+    env = os.environ.get("QRD_PDFRAST")
+    if env:
+        if not (shutil.which(env) or pathlib.Path(env).exists()):
+            sys.exit(f"QRD_PDFRAST is set to {env!r}, which does not exist.")
+        argv = dict(PDF_CANDIDATES).get(pathlib.Path(env).name.split(".")[0], _poppler_argv)
+        return env, lambda path, stem: _run(argv(env, path, stem))
+    for name, argv in PDF_CANDIDATES:
+        hit = shutil.which(name)
+        if hit:
+            return hit, lambda path, stem, h=hit, a=argv: _run(a(h, path, stem))
+    try:
+        import pypdfium2                     # noqa: F401
+    except ImportError:
+        sys.exit(
+            "Need something to rasterise the PDFs, and none was found.\n"
+            "Tried: " + ", ".join(n for n, _ in PDF_CANDIDATES) + ", and pypdfium2.\n"
+            "  macOS:  brew install poppler\n"
+            "  Debian: sudo apt-get install poppler-utils\n"
+            "Or add --with pypdfium2 to the uv command, which needs no system\n"
+            "package -- but it is Chrome's PDF engine and the SVG side is already\n"
+            "Chrome, so prefer poppler where the independence matters.\n"
+            "QRD_PDFRAST overrides the lookup.")
+    return "pypdfium2 (Chrome's own PDF engine -- less independent)", _pdfium
+
+
+def _run(argv):
+    subprocess.run(argv, check=True, capture_output=True, timeout=180)
+
+
+def _pdfium(path, stem):
+    import pypdfium2 as pdfium
+    doc = pdfium.PdfDocument(str(path))
+    doc[0].render(scale=PDF_DPI / 72).to_pil().save(f"{stem}.png")
+
+
+def shoot_pdf(path, png, rasterise):
     stem = str(png)[:-4] if str(png).endswith(".png") else str(png)
-    subprocess.run(["pdftoppm", "-r", str(PDF_DPI), "-png", "-singlefile", str(path), stem],
-                   check=True, capture_output=True, timeout=180)
+    rasterise(path, stem)
     return PDF_DPI / 25.4                  # px per mm
 
 
@@ -91,6 +161,10 @@ def main():
     if idx["url"].rstrip("#") != url:
         raise SystemExit(f"the sheets were written for {idx['url']}, not {url}")
 
+    chrome = find_chrome()                # fail now, not after the first shot
+    pdf_label, pdf_rasterise = find_pdf_rasteriser()
+    print(f"SVG via {chrome}\nPDF via {pdf_label}\n")
+
     rast = SHEETS / "rast"
     rast.mkdir(parents=True, exist_ok=True)
     bad, rows, measured = [], [], []
@@ -99,10 +173,11 @@ def main():
         if args.only and sh["name"] != args.only:
             continue
         want = sh["expect"]
-        for kind, shoot in (("svg", shoot_svg), ("pdf", shoot_pdf)):
+        for kind in ("svg", "pdf"):
             src = SHEETS / f"{sh['name']}.{kind}"
             png = rast / f"{sh['name']}-{kind}.png"
-            ppmm = shoot(src, png)
+            ppmm = (shoot_svg(src, png, chrome) if kind == "svg"
+                    else shoot_pdf(src, png, pdf_rasterise))
             img = Image.open(png)
             good, total = decoded(img, url)
             rows.append((sh["name"], kind, sh["mode"], want, good, total,

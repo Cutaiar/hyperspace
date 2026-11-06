@@ -24,6 +24,15 @@ uv run --with pillow --with numpy --with segno --with zxing-cpp \
   python3 gen/sheets.py --url https://hyperspace.cutaiar.io
 ```
 
+That one also wants **poppler** — the only system package this prototype needs
+beyond Chromium, and the one thing here that is not satisfied by a fresh macOS:
+`brew install poppler`, or `apt-get install poppler-utils`. It rasterises the
+PDFs, and it is poppler rather than Chrome on purpose, so the renderer that
+checks a file is not the renderer that checks the other one. `mutool` works
+too, `QRD_PDFRAST` overrides the lookup, and adding `--with pypdfium2` to the
+command above needs no system package at all — at the cost of being Chrome's
+PDF engine, which makes the two halves less independent.
+
 Regenerating artefacts needs `uv` and a Chromium (`QRD_CHROME` overrides the
 lookup). Nothing else is machine-specific; verified by cloning the branch
 clean and running the whole thing.
