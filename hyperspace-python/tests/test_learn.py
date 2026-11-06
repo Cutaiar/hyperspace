@@ -597,7 +597,7 @@ def test_a_hand_learn_writes_a_route_into_the_loaded_preset(tmp_path):
     lrn.learn_source("hand:7")
     new = lrn.resolve_pending(True)                          # Replace
     assert table.owner("view.inst_amp") is new and b not in table.bindings and untouched(r)
-    path = r.presets.save_as("HANDS")
+    path = r.loaded_patch.save_as("HANDS")
     routes = json.loads(path.read_text())["routes"]
     assert {"source": "hand:7", "target": "view.inst_amp", "op": "position",
             "motion": {"mode": "spring", "dur": 0.5, "bounce": 0.0}} in routes

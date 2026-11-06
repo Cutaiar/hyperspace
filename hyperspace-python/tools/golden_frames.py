@@ -289,7 +289,7 @@ from hyperspace.media.channels import MediaState
 from hyperspace.media.source import FETCHING
 from hyperspace.outputs import Switches, View
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.render import Renderer
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
@@ -443,9 +443,9 @@ class Rig:
         self.router = Router(reg, Bindings())
         self.router.use_bank(self.envs, self.clock)
         self.router.use_sequencer(self.seq, self.envs, self.clock)
-        presets = self.presets = Presets(lib, reg, self.router)
-        self.missing = presets.load(slug)
-        self.notes = list(presets.notes)
+        loaded_patch = self.loaded_patch = LoadedPatch(lib, reg, self.router)
+        self.missing = loaded_patch.load(slug)
+        self.notes = list(loaded_patch.notes)
         self.seeded = False          # K3: the phases, set on the first frame (`frame`)
         reg["ghost.on"].set(True)
         # plan 28 N4: a second hands node the graph declares shows too (its
@@ -466,7 +466,7 @@ class Rig:
         r = self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx, ghost=self.ghost)
         # plan 26 A4: the preset's graph (none for a corpus preset: the
         # default wiring) onto this renderer, as app.py attaches it
-        presets.graph.attach(r)
+        loaded_patch.graph.attach(r)
         r.max_frame = RENDER_CAP
         errs = r.fx.compile_all()
         if errs:
@@ -709,38 +709,38 @@ def expected_route(state: dict, fx_on: bool, visible: bool,
     return ROUTES[(bool(state["scene"]), shown, shown and bool(state["through"]) and fx_on)]
 
 
-def source_doc(presets, slug: str) -> dict:
+def source_doc(loaded_patch, slug: str) -> dict:
     """Preset `slug`'s file before `/7` (plan 36 T3): a corpus preset's
     source (`FACTORY_SOURCES`, what its `/7` was migrated from), else the
     file as the library has it (a fixture: an old file, a migration input)."""
     src = FACTORY_SOURCES / f"{slug}.json"
     if slug in CORPUS_PRESETS and src.is_file():
         return json.loads(src.read_text())
-    return presets.lib.read("presets", slug)
+    return loaded_patch.lib.read("presets", slug)
 
 
-def plan33_section(presets, slug: str) -> tuple[dict, set[str]]:
+def plan33_section(loaded_patch, slug: str) -> tuple[dict, set[str]]:
     """Preset `slug`'s section as plan 33 wrote it (`migrate` with `wire`
     off, after the load declared its instances), and the effect files —
     what a WIRED variant takes its run from (plan 36 T3: of the file
     before `/7`, `source_doc`)."""
-    doc = source_doc(presets, slug)
-    gs = presets.graph
+    doc = source_doc(loaded_patch, slug)
+    gs = loaded_patch.graph
     old, _ = graphmigrate.migrate(doc, gs.specs(), desk=None, wire=False)
     files = {n.partition(".")[0] for n in gs.specs()}
     return (old.get("graph") if isinstance(old.get("graph"), dict) else {}), files
 
 
-def _placements_wait(presets, slug: str) -> dict | None:
+def _placements_wait(loaded_patch, slug: str) -> dict | None:
     """Plan 36 T3: an old file whose wired frame holds D1 placements — the
     section `migrate` wires for it, before `placed_wires` writes them, for
     the switch states to be laid over first (the retired builder placed
     them on the built graph, after every output's state); None for any
     other (a `/7`, or none placed: the landed section is the one)."""
-    doc = source_doc(presets, slug)
+    doc = source_doc(loaded_patch, slug)
     if (graphmigrate.schema_version(doc) or 0) >= graphmigrate.SEVEN:
         return None
-    gs = presets.graph
+    gs = loaded_patch.graph
     out, _ = graphmigrate.migrate(doc, gs.specs(), desk=None)
     section = out.get("graph")
     if not isinstance(section, dict) or not any(
@@ -762,13 +762,13 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
     takes what OUTPUT's "hands through the effects" writes
     (`Shows(through=True)`); its scene and hands are the window's
     mutes (`state_views`). An output draws only what is wired."""
-    presets = rig.presets
+    loaded_patch = rig.loaded_patch
     late = None
     if wiring is None:
-        late = _placements_wait(presets, slug)
-        wired = late if late is not None else presets.graph.free_doc()
+        late = _placements_wait(loaded_patch, slug)
+        wired = late if late is not None else loaded_patch.graph.free_doc()
     else:
-        old, files = plan33_section(presets, slug)
+        old, files = plan33_section(loaded_patch, slug)
         run = tuple(read_graph(old, effects=files).wiring().run or ())
         vsection = variant_section(wiring, run)
         wired = graphmigrate.wired_section(graphmigrate.renamed(vsection),
@@ -787,11 +787,11 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
                                                    graphmigrate.Shows(through=True))
     if late is not None:
         wired = graphmigrate.placed_wires(wired, {n.partition(".")[0]
-                                                  for n in presets.graph.specs()})
+                                                  for n in loaded_patch.graph.specs()})
     if late is not None or wiring is not None:
         # (plan 36 T4: an old file's frame, written here as the migration
         # writes it, ends with its look-back split as its values had it)
-        values = source_doc(presets, slug).get("values") or {}
+        values = source_doc(loaded_patch, slug).get("values") or {}
         wired = graphmigrate.split_lookback(wired, graphmigrate.look_of(values))
     return wired
 
@@ -838,7 +838,7 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
                label: str, keep: Keep) -> tuple[list[Shot], dict]:
     ctx = context()
     rig = Rig(slug, hands, ctx)
-    base = rig.presets.graph.free_doc() or {}
+    base = rig.loaded_patch.graph.free_doc() or {}
     section = rig_section(rig, slug, states, wiring)
     spec = read_graph(section, effects={n.partition(".")[0] for n in rig.fx.specs})
     assert not spec.notes, (slug, spec.notes)
@@ -889,7 +889,7 @@ def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
         if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed
-            said["graph"] = rig.presets.graph.doc     # the section as it landed, not a repr
+            said["graph"] = rig.loaded_patch.graph.doc     # the section as it landed, not a repr
             said["nodes"] = list(rig.renderer._graph.timed)
         return shots, said
     finally:
@@ -1077,8 +1077,8 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
     st = {name: k for k, (name, _) in enumerate(STATES)}
     entries.sort(key=lambda e: (order[e["preset"]], HANDS.index(e["hands"]),
                                 st.get(e["state"], len(st)), e["state"]))
-    presets = {k: v for k, v in old.get("presets", {}).items() if k not in redone}
-    presets.update({k: v for k, v in said.items() if k not in FIXTURE_PRESETS})
+    loadable_hashes = {k: v for k, v in old.get("presets", {}).items() if k not in redone}
+    loadable_hashes.update({k: v for k, v in said.items() if k not in FIXTURE_PRESETS})
     fixtures = {k: v for k, v in old.get("fixtures", {}).items() if k not in redone}
     fixtures.update({k: v for k, v in said.items() if k in FIXTURE_PRESETS})
     doc = {
@@ -1108,7 +1108,7 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
         "fixture_states": {slug: {"file": f"tests/fixtures/presets/{slug}.json",
                                   "hands": "present", "states": [n for n, _ in STATES]}
                            for slug in FIXTURE_PRESETS},
-        "presets": {k: presets[k] for k in sorted(presets, key=order.__getitem__)},
+        "presets": {k: loadable_hashes[k] for k in sorted(loadable_hashes, key=order.__getitem__)},
         "fixtures": {k: fixtures[k] for k in sorted(fixtures, key=order.__getitem__)},
         "goldens": entries,
     }
@@ -1222,7 +1222,7 @@ class Loader:
         router = Router(reg, Bindings())
         router.use_bank(envs, clock)
         router.use_sequencer(seq, envs, clock)
-        self.presets = Presets(lib, reg, router)
+        self.loaded_patch = LoadedPatch(lib, reg, router)
 
     def load(self, slug: str):
         """(the spec and section as plan 33 read the file — the one the
@@ -1230,9 +1230,9 @@ class Loader:
         load landed — `build_graph`'s). Plan 35 T3: every load lands a wired
         frame, so the plan 33 half is the same file through `migrate` with
         its `wire` off, after the load declared its instances."""
-        self.presets.load(slug)
-        gs = self.presets.graph
-        doc = source_doc(self.presets, slug)
+        self.loaded_patch.load(slug)
+        gs = self.loaded_patch.graph
+        doc = source_doc(self.loaded_patch, slug)
         old, _ = graphmigrate.migrate(doc, gs.specs(), desk=None,
                                       wire=False)
         effects = tuple(sorted(self.fx.specs))
@@ -1300,7 +1300,7 @@ def signature_case(loader: Loader, key: str):
     slug, _, variant = key.partition("/")
     spec, section, effects, wired = loader.load(slug)
     # (plan 36 T4: the look-back as the old file's values had it)
-    look = graphmigrate.look_of(source_doc(loader.presets, slug).get("values"))
+    look = graphmigrate.look_of(source_doc(loader.loaded_patch, slug).get("values"))
     files = {e.partition(".")[0] for e in effects}
     solo = dict(SOLO + SOLO_FX)
     if variant == "states":

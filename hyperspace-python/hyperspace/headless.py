@@ -68,8 +68,8 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     if plan31:
         router.use_bank(envs, clock)
         router.use_sequencer(seq, envs)
-    presets = preset.Presets(lib, reg, router)
-    return SimpleNamespace(lib=lib, reg=reg, router=router, presets=presets, lfos=lfos,
+    loaded_patch = preset.LoadedPatch(lib, reg, router)
+    return SimpleNamespace(lib=lib, reg=reg, router=router, loaded_patch=loaded_patch, lfos=lfos,
                            envs=envs, seq=seq, clock=clock)
 
 
@@ -174,8 +174,8 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
         app = make_app(home, machine=machine)
         app.lib.load(preset.GROUP, stem)
         name = app.lib.current(preset.GROUP) or stem
-        notes = list(app.presets.notes)
-        out = app.presets.save_as(name)
+        notes = list(app.loaded_patch.notes)
+        out = app.loaded_patch.save_as(name)
         # (plan 43 C2: the app saves the pose every time; the migration
         # writes one only where the file had one — an old file keeps
         # spinning — so a file without one has it taken back out)

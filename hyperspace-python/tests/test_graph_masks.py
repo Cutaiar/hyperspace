@@ -276,17 +276,17 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
         (home / "presets").mkdir(parents=True, exist_ok=True)
         (home / "presets" / FIXTURE.name).write_text(saved or FIXTURE.read_text())
         r = boot(home)
-        r.presets.load("mask-as-picture")
-        got = r.presets.graph.spec
+        r.loaded_patch.load("mask-as-picture")
+        got = r.loaded_patch.graph.spec
         assert got is not None and got.wired and not got.notes
         assert got.mattes == (G.MatteAt(1),)
-        assert [n for n in r.presets.notes if n.startswith("graph:")] == []
+        assert [n for n in r.loaded_patch.notes if n.startswith("graph:")] == []
         assert r.reg["matte.key"].value == pytest.approx(0.95)
         assert r.reg["matte.feather"].value == pytest.approx(4.0)
         if spec is not None:
             assert got == spec
         spec = got
-        saved = r.presets.save_as("mask-as-picture").read_text()
+        saved = r.loaded_patch.save_as("mask-as-picture").read_text()
         doc = json.loads(saved)
         assert doc["schema"] == "hyperspace.preset/10"
         assert {"kind": "matte"} in doc["graph"]["nodes"]

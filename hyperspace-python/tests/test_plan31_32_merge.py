@@ -37,7 +37,7 @@ def _backdrop(app, c: str | None) -> None:
     `backdrop.channel` was)."""
     from hyperspace import graph as G
 
-    gs = app.presets.graph
+    gs = app.loaded_patch.graph
     if c is None:
         gs.land(None)
         return
@@ -53,7 +53,7 @@ def _backdrop(app, c: str | None) -> None:
 def _backdrop_of(app) -> str | None:
     from hyperspace import graph as G
 
-    spec = app.presets.graph.spec
+    spec = app.loaded_patch.graph.spec
     return G.channel_into(spec.all_wires(), "backdrop.image") if spec is not None else None
 
 
@@ -75,7 +75,7 @@ def test_the_ladder_is_one_list():
 def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
     reg = app.reg
     _pattern_and_bin(app)
-    doc = app.presets.document("both")
+    doc = app.loaded_patch.document("both")
     assert doc["schema"] == V6 and next(iter(doc)) == "schema"
     # every value of both families, and the bins — and no retired id (the
     # channel under the scene is the graph's wire)
@@ -84,23 +84,23 @@ def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
     assert doc["values"] == reg.snapshot(part="patch")
     assert not [k for k in doc["values"] if M.retired(k)]
     assert doc[preset.MEDIA_KEY] == {"channels": {"a": [CLIP]}}
-    app.presets.save_as("both")
+    app.loaded_patch.save_as("both")
     # undo it all, then load
     reg["seq.1.1"].set(False)
     reg["seq.3.5"].set(False)
     reg["env.1.attack"].set(0.01)
     reg.media.assign("a", 0, None)
     _backdrop(app, None)
-    assert app.presets.load("both") == []
+    assert app.loaded_patch.load("both") == []
     assert reg["seq.1.1"].value is True and reg["seq.3.5"].value is True
     assert reg["env.1.attack"].value == pytest.approx(0.4)
     assert _backdrop_of(app) == "a"
     assert reg.media.channels["a"].bin[0] == CLIP
     # and stable through a load (once a load has read the file's integers
     # back as floats, as every preset since plan 13 does)
-    again = app.presets.save_as("both").read_bytes()
-    assert app.presets.load("both") == []
-    assert app.presets.save_as("both").read_bytes() == again
+    again = app.loaded_patch.save_as("both").read_bytes()
+    assert app.loaded_patch.load("both") == []
+    assert app.loaded_patch.save_as("both").read_bytes() == again
 
 
 def test_an_older_build_refuses_the_combined_save(app):
@@ -109,7 +109,7 @@ def test_an_older_build_refuses_the_combined_save(app):
     on a re-save (row 394: both Macs are on the newest build, so none
     should be asked to)."""
     _pattern_and_bin(app)
-    app.presets.save_as("both")
+    app.loaded_patch.save_as("both")
     lib = app.lib
     assert lib.read("presets", "both")["schema"] == V6
     kinds = lib._kinds
@@ -130,18 +130,18 @@ def test_what_each_branch_wrote_loads_and_saves_as_6(app, tmp_path):
 
     doc = json.loads((FIXTURES / "v3-only.json").read_text())
     assert doc["schema"] == V3
-    assert app.presets.load_doc(doc) == []
+    assert app.loaded_patch.load_doc(doc) == []
     reg = app.reg
     assert reg["seq.1.1"].value is True and reg["seq.3.5"].value is True
     assert reg["env.1.attack"].value == pytest.approx(0.4)
-    out = app.presets.document("pattern")
+    out = app.loaded_patch.document("pattern")
     assert out["schema"] == V6 and out["values"]["seq.1.1"] is True
     r = boot(tmp_path / "plain")
     doc = json.loads((FIXTURES / "media-free.json").read_text())
     assert doc["schema"] == V2
-    assert r.presets.load_doc(doc) == []
+    assert r.loaded_patch.load_doc(doc) == []
     assert r.reg["view.bright"].value == pytest.approx(1.5)
-    out = r.presets.document("plain")
+    out = r.loaded_patch.document("plain")
     assert out["schema"] == V6 and out["values"]["view.bright"] == pytest.approx(1.5)
 
 
@@ -155,12 +155,12 @@ def test_a_media_value_is_saved_wherever_it_stands(app):
     reg["view.media_alpha"].set(0.5)
     lib.save_as("view", "default")                 # the view group's default module
     assert lib.defaults("view")["view.media_alpha"] == pytest.approx(0.5)
-    doc = app.presets.document("x")
+    doc = app.loaded_patch.document("x")
     assert doc["schema"] == V6 and doc["values"]["view.media_alpha"] == pytest.approx(0.5)
     reg["view.media_alpha"].set(build)
-    doc = app.presets.document("x")
+    doc = app.loaded_patch.document("x")
     assert doc["schema"] == V6 and doc["values"]["view.media_alpha"] == build
-    app.presets.save_as("x")
+    app.loaded_patch.save_as("x")
     reg["view.media_alpha"].set(0.5)
-    assert app.presets.load("x") == []
+    assert app.loaded_patch.load("x") == []
     assert reg["view.media_alpha"].value == build

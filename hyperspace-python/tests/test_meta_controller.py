@@ -31,7 +31,7 @@ from hyperspace import (
 )
 from hyperspace.deck import KEYS, MOUSE, Deck, MetaController
 from hyperspace.hotreload import MODULES
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.pointer import Pointer, Through
 from hyperspace.routing import Binding
 from hyperspace.ui import Panel
@@ -63,10 +63,10 @@ def _look(deck) -> dict:
     return {"bases": deck.reg.snapshot(part="patch"),
             "routes": [b.to_json() for b in t.routes()],
             "desk": [b.to_json() for b in t.desk()],
-            "name": deck.presets.current,
-            "landing": deck.presets.landing[1],
-            "labels": dict(deck.presets.labels),
-            "lit": deck.presets.active_slot,
+            "name": deck.loaded_patch.current,
+            "landing": deck.loaded_patch.landing[1],
+            "labels": dict(deck.loaded_patch.labels),
+            "lit": deck.loaded_patch.active_slot,
             "steps": [s.label for s in deck.undo.stack]}
 
 
@@ -157,11 +157,11 @@ def test_pointing_the_panel_at_deck_2_sends_every_panel_handle_there(rig):
     panel, lib = _panel(rig), rig.r.lib
     for h in PANEL_HANDLES:
         assert getattr(panel, h) is getattr(one, h), h
-    assert panel.deck is one and lib.presets is one.presets and lib.reg is one.reg
+    assert panel.deck is one and lib.loaded_patch is one.loaded_patch and lib.reg is one.reg
     meta.point_panel(two)
     for h in PANEL_HANDLES:
         assert getattr(panel, h) is getattr(two, h), h
-    assert panel.deck is two and lib.presets is two.presets and lib.reg is two.reg
+    assert panel.deck is two and lib.loaded_patch is two.loaded_patch and lib.reg is two.reg
     assert undo.installed() is two.undo
     # the controllers and the outputs stayed: the desk's rows; only its learn follows
     assert rig.r.midi.reg is one.reg and rig.r.midi.table is one.table
@@ -175,13 +175,13 @@ def test_what_the_panel_does_on_deck_2_stays_on_deck_2(rig):
     before = _look(one)
     assert before["name"] is not None
     meta.point_panel(two)
-    other = next(n for n in sorted(lib.list(PRESETS)) if n != before["name"])
-    lib.load(PRESETS, other)                               # the strip's road
-    assert two.presets.current == other and lib.current(PRESETS) == other
+    other = next(n for n in sorted(lib.list(LOADABLE)) if n != before["name"])
+    lib.load(LOADABLE, other)                               # the strip's road
+    assert two.loaded_patch.current == other and lib.current(LOADABLE) == other
     assert two.undo.stack[-1].label.startswith("load")
     assert _look(one) == before
-    assert one.marks.lands()[PRESETS][0] == before["name"]    # deck 1's marks read deck 1
-    assert two.marks.lands()[PRESETS][0] == other
+    assert one.marks.lands()[LOADABLE][0] == before["name"]    # deck 1's marks read deck 1
+    assert two.marks.lands()[LOADABLE][0] == other
     # a base, and a route added on the deck the panel is on
     bright = two.reg["view.bright"]
     bright.set(bright.lo + 0.123)
@@ -193,7 +193,7 @@ def test_what_the_panel_does_on_deck_2_stays_on_deck_2(rig):
     assert _look(one) == before and pattern is two.reg["view.pattern_mix"]
     # ⌘Z: the installed undo is the panel's deck's
     undo.undo()
-    assert two.presets.current != other
+    assert two.loaded_patch.current != other
     assert _look(one) == before
 
 
@@ -201,18 +201,18 @@ def test_a_deck_s_own_verbs_land_on_that_deck_wherever_the_panel_is(rig):
     """`Presets.load` / `save_as` / `Library.load(into=)`, the panel on deck 1."""
     meta, one, two, lib = rig.meta, rig.one, rig.two, rig.r.lib
     before = _look(one)
-    names = [n for n in sorted(lib.list(PRESETS)) if n != before["name"]]
-    two.presets.load(names[0])
-    assert two.presets.current == names[0] and _look(one) == before
-    assert lib.current(PRESETS) == before["name"]          # the strip still says deck 1's
+    names = [n for n in sorted(lib.list(LOADABLE)) if n != before["name"]]
+    two.loaded_patch.load(names[0])
+    assert two.loaded_patch.current == names[0] and _look(one) == before
+    assert lib.current(LOADABLE) == before["name"]          # the strip still says deck 1's
     assert undo.installed() is one.undo and two.undo.stack
-    assert lib.presets is one.presets and two.presets.lib.presets is two.presets
+    assert lib.loaded_patch is one.loaded_patch and two.loaded_patch.lib.loaded_patch is two.loaded_patch
     # a save on deck 2 writes deck 2's look
     p = two.reg["view.bright"]
     p.set(p.lo + 0.2345)
-    two.presets.save_as("deck-two-look")
-    assert lib.read(PRESETS, "deck-two-look")["values"]["view.bright"] == pytest.approx(p.base)
-    assert two.presets.current == "deck-two-look"
+    two.loaded_patch.save_as("deck-two-look")
+    assert lib.read(LOADABLE, "deck-two-look")["values"]["view.bright"] == pytest.approx(p.base)
+    assert two.loaded_patch.current == "deck-two-look"
     assert meta.panel is one and _look(one)["bases"] == before["bases"]
 
 
@@ -283,27 +283,27 @@ def test_a_bank_pad_on_deck_2_loads_on_deck_2_and_its_light_is_deck_2s(rig):
     a save by the bank's own road, not the panel's deck."""
     meta, one, two, lib = rig.meta, rig.one, rig.two, rig.r.lib
     bank = lib.project.bank
-    k = next(i for i, n in enumerate(bank[:8]) if n and n != one.presets.current)
+    k = next(i for i, n in enumerate(bank[:8]) if n and n != one.loaded_patch.current)
     two.table.add(Binding("note:0:71", f"preset.load.{k}", "fire"))     # (the meta controller's)
     meta.point(DESK, two)
     before = _look(one)
     _send(rig, note(71), note(71, 0))
-    assert two.presets.current == bank[k] and two.presets.active_slot == k
-    assert _look(one) == before and lib.current(PRESETS) == before["name"]
+    assert two.loaded_patch.current == bank[k] and two.loaded_patch.active_slot == k
+    assert _look(one) == before and lib.current(LOADABLE) == before["name"]
     assert lib.project.active == before["lit"]               # the panel's view: deck 1's slot
 
 
 def test_a_save_on_deck_2_captures_deck_2(rig):
     one, two, lib = rig.one, rig.two, rig.r.lib
-    two.presets.load(next(n for n in sorted(lib.list(PRESETS)) if n != one.presets.current))
+    two.loaded_patch.load(next(n for n in sorted(lib.list(LOADABLE)) if n != one.loaded_patch.current))
     p = two.reg["view.bright"]
     p.set(p.lo + 0.3456)
-    before, listed = _look(one), set(lib.list(PRESETS))
+    before, listed = _look(one), set(lib.list(LOADABLE))
     two.reg["preset.save_new"].fire()
-    (saved,) = set(lib.list(PRESETS)) - listed
-    assert lib.read(PRESETS, saved)["values"]["view.bright"] == pytest.approx(p.base)
-    assert two.presets.current == saved and _look(one) == before
-    assert lib.current(PRESETS) == before["name"]
+    (saved,) = set(lib.list(LOADABLE)) - listed
+    assert lib.read(LOADABLE, saved)["values"]["view.bright"] == pytest.approx(p.base)
+    assert two.loaded_patch.current == saved and _look(one) == before
+    assert lib.current(LOADABLE) == before["name"]
 
 
 def test_the_sequencer_page_goes_with_the_desk(rig):
@@ -382,9 +382,9 @@ def test_deck_2s_load_leaves_deck_1s_labels_and_light(rig):
     one, two, lib = rig.one, rig.two, rig.r.lib
     labels, lit = {g: lib.landed(g) for g in lib.landed_groups()}, lib.project.active
     dots = {g: lib.is_dirty(g) for g in ("view", "pattern")}
-    two.presets.load(next(n for n in sorted(lib.list(PRESETS)) if n != one.presets.current))
+    two.loaded_patch.load(next(n for n in sorted(lib.list(LOADABLE)) if n != one.loaded_patch.current))
     assert {g: lib.landed(g) for g in lib.landed_groups()} == labels
-    assert lib.project.active == lit and one.presets.active_slot == lit
+    assert lib.project.active == lit and one.loaded_patch.active_slot == lit
     assert {g: lib.is_dirty(g) for g in dots} == dots
     # deck 2's undo of that load: nothing of deck 1's either
     two.undo.undo()
@@ -399,8 +399,8 @@ def test_each_deck_keeps_its_own_section_references(rig):
     ref = lib.landed("view")
     dirty = lib.is_dirty("view")
     meta.point_panel(two)
-    lib.load(PRESETS, next(n for n in sorted(lib.list(PRESETS)) if n != one.presets.current))
-    assert two.presets.labels["view"][1] is not ref[1]
+    lib.load(LOADABLE, next(n for n in sorted(lib.list(LOADABLE)) if n != one.loaded_patch.current))
+    assert two.loaded_patch.labels["view"][1] is not ref[1]
     meta.point_panel(one)
     assert lib.landed("view") == ref and lib.is_dirty("view") == dirty
     assert one.marks.lands()["view"] == ref and two.marks.lands()["view"] != ref
@@ -409,21 +409,21 @@ def test_each_deck_keeps_its_own_section_references(rig):
 def test_a_new_preset_on_deck_2_stays_on_deck_2(rig):
     one, two, lib = rig.one, rig.two, rig.r.lib
     before = _look(one)
-    two.presets.new()
-    assert two.presets.current == preset.UNTITLED_PRESET and two.undo.stack
-    assert _look(one) == before and lib.current(PRESETS) == before["name"]
+    two.loaded_patch.new()
+    assert two.loaded_patch.current == preset.UNTITLED_PATCH and two.undo.stack
+    assert _look(one) == before and lib.current(LOADABLE) == before["name"]
 
 
 def test_nothing_of_a_deck_s_view_is_a_second_copy(rig):
     """`DeckLibrary` and `DeckProject` hold the one library's and show's state;
     only which deck differs, and a hot reload can re-class them."""
     one, two, lib = rig.one, rig.two, rig.r.lib
-    view = two.presets.lib
+    view = two.loaded_patch.lib
     assert view.base is lib and view.__dict__ is lib.__dict__
     assert view.project.__dict__ is lib.project.__dict__ and view.project.bank is lib.project.bank
-    assert view.presets is two.presets and view.reg is two.reg
+    assert view.loaded_patch is two.loaded_patch and view.reg is two.reg
     assert view.project.lib is view and lib.project.lib is lib
-    assert one.presets.lib.presets is one.presets
+    assert one.loaded_patch.lib.loaded_patch is one.loaded_patch
     lib.status = "said"
     assert view.status == "said"
     new_view = type("DeckLibrary", (library.Library,), {"__slots__": library.DeckLibrary.__slots__})
@@ -587,9 +587,9 @@ def test_main_points_every_holder_and_moves_none():
                  "on_air_pointer=meta.on_air_pointer", "panel_pointer=meta.panel_pointer",
                  "keys_pointer=meta.pointer(KEYS)", "on_air = meta.on_air",
                  "_draw_render(on_air.renderer, ctx, on_air.view,",
-                 "for on in meta.decks", "meta.on_air.presets.current"):
+                 "for on in meta.decks", "meta.on_air.loaded_patch.current"):
         assert line in src, line
-    for gone in ("_draw_render(renderer, ctx, s,", "presets.listeners.append(dream_check)"):
+    for gone in ("_draw_render(renderer, ctx, s,", "loaded_patch.listeners.append(dream_check)"):
         assert gone not in src, gone
     assert ".point_panel(" not in src and "meta.point(" not in src
     (check,) = [n for n in ast.walk(ast.parse(src))

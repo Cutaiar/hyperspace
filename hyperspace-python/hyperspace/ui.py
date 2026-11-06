@@ -2175,8 +2175,8 @@ class Panel:
         (no renderer, no presets) reads as the empty frame (plan 36 T3:
         `graph.EMPTY`). Plan 35 T5: the wired frame itself, in the new ids,
         on every page."""
-        presets = getattr(getattr(self, "library", None), "presets", None)
-        gs = getattr(presets, "graph", None)
+        loaded_patch = getattr(getattr(self, "library", None), "loaded_patch", None)
+        gs = getattr(loaded_patch, "graph", None)
         # (no renderer: the landed preset's own wiring — what it would hand one)
         wiring = (getattr(self.renderer, "wiring", None) or getattr(gs, "wiring", None)
                   or EMPTY)
@@ -2202,7 +2202,7 @@ class Panel:
         """The loaded preset's bus cuts (plan 44 D3; plan 36 T1's were the show's:
         `graph.RigWires`), what the OUTPUT page's words and edits read;
         with no presets, every cable standing."""
-        return bus_cuts_of(getattr(getattr(self, "library", None), "presets", None))
+        return bus_cuts_of(getattr(getattr(self, "library", None), "loaded_patch", None))
 
     def black_outputs(self) -> list[int]:
         """The opened outputs showing nothing for a reason other than the

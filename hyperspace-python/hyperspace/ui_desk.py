@@ -797,8 +797,8 @@ def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     return f"{c.glyph} · {mid} · {_layer_word(table, b)}\n{c.name}"
 
 
-def _preset_name(panel) -> str:
-    pr = ui_routing._presets(panel)
+def _loadable_name(panel) -> str:
+    pr = ui_routing._loaded_patch(panel)
     cur = getattr(pr, "current", None) if pr is not None else None
     return cur or "no preset"
 
@@ -1113,7 +1113,7 @@ def _header(panel, table) -> None:
         line, can = pick_line(panel, table, c)
         line = f"{line} · {math.ceil(left(panel))} s"
         words = (ui._micro_width("apc40") + ui._micro_width(f"{table.layer} layer  ·  shift")
-                 + imgui.calc_text_size(f"{_preset_name(panel)}").x + 40)
+                 + imgui.calc_text_size(f"{_loadable_name(panel)}").x + 40)
         alone = imgui.calc_text_size(line).x > end - start.x - words
     if alone:
         imgui.text_colored(ui.RED if can else ui.DIM, ui.fit_text(line, end - start.x))
@@ -1144,7 +1144,7 @@ def _header(panel, table) -> None:
                                   "k the length.")
         imgui.same_line()
         room_ = end - imgui.get_cursor_pos_x()
-        imgui.text_colored(ui.TEXT, ui.fit_text(_preset_name(panel), max(0.0, room_)))
+        imgui.text_colored(ui.TEXT, ui.fit_text(_loadable_name(panel), max(0.0, room_)))
         if line is not None:
             imgui.same_line(0, 20)
             imgui.text_colored(ui.RED if can else ui.DIM, line)

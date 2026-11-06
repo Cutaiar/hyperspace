@@ -36,16 +36,16 @@ def _party(tmp_path):
     app = make_app(tmp_path)
     app.lib.load("presets", "party-trip")
     pushed: list[str] = []
-    e = graphview.Edit(graph=app.presets.graph, push=pushed.append)
-    e.presets = app.presets
+    e = graphview.Edit(graph=app.loaded_patch.graph, push=pushed.append)
+    e.loaded_patch = app.loaded_patch
     return app, e, pushed
 
 
 def _build(app, n: int = 2):
     """(the render graph the renderer would build, the canvas over it)."""
-    spec = app.presets.graph.spec
-    g = G.build_graph(_views(n), spec.wiring(), (), tuple(sorted(app.presets.graph.fx.specs))
-                      if app.presets.graph.fx is not None else (), G.bus_cuts_of(app.presets))
+    spec = app.loaded_patch.graph.spec
+    g = G.build_graph(_views(n), spec.wiring(), (), tuple(sorted(app.loaded_patch.graph.fx.specs))
+                      if app.loaded_patch.graph.fx is not None else (), G.bus_cuts_of(app.loaded_patch))
     return g, graphview.build(Bindings(), Registry(), None, None, g, spec)
 
 
@@ -70,20 +70,20 @@ def test_rewiring_output_1_changes_that_one_port_and_nothing_else(tmp_path):
     draws into each of output 1's ports is one cable, and it is what the
     render graph reads."""
     app, e, pushed = _party(tmp_path)
-    spec = app.presets.graph.spec
+    spec = app.loaded_patch.graph.spec
     before = list(spec.wires)
     into_before = {w.dst: w.src for w in before}
     g0, _ = _build(app)
     out2 = G.signature(g0)[1]
     assert e.wire("scene", "output.1.image") is None and pushed == [
         "wire scene → output.1.image"]
-    after = list(app.presets.graph.spec.wires)
+    after = list(app.loaded_patch.graph.spec.wires)
     assert set(after) - set(before) == {G.Wire("scene", "output.1.image")}
     assert set(before) <= set(after)
     into_after = {w.dst: w.src for w in after}
     assert {d: s for d, s in into_after.items() if d != "output.1.image"} == into_before
-    assert app.presets.graph.spec.effects == spec.effects        # no placement moved
-    assert app.presets.bus == G.BusCuts()                       # no rig cable moved
+    assert app.loaded_patch.graph.spec.effects == spec.effects        # no placement moved
+    assert app.loaded_patch.bus == G.BusCuts()                       # no rig cable moved
     g, view = _build(app)
     assert G.signature(g)[1] == out2                             # output 2: as it was
     # output 1's ports: its own picture; its hands and guide by the bus,
@@ -113,19 +113,19 @@ def test_cutting_a_bus_cable_persists_in_the_preset_and_empties_the_port(tmp_pat
     preset's file (`bus`) and read back by its load; a drag from All
     outputs' pin joins it again."""
     app, e, pushed = _party(tmp_path)
-    show, pre = app.lib.project, app.presets
+    show, pre = app.lib.project, app.loaded_patch
     show_dirty = show.is_dirty()
-    section = app.presets.graph.spec.to_json()
+    section = app.loaded_patch.graph.spec.to_json()
     _, view = _build(app)
     cable, = _into(view, "output.1", "hands")
     assert e.unwire(cable) is None and pushed == ["cut output.all.hands → output.1.hands"]
     assert pre.bus.cut == {G.bus_wire(1, "hands")} and app.lib.is_dirty("presets")
     assert show.is_dirty() == show_dirty                          # the show is not touched
-    assert app.presets.graph.spec.to_json() == section
+    assert app.loaded_patch.graph.spec.to_json() == section
     g, view = _build(app)
     assert _ports(g, 1)["hands"] is None and _ports(g, 2)["hands"] == "hands.layer"
     assert _into(view, "output.1", "hands") == []
-    assert G.output_ports(app.presets.graph.wiring, 1, pre.bus)["hands"] is None
+    assert G.output_ports(app.loaded_patch.graph.wiring, 1, pre.bus)["hands"] is None
     # (a second cut of it is the one refusal)
     assert e.unwire(cable) == graphview.NO_SUCH_WIRE.format(wire=str(G.bus_wire(1, "hands")))
     # in the preset's file, and back
@@ -186,7 +186,7 @@ def test_a_drag_from_the_bus_takes_the_port_and_only_into_the_same_port(tmp_path
     app, e, pushed = _party(tmp_path)
     assert e.wire("scene", "output.2.image") is None
     assert e.wire("rout:output.all.image", "rin:output.2/image") is None
-    assert G.Wire("scene", "output.2.image") not in app.presets.graph.spec.wires
+    assert G.Wire("scene", "output.2.image") not in app.loaded_patch.graph.spec.wires
     assert len(pushed) == 2
     _, view = _build(app)
     cable, = _into(view, "output.2", "image")
@@ -195,7 +195,7 @@ def test_a_drag_from_the_bus_takes_the_port_and_only_into_the_same_port(tmp_path
         graphview.BUS_SAME_PORT.format(port="image")
     assert e.insert_effect(cable, "acid") == graphview.BUS_NO_EFFECT.format(
         wire="output.all.image → output.2.image")
-    alone = graphview.Edit(graph=app.presets.graph, push=pushed.append)
+    alone = graphview.Edit(graph=app.loaded_patch.graph, push=pushed.append)
     assert alone.wire("rout:output.all.image", "rin:output.2/image") == graphview.BUS_NO_SHOW
 
 
@@ -207,14 +207,14 @@ def test_deleting_a_window_takes_its_bus_cables_too(tmp_path):
     app, e, pushed = _party(tmp_path)
     assert e.drop_node("render:output.2") is None
     assert e.said == graphview.OUTPUT_UNWIRED.format(label="Output 2") and len(pushed) == 1
-    assert app.presets.bus.cut == {G.bus_wire(2, p) for p in G.BUS_PORTS}
+    assert app.loaded_patch.bus.cut == {G.bus_wire(2, p) for p in G.BUS_PORTS}
     g, view = _build(app)
     assert _ports(g, 2) == {"image": None, "hands": None, "guide": None}
     assert not [c for c in view.cables if c.dst_port.startswith("rin:output.2/")]
-    assert graphview.picture_now(app.presets.graph.spec, "output.2.image",
-                                 app.presets.bus) == graphview.NOTHING
+    assert graphview.picture_now(app.loaded_patch.graph.spec, "output.2.image",
+                                 app.loaded_patch.bus) == graphview.NOTHING
     assert graphview.set_picture(e, "output.2.image", graphview.AS_ALL) is None
-    assert app.presets.bus.cut == {G.bus_wire(2, p) for p in ("hands", "guide", "depth")}
+    assert app.loaded_patch.bus.cut == {G.bus_wire(2, p) for p in ("hands", "guide", "depth")}
     assert _ports(_build(app)[0], 2)["image"] == _ports(g, 1)["image"]
     assert e.drop_node("render:output.2") is None
     assert e.drop_node("render:output.2") is None
@@ -229,12 +229,12 @@ def test_an_undo_puts_a_cut_bus_cable_back(tmp_path):
     from test_undo import settle
 
     rig, e, _ = free_rig(tmp_path, ("lookback", "output.all.image"), undo_rig=True)
-    e.presets = rig.presets
+    e.loaded_patch = rig.loaded_patch
     assert e.unwire("rout:output.all.image", "rin:output.1/image") is None
-    assert rig.presets.bus.cut == {G.bus_wire(1, "image")}
+    assert rig.loaded_patch.bus.cut == {G.bus_wire(1, "image")}
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
-    assert rig.presets.bus == G.BusCuts()
+    assert rig.loaded_patch.bus == G.BusCuts()
 
 
 def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
@@ -281,7 +281,7 @@ def test_deleting_a_window_cuts_only_the_bus_cables_drawn(tmp_path):
     app, e, _ = _party(tmp_path)
     assert e.wire("scene", "output.2.hands") is None
     assert e.drop_node("render:output.2") is None
-    assert app.presets.bus.cut == {G.bus_wire(2, p) for p in ("image", "guide", "depth")}
+    assert app.loaded_patch.bus.cut == {G.bus_wire(2, p) for p in ("image", "guide", "depth")}
     assert _ports(_build(app)[0], 2)["hands"] == "hands.layer"
 
 
@@ -292,7 +292,7 @@ def test_through_refuses_a_window_with_no_picture_or_its_own_hands(tmp_path):
     lossless: off puts back exactly what on took)."""
     app, e, _ = _party(tmp_path)
     assert e.unwire("output.2.image") is None                    # the bus cable cut
-    before = app.presets.graph.spec.to_json()
+    before = app.loaded_patch.graph.spec.to_json()
     assert graphview.set_through(e, 2, True) == graphview.THROUGH_NO_PICTURE.format(
         label="Output 2")
     assert graphview.set_picture(e, "output.2.image", graphview.AS_ALL) is None
@@ -300,10 +300,10 @@ def test_through_refuses_a_window_with_no_picture_or_its_own_hands(tmp_path):
     assert graphview.set_through(e, 2, True) == graphview.THROUGH_OWN_HANDS.format(
         label="Output 2", src="ground", n=2)
     assert e.unwire("ground", "output.2.hands") is None
-    assert app.presets.graph.spec.to_json() == before
+    assert app.loaded_patch.graph.spec.to_json() == before
     assert graphview.set_through(e, 2, True) is None
     assert graphview.set_through(e, 2, False) is None
-    assert app.presets.graph.spec.to_json() == before
+    assert app.loaded_patch.graph.spec.to_json() == before
 
 
 def test_through_writes_only_the_wires_it_names(tmp_path):
@@ -312,14 +312,14 @@ def test_through_writes_only_the_wires_it_names(tmp_path):
     hands — its guide untouched, still the bus cable; off, exactly those
     back out."""
     app, e, _ = _party(tmp_path)
-    before = app.presets.graph.spec.to_json()
+    before = app.loaded_patch.graph.spec.to_json()
     assert graphview.set_through(e, 1, True) is None
-    spec = app.presets.graph.spec
+    spec = app.loaded_patch.graph.spec
     own = {w.port: w.src for w in spec.wires if w.node == "output.1"}
     assert set(own) == {"image", "hands"} and own["hands"] == G.GROUND
-    assert graphview.is_through(spec, 1, app.presets.bus)
+    assert graphview.is_through(spec, 1, app.loaded_patch.bus)
     _, view = _build(app)
     guide, = _into(view, "output.1", "guide")
     assert guide.ref == G.bus_wire(1, "guide")
     assert graphview.set_through(e, 1, False) is None
-    assert app.presets.graph.spec.to_json() == before
+    assert app.loaded_patch.graph.spec.to_json() == before

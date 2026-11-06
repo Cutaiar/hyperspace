@@ -154,7 +154,7 @@ def test_an_old_preset_opened_with_an_old_show_takes_its_look_and_cuts_end_to_en
     before = show.read_bytes()
     _old_preset(home)
     rig = boot(home, show="rig")
-    pr, reg, pre = rig.lib.project, rig.reg, rig.presets
+    pr, reg, pre = rig.lib.project, rig.reg, rig.loaded_patch
     # the show: its look and cuts read out, its mirror the room's
     assert pr.old_look == LOOK and pr.old_cuts.cut == {CUT}
     assert reg["ghost.mirror"].value is True and reg["tempo.bpm"].value == 128.0
@@ -184,8 +184,8 @@ def test_an_old_preset_opened_with_an_old_show_takes_its_look_and_cuts_end_to_en
     # a fresh launch on the /3 show: the old look still from its backup
     again = boot(home, show="rig")
     assert again.lib.project.old_look == LOOK and again.lib.project.old_cuts.cut == {CUT}
-    again.presets.load("OLD")
-    assert again.reg["ghost.alpha"].value == 0.25 and again.presets.bus.cut == {CUT}
+    again.loaded_patch.load("OLD")
+    assert again.reg["ghost.alpha"].value == 0.25 and again.loaded_patch.bus.cut == {CUT}
 
 
 def test_a_cut_is_the_presets_undone_with_it_and_held_in_its_dot(tmp_path):
@@ -194,7 +194,7 @@ def test_a_cut_is_the_presets_undone_with_it_and_held_in_its_dot(tmp_path):
     from test_undo import settle
 
     rig = undo_boot(tmp_path / "home")
-    pre = rig.presets
+    pre = rig.loaded_patch
     rig.lib.load("presets", "party-trip")
     settle(rig)
     assert not rig.lib.is_dirty("presets")
@@ -404,8 +404,8 @@ def test_an_old_shows_extra_hands_look_is_no_unknown_id_for_a_preset_without_the
     _old_preset(home)
     rig = boot(home, show="rig")
     rig.lib.warning = ""
-    assert rig.presets.load("OLD") == []
-    assert not [n for n in rig.presets.notes if "unknown" in n] and "unknown" not in rig.lib.warning
+    assert rig.loaded_patch.load("OLD") == []
+    assert not [n for n in rig.loaded_patch.notes if "unknown" in n] and "unknown" not in rig.lib.warning
     assert rig.reg["ghost.alpha"].value == 0.25 and "ghost.2.alpha" not in rig.reg
 
 

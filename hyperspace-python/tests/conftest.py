@@ -342,7 +342,7 @@ def _graph_page_starts_on_the_full_canvas(request, monkeypatch):
 
     if request.node.name == "test_default_is_on":
         return
-    monkeypatch.setattr(ui_graph, "PRESET_ONLY", False)
+    monkeypatch.setattr(ui_graph, "PATCH_ONLY", False)
 
 
 @pytest.fixture(autouse=True)
@@ -472,10 +472,10 @@ def boot_home(home, *, corpus: bool = True):
     routing.register_desk(reg, table)
     lib.attach(reg)
     router = routing.Router(reg, table)
-    presets = preset.Presets(lib, reg, router)
+    loaded_patch = preset.LoadedPatch(lib, reg, router)
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
-                           router=router, presets=presets, clock=clock, home=home)
+                           router=router, loaded_patch=loaded_patch, clock=clock, home=home)
 
 
 def _with_old_pads(path, re_aimed: dict | None = None) -> None:
@@ -576,19 +576,19 @@ def build_owner_home(home):
     one, two, three = OWNER_PRESETS
     # NIGHT ONE: TUMBLE, dimmer
     reg["view.bright"].set(reg["view.bright"].value * 0.8)
-    r.presets.save_as(one)
+    r.loaded_patch.save_as(one)
     # NIGHT TWO: a pad of row 4 re-aimed and a device knob learned
     rows = [b for b in table.desk() if b.source != OWNER_PAD["source"]]
     rows.append(Binding.from_json({**OWNER_PAD, "layer": "preset"}))
     rows.append(preset.device_knob(*OWNER_KNOB))
     table.set_desk(rows, load=False)
     reg["view.speed"].set(reg["view.speed"].value * 0.5)
-    r.presets.save_as(two)
+    r.loaded_patch.save_as(two)
     # NIGHT THREE: WAKE with its eight device knobs, the trail longer
-    r.presets.load("WAKE")
+    r.loaded_patch.load("WAKE")
     reg["dream.fade"].set_norm(0.7)
-    r.presets.save_as(three)
-    folder = home / library.PRESETS
+    r.loaded_patch.save_as(three)
+    folder = home / library.LOADABLE
     for name in OWNER_PRESETS:
         _with_old_pads(folder / f"{library.slug(name)}.json",
                        OWNER_PAD if name == two else None)

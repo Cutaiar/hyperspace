@@ -241,7 +241,7 @@ def test_a_moved_node_in_an_old_layout_saves_in_todays_ids(tmp_path):
     place for — saves `/6` with every key in today's ids (R15's old ids
     below `/6` are gone with the ladder), and reads back where it was."""
     app = _five_rig(tmp_path, "glimmer-bug")
-    pr = app.presets
+    pr = app.loaded_patch
     assert "render:channel.a" in pr.layout and "render:media.a" not in pr.layout
     pr.layout["render:channel.a"] = [10, 20]
     pr.layout["render:hands.2"] = [30, 40]
@@ -262,7 +262,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
     faces' pattern taken off — saves `/6` with the edited frame as it stands, and
     no `backdrop.history` (the capture wire says it)."""
     app = _five_rig(tmp_path, "branch-two-sizes")
-    gs = app.presets.graph
+    gs = app.loaded_patch.graph
     wired = copy.deepcopy(gs.free_doc())
     head = next(w for w in wired["wires"] if w["to"] == "output.all.image")
     for name, wires in {
@@ -278,7 +278,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
         assert wires != wired["wires"], name
         edited = {**wired, "wires": wires}
         gs.land(G.read_graph(edited), copy.deepcopy(edited))
-        doc = app.presets.document("branch-two-sizes")
+        doc = app.loaded_patch.document("branch-two-sizes")
         assert doc["schema"] == "hyperspace.preset/10", name
         assert doc["graph"] == G.read_graph(edited).to_json(), name
         assert "backdrop.history" not in doc["values"], name
@@ -291,9 +291,9 @@ def test_an_untouched_corpus_preset_saves_as_its_load(tmp_path):
 
     app = make_app(tmp_path)
     app.lib.load("presets", "party-trip")
-    doc = app.presets.document("party-trip")
+    doc = app.loaded_patch.document("party-trip")
     assert doc["schema"] == "hyperspace.preset/10"
-    assert doc["graph"] == app.presets.graph.free_doc()
+    assert doc["graph"] == app.loaded_patch.graph.free_doc()
 
 
 def saved_bytes(home: Path, kind: str, path: Path) -> bytes:
@@ -346,9 +346,9 @@ def test_the_missing_effects_wires_survive_a_save(tmp_path):
     app = make_app(tmp_path)
     doc = {"schema": "hyperspace.preset/5", "name": "t", "graph": section(*MISSING_RUN),
            "values": {"fx.acid.on": True}}
-    assert app.presets.load_doc(doc) == [] and app.presets.notes == []
-    assert main_run(app.presets.graph.spec) == ("foo", "acid")
-    out = app.presets.document("t")
+    assert app.loaded_patch.load_doc(doc) == [] and app.loaded_patch.notes == []
+    assert main_run(app.loaded_patch.graph.spec) == ("foo", "acid")
+    out = app.loaded_patch.document("t")
     assert out["schema"] == "hyperspace.preset/10"
     assert main_run(G.read_graph(out["graph"])) == ("foo", "acid")
 
@@ -368,17 +368,17 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
     for k, (name, switches) in enumerate(want.items()):
         app = make_app(tmp_path / str(k))
         src = json.loads((DRIVEN / f"{name}.json").read_text())
-        assert app.presets.load_doc(src) == [] and app.presets.notes == [], name
+        assert app.loaded_patch.load_doc(src) == [] and app.loaded_patch.notes == [], name
         assert [b.target for b in app.router.table.routes()] == [
             f"{sw}.select" for sw, *_ in switches]
-        free = app.presets.graph.free_doc()
+        free = app.loaded_patch.graph.free_doc()
         for sw, end, old, pick in switches:
             assert app.reg[f"{sw}.select"].value == pick, (name, sw)
             assert {"from": sw, "to": end} in free["wires"]
             for i, c in enumerate("abcdefgh", 1):
                 assert {"from": f"channel.{c}", "to": f"{sw}.in{i}"} in free["wires"]
             assert not [w for w in free["wires"] if w["to"] == end and w["from"] != sw]
-        doc = app.presets.document(name)
+        doc = app.loaded_patch.document(name)
         assert doc["schema"] == "hyperspace.preset/10", name          # (row 394)
         assert [n for n in doc["graph"]["nodes"] if n["kind"] == "switch"] == [
             {"kind": "switch", **({"instance": 2} if sw == "switch.2" else {})}
@@ -398,7 +398,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
 
     app = make_app(tmp_path)
     app.lib.load("presets", "party-acid")
-    gs = app.presets.graph
+    gs = app.loaded_patch.graph
     run = main_run(gs.spec)
     # (plan 36 T3: an effect in no run exists only where the section names
     # it — one added on GRAPH and left on no wire)
@@ -407,7 +407,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
     assert off not in run           # (R25: the add switched it on — on, in no run)
     app.reg[f"fx.{off}.on"].set(True)
     assert main_run(gs.spec) == run
-    doc = app.presets.document("after")
+    doc = app.loaded_patch.document("after")
     assert doc["schema"] == "hyperspace.preset/10" and main_run(G.read_graph(doc["graph"])) == run
 
 
@@ -420,11 +420,11 @@ def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):
 
     app = make_app(tmp_path)
     r = Renderer(ctx, fx=app.reg.fx_state)
-    app.presets.graph.attach(r)
+    app.loaded_patch.graph.attach(r)
     if slug is not None:
         app.lib.load("presets", slug)
     if doc is not None:
-        assert app.presets.load_doc(doc) == []
+        assert app.loaded_patch.load_doc(doc) == []
     return app, r
 
 
@@ -443,7 +443,7 @@ def test_only_wired_effects_have_nodes(ctx, tmp_path):
     from hyperspace.outputs import Switches
 
     app, r = _loaded(ctx, tmp_path, "party-acid")
-    want = main_run(app.presets.graph.spec)
+    want = main_run(app.loaded_patch.graph.spec)
     assert want and len(want) < len(app.reg.fx_state.files)       # (plan 36 T3)
     run(ctx, r, views(ctx, Switches()), frames=1)
     g = r._graph

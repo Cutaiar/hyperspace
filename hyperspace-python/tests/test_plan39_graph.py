@@ -31,7 +31,7 @@ CUT_OUT = {("channel.a", "segment.image"), ("segment.fg", "composite.over"),
 
 
 def _entries(rig) -> list[dict]:
-    return [e for e in rig.presets.graph.spec.to_json().get("nodes", [])
+    return [e for e in rig.loaded_patch.graph.spec.to_json().get("nodes", [])
             if e.get("kind") != "hands"]
 
 
@@ -60,7 +60,7 @@ def test_each_adds_unwired_one_undo_step_and_a_second_is_the_next(tmp_path, kind
     assert e.add_node(kind) is None
     assert e.added == f"{kind}.2" and {"kind": kind, "instance": 2} in _entries(rig)
     assert pushed == [f"add {kind}", f"add {kind}.2"]
-    assert rig.presets.graph.spec.notes == ()
+    assert rig.loaded_patch.graph.spec.notes == ()
 
 
 def test_a_new_one_is_past_the_highest_instance_declared(tmp_path):
@@ -84,7 +84,7 @@ def test_the_cut_out_on_the_scene_chain(tmp_path):
     assert e.starter("cut-out") is None
     assert wired_wires(rig) == {("shape", "scene.geometry")} | CUT_OUT
     assert {"kind": "segment"} in _entries(rig) and {"kind": "composite"} in _entries(rig)
-    assert rig.presets.graph.spec.notes == ()
+    assert rig.loaded_patch.graph.spec.notes == ()
     assert pushed == ["starter: cut-out"]
     assert e.placed == ("segment", "composite")      # (the scene, channel a, All outputs stay)
     assert e.said == ("cut-out: channel.a → segment.image, segment.fg over the scene in "
@@ -110,7 +110,7 @@ def test_a_second_cut_out_is_refused_nothing(tmp_path):
     assert ("composite", ALL) not in got             # (one wire into a port)
     assert "in place of composite into All outputs" in e.said
     assert e.placed == ("segment.2", "composite.2") and len(pushed) == 2
-    assert rig.presets.graph.spec.notes == ()
+    assert rig.loaded_patch.graph.spec.notes == ()
 
 
 def test_the_cut_out_from_the_picker_lands_at_the_point(tmp_path):
@@ -259,7 +259,7 @@ def test_each_entry_round_trips_through_a_seven_save_with_its_values(tmp_path):
     rig.reg["matte.key"].set(0.3)
     rig.reg["cut.amount"].set(0.5)
     rig.reg["segment.2.feather"].set(6.0)
-    saved = rig.presets.save_as("t5-round").read_text()
+    saved = rig.loaded_patch.save_as("t5-round").read_text()
     doc = json.loads(saved)
     assert doc["schema"] == "hyperspace.preset/10"
     nodes = doc["graph"]["nodes"]
@@ -269,9 +269,9 @@ def test_each_entry_round_trips_through_a_seven_save_with_its_values(tmp_path):
     (home / "presets").mkdir(parents=True)
     (home / "presets" / "t5-round.json").write_text(saved)
     r = boot(home)
-    r.presets.load("t5-round")
-    got = r.presets.graph.spec
-    assert got == rig.presets.graph.spec and not got.notes
+    r.loaded_patch.load("t5-round")
+    got = r.loaded_patch.graph.spec
+    assert got == rig.loaded_patch.graph.spec and not got.notes
     assert got.mattes == (G.MatteAt(1),) and got.cuts == (G.CutAt(1),)
     assert r.reg["matte.key"].value == pytest.approx(0.3)
     assert r.reg["cut.amount"].value == pytest.approx(0.5)
@@ -288,5 +288,5 @@ def test_edges_is_an_effect_file_like_any(tmp_path):
     rig, e, _ = wired_rig(tmp_path, SCENE)
     assert ("effect", "edges", "edges") in graphview.picker(e)
     assert e.add_node("effect", "edges") is None
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert any("edges" in names for _, names in ui_fx.groups(spec))

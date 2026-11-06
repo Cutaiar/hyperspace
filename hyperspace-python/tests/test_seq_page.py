@@ -67,7 +67,7 @@ def test_send_a_does_nothing_until_the_sequencer_is_there(rig):
 
 
 def test_a_pad_toggles_a_step_and_loads_no_preset(rig, seq):
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     tap(rig, CLIP[0], channel=1)                               # off the page: slot 2 loads
     before, active = lib.current("presets"), pr.active
     enter(rig)
@@ -150,7 +150,7 @@ def test_an_advancing_playhead_sends_only_the_diff(rig, seq):
 
 
 def test_leaving_restores_the_bank_the_toggles_and_save(rig, seq):
-    lib = rig.presets.lib
+    lib = rig.loaded_patch.lib
     before = state(rig)
     enter(rig)
     tap(rig, CLIP[3], channel=2)
@@ -163,7 +163,7 @@ def test_leaving_restores_the_bank_the_toggles_and_save(rig, seq):
     assert rig.reg[routing.SAVE_PARAM].value
     push(rig, note(STOP, 0, channel=7))
     tap(rig, CLIP[0], channel=0)                               # and the bank loads
-    assert lib.current("presets") == rig.presets.bank[0]
+    assert lib.current("presets") == rig.loaded_patch.bank[0]
 
 
 def test_the_render_toggle_comes_back_on_leaving(rig, seq):
@@ -180,7 +180,7 @@ def test_the_render_toggle_comes_back_on_leaving(rig, seq):
 def test_a_bank_pad_held_across_send_a_never_saves(rig, seq):
     t = [0.0]
     rig.midi.clock = lambda: t[0]
-    pr = rig.presets
+    pr = rig.loaded_patch
     pr.clear_slot(5)
     push(rig, note(CLIP[0], channel=5))                        # the empty pad, held…
     push(rig, note(SEND_A), note(SEND_A, 0))                   # …across the switch

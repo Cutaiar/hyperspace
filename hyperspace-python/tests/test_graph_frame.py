@@ -394,7 +394,7 @@ def _land(rig, section: dict) -> None:
     exist only so — `FxState.hold`), which hands the renderer its wiring."""
     spec = G.read_graph(section, effects=set(rig.fx.files))
     assert spec.notes == (), spec.notes
-    rig.presets.graph.land(spec, spec.to_json())
+    rig.loaded_patch.graph.land(spec, spec.to_json())
     assert rig.renderer.wiring == spec.wiring()
 
 

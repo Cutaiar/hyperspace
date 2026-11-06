@@ -24,7 +24,7 @@ def app(tmp_path_factory):
 
 
 def save(app, name: str) -> bytes:
-    return Path(app.presets.save_as(name)).read_bytes()
+    return Path(app.loaded_patch.save_as(name)).read_bytes()
 
 
 def load(app, stem: str) -> str:
@@ -80,38 +80,38 @@ def test_node_mode_round_trips_over_the_corpus(app, stem):
     name = load(app, stem)
     plain = save(app, name)
     assert b"node_mode" not in plain
-    node = min(n for n in app.presets._held_canvas() if n.startswith(("render:", "macro.")))
-    assert app.presets.point_node_mode(1, "midi", node) is None
-    assert app.presets.point_node_mode(2, "gamepad", "macro.2") is None
+    node = min(n for n in app.loaded_patch._held_canvas() if n.startswith(("render:", "macro.")))
+    assert app.loaded_patch.point_node_mode(1, "midi", node) is None
+    assert app.loaded_patch.point_node_mode(2, "gamepad", "macro.2") is None
     saved = save(app, name)
     assert json.loads(saved)["node_mode"] == [
         {"player": 1, "controller": "midi", "node": node},
         {"player": 2, "controller": "gamepad", "node": "macro.2"}]
     load(app, name)
-    assert app.presets.node_mode.of(1, "midi") == node
-    assert app.presets.node_mode.of(2, "gamepad") == "macro.2"
-    assert not [n for n in app.presets.notes if "node mode" in n]
+    assert app.loaded_patch.node_mode.of(1, "midi") == node
+    assert app.loaded_patch.node_mode.of(2, "gamepad") == "macro.2"
+    assert not [n for n in app.loaded_patch.notes if "node mode" in n]
     assert save(app, name) == saved                     # a fixed point
     doc = json.loads(saved)
     del doc["node_mode"]
     assert preset.dumps(doc).encode() == plain          # the key and nothing else
-    app.presets.leave_node_mode(1, "midi")
-    app.presets.leave_node_mode(2, "gamepad")
+    app.loaded_patch.leave_node_mode(1, "midi")
+    app.loaded_patch.leave_node_mode(2, "gamepad")
     assert save(app, name) == plain                     # byte for byte
 
 
 def test_a_load_with_no_key_points_at_nothing(app):
     load(app, CORPUS_PRESETS[0])
-    app.presets.point_node_mode(1, "midi", "macro.1")
+    app.loaded_patch.point_node_mode(1, "midi", "macro.1")
     load(app, CORPUS_PRESETS[1])                        # no preset affects another
-    assert not app.presets.node_mode
+    assert not app.loaded_patch.node_mode
 
 
 def test_a_new_preset_points_at_nothing(app):
     load(app, CORPUS_PRESETS[0])
-    app.presets.point_node_mode(1, "midi", "macro.1")
-    app.presets.new()
-    assert not app.presets.node_mode
+    app.loaded_patch.point_node_mode(1, "midi", "macro.1")
+    app.loaded_patch.new()
+    assert not app.loaded_patch.node_mode
 
 
 def test_the_migration_road_keeps_the_key_as_a_fixed_point(tmp_path):
@@ -130,25 +130,25 @@ def test_the_migration_road_keeps_the_key_as_a_fixed_point(tmp_path):
 def test_a_node_the_graph_does_not_have_is_said_and_left_out(app):
     put_file(app, "gone", node_mode=[{**ENTRY, "player": 1, "node": "render:nothing"}, ENTRY])
     load(app, "gone")
-    assert app.presets.node_mode.to_json() == [ENTRY]
-    assert nodemode.NODE_GONE.format(node="nothing") in app.presets.notes
+    assert app.loaded_patch.node_mode.to_json() == [ENTRY]
+    assert nodemode.NODE_GONE.format(node="nothing") in app.loaded_patch.notes
 
 
 def test_pointing_at_a_node_the_preset_does_not_have_is_refused(app):
     load(app, CORPUS_PRESETS[0])
-    was = app.presets.node_mode
-    assert app.presets.point_node_mode(1, "midi", "render:nothing") == (
+    was = app.loaded_patch.node_mode
+    assert app.loaded_patch.point_node_mode(1, "midi", "render:nothing") == (
         nodemode.NODE_GONE.format(node="nothing"))
-    assert app.presets.node_mode == was
+    assert app.loaded_patch.node_mode == was
 
 
 def test_re_pointing_lights_the_dot(app):
     name = load(app, CORPUS_PRESETS[0])
     save(app, name)
     assert not app.lib.is_dirty(preset.GROUP)
-    app.presets.point_node_mode(1, "midi", "macro.1")
+    app.loaded_patch.point_node_mode(1, "midi", "macro.1")
     assert app.lib.is_dirty(preset.GROUP)
-    app.presets.leave_node_mode(1, "midi")
+    app.loaded_patch.leave_node_mode(1, "midi")
     assert not app.lib.is_dirty(preset.GROUP)
 
 
@@ -158,7 +158,7 @@ def test_a_refused_load_leaves_the_node_mode_whole(app):
     from test_presets import put
 
     name = load(app, "party-noita")
-    assert app.presets.point_node_mode(1, "midi", "render:hands") is None
+    assert app.loaded_patch.point_node_mode(1, "midi", "render:hands") is None
     save(app, name)
     put(Path(app.lib.home), "BROKEN", schema="hyperspace.preset/7",
         graph={"frame": "wired", "nodes": [], "wires": [
@@ -166,9 +166,9 @@ def test_a_refused_load_leaves_the_node_mode_whole(app):
         values={"view.speed": "fast"})
     with pytest.raises(LibraryError, match="nothing loaded"):
         app.lib.load(preset.GROUP, "BROKEN")
-    assert app.presets.node_mode.of(1, "midi") == "render:hands"
+    assert app.loaded_patch.node_mode.of(1, "midi") == "render:hands"
     assert not app.lib.is_dirty(preset.GROUP)
-    app.presets.leave_node_mode(1, "midi")
+    app.loaded_patch.leave_node_mode(1, "midi")
     save(app, name)
 
 
@@ -178,24 +178,24 @@ def test_every_node_with_a_param_can_be_pointed_at(app):
     for stem in CORPUS_PRESETS[:3]:
         load(app, stem)
         view = graphview.build(app.router.table, app.reg, app.router, None, None,
-                               app.presets.graph.spec)
+                               app.loaded_patch.graph.spec)
         for n in view.nodes:
             name = n.id.partition(":")[2] if n.id.startswith("render:") else n.id
             head = graphview.params_of(name) + "."
             if nodemode.fillable(app.reg, [p.id for p in app.reg if p.id.startswith(head)]):
-                assert app.presets.point_node_mode(1, "midi", n.id) is None, n.id
-        app.presets.leave_node_mode(1, "midi")
+                assert app.loaded_patch.point_node_mode(1, "midi", n.id) is None, n.id
+        app.loaded_patch.leave_node_mode(1, "midi")
     for node in ("render:camera", "seq", "render:channel.a"):
         put_file(app, "fixture", node_mode=[{**ENTRY, "node": node}])
         load(app, "fixture")
-        assert app.presets.node_mode.of(2, "gamepad") == node
-        assert not [n for n in app.presets.notes if "node mode" in n]
+        assert app.loaded_patch.node_mode.of(2, "gamepad") == node
+        assert not [n for n in app.loaded_patch.notes if "node mode" in n]
         assert json.loads(save(app, "fixture"))["node_mode"][0]["node"] == node
 
 
 def test_a_presets_and_a_mark_from_before_a_hot_reload_still_work(app):
     load(app, CORPUS_PRESETS[0])
-    pre = app.presets
+    pre = app.loaded_patch
     pre.__dict__.pop("_node_mode", None)        # a running app's object
     assert not pre.node_mode and pre.signature()
     assert nodemode.KEY not in pre.document("x")
@@ -211,14 +211,14 @@ def test_a_presets_and_a_mark_from_before_a_hot_reload_still_work(app):
 
 def test_a_node_that_goes_lets_go(app):
     load(app, CORPUS_PRESETS[0])
-    bank = app.presets.banks()["lfo"]
+    bank = app.loaded_patch.banks()["lfo"]
     voice = bank.doc()[-1]
     node = f"lfo.{voice}"
-    assert app.presets.point_node_mode(1, "midi", node) is None
-    app.presets.settle_groups()
-    assert app.presets.node_mode.of(1, "midi") == node  # still there: stays
+    assert app.loaded_patch.point_node_mode(1, "midi", node) is None
+    app.loaded_patch.settle_groups()
+    assert app.loaded_patch.node_mode.of(1, "midi") == node  # still there: stays
     bank.remove(voice)                                  # the mechanism's hook, not a caller
-    assert not app.presets.node_mode
+    assert not app.loaded_patch.node_mode
 
 
 def test_re_pointing_is_one_undo_step_that_puts_it_back(app):
@@ -227,18 +227,18 @@ def test_re_pointing_is_one_undo_step_that_puts_it_back(app):
     try:
         u = undo.Undo(app.reg, app.router.table, marks=Marks(app.lib))
         undo.install(u)
-        app.presets.point_node_mode(1, "midi", "macro.1")
+        app.loaded_patch.point_node_mode(1, "midi", "macro.1")
         u.tick(1.0)                                     # another frame, another action
-        app.presets.point_node_mode(1, "midi", "macro.2")
+        app.loaded_patch.point_node_mode(1, "midi", "macro.2")
         u.tick(2.0)
-        assert app.presets.node_mode.of(1, "midi") == "macro.2"
+        assert app.loaded_patch.node_mode.of(1, "midi") == "macro.2"
         assert len(u.stack) == 2
-        assert u.undo() and app.presets.node_mode.of(1, "midi") == "macro.1"
-        assert u.undo() and not app.presets.node_mode
-        assert u.redo() and app.presets.node_mode.of(1, "midi") == "macro.1"
+        assert u.undo() and app.loaded_patch.node_mode.of(1, "midi") == "macro.1"
+        assert u.undo() and not app.loaded_patch.node_mode
+        assert u.redo() and app.loaded_patch.node_mode.of(1, "midi") == "macro.1"
     finally:
         undo.install(was)
-        app.presets.node_mode = NodeMode()
+        app.loaded_patch.node_mode = NodeMode()
 
 
 # ---- the row map: derived, never saved ----

@@ -107,7 +107,7 @@ def test_one_press_replaces_the_hosts_dream_as_one_undo_step(rig):  # noqa: F811
 
         assert ui_routing.settle_sheet(rig.panel, True) is None   # the one press
         assert ui_routing.sheet(rig.panel) is None and len(u.stack) == n + 1
-        spec = rig.lib.presets.graph.spec
+        spec = rig.lib.loaded_patch.graph.spec
         assert [nm for nm in patches.spec_names(spec) if nm.startswith("dream")] == ["dream"]
         now = wires(rig)
         assert ("lookback", "dream.image") not in now
@@ -117,7 +117,7 @@ def test_one_press_replaces_the_hosts_dream_as_one_undo_step(rig):  # noqa: F811
         assert reg["dream.hue"].base == pytest.approx(12.0)
         assert reg["dream.fade"].base == fade                     # the look-back's: not the patch's
         assert reg["dream.echo_mix"].base == echoes
-        group = rig.lib.presets.groups[-1]
+        group = rig.lib.loaded_patch.groups[-1]
         assert "render:dream" in group["nodes"]
         assert {p["id"] for p in graphview.open_ports(spec, group)} >= {"in"}
         head = ui_graph._state(rig.panel)["said"]
@@ -334,7 +334,7 @@ def test_the_hosts_group_lets_the_dream_go_and_its_pins_with_it(rig):  # noqa: F
     assert ui_graph.spawn(rig.panel, slug, (0.0, 0.0)) is None     # no dream here: straight on
     if ui_routing.sheet(rig.panel) is not None:
         ui_routing.settle_sheet(rig.panel, True)
-    pre = rig.lib.presets
+    pre = rig.lib.loaded_patch
     first = pre.groups[-1]
     assert "render:dream" in first["nodes"]
     assert any(p.get("to", "").startswith("dream.") for p in first["ports"])
@@ -364,8 +364,8 @@ def test_a_group_of_the_dream_alone_goes_with_it(rig):  # noqa: F811
     assert entry["nodes"] == ["render:dream"]
     sheet_up(rig, slug)
     assert ui_routing.settle_sheet(rig.panel, True) is None
-    assert [g["nodes"] for g in rig.lib.presets.groups] == [["render:dream"]]
-    assert rig.lib.presets.groups[0]["id"] != entry["id"]
+    assert [g["nodes"] for g in rig.lib.loaded_patch.groups] == [["render:dream"]]
+    assert rig.lib.loaded_patch.groups[0]["id"] != entry["id"]
 
 
 def test_wire_as_saved_puts_the_replacing_dream_on_the_hosts_picture(rig):  # noqa: F811
@@ -373,7 +373,7 @@ def test_wire_as_saved_puts_the_replacing_dream_on_the_hosts_picture(rig):  # no
     slug = put(rig, cut("alone", ["render:dream"]))
     sheet_up(rig, slug)
     assert ui_routing.settle_sheet(rig.panel, True) is None
-    g = rig.lib.presets.groups[-1]
+    g = rig.lib.loaded_patch.groups[-1]
     assert ui_graph.wire_as_saved(rig.panel, g["id"]) is None
     assert {("lookback", "dream.image"), ("dream", "composite.over")} <= set(wires(rig))
 
@@ -381,7 +381,7 @@ def test_wire_as_saved_puts_the_replacing_dream_on_the_hosts_picture(rig):  # no
 def test_the_edit_lands_no_replace_nobody_asked_for(rig):  # noqa: F811
     on_graph(rig, "party-wake")
     e = ui_graph.group_edit(rig.panel)
-    landing = spawn(cut("dreamy"), Host.of(*rig.lib.presets.parts()[:2]))
+    landing = spawn(cut("dreamy"), Host.of(*rig.lib.loaded_patch.parts()[:2]))
     before = state(rig)
     assert e.spawn(landing) == landing.unanswered(None)
     assert state(rig) == before
@@ -452,7 +452,7 @@ def test_a_node_the_section_lacks_leaves_the_params_to_the_group_node(rig):  # n
     """A look-back and no dream: the dream's rows sit on `group:dream`, as any
     param of a node the section does not name does; the look-back's stay."""
     on_graph(rig, "party-noita")
-    spec = rig.lib.presets.graph.spec
+    spec = rig.lib.loaded_patch.graph.spec
     assert "dream" not in patches.spec_names(spec)
     view = ui_graph._state(rig.panel)["view"]
     if view.node("render:lookback") is not None:
@@ -491,7 +491,7 @@ def test_a_saved_preset_is_unmoved_by_who_draws_its_params(rig, name):  # noqa: 
     for k, v in file.get("values", {}).items():
         if k.startswith("dream.") and k in rig.reg:
             assert rig.reg[k].base == pytest.approx(v), k
-    assert G.read_graph(file["graph"]).to_json() == rig.lib.presets.graph.spec.to_json()
+    assert G.read_graph(file["graph"]).to_json() == rig.lib.loaded_patch.graph.spec.to_json()
     got = {(b.source, b.target) for b in rig.router.table.routes()}
     assert {(r["source"], r["target"]) for r in file.get("routes", ())} <= got
 

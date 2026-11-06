@@ -116,7 +116,7 @@ def test_the_masters_row_survives_a_load_that_drops_a_presets(tmp_path):
     assert master
     put(tmp_path, "LEANS", routes=[
         {"source": "hand:left.y", "target": "output.dim", "op": "push", "value": 0.375}])
-    r.presets.load("LEANS")
+    r.loaded_patch.load("LEANS")
     assert all(any(x is b for x in table.bindings) for b in master)
     assert not table.routes_to("output.dim")
 
@@ -152,8 +152,8 @@ def test_a_saved_row_drops_with_a_note_and_a_later_save_removes_it(tmp_path):
             {"depth": {"source": "hand:left.y", "target": "master.gain"}, "from": 0.0, "to": 1.0},
             {"base": "view.bright", "from": 0.0, "to": 0.5}]}})
     before = path.read_bytes()
-    r.presets.load("LEANS")
-    table, notes = r.router.table, r.presets.notes
+    r.loaded_patch.load("LEANS")
+    table, notes = r.router.table, r.loaded_patch.notes
     assert any(n.startswith("dropped hand:left.y → master.gain: " + WORDS) for n in notes)
     assert any(n.startswith("dropped axis:RX → master.dyn: master.dyn is") for n in notes)
     assert any(n.startswith("dropped cc:0:48 → tempo.bpm: tempo.bpm is") for n in notes)
@@ -166,8 +166,8 @@ def test_a_saved_row_drops_with_a_note_and_a_later_save_removes_it(tmp_path):
     assert [x["target"] for x in doc["routes"]] == ["view.speed"]
     assert [x["target"] for x in doc["desk"]] == ["view.bright"]
     assert doc["macros"]["macro.1"]["subs"] == [{"base": "view.bright", "from": 0.0, "to": 0.5}]
-    r.presets.load("LEANS")
-    assert not [n for n in r.presets.notes if "meta controller" in n]
+    r.loaded_patch.load("LEANS")
+    assert not [n for n in r.loaded_patch.notes if "meta controller" in n]
 
 
 def test_no_corpus_file_holds_a_row_on_a_meta_param():
@@ -232,7 +232,7 @@ def test_a_row_a_hot_reload_left_is_not_saved(tmp_path):
     table = r.router.table
     table.bindings.append(Binding("hand:left.y", "master.gain", "push", 0.375))
     table.bindings.append(Binding("cc:3:16", "tempo.bpm", "abs", layer="preset"))
-    doc = r.presets.document("LEFT")
+    doc = r.loaded_patch.document("LEFT")
     assert not [x for x in doc["routes"] if x["target"] == "master.gain"]
     assert not [x for x in doc["desk"] if x["target"] == "tempo.bpm"]
 
@@ -398,13 +398,13 @@ def test_a_spawn_lands_the_rest_and_says_what_it_refused(tmp_path):
     the referee refuses at a spawn does."""
     app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-trip")
-    pre, table, reg = app.presets, app.router.table, app.reg
+    pre, table, reg = app.loaded_patch, app.router.table, app.reg
     u = undo.Undo(reg, table, banks=pre.banks)
     undo.install(u)
     try:
         e = graphview.Edit(table, reg, app.router, graph=pre.graph,
                            push=lambda label: undo.push(label, load=True))
-        e.presets = pre
+        e.loaded_patch = pre
         doc = _with(routes=[{"source": "lfo:0", "target": "master.gain", "op": "push",
                              "value": 0.2}],
                     desk=[{"source": "cc:3:16", "target": "tempo.bpm", "op": "abs"}])

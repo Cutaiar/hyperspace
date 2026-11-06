@@ -49,12 +49,12 @@ from hyperspace.fx import FxState
 from hyperspace.ghost import GhostState
 from hyperspace.hotreload import MODULES
 from hyperspace.learn import Learn
-from hyperspace.library import PRESETS, Library, Marks
+from hyperspace.library import LOADABLE, Library, Marks
 from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Registry, build_registry, part_of
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Bindings, Router, Sources, bindings_path
 from hyperspace.view import ViewState
 
@@ -108,7 +108,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     Panel._register_panel_params(SimpleNamespace(reg=reg, open=True, cheatsheet=True,
                                                  desk=True, page=1))
     router = Router(reg, table)
-    presets = Presets(lib, reg, router)
+    loaded_patch = LoadedPatch(lib, reg, router)
     learn = Learn(reg, router.table, lane=router.lane)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
@@ -117,7 +117,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
                   on_restore=router.sync_macros)
     undo.install(u)
     r.__dict__.update(lib=lib, reg=reg, view=view, control=control, chain=chain, audio=audio,
-                      router=router, table=router.table, presets=presets, clock=clock,
+                      router=router, table=router.table, loaded_patch=loaded_patch, clock=clock,
                       lfos=lfos, learn=learn, midi=midi, inp=inp, out=out, undo=u,
                       home=Path(home), settings=settings, output=output, envs=envs, seq=seq)
     return r
@@ -155,12 +155,12 @@ def _state(r) -> dict:
 def _walk(r) -> list[dict]:
     """Every corpus preset in turn: load it, 120 frames with one fixed lane
     vector, `view.bright` turned and settled into a step, `undo.undo()`."""
-    names = sorted(r.lib.list(PRESETS))
+    names = sorted(r.lib.list(LOADABLE))
     files = sorted((CORPUS / "presets").glob("*.json"))
     assert len(names) == len(files) > 0
     out = []
     for i, name in enumerate(names):
-        r.lib.load(PRESETS, name)
+        r.lib.load(LOADABLE, name)
         r.chain.out = CEIL * np.linspace(0.15, 0.85, len(r.chain.out))
         _frames(r, FRAMES)
         p = r.reg["view.bright"]
@@ -264,14 +264,14 @@ def test_one_sources_fed_once_drives_two_routers_as_one_router_did(tmp_path):
     assert a.reg is not b.reg and a.router is not b.router
     assert any(t is b.table.meta_table for t in shared.tables)
     rigs = (solo, a, b)
-    names = sorted(a.lib.list(PRESETS))
-    assert names == sorted(solo.lib.list(PRESETS)) == sorted(b.lib.list(PRESETS))
+    names = sorted(a.lib.list(LOADABLE))
+    assert names == sorted(solo.lib.list(LOADABLE)) == sorted(b.lib.list(LOADABLE))
     chain = a.chain                                  # one analyzer, as the rig has
     frames = 0
     driven: dict[str, set[str]] = {"hand": set(), "axis": set(), "lane": set()}
     for name in names:
         for r in rigs:
-            r.lib.load(PRESETS, name)
+            r.lib.load(LOADABLE, name)
         chain.out = CEIL * np.linspace(0.15, 0.85, len(chain.out))
         for k in range(FRAMES // 2):
             for r in rigs:
@@ -324,17 +324,17 @@ def test_a_deck_beside_changes_nothing_on_air_and_lands_what_one_deck_lands(tmp_
     a = boot(tmp_path / "a")
     b = Deck.beside(a.deck, lfos=lfo.LFOs(seed=1))
     assert a.deck.sources is b.sources
-    names = sorted(a.lib.list(PRESETS))
+    names = sorted(a.lib.list(LOADABLE))
     moved = 0
 
     def looks(reg) -> dict:
         return {p.id: repr(p.value) for p in reg if part_of(p) == "patch"}
 
     for name in names:
-        doc = json.loads(Path(a.lib.path_of(PRESETS, name)).read_text())
-        alone.lib.load(PRESETS, name)
-        a.lib.load(PRESETS, name)
-        b.presets.load_doc(doc)
+        doc = json.loads(Path(a.lib.path_of(LOADABLE, name)).read_text())
+        alone.lib.load(LOADABLE, name)
+        a.lib.load(LOADABLE, name)
+        b.loaded_patch.load_doc(doc)
         alone.chain.out = a.chain.out = CEIL * np.linspace(0.15, 0.85, len(a.chain.out))
         for k in range(FRAMES // 2):
             for rr in (alone, a):
@@ -418,9 +418,9 @@ def test_the_deck_holds_the_rig_boot_hands_out(tmp_path):
     no renderer, and the installed undo is the deck's."""
     r = boot(tmp_path / "home")
     d = r.deck
-    assert (d.reg, d.view, d.table, d.router, d.lfos, d.presets, d.learn, d.undo) == (
-        r.reg, r.view, r.table, r.router, r.lfos, r.presets, r.learn, r.undo)
-    assert d.table is d.router.table and d.graph is d.presets.graph
+    assert (d.reg, d.view, d.table, d.router, d.lfos, d.loaded_patch, d.learn, d.undo) == (
+        r.reg, r.view, r.table, r.router, r.lfos, r.loaded_patch, r.learn, r.undo)
+    assert d.table is d.router.table and d.graph is d.loaded_patch.graph
     assert d.renderer is None
     assert d.clock is r.clock is d.router.clock
     # plan 44 D2: the router reads the deck's sources (its own while there
@@ -469,7 +469,7 @@ def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
     assert "nonlocal" not in inspect.getsource(app.main)
     # nothing of the deck's is still built in main
     src = inspect.getsource(app.main)
-    for line in ("build_registry(", "Router(reg, table)", "Presets(library", "Learn(reg",
+    for line in ("build_registry(", "Router(reg, table)", "LoadedPatch(library", "Learn(reg",
                  "undo.Undo(", "library.attach(reg)", "ViewState()"):
         assert line not in src, line
     assert "deck=deck" in src and "*deck.targets()" in src
@@ -499,10 +499,10 @@ def test_the_build_keeps_mains_order():
            "bindings = table(reg)", "library.attach(reg)", "panel(reg, s, clock=clock",
            "Router(reg, bindings, sources=sources)", "router.use_lfos(lfos, clock)",
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
-           "Presets(on_deck, reg, router", "presets.graph.attach(renderer)",
+           "LoadedPatch(on_deck, reg, router", "loaded_patch.graph.attach(renderer)",
            "Learn(reg, router.table", "devices(reg, router, learn, panel=",
            "library.project.load_startup()", "geometry.warm_all(first=s.shape)",
-           "Marks(presets.lib)", "undos.Undo(reg, router.table", "undos.install(undo_obj)"]
+           "Marks(loaded_patch.lib)", "undos.Undo(reg, router.table", "undos.install(undo_obj)"]
     at = [src.index(s) for s in seq]
     assert at == sorted(at), [s for s, a, b in zip(seq, at, sorted(at), strict=True) if a != b]
 
@@ -609,7 +609,7 @@ def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, mon
     real_startup = type(r.lib.project).load_startup
     monkeypatch.setattr(type(r.lib.project), "load_startup",
                         lambda self: (startups.append(1), real_startup(self))[1])
-    loaded = r.lib.current(PRESETS)
+    loaded = r.lib.current(LOADABLE)
     # a second deck leaves the process's one-of-a-kind steps alone (plan 44
     # D1: `attach`, `startup`, `install` off; D2+ decides their real shape)
     second = Deck.build(library=r.lib, control=r.control, audio=r.audio,
@@ -618,8 +618,8 @@ def test_the_band_hooks_are_the_rigs_and_two_decks_leave_them_once(tmp_path, mon
     assert r.lib.reg is r.reg and undo.installed() is r.undo      # the first deck's still
     # (plan 44 D3: what is loaded is each deck's presets' own — the first's
     # is as it was; the kind stays the first until a pointer moves it, D5a)
-    assert startups == [] and r.presets.current == loaded         # nothing re-landed
-    assert second.presets.current is None and r.lib.presets is r.presets
+    assert startups == [] and r.loaded_patch.current == loaded         # nothing re-landed
+    assert second.loaded_patch.current is None and r.lib.loaded_patch is r.loaded_patch
     assert band() == ONCE                                                 # still once
     assert (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"],
             r.lib._load_hooks["band"]) == hooks

@@ -906,7 +906,7 @@ def test_save_as_patch_and_update_patch_keep_inside_the_narrowest_pane(tmp_path,
     with build_rig(tmp_path) as r:
         r.panel.desk = False
         r.lib.load("presets", "party-noita")
-        r.lib.presets.groups = []
+        r.lib.loaded_patch.groups = []
         frame(r.panel, "graph")
         entry = ui_graph.group_nodes(r.panel, ["render:warp", "render:doublevision"])
         entry["patch"] = "noita-core"

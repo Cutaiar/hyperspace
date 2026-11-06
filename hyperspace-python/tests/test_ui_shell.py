@@ -28,7 +28,7 @@ from hyperspace.library import Library
 from hyperspace.outputs import Slot
 from hyperspace.overlay import Output, register_switches
 from hyperspace.params import PLANES, Kind, build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import (
     CHEATSHEET,
@@ -115,14 +115,14 @@ def build_rig(tmp_path, renderer=None):
     panel.outputs = slots
     router = Router(reg, table)
     router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
-    presets = Presets(lib, reg, router)  # the bank and the preset strip, as app.py builds them
+    loaded_patch = LoadedPatch(lib, reg, router)  # the bank and the preset strip, as app.py builds them
     # plan 36 T3: nothing landed is the empty frame (every output black); the
     # app always lands its startup preset — here today's frame, as one would
     from hyperspace import graph as G
     from hyperspace import graphmigrate as M
 
     today = G.read_graph(M.wired_of(G.Wiring()))
-    presets.graph.land(today, today.to_json())
+    loaded_patch.graph.land(today, today.to_json())
     panel.router = router
     r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router,
                         slots=slots)
@@ -839,7 +839,7 @@ def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeyp
             # the track faders: the preset's own since plan 24 C2 (decision 17)
             *[Binding(f"cc:{k}:7", "view.bright", "abs", layer="preset") for k in range(8)],
             Binding("cc:0:14", "view.bright", "abs")]         # MASTER: dropped, noted
-    rig.lib.presets.desk_notes = table.set_desk(full)
+    rig.lib.loaded_patch.desk_notes = table.set_desk(full)
     table.set_macros({f"macro.{k}": {"label": f"M{k}", "subs": [
         {"base": "view.depth4", "from": 0.0, "to": 1.0},
         {"depth": {"source": "lane:0", "target": "rot.rate.ZW"}, "from": 0.0, "to": 1.0}]}

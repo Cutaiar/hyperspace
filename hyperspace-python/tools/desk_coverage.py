@@ -55,16 +55,16 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
-from hyperspace.library import PRESETS, Library, group_folder
+from hyperspace.library import LOADABLE, Library, group_folder
 from hyperspace.lookback import DreamState
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.view import ViewState
 
 REPORT = ROOT / "docs" / "plans" / "assets" / "24-party-fixes" / "desk-coverage.md"
 CORPUS = ROOT / "tests" / "corpus"                   # the presets, as test data
-CORPUS_GROUPS = (PRESETS, "dream")      # what the scratch home is seeded with (`group_folder`)
+CORPUS_GROUPS = (LOADABLE, "dream")      # what the scratch home is seeded with (`group_folder`)
 BAR = 4                     # the owner's bar: at most this many dark or dead
 MAPPED, DARK, DEAD = "mapped", "dark", "dead"
 MARK = {MAPPED: "●", DARK: "·", DEAD: "✕"}
@@ -150,18 +150,18 @@ def boot(home: Path) -> SimpleNamespace:
     routing.register_desk(reg, table)
     lib.attach(reg)
     router = Router(reg, table)
-    presets = Presets(lib, reg, router)
-    return SimpleNamespace(lib=lib, reg=reg, router=router, presets=presets, table=table)
+    loaded_patch = LoadedPatch(lib, reg, router)
+    return SimpleNamespace(lib=lib, reg=reg, router=router, loaded_patch=loaded_patch, table=table)
 
 
 def coverage_of(rig, name: str, controls: list[apc40.Control]) -> Row:
     """Load preset `name` and read its preset layer against `controls`."""
-    rig.presets.load(name)
+    rig.loaded_patch.load(name)
     reg, table = rig.reg, rig.table
     values = reg.snapshot()
     # (plan 33 T7: whether the faces show a picture is the graph's wire)
-    media = learn.faces_media(rig.presets.graph.spec, getattr(reg, "switch_state", None))
-    drawn = learn.drawn_of(rig.presets.graph.spec)      # (plan 36 T4: what the graph draws)
+    media = learn.faces_media(rig.loaded_patch.graph.spec, getattr(reg, "switch_state", None))
+    drawn = learn.drawn_of(rig.loaded_patch.graph.spec)      # (plan 36 T4: what the graph draws)
     on: dict[str, Binding] = {}
     for b in table.desk():
         if b.enabled:
@@ -195,11 +195,11 @@ def coverage(home: Path, library: Path | None = None) -> tuple[list[apc40.Contro
     for group in CORPUS_GROUPS:
         _copy_in(CORPUS / group_folder(group), home / group_folder(group))
     if library is not None:
-        for group in (PRESETS,):        # (plan 44 D3: desk templates are retired)
+        for group in (LOADABLE,):        # (plan 44 D3: desk templates are retired)
             _copy_in(library / group, home / group)
     rig = boot(home)
     controls = layer_controls(rig.table)
-    names = rig.lib.list(PRESETS)
+    names = rig.lib.list(LOADABLE)
     return controls, [coverage_of(rig, n, controls) for n in names]
 
 

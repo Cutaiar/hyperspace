@@ -58,7 +58,7 @@ from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
@@ -119,14 +119,14 @@ def build(seconds: float) -> SimpleNamespace:
     routing.register_desk(reg, table)       # before attach, as app._desk_table does
     lib.attach(reg)
     router = Router(reg, table)
-    presets = Presets(lib, reg, router)
+    loaded_patch = LoadedPatch(lib, reg, router)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, table, inp=inp, out=out, clock=lambda: r.t)
     lib.project.load_startup()
     u = undo.Undo(reg, table, marks=Marks(lib), tag=lambda: tuple(s.name for s in chain.spec),
                   on_restore=router.sync_macros)
     undo.install(u)
-    r.__dict__.update(lib=lib, reg=reg, table=table, presets=presets, midi=midi, inp=inp,
+    r.__dict__.update(lib=lib, reg=reg, table=table, loaded_patch=loaded_patch, midi=midi, inp=inp,
                       out=out, undo=u)
     give_knobs(r)
     reg["desk.slew"].set(seconds)
@@ -245,7 +245,7 @@ def load_mid_glide() -> None:
     frames(r, 2)
     say(f"   2 frames into a turn to the end and a fade to black: pan {pan.base:.2f} units, "
         f"dim {dim.base:.3f}; gliding: {sorted(r.midi._slews)}")
-    r.presets.load("TRIP")
+    r.loaded_patch.load("TRIP")
     loaded = pan.base
     say(f"   load TRIP: pan is {loaded:.2f} units (the preset's)")
     frames(r)

@@ -177,7 +177,7 @@ def test_a_load_under_a_live_route_inherits_no_commit(rig):
     """The saved base plus the route's whole offset: a look holds no commit
     it never made. Its undo brings the commit back, nothing counted twice."""
     p = routed(rig)
-    rig.presets.save_as("LOOK")
+    rig.loaded_patch.save_as("LOOK")
     saved = p.norm
     rig.out_value[0] = 0.6
     go(rig, 2)
@@ -189,7 +189,7 @@ def test_a_load_under_a_live_route_inherits_no_commit(rig):
     settle_with(rig)
     committed, shown = p.norm, p.eff_norm
     assert committed == pytest.approx(saved + offset) and shown == pytest.approx(committed)
-    rig.presets.load("LOOK")
+    rig.loaded_patch.load("LOOK")
     go(rig, 2)
     p = rig.reg[p.id]
     assert p.norm == pytest.approx(saved)
@@ -208,8 +208,8 @@ def test_a_load_with_the_same_value_as_the_commit_inherits_nothing(rig):
     rig.reg[CHASE_PARAM].set(False)
     offset = p._trim
     assert offset > 0
-    rig.presets.save_as("SAME")                # the committed value, in a file
-    rig.presets.load("SAME")
+    rig.loaded_patch.save_as("SAME")                # the committed value, in a file
+    rig.loaded_patch.load("SAME")
     go(rig, 2)
     assert p.eff_norm == pytest.approx(p.norm + offset)
 
@@ -222,8 +222,8 @@ def test_a_loads_pose_inherits_no_commit(rig):
     go(rig, 2)
     rig.reg[CHASE_PARAM].set(False)
     assert p._trim
-    rig.presets.save_as("POSED")
-    rig.presets.load("POSED")
+    rig.loaded_patch.save_as("POSED")
+    rig.loaded_patch.load("POSED")
     assert p._trim == 0.0
 
 
@@ -638,26 +638,26 @@ def test_the_step_closes_on_the_undo_the_press_opened_it_on(rig):
 
 def test_a_hold_that_moved_nothing_costs_no_step_and_no_dirty_dot(rig):
     routed(rig)
-    dirty = rig.presets.is_dirty()
+    dirty = rig.loaded_patch.is_dirty()
     rig.undo.clear()
     rig.reg[CHASE_PARAM].set(True)
     go(rig, 5)                                 # the hand at rest: nothing to commit
     rig.reg[CHASE_PARAM].set(False)
     assert labels(rig) == []
-    assert rig.presets.is_dirty() == dirty
+    assert rig.loaded_patch.is_dirty() == dirty
 
 
 def test_a_commit_lights_the_dirty_dot_and_a_save_holds_it(rig):
     p = routed(rig)
-    rig.presets.save_as("CHASED")
-    assert not rig.presets.is_dirty()
+    rig.loaded_patch.save_as("CHASED")
+    assert not rig.loaded_patch.is_dirty()
     rig.out_value[0] = 0.6
     go(rig, 2)
-    assert not rig.presets.is_dirty(), "an offset alone is no edit"
+    assert not rig.loaded_patch.is_dirty(), "an offset alone is no edit"
     rig.reg[CHASE_PARAM].set(True)
     go(rig, 2)
     rig.reg[CHASE_PARAM].set(False)
-    assert rig.presets.is_dirty()
+    assert rig.loaded_patch.is_dirty()
     assert rig.reg.snapshot(part="patch")[p.id] == pytest.approx(p.value)
 
 

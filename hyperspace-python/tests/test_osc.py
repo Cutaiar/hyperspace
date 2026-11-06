@@ -65,8 +65,8 @@ def _show(tmp_path, devices_toml: str = PHONE, *, preset: bool = True):
     lrn.devices = rig
     rig.open_all()
     if preset:
-        assert app.presets.load(FIXTURE.stem) == []
-        assert app.presets.notes == [] and app.router.table.dropped == []
+        assert app.loaded_patch.load(FIXTURE.stem) == []
+        assert app.loaded_patch.notes == [] and app.router.table.dropped == []
     return NS(app=app, rig=rig, learn=lrn, cfg=cfg, home=home, now=[0.0])
 
 

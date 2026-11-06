@@ -70,7 +70,7 @@ def land_frame(rig, src, *shows):
     section = shown(src, *shows)
     spec = G.read_graph(section)
     assert not spec.notes, spec.notes
-    rig.lib.presets.graph.land(spec, spec.to_json())
+    rig.lib.loaded_patch.graph.land(spec, spec.to_json())
     return spec
 
 
@@ -312,7 +312,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     frame(rig.panel, "graph")
     assert st["said"] == ui_graph.ALREADY_TIDY
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.presets.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
     frame(rig.panel, "graph")
     assert st["applied"]["render:camera"] == (900.0, 40.0)
     st["tidy"] = True
@@ -321,7 +321,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     k = len({n.area for n in view.nodes if not n.idle})     # (plan 35 G: by primitive)
     assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in {k} areas, every one "
                           f"collapsed · {idle} idle off the canvas")
-    assert st["open"] == set() and rig.lib.presets.layout == {}
+    assert st["open"] == set() and rig.lib.loaded_patch.layout == {}
     auto = ui_graph.layout_of(st, view)
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
                if not n.idle)                           # N9: an idle node is not placed
@@ -897,7 +897,7 @@ def test_every_nodes_side_panel_draws(rig):
     — a toggle's checkbox, a trigger's chip and a combo beside the sliders."""
     st = party(rig)
     # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
-    e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
+    e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
     # (plan 36 T2: the pattern is in already — the faces' wire says it;
     # T4: an echo is the look-back's pin — its item adds the look-back)
     for kind, f in (("backdrop", None), ("guide", None), ("echo", "2"),
@@ -1027,7 +1027,7 @@ def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
     select row with its Learn menu sits under them, and the canvas's
     summary says the pick."""
     st = party(rig)
-    e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
+    e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
     assert e.add_node("switch") is None and e.added == "switch"
     assert e.wire("rout:channel.a", "rin:switch/in1") is None
     assert e.wire("rout:channel.c", "rin:switch/in3") is None

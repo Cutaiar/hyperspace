@@ -219,14 +219,14 @@ def test_a_branch_saves_as_v6_and_reloads(tmp_path):
     doc = {"schema": "hyperspace.preset/2", "name": "t", "graph": BRANCH, "values": {}}
     assert G.read_graph(copy.deepcopy(BRANCH)).to_json() == BRANCH
     app = make_app(tmp_path)
-    assert app.presets.load_doc(copy.deepcopy(doc)) == []
-    saved = app.presets.document("t")
-    wired, _ = M.seven(doc, app.presets.graph.specs())
+    assert app.loaded_patch.load_doc(copy.deepcopy(doc)) == []
+    saved = app.loaded_patch.document("t")
+    wired, _ = M.seven(doc, app.loaded_patch.graph.specs())
     assert saved["schema"] == M.SAVE_SCHEMA
     assert saved["graph"] == G.read_graph(wired["graph"]).to_json()     # (plan 36 T3: hands)
     assert saved["graph"][G.FRAME_KEY] == G.WIRED_FRAME
-    assert app.presets.load_doc(copy.deepcopy(saved)) == []
-    assert app.presets.document("t") == saved                 # and reloads as it saved
+    assert app.loaded_patch.load_doc(copy.deepcopy(saved)) == []
+    assert app.loaded_patch.document("t") == saved                 # and reloads as it saved
 
 
 def test_v6_is_refused_by_the_ladder_below(tmp_path):
@@ -234,11 +234,11 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     All outputs) is refused, values and all, by a plan 33/34 build's ladder
     (2 … 5) in its own words."""
     app = make_app(tmp_path)
-    app.presets.load_doc({"schema": "hyperspace.preset/6", "name": "six", "values": {},
+    app.loaded_patch.load_doc({"schema": "hyperspace.preset/6", "name": "six", "values": {},
                           "graph": {"frame": "wired", "nodes": [],
                                     "wires": [{"from": "channel.a",
                                                "to": "output.all.image"}]}})
-    app.presets.save_as("six")
+    app.loaded_patch.save_as("six")
     lib = app.lib
     assert lib.read("presets", "six")["schema"] == M.SAVE_SCHEMA
     kinds = lib._kinds
@@ -322,8 +322,8 @@ def loaded(tmp_path: Path, path: Path):
         shutil.copyfile(path, tmp_path / "presets" / path.name)
     app = make_app(tmp_path)
     app.lib.load("presets", path.stem)
-    gs = app.presets.graph
-    return gs.spec, gs.free_doc(), list(app.presets.notes)
+    gs = app.loaded_patch.graph
+    return gs.spec, gs.free_doc(), list(app.loaded_patch.notes)
 
 
 def old_ends(spec: G.GraphSpec) -> list[str]:

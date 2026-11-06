@@ -75,7 +75,7 @@ def load(rig, name, graph=None):
     section = getattr(rig.panel.renderer._graph, "section", None)
     if name == "party-trip" and section is not None:
         spec = G.read_graph(section)
-        rig.lib.presets.graph.land(spec, spec.to_json())
+        rig.lib.loaded_patch.graph.land(spec, spec.to_json())
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     return ui_graph._state(rig.panel)
@@ -281,7 +281,7 @@ def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
     # (2026-10-26: no layout runs on its own; only tidy lays out again)
     below = next(n.id for n in drawn if n.column == view.node("render:shape").column
                  and lay.nodes[n.id][1] > lay.nodes["render:shape"][1])
-    rig.lib.presets.layout["render:shape"] = [4000, 4000]
+    rig.lib.loaded_patch.layout["render:shape"] = [4000, 4000]
     frame(rig.panel, "graph")
     assert st["applied"]["render:shape"] == (4000.0, 4000.0)
     assert st["applied"][below] == lay.nodes[below]
@@ -295,7 +295,7 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     view = st["view"]
     ui_graph.toggle_idle(st, graphview.MODULATION)
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.presets.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
@@ -308,7 +308,7 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     k = len({n.area for n in view.nodes if not n.idle})
     assert st["said"] == (f"laid out {len(view.nodes) - 26} nodes in {k} areas, every one "
                           "collapsed · 26 idle off the canvas")
-    assert st["idle_open"] == set() and st["open"] == set() and rig.lib.presets.layout == {}
+    assert st["idle_open"] == set() and st["open"] == set() and rig.lib.loaded_patch.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
     assert st["applied"][graphview.idle_id(graphview.MODULATION)] == lay.lines[
@@ -685,7 +685,7 @@ def test_a_node_is_laid_where_its_consumers_are(rig):
     lay = ui_graph.areas_of(st, view)
     assert lay.nodes["render:acid.2"][0] < lay.nodes["render:lookback"][0]
     # a saved position wins: the rule names an area, it moves no placed node
-    rig.lib.presets.layout["render:acid.2"] = [4000, 4000]
+    rig.lib.loaded_patch.layout["render:acid.2"] = [4000, 4000]
     frame(rig.panel, "graph")
     assert st["applied"]["render:acid.2"] == (4000.0, 4000.0)
 
@@ -767,7 +767,7 @@ def test_a_blank_preset_draws_only_the_outputs(rig, monkeypatch):
             ch.bin = [None] * len(ch.bin)
             if c in filled:
                 ch.bin[0] = "local:still.png"
-        spec = rig.lib.presets.graph.spec
+        spec = rig.lib.loaded_patch.graph.spec
         rig.panel.renderer = NS(_graph=G.build_graph(views(Switches(), Switches()),
                                                      spec.wiring()))
         frame(rig.panel, "graph")
@@ -857,7 +857,7 @@ def test_insert_effect_lands_where_the_cable_was_clicked(rig):
     view = st["view"]
     c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
     assert ui_graph.insert_effect(rig.panel, c, "kaleido", (321.0, 654.0)) is None
-    placed = {k: v for k, v in rig.lib.presets.layout.items() if v == [321, 654]}
+    placed = {k: v for k, v in rig.lib.loaded_patch.layout.items() if v == [321, 654]}
     assert len(placed) == 1 and next(iter(placed)).startswith("render:kaleido")
 
 
@@ -908,11 +908,11 @@ def test_a_panned_canvas_moves_every_node_and_saves_where_they_lie(rig):
     moved = [k for k, v in before.items() if k in st["applied"]]
     assert moved and all(st["applied"][k] == (before[k][0] + 100.0, before[k][1] - 50.0)
                          for k in moved)
-    assert rig.lib.presets.layout == {}
+    assert rig.lib.loaded_patch.layout == {}
     view = st["view"]
     c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
     assert ui_graph.insert_effect(rig.panel, c, "kaleido", (400.0, 300.0)) is None
-    assert [300, 350] in rig.lib.presets.layout.values()
+    assert [300, 350] in rig.lib.loaded_patch.layout.values()
 
 
 def test_a_pinch_zooms_by_just_what_the_fingers_spread(monkeypatch):
@@ -964,7 +964,7 @@ def test_a_fractional_pan_moves_nothing_it_saves(rig):
     for k in range(30):
         st["pan"] = (37.3 * k - 400.6, -21.7 * k + 150.45)
         frame(rig.panel, "graph")
-    assert rig.lib.presets.layout == {}
+    assert rig.lib.loaded_patch.layout == {}
 
 
 def test_esc_closes_the_details(rig):
@@ -1109,6 +1109,6 @@ def test_a_preset_landing_without_the_node_lets_it_go(rig):
     frame(panel, "view")
     assert panel.graph_selected == "render:pattern"
     at = panel.graph_selected_at
-    rig.lib.presets.new()                                 # shape → scene → output: no pattern
+    rig.lib.loaded_patch.new()                                 # shape → scene → output: no pattern
     frame(panel, "view")
     assert panel.graph_selected is None and panel.graph_selected_at > at

@@ -138,7 +138,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-PRESETS = "presets"
+LOADABLE = "presets"
 PROJECTS = "projects"
 SHOW_SUFFIX = ".hyp.json"
 BACKUP_PREFIX = "library-backup-"
@@ -194,7 +194,7 @@ def preset_files(library: Path) -> list[Path]:
     (``.bak-``) and anything in ``trash/`` left out."""
     from hyperspace.library import _walk
 
-    folder = library / PRESETS
+    folder = library / LOADABLE
     if not folder.is_dir():
         return []
     return [p for p in _walk(folder)
@@ -472,7 +472,7 @@ def show_write(todo) -> list[str]:
 
 # plan 50: the folders in a library root that hold no module presets — the
 # document kinds', the shows', the trash, the old routing presets
-NOT_MODULES = (PRESETS, PROJECTS, "patches", "trash", "bindings")
+NOT_MODULES = (LOADABLE, PROJECTS, "patches", "trash", "bindings")
 
 
 def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]]:
@@ -653,8 +653,8 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     home = machine_home()
     library = (a.library if a.library is not None else configured_library(home)).expanduser()
     library = library.resolve()
-    if not (library / PRESETS).is_dir():
-        print(f"no presets folder at {library / PRESETS}", file=sys.stderr)
+    if not (library / LOADABLE).is_dir():
+        print(f"no presets folder at {library / LOADABLE}", file=sys.stderr)
         return 2
     try:
         _show, seed, said = rig_show(library, home, a.show)
@@ -707,7 +707,7 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
                      if not a.apply and shared_retapers(library, retapers) else library)
         for k, path in enumerate(files):
             r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed,
-                      file=path.relative_to(library / PRESETS).as_posix())
+                      file=path.relative_to(library / LOADABLE).as_posix())
             results.append(r)
             print(line(r), flush=True)
     counts: dict[str, int] = {}
@@ -731,7 +731,7 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
         print(f"wrote {len(writes)} as /10 into {a.to}, skipped {len(skipped)}")
     elif a.apply:
         for r in writes:
-            write(library / PRESETS / r.file, r.data)
+            write(library / LOADABLE / r.file, r.data)
         print(f"rewrote {len(writes)} as /10, left {len(untouched)} untouched (already /10), "
               f"skipped {len(skipped)}")
         for problem in show_write(shows):

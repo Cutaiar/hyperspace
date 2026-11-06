@@ -21,7 +21,7 @@ def test_records_says_and_sets_the_capture(tmp_path):
     assert capture_line(spec) == "records: Scene"
     assert draws_over_line(spec) == "draws over: Scene"
     rig, e, pushed = free_rig(tmp_path, *_pairs(DEFAULT), nodes=DEFAULT["nodes"])
-    gs = rig.presets.graph
+    gs = rig.loaded_patch.graph
     before = gs.spec.to_json()
     assert graphview.picture_choices(gs.spec, "lookback.image")[0] == "nothing"
     assert graphview.picture_now(gs.spec, "lookback.image") == "scene"

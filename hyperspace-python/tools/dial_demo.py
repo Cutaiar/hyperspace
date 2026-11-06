@@ -169,7 +169,7 @@ def draw(self, dt, fps):
     state.panel = self
     self.reg["ui.page"].set(PAGE_KEYS.index("system"))
     if not state.loaded and self.library is not None:
-        self.library.presets.load("DIAL")
+        self.library.loaded_patch.load("DIAL")
         state.loaded = True
     k, name, _, swap = at_frame(state.n)
     if swap:

@@ -18,7 +18,7 @@ from ui_driver import Driver
 
 from hyperspace import app, lfo, routing, ui_graph, ui_pane, undo
 from hyperspace.deck import Deck, MetaController
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.params import part_of, part_of_id
 from hyperspace.routing import Binding
 from hyperspace.ui import META_SECTIONS, PAGE_KEYS
@@ -114,20 +114,20 @@ def test_edit_undo_follows_the_panels_deck_and_a_stack_stays_with_its_deck(rig):
 def test_the_dot_is_per_deck(rig):
     """A deck's dirty dot compares that deck's state with what that deck loaded:
     an edit on deck 2 lights deck 2's and not deck 1's, and its undo puts it out."""
-    one, two = rig.one.presets.lib, rig.two.presets.lib
-    name = rig.lib.list(PRESETS)[0]
-    rig.two.presets.load(name)
+    one, two = rig.one.loaded_patch.lib, rig.two.loaded_patch.lib
+    name = rig.lib.list(LOADABLE)[0]
+    rig.two.loaded_patch.load(name)
     go(rig)
-    assert not two.is_dirty(PRESETS) and not one.is_dirty(PRESETS)
+    assert not two.is_dirty(LOADABLE) and not one.is_dirty(LOADABLE)
     rig.two.reg["view.bright"].step(5)
     go(rig)
-    assert two.is_dirty(PRESETS) and two.is_dirty("view")
-    assert not one.is_dirty(PRESETS) and not one.is_dirty("view")
+    assert two.is_dirty(LOADABLE) and two.is_dirty("view")
+    assert not one.is_dirty(LOADABLE) and not one.is_dirty("view")
     assert rig.two.undo.undo()
-    assert not two.is_dirty(PRESETS) and not two.is_dirty("view")
+    assert not two.is_dirty(LOADABLE) and not two.is_dirty("view")
     rig.one.reg["view.bright"].step(5)
     go(rig)
-    assert one.is_dirty(PRESETS) and not two.is_dirty(PRESETS)
+    assert one.is_dirty(LOADABLE) and not two.is_dirty(LOADABLE)
 
 
 def test_a_meta_knob_is_one_step_on_the_meta_stack(rig):
@@ -160,7 +160,7 @@ def test_undo_on_either_deck_never_moves_a_meta_param(rig, which):
     rig.meta.point_panel(deck)
     deck.reg["view.bright"].step(3)
     go(rig)
-    deck.presets.load(rig.lib.list(PRESETS)[1])
+    deck.loaded_patch.load(rig.lib.list(LOADABLE)[1])
     go(rig)
     rig.reg["master.gain"].step(-3)                    # the hour-old analyzer tweak
     rig.reg["band.0.thr"].step(4)
@@ -215,19 +215,19 @@ def test_undo_in_a_meta_section_never_moves_a_deck(rig, which):
 def test_a_load_is_a_step_on_its_decks_stack_and_recovers_a_mistake(rig):
     """A mistaken load is one ⌘Z, on the deck it landed on: its name, reference,
     routes, an unsaved edit before it, and nothing on the other deck."""
-    two, name = rig.two, rig.lib.list(PRESETS)[1]
+    two, name = rig.two, rig.lib.list(LOADABLE)[1]
     other = bases(rig.one)
     two.reg["view.bright"].step(4)
     go(rig)
-    before = (bases(two), two.presets.current, [b.to_json() for b in two.table.routes()])
+    before = (bases(two), two.loaded_patch.current, [b.to_json() for b in two.table.routes()])
     n = len(two.undo.stack)
-    two.presets.load(name)
+    two.loaded_patch.load(name)
     go(rig)
     assert [s.label for s in two.undo.stack][n:] == [f"load {name}"]
     assert rig.one.undo.stack == [] and rig.meta.undo.stack == []
     assert two.undo.undo() and two.undo.status == f"undid load {name}"
     assert all(undo.alike(v, before[0][k]) for k, v in bases(two).items())
-    assert two.presets.current == before[1]
+    assert two.loaded_patch.current == before[1]
     assert [b.to_json() for b in two.table.routes()] == before[2]
     assert bases(rig.one) == other
 
@@ -245,7 +245,7 @@ def test_a_decks_undo_never_relands_the_meta_controllers_strip(rig):
     go(rig)
     moved = lib.landed("band")
     assert lib.current("band") != "Mine"
-    rig.one.presets.load(lib.list(PRESETS)[2])
+    rig.one.loaded_patch.load(lib.list(LOADABLE)[2])
     go(rig)
     assert "band" not in rig.one.marks.lands() and "band" not in rig.two.marks.lands()
     assert rig.one.undo.undo()
@@ -282,7 +282,7 @@ def test_the_shows_mark_is_on_the_meta_stack(rig):
     go(rig)
     rig.reg["edit.undo"].fire()
     rig.reg["edit.undo"].fire()
-    assert one.presets.current == "TUMBLE" and pr.name == "party"
+    assert one.loaded_patch.current == "TUMBLE" and pr.name == "party"
 
 
 def test_the_meta_controllers_rows_are_a_step_and_their_undo_writes_their_file(rig):
@@ -319,11 +319,11 @@ def test_a_corpus_walk_a_decks_stack_holds_no_meta_param(rig):
     """Every corpus preset loaded on each deck, every step's state read: no base of
     a meta param on a deck's stack, no base of a preset's on the meta stack, and the
     walk makes no step on the meta stack at all."""
-    names = rig.lib.list(PRESETS)
+    names = rig.lib.list(LOADABLE)
     assert len(names) > 3
     for deck in (rig.one, rig.two):
         for name in names:
-            deck.presets.load(name)
+            deck.loaded_patch.load(name)
             go(rig, 3)
         go(rig)
         assert len(deck.undo.stack) >= len(names) - 1

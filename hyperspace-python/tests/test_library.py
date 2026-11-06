@@ -30,7 +30,7 @@ from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, SCENES_DIR, Control
 from hyperspace.library import Library, LibraryError, migrate_doc, scene_doc, slug
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Bindings as _Bindings
 from hyperspace.routing import Router as _Router
 from hyperspace.view import ViewState
@@ -66,9 +66,9 @@ def make(home, show: str | None = "house"):
     lib = Library(home, period=0.0)
     reg = build_registry(view, control, audio, lib.project)
     lib.attach(reg)
-    presets = Presets(lib, reg, _Router(reg, _Bindings()))    # the bank's loader, as app.py builds it
+    loaded_patch = LoadedPatch(lib, reg, _Router(reg, _Bindings()))    # the bank's loader, as app.py builds it
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
-                           presets=presets)
+                           loaded_patch=loaded_patch)
 
 
 @pytest.fixture()
@@ -410,7 +410,7 @@ def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
     like any module's. A user's old bindings/ folder is no group."""
     from hyperspace.routing import Binding
 
-    lib, router = rig.lib, rig.presets.router
+    lib, router = rig.lib, rig.loaded_patch.router
     # plan 40 T1: and the patches, a kind that is spawned, never loaded
     assert lib.kinds == ("patches", "presets") and not hasattr(lib, "routing")
     (tmp_path / "bindings").mkdir()
@@ -469,7 +469,7 @@ def test_the_preset_kind_reaches_presets_at_call_time(rig):
     hold the pre-reload bound methods (was the routing kind's test)."""
     lib = rig.lib
     seen = []
-    rig.presets.signature = lambda: seen.append("sig") or ()
+    rig.loaded_patch.signature = lambda: seen.append("sig") or ()
     lib.load("presets", "hands-play")
     assert seen == ["sig"]
 
@@ -785,8 +785,8 @@ def test_a_save_that_changes_nothing_trashes_nothing(rig, tmp_path):
         lib.overwrite("view")
         lib.save_as("view", "Same")
     assert trash(tmp_path, "view") == [] and not (tmp_path / library.TRASH).exists()
-    rig.presets.save_as("LOOK")
-    rig.presets.save_as("LOOK")
+    rig.loaded_patch.save_as("LOOK")
+    rig.loaded_patch.save_as("LOOK")
     assert not (tmp_path / library.TRASH).exists()
     reg["view.bright"].set_value(1.5)
     lib.overwrite("view")

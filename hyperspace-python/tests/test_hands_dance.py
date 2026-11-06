@@ -249,8 +249,8 @@ def show(tmp_path, tape_path):
     (home / "presets").mkdir(parents=True)
     shutil.copyfile(FIXTURE, home / "presets" / FIXTURE.name)
     app = boot_home(home)
-    assert app.presets.load(FIXTURE.stem) == []
-    assert app.presets.notes == [] and app.router.table.dropped == []
+    assert app.loaded_patch.load(FIXTURE.stem) == []
+    assert app.loaded_patch.notes == [] and app.router.table.dropped == []
     return NS(app=app, r=_rig(tape_path))
 
 

@@ -180,7 +180,7 @@ def test_the_crossfader_keeps_its_hold_across_a_preset_load(rig):
     assert xf.last_hw > dim.norm == pytest.approx(0.5)      # the fader just above the value
     serial = t.desk_serial
     push(rig, note(apc40.N_CLIP[0], channel=2))             # a preset load, off the clip row
-    assert rig.presets.active == 2 and t.desk_serial > serial
+    assert rig.loaded_patch.active == 2 and t.desk_serial > serial
     assert xf.caught and master.caught                       # still held
     assert dim.norm == pytest.approx(0.5)                    # and the load did not move it
     push(rig, cc(apc40.CC_XFADE, 30))                        # down, away from the fader's side
@@ -594,7 +594,7 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
     layer, which no preset's desk may map — and its LED is lit while the
     show names one, dark when it names none. Home is a load: it drops to
     the preset layer (D4)."""
-    t, proj = rig.midi.table, rig.presets
+    t, proj = rig.midi.table, rig.loaded_patch
     lib, n = proj.lib, apc40.N_OVERDUB
     (b,) = t.route("note", 0, n)
     assert (b.target, b.op, b.layer, b.feedback) == ("preset.home", "toggle", None, "led")
@@ -737,7 +737,7 @@ def test_a_preset_load_stops_a_glide_on_a_performance_param_and_not_on_the_dim(t
     frames(r, 3)
     assert set(slews) == {p.id, "output.xfade"}
     assert r.lib.current("presets") == "TUMBLE"
-    r.presets.load("TRIP")                          # mid-glide
+    r.loaded_patch.load("TRIP")                          # mid-glide
     loaded, dim_mid = p.base, dim.norm
     frames(r)
     assert set(slews) == {"output.xfade"} and p.base == loaded and dim.norm < dim_mid
@@ -773,7 +773,7 @@ def test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers(rig):
     nothing and says the slot is empty (D8), as row 1 does."""
     from hyperspace import library
 
-    t, pr, lib = rig.midi.table, rig.presets, rig.presets.lib
+    t, pr, lib = rig.midi.table, rig.loaded_patch, rig.loaded_patch.lib
     assert len(apc40.BANK_PADS) == library.SLOTS == len(pr.bank) == 24
     assert apc40.BANK_PADS[:8] == [(apc40.N_CLIP[0], k) for k in range(8)]
     assert apc40.BANK_PADS[8:16] == [(apc40.N_CLIP[3], k) for k in range(8)]
@@ -818,7 +818,7 @@ def test_the_bank_pads_are_invariant(rig):
     preset's. A Learn on one is refused in the existing words (through a
     press, which does its own job, and through `learn_control`, a click's
     road); a preset's row on one is dropped with the existing note."""
-    t, pr, m = rig.midi.table, rig.presets, rig.midi
+    t, pr, m = rig.midi.table, rig.loaded_patch, rig.midi
     lib = pr.lib
     for k, (n, ch) in enumerate(apc40.BANK_PADS):
         (b,) = t.route("note", ch, n)

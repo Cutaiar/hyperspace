@@ -191,10 +191,10 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     port = view.owner("mod:view.bright")[1]
     assert port.pins[:2] == ("base:view.bright", "mod:view.bright")
     # where each node's position lives
-    assert graphview.home(view.node("render:shape")) == graphview.PRESET
+    assert graphview.home(view.node("render:shape")) == graphview.PATCH_SECTION
     assert graphview.home(view.node("render:output.1")) == graphview.META_SECTION
     # plan 31 G1: an LFO is the preset's (a bank's membership is preset content)
-    assert graphview.home(view.node("lfo.1")) == graphview.PRESET
+    assert graphview.home(view.node("lfo.1")) == graphview.PATCH_SECTION
     assert graphview.home(view.node(graphview.ANALYZER)) == graphview.META_SECTION
     assert graphview.home(view.node("group:tempo")) == graphview.META_SECTION
 
@@ -303,12 +303,12 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
            "render:hands.2.guide": [11, 12], "render:acid.2": [13, 14], "lfo.1": [15, 16]}
     assert M.renamed_layout(old) == new
     assert M.renamed_layout(new) == new           # (new ids: untouched — `render:hands` too)
-    lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
+    lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.project
     lib.load("presets", "party-trip")
-    doc = presets.document("party-trip")
+    doc = loaded_patch.document("party-trip")
     doc[LAYOUT_KEY] = old
-    presets.load_doc(doc)
-    assert presets.layout == new
+    loaded_patch.load_doc(doc)
+    assert loaded_patch.layout == new
     project.save("old-show")
     raw = json.loads(project.path.read_text())
     raw["layout"] = {"render:eye": [40, 50], "render:output.1": [60, 70]}
@@ -326,32 +326,32 @@ def test_layout_round_trips_through_the_preset_and_the_show(rig):
     (every corpus preset) loads with no note and no dirt; one with a bad
     entry keeps the good ones and says so."""
     from hyperspace.preset import LAYOUT_KEY
-    lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
+    lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.project
     lib.load("presets", "party-trip")
     # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
     # values, which this rig — the panel's, built without them — lacks)
-    said = [n for n in presets.notes if not n.endswith("…") or "env." not in n]
-    assert presets.layout == {} and said == [] and not lib.is_dirty("presets")
-    assert LAYOUT_KEY not in presets.document("party-trip")
-    presets.layout["render:shape"] = [520, 40]
-    presets.layout["mod.1"] = [260, 300]
+    said = [n for n in loaded_patch.notes if not n.endswith("…") or "env." not in n]
+    assert loaded_patch.layout == {} and said == [] and not lib.is_dirty("presets")
+    assert LAYOUT_KEY not in loaded_patch.document("party-trip")
+    loaded_patch.layout["render:shape"] = [520, 40]
+    loaded_patch.layout["mod.1"] = [260, 300]
     assert lib.is_dirty("presets")                  # a node moved is an edit
     lib.save_as("presets", "trip-laid")
     doc = lib.read("presets", "trip-laid")
     assert doc[LAYOUT_KEY] == {"mod.1": [260, 300], "render:shape": [520, 40]}
     lib.load("presets", "party-trip")
-    assert presets.layout == {}
+    assert loaded_patch.layout == {}
     lib.load("presets", "trip-laid")
-    assert presets.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
+    assert loaded_patch.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
     assert not lib.is_dirty("presets")
     # one entry a line in the file
     text = (lib.path_of("presets", "trip-laid")).read_text()
     assert '  "render:shape": [520, 40]' in text
     # a bad entry: dropped, said
     doc[LAYOUT_KEY]["oops"] = ["x", 1]
-    presets.load_doc(doc)
-    assert presets.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
-    assert any(n.startswith("layout: 1 entry") for n in presets.notes)
+    loaded_patch.load_doc(doc)
+    assert loaded_patch.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
+    assert any(n.startswith("layout: 1 entry") for n in loaded_patch.notes)
     # the show: the rig's nodes
     project.save("laid-show")
     assert not project.is_dirty()
@@ -513,7 +513,7 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     rig.lib.load("presets", "party-trip")
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
-    assert rig.lib.presets.layout == {} and rig.lib.project.layout == {}
+    assert rig.lib.loaded_patch.layout == {} and rig.lib.project.layout == {}
     assert not rig.lib.is_dirty("presets")
 
     def move():
@@ -523,13 +523,13 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     _in_editor(rig, move)
     frame(rig.panel, "graph")
     # N9: lfo.2 is idle, not drawn
-    assert rig.lib.presets.layout == {"render:camera": [700, 50], "lfo.1": [30, 640]}
+    assert rig.lib.loaded_patch.layout == {"render:camera": [700, 50], "lfo.1": [30, 640]}
     assert rig.lib.project.layout == {"analyzer": [40, 20]}
     assert rig.lib.is_dirty("presets")
     # tidy forgets them both
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert rig.lib.presets.layout == {} and rig.lib.project.layout == {}
+    assert rig.lib.loaded_patch.layout == {} and rig.lib.project.layout == {}
 
 
 def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_close(rig,
@@ -637,20 +637,20 @@ def test_undoing_a_load_puts_the_earlier_layout_back(tmp_path):
     """The marks carry the GRAPH page's positions: undoing a preset load
     over a plain preset leaves no positions and no dirt; undoing a show
     load gives the earlier show's map back, clean."""
-    from hyperspace.library import PRESETS
+    from hyperspace.library import LOADABLE
     r, settle = _undo_rig(tmp_path)
-    lib, presets, pr = r.lib, r.presets, r.lib.project
-    presets.save_as("plain")
-    presets.layout["render:shape"] = [40, 80]
-    presets.save_as("laid")
-    lib.load(PRESETS, "plain")
+    lib, loaded_patch, pr = r.lib, r.loaded_patch, r.lib.project
+    loaded_patch.save_as("plain")
+    loaded_patch.layout["render:shape"] = [40, 80]
+    loaded_patch.save_as("laid")
+    lib.load(LOADABLE, "plain")
     settle(r)
-    lib.load(PRESETS, "laid")
+    lib.load(LOADABLE, "laid")
     settle(r)
-    assert presets.layout == {"render:shape": [40, 80]}
+    assert loaded_patch.layout == {"render:shape": [40, 80]}
     assert r.undo.undo()
-    assert lib.current(PRESETS) == "plain"
-    assert presets.layout == {} and not lib.is_dirty(PRESETS)
+    assert lib.current(LOADABLE) == "plain"
+    assert loaded_patch.layout == {} and not lib.is_dirty(LOADABLE)
     # the show
     pr.save("show-plain")
     pr.layout["lfo.1"] = [0, 10]
@@ -671,24 +671,24 @@ def test_a_tidy_is_one_undo_step(tmp_path):
     ⇧⌘Z tidies both again."""
     from types import SimpleNamespace
 
-    from hyperspace.library import PRESETS
+    from hyperspace.library import LOADABLE
     r, settle = _undo_rig(tmp_path)
-    lib, presets, pr = r.lib, r.presets, r.lib.project
-    presets.layout["render:shape"] = [40, 80]
+    lib, loaded_patch, pr = r.lib, r.loaded_patch, r.lib.project
+    loaded_patch.layout["render:shape"] = [40, 80]
     pr.layout["lfo.1"] = [0, 10]
     settle(r)
     view = graphview.View(nodes=[graphview.VNode("render:shape", "render", "shape"),
                                  graphview.VNode("lfo.1", "lfo", "LFO 1")])
     ui_graph.forget(SimpleNamespace(library=lib), view)
-    assert presets.layout == {} and pr.layout == {}
+    assert loaded_patch.layout == {} and pr.layout == {}
     settle(r)
     assert r.undo.undo() and r.undo.status.endswith("tidy the graph")
-    assert presets.layout == {"render:shape": [40, 80]} and pr.layout == {"lfo.1": [0, 10]}
-    assert lib.is_dirty(PRESETS)            # the positions are still not saved
+    assert loaded_patch.layout == {"render:shape": [40, 80]} and pr.layout == {"lfo.1": [0, 10]}
+    assert lib.is_dirty(LOADABLE)            # the positions are still not saved
     settle(r)
     assert r.undo.redo() and r.undo.status.endswith("tidy the graph")
-    assert presets.layout == {} and pr.layout == {}     # both maps tidied again
-    assert not lib.is_dirty(PRESETS)        # (the saved preset holds no positions either)
+    assert loaded_patch.layout == {} and pr.layout == {}     # both maps tidied again
+    assert not lib.is_dirty(LOADABLE)        # (the saved preset holds no positions either)
 
 
 # ---------------------------------------------------------------- plan 32 T10: the media area

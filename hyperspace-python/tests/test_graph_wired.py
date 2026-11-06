@@ -316,7 +316,7 @@ def test_a_full_wired_frame_saves_as_it_stands(tmp_path):
     want = G.read_graph(section).to_json()
     app = make_app(tmp_path)
     doc = {"schema": M.WIRED_SCHEMA, "name": "full", "values": {}, "graph": section}
-    assert app.presets.load_doc(doc) == []
-    out = app.presets.document("full")
+    assert app.loaded_patch.load_doc(doc) == []
+    out = app.loaded_patch.document("full")
     assert out["schema"] == M.SAVE_SCHEMA and out["graph"] == want
-    assert app.presets.load_doc(out) == [] and app.presets.document("full") == out
+    assert app.loaded_patch.load_doc(out) == [] and app.loaded_patch.document("full") == out

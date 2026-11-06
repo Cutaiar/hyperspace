@@ -133,8 +133,8 @@ def test_a_step_still_open_when_focus_comes_opens_nothing(rig):
 
 def _pad_rig(rig):
     """A filled pad 1, with deck 2 holding a look of its own, every stack quiet."""
-    rig.one.presets.lib.project.bank[0] = "party-wake"
-    rig.two.presets.load("party-trip")
+    rig.one.loaded_patch.lib.project.bank[0] = "party-wake"
+    rig.two.loaded_patch.load("party-trip")
     go(rig)
 
 
@@ -163,7 +163,7 @@ def test_a_mis_pressed_pad_then_cmd_z_takes_nothing_from_the_room(rig):
 
 def test_copy_on_air_then_cmd_z_takes_nothing_from_the_room(rig):
     """The head's copy lands on the deck off air, just as a pad's load."""
-    rig.two.presets.load("party-trip")
+    rig.two.loaded_patch.load("party-trip")
     go(rig)
     p = rig.one.reg[BRIGHT]
     change(rig.one.reg)
@@ -180,20 +180,20 @@ def test_a_pad_then_the_panel_on_that_deck_is_still_latched(rig):
     """Rule 4 in the case that made it: the load is on deck 2's stack, the panel comes
     after it, and ⌘Z refuses. Touch it, double undo, and the load goes back."""
     _pad_rig(rig)
-    was = rig.two.presets.current
+    was = rig.two.loaded_patch.current
     rig.one.reg["preset.load.0"].fire()
     go(rig)
-    assert rig.two.presets.current != was
-    loaded = rig.two.presets.current
+    assert rig.two.loaded_patch.current != was
+    loaded = rig.two.loaded_patch.current
     rig.meta.point_panel(rig.two)
     press(rig)
     refused_on(rig.two.undo, "undo", "on deck 2")
-    assert rig.two.presets.current == loaded
+    assert rig.two.loaded_patch.current == loaded
     change(rig.two.reg)
     go(rig)
     press(rig)
     press(rig)
-    assert rig.two.presets.current == was
+    assert rig.two.loaded_patch.current == was
 
 
 def test_the_same_inside_the_settle_time(rig):
@@ -201,21 +201,21 @@ def test_the_same_inside_the_settle_time(rig):
     _pad_rig(rig)
     rig.one.reg["preset.load.0"].fire()
     rig.meta.point_panel(rig.two)
-    loaded = rig.two.presets.current
+    loaded = rig.two.loaded_patch.current
     press(rig)
     refused_on(rig.two.undo, "undo", "on deck 2")
-    assert rig.two.presets.current == loaded
+    assert rig.two.loaded_patch.current == loaded
 
 
 def test_a_pad_with_the_panel_on_that_deck_is_a_push_where_you_are(rig):
     """Rule 4 for the words "⌘Z takes it back": the push comes after the focus event."""
     _pad_rig(rig)
     rig.meta.point_panel(rig.two)
-    was = rig.two.presets.current
+    was = rig.two.loaded_patch.current
     rig.one.reg["preset.load.0"].fire()
     assert rig.lib.status.endswith("; ⌘Z takes it back")
     press(rig)
-    assert rig.two.presets.current == was
+    assert rig.two.loaded_patch.current == was
 
 
 def test_meta_is_one_rule_with_the_decks(rig):
@@ -428,14 +428,14 @@ def test_a_load_of_the_look_already_there_opens_nothing_for_a_press_inside_the_s
     rig.meta.point_panel(rig.two)
     rig.one.reg["preset.load.0"].fire()
     go(rig)
-    loaded, steps = rig.two.presets.current, len(rig.two.undo.stack)
+    loaded, steps = rig.two.loaded_patch.current, len(rig.two.undo.stack)
     rig.meta.point_panel(rig.one)
     rig.meta.point_panel(rig.two)
     rig.one.reg["preset.load.0"].fire()
     assert rig.two.undo._open is not None
     press(rig)
     refused_on(rig.two.undo, "undo", "on deck 2")
-    assert rig.two.presets.current == loaded
+    assert rig.two.loaded_patch.current == loaded
     go(rig)
     assert rig.two.undo.latched and len(rig.two.undo.stack) == steps
 
@@ -500,10 +500,10 @@ def test_a_failed_load_shuts_nothing(rig, settled):
 
 def test_a_pad_whose_file_will_not_load_shuts_nothing(rig):
     """The same by the pad's road, with a file that is not there."""
-    rig.one.presets.lib.project.bank[0] = "party-wake"
+    rig.one.loaded_patch.lib.project.bank[0] = "party-wake"
     p, was = _room_step(rig)
     moved = p.base
-    rig.one.presets.lib.project.bank[0] = "no-such-look"
+    rig.one.loaded_patch.lib.project.bank[0] = "no-such-look"
     rig.one.reg["preset.load.0"].fire()
     go(rig)
     assert p.base == moved and not rig.one.undo.latched
@@ -555,7 +555,7 @@ def test_a_real_load_latches_the_room_as_it_lands(rig):
 
 def test_a_copy_onto_an_empty_deck_latches_the_room_though_its_step_is_cleared(rig):
     """`copy_on_air` clears the step it opened: the look landed all the same."""
-    assert rig.two.presets.current is None and not rig.two.undo.stack
+    assert rig.two.loaded_patch.current is None and not rig.two.undo.stack
     p, _was = _room_step(rig)
     moved = p.base
     rig.meta.copy_on_air()

@@ -663,7 +663,7 @@ def _preset_rig(ctx, tmp_path):
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
-    from hyperspace.preset import Presets
+    from hyperspace.preset import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
     chain = Analyzer(Analyser())
@@ -680,8 +680,8 @@ def _preset_rig(ctx, tmp_path):
     lfo.register(reg, lfo.LFOs(), clock)
     lib.attach(reg)
     router = Router(reg, Bindings())
-    presets = Presets(lib, reg, router)
-    return SimpleNamespace(lib=lib, reg=reg, view=view, r=r, presets=presets)
+    loaded_patch = LoadedPatch(lib, reg, router)
+    return SimpleNamespace(lib=lib, reg=reg, view=view, r=r, loaded_patch=loaded_patch)
 
 
 def _final_alpha(ctx, b, bg_alpha, w=240, h=160, frames=4):
@@ -721,7 +721,7 @@ def test_every_corpus_preset_renders_opaque_in_window_mode(ctx, tmp_path, name):
     first = _corpus_presets()[0] if name in STRESS else name
     path = b.lib.path_of("presets", first)
     assert path is not None, first
-    b.presets.load(json.loads(path.read_text())["name"])
+    b.loaded_patch.load(json.loads(path.read_text())["name"])
     assert b.lib.current("presets") is not None
     if name in STRESS:
         # (plan 36 T3: every effect file exists for the stress, as before a

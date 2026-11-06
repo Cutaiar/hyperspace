@@ -35,10 +35,10 @@ def make(tmp_path):
     view = ViewState()
     seed(tmp_path)                  # the corpus: the shipped presets, the party and house shows
     lib = Library(tmp_path)
-    presets = lib.project
-    reg = build_registry(view, control, audio, presets)
+    project = lib.project
+    reg = build_registry(view, control, audio, project)
     lib.attach(reg)
-    return reg, view, control, audio, presets
+    return reg, view, control, audio, project
 
 
 @pytest.fixture()
@@ -331,11 +331,11 @@ def test_preset_bank_params(rig):
     """The bank's params (plan 13 WP2): select, load, save, next / prev
     over the project's preset names, loading through `Presets` (plan 19
     WP1: twenty-four choices, the F-keys' eight with a trigger each)."""
-    from hyperspace.preset import Presets
+    from hyperspace.preset import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
     reg, view, _control, _audio, bank = rig
-    Presets(bank.lib, reg, Router(reg, Bindings()))
+    LoadedPatch(bank.lib, reg, Router(reg, Bindings()))
     bank.load("house", startup=False)          # the house moods (the seed opens party)
     assert reg["preset.select"].names[:2] == ["BIG BLUE WAVE", "EMBER ORBIT"]
     assert len(reg["preset.select"].names) == 24
@@ -361,59 +361,59 @@ def test_the_list_triggers_walk_the_drop_downs_list_not_the_bank(rig):
     and pass over the bank: a preset in no slot is reached, and one saved
     as new a moment ago is in the walk. QUANT's `preset.next` still walks
     only the bank's filled slots."""
-    from hyperspace.library import PRESETS
-    from hyperspace.preset import Presets
+    from hyperspace.library import LOADABLE
+    from hyperspace.preset import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
     reg, _view, _control, _audio, bank = rig
-    Presets(bank.lib, reg, Router(reg, Bindings()))
+    LoadedPatch(bank.lib, reg, Router(reg, Bindings()))
     bank.load("house", startup=False)
     lib = bank.lib
-    listing = lib.list(PRESETS)
+    listing = lib.list(LOADABLE)
     assert len(listing) > 2 and set(listing) - set(bank.bank)   # some in no slot
-    lib.load(PRESETS, listing[0])
+    lib.load(LOADABLE, listing[0])
     reg["preset.list.next"].fire()
-    assert lib.current(PRESETS) == listing[1]
+    assert lib.current(LOADABLE) == listing[1]
     reg["preset.list.prev"].fire()
     reg["preset.list.prev"].fire()                     # wraps to the end
-    assert lib.current(PRESETS) == listing[-1]
+    assert lib.current(LOADABLE) == listing[-1]
     reg["preset.list.next"].fire()                     # …and back to the start
-    assert lib.current(PRESETS) == listing[0]
+    assert lib.current(LOADABLE) == listing[0]
     # a new save lands in the list at its name's place, and the walk finds it
     reg["preset.save_new"].fire()
-    new = lib.current(PRESETS)
-    assert new not in listing and new in lib.list(PRESETS)
-    after = lib.list(PRESETS)
+    new = lib.current(LOADABLE)
+    assert new not in listing and new in lib.list(LOADABLE)
+    after = lib.list(LOADABLE)
     reg["preset.list.next"].fire()
-    assert lib.current(PRESETS) == after[(after.index(new) + 1) % len(after)]
+    assert lib.current(LOADABLE) == after[(after.index(new) + 1) % len(after)]
     reg["preset.list.prev"].fire()
-    assert lib.current(PRESETS) == new
+    assert lib.current(LOADABLE) == new
     # the bank's walk is the desk's, unchanged: only filled slots
     reg["preset.select"].set_norm(0.0)
     reg["preset.next"].fire()
-    assert lib.current(PRESETS) == bank.bank[bank.active] and bank.active >= 0
+    assert lib.current(LOADABLE) == bank.bank[bank.active] and bank.active >= 0
 
 
 def test_the_list_walk_from_nothing_loaded_and_a_bad_file(rig):
     """With no preset loaded the walk starts at the list's first (next) or
     last (prev); a preset file that will not parse shows on the library's
     error line and the walk raises nothing."""
-    from hyperspace.library import PRESETS
-    from hyperspace.preset import Presets
+    from hyperspace.library import LOADABLE
+    from hyperspace.preset import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
     reg, _view, _control, _audio, bank = rig
-    Presets(bank.lib, reg, Router(reg, Bindings()))
+    LoadedPatch(bank.lib, reg, Router(reg, Bindings()))
     lib = bank.lib
-    listing = lib.list(PRESETS)
-    lib._landed(PRESETS, None, None)        # (plan 44 D3: the presets' own landing)
+    listing = lib.list(LOADABLE)
+    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the presets' own landing)
     assert bank.walk(-1) == listing[-1]
-    lib._landed(PRESETS, None, None)        # (plan 44 D3: the presets' own landing)
+    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the presets' own landing)
     assert bank.walk(1) == listing[0]
-    bad = lib.home / PRESETS / "aaa-broken.json"
+    bad = lib.home / LOADABLE / "aaa-broken.json"
     bad.parent.mkdir(parents=True, exist_ok=True)
     bad.write_text("{ not json")
-    lib._landed(PRESETS, None, None)        # (plan 44 D3: the presets' own landing)
+    lib._landed(LOADABLE, None, None)        # (plan 44 D3: the presets' own landing)
     lib.error = ""
     assert bank.walk(1) is None and lib.error.startswith("library:")
 
@@ -685,7 +685,7 @@ def test_inst_layout_is_declared(tmp_path):
     for name in names:
         lay.set(2)
         assert r.view.inst_layout == 2
-        assert "view.inst_layout" not in r.presets.load(name), name
+        assert "view.inst_layout" not in r.loaded_patch.load(name), name
         assert r.view.inst_layout == 0 and lay.base == 0, name
     # (plan 36 T3: the corpus `/7` files are full saves — at its default;
     # their sources, made before it, never name it)

@@ -40,7 +40,7 @@ from hyperspace.learn import Learn, blocked
 from hyperspace.library import Library
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import SHIFT_PARAM, Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
@@ -176,9 +176,9 @@ def build(tmp_path, monkeypatch):
         router.use(rig)
         learn.devices = rig
         rig.open_all()
-        presets = Presets(lib, reg, router)
+        loaded_patch = LoadedPatch(lib, reg, router)
         return NS(reg=reg, table=table, router=router, learn=learn, devices=rig, lib=lib,
-                  presets=presets, bus=bus, notes=notes, path=path, tracker=tracker)
+                  loaded_patch=loaded_patch, bus=bus, notes=notes, path=path, tracker=tracker)
     return make
 
 
@@ -503,9 +503,9 @@ def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(bu
     assert len(r.devices.get("apc40").io.bindings) == len(t.midi())
     lib = r.lib
     for name in lib.list("presets"):
-        lib.presets.load(name)
+        lib.loaded_patch.load(name)
         frame(r)
-        assert lib.presets.desk_notes == [], name
+        assert lib.loaded_patch.desk_notes == [], name
         assert not lib.is_dirty("presets"), name
     assert r.path.read_text() == text                # never rewritten
     assert not r.notes                               # the registry said nothing either
@@ -526,7 +526,7 @@ def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build)
     assert rows and all(not b.device and t.role_of(b) == "pad" for b in rows)
     lib = r.lib
     for name in lib.list("presets"):
-        lib.presets.load(name)
+        lib.loaded_patch.load(name)
         frame(r)
         assert not lib.is_dirty("presets"), name
     one, two = r.devices.get("pad").io, r.devices.get("p2").io

@@ -156,8 +156,8 @@ from .graph import (
     read_graph,
 )
 from .library import (
-    PERFORMANCE_SCHEMA,
-    PRESETS,
+    LOADABLE_SCHEMA,
+    LOADABLE,
     RETIRED_MODULES,
     DocKind,
     read_positions,
@@ -206,7 +206,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
 )
 from .routing import MOD_OPS, Binding, is_continuous, meta_row_refusal
 
-SCHEMA = PERFORMANCE_SCHEMA
+SCHEMA = LOADABLE_SCHEMA
 # the schemas a load reads (each migrated on load; row 394: a save writes
 # `SAVE_SCHEMA` only). /3 is /2 plus the envelopes and the sequencer (plan
 # 31 P), /4 /3 plus media (plan 32 S, D1), /5 /4 plus the free graph (plan
@@ -246,10 +246,10 @@ POSE_UNREAD = "pose: not six numbers, ignored — the turn is left spinning"
 V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
 V3_KEYS = ("lfos", "envs")
-GROUP = PRESETS                   # the library folder, and the strip's group
+GROUP = LOADABLE                   # the library folder, and the strip's group
 # plan 35 T7 (row 387): the new preset — what the strip's `new` chip starts,
 # named until it is saved, and what it says
-UNTITLED_PRESET = "untitled"
+UNTITLED_PATCH = "untitled"
 NEW_SAID = "new preset: default values, shape → scene → All outputs — a shape on every window"
 # plan 36 T3 (W3): a `/7` with no graph section, or an empty one — the strip says so
 NO_GRAPH_SAID = "no graph: nothing is wired — black until something is wired to an output"
@@ -801,7 +801,7 @@ def echo_seconds(doc: dict) -> tuple[dict, list[str]]:
     return out, notes
 
 
-class Presets:
+class LoadedPatch:
     """The loaded preset over one library, registry and router.
 
     Built as ``Presets(lib, reg, router)`` once the router exists (app.main);
@@ -830,7 +830,7 @@ class Presets:
         # the performance groups' landings (`Library._labels`) and the bank's
         # lit slot (`Project.active`) on this deck
         self.labels: dict[str, tuple] = {}
-        first = getattr(base, "presets", None) is None
+        first = getattr(base, "loaded_patch", None) is None
         self.active_slot = (getattr(base.project, "__dict__", {}).get("active", -1)
                             if first and hasattr(base, "project") else -1)
         self.note = ""
@@ -878,13 +878,13 @@ class Presets:
                                 lambda doc: dumps(doc))
         if first:
             base.kind(GROUP, SCHEMA.rpartition("/")[0],
-                      load=lambda doc, path: base.presets.load_doc(doc, path),
-                      document=lambda name: base.presets.document(name),
-                      signature=lambda: base.presets.signature(),
+                      load=lambda doc, path: base.loaded_patch.load_doc(doc, path),
+                      document=lambda name: base.loaded_patch.document(name),
+                      signature=lambda: base.loaded_patch.signature(),
                       versions=VERSIONS,
                       text=lambda doc: dumps(doc))
-            base.on_load(GROUP, lambda name: base.presets._landed(name))
-            base.presets = self
+            base.on_load(GROUP, lambda name: base.loaded_patch._landed(name))
+            base.loaded_patch = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
     # ---- the API ----
@@ -956,13 +956,13 @@ class Presets:
                   and not is_resize_id(k) and not is_lookback_id(k)
                   and not is_matte_id(k) and not is_cut_id(k)
                   and not is_segment_id(k)}
-        doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PRESET, "values": values,
+        doc = {"schema": SAVE_SCHEMA, "name": UNTITLED_PATCH, "values": values,
                "routes": [], "macros": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
                GRAPH_KEY: read_graph({FRAME_KEY: WIRED_FRAME, "wires": [
                    {"from": a, "to": b} for a, b in graphview.SCENE_CHAIN]}).to_json(),
                LAYOUT_KEY: graphview.chain_layout(graphview.NEW_CHAIN, at)}
-        lib.land_unsaved(GROUP, UNTITLED_PRESET, doc)
+        lib.land_unsaved(GROUP, UNTITLED_PATCH, doc)
         self.unsaved = True               # (after the load hook cleared it)
         lib.say(NEW_SAID)
         return [NEW_SAID]

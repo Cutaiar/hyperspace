@@ -34,7 +34,7 @@ from hyperspace.fx import FxState
 from hyperspace.library import F_KEYS, SLOTS, Library, LibraryError, bank_doc
 from hyperspace.lookback import DreamState
 from hyperspace.params import PATCH_GROUPS, build_registry, part_of
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
@@ -70,10 +70,10 @@ def boot(home, show: str | None = "house"):
     routing.register_desk(reg, table)
     lib.attach(reg)
     router = Router(reg, table)
-    presets = Presets(lib, reg, router)
+    loaded_patch = LoadedPatch(lib, reg, router)
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
-                           router=router, presets=presets, clock=clock, home=home)
+                           router=router, loaded_patch=loaded_patch, clock=clock, home=home)
 
 
 @pytest.fixture()
@@ -134,7 +134,7 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
               {"source": "lane:2", "target": "view.bright", "op": "push", "value": 0.2,
                "enabled": False}]
     put(rig.home, "PARTIAL", values=values, routes=routes)
-    assert rig.presets.load("PARTIAL") == []
+    assert rig.loaded_patch.load("PARTIAL") == []
     assert reg.snapshot(part="patch") == expected(lib, values)
     assert rig.view.shape == 4 and reg["lfo.1.depth"].value == 0.25
     assert reg["view.bright"].value == lib.defaults("view")["view.bright"]
@@ -143,7 +143,7 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
     assert [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"] == keys
     assert table.desk() == []                               # the file's `desk: []`
-    assert rig.presets.current == "PARTIAL" and not lib.is_dirty("presets")
+    assert rig.loaded_patch.current == "PARTIAL" and not lib.is_dirty("presets")
 
 
 def test_a_preset_with_per_frame_echo_ids_is_read_in_seconds(rig):
@@ -157,11 +157,11 @@ def test_a_preset_with_per_frame_echo_ids_is_read_in_seconds(rig):
         routes=[{"source": "hand:right.z", "target": "dream.decay", "op": "push",
                  "value": -0.12}],
         desk=[{"source": "cc:*:17", "target": "dream.decay", "op": "abs", "feedback": "ring"}])
-    assert rig.presets.load("OLDWAKE") == []
+    assert rig.loaded_patch.load("OLDWAKE") == []
     reg, table = rig.reg, rig.router.table
     assert reg["dream.fade"].value == pytest.approx(fade_of_decay(0.93))
     assert reg["dream.gap"].value == pytest.approx(2 / 60, abs=1e-6)
-    assert len(rig.presets.notes) == 1 and "look-back read in seconds" in rig.presets.notes[0]
+    assert len(rig.loaded_patch.notes) == 1 and "look-back read in seconds" in rig.loaded_patch.notes[0]
     (row,) = table.routes()
     assert row.target == "dream.fade" and row.value < 0          # reach in: longer, as before
     # the throw spans as far as the old one (0.87 … 0.99 a frame), in
@@ -199,13 +199,13 @@ def test_a_preset_load_never_touches_a_session_param(rig):
                                   "scene.select": (scene + 1) % 3, "output.dim": 1.0})
     before = reg.snapshot(part="shared_meta")
     assert before["desk.slew"] == 0.12
-    rig.presets.load("FAST")
-    assert slew.value == 0.12 and "desk.slew is the session's, ignored" in rig.presets.notes
+    rig.loaded_patch.load("FAST")
+    assert slew.value == 0.12 and "desk.slew is the session's, ignored" in rig.loaded_patch.notes
     assert rig.view.shape == 5
     assert rig.clock.bpm == 100.0 and rig.chain.gain == 2.0 and rig.chain.params[0].atk == 0.3
     assert control.scene == scene and reg.snapshot(part="shared_meta") == before
-    assert out.dim == 0.4 and "output.dim is the session's, ignored" in rig.presets.notes
-    rig.presets.load("TRIP")                          # the party preset, too
+    assert out.dim == 0.4 and "output.dim is the session's, ignored" in rig.loaded_patch.notes
+    rig.loaded_patch.load("TRIP")                          # the party preset, too
     assert rig.clock.bpm == 100.0 and reg.snapshot(part="shared_meta") == before
     assert out.dim == 0.4
     rig.lib.project.load("party")                     # a show load, startup preset and all
@@ -227,8 +227,8 @@ def test_session_ids_in_a_preset_are_noted_and_ignored(rig):
         routes=[{"source": "key:X", "target": "view.faces", "op": "toggle"},
                 {"source": "hand:7", "target": "view.bright", "op": "push", "value": 0.2},
                 {"source": "hand:8", "target": "view.bright", "op": "push", "value": 0.4}])
-    assert rig.presets.load("NOISY") == ["nebula.glow"]
-    notes = rig.presets.notes
+    assert rig.loaded_patch.load("NOISY") == ["nebula.glow"]
+    notes = rig.loaded_patch.notes
     assert "tempo.bpm is the session's, ignored" in notes
     assert "scene.select is the session's, ignored" in notes
     assert "1 unknown id(s): nebula.glow" in notes
@@ -246,7 +246,7 @@ def test_a_value_that_will_not_land_leaves_the_state_whole(rig):
     put(rig.home, "BROKEN", values={"view.shape": 3, "view.speed": "fast"},
         routes=[{"source": "hand:7", "target": "view.bright", "op": "push"}])
     with pytest.raises(LibraryError, match="nothing loaded"):
-        rig.presets.load("BROKEN")
+        rig.loaded_patch.load("BROKEN")
     assert reg.snapshot() == snap
     assert [b.to_json() for b in rig.router.table.routes()] == routes
     assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
@@ -546,13 +546,13 @@ def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
     lib.label("camera", "stale")                          # a label from before
     put(rig.home, "LABELS", schema="hyperspace.preset/9", values={"dream.mix": 0.25},
         modules={"dream": "wake", "fx": "trip"})
-    rig.presets.load("LABELS")
+    rig.loaded_patch.load("LABELS")
     assert lib.current("dream") is None and lib.current("camera") is None
     assert lib.current("fx") is None and not lib.is_dirty("dream")
     assert reg["dream.mix"].base == pytest.approx(0.25)
     assert reg["dream.echoes"].base == lib._fresh_of("dream")["dream.echoes"]
     assert reg["dream.echoes"].base != wake["values"]["dream.echoes"]   # no default.json
-    doc = rig.presets.document("LABELS")
+    doc = rig.loaded_patch.document("LABELS")
     assert "modules" not in doc and doc["schema"] == "hyperspace.preset/10"
     reg["dream.mix"].set(0.3)
     assert lib.is_dirty("dream")                            # the dot is live against the load
@@ -575,7 +575,7 @@ def test_the_fx_presets_are_retired(rig):
     lib._defaults.clear()
     assert lib.defaults("fx") == fresh and "fx" not in lib.groups()
     # (the hook, its watch and the run they landed: no name of theirs is left)
-    assert not [n for n in dir(Presets) if "fx" in n]
+    assert not [n for n in dir(LoadedPatch) if "fx" in n]
     assert not [n for n in dir(graphmigrate) if "module" in n or n.endswith("_runs")]
     assert "fx" not in getattr(lib, "_apply_hooks", {})
 
@@ -594,11 +594,11 @@ def test_a_preset_round_trips(rig):
         {"base": "view.depth4", "from": 0.0, "to": 0.6}]}}
     put(rig.home, "SRC", values={"view.shape": 3}, desk=desk, macros=macros, note="a note",
         routes=[{"source": "hand:7", "target": "view.speed", "op": "push", "value": 0.3}])
-    rig.presets.load("SRC")
+    rig.loaded_patch.load("SRC")
     lib.load("dream", "wake")
     rig.reg["camera.zoom"].set(2.0)
-    sig = rig.presets.signature()
-    path = rig.presets.save_as("Round Trip")
+    sig = rig.loaded_patch.signature()
+    path = rig.loaded_patch.save_as("Round Trip")
     assert path == rig.home / "presets" / "round-trip.json"
     doc = json.loads(path.read_text())
     # (row 394: every save is the newest schema)
@@ -613,8 +613,8 @@ def test_a_preset_round_trips(rig):
     assert not [k for k in doc["values"] if retired(k)]
     rig.reg["camera.zoom"].set(1.0)
     rig.lib.project.load_slot(0)                            # something else in between
-    rig.presets.load("Round Trip")
-    assert rig.presets.signature() == sig and not lib.is_dirty("presets")
+    rig.loaded_patch.load("Round Trip")
+    assert rig.loaded_patch.signature() == sig and not lib.is_dirty("presets")
     assert preset.desk_json(table.desk()) == desk and table.macros_doc() == macros
     assert lib.current("dream") is None             # (plan 44 D3: no module label)
 
@@ -644,10 +644,10 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
         # MASTER: invariant (the track faders are layered since plan 24 C2)
         desk=[*DESK, {"source": "cc:0:14", "target": "view.bright", "op": "abs"}],
         macros=MACROS)
-    rig.presets.load("DESKED")
+    rig.loaded_patch.load("DESKED")
     assert preset.desk_json(table.desk()) == DESK and table.layer == "preset"
-    assert any("cc:0:14 → view.bright" in n and "invariant" in n for n in rig.presets.notes)
-    assert rig.presets.desk_notes and "cc:0:14" in rig.presets.desk_notes[0]
+    assert any("cc:0:14 → view.bright" in n and "invariant" in n for n in rig.loaded_patch.notes)
+    assert rig.loaded_patch.desk_notes and "cc:0:14" in rig.loaded_patch.desk_notes[0]
     assert [b.to_json() for b in table.midi() if b.layer != "preset"] == meta_rows
     assert table.macros_doc() == MACROS
     depth4 = reg["view.depth4"]
@@ -655,7 +655,7 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
     assert not lib.is_dirty("presets")                        # landed before the clean reference
     assert rig.router.follow_macros() == []                   # nothing left to land next frame
     put(rig.home, "DARK", desk=[], macros={})
-    rig.presets.load("DARK")
+    rig.loaded_patch.load("DARK")
     assert table.desk() == [] and table.macros_doc() == {}
     assert [b.to_json() for b in table.midi() if b.layer != "preset"] == meta_rows
 
@@ -665,17 +665,17 @@ def test_a_preset_without_a_desk_gets_the_fresh_preset_layer(rig):
     map's preset layer (`preset.fresh_desk`, plan 13 §3.2)."""
     table = rig.router.table
     put(rig.home, "EMPTY", desk=[])
-    rig.presets.load("EMPTY")
+    rig.loaded_patch.load("EMPTY")
     assert table.desk() == []
     path = put(rig.home, "BARE")
     doc = json.loads(path.read_text())
     del doc["desk"], doc["macros"]
     path.write_text(json.dumps(doc))
-    rig.presets.load("BARE")
+    rig.loaded_patch.load("BARE")
     fresh = [b for b in routing.factory_desk() if b.layer == "preset"]
     assert [b.to_json() for b in table.desk()] == [b.to_json() for b in fresh]
     assert preset.desk_json(table.desk()) == preset.desk_json(preset.fresh_desk())
-    assert rig.presets.document("BARE")["desk"] == preset.desk_json(fresh)
+    assert rig.loaded_patch.document("BARE")["desk"] == preset.desk_json(fresh)
 
 
 def test_a_preset_with_a_desk_and_macros_round_trips(rig):
@@ -684,26 +684,26 @@ def test_a_preset_with_a_desk_and_macros_round_trips(rig):
     lib, table = rig.lib, rig.router.table
     put(rig.home, "SHOW", desk=DESK, macros=MACROS,
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}])
-    rig.presets.load("SHOW")
+    rig.loaded_patch.load("SHOW")
     assert not lib.is_dirty("presets")
     table.desk()[0].target = "view.instances"                 # the page's retarget
     assert lib.is_dirty("presets")
     table.macros["macro.1"].label = "Cold"
-    path = rig.presets.save_as("SHOW")
+    path = rig.loaded_patch.save_as("SHOW")
     doc = json.loads(path.read_text())
     assert doc["desk"][0]["target"] == "view.instances" and "layer" not in doc["desk"][0]
     assert doc["macros"]["macro.1"]["label"] == "Cold"
     assert not lib.is_dirty("presets")
-    rig.presets.load("TRIP")
+    rig.loaded_patch.load("TRIP")
     assert table.macros_doc() != doc["macros"]
-    rig.presets.load("SHOW")
+    rig.loaded_patch.load("SHOW")
     assert preset.desk_json(table.desk()) == doc["desk"] and table.macros_doc() == doc["macros"]
     assert not lib.is_dirty("presets")
 
 
 def test_a_preset_edited_on_disk_is_re_applied(rig):
     path = put(rig.home, "LIVE", values={"view.shape": 2})
-    rig.presets.load("LIVE")
+    rig.loaded_patch.load("LIVE")
     rig.lib.poll(now=1.0)
     doc = json.loads(path.read_text())
     doc["values"]["view.shape"] = 9
@@ -730,7 +730,7 @@ def test_lfo_breathes_macro_moves_brightness_up_and_speed_down(rig):
     1× to 2× while the spin slows from 0.25× to a crawl, both over the
     knob's whole throw, and the LFO's push on the fx mix deepens with it."""
     reg, router, table = rig.reg, rig.router, rig.router.table
-    rig.presets.load("lfo-breathe")
+    rig.loaded_patch.load("lfo-breathe")
     knob = reg["macro.1"]
     bright, speed = reg["view.bright"], reg["view.speed"]
     assert knob.value == 0.0 and table.macros["macro.1"].label == "Breathe"
@@ -763,13 +763,13 @@ def test_a_load_tells_the_listeners_its_name(rig):
     the dream on with no worker is a banner); a listener that raises is a
     note, never a failed load."""
     heard: list = []
-    rig.presets.listeners.append(heard.append)
-    rig.presets.listeners.append(lambda name: 1 / 0)
+    rig.loaded_patch.listeners.append(heard.append)
+    rig.loaded_patch.listeners.append(lambda name: 1 / 0)
     name = rig.lib.list("presets")[0]
-    assert rig.presets.load(name) == []
+    assert rig.loaded_patch.load(name) == []
     assert heard == [rig.lib.current("presets")]
     assert rig.lib.warning.startswith("preset listener: ZeroDivisionError")
-    assert not rig.presets.note.startswith("preset listener")   # the preset's own note
+    assert not rig.loaded_patch.note.startswith("preset listener")   # the preset's own note
 
 
 # ------------------------------------------- plan 15 WP4: save-as from the desk
@@ -1136,7 +1136,7 @@ def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
     assert pr.active == -1
     # the four sites call it, and nothing else looks a preset up in the bank
     for fn in (library.Project._set_slot, library.Project._apply, library.Marks.put,
-               preset.Presets._landed):
+               preset.LoadedPatch._landed):
         src = inspect.getsource(fn)
         assert "follow()" in src and "bank.index" not in src, fn.__qualname__
     # (plan 48: `follow` resolves each slot to its file, so a slot naming
@@ -1191,12 +1191,12 @@ def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(ow
         desk = json.loads((home / "presets" / name).read_text())["desk"]
         assert len(_on_bank_rows(desk)) == 16, name
     r = boot_home(home)                                    # the launch lands NIGHT ONE
-    lib, table, pr, presets = r.lib, r.router.table, r.lib.project, r.presets
+    lib, table, pr, loaded_patch = r.lib, r.router.table, r.lib.project, r.loaded_patch
     # saved before plan 19: the fresh layer had no device knob then (WP3's SCENE)
     fresh = len([b for b in preset.fresh_desk() if not _is_device_knob(b)])
     # NIGHT ONE: the sixteen exact rows — nothing said
     assert lib.current("presets") == "NIGHT ONE"
-    assert presets.desk_notes == [] and presets.notes == [] and lib.warning == ""
+    assert loaded_patch.desk_notes == [] and loaded_patch.notes == [] and lib.warning == ""
     assert _on_bank_rows(table.desk()) == [] and len(table.desk()) == fresh
     assert not lib.is_dirty("presets")
     # NIGHT TWO: fifteen quiet, the owner's re-aimed pad with its note, the knob kept
@@ -1204,7 +1204,7 @@ def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(ow
     said = (f"dropped {OWNER_PAD['source']} → {OWNER_PAD['target']}: that control is "
             "invariant, the session's (plan 13 D6)")
     assert lib.current("presets") == "NIGHT TWO"
-    assert presets.desk_notes == [said] and presets.notes == [said]
+    assert loaded_patch.desk_notes == [said] and loaded_patch.notes == [said]
     assert lib.warning == f"preset NIGHT TWO: {said}"       # one note: no "(+15 more)"
     assert _on_bank_rows(table.desk()) == []
     knob = preset.device_knob(*OWNER_KNOB)
@@ -1217,7 +1217,7 @@ def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(ow
     # NIGHT THREE (WAKE's eight device knobs): quiet, the eight kept
     lib.warning = ""
     lib.load("presets", "NIGHT THREE")
-    assert presets.desk_notes == [] and lib.warning == ""
+    assert loaded_patch.desk_notes == [] and lib.warning == ""
     assert [b.target for b in table.desk() if _is_device_knob(b)] == wake_knobs(home)
     assert not lib.is_dirty("presets")
     # an undo's restore of a desk meets the same rule (`set_desk(load=False)`)
@@ -1232,7 +1232,7 @@ def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(ow
     with pytest.MonkeyPatch.context() as m:
         m.setattr(routing, "RETIRED_DESK_ROWS", frozenset())
         lib.load("presets", "NIGHT ONE")
-        assert len(presets.desk_notes) == 16 and "(+15 more)" in lib.warning
+        assert len(loaded_patch.desk_notes) == 16 and "(+15 more)" in lib.warning
 
 
 def test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads(owner_home):
@@ -1265,7 +1265,7 @@ def test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads(owner_h
     # it loads clean and quiet from now on
     lib.load("presets", "NIGHT ONE")
     lib.load("presets", "NIGHT TWO")
-    assert r.presets.desk_notes == [] and not lib.is_dirty("presets")
+    assert r.loaded_patch.desk_notes == [] and not lib.is_dirty("presets")
 
 
 # ------------------------------- plan 19 WP3: a user's desk and the re-cut
@@ -1319,12 +1319,12 @@ def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
         {"source": "lfo:0", "target": "ghost.tethers", "op": "push", "value": 0.5},
         {"source": "hand:right.y", "target": "view.inst_amp", "op": "position"}])
     before = (path.read_bytes(), path.stat().st_mtime_ns)
-    rig.presets.load("MIRRORED")
+    rig.loaded_patch.load("MIRRORED")
     table = rig.router.table
     for pid in ("ghost.mirror", "ghost.guide", "ghost.tethers"):
         assert not table.routes_to(pid), pid
     assert table.owner("view.inst_amp").source == "hand:right.y"
-    notes = rig.presets.notes
+    notes = rig.loaded_patch.notes
     assert ("dropped hand:right.x → ghost.mirror: ghost.mirror is the meta controller's, "
             "tuned before the show; no preset row may drive it") in notes     # (row 743)
     assert "dropped hand:left.roll → ghost.guide: not modulatable" in notes
@@ -1346,14 +1346,14 @@ def test_a_wired_preset_saves_as_v6(rig):
     refused in its words."""
     assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)
     assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/7"
-    rig.presets.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
-    section = rig.presets.graph.free_doc()
+    rig.loaded_patch.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
+    section = rig.loaded_patch.graph.free_doc()
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
                                    if w["to"] != "lookback.capture"]}
-    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/10"
-    rig.presets.graph.land(G.read_graph(edited), edited)
-    doc = rig.presets.document("edited")
+    assert rig.loaded_patch.document("edited")["schema"] == "hyperspace.preset/10"
+    rig.loaded_patch.graph.land(G.read_graph(edited), edited)
+    doc = rig.loaded_patch.document("edited")
     assert doc["schema"] == "hyperspace.preset/10" and doc["graph"] == edited
     put(rig.home, "ELEVEN", schema="hyperspace.preset/11")
     rig.lib.poll()
@@ -1373,14 +1373,14 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
         (home / "presets").mkdir(parents=True, exist_ok=True)
         (home / "presets" / src.name).write_text(saved or src.read_text())
         r = boot(home)
-        r.presets.load(name)
-        got = r.presets.graph.spec
+        r.loaded_patch.load(name)
+        got = r.loaded_patch.graph.spec
         assert got is not None and got.wired and not got.notes
-        assert [n for n in r.presets.notes if n.startswith("graph:")] == []
+        assert [n for n in r.loaded_patch.notes if n.startswith("graph:")] == []
         if spec is not None:
             assert got == spec
         spec = got
-        saved = r.presets.save_as(name).read_text()
+        saved = r.loaded_patch.save_as(name).read_text()
         assert json.loads(saved)["schema"] == "hyperspace.preset/10"
 
 
@@ -1395,7 +1395,7 @@ def _fresh_performance(lib):
 
 def _spoil(rig, name):
     """A loaded corpus preset with a route and a desk row of its own."""
-    rig.presets.load(name)
+    rig.loaded_patch.load(name)
     table = rig.router.table
     table.add(Binding("hand:7", "view.bright", "position"))
     table.set_desk([*table.desk(), Binding("cc:0:14", "view.speed", "abs", layer="preset")])
@@ -1411,32 +1411,32 @@ def test_a_new_preset_is_fresh_values_and_the_scene_chain(rig, name):
     lib, reg, table = rig.lib, rig.reg, rig.router.table
     _spoil(rig, name)
     kept = reg.snapshot(part="shared_meta")
-    assert rig.presets.new() == [preset.NEW_SAID]
+    assert rig.loaded_patch.new() == [preset.NEW_SAID]
     for k, v in _fresh_performance(lib).items():
         assert reg[k].value == v, k
     assert table.routes() == []
     assert preset.desk_json(table.desk()) == preset.desk_json(preset.fresh_desk())
-    doc = rig.presets.document(preset.UNTITLED_PRESET)
+    doc = rig.loaded_patch.document(preset.UNTITLED_PATCH)
     assert doc["desk"] == preset.desk_json(preset.fresh_desk())
     assert doc["routes"] == []
     assert reg.snapshot(part="shared_meta") == kept
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}],
             "wires": [{"from": "shape", "to": "scene.geometry"},
                       {"from": "scene", "to": "output.all.image"}]}   # (plan 36 T3: hands written)
     assert G.reaches(spec) == frozenset({"shape", "scene"})
-    assert lib.current("presets") == preset.UNTITLED_PRESET
+    assert lib.current("presets") == preset.UNTITLED_PATCH
     assert lib.is_dirty("presets")
-    assert lib.path_of("presets", preset.UNTITLED_PRESET) is None
+    assert lib.path_of("presets", preset.UNTITLED_PATCH) is None
 
 
 def test_a_new_preset_does_not_depend_on_what_was_loaded(rig):
     after = []
     for name in ("big-blue-wave", "hex-engine"):
         _spoil(rig, name)
-        rig.presets.new()
+        rig.loaded_patch.new()
         after.append((rig.reg.snapshot(part="patch"),
-                      rig.presets.document(preset.UNTITLED_PRESET)))
+                      rig.loaded_patch.document(preset.UNTITLED_PATCH)))
     assert after[0] == after[1]
 
 
@@ -1452,7 +1452,7 @@ def test_a_new_preset_undoes_in_one_step(rig):
         u.tick(2.0)
         before = rig.reg.snapshot(part="patch")
         loaded = rig.lib.current("presets")
-        rig.presets.new()
+        rig.loaded_patch.new()
         assert u.stack[-1].label == "new preset"
         assert u.undo()
     finally:
@@ -1470,29 +1470,29 @@ def test_a_new_preset_empties_the_bins_macros_and_modifiers(rig):
     doc = json.loads((rig.home / "presets" / "lfo-breathe.json").read_text())
     doc.update(name="full", media={"channels": {"a": ["local:x.png"]}},
                modifiers=[{"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy", None]}])
-    rig.presets.load_doc(doc)
-    table, media = rig.router.table, rig.presets.media
+    rig.loaded_patch.load_doc(doc)
+    table, media = rig.router.table, rig.loaded_patch.media
     assert media.to_json()["channels"] and table.modifiers_doc(rig.reg)
     assert [m for m in table.macros_doc().values() if m.get("subs")]
-    rig.presets.new()
+    rig.loaded_patch.new()
     assert not media.to_json().get("channels")
     assert not table.modifiers_doc(rig.reg)
     assert not [m for m in table.macros_doc().values() if m.get("subs")]
-    saved = rig.presets.document("blank")
+    saved = rig.loaded_patch.document("blank")
     assert not saved.get("modifiers") and not (saved.get("media") or {}).get("channels")
     assert not [m for m in saved["macros"].values() if m.get("subs")]
 
 
 def test_a_new_preset_saves_and_loads_back_as_the_scene_chain(rig):
     _spoil(rig, "big-blue-wave")
-    rig.presets.new()
-    rig.presets.save_as("blank")
+    rig.loaded_patch.new()
+    rig.loaded_patch.save_as("blank")
     _spoil(rig, "hex-engine")
-    rig.presets.load("blank")
-    assert rig.presets.graph.spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}],
+    rig.loaded_patch.load("blank")
+    assert rig.loaded_patch.graph.spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}],
             "wires": [{"from": "shape", "to": "scene.geometry"},
                       {"from": "scene", "to": "output.all.image"}]}
-    assert len(rig.presets.layout) == 3
+    assert len(rig.loaded_patch.layout) == 3
     assert rig.router.table.routes() == []
     assert preset.desk_json(rig.router.table.desk()) == preset.desk_json(preset.fresh_desk())
 
@@ -1516,8 +1516,8 @@ def test_a_new_preset_draws_a_shape(rig, gl_ctx):
 
     from hyperspace.outputs import Switches, View
 
-    rig.presets.new()
-    spec = rig.presets.graph.spec
+    rig.loaded_patch.new()
+    spec = rig.loaded_patch.graph.spec
     gl = _tool().Rig("legacy6", "present", gl_ctx)
     try:
         gl.renderer.wiring = spec.wiring()
@@ -1553,36 +1553,36 @@ def test_resize_values_save_and_load_with_the_preset(tmp_path):
     r = boot(a)
     put(a, "CROP", graph=_resize_section(), values={"resize.2.crop_x": 0.3})
     r.lib.poll()
-    assert r.presets.load("CROP") == []
+    assert r.loaded_patch.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
-    saved = r.presets.save_as("CROP").read_text()
+    saved = r.loaded_patch.save_as("CROP").read_text()
     assert json.loads(saved)["schema"] == "hyperspace.preset/10"
     assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
     (b / "presets").mkdir(parents=True)
     (b / "presets" / "crop.json").write_text(saved)
     r = boot(b)
-    assert r.presets.load("CROP") == []
+    assert r.loaded_patch.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
-    assert not [n for n in r.presets.notes if "unknown id" in n]
+    assert not [n for n in r.loaded_patch.notes if "unknown id" in n]
     put(b, "PLAIN", values={})
     r.lib.poll()
-    r.presets.load("PLAIN")
+    r.loaded_patch.load("PLAIN")
     assert not [p for p in r.reg if p.id.startswith("resize.2.")]
     unwired = {**_resize_section(), "wires": [
         w for w in _resize_section()["wires"] if w["to"] != "resize.2.image"]}
     put(b, "UNWIRED", graph=unwired, values={"resize.2.crop_x": 0.7})
     r.lib.poll()
-    r.presets.load("UNWIRED")
-    assert "resize.2" not in G.reaches(r.presets.graph.spec)
+    r.loaded_patch.load("UNWIRED")
+    assert "resize.2" not in G.reaches(r.loaded_patch.graph.spec)
     assert r.reg["resize.2.crop_x"].value == 0.7
 
 
 def test_a_new_preset_carries_no_resize_values(rig):
     put(rig.home, "CROP", graph=_resize_section(), values={"resize.2.crop_x": 0.3})
     rig.lib.poll()
-    rig.presets.load("CROP")
+    rig.loaded_patch.load("CROP")
     assert "resize.2.crop_x" in rig.reg
-    rig.presets.new()
+    rig.loaded_patch.new()
     assert not [p for p in rig.reg if preset.is_resize_id(p.id)]
-    doc = rig.presets.document(preset.UNTITLED_PRESET)
+    doc = rig.loaded_patch.document(preset.UNTITLED_PATCH)
     assert not [k for k in doc["values"] if k.startswith("resize")]

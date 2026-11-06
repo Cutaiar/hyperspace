@@ -374,7 +374,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
         assert not lrn.held and lrn.accepts("hand:right.x")
         assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["view.bright"]
         assert not [b for b in table.bindings if b.target == "fx.acid.speed" and b.is_midi]
-        (g,) = rig.lib.presets.groups
+        (g,) = rig.lib.loaded_patch.groups
         (kept,) = g["kept_by_host"]
         assert graphview.kept_words(kept) == "K1 kept by the preset"
         assert "1 row kept by the preset" in ui_graph._state(panel)["said"]
@@ -1463,14 +1463,14 @@ def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
     from hyperspace.learn import Learn
 
     panel, lib, table = rig.panel, rig.lib, rig.router.table
-    real = ui_routing.preset_controls
+    real = ui_routing.patch_controls
     calls = []
 
     def counted(t):
         calls.append(1)
         return real(t)
     monkeypatch.setattr(ui_routing, "_DARK", {})           # nothing remembered yet
-    monkeypatch.setattr(ui_routing, "preset_controls", counted)
+    monkeypatch.setattr(ui_routing, "patch_controls", counted)
 
     def fresh() -> list[str]:
         rows = table.desk()

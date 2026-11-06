@@ -31,7 +31,7 @@ from hyperspace.deck import (
     hand_over,
     register_xfade,
 )
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.media.channels import Channels, MediaSources
 from hyperspace.media.frame import MediaFrame
 from hyperspace.outputs import Switches, View
@@ -59,7 +59,7 @@ def test_a_deck_beside_shares_the_rig_and_holds_its_own_look(tmp_path):
     assert b.meta_reg is a.deck.meta_reg and b.sources is a.deck.sources
     assert b.clock is a.deck.clock and b.table.meta_table is a.table.meta_table
     assert b.reg is not a.reg and b.view is not a.view and b.router is not a.router
-    assert b.lfos is not a.lfos and b.undo is not a.deck.undo and b.presets is not a.deck.presets
+    assert b.lfos is not a.lfos and b.undo is not a.deck.undo and b.loaded_patch is not a.deck.loaded_patch
     assert b.reg["output.dim"] is a.reg["output.dim"]             # the room's, by reference
     assert b.reg["view.bright"] is not a.reg["view.bright"]       # the look's, its own
     assert a.deck.meta_reg.on_air_reg is a.reg                           # the first stays the lead
@@ -70,15 +70,15 @@ def test_a_deck_beside_leaves_the_library_the_strip_and_undo_with_the_first(tmp_
 
     a, b = _pair(tmp_path)
     lib = a.lib
-    assert lib.presets is a.deck.presets
+    assert lib.loaded_patch is a.deck.loaded_patch
     assert undo.installed() is a.deck.undo
     before = a.reg["view.bright"].value
     b.reg["view.bright"].set(0.123)
     assert a.reg["view.bright"].value == before
-    names = sorted(lib.list(PRESETS))
-    lib.load(PRESETS, names[0])
-    assert lib.current(PRESETS) == names[0] == a.deck.presets.current
-    assert b.presets.current is None and b.table.routes() == []
+    names = sorted(lib.list(LOADABLE))
+    lib.load(LOADABLE, names[0])
+    assert lib.current(LOADABLE) == names[0] == a.deck.loaded_patch.current
+    assert b.loaded_patch.current is None and b.table.routes() == []
 
 
 def test_nothing_of_a_deck_beside_writes_a_file(tmp_path):
@@ -743,14 +743,14 @@ def test_deck_2_at_xfade_1_is_deck_1_on_the_same_preset_byte_for_byte(ctx, tmp_p
     doc = json.loads((_corpus_dir() / f"{name}.json").read_text())
 
     # deck 1 on X, alone: the picture to match
-    rig.a.presets.load_doc(doc, None)
+    rig.a.loaded_patch.load_doc(doc, None)
     t = 7.0
     want = _frame(ctx, rig.a, size, t)
     assert want[..., :3].max() > 0, name         # the proof has teeth: a picture
     # deck 1 somewhere else; deck 2 on X
     other = "party-acid" if name != "party-acid" else "party-trip"
-    rig.a.presets.load_doc(json.loads((_corpus_dir() / f"{other}.json").read_text()), None)
-    rig.b.presets.load_doc(doc, None)
+    rig.a.loaded_patch.load_doc(json.loads((_corpus_dir() / f"{other}.json").read_text()), None)
+    rig.b.loaded_patch.load_doc(doc, None)
     alone = _frame(ctx, rig.a, size, t)
     assert not (alone == want).all(), name
     fade = Fade(rig.a, rig.b, Mix(xfade=1.0), ctx)
@@ -830,11 +830,11 @@ def test_deck_2_on_another_preset_moves_nothing_of_the_on_air_deck(ctx, tmp_path
 
     rig = _gl_rig(ctx, tmp_path / "rig", Renderer)
     size = (160, 100)
-    rig.a.presets.load_doc(json.loads((_corpus_dir() / "party-acid.json").read_text()), None)
+    rig.a.loaded_patch.load_doc(json.loads((_corpus_dir() / "party-acid.json").read_text()), None)
     assert rig.a.renderer.ghost.state is not rig.b.renderer.ghost.state
     before, picture = _object_state(rig.a), _frame(ctx, rig.a, size, 2.0)
     for path in _corpus_docs():
-        rig.b.presets.load_doc(json.loads(path.read_text()), None)
+        rig.b.loaded_patch.load_doc(json.loads(path.read_text()), None)
         for pid, v in (("ghost.alpha", 0.2), ("ghost.on", False), ("view.bright", 0.7)):
             rig.b.reg[pid].set(v)
         rig.b.reg.apply()
@@ -851,7 +851,7 @@ def test_a_fade_after_the_rest_draws_again(ctx, tmp_path):
     rig = _gl_rig(ctx, tmp_path / "rig", Renderer)
     size = (160, 100)
     doc = json.loads((_corpus_dir() / "party-acid.json").read_text())
-    rig.b.presets.load_doc(doc, None)
+    rig.b.loaded_patch.load_doc(doc, None)
     fade = Fade(rig.a, rig.b, Mix(xfade=1.0), ctx)
     first = _fade_frame(ctx, fade, size, 2.0)
     fade.mix.xfade = 0.0
@@ -871,7 +871,7 @@ def test_deck_2_draws_at_the_windows_sample_count(ctx, tmp_path):
     rig = _gl_rig(ctx, tmp_path / "rig", Renderer)
     size = (160, 100)
     doc = json.loads((_corpus_dir() / "party-acid.json").read_text())
-    rig.b.presets.load_doc(doc, None)
+    rig.b.loaded_patch.load_doc(doc, None)
     fade = Fade(rig.a, rig.b, Mix(xfade=0.5), ctx)
     _tex, fbo = _target(ctx, size, (0, 0, 0, 255))
     v = View(Switches(), size, target=fbo, viewport=(0, 0, *size))
@@ -886,7 +886,7 @@ def test_a_raise_in_a_real_deck_2_leaves_the_frame_the_on_air_decks(ctx, tmp_pat
     rig = _gl_rig(ctx, tmp_path / "rig", Renderer)
     size = (160, 100)
     doc = json.loads(next(iter(_corpus_docs())).read_text())
-    rig.a.presets.load_doc(doc, None)
+    rig.a.loaded_patch.load_doc(doc, None)
     want = _frame(ctx, rig.a, size, 3.0)
     fade = Fade(rig.a, rig.b, Mix(xfade=0.7), ctx)
 

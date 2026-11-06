@@ -68,8 +68,8 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
     audio = SimpleNamespace(chain=chain, on=True)
     view = ViewState()
     lib = Library(tmp_path) if full else None
-    presets = lib.project if full else None
-    reg = build_registry(view, control, audio, presets)
+    project = lib.project if full else None
+    reg = build_registry(view, control, audio, project)
     if full:
         lib.attach(reg)
     if full:
@@ -119,9 +119,9 @@ def load_preset(r, router: Router, name: str) -> list[str]:
     """A preset by name through the one loader (`preset.Presets` over the
     rig's library) — the road the routing presets took before plan 13 WP5
     made them presets. Returns the ids the registry lacks."""
-    from hyperspace.preset import Presets
+    from hyperspace.preset import LoadedPatch
 
-    return Presets(r.lib, r.reg, router).load(name)
+    return LoadedPatch(r.lib, r.reg, router).load(name)
 
 
 def session_rows() -> list[Binding]:
@@ -908,17 +908,17 @@ def test_the_legacy6_preset_replaces_routes_and_lands_bases(tmp_path):
     """The routing preset `legacy6` is a preset since plan 13 WP5: loaded by
     name through `Presets` it replaces every route and lands its bases —
     the zeros the parity anchor needs — and leaves the input rows alone."""
-    from hyperspace.preset import Presets
+    from hyperspace.preset import LoadedPatch
 
     seed(tmp_path)
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, house())
-    presets = Presets(r.lib, r.reg, router)
+    loaded_patch = LoadedPatch(r.lib, r.reg, router)
     router.table.add(Binding("lane:0", "view.bright", "push", 0.5))
     inputs = ("key", "pad", "hat", *routing.MIDI_SCHEMES)
     n_inputs = len(router.table.of(*inputs))
     r.view.rate[0] = 2.0
-    assert presets.load("legacy6") == [] and presets.notes == []
+    assert loaded_patch.load("legacy6") == [] and loaded_patch.notes == []
     assert len(router.table.mods()) == 12 and not router.table.routes_to("view.bright")
     assert len(router.table.of(*inputs)) == n_inputs
     assert r.view.pattern_mod == [1.0] * N_MOD           # plan 22 B3: the inputs on 1
@@ -2158,7 +2158,7 @@ def test_a_row_the_owner_put_on_a_bank_pad_is_left_alone(owner_home, capsys):
     # the owner's pad is invariant, so an old preset's shape row on it goes
     # quietly like the other fifteen
     pr.load_slot(0)
-    assert r.lib.current("presets") == "NIGHT ONE" and r.presets.desk_notes == []
+    assert r.lib.current("presets") == "NIGHT ONE" and r.loaded_patch.desk_notes == []
     # and a second launch leaves the owner's row and adds nothing
     capsys.readouterr()
     again = boot_home(home).router.table

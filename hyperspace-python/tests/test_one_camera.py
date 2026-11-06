@@ -165,7 +165,7 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     shape = view.shape
     want = G.shape_view(shape, view.ang, 0.0, 0.0, flat=view.held, body=view.body)[:2]
     pose = view.pose()
-    path = rig.presets.save_as("FRAMED")
+    path = rig.loaded_patch.save_as("FRAMED")
     doc = json.loads(path.read_text())
     assert doc["schema"] == "hyperspace.preset/10" == preset.SAVE_SCHEMA   # (plan 44 D3)
     assert doc["values"]["eye.fov"] == 31.0 and doc["values"]["eye.distance"] == 6.0
@@ -176,17 +176,17 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     assert keys.index(preset.POSE_KEY) == keys.index("values") + 1
     # another preset (a corpus /9: the default eye, no pose)
     turn = list(view.ang)
-    rig.presets.load("DIAL")
+    rig.loaded_patch.load("DIAL")
     assert reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
     assert view.ang == turn                   # no pose: left spinning
     # …and back
-    rig.presets.load("FRAMED")
+    rig.loaded_patch.load("FRAMED")
     assert reg["eye.fov"].value == 31.0 and reg["eye.distance"].value == 6.0
     assert reg["camera.zoom"].value == pytest.approx(1.7)
     assert view.ang == pytest.approx(pose, abs=1e-6) and view.body is None
     got = G.shape_view(shape, view.ang, 0.0, 0.0, flat=view.held, body=view.body)[:2]
     assert all(np.allclose(a, b, atol=1e-4) for a, b in zip(got, want))
-    assert rig.presets.notes == [] and not rig.lib.is_dirty("presets")
+    assert rig.loaded_patch.notes == [] and not rig.lib.is_dirty("presets")
     # the turn moving is no edit
     view.integrate(0.5)
     view.ang[0] += 1.0
@@ -199,8 +199,8 @@ def test_a_pose_that_is_not_six_numbers_is_said_and_the_turn_left_spinning(tmp_p
     for bad in ({k: 0.5 for k in POSE_IDS[:5]}, {**{k: 0.5 for k in POSE_IDS}, "rot.phase.XY": "x"},
                 {**{k: 0.5 for k in POSE_IDS}, "rot.phase.ZW": float("nan")}, [0.5] * 6):
         rig.view.ang = [0.1] * 6
-        rig.presets.load_doc({**doc, preset.POSE_KEY: bad})
-        assert preset.POSE_UNREAD in rig.presets.notes, bad
+        rig.loaded_patch.load_doc({**doc, preset.POSE_KEY: bad})
+        assert preset.POSE_UNREAD in rig.loaded_patch.notes, bad
         assert rig.view.ang == [0.1] * 6
 
 
@@ -211,8 +211,8 @@ def test_a_pose_in_values_is_no_pose(tmp_path):
     doc = json.loads((CORPUS / "presets" / "dial.json").read_text())
     doc["values"]["rot.phase.XY"] = 1.0
     rig.view.ang = [0.1] * 6
-    rig.presets.load_doc(doc)
-    assert "rot.phase.XY is not part of a preset, ignored" in rig.presets.notes
+    rig.loaded_patch.load_doc(doc)
+    assert "rot.phase.XY is not part of a preset, ignored" in rig.loaded_patch.notes
     assert rig.view.ang == [0.1] * 6
 
 
@@ -274,13 +274,13 @@ def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path
     assert "render:camera" not in pr.layout and pr.layout["device:apc40"] == [1, 2]
     assert reg["tempo.bpm"].value == pytest.approx(128.0)
     assert not pr.is_dirty()
-    rig.presets.load("OLD")
+    rig.loaded_patch.load("OLD")
     assert reg["eye.fov"].value == 30.0 and reg["eye.distance"].value == 5.0
-    assert rig.presets.layout["render:camera"] == CAMERA_AT and rig.presets.notes == []
-    rig.presets.load("DIAL")                                      # a /9: its own eye
+    assert rig.loaded_patch.layout["render:camera"] == CAMERA_AT and rig.loaded_patch.notes == []
+    rig.loaded_patch.load("DIAL")                                      # a /9: its own eye
     assert reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
-    rig.presets.load("OLD")
-    saved = json.loads(rig.presets.save_as("OLD").read_text())
+    rig.loaded_patch.load("OLD")
+    saved = json.loads(rig.loaded_patch.save_as("OLD").read_text())
     assert saved["schema"] == preset.SAVE_SCHEMA
     assert {k: saved["values"][k] for k in EYE} == EYE
     assert saved["layout"]["render:camera"] == CAMERA_AT
@@ -302,7 +302,7 @@ def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path
     again = boot(home, show="rig")
     assert again.lib.project.old_eye == EYE and again.lib.project.camera_at == CAMERA_AT
     assert not any(k.startswith("eye.") for k in again.lib.project.session)
-    again.presets.load("OLD")
+    again.loaded_patch.load("OLD")
     assert again.reg["eye.fov"].value == 30.0 and again.reg["eye.distance"].value == 5.0
 
 
@@ -323,9 +323,9 @@ def test_a_bank_autosave_before_the_tool_still_hands_old_presets_the_eye(tmp_pat
     again = boot(home, show="rig")
     assert again.lib.project.old_eye == EYE and again.lib.project.camera_at == CAMERA_AT
     again.reg["eye.fov"].set(90.0)
-    again.presets.load("OLD")
+    again.loaded_patch.load("OLD")
     assert again.reg["eye.fov"].value == 30.0 and again.reg["eye.distance"].value == 5.0
-    assert again.presets.layout["render:camera"] == CAMERA_AT
+    assert again.loaded_patch.layout["render:camera"] == CAMERA_AT
 
 
 def test_the_tool_copies_nothing_when_nothing_it_reads_is_retapered(tmp_path, monkeypatch):
@@ -351,7 +351,7 @@ def test_an_old_preset_with_no_old_eye_takes_the_builds(tmp_path):
     rig = boot(tmp_path)
     rig.reg["eye.fov"].set(90.0)
     (tmp_path / "presets" / "old.json").write_text(preset.dumps({**old_preset(), "name": "OLD"}))
-    rig.presets.load("OLD")
+    rig.loaded_patch.load("OLD")
     assert rig.lib.project.old_eye == {}
     assert rig.reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
     assert rig.reg["eye.distance"].value == pytest.approx(G.EYE_DISTANCE)
@@ -493,7 +493,7 @@ def test_the_camera_node_is_the_looks():
     preset's and its refusal says it is the look's one camera."""
     assert "camera" not in graphview.FIXTURE_KINDS and "camera" in graphview.ALWAYS_KINDS
     cam = graphview.VNode("render:camera", "render", "Camera")
-    assert graphview.home(cam) == graphview.PRESET
+    assert graphview.home(cam) == graphview.PATCH_SECTION
     got, why = graphview.spec_name("render:camera")
     assert got is None and why == graphview.CAMERA_KEPT.format(label="Camera")
 
@@ -573,12 +573,12 @@ def _library(tmp_path: Path) -> Path:
     two `/7` presets (one with the taper marker, one without), a `/9`
     already, a patch and a desk template from before the tapers."""
     lib = tmp_path / "Drive" / "Hyperspace"
-    presets = lib / "presets"
-    presets.mkdir(parents=True)
-    (presets / "trip-old.json").write_text(preset.dumps(old_preset()))
-    (presets / "trip-unmarked.json").write_text(
+    loadable_dir = lib / "presets"
+    loadable_dir.mkdir(parents=True)
+    (loadable_dir / "trip-old.json").write_text(preset.dumps(old_preset()))
+    (loadable_dir / "trip-unmarked.json").write_text(
         preset.dumps({**old_preset(marked=False), "name": "TRIP UNMARKED"}))
-    shutil.copyfile(CORPUS / "presets" / "dial.json", presets / "dial.json")
+    shutil.copyfile(CORPUS / "presets" / "dial.json", loadable_dir / "dial.json")
     _write(lib / "projects" / "rig.hyp.json", old_show())
     (lib / "patches").mkdir()
     shutil.copyfile(OLD_PATCH, lib / "patches" / "acid-wash.json")
@@ -785,9 +785,9 @@ def test_a_pose_at_the_edge_of_the_turn_saves_loads_and_saves_as_itself(tmp_path
     rig = boot(tmp_path)
     for k in range(0, len(edges), 6):
         rig.view.set_pose((edges[k:k + 6] + [0.0] * 6)[:6])
-        one = rig.presets.document("EDGE")
-        rig.presets.load_doc(one)
-        two = rig.presets.document("EDGE")
+        one = rig.loaded_patch.document("EDGE")
+        rig.loaded_patch.load_doc(one)
+        two = rig.loaded_patch.document("EDGE")
         assert two[preset.POSE_KEY] == one[preset.POSE_KEY]
         assert preset.dumps(two) == preset.dumps(one)
 
@@ -809,10 +809,10 @@ def test_one_picture_saves_one_pose_and_save_load_save_is_byte_stable(tmp_path):
     def save_load_save(three_d: bool) -> dict:
         reg["view.rotate"].set(False)
         reg["view.three_d"].set(three_d)
-        one = rig.presets.document("P")
-        rig.presets.load_doc(one)
+        one = rig.loaded_patch.document("P")
+        rig.loaded_patch.load_doc(one)
         view.integrate(0.0)                       # a frame: the switch folds a body
-        two = rig.presets.document("P")
+        two = rig.loaded_patch.document("P")
         assert preset.dumps(two) == preset.dumps(one)
         return one[preset.POSE_KEY]
 

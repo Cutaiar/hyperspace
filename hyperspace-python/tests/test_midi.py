@@ -15,7 +15,7 @@ from hyperspace.library import Library
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Bindings, Router, is_meta_row
 from hyperspace.view import ViewState
 
@@ -54,8 +54,8 @@ def rig(tmp_path):
     view = ViewState()
     seed(tmp_path)              # the corpus: the party show's bank, TUMBLE first
     lib = Library(tmp_path)
-    presets = lib.project
-    reg = build_registry(view, control, audio, presets)
+    project = lib.project
+    reg = build_registry(view, control, audio, project)
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
     reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
@@ -70,9 +70,9 @@ def rig(tmp_path):
     hands.register(reg, hands.HandSettings.from_config({}))   # the global track knobs
     inp, out = FakeIn(), FakeOut()
     m = MidiIO(reg, path=tmp_path / "midi_map.json", inp=inp, out=out)
-    Presets(lib, reg, Router(reg, m.table))     # the bank the clip row and QUANT load
+    LoadedPatch(lib, reg, Router(reg, m.table))     # the bank the clip row and QUANT load
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio,
-                           presets=presets, midi=m, inp=inp, out=out, clock=clock)
+                           loaded_patch=project, midi=m, inp=inp, out=out, clock=clock)
 
 
 def push(r, *msgs):
@@ -261,9 +261,9 @@ def test_transport_corner_is_the_clock(rig):
     push(rig, note(apc40.N_NUDGE_M), note(apc40.N_NUDGE_M, 0))
     push(rig, note(apc40.N_NUDGE_M), note(apc40.N_NUDGE_M, 0))
     assert c.nudge == pytest.approx(-0.01)
-    was = rig.presets.active
+    was = rig.loaded_patch.active
     push(rig, note(apc40.N_QUANT))
-    assert rig.presets.active != was
+    assert rig.loaded_patch.active != was
 
 
 def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
@@ -290,7 +290,7 @@ def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
 
 def test_preset_row_lights_the_active_preset(rig):
     push(rig, note(apc40.N_CLIP[0], channel=2))
-    assert rig.presets.active == 2
+    assert rig.loaded_patch.active == 2
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
     assert leds[(2, apc40.N_CLIP[0])] == apc40.GREEN
     # a slot that holds another preset is amber, not dark (plan 19 WP2)
@@ -433,7 +433,7 @@ def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
     is written, the preset's dot lights; a param only the session maps (an
     invariant fader, a global-layer knob) is refused with the reason in
     the learn line, as Learn refuses, and its row stays."""
-    m, lib = rig.midi, rig.presets.lib
+    m, lib = rig.midi, rig.loaded_patch.lib
     lib.load("presets", "BIG BLUE WAVE")
     assert not lib.is_dirty("presets")
     path = m.table.path
@@ -705,7 +705,7 @@ def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
     """A `hold` row fires when its button has been down HOLD_S — while it
     is still down (fork 14) — and never again for that press."""
     at, fires = bar_rig(rig)
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     rows = [b for b in rig.midi.bindings if b.op == "hold"]
     assert [(b.source, b.target, b.layer) for b in rows] \
         == [(f"note:{k}:{STOP}", "preset.save_new", None) for k in BAR]
@@ -738,13 +738,13 @@ def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
 
 def test_a_tap_fires_nothing(rig):
     at, fires = bar_rig(rig)
-    lib = rig.presets.lib
-    was, bank = lib.current("presets"), list(rig.presets.bank)
+    lib = rig.loaded_patch.lib
+    was, bank = lib.current("presets"), list(rig.loaded_patch.bank)
     at(0.0, note(STOP, channel=3))
     at(0.3, note(STOP, 0, channel=3))                        # released at 0.3 s
     at(0.6)
     at(2.0)
-    assert fires == [] and lib.current("presets") == was and rig.presets.bank == bank
+    assert fires == [] and lib.current("presets") == was and rig.loaded_patch.bank == bank
     # a tap in one poll, and taps one after the other, likewise
     at(3.0, note(STOP, channel=3), note(STOP, 0, channel=3))
     at(3.5, note(STOP, channel=3))
@@ -801,7 +801,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     from hyperspace import midi
 
     at, fires = bar_rig(rig)
-    pr = rig.presets
+    pr = rig.loaded_patch
     pad = apc40.N_CLIP[0]
     assert apc40.blink_of(STOP, 1) == 2 and apc40.blink_of(pad, apc40.GREEN) == apc40.GREEN_BLINK
     assert apc40.blink_of(apc40.N_CLIP[2], apc40.RED) == apc40.RED_BLINK
@@ -1299,7 +1299,7 @@ def test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty(rig, monkeypatch
     way to turn the third state off) leaves a filled pad dark."""
     from hyperspace import routing
 
-    pr = rig.presets
+    pr = rig.loaded_patch
 
     def led(k):
         n, ch = apc40.BANK_PADS[k]
@@ -1359,7 +1359,7 @@ def test_save_as_blinks_the_new_pad_on_row_four(rig):
     from hyperspace import midi
 
     at, fires = bar_rig(rig)
-    pr = rig.presets
+    pr = rig.loaded_patch
     assert pr.next_empty() == 9                                     # slot 10
     pad = apc40.N_CLIP[0]
     push(rig, note(pad, channel=4), note(pad, 0, channel=4))        # TRIP, on F5
@@ -1451,7 +1451,7 @@ def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
         t[0] = seconds
         push(rig, *msgs)
 
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     pad = apc40.N_CLIP[0]
     # free but for SAVE on track 8's (plan 24 C1, decision 18)
     assert [b.target for b in rig.midi.bindings if b.kind == "note" and b.number == STOP] \
@@ -1490,7 +1490,7 @@ def test_two_empty_pads_held_together_each_save_into_their_own_slot(rig):
 
     t = [0.0]
     rig.midi.clock = lambda: t[0]
-    pr, pad = rig.presets, apc40.N_CLIP[0]
+    pr, pad = rig.loaded_patch, apc40.N_CLIP[0]
     pr.clear_slot(6)
     pr.clear_slot(7)
     t[0] = 0.0

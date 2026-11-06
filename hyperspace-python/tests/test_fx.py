@@ -484,9 +484,9 @@ def test_the_browser_draws_every_strip(tmp_path, monkeypatch):
     from hyperspace import ui_fx
     from hyperspace.app import CONTROL_SIZE
     with shell(tmp_path) as (rig, st, stand_in):
-        rig.lib.presets.load("TRIP")
+        rig.lib.loaded_patch.load("TRIP")
         stand_in.fx.error = lambda n: "line 3: made up"
-        listed = [n for _, ns in ui_fx.groups(rig.lib.presets.graph.spec) for n in ns]
+        listed = [n for _, ns in ui_fx.groups(rig.lib.loaded_patch.graph.spec) for n in ns]
         assert listed
         longest = max(st.specs, key=lambda n: len(st.specs[n].params))
         for sel in (None, *listed, longest):
@@ -516,7 +516,7 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
                 names[i] = label
                 return _real(label, *a, **k)
             monkeypatch.setattr(imgui, fn, rec)
-        listed = [n for _, ns in ui_fx.groups(rig.app.presets.graph.spec) for n in ns]
+        listed = [n for _, ns in ui_fx.groups(rig.app.loaded_patch.graph.spec) for n in ns]
         assert listed.count("acid.3") == 2
         for name in [None, *dict.fromkeys(listed)]:
             rig.panel.fx_selected = name
@@ -538,14 +538,14 @@ def test_the_selection_is_a_name_a_load_keeps(tmp_path, monkeypatch):
         rig.panel.fx_selected = "kaleido.2"
         rig.frame()
         assert "fx.kaleido.2.speed" in rig.rects
-        rig.app.presets.load("TRIP")                 # kaleido.2 is no node of TRIP's
+        rig.app.loaded_patch.load("TRIP")                 # kaleido.2 is no node of TRIP's
         rig.frame()
         assert rig.panel.fx_selected == "kaleido.2"
         assert "no effect kaleido.2" in rig.plain
         rig.panel.fx_selected = "warp"               # a file the graph does not name:
         rig.frame()                                  # (plan 36 T3) no such effect either
         assert "no effect warp" in rig.plain and "fx.warp.speed" not in rig.rects
-        assert not any("sel" in k for k in rig.app.presets.document("x")["values"])
+        assert not any("sel" in k for k in rig.app.loaded_patch.document("x")["values"])
     finally:
         rig.close()
 
@@ -972,7 +972,7 @@ def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
     r = boot(tmp_path / "home", fx=st)
     r.fx = st
     # (plan 36 T3: warp exists only where a graph names it — one in the run)
-    r.presets.load_doc({"schema": "hyperspace.preset/5", "name": "w", "values": {},
+    r.loaded_patch.load_doc({"schema": "hyperspace.preset/5", "name": "w", "values": {},
                         "graph": {"nodes": [], "wires": [{"from": "frame", "to": "warp.image"},
                                                          {"from": "warp", "to": "fx.image"}]}})
     pushes = []
@@ -1373,8 +1373,8 @@ def browsing(tmp_path, monkeypatch, section=BROWSED):
     names = {n for _, ns in BROWSED_GROUPS for n in ns} if section is BROWSED else set()
     doc = {"schema": "hyperspace.preset/5", "name": "browse", "graph": section,
            "values": {f"fx.{n}.on": True for n in sorted(names)}}
-    r.presets.load_doc(doc)
-    assert not [n for n in r.presets.notes if "graph" in n or "unknown" in n], r.presets.notes
+    r.loaded_patch.load_doc(doc)
+    assert not [n for n in r.loaded_patch.notes if "graph" in n or "unknown" in n], r.loaded_patch.notes
     return rig
 
 
@@ -1420,8 +1420,8 @@ def test_show_on_graph_selects_the_node(tmp_path, monkeypatch):
     with shell(tmp_path) as (rig, st, stand_in):
         doc = {"schema": "hyperspace.preset/5", "name": "browse", "graph": BROWSED,
                "values": {"fx.acid.2.on": True}}
-        rig.lib.presets.load_doc(doc)
-        wiring = rig.lib.presets.graph.wiring
+        rig.lib.loaded_patch.load_doc(doc)
+        wiring = rig.lib.loaded_patch.graph.wiring
         stand_in.wiring = wired_wiring(wiring)
         stand_in._graph = G.build_graph(views(Switches(), Switches()), wired_wiring(wiring),   # (plan 35)
                                           effects=tuple(sorted(st.specs)))
@@ -1506,7 +1506,7 @@ def test_an_old_preset_loads_its_retired_ids_without_a_note(tmp_path):
 
     from hyperspace import graph as G
     app = make_app(tmp_path)
-    st = app.presets.graph.fx
+    st = app.loaded_patch.graph.fx
     values = {"view.media": 2, "backdrop.channel": 1}
     for k, n in enumerate(sorted(st.specs)):
         values[f"fx.{n}.order"] = 90 - k
@@ -1514,9 +1514,9 @@ def test_an_old_preset_loads_its_retired_ids_without_a_note(tmp_path):
     values.update({"fx.warp.on": True, "fx.acid.on": True, "fx.kaleido.on": True,
                    "fx.kaleido.target": 1})
     doc = {"schema": "hyperspace.preset/4", "name": "old", "values": values}
-    assert app.presets.load_doc(doc) == []
-    assert not [n for n in app.presets.notes if "unknown" in n], app.presets.notes
-    spec = app.presets.graph.spec
+    assert app.loaded_patch.load_doc(doc) == []
+    assert not [n for n in app.loaded_patch.notes if "unknown" in n], app.loaded_patch.notes
+    spec = app.loaded_patch.graph.spec
     # (plan 35 T3: a wired frame — the run from the look-back into All
     # outputs, the channels in the new ids)
     assert G.run_back(spec, "output.all.image") == ("warp", "acid")   # warp's lower
@@ -1597,15 +1597,15 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
               "view.media": 2, "media.a.slot": 0}
     doc = {"schema": "hyperspace.preset/4", "name": "old", "values": values,
            "media": {"channels": {"b": ["shared:x.png"]}}}
-    assert app.presets.load_doc(doc) == []
-    out = app.presets.document("old")
+    assert app.loaded_patch.load_doc(doc) == []
+    out = app.loaded_patch.document("old")
     assert out["schema"] == "hyperspace.preset/10"
     assert not [k for k in out["values"] if M.retired(k)]
     run = G.run_back(G.read_graph(out["graph"]), "output.all.image")
     assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
     assert G.Wire("channel.b", "pattern.media") in G.read_graph(out["graph"]).all_wires()
     # reorder on GRAPH to acid first (the wired frame's run, rewired where it stands)
-    sec = app.presets.graph.free_doc()
+    sec = app.loaded_patch.graph.free_doc()
     # (plan 36 T4: the run's head is the scene — no look-back drawn)
     rerun = [{"from": "scene", "to": "acid.image"}, {"from": "acid", "to": "warp.image"},
              {"from": "warp", "to": "output.all.image"}]
@@ -1615,8 +1615,8 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
     at = sec["wires"].index(old[0])
     keep = [w for w in sec["wires"] if w not in old]
     sec = {**sec, "wires": [*keep[:at], *rerun, *keep[at:]]}
-    app.presets.graph.land(G.read_graph(sec), sec)
-    out = app.presets.document("old")
+    app.loaded_patch.graph.land(G.read_graph(sec), sec)
+    out = app.loaded_patch.document("old")
     assert out["schema"] == "hyperspace.preset/10"
     assert G.run_back(G.read_graph(out["graph"]), "output.all.image") == (
         "acid", "warp")

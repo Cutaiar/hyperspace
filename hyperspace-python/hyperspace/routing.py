@@ -563,7 +563,7 @@ LOOP_KEY_ROWS = (
 # before it that targets a theme param — a factory key or APC40 row, or
 # one the user learned — is rewritten to the preset param of the same
 # slot (`remap_factory`, noted, the file written back once)
-THEME_TO_PRESET = {
+THEME_TO_BANK = {
     "theme.select": "preset.select", "theme.next": "preset.next",
     "theme.prev": "preset.prev",
     **{f"theme.{w}.{k}": f"preset.{w}.{k}" for w in ("load", "save") for k in range(F_KEYS)},
@@ -1438,8 +1438,8 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
             notes.append(f"remapped {b.source}: {b.target} → {target} (the pad layout "
                          f"of {when})")
             b = replace(b, target=target, op=op, value=value)
-        elif b.target in THEME_TO_PRESET:
-            target = THEME_TO_PRESET[b.target]
+        elif b.target in THEME_TO_BANK:
+            target = THEME_TO_BANK[b.target]
             notes.append(f"remapped {b.source}: {b.target} → {target} (the preset bank "
                          "of plan 13)")
             b = replace(b, target=target)

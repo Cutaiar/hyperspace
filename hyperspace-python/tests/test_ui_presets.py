@@ -426,7 +426,7 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
 
     panel, lib = rig.panel, rig.lib
     called = []
-    monkeypatch.setattr(lib.presets, "new", lambda at: called.append(1) or [preset.NEW_SAID])
+    monkeypatch.setattr(lib.loaded_patch, "new", lambda at: called.append(1) or [preset.NEW_SAID])
     rects = _page(panel)["rects"]
     assert "strip.presets.new" in rects and "strip.presets.save" in rects
     assert rects["strip.presets.new"][2] <= rects["strip.presets.save"][0]
@@ -435,8 +435,8 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
     _click(panel, rects["strip.presets.new"])
     assert called == [1]
     monkeypatch.undo()
-    lib.presets.new()
-    assert lib.current("presets") == preset.UNTITLED_PRESET
+    lib.loaded_patch.new()
+    assert lib.current("presets") == preset.UNTITLED_PATCH
     page_frame(panel)
     _click(panel, _rects(panel)["strip.presets.save"])
     assert ui_presets._state(panel)["naming"] == "presets"
@@ -450,11 +450,11 @@ def test_new_then_save_never_writes_over_a_preset_named_untitled(rig):  # noqa: 
     from hyperspace import preset
 
     panel, lib = rig.panel, rig.lib
-    path = lib.presets.save_as(preset.UNTITLED_PRESET)
+    path = lib.loaded_patch.save_as(preset.UNTITLED_PATCH)
     was = path.read_bytes()
-    assert not lib.presets.unsaved
-    lib.presets.new()
-    assert lib.presets.unsaved and lib.path_of("presets", preset.UNTITLED_PRESET) == path
+    assert not lib.loaded_patch.unsaved
+    lib.loaded_patch.new()
+    assert lib.loaded_patch.unsaved and lib.path_of("presets", preset.UNTITLED_PATCH) == path
     _page(panel)
     _click(panel, _rects(panel)["strip.presets.save"])
     st = ui_presets._state(panel)
@@ -465,11 +465,11 @@ def test_new_then_save_never_writes_over_a_preset_named_untitled(rig):  # noqa: 
     _click(panel, _rects(panel)["strip.presets.as"])
     assert st["naming"] == "presets" and st["buf"] == ""
     st["naming"] = None
-    lib.presets.save_as("blank")
-    assert not lib.presets.unsaved
-    lib.presets.new()
-    lib.presets.load("blank")
-    assert not lib.presets.unsaved
+    lib.loaded_patch.save_as("blank")
+    assert not lib.loaded_patch.unsaved
+    lib.loaded_patch.new()
+    lib.loaded_patch.load("blank")
+    assert not lib.loaded_patch.unsaved
 
 
 def test_the_routing_head_draws_save_and_as_over_the_presets(rig):  # noqa: F811

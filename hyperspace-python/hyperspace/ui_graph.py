@@ -295,8 +295,8 @@ ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them
            "to a handful of boxes and wires")
 # plan 36 T6 (D4): the **preset only** chip starts lit, for every preset
 # (a constant so the tests' autouse fixture can start them on the full canvas)
-PRESET_ONLY = True
-PRESET_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
+PATCH_ONLY = True
+PATCH_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
                    "they reach. Controllers, modulation and macros are left off the canvas "
                    "(nothing is changed, only not drawn). Click to show everything.")
 # 2026-10-26: output 1's picture behind the canvas, fixed to the page (not
@@ -382,7 +382,7 @@ def _state(panel) -> dict:
     st.setdefault("backdrop", True)         # 2026-10-26: output 1 behind the canvas
     st.setdefault("backdrop_alpha", BACKDROP_ALPHA)
     st.setdefault("pan", (0.0, 0.0))        # canvas units every position is moved by
-    st.setdefault("preset_only", PRESET_ONLY)     # plan 36 T6 (D4): on for every preset, kept across loads
+    st.setdefault("patch_only", PATCH_ONLY)     # plan 36 T6 (D4): on for every preset, kept across loads
     st.setdefault("hide", frozenset())      # the node ids that view leaves off this frame
     # 2026-10-31: the nodes the picker added this session (canvas ids), drawn
     # whatever the chip and the idle lines say until deleted (`reveal_node`):
@@ -459,11 +459,11 @@ def _layouts(panel) -> tuple[dict | None, dict | None]:
     """(the loaded preset's layout map, the open show's), the live dicts —
     None where the panel has no library."""
     lib = getattr(panel, "library", None)
-    presets = getattr(lib, "presets", None)
+    loaded_patch = getattr(lib, "loaded_patch", None)
     project = getattr(lib, "project", None)
-    pre = getattr(presets, "layout", None) if presets is not None else None
-    if presets is not None and pre is None:
-        pre = presets.layout = {}
+    pre = getattr(loaded_patch, "layout", None) if loaded_patch is not None else None
+    if loaded_patch is not None and pre is None:
+        pre = loaded_patch.layout = {}
     show = getattr(project, "layout", None) if project is not None else None
     if project is not None and show is None:
         show = project.layout = {}
@@ -488,12 +488,12 @@ def view_of(panel) -> graphview.View | None:
     reg, table = panel.reg, router.table
     devices = getattr(panel, "devices", None)
     rgraph = getattr(getattr(panel, "renderer", None), "_graph", None)
-    gs = getattr(getattr(getattr(panel, "library", None), "presets", None), "graph", None)
+    gs = getattr(getattr(getattr(panel, "library", None), "loaded_patch", None), "graph", None)
     # (plan 35 G: the wired frame itself, in the new ids)
     spec = getattr(gs, "spec", None)
     lanes = _lanes(panel)
     # plan 40 T2: the preset's groups (made, opened, renamed: a new view)
-    groups = getattr(getattr(getattr(panel, "library", None), "presets", None), "groups", None)
+    groups = getattr(getattr(getattr(panel, "library", None), "loaded_patch", None), "groups", None)
     k = (graphview.key(table, reg, router, devices, rgraph, spec), groups_key(groups))
     if st["view"] is None or st["key"] != k:
         chain = getattr(getattr(panel, "audio", None), "chain", None)
@@ -569,9 +569,9 @@ def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
     Plan 40 T2 (D4): and a folded group's members, whatever the chip —
     their group's node stands for them until +."""
     fold = frozenset(graphview.folded(view))
-    if not st.get("preset_only", PRESET_ONLY):
+    if not st.get("patch_only", PATCH_ONLY):
         return fold
-    keep = graphview.preset_only(view) | st.get("revealed", set())
+    keep = graphview.patch_only(view) | st.get("revealed", set())
     return frozenset(n.id for n in view.nodes if n.id not in keep) | fold
 
 
@@ -1025,8 +1025,8 @@ def settle(panel) -> None:
     the names are read only when the spec moved."""
     st = panel.__dict__.get(STATE)
     nid = getattr(panel, "graph_selected", None)
-    presets = getattr(getattr(panel, "library", None), "presets", None)
-    spec = getattr(getattr(presets, "graph", None), "spec", None)
+    loaded_patch = getattr(getattr(panel, "library", None), "loaded_patch", None)
+    spec = getattr(getattr(loaded_patch, "graph", None), "spec", None)
     if st is None or spec is st.get("spec_seen"):
         return
     st["spec_seen"] = spec
@@ -1182,10 +1182,10 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(TIDY_TIP)
     imgui.same_line()
-    if ui.lit_chip("preset only##graph", st["preset_only"]):
-        st["preset_only"] = not st["preset_only"]
+    if ui.lit_chip("preset only##graph", st["patch_only"]):
+        st["patch_only"] = not st["patch_only"]
     if imgui.is_item_hovered():
-        ui.tooltip(PRESET_ONLY_TIP)
+        ui.tooltip(PATCH_ONLY_TIP)
     imgui.same_line()
     _backdrop_chips(panel, st)
     label = beside_chip(selected, width, st["beside"])
@@ -1235,12 +1235,12 @@ def window_wants(panel) -> list[str]:
     that this rig has not open (`graphview.window_wanted_lines` over the
     presets' graph and bus cuts and the panel's outputs), one line each —
     what OUTPUT and the GRAPH head say; [] with no presets (a test's panel)."""
-    presets = getattr(getattr(panel, "library", None), "presets", None)
-    if presets is None:
+    loaded_patch = getattr(getattr(panel, "library", None), "loaded_patch", None)
+    if loaded_patch is None:
         return []
-    spec = getattr(getattr(presets, "graph", None), "spec", None)
+    spec = getattr(getattr(loaded_patch, "graph", None), "spec", None)
     count = len(getattr(panel, "outputs", None) or ())
-    return graphview.window_wanted_lines(spec, getattr(presets, "bus", None), count)
+    return graphview.window_wanted_lines(spec, getattr(loaded_patch, "bus", None), count)
 
 
 def _wants_chip(panel, beside: bool = True) -> None:
@@ -1333,7 +1333,7 @@ def copy_on_air(panel) -> None:
     except Exception as e:  # noqa: BLE001 — a panel click must not take the frame down
         say(warning=f"not copied: {type(e).__name__}: {e}"[:160])
         return
-    words = (f"copied {src.presets.current or 'the look'} from {meta.words(src)} "
+    words = (f"copied {src.loaded_patch.current or 'the look'} from {meta.words(src)} "
              f"to {meta.words(dst)}")
     if missing:
         say(warning=f"{words}; {len(missing)} id(s) it lacks: " + ", ".join(missing[:4]))
@@ -1583,7 +1583,7 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         # (plan 36 T5: a node the preset's map already places — a new
         # preset's All outputs — moves there, or that entry would hold it;
         # a leaver was placed by `leave_groups`)
-        m = pre if graphview.home(n) == graphview.PRESET or (pre and n.id in pre) else show
+        m = pre if graphview.home(n) == graphview.PATCH_SECTION or (pre and n.id in pre) else show
         if m is not None and n.id not in left:
             px, py = panned(st)                 # saved in layout units, not panned ones
             m[n.id] = [round(now[0] - px), round(now[1] - py)]
@@ -2050,7 +2050,7 @@ def group_edit(panel) -> graphview.Edit | None:
     if e is None:
         return None
     e.push = lambda label: undo.push(label, load=True)
-    e.presets = getattr(getattr(panel, "library", None), "presets", None)
+    e.loaded_patch = getattr(getattr(panel, "library", None), "loaded_patch", None)
     e.slots = getattr(panel, "outputs", None) or ()     # (a window's name, in the chip's words)
     return e
 
@@ -2542,7 +2542,7 @@ WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the rig lacks (`devices
 def group_entry_of(panel, gid: str) -> dict | None:
     """The loaded preset's entry of group `gid` (its session keys too: a
     spawn's open `ports` and its `renames`), or None."""
-    pre = getattr(getattr(panel, "library", None), "presets", None)
+    pre = getattr(getattr(panel, "library", None), "loaded_patch", None)
     return next((g for g in getattr(pre, "groups", None) or () if g.get("id") == gid), None)
 
 
@@ -2628,7 +2628,7 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     on the head), or None."""
     st = _state(panel)
     lib = getattr(panel, "library", None)
-    pre = getattr(lib, "presets", None)
+    pre = getattr(lib, "loaded_patch", None)
     e = group_edit(panel)
     if lib is None or pre is None or e is None:
         _note(st, NO_LIBRARY)
@@ -3220,12 +3220,12 @@ def render_edit(panel) -> graphview.Edit:
     """The render edits on this panel's loaded preset (its `GraphSection`),
     pins named through the renderer's last graph, one undo step each."""
     lib = getattr(panel, "library", None)
-    gs = getattr(getattr(lib, "presets", None), "graph", None)
+    gs = getattr(getattr(lib, "loaded_patch", None), "graph", None)
     rg = getattr(getattr(panel, "renderer", None), "_graph", None)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
     e.show = getattr(lib, "project", None)
-    e.presets = getattr(lib, "presets", None)           # (plan 44 D3: the bus cuts are the preset's)
+    e.loaded_patch = getattr(lib, "loaded_patch", None)           # (plan 44 D3: the bus cuts are the preset's)
     return e
 
 
@@ -4008,11 +4008,11 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
     # `render_edit` instead)
     lib = getattr(panel, "library", None)
     e = graphview.Edit(table, panel.reg, router, view, profile,
-                       graph=getattr(getattr(lib, "presets", None), "graph", None),
+                       graph=getattr(getattr(lib, "loaded_patch", None), "graph", None),
                        render=getattr(getattr(panel, "renderer", None), "_graph", None))
     e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
     # row 563: a modifier or a voice deleted leaves its group at once
-    e.presets = getattr(lib, "presets", None)
+    e.loaded_patch = getattr(lib, "loaded_patch", None)
     return e
 
 

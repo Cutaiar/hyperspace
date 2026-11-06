@@ -38,7 +38,7 @@ from undo_demo import frames, say
 from fake_hands import hand
 
 from hyperspace import config, placement, ui
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 
 
 def footer(panel, now: float) -> str:
@@ -104,14 +104,14 @@ def round_off(r) -> None:
     say("   (each preset of the library loaded, 2 s of hands on its own routes, the hands "
         "gone)")
     shown = 0
-    names = lib.list(PRESETS)
+    names = lib.list(LOADABLE)
     for name in names:
-        lib.load(PRESETS, name)
+        lib.load(LOADABLE, name)
         frames(r, 5)
-        ref = lib._loaded[PRESETS]
+        ref = lib._loaded[LOADABLE]
         frames(r, 120, hands_at=moving)
         frames(r, 40)
-        sig = lib._kinds[PRESETS].signature()
+        sig = lib._kinds[LOADABLE].signature()
         moved = {k: (ref[0][k], v) for k, v in sig[0].items() if v != ref[0][k]}
         if not moved:
             continue
@@ -122,7 +122,7 @@ def round_off(r) -> None:
                 f"{reg[pid].fmt(b)})")
         say(f"     before  (signature != reference):    {'unsaved •' if sig != ref else 'clean'}")
         say(f"     after   (Library.is_dirty):          "
-            f"{'unsaved •' if lib.is_dirty(PRESETS) else 'clean'}")
+            f"{'unsaved •' if lib.is_dirty(LOADABLE) else 'clean'}")
         pid = min(moved)
         group = pid.split(".")[0]
         say(f"     the {group.upper()} page's module dot:         "
@@ -131,7 +131,7 @@ def round_off(r) -> None:
         was = p.base
         p.step(1 if p.position() < p.steps else -1)
         say(f"     one detent of {pid} ({p.fmt(was)} -> {p.fmt(p.base)}):  "
-            f"{'unsaved •' if lib.is_dirty(PRESETS) else 'clean'}")
+            f"{'unsaved •' if lib.is_dirty(LOADABLE) else 'clean'}")
     say(f"   {shown} of {len(names)} presets had a base moved by these hands; "
         f"every other one read clean before and after")
 
@@ -176,7 +176,7 @@ def main() -> None:
     say("Hyperspace — plan 16 WP7's follow-ups, headless (tools/followups_demo.py)")
     say(f"home folder: {demo.HOME}  (a temp folder made by this script)")
     frames(r, 5)
-    say(f"show: {r.lib.project.name}   preset: {r.lib.current(PRESETS)}")
+    say(f"show: {r.lib.project.name}   preset: {r.lib.current(LOADABLE)}")
     say()
     lines_twice(r)
     round_off(r)

@@ -255,29 +255,29 @@ def app(tmp_path):
     lib.attach(reg)
     router = routing.Router(reg, table)
     router.use_lfos(lfos, clock)
-    presets = preset.Presets(lib, reg, router)
-    return SimpleNamespace(lib=lib, reg=reg, router=router, presets=presets, lfos=lfos)
+    loaded_patch = preset.LoadedPatch(lib, reg, router)
+    return SimpleNamespace(lib=lib, reg=reg, router=router, loaded_patch=loaded_patch, lfos=lfos)
 
 
 def test_a_preset_without_the_key_loads_four_lfos(app):
     app.lfos.set([1, 3])
-    doc = app.presets.document("old")
+    doc = app.loaded_patch.document("old")
     assert doc["lfos"] == [1, 3]
     del doc["lfos"]                              # as a file from before plan 31 wrote it
-    app.presets.load_doc(doc)
+    app.loaded_patch.load_doc(doc)
     assert app.lfos.ids() == [1, 2, 3, 4] and "lfo.2.depth" in app.reg
-    assert "lfos" not in app.presets.document("again")   # the default writes no key
+    assert "lfos" not in app.loaded_patch.document("again")   # the default writes no key
 
 
 def test_a_preset_round_trips_with_gaps(app):
     app.lfos.set([1, 3, 7])
     app.reg["lfo.7.depth"].set(0.25)
     app.reg["lfo.3.sync"].set(2)
-    doc = app.presets.document("gaps")
+    doc = app.loaded_patch.document("gaps")
     assert doc["lfos"] == [1, 3, 7] and doc["values"]["lfo.7.depth"] == 0.25
     app.lfos.set([1, 2, 3, 4])                  # somewhere else entirely
-    assert app.presets.load_doc(doc) == []       # every id known: none unknown
+    assert app.loaded_patch.load_doc(doc) == []       # every id known: none unknown
     assert app.lfos.ids() == [1, 3, 7]
     assert app.reg["lfo.7.depth"].value == pytest.approx(0.25)
     assert app.reg["lfo.3.sync"].value == 2
-    assert app.presets.document("gaps")["values"] == doc["values"]
+    assert app.loaded_patch.document("gaps")["values"] == doc["values"]

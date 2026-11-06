@@ -58,8 +58,8 @@ def test_there_are_candidates():
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)
 def test_each_candidate_loads_with_no_note_and_keeps_every_row(rig, path):
     doc = json.loads(path.read_text())
-    assert rig.presets.load(path.stem) == []
-    assert rig.presets.notes == [] and rig.presets.desk_notes == []
+    assert rig.loaded_patch.load(path.stem) == []
+    assert rig.loaded_patch.notes == [] and rig.loaded_patch.desk_notes == []
     table = rig.router.table
     assert table.dropped == []
     assert [b.to_json() for b in table.routes()] == doc["routes"]
@@ -79,7 +79,7 @@ def test_every_subscriber_names_a_real_param_or_a_route_of_its_file(rig, path):
     the file carries, onto a modulatable param. Every macro has a label and
     the file's note says what each one does."""
     doc = json.loads(path.read_text())
-    rig.presets.load(path.stem)
+    rig.loaded_patch.load(path.stem)
     reg = rig.reg
     routes = {(r["source"], r["target"]) for r in doc["routes"] if r.get("enabled", True)}
     seen: dict[str, list[str]] = {}
@@ -108,7 +108,7 @@ def test_turning_a_macro_moves_its_bases_and_scales_its_routes(rig, path):
     subscriber at its `from` / `to` and each depth subscriber's route
     pushes by its depth times the range's end."""
     doc = json.loads(path.read_text())
-    rig.presets.load(path.stem)
+    rig.loaded_patch.load(path.stem)
     reg, router = rig.reg, rig.router
     loud = SimpleNamespace(lanes=np.full(6, 0.5 * CEIL))     # every band at half the ceiling
     router.feed("lfo", np.ones(4))                          # every LFO at the top of its swing

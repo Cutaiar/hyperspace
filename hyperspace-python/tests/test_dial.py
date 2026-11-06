@@ -14,7 +14,7 @@ from test_routing import rig as full_rig
 import hyperspace.gamepad as gp
 from hyperspace import app
 from hyperspace.params import Registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Router
 
 
@@ -148,7 +148,7 @@ def test_the_dial_preset_fills_both_clocks(tmp_path):
     seed(tmp_path)                        # the corpus: DIAL among the shipped presets
     r = full_rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
-    assert Presets(r.lib, r.reg, router).load("DIAL") == []
+    assert LoadedPatch(r.lib, r.reg, router).load("DIAL") == []
     assert router.table.dropped == []
     dialed = {b.source for b in router.table.routes() if b.scheme == "axis"}
     assert dialed == {f"axis:{n}" for n in gp.DIAL_LANES}
@@ -216,7 +216,7 @@ def test_the_system_page_draws_both_clocks(tmp_path, monkeypatch):
         r.panel.pad = pad
         app._register_dial(r.reg, pad)
         frame(r.panel, "system")                 # no dial routes: the hint
-        assert [k for k in Presets(r.lib, r.reg, r.router).load("DIAL")
+        assert [k for k in LoadedPatch(r.lib, r.reg, r.router).load("DIAL")
                 if not k.startswith(("env.", "seq."))] == []  # (plan 36 T3: the `/7`'s envelope ids, this rig has none)
         x, y = at(100)
         pad.frame(axes=[x, -y, -x, y, -1.0, -1.0])

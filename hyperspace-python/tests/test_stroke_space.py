@@ -36,16 +36,16 @@ def test_the_default_is_world_space_a_preset_performance_switch():
 def test_the_switch_is_in_a_saved_preset_and_loads_back(tmp_path):
     rig = boot(tmp_path)
     rig.reg["view.screen_strokes"].set(True)
-    doc = rig.presets.document("S")
+    doc = rig.loaded_patch.document("S")
     assert doc["values"]["view.screen_strokes"] is True
     rig.reg["view.screen_strokes"].set(False)
     path = tmp_path / "S.json"
     path.write_text(json.dumps(doc))
-    rig.presets.load_doc(doc, path)
+    rig.loaded_patch.load_doc(doc, path)
     assert rig.view.screen_strokes is True
     # a preset without the key (every corpus file) lands world space
     del doc["values"]["view.screen_strokes"]
-    rig.presets.load_doc(doc, path)
+    rig.loaded_patch.load_doc(doc, path)
     assert rig.view.screen_strokes is False
 
 

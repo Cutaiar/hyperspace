@@ -41,7 +41,7 @@ from imgui_bundle import imgui, implot
 from test_ui_shell import menu as read_menu
 
 from hyperspace import learn, undo
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.params import Kind
 from hyperspace.routing import Binding
 from hyperspace.ui import Panel, apply_style, load_fonts
@@ -136,7 +136,7 @@ def unbind_demo() -> None:
                                     if not t.routes_to(i))
     say("Plan 17 WP1 — one Unbind (headless: no window, no device, no hand; the menu is read "
         "as text)")
-    say(f"home: <home>  ·  preset: {r.lib.current(PRESETS)}  ·  "
+    say(f"home: <home>  ·  preset: {r.lib.current(LOADABLE)}  ·  "
         f"{len(t.routes())} routes, {len(t.desk())} desk rows")
     say()
     say(f"0. {pid} in this preset has a knob and a hand route; add an LFO route, switched off")
@@ -259,7 +259,7 @@ def learn_demo() -> None:
         "device, no camera;")
     say("the desk's messages are put on fake ports, the hands are synthetic, the menu and the "
         "footer are read as text)")
-    say(f"home: <home>  ·  preset: {r.lib.current(PRESETS)}")
+    say(f"home: <home>  ·  preset: {r.lib.current(LOADABLE)}")
     say()
     say("1. The menu")
     show_menu(r, panel, pid, page)

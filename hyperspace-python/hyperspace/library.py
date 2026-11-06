@@ -181,7 +181,7 @@ EYE_BACKUP = "2-eye"
 # hands' and clouds' looks from its `session`, each preset's since `/10` —
 # <file>.bak-v2-look
 LOOK_BACKUP = "2-look"
-PRESETS = "presets"       # the presets' group, a document kind (preset.py)
+LOADABLE = "presets"       # the presets' group, a document kind (preset.py)
 # (plan 24 C3's desk templates, `<root>/desk/`, are retired — plan 44 D3,
 # the owner, 2026-11-03: neither library held one)
 # <root>/patches/<slug>.json (plan 40 P1): the patches — a group of nodes
@@ -206,7 +206,7 @@ GROUP_PATCH_WORDS = "{name} is a patch of the {group} group: open it from that g
 NOT_GROUP_WORDS = "{file} is {what}, not a patch of the {group} group"
 # the groups `rename` serves: the presets and the patches (a module preset
 # is saved under another name instead)
-RENAMABLE = (PRESETS, PATCHES)
+RENAMABLE = (LOADABLE, PATCHES)
 # folders in a library root that are no group: the routing presets' old
 # folder, kept as it was by plan 13's migration and never read again
 LEGACY_DIRS = ("bindings",)
@@ -221,7 +221,7 @@ _TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 
-PERFORMANCE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (preset.py)
+LOADABLE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (preset.py)
 PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: the rig's session, the pads, startup
 PROJECT_V2 = "hyperspace.project/2"        # read as its /3 (`show_without_look`), once
 PROJECT_V1 = "hyperspace.project/1"        # refused: no old-schema support (2026-10-25)
@@ -769,7 +769,7 @@ def group_folder(group: str, kinds=()) -> str:
     patches, the shows and any document kind (`kinds`) in their own
     ``<group>``; every other group's — a module group's patches of one
     group — in ``patches/<group>``."""
-    if group in (PRESETS, PATCHES, PROJECTS) or group in kinds:
+    if group in (LOADABLE, PATCHES, PROJECTS) or group in kinds:
         return group
     return f"{PATCHES}/{group}"
 
@@ -1063,37 +1063,37 @@ class Project:
         """`active` follows the loaded preset — the one place (plan 19
         WP1): kept where it is when that slot still names it, else the
         first slot that names it, else −1; −1 when nothing is loaded."""
-        lib, cur = self.lib, self.lib.current(PRESETS)
+        lib, cur = self.lib, self.lib.current(LOADABLE)
         if cur is None:                               # nothing loaded: no slot is lit
             self.active = -1
             return
         # a slot names it when it is the same string or reads (as a pad
         # loads it, loosely) the same file: `Ac/Dc`, `Party/TRIP` (plan 48
         # review); one look at the library for every slot
-        snap = lib._lookup(PRESETS) if hasattr(lib, "_lookup") else None
-        target = None if snap is None else lib._resolve(PRESETS, cur, snap, loose=True)
+        snap = lib._lookup(LOADABLE) if hasattr(lib, "_lookup") else None
+        target = None if snap is None else lib._resolve(LOADABLE, cur, snap, loose=True)
 
         def names(n: str | None) -> bool:
             return n is not None and (n == cur or (
-                target is not None and lib._resolve(PRESETS, n, snap, loose=True) == target))
+                target is not None and lib._resolve(LOADABLE, n, snap, loose=True) == target))
 
         if not (0 <= self.active < len(self.bank) and names(self.bank[self.active])):
             self.active = next((k for k, n in enumerate(self.bank) if names(n)), -1)
 
     def _loader(self):
-        return getattr(self.lib, "presets", None)
+        return getattr(self.lib, "loaded_patch", None)
 
     @property
     def active(self) -> int:
         """The slot lit (`load_slot`, `follow`): that of the preset loaded on
         the deck this view is of, so one deck's load moves no other's light
         (plan 44 D5a, `Presets.active_slot`). No presets yet: this object's."""
-        slot = getattr(getattr(self.lib, "presets", None), "active_slot", None)
+        slot = getattr(getattr(self.lib, "loaded_patch", None), "active_slot", None)
         return slot if slot is not None else self.__dict__.get("active", -1)
 
     @active.setter
     def active(self, k: int) -> None:
-        pre = getattr(self.lib, "presets", None)
+        pre = getattr(self.lib, "loaded_patch", None)
         if getattr(pre, "active_slot", None) is not None:
             pre.active_slot = k
         else:
@@ -1114,16 +1114,16 @@ class Project:
         if not 0 <= k < len(self.bank):
             return None
         lib, name, key = self.lib, self.bank[k], slot_key(k)
-        presets = self._loader()
+        loaded_patch = self._loader()
         if name is None:
             lib.say(warning=f"{key}: an empty slot — hold its pad" + (
                 f" (or ⇧{key})" if k < F_KEYS else "") + " to save the live state into it")
             return None
-        if presets is None or lib.path_of(PRESETS, name, loose=True) is None:
+        if loaded_patch is None or lib.path_of(LOADABLE, name, loose=True) is None:
             lib.say(warning=f"{key}: no preset {name!r}")
             return None
         try:
-            presets.load(name)
+            loaded_patch.load(name)
         except LibraryError as e:                     # a bad file: said, never fatal
             lib.error = f"library: {e}"
             return None
@@ -1137,16 +1137,16 @@ class Project:
         it. A show file that cannot take
         the slot (`write`) leaves the bank as the file has it: the preset
         is saved and in the list, and the footer says why."""
-        presets = self._loader()
+        loaded_patch = self._loader()
         if not 0 <= k < len(self.bank) or self.lib.reg is None:
             return
-        if presets is None:
+        if loaded_patch is None:
             self.bank_error = "presets: no preset loader"
             return
         was = self.bank[k]
         name = was or self._fresh_name(k)
         try:
-            presets.save_as(name)
+            loaded_patch.save_as(name)
         except LibraryError as e:                     # a full disk must not stop the show
             self.bank_error = f"presets: {e}"
             return
@@ -1163,7 +1163,7 @@ class Project:
 
     def _fresh_name(self, k: int) -> str:
         """``PRESET <k+1>``, made unique against every preset there is."""
-        taken = ({slug(n) for n in self.lib.list(PRESETS)}
+        taken = ({slug(n) for n in self.lib.list(LOADABLE)}
                  | {slug(n) for n in self.bank if n})
         base = name = f"PRESET {k + 1}"
         n = 1
@@ -1222,23 +1222,23 @@ class Project:
 
     def _save_new(self, at: int | None) -> bool:
         """`save_new` into slot `at`, or the next empty one when None."""
-        lib, presets = self.lib, self._loader()
+        lib, loaded_patch = self.lib, self._loader()
         if lib.reg is None:
             return False
-        if presets is None:
+        if loaded_patch is None:
             self.bank_error = "presets: no preset loader"
             return False
         # stems as slugs: on a filesystem that folds case, `Trip-2.json`
         # is the file a save of "TRIP 2" would write over. Plan 48 row 587:
         # the new preset lands beside the loaded one — in its folder, the
         # library's root for a top-level one or none loaded
-        taken = lib._taken(PRESETS) | {lib._fold(PRESETS, n) for n in self.bank if n}
-        folder, base = lib.folder_of(PRESETS, lib.current(PRESETS))
+        taken = lib._taken(LOADABLE) | {lib._fold(LOADABLE, n) for n in self.bank if n}
+        folder, base = lib.folder_of(LOADABLE, lib.current(LOADABLE))
         leaf = next_name(base, taken, key=lambda n: lib._fold(
-            PRESETS, f"{folder}/{n}" if folder else n))
+            LOADABLE, f"{folder}/{n}" if folder else n))
         name = f"{folder}/{leaf}" if folder else leaf
         try:
-            presets.save_as(name)
+            loaded_patch.save_as(name)
         except (LibraryError, OSError) as e:          # a full disk must not stop the show
             self.bank_error = f"presets: {e}"
             return False
@@ -1275,7 +1275,7 @@ class Project:
         written or deleted; no undo step."""
         if not 0 <= k < len(self.bank):
             return
-        if self.lib.path_of(PRESETS, name, loose=True) is None:
+        if self.lib.path_of(LOADABLE, name, loose=True) is None:
             self.lib.say(warning=f"{slot_key(k)}: no preset {name!r}")
             return
         self._set_slot(k, name, f"{slot_key(k)}: {name}")
@@ -1344,7 +1344,7 @@ class Project:
         if self._loader() is None:
             return None
         try:
-            return lib.next(PRESETS) if step > 0 else lib.prev(PRESETS)
+            return lib.next(LOADABLE) if step > 0 else lib.prev(LOADABLE)
         except (LibraryError, OSError) as e:
             lib.error = f"library: {e}"
             return None
@@ -1353,14 +1353,14 @@ class Project:
         """The project's startup preset (D11), if it names one: a launch
         and a project load bring it up. A name with no file says so and
         the app keeps running on what it has. True when it loaded."""
-        lib, presets, name = self.lib, self._loader(), self.startup
-        if presets is None or not name:
+        lib, loaded_patch, name = self.lib, self._loader(), self.startup
+        if loaded_patch is None or not name:
             return None
-        if lib.path_of(PRESETS, name, loose=True) is None:
+        if lib.path_of(LOADABLE, name, loose=True) is None:
             lib.say(warning=f"startup: no preset {name!r}")
             return None
         try:
-            presets.load(name)
+            loaded_patch.load(name)
         except LibraryError as e:
             lib.error = f"library: {e}"
             return None
@@ -1380,7 +1380,7 @@ class Project:
             return None
         if lib.warning == HOME_UNSET:                 # it names one now
             lib.warning = ""
-        if self._loader() is not None and lib.path_of(PRESETS, name, loose=True) is not None:
+        if self._loader() is not None and lib.path_of(LOADABLE, name, loose=True) is not None:
             undo.push_on(lib.reg, f"home → {name}", load=True)
         return self.load_startup()
 
@@ -1730,7 +1730,7 @@ class Marks(_Landings):
         their numbers (row 563, `Presets.group_high`), the preset's bus
         cuts (plan 44 D3, `Presets.bus`) and its node mode (plan 57,
         `Presets.node_mode`)."""
-        pre = self.lib.presets
+        pre = self.lib.loaded_patch
         gs = getattr(pre, "graph", None)
         return (self._show(), self.lands(),
                 (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
@@ -1761,7 +1761,7 @@ class Marks(_Landings):
         """First in a restore: the loaded preset's graph goes back first of all
         (plan 26 A4): an effect instance's params (`fx.acid.2.*`) exist before
         their values land."""
-        gs = getattr(self.lib.presets, "graph", None)
+        gs = getattr(self.lib.loaded_patch, "graph", None)
         if mark[3] is not None and gs is not None:
             gs.put(mark[3])
 
@@ -1779,7 +1779,7 @@ class Marks(_Landings):
         if show[0] == pr.ident():
             pr.layout = copy.deepcopy(show[1])
         self._reland(landed)
-        pre = lib.presets
+        pre = lib.loaded_patch
         if pre is not None:
             pre.note, pre.notes, pre.desk_notes = note[0], list(note[1]), list(note[2])
             pre.layout = copy.deepcopy(layout)   # the GRAPH page's positions (plan 28 N2)
@@ -1858,7 +1858,7 @@ class Library:
 
     # the panel's deck's, once pointed (plan 44 D5a); one deck's own: `DeckLibrary`
     reg = Through("reg")
-    presets = Through("presets")
+    loaded_patch = Through("loaded_patch")
 
     def __init__(self, home_dir: Path | None = None, *, machine: Path | None = None,
                  period: float = 0.5):
@@ -1902,7 +1902,7 @@ class Library:
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
-        self.presets = None        # preset.Presets, set by its constructor (`presets`, below)
+        self.loaded_patch = None        # preset.Presets, set by its constructor (`presets`, below)
         self.project = Project(self)
         if self.missing is not None:
             text = missing_text(self.missing)
@@ -1942,10 +1942,10 @@ class Library:
         """The one library, whichever view this is (`DeckLibrary`)."""
         return self
 
-    def on_deck(self, presets=None) -> DeckLibrary:
+    def on_deck(self, loaded_patch=None) -> DeckLibrary:
         """The library as one deck sees it (`DeckLibrary`), for `presets`; None:
         they are not built yet, and the `Presets` handed it says so."""
-        return DeckLibrary(self, presets)
+        return DeckLibrary(self, loaded_patch)
 
     def attach(self, reg: Registry) -> list[str]:
         """Bind the registry; its state right now is what "default" means.
@@ -2112,7 +2112,7 @@ class Library:
             d = self.group_dir(root, group)
             if not d.is_dir():
                 continue
-            if group != PRESETS:
+            if group != LOADABLE:
                 out.update((p.name[:-5], p) for p in d.glob("*.json"))
                 continue
             for p in self._tree(d)[0]:
@@ -2155,7 +2155,7 @@ class Library:
         (`_resolve` refuses to pick)."""
         out: dict[str | None, list[Path]] = {}
         for root in self._roots():
-            d = root / PRESETS
+            d = root / LOADABLE
             if not d.is_dir():
                 continue
             hit = self._walked(d)
@@ -2178,7 +2178,7 @@ class Library:
         if want == "":
             return ""
         for root in self._roots():
-            d = root / PRESETS
+            d = root / LOADABLE
             if d.is_dir():
                 for f in self._tree(d)[1]:
                     if fold_folder(f) == want:
@@ -2189,7 +2189,7 @@ class Library:
         """The folder a preset file sits in under ``presets/``, ending in
         ``/`` (``party/``) — ``""`` at the top, for any other group, or a
         path outside the library (plan 48)."""
-        if group != PRESETS or path is None:
+        if group != LOADABLE or path is None:
             return ""
         try:
             rel = path.parent.relative_to(self.home / group).as_posix()
@@ -2202,7 +2202,7 @@ class Library:
         and for a preset its folder too (``party/trip-2``, `path_slug`
         lowered); None for a preset name that could not name a file
         (``../x``)."""
-        return slug(name) if group != PRESETS else fold(name)
+        return slug(name) if group != LOADABLE else fold(name)
 
     def folder_of(self, group: str, name: str | None) -> tuple[str, str]:
         """(folder, leaf) of a preset name — one rule (plan 48 review): a
@@ -2211,7 +2211,7 @@ class Library:
         ``/``; ``""`` is the top. Any other group has no folders."""
         if not name:
             return "", name or ""
-        return split_name(name) if group == PRESETS else ("", name)
+        return split_name(name) if group == LOADABLE else ("", name)
 
     def _leaf(self, group: str, path: Path) -> str:
         """The name a file is listed by, less its folder: its own ``name``
@@ -2220,7 +2220,7 @@ class Library:
 
     @staticmethod
     def _shown(group: str, name: str) -> str:
-        return harmless(name) if group == PRESETS else name
+        return harmless(name) if group == LOADABLE else name
 
     def _doc(self, path: Path) -> dict:
         """The parsed file, re-read only when its mtime moved (UI polls per frame)."""
@@ -2299,12 +2299,12 @@ class Library:
         on disk folded."""
         files = self._files(group)
         idx = self._index(group, files)
-        if group != PRESETS:
+        if group != LOADABLE:
             return idx, files, {}, set()
         folders: set[str | None] = set()
         for root in self._roots():
-            if (root / PRESETS).is_dir():
-                hit = self._walked(root / PRESETS)
+            if (root / LOADABLE).is_dir():
+                hit = self._walked(root / LOADABLE)
                 if "folded" not in hit:                 # kept with the walk, as byfold
                     hit["folded"] = {fold_folder(f) for f in hit["folders"]}
                 folders |= hit["folded"]
@@ -2322,7 +2322,7 @@ class Library:
         hit = idx.get(name)
         if hit is not None:
             return hit
-        if group != PRESETS:
+        if group != LOADABLE:
             return files.get(slug(name))
         key = fold(name)
         if key is None:
@@ -2359,7 +2359,7 @@ class Library:
         (`save_new`, `rename`). For the presets each is folded with its
         folder (`_fold`: ``party/trip-2``), so a name is taken only in its
         own folder (plan 48)."""
-        if group != PRESETS:
+        if group != LOADABLE:
             return ({slug(s) for s in self._files(group)}
                     | {slug(n) for n in self.list(group)})
         out = {self._fold(group, s) for s in self._files(group)}
@@ -2371,14 +2371,14 @@ class Library:
         """What in the open show still names the preset `name` (or, given,
         the file at `path`): its slots (``F6``, ``slot 12``) and its
         ``startup``."""
-        pr, key = self.project, self._fold(PRESETS, name)
-        snap = self._lookup(PRESETS)                   # one look for every slot
-        target = path or self._resolve(PRESETS, name, snap, loose=True)
+        pr, key = self.project, self._fold(LOADABLE, name)
+        snap = self._lookup(LOADABLE)                   # one look for every slot
+        target = path or self._resolve(LOADABLE, name, snap, loose=True)
 
         def names(n: str | None) -> bool:
-            return bool(n) and (n == name or (key is not None and self._fold(PRESETS, n) == key)
+            return bool(n) and (n == name or (key is not None and self._fold(LOADABLE, n) == key)
                                 or (target is not None
-                                    and self._resolve(PRESETS, n, snap, loose=True) == target))
+                                    and self._resolve(LOADABLE, n, snap, loose=True) == target))
         out = [slot_key(k) for k, n in enumerate(pr.bank) if names(n)]
         if names(pr.startup):
             out.append("the startup preset")
@@ -2407,7 +2407,7 @@ class Library:
                 and patchdoc.GROUP_KEY not in doc):
             doc[patchdoc.GROUP_KEY] = group
         if patchdoc.GROUP_KEY not in doc:
-            what = ("a whole preset" if patchdoc.shape_of(doc) == patchdoc.PRESET_SHAPE
+            what = ("a whole preset" if patchdoc.shape_of(doc) == patchdoc.LOADABLE_SHAPE
                     else "a canvas patch" if str(doc.get("schema", "")).startswith(
                         f"{patchdoc.KIND}/") else f"schema {doc.get('schema')!r}")
             raise LibraryError(NOT_GROUP_WORDS.format(file=path.name, what=what,
@@ -2562,8 +2562,8 @@ class Library:
         D3): the presets kind's `Presets` — its `landing`, (current, what
         its load produced, how to re-apply) — so a deck's dirty dot is its
         own; None for every other group."""
-        pre = self.presets
-        if group == PRESETS and pre is not None and hasattr(type(pre), "landing"):
+        pre = self.loaded_patch
+        if group == LOADABLE and pre is not None and hasattr(type(pre), "landing"):
             return pre
         return None
 
@@ -2574,14 +2574,14 @@ class Library:
         kept here, the one strip the meta controller has."""
         if group not in PATCH_GROUPS:
             return None
-        return getattr(self.presets, "labels", None)
+        return getattr(self.loaded_patch, "labels", None)
 
     def landed_groups(self) -> set[str]:
         """Every group with a landing: the library's and the presets'."""
         out = {*self._current, *self._loaded, *self._adopted}
-        if self._owner(PRESETS) is not None:
-            out.add(PRESETS)
-        out.update(getattr(self.presets, "labels", ()))
+        if self._owner(LOADABLE) is not None:
+            out.add(LOADABLE)
+        out.update(getattr(self.loaded_patch, "labels", ()))
         return out
 
     def reland(self, group: str, mark: tuple) -> None:
@@ -2738,7 +2738,7 @@ class Library:
         doc = self.document(group, name, extra=extra)
         path = self.path_of(group, name)
         renamed = None
-        if group == PRESETS:
+        if group == LOADABLE:
             # plan 48 row 587: a folder-qualified name is written in its
             # folder (made if need be); the file holds the leaf, and the
             # name is spelled as the list will spell it — the folder as it is
@@ -2823,7 +2823,7 @@ class Library:
         # restore to the old name makes them work again (plan 19 WP4)
         shown = (name if self._index(group).get(name) == path
                  else self._prefix(group, path) + self._leaf(group, path))
-        still = self.still_named(shown, path) if group == PRESETS else []
+        still = self.still_named(shown, path) if group == LOADABLE else []
         if self._to_trash(path) is None:
             raise LibraryError(f"{path.name}: not deleted — it could not be kept in the "
                                f"trash ({self._trash_dir()})")
@@ -2834,7 +2834,7 @@ class Library:
         self._sync(path)
         if self.current(group) in (name, shown) and self.path_of(group, shown) is None:
             self._landed(group, None, None)
-        if group == PRESETS:
+        if group == LOADABLE:
             if still:
                 self.say(warning=f"{shown} is in the trash — {_and(still)} still "
                                  f"name{'s' if len(still) == 1 else ''} it; restore it from "
@@ -2895,7 +2895,7 @@ class Library:
         # moving a preset between folders is `move` (stage 2)
         pre = self._prefix(group, path)
         leaf = new[len(pre):].strip() if pre and new.startswith(pre) else new
-        if group == PRESETS and "/" in leaf:
+        if group == LOADABLE and "/" in leaf:
             raise LibraryError(f"{new}: a rename keeps the folder — a name has no '/' "
                                "(the row's right-click: move to ▸)")
         if not leaf:
@@ -3019,12 +3019,12 @@ class Library:
         ones; sorted case folded."""
         out: set[str] = set()
         for root in self._roots():
-            d = root / PRESETS
+            d = root / LOADABLE
             if d.is_dir():
                 out.update(self._tree(d)[1])
         return sorted(out, key=str.lower)
 
-    def _owned(self, path: Path, snap: tuple, group: str = PRESETS) -> set[str]:
+    def _owned(self, path: Path, snap: tuple, group: str = LOADABLE) -> set[str]:
         """What names the file `path`, folded: its listed names and its file
         key (and, at the top, its raw stem, as before plan 48)."""
         idx, files = snap[0], snap[1]
@@ -3040,10 +3040,10 @@ class Library:
         for n, p in snap[0].items():
             if p == path:
                 return n
-        return self._prefix(PRESETS, path) + self._leaf(PRESETS, path)
+        return self._prefix(LOADABLE, path) + self._leaf(LOADABLE, path)
 
     def _follow_many(self, moves: dict[Path, str], snap: tuple, verb: str, what: str,
-                     *, group: str = PRESETS) -> tuple[int, list[str]]:
+                     *, group: str = LOADABLE) -> tuple[int, list[str]]:
         """After files were renamed or moved (`moves`: each old path → the
         name it is listed by now; `snap` the library as it was before) —
         `rename`'s steps 4–6, and a move's and a folder rename's: the loaded
@@ -3077,7 +3077,7 @@ class Library:
             hook = self._load_hooks.get(group)
             if hook is not None:
                 hook(now)
-        if group != PRESETS:
+        if group != LOADABLE:
             self.say(f"{verb} {what}")
             return 0, []
         done, left = self._repoint_by(to)
@@ -3131,21 +3131,21 @@ class Library:
         moved, for no such preset, no such folder, or a folder that already
         has a preset of that name or that file. Returns the new path."""
         self.writable()
-        snap = self._lookup(PRESETS)
-        path = self._resolve(PRESETS, name, snap, loose=False)
+        snap = self._lookup(LOADABLE)
+        path = self._resolve(LOADABLE, name, snap, loose=False)
         if path is None:
             raise LibraryError(f"no preset {name!r}")
         folder = self._existing_folder(folder)
-        if fold_folder(self._prefix(PRESETS, path)[:-1]) == fold_folder(folder):
+        if fold_folder(self._prefix(LOADABLE, path)[:-1]) == fold_folder(folder):
             return path
-        leaf = self._leaf(PRESETS, path)
+        leaf = self._leaf(LOADABLE, path)
         new = f"{folder}/{leaf}" if folder else leaf
-        base = self.home / PRESETS
+        base = self.home / LOADABLE
         dst = (base / folder if folder else base) / path.name
         idx, files = snap[0], snap[1]
-        taken = ({self._fold(PRESETS, s) for s, p in files.items() if p != path}
-                 | {self._fold(PRESETS, n) for n, p in idx.items() if p != path})
-        if self._fold(PRESETS, new) in taken or dst.exists():
+        taken = ({self._fold(LOADABLE, s) for s, p in files.items() if p != path}
+                 | {self._fold(LOADABLE, n) for n, p in idx.items() if p != path})
+        if self._fold(LOADABLE, new) in taken or dst.exists():
             raise LibraryError(f"{leaf}: {folder or 'the top level'} already has a preset "
                                "by that name — rename one first")
         _move_file(path, dst)
@@ -3166,7 +3166,7 @@ class Library:
         if self._folder_on_disk(full) is not None:
             raise LibraryError(f"{full}: that folder is already there")
         try:
-            (self.home / PRESETS / full).mkdir(parents=True, exist_ok=False)
+            (self.home / LOADABLE / full).mkdir(parents=True, exist_ok=False)
         except FileExistsError as e:
             raise LibraryError(f"{full}: that name is taken (by a file)") from e
         except (OSError, ValueError) as e:
@@ -3192,7 +3192,7 @@ class Library:
         full = f"{parent}/{name}" if parent else name
         if full == folder:
             return folder
-        src, dst = self.home / PRESETS / folder, self.home / PRESETS / full
+        src, dst = self.home / LOADABLE / folder, self.home / LOADABLE / full
         # review of #349: taken unless `dst` is this very folder (a change of
         # case on a disk that folds case) — asked of the disk, not of a fold:
         # on a case-sensitive volume `Party` beside `party` is another folder
@@ -3205,14 +3205,14 @@ class Library:
         if (not itself and fold_folder(full) != fold_folder(folder)
                 and self._folder_on_disk(full) is not None):
             raise LibraryError(f"{full}: that name is taken — pick another")
-        snap = self._lookup(PRESETS)
+        snap = self._lookup(LOADABLE)
         moves: dict[Path, str] = {}
         for p in snap[1].values():
             if not p.is_relative_to(src):
                 continue
             sub = p.parent.relative_to(src).as_posix()
             pre = full if sub == "." else f"{full}/{sub}"
-            moves[p] = f"{pre}/{self._leaf(PRESETS, p)}"
+            moves[p] = f"{pre}/{self._leaf(LOADABLE, p)}"
         try:
             src.rename(dst)
         except (OSError, ValueError) as e:
@@ -3235,7 +3235,7 @@ class Library:
             return []
         try:
             got = sorted((p.name + "/" if p.is_dir() else p.name)
-                         for p in (self.home / PRESETS / on_disk).iterdir()
+                         for p in (self.home / LOADABLE / on_disk).iterdir()
                          if p.name != ".DS_Store")
         except OSError as e:
             return [f"(unreadable: {e})"]
@@ -3252,7 +3252,7 @@ class Library:
         if not (folder or "").strip().strip("/"):
             raise LibraryError("the top level is not a folder to remove")
         folder = self._existing_folder(folder)
-        d = self.home / PRESETS / folder
+        d = self.home / LOADABLE / folder
         held = self.held(folder)
         if held:
             raise LibraryError(f"{folder}: not empty — it holds {_and(held)}; move or "
@@ -3371,7 +3371,7 @@ class Library:
                             pass
                     folder = path.parent.relative_to(group).as_posix()
                     folder = "" if folder == "." else folder
-                    if folder and group.name == PRESETS:
+                    if folder and group.name == LOADABLE:
                         name = f"{folder}/{name}"
                     out.append(Trashed(path, group.name, name,
                                        _when(m["stamp"]) if m else "", folder, old))
@@ -3398,7 +3398,7 @@ class Library:
         # the group and the folder it came from are where it lies in the
         # trash (plan 48: ``trash/presets/party/`` → ``presets/party/``)
         _root, group, sub, _old = where
-        if sub and group == PRESETS:
+        if sub and group == LOADABLE:
             # review of #334: the folder as it is on disk now (APFS folds
             # case), so what is taken there is read from the right place
             sub = self._folder_on_disk(sub) or sub
@@ -3412,10 +3412,10 @@ class Library:
             group, sub = sub, ""
         # only the presets have folders (plan 48): a file a non-preset group
         # kept deeper goes back where that group lists it
-        sub = sub if group == PRESETS else ""
+        sub = sub if group == LOADABLE else ""
         folder = self.group_dir(self.home, group) / sub if sub else self.group_dir(self.home,
                                                                                   group)
-        pre = f"{sub}/" if sub and group == PRESETS else ""
+        pre = f"{sub}/" if sub and group == LOADABLE else ""
         data = path.read_bytes()
         try:
             doc = json.loads(data)
@@ -3431,10 +3431,10 @@ class Library:
             # what is taken in the folder it goes back to
             stems = {p.name[:-5] for p in self._files(group).values() if p.parent == folder}
             names = ({slug(n[len(pre):]) for n, p in self._index(group).items()
-                      if p.parent == folder} if group == PRESETS else set())
+                      if p.parent == folder} if group == LOADABLE else set())
         taken = {slug(s) for s in stems} | names
         renamed = slug(stem) in {slug(s) for s in stems} or (
-            group == PRESETS and slug(name) in names)
+            group == LOADABLE and slug(name) in names)
         if renamed:
             if doc is None:
                 raise LibraryError(f"{path.name}: not restored — {stem} is taken and the file "
@@ -3457,7 +3457,7 @@ class Library:
             dst.unlink(missing_ok=True)
             raise LibraryError(f"{dst.name}: not restored ({e})") from e
         self._sync(dst)
-        if group == PRESETS and self.warning.startswith(f"{pre}{self._shown(group, name)} is in the trash"):
+        if group == LOADABLE and self.warning.startswith(f"{pre}{self._shown(group, name)} is in the trash"):
             self.warning = ""                              # what × said is no longer so
         now = pre + self._shown(group, str(doc["name"]) if renamed else name)
         what = f"show {now}" if show else now
@@ -3572,7 +3572,7 @@ class Library:
                 if d.is_dir() and not d.name.startswith("."):
                     # the presets every folder down (plan 48), as `_files` lists them
                     # (plan 50: and the patches of one group, a folder down)
-                    for f in (self._tree(d)[0] if d.name == PRESETS else
+                    for f in (self._tree(d)[0] if d.name == LOADABLE else
                               [*d.glob("*.json"), *d.glob("*/*.json")] if d.name == PATCHES
                               else d.glob("*.json")):
                         try:
@@ -3726,24 +3726,24 @@ class DeckLibrary(Library):
 
     __slots__ = ("_project", "base", "own")
 
-    def __init__(self, base: Library, presets=None):   # never `Library.__init__`: nothing is new
+    def __init__(self, base: Library, loaded_patch=None):   # never `Library.__init__`: nothing is new
         self.__dict__ = base.__dict__
-        self.base, self.own = base, presets
+        self.base, self.own = base, loaded_patch
         self._project = DeckProject(self)
 
-    def on_deck(self, presets=None) -> DeckLibrary:
+    def on_deck(self, loaded_patch=None) -> DeckLibrary:
         """This view, for its first `Presets` (`Deck.build` makes it before them,
         for the deck's bank params); another's is a view of its own."""
-        if presets is None or self.own is presets:
+        if loaded_patch is None or self.own is loaded_patch:
             return self
         if self.own is None:
-            self.own = presets
+            self.own = loaded_patch
             return self
-        return DeckLibrary(self.base, presets)
+        return DeckLibrary(self.base, loaded_patch)
 
     @property
-    def presets(self):
-        return self.own if self.own is not None else self.base.presets
+    def loaded_patch(self):
+        return self.own if self.own is not None else self.base.loaded_patch
 
     @property
     def reg(self):
@@ -3756,9 +3756,9 @@ class DeckLibrary(Library):
     @property
     def _kinds(self) -> dict[str, DocKind]:
         kinds = self.__dict__["_kinds"]
-        return kinds if self.own is None else {**kinds, PRESETS: self.own.doc_kind}
+        return kinds if self.own is None else {**kinds, LOADABLE: self.own.doc_kind}
 
     @property
     def _load_hooks(self) -> dict[str, Any]:
         hooks = self.__dict__["_load_hooks"]
-        return hooks if self.own is None else {**hooks, PRESETS: self.own._landed}
+        return hooks if self.own is None else {**hooks, LOADABLE: self.own._landed}

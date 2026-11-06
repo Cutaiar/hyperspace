@@ -42,10 +42,10 @@ SHIFT_TARGETS = (*(f"band.{i}.post" for i in range(6)), "master.dyn", "master.tr
 
 
 def load_fixture(rig, name="faders.json"):
-    lib = rig.presets.lib
+    lib = rig.loaded_patch.lib
     (lib.home / "presets").mkdir(parents=True, exist_ok=True)
     shutil.copy(FIXTURES / name, lib.home / "presets" / name)
-    lib.presets.load("FADERS")
+    lib.loaded_patch.load("FADERS")
     rig.midi.poll()
     return lib
 
@@ -93,15 +93,15 @@ def test_every_corpus_preset_leaves_the_faders_dark_and_shift_lights_the_audio(r
     """Decision 23: no shipped preset got fader rows — every corpus file's
     desk binds no track fader, and each loads with S1–S8 dark on the
     preset layer and the audio strip under SHIFT, with no desk note."""
-    lib, t = rig.presets.lib, rig.midi.table
+    lib, t = rig.loaded_patch.lib, rig.midi.table
     for path in sorted((CORPUS / "presets").glob("*.json")):
         desk = json.loads(path.read_text()).get("desk") or []
         assert not [d for d in desk if d["source"].endswith(f":{FADER}")
                     and d["source"].startswith("cc:")], path.name
     for name in lib.list("presets"):
-        lib.presets.load(name)
+        lib.loaded_patch.load(name)
         rig.midi.poll()
-        assert lib.presets.desk_notes == [], name
+        assert lib.loaded_patch.desk_notes == [], name
         assert t.layer == "preset"
         assert faders_lit(t) == {}, name
     shift(rig)
@@ -126,7 +126,7 @@ def test_a_preset_with_fader_rows_lights_s1_s8_and_drives_them(rig):
     lib = load_fixture(rig)
     t = rig.midi.table
     assert lib.current("presets") == "FADERS"
-    assert lib.presets.desk_notes == []
+    assert lib.loaded_patch.desk_notes == []
     assert not lib.is_dirty("presets")
     assert faders_lit(t) == dict(zip(GLYPHS, TARGETS))
     for k, pid in enumerate(TARGETS):
@@ -145,13 +145,13 @@ def test_the_fader_rows_round_trip_through_save_and_load(rig):
     lib = load_fixture(rig)
     t = rig.midi.table
     before = sorted(json.dumps(b.to_json(), sort_keys=True) for b in t.desk())
-    path = lib.presets.save_as("FADERS 2")
+    path = lib.loaded_patch.save_as("FADERS 2")
     doc = json.loads(Path(path).read_text())
     want = json.loads((FIXTURES / "faders.json").read_text())["desk"]
     assert norm_rows(doc["desk"]) == norm_rows(want)
-    lib.presets.load("FADERS 2")
+    lib.loaded_patch.load("FADERS 2")
     rig.midi.poll()
-    assert lib.presets.desk_notes == []
+    assert lib.loaded_patch.desk_notes == []
     assert sorted(json.dumps(b.to_json(), sort_keys=True) for b in t.desk()) == before
     assert faders_lit(t) == dict(zip(GLYPHS, TARGETS))
 
@@ -293,7 +293,7 @@ def test_a_preset_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig):
         t.bindings.remove(b)
     t.bindings.append(Binding(f"cc:0:{FADER}", "view.speed", "abs", ring=0))
     lib = load_fixture(rig)
-    assert lib.presets.desk_notes == [
+    assert lib.loaded_patch.desk_notes == [
         (f"dropped cc:0:{FADER} → view.points_alpha: that control is invariant, the "
          "session's (plan 13 D6)")]
 

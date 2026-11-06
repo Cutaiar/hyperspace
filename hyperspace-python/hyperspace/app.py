@@ -1665,7 +1665,7 @@ def main(argv: list[str] | None = None) -> None:
     hand_settings, output, panel = made.hands, made.outputs, made.panel
     device_reg, dream_io, awake, segmenters = made.devices
     s, reg, router = deck.view, deck.reg, deck.router
-    clock, presets, undo_obj = deck.clock, deck.presets, deck.undo
+    clock, loaded_patch, undo_obj = deck.clock, deck.loaded_patch, deck.undo
     panel.undo = undo_obj              # the footer's message slot
     panel.deck = deck                  # plan 44 D1: beside its handles; D5 reads through it
     # deck 2 (plan 44 D4): its own look over the same session, sources and
@@ -1692,7 +1692,7 @@ def main(argv: list[str] | None = None) -> None:
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
     meta = MetaController(deck, deck2, players, mix=mix)
     fade = Fade(deck, deck2, mix, ctx, dream=dream_io, pointer=meta.on_air_pointer)
-    media.heard = lambda: meta.on_air.presets.media
+    media.heard = lambda: meta.on_air.loaded_patch.media
     fade.said = lambda text: library.say(warning=text)    # a warm draw's failure, at once
     panel.fade = fade                  # the SYSTEM page's second GPU block
     panel.pointer = library.pointer = meta.panel_pointer
@@ -1786,7 +1786,7 @@ def main(argv: list[str] | None = None) -> None:
     # a raising render draw, or 2 s with no render frame presented while the
     # panel runs, each with every thread's stack; kill -USR1 dumps on demand
     watchdog = Watchdog(home / LOG_NAME,
-                        preset=lambda: meta.on_air.presets.current)
+                        preset=lambda: meta.on_air.loaded_patch.current)
     # with two or more outputs the stall is "no output presented", and one
     # output dark while another presents is a warning naming it (WP3)
     opened = [sl for sl in slots if sl.opened and sl.output is not None]
@@ -1807,9 +1807,9 @@ def main(argv: list[str] | None = None) -> None:
             render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
                               "the dream passes its picture through")
     for on in meta.decks:
-        on.presets.listeners.append(lambda name, on=on: dream_check(on, name))
-        on.presets.listeners.append(lambda name, on=on: fade.ask_warm(on))
-    dream_check(deck, presets.current)          # the startup preset has already landed
+        on.loaded_patch.listeners.append(lambda name, on=on: dream_check(on, name))
+        on.loaded_patch.listeners.append(lambda name, on=on: fade.ask_warm(on))
+    dream_check(deck, loaded_patch.current)          # the startup preset has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
     publishers = _Closer(lambda: _close_each((lambda: _close_publishers(render_win, slots),

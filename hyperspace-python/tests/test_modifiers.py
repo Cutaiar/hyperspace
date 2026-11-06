@@ -272,10 +272,10 @@ def put(lib, *names: str) -> None:
 
 
 def test_modifiers_live_in_the_preset_and_never_in_bindings_json(rig):
-    lib, reg, router, presets = rig.lib, rig.reg, rig.router, rig.presets
+    lib, reg, router, loaded_patch = rig.lib, rig.reg, rig.router, rig.loaded_patch
     table = router.table
     put(lib, "mod-energy")
-    assert presets.load("mod-energy") == [] and presets.notes == []
+    assert loaded_patch.load("mod-energy") == [] and loaded_patch.notes == []
     assert [m.id for m in table.modifiers] == ["mod.1", "mod.2"]
     assert reg["mod.1.release"].value == 0.6 and reg["mod.2.how"].value == 1
     # the session file: rows only — no modifier, no `mod.*` id anywhere
@@ -284,7 +284,7 @@ def test_modifiers_live_in_the_preset_and_never_in_bindings_json(rig):
     table.write()
     assert "mod" not in routing.bindings_path(lib.home).read_text().replace("mode", "")
     # the preset: the list after the routes, the params in their entries only
-    doc = presets.document("MOD ENERGY")
+    doc = loaded_patch.document("MOD ENERGY")
     keys = list(doc)
     assert keys.index(MODIFIERS_KEY) == keys.index("routes") + 1
     want = json.loads((FIXTURES / "presets" / "mod-energy.json").read_text())[MODIFIERS_KEY]
@@ -294,24 +294,24 @@ def test_modifiers_live_in_the_preset_and_never_in_bindings_json(rig):
     # an edit is the preset's: its dirty dot
     reg["mod.1.release"].set(1.0)
     assert lib.is_dirty("presets")
-    assert presets.document("X")[MODIFIERS_KEY][0]["release"] == 1.0
+    assert loaded_patch.document("X")[MODIFIERS_KEY][0]["release"] == 1.0
     # a save, reloaded, is the same preset
-    presets.save_as("MOD ENERGY 2")
+    loaded_patch.save_as("MOD ENERGY 2")
     reg["mod.1.release"].set(0.2)
-    presets.load("MOD ENERGY 2")
-    assert reg["mod.1.release"].value == 1.0 and presets.notes == []
+    loaded_patch.load("MOD ENERGY 2")
+    assert reg["mod.1.release"].value == 1.0 and loaded_patch.notes == []
     # another preset with none: every modifier and its params gone
     put(lib, "mod-missing")
-    presets.load("mod-missing")
+    loaded_patch.load("mod-missing")
     assert [m.kind for m in table.modifiers] == ["curve"] and "mod.1.release" not in reg
 
 
 def test_a_route_onto_a_missing_modifier_is_dropped_with_a_note(rig):
-    lib, presets, table = rig.lib, rig.presets, rig.router.table
+    lib, loaded_patch, table = rig.lib, rig.loaded_patch, rig.router.table
     put(lib, "mod-missing")
-    presets.load("mod-missing")
+    loaded_patch.load("mod-missing")
     assert [(b.source, b.target) for b in table.routes()] == [("mod:1", "view.speed")]
-    assert presets.notes == ["dropped mod:3 → view.bright: no modifier mod.3"]
+    assert loaded_patch.notes == ["dropped mod:3 → view.bright: no modifier mod.3"]
     # the file is left as it is
     assert len(json.loads((lib.home / "presets" / "mod-missing.json").read_text())["routes"]) == 2
 
@@ -319,9 +319,9 @@ def test_a_route_onto_a_missing_modifier_is_dropped_with_a_note(rig):
 def test_a_modifier_whose_input_the_rig_lacks_is_dormant(rig):
     """A hand the rig never feeds: the modifier stays, its lane is not
     live, the route on it moves nothing, and nothing is noted."""
-    lib, reg, router, presets = rig.lib, rig.reg, rig.router, rig.presets
+    lib, reg, router, loaded_patch = rig.lib, rig.reg, rig.router, rig.loaded_patch
     put(lib, "mod-energy")
-    presets.load("mod-energy")
+    loaded_patch.load("mod-energy")
     base = reg["fx.acid.mix"].norm
     for _ in range(3):
         router.modulate(analyzer(0.9))
@@ -335,34 +335,34 @@ def test_an_older_preset_without_the_key_loads_as_before(rig):
     """Every corpus preset has no `modifiers`: it loads with no note,
     holds none, and saves without the key — the same document as the
     base build's (no `mod.*` id among its values)."""
-    lib, presets, table = rig.lib, rig.presets, rig.router.table
+    lib, loaded_patch, table = rig.lib, rig.loaded_patch, rig.router.table
     for name in ("party-tumble", "lfo-breathe", "legacy6"):
-        presets.load(name)
-        assert presets.notes == [] and table.modifiers == ()
-        doc = presets.document(name)
+        loaded_patch.load(name)
+        assert loaded_patch.notes == [] and table.modifiers == ()
+        doc = loaded_patch.document(name)
         assert MODIFIERS_KEY not in doc
         assert not any(k.startswith("mod.") for k in doc["values"])
         assert not lib.is_dirty("presets")
     # a modifier left by the last preset goes with any load
     put(lib, "mod-energy")
-    presets.load("mod-energy")
-    presets.load("party-tumble")
+    loaded_patch.load("mod-energy")
+    loaded_patch.load("party-tumble")
     assert table.modifiers == () and not rig.reg.group("mod")
     rig.router.modulate()
     assert "mod" not in rig.router.schemes()
 
 
 def test_a_bad_modifier_entry_is_a_note_and_the_rest_load(rig):
-    lib, presets, table = rig.lib, rig.presets, rig.router.table
+    lib, loaded_patch, table = rig.lib, rig.loaded_patch, rig.router.table
     (lib.home / "presets").mkdir(parents=True, exist_ok=True)
     doc = json.loads((FIXTURES / "presets" / "mod-energy.json").read_text())
     doc["name"] = "MOD BAD"
     doc[MODIFIERS_KEY] = [{"id": "mod.1", "kind": "wobble"}, *doc[MODIFIERS_KEY][1:], "junk"]
     (lib.home / "presets" / "mod-bad.json").write_text(json.dumps(doc))
-    presets.load("mod-bad")
+    loaded_patch.load("mod-bad")
     assert [m.id for m in table.modifiers] == ["mod.2"]
-    assert any("wobble" in n for n in presets.notes)
-    assert any("not an object" in n for n in presets.notes)
+    assert any("wobble" in n for n in loaded_patch.notes)
+    assert any("not an object" in n for n in loaded_patch.notes)
 
 
 # ---------------------------------------------------------------- undo, learn
@@ -405,7 +405,7 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     """"Right hand energy, smoothed, times band 0, into acid mix", from the
     MODIFIERS strip and the route list alone — and saved, it is the
     fixture's preset."""
-    reg, router, presets = rig.reg, rig.router, rig.presets
+    reg, router, loaded_patch = rig.reg, rig.router, rig.loaded_patch
     panel = panel_of(rig)
     # (plan 36 T3: acid exists where the graph names it — every file, as
     # before a graph lands)
@@ -449,7 +449,7 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     reg.apply()
     assert ui_routing.modifier_output(router, "mod.2") is None and not p.modulated
     # saved, it is the fixture: the same modifiers, the same route
-    doc = presets.document("MOD ENERGY")
+    doc = loaded_patch.document("MOD ENERGY")
     fix = json.loads((FIXTURES / "presets" / "mod-energy.json").read_text())
     assert doc[MODIFIERS_KEY] == [Modifier.from_json(d).to_json() for d in fix[MODIFIERS_KEY]]
     assert doc["routes"] == [Binding.from_json(r).to_json() for r in fix["routes"]]

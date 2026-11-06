@@ -226,8 +226,8 @@ def _app(media=None, view=None):
     lib.attach(reg)
     router = routing.Router(reg, table)
     router.use_lfos(lfos, clock)
-    presets = preset.Presets(lib, reg, router)
-    return SimpleNamespace(lib=lib, reg=reg, router=router, presets=presets, lfos=lfos,
+    loaded_patch = preset.LoadedPatch(lib, reg, router)
+    return SimpleNamespace(lib=lib, reg=reg, router=router, loaded_patch=loaded_patch, lfos=lfos,
                            clock=clock)
 
 
@@ -236,7 +236,7 @@ def _on_renderer(ctx, app, media):
 
     r = Renderer(ctx, fx=app.reg.fx_state)
     r.ghost.state.on = False
-    app.presets.graph.attach(r)
+    app.loaded_patch.graph.attach(r)
     r.media = media
     return r
 
@@ -259,7 +259,7 @@ def test_a_route_drives_select(ctx):
            "graph": section(("frame", "fx.image"), ("media.a", "switch.in1"),
                             ("media.b", "switch.in2"), ("media.c", "switch.in3"),
                             ("switch", "output.1.image"), nodes=[SWITCH])}
-    app.presets.load_doc(doc)
+    app.loaded_patch.load_doc(doc)
     assert app.reg["switch.select"].value == 2
     one = app.lfos[0]
     one.shape, one.rate, one.depth = SHAPES.index("square"), 1.0, 1.0
@@ -314,10 +314,10 @@ def test_a_migrated_view_media_route_still_switches_the_faces(ctx):
     view = _faces_view()
     app = _app(m, view)
     src = json.loads((DRIVEN / "driven-media-v2.json").read_text())
-    assert app.presets.load_doc(src) == []
+    assert app.loaded_patch.load_doc(src) == []
     assert [b.target for b in app.router.table.routes()] == ["switch.select"]
     assert app.reg["switch.select"].value == 2
-    free = app.presets.graph.free_doc()
+    free = app.loaded_patch.graph.free_doc()
     assert SWITCH in free["nodes"] and {"from": "switch", "to": "pattern.media"} in free["wires"]
     for i, c in enumerate("abcdefgh", 1):
         assert {"from": f"channel.{c}", "to": f"switch.in{i}"} in free["wires"]
@@ -356,7 +356,7 @@ def test_a_migrated_backdrop_route_switches_the_backdrop(ctx):
     view = _empty()
     app = _app(m, view)
     src = json.loads((DRIVEN / "driven-channels.json").read_text())
-    assert app.presets.load_doc(src) == []
+    assert app.loaded_patch.load_doc(src) == []
     assert [b.target for b in app.router.table.routes()] == ["switch.select",
                                                              "switch.2.select"]
     assert app.reg["switch.2.select"].value == 3
@@ -389,10 +389,10 @@ def test_switch_params_come_and_go_with_the_graph(tmp_path):
            "graph": section(("frame", "fx.image"), ("media.a", "switch.2.in5"),
                             ("switch.2", "output.2.image"),
                             nodes=[{"kind": "switch", "instance": 2}])}
-    assert app.presets.load_doc(doc) == []
+    assert app.loaded_patch.load_doc(doc) == []
     assert app.reg["switch.2.select"].value == 5 and app.reg["switch.2.select"].group == "switch"
-    assert app.presets.document("two")["values"]["switch.2.select"] == 5
-    assert app.presets.load_doc({"schema": "hyperspace.preset/4", "name": "none",
+    assert app.loaded_patch.document("two")["values"]["switch.2.select"] == 5
+    assert app.loaded_patch.load_doc({"schema": "hyperspace.preset/4", "name": "none",
                                  "values": {}}) == []
     assert "switch.2.select" not in app.reg
 
@@ -431,7 +431,7 @@ def test_a_route_on_a_removed_switch_select_goes_dormant_without_raising(ctx):
            "graph": section(("frame", "fx.image"), ("media.a", "switch.2.in1"),
                             ("switch.2", "output.1.image"),
                             nodes=[{"kind": "switch", "instance": 2}])}
-    assert app.presets.load_doc(doc) == []
+    assert app.loaded_patch.load_doc(doc) == []
     route = Binding("lfo:0", "switch.2.select", "push", 0.25)
     app.router.table.bindings.append(route)
     m.assign("a", 0, "file:/fake/a.png")
@@ -439,7 +439,7 @@ def test_a_route_on_a_removed_switch_select_goes_dormant_without_raising(ctx):
     r = _on_renderer(ctx, app, m)
     vs = _views(ctx)
     _frame(ctx, r, view, vs, 0)
-    e = graphview.Edit(graph=app.presets.graph)
+    e = graphview.Edit(graph=app.loaded_patch.graph)
     assert e.drop_node("switch.2") is None
     assert "switch.2.select" not in app.reg
     for k in range(1, 5):

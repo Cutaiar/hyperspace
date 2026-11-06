@@ -194,9 +194,9 @@ def test_a_scale_on_a_performance_param_is_refused_with_a_note(tmp_path):
     from test_presets import boot, put
     r = boot(tmp_path)
     put(tmp_path, "SCALED", routes=rows, macros={})
-    r.presets.load("SCALED")
+    r.loaded_patch.load("SCALED")
     assert [b.scale for b in r.router.table.routes()] == [None, None, "master.gain"]
-    assert any("dropped the scale view.speed" in n for n in r.presets.notes)
+    assert any("dropped the scale view.speed" in n for n in r.loaded_patch.notes)
     assert r.router.table.macros_doc()["macro.4"]["subs"] == [depth_sub("lfo:1", "fx.mix")]
     # the ROUTING page's combo offers session params only
     from types import SimpleNamespace
@@ -228,14 +228,14 @@ def test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note(tmp_path):
         depth_sub("hand:1", "master.gain", 0.0, 1.0)]}}              # a depth: dropped
     routes = [{"source": "hand:1", "target": "master.gain", "op": "push", "value": 0.3}]
     put(tmp_path, "MIXED", routes=routes, macros=macros, values={"macro.1": 0.5})
-    r.presets.load("MIXED")
+    r.loaded_patch.load("MIXED")
     assert reg["tempo.bpm"].value == pytest.approx(bpm)              # never written
     assert real.value == pytest.approx(trim)
     assert reg["view.bright"].norm == pytest.approx(0.3, abs=1e-6)
     assert table.macros_doc()["macro.1"] == {"label": "Mixed", "subs": [
         {"base": "view.bright", "from": 0.0, "to": 0.6}]}
     assert not table.routes_to("master.gain")
-    notes = r.presets.notes
+    notes = r.loaded_patch.notes
     assert any("macro.1's depth subscriber on hand:1 → master.gain" in n for n in notes)
     assert any("macro.1's base subscriber tempo.bpm" in n and "D9" in n for n in notes)
     assert any("macro.1's base subscriber band.sel.trim" in n for n in notes)

@@ -36,7 +36,7 @@ from hyperspace.routing import Binding, Bindings
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "patches"
 ACID_WASH = FIXTURES / "acid-wash.json"
 # the presets the build once shipped (tests/corpus: test data, never read by the app)
-PRESETS = Path(__file__).resolve().parent / "corpus" / "presets"
+LOADABLE = Path(__file__).resolve().parent / "corpus" / "presets"
 
 
 def example() -> dict:
@@ -44,7 +44,7 @@ def example() -> dict:
 
 
 def preset(name: str) -> dict:
-    return json.loads((PRESETS / f"{name}.json").read_text())
+    return json.loads((LOADABLE / f"{name}.json").read_text())
 
 
 def parts(doc: dict):
@@ -615,7 +615,7 @@ def test_a_patch_cut_from_every_corpus_presets_main_run_round_trips():
     `output.all.image`) lifted, spawned back into the same preset — every
     id renamed, `.2` — landed, and lifted again reads as the first."""
     skipped, done = set(), []
-    for path in sorted(PRESETS.glob("*.json")):
+    for path in sorted(LOADABLE.glob("*.json")):
         doc = json.loads(path.read_text())
         spec = G.read_graph(doc["graph"])
         run = G.run_back(spec, "output.all.image")

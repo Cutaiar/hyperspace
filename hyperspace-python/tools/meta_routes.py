@@ -42,7 +42,7 @@ if str(ROOT) not in sys.path:
 from hyperspace.library import _walk
 from hyperspace.routing import Binding, Macro, meta_row_refusal
 
-PRESETS, PATCHES = "presets", "patches"
+LOADABLE, PATCHES = "presets", "patches"
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     lines: list[str] = []
     bad: list[str] = []
-    for kind, then in ((PRESETS, "dropped at the next load of each"),
+    for kind, then in ((LOADABLE, "dropped at the next load of each"),
                        (PATCHES, "each patch refused whole when read")):
         n, found, unread = scan(a.library / kind)
         lines += report(a.library, kind, then, found, n)

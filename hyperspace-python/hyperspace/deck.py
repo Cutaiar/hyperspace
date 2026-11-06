@@ -75,7 +75,7 @@ from .outputs import Offscreen, View, preview_size
 from .params import Registry, MetaRegistry, build_registry, part_of
 from .players import Duty, Players
 from .pointer import Pointer
-from .preset import Presets
+from .preset import LoadedPatch
 from .routing import Bindings, Router, Sources
 from .view import ViewState
 
@@ -116,7 +116,7 @@ class Deck:
     # order; plan 44 §2 calls it shared — D3+ passes the rig's one in
     # (`build(clock=…)`) rather than building one per deck
     clock: tempo.Clock
-    presets: Presets
+    loaded_patch: LoadedPatch
     learn: Learn
     undo: undos.Undo
     marks: Marks
@@ -133,7 +133,7 @@ class Deck:
     @property
     def graph(self):
         """The presets' graph section (`preset.GraphSection`)."""
-        return self.presets.graph
+        return self.loaded_patch.graph
 
     @property
     def meta_reg(self) -> MetaRegistry | None:
@@ -272,14 +272,14 @@ class Deck:
         router.use_sequencer(seq, envs)        # after the banks begin, before the plan
         # the presets (preset.py): the library's `presets/` files, landed on the
         # registry and the table; the project's bank loads through it
-        presets = Presets(on_deck, reg, router)
+        loaded_patch = LoadedPatch(on_deck, reg, router)
         if renderer is not None:
             # plan 26 A4: a preset's graph section sets the renderer's wiring and
             # hands an extra hands node its own state (`Renderer.ghost_states`)
-            presets.graph.attach(renderer)
+            loaded_patch.graph.attach(renderer)
             # plan 44 D3: the bus cuts are the loaded preset's — the renderer
             # reads them off the presets (`graph.rig_of`: `Presets.rig`)
-            renderer.bus_source = presets
+            renderer.bus_source = loaded_patch
             renderer.deck_reg = reg            # whose picture it is (the poi's guide)
         # one Learn over the live table, whatever the MIDI gate says: a knob
         # or a hand completes it, the panel's prompt settles what the referee
@@ -302,7 +302,7 @@ class Deck:
         # D5b), bases through the registry, table parts through the table, what
         # is loaded through the deck's marks, and a restore tells the router its
         # macros are acted on. The meta params are on `meta_stack`'s
-        marks = Marks(presets.lib)
+        marks = Marks(loaded_patch.lib)
         undo_obj = undos.Undo(reg, router.table, marks=marks, only=in_patch,
                               on_restore=router.sync_macros,
                               # the LFOs' membership (plan 31 B), read off the
@@ -314,7 +314,7 @@ class Deck:
         if install:
             undos.install(undo_obj)        # what undo.push and the edit.* triggers reach
         return cls(reg=reg, view=s, table=router.table, router=router, lfos=lfos, envs=envs,
-                   seq=seq, clock=clock, presets=presets, learn=learn, undo=undo_obj, marks=marks,
+                   seq=seq, clock=clock, loaded_patch=loaded_patch, learn=learn, undo=undo_obj, marks=marks,
                    renderer=renderer, sources=sources,
                    band_shape=tag if tag is not None else (
                        (lambda: tuple(s.name for s in audio.chain.spec))
@@ -336,7 +336,7 @@ class Deck:
         the strip and the undo keys stay `first`'s until `MetaController.point_panel`
         moves them. Nothing points at it yet."""
         return cls.build(
-            library=first.presets.lib, control=None, audio=None,
+            library=first.loaded_patch.lib, control=None, audio=None,
             table=lambda reg: Bindings([], meta_table=first.table.meta_table),
             renderer=renderer, media=media, lfos=lfos,
             meta_reg=first.meta_reg, sources=first.sources,
@@ -376,11 +376,11 @@ class Deck:
             *([(src, "routing_sources", "Sources")]
               if (src := getattr(self, "sources", None)) is not None else []),
             (self.router, "routing", "Router"),
-            (self.presets, "preset", "Presets"),
+            (self.loaded_patch, "preset", "LoadedPatch"),
             # plan 44 D5a: its view of the library (getattr: a stand-in deck has none)
             *([(on, "library", "DeckLibrary"), (on.project, "library", "DeckProject")]
-              if (on := getattr(self.presets, "lib", None)) is not None else []),
-            (self.presets.graph, "preset", "GraphSection"),      # plan 26 A4
+              if (on := getattr(self.loaded_patch, "lib", None)) is not None else []),
+            (self.loaded_patch.graph, "preset", "GraphSection"),      # plan 26 A4
             (self.learn, "learn", "Learn"),
             (self.clock, "tempo", "Clock"),
             (self.lfos, "lfo", "LFOs"),
@@ -442,7 +442,7 @@ def meta_stack(first: Deck) -> undos.Undo:
     the band hooks; the stack is no deck's."""
     return undos.Undo(first.meta_reg, MetaRows(first.meta_table),
                       called="on the meta controller",
-                      marks=MetaMarks(first.presets.lib.base), tag=first.band_shape)
+                      marks=MetaMarks(first.loaded_patch.lib.base), tag=first.band_shape)
 
 
 def _carry(src: Deck, dst: Deck) -> None:
@@ -529,7 +529,7 @@ class MetaController:
                  mix: Mix | None = None):
         self.decks = (first, second)
         for deck in self.decks:
-            project = getattr(getattr(getattr(deck, "presets", None), "lib", None), "project", None)
+            project = getattr(getattr(getattr(deck, "loaded_patch", None), "lib", None), "project", None)
             if isinstance(project, DeckProject):     # (a stand-in deck has none)
                 project.meta = self
         reg = getattr(first, "reg", None)
@@ -584,7 +584,7 @@ class MetaController:
 
     def off_air_project(self) -> DeckProject | None:
         """The deck off air's bank view (a stand-in deck has none)."""
-        project = getattr(getattr(getattr(self.off_air, "presets", None), "lib", None), "project", None)
+        project = getattr(getattr(getattr(self.off_air, "loaded_patch", None), "lib", None), "project", None)
         return project if isinstance(project, DeckProject) else None
 
     def row_load(self) -> tuple[DeckProject | None, str | None]:
@@ -800,15 +800,15 @@ class MetaController:
         deck on air: nothing. Returns the ids the document names that the deck
         lacks. See `_carry` for what a document does not hold."""
         src, dst = self.on_air, self.off_air
-        name, presets = src.presets.current, dst.presets
-        empty = presets.current is None and dst.graph.spec is None and not dst.undo.stack
-        doc = src.presets.document(name or "untitled")
+        name, loaded_patch = src.loaded_patch.current, dst.loaded_patch
+        empty = loaded_patch.current is None and dst.graph.spec is None and not dst.undo.stack
+        doc = src.loaded_patch.document(name or "untitled")
         undos.push_on(dst.reg, f"copy {name or 'untitled'} from on air", load=True)
-        missing = presets.load_doc(doc)
+        missing = loaded_patch.load_doc(doc)
         _carry(src, dst)
-        presets.landing = (*copy.deepcopy(src.presets.landing[:2]), None)
-        presets._landed(name)
-        presets.unsaved = src.presets.unsaved
+        loaded_patch.landing = (*copy.deepcopy(src.loaded_patch.landing[:2]), None)
+        loaded_patch._landed(name)
+        loaded_patch.unsaved = src.loaded_patch.unsaved
         if empty:
             dst.undo.clear()
         return missing

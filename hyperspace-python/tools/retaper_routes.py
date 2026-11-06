@@ -240,16 +240,16 @@ def main(argv: list[str] | None = None) -> int:
     ml = _migrate_library()
     home = ml.machine_home()
     library = (a.library or ml.configured_library(home)).expanduser()
-    presets = ml.preset_files(library)
+    loadable_files = ml.preset_files(library)
     patches = json_files(library / PATCHES)
     desks = json_files(library / DESK)
     table = home / routing.FILE
-    if not presets and not patches and not desks:
-        print(f"no presets under {library / ml.PRESETS}")
+    if not loadable_files and not patches and not desks:
+        print(f"no presets under {library / ml.LOADABLE}")
         return 1
     files = FxState().files
     # every change worked out before anything is written
-    todo: list[tuple[Path, Change]] = [(p, plan(p, files)) for p in presets]
+    todo: list[tuple[Path, Change]] = [(p, plan(p, files)) for p in loadable_files]
     todo += [(p, plan(p, files, kind="patch")) for p in patches]
     todo += [(p, plan(p, files, kind="desk")) for p in desks]
     if table.is_file():
@@ -263,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{'':46s}{r}")
     touched = [c for _, c in todo if c.changed]
     moved = sum(len(c.rows) for c in touched)
-    print(f"\n{len(presets)} presets, {len(patches)} patches, {len(desks)} desk templates"
+    print(f"\n{len(loadable_files)} presets, {len(patches)} patches, {len(desks)} desk templates"
           f"{', bindings.json' if table.is_file() else ''}: {len(touched)} "
           f"{'written' if a.write else 'would be written'} ({moved} rows moved, "
           f"{sum(1 for c in touched if not c.rows)} marker only, "

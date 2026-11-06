@@ -47,10 +47,10 @@ from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
-from hyperspace.library import PRESETS, Library
+from hyperspace.library import LOADABLE, Library
 from hyperspace.lookback import DreamState
 from hyperspace.params import Kind, build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.render import Renderer, ViewState
 from hyperspace.routing import Bindings, Router
 
@@ -199,7 +199,7 @@ class Stage:
         # the preset through the one loader (plan 13 WP2), over a throwaway
         # library home holding the corpus, so nothing touches ~/Hyperspace
         self._home = tempfile.TemporaryDirectory()
-        own = Path(self._home.name) / PRESETS
+        own = Path(self._home.name) / LOADABLE
         own.mkdir()
         for f in sorted(CORPUS.glob("*.json")):
             shutil.copyfile(f, own / f.name)
@@ -208,10 +208,10 @@ class Stage:
         self.router = Router(self.reg, Bindings())
         self.router.use_bank(envs, self.clock)
         self.router.use_sequencer(seq, envs, self.clock)
-        presets = Presets(lib, self.reg, self.router)
-        missing = presets.load(load or name.split("-", 1)[1].upper())
-        assert not missing and not presets.notes and not self.router.table.dropped, (
-            name, missing, presets.notes)
+        loaded_patch = LoadedPatch(lib, self.reg, self.router)
+        missing = loaded_patch.load(load or name.split("-", 1)[1].upper())
+        assert not missing and not loaded_patch.notes and not self.router.table.dropped, (
+            name, missing, loaded_patch.notes)
         # the preset's own routes: the table was empty before the load
         self.routes = list(self.router.table.routes())
         self.src = DictSource(lambda: self.t)
@@ -222,7 +222,7 @@ class Stage:
         if self.renderer is not None:
             # plan 36 T3: a bare renderer draws the app's empty frame; the
             # preset's graph onto it, as app.py attaches it
-            presets.graph.attach(self.renderer)
+            loaded_patch.graph.attach(self.renderer)
             errs = self.renderer.fx.compile_all()     # before any frame: a broken shader is a stop
             if errs:
                 raise RuntimeError(f"fx shaders failed to build: {errs}")

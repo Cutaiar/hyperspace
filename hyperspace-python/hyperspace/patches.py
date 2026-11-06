@@ -115,7 +115,7 @@ MODULE_KIND, MODULE_VERSION = "hyperspace.preset", 1
 GROUP_KEY = "group"
 GROUP_KEYS = ("schema", "name", "note", GROUP_KEY, "values", "layout", "units")
 # the one document shape's three readings (`shape_of`)
-PRESET_SHAPE, PATCH_SHAPE, GROUP_SHAPE = "preset", "patch", "group"
+LOADABLE_SHAPE, PATCH_SHAPE, GROUP_SHAPE = "preset", "patch", "group"
 NEWER_WORDS = "{schema} is newer than this build ({newest})"
 NOT_FRAGMENT_WORDS = "schema {schema!r} is not a {kind}"
 GROUP_EMPTY_WORDS = "group is {value!r}: the key names no param group"
@@ -285,7 +285,7 @@ def shape_of(doc: Mapping) -> str:
     `GROUP_EMPTY_WORDS`)."""
     kind, version = _schema(doc)
     if kind == MODULE_KIND and version is not None and version > MODULE_VERSION:
-        return PRESET_SHAPE
+        return LOADABLE_SHAPE
     if GROUP_KEY in doc:
         return GROUP_SHAPE
     return PATCH_SHAPE

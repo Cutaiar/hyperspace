@@ -42,16 +42,16 @@ def _library(tmp_path: Path) -> Path:
     from hyperspace import headless
 
     lib = tmp_path / "Drive" / "Hyperspace"
-    presets = lib / "presets"
-    presets.mkdir(parents=True)
-    shutil.copyfile(SOURCES / "party-trip.json", presets / "trip-night.json")
-    shutil.copyfile(FIXTURES / "glimmer-bug.json", presets / "glimmer-bug.json")
+    loadable_dir = lib / "presets"
+    loadable_dir.mkdir(parents=True)
+    shutil.copyfile(SOURCES / "party-trip.json", loadable_dir / "trip-night.json")
+    shutil.copyfile(FIXTURES / "glimmer-bug.json", loadable_dir / "glimmer-bug.json")
     seven, _, _ = headless.resave(FIXTURES / "acid-scene.json", tmp_path / "seven")
-    (presets / "acid-scene.json").write_bytes(seven)
-    (presets / "broken.json").write_text(json.dumps(
+    (loadable_dir / "acid-scene.json").write_bytes(seven)
+    (loadable_dir / "broken.json").write_text(json.dumps(
         {"schema": "hyperspace.preset/2", "name": "broken", "values": {"view.bright": "fast"}}))
-    (presets / "trip-night.json.bak-20261001").write_text("{}")
-    (presets / ".tmp.json").write_text("{}")
+    (loadable_dir / "trip-night.json.bak-20261001").write_text("{}")
+    (loadable_dir / ".tmp.json").write_text("{}")
     (lib / "trash" / "presets").mkdir(parents=True)
     (lib / "trash" / "presets" / "old.json").write_text(
         (CORPUS / "dial.json").read_text())
@@ -248,13 +248,13 @@ def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
     the library does — ``party/`` and ``party/deep/`` migrated in place,
     a hidden folder (``.cache``) never read; ``--to`` keeps the folders."""
     lib = _library(tmp_path)
-    presets = lib / "presets"
-    (presets / "party" / "deep").mkdir(parents=True)
-    shutil.copyfile(SOURCES / "party-trip.json", presets / "party" / "night.json")
-    shutil.copyfile(FIXTURES / "glimmer-bug.json", presets / "party" / "deep" / "bug.json")
-    (presets / ".cache").mkdir()
-    shutil.copyfile(SOURCES / "party-trip.json", presets / ".cache" / "x.json")
-    got = [p.relative_to(presets).as_posix() for p in _tool().preset_files(lib)]
+    loadable_dir = lib / "presets"
+    (loadable_dir / "party" / "deep").mkdir(parents=True)
+    shutil.copyfile(SOURCES / "party-trip.json", loadable_dir / "party" / "night.json")
+    shutil.copyfile(FIXTURES / "glimmer-bug.json", loadable_dir / "party" / "deep" / "bug.json")
+    (loadable_dir / ".cache").mkdir()
+    shutil.copyfile(SOURCES / "party-trip.json", loadable_dir / ".cache" / "x.json")
+    got = [p.relative_to(loadable_dir).as_posix() for p in _tool().preset_files(lib)]
     assert got == ["acid-scene.json", "broken.json", "glimmer-bug.json", "trip-night.json",
                    "party/night.json", "party/deep/bug.json"]
     out_dir = tmp_path / "out"
@@ -262,11 +262,11 @@ def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
     assert json.loads((out_dir / "party" / "deep" / "bug.json").read_text())["schema"] \
         == "hyperspace.preset/10"
     capsys.readouterr()
-    hidden = (presets / ".cache" / "x.json").read_bytes()
+    hidden = (loadable_dir / ".cache" / "x.json").read_bytes()
     assert _tool().main(["--library", str(lib), "--apply"], picture=same_picture) == 1
     out = capsys.readouterr().out
     assert "party/night.json" in out and "party/deep/bug.json" in out
     for rel in ("party/night.json", "party/deep/bug.json"):
-        assert json.loads((presets / rel).read_text())["schema"] == "hyperspace.preset/10", rel
-    assert (presets / ".cache" / "x.json").read_bytes() == hidden
+        assert json.loads((loadable_dir / rel).read_text())["schema"] == "hyperspace.preset/10", rel
+    assert (loadable_dir / ".cache" / "x.json").read_bytes() == hidden
     assert "rewrote 4 as /10" in out

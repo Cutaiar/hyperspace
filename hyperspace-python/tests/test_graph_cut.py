@@ -276,18 +276,18 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
         (home / "presets").mkdir(parents=True, exist_ok=True)
         (home / "presets" / FIXTURE.name).write_text(saved or FIXTURE.read_text())
         r = boot(home)
-        r.presets.load("cut-out")
-        got = r.presets.graph.spec
+        r.loaded_patch.load("cut-out")
+        got = r.loaded_patch.graph.spec
         assert got is not None and got.wired and not got.notes
         assert got.cuts == (G.CutAt(1),) and got.mattes == (G.MatteAt(1),)
-        assert [n for n in r.presets.notes if n.startswith("graph:")] == []
+        assert [n for n in r.loaded_patch.notes if n.startswith("graph:")] == []
         assert r.reg["cut.amount"].value == pytest.approx(1.0)
         assert r.reg["cut.invert"].value is False
         assert r.reg["matte.key"].value == pytest.approx(0.95)
         if spec is not None:
             assert got == spec
         spec = got
-        saved = r.presets.save_as("cut-out").read_text()
+        saved = r.loaded_patch.save_as("cut-out").read_text()
         doc = json.loads(saved)
         assert doc["schema"] == "hyperspace.preset/10"
         assert {"kind": "cut"} in doc["graph"]["nodes"]
@@ -301,9 +301,9 @@ def test_a_new_preset_holds_no_cut_values(tmp_path):
     (home / "presets").mkdir(parents=True)
     (home / "presets" / FIXTURE.name).write_text(FIXTURE.read_text())
     r = boot(home)
-    r.presets.load("cut-out")
-    r.presets.new()
-    doc = json.loads(r.presets.save_as("fresh").read_text())
+    r.loaded_patch.load("cut-out")
+    r.loaded_patch.new()
+    doc = json.loads(r.loaded_patch.save_as("fresh").read_text())
     assert not [k for k in doc["values"] if params.is_cut_id(k)]
 
 

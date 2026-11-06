@@ -42,7 +42,7 @@ from hyperspace.library import Library
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Binding, Router
 from hyperspace.view import ViewState
 
@@ -122,8 +122,8 @@ def owner_rig(tmp_path):
     inp, out = FakeIn(), FakeOut()
     t = [100.0]
     m = MidiIO(reg, path=tmp_path / "bindings.json", inp=inp, out=out, clock=lambda: t[0])
-    presets = Presets(lib, reg, Router(reg, m.table))
-    presets.load("TUMBLE")
+    loaded_patch = LoadedPatch(lib, reg, Router(reg, m.table))
+    loaded_patch.load("TUMBLE")
     m.poll()
     return SimpleNamespace(reg=reg, view=view, control=control, lib=lib, midi=m,
                            inp=inp, out=out, t=t)

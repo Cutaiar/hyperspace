@@ -47,7 +47,7 @@ def test_the_template_code_is_gone():
         assert not hasattr(library, name), name
     assert not hasattr(library.Library, "desk_template")
     for name in ("template_of_loaded", "template_at_load", "_at_load", "_mods_at_load"):
-        assert not hasattr(preset.Presets, name), name
+        assert not hasattr(preset.LoadedPatch, name), name
     assert graphmigrate.TEN_RETIRED == ("modules", "desk_template")
 
 
@@ -66,19 +66,19 @@ def test_an_old_templated_preset_loads_its_own_rows_and_saves_without_the_key(tm
     rig = boot(tmp_path)
     put_fixtures(rig.home)
     rig.lib._sync()
-    assert rig.presets.load("TEMPLATED") == []
-    assert preset.TEMPLATE_RETIRED.format(name="fixture shape") in rig.presets.notes
+    assert rig.loaded_patch.load("TEMPLATED") == []
+    assert preset.TEMPLATE_RETIRED.format(name="fixture shape") in rig.loaded_patch.notes
     desk = desk_json(rig.router.table.desk())
     assert [r["source"] for r in desk] == ["cc:*:17", "cc:0:50"]
     assert {r["target"] for r in desk} == {"dream.mix", "view.pattern_mix"}
-    doc = rig.presets.document("TEMPLATED")
+    doc = rig.loaded_patch.document("TEMPLATED")
     assert doc["schema"] == "hyperspace.preset/10"
     assert "desk_template" not in doc and "modules" not in doc
-    path = rig.presets.save_as("TEMPLATED")
+    path = rig.loaded_patch.save_as("TEMPLATED")
     first = path.read_bytes()
-    rig.presets.load("TEMPLATED")
-    assert rig.presets.notes == [] and not rig.lib.is_dirty("presets")
-    assert rig.presets.save_as("TEMPLATED").read_bytes() == first      # a fixed point
+    rig.loaded_patch.load("TEMPLATED")
+    assert rig.loaded_patch.notes == [] and not rig.lib.is_dirty("presets")
+    assert rig.loaded_patch.save_as("TEMPLATED").read_bytes() == first      # a fixed point
     # the template file is never read, never written
     assert (rig.home / "desk" / TEMPLATE.name).read_bytes() == TEMPLATE.read_bytes()
 

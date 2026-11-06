@@ -352,7 +352,7 @@ def test_a_patch_carries_no_player(rig):
     """Remembered by the meta controller on this Mac: nothing of it in a saved preset."""
     rig.meta.move_player(2, Duty.OFF_AIR)
     for deck in rig.meta.decks:
-        text = deck.presets.save_as("saved with a player off air").read_text()
+        text = deck.loaded_patch.save_as("saved with a player off air").read_text()
         assert "off_air" not in text and '"players"' not in text
 
 

@@ -71,7 +71,7 @@ def test_the_one_ladder_reads_every_fragment_as_its_patch_2():
 
 def test_shape_of_reads_the_one_shape_three_ways():
     preset_doc = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
-    assert patches.shape_of(preset_doc) == patches.PRESET_SHAPE
+    assert patches.shape_of(preset_doc) == patches.LOADABLE_SHAPE
     assert patches.shape_of(json.loads(ACID_WASH.read_text())) == patches.PATCH_SHAPE
     assert patches.shape_of(json.loads(WAKE.read_text())) == patches.GROUP_SHAPE
     assert patches.shape_of(patches.forward(OLD_MODULE)) == patches.GROUP_SHAPE
@@ -109,7 +109,7 @@ def test_the_presets_ladder_is_one_function_the_load_reads_through():
     import inspect
 
     from hyperspace import graphmigrate, preset
-    assert "graphmigrate.forward(" in inspect.getsource(preset.Presets.load_doc)
+    assert "graphmigrate.forward(" in inspect.getsource(preset.LoadedPatch.load_doc)
     new = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
     fwd = graphmigrate.forward(copy.deepcopy(new), {})
     assert fwd.doc == new and fwd.notes == () and fwd.migrated == ""
@@ -176,7 +176,7 @@ def test_an_old_patch_1_reads_as_its_2_through_the_library(tmp_path):
     app = headless.make_app(tmp_path)
     doc = app.lib.read_patch("acid-wash")
     assert doc["schema"] == "hyperspace.patch/2"
-    host = patches.Host.of(app.presets.graph.spec, app.router.table, app.presets.banks())
+    host = patches.Host.of(app.loaded_patch.graph.spec, app.router.table, app.loaded_patch.banks())
     landing = patches.spawn(doc, host)
     assert {e.get("file") for e in landing.nodes if e.get("kind") == "effect"} == {
         "acid", "wobble"}

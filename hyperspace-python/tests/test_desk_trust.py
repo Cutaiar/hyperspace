@@ -92,7 +92,7 @@ def test_the_save_button_is_track_eights_clip_stop_invariant_and_lit_while_held(
     on both layers, its LED lit while it is held. A SAVE press with no pad
     does nothing: no file, no load, no slot moved. The other seven
     clip-stop buttons stay free for Learn."""
-    t, lib, pr = rig.midi.table, rig.presets.lib, rig.presets
+    t, lib, pr = rig.midi.table, rig.loaded_patch.lib, rig.loaded_patch
     (b,) = t.route("note", SAVE_CH, STOP)
     assert (b.target, b.op, b.layer, b.feedback) == (SAVE_PARAM, "momentary", None, "led")
     assert apc40.SAVE == (STOP, SAVE_CH) and apc40.glyph(b.source) == "G6·8"
@@ -120,7 +120,7 @@ def test_a_reconnect_lets_go_of_a_save_whose_release_was_lost(rig):
     rig.midi._enter()
     assert rig.reg[SAVE_PARAM].value is False
     push(rig, *tap(0))
-    assert rig.presets.lib.current("presets") == "TUMBLE"
+    assert rig.loaded_patch.lib.current("presets") == "TUMBLE"
 
 
 def test_nothing_can_latch_save(rig, tmp_path):
@@ -197,7 +197,7 @@ def test_save_held_and_an_empty_pad_tapped_saves_into_that_slot(rig):
     """On an empty pad the two-handed save is #158's save: a new preset
     named from the loaded one into that slot, loaded, the pad blinking."""
     at = clocked(rig)
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))                                                  # TRIP, on F5
     assert lib.current("presets") == "TRIP" and pr.bank[12] is None
     at(1.0, save_down())
@@ -219,7 +219,7 @@ def test_save_held_and_a_filled_pad_tapped_saves_a_new_preset_and_keeps_the_old(
     this pad (keeps the preset)" leaves it; nothing goes to the trash; the
     new preset is the loaded one and its pad blinks."""
     at = clocked(rig)
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))                                                  # TRIP
     at(0.5, save_down(), *tap(10), save_up())                         # TRIP 2 → slot 11
     assert pr.bank[10] == "TRIP 2"
@@ -254,7 +254,7 @@ def test_the_two_handed_save_works_ten_times_in_a_row(rig):
     its slot pointing at it, loaded, its pad blinking, every earlier file
     untouched, the trash untouched, the layer left as it was."""
     at = clocked(rig)
-    lib, pr, t = rig.presets.lib, rig.presets, rig.midi.table
+    lib, pr, t = rig.loaded_patch.lib, rig.loaded_patch, rig.midi.table
     at(0.0, *tap(4))                                                  # TRIP
     gone = trash(lib)
     slots = [12, 0, 13, 12, 3, 20, 20, 8, 1, 23]       # empty, filled, …, the same one again
@@ -289,7 +289,7 @@ def test_a_save_tap_does_not_load_or_start_a_hold(rig):
     loaded first, and its hold (#158's save into an empty slot) never fires
     after it — one press, one preset."""
     at = clocked(rig)
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))
     loads = []
     pr.lib.on_load("presets", loads.append)       # (a save lands the new preset too)
@@ -311,7 +311,7 @@ def test_a_failed_save_into_a_filled_slot_leaves_the_slot_and_blinks_nothing(rig
     named (the new preset is saved and in the list, the footer says why);
     a save that could not be written at all blinks nothing."""
     at = clocked(rig)
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))
 
     def refuse():
@@ -333,7 +333,7 @@ def test_a_failed_save_into_a_filled_slot_leaves_the_slot_and_blinks_nothing(rig
 
     def fail(name):
         raise OSError("read-only")
-    monkeypatch.setattr(lib.presets, "save_as", fail)
+    monkeypatch.setattr(lib.loaded_patch, "save_as", fail)
     mark = len(rig.out.sent)
     n, ch = pad(1)
     at(2.0, save_down(), note(n, channel=ch))
@@ -347,7 +347,7 @@ def test_the_hold_on_an_empty_pad_still_saves_and_a_filled_one_only_loads(rig):
     desk never overwrites, and the hold never makes a new preset over a
     filled slot — that is the two-handed save's)."""
     at = clocked(rig)
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))
     n, ch = pad(9)
     at(1.0, note(n, channel=ch))
@@ -366,7 +366,7 @@ def test_the_hold_on_an_empty_pad_still_saves_and_a_filled_one_only_loads(rig):
 def test_save_into_and_save_empty_on_the_project(rig):
     """`Project.save_into` grew the filled case; `save_empty` is #158's
     hold (empty only). Neither overwrites a file."""
-    pr = rig.presets
+    pr = rig.loaded_patch
     pr.load_slot(4)
     assert pr.save_empty(1) is False and pr.bank[1] == "FACES"
     assert pr.save_into(1) is True and pr.bank[1] == "TRIP 2"
@@ -422,12 +422,12 @@ def test_an_older_presets_toggle_rows_drop_quietly_and_an_owners_row_with_a_note
     the same job (`routing.RETIRED_DESK_ROWS`) — and drops an owner's row
     on the SAVE button with the usual note. Loaded through a scratch
     library from tests/fixtures/desk-trust/."""
-    lib, t = rig.presets.lib, rig.midi.table
+    lib, t = rig.loaded_patch.lib, rig.midi.table
     (lib.home / "presets").mkdir(parents=True, exist_ok=True)
     shutil.copy(FIXTURES / "old-desk.json", lib.home / "presets" / "old-desk.json")
-    lib.presets.load("OLD DESK")
+    lib.loaded_patch.load("OLD DESK")
     assert lib.current("presets") == "OLD DESK"
-    assert lib.presets.desk_notes == [
+    assert lib.loaded_patch.desk_notes == [
         ("dropped note:7:52 → camera.reset: that control is invariant, the session's "
          "(plan 13 D6)")]
     assert [b.source for b in t.desk()] == ["cc:0:48", "cc:0:55", "note:0:86"]

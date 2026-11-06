@@ -1018,7 +1018,7 @@ def _launch(home):
     and the presets after, then the show's startup preset."""
     from hyperspace import lfo, tempo
     from hyperspace.library import Library
-    from hyperspace.preset import Presets
+    from hyperspace.preset import LoadedPatch
     from hyperspace.routing import Bindings, Router, bindings_path
 
     chain = Analyzer(Analyser())
@@ -1038,7 +1038,7 @@ def _launch(home):
     table = app._desk_table(reg, Bindings.load(bindings_path(home), legacy_midi=None))
     lib.attach(reg)
     router = Router(reg, table)
-    Presets(lib, reg, router)
+    LoadedPatch(lib, reg, router)
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.project)
 

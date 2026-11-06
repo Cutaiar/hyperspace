@@ -142,7 +142,7 @@ from .learn import (
     settle_pair,
     withdrawn_words,
 )
-from .library import PRESETS
+from .library import LOADABLE
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
 from .modifiers import Modifier, smooth_motion
@@ -642,7 +642,7 @@ def sheet_wants(panel, landing, choices=None) -> list[str]:
 def sheet_title(panel, landing) -> str:
     """"spawn acid wash into party-trip"."""
     lib = getattr(panel, "library", None)
-    into = (lib.current(PRESETS) if lib is not None else None) or "this preset"
+    into = (lib.current(LOADABLE) if lib is not None else None) or "this preset"
     return f"spawn {landing.group.get('name') or 'patch'} into {into}"
 
 
@@ -1267,17 +1267,17 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
 
 # ---- the head: the loaded preset, the layer, the last learn, the load's notes ----
 
-def _presets(panel):
+def _loaded_patch(panel):
     """The library's `Presets` (preset.py), or None on a panel without one."""
     lib = panel.library
-    if lib is None or lib.reg is None or PRESETS not in lib.kinds:
+    if lib is None or lib.reg is None or LOADABLE not in lib.kinds:
         return None
-    return getattr(lib, "presets", None)
+    return getattr(lib, "loaded_patch", None)
 
 
 def _save_as(panel, name: str) -> None:
-    ui_presets._guard(panel, panel.library.save_as, PRESETS, name)
-    ui_presets.invalidate(panel, PRESETS)
+    ui_presets._guard(panel, panel.library.save_as, LOADABLE, name)
+    ui_presets.invalidate(panel, LOADABLE)
 
 
 def head(panel, router: Router) -> None:
@@ -1286,15 +1286,15 @@ def head(panel, router: Router) -> None:
     save / as… (ui_presets), over the same preset — a factory one gets a
     user shadow (`Library.overwrite`)."""
     lib, table, st = panel.library, router.table, _state(panel)
-    pr = _presets(panel)
+    pr = _loaded_patch(panel)
     imgui.push_id("head")
     if pr is None or not ui_presets._name_field(panel, NAMING, lambda n: _save_as(panel, n)):
-        _preset_line(panel, pr, table)
+        _loadable_line(panel, pr, table)
     imgui.pop_id()
     _learn_line(panel)
     if st["error"]:
         imgui.text_colored(ui.WARN, st["error"])
-    if lib is not None and lib.error and PRESETS in lib.error:
+    if lib is not None and lib.error and LOADABLE in lib.error:
         imgui.text_colored(ui.WARN, lib.error)          # a preset that would not load
     # the desk rows the last load dropped (an invariant control, D6), on
     # one line so a file full of them never pushes the page off the window
@@ -1315,7 +1315,7 @@ def head(panel, router: Router) -> None:
         imgui.text_colored(ui.WARN, note)
 
 
-def _preset_line(panel, pr, table) -> None:
+def _loadable_line(panel, pr, table) -> None:
     lib = panel.library
     cur = pr.current if pr is not None else None
     ui._micro("preset")
@@ -1325,7 +1325,7 @@ def _preset_line(panel, pr, table) -> None:
         ui.tooltip("The loaded preset: its routes, its desk and its macros are "
                           "this section. A learn or an edit here changes it — the dot — "
                           "and writes nothing until save" if cur else "no preset loaded")
-    edited = pr is not None and cur is not None and ui_presets.dirty(panel, PRESETS)
+    edited = pr is not None and cur is not None and ui_presets.dirty(panel, LOADABLE)
     rects = ui_presets._state(panel)["rects"]
     rects.pop("head.dot", None)
     if edited:
@@ -1333,7 +1333,7 @@ def _preset_line(panel, pr, table) -> None:
         rects["head.dot"] = ui.dirty_dot("edited since it loaded — save writes it")
     glob = table.layer == "global"
     layer = f"desk layer: {'global' if glob else 'preset'}"
-    word = ui_presets.save_label(lib, PRESETS) if lib is not None else "save"
+    word = ui_presets.save_label(lib, LOADABLE) if lib is not None else "save"
     sp = imgui.get_style().item_spacing.x
     # flush right; in a narrow pane on a row of its own (plan 49 stage 3)
     right = ui.chip_w(word, "as…") + ui._micro_width(layer) + sp
@@ -1352,9 +1352,9 @@ def _preset_line(panel, pr, table) -> None:
         imgui.begin_disabled()
         ui.chip(word)
         imgui.end_disabled()
-    elif ui_presets.save_chip(panel, PRESETS, word, edited, key="head"):
-        ui_presets._guard(panel, lib.overwrite, PRESETS)
-        ui_presets.invalidate(panel, PRESETS)
+    elif ui_presets.save_chip(panel, LOADABLE, word, edited, key="head"):
+        ui_presets._guard(panel, lib.overwrite, LOADABLE)
+        ui_presets.invalidate(panel, LOADABLE)
     imgui.same_line()
     imgui.begin_disabled(pr is None)
     if ui.chip("as…"):
@@ -1446,7 +1446,7 @@ def _column(names: list[str]) -> float:
     return max(CONTROL_W, widest + 2 * sp)
 
 
-def preset_controls(table) -> list[Binding]:
+def patch_controls(table) -> list[Binding]:
     """One factory row per control the profile's map puts on a layer — the
     controls a preset may map (the invariant ones are the session's)."""
     seen: set[str] = set()
@@ -1481,7 +1481,7 @@ def unmapped(table) -> list[Binding]:
     sig = _dark_signature(table)
     if _DARK.get("sig") != sig:
         rows = table.desk()
-        _DARK["rows"] = [f for f in preset_controls(table)
+        _DARK["rows"] = [f for f in patch_controls(table)
                          if not any(b.overlaps(f) for b in rows)]
         _DARK["sig"] = sig
     return list(_DARK["rows"])

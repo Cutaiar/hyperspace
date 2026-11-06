@@ -281,13 +281,13 @@ def test_a_saved_row_on_a_totem_or_a_poi_drops_with_a_note_and_presses_nothing(r
         routes=[{"source": f"seq:{k}", "target": t, "op": "push", "value": 1.0}
                 for k, t in enumerate(targets)],
         values={"totem.on": True, "poi.length": 2.0})
-    d.presets.load("CARRIES")
-    assert d.presets.current == "CARRIES"
+    d.loaded_patch.load("CARRIES")
+    assert d.loaded_patch.current == "CARRIES"
     assert not [b for b in d.table.bindings if b.target in targets and not is_meta_row(b)]
     for t in targets:
         assert any(n.startswith("dropped note:8:") and f"→ {t}" in n and "no patch's row" in n
-                   for n in d.presets.notes), t
-        assert any(n.startswith("dropped seq:") and t in n for n in d.presets.notes), t
+                   for n in d.loaded_patch.notes), t
+        assert any(n.startswith("dropped seq:") and t in n for n in d.loaded_patch.notes), t
     assert d.reg["totem.on"].value is False
     rig.meta.pointer("apc40").deck = d
     length = d.reg["poi.length"].value
@@ -301,8 +301,8 @@ def test_a_file_saved_after_it_holds_none_of_them(rig):
     d = rig.one
     path = put(rig.lib.home, "CARRIES", desk=[{"source": "note:8:0", "target": "totem.on",
                                                "op": "toggle"}])
-    d.presets.load("CARRIES")
-    d.presets.save_as("CARRIES")
+    d.loaded_patch.load("CARRIES")
+    d.loaded_patch.save_as("CARRIES")
     doc = json.loads(path.read_text())
     assert not [r for r in (*doc["desk"], *doc["routes"]) if is_meta_id(r["target"])]
 
@@ -345,9 +345,9 @@ def test_every_factory_row_on_the_class_is_the_meta_controllers():
 def test_shift_f_keys_save_by_the_real_road(rig):
     import glfw
 
-    project = rig.one.presets.lib.project
+    project = rig.one.loaded_patch.lib.project
     _bank(rig, "party-wake", "party-tumble")
-    rig.one.presets.load("party-wake")
+    rig.one.loaded_patch.load("party-wake")
     path = rig.lib.path_of("presets", project.bank[0])
     was = json.loads(path.read_text())["values"]["view.bright"]
     rig.one.reg["view.bright"].set(was + 0.25)
@@ -371,7 +371,7 @@ def test_a_pad_learn_on_a_load_still_lands_and_loads_off_air(rig):
     pad = ScriptedPad()
     pad.frame(held={gamepad.A})
     d.router.pad(pad, now=1.0)
-    assert rig.two.presets.current == "TUMBLE" and _state(d) == theirs
+    assert rig.two.loaded_patch.current == "TUMBLE" and _state(d) == theirs
 
 
 # ------------------------------------------------------------ review of #388
@@ -460,7 +460,7 @@ def test_finding_2_a_load_lets_a_glide_on_the_class_arrive(tmp_path):
     frames(r, 3)
     assert "poi.length" in slews
     mid = p.norm
-    r.presets.load("TRIP")
+    r.loaded_patch.load("TRIP")
     frames(r)
     assert "poi.length" in slews and p.norm > mid
     frames(r, 20)

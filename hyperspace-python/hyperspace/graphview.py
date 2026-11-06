@@ -167,7 +167,7 @@ CABLE_KINDS = ("route", "setter", "sub", "input", "render", "lane")
 IN, OUT = "in", "out"
 BASE, MOD, DEPTH = "base", "mod", "depth"
 # which layout map a node's position is saved in
-PRESET, META_SECTION = "preset", "session"
+PATCH_SECTION, META_SECTION = "preset", "session"
 
 ANALYZER = "analyzer"
 CAMERA = "camera"            # the shared camera's node: `render:camera` (plan 35 V2: was `eye`)
@@ -663,7 +663,7 @@ def device_node(d) -> tuple[VNode, list]:
 # with the templates, plan 44 D3.) A row whose role this rig lists no
 # device for draws from a grey placeholder ``device:<role>``.
 
-PRESET_LAYER, GLOBAL_LAYER = "preset", "global"
+PATCH_DESK_LAYER, GLOBAL_LAYER = "preset", "global"
 # what a layer's node is called after the device's role ("apc40 (SHIFT)")
 LAYER_LABEL = {GLOBAL_LAYER: "SHIFT"}
 # the desk's port groups (`Port.group` is the profile's control kind), in
@@ -1517,8 +1517,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if mine is None:
             return source_pin(b.source), ""
         else:
-            layer = PRESET_LAYER if shadowed else (b.layer or PRESET_LAYER)
-            n = mine.get(layer) or mine[PRESET_LAYER]
+            layer = PATCH_DESK_LAYER if shadowed else (b.layer or PATCH_DESK_LAYER)
+            n = mine.get(layer) or mine[PATCH_DESK_LAYER]
             inside = ""
         pin = lpins.get((n.id, b.source))
         if pin is None:
@@ -2639,7 +2639,7 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
     return layout(view, placed, expanded, folds, collapsed, idle_open).nodes
 
 
-def preset_only(view: View) -> frozenset[str]:
+def patch_only(view: View) -> frozenset[str]:
     """The ids of the nodes the **preset only** view draws (plan 36 T6, D4):
     the preset section's own nodes (`frame_names`, as ``render:<name>``),
     every node with a cable to one of them (whatever its kind: an LFO routed
@@ -2693,10 +2693,10 @@ def home(n: VNode) -> str:
     node, a placeholder — sources, the analyzer, the outputs, a session
     group's node)."""
     if n.kind in ("modifier", "macro", "render", "channel", *BANK_SCHEMES, SEQ):
-        return PRESET
+        return PATCH_SECTION
     if n.kind == "group":
         group = n.id.partition(":")[2]
-        return PRESET if group in PATCH_GROUPS else META_SECTION
+        return PATCH_SECTION if group in PATCH_GROUPS else META_SECTION
     return META_SECTION
 
 
@@ -2709,7 +2709,7 @@ def split(view: View, positions: Mapping[str, Any]) -> tuple[dict, dict]:
         xy = positions.get(n.id)
         if xy is None:
             continue
-        (pre if home(n) == PRESET else ses)[n.id] = [round(float(xy[0])), round(float(xy[1]))]
+        (pre if home(n) == PATCH_SECTION else ses)[n.id] = [round(float(xy[0])), round(float(xy[1]))]
     return pre, ses
 
 
@@ -3047,7 +3047,7 @@ def land_choices(view: View, edit, fixed: str, nid: str
 GROUP_IN, GROUP_OUT = "gin", "gout"      # a group node's boundary pins
 NOTHING_TO_GROUP = "nothing to group"
 NO_GROUP = "no group {gid}"
-NO_PRESET_GROUPS = "no preset is loaded: nothing to group"
+NO_LOADABLE_GROUPS = "no preset is loaded: nothing to group"
 GROUP_NEEDS_NAME = "a group needs a name"
 GROUP_MOVED = "{node} left {other} for this group"
 GROUPED = "grouped {n} node{s} as {name}"
@@ -3057,8 +3057,8 @@ LEFT_EMPTY = "{node} left {name}, the last of it: the group is gone"
 GROUP_NO_DELETE = ("{name} is a group: Ungroup it from its menu (its nodes stay), or open it "
                    "and delete its nodes")
 # plan 40 T3: a patch spawned, spliced, wired as saved; a group saved as one
-PATCH_SIDE, PRESET_SIDE = "patch", "preset"     # a conflict's two answers (the sheet's, D3)
-NO_PRESET_SPAWN = "no preset is loaded: nothing to spawn into"
+PATCH_SIDE, LOADABLE_SIDE = "patch", "preset"     # a conflict's two answers (the sheet's, D3)
+NO_LOADABLE_SPAWN = "no preset is loaded: nothing to spawn into"
 SPAWN_STALE = "the preset changed while the sheet was up: spawn {name} again"
 # (wave 3 P2) what replacing the host's dream costs it, in words
 LOSES_WIRES = "its wires: {wires}"
@@ -3701,7 +3701,7 @@ class Edit:
         self.show = None
         # plan 40 T2: the loaded `preset.Presets`, whose `groups` and
         # `layout` the group verbs edit (None: no group verb lands)
-        self.presets = None
+        self.loaded_patch = None
         self.spawned = None     # plan 40 T3: the group entry the last spawn landed
 
     # ---- the render graph (plan 28 N4): each returns None (done; its
@@ -4365,7 +4365,7 @@ class Edit:
     # write. Returns a refusal in words, or None (its words in `said`) ----
 
     def _groups(self) -> list[dict] | None:
-        pre = getattr(self, "presets", None)
+        pre = getattr(self, "loaded_patch", None)
         if pre is None:
             return None
         if getattr(pre, "groups", None) is None:
@@ -4393,12 +4393,12 @@ class Edit:
         is one step). Returns the entry as landed."""
         groups = self._groups()
         if groups is None:
-            raise ValueError(NO_PRESET_GROUPS)
-        high = getattr(self.presets, "group_high", None)
+            raise ValueError(NO_LOADABLE_GROUPS)
+        high = getattr(self.loaded_patch, "group_high", None)
         if high is None:
             high = max((graphmigrate.group_number(g.get("id")) for g in groups), default=0)
         n = int(high) + 1
-        self.presets.group_high = n
+        self.loaded_patch.group_high = n
         g = {"id": f"group.{n}", "name": str(entry.get("name") or f"group {n}")}
         if entry.get("patch"):
             g["patch"] = str(entry["patch"])
@@ -4422,7 +4422,7 @@ class Edit:
         goes); a group holds nodes, never a group."""
         groups = self._groups()
         if groups is None:
-            return None, [NO_PRESET_GROUPS]
+            return None, [NO_LOADABLE_GROUPS]
         ids = list(dict.fromkeys(ids))
         mem, refused = patches.groupable(getattr(self.graph, "spec", None), self.table, ids)
         ok = set(mem.canvas())
@@ -4496,9 +4496,9 @@ class Edit:
         dx, dy = float(delta[0]), float(delta[1])
         if not (dx or dy):
             return None
-        lay = getattr(self.presets, "layout", None)
+        lay = getattr(self.loaded_patch, "layout", None)
         if lay is None:
-            lay = self.presets.layout = {}
+            lay = self.loaded_patch.layout = {}
         self._step(f"move {g['name']}")
         for cid in g["nodes"]:
             xy = positions.get(cid)
@@ -4531,11 +4531,11 @@ class Edit:
         hit = list({id(g): g for g, _, _ in todo}.values())
         self._step(f"{todo[0][1]} leaves {hit[0]['name']}" if len(todo) == 1 else
                    f"{len(todo)} nodes leave {', '.join(g['name'] for g in hit)}")
-        lay = getattr(self.presets, "layout", None)
+        lay = getattr(self.loaded_patch, "layout", None)
         for _g, nid, at in todo:
             if at is not None:
                 if lay is None:
-                    lay = self.presets.layout = {}
+                    lay = self.loaded_patch.layout = {}
                 lay[nid] = [round(float(at[0])), round(float(at[1]))]
         said = []
         for g in hit:
@@ -4560,8 +4560,8 @@ class Edit:
         sheet was asked to replace (`choices`), its modifier
         ids the next ones, its voices free in banks there are — else the
         words (the preset moved under the sheet; nothing is written)."""
-        if self.graph is None or self.presets is None or self.table is None:
-            return NO_PRESET_SPAWN
+        if self.graph is None or self.loaded_patch is None or self.table is None:
+            return NO_LOADABLE_SPAWN
         # (wave 3 P1) a dream the host already has …; `getattr`: a sheet held
         # open across a hot reload holds a `Landing` of the class before it
         why = getattr(landing, "refusal", None)
@@ -4660,7 +4660,7 @@ class Edit:
         node is the patch's whatever the file leaves out. By what the nodes own
         (`param_rows`), whichever groups that falls in: the shape's are `rot.*`,
         most of `view.*` and `fx.face_map`."""
-        lib = getattr(self.presets, "lib", None)
+        lib = getattr(self.loaded_patch, "lib", None)
         if not replacing or lib is None:
             return {}
         gone = patches.node_members(replacing)
@@ -4792,7 +4792,7 @@ class Edit:
             got = table.add_modifier(m.kind, m.inputs, reg, **m.params)
             if got is None or got.id != m.id:          # (the refusal above rules it out)
                 notes.append(f"{m.id} landed as {getattr(got, 'id', '?')}")
-        lib = getattr(self.presets, "lib", None)
+        lib = getattr(self.loaded_patch, "lib", None)
         values = {**after, **landing.values}
         if values and lib is not None:
             missing = lib.restore(values)
@@ -4802,9 +4802,9 @@ class Edit:
         macros = self._drop_replaced_macros(replacing) if replacing else table.macros_doc()
         if landing.macros or macros != table.macros_doc():
             notes += table.set_macros({**macros, **copy.deepcopy(landing.macros)}, reg)
-        lay = getattr(self.presets, "layout", None)
+        lay = getattr(self.loaded_patch, "layout", None)
         if lay is None:
-            lay = self.presets.layout = {}
+            lay = self.loaded_patch.layout = {}
         for cid, xy in landing.layout.items():
             lay[cid] = [round(float(xy[0])), round(float(xy[1]))]
         self._replaced_leave_groups(replacing)
@@ -4852,7 +4852,7 @@ class Edit:
         for r in landing.routes:
             b = Binding.from_json(dict(r))
             c, which = answer(r, ("source", "target"))
-            if which == PRESET_SIDE:
+            if which == LOADABLE_SIDE:
                 kept.append(keep(c))
                 continue
             try:
@@ -4875,7 +4875,7 @@ class Edit:
         for r in landing.desk:
             b = Binding.from_json({**dict(r), "layer": "preset"})
             c, which = answer(r, ("desk",))
-            if which == PRESET_SIDE:
+            if which == LOADABLE_SIDE:
                 kept.append(keep(c))
                 continue
             try:
@@ -5030,12 +5030,12 @@ class Edit:
         if not name:
             return PATCH_NEEDS_NAME
         stem = patches.slug(name)
-        lib = getattr(self.presets, "lib", None)
+        lib = getattr(self.loaded_patch, "lib", None)
         if (g.get("patch") != stem and lib is not None
                 and lib.path_of("patches", stem) is not None):     # (library.PATCHES)
             # (review fix) another patch has this file: Save as never replaces it
             return PATCH_EXISTS.format(name=name)
-        spec, table, values, layout = self.presets.parts()
+        spec, table, values, layout = self.loaded_patch.parts()
         # plan 50: a group holds any node the preset saves; what a patch
         # cannot carry is asked here, at the save, and refused in words
         _, refused = patches.select(spec, table, g["nodes"])
@@ -5044,7 +5044,7 @@ class Edit:
         doc, said = patches.lift(spec, table, values, layout, g["nodes"])
         doc["name"], doc["note"] = name, str(note or "").strip()
         try:
-            path = self.presets.lib.save_patch(doc)
+            path = self.loaded_patch.lib.save_patch(doc)
         except Exception as e:  # noqa: BLE001 — LibraryError, OSError: said, nothing landed
             return str(e)
         stem = path.name[:-5]
@@ -5436,7 +5436,7 @@ def _bus_cuts(edit: Edit) -> rgraph.BusCuts:
     """The bus cuts the loaded preset holds (`edit.presets.bus`, plan 44
     D3; plan 36 T1's were the show's); with no presets, the rig as it
     ships: every cable standing."""
-    return rgraph.bus_cuts_of(getattr(edit, "presets", None))
+    return rgraph.bus_cuts_of(getattr(edit, "loaded_patch", None))
 
 
 def _bus_source(name: str | None) -> bool:
@@ -5451,7 +5451,7 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
     changed); else, unless `dry`, the undo step and the landing. `rig`
     (plan 36 T1): the preset's bus cuts after the edit (plan 44 D3), set
     in the same undo step — refused with no presets to hold them."""
-    if bus_cuts is not None and bus_cuts != _bus_cuts(edit) and getattr(edit, "presets", None) is None:
+    if bus_cuts is not None and bus_cuts != _bus_cuts(edit) and getattr(edit, "loaded_patch", None) is None:
         return BUS_NO_SHOW
     gs = edit.graph
     if gs is None:
@@ -5486,7 +5486,7 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
     if not same:
         gs.land(spec, new)
     if bus_cuts is not None and bus_cuts != _bus_cuts(edit):
-        edit.presets.bus = bus_cuts
+        edit.loaded_patch.bus = bus_cuts
     edit.said = said
     return None
 
@@ -5594,13 +5594,13 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         # plan 36 T2: a cloud's one wire is the rig's, into the scene
         if not rgraph.is_cloud_wire(w):
             return CLOUD_INTO_SCENE.format(cloud=s)
-        if getattr(edit, "presets", None) is None:
+        if getattr(edit, "loaded_patch", None) is None:
             return BUS_NO_SHOW
         return _land(edit, doc, f"wire {w}", f"wired {w}", dry, bus_cuts=_bus_cuts(edit).joining(w))
     if _bus_source(s):
         if not rgraph.is_bus(w):
             return BUS_SAME_PORT.format(port=s.rpartition(".")[2])
-        if getattr(edit, "presets", None) is None:
+        if getattr(edit, "loaded_patch", None) is None:
             return BUS_NO_SHOW
         gone = [x for x in doc.get("wires", []) if x["to"] == d]
         doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != d]
@@ -6599,7 +6599,7 @@ def render_drop(edit: Edit, node: str) -> str | None:
         # itself is not drawn, and stays as it is — M2)
         bus_cuts = _bus_cuts(edit)
         owned = {x["to"] for x in wires}
-        bus = [] if kind == rgraph.ALL_OUTPUTS or getattr(edit, "presets", None) is None else [
+        bus = [] if kind == rgraph.ALL_OUTPUTS or getattr(edit, "loaded_patch", None) is None else [
             w for w in bus_cuts.present(rgraph.bus_wire(int(name.partition(".")[2]), p)
                                    for p in rgraph.BUS_PORTS) if w.dst not in owned]
         if len(left) == len(wires) and not bus:     # (T5 review: say nothing was done)

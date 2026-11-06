@@ -29,7 +29,7 @@ from PIL import Image
 
 from hyperspace import undo
 from hyperspace.app import CONTROL_SIZE
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "15-safety-net"
@@ -92,7 +92,7 @@ def main() -> None:
         bright.set(b0 * (1 + 0.02 * (k + 1)))
         draw(1)
     draw(40)
-    r.lib.load(PRESETS, "FACES")                      # a load
+    r.lib.load(LOADABLE, "FACES")                      # a load
     draw(40)
     undo.undo()                                       # what Cmd+Z fires
     draw()

@@ -366,7 +366,7 @@ def test_the_deck_lists_the_totem_state_for_a_hot_reload_to_re_class():
     reg, state, _ = rig()
     fake = SimpleNamespace(renderer=None, hold=None, view=ViewState(), reg=reg,
                            marks=None, undo=None, router=None,
-                           presets=SimpleNamespace(graph=None), learn=None, clock=None,
+                           loaded_patch=SimpleNamespace(graph=None), learn=None, clock=None,
                            lfos=SimpleNamespace(lfos=[]), envs=SimpleNamespace(voices=[]),
                            seq=SimpleNamespace(lanes=[]))
     assert (state, "totem", "TotemState") in Deck.targets(fake)

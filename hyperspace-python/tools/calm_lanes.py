@@ -172,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     library = a.library or ml.configured_library(home)
     files = ml.preset_files(library)
     if not files:
-        print(f"no presets under {library / ml.PRESETS}")
+        print(f"no presets under {library / ml.LOADABLE}")
         return 1
     if a.apply:
         print(f"backup: {ml.backup(library, home)}")

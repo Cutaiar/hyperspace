@@ -322,8 +322,8 @@ def test_a_preset_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
 
     rig, e, _ = wired_rig(tmp_path, slug="delay-trails")
     calls = []
-    rig.presets.graph.renderer.reset_delays = lambda: calls.append(1)
-    spec = rig.presets.graph.spec
+    rig.loaded_patch.graph.renderer.reset_delays = lambda: calls.append(1)
+    spec = rig.loaded_patch.graph.spec
     w = next(w for w in spec.wires if w.dst != "delay.image" and w.src != "delay")
     assert e.unwire(f"rout:{w.src}", f"rin:{w.node}/{w.port}") is None
     assert calls == []

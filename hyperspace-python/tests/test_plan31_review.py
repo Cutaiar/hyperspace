@@ -156,7 +156,7 @@ def test_a_lane_on_a_missing_id_fires_nothing():
 def test_a_refused_load_keeps_the_extra_voices_and_their_values(tmp_path):
     app = make_app(tmp_path)
     reg = app.reg
-    doc = app.presets.document("x")            # four LFOs, five envelopes
+    doc = app.loaded_patch.document("x")            # four LFOs, five envelopes
     bad = {**doc, "values": {**doc["values"], "view.bright": "fast"}}
     n = app.lfos.add()
     reg[f"lfo.{n}.depth"].set(0.9)
@@ -165,7 +165,7 @@ def test_a_refused_load_keeps_the_extra_voices_and_their_values(tmp_path):
     reg[f"env.{m}.decay"].set(3.0)
     before = reg.snapshot(part="patch")
     with pytest.raises(ValueError):
-        app.presets.load_doc(bad)
+        app.loaded_patch.load_doc(bad)
     assert app.lfos.ids() == [1, 2, 3, 4, 5] and app.envs.ids() == [1, 2, 3, 4, 5, 6]
     assert reg[f"lfo.{n}.depth"].value == pytest.approx(0.9)
     assert reg[f"lfo.{n}.rate"].value == pytest.approx(7.0)
@@ -238,12 +238,12 @@ def test_desk_rows_and_layout_keys_on_plan_31_ids_survive_a_build_without_it(tmp
     against the registry and `read_layout` keeps any name. (Row 394: the
     save is `/6` whatever it holds.)"""
     old = make_app(tmp_path, plan31=False)
-    doc = old.presets.document("x")
+    doc = old.loaded_patch.document("x")
     row = {**doc["desk"][0], "target": "env.2.fire", "op": "momentary"}
     layout = {"env.6": [10, 20], "seq": [1, 2], "lfo.7": [3, 4]}
     doc = {**doc, "desk": [row, *doc["desk"][1:]], "layout": layout}
-    old.presets.load_doc(doc)
-    out = old.presets.document("x")
+    old.loaded_patch.load_doc(doc)
+    out = old.loaded_patch.document("x")
     assert out["desk"][0] == row and out["layout"] == layout
     assert out["schema"] == preset.SAVE_SCHEMA
 

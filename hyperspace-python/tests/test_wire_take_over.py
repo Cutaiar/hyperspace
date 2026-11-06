@@ -40,7 +40,7 @@ def press_plan(rig, plan):  # noqa: F811
 
 
 def open_ids(rig, gid=GID) -> list[str]:  # noqa: F811
-    pre = rig.lib.presets
+    pre = rig.lib.loaded_patch
     entry = next(g for g in pre.groups if g["id"] == gid)
     return [p["id"] for p in graphview.open_ports(pre.graph.spec, entry)]
 
@@ -66,7 +66,7 @@ def on_section(doc, *ports, nodes=("render:warp",)):
     pushed = []
     e = graphview.Edit(graph=gs, push=pushed.append)
     entry = {"id": GID, "name": "g", "nodes": list(nodes), "ports": list(ports)}
-    e.presets = type("P", (), {"groups": [entry], "layout": {}})()
+    e.loaded_patch = type("P", (), {"groups": [entry], "layout": {}})()
     return e, gs, pushed
 
 
@@ -114,7 +114,7 @@ def test_what_was_cut_stays_on_the_canvas_and_is_not_rewired(rig):  # noqa: F811
     spawned(rig)
     assert press(rig) is None
     frame(rig.panel, "graph")
-    assert "huecycle" in graphview.frame_names(rig.lib.presets.graph.spec)
+    assert "huecycle" in graphview.frame_names(rig.lib.loaded_patch.graph.spec)
     assert st["view"].node("render:huecycle") is not None
     assert not [w for w in wires(rig) if w[0] == "huecycle"]
 
@@ -308,7 +308,7 @@ def test_taking_another_groups_cable_opens_that_groups_pin(rig):  # noqa: F811
     spawned(rig)
     assert press(rig) is None
     spawned(rig, at=(100.0, 300.0), keep=True)
-    second = rig.lib.presets.groups[-1]["id"]
+    second = rig.lib.loaded_patch.groups[-1]["id"]
     assert press(rig, second) is None
     assert ("delay.2", "output.all.image") in wires(rig) and THROUGH not in wires(rig)
     assert open_ids(rig) == ["out"]
@@ -333,7 +333,7 @@ def test_a_member_feeding_another_port_leaves_its_other_pin_open():
     assert e.wire_as_saved(GID) == "output.all.image is taken"
     assert into(gs, "output.1.image") == ["warp"]
     assert into(gs, "output.all.image") == ["acid"]           # never cut
-    entry = e.presets.groups[0]
+    entry = e.loaded_patch.groups[0]
     assert [p["id"] for p in graphview.open_ports(gs.spec, entry)] == ["out.2"]
     plan = e.take_over_of(GID)
     assert plan.cuts == (("acid", "output.all.image"),)
@@ -348,7 +348,7 @@ def test_an_outlet_saying_nothing_it_fed_closes_once_its_member_feeds_outside(wa
     has no "the patch says nothing it was wired to" left to repeat."""
     port = {"id": "out", "type": "image", "from": "warp", **was}
     e, gs, _ = on_section({"nodes": EFFECTS}, port)
-    entry = e.presets.groups[0]
+    entry = e.loaded_patch.groups[0]
     assert [p["id"] for p in graphview.open_ports(gs.spec, entry)] == ["out"]
     assert e.wire_as_saved(GID) == graphview.NO_WAS.format(port="out")
     gs.spec = G.read_graph({"frame": "wired", "nodes": EFFECTS,
@@ -373,7 +373,7 @@ def test_a_cut_outlets_pin_opens_though_its_member_feeds_another_port():
         {"nodes": EFFECTS, "wires": [{"from": "warp", "to": "output.1.image"},
                                      {"from": "warp", "to": "output.all.image"}]},
         {"id": "x", "type": "image", "from": "warp", "was": "output.all.image"})
-    entry = e.presets.groups[0]
+    entry = e.loaded_patch.groups[0]
     assert graphview.open_ports(gs.spec, entry) == []
     e.graph.spec = G.read_graph({"frame": "wired", "nodes": EFFECTS, "wires": [
         {"from": "warp", "to": "output.1.image"}, {"from": "acid", "to": "output.all.image"}]})
@@ -415,7 +415,7 @@ def test_a_press_once_the_group_is_gone_refuses(rig):  # noqa: F811
     trip(rig)
     spawned(rig)
     plan = edit(rig).take_over_of(GID)
-    rig.lib.presets.groups = []
+    rig.lib.loaded_patch.groups = []
     assert press_plan(rig, plan) == graphview.TAKE_OVER_STALE.format(name="acid wash")
     assert HUECYCLE in wires(rig)
 
@@ -424,7 +424,7 @@ def test_a_press_once_the_plan_is_gone_refuses():
     e, gs, pushed = on_section({"nodes": EFFECTS,
                                 "wires": [{"from": "acid", "to": "output.all.image"}]}, OUT)
     plan = e.take_over_of(GID)
-    e.presets.groups[0]["ports"] = []
+    e.loaded_patch.groups[0]["ports"] = []
     assert e.wire_taking_over(plan) == graphview.TAKE_OVER_STALE.format(name="g")
     assert not pushed and gs.landed == 0
 

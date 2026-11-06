@@ -264,7 +264,7 @@ def test_dream_fx_composite_saved_spawned_and_undone_through_the_doors(rig):
     assert ui_routing.settle_sheet(rig.panel, False) is None
 
     on_graph(rig, "party-noita")
-    pre = rig.lib.presets
+    pre = rig.lib.loaded_patch
     assert "dream" not in patches.spec_names(pre.graph.spec)
     rig.reg["dream.mix"].set_value(0.9)
     before, wired, home = state(rig), wires(rig), files(rig.lib.home)
@@ -297,7 +297,7 @@ def test_a_look_back_lands_as_a_second_look_back_with_its_own_knobs(rig):
     `dream.*` untouched. The section keeps the second one's entry though a
     wire names it (it is what declares it)."""
     on_graph(rig, "party-wake")
-    doc, refused = patches.lift(*rig.lib.presets.parts(), ["render:lookback"])
+    doc, refused = patches.lift(*rig.lib.loaded_patch.parts(), ["render:lookback"])
     assert refused == []
     doc["name"] = "ring"
     doc["values"] = {**doc["values"], "dream.gap": 3.0}
@@ -305,17 +305,17 @@ def test_a_look_back_lands_as_a_second_look_back_with_its_own_knobs(rig):
     slug = put(rig, doc)
     host_gap = rig.reg["dream.gap"].value
     assert spawned(rig, slug) is None, ui_graph._state(rig.panel).get("note")
-    spec = rig.lib.presets.graph.spec
+    spec = rig.lib.loaded_patch.graph.spec
     assert "lookback.2" in patches.spec_names(spec)
     assert rig.reg["dream.2.gap"].value == pytest.approx(3.0)
     assert rig.reg["dream.gap"].value == host_gap
     # wired: `_land` keeps the entry (it declares it), and the section reads
     e = ui_graph.group_edit(rig.panel)
-    assert e.wire_as_saved(rig.lib.presets.groups[-1]["id"]) is None, e.said
+    assert e.wire_as_saved(rig.lib.loaded_patch.groups[-1]["id"]) is None, e.said
     assert any(w.src == "scene" and w.dst == "lookback.2.image" for w in
-               rig.lib.presets.graph.spec.wires)
+               rig.lib.loaded_patch.graph.spec.wires)
     assert any(x.get("kind") == "lookback" and x.get("instance") == 2
-               for x in rig.lib.presets.graph.spec.to_json()["nodes"])
+               for x in rig.lib.loaded_patch.graph.spec.to_json()["nodes"])
 
 
 def test_hands_one_lifts_as_a_new_hands():
@@ -343,7 +343,7 @@ def test_a_hands_layer_is_taken_with_its_hands(rig):
     assert refused == [patches.LAYER_WORDS.format(name="hands.layer", of="hands")]
     assert [e["kind"] for e in doc["nodes"]] == ["composite"]
     on_graph(rig, "party-wake")
-    doc, refused = patches.lift(*rig.lib.presets.parts(), ["render:hands", "render:hands.layer"])
+    doc, refused = patches.lift(*rig.lib.loaded_patch.parts(), ["render:hands", "render:hands.layer"])
     assert refused == []
     doc["name"] = "ghosts"
     slug = put(rig, doc)
@@ -351,7 +351,7 @@ def test_a_hands_layer_is_taken_with_its_hands(rig):
     assert spawned(rig, slug) is None
     said = ui_graph._state(rig.panel)["said"]
     assert "no param" not in said, said
-    assert {"hands.2", "hands.2.layer"} <= patches.spec_names(rig.lib.presets.graph.spec)
+    assert {"hands.2", "hands.2.layer"} <= patches.spec_names(rig.lib.loaded_patch.graph.spec)
     assert rig.reg["ghost.2.alpha"].value == doc["values"]["ghost.2.alpha"]
 
 
@@ -398,13 +398,13 @@ def test_wire_as_saved_puts_a_scene_inlet_back_in_its_draw_order(rig):
         p for p in doc["ports"] if p["was"] == "shape"]})
     host = preset("party-noita")
     host["graph"] = {"frame": "wired", "nodes": [{"kind": "shape"}]}
-    assert rig.lib.presets.load_doc(host) is not None
+    assert rig.lib.loaded_patch.load_doc(host) is not None
     assert spawned(rig, slug) is None, ui_graph._state(rig.panel).get("note")
-    gid = rig.lib.presets.groups[-1]["id"]
-    assert graphview.open_ports(rig.lib.presets.graph.spec, rig.lib.presets.groups[-1])
+    gid = rig.lib.loaded_patch.groups[-1]["id"]
+    assert graphview.open_ports(rig.lib.loaded_patch.graph.spec, rig.lib.loaded_patch.groups[-1])
     e = ui_graph.group_edit(rig.panel)
     assert e.wire_as_saved(gid) is None, e.said
-    into = [w.src for w in rig.lib.presets.graph.spec.all_wires() if w.dst == "scene.geometry"]
+    into = [w.src for w in rig.lib.loaded_patch.graph.spec.all_wires() if w.dst == "scene.geometry"]
     assert into == ["hands.3", "shape", "hands.2"]
 
 
@@ -491,9 +491,9 @@ def test_a_new_preset_holds_a_scene_so_a_whole_frame_is_refused_there(tmp_path):
     """A new preset's section is the scene chain: a whole frame says so,
     rather than land a second scene."""
     app = headless.make_app(tmp_path)
-    app.presets.new()
+    app.loaded_patch.new()
     p = parts(wake_doc())
     whole, _ = patches.lift(*p, everything(p))
     landing = spawn({**whole, "name": "x"},
-                    Host.of(app.presets.graph.spec, app.router.table))
+                    Host.of(app.loaded_patch.graph.spec, app.router.table))
     assert set(landing.taken) == {"scene", "shape"}

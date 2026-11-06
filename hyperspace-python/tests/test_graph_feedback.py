@@ -199,9 +199,9 @@ def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
     assert spec.notes == ()
     assert G.read_graph({"nodes": [node]}).notes == ()
     app = make_app(tmp_path)
-    assert app.presets.load_doc({"schema": "hyperspace.preset/5", "name": "fb",
+    assert app.loaded_patch.load_doc({"schema": "hyperspace.preset/5", "name": "fb",
                                  "values": {}, "graph": sec}) == []
-    doc = app.presets.document("fb")
+    doc = app.loaded_patch.document("fb")
     assert doc["schema"] == "hyperspace.preset/10"
     # (plan 36 T4: an echo is its look-back's pin now — the look-back's node)
     kind = "lookback" if node["kind"] == "echo" else node["kind"]

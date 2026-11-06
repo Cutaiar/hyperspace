@@ -435,7 +435,7 @@ def test_a_window_the_rig_lacks_is_said_on_output_and_the_graph_head(shell_rig, 
     ui_frame(p, "graph")
     ui_frame(p, "output")
     assert not any("which this rig has not open" in t for t in texts)
-    pre = p.library.presets
+    pre = p.library.loaded_patch
     spec = G.read_graph({"frame": "wired", "wires": [{"from": "scene", "to": "output.6.image"}]})
     pre.graph.land(spec, spec.to_json())
     pre.bus = pre.bus.cutting(G.bus_wire(5, "hands"))

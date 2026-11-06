@@ -38,7 +38,7 @@ from hyperspace import graph as G
 from hyperspace import graphmigrate as M
 from hyperspace import preset
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.outputs import Switches, View
 
 S = Switches
@@ -174,15 +174,15 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
     # rest landed, the entry kept on no wire (the `/7` reads no placement)
     rig = boot(tmp_path)
     stub = Stub()
-    rig.presets.graph.attach(stub)
+    rig.loaded_patch.graph.attach(stub)
     section = {"nodes": [{"kind": "hands", "into": "scene"},
                          {"kind": "effect", "file": "palette", "after": "teapot"}]}
     put(rig.home, "Odd", values={"view.bright": 3.0}, graph=section)
-    rig.lib.load(PRESETS, "Odd")
-    assert rig.presets.notes == [f"{teapot}: not wired (plan 36)"]
+    rig.lib.load(LOADABLE, "Odd")
+    assert rig.loaded_patch.notes == [f"{teapot}: not wired (plan 36)"]
     assert G.in_scene_hands(stub.wiring) == [1] and rig.reg["view.bright"].value == 3.0
-    saved = rig.presets.document("Odd")[preset.GRAPH_KEY]
-    assert saved == rig.presets.graph.free_doc()
+    saved = rig.loaded_patch.document("Odd")[preset.GRAPH_KEY]
+    assert saved == rig.loaded_patch.graph.free_doc()
     assert {"kind": "effect", "file": "palette"} in saved["nodes"]
     assert not any(k in e for e in saved["nodes"] for k in G.PLACE_KEYS)
 
@@ -213,22 +213,22 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
             "acid-scene": (G.EffectAt("acid", 2, after="scene"),)}
     rig = boot(tmp_path)
     stub = Stub()
-    rig.presets.graph.attach(stub)
+    rig.loaded_patch.graph.attach(stub)
     for slug in PLACED:
         doc = _fixture(slug)
         assert G.read_graph(doc["graph"]).to_json() == doc["graph"]
         dst = rig.home / "presets" / f"{slug}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text((FIXTURES / f"{slug}.json").read_text())
-        missing = rig.lib.load(PRESETS, slug)
-        assert missing == [] and rig.presets.notes == [] and rig.presets.migrated, slug
+        missing = rig.lib.load(LOADABLE, slug)
+        assert missing == [] and rig.loaded_patch.notes == [] and rig.loaded_patch.migrated, slug
         assert stub.wiring.placed == () and stub.wiring.wired, slug
         (e,) = want[slug]
         assert any(w.dst == f"{e.name}.image" for w in stub.wiring.wires), slug
-        assert not rig.lib.is_dirty(PRESETS), slug
-        saved = rig.presets.document(slug)
+        assert not rig.lib.is_dirty(LOADABLE), slug
+        saved = rig.loaded_patch.document(slug)
         assert not any(k in n for n in saved[preset.GRAPH_KEY]["nodes"] for k in G.PLACE_KEYS)
-        assert saved[preset.GRAPH_KEY] == rig.presets.graph.free_doc()     # (row 394)
+        assert saved[preset.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()     # (row 394)
         line = json.dumps(saved[preset.GRAPH_KEY]["nodes"][0])
         assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {line}' in preset.dumps(saved)
     assert rig.reg["fx.acid.2.on"].value and rig.reg["dream.on"].value

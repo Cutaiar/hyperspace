@@ -426,7 +426,7 @@ def test_a_preset_carries_the_pattern_and_the_envelopes(app):
     reg["env.4.mode"].set(envelope.ONE_SHOT)
     reg["seq.run"].set(True)
     reg["env.1.gate"].set(True)
-    doc = app.presets.document("pattern")
+    doc = app.loaded_patch.document("pattern")
     vals = doc["values"]
     assert "envs" not in doc                      # the five lane envelopes: no key
     assert vals["seq.1.1"] is True and vals["seq.3.5"] is True and vals["seq.1.2"] is False
@@ -436,23 +436,23 @@ def test_a_preset_carries_the_pattern_and_the_envelopes(app):
         assert pid not in vals
     app.envs.add()
     reg["env.6.decay"].set(1.5)
-    doc = app.presets.document("pattern")
+    doc = app.loaded_patch.document("pattern")
     assert doc["envs"] == [1, 2, 3, 4, 5, 6] and doc["values"]["env.6.decay"] == 1.5
     # somewhere else entirely, then back
     reg["seq.1.1"].set(False)
     reg["env.2.attack"].set(0.01)
     app.envs.remove(6)
-    assert app.presets.load_doc(doc) == []
+    assert app.loaded_patch.load_doc(doc) == []
     assert reg["seq.1.1"].value is True and app.seq.lanes[0].steps[0] == 1.0
     assert reg["env.2.attack"].value == pytest.approx(0.5)
     assert app.envs.ids() == [1, 2, 3, 4, 5, 6] and app.envs.voice(6).decay == 1.5
     assert app.seq.run                            # the transport is the session's
-    assert app.presets.document("pattern")["values"] == doc["values"]
+    assert app.loaded_patch.document("pattern")["values"] == doc["values"]
 
 
 def test_an_old_preset_loads_four_lfos_five_envelopes_and_an_empty_pattern(app):
     reg = app.reg
-    doc = app.presets.document("old")
+    doc = app.loaded_patch.document("old")
     old = {**doc, "values": {k: v for k, v in doc["values"].items()
                              if not k.startswith(("env.", "seq."))}}
     old.pop("envs", None)
@@ -462,12 +462,12 @@ def test_an_old_preset_loads_four_lfos_five_envelopes_and_an_empty_pattern(app):
     reg["seq.4.8"].set(True)
     reg["env.3.sustain"].set(0.1)
     reg["seq.swing"].set(0.3)
-    assert app.presets.load_doc(old) == []
+    assert app.loaded_patch.load_doc(old) == []
     assert app.lfos.ids() == [1, 2, 3, 4] and app.envs.ids() == [1, 2, 3, 4, 5]
     assert not any(v for ln in app.seq.lanes for v in ln.steps)
     assert reg["env.3.sustain"].value == pytest.approx(envelope.Envelope().sustain)
     assert reg["seq.swing"].value == 0.0
-    again = app.presets.document("old")
+    again = app.loaded_patch.document("old")
     assert "envs" not in again and "lfos" not in again
 
 
@@ -497,7 +497,7 @@ def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
     from hyperspace import preset
 
     app.reg["seq.run"].set(True)                  # the transport is never the preset's
-    doc = app.presets.document("plain")
+    doc = app.loaded_patch.document("plain")
     assert doc["schema"] == V6
     assert "lfos" not in doc and "envs" not in doc
     every = app.reg.snapshot(part="patch")
@@ -508,16 +508,16 @@ def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
     assert doc["values"] == {k: v for k, v in every.items() if not k.startswith("mod.")
                              and M.effect_of(k) in (None, *held)}
     assert "seq.run" not in doc["values"] and _new_ids(doc)
-    path = app.presets.save_as("plain")
+    path = app.loaded_patch.save_as("plain")
     first = path.read_bytes()
     assert first == preset.dumps(doc).encode()
     # and stable through a load (once a load has read the file's integers
     # back as floats, as every preset since plan 13 does)
-    assert app.presets.load("plain") == []
-    again = app.presets.save_as("plain").read_bytes()
-    assert app.presets.load("plain") == []
-    assert app.presets.save_as("plain").read_bytes() == again
-    assert app.presets.document("plain")["schema"] == V6
+    assert app.loaded_patch.load("plain") == []
+    again = app.loaded_patch.save_as("plain").read_bytes()
+    assert app.loaded_patch.load("plain") == []
+    assert app.loaded_patch.save_as("plain").read_bytes() == again
+    assert app.loaded_patch.document("plain")["schema"] == V6
 
 
 @pytest.mark.parametrize("touch", [
@@ -533,7 +533,7 @@ def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
         "seq-target"])
 def test_anything_of_plan_31_saves_in_six(app, touch):
     touch(app)
-    doc = app.presets.document("new")
+    doc = app.loaded_patch.document("new")
     assert doc["schema"] == V6 and next(iter(doc)) == "schema"
     # every envelope and sequencer value, as every other group's
     snap = app.reg.snapshot(part="patch")
@@ -542,21 +542,21 @@ def test_anything_of_plan_31_saves_in_six(app, touch):
 
 def test_a_3_round_trips_and_a_2_after_it_puts_the_defaults_back(app):
     reg = app.reg
-    plain = app.presets.document("plain")
-    app.presets.save_as("plain")
+    plain = app.loaded_patch.document("plain")
+    app.loaded_patch.save_as("plain")
     reg["seq.1.1"].set(True)
     reg["env.1.attack"].set(0.4)
-    first = app.presets.document("pattern")
-    app.presets.save_as("pattern")
+    first = app.loaded_patch.document("pattern")
+    app.loaded_patch.save_as("pattern")
     reg["seq.1.1"].set(False)
     reg["env.1.attack"].set(0.01)
-    assert app.presets.load("pattern") == []
+    assert app.loaded_patch.load("pattern") == []
     assert reg["seq.1.1"].value is True and reg["env.1.attack"].value == pytest.approx(0.4)
-    assert app.presets.document("pattern") == first
-    assert app.presets.load("plain") == []
+    assert app.loaded_patch.document("pattern") == first
+    assert app.loaded_patch.load("plain") == []
     assert reg["seq.1.1"].value is False
     assert reg["env.1.attack"].value == pytest.approx(envelope.Envelope().attack)
-    assert app.presets.document("plain") == plain
+    assert app.loaded_patch.document("plain") == plain
 
 
 def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
@@ -571,16 +571,16 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
 
     assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (… plan 40 T2: /8; plan 43 C2: /9)
     app.reg["view.bright"].set(1.5)
-    doc = {k: v for k, v in app.presets.document("p").items() if k != "graph"}
+    doc = {k: v for k, v in app.loaded_patch.document("p").items() if k != "graph"}
     doc["values"] = {k: v for k, v in doc["values"].items()
                      if not k.startswith(("env.", "seq."))}
-    assert app.presets.load_doc({**doc, "schema": V2}) == []
+    assert app.loaded_patch.load_doc({**doc, "schema": V2}) == []
     want = app.reg.snapshot(part="patch")
     app.reg["view.bright"].set(0.2)
-    assert app.presets.load_doc({**doc, "schema": V3}) == []
+    assert app.loaded_patch.load_doc({**doc, "schema": V3}) == []
     assert app.reg.snapshot(part="patch") == want
     app.reg["seq.3.3"].set(True)
-    app.presets.save_as("pattern")
+    app.loaded_patch.save_as("pattern")
     lib = app.lib
     assert lib.read("presets", "pattern")["schema"] == V6
     kinds = lib._kinds
@@ -612,7 +612,7 @@ def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
           if doc["values"].get(f"seq.{ln}.{s}")}
     assert on == {(1, 1), (1, 5), (2, 3), (2, 7), *((3, s) for s in range(1, 9))}
     app.reg["seq.run"].set(False)
-    assert app.presets.load("seq-demo") == [] and app.presets.notes == []
+    assert app.loaded_patch.load("seq-demo") == [] and app.loaded_patch.notes == []
     reg, seq, clock = app.reg, app.seq, app.clock
     assert not seq.run and reg["seq.span"].value == 0 and seq.steps_per_beat == 4
     assert all(app.envs.voice(n).mode == envelope.ONE_SHOT for n in (1, 2, 3))

@@ -90,7 +90,7 @@ def _app_with(tmp_path, name: str, doc: dict):
 
 
 def _build(app, n: int = 2) -> G.Graph:
-    gs = app.presets.graph
+    gs = app.loaded_patch.graph
     return G.build_graph(_views(n), gs.wiring, (), tuple(sorted(gs.fx.specs)))
 
 
@@ -104,14 +104,14 @@ def test_a_section_less_seven_loads_black_and_says_so(tmp_path, graph):
     doc = {"schema": SEVEN, "values": {"view.bright": 1.0},
            **({"graph": graph} if graph is not None else {})}
     app = _app_with(tmp_path, "bare", doc)
-    gs = app.presets.graph
-    assert preset.NO_GRAPH_SAID in app.presets.notes
+    gs = app.loaded_patch.graph
+    assert preset.NO_GRAPH_SAID in app.loaded_patch.notes
     assert gs.wiring.wired and gs.wiring.wires == ()
     g = _build(app)
     assert all(isinstance(n, G.Output) for n in g.nodes.values()), list(g.nodes)
     assert gs.fx.specs == {}                           # no effect exists
     assert not [p.id for p in app.reg if p.id.startswith("fx.acid.")]
-    saved = app.presets.document("bare")
+    saved = app.loaded_patch.document("bare")
     assert saved["schema"] == SAVED
     assert saved["graph"] == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
 
@@ -157,11 +157,11 @@ def test_a_refused_wire_in_a_seven_is_dropped_with_a_note_not_defaulted(tmp_path
         {"from": "shape", "to": "scene.geometry"},
         {"from": "scene", "to": "output.all.teapot"}]}
     app = _app_with(tmp_path, "refused", {"schema": SEVEN, "values": {}, "graph": section})
-    notes = [n for n in app.presets.notes if n.startswith("graph: wire")]
+    notes = [n for n in app.loaded_patch.notes if n.startswith("graph: wire")]
     assert len(notes) == 1 and "teapot" in notes[0] and notes[0].endswith("; dropped")
-    gs = app.presets.graph
+    gs = app.loaded_patch.graph
     assert [(w.src, w.dst) for w in gs.wiring.wires] == [("shape", "scene.geometry")]
-    assert _pairs(app.presets.document("refused")["graph"]) == [("shape", "scene.geometry")]
+    assert _pairs(app.loaded_patch.document("refused")["graph"]) == [("shape", "scene.geometry")]
 
 
 def test_a_seven_is_never_migrated_or_filled_in(tmp_path):
@@ -173,8 +173,8 @@ def test_a_seven_is_never_migrated_or_filled_in(tmp_path):
         {"from": "scene", "to": "lookback.image"},
         {"from": "lookback", "to": "output.all.image"}]}
     app = _app_with(tmp_path, "lean", {"schema": SEVEN, "values": {}, "graph": section})
-    assert app.presets.migrated == "", app.presets.migrated
-    got = _pairs(app.presets.document("lean")["graph"])
+    assert app.loaded_patch.migrated == "", app.loaded_patch.migrated
+    got = _pairs(app.loaded_patch.document("lean")["graph"])
     assert got == _pairs(section)
 
 
@@ -190,15 +190,15 @@ def test_an_effect_not_in_a_seven_section_is_absent_everywhere(tmp_path):
         {"from": "acid", "to": "output.all.image"}]}
     values = {"fx.acid.on": True, "fx.palette.on": True, "fx.palette.mix": 1.0}
     app = _app_with(tmp_path, "one-fx", {"schema": SEVEN, "values": values, "graph": section})
-    gs = app.presets.graph
+    gs = app.loaded_patch.graph
     assert set(gs.fx.specs) == {"acid"} and "palette" in gs.fx.files
     assert "fx.acid.on" in app.reg and "fx.palette.on" not in app.reg
-    assert any("unknown id" in n and "fx.palette" in n for n in app.presets.notes)
+    assert any("unknown id" in n and "fx.palette" in n for n in app.loaded_patch.notes)
     effects = {n.effect for n in _build(app).nodes.values() if isinstance(n, G.Effect)}
     assert effects == {"acid"}
     listed = {name for _, names in ui_fx.groups(gs.spec) for name in names}
     assert listed == {"acid"}
-    assert not any(k.startswith("fx.palette.") for k in app.presets.document("one-fx")["values"])
+    assert not any(k.startswith("fx.palette.") for k in app.loaded_patch.document("one-fx")["values"])
 
 
 def test_the_migration_drops_the_values_of_effects_not_in_the_section():
@@ -229,9 +229,9 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     doc = json.loads((FIXTURES / "acid-scene.json").read_text())
     app = _app_with(tmp_path, "acid-scene", doc)
     said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SAVED)
-    assert app.presets.migrated == said and app.presets.notes == []     # (not a problem)
+    assert app.loaded_patch.migrated == said and app.loaded_patch.notes == []     # (not a problem)
     assert app.lib.warning == f"preset acid-scene: {said}"              # (the strip says it)
-    assert app.presets.document("acid-scene")["schema"] == SAVED
+    assert app.loaded_patch.document("acid-scene")["schema"] == SAVED
 
 
 @pytest.mark.parametrize("slug, want", [
@@ -293,16 +293,16 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
     (folder / "trip.json").write_bytes(
         (SOURCES / "party-trip.json").read_bytes())                          # a /2
     app.lib.load(preset.GROUP, "trip")
-    assert ("pattern", "shape.faces") in _pairs(app.presets.graph.free_doc())
-    e = graphview.Edit(graph=app.presets.graph, push=lambda label: None)
+    assert ("pattern", "shape.faces") in _pairs(app.loaded_patch.graph.free_doc())
+    e = graphview.Edit(graph=app.loaded_patch.graph, push=lambda label: None)
     assert e.unwire("pattern", "shape.faces") is None, e.said
-    assert ("pattern", "shape.faces") not in _pairs(app.presets.graph.free_doc())
-    path = app.presets.save_as("trip")
+    assert ("pattern", "shape.faces") not in _pairs(app.loaded_patch.graph.free_doc())
+    path = app.loaded_patch.save_as("trip")
     assert json.loads(path.read_text())["schema"] == SAVED
     again = make_app(tmp_path / "home")
     again.lib.load(preset.GROUP, "trip")
-    assert ("pattern", "shape.faces") not in _pairs(again.presets.graph.free_doc())
-    assert again.presets.migrated == ""
+    assert ("pattern", "shape.faces") not in _pairs(again.loaded_patch.graph.free_doc())
+    assert again.loaded_patch.migrated == ""
 
 
 # ---------------------------------------------------------------- the corpus presets

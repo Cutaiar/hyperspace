@@ -16,9 +16,9 @@ from hyperspace import library
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
-from hyperspace.library import LAST_SHOW, PRESETS, Library, LibraryError
+from hyperspace.library import LAST_SHOW, LOADABLE, Library, LibraryError
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
+from hyperspace.preset import LoadedPatch
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
 
@@ -30,8 +30,8 @@ def make(root, machine=None):
     lib = Library(root, machine=machine, period=0.0)
     reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project)
     lib.attach(reg)
-    presets = Presets(lib, reg, Router(reg, Bindings()))
-    return SimpleNamespace(lib=lib, reg=reg, presets=presets, chain=chain)
+    loaded_patch = LoadedPatch(lib, reg, Router(reg, Bindings()))
+    return SimpleNamespace(lib=lib, reg=reg, loaded_patch=loaded_patch, chain=chain)
 
 
 def files(folder):
@@ -58,8 +58,8 @@ def test_a_save_lands_in_the_library_and_last_show_in_the_machine_home(tmp_path)
     before = files(a)
     rig = make(lib_root, machine=a)
     assert rig.lib.home == lib_root and rig.lib.machine == a and rig.lib.missing is None
-    path = rig.presets.save_as("HI FREK")
-    assert path == lib_root / PRESETS / "hi-frek.json" and path.is_file()
+    path = rig.loaded_patch.save_as("HI FREK")
+    assert path == lib_root / LOADABLE / "hi-frek.json" and path.is_file()
     rig.lib.project.save("mine")
     assert (lib_root / "projects" / "mine.hyp.json").is_file()
     assert sorted(set(files(a)) - set(before)) == [LAST_SHOW]
@@ -75,9 +75,9 @@ def test_a_save_lands_in_the_library_and_last_show_in_the_machine_home(tmp_path)
     assert "shared library not found at" in rig.lib.warning
     # an unsaved show stands in: nothing read, nothing to list
     assert rig.lib.project.name == "untitled" and rig.lib.project.path is None
-    assert rig.lib.list(PRESETS) == [] and rig.lib.project.list() == []
+    assert rig.lib.list(LOADABLE) == [] and rig.lib.project.list() == []
     with pytest.raises(LibraryError, match="not saved; fix \\[library\\] path"):
-        rig.presets.save_as("HI FREK 2")
+        rig.loaded_patch.save_as("HI FREK 2")
     assert not lib_root.exists()
 
 
@@ -106,27 +106,27 @@ def test_a_missing_library_lists_nothing(gone):
     """One tier (2026-10-28): nothing ships with the app, so a missing
     library lists nothing and opens the unsaved `untitled` show."""
     lib = gone.lib
-    assert lib.list(PRESETS) == [] and all(lib.list(g) == [] for g in lib.groups())
+    assert lib.list(LOADABLE) == [] and all(lib.list(g) == [] for g in lib.groups())
     assert lib.project.name == "untitled" and lib.project.path is None
     assert lib.project.bank == [None] * 24 and lib.project.startup is None
     assert lib.project.list() == []
-    assert lib.current(PRESETS) is None
+    assert lib.current(LOADABLE) is None
 
 
 def test_every_write_into_a_missing_library_is_refused(gone):
     lib, rig = gone.lib, gone.rig
     name = "TUMBLE"                     # (refused before it is even looked for)
-    for call in (lambda: rig.presets.save_as("NEW"),
+    for call in (lambda: rig.loaded_patch.save_as("NEW"),
                  lambda: lib.save_as("camera", "Wide"),
-                 lambda: lib.delete(PRESETS, name),
-                 lambda: lib.rename(PRESETS, name, "other"),
+                 lambda: lib.delete(LOADABLE, name),
+                 lambda: lib.rename(LOADABLE, name, "other"),
                  lambda: lib.empty_trash(),
                  lambda: lib.project.save("mine"),
                  lambda: lib.project.write(),
                  lambda: library._write_json(gone.root / "presets" / "x.json", {})):
         with pytest.raises(LibraryError, match="shared library not found at"):
             call()
-    assert library.to_trash(CORPUS / PRESETS / "party-trip.json", gone.root) is None
+    assert library.to_trash(CORPUS / LOADABLE / "party-trip.json", gone.root) is None
     assert not (gone.tmp / "Dropbox").exists()
     assert sorted(files(gone.machine)) == []                 # nothing in the home either
 
@@ -202,20 +202,20 @@ def test_the_temp_file_is_never_a_preset(tmp_path, monkeypatch):
 def test_a_cloud_conflict_copy_is_listed_beside_its_file(tmp_path):
     rig = make(tmp_path)
     lib = rig.lib
-    path = rig.presets.save_as("HI FREK")
+    path = rig.loaded_patch.save_as("HI FREK")
     doc = json.loads(path.read_text())
     copy = path.parent / "hi-frek (Dan's conflicted copy 2026-10-14).json"
     copy.write_text(json.dumps({**doc, "note": "Dan's"}))
-    names = lib.list(PRESETS)
+    names = lib.list(LOADABLE)
     assert "HI FREK" in names and copy.stem in names
-    assert lib.path_of(PRESETS, "HI FREK") == path
-    assert lib.path_of(PRESETS, copy.stem) == copy
+    assert lib.path_of(LOADABLE, "HI FREK") == path
+    assert lib.path_of(LOADABLE, copy.stem) == copy
     # it loads, renames and deletes as its own entry
-    rig.presets.load(copy.stem)
-    lib.rename(PRESETS, copy.stem, "HI FREK DAN")
-    assert "HI FREK DAN" in lib.list(PRESETS) and not copy.exists()
-    assert lib.delete(PRESETS, "HI FREK DAN")
-    assert lib.list(PRESETS).count("HI FREK") == 1
+    rig.loaded_patch.load(copy.stem)
+    lib.rename(LOADABLE, copy.stem, "HI FREK DAN")
+    assert "HI FREK DAN" in lib.list(LOADABLE) and not copy.exists()
+    assert lib.delete(LOADABLE, "HI FREK DAN")
+    assert lib.list(LOADABLE).count("HI FREK") == 1
 
 
 def test_two_files_of_one_name_neither_canonical_both_list(tmp_path):
