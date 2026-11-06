@@ -98,7 +98,14 @@ from . import lfo, modifiers, undo
 from .envelope import GROUP as ENV_SCHEME
 from .graph import pin_node, source_into
 from .motion import DEFAULT_ROUTE_FEEL
-from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
+from .params import (
+    PERFORMANCE_GROUPS,
+    Kind,
+    Param,
+    Registry,
+    is_lookback_knob,
+    is_per_deck_meta_id,
+)
 from .routing import (
     HELD_ONLY,
     MOD_OPS,
@@ -122,6 +129,9 @@ from .routing import (
 
 # plan 24 C1: the desk's SAVE is held, never latched — a learned toggle or
 # button row would leave it on, and every bank pad's tap would then save
+# row 755: a desk Learn on a meta param that is one per `Deck` would be a patch's row, so it
+# is refused (the owner, seventh round); these say where a person's road is
+PER_DECK_ROAD = "use Learn pad, a key, or the APC's factory rows"
 SAVE_REFUSAL = ("Save is the desk's SAVE (track 8's clip stop, held) — it takes no "
                 "learned control")
 
@@ -854,7 +864,8 @@ class Learn:
         if why is not None:
             if self.want == "desk":
                 self.take()
-            self.refuse(f"{why} — not learned")
+            road = f"; {PER_DECK_ROAD}" if is_per_deck_meta_id(pid) else ""
+            self.refuse(f"{why} — not learned{road}")
             return False
         kind, number = b.kind, b.number
         if pid in HELD_ONLY and kind != "note":

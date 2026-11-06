@@ -5,7 +5,7 @@
 
 **Read-only. It writes nothing,** to the library or anywhere else, and the
 path has no default: **the owner runs this.** No preset row may drive a meta
-controller param (`params.part_of(p) == "session"`), so a load drops such a
+controller param (`params.is_meta_id`), so a load drops such a
 row with a note (`routing.referee`, `Bindings.set_desk`, `routing.settle_bases`)
 and the next save of that preset writes the file without it. This says, before
 any of that happens, which files hold one, and so which params to think about

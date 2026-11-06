@@ -52,8 +52,6 @@ from hyperspace.routing import (
     Binding,
     Bindings,
     factory_desk,
-    is_load_verb,
-    is_save_verb,
     is_session_row,
     led_shade,
     meta_refusal,
@@ -983,7 +981,12 @@ def test_the_panels_own_load_on_air_is_the_intentional_one(rig):
     assert rig.two.presets.current == "TUMBLE" and rig.one.presets.current == "WAKE"
 
 
-# ------------------------------------------- no preset's row can press a load (row 752)
+def _library_verb(pid):
+    """`preset.*`: the whole group is refused now (row 746), which replaced row 752's list."""
+    return pid.startswith("preset.")
+
+
+# ------------------------------------------- no patch's row can press any `preset.*` (row 746)
 
 CARRIED = ["preset.select", "preset.next", "preset.prev", "preset.home", "preset.load.0",
            "preset.list.next", "preset.list.prev"]
@@ -996,8 +999,8 @@ def test_a_preset_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
     t = Bindings()
     for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
                 Binding("seq:0", verb, "push", 1.0), Binding("lfo:0", verb, "position", 1.0)):
-        assert not is_session_row(row) and "no preset row" in meta_row_refusal(row)
-        with pytest.raises(ValueError, match="no preset row"):
+        assert not is_session_row(row) and "no patch's row" in meta_row_refusal(row)
+        with pytest.raises(ValueError, match="no patch's row"):
             t.add(row)
     assert t.set_desk([Binding("note:0:60", verb, "toggle")]) and not t.desk()
     assert meta_refusal(verb) is not None
@@ -1020,8 +1023,8 @@ def test_a_preset_carrying_load_rows_reaches_no_other_deck(rig, carrier):
                 for k, v in enumerate(CARRIED)])
     d.presets.load("CARRIES")
     assert d.presets.current == "CARRIES"
-    assert not [b for b in d.table.bindings if is_load_verb(b.target) and not is_session_row(b)]
-    desk_notes = [n for n in d.presets.notes if n.startswith("dropped note:8:") and "no preset row" in n]
+    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_session_row(b)]
+    desk_notes = [n for n in d.presets.notes if n.startswith("dropped note:8:") and "no patch's row" in n]
     assert len(desk_notes) == len(CARRIED)
     assert all(any(f"→ {v}" in n for n in d.presets.notes) for v in CARRIED), "each route said"
     passing = NS(meta=rig.meta, chain=rig.r.chain)
@@ -1042,6 +1045,7 @@ def test_a_learn_will_not_put_a_presets_row_on_a_library_verb(rig):
     assert not desk_target(p) and pad_target(p)
     for pid in ("preset.save.0", "preset.save_new"):
         assert not desk_target(rig.one.reg[pid]) and pad_target(rig.one.reg[pid])
+    # (row 746: a desk Learn on one lands a person's row: tests/test_layer_boundary.py)
 
 
 SAVES = ["preset.save.0", "preset.save.7", "preset.save_new"]
@@ -1051,12 +1055,11 @@ SAVES = ["preset.save.0", "preset.save.7", "preset.save_new"]
 def test_a_preset_cannot_carry_a_row_on_a_save_verb_by_any_door(verb):
     """A look's own row writing over another look's file breaks the absolute rule."""
     t = Bindings()
-    assert is_save_verb(verb) and not is_load_verb(verb)
     for row in (Binding("note:0:60", verb, "toggle", layer="preset"),
                 Binding("note:0:60", verb, "hold", layer="preset"),
                 Binding("seq:0", verb, "push", 1.0), Binding("lfo:0", verb, "position", 1.0)):
-        assert not is_session_row(row) and "no preset row" in meta_row_refusal(row)
-        with pytest.raises(ValueError, match="no preset row"):
+        assert not is_session_row(row) and "no patch's row" in meta_row_refusal(row)
+        with pytest.raises(ValueError, match="no patch's row"):
             t.add(row)
     assert t.set_desk([Binding("note:0:60", verb, "toggle")]) and not t.desk()
     for row in (Binding("note:0:61", verb, "hold"), Binding("note:0:62", verb, "hold", layer="global"),
@@ -1080,9 +1083,9 @@ def test_a_preset_carrying_save_rows_loses_them_with_a_note_and_writes_nothing(r
                 for k, v in enumerate(SAVES)])
     d.presets.load("SAVER")
     assert d.presets.current == "SAVER"
-    assert not [b for b in d.table.bindings if is_save_verb(b.target) and not is_session_row(b)]
+    assert not [b for b in d.table.bindings if _library_verb(b.target) and not is_session_row(b)]
     for v in SAVES:
-        assert any(n.startswith("dropped note:8:") and f"→ {v}" in n and "no preset row" in n
+        assert any(n.startswith("dropped note:8:") and f"→ {v}" in n and "no patch's row" in n
                    for n in d.presets.notes), v
         assert any(n.startswith("dropped seq:") and v in n for n in d.presets.notes), v
     passing = NS(meta=rig.meta, chain=rig.r.chain)
@@ -1133,10 +1136,9 @@ def test_the_edges_hold_to_save_still_saves(rig):
 def test_no_factory_row_or_corpus_preset_carries_a_load_or_save_row():
     """The factory's load rows are all invariant and its save rows are keys, so the
     meta controller's; no corpus preset or shipped JSON's `desk` or `routes` has one."""
-    rows = [b for b in factory_desk() if is_load_verb(b.target)]
+    rows = [b for b in factory_desk() if _library_verb(b.target)]
     assert len(rows) > 24 and all(b.layer is None for b in rows)
-    assert not [b for b in factory_desk() if b.layer == "preset" and is_save_verb(b.target)]
-    assert all(is_session_row(b) for b in Bindings.factory().bindings if is_save_verb(b.target))
+    assert all(is_session_row(b) for b in Bindings.factory().bindings if _library_verb(b.target))
     root = Path(__file__).parent / "corpus"
     files = [*root.rglob("*.json"), *Path(app.__file__).parent.rglob("*.json")]
     assert files
@@ -1149,7 +1151,7 @@ def test_no_factory_row_or_corpus_preset_carries_a_load_or_save_row():
             continue
         for row in (*(doc.get("desk") or ()), *(doc.get("routes") or ())):
             target = row.get("target") if isinstance(row, dict) else None
-            assert not (is_load_verb(target) or is_save_verb(target)), (f, row)
+            assert not (target and _library_verb(target)), (f, row)
 
 
 # --------------------------------------------------------- the frame and the panel

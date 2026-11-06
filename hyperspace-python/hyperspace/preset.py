@@ -196,6 +196,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     is_lookback_id,
     is_lookback_knob,
     is_matte_id,
+    is_meta_id,
     is_resize_id,
     is_segment_id,
     is_switch_id,
@@ -203,7 +204,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     part_of,
     retaper_depths,
 )
-from .routing import MOD_OPS, Binding, is_continuous, is_session_id, meta_row_refusal
+from .routing import MOD_OPS, Binding, is_continuous, meta_row_refusal
 
 SCHEMA = PERFORMANCE_SCHEMA
 # the schemas a load reads (each migrated on load; row 394: a save writes
@@ -1082,7 +1083,7 @@ class Presets:
                     unknown.append(pid)
             elif part_of(p) == "session":
                 notes.append(f"{pid} is the session's, ignored")
-            elif part_of(p) is None or not p.persist:
+            elif part_of(p) != "performance" or not p.persist:
                 notes.append(f"{pid} is not part of a preset, ignored")
             else:
                 values[pid] = v
@@ -1114,7 +1115,7 @@ class Presets:
             # on a meta param goes on to the referee, which drops it in its
             # own words (row 743), so a later save writes the file without it
             tp = reg.get(b.target)
-            if tp is not None and not tp.modulatable and not is_session_id(b.target):
+            if tp is not None and not tp.modulatable and not is_meta_id(b.target):
                 notes.append(f"dropped {b.source} → {b.target}: not modulatable")
                 continue
             routes.append(b)
@@ -1200,7 +1201,7 @@ class Presets:
                         late.append(pid)
                 elif part_of(p) == "session":
                     notes.append(f"{pid} is the session's, ignored")
-                elif part_of(p) is None or not p.persist:
+                elif part_of(p) != "performance" or not p.persist:
                     notes.append(f"{pid} is not part of a preset, ignored")
                 else:
                     values[pid] = v

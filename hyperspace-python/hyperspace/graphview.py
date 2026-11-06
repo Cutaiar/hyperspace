@@ -129,7 +129,7 @@ from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .groupwords import group_title
-from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
+from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_meta_id
 from .routing import (
     MOD_OPS,
     PAIR_SCHEME,
@@ -145,7 +145,6 @@ from .routing import (
     base_sub,
     is_continuous,
     is_macro,
-    is_session_id,
     is_session_row,
     meta_refusal,
     meta_row_refusal,
@@ -1612,7 +1611,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             targets.append(pid)
 
     for p in reg:
-        if p.modulatable and not p.alias and not is_session_id(p.id):    # (register row 743)
+        if p.modulatable and not p.alias and not is_meta_id(p.id):       # (register rows 743, 746)
             want(p.id)
     for b in (*routes, *setters):
         want(b.target)

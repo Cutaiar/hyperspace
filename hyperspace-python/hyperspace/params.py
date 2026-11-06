@@ -189,7 +189,20 @@ SESSION_IDS = ("app.restart", "edit.undo", "edit.redo", "seq.page", "seq.select"
 # by its load. The params stay `persist=False`: the turn moves every frame,
 # so it is no base, no undo step and no dirty dot
 POSE_IDS = tuple(f"rot.phase.{name}" for name in PLANE_NAMES)
-PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
+# SEM (register row 746): the meta controller's params that are one per `Deck`. They
+# close over one deck (`preset.*` its `DeckProject`, `deck.chase` its registry's
+# `chasing`, `totem.*` and `poi.*` their `on_reg`), so they cannot be a session param,
+# which `Registry.add` makes one object on every deck. They count as the meta controller's
+# for `routing.meta_refusal` and the one-layer test, and stay each deck's own object.
+# None persists, so no file holds one and none is in a snapshot
+PER_DECK_META_GROUPS = ("preset", "deck", "totem", "poi")
+PER_DECK_META = "per_deck_meta"
+PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS,
+         PER_DECK_META: PER_DECK_META_GROUPS}
+# the two layers (the owner, 2026-11-04, fourth round: "two layers of granularity and no
+# others"): these parts are the meta controller's, and "performance" is the patch's. A param
+# is in exactly one (tests/test_layer_boundary.py, over the app's whole registry)
+META_PARTS = ("session", PER_DECK_META)
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
 # dir · out · DRIVE · gain). It lives here, not in the chain, because it is
@@ -223,8 +236,8 @@ MOD_ON, MOD_OFF = 0.6, 0.4
 MOD_DEADBAND = 0.15
 
 # the base chase (plan 52): the deck's rig control, held to commit the
-# performer into the base. Its group is in neither part of the split: every
-# deck has its own, and no file holds it
+# performer into the base. Its group is meta, one per deck (`PER_DECK_META_GROUPS`):
+# every deck has its own, and no file holds it
 CHASE_PARAM = "deck.chase"
 CHASE_LABEL = "base chase"     # the undo step's name
 # a macro's base moves its base subscribers (`Router.follow_macros`), which an
@@ -748,12 +761,12 @@ def chase_reaches(p: Param) -> bool:
 
 
 def part_of(p: Param) -> str | None:
-    """"performance" or "session", by the param's group; None for a group
-    in neither (no group, or `preset`, whose params never persist). A
-    session key of a performance group (`SESSION_KEYS`: `ghost.mirror`)
-    is the session's. The one rule (plan 44 D3): a deck's registry hands
-    the session every param this calls "session". Cached on the param at
-    its declaration (`Param._part`); one from before a hot reload is asked."""
+    """"performance", "session" or `PER_DECK_META`, by the param's group; None for a
+    group in none of them, which the one-layer test fails. A session key of a
+    performance group (`SESSION_KEYS`: `ghost.mirror`) is the session's. The one
+    rule (plan 44 D3): a deck's registry hands the session every param this calls
+    "session". Cached on the param at its declaration (`Param._part`); one from
+    before a hot reload is asked."""
     got = p.__dict__.get("_part", _UNSET)
     if got is not _UNSET:
         return got
@@ -763,8 +776,26 @@ def part_of(p: Param) -> str | None:
 _UNSET = object()
 
 
+def is_session_id(pid: str | None) -> bool:
+    """Does `pid` name a session param (`SESSION_GROUPS`, plan 13 §4), the one object every
+    deck shares? By its group prefix, so a param this registry lacks (a band a layout has
+    not built yet) is still classed."""
+    return bool(pid) and part_of_id(pid) == "session"
+
+
+def is_meta_id(pid: str | None) -> bool:
+    """Does `pid` name a param of the meta controller, whichever kind? The test for "may
+    a patch's row reach it"; `is_session_id` only for "is it one object on every deck"."""
+    return bool(pid) and part_of_id(pid) in META_PARTS
+
+
+def is_per_deck_meta_id(pid: str | None) -> bool:
+    """Does `pid` name a meta param that is one per `Deck` (`PER_DECK_META`)?"""
+    return bool(pid) and part_of_id(pid) == PER_DECK_META
+
+
 def group_part(group: str | None) -> str | None:
-    """The part a whole group is in ("performance", "session" or None)."""
+    """The part a whole group is in (one of `PARTS`, or None)."""
     for name, groups in PARTS.items():
         if group in groups:
             return name
@@ -1269,8 +1300,11 @@ class SessionRegistry(Registry):
         super().apply()
 
     def add(self, p: Param) -> Param:
-        if part_of(p) == "performance":
+        part = part_of(p)
+        if part == "performance":
             raise ValueError(f"{p.id} is a performance param: a deck's, never the session's")
+        if part == PER_DECK_META:
+            raise ValueError(f"{p.id} closes over one deck: each deck's own, never shared")
         decks = self.decks
         for d in decks:
             if p.id in d._p:
