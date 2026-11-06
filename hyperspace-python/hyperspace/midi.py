@@ -673,8 +673,9 @@ class MidiIO:
             load = seen[1] != self._seen[1]
             # (node mode's rows came or went, N1a: each fader on them picks up from
             # where it is, as across a layer switch, so leaving never jumps a saved row)
-            switch = seen[0] != self._seen[0] or seen[4] != self._seen[4]
-            if seen[3] != self._seen[3]:
+            # (by slices: an adapter from before a hot reload holds a shorter tuple)
+            switch = seen[0] != self._seen[0] or seen[4:] != self._seen[4:]
+            if seen[3:4] != self._seen[3:4]:
                 self._drop_page_holds()
             self._seen = seen
             self.redraw(load=load, switch=switch)

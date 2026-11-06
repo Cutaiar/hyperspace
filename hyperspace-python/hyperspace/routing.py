@@ -830,6 +830,15 @@ class Binding:
             return False
         return self.kind == "pitch" or self.number == other.number
 
+    def feedback_from(self, profile) -> None:
+        """Show what `profile` says this control can show (`feedback_for`: its light,
+        its ring, its velocities). `profile` None or a control it has no word on: as is."""
+        fb = (profile.feedback_for(self.kind, self.channel, self.number)
+              if profile is not None else None)
+        if fb:
+            self.feedback, self.ring = fb["feedback"], fb.get("ring", self.ring)
+            self.on, self.off = fb.get("on", self.on), fb.get("off", self.off)
+
     @property
     def control(self) -> tuple[str, int, int] | None:
         """The physical control a MIDI row names, for feedback: (kind,
@@ -2730,6 +2739,11 @@ class Bindings:
         `node_desk`), as they stand: the same objects until what they say moves."""
         nd = self.node_desk
         return nd.rows(role) if nd is not None else []
+
+    def under_node_mode(self, b: Binding) -> bool:
+        """Is saved row `b` on a control node mode fills now, so it waits (N1a)?"""
+        nd = self.node_desk
+        return nd is not None and nd.under(b)
 
     def node_rows_serial(self, role: str | None = None) -> int:
         """How many times those rows have changed: a desk redraws on one."""
