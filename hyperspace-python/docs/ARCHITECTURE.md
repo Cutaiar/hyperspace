@@ -781,9 +781,16 @@ Consequences:
   tempo would tap on every transient
   (`tests/test_tempo.py::test_a_performer_on_tap_tempo_is_dormant_but_one_on_the_lfo_trigger_fires`).
 - **A preset's route may perform any modulatable param but a meta
-  controller's** (`part_of(p) == "session"`; `routing.meta_refusal`, register
-  row 743): no row of a preset drives one, and a preset never sets its base.
+  controller's** (`params.is_meta_id`; `routing.meta_refusal`, register
+  rows 743, 746): no row of a preset drives one, and a preset never sets its base.
   The line is `routing.is_session_row`, so the meta controller's own rows stay.
+- **Every param is in exactly one layer** (`params.param_layer`): "performance"
+  is the patch, "session" and `PER_DECK_META` the meta controller. "session" is one
+  object on every deck; `PER_DECK_META` (`preset.*`, `deck.chase`, `totem.*`,
+  `poi.*`) closes over one deck and stays each deck's own
+  (`tests/test_layer_boundary.py`, rows 746, 747). The same test holds **the
+  wall:** a patch module reaches a module of the meta controller's only through
+  its `SURFACE`, the named list of what crosses today and why.
 - **The pattern inputs add no writer.** `pattern.mod.0–7` are ordinary
   modulatable params with a named meaning each (§5, Face patterns). The
   FACES page writes their bases like any widget, and its "+ source"

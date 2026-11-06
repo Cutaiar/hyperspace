@@ -13,6 +13,7 @@ from hyperspace.control import SCENES, Control
 from hyperspace.geometry import SHAPES
 from hyperspace.library import Library
 from hyperspace.params import (
+    PER_DECK_META,
     PERFORMANCE_GROUPS,
     SESSION_GROUPS,
     Kind,
@@ -486,7 +487,7 @@ def test_every_persisted_group_is_performance_or_session(tmp_path):
         assert part_of(p) in ("performance", "session"), p.id
         assert p.id.partition(".")[0] == p.group, p.id
     assert all(not p.persist for p in reg if p.id.startswith("rot.phase."))
-    assert all(part_of(p) is None for p in reg.group("preset"))
+    assert all(part_of(p) == PER_DECK_META and not p.persist for p in reg.group("preset"))
 
 
 def test_snapshot_by_part(tmp_path):

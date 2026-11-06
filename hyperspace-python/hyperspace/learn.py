@@ -98,7 +98,14 @@ from . import lfo, modifiers, undo
 from .envelope import GROUP as ENV_SCHEME
 from .graph import pin_node, source_into
 from .motion import DEFAULT_ROUTE_FEEL
-from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
+from .params import (
+    PERFORMANCE_GROUPS,
+    Kind,
+    Param,
+    Registry,
+    is_lookback_knob,
+    is_per_deck_meta_id,
+)
 from .routing import (
     HELD_ONLY,
     MOD_OPS,
@@ -819,7 +826,11 @@ class Learn:
         session's. A meta param (row 743) is refused whatever the control:
         this row would be the preset's, and no preset row may drive one. A
         learn armed for the desk is then over, since no control can land it;
-        a bare arm still waits for a pad button, which can.
+        a bare arm still waits for a pad button, which can. **A meta param that
+        is one per `Deck`** (row 746: `preset.*`, `deck.chase`, `totem.*`,
+        `poi.*`) has a road: a person's row, on the global layer, so no patch
+        loses a desk row to it and no patch holds it. It goes in `bindings.json`, written
+        now, as a pad's does, one step on the meta stack; `preset.*` takes a button.
         Otherwise the row replaces every preset-layer row on the control
         (an any-channel row on it included, `Binding.overlaps`) and the
         param's previous preset-layer row in the same role
@@ -851,7 +862,8 @@ class Learn:
                         "— latch SHIFT off to learn into the preset")
             return False
         why = meta_refusal(pid)          # (only now: a row on these two is the session's)
-        if why is not None:
+        persons = is_per_deck_meta_id(pid)
+        if why is not None and not persons:
             if self.want == "desk":
                 self.take()
             self.refuse(f"{why} — not learned")
@@ -860,6 +872,11 @@ class Learn:
         if pid in HELD_ONLY and kind != "note":
             self.refuse(f"{pid} is held: it takes a button, not {named(b)}")
             return False
+        if persons and kind != "note" and p.group == "preset":   # (a knob's sweep: a load a tick)
+            self.refuse(f"{pid} takes a button, not {named(b)}")
+            return False
+        if persons:
+            b.layer = "global"
         if kind == "cc":
             if profile is not None and profile.is_relative(number):
                 b.op = "rel"
@@ -872,15 +889,19 @@ class Learn:
             b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
             b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
         self.take()
-        undo.push(f"learn {pid}")                    # one undo step (undo.py, plan 15)
-        gone = table.bind(b, write=False)            # the preset rows it replaced
+        if persons:
+            undo.push_meta(f"learn {pid}")           # the meta controller's row, its stack
+        else:
+            undo.push(f"learn {pid}")                # one undo step (undo.py, plan 15)
+        gone = table.bind(b, write=persons)          # the rows of its layer it replaced
         self._mapped(b)
         table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
         glyph = getattr(profile, "glyph", None)
         let_go = list(dict.fromkeys(
             (glyph(x.bare) if glyph is not None else None) or named(x)
             for x in gone if not x.overlaps(b)))
-        self.said(f"learned {pid} ← {named(b)} (into the preset)"
+        into = "on the global layer: latch SHIFT to press it" if persons else "into the preset"
+        self.said(f"learned {pid} ← {named(b)} ({into})"
                   + (f"; {', '.join(let_go)} let go" if let_go else ""))
         return True
 

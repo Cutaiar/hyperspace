@@ -296,6 +296,7 @@ from .params import (
     Param,
     Registry,
     fx_files,
+    is_per_deck_meta_id,
     part_of,
     part_of_id,
     retaper_depths,
@@ -1558,13 +1559,9 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
 
 # the words every door refuses a preset's row on a meta param in (row 743)
 META_WORDS = "{pid} is the meta controller's, tuned before the show; no preset row may drive it"
-LOAD_WORDS = ("{pid} loads a patch onto the deck off air, which is the meta controller's to do; "
-              "no preset row may drive it")
-SAVE_WORDS = ("{pid} writes a library file, which a person's save does; "
-              "no preset row may drive it")
-# the library verbs: a load is a meta controller verb (the owner, 2026-11-06, row 700)
-LOAD_VERBS = frozenset({"preset.select", "preset.next", "preset.prev", "preset.home",
-                        "preset.list.next", "preset.list.prev"})
+# ...and on a meta param that is one per `Deck` (register row 746: `preset.*`, `deck.chase`,
+# `totem.*`, `poi.*`): a press of one is a person's, whatever it does
+PER_DECK_WORDS = "{pid} is the meta controller's, a person's to press; no patch's row may drive it"
 
 
 def is_session_id(pid: str | None) -> bool:
@@ -1574,22 +1571,6 @@ def is_session_id(pid: str | None) -> bool:
     return bool(pid) and part_of_id(pid) == "session"
 
 
-def is_load_verb(pid: str | None) -> bool:
-    """Does `pid` load a patch (`LOAD_VERBS`, `preset.load.<k>`)? From any row or key it
-    lands on the deck off air (`library.DeckProject`). `preset.*` stays out of
-    `is_session_id` until SEM: a session param is one object both decks share."""
-    return bool(pid) and (pid in LOAD_VERBS or (
-        pid.startswith("preset.load.") and pid.rpartition(".")[2].isdigit()))
-
-
-def is_save_verb(pid: str | None) -> bool:
-    """Does `pid` write a library file (`preset.save_new`, `preset.save.<k>`)? `save_slot`
-    writes over the file slot k names, which can be another preset's. A person's save is
-    the meta controller's row or the panel's, and stays."""
-    return pid == "preset.save_new" or (bool(pid) and pid.startswith("preset.save.")
-                                        and pid.rpartition(".")[2].isdigit())
-
-
 def meta_refusal(pid: str | None) -> str | None:
     """Why no row of a preset may drive `pid`, or None when one may. The hard
     rule (the owner, 2026-11-04, register row 743; overturns the old "a route
@@ -1597,15 +1578,14 @@ def meta_refusal(pid: str | None) -> str | None:
     the show, and the refusal says which params belong in the preset. By the
     id (`is_session_id`), so a table with no registry and a param this build
     has not made yet are still classed; it says what `part_of` says of every
-    param a registry holds. And a library verb (row 752): from a row a load lands on
-    the other deck (`is_load_verb`, row 700) and a save writes over a slot's file
-    (`is_save_verb`), so a preset's row on one would be one preset changing another,
-    which the absolute rule forbids."""
-    if is_load_verb(pid):
-        return LOAD_WORDS.format(pid=pid)
-    if is_save_verb(pid):
-        return SAVE_WORDS.format(pid=pid)
-    return META_WORDS.format(pid=pid) if is_session_id(pid) else None
+    param a registry holds. And a meta param that is one per `Deck` (row 746, replacing
+    row 752's list of load and save verbs): from a row a load lands on the other deck
+    (row 700) and a save writes over a slot's file, so a patch's row on `preset.*` would
+    be one patch changing another, which the absolute rule forbids; `deck.chase`,
+    `totem.*` and `poi.*` are a person's controls, in no look."""
+    if is_session_id(pid):
+        return META_WORDS.format(pid=pid)
+    return PER_DECK_WORDS.format(pid=pid) if is_per_deck_meta_id(pid) else None
 
 
 def meta_row_refusal(b: Binding, target: str | None = None) -> str | None:

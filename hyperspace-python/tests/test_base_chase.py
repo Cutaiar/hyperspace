@@ -745,7 +745,8 @@ def test_a_desk_button_learned_on_it_is_held_not_latched(rig):
     src = "note:0:94"
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_control(src)
-    row = [b for b in rig.table.bindings if b.source == src]
+    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
+    row = [b for b in rig.table.bindings if b.source == src and b.layer == "global"]
     assert [(b.target, b.op) for b in row] == [(CHASE_PARAM, "momentary")]
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
@@ -825,6 +826,7 @@ def test_a_desk_button_and_a_pad_button_hold_it_together(rig):
     other way about; a desk cable lost lets go only of the desk's."""
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_control("note:0:94")
+    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
     pad = Pad()
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
@@ -852,6 +854,7 @@ def test_a_desk_closed_lets_go(rig):
     """A desk's device closed with its button down: no poll follows."""
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_control("note:0:94")
+    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
@@ -879,6 +882,7 @@ def test_a_desk_lost_leaves_what_another_desk_holds(rig, lost):
     press_momentary(p, "note@launch:0:94", True)     # the second desk's button
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_control("note:0:94")
+    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     getattr(rig.midi, lost)()
@@ -892,6 +896,7 @@ def test_a_desk_lost_leaves_what_another_desk_holds(rig, lost):
 def test_a_desk_row_changed_under_its_button_still_releases(rig, change):
     rig.learn.arm(CHASE_PARAM)
     assert rig.learn.learn_control("note:0:94")
+    rig.table.set_layer("global")               # (row 755: a person's row, on that layer)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
