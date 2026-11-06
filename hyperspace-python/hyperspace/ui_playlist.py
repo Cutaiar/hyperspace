@@ -42,6 +42,10 @@ def where(p) -> str:
     if pl is None:
         return ""
     n = len(pl.entries)
+    if p.on and p.lost:
+        left = p.left()
+        return (f"{pl.name}: nothing will play now, and what is on air stays"
+                + (f" · trying again in {clock(left)}" if left is not None else ""))
     if not p.on:
         return f"{pl.name}: stopped · {n} {'entry' if n == 1 else 'entries'}"
     if p.at is None or p.at >= n:
@@ -55,7 +59,7 @@ def _write(panel, p, entries: list[Entry]) -> None:
     """The entries changed: the list as it plays and its file, said if refused."""
     try:
         p.playlist = Playlist(p.playlist.name, entries)
-        playlist.save(panel.library, p.playlist)
+        playlist.save(panel.library, p.playlist, p.key)
     except LibraryError as e:
         panel.library.say(warning=str(e))
 
@@ -72,14 +76,23 @@ def _pick(panel, p) -> None:
     _, st["name"] = imgui.input_text_with_hint("##playlist.name", "a new list's name", st["name"])
     ui.beside(ui.chip_w("new"))
     if ui.chip("new##playlist.new") and st["name"].strip():
-        name = st["name"].strip()
-        try:
-            playlist.save(panel.library, Playlist(name))
-        except LibraryError as e:
-            panel.library.say(warning=str(e))
-        else:
-            st["name"] = ""
-            p.select(name)
+        _new(panel, p, st)
+
+
+def _new(panel, p, st: dict) -> None:
+    """A new, empty list. A name that resolves to a list there is (`Cart!` is `cart`) is
+    refused: writing it would empty that list."""
+    name, lib = st["name"].strip(), panel.library
+    if lib.path_of(PLAYLISTS, name) is not None:
+        lib.say(warning=f"there is already a list called {name}: choose it, or another name")
+        return
+    try:
+        playlist.save(lib, Playlist(name))
+    except LibraryError as e:
+        lib.say(warning=str(e))
+    else:
+        st["name"] = ""
+        p.select(name)
 
 
 def _transport(panel, p) -> None:
@@ -103,7 +116,8 @@ def _entries(panel, p) -> None:
         _, dwell = imgui.input_float(f"##playlist.dwell.{i}", entry.dwell_s, 0.0, 0.0, "%.0f s")
         if imgui.is_item_deactivated_after_edit():
             out = [*entries]
-            out[i] = Entry(entry.loadable, max(playlist.MIN_DWELL_S, float(dwell)), entry.fade_s)
+            out[i] = Entry(entry.loadable, min(playlist.MAX_DWELL_S, max(playlist.MIN_DWELL_S, float(dwell))),
+                           entry.fade_s)
         elif imgui.is_item_hovered():
             ui.tooltip("Seconds from this look's fade to the next one's.")
         ui.beside(ui.chip_w("×"))

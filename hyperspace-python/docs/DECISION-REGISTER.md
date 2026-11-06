@@ -13175,6 +13175,9 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   `loadable`, the signed word, and its value a name under the loadable patches' folder, so the format lane's folder move
   (plan 57) changes nothing in a playlist. A new folder, so no schema moves. An older build lists it as a group and does
   nothing with it (the reading, §4).
+- **Bounds.** `Entry` refuses what could not be played, so nothing writes what would not read: a dwell from 1 s to a week, a
+  fade from 0 to `output.xfade_s`'s own 30 s. `1e999` is refused, not a fade that never ends. A bad row is left out and said, and
+  the rest plays, as with a missing patch. A save goes over the file the name resolves to, as `save_as` does.
 - **Judge it.** 537.
 
 ### 706. One advance
@@ -13185,7 +13188,10 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   loads by the deck off air's own `LoadedPatch.load`, the road a bank pad takes; it fades when due and warm. `crossfade`
   takes `seconds`, so an entry's `fade_s` writes nothing over `output.xfade_s`.
 - **Why fade to fade.** "A new look every five minutes" is 300, whatever the fade takes.
-- **Why read the file each time.** A save on the other Mac lands at the next advance, with no restart. `Library.read` keeps
+- **Nothing will play.** An install runs on: Drive offline makes every patch missing, so it says so once, what is on air stays,
+  and it tries again a dwell later, and plays when they are back. It never stops itself.
+- **A hand on the fader.** Taken across to the look armed, that look has played: its dwell starts there, and it moves on.
+- **Why read the file each time.** It reads by the name it was chosen by, so a conflict copy stays itself. A save on the other Mac lands at the next advance, with no restart. `Library.read` keeps
   the parse until the mtime moves. If the file has gone, the last list plays on, said.
 - **Judge it.** 538.
 
@@ -13196,7 +13202,7 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   "pauses on the dot", and its panel following on air: the panel stays where it was put (`MetaController`).
 - **Kept, and why they are no guards.** It waits while `MetaController.mixing`: the deck off air is in the picture then, and
   a load would jump the room; row 700 refuses a pad there for the same reason. A load armed on a deck that has since gone
-  on air loads again: otherwise the fade would run back to what was on air.
+  on air has played, and it moves on: otherwise the fade would run back to what was on air.
 - **DQ8.** No second dream worker: `test_an_advance_is_one_mix_pass` holds that the module imports only `library` and
   names no fade, draw or worker of its own.
 
@@ -13207,6 +13213,8 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   needed. `tests/test_layer_boundary.py`'s rig registers them, so the one-layer walk covers them. A route or desk row on one in
   a file is dropped with a note at load, as any meta row is. A key or a pad's own row may press one: those are the meta
   controller's.
+- **A new list.** A name that resolves to a list there is (`Cart!` is `cart`) is refused, since writing it would empty that list.
+  An edit goes to the file the list was chosen from. Editing a file with a bad row in the section writes it without that row.
 - **Not built.** `playlist.select`, plan 44 §6's. A file's name is no enum, and nothing but the section chooses.
 - **Cost of a section.** One more header took a fresh launch at 900 px past the pane by 17 px, so `MIN_BODY_H` went from 150 to 140.
 - **Frame cost.** `Playing.tick` costs about 30 ns a frame, stopped or dwelling (40 ns by `timeit`, less the call's 11 ns): one attribute write and one compare. `MetaController.tick` adds one `is not None`. The rest runs only around an advance.

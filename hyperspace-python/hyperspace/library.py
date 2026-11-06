@@ -2480,20 +2480,21 @@ class Library:
             raise LibraryError("patch not saved: " + "; ".join(refused))
         return self._write_kind(PATCHES, name, doc)
 
-    def save_playlist(self, doc: dict) -> Path:
-        """Write playlist `doc` as ``<home>/playlists/<slug of its name>.json``, as
-        `save_patch` writes a patch, and nothing else. `playlist.Playlist.to_doc` is
-        what makes one, and a nameless one is refused."""
+    def save_playlist(self, doc: dict, key: str | None = None) -> Path:
+        """Write playlist `doc`, as `save_as` does: over the file `key` (else its name)
+        resolves to, so a save never leaves a second file of one name, else a new
+        ``<home>/playlists/<slug>.json``. `playlist.Playlist.to_doc` is what makes one, and
+        a nameless one is refused."""
         self.writable()
         name = str(doc.get("name") or "").strip()
         if not name:
             raise LibraryError("playlist not saved: a playlist needs a name")
-        return self._write_kind(PLAYLISTS, name, doc)
+        return self._write_kind(PLAYLISTS, name, doc, self.path_of(PLAYLISTS, key or name))
 
-    def _write_kind(self, group: str, name: str, doc: dict) -> Path:
-        """`doc` as ``<home>/<group>/<slug of name>.json``: atomically, a different
-        text already there copied to the trash first."""
-        path = self.home / group / f"{slug(name)}.json"
+    def _write_kind(self, group: str, name: str, doc: dict, path: Path | None = None) -> Path:
+        """`doc` at `path`, by default ``<home>/<group>/<slug of name>.json``: atomically, a
+        different text already there copied to the trash first."""
+        path = path if path is not None else self.home / group / f"{slug(name)}.json"
         text = _json_text(doc)
         if path.is_file():
             try:

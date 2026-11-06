@@ -13,7 +13,9 @@ written over. There is no pausing at all: it plays or it is stopped.
 
 1. `LEAD_S` before the fade is due, the next entry loads into the deck off air, by that
    deck's own `LoadedPatch.load`, the road a bank pad's load takes. A patch that is
-   missing or will not read is skipped, said in words, and the next is tried at once.
+   missing or will not read is skipped, said in words, and the next is tried at once. If
+   none will play (Drive offline), it says so once, what is on air stays, and it tries
+   again a dwell later: an install runs on.
 2. The load asks `Fade.warm` for one small draw in the same frame, so its shaders compile
    there and not in the fade's first frame. A look that will not draw is skipped too.
 3. When the fade is due and the warm draw is done, `MetaController.crossfade` runs the
@@ -23,14 +25,16 @@ written over. There is no pausing at all: it plays or it is stopped.
 
 An advance waits while the crossfader is between its ends or a fade is running
 (`MetaController.mixing`), since then the deck off air is in the picture. That is a
-fact of the mixer rather than a guard: a press of a bank pad is refused there too.
+fact of the mixer rather than a guard: a press of a bank pad is refused there too. A hand
+that takes the fader across to the look armed has played it: its dwell starts there.
 
 **Dwell** is the seconds from one fade's start to the next's, so 300 is a new look every
 five minutes whatever the fades take. It is the entry's that has just gone on air.
 
-**The file** is read again before each load (`Library.read` keeps the parse until the
-mtime moves), so an edit or the other Mac's save lands at the next advance, with no
-restart. A file that has gone keeps the last list playing, and says so.
+**The file** is read again before each load, by the name it was chosen by (`Library.read`
+keeps the parse until the mtime moves), so an edit or the other Mac's save lands at the
+next advance, with no restart. A file that has gone keeps the last list playing, and says
+so. A bad row is left out and said; the rest of the file plays, as with a missing patch.
 
 **Its controls** (`register`): `playlist.play`, `.next` and `.prev`, one object on both
 decks (a shared meta group), never saved and not modulatable, so no patch's row can press
@@ -50,29 +54,41 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-from .library import LOADABLE, PLAYLIST_KIND, PLAYLIST_VERSION, PLAYLISTS, LibraryError
+from .library import PLAYLIST_KIND, PLAYLIST_VERSION, PLAYLISTS, LibraryError
 
 SCHEMA = f"{PLAYLIST_KIND}/{PLAYLIST_VERSION}"
 DEFAULT_DWELL_S = 300.0   # the owner's "a new look every five minutes"
 MIN_DWELL_S = 1.0         # below this a look would not be seen, and a typo would strobe
+MAX_DWELL_S = 7 * 86400.0  # a week: past this a number is a typo, and an install looks hung
+FADE_MAX_S = 30.0         # `output.xfade_s`'s own top (`deck.register_xfade`, a test holds them)
 LEAD_S = 2.0              # how long before its fade the next look loads and warms
 SOON = -math.inf          # a time already past: due at the next tick
 
 
-def _seconds(value: Any, what: str, least: float) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float) or not value >= least:
-        raise ValueError(f"{what} must be a number of seconds, at least {least:g}: got {value!r}")
+def _seconds(value: Any, what: str, least: float, most: float) -> float:
+    """`value` as seconds in the range; ValueError, in words. Compared before any `float`, so
+    infinity, not-a-number and an integer too long for a float are all refused here."""
+    if isinstance(value, bool) or not isinstance(value, int | float) or not least <= value <= most:
+        raise ValueError(f"{what} must be seconds from {least:g} to {most:g}: got {value!r}")
     return float(value)
 
 
 @dataclass(frozen=True)
 class Entry:
     """One line of a playlist. `loadable` is a loadable patch's name in the library
-    (its folders too: ``party/trip``). `fade_s` None: `output.xfade_s`, read at the fade."""
+    (its folders too: ``party/trip``). `fade_s` None: `output.xfade_s`, read at the fade.
+    Refuses, in words, what could not be played, so nothing can write what would not read."""
 
     loadable: str
     dwell_s: float = DEFAULT_DWELL_S
     fade_s: float | None = None
+
+    def __post_init__(self):
+        if not isinstance(self.loadable, str) or not self.loadable.strip():
+            raise ValueError("it names no loadable patch")
+        object.__setattr__(self, "dwell_s", _seconds(self.dwell_s, "dwell_s", MIN_DWELL_S, MAX_DWELL_S))
+        if self.fade_s is not None:
+            object.__setattr__(self, "fade_s", _seconds(self.fade_s, "fade_s", 0.0, FADE_MAX_S))
 
     def to_doc(self) -> dict:
         doc: dict[str, Any] = {"loadable": self.loadable, "dwell_s": self.dwell_s}
@@ -83,10 +99,12 @@ class Entry:
 
 @dataclass
 class Playlist:
-    """A playlist's file as it reads: its name and its entries, in order."""
+    """A playlist's file as it reads: its name, its entries in order, and in words the rows
+    left out for being unplayable."""
 
     name: str
     entries: list[Entry] = field(default_factory=list)
+    skipped: list[str] = field(default_factory=list, compare=False)
 
     def to_doc(self) -> dict:
         return {"schema": SCHEMA, "name": self.name,
@@ -94,20 +112,20 @@ class Playlist:
 
     @classmethod
     def from_doc(cls, doc: dict) -> Playlist:
-        """The file's words. ValueError, in words, for what cannot be played."""
+        """The file's words. A bad row is left out and said in `skipped`, as a missing patch
+        is only skipped; ValueError, in words, for a file that holds no list at all."""
         if not isinstance(doc, dict) or not isinstance(doc.get("entries"), list):
             raise ValueError("a playlist's file holds a list of entries")  # noqa: TRY004
-        out = []
+        out, skipped = [], []
         for i, row in enumerate(doc["entries"], 1):
-            name = row.get("loadable") if isinstance(row, dict) else None
-            if not isinstance(name, str) or not name.strip():
-                raise ValueError(f"entry {i} names no loadable patch")
-            fade = row.get("fade_s")
-            out.append(Entry(name,
-                             _seconds(row.get("dwell_s", DEFAULT_DWELL_S), f"entry {i}'s dwell_s",
-                                      MIN_DWELL_S),
-                             None if fade is None else _seconds(fade, f"entry {i}'s fade_s", 0.0)))
-        return cls(str(doc.get("name") or ""), out)
+            try:
+                if not isinstance(row, dict):
+                    raise ValueError("it is not an entry")  # noqa: TRY004
+                out.append(Entry(row.get("loadable"), row.get("dwell_s", DEFAULT_DWELL_S),
+                                 row.get("fade_s")))
+            except ValueError as e:
+                skipped.append(f"entry {i}: {e}")
+        return cls(str(doc.get("name") or ""), out, skipped)
 
 
 def read(lib, name: str) -> Playlist:
@@ -121,29 +139,35 @@ def read(lib, name: str) -> Playlist:
     return playlist
 
 
-def save(lib, playlist: Playlist) -> None:
-    lib.save_playlist(playlist.to_doc())
+def save(lib, playlist: Playlist, key: str | None = None) -> None:
+    """Over the file `key` (what it was chosen by; else its own name) resolves to."""
+    lib.save_playlist(playlist.to_doc(), key)
 
 
 class Playing:
     """One playlist being played, or none: what the meta controller ticks.
 
-    `meta` is the `MetaController` (`off_air`, `mixing`, `crossfade`), `lib` the library,
-    for the file and the words, and `fade` the `deck.Fade`, for the warm draw; None has
-    none to wait for."""
+    `meta` is the `MetaController` (`on_air`, `off_air`, `mixing`, `crossfade`), `lib` the
+    library, for the file and the words, and `fade` the `deck.Fade`, for the warm draw;
+    None has none to wait for."""
 
     def __init__(self, meta, lib, fade=None):
         self.meta, self.lib, self.fade = meta, lib, fade
         self.playlist: Playlist | None = None
+        self.key: str | None = None     # the name it was chosen by: its file's, always
         self.on = False
-        self.at: int | None = None      # the entry last faded to
-        self.next = 0                   # the entry to load next
-        self.armed: int | None = None   # the entry loaded and not yet faded to…
-        self.armed_on = None            # …on this deck
+        self.at: int | None = None      # the entry last on air
+        self.next = 0                   # the entry to load next (`_arm` wraps it)
+        self.armed: Entry | None = None  # the entry loaded and not yet on air…
+        self.armed_at = 0               # …its place…
+        self.armed_on = None            # …and its deck
         self.fails = 0                  # entries in a row that would not load or draw
+        self.lost = False               # a whole pass would not play: said once, tried again
+        self.stepping = False           # a step asked for and not yet on air
         self.fade_at = self.load_at = SOON
         self.waited = False             # has this wait been said?
         self.last = 0.0                 # the frame's clock, as `tick` last saw it
+        self.rows_said: list[str] = []  # the file's bad rows, as last said
 
     # ---- what a person does ----
 
@@ -155,7 +179,10 @@ class Playing:
         except LibraryError as e:
             self.lib.say(warning=str(e))
             return False
+        self.key = name
         self.at, self.next, self.armed, self.fails = None, 0, None, 0
+        self.lost, self.stepping, self.rows_said = False, False, []
+        self._say_rows()
         if self.on:
             self.load_at = self.fade_at = SOON
         return True
@@ -167,28 +194,30 @@ class Playing:
         if self.playlist is None or not self.playlist.entries:
             self.lib.say(warning="playlist: choose one with something in it first")
             return
-        self.on, self.fails, self.waited = True, 0, False
+        self.on, self.fails, self.waited, self.lost = True, 0, False, False
         self.load_at = self.fade_at = SOON
 
-    def stop(self, why: str | None = None) -> None:
+    def stop(self) -> None:
         """Stop where it is: a fade running finishes, and what is on air stays. A look
         loaded for the next fade stays on the deck off air."""
-        self.on, self.armed = False, None
-        if why is not None:
-            self.lib.say(warning=why)
+        self.on, self.armed, self.stepping = False, None, False
 
     def step(self, by: int = 1) -> None:
-        """Go on (+1) or back (-1) now, whatever is left of the dwell. Stopped, nothing
-        fades: back moves the place it will play from, and on leaves it, as play goes on
-        from there anyway."""
+        """Go on (+1) or back (-1) one entry, and presses add up. Playing, it goes now,
+        whatever is left of the dwell: the first press on is the entry already next, and
+        the first back the one before what is on air. Stopped, nothing fades: it moves
+        the place play goes on from."""
         entries = self.playlist.entries if self.playlist is not None else ()
         if not entries:
             return
-        if by < 0:                      # the one before what is on air
-            self.next, self.armed = ((self.at or 0) + by) % len(entries), None
-        if self.on:
-            self.fails = 0
-            self.load_at = self.fade_at = SOON
+        if not self.on:
+            self.next += by
+            return
+        if self.stepping or by < 0:
+            base = self.next if self.stepping or self.at is None else self.at
+            self.next, self.armed = base + by, None
+        self.stepping, self.fails, self.lost = True, 0, False
+        self.load_at = self.fade_at = SOON
 
     # ---- once a frame ----
 
@@ -207,81 +236,103 @@ class Playing:
                 self.lib.say("playlist: waiting for the crossfader to reach an end")
             return
         self.waited = False
-        if self.armed is None or self.armed_on is not meta.off_air:
-            self._arm()                 # (on air moved by hand since: load again)
+        if self.armed is not None and self.armed_on is meta.on_air:
+            self._played(now)           # a hand took the fader across to it
+            return
+        if self.armed is None:
+            self._arm(now)
             return
         fade = self.fade
         if fade is not None:
             if fade.warm_deck is not None:
                 return                  # its warm draw is still to come
             if fade.warm_error:
-                self._failed(self.armed, fade.warm_error)
+                entry, self.armed = self.armed, None
+                self._failed(self.armed_at, entry.loadable, fade.warm_error, now)
                 return
         if now >= self.fade_at:
-            self._go(now)
+            self.meta.crossfade(seconds=self.armed.fade_s)
+            self._played(now)
+
+    def _say(self, words: str) -> None:
+        """A line about one entry or the file: not while a whole pass is lost, already said."""
+        if not self.lost:
+            self.lib.say(warning=words)
+
+    def _say_rows(self) -> None:
+        pl = self.playlist
+        if pl.skipped != self.rows_said:
+            self.rows_said = pl.skipped
+            for words in pl.skipped:
+                self._say(f"playlist {pl.name}: left out {words}")
 
     def _fresh(self) -> list[Entry]:
         """The entries as the file says now; a file that will not read keeps the last."""
-        pl = self.playlist
         try:
-            self.playlist = pl = read(self.lib, pl.name)
+            self.playlist = read(self.lib, self.key)
         except LibraryError as e:
-            self.lib.say(warning=f"{e}: playing the list as it last read")
-        return pl.entries
+            self._say(f"{e}: playing the list as it last read")
+        self._say_rows()
+        return self.playlist.entries
 
-    def _arm(self) -> None:
+    def _arm(self, now: float) -> None:
         """Load the next loadable entry into the deck off air, skipping what cannot."""
         entries = self._fresh()
-        while self.on:
-            if not entries:
-                self.stop(f"playlist {self.playlist.name}: it has nothing in it. Stopped")
-                return
+        if not entries:
+            self._retry(now, "it has nothing in it", DEFAULT_DWELL_S)
+            return
+        while True:
             k = self.next = self.next % len(entries)
             why = self._load(entries[k].loadable)
             if why is None:
-                self.armed, self.armed_on = k, self.meta.off_air
+                self.armed, self.armed_at, self.armed_on = entries[k], k, self.meta.off_air
                 return
-            self._failed(k, why)
+            if self._failed(k, entries[k].loadable, why, now):
+                return
 
     def _load(self, name: str) -> str | None:
         """`name` on the deck off air; why not, in words, or None. A raise of any kind
         is one look lost: an install runs on."""
-        loaded_patch = self.meta.off_air.loaded_patch
         if self.fade is not None:
             self.fade.warm_error = ""   # (the last warm draw's words: this load's own next)
         try:
-            if self.lib.path_of(LOADABLE, name, loose=True) is None:
-                return "there is no such patch"
-            loaded_patch.load(name)
+            self.meta.off_air.loaded_patch.load(name)
         except Exception as e:  # noqa: BLE001 — one bad file must not end an install
             return str(e) if isinstance(e, LibraryError) else f"{type(e).__name__}: {e}"[:160]
         return None
 
-    def _failed(self, k: int, why: str) -> None:
-        """Entry `k` is skipped and said, the next is next; every entry in a row and it
-        stops rather than try for ever."""
+    def _failed(self, k: int, name: str, why: str, now: float) -> bool:
+        """Entry `k` is skipped and said, the next is next. True when that is every entry
+        in a row: then it waits a dwell before trying again."""
         pl = self.playlist
-        name = pl.entries[k].loadable if k < len(pl.entries) else f"entry {k + 1}"
-        self.lib.say(warning=f"playlist {pl.name}: skipped {name}: {why}")
-        self.armed, self.next = None, (k + 1) % max(1, len(pl.entries))
+        self._say(f"playlist {pl.name}: skipped {name}: {why}")
+        self.next = k + 1
         self.fails += 1
-        if self.fails >= len(pl.entries):
-            self.stop(f"playlist {pl.name}: none of its {len(pl.entries)} entries will play. "
-                      "Stopped, and what is on air stays")
+        if self.fails < len(pl.entries):
+            return False
+        dwell = pl.entries[k].dwell_s if k < len(pl.entries) else DEFAULT_DWELL_S
+        self._retry(now, f"none of its {len(pl.entries)} entries will play", dwell)
+        return True
 
-    def _go(self, now: float) -> None:
-        """The fade, and the clock for the next: this entry's dwell runs from now."""
-        k, entries = self.armed, self.playlist.entries
-        if k >= len(entries):           # (the file shrank under it)
-            self.armed, self.next = None, 0
-            return
-        entry = entries[k]
-        self.meta.crossfade(seconds=entry.fade_s)
-        self.at, self.armed, self.next, self.fails = k, None, (k + 1) % len(entries), 0
+    def _retry(self, now: float, why: str, dwell: float) -> None:
+        """Nothing to play now. It stays on, what is on air stays, and it tries again a
+        dwell later; said once, however long it lasts."""
+        pl = self.playlist
+        if not self.lost:
+            self.lib.say(warning=f"playlist {pl.name}: {why}. What is on air stays; "
+                                 "trying again each dwell")
+        self.lost, self.fails, self.armed = True, 0, None
+        self.load_at = self.fade_at = now + dwell
+
+    def _played(self, now: float) -> None:
+        """The armed entry is on air, or on its way: its dwell runs from now."""
+        entry, k, total = self.armed, self.armed_at, len(self.playlist.entries)
+        self.at, self.armed, self.next, self.fails = k, None, k + 1, 0
+        self.lost, self.stepping = False, False
         self.fade_at = now + entry.dwell_s
         self.load_at = self.fade_at - LEAD_S
         self.lib.say(f"playlist {self.playlist.name}: {entry.loadable}, "
-                     f"{k + 1} of {len(entries)}, for {entry.dwell_s:g} s")
+                     f"{k + 1} of {total}, for {entry.dwell_s:g} s")
 
     def left(self) -> float | None:
         """Seconds until the next fade is due, or None: stopped or due now."""
