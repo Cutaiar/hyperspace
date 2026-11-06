@@ -129,6 +129,10 @@ ROW_H = 34.0
 # edited to match.
 CTL_ROWS = 6
 
+# How many table rows the page carries. The PAGE scrolls, so this is a
+# content decision rather than a function of the window.
+N_TABLE_ROWS = 14
+
 
 PLANES = ("XY", "XZ", "XW", "YZ", "YW", "ZW")
 
@@ -145,8 +149,8 @@ CTL_STATE = {
     "tag": "bad id",
     "tip_frames": 0,
     "tip_now": False,
-    "table_scroll": 0.0,
-    "table_max": 0.0,
+    "page_scroll": 0.0,
+    "page_max": 0.0,
     "range": "Week",
     "ctx": "",
 }
@@ -173,6 +177,8 @@ class Rects:
     # the scrolling viewport the rows live in; table_rows are the slots
     # inside it at scroll 0
     table_view: tuple = (0, 0, 0, 0)
+    # the body's natural height, which is what the page scrolls through
+    body_h: float = 0.0
     table_head: tuple = (0, 0, 0, 0)
     cols: list = field(default_factory=list)
 
@@ -184,7 +190,8 @@ GUT = 24
 CARD_GAP = 16
 
 
-def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
+def lay_out(w: int, h: int, n_rows: int | None = None,
+            body_dy: float = 0.0) -> Rects:
     """The whole page as a layout TREE, measured then placed.
 
     Every card's height here comes from what is in it. The old version typed
@@ -278,16 +285,33 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
                 N(dir="row", gap=CARD_GAP, key="cards",
                   kids=(routing, controls)),
                 N(h=32.0, key="tabs"),
-                # the table takes whatever is left, which is what grow MEANS
-                N(grow=1.0, dir="column", key="table", kids=(
+                # The table is its NATURAL height - every row - and the PAGE
+                # scrolls. It used to take whatever was left and scroll
+                # inside itself, which on a window this tall left a viewport
+                # one row deep: you could see a single clipped row and
+                # nothing below it. Nested scrolling is the wrong answer
+                # anyway; a dashboard scrolls as a page.
+                N(dir="column", key="table", kids=(
                     N(h=36.0, key="head"),
-                    N(grow=1.0, key="rows"),
+                    N(h=float(n_rows if n_rows is not None else N_TABLE_ROWS)
+                      * ROW_H, key="rows"),
                 )),
             )),
         )),
     ))
 
-    at = B.lay(page, B.Rect(0, 0, w, h))
+    # The body is laid out at its own height, then SHIFTED by the scroll.
+    # lay_out stays a pure function of (w, h, body_dy), so it is still
+    # cacheable and still testable without imgui.
+    B.measure_tree(page)
+    body = next(k for k in page.kids[1].kids if k.key == "body")
+    natural = body.mh
+    at = B.lay(page, B.Rect(0, 0, w, max(float(h), HEADER_H + natural)))
+    r.body_h = natural
+    if body_dy:
+        for k, v in at.items():
+            if k not in ("page", "sidebar", "header", "main"):
+                at[k] = B.Rect(v.x, v.y + body_dy, v.w, v.h)
 
     r.sidebar = at["sidebar"].as_tuple()
     r.header = at["header"].as_tuple()
@@ -318,12 +342,7 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
     rows = at["rows"]
     r.table_view = rows.as_tuple()
     if n_rows is None:
-        # However many fit in what is left, and NO forced minimum: a window
-        # short enough to leave less than one row used to get one anyway,
-        # hanging 10 px off the bottom at 1280x900. A row that does not fit
-        # is not a row - it is the case ScrollArea exists for, and until that
-        # lands the honest answer is to draw none rather than to overflow.
-        n_rows = max(0, int(rows.h // ROW_H))
+        n_rows = N_TABLE_ROWS
     for i in range(n_rows):
         r.table_rows.append((rows.x, rows.y + i * ROW_H, rows.w, ROW_H))
 
@@ -421,6 +440,28 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     if picked is not None:
         state["range"] = RANGES[picked]
     render.last_group_w, render.last_github_w = rgw, gw
+
+    # ---- everything below the header scrolls as ONE page ------------------
+    # Not the table on its own: at the window heights people actually use,
+    # the content above left the table a viewport one row deep. A dashboard
+    # scrolls as a page.
+    bx, by = SIDEBAR_W, HEADER_H
+    bw, bh = w - SIDEBAR_W, h - HEADER_H
+    with I.scroll_area(ui, "page", bx, by, bw, bh, r.body_h,
+                       backdrop=T.rgba("background", theme=theme)) as view:
+        # re-lay-out at this frame's scroll, so there is no frame of lag
+        rr = lay_out(w, h, body_dy=view.y - by)
+        _body(ui, rr, w, h, series, state)
+    state["page_scroll"], state["page_max"] = I.scrolled(ui, "page")
+    return
+
+
+def _body(ui, r, w, h, series, state):
+    """Everything below the header. Drawn inside the page's scroll area, so
+    `r` is already offset by the scroll and `ui.dl` is that area's list."""
+    import menu as M
+    dl, faces, theme, grad_tex = ui.dl, ui.faces, ui.theme, ui.grad_tex
+    ink = T.rgba("foreground", theme=theme)
 
     # ---- stat cards -------------------------------------------------------
     for (title, value, delta, up, head, detail), rect, part in zip(
@@ -660,30 +701,22 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
         D.label(dl, cxp, hy, head, faces, "medium", 13, ink, align=al,
                 box_w=cwid - (COL_PAD if al == "right" else 0), baseline_box=hh)
 
+    # No inner scroll: the PAGE scrolls, and nesting one inside the other is
+    # the wrong answer. The rows are drawn inline at their natural heights.
     vx, vy, vw, vh = r.table_view
-    with I.scroll_area(ui, "table", vx, vy, vw, vh, len(rows) * ROW_H,
-                       backdrop=T.rgba("background", theme=theme)) as view:
-        _table_rows(ui, rows, view, vy, vh, r, faces, theme, ink, state)
-    # recorded rather than read off pixels: a row that scrolled past the top
-    # looks exactly like a row that was never drawn
-    state["table_scroll"], state["table_max"] = I.scrolled(ui, "table")
-
-    return
+    _table_rows(ui, rows, B.Rect(vx, vy, vw, vh), r, faces, theme, ink, state)
 
 
-def _table_rows(ui, rows, view, vy, vh, r, faces, theme, ink, state):
-    """The table's rows, drawn inside the scroll viewport.
+def _table_rows(ui, rows, view, r, faces, theme, ink, state):
+    """The table's rows, drawn inline inside the page's scroll area.
 
-    Culled to what is visible: 101 rows means 101 invisible_buttons and 101
-    popup calls otherwise, and ImGui would clip them all away having done
-    the work. Culling is on the ROW, not on the draw, so a row that is not
-    on screen submits no widget at all.
+    N_TABLE_ROWS of them, not all 101: the page carries a readable slice and
+    the tabs filter it. Drawing every row would mean 101 invisible_buttons
+    and 101 popup calls a frame for rows nobody can reach.
     """
-    dl = ui.dl                      # the CHILD's list: see scroll_area
+    dl = ui.dl                      # the page scroll area's list
     aligns = ["left", "left", "left", "center", "right", "left"]
-    first = max(int((vy - view.y) // ROW_H) - 1, 0)
-    last = min(int((vy + vh - view.y) // ROW_H) + 1, len(rows) - 1)
-    for ri in range(first, last + 1):
+    for ri in range(min(N_TABLE_ROWS, len(rows))):
         row = rows[ri]
         rx, ry, rw, rh = view.x, view.y + ri * ROW_H, view.w, ROW_H
         hovered = I.row(ui, f"row.{ri}", rx, ry, rw, rh).hot

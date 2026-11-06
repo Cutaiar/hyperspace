@@ -390,18 +390,27 @@ def test_input_text_is_visible_in_both_themes(DB):
 # ScrollArea
 # --------------------------------------------------------------------------
 
+def page_view(DB):
+    """The page's scroll viewport: everything below the header, right of
+    the sidebar. The whole body scrolls now, not the table on its own - at
+    the window heights people use, the content above left the table a
+    viewport one row deep."""
+    return (DB.SIDEBAR_W, DB.HEADER_H,
+            W - DB.SIDEBAR_W, H - DB.HEADER_H)
+
+
 def table_centre(DB):
-    vx, vy, vw, vh = DB.lay_out(W, H).table_view
+    vx, vy, vw, vh = page_view(DB)
     return vx + vw / 2, vy + vh / 2
 
 
-def test_the_wheel_scrolls_the_table(DB):
+def test_the_wheel_scrolls_the_page(DB):
     x, y = table_centre(DB)
     DB.render("dark", W, H, script=[(x, y)] * 6)
-    assert DB.render.last_state["table_scroll"] == 0.0
+    assert DB.render.last_state["page_scroll"] == 0.0
     DB.render("dark", W, H,
               script=[(x, y)] * 6 + [(x, y, False, -3.0)] * 10 + [(x, y)] * 20)
-    assert DB.render.last_state["table_scroll"] > 100.0, "the wheel did nothing"
+    assert DB.render.last_state["page_scroll"] > 100.0, "the wheel did nothing"
 
 
 def test_the_scroll_range_is_the_content_less_the_viewport(DB):
@@ -413,13 +422,13 @@ def test_the_scroll_range_is_the_content_less_the_viewport(DB):
     went 3238 -> 5638 -> 51238 while the row count never changed.
     """
     x, y = table_centre(DB)
-    _vx, _vy, _vw, vh = DB.lay_out(W, H).table_view
-    want = 101 * DB.ROW_H - vh
+    _bx, _by, _bw, bh = page_view(DB)
+    want = DB.lay_out(W, H).body_h - bh
     seen = []
     for n in (0, 10, 200):
         DB.render("dark", W, H,
                   script=[(x, y)] * 4 + [(x, y, False, -3.0)] * n + [(x, y)] * 8)
-        seen.append(DB.render.last_state["table_max"])
+        seen.append(DB.render.last_state["page_max"])
     assert all(abs(m - want) < 0.5 for m in seen), (
         f"the scroll range drifted: {seen}, wanted {want}")
 
@@ -429,44 +438,44 @@ def test_scrolling_clamps_at_both_ends(DB):
     DB.render("dark", W, H,
               script=[(x, y)] * 4 + [(x, y, False, -3.0)] * 200 + [(x, y)] * 8)
     st = DB.render.last_state
-    assert st["table_scroll"] == pytest.approx(st["table_max"], abs=0.5)
+    assert st["page_scroll"] == pytest.approx(st["page_max"], abs=0.5)
     DB.render("dark", W, H,
               script=[(x, y)] * 4 + [(x, y, False, -3.0)] * 50
               + [(x, y, False, 3.0)] * 200 + [(x, y)] * 8)
-    assert DB.render.last_state["table_scroll"] == 0.0
+    assert DB.render.last_state["page_scroll"] == 0.0
 
 
 def test_scrolled_content_stays_inside_the_viewport(DB):
-    """The bug this is here for: rows drawn into the PARENT's draw list are
-    clipped by nothing, so a scrolled table painted straight over the header
-    above it. Content has to go into the child's list.
+    """The bug this is here for: content drawn into the PARENT's draw list
+    is clipped by nothing, so a scrolled body paints straight over the fixed
+    header above it. It has to go into the child's list.
     """
     DBr = DB.lay_out(W, H)
-    vx, vy, vw, vh = DBr.table_view
+    vx, vy, vw, vh = page_view(DB)
     x, y = vx + vw / 2, vy + vh / 2
     frames = DB.render("dark", W, H,
                        script=[(x, y)] * 4 + [(x, y, False, -3.0)] * 8
                        + [(x, y)] * 20)
-    assert DB.render.last_state["table_scroll"] > 0, "it did not scroll"
+    assert DB.render.last_state["page_scroll"] > 0, "it did not scroll"
     still = DB.render("dark", W, H, script=[(x, y)] * 4)[-1]
     # The header sits flush on top of the viewport, so there is no gap to
     # inspect - but it must be IDENTICAL scrolled and not. A row painted
     # into the parent's list instead of the child's lands right on it.
-    hx, hy, hw, hh = DBr.table_head
+    hx, hy, hw, hh = DBr.header
     band = (slice(int(hy), int(hy + hh)), slice(int(hx), int(hx + hw)))
     assert np.array_equal(frames[-1][band], still[band]), (
-        "scrolled rows leaked over the table header")
+        "scrolled body leaked over the fixed header")
 
 
 def test_the_scrollbar_shows_on_hover_and_not_otherwise(DB):
     """shadcn's default is `type="hover"`: no scrollbar until the pointer is
     over the region. Dwells either side of the easing period."""
     DBr = DB.lay_out(W, H)
-    vx, vy, vw, vh = DBr.table_view
+    vx, vy, vw, vh = page_view(DB)
     import tokens as T
     col = int(vx + vw - T.SCROLL["bar_w"] + T.SCROLL["thumb_inset"] + 3)
     inside = (vx + vw / 2, vy + vh / 2)
-    away = (vx + 40, DBr.header[1] + 20)
+    away = (40, DBr.header[1] + 20)          # over the fixed sidebar
 
     off = DB.render("dark", W, H, script=[away] * DWELL)[-1]
     on = DB.render("dark", W, H,
@@ -483,7 +492,7 @@ def test_the_thumb_lands_where_the_geometry_says(DB):
     import box as B
     import tokens as T
     DBr = DB.lay_out(W, H)
-    vx, vy, vw, vh = DBr.table_view
+    vx, vy, vw, vh = page_view(DB)
     x, y = vx + vw / 2, vy + vh / 2
     frames = DB.render("dark", W, H,
                        script=[(x, y)] * 6 + [(x, y, False, -3.0)] * 8
@@ -491,7 +500,7 @@ def test_the_thumb_lands_where_the_geometry_says(DB):
     st = DB.render.last_state
     s = T.SCROLL
     t = B.scroll_thumb(vx + vw - s["bar_w"], vy, s["bar_w"], vh, vh,
-                       vh + st["table_max"], st["table_scroll"],
+                       vh + st["page_max"], st["page_scroll"],
                        inset=s["track_inset"], thumb_w=s["thumb_w"],
                        thumb_inset=s["thumb_inset"], thumb_min=s["thumb_min"])
     assert t is not None

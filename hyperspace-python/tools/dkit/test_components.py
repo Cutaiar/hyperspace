@@ -415,12 +415,12 @@ def test_the_page_fits_the_window():
     D = _dashboard()
     for w, h in ((1440, 1100), (1280, 900), (1680, 1200)):
         r = D.lay_out(w, h)
-        # 1280x900 leaves room for no table rows at all, which is the honest
-        # answer until ScrollArea lands - a row that does not fit is not a
-        # row, and forcing one hung it 10 px off the bottom.
-        bottom = (r.table_rows[-1][1] + r.table_rows[-1][3] if r.table_rows
-                  else r.table_head[1] + r.table_head[3])
-        assert bottom <= h + 0.01, f"the page overflows at {w}x{h}"
+        # The page SCROLLS now, so the body is taller than the window by
+        # design - that is what body_h is. What must hold is that it is
+        # laid out at its natural height and nothing escapes sideways.
+        bottom = r.table_rows[-1][1] + r.table_rows[-1][3]
+        assert bottom <= D.HEADER_H + r.body_h + 0.01, (
+            f"the body overflows its own natural height at {w}x{h}")
         assert r.controls_card[0] + r.controls_card[2] <= w + 0.01
 
 
