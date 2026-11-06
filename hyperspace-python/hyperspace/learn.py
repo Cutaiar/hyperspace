@@ -878,10 +878,7 @@ class Learn:
                 b.op = "toggle"
         elif kind == "note":
             b.op = "momentary" if pid in HELD_ONLY else "toggle"
-        fb = profile.feedback_for(kind, b.channel, number) if profile is not None else None
-        if fb:
-            b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
-            b.on, b.off = fb.get("on", b.on), fb.get("off", b.off)
+        b.feedback_from(profile)
         self.take()
         undo.push(f"learn {pid}")                    # one undo step (undo.py, plan 15)
         gone = table.bind(b, write=False)            # the patch rows it replaced
@@ -891,7 +888,7 @@ class Learn:
         let_go = list(dict.fromkeys(
             (glyph(x.bare) if glyph is not None else None) or named(x)
             for x in gone if not x.overlaps(b)))
-        under = any(x.overlaps(b) for x in table.node_rows(b.device or None))
+        under = table.under_node_mode(b)
         self.said(f"learned {pid} ← {named(b)} (into the preset)"
                   + (f"; {', '.join(let_go)} let go" if let_go else "")
                   + ("; under node mode until that desk leaves its node" if under else ""))

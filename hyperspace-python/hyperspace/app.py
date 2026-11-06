@@ -115,7 +115,7 @@ from .outputs import (
     View,
 )
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
-from .params import Registry
+from .params import Registry, build_meta
 from .pinch import install as install_pinch
 from .players import Players
 from .pointer import Pointer, Through
@@ -838,46 +838,24 @@ def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
         return None, dream_error(e)
 
 
-def _register_dial(reg: Registry, pad) -> None:
-    """The sticks' dial readings (gamepad.dial, a prototype) as meta controller
-    params on the pad: one enum per stick, and a trigger that swaps the
-    two — the same routes felt the other way, to compare them. Never
-    saved, never performed: the gamepad entry's `dial_left` / `dial_right`
-    set where a launch starts. `pad` is a `gamepad.Pad` or a callable
-    returning the one that is current (the device registry's primary pad,
-    which a config edit may replace); None, no pad: nothing registered."""
-    pad_of = pad if callable(pad) else (lambda: pad)
-    if pad_of() is None or "desk.pad.dial.left" in reg:
-        return
-    modes = list(gamepad.DIAL_MODES)
-
-    def mode_of(stick: str) -> str:
-        p = pad_of()
-        return (p.dial_modes if p is not None else gamepad.DIAL_DEFAULT).get(
-            stick, gamepad.DIAL_DEFAULT[stick])
-
-    def set_mode(stick: str, i) -> None:
-        p = pad_of()
-        if p is not None:
-            p.dial_modes[stick] = modes[int(i) % len(modes)]
-
-    tip = ("How the {} stick reads as a dial (its axis:{}.* lanes): petal, the "
-           "sector it points into gets the whole push; blend, neighbouring sectors "
-           "crossfade as it sweeps round.")
-    for stick, side in (("L", "left"), ("R", "right")):
-        reg.enum(f"desk.pad.dial.{side}", f"{side.capitalize()} dial",
-                 lambda s=stick: modes.index(mode_of(s)),
-                 lambda i, s=stick: set_mode(s, i),
-                 modes, group="desk", persist=False, modulatable=False,
-                 tip=tip.format(side, stick))
-
-    def swap():
-        p = pad_of()
-        if p is not None:
-            m = p.dial_modes
-            m["L"], m["R"] = m.get("R", "blend"), m.get("L", "petal")
-    reg.trigger("desk.pad.dial.swap", "Swap dials", swap, group="desk", modulatable=False,
-                tip="Swap the two sticks' dial readings — petal ↔ blend.")
+def _dial_launch(cfg: dict) -> dict[str, str]:
+    """Each stick's dial reading at launch, {"L": …, "R": …}: the first enabled gamepad
+    entry's `dial_left` / `dial_right` (`[[devices]]`, or the old `[gamepad]` table
+    translated), else `gamepad.DIAL_DEFAULT`. What a loadable patch naming none gets. A
+    reading is a deck's, not a pad's, so there is one pair: a later entry's that differs
+    is said (`cfg["notes"]`, the SYSTEM page) and not read."""
+    out = dict(gamepad.DIAL_DEFAULT)
+    pads = [e for e in config.devices(cfg) if e.get("kind") == "gamepad" and e.get("enabled", True)]
+    keys = (("L", "dial_left"), ("R", "dial_right"))
+    for stick, key in keys:
+        if pads and pads[0].get(key) in gamepad.DIAL_MODES:
+            out[stick] = pads[0][key]
+    for e in pads[1:]:
+        if any(e.get(key) in gamepad.DIAL_MODES and e[key] != out[stick] for stick, key in keys):
+            cfg.setdefault("notes", []).append(
+                f"config: {e.get('role')}: dial_left / dial_right are read on the first "
+                "enabled pad only; a loadable patch's own readings win")
+    return out
 
 
 class Awake:
@@ -1652,15 +1630,15 @@ def main(argv: list[str] | None = None) -> None:
         renderer.segment_cfg = cfg.get("segment", {})   # the segment workers' backend (plan 39 T4)
         # …closed with the adapters, at quit and restart — deck 2's too (plan 44 D4)
         segmenters = _Closer(lambda: _close_each([r.close for r in rendering]))
-        # the sticks as dials (gamepad.dial, a prototype): shared meta params on
-        # whichever pad is the primary now
-        _register_dial(reg, lambda: device_reg.adapter("gamepad"))
         awake = _open_awake(cfg)               # no screensaver over the show
         return _DevicesMade(device_reg, dream_io, awake, segmenters)
 
+    restart = lambda: [setattr(p, "restart_requested", True) for p in panels]
+    # the meta controller's params, with what any deck's registry reads as it is built
+    meta_reg = build_meta(control, audio, restart, media=media.state)
+    meta_reg.dial_launch = _dial_launch(cfg)
     deck = Deck.build(library=library, control=control, audio=audio, table=load_table,
-                      renderer=renderer, media=media.state,
-                      restart=lambda: [setattr(p, "restart_requested", True) for p in panels],
+                      renderer=renderer, media=media.state, restart=restart, meta_reg=meta_reg,
                       hands=hands_setup, outputs=outputs_setup, panel=panel_setup,
                       devices=devices_setup, made=made, warm=True)
     hand_settings, output, panel = made.hands, made.outputs, made.panel

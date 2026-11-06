@@ -38,14 +38,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import apc40, generic, nodemode
+from . import nodemode
 from .devices import MidiDevice
 from .routing import Binding
+from .routing_sources import BUILTIN_LANES, DECK_SCHEMES, qualified
 
 KIND = "midi"                  # what a saved entry's `controller` says of a desk
-PROFILES = {"apc40": apc40, "generic": generic}
 # the schemes that are no controller's: what a route from one modulates is still free
-MODULATORS = frozenset({"lane", "lfo", "env", "seq", "mod"})
+MODULATORS = frozenset(BUILTIN_LANES) | DECK_SCHEMES
 
 NOT_FIRST = "{role} is player {player}'s second desk: a patch points at a player's first"
 NO_SHAPE = "{role} has no known knobs or faders to fill"
@@ -54,12 +54,26 @@ NO_SHAPE = "{role} has no known knobs or faders to fill"
 def _address(source: str, qualifier: str) -> str:
     """A bare source, as this desk's rows spell it."""
     scheme, _, rest = source.partition(":")
-    return f"{scheme}@{qualifier}:{rest}" if qualifier else source
+    return f"{qualified(scheme, qualifier)}:{rest}"
 
 
-def freedoms_of(profile: str) -> list[tuple[str, ...]]:
+def same_control(a: Binding | str, b: Binding) -> bool:
+    """Are these one physical control of one desk? Their qualifiers have been settled by
+    the caller (`Bindings.serves`): a first desk's row may spell its own role or none."""
+    bare = a if isinstance(a, str) else a.bare
+    return Binding(bare, "").overlaps(Binding(b.bare, ""))
+
+
+def profile_of(devices, role: str):
+    """The MIDI profile module of the desk `role`, None for a role with none. `midi.PROFILES`,
+    asked for here because `midi` (and mido) is imported only once a desk opens."""
+    from .midi import PROFILES
+    return PROFILES.get(getattr(devices.get(role), "profile", ""))
+
+
+def freedoms_of(profile) -> list[tuple[str, ...]]:
     """What a MIDI profile's desk has to fill: none for a desk of unknown shape."""
-    fn = getattr(PROFILES.get(profile), "degrees_of_freedom", None)
+    fn = getattr(profile, "degrees_of_freedom", None)
     return fn() if fn is not None else []
 
 
@@ -92,20 +106,24 @@ class NodeDesk:
     """A `Deck`'s derived desk rows. It reads the deck's loadable patch, registry and
     table, and only asks the meta controller who holds what and where it is."""
 
-    def __init__(self, deck, devices, players, pointer_of):
+    def __init__(self, deck, devices, meta):
         self.deck = deck
         self.devices = devices      # `DeviceRegistry`
-        self.players = players      # `players.Players`
-        self.pointer_of = pointer_of
+        self.meta = meta            # `MetaController`: who holds what, and where it is
         self._now: dict[str, _Now] = {}
 
     # ---- who ----
 
     def _desks(self) -> list[MidiDevice]:
-        return [d for d in getattr(self.devices, "devices", ()) if isinstance(d, MidiDevice)]
+        """The desks that are open or could be (an entry switched off is no `MidiDevice`),
+        in the order that makes one first: `DeviceRegistry.midi_roles`, whose first is the
+        desk the bindings were written for, so a generic box listed above the APC40 is
+        not its player's first desk."""
+        desks = {d.role: d for d in self.devices.devices if isinstance(d, MidiDevice)}
+        return [desks[r] for r in self.devices.midi_roles() if r in desks]
 
     def player_of(self, role: str) -> int:
-        return self.players.player_of(role).number
+        return self.meta.players.player_of(role).number
 
     def is_first(self, role: str) -> bool:
         """Is `role` its player's first desk listed, the one a saved entry reaches?"""
@@ -113,10 +131,10 @@ class NodeDesk:
         return next((d.role for d in self._desks() if self.player_of(d.role) == n), None) == role
 
     def on_here(self, role: str) -> bool:
-        return self.pointer_of(role).deck is self.deck
+        return self.meta.pointer(role).deck is self.deck
 
-    def _profile(self, role: str) -> str:
-        return next((d.profile for d in self._desks() if d.role == role), "")
+    def _profile(self, role: str):
+        return profile_of(self.devices, role)
 
     # ---- the rows ----
 
@@ -136,8 +154,8 @@ class NodeDesk:
                 continue
             spelled = b.source
             if mine:
-                spelled = next((_address(f[0], q) for f in freedoms
-                                if Binding(_address(f[0], q), "").overlaps(b)), b.source)
+                spelled = next((_address(f[0], q) for f in freedoms if same_control(f[0], b)),
+                               b.source)
             out.append((spelled, b.target))
         return out
 
@@ -149,7 +167,7 @@ class NodeDesk:
         node = deck.loaded_patch.node_mode.of(player, KIND) if self.is_first(role) else None
         key = (node, player, getattr(deck.reg, "serial", 0), id(t.bindings), len(t.bindings),
                t.rows_serial, t.desk_serial, getattr(t, "redraw_serial", 0),
-               self._profile(role), t.is_primary(role))
+               getattr(self.devices.get(role), "profile", ""), t.is_primary(role))
         if key == now.key:
             return now
         now.key, now.node, now.player = key, node, player
@@ -170,16 +188,14 @@ class NodeDesk:
         t, reg = self.deck.table, self.deck.reg
         q = "" if t.is_primary(role) else role
         keep = {(b.source, b.target): b for b in had}
-        profile = PROFILES.get(self._profile(role))
+        profile = self._profile(role)
         out = []
         for slot in fit.slots:
             source = _address(slot.sources[0], q)
             b = keep.get((source, slot.param))
             if b is None:
                 b = Binding(source, slot.param, "abs", layer="preset")
-                fb = profile.feedback_for(b.kind, b.channel, b.number) if profile else None
-                if fb:
-                    b.feedback, b.ring = fb["feedback"], fb.get("ring", b.ring)
+                b.feedback_from(profile)
                 b.words = reg[slot.param].label or slot.param     # the on-screen desk's
                 b.node_mode = True                                # …which draws it as one
             out.append(b)
@@ -201,7 +217,7 @@ class NodeDesk:
         control they fill)? It does not act until they go."""
         if not b.is_midi or b.layer != "preset":
             return False
-        return any(x.overlaps(b) for x in self.rows(self.deck.table.role_of(b) or None))
+        return any(same_control(x, b) for x in self.rows(self.deck.table.role_of(b) or None))
 
     def held(self) -> list[Held]:
         """Every desk this patch can point, in list order: a player's first of each."""
@@ -232,7 +248,7 @@ class NodeDesk:
         if why is None:
             why = self.deck.loaded_patch.point_node_mode(self.player_of(role), KIND, node)
         if why is None:
-            self.pointer_of(role).deck = self.deck
+            self.meta.point(role, self.deck)
         return why
 
     def leave(self, role: str) -> None:
@@ -253,4 +269,4 @@ class NodeDesk:
 def install(meta, devices) -> None:
     """A `NodeDesk` on each of the two `Deck`s' tables (`app.main`)."""
     for deck in meta.decks:
-        deck.table.node_desk = NodeDesk(deck, devices, meta.players, meta.pointer)
+        deck.table.node_desk = NodeDesk(deck, devices, meta)

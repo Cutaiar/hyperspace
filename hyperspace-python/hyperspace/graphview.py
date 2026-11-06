@@ -2079,6 +2079,7 @@ AREA: dict[str, str] = {
     "group:master": AUDIO, "group:audio": AUDIO, "group:scene": AUDIO,
     "group:lfo": MODULATION, "group:mod": MODULATION, "group:macro": MODULATION,
     "group:env": MODULATION, "group:seq": MODULATION,
+    "group:pad": CONTROLLERS,
     "group:view": SCENE_AREA, "group:rot": SCENE_AREA, "group:pattern": SCENE_AREA,
     "group:camera": SCENE_AREA, "group:eye": SCENE_AREA, "group:ghost": SCENE_AREA,
     "group:hands": SCENE_AREA, "group:cloud": SCENE_AREA, "group:backdrop": SCENE_AREA,

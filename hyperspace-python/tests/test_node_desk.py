@@ -7,6 +7,8 @@ reaches another through them.
 
 from __future__ import annotations
 
+import ast
+import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,7 +18,7 @@ from test_meta_controller import DESK, _pointed
 from test_midi import FakeIn, FakeOut
 from test_undo import boot
 
-from hyperspace import apc40, devices, learn, node_desk, nodemode, routing, undo
+from hyperspace import apc40, app, devices, generic, learn, node_desk, nodemode, routing, undo
 from hyperspace.midi import MidiIO
 from hyperspace.players import Duty
 from hyperspace.routing import Binding
@@ -499,3 +501,139 @@ def test_the_seq_page_and_node_mode_stand_together(rig):
         assert t.dispatch("cc", 0, K1, DESK)[0] is rig.nd1.rows()[0]
     finally:
         t.set_page(None)
+
+
+# ---------------------------------------------------------------- review of #396
+
+
+def _generic_above(rig):
+    t = rig.one.table
+    io = MidiIO(rig.one.reg, t, inp=FakeIn(), out=FakeOut(), learner=rig.one.learn,
+                role="box", profile="generic")
+    box = devices.MidiDevice("box", {"profile": "generic"},
+                             devices.Context(reg=rig.one.reg, table=t), io=io)
+    rig.devs.devices.insert(0, box)
+    t.midi_roles = rig.devs.midi_roles()
+    return box
+
+
+def test_a_generic_box_listed_above_the_apc40_is_not_its_players_first_desk(rig):
+    _generic_above(rig)
+    node, _ = pick_node(rig.one)
+    assert rig.nd1.is_first(DESK) and not rig.nd1.is_first("box")
+    assert rig.nd1.refusal(DESK, node) is None
+    assert rig.nd1.enter(DESK, node) is None
+    assert rig.nd1.rows(DESK) and rig.nd1.rows("box") == []
+
+
+def test_an_entry_switched_off_was_never_a_first_desk(rig):
+    """Half of a review finding, disproved: an off entry is an `OffDevice`, no `MidiDevice`."""
+    t = rig.one.table
+    off = devices.OffDevice("old", "midi", {"role": "old", "kind": "midi", "enabled": False})
+    rig.devs.devices.insert(0, off)
+    t.midi_roles = rig.devs.midi_roles()
+    assert rig.nd1.is_first(DESK)
+
+
+def test_a_first_desks_row_spelling_its_own_role_takes_its_freedom(rig):
+    node, params = pick_node(rig.one)
+    t = rig.one.table
+    mine = Binding(f"cc@{DESK}:0:{K1}", params[0], "abs", layer="preset")
+    t.bind(mine, write=False)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert f"cc:0:{K1}" not in {b.source for b in rig.nd1.rows()}
+    assert rig.nd1._follow(DESK).fit.kept == (params[0],)
+    assert rig.nd1.rows()[0].target == params[1]
+
+
+def test_an_invariant_row_spelling_its_own_role_keeps_its_control(rig):
+    node, params = pick_node(rig.one)
+    t = rig.one.table
+    t.bind(Binding(f"cc@{DESK}:0:{K1}", "view.speed", "abs"), write=False)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert f"cc:0:{K1}" not in {b.source for b in rig.nd1.rows()}
+    assert rig.nd1.rows()[0].target == params[0]
+
+
+def test_under_reads_a_row_spelling_its_own_role(rig):
+    node, params = pick_node(rig.one)
+    t = rig.one.table
+    t.remove(next(b for b in t.desk() if b.source == f"cc:0:{K1}"))
+    other = next(p.id for p in rig.one.reg if p.modulatable and p.id not in params
+                 and routing.meta_refusal(p.id) is None and p.kind.name == "CONTINUOUS")
+    saved = Binding(f"cc@{DESK}:0:{K1}", other, "abs", layer="preset")
+    t.bind(saved, write=False)
+    assert not rig.nd1.under(saved)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert rig.nd1.rows()[0].source == f"cc:0:{K1}"
+    assert rig.nd1.under(saved)
+
+
+def test_an_adapter_from_before_a_hot_reload_holds_a_shorter_tuple(rig):
+    rig.midi._seen = rig.midi._seen[:4]
+    rig.push()                              # (a slice, not an index)
+    assert len(rig.midi._seen) == 5
+
+
+def test_the_desks_map_moves_when_the_rows_do(rig):
+    pytest.importorskip("imgui_bundle")
+    from hyperspace import ui, ui_desk  # noqa: F401 — (`ui` first: ui_desk imported cold trips)
+    t = rig.one.table
+    node, params = pick_node(rig.one)
+    before = ui_desk._key(t)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert ui_desk._key(t) != before
+    assert ui_desk.lit(t)["K1"].target == params[0]
+
+
+def test_install_is_once_in_main_and_no_device_listener_replaces_it(rig):
+    """A review finding, disproved: `node_desk.install` is in `main`'s own body, not in the
+    `point_at_devices` listener, so a pad reconnecting keeps each deck's rows and catches."""
+    tree = ast.parse(inspect.getsource(app.main))
+    main = tree.body[0]
+
+    def calls(n):
+        return [x for x in ast.walk(n) if isinstance(x, ast.Call)
+                and ast.unparse(x.func) == "node_desk.install"]
+    nested = [f for f in ast.walk(main) if isinstance(f, ast.FunctionDef | ast.Lambda)
+              and f is not main]
+    assert len(calls(main)) == 1 and not any(calls(f) for f in nested)
+    node, _ = pick_node(rig.one)
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    row, keeper = rig.nd1.rows()[0], rig.one.table.node_desk
+    rig.devs.entries = [{"role": DESK, "kind": "midi", "profile": "apc40", "enabled": True}]
+    rig.devs.apply([dict(e) for e in rig.devs.entries])         # nothing changed: it stays
+    for told in rig.devs.listeners:
+        told()
+    assert rig.one.table.node_desk is keeper and rig.nd1.rows()[0] is row
+
+
+def test_enter_goes_through_the_meta_controllers_door(rig):
+    node, _ = pick_node(rig.one)
+    went = []
+    real = rig.meta.point
+    rig.meta.point = lambda role, deck: (went.append((role, deck)), real(role, deck))
+    assert rig.nd2.refusal(DESK, node) is None
+    assert rig.nd2.enter(DESK, node) is None
+    assert went == [(DESK, rig.two)]
+    rig.meta.point = real
+    with pytest.raises(ValueError):                 # …which checks the deck is one of its two
+        rig.meta.point(DESK, object())
+
+
+def test_a_new_built_in_lane_counts_as_a_modulator_by_import():
+    from hyperspace.routing_sources import BUILTIN_LANES, DECK_SCHEMES
+    assert node_desk.MODULATORS == set(BUILTIN_LANES) | DECK_SCHEMES
+    assert node_desk.freedoms_of(generic) == []
+
+
+def test_a_row_takes_the_profiles_whole_feedback_as_a_learn_does(rig):
+    b = Binding("note:0:53", "x", "toggle")
+    b.feedback_from(apc40)
+    assert (b.feedback, b.on, b.off) == ("led", apc40.GREEN, 0)
+    k = Binding(f"cc:0:{K1}", "x", "abs")
+    k.feedback_from(apc40)
+    assert (k.feedback, k.ring) == ("ring", apc40.RING_VOLUME)
+    was = Binding(f"cc:0:{K1}", "x", "abs")
+    was.feedback_from(None)
+    assert was.feedback is None
