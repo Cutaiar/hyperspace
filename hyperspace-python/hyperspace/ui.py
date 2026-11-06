@@ -55,6 +55,7 @@ from . import (
     ui_pane,
     ui_patterns,
     ui_players,
+    ui_playlist,
     ui_routing,
     ui_seq,
     undo,
@@ -684,10 +685,10 @@ CHEATSHEET = [
 # the sections that hold the meta controller's params: ⌘Z there takes its stack
 # (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
 # output; audio holds the master faders and nothing of a loadable patch (row 692)
-META_SECTIONS = ("output", "audio", "analyzer", "hands")
+META_SECTIONS = ("output", "audio", "analyzer", "hands", "playlist")
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-             "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players"]
+             "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
 
 
 class PageHistory:
@@ -806,6 +807,7 @@ class Panel:
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.meta_undo = None  # the meta controller's stack (plan 44 D5b): so does its
         self.meta = None       # set by app.py (deck.MetaController): GRAPH's head, the player screen
+        self.playing = None    # set by app.py (playlist.Playing): the playlist section
         self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
         self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
@@ -2111,6 +2113,10 @@ class Panel:
     def _page_players(self, dt: float) -> None:
         """Who is on air, and what they hold (ui_players.py)."""
         ui_players.section(self, dt)
+
+    def _page_playlist(self, dt: float) -> None:
+        """The playlist, for installs (ui_playlist.py)."""
+        ui_playlist.page(self, dt)
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""

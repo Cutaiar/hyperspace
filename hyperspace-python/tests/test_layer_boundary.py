@@ -31,6 +31,7 @@ from hyperspace import (
     graphview,
     hands,
     patches,
+    playlist,
     poi,
     routing,
     totem,
@@ -82,6 +83,7 @@ def rig(air_rig):  # noqa: F811
     totem.register(r.one.reg, totem.TotemState())
     poi.register(r.one.reg, poi.PoiState(), {})
     app._share_experiments(r.one.reg, r.two.reg, poi_cfg={})
+    playlist.register(r.one.reg, playlist.Playing(r.meta, r.lib))
     return r
 
 

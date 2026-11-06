@@ -170,7 +170,7 @@ PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media
                       "backdrop", "switch", "resize", "matte", "cut", "segment", "ghost",
                       "cloud", "lfo", "env", "seq", "macro", "mod")
 SHARED_META_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk")
+                  "overlay", "ui", "desk", "playlist")
 # plan 44 D3 (row 612): the shared meta params inside a patch group, by
 # group → the last segment of their ids — `ghost.mirror`, and an extra
 # hands node's `ghost.2.mirror`. They keep their group (the HANDS page

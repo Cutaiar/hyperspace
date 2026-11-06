@@ -32,6 +32,14 @@ five minutes whatever the fades take. It is the entry's that has just gone on ai
 mtime moves), so an edit or the other Mac's save lands at the next advance, with no
 restart. A file that has gone keeps the last list playing, and says so.
 
+**Its controls** (`register`): `playlist.play`, `.next` and `.prev`, one object on both
+decks (a shared meta group), never saved and not modulatable, so no patch's row can press
+one (`routing.meta_refusal`); a key or a pad button may, those being the meta controller's.
+
+**Undo** (row 709). Each load is a step on that deck's stack, the most that stack keeps
+is `undo.LIMIT`, and each load and each fade latches the panel's stack (row 753), so ⌘Z on
+a cart left running refuses and takes nothing back until someone changes something there.
+
 Imports only `library`; the meta controller, the decks and the fade arrive as arguments
 and are used duck-typed, so `tests/test_playlist.py` runs `tick` over stand-ins.
 """
@@ -135,6 +143,7 @@ class Playing:
         self.fails = 0                  # entries in a row that would not load or draw
         self.fade_at = self.load_at = SOON
         self.waited = False             # has this wait been said?
+        self.last = 0.0                 # the frame's clock, as `tick` last saw it
 
     # ---- what a person does ----
 
@@ -169,8 +178,9 @@ class Playing:
             self.lib.say(warning=why)
 
     def step(self, by: int = 1) -> None:
-        """Go on (+1) or back (-1) now, whatever is left of the dwell. Stopped: only
-        moves the place it will play from."""
+        """Go on (+1) or back (-1) now, whatever is left of the dwell. Stopped, nothing
+        fades: back moves the place it will play from, and on leaves it, as play goes on
+        from there anyway."""
         entries = self.playlist.entries if self.playlist is not None else ()
         if not entries:
             return
@@ -185,6 +195,7 @@ class Playing:
     def tick(self, now: float) -> None:
         """One compare a frame while a look dwells (`load_at`); the rest runs only
         around an advance."""
+        self.last = now
         if self.on and now >= self.load_at:
             self._due(now)
 
@@ -272,6 +283,24 @@ class Playing:
         self.lib.say(f"playlist {self.playlist.name}: {entry.loadable}, "
                      f"{k + 1} of {len(entries)}, for {entry.dwell_s:g} s")
 
-    def left(self, now: float) -> float | None:
+    def left(self) -> float | None:
         """Seconds until the next fade is due, or None: stopped or due now."""
-        return self.fade_at - now if self.on and self.fade_at > now else None
+        return self.fade_at - self.last if self.on and self.fade_at > self.last else None
+
+
+PLAY_TIP = ("Play the playlist: each look loads off air, then the crossfader runs across. For "
+            "an install: it does not wait for anyone's edits, and it writes over the deck off air.")
+
+
+def register(reg, playing: Playing) -> list[str]:
+    """`playlist.play`, `.next`, `.prev`: the meta controller's (`params.SHARED_META_GROUPS`),
+    an operator's verbs. Declared once, on both decks, from lambdas so a hot reload lands."""
+    settings = {"group": "playlist", "modulatable": False}
+    reg.toggle("playlist.play", "Playlist", lambda: playing.on,
+               lambda v: playing.play() if v else playing.stop(), persist=False, tip=PLAY_TIP,
+               **settings)
+    reg.trigger("playlist.next", "Playlist on", lambda: playing.step(1),
+                tip="The next look now, whatever is left of this one's dwell.", **settings)
+    reg.trigger("playlist.prev", "Playlist back", lambda: playing.step(-1),
+                tip="The look before this one, now.", **settings)
+    return ["playlist.play", "playlist.next", "playlist.prev"]

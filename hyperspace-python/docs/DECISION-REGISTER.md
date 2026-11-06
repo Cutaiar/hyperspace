@@ -737,6 +737,8 @@ here; overturn → the change, then the same.
 | 705 | Plan 44 D6a: a playlist is a file kind of the library's, `<library>/playlists/<slug>.json`, `hyperspace.playlist/1`, `{name, entries: [{loadable, dwell_s, fade_s?}]}`; `read` checks it, nothing lands it, a load of one is refused in words | — | owner — 2026-11-04: "seconds, `playlists/`, no pausing" |
 | 706 | Plan 44 D6a: an advance is `LEAD_S` (2 s) of load and warm on the deck off air, then `MetaController.crossfade`; dwell runs fade start to fade start; `fade_s` absent is `output.xfade_s`; a missing patch is skipped and said, every entry in a row stops; the file is read again before each load | — | owner — 2026-11-04: "a new look every five minutes"; the reading's DQ5 |
 | 707 | Plan 44 D6a: no guards against the operator. It does not wait on a dirty deck, an open undo step or the panel; it does wait while the crossfader is between its ends, a fact of the mixer, and loads again if on air has moved. No third deck; no second dream worker | — | owner — 2026-11-04: "it needs no guards against the operator"; overrules plan 44 §6 and the reading's DQ5 rec |
+| 708 | Plan 44 D6b: `playlist.play`, `.next`, `.prev`, group `playlist`, a shared meta group, never saved, not modulatable, so `routing.meta_refusal` refuses a patch's row by the id; `MetaController.tick` ticks it last, one hook; a new pane section, `ui.PAGE_KEYS` appended; `MIN_BODY_H` 150 to 140 so a fresh launch at 900 px keeps no scrollbar. `playlist.select` is not a param: a file's name is no enum, the section's list chooses | — | owner — 2026-11-06: "a playlist is an operator's verb", via the orchestrator's rule; (rec) on `playlist.select` |
+| 709 | Plan 44 D6b: the warm draw before each fade, waited for, and a look that will not draw is skipped. A load and a fade each latch the panel's stack on every advance, kept as row 753 has it; a load's step stays on its deck's stack, at most `undo.LIMIT`. Measured below | — | owner — 2026-11-06: row 753; (rec) that the latch is right on an install |
 | 715 | Plan 57 NM0: a loadable patch saves node mode as `{"player", "controller", "node"}`, the rows derived; `controller` is a device kind | 546 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on saving it and on naming a player; (rec) — pending the owner on `controller` |
 | 716 | Plan 57 NM0: the fill: what stays, what fills, what is listed; a `NODE_MODE` cable kind in green | 546, 548 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on the rule; (rec) — pending the owner on the colour and on a row elsewhere taking its freedom |
 | 717 | Plan 57: NM0 is an optional key, no bump; the rest is one migration, whose order and questions are in plan 57 | 547 | owner — 2026-11-06: yes, and all of it in one migration: "coordinating the migration is not hard" (`plans/57-format-lane.md` §6) |
@@ -13157,6 +13159,28 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   on air loads again: otherwise the fade would run back to what was on air.
 - **DQ8.** No second dream worker: `test_an_advance_is_one_mix_pass` holds that the module imports only `library` and
   names no fade, draw or worker of its own.
+
+### 708. Its controls and its section
+
+- **Answer.** A playlist is an operator's verb, so `routing.meta_refusal` applies.
+- **Built.** Group `playlist` joins `SHARED_META_GROUPS`, so the ids class by their first segment and no list of ids is
+  needed. `tests/test_layer_boundary.py`'s rig registers them, so the one-layer walk covers them. A route or desk row on one in
+  a file is dropped with a note at load, as any meta row is. A key or a pad's own row may press one: those are the meta
+  controller's.
+- **Not built.** `playlist.select`, plan 44 §6's. A file's name is no enum, and nothing but the section chooses.
+- **Cost of a section.** One more header took a fresh launch at 900 px past the pane by 17 px, so `MIN_BODY_H` went from 150 to 140.
+- **Frame cost.** `Playing.tick` costs about 30 ns a frame, stopped or dwelling (40 ns by `timeit`, less the call's 11 ns): one attribute write and one compare. `MetaController.tick` adds one `is not None`. The rest runs only around an advance.
+- **Judge it.** 539.
+
+### 709. Ready before the fade, and the latch
+
+- **Measured.** The real app, `tools/drive_playlist.py`, on the shared Mac with load averages of 7 to 11, three runs, 16 fades each, eight corpus looks, frames about 8 ms. A load: median 13 ms, worst 101 ms. A warm draw: median 3 ms, worst 15 ms. A fade's first frame: median 8 ms, worst 12, 49 and 87 ms across the runs, the frame the warm draw is for. A frame in a fade: median 9 ms. **What is left:** frames over 100 ms all came in the first round, 5 or 6 a run, up to 352 ms, in a fade or just after it; a second round of the same looks had none. Timed by part, most have only a few ms in both renderers' draws (309 ms with 5 ms of draw), so the time is outside the draw code, in the panel, the swap or the driver, and one had 115 ms in the draw. Not explained further, and this Mac's load may be part of it: for check 539 on the rig. No fade or warm error in any run.
+- **The latch on an install.** Each load onto the other `Deck` shuts the panel's stack when the panel is on air, and each fade
+  shuts it whichever deck it is on (`undo.on_air`). So on a cart ⌘Z refuses after every advance until someone changes something:
+  nobody's ⌘Z takes a look out of the room. A change opens it, and then ⌘Z goes all the way down, as row 753 says, so far enough
+  back it reaches a load the playlist made on that deck. Left as row 753 has it, and asked of the owner.
+- **Memory.** A load's step is about 65 KB headless (tracemalloc, 100 steps 6.9 MB, 130 loads still 100 steps, 7.0 MB), so at most about 7 MB a deck. **The leak this found:** `SceneTarget.ensure` never kept its multisampled colour renderbuffer, so never released it, since 2026-09-19. One went at every fade's rest, 10 to 15 MB each here: footprint 3138 MB after 120 advances, over 4 GB a day at one every five minutes. Isolated by the kernel's counter: idle, a load and a warm draw flat, only fades grew; counted by call site, `render.py:724` held 16 of 16 made. Fixed here: 964 to 950 MB over the same 120 advances, flat at idle. Any fade or window resize gains, not only a playlist.
+- **Judge it.** 540.
 
 ### 715. What a loadable patch saves of node mode
 

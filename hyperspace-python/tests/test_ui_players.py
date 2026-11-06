@@ -632,7 +632,7 @@ def test_a_panel_with_no_meta_controller_draws_no_board(tmp_path, monkeypatch):
 
 def test_players_is_a_section_at_the_end_of_the_page_keys():
     """Append-only: every saved binding keeps its slot."""
-    assert PAGE_KEYS[-1] == "players" and PAGE_KEYS.index("system") == 15
+    assert PAGE_KEYS.index("players") == 16 and PAGE_KEYS.index("system") == 15   # append-only
     assert "players" in ui_pane.KEYS
 
 
