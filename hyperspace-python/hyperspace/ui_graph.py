@@ -2378,6 +2378,7 @@ def _group_side(panel, st: dict, view: graphview.View, g) -> None:
                                      imgui.InputTextFlags_.enter_returns_true)
     names[g.id] = (g.name, text)
     if entered:
+        undo.by_hand(True)              # the field's own report: row 757
         rename_group(panel, g.id, text)
     if g.patch:
         imgui.text_disabled(f"from patch {g.patch}")
