@@ -37,11 +37,12 @@ Regenerating artefacts needs `uv` and a Chromium (`QRD_CHROME` overrides the
 lookup). Nothing else is machine-specific; verified by cloning the branch
 clean and running the whole thing.
 
-## Four views
+## Five views
 
 | view | what it is |
 | --- | --- |
 | **gallery** | 29 stills. Pick a destination (screen px, sticker mm, etched, projected) and every code gets a verdict against it. |
+| **families** | The same stills grouped by what the solid *is* — hypercubes, cross-polytopes, duoprisms, simplexes, the 24-cell — including the members that have no still, and why. |
 | **live solver** | Re-derives the code per update, 0.2 ms a solve. Grab it and fold it. |
 | **sprite** | 216 precomputed frames, 94 KB, no solver on the client. |
 | **stickers** | Lay codes on a sheet, see the cut lines, export SVG or PDF. |
@@ -52,6 +53,11 @@ clean and running the whole thing.
   solves in 0.2 ms instead of 2 s. The URL is baked into the factorisation —
   point it elsewhere and every artefact must be rebuilt.
 - **29 stills** across eight subjects, seven dot styles, six palettes.
+- **The family tree.** `gen/polytopes.py` carries the taxonomy and the reject
+  log as data rather than a comment, `gallery.py` writes both into the
+  manifest, and the families view reads it. A subject that was rendered and
+  rejected is part of the answer, so it is shown with its reason instead of
+  being absent.
 - **Measurement.** `gen/robust.py` measures the *rendered* file, not the
   matrix: min px/module, blur tolerance, flash tolerance. The manifest carries
   those plus the module grid as base64.

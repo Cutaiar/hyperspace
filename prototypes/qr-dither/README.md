@@ -24,10 +24,14 @@ cd app && npm install && npm run dev
 ```
 
 Then <http://localhost:5181>. Vite 8 binds IPv6 only, so `127.0.0.1` will not
-answer — use `localhost`. Three views:
+answer — use `localhost`. Five views:
 
 - **gallery** — 29 stills across eight 4D subjects, seven dot styles and six
   palettes. Pick a destination and every code gets a verdict against it.
+- **families** — the same stills grouped by what the solid *is*. Which
+  orientations survive module quantisation is a property of a family's edge
+  set, not of any one solid, so the family is the unit that explains why the
+  tesseract has six orientations and the 5-cell has none.
 - **live solver** — re-derives the whole code per update, **0.2 ms** a solve.
   Grab it and fold it.
 - **sprite** — 216 precomputed frames, 94 KB, every one decode-verified.

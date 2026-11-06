@@ -14,6 +14,8 @@
    "pose": "tess_nested",
    "stroke": 2,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -40,6 +42,8 @@
    "pose": "tess_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -66,6 +70,8 @@
    "pose": "tess_wide",
    "stroke": 2,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -92,6 +98,8 @@
    "pose": "tess_deep",
    "stroke": 2,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -118,6 +126,8 @@
    "pose": "tess_tilt_deep",
    "stroke": 2,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -144,6 +154,8 @@
    "pose": "tess_shallow",
    "stroke": 3,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -170,6 +182,8 @@
    "pose": "c16_star",
    "stroke": 5,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -196,6 +210,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -222,6 +238,8 @@
    "pose": "duo48_flat",
    "stroke": 2,
    "version": 12,
+   "subject": "duo48",
+   "family": "duoprism",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -248,6 +266,8 @@
    "pose": "duo88_flat",
    "stroke": 2,
    "version": 12,
+   "subject": "duo88",
+   "family": "duoprism",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -274,6 +294,8 @@
    "pose": "duo88_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "duo88",
+   "family": "duoprism",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -300,6 +322,8 @@
    "pose": "c24_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell24",
+   "family": "exceptional",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -326,6 +350,8 @@
    "pose": "cube_flat",
    "stroke": 2,
    "version": 12,
+   "subject": "cube",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -352,6 +378,8 @@
    "pose": "cube_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cube",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -378,6 +406,8 @@
    "pose": "tess_tilt",
    "stroke": 3,
    "version": 15,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -404,6 +434,8 @@
    "pose": "duo88_tilt",
    "stroke": 3,
    "version": 12,
+   "subject": "duo88",
+   "family": "duoprism",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -430,6 +462,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "square",
    "eye_frame": "square",
    "eye_core": "square",
@@ -456,6 +490,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "rounded",
    "eye_frame": "rounded",
    "eye_core": "rounded",
@@ -482,6 +518,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "extra-rounded",
    "eye_frame": "extra-rounded",
    "eye_core": "extra-rounded",
@@ -508,6 +546,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "dots",
    "eye_frame": "dot",
    "eye_core": "dot",
@@ -534,6 +574,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "dots-tight",
    "eye_frame": "dot",
    "eye_core": "dot",
@@ -560,6 +602,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "classy",
    "eye_frame": "rounded",
    "eye_core": "square",
@@ -586,6 +630,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "classy-rounded",
    "eye_frame": "rounded",
    "eye_core": "rounded",
@@ -612,6 +658,8 @@
    "pose": "tess_tilt_deep",
    "stroke": 2,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "extra-rounded",
    "eye_frame": "rounded",
    "eye_core": "rounded",
@@ -638,6 +686,8 @@
    "pose": "tess_tilt_deep",
    "stroke": 2,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "extra-rounded",
    "eye_frame": "rounded",
    "eye_core": "rounded",
@@ -664,6 +714,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "rounded",
    "eye_frame": "rounded",
    "eye_core": "rounded",
@@ -690,6 +742,8 @@
    "pose": "c16_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "cell16",
+   "family": "orthoplex",
    "dot": "square",
    "eye_frame": "rounded",
    "eye_core": "rounded",
@@ -716,6 +770,8 @@
    "pose": "duo88_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "duo88",
+   "family": "duoprism",
    "dot": "dots",
    "eye_frame": "rounded",
    "eye_core": "rounded",
@@ -742,6 +798,8 @@
    "pose": "tess_tilt",
    "stroke": 2,
    "version": 12,
+   "subject": "tesseract",
+   "family": "hypercube",
    "dot": "extra-rounded",
    "eye_frame": "rounded",
    "eye_core": "rounded",
@@ -788,6 +846,155 @@
    "min_ppm": 1,
    "blur": 0.5,
    "flash": 1.2
+  }
+ ],
+ "families": [
+  {
+   "id": "hypercube",
+   "label": "Hypercubes",
+   "note": "The measure polytopes. Every edge runs along an axis, which is exactly what a square module grid samples cleanly, and is why this family is the one the prototype is built around.",
+   "subjects": [
+    {
+     "id": "cube",
+     "label": "3-cube",
+     "dim": 3,
+     "vertices": 8,
+     "edges": 12,
+     "poses": [
+      "cube_flat",
+      "cube_tilt"
+     ],
+     "rejected": []
+    },
+    {
+     "id": "tesseract",
+     "label": "Tesseract (4-cube)",
+     "dim": 4,
+     "vertices": 16,
+     "edges": 32,
+     "poses": [
+      "tess_nested",
+      "tess_tilt",
+      "tess_wide",
+      "tess_deep",
+      "tess_tilt_deep",
+      "tess_shallow"
+     ],
+     "rejected": [
+      {
+       "pose": "folded part-way through XW",
+       "why": "An angle that is neither 0 nor 45, so every edge becomes a dotted stagger."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "orthoplex",
+   "label": "Cross-polytopes",
+   "note": "The duals of the hypercubes: vertices on the axes, every non-opposite pair joined. Several vertices project to the same point, so they read as a figure inside a diamond rather than as nested cells.",
+   "subjects": [
+    {
+     "id": "cell16",
+     "label": "16-cell",
+     "dim": 4,
+     "vertices": 8,
+     "edges": 24,
+     "poses": [
+      "c16_star",
+      "c16_tilt"
+     ],
+     "rejected": []
+    }
+   ]
+  },
+  {
+   "id": "duoprism",
+   "label": "Duoprisms",
+   "note": "An m-gon times a k-gon. The angles available are the polygons' own, so octagons work (every edge on an axis or a 45) and triangles do not.",
+   "subjects": [
+    {
+     "id": "duo38",
+     "label": "3-8 duoprism",
+     "dim": 4,
+     "vertices": 24,
+     "edges": 48,
+     "poses": [],
+     "rejected": [
+      {
+       "pose": "any orientation",
+       "why": "The triangular ring's edges never land on 0, 45 or 90; they staircase the way the octagonal ones do not."
+      }
+     ]
+    },
+    {
+     "id": "duo48",
+     "label": "4-8 duoprism",
+     "dim": 4,
+     "vertices": 32,
+     "edges": 64,
+     "poses": [
+      "duo48_flat"
+     ],
+     "rejected": []
+    },
+    {
+     "id": "duo88",
+     "label": "8-8 duoprism",
+     "dim": 4,
+     "vertices": 64,
+     "edges": 128,
+     "poses": [
+      "duo88_flat",
+      "duo88_tilt"
+     ],
+     "rejected": []
+    }
+   ]
+  },
+  {
+   "id": "simplex",
+   "label": "Simplexes",
+   "note": "The minimum solid in each dimension. No two edges are parallel and none aligns to an axis, which is the one thing this grid cannot draw.",
+   "subjects": [
+    {
+     "id": "cell5",
+     "label": "5-cell",
+     "dim": 4,
+     "vertices": 5,
+     "edges": 10,
+     "poses": [],
+     "rejected": [
+      {
+       "pose": "any orientation",
+       "why": "No axis to align to, so its edges staircase at every angle."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "exceptional",
+   "label": "The 24-cell",
+   "note": "Self-dual, 96 edges, and no analogue in any other dimension \u2014 it is its own family. The densest subject here that still reads.",
+   "subjects": [
+    {
+     "id": "cell24",
+     "label": "24-cell",
+     "dim": 4,
+     "vertices": 24,
+     "edges": 96,
+     "poses": [
+      "c24_tilt"
+     ],
+     "rejected": [
+      {
+       "pose": "cell first",
+       "why": "Fills solid. 96 edges with no gaps left for a reader."
+      }
+     ]
+    }
+   ]
   }
  ],
  "matrix_encoding": "base64, row-major, MSB first, bit i = y*n + x"

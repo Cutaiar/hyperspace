@@ -16,6 +16,9 @@ export type Item = {
   pose: string
   stroke: number
   version: number
+  /** which solid, and which family it belongs to — gen/polytopes.py's taxonomy */
+  subject?: string
+  family?: string
   dot: string
   /** The rest of what gen/gallery.py handed style.to_svg. Optional only
    *  because a manifest generated before the exporters could carry a style
@@ -47,10 +50,37 @@ export type Baseline = {
   flash: number
 }
 
+/** One solid: what it is, and what was tried and rejected.
+ *
+ *  `vertices` and `edges` are counted off the real geometry in
+ *  gen/polytopes.py rather than declared, so they cannot describe a shape that
+ *  is not there. `dim` is declared, because a 3-cube sits in the w = 0
+ *  hyperplane and its vertices are 4-tuples like everything else. */
+export type Subject = {
+  id: string
+  label: string
+  dim: number
+  vertices: number
+  edges: number
+  /** pose ids in POSES; empty means nothing about this solid survived */
+  poses: string[]
+  /** rendered and rejected by eye at 65 modules, and why */
+  rejected: { pose: string; why: string }[]
+}
+
+export type Family = {
+  id: string
+  label: string
+  note: string
+  subjects: Subject[]
+}
+
 export type Manifest = {
   url: string
   items: Item[]
   baselines: Baseline[]
+  /** the whole taxonomy, members with no still included */
+  families?: Family[]
   matrix_encoding: string
 }
 
