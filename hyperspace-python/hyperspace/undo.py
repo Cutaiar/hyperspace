@@ -475,6 +475,16 @@ class Undo:
             empty = self._marks_equal(step.before.marks)
         return empty
 
+    def _will_open(self) -> bool:
+        """Will the open step open the latch when it lands: begun on focus, and not
+        about to close empty (a load of the look already there, a knob brought back)?"""
+        step = self._open
+        if step is None or not self._opens:
+            return False
+        now = self._take()
+        ids, parts, _left = self._differs(step.before, now, tagged=False)
+        return not self._empty(step, now, ids, parts)
+
     def _marks_equal(self, mark) -> bool:
         try:
             equal = getattr(self.marks, "equal", None)    # marks that know what they restore
@@ -866,12 +876,7 @@ def _shut(u: Undo | None) -> None:
 def takes_back(u: Undo) -> bool:
     """Would ⌘Z here take back the step just begun on `u`? For words which promise it:
     only a step that opens the latch and will not close empty."""
-    step = u._open
-    if here() is not u or u is not _focused or step is None or not u._opens:
-        return False
-    now = u._take()
-    ids, parts, _left = u._differs(step.before, now, tagged=False)
-    return not u._empty(step, now, ids, parts)
+    return here() is u and u is _focused and u._will_open()
 
 
 def _refused(at: Undo, verb: str) -> bool:
@@ -880,7 +885,7 @@ def _refused(at: Undo, verb: str) -> bool:
     closed, so a hold or a gesture under way goes on."""
     at._observe(at._fingerprint())
     _focus(at)
-    if at.latched and not at._opens:
+    if at.latched and not at._will_open():
         at._say(f"nothing to {verb} here yet: make a change {at.called} first")
         return True
     return False

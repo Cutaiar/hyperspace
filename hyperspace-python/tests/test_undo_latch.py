@@ -421,6 +421,60 @@ def test_a_refusal_does_not_cut_a_gesture_in_two(rig):
     assert len(rig.one.undo.stack) == 1
 
 
+def test_a_load_of_the_look_already_there_opens_nothing_for_a_press_inside_the_settle(rig):
+    """Second review. The step is open and will close empty, so it is no push: the press
+    refuses, and the older step, the first load, is not popped in its place."""
+    _pad_rig(rig)
+    rig.meta.point_panel(rig.two)
+    rig.one.reg["preset.load.0"].fire()
+    go(rig)
+    loaded, steps = rig.two.presets.current, len(rig.two.undo.stack)
+    rig.meta.point_panel(rig.one)
+    rig.meta.point_panel(rig.two)
+    rig.one.reg["preset.load.0"].fire()
+    assert rig.two.undo._open is not None
+    press(rig)
+    refused_on(rig.two.undo, "undo", "on deck 2")
+    assert rig.two.presets.current == loaded
+    go(rig)
+    assert rig.two.undo.latched and len(rig.two.undo.stack) == steps
+
+
+def test_a_knob_turned_and_brought_back_inside_the_settle_opens_nothing(rig):
+    """Second review. The same with a gesture, and the press does not cut it: the knob
+    turned on from there is one step, which opens the latch."""
+    u, p = rig.one.undo, rig.one.reg[BRIGHT]
+    change(rig.one.reg)
+    go(rig)
+    rig.meta.point_panel(rig.two)
+    rig.meta.point_panel(rig.one)
+    old, steps = p.base, len(u.stack)
+    change(rig.one.reg)
+    go(rig, 1)
+    p.set(old)
+    go(rig, 1)
+    assert u._open is not None
+    press(rig)
+    refused_on(u, "undo", "on deck 1")
+    assert p.base == old and u._open is not None and len(u.stack) == steps + 1
+    go(rig)
+    assert u.latched and len(u.stack) == steps
+    rig.reg["edit.redo"].fire()
+    refused_on(u, "redo", "on deck 1")
+
+
+def test_a_step_that_will_land_still_goes_back_at_the_press(rig):
+    """The other side: inside the settle time, a real change is the push, and ⌘Z takes it."""
+    u, p = rig.one.undo, rig.one.reg[BRIGHT]
+    press(rig)
+    assert u.latched
+    was = p.base
+    change(rig.one.reg)
+    go(rig, 1)
+    press(rig)
+    assert p.base == was and not u.latched
+
+
 def test_a_pad_leaves_a_meta_stack_in_focus_alone(rig):
     """Finding 4. An analyzer nudge, a pad, ⌘Z with the mouse unmoved: the nudge goes back."""
     _pad_rig(rig)
