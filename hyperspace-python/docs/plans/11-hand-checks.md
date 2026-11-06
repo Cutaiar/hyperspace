@@ -8065,6 +8065,10 @@ With 541's node pointed. *Pass:* a green bundle from the apc40 to the node, apar
 easy to tell from white, amber, blue and violet. Its K1 cable thickens as the param rises. A saved
 row on K1 goes faint and says "(under node mode)". Right-click: leave; ⌫ does nothing. Say if a
 white bundle lying under the green one between the same two nodes reads badly (row 713).
+Then a real copy, since no corpus patch holds one: on a throwaway copy of a preset with an effect,
+add a copy of that effect, select the copy, and press **point apc40 here**. *Pass:* expand it: the
+green cables land on the copy's own pins, not the original's; turning K1 moves the knob the side
+pane names, on the picture.
 **544. Saved, per `Deck`.** (two `Deck`s; throwaway copies)
 1. Save, load another, load it back. *Pass:* pointed again, with no click.
 2. Undo a re-point. *Pass:* one ⌘Z, the rows follow; the desk stays on its `Deck`.
