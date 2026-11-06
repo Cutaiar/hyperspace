@@ -13215,16 +13215,22 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   needed. `tests/test_layer_boundary.py`'s rig registers them, so the one-layer walk covers them. A route or desk row on one in
   a file is dropped with a note at load, as any meta row is. A key or a pad's own row may press one: those are the meta
   controller's.
-- **A new list.** A name that resolves to a list there is (`Cart!` is `cart`) is refused, since writing it would empty that list.
-  An edit goes to the file the list was chosen from. Editing a file with a bad row in the section writes it without that row.
+- **A new list.** A name whose slug is taken (`Cart!` is `cart`) is refused, since writing it would empty that list.
+- **An edit.** Over the file as it is now, so the other Mac's save stands, found by entry, into memory only once the save lands, to the
+  file the list was chosen from. What is on air, armed and next stay the entries they are, for the other Mac's save too. Editing a file
+  with a bad row in the section writes it without that row.
 - **Not built.** `playlist.select`, plan 44 §6's. A file's name is no enum, and nothing but the section chooses.
-- **Cost of a section.** One more header took a fresh launch at 900 px past the pane by 17 px, so `MIN_BODY_H` went from 150 to 140.
+- **Cost of a section.** One more header took a fresh launch at 900 px past the pane by 17 px. `MIN_BODY_H` stays 150; with no more open
+  than a fresh launch's two, the floor is `FRESH_BODY_H`, 120, so only that case changes.
 - **Frame cost.** `Playing.tick` costs about 30 ns a frame, stopped or dwelling (40 ns by `timeit`, less the call's 11 ns): one attribute write and one compare. `MetaController.tick` adds one `is not None`. The rest runs only around an advance.
 - **Judge it.** 539.
 
 ### 709. Ready before the fade, and the latch
 
 - **Measured.** The real app, `tools/drive_playlist.py`, on the shared Mac with load averages of 7 to 11, three runs, 16 fades each, eight corpus looks, frames about 8 ms. A load: median 13 ms, worst 101 ms. A warm draw: median 3 ms, worst 15 ms. A fade's first frame: median 8 ms, worst 12, 49 and 87 ms across the runs, the frame the warm draw is for. A frame in a fade: median 9 ms. **What is left:** frames over 100 ms all came in the first round, 5 or 6 a run, up to 352 ms, in a fade or just after it; a second round of the same looks had none. Timed by part, most have only a few ms in both renderers' draws (309 ms with 5 ms of draw), so the time is outside the draw code, in the panel, the swap or the driver, and one had 115 ms in the draw. Not explained further, and this Mac's load may be part of it: for check 539 on the rig. No fade or warm error in any run.
+- **⌘Z over the section.** Takes back nothing and says so (`undo.NOTHING_HERE`), as over the player screen, and moves no focus
+  (rows 753, 757). Chosen over leaving it out of `META_SECTIONS` alone, which would send it to the panel's deck, since nothing in the
+  section is on any stack: a ⌘Z after a × must not take back something unrelated, on air.
 - **The latch on an install.** Each load onto the other `Deck` shuts the panel's stack when the panel is on air, and each fade
   shuts it whichever deck it is on (`undo.on_air`). So on a cart ⌘Z refuses after every advance until someone changes something:
   nobody's ⌘Z takes a look out of the room. A change opens it, and then ⌘Z goes all the way down, as row 753 says, so far enough

@@ -136,7 +136,9 @@ DEFAULT_OPEN = {k: k in ("selection", "presets") for k in KEYS}
 DEFAULT_BELOW = {k: k == "selection" for k in KEYS}     # the narrow page's band
 LAYOUTS = {"open": DEFAULT_OPEN, "below": DEFAULT_BELOW}   # ui.json's pane.<layout>
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)
-MIN_BODY_H = 140.0       # beside the canvas, an open body is never shorter (the pane scrolls)
+MIN_BODY_H = 150.0       # beside the canvas, an open body is never shorter (the pane scrolls)…
+FRESH_BODY_H = 120.0     # …but with no more open than a fresh launch has, so it fits 900 px
+FRESH_OPEN = 2
 CHIP_MAX = 220.0         # px: the most a band header's words take
 WRITE_AFTER_S = 0.5      # a fold is written this long after the last click
 COST_KEEP = 0.9          # a body's running mean: this much the last mean, the rest the newest
@@ -323,9 +325,11 @@ def flush(st: dict, now: float | None = None, force: bool = False) -> bool:
     return True
 
 
-def body_height(room: float, n_open: int, floor: float = MIN_BODY_H) -> float:
-    """Each open body's height: the room under the headers shared evenly,
-    never under `floor`."""
+def body_height(room: float, n_open: int, floor: float | None = None) -> float:
+    """Each open body's height: the room under the headers shared evenly, never under
+    `floor`, by default `MIN_BODY_H`, or `FRESH_BODY_H` with no more open than a fresh launch."""
+    if floor is None:
+        floor = FRESH_BODY_H if n_open <= FRESH_OPEN else MIN_BODY_H
     return max(floor, room / n_open) if n_open else 0.0
 
 

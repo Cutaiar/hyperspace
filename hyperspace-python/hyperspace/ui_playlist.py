@@ -7,8 +7,10 @@ each its name, its dwell and a × to take it out, and a list to add another from
 written to the file when it is done (`playlist.save`), so a dwell typed over writes one file
 and not one per key, and `Playing` reads the file before each load anyway.
 
-The library's folders are listed only with a list open: a closed section costs nothing
-and an open one lists no folder a frame, which on the shared Drive is worth keeping.
+The library's folders are listed only with a list open, and on the poll's cadence
+(`ui_loadable.names`), so an open list globs no Drive folder a frame on the machine driving
+the room. Nothing here is on an undo stack, so ⌘Z over the section takes nothing back and
+says so (`Panel.in_meta_section`, row 709).
 
 Ids for `tests/ui_driver.py`: ``playlist.pick``, ``playlist.name``, ``playlist.new``,
 ``chip.playlist.play``, ``playlist.next``, ``playlist.prev``, ``playlist.add``,
@@ -19,21 +21,15 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import playlist, ui
-from .library import LOADABLE, PLAYLISTS, LibraryError
-from .playlist import Entry, Playlist
+from . import playlist, ui, ui_loadable, ui_media
+from .library import LOADABLE, PLAYLISTS, LibraryError, slug
+from .playlist import Playlist
 
 STATE = "_playlist_ui"    # on the panel: the name typed for a new one
 
 
 def _state(panel) -> dict:
     return panel.__dict__.setdefault(STATE, {"name": ""})
-
-
-def clock(seconds: float) -> str:
-    """Seconds as a countdown reads: 4:05."""
-    whole = max(0, round(seconds))
-    return f"{whole // 60}:{whole % 60:02d}"
 
 
 def where(p) -> str:
@@ -45,29 +41,20 @@ def where(p) -> str:
     if p.on and p.lost:
         left = p.left()
         return (f"{pl.name}: nothing will play now, and what is on air stays"
-                + (f" · trying again in {clock(left)}" if left is not None else ""))
+                + (f" · trying again in {ui_media._mmss(left)}" if left is not None else ""))
     if not p.on:
         return f"{pl.name}: stopped · {n} {'entry' if n == 1 else 'entries'}"
-    if p.at is None or p.at >= n:
-        return f"{pl.name}: starting"
     left = p.left()
+    if p.at is None or p.at >= n:
+        return f"{pl.name}: " + (f"next in {ui_media._mmss(left)}" if left is not None else "starting")
     return (f"{pl.name}: {p.at + 1} of {n}, {pl.entries[p.at].loadable}"
-            + (f" · next in {clock(left)}" if left is not None else " · next now"))
-
-
-def _write(panel, p, entries: list[Entry]) -> None:
-    """The entries changed: the list as it plays and its file, said if refused."""
-    try:
-        p.playlist = Playlist(p.playlist.name, entries)
-        playlist.save(panel.library, p.playlist, p.key)
-    except LibraryError as e:
-        panel.library.say(warning=str(e))
+            + (f" · next in {ui_media._mmss(left)}" if left is not None else " · next now"))
 
 
 def _pick(panel, p) -> None:
     imgui.set_next_item_width(-1)
     if imgui.begin_combo("##playlist.pick", p.playlist.name if p.playlist else "choose a list"):
-        for name in panel.library.list(PLAYLISTS):
+        for name in ui_loadable.names(panel, PLAYLISTS):
             if imgui.selectable(name, p.playlist is not None and name == p.playlist.name)[0]:
                 p.select(name)
         imgui.end_combo()
@@ -83,7 +70,7 @@ def _new(panel, p, st: dict) -> None:
     """A new, empty list. A name that resolves to a list there is (`Cart!` is `cart`) is
     refused: writing it would empty that list."""
     name, lib = st["name"].strip(), panel.library
-    if lib.path_of(PLAYLISTS, name) is not None:
+    if slug(name) in lib._taken(PLAYLISTS):
         lib.say(warning=f"there is already a list called {name}: choose it, or another name")
         return
     try:
@@ -92,6 +79,7 @@ def _new(panel, p, st: dict) -> None:
         lib.say(warning=str(e))
     else:
         st["name"] = ""
+        ui_loadable.invalidate(panel, PLAYLISTS)
         p.select(name)
 
 
@@ -106,7 +94,7 @@ def _transport(panel, p) -> None:
 
 def _entries(panel, p) -> None:
     entries = p.playlist.entries
-    out = None
+    act = None           # one edit a frame, once the rows are drawn: it changes the list
     for i, entry in enumerate(entries):
         imgui.push_id(i)
         mark = "▸ " if p.on and i == p.at else ""
@@ -115,23 +103,22 @@ def _entries(panel, p) -> None:
                                       - ui.chip_w("×") - 8))
         _, dwell = imgui.input_float(f"##playlist.dwell.{i}", entry.dwell_s, 0.0, 0.0, "%.0f s")
         if imgui.is_item_deactivated_after_edit():
-            out = [*entries]
-            out[i] = Entry(entry.loadable, min(playlist.MAX_DWELL_S, max(playlist.MIN_DWELL_S, float(dwell))),
-                           entry.fade_s)
+            act = (p.set_dwell, i, entry.loadable, dwell)
         elif imgui.is_item_hovered():
             ui.tooltip("Seconds from this look's fade to the next one's.")
         ui.beside(ui.chip_w("×"))
         if ui.chip(f"×##playlist.out.{i}"):
-            out = [e for k, e in enumerate(entries) if k != i]
+            act = (p.remove, i, entry.loadable)
         imgui.pop_id()
     imgui.set_next_item_width(-1)
     if imgui.begin_combo("##playlist.add", "add a look"):
-        for name in panel.library.list(LOADABLE):
+        for name in ui_loadable.names(panel, LOADABLE):
             if imgui.selectable(name, False)[0]:
-                out = [*entries, Entry(name)]
+                act = (p.add, name)
         imgui.end_combo()
-    if out is not None:
-        _write(panel, p, out)
+    if act is not None:
+        act[0](*act[1:])
+        ui_loadable.invalidate(panel, PLAYLISTS)
 
 
 def page(panel, dt: float = 0.0) -> None:

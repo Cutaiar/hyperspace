@@ -11,7 +11,9 @@ import ctypes
 import os
 import statistics
 import sys
+import threading
 import time
+import traceback
 
 from hyperspace import playlist
 from hyperspace.playlist import Entry, Playlist
@@ -22,6 +24,8 @@ LOOKS = ("party-trip", "party-acid", "party-wake", "party-noita", "party-tracer"
 SOAK = int(os.environ.get("PLAYLIST_SOAK", "80"))      # advances
 ROUNDS = int(os.environ.get("PLAYLIST_ROUNDS", "2"))
 SLOW_MS = 40.0
+QUIET_S = 20.0     # no step of the script for this long is a wedge
+STUCK_S = 30.0     # the script stepping, and no advance for this long, is one too
 
 
 def footprint() -> str:
@@ -53,10 +57,45 @@ def timed(obj, name, into):
     setattr(obj, name, call)
 
 
+def state(panel) -> str:
+    p, meta, fade, lib = panel.playing, panel.meta, panel.fade, panel.library
+    return (f"on {p.on}, at {p.at}, lost {p.lost}, armed {p.armed}, mixing {meta.mixing}, timed "
+            f"{meta.timed}, fader {meta.mix.xfade:.3f}, warm_deck {fade.warm_deck}, warm_error "
+            f"{fade.warm_error!r}, load_at in {p.load_at - p.last:.1f} s; warning {lib.warning!r}; "
+            f"status {lib.status!r}")
+
+
+def watch(panel, seen: dict) -> None:
+    """No step of the script for `QUIET_S`: the script runs from `Panel.draw`, so one that raises
+    each frame leaves the app looping under the frame guard, the room playing and the script
+    dead, and no deadline in the script can see it. Says what it can, and ends the run."""
+    while True:
+        time.sleep(1.0)
+        if time.perf_counter() - seen["at"] > QUIET_S:
+            print(f"WEDGED: no step for {QUIET_S} s: {state(panel)}; draw raised {seen['raised']}",
+                  file=sys.stderr, flush=True)
+            os._exit(3)
+
+
 def script(d, panel):
     p, meta, fade, lib = panel.playing, panel.meta, panel.fade, panel.library
     panel.render_watch = None
     assert meta.playing is p
+    seen = {"at": time.perf_counter(), "raised": 0}
+    draw = type(panel).draw
+
+    def drawn(self, dt, fps):
+        try:
+            draw(self, dt, fps)
+        except Exception:
+            if not seen["raised"]:
+                print("WEDGED: Panel.draw raised:", file=sys.stderr)
+                traceback.print_exc()
+            seen["raised"] += 1
+            raise
+        seen["at"] = time.perf_counter()
+    type(panel).draw = drawn
+    threading.Thread(target=watch, args=(panel, seen), daemon=True).start()
     loads, warms = [], []
     timed(p, "_load", loads)
     real_warm = fade.warm
@@ -85,8 +124,12 @@ def script(d, panel):
     went = []
     at = None
     rounds = ROUNDS * len(LOOKS)
+    moved = time.perf_counter()
     while len(went) < rounds:
         yield
+        if time.perf_counter() - moved > STUCK_S:
+            print(f"WEDGED: no advance for {STUCK_S} s: {state(panel)}", file=sys.stderr, flush=True)
+            os._exit(4)
         now = time.perf_counter()
         step = (now - last) * 1000
         last = now
@@ -103,7 +146,7 @@ def script(d, panel):
             dwell.append(step)
         was_fading = running
         if p.at != at:
-            at = p.at
+            at, moved = p.at, time.perf_counter()
             print(f"advance {len(went) + 1}, {time.perf_counter():.1f} s: {footprint()}", file=sys.stderr)
             went.append((p.playlist.entries[at].loadable, meta.deck_name(meta.off_air),
                          meta.off_air.loaded_patch.current))
@@ -129,10 +172,14 @@ def script(d, panel):
     at = None
     print(f"soak start: {footprint()}, params {len(meta.decks[0].reg)}+{len(meta.decks[1].reg)}, "
           f"stacks {[len(s.stack) for s in meta.stacks]}", file=sys.stderr)
+    moved = time.perf_counter()
     while done < SOAK:
         yield
+        if time.perf_counter() - moved > STUCK_S:
+            print(f"WEDGED: no advance for {STUCK_S} s: {state(panel)}", file=sys.stderr, flush=True)
+            os._exit(4)
         if p.at != at:
-            at = p.at
+            at, moved = p.at, time.perf_counter()
             done += 1
             if done % 20 == 0:
                 print(f"soak {done}: {footprint()}, params {len(meta.decks[0].reg)}+"
@@ -140,6 +187,6 @@ def script(d, panel):
                       file=sys.stderr)
     p.stop()
     print(f"end of the soak: {footprint()}", file=sys.stderr)
-    for k in range(3):                # the control: the same frames with nothing happening
+    for k in range(int(os.environ.get("PLAYLIST_IDLE", "3"))):   # the control: nothing happening
         yield from d.wait(1200)
         print(f"idle, {(k + 1) * 1200} frames on: {footprint()}", file=sys.stderr)

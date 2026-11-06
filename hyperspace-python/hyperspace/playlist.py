@@ -128,6 +128,12 @@ class Playlist:
         return cls(str(doc.get("name") or ""), out, skipped)
 
 
+def _nearest(entries: list[Entry], name: str, i: int) -> int | None:
+    """The place of the entry `name` nearest `i`, for a list with one look twice; or None."""
+    hits = [k for k, e in enumerate(entries) if e.loadable == name]
+    return min(hits, key=lambda k: abs(k - i)) if hits else None
+
+
 def read(lib, name: str) -> Playlist:
     """Playlist `name` from the library; LibraryError, in words, for a bad file."""
     doc = lib.read(PLAYLISTS, name)
@@ -196,6 +202,54 @@ class Playing:
             return
         self.on, self.fails, self.waited, self.lost = True, 0, False, False
         self.load_at = self.fade_at = SOON
+
+    def edit(self, change) -> bool:
+        """`change(entries)` over the file as it is now, so another Mac's save is kept, and
+        into memory only once the save has landed. It returns the new entries, or None
+        with its reason said. True when it landed; the place stays (`_keep_place`)."""
+        try:
+            pl = read(self.lib, self.key)
+            entries = change(list(pl.entries))
+            if entries is None:
+                return False
+            done = Playlist(pl.name, entries)
+            save(self.lib, done, self.key)
+        except (LibraryError, ValueError) as e:
+            self.lib.say(warning=f"playlist not changed: {e}")
+            return False
+        self._keep_place(entries)
+        self.playlist, self.rows_said = done, []
+        return True
+
+    def _row(self, entries: list[Entry], i: int, name: str) -> int | None:
+        """The file's row for what the panel showed at `i`, by entry: the file may have moved
+        under the panel."""
+        k = _nearest(entries, name, i)
+        if k is None:
+            self.lib.say(warning=f"playlist: {name} is no longer in the file")
+        return k
+
+    def remove(self, i: int, name: str) -> bool:
+        def change(entries):
+            k = self._row(entries, i, name)
+            return None if k is None else entries[:k] + entries[k + 1:]
+        return self.edit(change)
+
+    def set_dwell(self, i: int, name: str, dwell: float) -> bool:
+        """A typed dwell, brought into range: the field can hold infinity."""
+        dwell = float(dwell)
+        dwell = MIN_DWELL_S if math.isnan(dwell) else min(MAX_DWELL_S, max(MIN_DWELL_S, dwell))
+
+        def change(entries):
+            k = self._row(entries, i, name)
+            if k is None:
+                return None
+            entries[k] = Entry(entries[k].loadable, dwell, entries[k].fade_s)
+            return entries
+        return self.edit(change)
+
+    def add(self, name: str) -> bool:
+        return self.edit(lambda entries: [*entries, Entry(name)])
 
     def stop(self) -> None:
         """Stop where it is: a fade running finishes, and what is on air stays. A look
@@ -266,10 +320,30 @@ class Playing:
             for words in pl.skipped:
                 self._say(f"playlist {pl.name}: left out {words}")
 
+    def _keep_place(self, new: list[Entry]) -> None:
+        """The list is changing to `new`: what is on air, what is armed and what is next
+        stay the entries they are, wherever those now sit. An entry that has gone: nothing
+        on air, nothing armed, and next is whatever took its place."""
+        old = self.playlist.entries if self.playlist is not None else []
+        if self.at is not None:
+            self.at = _nearest(new, old[self.at].loadable, self.at) if self.at < len(old) else None
+        if self.armed is not None:
+            k = _nearest(new, self.armed.loadable, self.armed_at)
+            if k is None:
+                self.armed = None
+            else:
+                self.armed, self.armed_at = new[k], k
+        if old:
+            n = self.next % len(old)
+            k = _nearest(new, old[n].loadable, n)
+            self.next = n if k is None else k
+
     def _fresh(self) -> list[Entry]:
         """The entries as the file says now; a file that will not read keeps the last."""
         try:
-            self.playlist = read(self.lib, self.key)
+            pl = read(self.lib, self.key)
+            self._keep_place(pl.entries)
+            self.playlist = pl
         except LibraryError as e:
             self._say(f"{e}: playing the list as it last read")
         self._say_rows()

@@ -20,13 +20,13 @@ from test_on_off_air import rig as on_off_air_rig
 from test_ui_pane import _only, _spills, _st, _tall_driver
 from test_ui_shell import build_rig
 
-from hyperspace import app, hotreload, playlist, ui_graph, ui_playlist, undo
+from hyperspace import app, hotreload, playlist, ui_graph, ui_pane, ui_players, ui_playlist, undo
 from hyperspace.library import PLAYLISTS, Library, LibraryError, group_folder
 from hyperspace.params import is_shared_meta_id, part_of
 from hyperspace.playlist import LEAD_S, Entry, Playing, Playlist
 from hyperspace.render import SceneTarget
 from hyperspace.routing import meta_refusal
-from hyperspace.ui import PAGE_KEYS
+from hyperspace.ui import META_SECTIONS, PAGE_KEYS, Panel
 
 ROOT = Path(app.__file__).resolve().parents[1]
 air = on_off_air_rig     # the fixture: two decks, the desk, the library
@@ -786,19 +786,172 @@ def test_a_new_list_named_like_one_there_empties_nothing(tmp_path):
         assert p.playlist.name == "second" and st["name"] == "" and p.key == "second"
 
 
+def _real_list(tmp_path, *entries):
+    """A real library and a `Playing` on a list of `entries`, over stand-in decks."""
+    lib = Library(tmp_path / "home", period=0.0)
+    playlist.save(lib, lst(*entries))
+    p = Playing(StandInMeta(), lib)
+    assert p.select("cart")
+    return p, lib
+
+
+def _on_air(p, k):
+    """Entry `k` on air, the next loaded nowhere yet."""
+    p.at, p.next, p.on = k, k + 1, True
+
+
+def test_removing_an_entry_before_the_place_keeps_the_place(tmp_path):
+    p, _lib = _real_list(tmp_path, ("a", 10.0), ("b", 10.0), ("c", 10.0))
+    _on_air(p, 1)                                  # b on air, c next
+    assert p.remove(0, "a")
+    assert p.playlist.entries[p.at].loadable == "b"
+    assert p.playlist.entries[p.next % 2].loadable == "c"
+
+
+def test_removing_an_entry_keeps_what_is_armed_and_says_the_right_one(tmp_path):
+    p, lib = _real_list(tmp_path, ("a", 10.0), ("b", 10.0), ("c", 77.0, 3.0), ("d", 5.0, 1.0))
+    p.on, p.at = True, 1
+    p.fade_at = p.load_at = -1.0
+    p.tick(0.0)                                    # next is 0: a loads; say c instead
+    p.next = 2
+    p.armed = None
+    p.tick(0.0)
+    assert p.armed.loadable == "c"
+    assert p.remove(0, "a")
+    p.tick(1.0)
+    assert p.meta.fades[-1] == 3.0 and p.fade_at == 78.0   # c's fade, c's dwell
+    assert "c, 2 of 3" in lib.status
+
+
+def test_removing_what_is_on_air_or_armed_lets_it_go(tmp_path):
+    p, _lib = _real_list(tmp_path, ("a", 10.0), ("b", 10.0), ("c", 10.0))
+    _on_air(p, 1)
+    assert p.remove(1, "b")
+    assert p.at is None and p.playlist.entries[p.next].loadable == "c"
+    p, _lib = _real_list(tmp_path, ("a", 10.0), ("b", 10.0), ("c", 10.0))
+    p.on, p.next = True, 1
+    p.tick(0.0)
+    assert p.armed.loadable == "b"
+    assert p.remove(1, "b")
+    assert p.armed is None and p.playlist.entries[p.next].loadable == "c"
+
+
+def test_a_save_from_the_other_mac_keeps_the_place_too():
+    p, meta, lib = playing(("a", 10.0), ("b", 10.0), ("c", 10.0))
+    p.play()
+    p.tick(0.0)
+    p.tick(0.0)
+    meta.across()
+    assert p.at == 0
+    lib.doc = lst(("new", 10.0), ("a", 10.0), ("b", 10.0), ("c", 10.0)).to_doc()
+    p.tick(10.0 - LEAD_S)
+    assert meta.off_air.loads == ["b"] and p.playlist.entries[p.at].loadable == "a"
+
+
+def test_an_edit_is_over_the_file_as_it_is_now(tmp_path):
+    """The other Mac's save stands, and a row that moved is found by what it is."""
+    p, lib = _real_list(tmp_path, ("a", 10.0), ("b", 10.0))
+    path = lib.path_of(PLAYLISTS, "cart")
+    path.write_text(json.dumps(lst(("theirs", 10.0), ("a", 10.0), ("b", 10.0)).to_doc()))
+    lib._docs.pop(path, None)
+    assert p.remove(0, "a")                        # the panel still shows a at row 0
+    assert [e.loadable for e in playlist.read(lib, "cart").entries] == ["theirs", "b"]
+    assert [e.loadable for e in p.playlist.entries] == ["theirs", "b"]
+
+
+def test_a_row_gone_from_the_file_is_said_and_nothing_changes(tmp_path):
+    p, lib = _real_list(tmp_path, ("a", 10.0), ("b", 10.0))
+    path = lib.path_of(PLAYLISTS, "cart")
+    path.write_text(json.dumps(lst(("b", 10.0)).to_doc()))
+    lib._docs.pop(path, None)
+    assert not p.remove(0, "a")
+    assert "a is no longer in the file" in lib.warning
+    assert [e.loadable for e in playlist.read(lib, "cart").entries] == ["b"]
+
+
+def test_a_refused_save_leaves_memory_as_the_disk_has_it(tmp_path, monkeypatch):
+    p, lib = _real_list(tmp_path, ("a", 10.0), ("b", 10.0))
+
+    def refuse(*_a, **_k):
+        raise LibraryError("the library is not there")
+    monkeypatch.setattr(lib, "save_playlist", refuse)
+    assert not p.remove(0, "a")
+    assert [e.loadable for e in p.playlist.entries] == ["a", "b"]
+    assert "the library is not there" in lib.warning
+
+
+@pytest.mark.parametrize(("typed", "landed"), [(math.inf, playlist.MAX_DWELL_S), (1e39, playlist.MAX_DWELL_S),
+                                               (0.0, playlist.MIN_DWELL_S), (math.nan, playlist.MIN_DWELL_S),
+                                               (42.0, 42.0)])
+def test_a_typed_dwell_is_brought_into_range_and_the_line_can_say_it(tmp_path, typed, landed):
+    p, lib = _real_list(tmp_path, ("a", 10.0))
+    assert p.set_dwell(0, "a", typed)
+    assert playlist.read(lib, "cart").entries[0].dwell_s == landed
+    p.on, p.at, p.fade_at, p.last = True, 0, p.playlist.entries[0].dwell_s, 0.0
+    assert ui_playlist.where(p)                    # no OverflowError in the panel's draw
+
+
 def test_an_edit_in_the_section_stays_in_the_file_it_was_chosen_from(tmp_path):
-    with build_rig(tmp_path) as r:
-        lib = r.panel.library
-        folder = lib.home / "playlists"
-        folder.mkdir(parents=True)
-        (folder / "cart.json").write_text(json.dumps(lst("real").to_doc()))
-        (folder / "cart copy.json").write_text(json.dumps(lst("theirs").to_doc()))
-        listed = next(n for n in lib.list(PLAYLISTS) if n != "cart")
-        p = Playing(StandInMeta(), lib)
-        assert p.select(listed)
-        ui_playlist._write(r.panel, p, [Entry("edited")])
-        assert playlist.read(lib, "cart").entries[0].loadable == "real"
-        assert playlist.read(lib, listed).entries[0].loadable == "edited"
+    """A conflict copy holds the name inside its twin's: read and written by its own key."""
+    lib = Library(tmp_path / "home", period=0.0)
+    folder = lib.home / "playlists"
+    folder.mkdir(parents=True)
+    (folder / "cart.json").write_text(json.dumps(lst("real").to_doc()))
+    (folder / "cart copy.json").write_text(json.dumps(lst("theirs").to_doc()))
+    listed = next(n for n in lib.list(PLAYLISTS) if n != "cart")
+    p = Playing(StandInMeta(), lib)
+    assert p.select(listed)
+    assert p.add("edited")
+    assert playlist.read(lib, "cart").entries[0].loadable == "real"
+    assert [e.loadable for e in playlist.read(lib, listed).entries] == ["theirs", "edited"]
+
+
+def test_the_params_walk_too(air):
+    p = _on_real(air, ("party-trip", 100.0), ("party-acid", 100.0), ("party-wake", 100.0))
+    reg = air.one.reg
+    reg["playlist.play"].toggle()
+    air.meta.tick(0.0, 0.05)
+    t = _run(air, 0.0, 3.0)
+    assert p.at == 0
+    reg["playlist.prev"].fire()
+    reg["playlist.prev"].fire()
+    assert p.next % 3 == 1                         # a, c, b
+    air.meta.tick(t, 0.05)
+    assert air.meta.on_air is air.two and air.one.loaded_patch.current == "ACID"
+
+
+def test_cmd_z_over_the_section_takes_back_nothing_and_says_so(air, monkeypatch):
+    """Row 709. Its edits are files, on no stack: not the meta stack, which would take back a master
+    fader on air, and not the deck's. As the player screen (rows 753, 757): no focus moves either."""
+    meta = air.meta
+    gain = air.one.reg["master.gain"]
+    undo.by_hand(True)
+    gain.set(gain.base * 0.5 + 0.1)
+    for t in (10.0, 12.0):
+        meta.undo.tick(t)
+    was = gain.base
+    bright = air.one.reg["view.bright"]
+    bright.set(0.61)
+    for t in (10.0, 12.0):
+        air.one.undo.tick(t)
+    undo.by_hand(False)
+    shown = bright.base
+    panel = NS(_param_under=None)
+    monkeypatch.setattr(ui_pane, "where", lambda _p: "playlist")
+    monkeypatch.setattr(ui_players, "over", lambda _p: False)
+    undo.where(lambda: Panel.in_meta_section(panel))
+    assert undo.here() is None
+    focus = undo._focused
+    undo.undo()
+    assert gain.base == was and bright.base == shown and undo._focused is focus
+    assert meta.undo.status == undo.NOTHING_HERE
+    assert "playlist" not in META_SECTIONS
+
+
+def test_a_fresh_launchs_floor_is_only_for_a_fresh_launch():
+    assert ui_pane.MIN_BODY_H == 150.0
+    assert ui_pane.body_height(200.0, 2) == 120.0
+    assert ui_pane.body_height(200.0, 3) == 150.0
 
 
 def test_the_section_says_when_nothing_will_play():
