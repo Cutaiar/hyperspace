@@ -472,7 +472,7 @@ def show_write(todo) -> list[str]:
 
 # plan 50: the folders in a library root that hold no module presets — the
 # document kinds', the shows', the trash, the old routing loadable patches
-NOT_MODULES = (LOADABLE, PROJECTS, "patches", "trash", "bindings")
+NOT_MODULES = (LOADABLE, PROJECTS, "patches", "playlists", "trash", "bindings")
 
 
 def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]]:

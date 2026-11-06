@@ -8029,6 +8029,13 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 6. Save three ways: the panel's "as…", a held empty pad, and the Edge's hold on MENU if you have one. *Pass:* each saves, as before.
 *Judge:* is green for off air right, with nothing on the pads saying what the room is on? The panel's chip and the OS title say that.
 
+## CC. The playlist's file (plan 44 D6a)
+Register rows 705–707, 2026-11-06. No behaviour yet: nothing plays one until group CD. Headless: `tests/test_playlist.py`, over stand-ins.
+**537. The folder is harmless.** Put a `playlists/` folder with one `.json` in a scratch library, as `tests/test_playlist.py` writes one, and launch on it.
+*Pass:* the presets section lists nothing new, the footer says nothing, and a dry run of `tools/migrate_library.py` on that library leaves the folder out.
+**538. Read the plan's model.** No machine needed. `playlist.py`'s docstring against what you want from a cart left running.
+*Judge:* a dwell of 300 is a fade starting every 300 s, whatever the fade takes (row 706), not 300 s alone on air. Right?
+
 ## CF. Node mode's saved form (plan 57)
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round
 trip over the corpus, the fill, the kind). **No panel writes the key until N1b,** so 546 and 547

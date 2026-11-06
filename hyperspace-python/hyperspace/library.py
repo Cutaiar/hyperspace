@@ -207,6 +207,11 @@ NOT_GROUP_WORDS = "{file} is {what}, not a patch of the {group} group"
 # the groups `rename` serves: the loadable patches and the patches (a module preset
 # is saved under another name instead)
 RENAMABLE = (LOADABLE, PATCHES)
+# plan 44 D6: a playlist (playlist.py), a kind of its own in ``<root>/playlists/``,
+# read and written here and never landed: it names loadable patches, and holds no look
+PLAYLISTS = "playlists"
+PLAYLIST_KIND, PLAYLIST_VERSION = "hyperspace.playlist", 1
+PLAYLIST_LANDED = "a playlist is played, not loaded"
 # folders in a library root that are no group: the routing loadable patches' old
 # folder, kept as it was by plan 13's migration and never read again
 LEGACY_DIRS = ("bindings",)
@@ -760,6 +765,18 @@ def _patch_kind() -> DocKind:
     # (plan 50: every version the one ladder reads, `patches.forward`)
     return DocKind(patchdoc.KIND, patchdoc.READS, _patch_spawned, _patch_spawned,
                    _patch_spawned)
+
+
+def _playlist_landed(*_args) -> Any:
+    raise LibraryError(PLAYLIST_LANDED)
+
+
+def _playlist_kind() -> DocKind:
+    """The playlists' document kind (plan 44 D6), as `_patch_kind`: its schema and
+    versions, so `read` checks the file, and the doors that refuse. `playlist.Playing`
+    reads one with `read`; `save_playlist` writes one; nothing lands one."""
+    return DocKind(PLAYLIST_KIND, (PLAYLIST_VERSION,), _playlist_landed, _playlist_landed,
+                   _playlist_landed)
 
 
 def group_folder(group: str, kinds=()) -> str:
@@ -1897,6 +1914,7 @@ class Library:
         self._adopted: dict[str, Any] = {}        # group → how to re-apply an adopted loadable patch
         self._kinds: dict[str, DocKind] = {}      # group → a document kind of its own
         self._kinds[PATCHES] = _patch_kind()      # plan 40 T1: spawned, never loaded
+        self._kinds[PLAYLISTS] = _playlist_kind()  # plan 44 D6: played, never landed
         self._fresh_extra: dict[str, dict] = {}   # group → its extra (layout) at attach
         self._defaults: dict[str, dict[str, Any]] = {}   # defaults(group), until a file moves
         self._docs: dict[Path, tuple[float, dict]] = {}   # parsed files, by mtime
@@ -2460,7 +2478,22 @@ class Library:
             refused = ["a patch needs a name", *refused]
         if refused:
             raise LibraryError("patch not saved: " + "; ".join(refused))
-        path = self.home / PATCHES / f"{slug(name)}.json"
+        return self._write_kind(PATCHES, name, doc)
+
+    def save_playlist(self, doc: dict) -> Path:
+        """Write playlist `doc` as ``<home>/playlists/<slug of its name>.json``, as
+        `save_patch` writes a patch, and nothing else. `playlist.Playlist.to_doc` is
+        what makes one, and a nameless one is refused."""
+        self.writable()
+        name = str(doc.get("name") or "").strip()
+        if not name:
+            raise LibraryError("playlist not saved: a playlist needs a name")
+        return self._write_kind(PLAYLISTS, name, doc)
+
+    def _write_kind(self, group: str, name: str, doc: dict) -> Path:
+        """`doc` as ``<home>/<group>/<slug of name>.json``: atomically, a different
+        text already there copied to the trash first."""
+        path = self.home / group / f"{slug(name)}.json"
         text = _json_text(doc)
         if path.is_file():
             try:
@@ -2468,11 +2501,11 @@ class Library:
             except (OSError, ValueError):
                 old = None                               # unreadable as text: keep it anyway
             if old != text and self._to_trash(path) is None:
-                self.say(warning=f"{PATCHES}/{path.name}: overwritten — the old file could "
+                self.say(warning=f"{group}/{path.name}: overwritten — the old file could "
                                  "not be kept in the trash")
         _write_text(path, text)
         self._sync(path)
-        self.say(f"{PATCHES}: saved {name}")
+        self.say(f"{group}: saved {name}")
         return path
 
     # ---- defaults & values ----
