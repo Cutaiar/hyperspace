@@ -11,7 +11,16 @@ from hyperspace import devices, graphview, routing_sources, ui_pad, ui_pad_views
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
-from hyperspace.learn import BARE_WANTS, PAIR_SPRING_WANT, PAIR_WANT, Learn, row_for
+from hyperspace.learn import (
+    BARE_WANTS,
+    KEEP_BOTH,
+    PAIR_SPRING_WANT,
+    PAIR_WANT,
+    TAKE_OVER,
+    Learn,
+    row_for,
+    settle_pair,
+)
 from hyperspace.library import Library
 from hyperspace.motion import DEFAULT_ROUTE_FEEL
 from hyperspace.pads import models
@@ -366,6 +375,9 @@ def test_learn_pair_lands_a_step_row_on_two_presses(rig):
     press(rig, pad, 0.2, hat=DOWN)
     assert rig.learn.learning is None
     assert p.position() == was                 # neither learn press stepped it
+    # the factory's rows are on those poles: it asks first (row 754)
+    assert not rig.table.of("pair")
+    settle_pair(rig.learn.pair_ask, TAKE_OVER, rig.reg)
     row = rig.table.of("pair")
     assert [(b.source, b.target, b.op, b.value) for b in row] == [
         ("pair:UP/DOWN", p.id, "step", 1.0)]
@@ -385,6 +397,7 @@ def test_learn_pair_spring_lands_a_route_like_a_stick(rig):
     pad.frame()
     press(rig, pad, 0.0, held={gp.RB})
     press(rig, pad, 0.1, held={gp.A})
+    settle_pair(rig.learn.pair_ask, KEEP_BOTH, rig.reg)    # the factory's RB row: row 754
     b = rig.table.owner(p.id)
     assert b is not None and b.source == "pair:RB/A" and b.op == "push"
     assert b.motion == DEFAULT_ROUTE_FEEL
@@ -407,7 +420,7 @@ def test_a_pair_is_two_controls_of_one_pad(rig):
     assert rig.learn.refused and rig.learn.learning == "view.speed"
     assert rig.learn.learn_pad_button("hat:DOWN")
     assert rig.learn.learning is None
-    assert any(b.source == "pair:UP/DOWN" for b in rig.table.bindings)
+    assert rig.learn.pair_ask.new.source == "pair:UP/DOWN"
 
 
 def test_a_toggle_has_no_two_directions(rig):
@@ -553,8 +566,8 @@ def test_the_graphs_device_node_draws_the_pairs_and_a_cable_makes_a_route(rig):
         cable = next(c for c in view.cables if c.addr == addr)
         assert view.owner(cable.src_port)[0] is node
     e = graphview.Edit(rig.table, rig.reg, rig.router, view)
-    got = e.connect("out:pair:UP/DOWN", "mod:camera.zoom")
-    assert isinstance(got, Binding) and (got.source, got.op) == ("pair:UP/DOWN", "push")
+    got = e.connect("out:pair:RB/LB", "mod:camera.zoom")
+    assert isinstance(got, Binding) and (got.source, got.op) == ("pair:RB/LB", "push")
     assert got.motion == DEFAULT_ROUTE_FEEL
 
 
@@ -629,6 +642,7 @@ def test_a_second_pads_row_is_not_on_the_windows_controls(rig):
 
 
 def test_a_cable_from_a_pair_onto_a_stepped_param_is_a_step_row(rig):
+    clear_pad_rows(rig.table)
     devs = devices.DeviceRegistry(devices=[devices.PadDevice("pad", io=ScriptedPad())])
     view = graphview.build(rig.table, rig.reg, rig.router, devs, None, None)
     e = graphview.Edit(rig.table, rig.reg, rig.router, view)
@@ -637,21 +651,6 @@ def test_a_cable_from_a_pair_onto_a_stepped_param_is_a_step_row(rig):
     assert isinstance(got, Binding) and (got.source, got.op, got.value) == (
         "pair:UP/DOWN", "step", 1.0)
     assert not any(b.source == "pair:UP/DOWN" and b.op == "position" for b in rig.table.bindings)
-
-
-def test_a_learn_says_what_else_the_press_moves(rig):
-    """Row 751: the layers do not edit each other, so a press may move both, and
-    the line says so, whichever came second."""
-    rig.table.add(Binding("pair:UP/DOWN", "camera.zoom", "push", 0.5))
-    rig.learn.arm("view.speed", PAIR_WANT)
-    rig.learn.learn_pad_button("hat:UP")
-    rig.learn.learn_pad_button("hat:DOWN")
-    assert "also moves camera.zoom" in rig.learn.last
-    assert rig.table.owner("camera.zoom") is not None    # the preset's route stands
-    rig.learn.arm("view.depth4", PAIR_SPRING_WANT)
-    rig.learn.learn_pad_button("pad:Y")
-    rig.learn.learn_pad_button("pad:A")
-    assert "also moves view.faces" in rig.learn.last or "also moves view.lines" in rig.learn.last
 
 
 def test_a_button_learn_on_one_pole_leaves_the_other_moving(rig):
@@ -678,6 +677,7 @@ def test_a_pair_learn_sharing_a_pole_leaves_the_other_moving(rig):
     rig.learn.arm("view.bright", PAIR_WANT)
     rig.learn.learn_pad_button("hat:UP")
     rig.learn.learn_pad_button("hat:LEFT")
+    settle_pair(rig.learn.pair_ask, TAKE_OVER, rig.reg)    # row 754
     assert [b.source for b in rig.table.of("pair")] == ["pair:UP/LEFT"]
     assert [(b.source, b.value) for b in rig.table.of("hat")] == [("hat:DOWN", -1.0)]
 

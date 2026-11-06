@@ -70,10 +70,14 @@ lane and one degree of freedom.
   migrates by the same table and adds no spelling of its own.
 - **Not built: poles on keys or MIDI notes.** Their rows are dispatched by
   `Router.keys` and `midi.py`; the address has room for them.
-- **A route on a pair leaves its poles' own rows alone.** The two layers do not edit
-  each other, so both act, both are drawn, and the learn's line says what else a press
-  moves. A Learn on one pole of a `step` pair leaves the other pole moving, as a row
-  of its own.
+- **A pair that overlaps a mapping asks first** (row 754; the owner, 2026-11-06, over
+  row 751's "both act, unasked"). Any road a person takes to a row on a pair, with a row
+  already on a pole: which control is mapped and to what, then **keep both**, **let the
+  pair take over** or **cancel**, with no default (`learn.propose_row`, `learn.settle_pair`).
+  Files, migrations and factory rows do not ask, and both act. A meta row a patch's route
+  takes goes on the meta controller's stack, and the words say how to reach it. The same
+  pair on another param is one lane read twice, and asks nothing.
+  A Learn on one pole of a `step` pair leaves the other pole moving, as a row of its own.
 - **A control something else holds is no pole.** `models.control_free(model, name,
   skip)` is the one question: `natural_pairs`, `paired_with`, `degrees_of_freedom`,
   `Router._pair_step`, `pair_lanes`, the lanes view and a pair's Learn all ask it. `skip`

@@ -80,11 +80,19 @@ the registry's (``Registry.real``, installed by ``build_registry``), the
 same one the panel's widgets read through; a registry without it (a
 bare test rig) learns the alias as armed.
 
+**A pair that overlaps a mapping asks** (register row 754): a row a person
+makes on a ``pair:`` lane, by any road, while either pole already has a row
+waits as a `PairAsk` for **keep both**, **let the pair take over** or
+**cancel** (`settle_pair`). A row from a file never comes this way.
+
 Imports nothing from the adapters or the panel: the registry and the
 table are all it needs.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, replace
 
 from . import lfo, modifiers, undo
 from .envelope import GROUP as ENV_SCHEME
@@ -102,11 +110,13 @@ from .routing import (
     Bindings,
     Owned,
     base_scheme,
+    is_session_row,
     meta_refusal,
     pair_address,
     pair_poles,
     parse_sink,
     qualified,
+    row_words,
     whole_circle,
 )
 
@@ -458,37 +468,178 @@ def _steps_on(x: Binding, b: Binding, bare: tuple[str, ...]) -> bool:
     return poles is not None and any(pole.source in bare for pole in poles)
 
 
+def _split_row(table: Bindings, x: Binding, bare: tuple[str, ...]) -> list[Binding]:
+    """A pair's `step` row `x` goes from the poles `bare`, and the pole they do
+    not take keeps moving as it did, as a row of its own with everything else `x`
+    had (its gate, its scale). Returns those rows."""
+    left = []
+    table.remove(x)
+    for pole, sign in zip(pair_poles(":".join(x.parts)) or (), (1, -1), strict=False):
+        if pole.source not in bare:
+            scheme, _, name = pole.source.partition(":")
+            row = replace(x, source=f"{qualified(scheme, x.device)}:{name}", value=sign * x.value)
+            table.add(row)
+            left.append(row)
+    return left
+
+
 def _split_pairs(table: Bindings, b: Binding, bare: tuple[str, ...]) -> tuple[list, list]:
     """A button learn takes the poles `bare`: each pair's `step` row on one
-    (`_steps_on`) goes, and the pole it does not take keeps moving as it did,
-    as a row of its own. Returns (the pair rows gone, the rows left behind)."""
+    (`_steps_on`) splits (`_split_row`). Returns (the pair rows gone, the rows
+    left behind)."""
     gone, left = [x for x in table.bindings if _steps_on(x, b, bare)], []
     for x in gone:
-        table.remove(x)
-        for pole, sign in zip(pair_poles(":".join(x.parts)) or (), (1, -1), strict=False):
-            if pole.source not in bare:
-                scheme, _, name = pole.source.partition(":")
-                row = Binding(f"{qualified(scheme, x.device)}:{name}", x.target, "step",
-                              sign * x.value)
-                table.add(row)
-                left.append(row)
+        left += _split_row(table, x, bare)
     return gone, left
 
 
-def _also_moved(table: Bindings, b: Binding, bare: tuple[str, ...]) -> str:
-    """Words for what else a press of the poles `bare` moves: a preset's route
-    and the meta controller's rows are each their own layer's, so neither learn
-    removes the other's (row 751), and it is said instead. "" when nothing is."""
+# ---- a pair that overlaps a mapping asks first (register row 754) ----
+
+KEEP_BOTH, TAKE_OVER, CANCEL = "keep both", "take over", "cancel"
+# where a meta row's step is: the stack, not a promise of the next ⌘Z (a stack just
+# come to may refuse until a change is made on it, row 753). `ui.META_SECTIONS`
+META_UNDO = "undo it on the meta controller's stack: mouse over OUTPUT, AUDIO, ANALYZER or HANDS"
+DECK_UNDO = "undo the route taken on this deck's stack"
+
+
+def pole_rows(table: Bindings, b: Binding, skip: Iterable[Binding] = ()) -> list[Binding]:
+    """The mappings `b` would land beside: a row of its own on either pole, or
+    another pair's sharing one, that would still stand once `b` lands. Empty when
+    `b` is on no pair or is switched off, since it acts on nothing. The same pair
+    on any param is one lane read twice, not a pole's mapping (row 754). A row
+    switched off acts on nothing. A performer on `b`'s own target is the referee's
+    question: `b` replaces it whichever way this one is answered. `skip`: what the
+    road moves anyway."""
+    poles = pair_poles(":".join(b.parts)) if b.scheme == PAIR_SCHEME and b.enabled else None
+    if poles is None:
+        return []
+    bare = {pole.source for pole in poles}
+    skip = tuple(skip)
+
     def on_pole(x: Binding) -> bool:
-        if x is b or not x.enabled or x.device != b.device:
-            return False
         if x.scheme == PAIR_SCHEME:
-            poles = pair_poles(":".join(x.parts))
-            return poles is not None and any(pole.source in bare for pole in poles)
+            theirs = pair_poles(":".join(x.parts))
+            return theirs is not None and any(pole.source in bare for pole in theirs)
         return x.bare in bare
-    also = list(dict.fromkeys(x.target for x in table.bindings
-                              if on_pole(x) and x.target != b.target))
-    return f"; a press also moves {', '.join(also)}" if also else ""
+    return [x for x in table.bindings
+            if x.enabled and x.device == b.device and x.source != b.source and on_pole(x)
+            and not (b.is_performer and x.is_performer and x.target == b.target)
+            and not any(x is y for y in skip)]
+
+
+@dataclass
+class PairAsk:
+    """`new` asks for a pair whose poles already have rows. Nothing has changed
+    yet. `land` is the road's landing once answered, which `settle_pair` runs;
+    `skip` is what that road moves anyway; `replaced` is the table's count of its
+    routes being replaced when asked (`stale`)."""
+
+    table: Bindings
+    new: Binding
+    land: Callable[[], object]
+    skip: tuple[Binding, ...] = ()
+    replaced: int = 0
+
+    @property
+    def rows(self) -> list[Binding]:
+        """What is on the poles now: read when drawn and when answered."""
+        return pole_rows(self.table, self.new, self.skip)
+
+    @property
+    def stale(self) -> bool:
+        """Has what it asked about gone from under it? A load or an undo replaced
+        the routes, so the answer would land in another patch's table; or nothing
+        is on the poles now, so there is nothing to consent to."""
+        return self.table.routes_replaced_n != self.replaced or not self.rows
+
+
+def withdrawn_words(ask: PairAsk) -> str:
+    return f"nothing landed: the mappings changed while {row_words(ask.new)} asked"
+
+
+def propose_row(table: Bindings, new: Binding, land: Callable[[], object],
+                answered: Callable[[], object] | None = None, moving: Binding | None = None):
+    """The one door for a row a person makes (register row 754). Lands it (returns
+    what `land` returns), or holds it and returns a `PairAsk` when it overlaps a
+    mapping, with `answered` the landing that runs on an answer (default `land`:
+    the road's own second question has been asked by then). `moving`: the row in
+    the table being re-pointed to be `new`; its own source again asks nothing."""
+    skip = () if moving is None else (moving,)
+    if (moving is None or moving.source != new.source) and pole_rows(table, new, skip):
+        return PairAsk(table, new, answered or land, skip, table.routes_replaced_n)
+    return land()
+
+
+def _label(pid: str, reg: Registry | None) -> str:
+    p = reg.get(pid) if reg is not None else None
+    return (p.label if p is not None else "") or pid
+
+
+def _row_says(x: Binding, reg: Registry | None) -> str:
+    """"d-pad up moves Brightness", with whose row it is."""
+    whose = "the meta controller's, for every patch" if is_session_row(x) else "this patch's"
+    return f"{row_words(x)} moves {_label(x.target, reg)} ({whose})"
+
+
+def pair_lines(ask: PairAsk, reg: Registry | None = None) -> list[str]:
+    """The question's words: which control is mapped, and to what; which row asks."""
+    return [*(_row_says(x, reg) for x in ask.rows),
+            f"{row_words(ask.new)} asks to move {_label(ask.new.target, reg)}."]
+
+
+def settle_pair(ask: PairAsk, choice: str, reg: Registry | None = None) -> str:
+    """The answer, in words. **Keep both** lands the row and both act. **Take
+    over** lands it, then the rows on its poles go, read now; a pair's `step` row
+    leaves its other pole moving (`_split_row`). **Cancel** lands nothing.
+
+    One step on each stack the answer changes, and only those: the new row's
+    layer, and a row taken from the other layer on that layer's stack (a meta
+    row: `undo.push_meta`, restored through `SessionTable.set_rows`, which writes
+    the file). No stack reaches into another, so the words say where each is. The
+    meta push comes last: by the latch (row 753) only the stack a person's change
+    ended on can take it back at once, and a meta row is the one they cannot
+    simply delete again from where they are."""
+    if choice not in (KEEP_BOTH, TAKE_OVER, CANCEL):
+        raise ValueError(f"no such answer {choice!r}")
+    table, new = ask.table, ask.new
+    pair = row_words(new)
+    if choice == CANCEL:
+        return f"nothing landed: {pair} → {new.target}"
+    if ask.stale:
+        return withdrawn_words(ask)
+    why = table.refusal(new)             # before any push: a push moves the focus (row 753)
+    if why is not None:
+        return f"nothing landed: {why}"
+    rows = ask.rows
+    gone = rows if choice == TAKE_OVER else []
+    meta = is_session_row(new) or any(is_session_row(x) for x in gone)
+    taken_route = any(not is_session_row(x) for x in gone)
+    label = f"pair {new.target}"
+    if not is_session_row(new) or taken_route:
+        undo.push(label)
+    if meta:
+        undo.push_meta(label)
+    try:
+        ask.land()                       # first: a refusal leaves the poles' rows alone
+    except ValueError as e:              # not the referee's, asked above: a guard for the poles
+        return f"nothing landed: {e}"
+    bare = tuple(pole.source for pole in pair_poles(":".join(new.parts)) or ())
+    kept: list[Binding] = []
+    for x in gone:
+        if _steps_on(x, new, bare):
+            kept += _split_row(table, x, bare)
+        else:
+            table.remove(x)
+    if meta:
+        table.write()                    # once: the landing leaves the file to this
+    where = (f"; {META_UNDO}" if meta else "") + (
+        f"; {DECK_UNDO}" if meta and taken_route else "")
+    if choice == KEEP_BOTH:
+        return (f"both act: {pair} → {new.target}, and "
+                f"{', '.join(row_words(x) for x in rows)} as it was{where}")
+    return (f"the pair took over: {pair} → {new.target}; let go: "
+            + ", ".join(_row_says(x, reg) for x in gone)
+            + "".join(f"; {x.target} keeps {x.describe()}" for x in kept) + where)
 
 
 def land_moved(b: Binding, old_source: str, p: Param | None) -> None:
@@ -517,6 +668,8 @@ def move_route(table: Bindings, reg: Registry, b: Binding, *, source: str | None
 
 class Learn:
     """The armed param and the question the referee left for the panel."""
+
+    pair_ask: PairAsk | None = None      # on the class: a `Learn` from before a hot reload
 
     # told each row a learn makes (plan 55: `DeviceRegistry.mapped`, so a controller
     # mapped on another deck moves there); None: nobody asks
@@ -595,6 +748,7 @@ class Learn:
             self.refused = False
             self.control = None          # arming a param lets a picked control go
         self.pair_first = None           # plan 56: no pole pressed yet
+        self.pair_ask = None             # row 754: a new arm forgets it, as `pending`
         self.armed_n = getattr(self, "armed_n", 0) + 1
 
     def hold(self, on: bool = True) -> None:
@@ -841,8 +995,8 @@ class Learn:
     def learn_pair(self, source: str) -> bool:
         """The pair `source` (``pair:UP/DOWN``) completes the armed learn, by
         the want's model. "pair": a `step` row at one detent each way, the
-        session's like any pad button row: `bindings.json` is written, no undo
-        step, and it replaces the rows on either pole. "pair (spring)": a
+        session's like any pad button row: `bindings.json` is written, and a
+        step on the meta stack. Rows on either pole ask first (row 754). "pair (spring)": a
         route through `learn_source`, into the preset as a stick's; a whole-
         number or enum target takes the step row, since a lane resting at 0.5
         would park it mid-throw (a GRAPH cable comes here for the same reason,
@@ -860,33 +1014,42 @@ class Learn:
             return True
         table = self.table
         b = Binding(source, pid, "step", 1.0)
-        poles = pair_poles(":".join(b.parts))
-        if poles is None:
+        if pair_poles(":".join(b.parts)) is None:
             self.take()
             self.refuse(f"{source} names no two controls of a pad — not learned")
             return True
-        bare = tuple(pole.source for pole in poles)
         if self.want == PAIR_SPRING_WANT and p.kind is Kind.CONTINUOUS and not p.integer:
             self.learn_source(source, centred=True)
-            if not self.refused and (also := _also_moved(table, b, bare)):
-                self.said(f"{self.last}{also}")
             return True
         self.take()
-        gone = [x for x in table.bindings if x.device == b.device and x.bare in bare]
-        for x in gone:
-            table.remove(x)
-        pairs, kept = _split_pairs(table, b, bare)
-        table.add(b)
-        table.write()
-        self._mapped(b)
-        kept_targets = {x.target for x in kept}
-        let_go = ", ".join(dict.fromkeys(x.target for x in (*gone, *pairs)
-                                         if x.target != pid and x.target not in kept_targets))
-        keeps = "".join(f"; {x.target} keeps {x.describe()}" for x in kept)
-        self.said(f"learned {pid} ← {b.describe()} (into {getattr(table.path, 'name', 'the session')})"
-                  + (f"; {let_go} let go" if let_go else "") + keeps
-                  + _also_moved(table, b, bare))
+
+        def land() -> None:
+            self._land_step(b)
+            table.write()
+            self.said(f"learned {pid} ← {b.describe()} "
+                      f"(into {getattr(table.path, 'name', 'the session')}); {META_UNDO}")
+        self._ask_pair(propose_row(table, b, land, lambda: self._land_step(b)))
         return True
+
+    def _land_step(self, b: Binding) -> None:
+        """A pair's `step` row into the table, the meta controller's like any pad
+        button row; the caller writes the file, once. The same pair on the same
+        param again replaces itself; every other row is `settle_pair`'s to take or
+        to leave."""
+        undo.push_meta(f"learn pair {b.target}")
+        table = self.table
+        for x in [x for x in table.bindings
+                  if x.source == b.source and x.target == b.target and x.op == "step"]:
+            table.remove(x)
+        table.add(b)
+        self._mapped(b)
+
+    def _ask_pair(self, asked) -> None:
+        """What `propose_row` returned: a question is held for the panel (row 754),
+        the table untouched; a row that landed has nothing to hold."""
+        if isinstance(asked, PairAsk):
+            self.pair_ask = asked
+            self.said(f"{row_words(asked.new)} overlaps a mapping: answer the question")
 
     # ---- a sink port takes it (plan 27 B3) ----
 
@@ -1013,11 +1176,14 @@ class Learn:
             self._mapped(cur)
             self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
             return
-        if cur is not None:
-            self.pending = (b, cur)
-            self.said(f"{Owned(cur, b)} — replace?")
-            return
-        self._place(b)
+
+        def land() -> None:
+            if cur is not None:
+                self.pending = (b, cur)
+                self.said(f"{Owned(cur, b)} — replace?")
+                return
+            self._place(b)
+        self._ask_pair(propose_row(self.table, b, land, lambda: self._place(b)))
 
     def _row(self, source: str, p: Param, when: str | None, *,
              centred: bool = False, depth: float | None = None) -> Binding:

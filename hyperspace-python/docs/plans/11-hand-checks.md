@@ -8242,6 +8242,24 @@ Register row 753, 2026-11-06. Restart first. Headless: `tests/test_undo_latch.py
 *Fail:* any ⌘Z that takes back a step you made before you came to that stack, or a refusal right after a change you just made there.
 *Judge:* with the panel on air and open, a pad's load shuts it (step 3), and any fade shuts the panel's deck (step 9): both past the owner's sentence, row 753. Right? And a controller's change opens the stack in focus, whoever's it is: another player's knob counts (row 753). Right, or only your own player's?
 
+## CS. A pair that overlaps a mapping asks (plan 56)
+Register row 754, 2026-11-06. Headless: `tests/test_pair_consent.py`: each road asks and
+doesn't, each answer, a file load, undo on the real three stacks. A real panel by the
+mouse: `tools/app_driver.py`, Let the pair take over.
+**580. Consent, by your eye.** (a pad with the factory's D-pad rows)
+1. On a continuous param: **Learn pair (spring)**, press ↑, then ↓. Read the question. Press
+   Enter. Press **Keep both**, then press ↑.
+2. ⌘Z. Learn it again. **Let the pair take over**, then press ↑.
+3. ⌘Z with the mouse over OUTPUT, then ⌘Z with it over the graph.
+4. On GRAPH, drag from the pad node's `UP / DOWN` onto another param's mod. **Cancel**.
+5. Quit and reopen after step 3's undo. Load a saved patch whose route is on `pair:UP/DOWN`.
+*Pass:* (1) the question names d-pad up and down, Brightness, and the meta controller; Enter
+does nothing; after **Keep both** ↑ moves both. (2) ↑ moves only the param, and the line says
+which stack the rows are on. (3) Over OUTPUT ⌘Z brings ↑ and ↓ back on Brightness, and over
+the graph it then refuses in words until a change is made there (row 753). Say whether one ⌘Z should take back both (row 754). (4) Nothing lands. (5) No
+question at any load, and both act. Fail: a row landing or going before you answer, or a
+meta row not coming back.
+
 ## What no test covers
 
 Only a person can settle these:

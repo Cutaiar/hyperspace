@@ -3568,7 +3568,8 @@ def real_pin(view: View, pin: str) -> str:
 # table call returned, a `Refusal` (the words the page shows, nothing
 # changed) or an `Ask` (the target has a performer: the page puts up the
 # same Replace / Keep prompt ROUTING does, `ui_routing.ask`, and *Replace*
-# runs `commit`).
+# runs `commit`) or a `learn.PairAsk` (a pair whose poles have rows, row 754:
+# `ui_routing.ask_pair`).
 #
 # **The seam with plan 28 N4** (render-graph edits): a request is
 # dispatched by the type of the pins it joins. Value and trigger pins are
@@ -4063,12 +4064,17 @@ class Edit:
 
     def _add(self, b: Binding):
         table = self.table
-        try:
-            return table.add(b)
-        except Owned as e:
-            return Ask(e.existing, b, lambda: table.replace_owner(b))
-        except ValueError as e:
-            return Refusal(str(e))
+
+        def land():
+            try:
+                return table.add(b)
+            except Owned as e:
+                return Ask(e.existing, b, lambda: table.replace_owner(b))
+            except ValueError as e:
+                return Refusal(str(e))
+        if table.refusal(b) is not None:      # no question over a row that cannot land
+            return land()
+        return learnmod.propose_row(table, b, land, lambda: table.replace_owner(b))
 
     def _pair_step_row(self, addr: str, p: Param):
         """A pair's cable onto a stepped param: a route's lane, resting at 0.5,
@@ -4079,6 +4085,8 @@ class Edit:
         lrn.arm(p.id, learnmod.PAIR_WANT)
         if not lrn.learn_pair(addr) or lrn.refused:
             return Refusal(lrn.last or f"{addr} did not land on {p.id}")
+        if lrn.pair_ask is not None:
+            return lrn.pair_ask
         return next((b for b in reversed(self.table.bindings)
                      if b.source == addr and b.target == p.id), None)
 

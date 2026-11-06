@@ -3056,12 +3056,15 @@ class Bindings:
             self._follow_route((b.source, b.target), None)
         self.dropped, self.notes = [], []
 
+    routes_replaced_n = 0     # `set_routes` so far (a load, an undo): a held question (row 754)
+
     def set_routes(self, routes: Iterable[Binding]) -> None:
         """Replace every performer row, keeping the input bindings. Two
         rows on one target: the first stays, the rest go to `dropped`."""
         kept, self.dropped = referee(routes)
         self.notes = []
         self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + kept
+        self.routes_replaced_n += 1
 
     # ---- the modifiers (plan 28 N1) ----
 

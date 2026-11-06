@@ -749,7 +749,9 @@ Consequences:
   declares it, `pair:<+ pole>/<− pole>`, and `Router.pad` feeds its one lane,
   resting at 0.5, into the shared sources, so a route reads it as it reads a stick.
   A `step` row on one acts as the two rows it stands for and stays the meta
-  controller's (`tests/test_paired_axes.py`).
+  controller's (`tests/test_paired_axes.py`). A person's row on a pair whose pole is
+  mapped asks first (`learn.propose_row`, `learn.settle_pair`, row 754;
+  `tests/test_pair_consent.py`).
 - **The base chase is the one road from a performer into a base** (plan 52):
   while `deck.chase` is held, `Param.apply` writes what it landed into the
   base, on this deck's look params only, and `Param._trim` keeps the offset

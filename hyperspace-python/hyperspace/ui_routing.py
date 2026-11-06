@@ -126,7 +126,22 @@ from imgui_bundle import imgui
 from . import apc40, motion, ui, ui_feel, ui_presets, undo
 from .bands import CEIL
 from .groupwords import group_word
-from .learn import LANE_DEPTH, clutch_of, is_auto_clutch, land_moved, move_route
+from .learn import (
+    CANCEL,
+    KEEP_BOTH,
+    LANE_DEPTH,
+    META_UNDO,
+    TAKE_OVER,
+    PairAsk,
+    clutch_of,
+    is_auto_clutch,
+    land_moved,
+    move_route,
+    pair_lines,
+    propose_row,
+    settle_pair,
+    withdrawn_words,
+)
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
@@ -145,6 +160,7 @@ from .routing import (
     base_refusal,
     base_sub,
     factory_desk,
+    is_session_row,
     meta_refusal,
     whole_circle,
 )
@@ -391,12 +407,17 @@ def add_route(panel, target: str, source: str | None = None, depth: float = LANE
     if why is not None:                  # the referee's words, where the page shows them
         _state(panel)["error"] = f"routing: {why}"
         return None
-    try:
-        router.table.add(b)
-    except Owned as e:
-        ask(panel, e.existing, b, lambda: router.table.replace_owner(b))
+    def land() -> Binding | None:
+        try:
+            return router.table.add(b)
+        except Owned as e:
+            ask(panel, e.existing, b, lambda: router.table.replace_owner(b))
+            return None
+    got = propose_row(router.table, b, land, lambda: router.table.replace_owner(b))
+    if isinstance(got, PairAsk):
+        ask_pair(panel, got)
         return None
-    return b
+    return got
 
 
 # ---- the prompt: one performer per target, so a second one asks ----
@@ -408,6 +429,55 @@ def ask(panel, old: Binding, new: Binding, commit: Callable[[], object]) -> None
     through `Bindings.replace_owner`, which reads the target's owner at
     that moment — `old` is who to name, not who to remove."""
     _state(panel)["prompt"] = (old, new, commit)
+
+
+def ask_pair(panel, asked: PairAsk) -> None:
+    """Hold the question a pair's overlap asks (row 754): nothing lands until
+    `answer_pair`. A learn's is on the shared `Learn`, as `pending` is."""
+    _state(panel)["pair"] = asked
+
+
+def _clear_pair(panel) -> None:
+    _state(panel)["pair"] = None
+    lrn = getattr(panel, "learn", None)
+    if lrn is not None:
+        lrn.pair_ask = None
+
+
+def say_pair(panel, words: str) -> None:
+    """Where every page shows it, as a refusal from any page is."""
+    lib, lrn = getattr(panel, "library", None), getattr(panel, "learn", None)
+    if lib is not None and hasattr(lib, "say"):
+        lib.say(words)
+    if lrn is not None:
+        lrn.said(words)
+
+
+def pair_question_up(panel) -> PairAsk | None:
+    """The overlap question up now, or None. One gone stale (`PairAsk.stale`) is
+    withdrawn, and says so."""
+    asked = _state(panel).get("pair") or getattr(getattr(panel, "learn", None), "pair_ask", None)
+    if asked is None or not asked.stale:
+        return asked
+    _clear_pair(panel)
+    say_pair(panel, withdrawn_words(asked))
+    return None
+
+
+def answer_pair(panel, choice: str) -> None:
+    """`KEEP_BOTH`, `TAKE_OVER` or `CANCEL`, for the question up."""
+    asked = pair_question_up(panel)
+    if asked is not None:
+        _clear_pair(panel)
+        say_pair(panel, settle_pair(asked, choice, panel.reg))
+
+
+def _move_source(panel, router: Router, b: Binding, source: str) -> None:
+    """A row's source combo: onto a pair whose poles have rows, it asks (row 754)."""
+    got = propose_row(router.table, replace(b, source=source),
+                      lambda: move_route(router.table, router.reg, b, source=source), moving=b)
+    if isinstance(got, PairAsk):
+        ask_pair(panel, got)
 
 
 def _wake(router: Router, b: Binding) -> Binding | None:
@@ -661,12 +731,13 @@ def modal(panel) -> None:
     st = _state(panel)
     sq = getattr(panel, "spawn_question", None)
     lrn = getattr(panel, "learn", None)
+    pair = pair_question_up(panel)
     if lrn is not None and hasattr(lrn, "hold"):
-        lrn.hold(sq is not None)
+        lrn.hold(sq is not None or pair is not None)
     q = _question(panel)
     st["modal"] = False                 # did the modal draw this frame (tests read it)
     st["sheet"] = False                 # …and was it the spawn's sheet (plan 40 T3)
-    if q is None and sq is None:
+    if q is None and sq is None and pair is None:
         if imgui.is_popup_open(PROMPT):                  # stale: the question went away
             opened, _ = imgui.begin_popup_modal(PROMPT, None, imgui.WindowFlags_.no_title_bar)
             if opened:
@@ -687,6 +758,10 @@ def modal(panel) -> None:
     if sq is not None:
         st["sheet"] = True
         _sheet(panel, sq[0], sq[1])
+        imgui.end_popup()
+        return
+    if pair is not None:
+        _pair_body(panel, pair)
         imgui.end_popup()
         return
     old, new, _ = q
@@ -710,6 +785,36 @@ def modal(panel) -> None:
     if imgui.is_item_hovered():
         ui.tooltip("Leave the table as it is")
     imgui.end_popup()
+
+
+def _pair_body(panel, asked: PairAsk) -> None:
+    """The overlap question (row 754): which control is mapped and to what, then
+    **Keep both**, **Let the pair take over**, **Cancel**. No default: the chips
+    take the mouse, and the panel has no keyboard navigation."""
+    ui._micro("part of this pair is already mapped")
+    for line in pair_lines(asked, panel.reg):
+        imgui.text_wrapped(line)
+    cur = asked.table.owner(asked.new.target)
+    if asked.new.is_performer and cur is not None and not any(cur is x for x in asked.skip):
+        imgui.text_disabled(f"{cur.describe()} lets go of {asked.new.target} either way.")
+    imgui.spacing()
+    if ui.chip("Keep both##pair"):
+        answer_pair(panel, KEEP_BOTH)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        ui.tooltip("Both act: a press moves what it moved, and the pair too")
+    if ui.chip("Let the pair take over##pair"):
+        answer_pair(panel, TAKE_OVER)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        meta = any(is_session_row(x) for x in asked.rows)
+        ui.tooltip("The rows above go, and the pair lands."
+                   + (f" A meta controller's row goes for every patch: {META_UNDO}" if meta else ""))
+    if ui.chip("Cancel##pair"):
+        answer_pair(panel, CANCEL)
+        imgui.close_current_popup()
+    if imgui.is_item_hovered():
+        ui.tooltip("Land nothing")
 
 
 META_LINE = "the meta controller's: tuned before the show"
@@ -949,7 +1054,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
             sel, _ = imgui.selectable(lb, i == cur)
             if sel and i < len(sources):
                 # its subscribers too
-                move_route(router.table, router.reg, b, source=sources[i][0])
+                _move_source(panel, router, b, sources[i][0])
         imgui.end_combo()
     imgui.same_line()
     sp = imgui.get_style().item_spacing.x
