@@ -47,6 +47,7 @@ from imgui_bundle import imgui
 from . import devices, ui
 from .pads import models
 from .players import Duty
+from .pointer import deck_number
 
 STATE = "_players_ui"     # on the panel: {"sel", "drag", "said", "large", …}
 SEL_PLAYER, SEL_CTL = "player", "ctl"
@@ -302,7 +303,7 @@ def summary(panel) -> str:
 # ---------------------------------------------------------------- moves and their words
 
 def _deck_no(meta, deck) -> int:
-    return next(i + 1 for i, d in enumerate(meta.decks) if d is deck)
+    return deck_number(meta.decks, deck)
 
 
 def duty_words(number: int, duty: Duty, roles, left: int, reached: int) -> str:
@@ -803,7 +804,7 @@ def footer(panel) -> None:
         return
     st = _state(panel)
     imgui.same_line()
-    if ui.lit_chip(f"{summary(panel)}##players.open", st["large"]):
+    if ui.lit_chip(f"players: {summary(panel)}##players.open", st["large"]):
         st["large"] = not st["large"]
     if imgui.is_item_hovered():
         ui.tooltip(OPEN_TIP)

@@ -1563,7 +1563,7 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
 META_WORDS = "{pid} is the meta controller's, tuned before the show; no preset row may drive it"
 # ...and on a meta param that is one per `Deck` (register row 746: `preset.*`, `deck.chase`,
 # `totem.*`, `poi.*`): a press of one is a person's, whatever it does
-PER_DECK_WORDS = "{pid} is the meta controller's, a person's to press; no patch's row may drive it"
+PER_DECK_WORDS = "{pid} is the meta controller's, one per deck, a person's own; no patch's row may drive it"
 
 
 def meta_refusal(pid: str | None) -> str | None:

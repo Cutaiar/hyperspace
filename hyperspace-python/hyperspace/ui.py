@@ -84,7 +84,7 @@ from .groupwords import group_title
 from .hands import panel as ui_hands
 from .media import publish
 from .params import PLANES, Kind, Param, Registry, build_registry, part_of
-from .pointer import Through
+from .pointer import Through, deck_number
 from .view import RED as RED_RGB
 from .view import ViewState
 
@@ -644,7 +644,7 @@ CHEATSHEET = [
     ("R", "reset view + camera"),
     ("F1–F8", "load off air · ⇧ saves"),
     ("B", "tap tempo · ⇧B LFO trigger"),
-    ("Cmd+Z", "undo · ⇧ redo (or Ctrl+Z)"),
+    ("Cmd+Z", "undo, after a change here · ⇧ redo (or Ctrl+Z)"),
     ("Home", "home preset, off air (fn ←)"),
     ("Cmd+R", "restart process"),
     ("Cmd+[ ]", "panel page back · forward"),
@@ -665,7 +665,8 @@ CHEATSHEET = [
     ("APC40", "K D knobs · S faders · G row·col · B ⇧"),
     # the APC40 rows whose labels alone do not say it (2026-10-16)
     ("APC40 G7 G9 G10", "analyzer band (⇧ D knobs follow) · next transfer · reset"),
-    ("APC40 QUANT", "next bank preset (the pad's B walks the list)"),
+    ("APC40 clip pads", "load off air · hold an empty one: save"),
+    ("APC40 QUANT", "next bank preset, off air"),
     ("APC40 STOP ALL", "reset the analyzer · again within 8 s: undo"),
     ("APC40 MASTER PAN", "overlay · click-through (if config allows)"),
 ]
@@ -2751,8 +2752,14 @@ class Panel:
         work beyond its effects); with no timer queries on the context, the
         one line saying so. Plan 35 T4: then the ends that ran the last
         frame (`stats["ends"]`, where the pipelines were). Nothing before a
-        frame has been timed, or with no renderer."""
-        return _gpu_block(getattr(self.renderer, "stats", None) or {}, "gpu")
+        frame has been timed, or with no renderer. With two decks (D5e): the deck on
+        air's, by its number, whichever the panel is on, as `deck2_gpu_lines` is the
+        deck off air's; the panel's own would read the deck off air twice."""
+        fade = getattr(self, "fade", None)
+        if fade is None:
+            return _gpu_block(getattr(self.renderer, "stats", None) or {}, "gpu")
+        stats = getattr(fade.on_air.renderer, "stats", None) or {}
+        return _gpu_block(stats, f"deck {deck_number(fade.decks, fade.on_air)} (on air) gpu")
 
     def deck2_gpu_lines(self) -> list[str]:
         """Plan 44 D4, §8: the second GPU block, what the deck off air costs —
@@ -2763,7 +2770,7 @@ class Panel:
         if fade is None:
             return []
         mixed = getattr(fade.on_air.renderer, "mix_error", "")
-        deck = f"deck {2 if fade.off_air is fade.decks[1] else 1}"
+        deck = f"deck {deck_number(fade.decks, fade.off_air)}"
         said = [f"{deck}: {e}" for e in (fade.error, fade.warm_error, mixed) if e]
         if not (fade.drew or fade.previewed):
             return [f"{deck}: off air, draws nothing", *said]
