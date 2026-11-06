@@ -54,10 +54,21 @@ loud is hiding the only decision that matters. Fixing the size instead:
 | 44 mm | 3×5 | 15 | 0.603 mm |
 | 50 mm | 3×4 | 12 | 0.685 mm |
 
+Every figure in both tables above is asserted in `app/check/sheet.check.ts`
+against the layout model, so the document and the code cannot drift apart:
+
+```sh
+cd app && npm run check
+```
+
 ## Build order
 
-1. **Sheet model** — `src/lib/sheet.ts`: paper sizes, margins, gutter, bleed;
-   `layout(codes, opts)` returns placements in mm. Pure, testable, no React.
+1. ~~**Sheet model**~~ — done: `src/lib/sheet.ts` — `src/lib/sheet.ts`: paper sizes, margins, gutter, bleed;
+   papers, usable area per cut mode, `layout()` in millimetres, `assign()` to
+   fill cells, `pitch()`/`minSticker()`, and warnings for the cases that bite
+   (bleed wider than half the gutter, under the 6 mm minimum, nothing fits).
+   Pure: no React, no DOM, no SVG, so the preview and the exporter read the
+   same geometry and cannot disagree.
 2. **Preview** — the sheet drawn to scale with cut lines and bleed shown, plus
    the per-sheet count and a warning when pitch drops under the floor.
 3. **Selection** — pick from the gallery, set a count per code, fill the sheet
