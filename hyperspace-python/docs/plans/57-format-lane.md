@@ -156,10 +156,17 @@ today `session` (the tuning), `modules` (the session groups' labels), `bank`, `s
 **Size:** L. `Project`, `MetaMarks`, the bank's callers, `last_show` and the shows tests all
 move. It is the largest item here by far and shares no code with the others. **[Rec]** it
 shares the run and the backup, not the bump: a new file kind starts at `/1`, and no preset
-changes for it. If it would delay the show, it is the one item that can run as a second
-migration, since it touches nothing the first writes. The owner said one; that is his call.
+changes for it. The owner, 2026-11-06: one run; the second-migration fallback is not used.
 
 ## 6. Questions for the owner
+
+**All answered: FQ1 and FQ2 landed with #377; the owner answered FQ3–FQ7 on 2026-11-06, as
+recommended.** FQ4: "'loadable' is accurate to what the thing within the folder is, so I think
+that's fine": `hyperspace.loadable/11` in `<library>/loadable/`. FQ5: "as recommended", as §5 reads.
+FQ6: **one migration**, overruling the rec's fallback: "coordinating the migration is not hard", so
+shows' move is inside the one run and does not split off. FQ7: those spellings; "546 and 552 look
+good". Where the bank belongs is answered with FQ5: in the install file. The venues half of §5 is not:
+it goes to wave 5's plan.
 
 | | Question | Rec |
 | --- | --- | --- |

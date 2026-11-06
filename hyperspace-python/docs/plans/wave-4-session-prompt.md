@@ -218,6 +218,17 @@ stay, and load only into the off-air `Deck`. If they should go too, it is a one-
 - **Venues probably go.** Composing displays and peripherals in the app is new work, not
   scheduled in this wave.
 
+**Ninth round, 2026-11-06.**
+- **The gate on D5d is dropped:** "we can drop the gate". Checks 489–492 no longer hold #380; try
+  #380 on the rig before SEM starts, if that can be done.
+- **Bank pads and F-keys load off air** (row 700, option (b)): always into the off-air `Deck`, never
+  touching the room, and refused while the crossfader is between its ends. A load is a meta
+  controller verb. The panel's own load still goes to the `Deck` the panel is looking at.
+- **The glossary is signed**, reviewed with Dillon. `docs/GLOSSARY.md` now says patch and loadable
+  patch. SEM follows it.
+- **FQ3–FQ7 as recommended, and one migration:** see `57-format-lane.md` §6.
+- **Wave 5 is to be planned now,** with its launch prompt. It runs after this wave lands.
+
 ## Joy-Con version 0 (#365), from another session, 2026-11-04
 
 The Joy-Con integration was scaled back to a workable control surface for an upcoming
