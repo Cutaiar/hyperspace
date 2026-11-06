@@ -35,6 +35,7 @@ sys.path.insert(0, str(HERE))
 import draw as D          # noqa: E402
 import gradient as G      # noqa: E402
 import interact as I      # noqa: E402
+import menu as M          # noqa: E402
 import tokens as T        # noqa: E402
 from ease import Anim     # noqa: E402
 
@@ -48,6 +49,16 @@ BANDS = [("SUB", "ZW", 20, 60, 1), ("BASS", "XW", 60, 160, 1),
          ("MIDB", "YW", 160, 400, -1), ("MID", "XY", 400, 1200, -1),
          ("UPR", "XZ", 1200, 4000, 1), ("AIR", "YZ", 4000, 14000, -1)]
 CEIL = 2.6
+
+ROW_MENU = [
+    M.Item("open", "Open in catalog", icon="eye"),
+    M.Item("copy", "Copy Schl\u00e4fli", icon="copy", shortcut="\u2318C"),
+    M.Item("pin", "Pin to scene", icon="layers"),
+    M.sep(),
+    M.heading("Danger"),
+    M.Item("remove", "Remove from view", icon="trash-2",
+           variant="destructive"),
+]
 
 NAV = [("Overview", "gauge"), ("Catalog", "shapes"), ("Scenes", "layers"),
        ("Analyzer", "activity"), ("Routing", "waves")]
@@ -168,7 +179,7 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
         r.table_rows.append((inner_x, y + i * 34, inner_w, 34))
 
     # Shape | Kind | Schlafli | Dim | Cells | Family
-    fracs = [0.22, 0.29, 0.13, 0.06, 0.08, 0.22]
+    fracs = [0.22, 0.28, 0.13, 0.06, 0.08, 0.20]
     cxx = inner_x + 12
     for f in fracs:
         cwid = (inner_w - 24) * f
@@ -322,7 +333,18 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
 
     for ri, (row, rect) in enumerate(zip(rows[:shown], r.table_rows)):
         rx, ry, rw, rh = rect
-        I.row(ui, f"row.{ri}", rx, ry, rw, rh)
+        hovered = I.row(ui, f"row.{ri}", rx, ry, rw, rh).hot
+        # the kebab shows on hover, as shadcn's row actions do, but stays put
+        # once its menu is open
+        mkey = f"rowmenu.{ri}"
+        if hovered > 0.01 or imgui.is_popup_open(mkey):
+            if I.icon_button(ui, f"kebab.{ri}", rx + rw - 30,
+                             ry + (rh - 26) / 2, 26,
+                             "ellipsis-vertical", glyph=15).clicked:
+                imgui.open_popup(mkey)
+        picked = M.popup(ui, mkey, ROW_MENU)
+        if picked:
+            state["said"] = f"{picked} \u00b7 {row['name']}"
         D.fill(dl, rx, ry + rh - 1, rw, 1, T.rgba("border", theme=theme))
         cells = [row["name"], row["kind"], row["schlafli"] or "—",
                  f"{row['dims']}D",
@@ -382,15 +404,10 @@ def _boot(theme_name, w, h, *, visible: bool, retina: bool = False):
     ww, _ = glfw.get_window_size(win)
     fw, _ = glfw.get_framebuffer_size(win)
     density = (fw / ww) if ww else 1.0
-    faces = {}
-    for k, fn in D.FACE_FILES:
-        cfg = imgui.ImFontConfig()
-        # glyphs are rasterized at the display's real pixel density; without
-        # this they are cut at logical size and scaled up, which is the other
-        # half of looking grainy on a Retina screen
-        cfg.rasterizer_density = density
-        faces[k] = io.fonts.add_font_from_file_ttf(str(HERE / "fonts" / fn),
-                                                   16.0, cfg)
+    # glyphs are rasterized at the display's real pixel density; without this
+    # they are cut at logical size and scaled up, which is the other half of
+    # looking grainy on a Retina screen
+    faces = D.load_faces(io, HERE, density)
     LL = T.LIGHT_L if theme_name == "light" else T.DARK_L
     grad = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))
     return win, impl, io, faces, grad
@@ -493,8 +510,7 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
     impl = GlfwRenderer(win)
 
     io = imgui.get_io()
-    faces = {k: io.fonts.add_font_from_file_ttf(str(HERE / "fonts" / fn), 16.0)
-             for k, fn in D.FACE_FILES}
+    faces = D.load_faces(io, HERE)
 
     LL = T.LIGHT_L if theme_name == "light" else T.DARK_L
     grad_tex = G.upload_1d(G.ramp_oklab(*G.card_gradient(LL), n=256))

@@ -16,6 +16,8 @@ LIGHT = {
     "background": "#ffffff",
     "foreground": "#0a0a0a",
     "card": "#ffffff",
+    "popover": "#ffffff",
+    "popover-foreground": "#0a0a0a",
     "primary": "#171717",
     "primary-foreground": "#fafafa",
     "secondary": "#f5f5f5",
@@ -36,6 +38,8 @@ DARK = {
     "background": "#0a0a0a",
     "foreground": "#fafafa",
     "card": "#171717",
+    "popover": "#171717",              # oklch(0.205 0 0)
+    "popover-foreground": "#fafafa",
     "primary": "#e5e5e5",
     "primary-foreground": "#171717",
     "secondary": "#262626",

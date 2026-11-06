@@ -40,13 +40,8 @@ FACES = dict(D.FACE_FILES)
 
 
 def load_faces():
-    io = imgui.get_io()
-    out = {}
-    for k, fn in FACES.items():
-        p = HERE / "fonts" / fn
-        if p.exists():
-            out[k] = io.fonts.add_font_from_file_ttf(str(p), 16.0)
-    return out      # 1.92 builds the atlas lazily; there is no Build() any more
+    # 1.92 builds the atlas lazily; there is no Build() any more
+    return D.load_faces(imgui.get_io(), HERE)
 
 
 def render(theme_name: str, tess: float | None = None) -> np.ndarray:

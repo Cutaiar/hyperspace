@@ -142,6 +142,29 @@ FACE_FILES = [(f"{v}{t}", f"Geist-{w}{t}.ttf")
               for t in ("", "-tnum")]
 
 
+# The panel merges DejaVu behind every face for the symbols its own faces do
+# not carry (ui.py:152-153). The kit needs the same: Geist's latin subset has
+# no arrows and no command key, and a missing glyph draws as a box.
+FALLBACK = "../../hyperspace/fonts/DejaVuSans.ttf"
+
+
+def load_faces(io, here, density: float = 1.0) -> dict:
+    """Every face, each with the symbol fallback merged in behind it."""
+    out = {}
+    fb = (here / FALLBACK).resolve()
+    for key, fn in FACE_FILES:
+        cfg = imgui.ImFontConfig()
+        cfg.rasterizer_density = density
+        out[key] = io.fonts.add_font_from_file_ttf(str(here / "fonts" / fn),
+                                                   16.0, cfg)
+        if fb.exists():
+            m = imgui.ImFontConfig()
+            m.merge_mode = True
+            m.rasterizer_density = density
+            io.fonts.add_font_from_file_ttf(str(fb), 16.0, m)
+    return out
+
+
 def face_key(variant: str, tabular: bool) -> str:
     """The face to use. `-tnum` carries Geist's tabular figures, frozen into
     the cmap at build time because stb_truetype applies no OpenType feature.

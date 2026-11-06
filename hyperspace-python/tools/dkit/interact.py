@@ -56,14 +56,21 @@ class Ui:
     _seen: set = field(default_factory=set)
 
     # -- state ------------------------------------------------------------
-    def hit(self, key: str, x, y, w, h) -> State:
-        """Place an invisible_button over the rect and read it back."""
+    def hit(self, key: str, x, y, w, h, *, allow_overlap: bool = False) -> State:
+        """Place an invisible_button over the rect and read it back.
+
+        `allow_overlap` lets a later, smaller control on top of this one take
+        the hover — a row with a kebab in it, for instance. Without it the
+        row swallows the button.
+        """
         if w <= 0 or h <= 0:
             return State()
         if key in self._seen:
             raise ValueError(f"duplicate dkit widget id: {key!r}")
         self._seen.add(key)
         imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+        if allow_overlap:
+            imgui.set_next_item_allow_overlap()
         clicked = imgui.invisible_button(f"##{key}", imgui.ImVec2(w, h))
         hovered = imgui.is_item_hovered()
         held = imgui.is_item_active()
@@ -151,7 +158,7 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0) -> tuple:
 
 def row(ui: Ui, key, x, y, w, h) -> State:
     """A table row: hover tints the whole band, as shadcn's `hover:bg-muted/50`."""
-    st = ui.hit(key, x, y, w, h)
+    st = ui.hit(key, x, y, w, h, allow_overlap=True)
     if st.hot > 0.01:
         D.fill(ui.dl, x, y, w, h, mix(ui.col("transparent"),
                                       ui.col("muted", 0.5), st.hot))

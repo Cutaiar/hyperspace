@@ -180,6 +180,28 @@ code would have found:
 Lucide dropped brand icons, so there is no `github`; the header button is
 text. ISC licence in `Lucide-LICENSE.txt`.
 
+## Menus and popovers
+
+The hard parts of a popup are focus, dismissal on click-away or Escape,
+nesting and z-order — all of which ImGui already does. `menu.py` borrows its
+popup window and paints shadcn's chrome into it rather than reimplementing
+any of it. Open with `imgui.open_popup(key)` from an
+`interact.icon_button(..., "ellipsis-vertical")`; draw with
+`menu.popup(ui, key, items)`, which returns the chosen id.
+
+Items carry an icon, a shortcut, a `destructive` variant, a `checked` state
+and an `enabled` flag; `menu.sep()` and `menu.heading()` are the other two
+row kinds.
+
+Two things worth knowing:
+
+* **The shadow and ring fall outside the popup window**, which imgui clips
+  to, so the chrome widens the clip rect while it draws.
+* **`replay.keep` drops every popup, menu and tooltip** from the GRAPH canvas
+  tap (`hyperspace/replay.py:91`). A menu opened over that canvas will not
+  appear in the `panel:graph` texture that feeds the render graph. Fine on
+  the panel; it cannot be part of anything projected.
+
 ## Running it
 
 Nothing here needs `HYPERSPACE_HOME` — dkit touches none of the app's state.
