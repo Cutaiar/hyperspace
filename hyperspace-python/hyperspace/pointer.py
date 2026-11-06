@@ -24,6 +24,11 @@ from typing import Any
 moves: int = globals().get("moves", 0)
 
 
+def deck_number(decks, deck) -> int:
+    """Which of the two `decks` this is, as a person reads it: 1 or 2."""
+    return 1 if deck is decks[0] else 2
+
+
 @dataclass
 class Pointer:
     """One holder's place: the `Deck` it is on now. A plain attribute to read."""

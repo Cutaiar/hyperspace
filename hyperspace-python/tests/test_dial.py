@@ -563,6 +563,47 @@ def test_the_pad_picture_shows_a_dialed_stick(tmp_path):
         assert says("axis:RX") == (ui_pad.BUILT_IN["axis:RX"], None)
 
 
+def test_an_unplugged_pad_draws_no_sectors_and_is_never_asked(tmp_path, monkeypatch):
+    """Second review of #395: `_sectors` has no `pad.on` of its own, and needs none. Its
+    only road is `_body`, whose pad is `_pad(panel)`: None while the pad is off, so the
+    picture rests as `Panel._dials` does, last axis values or not, and `pad.dials` is not
+    called by either. A pad on the other deck rests the same way, though it is on."""
+    from test_ui_shell import build_rig
+
+    from hyperspace import devices, ui_pad
+
+    wells = []
+    draw = ui_pad._well
+    monkeypatch.setattr(ui_pad, "_well", lambda dl, pad, c, *a: (
+        wells.append((c.source, a[-1] if len(a) == 6 else None)), draw(dl, pad, c, *a))[1])
+    with build_rig(tmp_path) as r:
+        pad = ScriptedPad()
+        r.panel.pad = pad
+        r.router.table.add(Binding("axis:L.E", "view.inst_amp", "push", 1.0))
+        pad.frame(axes=[1.0, 0.0, 0.0, 0.0, -1.0, -1.0])
+        _pane(r.panel, pad)                         # (twice: `dialed` is read as it draws)
+        wells.clear()
+        _pane(r.panel, pad)
+        assert dict(wells)["pad:LSTICK"][2] > 0     # live: the well fills
+        pad.source = None                           # unplugged, its axes left as they were
+        assert not pad.on and pad.axes[0] == 1.0
+
+        def asked():
+            raise AssertionError("an unplugged pad's dials were read")
+        monkeypatch.setattr(pad, "dials", asked)
+        wells.clear()
+        _pane(r.panel, pad)
+        assert dict(wells)["pad:LSTICK"] == [0.0] * gp.DIAL
+        monkeypatch.undo()                          # (the well's spy too)
+        pad.source = "usb"
+        ctx = devices.Context(reg=r.reg, table=r.router.table)
+        dev = devices.PadDevice("pad", None, ctx, io=pad)
+        dev.point(NS(deck=NS(reg=Registry(), router=None)))
+        r.panel.devices = devices.DeviceRegistry(devices=[dev], ctx=ctx)
+        assert pad.on and not r.panel.pad_reads_here()
+        assert ui_pad._sectors(r.panel, pad, gp.control("pad:LSTICK")) == [0.0] * gp.DIAL
+
+
 def test_a_second_pads_dial_route_leaves_the_primarys_stick_alone():
     from hyperspace import ui_pad
 
