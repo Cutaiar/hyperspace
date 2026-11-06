@@ -3,6 +3,10 @@
 What to build next, and why — ordered by how much of Hyperspace's actual
 surface each one unblocks, not by how interesting it is.
 
+> **Current state, the traps, and the process this has settled into are in
+> [`HANDOFF.md`](HANDOFF.md).** Read that second. This file is the plan;
+> that one is where the work actually got to.
+
 ## Is any of this already out there?
 
 Asked properly, because building what exists is the worst outcome.
@@ -48,7 +52,8 @@ that has worked all the way through this.
 | popover placement (side/align/offset, flip, shift) | done |
 | rounded clipping (`overflow-hidden`) | done — both the rect-child and corner-cover cases |
 | pixel snapping (the browser paints on whole pixels) | done — and it was worth 91 levels |
-| components | Tier 1 done; Tier 2 next |
+| intrinsic sizing (`box.Node`, `measure_tree`, `place_tree`) | done — 0.38 ms for 955 nodes |
+| components | Tier 1 + ScrollArea, Button, ButtonGroup, ContextMenu, Combobox |
 
 ## Still missing, after flex
 
@@ -59,15 +64,16 @@ will keep running into:
 |---|---|---|
 | ~~**rounded clipping**~~ | **done.** The Slider needed it at once: its track is `overflow-hidden rounded-full` and the range is a plain rect | yes — built |
 | **text wrapping / multi-line measure** | descriptions, tooltips, node summaries. `push_text_wrap_pos` exists but `label()` is single-line | a tooltip truncates rather than wraps |
-| **intrinsic sizing** (`fit-content`, `min-content`) | `Flow` measures one row; there is no "how big is this subtree" | yes — every container is hand-sized, Tier 1 included |
-| **scroll container** | REVIEW.md: "a section may scroll down". ImGui child windows scroll but the bars need restyling | not yet — but no longer blocked |
-| **focus ring + tab order** | `focus-visible:ring-[3px]` | half: `draw.ring` draws it and the Input eases it in on real focus, but nothing orders a tab sequence |
+| ~~**intrinsic sizing**~~ | **done.** `box.Node` + `measure_tree` (bottom-up) + `place_tree` (top-down) | yes — built |
+| ~~**scroll container**~~ | **done.** `interact.scroll_area`, and the dashboard page scrolls | yes — built |
+| **focus ring + tab order** | `focus-visible:ring-[3px]` | mostly: `Ui.focus_visible` tracks keyboard-vs-mouse and every control rings correctly, but nothing orders a tab sequence |
 | **variant resolver** (cva) | variants are ad-hoc dicts (`tokens.BADGE`, now `SWITCH`, `INPUT`, `SELECT` too); each component invents its own | yes, and getting worse |
 | **transform transitions** | shadcn menus `zoom-in-95`; the ease store does colour only | no — the Switch's thumb slides by hand off an eased scalar |
 | **density / scale** | `Ui.scale` exists and is unused; the side pane is 240–320px | the demo pins its control column to 280 by hand |
 
-Intrinsic sizing is now the one that will bite hardest, and the variant
-resolver is next after it — Tier 1 added four more ad-hoc tables.
+The **variant resolver** is now the one that will bite hardest — there are
+eight ad-hoc tables, and `comp_button` alone added three. **Text wrapping**
+is next after it: Dialog and Toast both want a multi-line measure.
 
 ## Components, against Hyperspace's real control inventory
 
@@ -102,12 +108,15 @@ measured params plus every tooltip. All five are diffed against the real
 component in both themes and driven by real imgui widgets underneath, so
 `tests/ui_driver.py` can still find and drive them.
 
-**Tier 2 — next, and what the node editor needs.** ScrollArea, ContextMenu,
-Collapsible, Resizable, Command. ScrollArea is no longer blocked: rounded
-clipping was pulled forward and built.
+**Tier 2 — partly done.** ScrollArea ✓, ContextMenu ✓, Button ✓,
+ButtonGroup ✓, Combobox ✓. Still open: **Collapsible**, **Resizable**,
+**Command** (the cmdk ranking is already ported and verified as
+`comp_combobox.rank_items_cmdk`, waiting for this).
 
-**Tier 3 — polish.** AlertDialog/Dialog, Toast, Kbd, HoverCard,
-Sheet/Drawer, Breadcrumb, ButtonGroup, RadioGroup, Pagination.
+**Tier 3 — polish, and the next wave.** Dialog, Sheet, Toast, Kbd,
+Breadcrumb, Checkbox — then AlertDialog, HoverCard, RadioGroup, Pagination.
+Dialog first: it brings the modal layer and the scrim that Sheet and
+AlertDialog both need, and nothing in the kit has either yet.
 
 ### Two the requested list left out, which are the biggest wins
 
@@ -140,34 +149,41 @@ this order:
 
 1. **`ROADMAP.md`** (this file) — what to build, why that order, and the
    constraints each component has to respect.
-2. **`README.md`** — how the kit works, how to run it, how to test it, and
+2. **`HANDOFF.md`** — where the work actually got to, every trap that cost
+   a round of rework, and the process revisions each of them forced.
+3. **`README.md`** — how the kit works, how to run it, how to test it, and
    the calibration findings that are easy to rediscover the hard way
    (ImGui's stroke is not centred on the path; its font size is not a CSS
    px; three bindings reverse the C++ argument order).
-3. **`FINDINGS.md`** — what is built, what is not, and what every number
-   was measured on.
+4. **`FINDINGS.md`** — the Tier 1 verdict, and what every number was
+   measured on.
 
 A reasonable opening message:
 
-> Read `hyperspace-python/tools/dkit/ROADMAP.md` and `README.md`. Tier 1 is
-> done — build ScrollArea, which rounded clipping has unblocked. Use the
-> browser-oracle pattern: add the component to `prototypes/dashboard`,
-> measure it on the `?probe` route, then match it in the kit and diff it.
-> Do not implement from a reading of the spec — `?probe` exists because
+> Read `hyperspace-python/tools/dkit/ROADMAP.md` and `HANDOFF.md`. Branch
+> `claude/magical-ritchie-fkh5e0`. Build Dialog, which brings the modal
+> layer Sheet and AlertDialog also need. Use the browser-oracle pattern:
+> add the real component to `prototypes/dashboard`, measure it on the
+> `?probe` route, then match it in the kit and diff it on `?gallery`. Do
+> not implement from a reading of the spec — `?probe` exists because
 > reading the Tailwind classes is how the Slider, the Switch and the Select
-> each came out wrong the first time.
+> each came out wrong the first time, and because briefing an agent from a
+> *recollection* of which primitives a component is built on sent a whole
+> Combobox the wrong way.
 
 ### The order I would take from here
 
-Tier 1 and rounded clipping are done. Next:
-
-1. **ScrollArea**, now unblocked — and the first thing that will want
-   `cover_corners` rather than `fill_clipped`, since its content is not a
-   rect.
-2. **Intrinsic sizing**, because every container in the kit is still
-   hand-sized and ScrollArea will make that worse.
-3. **Collapsible / Accordion** — 17 folding sections in `ui_pane.SECTIONS`.
-4. **A variant resolver**, before a sixth ad-hoc table is written.
+1. **Dialog**, then **Sheet** — the modal layer and the scrim are the new
+   primitives; Sheet is Dialog with a side.
+2. **Toast** — the first thing in the kit with a lifetime longer than a
+   frame and no widget to hang its state on.
+3. **Kbd**, **Breadcrumb**, **Checkbox** — small, and Checkbox is 47 toggle
+   params.
+4. **Gallery cells for Button, ButtonGroup, ContextMenu and Combobox.**
+   Their chrome is not in the pixel diff yet, which is the biggest hole in
+   coverage right now.
+5. **A variant resolver**, before a ninth ad-hoc table is written.
+6. **Collapsible / Accordion** — 17 folding sections in `ui_pane.SECTIONS`.
 
 And the one thing none of this answers: **nothing is adopted yet.** The kit
 now covers 412 of 427 params, which is the whole reason Tier 1 came first;

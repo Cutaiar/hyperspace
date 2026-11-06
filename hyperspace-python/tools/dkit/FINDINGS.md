@@ -1,5 +1,10 @@
 # Can Dear ImGui look like shadcn?
 
+> **This file is accurate as the Tier 1 record.** What was built after
+> it — ScrollArea, intrinsic sizing, Button, ButtonGroup, ContextMenu,
+> Combobox — plus every trap and process revision, is in
+> [`HANDOFF.md`](HANDOFF.md).
+
 **Yes, to within a pixel — and the reason is narrower than it sounds.**
 
 *(Updated after five follow-on projects: interaction and easing, icons,

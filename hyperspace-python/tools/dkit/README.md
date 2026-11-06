@@ -1,5 +1,10 @@
 # dkit
 
+> **This file is accurate as the Tier 1 record.** What was built after
+> it — ScrollArea, intrinsic sizing, Button, ButtonGroup, ContextMenu,
+> Combobox — plus every trap and process revision, is in
+> [`HANDOFF.md`](HANDOFF.md).
+
 Can Dear ImGui, on this project's own stack, be made to look like shadcn/ui?
 
 **Picking this up fresh?** Start with [`ROADMAP.md`](ROADMAP.md) — what to
