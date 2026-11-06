@@ -13681,9 +13681,10 @@ still wins, as does a sink row.
 ### 754. A pair that overlaps a mapping asks first
 
 - **Answer.** The owner, 2026-11-06: "when you create the pair in general, it should tell you that part of this pair is already mapped. Then you should have to explicitly consent to either keeping both mappings on that control or the option to remove the existing mapping and let the pair take over that axis."
-- **Built.** `learn.pair_question` makes a `PairAsk` when `learn.pole_rows` finds a row: a
-  row of its own on either pole, or another pair's sharing one, in this `Deck`'s table,
-  switched on, same pad. Nothing changes until `learn.settle_pair`. `ui_routing.modal`
+- **Built.** `learn.propose_row` is the one door: it lands the row, or holds a `PairAsk` when
+  `learn.pole_rows` finds a mapping: a row of its own on either pole, or another pair's
+  sharing one, in this `Deck`'s table, switched on, same pad. Nothing changes until
+  `learn.settle_pair`. `ui_routing.modal`
   draws it, centred like Replace / Keep, not in the pane.
 - **The roads that ask:** Learn pair (`Learn.learn_pair`, the `step` row), Learn pair
   (spring) and any adapter's Learn (`Learn.learn_source`), a GRAPH cable onto a continuous
@@ -13694,32 +13695,39 @@ still wins, as does a sink row.
   question, over a file's rows), node mode's derived rows, a `bindings.json` or factory row:
   both act, and no saved file changes. A modifier's input on a pair lane is no route on it.
   A modifier deleted puts back the route it stood in for. Waking or retargeting a row
-  already on the pair makes no new mapping. The same pair on the same param again is the
-  same mapping; a Learn moving its own route is the one-axis-one-param rule it already had
-  (`_place`). A switched-off row acts on nothing.
+  already on the pair, or picking the source a row already has, makes no new mapping. The
+  same pair on any param is one lane read twice, not a pole's mapping, so a cable fans it
+  out unasked, while a Learn still moves it (`_place`, one axis one param). A switched-off
+  row, old or new, acts on nothing. A performer on the new row's own target is not an
+  overlap: alone, it is Replace / Keep's question.
 - **Step rows changed.** Learn pair used to replace the rows on its poles without saying so.
   It now asks like every other road. A plain Learn pad on one button still replaces that
   button's rows, as a button learn always did.
-- **One question.** A target that already has a performer does not add Replace / Keep on top:
-  the same question says it lets go either way, and the answer that lands replaces it,
-  read at that moment.
+- **One question.** A target whose performer is elsewhere, with a pole also mapped, does not
+  add Replace / Keep on top: the same question says it lets go either way, and the answer
+  that lands replaces it, read at that moment.
 - **Layers.** A person's answer is not a patch: nothing in a patch's file can remove a meta
   row, and loading one still only makes both act, so `meta_refusal` and "no patch can
   affect another patch" hold and both answers are offered. The words say a meta row goes
   "for every patch". One step on each stack the answer changes (`settle_pair`): the new
   row's layer, and a taken row's. So taking a meta row with a patch's route is one step on
   the `Deck`'s stack and one on the meta controller's, and ⌘Z does not cross between them
-  (plan 44 D5b): the words say a meta row comes back with ⌘Z over OUTPUT, AUDIO, ANALYZER or
-  HANDS, written back to `bindings.json` by `SessionTable.set_rows`. **Decide:** whether one
-  ⌘Z should take back both. It would mean a stack reaching into another, which D5b forbids.
+  (plan 44 D5b). The words say which stack and where to reach it, and promise no ⌘Z: under
+  the latch (row 753) a stack you have just come to refuses until a change is made on it.
+  The meta push comes last, so that stack is the one in focus after the answer and takes
+  the row back at once, written back to `bindings.json` by `SessionTable.set_rows`; the
+  deck's route then waits for a change there, and a person can delete it where they stand.
+  **(rec) — pending the owner:** whether one ⌘Z should take back both. It would mean a stack
+  reaching into another, which D5b forbids.
 - **Another `Deck`.** The question reads this `Deck`'s rows and takes only those and the meta
   controller's. A route the other loaded patch has on a shared pole is neither said nor
-  touched.
-- **A patch loaded under the question** withdraws it, says nothing landed
-  (`Bindings.routes_set_n`), so an answer cannot land one patch's row in the next.
-- **`Model.layout`** (#365, not on main) is read duck-typed by `ui_routing.layout_stays`, and
-  the question says such a pole stays. It adds to a question and does not raise one:
-  with #365 `models.control_free` keeps a layout's controls from being poles at all.
-- **To reverse.** `pair_question` returning None is row 751's behaviour for routes; the `step`
+  touched, and both act.
+- **A question gone stale is withdrawn** and says nothing landed (`PairAsk.stale`): a load or
+  an undo replaced the routes (`Bindings.routes_replaced_n`), so an answer cannot land one
+  patch's row in the next; or the poles' rows went, so nothing is left to consent to.
+- **`Model.layout`** (#365, not on main) is not read. With #365 `models.control_free` keeps a
+  layout's controls from being poles at all.
+- **Another `Deck`** (rec) — pending the owner: as above, neither said nor touched.
+- **To reverse.** `propose_row` always landing is row 751's behaviour for routes; the `step`
   road then needs its old removal back.
 - **Judge it.** 580.

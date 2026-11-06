@@ -4064,16 +4064,17 @@ class Edit:
 
     def _add(self, b: Binding):
         table = self.table
-        if table.refusal(b) is None:
-            asked = learnmod.pair_question(table, b, lambda: table.replace_owner(b))
-            if asked is not None:
-                return asked
-        try:
-            return table.add(b)
-        except Owned as e:
-            return Ask(e.existing, b, lambda: table.replace_owner(b))
-        except ValueError as e:
-            return Refusal(str(e))
+
+        def land():
+            try:
+                return table.add(b)
+            except Owned as e:
+                return Ask(e.existing, b, lambda: table.replace_owner(b))
+            except ValueError as e:
+                return Refusal(str(e))
+        if table.refusal(b) is not None:      # no question over a row that cannot land
+            return land()
+        return learnmod.propose_row(table, b, land, lambda: table.replace_owner(b))
 
     def _pair_step_row(self, addr: str, p: Param):
         """A pair's cable onto a stepped param: a route's lane, resting at 0.5,

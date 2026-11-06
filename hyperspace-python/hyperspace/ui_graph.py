@@ -225,10 +225,10 @@ from . import (
 from .bands import CEIL
 from .graph import Effect
 from .groupwords import group_title
-from .learn import PairAsk
+from .learn import META_UNDO, PairAsk
 from .library import LibraryError
 from .params import Kind
-from .routing import base_refusal, is_macro
+from .routing import PAIR_SCHEME, Binding, base_refusal, is_macro, row_words
 from .view import RED as RED_RGB
 
 STATE = "_graph"         # the panel's attribute: survives a reload of this module
@@ -4026,6 +4026,9 @@ def _settle(panel, res):
     elif isinstance(res, PairAsk):
         ui_routing.ask_pair(panel, res)
         _note(st, None)
+    elif isinstance(res, Binding) and res.scheme == PAIR_SCHEME and res.op == "step":
+        _note(st, None)                      # a stepped param's row: not this deck's stack
+        ui_routing.say_pair(panel, f"{row_words(res)} → {res.target}; {META_UNDO}")
     elif isinstance(res, graphview.Refusal):
         _note(st, str(res))
     else:

@@ -138,8 +138,9 @@ from .learn import (
     land_moved,
     move_route,
     pair_lines,
-    pair_question,
+    propose_row,
     settle_pair,
+    withdrawn_words,
 )
 from .library import PRESETS
 from .modifiers import KINDS as MOD_KINDS
@@ -161,7 +162,6 @@ from .routing import (
     factory_desk,
     is_session_row,
     meta_refusal,
-    pair_poles,
     whole_circle,
 )
 
@@ -407,16 +407,17 @@ def add_route(panel, target: str, source: str | None = None, depth: float = LANE
     if why is not None:                  # the referee's words, where the page shows them
         _state(panel)["error"] = f"routing: {why}"
         return None
-    asked = pair_question(router.table, b, lambda: router.table.replace_owner(b))
-    if asked is not None:
-        ask_pair(panel, asked)
+    def land() -> Binding | None:
+        try:
+            return router.table.add(b)
+        except Owned as e:
+            ask(panel, e.existing, b, lambda: router.table.replace_owner(b))
+            return None
+    got = propose_row(router.table, b, land, lambda: router.table.replace_owner(b))
+    if isinstance(got, PairAsk):
+        ask_pair(panel, got)
         return None
-    try:
-        router.table.add(b)
-    except Owned as e:
-        ask(panel, e.existing, b, lambda: router.table.replace_owner(b))
-        return None
-    return b
+    return got
 
 
 # ---- the prompt: one performer per target, so a second one asks ----
@@ -443,7 +444,7 @@ def _clear_pair(panel) -> None:
         lrn.pair_ask = None
 
 
-def _say_pair(panel, words: str) -> None:
+def say_pair(panel, words: str) -> None:
     """Where every page shows it, as a refusal from any page is."""
     lib, lrn = getattr(panel, "library", None), getattr(panel, "learn", None)
     if lib is not None and hasattr(lib, "say"):
@@ -453,13 +454,13 @@ def _say_pair(panel, words: str) -> None:
 
 
 def pair_question_up(panel) -> PairAsk | None:
-    """The overlap question up now, or None. A patch loaded under it withdraws
-    it and says so: the row it held was for the patch that was loaded."""
+    """The overlap question up now, or None. One gone stale (`PairAsk.stale`) is
+    withdrawn, and says so."""
     asked = _state(panel).get("pair") or getattr(getattr(panel, "learn", None), "pair_ask", None)
     if asked is None or not asked.stale:
         return asked
     _clear_pair(panel)
-    _say_pair(panel, f"nothing landed: a patch loaded while {asked.new.source} asked")
+    say_pair(panel, withdrawn_words(asked))
     return None
 
 
@@ -468,28 +469,15 @@ def answer_pair(panel, choice: str) -> None:
     asked = pair_question_up(panel)
     if asked is not None:
         _clear_pair(panel)
-        _say_pair(panel, settle_pair(asked, choice, panel.reg))
-
-
-def layout_stays(panel, asked: PairAsk) -> list[str]:
-    """A pole the pad's own layout holds (`Model.layout`, where a model has one:
-    #365) is no table row, so taking over cannot remove it: the words say it stays."""
-    model = getattr(getattr(panel, "pad", None), "model", None)
-    poles = pair_poles(":".join(asked.new.parts)) or ()
-    held = {pole.source.partition(":")[2] for pole in poles}
-    return [f"{row[0]} stays on {row[1]}: it is the pad's own layout"
-            for row in getattr(model, "layout", ()) or () if row[0] in held]
+        say_pair(panel, settle_pair(asked, choice, panel.reg))
 
 
 def _move_source(panel, router: Router, b: Binding, source: str) -> None:
     """A row's source combo: onto a pair whose poles have rows, it asks (row 754)."""
-    def land():
-        return move_route(router.table, router.reg, b, source=source)
-    asked = pair_question(router.table, replace(b, source=source), land, (b,))
-    if asked is not None:
-        ask_pair(panel, asked)
-    else:
-        land()
+    got = propose_row(router.table, replace(b, source=source),
+                      lambda: move_route(router.table, router.reg, b, source=source), moving=b)
+    if isinstance(got, PairAsk):
+        ask_pair(panel, got)
 
 
 def _wake(router: Router, b: Binding) -> Binding | None:
@@ -806,8 +794,6 @@ def _pair_body(panel, asked: PairAsk) -> None:
     ui._micro("part of this pair is already mapped")
     for line in pair_lines(asked, panel.reg):
         imgui.text_wrapped(line)
-    for line in layout_stays(panel, asked):
-        imgui.text_colored(ui.WARN, line)
     cur = asked.table.owner(asked.new.target)
     if asked.new.is_performer and cur is not None and not any(cur is x for x in asked.skip):
         imgui.text_disabled(f"{cur.describe()} lets go of {asked.new.target} either way.")
