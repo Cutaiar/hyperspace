@@ -202,7 +202,20 @@ def main():
                       "bytes": len(svg), "decodes": ok,
                       "dark": kw.get("bg", "#ffffff").lower() in ("#000000", "#000"),
                       "pose": pose, "stroke": stroke, "version": version,
+                      # Everything handed to style.to_svg, so the manifest
+                      # carries the look as well as the grid. The sticker
+                      # exporters re-render from the grid at a physical size
+                      # and need the same arguments this call used; a table of
+                      # them in the app would be a second place to drift.
+                      # Defaults mirror to_svg's own signature.
                       "dot": kw.get("dot", "square"),
+                      "eye_frame": kw.get("eye_frame", "square"),
+                      "eye_core": kw.get("eye_core", "square"),
+                      "fg": kw.get("fg", "#000000"),
+                      "fg2": kw.get("fg2"),
+                      "bg": kw.get("bg", "#ffffff"),
+                      "plate_radius": kw.get("plate_radius", 0),
+                      "style_eyes": kw.get("style_eyes", True),
                       "min_ppm": rb["min_ppm"], "blur": rb["blur"], "flash": rb["flash"],
                       "matrix": robust.pack(m)})
         if not ok:
