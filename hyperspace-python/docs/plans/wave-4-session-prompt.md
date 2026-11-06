@@ -274,6 +274,12 @@ the wall it adds (below) is not, so it is sized M–L, and it may be two PRs.
 | player, duty | none yet | New: named right from PL |
 | patch, loadable patch | preset, and "performance" (`part_of`) | The eighth round's words, replacing "one word: preset". Old names stay until SEM |
 
+**Found by wave 5's planning, 2026-11-06 (plan 58 §2), and SEM's to do:** `preset.*`, `deck.chase`, `totem.*` and
+`poi.*` are in neither layer, and can't just join the meta list: `Registry.add` makes a session param one object on
+both `Deck`s (`params.py:930–936`), and these close over one `Deck`. They need a class of "meta, one per `Deck`",
+counted as meta for the refusal and the one-layer test. That also closes a patch's desk row on `preset.save.N`
+writing another patch's file, which #380 does not, since it covers loads only.
+
 **SEM must also make the line hold mechanically,** not only rename it: every param is in
 exactly one layer, a test fails on anything in neither or both, and an import wall keeps
 the preset layer from reaching into the meta controller except through its named surface.

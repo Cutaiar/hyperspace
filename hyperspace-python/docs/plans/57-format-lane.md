@@ -200,6 +200,17 @@ it goes to wave 5's plan.
 each file word once), N1 and N2 are free of it. Once `/11` lands, the older Mac refuses every
 file. Row 521, closed by 576, and row 394 both say so and both accept it.
 
+## 7a. Found by wave 5's planning, 2026-11-06 (plan 58 §2): the run must carry these
+
+- **`modules` in a show is a live value:** it holds the analyzer scene in 5 of the 6 shows, and must reach the
+  install file. `layout`, `startup`, `scene.select` and `last_show` need homes too. The show `mine` has no tuning
+  and `startup: "MIGRATED"`.
+- **`trash/presets` moves too** (`TRASH`, `restore_trash`), and a reader accepts the old word for the run.
+- **Tidy in the same run:** delete `fx/`, empty folders and `.bak-v2-*`; report bank slots pointing at nothing
+  (five shows have 10 of 24 such slots).
+- **`scenes/band` files say `hyperspace.preset/1` and are analyzer tunings.** Rename their kind in the run, or
+  rung `/1` must stay.
+
 ## 8. Not verified
 
 The Drive library was not opened, as instructed: its counts of `pair:` rows, of folders that
