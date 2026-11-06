@@ -123,7 +123,7 @@ from dataclasses import replace
 
 from imgui_bundle import imgui
 
-from . import apc40, motion, ui, ui_feel, ui_presets, undo
+from . import apc40, motion, ui, ui_feel, ui_loadable, undo
 from .bands import CEIL
 from .groupwords import group_word
 from .learn import (
@@ -1276,8 +1276,8 @@ def _loaded_patch(panel):
 
 
 def _save_as(panel, name: str) -> None:
-    ui_presets._guard(panel, panel.library.save_as, LOADABLE, name)
-    ui_presets.invalidate(panel, LOADABLE)
+    ui_loadable._guard(panel, panel.library.save_as, LOADABLE, name)
+    ui_loadable.invalidate(panel, LOADABLE)
 
 
 def head(panel, router: Router) -> None:
@@ -1288,7 +1288,7 @@ def head(panel, router: Router) -> None:
     lib, table, st = panel.library, router.table, _state(panel)
     pr = _loaded_patch(panel)
     imgui.push_id("head")
-    if pr is None or not ui_presets._name_field(panel, NAMING, lambda n: _save_as(panel, n)):
+    if pr is None or not ui_loadable._name_field(panel, NAMING, lambda n: _save_as(panel, n)):
         _loadable_line(panel, pr, table)
     imgui.pop_id()
     _learn_line(panel)
@@ -1325,15 +1325,15 @@ def _loadable_line(panel, pr, table) -> None:
         ui.tooltip("The loaded preset: its routes, its desk and its macros are "
                           "this section. A learn or an edit here changes it — the dot — "
                           "and writes nothing until save" if cur else "no preset loaded")
-    edited = pr is not None and cur is not None and ui_presets.dirty(panel, LOADABLE)
-    rects = ui_presets._state(panel)["rects"]
+    edited = pr is not None and cur is not None and ui_loadable.dirty(panel, LOADABLE)
+    rects = ui_loadable._state(panel)["rects"]
     rects.pop("head.dot", None)
     if edited:
         imgui.same_line(0, 4)
         rects["head.dot"] = ui.dirty_dot("edited since it loaded — save writes it")
     glob = table.layer == "global"
     layer = f"desk layer: {'global' if glob else 'preset'}"
-    word = ui_presets.save_label(lib, LOADABLE) if lib is not None else "save"
+    word = ui_loadable.save_label(lib, LOADABLE) if lib is not None else "save"
     sp = imgui.get_style().item_spacing.x
     # flush right; in a narrow pane on a row of its own (plan 49 stage 3)
     right = ui.chip_w(word, "as…") + ui._micro_width(layer) + sp
@@ -1352,13 +1352,13 @@ def _loadable_line(panel, pr, table) -> None:
         imgui.begin_disabled()
         ui.chip(word)
         imgui.end_disabled()
-    elif ui_presets.save_chip(panel, LOADABLE, word, edited, key="head"):
-        ui_presets._guard(panel, lib.overwrite, LOADABLE)
-        ui_presets.invalidate(panel, LOADABLE)
+    elif ui_loadable.save_chip(panel, LOADABLE, word, edited, key="head"):
+        ui_loadable._guard(panel, lib.overwrite, LOADABLE)
+        ui_loadable.invalidate(panel, LOADABLE)
     imgui.same_line()
     imgui.begin_disabled(pr is None)
     if ui.chip("as…"):
-        ui_presets._begin_naming(panel, NAMING, cur or "")
+        ui_loadable._begin_naming(panel, NAMING, cur or "")
     imgui.end_disabled()
     if imgui.is_item_hovered():
         ui.tooltip("Save the live state as a new user preset")

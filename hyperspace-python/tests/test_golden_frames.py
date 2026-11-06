@@ -161,7 +161,7 @@ def test_every_corpus_preset_has_every_state_recorded_and_nothing_else():
         # are the windows' mutes, not switches emulated: the blank frame and
         # the channel alone wire no hands, so none is shown, and the blank
         # frame builds the outputs and nothing else)
-        from hyperspace.preset import NO_GRAPH_SAID
+        from hyperspace.loadable import NO_GRAPH_SAID
 
         # (the blank frame: the strip says it holds nothing, plan 36 T3)
         want = [NO_GRAPH_SAID] if slug == "blank-frame" else []
@@ -474,19 +474,19 @@ def test_every_preset_with_its_main_run_grouped_draws_its_goldens(ctx, tmp_path,
     present, the eight states as wiring) draws exactly its recorded
     goldens; on another renderer, exactly what the ungrouped file draws."""
     from hyperspace import graph as G
-    from hyperspace import preset
+    from hyperspace import loadable
 
     doc = _manifest()
     tool = _tool()
     path = tool.CORPUS / f"{slug}.json"
     src = json.loads(path.read_text())
     run = G.run_back(G.read_graph(src["graph"]), "output.all.image")
-    twin = {**src, "schema": preset.SAVE_SCHEMA,
+    twin = {**src, "schema": loadable.SAVE_SCHEMA,
             "groups": [{"id": "group.1", "name": "main run",
                         "nodes": [f"render:{n}" for n in run], "open": False}]}
     grouped = tmp_path / "grouped" / f"{slug}.json"
     grouped.parent.mkdir()
-    grouped.write_text(preset.dumps(twin))
+    grouped.write_text(loadable.dumps(twin))
     got, notes = tool.picture(grouped, slug=slug)
     assert not [n for n in notes if "group" in n], notes
     if tool.renderer_name(ctx) == doc["renderer"]:

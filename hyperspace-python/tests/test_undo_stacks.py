@@ -450,12 +450,12 @@ def test_a_param_under_the_mouse_says_by_its_own_layer_in_a_mixed_section(pane):
     p = r.panel
     frame(p, "hands")
     d.run(d.wait(2))
-    meta, preset = _drawn_params(r, d, "shared_meta"), _drawn_params(r, d, "patch")
-    assert meta and preset, (meta[:5], preset[:5])
+    meta, loadable = _drawn_params(r, d, "shared_meta"), _drawn_params(r, d, "patch")
+    assert meta and loadable, (meta[:5], loadable[:5])
     d.run(d.reveal(meta[0]), d.move(meta[0]), d.wait(2))
     assert p._param_under is r.reg[meta[0]] and p.in_meta_section()
-    d.run(d.reveal(preset[0]), d.move(preset[0]), d.wait(2))
-    assert p._param_under is r.reg[preset[0]] and not p.in_meta_section()
+    d.run(d.reveal(loadable[0]), d.move(loadable[0]), d.wait(2))
+    assert p._param_under is r.reg[loadable[0]] and not p.in_meta_section()
 
 
 def test_a_meta_param_in_a_decks_section_takes_the_meta_stack(pane):

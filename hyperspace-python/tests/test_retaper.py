@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from hyperspace import fx, headless, preset, tapers
+from hyperspace import fx, headless, loadable, tapers
 from hyperspace.fx import FxState, declare
 from hyperspace.params import (
     DEPTH_TAPER,
@@ -314,7 +314,7 @@ def test_an_old_preset_loads_as_the_tool_rewrites_it(tmp_path):
             row["value"] = before.pop(row["target"])
     assert not before
     old = tmp_path / "party-acid.json"
-    old.write_text(preset.dumps(doc))
+    old.write_text(loadable.dumps(doc))
     again, notes, _ = headless.resave(old, tmp_path / "scratch")
     assert again == data and notes == []
     out, change = t.retaper(json.loads(old.read_text()), FxState().files, file=old.name)
@@ -445,9 +445,9 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
             del row["value"]                      # a push of 1.0, omitted
         if row["target"] == "fx.fractals.amount":
             row["value"] = "lots"                 # a hand-edited row: left, said
-    (library / "presets" / "party-noita.json").write_text(preset.dumps(src))
+    (library / "presets" / "party-noita.json").write_text(loadable.dumps(src))
     done = json.loads((CORPUS / "party-trip.json").read_text())
-    (library / "presets" / "party-trip.json").write_text(preset.dumps(done))
+    (library / "presets" / "party-trip.json").write_text(loadable.dumps(done))
     (library / "presets" / ".party-noita.json.tmp").write_text("{}")
     old_patch = json.loads(OLD_PATCH.read_text())
     (library / "patches" / "wash.json").write_text(json.dumps(old_patch, indent=1) + "\n")
@@ -475,7 +475,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     assert json.loads((backups[0] / "presets" / "party-noita.json").read_text()) == src
     text = (library / "presets" / "party-noita.json").read_text()
     out = json.loads(text)
-    assert text == preset.dumps(out)                    # as the app writes it
+    assert text == loadable.dumps(out)                    # as the app writes it
     assert out["units"][DEPTH_UNIT] == DEPTH_TAPER
     rows = {r["target"]: r for r in out["routes"] if r["target"].startswith("fx.")}
     assert rows["fx.warp.amount"]["value"] != 0.3
@@ -486,7 +486,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     for k in src:
         if k not in ("routes", "units"):
             assert out[k] == src[k]
-    assert (library / "presets" / "party-trip.json").read_text() == preset.dumps(done)
+    assert (library / "presets" / "party-trip.json").read_text() == loadable.dumps(done)
     assert (library / "presets" / ".party-noita.json.tmp").read_text() == "{}"
     # the old patch: its push moved, the marker in; the fresh one: the same bytes
     ptext = (library / "patches" / "wash.json").read_text()

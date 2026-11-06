@@ -17,7 +17,7 @@ import pytest
 from test_plan31_wiring import make_app
 from test_presets import boot
 
-from hyperspace import preset
+from hyperspace import loadable
 from hyperspace.library import LibraryError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "merge-31-32"
@@ -67,9 +67,9 @@ def _pattern_and_bin(app) -> None:
 
 
 def test_the_ladder_is_one_list():
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (… plan 40 T2: /8; plan 43 C2: /9)
-    assert (preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA) == (V2, V3, V4)
-    assert preset.SAVE_SCHEMA == V6
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (… plan 40 T2: /8; plan 43 C2: /9)
+    assert (loadable.SCHEMA, loadable.SCHEMA_V3, loadable.MEDIA_SCHEMA) == (V2, V3, V4)
+    assert loadable.SAVE_SCHEMA == V6
 
 
 def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
@@ -83,7 +83,7 @@ def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
 
     assert doc["values"] == reg.snapshot(part="patch")
     assert not [k for k in doc["values"] if M.retired(k)]
-    assert doc[preset.MEDIA_KEY] == {"channels": {"a": [CLIP]}}
+    assert doc[loadable.MEDIA_KEY] == {"channels": {"a": [CLIP]}}
     app.loaded_patch.save_as("both")
     # undo it all, then load
     reg["seq.1.1"].set(False)
@@ -119,7 +119,7 @@ def test_an_older_build_refuses_the_combined_save(app):
             with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
                 lib.read("presets", "both")
     finally:
-        kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
+        kinds["presets"] = replace(kinds["presets"], versions=loadable.VERSIONS)
 
 
 def test_what_each_branch_wrote_loads_and_saves_as_6(app, tmp_path):

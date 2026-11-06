@@ -19,7 +19,7 @@ from conftest import CORPUS
 from test_presets import boot
 
 from hyperspace import geometry as G
-from hyperspace import ghost, preset
+from hyperspace import ghost, loadable
 from hyperspace.hands import core as hc
 from hyperspace.params import EYE_DISTANCE_RANGE, EYE_FOV_RANGE, PAN_RANGE, part_of
 from hyperspace.view import ViewState
@@ -328,8 +328,8 @@ def test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_pa
     path = rig.loaded_patch.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
     assert doc["schema"] == "hyperspace.preset/10"     # (row 394); a key marks the units
-    assert doc[preset.UNITS_KEY] == preset.UNITS       # (…and the depths' taper, wave 0 T1)
-    assert doc[preset.UNITS_KEY]["camera.pan"] == "world"
+    assert doc[loadable.UNITS_KEY] == loadable.UNITS       # (…and the depths' taper, wave 0 T1)
+    assert doc[loadable.UNITS_KEY]["camera.pan"] == "world"
     assert doc["values"]["camera.pan.x"] == 2.5
     rig.reg["camera.pan.x"].set(0.0)
     rig.lib.loaded_patch.load("WORLD PAN")
@@ -339,13 +339,13 @@ def test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_pa
 
 def test_pan_world_leaves_a_marked_or_panless_document_alone():
     marked = {"values": {"camera.pan.x": 3.0}, "units": {"camera.pan": "world"}}
-    assert preset.pan_world(marked) == (marked, False)
+    assert loadable.pan_world(marked) == (marked, False)
     plain = {"values": {"view.bright": 1.0}, "macros": {}}
-    assert preset.pan_world(plain) == (plain, False)
+    assert loadable.pan_world(plain) == (plain, False)
     sub = {"base": "camera.pan.x", "from": 0.25, "to": 0.75}
     old = {"values": {"camera.pan.x": 324.0, "camera.pan.y": 0.0},
            "macros": {"macro.1": {"label": "", "subs": [dict(sub)]}}}
-    new, changed = preset.pan_world(old)
+    new, changed = loadable.pan_world(old)
     assert changed and new["values"] == {"camera.pan.x": 1.0, "camera.pan.y": 0.0}
     # a subscriber's ends are fractions of the range (`Sub.at` lands a norm)
     assert new["macros"]["macro.1"]["subs"] == [sub]
@@ -357,11 +357,11 @@ def test_every_corpus_pan_lands_inside_the_new_range():
     converts to a pan well inside ±PAN_RANGE (party-mandala's 190 px is
     0.59 of a radius)."""
     for path in sorted((CORPUS / "presets").glob("*.json")):
-        doc, _ = preset.pan_world(json.loads(path.read_text()))
-        for pid in preset.PAN_IDS:
+        doc, _ = loadable.pan_world(json.loads(path.read_text()))
+        for pid in loadable.PAN_IDS:
             v = doc.get("values", {}).get(pid, 0.0)
             assert abs(v) < PAN_RANGE / 4, (path.name, pid, v)
-    mandala, _ = preset.pan_world(json.loads((CORPUS / "presets" / "party-mandala.json")
+    mandala, _ = loadable.pan_world(json.loads((CORPUS / "presets" / "party-mandala.json")
                                              .read_text()))
     assert mandala["values"]["camera.pan.x"] == pytest.approx(190.0 / 324.0)
 
@@ -522,21 +522,21 @@ def test_a_camera_module_saved_now_says_its_pan_is_in_world_units(tmp_path):
     rig.reg["camera.pan.x"].set(3.0)
     path = rig.lib.save_as("camera", "World")
     doc = json.loads(path.read_text())
-    assert doc[preset.UNITS_KEY] == preset.UNITS and preset.UNITS["camera.pan"] == "world"
+    assert doc[loadable.UNITS_KEY] == loadable.UNITS and loadable.UNITS["camera.pan"] == "world"
     rig.reg["camera.pan.x"].set(0.0)
     rig.lib.load("camera", "World")
     assert rig.view.pan[0] == pytest.approx(3.0) and not rig.lib.is_dirty("camera")
     # another group's module carries no marker
-    assert preset.UNITS_KEY not in rig.lib.document("view", "V")
+    assert loadable.UNITS_KEY not in rig.lib.document("view", "V")
 
 
 def test_a_hand_edited_units_that_is_no_object_is_no_marker(tmp_path):
     """`"units": "world"` (a string) neither raises nor counts as the
     marker: the preset loads and its pan is read in px."""
-    out, _ = preset.pan_world({"units": "world", "values": {"camera.pan.x": 324.0}})
+    out, _ = loadable.pan_world({"units": "world", "values": {"camera.pan.x": 324.0}})
     assert out["values"]["camera.pan.x"] == pytest.approx(1.0)
     odd = {"units": None, "values": None}
-    assert preset.pan_world(odd) == (odd, False)
+    assert loadable.pan_world(odd) == (odd, False)
     rig = boot(tmp_path)
     doc = json.loads((FIXTURES / "pan-px.json").read_text())
     doc.update(name="ODD UNITS", units="world")

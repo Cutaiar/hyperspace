@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from conftest import CORPUS, seed
 
-from hyperspace import gamepad, graphview, headless, nodemode, preset, routing, ui_graph, undo
+from hyperspace import gamepad, graphview, headless, nodemode, loadable, routing, ui_graph, undo
 from hyperspace.library import LibraryError, Marks
 from hyperspace.nodemode import NodeMode, Slot, fill
 from hyperspace.pads import models
@@ -28,14 +28,14 @@ def save(app, name: str) -> bytes:
 
 
 def load(app, stem: str) -> str:
-    app.lib.load(preset.GROUP, stem)
-    return app.lib.current(preset.GROUP) or stem
+    app.lib.load(loadable.GROUP, stem)
+    return app.lib.current(loadable.GROUP) or stem
 
 
 def put_file(app, stem: str, **keys) -> None:
-    doc = {"schema": preset.SAVE_SCHEMA, "name": stem, "values": {}, "routes": [], "desk": [],
+    doc = {"schema": loadable.SAVE_SCHEMA, "name": stem, "values": {}, "routes": [], "desk": [],
            "macros": {}, **keys}
-    (Path(app.lib.home) / preset.GROUP / f"{stem}.json").write_text(json.dumps(doc))
+    (Path(app.lib.home) / loadable.GROUP / f"{stem}.json").write_text(json.dumps(doc))
 
 
 # ---- the saved form ----
@@ -67,7 +67,7 @@ def test_a_second_entry_for_one_controller_loses_and_a_kind_unknown_here_is_kept
 
 
 def test_a_preset_says_the_key_one_entry_a_line():
-    text = preset.dumps({"schema": preset.SAVE_SCHEMA, "node_mode": [ENTRY, ENTRY]})
+    text = loadable.dumps({"schema": loadable.SAVE_SCHEMA, "node_mode": [ENTRY, ENTRY]})
     assert f'  {json.dumps(ENTRY)},\n  {json.dumps(ENTRY)}\n' in text
 
 
@@ -94,7 +94,7 @@ def test_node_mode_round_trips_over_the_corpus(app, stem):
     assert save(app, name) == saved                     # a fixed point
     doc = json.loads(saved)
     del doc["node_mode"]
-    assert preset.dumps(doc).encode() == plain          # the key and nothing else
+    assert loadable.dumps(doc).encode() == plain          # the key and nothing else
     app.loaded_patch.leave_node_mode(1, "midi")
     app.loaded_patch.leave_node_mode(2, "gamepad")
     assert save(app, name) == plain                     # byte for byte
@@ -118,7 +118,7 @@ def test_the_migration_road_keeps_the_key_as_a_fixed_point(tmp_path):
     src = tmp_path / "with.json"
     doc = json.loads((CORPUS / "presets" / f"{CORPUS_PRESETS[0]}.json").read_text())
     doc["node_mode"] = [ENTRY]
-    src.write_text(preset.dumps(doc))
+    src.write_text(loadable.dumps(doc))
     once, notes, _ = headless.resave(src, tmp_path / "a")
     assert json.loads(once)["node_mode"] == [ENTRY]
     assert not [n for n in notes if "node mode" in n]
@@ -145,11 +145,11 @@ def test_pointing_at_a_node_the_preset_does_not_have_is_refused(app):
 def test_re_pointing_lights_the_dot(app):
     name = load(app, CORPUS_PRESETS[0])
     save(app, name)
-    assert not app.lib.is_dirty(preset.GROUP)
+    assert not app.lib.is_dirty(loadable.GROUP)
     app.loaded_patch.point_node_mode(1, "midi", "macro.1")
-    assert app.lib.is_dirty(preset.GROUP)
+    assert app.lib.is_dirty(loadable.GROUP)
     app.loaded_patch.leave_node_mode(1, "midi")
-    assert not app.lib.is_dirty(preset.GROUP)
+    assert not app.lib.is_dirty(loadable.GROUP)
 
 
 def test_a_refused_load_leaves_the_node_mode_whole(app):
@@ -165,9 +165,9 @@ def test_a_refused_load_leaves_the_node_mode_whole(app):
             {"from": "scene", "to": "acid.image"}, {"from": "acid", "to": "output.all.image"}]},
         values={"view.speed": "fast"})
     with pytest.raises(LibraryError, match="nothing loaded"):
-        app.lib.load(preset.GROUP, "BROKEN")
+        app.lib.load(loadable.GROUP, "BROKEN")
     assert app.loaded_patch.node_mode.of(1, "midi") == "render:hands"
-    assert not app.lib.is_dirty(preset.GROUP)
+    assert not app.lib.is_dirty(loadable.GROUP)
     app.loaded_patch.leave_node_mode(1, "midi")
     save(app, name)
 

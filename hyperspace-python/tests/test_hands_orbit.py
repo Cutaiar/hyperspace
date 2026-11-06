@@ -19,7 +19,7 @@ from test_hands import make_app, v3
 from test_hands_room import FPS, lane, play, pose
 from test_undo import boot, settle
 
-from hyperspace import learn, preset, ui_routing, undo
+from hyperspace import learn, loadable, ui_routing, undo
 from hyperspace.deck import Deck
 from hyperspace.hands import core as hc
 from hyperspace.hands import room as R
@@ -802,7 +802,7 @@ def test_what_an_older_build_does_with_the_row(deck, tmp_path, monkeypatch):
     of the file lands, and nothing is refused. So no schema move (row 683)."""
     deck.reg["camera.pitch"].set(0.5)
     deck.loaded_patch.save_as("ORBIT")
-    monkeypatch.setattr(preset, "MOD_OPS", ("push", "position"))
+    monkeypatch.setattr(loadable, "MOD_OPS", ("push", "position"))
     deck.loaded_patch.load("ORBIT")
     notes = deck.loaded_patch.notes
     assert any("(turn): not a performer row" in n for n in notes)

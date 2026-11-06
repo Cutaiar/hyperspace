@@ -58,7 +58,7 @@ import time
 
 from imgui_bundle import imgui
 
-from . import preset, ui
+from . import loadable, ui
 from .groupwords import group_word
 from .library import (
     PATCHES,
@@ -385,7 +385,7 @@ def strip(panel, group: str) -> None:
     # that happens to be called `untitled` is never written over (the flag
     # counts while `untitled` is current: an undo of New hands back the
     # preset before, which saves as it always did)
-    unsaved = loaded_patch is not None and cur == preset.UNTITLED_PATCH and (
+    unsaved = loaded_patch is not None and cur == loadable.UNTITLED_PATCH and (
         bool(getattr(loaded_patch, "unsaved", False)) or lib.path_of(group, cur) is None)
     if save_chip(panel, group, word, is_dirty):
         if unsaved:

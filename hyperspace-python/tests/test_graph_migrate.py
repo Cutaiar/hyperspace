@@ -15,7 +15,7 @@ import pytest
 from conftest import CORPUS
 from test_plan31_wiring import make_app
 
-from hyperspace import fx, preset
+from hyperspace import fx, loadable
 from hyperspace import graph as G
 from hyperspace import graphmigrate as M
 from hyperspace.library import LibraryError
@@ -242,13 +242,13 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     lib = app.lib
     assert lib.read("presets", "six")["schema"] == M.SAVE_SCHEMA
     kinds = lib._kinds
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (plan 40 T2: /8; plan 43 C2: /9)
     try:
         kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
             lib.read("presets", "six")
     finally:
-        kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
+        kinds["presets"] = replace(kinds["presets"], versions=loadable.VERSIONS)
 
 
 def test_an_empty_run_is_written_as_frame_to_fx():

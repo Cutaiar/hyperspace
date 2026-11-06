@@ -24,7 +24,7 @@ from hyperspace import (
     lfo,
     library,
     poi,
-    preset,
+    loadable,
     seq_page,
     totem,
     undo,
@@ -410,7 +410,7 @@ def test_a_new_preset_on_deck_2_stays_on_deck_2(rig):
     one, two, lib = rig.one, rig.two, rig.r.lib
     before = _look(one)
     two.loaded_patch.new()
-    assert two.loaded_patch.current == preset.UNTITLED_PATCH and two.undo.stack
+    assert two.loaded_patch.current == loadable.UNTITLED_PATCH and two.undo.stack
     assert _look(one) == before and lib.current(LOADABLE) == before["name"]
 
 

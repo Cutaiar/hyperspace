@@ -663,7 +663,7 @@ def _preset_rig(ctx, tmp_path):
     from hyperspace.control import Control
     from hyperspace.library import Library
     from hyperspace.params import build_registry
-    from hyperspace.preset import LoadedPatch
+    from hyperspace.loadable import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
     chain = Analyzer(Analyser())

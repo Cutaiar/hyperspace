@@ -23,14 +23,14 @@ from conftest import (
     tree,
 )
 
-from hyperspace import config, library, params, patches, placement, preset, routing
+from hyperspace import config, library, params, patches, placement, loadable, routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, SCENES_DIR, Control
 from hyperspace.library import Library, LibraryError, migrate_doc, scene_doc, slug
 from hyperspace.params import build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Bindings as _Bindings
 from hyperspace.routing import Router as _Router
 from hyperspace.view import ViewState
@@ -962,7 +962,7 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
             else:
                 assert by_source[pad["source"]] == pad, (name, pad["source"])
     two = json.loads((home / "presets" / "night-two.json").read_text())
-    knob = preset.desk_json([preset.device_knob(*OWNER_KNOB)])[0]
+    knob = loadable.desk_json([loadable.device_knob(*OWNER_KNOB)])[0]
     assert knob in two["desk"]                                      # the knob the owner learned
     table = json.loads((home / "bindings.json").read_text())
     source, target = OWNER_ROW
@@ -1466,7 +1466,7 @@ def test_restore_never_overwrites(owner_home):
     # a taken name: another file of yours now carries it
     lib.delete("presets", "NIGHT THREE")
     other = home / "presets" / "elsewhere.json"
-    other.write_text(preset.dumps({**json.loads(three), "name": "NIGHT THREE"}))
+    other.write_text(loadable.dumps({**json.loads(three), "name": "NIGHT THREE"}))
     (item,) = [t for t in lib.trash() if t.name == "NIGHT THREE"]
     assert lib.restore_trash(item) == "NIGHT THREE 2"
     assert json.loads((home / "presets" / "night-three-2.json").read_text())["name"] == \

@@ -2565,12 +2565,12 @@ def patch_list(panel) -> list[dict]:
     same listing as last time is the same list, with no file stat'ed; a new
     listing re-reads only when the listing or a file moved."""
     from . import library as libmod
-    from . import ui_presets
+    from . import ui_loadable
     lib = getattr(panel, "library", None)
     if lib is None:
         return []
     st = _state(panel)
-    listed = ui_presets.names(panel, libmod.PATCHES)
+    listed = ui_loadable.names(panel, libmod.PATCHES)
     held = st.get("patch_list")
     if held is not None and held[0] is listed:
         return held[2]
@@ -2733,7 +2733,7 @@ def save_patch(panel, gid: str, name: str, note: str = "") -> str | None:
     """**Save** on the side pane's form (`Edit.save_patch`): the patch's file
     written and nothing else; a refusal on the head, nothing written."""
     from . import library as libmod
-    from . import ui_presets
+    from . import ui_loadable
     e = group_edit(panel)
     if e is None:
         return None
@@ -2741,7 +2741,7 @@ def save_patch(panel, gid: str, name: str, note: str = "") -> str | None:
     if why is None:
         st = _state(panel)
         st["patch_form"], st["patch_list"] = None, None
-        ui_presets.invalidate(panel, libmod.PATCHES)
+        ui_loadable.invalidate(panel, libmod.PATCHES)
     return why
 
 

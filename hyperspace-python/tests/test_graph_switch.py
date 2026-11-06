@@ -203,7 +203,7 @@ def _app(media=None, view=None):
     builds it, with the view state kept for the renderer."""
     import tempfile
 
-    from hyperspace import lfo, preset, routing, tempo
+    from hyperspace import lfo, loadable, routing, tempo
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
@@ -226,7 +226,7 @@ def _app(media=None, view=None):
     lib.attach(reg)
     router = routing.Router(reg, table)
     router.use_lfos(lfos, clock)
-    loaded_patch = preset.LoadedPatch(lib, reg, router)
+    loaded_patch = loadable.LoadedPatch(lib, reg, router)
     return SimpleNamespace(lib=lib, reg=reg, router=router, loaded_patch=loaded_patch, lfos=lfos,
                            clock=clock)
 

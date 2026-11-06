@@ -50,7 +50,7 @@ from hyperspace.hands.core import DEFAULT_DOFS, PINCHES, default_range
 from hyperspace.library import LOADABLE, Library
 from hyperspace.lookback import DreamState
 from hyperspace.params import Kind, build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.render import Renderer, ViewState
 from hyperspace.routing import Bindings, Router
 

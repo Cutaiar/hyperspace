@@ -4,7 +4,7 @@ each written to fail before its fix. The rigs are test_plan31_wiring's."""
 import pytest
 from test_plan31_wiring import frame, make_app, rig
 
-from hyperspace import envelope, graphview, modbank, preset, sequencer
+from hyperspace import envelope, graphview, modbank, loadable, sequencer
 from hyperspace.envelope import Envelope
 from hyperspace.sequencer import SPANS, Sequencer
 from hyperspace.tempo import Clock
@@ -245,7 +245,7 @@ def test_desk_rows_and_layout_keys_on_plan_31_ids_survive_a_build_without_it(tmp
     old.loaded_patch.load_doc(doc)
     out = old.loaded_patch.document("x")
     assert out["desk"][0] == row and out["layout"] == layout
-    assert out["schema"] == preset.SAVE_SCHEMA
+    assert out["schema"] == loadable.SAVE_SCHEMA
 
 
 # ---- 8: a refused add says why: the count, or the ids used up ----

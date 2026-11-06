@@ -25,7 +25,7 @@ import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
-from . import envelope, lfo, preset, routing, sequencer, tempo
+from . import envelope, lfo, loadable, routing, sequencer, tempo
 from .analysis import Analyser
 from .analyzer import Analyzer
 from .control import Control
@@ -68,7 +68,7 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     if plan31:
         router.use_bank(envs, clock)
         router.use_sequencer(seq, envs)
-    loaded_patch = preset.LoadedPatch(lib, reg, router)
+    loaded_patch = loadable.LoadedPatch(lib, reg, router)
     return SimpleNamespace(lib=lib, reg=reg, router=router, loaded_patch=loaded_patch, lfos=lfos,
                            envs=envs, seq=seq, clock=clock)
 
@@ -151,7 +151,7 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
     `scratch` is created; nothing outside it is written."""
     scratch = Path(scratch)
     home, machine = scratch / "library", scratch / "machine"
-    (home / preset.GROUP).mkdir(parents=True, exist_ok=True)
+    (home / loadable.GROUP).mkdir(parents=True, exist_ok=True)
     machine.mkdir(parents=True, exist_ok=True)
     if library is not None:
         for folder in SHARED_FOLDERS:
@@ -169,24 +169,24 @@ def resave(path: Path, scratch: Path, *, library: Path | None = None,
         # (copied under its slug: a file name the library would not write —
         # `factory--dial.json`, `My Look.json` — still loads by it)
         stem = slug(Path(path).stem)
-        shutil.copyfile(path, home / preset.GROUP / f"{stem}.json")
+        shutil.copyfile(path, home / loadable.GROUP / f"{stem}.json")
         seed(home, machine, show)
         app = make_app(home, machine=machine)
-        app.lib.load(preset.GROUP, stem)
-        name = app.lib.current(preset.GROUP) or stem
+        app.lib.load(loadable.GROUP, stem)
+        name = app.lib.current(loadable.GROUP) or stem
         notes = list(app.loaded_patch.notes)
         out = app.loaded_patch.save_as(name)
         # (plan 43 C2: the app saves the pose every time; the migration
         # writes one only where the file had one — an old file keeps
         # spinning — so a file without one has it taken back out)
         try:
-            had = preset.POSE_KEY in json.loads(Path(path).read_text())
+            had = loadable.POSE_KEY in json.loads(Path(path).read_text())
         except (OSError, ValueError, TypeError):
             had = True
         if not had:
             doc = json.loads(out.read_text())
-            if doc.pop(preset.POSE_KEY, None) is not None:
-                out.write_text(preset.dumps(doc))
+            if doc.pop(loadable.POSE_KEY, None) is not None:
+                out.write_text(loadable.dumps(doc))
         return out.read_bytes(), notes, name
     finally:
         if before is None:

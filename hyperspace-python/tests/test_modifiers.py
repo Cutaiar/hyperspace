@@ -36,7 +36,7 @@ from hyperspace.bands import CEIL
 from hyperspace.learn import Learn
 from hyperspace.modifiers import Modifier, ModState, step
 from hyperspace.params import PATCH_GROUPS, part_of
-from hyperspace.preset import MODIFIERS_KEY
+from hyperspace.loadable import MODIFIERS_KEY
 from hyperspace.routing import Binding, Bindings, Router
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "modifiers"

@@ -331,7 +331,7 @@ def test_preset_bank_params(rig):
     """The bank's params (plan 13 WP2): select, load, save, next / prev
     over the project's preset names, loading through `Presets` (plan 19
     WP1: twenty-four choices, the F-keys' eight with a trigger each)."""
-    from hyperspace.preset import LoadedPatch
+    from hyperspace.loadable import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
     reg, view, _control, _audio, bank = rig
@@ -362,7 +362,7 @@ def test_the_list_triggers_walk_the_drop_downs_list_not_the_bank(rig):
     as new a moment ago is in the walk. QUANT's `preset.next` still walks
     only the bank's filled slots."""
     from hyperspace.library import LOADABLE
-    from hyperspace.preset import LoadedPatch
+    from hyperspace.loadable import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
     reg, _view, _control, _audio, bank = rig
@@ -399,7 +399,7 @@ def test_the_list_walk_from_nothing_loaded_and_a_bad_file(rig):
     last (prev); a preset file that will not parse shows on the library's
     error line and the walk raises nothing."""
     from hyperspace.library import LOADABLE
-    from hyperspace.preset import LoadedPatch
+    from hyperspace.loadable import LoadedPatch
     from hyperspace.routing import Bindings, Router
 
     reg, _view, _control, _audio, bank = rig

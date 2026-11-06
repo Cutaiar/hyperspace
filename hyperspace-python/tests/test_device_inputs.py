@@ -40,7 +40,7 @@ from hyperspace.learn import Learn, blocked
 from hyperspace.library import Library
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import SHIFT_PARAM, Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 

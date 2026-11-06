@@ -1018,7 +1018,7 @@ def _launch(home):
     and the presets after, then the show's startup preset."""
     from hyperspace import lfo, tempo
     from hyperspace.library import Library
-    from hyperspace.preset import LoadedPatch
+    from hyperspace.loadable import LoadedPatch
     from hyperspace.routing import Bindings, Router, bindings_path
 
     chain = Analyzer(Analyser())

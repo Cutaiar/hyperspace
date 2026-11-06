@@ -18,7 +18,7 @@ from test_graph_edit import wired_rig, wired_wires
 from test_ui_shell import _click, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graphview, preset, ui_graph, ui_presets, undo
+from hyperspace import graphview, loadable, ui_graph, ui_loadable, undo
 from hyperspace.library import Marks
 
 ALL = "output.all.image"
@@ -46,7 +46,7 @@ def test_new_is_the_scene_chain_laid_out_where_you_look(tmp_path):
     its three nodes, left to right on one row from `at`."""
     rig, _, _ = wired_rig(tmp_path, {"frame": "wired",
                                      "wires": [{"from": "channel.b", "to": ALL}]})
-    assert rig.loaded_patch.new((120.0, -40.0)) == [preset.NEW_SAID]
+    assert rig.loaded_patch.new((120.0, -40.0)) == [loadable.NEW_SAID]
     spec = rig.loaded_patch.graph.spec
     assert wired_wires(rig) == CHAIN and len(spec.wires) == 2
     assert _entries(rig) == []                          # no pattern, nothing else
@@ -54,7 +54,7 @@ def test_new_is_the_scene_chain_laid_out_where_you_look(tmp_path):
     assert lay == {"render:shape": [120, -40],
                    "render:scene": [120 + graphview.COL_W, -40],
                    "render:output.all": [120 + 2 * graphview.COL_W, -40]}
-    doc = rig.loaded_patch.document(preset.UNTITLED_PATCH)
+    doc = rig.loaded_patch.document(loadable.UNTITLED_PATCH)
     assert doc["layout"] == lay
     assert doc["graph"] == spec.to_json()
 
@@ -92,8 +92,8 @@ def test_new_from_the_strip_lays_out_at_the_page_s_view(page):
     frame(panel, "presets")
     frame(panel)
     at = ui_graph.in_view(panel)            # (GRAPH is always drawn: as it sees it now)
-    _click(panel, ui_presets._state(panel)["rects"]["strip.presets.new"])
-    assert page.lib.current("presets") == preset.UNTITLED_PATCH
+    _click(panel, ui_loadable._state(panel)["rects"]["strip.presets.new"])
+    assert page.lib.current("presets") == loadable.UNTITLED_PATCH
     assert page.lib.loaded_patch.layout["render:shape"] == list(at)
     assert wired_wires(page.lib) == CHAIN
 

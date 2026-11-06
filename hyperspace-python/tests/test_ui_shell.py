@@ -14,7 +14,7 @@ import pytest
 from conftest import seed
 from imgui_bundle import imgui, implot
 
-from hyperspace import hands, lfo, routing, tempo, ui, ui_presets, ui_routing
+from hyperspace import hands, lfo, routing, tempo, ui, ui_loadable, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
@@ -28,7 +28,7 @@ from hyperspace.library import Library
 from hyperspace.outputs import Slot
 from hyperspace.overlay import Output, register_switches
 from hyperspace.params import PLANES, Kind, build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
 from hyperspace.ui import (
     CHEATSHEET,
@@ -332,7 +332,7 @@ def test_system_page_shows_the_dream_error_and_the_stall_log(rig, monkeypatch, t
     assert rig.panel.dream_error == (
         "dream worker off: torch is not installed — run `uv sync`, "
         "then launch with `uv run hyperspace`")
-    wd = Watchdog(tmp_path / "stall.log", preset=lambda: "FACES")
+    wd = Watchdog(tmp_path / "stall.log", loadable=lambda: "FACES")
     rig.panel.watchdog = wd
     frame(rig.panel, "system")
     assert rig.panel.dream_error in drawn
@@ -985,15 +985,15 @@ def test_strip_round_trip(rig):
     frame(panel, "view")
     assert lib.current("view") is None
     # the listing is cached on the poll cadence and invalidated by our writes
-    assert ui_presets.names(panel, "view") == []
-    ui_presets._save_as(panel, "view", "Mine")
+    assert ui_loadable.names(panel, "view") == []
+    ui_loadable._save_as(panel, "view", "Mine")
     assert lib.current("view") == "Mine" and not lib.is_dirty("view")
-    assert ui_presets.names(panel, "view") == ["Mine"]
+    assert ui_loadable.names(panel, "view") == ["Mine"]
     frame(panel)
     reg["view.bright"].step(3)
     assert lib.is_dirty("view")
     frame(panel)
-    ui_presets._save_as(panel, "view", "Other")
+    ui_loadable._save_as(panel, "view", "Other")
     assert lib.list("view") == ["Mine", "Other"]
     frame(panel)
     # ◀ ▶ walk the names; the dot clears on a load
@@ -1018,8 +1018,8 @@ def test_strip_name_field_draws(rig):
     """The inline save-as field replaces the strip while a name is typed."""
     panel = rig.panel
     frame(panel, "camera")
-    ui_presets._begin_naming(panel, "camera", "seed")
-    st = ui_presets._state(panel)
+    ui_loadable._begin_naming(panel, "camera", "seed")
+    st = ui_loadable._state(panel)
     assert st["naming"] == "camera" and st["buf"] == "seed"
     frame(panel)                    # draws the field, not the strip
     frame(panel)
@@ -1030,7 +1030,7 @@ def test_strip_name_field_draws(rig):
 def test_strip_survives_a_bad_library_call(rig):
     """A LibraryError from a strip action shows in lib.error, never raises."""
     panel, lib = rig.panel, rig.lib
-    assert ui_presets._guard(panel, lib.load, "view", "no such preset") is None
+    assert ui_loadable._guard(panel, lib.load, "view", "no such preset") is None
     assert "no preset" in lib.error
     frame(panel, "view")
 
@@ -1038,14 +1038,14 @@ def test_strip_survives_a_bad_library_call(rig):
 def test_dirty_dots_follow_the_poll_cadence(rig):
     panel, reg, lib = rig.panel, rig.reg, rig.lib
     frame(panel, "camera")
-    assert not ui_presets.dirty(panel, "camera")
-    assert not ui_presets.dirty(panel, "camera", polled=True)
+    assert not ui_loadable.dirty(panel, "camera")
+    assert not ui_loadable.dirty(panel, "camera", polled=True)
     reg["camera.zoom"].set_value(2.0)
-    assert ui_presets.dirty(panel, "camera")                 # live: at once
-    assert not ui_presets.dirty(panel, "camera", polled=True)  # the rail: next poll
-    for _ in range(int(ui_presets.LIST_POLL * 60) + 2):
+    assert ui_loadable.dirty(panel, "camera")                 # live: at once
+    assert not ui_loadable.dirty(panel, "camera", polled=True)  # the rail: next poll
+    for _ in range(int(ui_loadable.LIST_POLL * 60) + 2):
         frame(panel)
-    assert ui_presets.dirty(panel, "camera", polled=True)
+    assert ui_loadable.dirty(panel, "camera", polled=True)
     assert lib.is_dirty("camera")
 
 
@@ -1056,16 +1056,16 @@ def test_project_row_and_dirty_state(rig, tmp_path):
     proj = lib.project
     frame(panel, "presets")
     assert not proj.is_dirty()                     # the party show as saved: clean
-    ui_presets._project_save_as(panel, "Show")
+    ui_loadable._project_save_as(panel, "Show")
     assert proj.name == "Show" and proj.path == tmp_path / "projects" / "show.hyp.json"
     assert not proj.is_dirty()
-    assert ui_presets.names(panel, ui_presets.PROJECT) == ["house", "party", "show"]
+    assert ui_loadable.names(panel, ui_loadable.PROJECT) == ["house", "party", "show"]
     frame(panel)
     gain = rig.chain.gain
     reg["master.gain"].set(gain + 1.0)             # a session move
     assert proj.is_dirty()
     frame(panel)
-    ui_presets._guard(panel, proj.save)
+    ui_loadable._guard(panel, proj.save)
     assert not proj.is_dirty()
     # load / new go through the same row
     proj.new("scratch")
@@ -1153,7 +1153,7 @@ def test_preset_bank_and_strip_on_the_presets_page(rig):
     assert lib.read("presets", "FIELD")["values"]["view.shape"] == 5
     assert lib.current("presets") == "FIELD" and not lib.is_dirty("presets")
     reg["view.shape"].set(1)
-    assert ui_presets.dirty(panel, "presets")
+    assert ui_loadable.dirty(panel, "presets")
     frame(panel)
     reg["preset.load.2"].fire()
     assert rig.view.shape == 5 and not lib.is_dirty("presets")

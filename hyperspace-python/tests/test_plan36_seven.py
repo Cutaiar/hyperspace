@@ -24,7 +24,7 @@ from conftest import CORPUS
 
 from hyperspace import graph as G
 from hyperspace import graphmigrate as M
-from hyperspace import graphview, headless, preset, ui_fx
+from hyperspace import graphview, headless, loadable, ui_fx
 from hyperspace.headless import make_app
 from hyperspace.outputs import Switches, View
 
@@ -82,10 +82,10 @@ def _as_before_calming(made: bytes, source: Path, data: bytes) -> dict:
 def _app_with(tmp_path, name: str, doc: dict):
     """The headless app with `doc` as the user's preset `name`, loaded."""
     app = make_app(tmp_path / "home")
-    folder = tmp_path / "home" / preset.GROUP
+    folder = tmp_path / "home" / loadable.GROUP
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{name}.json").write_text(json.dumps({"name": name, **doc}))
-    app.lib.load(preset.GROUP, name)
+    app.lib.load(loadable.GROUP, name)
     return app
 
 
@@ -105,7 +105,7 @@ def test_a_section_less_seven_loads_black_and_says_so(tmp_path, graph):
            **({"graph": graph} if graph is not None else {})}
     app = _app_with(tmp_path, "bare", doc)
     gs = app.loaded_patch.graph
-    assert preset.NO_GRAPH_SAID in app.loaded_patch.notes
+    assert loadable.NO_GRAPH_SAID in app.loaded_patch.notes
     assert gs.wiring.wired and gs.wiring.wires == ()
     g = _build(app)
     assert all(isinstance(n, G.Output) for n in g.nodes.values()), list(g.nodes)
@@ -288,11 +288,11 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
     wire (`pattern → shape.faces`, plain faces), save — a `/7` — and load
     it again: the wire is still cut (a `/7` is never migrated again)."""
     app = make_app(tmp_path / "home")
-    folder = tmp_path / "home" / preset.GROUP
+    folder = tmp_path / "home" / loadable.GROUP
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "trip.json").write_bytes(
         (SOURCES / "party-trip.json").read_bytes())                          # a /2
-    app.lib.load(preset.GROUP, "trip")
+    app.lib.load(loadable.GROUP, "trip")
     assert ("pattern", "shape.faces") in _pairs(app.loaded_patch.graph.free_doc())
     e = graphview.Edit(graph=app.loaded_patch.graph, push=lambda label: None)
     assert e.unwire("pattern", "shape.faces") is None, e.said
@@ -300,7 +300,7 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
     path = app.loaded_patch.save_as("trip")
     assert json.loads(path.read_text())["schema"] == SAVED
     again = make_app(tmp_path / "home")
-    again.lib.load(preset.GROUP, "trip")
+    again.lib.load(loadable.GROUP, "trip")
     assert ("pattern", "shape.faces") not in _pairs(again.loaded_patch.graph.free_doc())
     assert again.loaded_patch.migrated == ""
 

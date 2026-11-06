@@ -98,7 +98,7 @@ if str(ROOT) not in sys.path:
 from hyperspace import routing
 from hyperspace.fx import FxState, retaper_of
 from hyperspace.params import DEPTH_TAPER, DEPTH_UNIT, UNITS_KEY, retaper_depths
-from hyperspace.preset import dumps as preset_text
+from hyperspace.loadable import dumps as preset_text
 
 PATCHES = "patches"
 DESK = "desk"

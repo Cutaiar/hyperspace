@@ -294,7 +294,7 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
     import json
 
     from hyperspace import graphmigrate as M
-    from hyperspace.preset import LAYOUT_KEY
+    from hyperspace.loadable import LAYOUT_KEY
     old = {"render:eye": [1, 2], "render:history": [3, 4], "render:media.a": [5, 6],
            "render:ghost": [7, 8], "render:hands": [9, 10], "render:readout.2": [11, 12],
            "render:acid.2": [13, 14], "lfo.1": [15, 16]}
@@ -325,7 +325,7 @@ def test_layout_round_trips_through_the_preset_and_the_show(rig):
     the show's: written on save, read on load. A preset without the key
     (every corpus preset) loads with no note and no dirt; one with a bad
     entry keeps the good ones and says so."""
-    from hyperspace.preset import LAYOUT_KEY
+    from hyperspace.loadable import LAYOUT_KEY
     lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.project
     lib.load("presets", "party-trip")
     # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
@@ -421,12 +421,12 @@ def test_no_plumbing_words_remain():
     """Plan 35 T5: the frame is ordinary nodes and wires, so the canvas's
     words for the old frame's own plumbing are gone, and so are the T3/T4
     bridges that drew a wired frame in plan 33's words."""
-    from hyperspace import preset, ui_graph
+    from hyperspace import loadable, ui_graph
     for name in ("PLUMBING", "RUN_KEPT", "FEEDS", "FEEDS_NO_DELETE", "FrameNode",
                  "canvas_name", "run_end", "_with_run", "_framed", "_is_plumbing"):
         assert not hasattr(graphview, name), name
     assert not hasattr(ui_graph, "_feeds_cut")
-    assert not hasattr(preset.GraphSection, "said")
+    assert not hasattr(loadable.GraphSection, "said")
     src = (PKG / "graphview.py").read_text()
     assert "is the default graph's" not in src and "FX_NAMES" not in src
 

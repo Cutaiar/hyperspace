@@ -661,9 +661,9 @@ def test_no_cable_runs_backwards_across_areas(rig, name):
     position): no cable runs from an area into one left of it. Before C3,
     `acid-scene` drew `wire:acid.2>lookback/occluder` from EFFECTS back
     into LOOK-BACK — acid.2 sits between the scene and the look-back."""
-    where, preset = name
-    view = (load(rig, preset) if where == "corpus" else load_fixture(rig, preset))["view"]
-    assert backward_across_areas(view) == [], preset
+    where, loadable = name
+    view = (load(rig, loadable) if where == "corpus" else load_fixture(rig, loadable))["view"]
+    assert backward_across_areas(view) == [], loadable
 
 
 def test_a_node_is_laid_where_its_consumers_are(rig):

@@ -9,7 +9,7 @@ import pytest
 from test_ui_shell import page_frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import graphview, patches, routing, ui, ui_desk, ui_graph, ui_pane, ui_presets
+from hyperspace import graphview, patches, routing, ui, ui_desk, ui_graph, ui_pane, ui_loadable
 from hyperspace.groupwords import group_part, group_title, group_word
 from hyperspace.library import PATCHES, Library, LibraryError
 from hyperspace.params import Registry
@@ -97,7 +97,7 @@ def test_no_param_of_the_analyzer_is_called_band_alone(shell_rig):  # noqa: F811
 def test_a_trash_row_says_the_word():
     class Item:
         group, old = "band", True
-    assert ui_presets.trash_tag(Item) == "analyzer · library"
+    assert ui_loadable.trash_tag(Item) == "analyzer · library"
 
 
 # ---- what stayed: a saved name, which only the format lane may move ----

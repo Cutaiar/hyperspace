@@ -29,7 +29,7 @@ from conftest import CORPUS
 from test_midi import cc, push, rig, shift  # noqa: F401 — the fixture
 
 import hyperspace.ui  # noqa: F401 — first: ui_desk imports through the panel (ui_pad reads its EDGE)
-from hyperspace import apc40, preset, routing, ui_desk
+from hyperspace import apc40, loadable, routing, ui_desk
 from hyperspace.routing import Binding, Bindings, bindings_path
 from hyperspace.view import ViewState
 
@@ -86,7 +86,7 @@ def test_the_faders_are_the_presets_and_the_audio_strip_is_shifts():
     (dim,) = [b for b in rows if b.target == "output.xfade"]
     assert (gain.number, gain.layer) == (apc40.CC_MASTER, None)
     assert (dim.number, dim.layer) == (apc40.CC_XFADE, None)
-    assert not [b for b in preset.fresh_desk() if b.number == FADER and b.kind == "cc"]
+    assert not [b for b in loadable.fresh_desk() if b.number == FADER and b.kind == "cc"]
 
 
 def test_every_corpus_preset_leaves_the_faders_dark_and_shift_lights_the_audio(rig):
@@ -111,7 +111,7 @@ def test_every_corpus_preset_leaves_the_faders_dark_and_shift_lights_the_audio(r
 def test_track_fader_is_a_preset_layer_row_with_soft_pickup():
     """`preset.track_fader(k, pid)` is the row a preset's desk binds track
     fader k with: the preset layer's, `abs`, no feedback, soft pickup."""
-    b = preset.track_fader(8, "dream.mix")
+    b = loadable.track_fader(8, "dream.mix")
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
         f"cc:7:{FADER}", "abs", "preset", None, True)
 

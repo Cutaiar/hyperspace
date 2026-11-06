@@ -1724,7 +1724,7 @@ def test_the_render_stack_imports_no_registry():
     import hyperspace.fx as F
     import hyperspace.render as R
 
-    banned = {"params", "routing", "library", "preset", "undo", "control"}
+    banned = {"params", "routing", "library", "loadable", "undo", "control"}
     for mod in (R, F):
         tree = ast.parse(Path(mod.__file__).read_text())
         for node in ast.walk(tree):

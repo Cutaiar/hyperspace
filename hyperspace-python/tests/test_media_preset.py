@@ -16,7 +16,7 @@ from conftest import seed
 from test_media_channels import FakeOpener, Here
 from test_presets import boot
 
-from hyperspace import preset
+from hyperspace import loadable
 from hyperspace.media.channels import CHANNELS, MediaState
 from hyperspace.params import Kind, build_registry
 
@@ -29,7 +29,7 @@ def rig(tmp_path):
 
 
 def save_text(r, name):
-    return preset.dumps(r.loaded_patch.document(name))
+    return loadable.dumps(r.loaded_patch.document(name))
 
 
 def test_channel_params_registered(rig):
@@ -136,7 +136,7 @@ def test_preset_without_media_keeps_every_value_in_six(tmp_path, name):
     assert r.loaded_patch.load(name) == []
     base = json.loads((BASE / f"{name}.json").read_text())
     doc = json.loads(save_text(r, name))
-    assert doc["schema"] == preset.SAVE_SCHEMA
+    assert doc["schema"] == loadable.SAVE_SCHEMA
     # (plan 36 T3: an effect the migrated section does not name — off, in
     # no run — has its values dropped with it)
     held = M.section_effects(doc["graph"])
@@ -147,7 +147,7 @@ def test_preset_without_media_keeps_every_value_in_six(tmp_path, name):
     # (plan 36 T3: a later effect file is in the save only where the
     # section names it — none of these presets runs displace)
     assert not any(k.startswith(LATER_EFFECTS[0].strip(' "')) for k in doc["values"])
-    assert doc[preset.MEDIA_KEY] == {"channels": {}}
+    assert doc[loadable.MEDIA_KEY] == {"channels": {}}
     assert "media.a.slot" in doc["values"] and "view.media_alpha" in doc["values"]
 
 
@@ -155,12 +155,12 @@ def test_a_media_preset_and_one_without_are_both_six(rig):
     """Row 394: with media or without, the save is `/6`, with the bins (an
     empty section when none is assigned) and every media-family value."""
     doc = rig.loaded_patch.document("x")
-    assert doc["schema"] == preset.SAVE_SCHEMA == "hyperspace.preset/10"
-    assert doc[preset.MEDIA_KEY] == {"channels": {}}
+    assert doc["schema"] == loadable.SAVE_SCHEMA == "hyperspace.preset/10"
+    assert doc[loadable.MEDIA_KEY] == {"channels": {}}
     rig.reg.media.assign("a", 0, "shared:loops/tunnel.mp4")
     doc = rig.loaded_patch.document("x")
-    assert doc["schema"] == preset.SAVE_SCHEMA
-    assert doc[preset.MEDIA_KEY] == {"channels": {"a": ["shared:loops/tunnel.mp4"]}}
+    assert doc["schema"] == loadable.SAVE_SCHEMA
+    assert doc[loadable.MEDIA_KEY] == {"channels": {"a": ["shared:loops/tunnel.mp4"]}}
     assert doc["values"]["media.a.slot"] == 0
     for pid, v in (("media.b.rate", 2.0), ("view.media_alpha", 0.5),
                    ("backdrop.alpha", 0.5)):
@@ -176,24 +176,24 @@ def test_a_row_on_a_media_param_survives_the_save(rig):
                                      "op": "push", "value": 0.2}])
     assert rig.loaded_patch.load("LFOPOS") == []
     doc = rig.loaded_patch.document("LFOPOS")
-    assert doc["schema"] == preset.SAVE_SCHEMA
+    assert doc["schema"] == loadable.SAVE_SCHEMA
     assert any(r["target"] == "media.a.pos" for r in doc["routes"])
     put(rig.home, "MACROALPHA", macros={"macro.1": {"subs": [
         {"base": "backdrop.alpha", "from": 0, "to": 1}]}})
     assert rig.loaded_patch.load("MACROALPHA") == []
     doc = rig.loaded_patch.document("MACROALPHA")
-    assert doc["schema"] == preset.SAVE_SCHEMA
+    assert doc["schema"] == loadable.SAVE_SCHEMA
     assert doc["macros"]["macro.1"]["subs"][0]["base"] == "backdrop.alpha"
     put(rig.home, "DESKALPHA", desk=[{"source": "cc:0:48", "target": "backdrop.alpha",
                                       "op": "set"}])
     assert rig.loaded_patch.load("DESKALPHA") == []
     doc = rig.loaded_patch.document("DESKALPHA")
-    assert doc["schema"] == preset.SAVE_SCHEMA
+    assert doc["schema"] == loadable.SAVE_SCHEMA
     assert any(r.get("target") == "backdrop.alpha" for r in doc["desk"])
     put(rig.home, "PLAIN", routes=[{"source": "lfo:0", "target": "camera.zoom",
                                     "op": "push", "value": 0.1}])
     assert rig.loaded_patch.load("PLAIN") == []
-    assert rig.loaded_patch.document("PLAIN")["schema"] == preset.SAVE_SCHEMA
+    assert rig.loaded_patch.document("PLAIN")["schema"] == loadable.SAVE_SCHEMA
 
 
 def test_bins_round_trip(rig, tmp_path):
@@ -219,7 +219,7 @@ def test_bins_round_trip(rig, tmp_path):
 def test_v2_and_v4_both_load(rig):
     from test_presets import put
     put(rig.home, "OLD", values={"view.bright": 2.0})
-    put(rig.home, "NEW", schema=preset.MEDIA_SCHEMA, values={"backdrop.channel": 2},
+    put(rig.home, "NEW", schema=loadable.MEDIA_SCHEMA, values={"backdrop.channel": 2},
         media={"channels": {"b": ["shared:x.png"]}})
     assert rig.loaded_patch.load("OLD") == []
     assert rig.reg["view.bright"].value == 2.0
@@ -258,7 +258,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     assert reg.snapshot()["view.media_alpha"] == 0.3
     doc = rig.loaded_patch.document("x")
     assert "view.bmp_alpha" not in doc["values"]
-    assert doc["values"]["view.media_alpha"] == 0.3 and doc["schema"] == preset.SAVE_SCHEMA
+    assert doc["values"]["view.media_alpha"] == 0.3 and doc["schema"] == loadable.SAVE_SCHEMA
     put(rig.home, "OLDALPHA", values={"view.bmp_alpha": 0.25})
     assert rig.loaded_patch.load("OLDALPHA") == [] and rig.loaded_patch.notes == []
     assert real.value == 0.25
@@ -274,7 +274,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
 
 def test_bad_id_in_bin_is_a_note(rig):
     from test_presets import put
-    put(rig.home, "BAD", schema=preset.MEDIA_SCHEMA,
+    put(rig.home, "BAD", schema=loadable.MEDIA_SCHEMA,
         media={"channels": {"a": ["shared:ok.png", "nonsense", None, "local:y.png"]}})
     assert rig.loaded_patch.load("BAD") == []
     assert rig.reg.media.channels["a"].bin[:4] == ["shared:ok.png", None, None, "local:y.png"]
@@ -320,7 +320,7 @@ def test_undo_of_a_load_puts_the_bins_back(tmp_path):
     m = r.reg.media
     m.assign("a", 0, "shared:before.png")
     settle(r)
-    put(r.home, "NEW", schema=preset.MEDIA_SCHEMA,
+    put(r.home, "NEW", schema=loadable.MEDIA_SCHEMA,
         media={"channels": {"a": ["shared:after.png"]}})
     r.loaded_patch.load("NEW")
     frames(r)

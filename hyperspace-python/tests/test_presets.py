@@ -25,7 +25,7 @@ from conftest import (
     seed,
 )
 
-from hyperspace import apc40, envelope, graphmigrate, lfo, preset, routing, sequencer, tempo
+from hyperspace import apc40, envelope, graphmigrate, lfo, loadable, routing, sequencer, tempo
 from hyperspace import graph as G
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
@@ -34,7 +34,7 @@ from hyperspace.fx import FxState
 from hyperspace.library import F_KEYS, SLOTS, Library, LibraryError, bank_doc
 from hyperspace.lookback import DreamState
 from hyperspace.params import PATCH_GROUPS, build_registry, part_of
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
@@ -83,7 +83,7 @@ def rig(tmp_path):
 
 def put(home, name, **doc):
     """A user preset file, the rest of the shape filled in."""
-    body = {"schema": preset.SCHEMA, "name": name, "values": {}, "routes": [],
+    body = {"schema": loadable.SCHEMA, "name": name, "values": {}, "routes": [],
             "desk": [], "macros": {}, **doc}
     path = home / "presets" / f"{name.lower()}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -615,7 +615,7 @@ def test_a_preset_round_trips(rig):
     rig.lib.project.load_slot(0)                            # something else in between
     rig.loaded_patch.load("Round Trip")
     assert rig.loaded_patch.signature() == sig and not lib.is_dirty("presets")
-    assert preset.desk_json(table.desk()) == desk and table.macros_doc() == macros
+    assert loadable.desk_json(table.desk()) == desk and table.macros_doc() == macros
     assert lib.current("dream") is None             # (plan 44 D3: no module label)
 
 
@@ -645,7 +645,7 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
         desk=[*DESK, {"source": "cc:0:14", "target": "view.bright", "op": "abs"}],
         macros=MACROS)
     rig.loaded_patch.load("DESKED")
-    assert preset.desk_json(table.desk()) == DESK and table.layer == "preset"
+    assert loadable.desk_json(table.desk()) == DESK and table.layer == "preset"
     assert any("cc:0:14 → view.bright" in n and "invariant" in n for n in rig.loaded_patch.notes)
     assert rig.loaded_patch.desk_notes and "cc:0:14" in rig.loaded_patch.desk_notes[0]
     assert [b.to_json() for b in table.midi() if b.layer != "preset"] == meta_rows
@@ -674,8 +674,8 @@ def test_a_preset_without_a_desk_gets_the_fresh_preset_layer(rig):
     rig.loaded_patch.load("BARE")
     fresh = [b for b in routing.factory_desk() if b.layer == "preset"]
     assert [b.to_json() for b in table.desk()] == [b.to_json() for b in fresh]
-    assert preset.desk_json(table.desk()) == preset.desk_json(preset.fresh_desk())
-    assert rig.loaded_patch.document("BARE")["desk"] == preset.desk_json(fresh)
+    assert loadable.desk_json(table.desk()) == loadable.desk_json(loadable.fresh_desk())
+    assert rig.loaded_patch.document("BARE")["desk"] == loadable.desk_json(fresh)
 
 
 def test_a_preset_with_a_desk_and_macros_round_trips(rig):
@@ -697,7 +697,7 @@ def test_a_preset_with_a_desk_and_macros_round_trips(rig):
     rig.loaded_patch.load("TRIP")
     assert table.macros_doc() != doc["macros"]
     rig.loaded_patch.load("SHOW")
-    assert preset.desk_json(table.desk()) == doc["desk"] and table.macros_doc() == doc["macros"]
+    assert loadable.desk_json(table.desk()) == doc["desk"] and table.macros_doc() == doc["macros"]
     assert not lib.is_dirty("presets")
 
 
@@ -1136,14 +1136,14 @@ def test_active_follows_the_loaded_preset_from_one_place(tmp_path):
     assert pr.active == -1
     # the four sites call it, and nothing else looks a preset up in the bank
     for fn in (library.Project._set_slot, library.Project._apply, library.Marks.put,
-               preset.LoadedPatch._landed):
+               loadable.LoadedPatch._landed):
         src = inspect.getsource(fn)
         assert "follow()" in src and "bank.index" not in src, fn.__qualname__
     # (plan 48: `follow` resolves each slot to its file, so a slot naming
     # the preset by another spelling lights too — the one look-up is there)
     assert inspect.getsource(library).count("bank.index(") == 0
     assert "enumerate(self.bank)" in inspect.getsource(library.Project.follow)
-    assert "pr.bank.index(" not in inspect.getsource(preset)
+    assert "pr.bank.index(" not in inspect.getsource(loadable)
 
 
 # ------------------------------ plan 19 WP2: a preset saved before the bank's rows
@@ -1193,7 +1193,7 @@ def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(ow
     r = boot_home(home)                                    # the launch lands NIGHT ONE
     lib, table, pr, loaded_patch = r.lib, r.router.table, r.lib.project, r.loaded_patch
     # saved before plan 19: the fresh layer had no device knob then (WP3's SCENE)
-    fresh = len([b for b in preset.fresh_desk() if not _is_device_knob(b)])
+    fresh = len([b for b in loadable.fresh_desk() if not _is_device_knob(b)])
     # NIGHT ONE: the sixteen exact rows — nothing said
     assert lib.current("presets") == "NIGHT ONE"
     assert loaded_patch.desk_notes == [] and loaded_patch.notes == [] and lib.warning == ""
@@ -1207,7 +1207,7 @@ def test_an_old_preset_loads_without_its_shape_pads_and_its_file_is_untouched(ow
     assert loaded_patch.desk_notes == [said] and loaded_patch.notes == [said]
     assert lib.warning == f"preset NIGHT TWO: {said}"       # one note: no "(+15 more)"
     assert _on_bank_rows(table.desk()) == []
-    knob = preset.device_knob(*OWNER_KNOB)
+    knob = loadable.device_knob(*OWNER_KNOB)
     assert [(b.source, b.target) for b in table.desk() if b.source == knob.source] \
         == [(knob.source, knob.target)]
     assert len(table.desk()) == fresh + 1 and not lib.is_dirty("presets")
@@ -1252,9 +1252,9 @@ def test_the_next_save_of_an_old_preset_writes_the_desk_without_the_pads(owner_h
     assert lib.overwrite("presets") == path
     doc = json.loads(path.read_text())
     assert _on_bank_rows(doc["desk"]) == []
-    knob = preset.desk_json([preset.device_knob(*OWNER_KNOB)])[0]
+    knob = loadable.desk_json([loadable.device_knob(*OWNER_KNOB)])[0]
     # (the fresh layer less the device knobs it gained in plan 19 WP3, + the learned one)
-    fresh = [b for b in preset.fresh_desk() if not _is_device_knob(b)]
+    fresh = [b for b in loadable.fresh_desk() if not _is_device_knob(b)]
     assert knob in doc["desk"] and len(doc["desk"]) == len(fresh) + 1
     (kept,) = list(trash.glob("night-two.*.json"))
     assert kept.read_bytes() == before["night-two.json"][0]        # the old file, whole
@@ -1291,7 +1291,7 @@ def test_a_users_desk_is_untouched_by_the_recut(owner_home):
     assert lib.current("presets") == "NIGHT ONE" and dials() == {}       # all eight dark
     assert [b.target for b in table.dispatch("cc", 0, 0x10)] == []        # D1 does nothing
     lib.load("presets", "NIGHT TWO")
-    knob = preset.device_knob(*OWNER_KNOB)
+    knob = loadable.device_knob(*OWNER_KNOB)
     assert dials() == {knob.source: knob.target}                         # D3 alone, learned
     lib.load("presets", "NIGHT THREE")
     assert list(dials().values()) == wake_knobs(home)
@@ -1302,7 +1302,7 @@ def test_a_users_desk_is_untouched_by_the_recut(owner_home):
     doc = json.loads((home / "presets" / "night-one.json").read_text())
     doc.pop("desk")
     doc["name"] = "NO DESK"
-    (home / "presets" / "no-desk.json").write_text(preset.dumps(doc))
+    (home / "presets" / "no-desk.json").write_text(loadable.dumps(doc))
     lib.poll()
     lib.load("presets", "NO DESK")
     assert list(dials().values()) == list(apc40.SCENE)
@@ -1344,9 +1344,9 @@ def test_a_wired_preset_saves_as_v6(rig):
     `hyperspace.preset/9` — the frame edited or not; the ladder reads `/2`
     … `/9` (plan 40 T2's `/8` a `/7` with groups) — and a `/10` file is
     refused in its words."""
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)
-    assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/7"
-    rig.loaded_patch.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)
+    assert graphmigrate.WIRED_SCHEMA == loadable.WIRED_SCHEMA == "hyperspace.preset/7"
+    rig.loaded_patch.load_doc({"schema": loadable.SCHEMA, "name": "edited", "values": {}})
     section = rig.loaded_patch.graph.free_doc()
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
@@ -1389,7 +1389,7 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
 def _fresh_performance(lib):
     return {k: v for k, v in lib._fresh_all().items()
             if k in lib.reg and lib.reg[k].group in PATCH_GROUPS
-            and not preset.is_instance_id(k) and not preset.is_switch_id(k)
+            and not loadable.is_instance_id(k) and not loadable.is_switch_id(k)
             and lib.reg[k].group != "modifiers"}
 
 
@@ -1411,13 +1411,13 @@ def test_a_new_preset_is_fresh_values_and_the_scene_chain(rig, name):
     lib, reg, table = rig.lib, rig.reg, rig.router.table
     _spoil(rig, name)
     kept = reg.snapshot(part="shared_meta")
-    assert rig.loaded_patch.new() == [preset.NEW_SAID]
+    assert rig.loaded_patch.new() == [loadable.NEW_SAID]
     for k, v in _fresh_performance(lib).items():
         assert reg[k].value == v, k
     assert table.routes() == []
-    assert preset.desk_json(table.desk()) == preset.desk_json(preset.fresh_desk())
-    doc = rig.loaded_patch.document(preset.UNTITLED_PATCH)
-    assert doc["desk"] == preset.desk_json(preset.fresh_desk())
+    assert loadable.desk_json(table.desk()) == loadable.desk_json(loadable.fresh_desk())
+    doc = rig.loaded_patch.document(loadable.UNTITLED_PATCH)
+    assert doc["desk"] == loadable.desk_json(loadable.fresh_desk())
     assert doc["routes"] == []
     assert reg.snapshot(part="shared_meta") == kept
     spec = rig.loaded_patch.graph.spec
@@ -1425,9 +1425,9 @@ def test_a_new_preset_is_fresh_values_and_the_scene_chain(rig, name):
             "wires": [{"from": "shape", "to": "scene.geometry"},
                       {"from": "scene", "to": "output.all.image"}]}   # (plan 36 T3: hands written)
     assert G.reaches(spec) == frozenset({"shape", "scene"})
-    assert lib.current("presets") == preset.UNTITLED_PATCH
+    assert lib.current("presets") == loadable.UNTITLED_PATCH
     assert lib.is_dirty("presets")
-    assert lib.path_of("presets", preset.UNTITLED_PATCH) is None
+    assert lib.path_of("presets", loadable.UNTITLED_PATCH) is None
 
 
 def test_a_new_preset_does_not_depend_on_what_was_loaded(rig):
@@ -1436,7 +1436,7 @@ def test_a_new_preset_does_not_depend_on_what_was_loaded(rig):
         _spoil(rig, name)
         rig.loaded_patch.new()
         after.append((rig.reg.snapshot(part="patch"),
-                      rig.loaded_patch.document(preset.UNTITLED_PATCH)))
+                      rig.loaded_patch.document(loadable.UNTITLED_PATCH)))
     assert after[0] == after[1]
 
 
@@ -1494,7 +1494,7 @@ def test_a_new_preset_saves_and_loads_back_as_the_scene_chain(rig):
                       {"from": "scene", "to": "output.all.image"}]}
     assert len(rig.loaded_patch.layout) == 3
     assert rig.router.table.routes() == []
-    assert preset.desk_json(rig.router.table.desk()) == preset.desk_json(preset.fresh_desk())
+    assert loadable.desk_json(rig.router.table.desk()) == loadable.desk_json(loadable.fresh_desk())
 
 
 @pytest.fixture(scope="module")
@@ -1583,6 +1583,6 @@ def test_a_new_preset_carries_no_resize_values(rig):
     rig.loaded_patch.load("CROP")
     assert "resize.2.crop_x" in rig.reg
     rig.loaded_patch.new()
-    assert not [p for p in rig.reg if preset.is_resize_id(p.id)]
-    doc = rig.loaded_patch.document(preset.UNTITLED_PATCH)
+    assert not [p for p in rig.reg if loadable.is_resize_id(p.id)]
+    doc = rig.loaded_patch.document(loadable.UNTITLED_PATCH)
     assert not [k for k in doc["values"] if k.startswith("resize")]

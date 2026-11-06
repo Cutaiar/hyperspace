@@ -44,7 +44,7 @@ hits = ["/hit", "/pad"]
 """
 
 
-def _show(tmp_path, devices_toml: str = PHONE, *, preset: bool = True):
+def _show(tmp_path, devices_toml: str = PHONE, *, loadable: bool = True):
     """The app's construction order over a scratch home whose config.toml
     lists `devices_toml` and nothing else (no [library]): the registry made
     from the config's entries alone, handed to the router and the Learn as
@@ -64,7 +64,7 @@ def _show(tmp_path, devices_toml: str = PHONE, *, preset: bool = True):
     app.router.use(rig)
     lrn.devices = rig
     rig.open_all()
-    if preset:
+    if loadable:
         assert app.loaded_patch.load(FIXTURE.stem) == []
         assert app.loaded_patch.notes == [] and app.router.table.dropped == []
     return NS(app=app, rig=rig, learn=lrn, cfg=cfg, home=home, now=[0.0])

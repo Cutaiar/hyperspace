@@ -29,7 +29,7 @@ from hyperspace.library import (
     slug,
 )
 from hyperspace.params import build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
 

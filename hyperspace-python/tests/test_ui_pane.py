@@ -11,7 +11,7 @@ from imgui_bundle import imgui, implot
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import ui, ui_bands, ui_graph, ui_pane, ui_presets
+from hyperspace import ui, ui_bands, ui_graph, ui_pane, ui_loadable
 from hyperspace.analyzer import N_MAX
 from hyperspace.ui import PAGE_KEYS
 
@@ -320,11 +320,11 @@ def test_the_strip_budgets_the_devices_missing_chip(tmp_path):
     with build_rig(tmp_path):
         imgui.new_frame()
         chips = ("new", "save", "as…")
-        full = ui_presets.strip_name_w(1000.0, chips, False)
-        assert full == ui_presets.name_w()
-        narrow = ui_presets.strip_name_w(300.0, chips, False)
-        assert ui_presets.strip_name_w(300.0, chips, False, 60.0) == max(
-            ui_presets.NAME_MIN, narrow - 60.0)
+        full = ui_loadable.strip_name_w(1000.0, chips, False)
+        assert full == ui_loadable.name_w()
+        narrow = ui_loadable.strip_name_w(300.0, chips, False)
+        assert ui_loadable.strip_name_w(300.0, chips, False, 60.0) == max(
+            ui_loadable.NAME_MIN, narrow - 60.0)
         imgui.end_frame()
 
 

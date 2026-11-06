@@ -28,7 +28,7 @@ from wiredframe import Shows, graph, unwired, wire_switches, wiring
 
 from hyperspace import graph as G
 from hyperspace import graphmigrate as M
-from hyperspace import preset
+from hyperspace import loadable
 from hyperspace.fx import FxState, SpecError, instance_of_name, parse
 from hyperspace.graphmigrate import wired_wiring
 from hyperspace.library import LOADABLE
@@ -447,7 +447,7 @@ def test_no_corpus_source_carries_a_graph_and_each_preset_loads_as_before(tmp_pa
         assert _old(stub.wiring).run is not None and stub.wiring.wired
         # (row 394: the save is `/6`, the frame the load landed)
         doc = rig.loaded_patch.document(name)
-        assert doc[preset.GRAPH_KEY] == rig.loaded_patch.graph.free_doc(), slug
+        assert doc[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc(), slug
         # (plan 33 T3: the dirty dot reads the section as wires — the run)
         assert json.loads(rig.loaded_patch.signature()[4])["frame"] == "wired"     # (plan 35)
         assert not rig.lib.is_dirty(LOADABLE), slug
@@ -476,10 +476,10 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     assert rig.reg["fx.acid.on"].value and not rig.reg["dream.on"].value
     assert not rig.lib.is_dirty(LOADABLE)
     doc = rig.loaded_patch.document("hands-lines")
-    assert doc[preset.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()
-    assert doc[preset.GRAPH_KEY]["frame"] == "wired"
-    text = preset.dumps(doc)
-    first = json.dumps(doc[preset.GRAPH_KEY]["nodes"][0])
+    assert doc[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()
+    assert doc[loadable.GRAPH_KEY]["frame"] == "wired"
+    text = loadable.dumps(doc)
+    first = json.dumps(doc[loadable.GRAPH_KEY]["nodes"][0])
     assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {first}' in text
     # another preset with today's frame: back to the default
     rig.lib.load(LOADABLE, "party-tumble")
@@ -502,7 +502,7 @@ def test_an_unknown_node_kind_is_a_note_and_the_default_graph(tmp_path):
     note = rig.loaded_patch.notes[0]
     assert note.startswith("graph: unknown node kind 'teapot'") and \
         note.endswith("; not read — black")
-    assert rig.loaded_patch.document("Odd")[preset.GRAPH_KEY] == section
+    assert rig.loaded_patch.document("Odd")[loadable.GRAPH_KEY] == section
     assert not rig.lib.is_dirty(LOADABLE)
 
 

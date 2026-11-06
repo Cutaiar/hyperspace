@@ -1786,7 +1786,7 @@ def main(argv: list[str] | None = None) -> None:
     # a raising render draw, or 2 s with no render frame presented while the
     # panel runs, each with every thread's stack; kill -USR1 dumps on demand
     watchdog = Watchdog(home / LOG_NAME,
-                        preset=lambda: meta.on_air.loaded_patch.current)
+                        loadable=lambda: meta.on_air.loaded_patch.current)
     # with two or more outputs the stall is "no output presented", and one
     # output dark while another presents is a warning naming it (WP3)
     opened = [sl for sl in slots if sl.opened and sl.output is not None]

@@ -519,7 +519,7 @@ def test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset(tmp_path):
     loading the preset again throws away what was learned since."""
     from test_midi import cc, push
 
-    from hyperspace import preset
+    from hyperspace import loadable
 
     r = desk_rig(tmp_path)
     lib, table, lrn = r.lib, r.router.table, r.learn
@@ -547,7 +547,7 @@ def test_a_knob_learn_writes_a_desk_row_into_the_loaded_preset(tmp_path):
     assert lib.is_dirty("presets")
     lib.load("presets", "BIG BLUE WAVE")                    # …and thrown away by a load
     assert not any(b.target == "view.speed" and b.number == 0x11 for b in table.desk())
-    assert preset.desk_json(table.desk()) == saved and not lib.is_dirty("presets")
+    assert loadable.desk_json(table.desk()) == saved and not lib.is_dirty("presets")
     assert untouched(r)
 
 

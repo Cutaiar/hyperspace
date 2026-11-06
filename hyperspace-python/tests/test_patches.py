@@ -43,7 +43,7 @@ def example() -> dict:
     return json.loads(ACID_WASH.read_text())
 
 
-def preset(name: str) -> dict:
+def loadable(name: str) -> dict:
     return json.loads((LOADABLE / f"{name}.json").read_text())
 
 
@@ -286,7 +286,7 @@ def test_lift_of_noitas_core():
     """warp, doublevision and fractals out of party-noita: one inlet from
     the scene, one outlet into tripcolour, the three effects' values and
     no others, the desk rows and hand routes on their params verbatim."""
-    noita = preset("party-noita")
+    noita = loadable("party-noita")
     doc, refused = patches.lift(*parts(noita), NOITA_CORE)
     assert refused == []
     assert patches.check({**doc, "name": "noita core"}) == []
@@ -308,7 +308,7 @@ def test_lift_of_noitas_core():
 
 
 def test_a_lift_that_names_the_rigs_refuses_it_and_keeps_the_rest():
-    noita = preset("party-noita")
+    noita = loadable("party-noita")
     doc, refused = patches.lift(*parts(noita),
                                 ["render:warp", "render:output.all",
                                  "render:camera", "seq", "env.2", "device:apc40"])
@@ -377,7 +377,7 @@ def test_lift_renames_to_the_lowest_ids_and_rebases_the_layout():
 # ---------------------------------------------------------------- spawn
 
 def test_spawn_into_a_host_that_holds_warp_renames_every_reference():
-    noita = preset("party-noita")
+    noita = loadable("party-noita")
     doc, _ = patches.lift(*parts(noita), NOITA_CORE)
     doc["name"] = "noita core"
     landing = spawn(doc, host_of(parts(noita)), at=(400, 80))
@@ -416,7 +416,7 @@ def test_a_spawn_with_k1_already_mapped_lists_one_conflict_and_lands_nothing():
     """acid-wash into party-noita, where K1 (cc:0:48) is view.bright: one
     conflict — the lane route is no one-owner source — and the host's parts
     are as they were (spawn is pure)."""
-    p = parts(preset("party-noita"))
+    p = parts(loadable("party-noita"))
     before = [b.to_json() for b in p[1].bindings], p[1].macros_doc(), p[1].modifiers_doc()
     landing = spawn(example(), host_of(p))
     assert landing.conflicts == (patches.Conflict(
@@ -549,7 +549,7 @@ def test_used_up_voice_ids_are_a_note():
 def test_host_of_without_banks_starts_past_every_voice_the_table_names():
     """No bank handed in: one past the highest voice id the table's lanes
     name, and past the default membership (LFOs 1–4, lane envelopes 1–5)."""
-    host = Host.of(*parts(preset("party-noita"))[:2])
+    host = Host.of(*parts(loadable("party-noita"))[:2])
     assert host.next_voice == {"lfo": 5, "env": 6}
     table = Bindings([Binding("lfo:7", "view.bright", "push")])
     table.set_modifiers([{"id": "mod.1", "kind": "smooth", "in": ["env:9"]}])
@@ -562,7 +562,7 @@ def test_host_of_without_banks_starts_past_every_voice_the_table_names():
 def test_a_patch_twice_collides_with_itself_row_by_row():
     """The second spawn of one patch: its K1 row and its hand row meet the
     first's (now the host's), and its ids are the next ones."""
-    p = parts(preset("party-noita"))
+    p = parts(loadable("party-noita"))
     doc = example()
     doc["routes"].append({"source": "hand:left.z", "target": "fx.acid.reach", "op": "push"})
     first = spawn(doc, host_of(p))
@@ -596,7 +596,7 @@ def round_trip(doc: dict, p, at=(240, 120)) -> tuple[dict, object]:
 
 @pytest.mark.parametrize("host", ["party-noita", "party-acid", "party-wake"])
 def test_the_example_round_trips(host):
-    back, landing = round_trip(example(), parts(preset(host)))
+    back, landing = round_trip(example(), parts(loadable(host)))
     same(back, example())
     if host == "party-acid":
         assert landing.renames["acid"] == "acid.2"
@@ -641,7 +641,7 @@ def test_select_is_the_lifts_rule_and_refuses_a_group():
     """`select` (factored out of `lift` for the GRAPH page's Group): the
     lift's members and words, and a group named among the ids — no
     nesting — left out in words."""
-    spec, table, _values, _layout = parts(preset("party-noita"))
+    spec, table, _values, _layout = parts(loadable("party-noita"))
     mem, refused = patches.select(spec, table, ["render:output.1", "render:warp", "group.2",
                                                 "macro.3", "env.2", "env.7", "mod.1"])
     assert mem.render == ("warp",) and mem.macros == (3,) and mem.envs == (7,)
@@ -658,7 +658,7 @@ def test_crossing_and_the_sides_classify_what_crosses_a_region():
     `wire_type` what it carries at the edge); `side`, `sub_side` and
     `input_side` where a row, a macro subscriber and a modifier input sit —
     the rules `read` and `lift` keep and the group node draws."""
-    spec, table, _values, _layout = parts(preset("party-noita"))
+    spec, table, _values, _layout = parts(loadable("party-noita"))
     mem, _ = patches.select(spec, table, NOITA_CORE)
     where = {(w.src, w.dst): (at, patches.wire_type(w, at))
              for w, at in patches.crossing(spec, mem.render)}
@@ -702,7 +702,7 @@ def test_a_fresh_library_lists_no_patch(tmp_path):
 
 
 def test_save_patch_then_read_patch_is_the_same_dict(lib):
-    noita = preset("party-noita")
+    noita = loadable("party-noita")
     doc, _ = patches.lift(*parts(noita), NOITA_CORE)
     doc.update(name="Noita Core", note="the middle of noita")
     path = lib.save_patch(doc)

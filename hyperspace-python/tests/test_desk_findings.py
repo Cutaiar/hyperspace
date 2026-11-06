@@ -42,7 +42,7 @@ from hyperspace.library import Library
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Binding, Router
 from hyperspace.view import ViewState
 

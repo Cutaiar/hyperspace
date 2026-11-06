@@ -229,7 +229,7 @@ def test_undo_of_add_and_remove_restores_the_params_and_their_bases():
 
 @pytest.fixture()
 def app(tmp_path):
-    from hyperspace import preset, routing, tempo
+    from hyperspace import loadable, routing, tempo
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
@@ -255,7 +255,7 @@ def app(tmp_path):
     lib.attach(reg)
     router = routing.Router(reg, table)
     router.use_lfos(lfos, clock)
-    loaded_patch = preset.LoadedPatch(lib, reg, router)
+    loaded_patch = loadable.LoadedPatch(lib, reg, router)
     return SimpleNamespace(lib=lib, reg=reg, router=router, loaded_patch=loaded_patch, lfos=lfos)
 
 

@@ -289,7 +289,7 @@ from hyperspace.media.channels import MediaState
 from hyperspace.media.source import FETCHING
 from hyperspace.outputs import Switches, View
 from hyperspace.params import build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.render import Renderer
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
@@ -358,7 +358,7 @@ class NullOut:
 class Shot:
     """One golden: what was drawn and the frame's hash."""
 
-    preset: str
+    loadable: str
     hands: str
     state: str
     route: str           # the pipeline the state reached: SCENE, SCENE_HANDS, HANDS, none
@@ -372,10 +372,10 @@ class Shot:
 
     @property
     def key(self) -> str:
-        return f"{self.preset}|{self.hands}|{self.state}"
+        return f"{self.loadable}|{self.hands}|{self.state}"
 
     def entry(self) -> dict:
-        out = {"preset": self.preset, "hands": self.hands, "state": self.state,
+        out = {"preset": self.loadable, "hands": self.hands, "state": self.state,
                "route": self.route, "hands_over": self.over, "size": list(self.size),
                "sha256": self.sha256, "png": f"png/{self.sha256[:16]}.png"}
         if self.wired is not None:          # (only a wired output's entry has it)
@@ -1071,7 +1071,7 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
     if only and old.get("renderer") != renderer:
         raise SystemExit(f"--only re-records into goldens made on {old.get('renderer')!r}; "
                          f"this is {renderer!r}: record them all")
-    redone = {s.preset for s in shots}
+    redone = {s.loadable for s in shots}
     entries = [e for e in old["goldens"] if e["preset"] not in redone] + [s.entry() for s in shots]
     order = {slug: k for k, slug in enumerate((*CORPUS_PRESETS, *FIXTURE_PRESETS))}
     st = {name: k for k, (name, _) in enumerate(STATES)}
@@ -1152,7 +1152,7 @@ def contact_sheet(moved: list[tuple[Shot, dict | None]], path: Path) -> Path:
         delta = np.clip(np.abs(np.asarray(now, int) - np.asarray(old, int)) * 4, 0, 255)
         for c, im in enumerate((old, now, Image.fromarray(delta.astype(np.uint8)))):
             sheet.paste(im, (c * tw, y + 18))
-        d.text((4, y + 3), f"{s.preset} · hands {s.hands} · {s.state} ({s.route})"
+        d.text((4, y + 3), f"{s.loadable} · hands {s.hands} · {s.state} ({s.route})"
                + ("" if e else " — no golden"), fill="white")
     path.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(path)

@@ -54,7 +54,7 @@ from . import (
     ui_pane,
     ui_patterns,
     ui_players,
-    ui_presets,
+    ui_loadable,
     ui_routing,
     ui_seq,
     undo,
@@ -833,7 +833,7 @@ class Panel:
         while the control window's GL is up. Safe to call twice. A presets
         fold clicked under `WRITE_AFTER_S` ago is written first (plan 48
         stage 2, as `ui_graph.close` flushes the pane's)."""
-        ui_presets.flush_folds(self, force=True)
+        ui_loadable.flush_folds(self, force=True)
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
         if tap is not None:
@@ -1775,7 +1775,7 @@ class Panel:
             _micro(note, FAINT)
         lib = self.library
         if group is not None and lib is not None and lib.reg is not None:
-            ui_presets.strip(self, group)
+            ui_loadable.strip(self, group)
         imgui.separator()
         imgui.dummy(imgui.ImVec2(0, 1))
 
@@ -2708,7 +2708,7 @@ class Panel:
             self._section("presets")
             imgui.text_disabled("no library attached")
             return
-        ui_presets.page(self)
+        ui_loadable.page(self)
 
     def library_lines(self) -> list[tuple[str, bool]]:
         """The SYSTEM page's library lines (plan 25), each with whether it

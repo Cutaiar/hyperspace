@@ -25,7 +25,7 @@ from conftest import CORPUS, OWNER_PAD, OWNER_ROW, boot_home, far_pads, old_shap
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import apc40, envelope, hands, lfo, preset, routing, sequencer, tempo
+from hyperspace import apc40, envelope, hands, lfo, loadable, routing, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, default_params
@@ -119,7 +119,7 @@ def load_preset(r, router: Router, name: str) -> list[str]:
     """A preset by name through the one loader (`preset.Presets` over the
     rig's library) — the road the routing presets took before plan 13 WP5
     made them presets. Returns the ids the registry lacks."""
-    from hyperspace.preset import LoadedPatch
+    from hyperspace.loadable import LoadedPatch
 
     return LoadedPatch(r.lib, r.reg, router).load(name)
 
@@ -908,7 +908,7 @@ def test_the_legacy6_preset_replaces_routes_and_lands_bases(tmp_path):
     """The routing preset `legacy6` is a preset since plan 13 WP5: loaded by
     name through `Presets` it replaces every route and lands its bases —
     the zeros the parity anchor needs — and leaves the input rows alone."""
-    from hyperspace.preset import LoadedPatch
+    from hyperspace.loadable import LoadedPatch
 
     seed(tmp_path)
     r = rig(tmp_path=tmp_path, full=True)
@@ -1190,7 +1190,7 @@ def test_a_preset_load_lists_what_it_dropped(tmp_path):
     d = tmp_path / "presets"
     d.mkdir()
     (d / "twice.json").write_text(json.dumps({
-        "schema": preset.SCHEMA, "name": "twice", "values": {}, "routes": [
+        "schema": loadable.SCHEMA, "name": "twice", "values": {}, "routes": [
             Binding("hand:7", "view.bright", "position").to_json(),
             Binding("hand:1", "view.bright", "position", when="hand:14").to_json()]}))
     assert load_preset(r, router, "twice") == []            # a gate is no exemption

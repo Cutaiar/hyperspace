@@ -108,8 +108,8 @@ def test_the_presets_ladder_is_one_function_the_load_reads_through():
     a `/2` comes out `/7`-shaped and said."""
     import inspect
 
-    from hyperspace import graphmigrate, preset
-    assert "graphmigrate.forward(" in inspect.getsource(preset.LoadedPatch.load_doc)
+    from hyperspace import graphmigrate, loadable
+    assert "graphmigrate.forward(" in inspect.getsource(loadable.LoadedPatch.load_doc)
     new = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
     fwd = graphmigrate.forward(copy.deepcopy(new), {})
     assert fwd.doc == new and fwd.notes == () and fwd.migrated == ""

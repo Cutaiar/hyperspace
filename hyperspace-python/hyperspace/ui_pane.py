@@ -73,7 +73,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_players, ui_presets, undo
+from . import library, ui, ui_fx, ui_players, ui_loadable, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -448,7 +448,7 @@ def _header(panel, key: str, title: str, on: bool, said: str, groups,
     off its preset. `chip`: as wide as its words (the
     band's rows), lit while open, on the row of the chip before it (`first`:
     there is none) unless it would pass the edge. True when clicked."""
-    dot = any(ui_presets.dirty(panel, g, polled=True) for g in groups)
+    dot = any(ui_loadable.dirty(panel, g, polled=True) for g in groups)
     room = 2 * ui.HEADER_DOT_R + 12 if dot else 0.0
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)   # measured in the face it is drawn in
     try:

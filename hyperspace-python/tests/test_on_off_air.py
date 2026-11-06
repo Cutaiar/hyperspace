@@ -36,7 +36,7 @@ from hyperspace import (
     graphview,
     hotreload,
     lfo,
-    preset,
+    loadable,
     routing,
     ui_graph,
     ui_media,
@@ -399,11 +399,11 @@ def test_a_load_off_air_keeps_the_eye_and_turn_on_air_and_brings_its_own(rig):
     doc = _doc("dial")
     doc["values"]["eye.fov"] = 70.0
     pose = [0.1, -0.2, 0.3, 0.4, -0.5, 0.6]
-    doc[preset.POSE_KEY] = dict(zip(POSE_IDS, pose, strict=True))
+    doc[loadable.POSE_KEY] = dict(zip(POSE_IDS, pose, strict=True))
     rig.two.loaded_patch.load_doc(doc)
     assert rig.two.view.ang == pose and rig.two.reg["eye.fov"].base == 70.0
     assert one.view.ang == turn and one.reg["eye.fov"].base == fov
-    saved = rig.two.loaded_patch.document("x")[preset.POSE_KEY]
+    saved = rig.two.loaded_patch.document("x")[loadable.POSE_KEY]
     assert [saved[k] for k in POSE_IDS] == pose
 
 

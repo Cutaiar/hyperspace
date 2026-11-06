@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import learn, patterns, ui, ui_presets, ui_routing, undo
+from . import learn, patterns, ui, ui_loadable, ui_routing, undo
 from .patterns import INPUTS, MODES, N_INPUTS
 from .routing import PATTERN_DEPTH
 
@@ -230,7 +230,7 @@ def _inputs(panel, mode: int) -> None:
         neutral_all(panel)
     if imgui.is_item_hovered():
         ui.tooltip(ALL_NEUTRAL_TIP)
-    ui_presets.strip(panel, "pattern")
+    ui_loadable.strip(panel, "pattern")
     imgui.separator()
     imgui.dummy(imgui.ImVec2(0, 1))
     top = imgui.get_cursor_screen_pos()

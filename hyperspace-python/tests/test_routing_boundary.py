@@ -88,7 +88,7 @@ def test_the_shared_sources_write_no_param():
 # it back), so it may import neither routing nor the registry it never
 # writes, nor anything that imports them
 ABOVE = ("ui", "app", "hands", "midi", "bridge", "learn", "dream", "hotreload", "library")
-SOURCES_ABOVE = (*ABOVE, "routing", "params", "preset", "undo", "deck", "devices")
+SOURCES_ABOVE = (*ABOVE, "routing", "params", "loadable", "undo", "deck", "devices")
 WALLS = {"routing.py": ABOVE, "routing_sources.py": SOURCES_ABOVE}
 # the lazy imports each file is allowed: name resolution for key and pad
 # rows (§1's "only lazily to resolve names") — pinned so a new one is a

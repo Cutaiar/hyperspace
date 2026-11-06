@@ -75,7 +75,7 @@ from .outputs import Offscreen, View, preview_size
 from .params import Registry, MetaRegistry, build_registry, part_of
 from .players import Duty, Players
 from .pointer import Pointer
-from .preset import LoadedPatch
+from .loadable import LoadedPatch
 from .routing import Bindings, Router, Sources
 from .view import ViewState
 
@@ -376,11 +376,11 @@ class Deck:
             *([(src, "routing_sources", "Sources")]
               if (src := getattr(self, "sources", None)) is not None else []),
             (self.router, "routing", "Router"),
-            (self.loaded_patch, "preset", "LoadedPatch"),
+            (self.loaded_patch, "loadable", "LoadedPatch"),
             # plan 44 D5a: its view of the library (getattr: a stand-in deck has none)
             *([(on, "library", "DeckLibrary"), (on.project, "library", "DeckProject")]
               if (on := getattr(self.loaded_patch, "lib", None)) is not None else []),
-            (self.loaded_patch.graph, "preset", "GraphSection"),      # plan 26 A4
+            (self.loaded_patch.graph, "loadable", "GraphSection"),      # plan 26 A4
             (self.learn, "learn", "Learn"),
             (self.clock, "tempo", "Clock"),
             (self.lfos, "lfo", "LFOs"),

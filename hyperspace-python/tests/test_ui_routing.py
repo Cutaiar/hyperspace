@@ -18,7 +18,7 @@ from imgui_bundle import imgui
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import routing, ui_graph, ui_presets, ui_routing
+from hyperspace import routing, ui_graph, ui_loadable, ui_routing
 from hyperspace.bands import CEIL
 from hyperspace.learn import LANE_DEPTH
 from hyperspace.library import LibraryError
@@ -610,7 +610,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     texts.clear()
     frame(panel)
     # the head's dot: a disc since plan 19 WP5, no longer the "●" glyph
-    assert "head.dot" in ui_presets._state(panel)["rects"]
+    assert "head.dot" in ui_loadable._state(panel)["rects"]
     assert (path.read_text(), path.stat().st_mtime_ns) == before   # no file written
     # SHIFT latched: the head says so
     table.set_layer("global")
@@ -698,10 +698,10 @@ def test_the_routing_heads_name_field_draws(rig):
     panel, lib = rig.panel, rig.panel.library
     lib.load("presets", "TRIP")
     frame(panel, "routing")
-    ui_presets._begin_naming(panel, ui_routing.NAMING, "seed")
+    ui_loadable._begin_naming(panel, ui_routing.NAMING, "seed")
     frame(panel)
     ui_routing._save_as(panel, "Mine")                    # what its ok / Enter commits
-    ui_presets._state(panel)["naming"] = None
+    ui_loadable._state(panel)["naming"] = None
     frame(panel)
     assert lib.current("presets") == "Mine" and not lib.is_dirty("presets")
     assert (rig.lib.home / "presets" / "mine.json").exists()
@@ -1331,7 +1331,7 @@ def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
     was = path.read_bytes()
     frame(panel, "routing")
     frame(panel)
-    st = ui_presets._state(panel)
+    st = ui_loadable._state(panel)
     assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)
     reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
     frame(panel)

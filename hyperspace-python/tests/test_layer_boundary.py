@@ -475,7 +475,7 @@ def _mods(*names: str) -> set[str]:
 
 # what a patch is made of, and what draws one
 PATCH_MODULES = _mods(
-    "patches", "preset", "nodemode", "graph", "graphmigrate", "modgraph", "modifiers", "modbank",
+    "patches", "loadable", "nodemode", "graph", "graphmigrate", "modgraph", "modifiers", "modbank",
     "lfo", "envelope", "sequencer", "patterns", "fx", "ghost", "lookback", "masks", "view",
     "field", "geometry", "glsl", "motion", "tapers", "palettecompat", "render", "media_tex",
     "segment", "dream", "media")
@@ -500,10 +500,10 @@ SURFACE = {
     ("nodemode", "players"): ({"NUMBERS"}, "a patch names a player, never a device (the glossary)"),
     ("ghost", "hands.core"): ({"SIDES", "PALM_W", "default_range"},
                               "the shape of a hand: constants, read while drawing one"),
-    ("preset", "apc40"): ({"*"}, "an old file's desk rows, spelled as the factory's (`_cc`)"),
+    ("loadable", "apc40"): ({"*"}, "an old file's desk rows, spelled as the factory's (`_cc`)"),
     ("dream", "config"): ({"DEFAULTS"}, "the dream's model paths; lazily, on its worker"),
     ("media.live", "devices"): ({"*"}, "a live source is a device kind (`Port`)"),
-    ("preset", "graphview"): ({"*"}, "LISTED, should not cross: a new look's chain, the panel's model"),
+    ("loadable", "graphview"): ({"*"}, "LISTED, should not cross: a new look's chain, the panel's model"),
     ("render", "poi"): ({"*"}, "LISTED, should not cross: the guide's state, an experiment's"),
     ("render", "poi_guide"): ({"PoiGuide"}, "LISTED, should not cross: drawn over the outputs"),
 }
@@ -512,7 +512,7 @@ META_NAMES = ("SHARED_META_", "PER_DECK_", "META_", "MetaRegistry", "MetaTable",
               "DeckProject", "is_shared_meta_", "is_meta_", "is_per_deck_", "meta_", "push_meta",
               "install_meta")
 SURFACE_NAMES = {
-    "preset": {"SHARED_META_GROUPS": "which groups a file's values may not hold",
+    "loadable": {"SHARED_META_GROUPS": "which groups a file's values may not hold",
                "is_meta_id": "a route's row goes on to the referee, in its words",
                "meta_row_refusal": "a save filters a row no load would land"},
     "patches": {"meta_refusal": "a patch file naming a meta param is refused (row 744)"},
@@ -521,7 +521,7 @@ SURFACE_NAMES = {
 # …and the handles at run time. (`Project.session` goes with the shows, in plan 57 §5.)
 META_ATTRS = {"meta", "decks", "meta_stack", "push_meta", "players", "session", "meta_reg", "meta_table"}
 SURFACE_ATTRS = {
-    ("preset", "project.session"): "seeds a landing group's params from the open show",
+    ("loadable", "project.session"): "seeds a landing group's params from the open show",
     ("dream", "w.meta"): "not ours: a model file's download record",
     ("segment", "w.meta"): "not ours: a model file's download record",
 }

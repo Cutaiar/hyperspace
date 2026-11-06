@@ -18,7 +18,7 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.library import LAST_SHOW, LOADABLE, Library, LibraryError
 from hyperspace.params import build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Bindings, Router
 from hyperspace.view import ViewState
 

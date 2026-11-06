@@ -98,10 +98,10 @@ class Watchdog:
     def __init__(self, path: Path | str, *, limit: float = LIMIT, period: float = PERIOD,
                  clock: Callable[[], float] = time.perf_counter,
                  wall: Callable[[], float] = time.time,
-                 preset: Callable[[], str | None] | None = None):
+                 loadable: Callable[[], str | None] | None = None):
         self.path = Path(path)
         self.limit, self.period = float(limit), float(period)
-        self.clock, self.wall, self.preset = clock, wall, preset
+        self.clock, self.wall, self.loadable = clock, wall, loadable
         self.last = clock()          # the last completed frame, on `clock`
         self.stalls = 0              # stalls this process has logged
         self.error = ""
@@ -139,7 +139,7 @@ class Watchdog:
         if self._file is None:
             return False
         try:
-            name = _quiet_call(self.preset)
+            name = _quiet_call(self.loadable)
             with self._lock:
                 f = self._file
                 f.write(f"\n=== {kind} {_stamp(self.wall())} · preset "

@@ -36,7 +36,7 @@ from wiredframe import Shows, Thru, graph, wire_switches
 
 from hyperspace import graph as G
 from hyperspace import graphmigrate as M
-from hyperspace import preset
+from hyperspace import loadable
 from hyperspace.graphmigrate import wired_wiring
 from hyperspace.library import LOADABLE
 from hyperspace.outputs import Switches, View
@@ -181,7 +181,7 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
     rig.lib.load(LOADABLE, "Odd")
     assert rig.loaded_patch.notes == [f"{teapot}: not wired (plan 36)"]
     assert G.in_scene_hands(stub.wiring) == [1] and rig.reg["view.bright"].value == 3.0
-    saved = rig.loaded_patch.document("Odd")[preset.GRAPH_KEY]
+    saved = rig.loaded_patch.document("Odd")[loadable.GRAPH_KEY]
     assert saved == rig.loaded_patch.graph.free_doc()
     assert {"kind": "effect", "file": "palette"} in saved["nodes"]
     assert not any(k in e for e in saved["nodes"] for k in G.PLACE_KEYS)
@@ -227,10 +227,10 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
         assert any(w.dst == f"{e.name}.image" for w in stub.wiring.wires), slug
         assert not rig.lib.is_dirty(LOADABLE), slug
         saved = rig.loaded_patch.document(slug)
-        assert not any(k in n for n in saved[preset.GRAPH_KEY]["nodes"] for k in G.PLACE_KEYS)
-        assert saved[preset.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()     # (row 394)
-        line = json.dumps(saved[preset.GRAPH_KEY]["nodes"][0])
-        assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {line}' in preset.dumps(saved)
+        assert not any(k in n for n in saved[loadable.GRAPH_KEY]["nodes"] for k in G.PLACE_KEYS)
+        assert saved[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()     # (row 394)
+        line = json.dumps(saved[loadable.GRAPH_KEY]["nodes"][0])
+        assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {line}' in loadable.dumps(saved)
     assert rig.reg["fx.acid.2.on"].value and rig.reg["dream.on"].value
 
 

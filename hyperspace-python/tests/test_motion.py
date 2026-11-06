@@ -230,9 +230,9 @@ def test_a_route_rows_motion_round_trips_and_is_absent_by_default():
 def test_a_preset_keeps_a_rows_motion_and_its_dirty_dot_sees_it():
     import json
 
-    from hyperspace import preset
+    from hyperspace import loadable
     b = Binding("axis:LX", "view.inst_amp", "push", 0.5, motion=Motion("follow", 0.02, 0.4))
-    text = preset.dumps({"routes": [b.to_json()]})
+    text = loadable.dumps({"routes": [b.to_json()]})
     back = Binding.from_json(json.loads(text)["routes"][0])
     assert back.motion == Motion("follow", 0.02, 0.4)
     before = json.dumps([b.to_json()])

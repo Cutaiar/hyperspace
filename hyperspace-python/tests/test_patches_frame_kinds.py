@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 from conftest import CORPUS, seed
 from test_graph_groups import files, spawned, state, watch, wires
-from test_patches import land, parts, preset
+from test_patches import land, parts, loadable
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -41,7 +41,7 @@ def rig(shell_rig):  # noqa: F811
 
 
 def wake_doc() -> dict:
-    return preset("party-wake")
+    return loadable("party-wake")
 
 
 def cut(name: str = "wake", ids=None) -> dict:
@@ -168,7 +168,7 @@ def test_a_dream_and_a_composite_lift_as_a_patch():
 
 
 def test_a_dream_patch_spawns_where_the_host_has_no_dream():
-    host = Host.of(*parts(preset("party-noita"))[:2])
+    host = Host.of(*parts(loadable("party-noita"))[:2])
     landing = spawn(cut(), host)
     assert landing.taken == () and landing.refusal is None
     assert "dream" in [patches.entry_name(e) for e in landing.nodes]
@@ -396,7 +396,7 @@ def test_wire_as_saved_puts_a_scene_inlet_back_in_its_draw_order(rig):
     assert refused == []
     slug = put(rig, {**doc, "name": "three", "ports": [
         p for p in doc["ports"] if p["was"] == "shape"]})
-    host = preset("party-noita")
+    host = loadable("party-noita")
     host["graph"] = {"frame": "wired", "nodes": [{"kind": "shape"}]}
     assert rig.lib.loaded_patch.load_doc(host) is not None
     assert spawned(rig, slug) is None, ui_graph._state(rig.panel).get("note")

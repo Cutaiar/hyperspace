@@ -30,7 +30,7 @@ import pytest
 from test_presets import boot
 
 from hyperspace import graph as G
-from hyperspace import graphmigrate, preset
+from hyperspace import graphmigrate, loadable
 from hyperspace.library import LOOK_BACKUP, PROJECT_SUFFIX, PROJECT_V2, PROJECTS
 from hyperspace.media.channels import Channels, MediaSources, MediaState, NoResolver
 from hyperspace.routing import Binding, Bindings, MetaTable
@@ -144,7 +144,7 @@ def _old_preset(home: Path, name: str = "OLD", folder: str = "") -> Path:
     doc["modules"] = {"dream": "wake"}
     path = home / "presets" / folder / f"{name.lower()}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(preset.dumps(doc))
+    path.write_text(loadable.dumps(doc))
     return path
 
 
@@ -168,7 +168,7 @@ def test_an_old_preset_opened_with_an_old_show_takes_its_look_and_cuts_end_to_en
     assert not rig.lib.is_dirty("presets")
     doc = pre.document("OLD")
     assert doc["schema"] == "hyperspace.preset/10" and "modules" not in doc
-    assert doc[preset.BUS_KEY] == {"cut": [CUT.to_json()]}
+    assert doc[loadable.BUS_KEY] == {"cut": [CUT.to_json()]}
     assert doc["values"]["ghost.alpha"] == 0.25 and "ghost.mirror" not in doc["values"]
     # the show saved: /3, the rig's session, kept as /2 beside it
     path = pr.save()
@@ -280,7 +280,7 @@ def test_a_newer_file_is_refused_as_an_older_build_refuses_a_ten(tmp_path):
     """The two-Macs rule, as this build sees it: a `/11` and a `/4` show are
     refused, as a build from before refuses a `/10` and a `/3`."""
     from hyperspace.library import Library, LibraryError, Project, migrate_doc
-    assert preset.VERSIONS[-1] == 10
+    assert loadable.VERSIONS[-1] == 10
     with pytest.raises(LibraryError, match="newer than this build"):
         migrate_doc({"schema": "hyperspace.project/4"}, "hyperspace.project")
     lib = Library(tmp_path)

@@ -494,7 +494,7 @@ def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
     value at its default beside every other performance value — the
     transport never — and a load and a re-save of it are byte for byte the
     same file."""
-    from hyperspace import preset
+    from hyperspace import loadable
 
     app.reg["seq.run"].set(True)                  # the transport is never the preset's
     doc = app.loaded_patch.document("plain")
@@ -510,7 +510,7 @@ def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
     assert "seq.run" not in doc["values"] and _new_ids(doc)
     path = app.loaded_patch.save_as("plain")
     first = path.read_bytes()
-    assert first == preset.dumps(doc).encode()
+    assert first == loadable.dumps(doc).encode()
     # and stable through a load (once a load has read the file's integers
     # back as floats, as every preset since plan 13 does)
     assert app.loaded_patch.load("plain") == []
@@ -566,10 +566,10 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     instead of loading it and stripping the pattern on its next save."""
     from dataclasses import replace
 
-    from hyperspace import preset
+    from hyperspace import loadable
     from hyperspace.library import LibraryError
 
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (… plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (… plan 40 T2: /8; plan 43 C2: /9)
     app.reg["view.bright"].set(1.5)
     doc = {k: v for k, v in app.loaded_patch.document("p").items() if k != "graph"}
     doc["values"] = {k: v for k, v in doc["values"].items()
@@ -589,7 +589,7 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
         with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
             lib.read("presets", "pattern")
     finally:
-        kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
+        kinds["presets"] = replace(kinds["presets"], versions=loadable.VERSIONS)
 
 
 # ---- plan 31 P: the corpus's seq-demo ----

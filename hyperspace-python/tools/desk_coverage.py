@@ -58,7 +58,7 @@ from hyperspace.fx import FxState
 from hyperspace.library import LOADABLE, Library, group_folder
 from hyperspace.lookback import DreamState
 from hyperspace.params import build_registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Router
 from hyperspace.view import ViewState
 

@@ -33,7 +33,7 @@ from test_graphview import _in_editor
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import devices, graphmigrate, graphview, headless, patches, preset, ui_graph, undo
+from hyperspace import devices, graphmigrate, graphview, headless, patches, loadable, ui_graph, undo
 from hyperspace import graph as G
 from hyperspace.library import Marks
 from hyperspace.outputs import Switches, View
@@ -77,8 +77,8 @@ def watch(rig):
 
 def grouped_twin(doc: dict, ids: list[str], name: str = "main run") -> dict:
     """`doc` with one folded group of `ids` — what a save of it writes."""
-    out = {**doc, "schema": preset.SAVE_SCHEMA,
-           preset.GROUPS_KEY: [{"id": "group.1", "name": name, "nodes": ids, "open": False}]}
+    out = {**doc, "schema": loadable.SAVE_SCHEMA,
+           loadable.GROUPS_KEY: [{"id": "group.1", "name": name, "nodes": ids, "open": False}]}
     if "media" in out:                              # (`document`'s order: groups before media)
         out["media"] = out.pop("media")
     return out
@@ -101,9 +101,9 @@ NO_RUN = {slug for slug, run in RUNS.items() if not run}
 def test_the_schema_is_eight_and_the_key_absent_is_no_groups():
     """D7: 37B took no `/8`, so `groups` is `/8`; the ladder reads it; the
     one migration step is "the key is absent → no groups"."""
-    assert preset.GROUPS_SCHEMA == "hyperspace.preset/8" and 8 in preset.VERSIONS
-    assert preset.GROUPS_KEY == "groups"
-    assert graphmigrate.groups_of({"schema": preset.WIRED_SCHEMA}) == []
+    assert loadable.GROUPS_SCHEMA == "hyperspace.preset/8" and 8 in loadable.VERSIONS
+    assert loadable.GROUPS_KEY == "groups"
+    assert graphmigrate.groups_of({"schema": loadable.WIRED_SCHEMA}) == []
     assert graphmigrate.groups_of({"groups": [ENTRY]}) == [ENTRY]
     assert graphmigrate.groups_of(None) == []
 
@@ -113,7 +113,7 @@ def test_one_rule_reads_a_group_number_for_the_load_and_for_group():
     GRAPH's: a group landed after `group.0` and a hand-edited `group.x`
     is `group.1`, after `group.7` is `group.8`."""
     gn = graphmigrate.group_number
-    assert preset.group_number is gn and not hasattr(graphview, "_group_n")
+    assert loadable.group_number is gn and not hasattr(graphview, "_group_n")
     assert [gn(x) for x in ("group.3", "group.0", "group.x", "mod.3", 3, None)] == [
         3, 0, 0, 0, 0, 0]
     from types import SimpleNamespace
@@ -135,13 +135,13 @@ def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
     assert keys.index("groups") == keys.index("media") - 1      # after layout, before media
-    text = preset.dumps(doc)
+    text = loadable.dumps(doc)
     assert '\n  {"id": "group.1"' in text                         # one group a line
     fresh = headless.make_app(tmp_path / "b")
     assert fresh.loaded_patch.load_doc(json.loads(text)) == []
     assert fresh.loaded_patch.notes == []
     assert fresh.loaded_patch.groups == doc["groups"]
-    assert preset.dumps(fresh.loaded_patch.document("noita grouped")) == text
+    assert loadable.dumps(fresh.loaded_patch.document("noita grouped")) == text
 
 
 def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
@@ -620,7 +620,7 @@ def test_a_groups_number_is_never_handed_out_twice(rig):
     # a reload starts from the file's own numbers — every id it names, kept
     # or dropped at the load (no counter is saved: the schema is as it was)
     doc = rig.lib.loaded_patch.document("x")
-    assert "group_high" not in doc and doc["schema"] == preset.SAVE_SCHEMA
+    assert "group_high" not in doc and doc["schema"] == loadable.SAVE_SCHEMA
     doc["groups"].append({"id": "group.9", "name": "gone", "nodes": ["render:kaleido"]})
     rig.lib.loaded_patch.load_doc(doc)
     assert [g["id"] for g in rig.lib.loaded_patch.groups] == ["group.1", "group.4"]
@@ -692,7 +692,7 @@ def _group_invariants(pre, seen: set[str]) -> None:
         assert w.node in names and graphview.kind_of(w.node) is not None, w
         assert (G.pin_node(w.src) or w.src) in names, w
     # a save writes exactly the live lists: nothing left for it to drop
-    assert pre.live_groups() == [preset.group_entry(g) for g in pre.groups]
+    assert pre.live_groups() == [loadable.group_entry(g) for g in pre.groups]
 
 
 def _stripped(doc: dict) -> dict:
@@ -704,7 +704,7 @@ def _round_trip(pre, tmp_path, k: int) -> dict:
     (every member there) and its document is the same again."""
     doc = pre.document("x")
     fresh = headless.make_app(tmp_path / f"rt{k}")
-    fresh.loaded_patch.load_doc(json.loads(preset.dumps(doc)))
+    fresh.loaded_patch.load_doc(json.loads(loadable.dumps(doc)))
     assert [n for n in fresh.loaded_patch.notes if n.startswith("group")] == []
     assert fresh.loaded_patch.groups == doc.get("groups", [])
     assert fresh.loaded_patch.document("x") == doc
@@ -834,7 +834,7 @@ def test_every_road_that_removes_a_node_settles_its_group(tmp_path):
     assert "lfo.5" not in pre.groups[0]["nodes"] and 5 not in app.lfos
     assert ui_seq.remove_env(panel, app.envs, 6)
     assert pre.groups[0]["nodes"] == ["render:warp"]
-    assert pre.live_groups() == [preset.group_entry(pre.groups[0])]
+    assert pre.live_groups() == [loadable.group_entry(pre.groups[0])]
 
 
 def test_undoing_a_load_keeps_the_floor_under_the_groups_numbers(rig):
@@ -1516,9 +1516,9 @@ def test_the_spawn_menu_open_two_frames_lists_the_patches_once(rig, monkeypatch)
     """The canvas's **spawn ▸** (and a drag) asks for the list every frame:
     the library is listed and each file looked up once per `ui_presets`
     poll, not once a frame; our own save re-lists at once."""
-    from hyperspace import ui_presets
+    from hyperspace import ui_loadable
     trip(rig)
-    ui_presets.invalidate(rig.panel, "patches")
+    ui_loadable.invalidate(rig.panel, "patches")
     lists, paths = [], []
     lib = rig.panel.library
     real_list, real_path = lib.list, lib.path_of
@@ -1530,7 +1530,7 @@ def test_the_spawn_menu_open_two_frames_lists_the_patches_once(rig, monkeypatch)
     assert lists == ["patches"] and first.count("acid wash") == 1
     ui_graph._spawn_menu(rig.panel, (0.0, 0.0))
     assert lists == ["patches"] and paths == first          # the second frame: no disk
-    ui_presets.invalidate(rig.panel, "patches")
+    ui_loadable.invalidate(rig.panel, "patches")
     assert [r["slug"] for r in ui_graph.patch_list(rig.panel)] == ["acid-wash"]
     assert lists == ["patches", "patches"]
 

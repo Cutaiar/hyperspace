@@ -25,8 +25,8 @@ from pathlib import Path
 
 from test_presets import boot
 
-from hyperspace import graphmigrate, library, preset
-from hyperspace.preset import desk_json
+from hyperspace import graphmigrate, library, loadable
+from hyperspace.loadable import desk_json
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "desk-templates"
 TEMPLATE = FIXTURES / "desk" / "fixture-shape.json"
@@ -42,12 +42,12 @@ def put_fixtures(home: Path) -> None:
 def test_the_template_code_is_gone():
     for name in ("TEMPLATE_KEY", "expand_desk", "compact_desk", "merge_modifiers",
                  "template_doc"):
-        assert not hasattr(preset, name), name
+        assert not hasattr(loadable, name), name
     for name in ("DESK", "DESK_SCHEMA"):
         assert not hasattr(library, name), name
     assert not hasattr(library.Library, "desk_template")
     for name in ("template_of_loaded", "template_at_load", "_at_load", "_mods_at_load"):
-        assert not hasattr(preset.LoadedPatch, name), name
+        assert not hasattr(loadable.LoadedPatch, name), name
     assert graphmigrate.TEN_RETIRED == ("modules", "desk_template")
 
 
@@ -67,7 +67,7 @@ def test_an_old_templated_preset_loads_its_own_rows_and_saves_without_the_key(tm
     put_fixtures(rig.home)
     rig.lib._sync()
     assert rig.loaded_patch.load("TEMPLATED") == []
-    assert preset.TEMPLATE_RETIRED.format(name="fixture shape") in rig.loaded_patch.notes
+    assert loadable.TEMPLATE_RETIRED.format(name="fixture shape") in rig.loaded_patch.notes
     desk = desk_json(rig.router.table.desk())
     assert [r["source"] for r in desk] == ["cc:*:17", "cc:0:50"]
     assert {r["target"] for r in desk} == {"dream.mix", "view.pattern_mix"}

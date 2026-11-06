@@ -30,7 +30,7 @@ from test_presets import boot, put
 from wiredframe import Shows, Thru, graph, wire_switches, wiring
 
 from hyperspace import graph as G
-from hyperspace import graphview, preset
+from hyperspace import graphview, loadable
 from hyperspace.graphmigrate import wired_wiring
 from hyperspace.library import LOADABLE
 from hyperspace.outputs import Switches, View
@@ -75,7 +75,7 @@ def test_a_wire_list_round_trips_and_d1_keys_read_as_wires():
     assert G.read_graph(spec.to_json()) == spec
     assert spec.wires == (G.Wire("hands.2", "output.2.hands"), G.Wire("palette", "output.1.image"),
                           G.Wire("history", "acid.2.image"), G.Wire("acid.2", "output.2.image"))
-    text = preset.dumps({"graph": section})
+    text = loadable.dumps({"graph": section})
     assert '"wires": [\n  {"from": "hands.2", "to": "output.2.hands"},\n' in text
     assert json.loads(text)["graph"] == section
     # D1's keys and the wires they are short for: one placement, one graph
@@ -221,7 +221,7 @@ def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_defau
     assert _bare(_old(stub.wiring)) == G.Wiring(hands="scene",
                                           wires=(G.Wire("hands", "output.2.hands"),))
     # (row 394: the save is the frame the load landed)
-    assert rig.loaded_patch.document("Odd")[preset.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()
+    assert rig.loaded_patch.document("Odd")[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()
     assert not rig.lib.is_dirty(LOADABLE)
 
 
@@ -283,7 +283,7 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
     assert edit.said == "wired hands.layer → output.2.hands"
     assert G.Wire("hands.layer", "output.2.hands") in stub.wiring.wires
     assert rig.lib.is_dirty(LOADABLE)
-    assert preset.GRAPH_KEY in rig.loaded_patch.document("Base")
+    assert loadable.GRAPH_KEY in rig.loaded_patch.document("Base")
     assert edit.wire("scene", "output.2.hands") is None          # replaces it
     wires = set(rig.loaded_patch.graph.spec.wires)
     assert G.Wire("scene", "output.2.hands") in wires
@@ -592,7 +592,7 @@ def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
         assert rig.lib.load(LOADABLE, slug) == [] and rig.loaded_patch.notes == [], slug
         assert not rig.lib.is_dirty(LOADABLE), slug
         assert doc["graph"]
-        assert rig.loaded_patch.document(slug)[preset.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()
+        assert rig.loaded_patch.document(slug)[loadable.GRAPH_KEY] == rig.loaded_patch.graph.free_doc()
     # (plan 36 T3: the placement `into output.1` is the wires it stood for)
     assert {G.Wire("scene", "acid.2.image"), G.Wire("acid.2", "output.2.image"),
             G.Wire("palette", "output.1.image")} <= set(stub.wiring.wires)

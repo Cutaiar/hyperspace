@@ -29,7 +29,7 @@ from conftest import CORPUS
 from test_presets import boot
 
 from hyperspace import geometry as G
-from hyperspace import ghost, graphmigrate, graphview, headless, preset
+from hyperspace import ghost, graphmigrate, graphview, headless, loadable
 from hyperspace import library as L
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
@@ -167,13 +167,13 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     pose = view.pose()
     path = rig.loaded_patch.save_as("FRAMED")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/10" == preset.SAVE_SCHEMA   # (plan 44 D3)
+    assert doc["schema"] == "hyperspace.preset/10" == loadable.SAVE_SCHEMA   # (plan 44 D3)
     assert doc["values"]["eye.fov"] == 31.0 and doc["values"]["eye.distance"] == 6.0
-    assert list(doc[preset.POSE_KEY]) == list(POSE_IDS)
-    assert [doc[preset.POSE_KEY][k] for k in POSE_IDS] == pytest.approx(pose, abs=1e-6)
+    assert list(doc[loadable.POSE_KEY]) == list(POSE_IDS)
+    assert [doc[loadable.POSE_KEY][k] for k in POSE_IDS] == pytest.approx(pose, abs=1e-6)
     assert not any(k.startswith("rot.phase.") for k in doc["values"])
     keys = list(doc)
-    assert keys.index(preset.POSE_KEY) == keys.index("values") + 1
+    assert keys.index(loadable.POSE_KEY) == keys.index("values") + 1
     # another preset (a corpus /9: the default eye, no pose)
     turn = list(view.ang)
     rig.loaded_patch.load("DIAL")
@@ -199,8 +199,8 @@ def test_a_pose_that_is_not_six_numbers_is_said_and_the_turn_left_spinning(tmp_p
     for bad in ({k: 0.5 for k in POSE_IDS[:5]}, {**{k: 0.5 for k in POSE_IDS}, "rot.phase.XY": "x"},
                 {**{k: 0.5 for k in POSE_IDS}, "rot.phase.ZW": float("nan")}, [0.5] * 6):
         rig.view.ang = [0.1] * 6
-        rig.loaded_patch.load_doc({**doc, preset.POSE_KEY: bad})
-        assert preset.POSE_UNREAD in rig.loaded_patch.notes, bad
+        rig.loaded_patch.load_doc({**doc, loadable.POSE_KEY: bad})
+        assert loadable.POSE_UNREAD in rig.loaded_patch.notes, bad
         assert rig.view.ang == [0.1] * 6
 
 
@@ -223,13 +223,13 @@ def test_the_migrations_resave_writes_a_pose_only_where_the_file_had_one(tmp_pat
     old = _write(tmp_path / "old.json", old_preset())
     data, notes, _ = headless.resave(old, tmp_path / "a")
     doc = json.loads(data)
-    assert notes == [] and preset.POSE_KEY not in doc and doc["schema"] == preset.SAVE_SCHEMA
-    posed = dict(doc, **{preset.POSE_KEY: dict(zip(POSE_IDS, [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+    assert notes == [] and loadable.POSE_KEY not in doc and doc["schema"] == loadable.SAVE_SCHEMA
+    posed = dict(doc, **{loadable.POSE_KEY: dict(zip(POSE_IDS, [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
                                                    strict=True))})
     path = tmp_path / "posed.json"
-    path.write_text(preset.dumps(posed))
+    path.write_text(loadable.dumps(posed))
     again, _, _ = headless.resave(path, tmp_path / "b")
-    assert json.loads(again)[preset.POSE_KEY] == posed[preset.POSE_KEY]
+    assert json.loads(again)[loadable.POSE_KEY] == posed[loadable.POSE_KEY]
 
 
 # ---------------------------------------------------------------- old files
@@ -241,7 +241,7 @@ def test_nine_is_pure_one_way_and_keeps_what_the_file_says():
     assert out is not doc and doc["values"].get("eye.fov") is None       # pure
     assert {k: out["values"][k] for k in EYE} == EYE
     assert out["layout"]["render:camera"] == CAMERA_AT
-    assert preset.POSE_KEY not in out
+    assert loadable.POSE_KEY not in out
     # a value or a position the file has stays; an id the show lacks is left out
     mine = dict(doc, values={**doc["values"], "eye.fov": 60.0}, layout={"render:camera": [1, 2]})
     out = graphmigrate.nine(mine, {"eye.distance": 9.0}, CAMERA_AT)
@@ -250,7 +250,7 @@ def test_nine_is_pure_one_way_and_keeps_what_the_file_says():
     assert "eye.fov" not in graphmigrate.nine(doc, {"eye.distance": 9.0})["values"]
     # no values at all; a /9 and no document come back as they are
     assert graphmigrate.nine({"schema": "hyperspace.preset/7"}, EYE)["values"] == EYE
-    nine = {"schema": preset.SAVE_SCHEMA, "values": {}}
+    nine = {"schema": loadable.SAVE_SCHEMA, "values": {}}
     assert graphmigrate.nine(nine, EYE, CAMERA_AT) is nine
     assert graphmigrate.nine(None, EYE) is None
 
@@ -266,7 +266,7 @@ def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path
     home = tmp_path / "lib"
     _write(home / "projects" / "rig.hyp.json", old_show())
     (home / "presets").mkdir(parents=True)
-    (home / "presets" / "old.json").write_text(preset.dumps({**old_preset(), "name": "OLD"}))
+    (home / "presets" / "old.json").write_text(loadable.dumps({**old_preset(), "name": "OLD"}))
     rig = boot(home, show="rig")
     pr, reg = rig.lib.project, rig.reg
     assert pr.name == "rig" and pr.old_eye == EYE and pr.camera_at == CAMERA_AT
@@ -281,7 +281,7 @@ def test_an_old_show_hands_its_eye_to_old_presets_and_keeps_none_itself(tmp_path
     assert reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
     rig.loaded_patch.load("OLD")
     saved = json.loads(rig.loaded_patch.save_as("OLD").read_text())
-    assert saved["schema"] == preset.SAVE_SCHEMA
+    assert saved["schema"] == loadable.SAVE_SCHEMA
     assert {k: saved["values"][k] for k in EYE} == EYE
     assert saved["layout"]["render:camera"] == CAMERA_AT
     # the show: written without the eye, the old file kept first
@@ -314,7 +314,7 @@ def test_a_bank_autosave_before_the_tool_still_hands_old_presets_the_eye(tmp_pat
     home = tmp_path / "lib"
     _write(home / "projects" / "rig.hyp.json", old_show())
     (home / "presets").mkdir(parents=True)
-    (home / "presets" / "old.json").write_text(preset.dumps({**old_preset(), "name": "OLD"}))
+    (home / "presets" / "old.json").write_text(loadable.dumps({**old_preset(), "name": "OLD"}))
     rig = boot(home, show="rig")
     rig.lib.project.put_slot(0, "OLD")                # a pad: the bank's autosave
     show = json.loads((home / "projects" / "rig.hyp.json").read_text())
@@ -350,7 +350,7 @@ def test_an_old_preset_with_no_old_eye_takes_the_builds(tmp_path):
     the build's default, the picture it drew before."""
     rig = boot(tmp_path)
     rig.reg["eye.fov"].set(90.0)
-    (tmp_path / "presets" / "old.json").write_text(preset.dumps({**old_preset(), "name": "OLD"}))
+    (tmp_path / "presets" / "old.json").write_text(loadable.dumps({**old_preset(), "name": "OLD"}))
     rig.loaded_patch.load("OLD")
     assert rig.lib.project.old_eye == {}
     assert rig.reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
@@ -575,9 +575,9 @@ def _library(tmp_path: Path) -> Path:
     lib = tmp_path / "Drive" / "Hyperspace"
     loadable_dir = lib / "presets"
     loadable_dir.mkdir(parents=True)
-    (loadable_dir / "trip-old.json").write_text(preset.dumps(old_preset()))
+    (loadable_dir / "trip-old.json").write_text(loadable.dumps(old_preset()))
     (loadable_dir / "trip-unmarked.json").write_text(
-        preset.dumps({**old_preset(marked=False), "name": "TRIP UNMARKED"}))
+        loadable.dumps({**old_preset(marked=False), "name": "TRIP UNMARKED"}))
     shutil.copyfile(CORPUS / "presets" / "dial.json", loadable_dir / "dial.json")
     _write(lib / "projects" / "rig.hyp.json", old_show())
     (lib / "patches").mkdir()
@@ -622,10 +622,10 @@ def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_preset(tmp_path
     assert _tree(backups[0]) == before
     for name in ("trip-old", "trip-unmarked"):
         doc = json.loads((lib / "presets" / f"{name}.json").read_text())
-        assert doc["schema"] == preset.SAVE_SCHEMA, name
+        assert doc["schema"] == loadable.SAVE_SCHEMA, name
         assert {k: doc["values"][k] for k in EYE} == EYE, name
         assert doc["layout"]["render:camera"] == CAMERA_AT, name
-        assert preset.POSE_KEY not in doc, name
+        assert loadable.POSE_KEY not in doc, name
         assert doc["units"]["fx.depth"] == "taper", name
     assert (lib / "presets" / "dial.json").read_bytes() == before["presets/dial.json"]
     show = json.loads((lib / "projects" / "rig.hyp.json").read_text())
@@ -778,8 +778,8 @@ def test_a_pose_at_the_edge_of_the_turn_saves_loads_and_saves_as_itself(tmp_path
     edges = [math.pi, -math.pi, math.pi - 1e-7, -math.pi + 1e-7, 3.1415925, -3.1415925,
              7 * math.pi, -5 * math.pi, 2.5, -2.5, 0.0, 1e-9]
     for a in edges:
-        b = preset.pose_angle(a)
-        assert preset.pose_angle(b) == b and b == round(b, 6), a
+        b = loadable.pose_angle(a)
+        assert loadable.pose_angle(b) == b and b == round(b, 6), a
         if -math.pi <= a <= math.pi:                 # a folded road's angle
             assert -math.pi < b < math.pi and math.remainder(b, 2 * math.pi) == b, a
     rig = boot(tmp_path)
@@ -788,8 +788,8 @@ def test_a_pose_at_the_edge_of_the_turn_saves_loads_and_saves_as_itself(tmp_path
         one = rig.loaded_patch.document("EDGE")
         rig.loaded_patch.load_doc(one)
         two = rig.loaded_patch.document("EDGE")
-        assert two[preset.POSE_KEY] == one[preset.POSE_KEY]
-        assert preset.dumps(two) == preset.dumps(one)
+        assert two[loadable.POSE_KEY] == one[loadable.POSE_KEY]
+        assert loadable.dumps(two) == loadable.dumps(one)
 
 
 def test_one_picture_saves_one_pose_and_save_load_save_is_byte_stable(tmp_path):
@@ -813,8 +813,8 @@ def test_one_picture_saves_one_pose_and_save_load_save_is_byte_stable(tmp_path):
         rig.loaded_patch.load_doc(one)
         view.integrate(0.0)                       # a frame: the switch folds a body
         two = rig.loaded_patch.document("P")
-        assert preset.dumps(two) == preset.dumps(one)
-        return one[preset.POSE_KEY]
+        assert loadable.dumps(two) == loadable.dumps(one)
+        return one[loadable.POSE_KEY]
 
     for shape in (three, four):
         reg["view.shape"].set(shape)
@@ -853,7 +853,7 @@ def test_a_loaded_pose_turns_on_as_the_saved_shape_did(plane):
     ang[plane] = 2.0
     v = ViewState(shape=shape, ang=list(ang), planes=[True] * 6)
     w = ViewState(shape=shape, planes=[True] * 6)
-    w.set_pose([preset.pose_angle(a) for a in v.pose()])
+    w.set_pose([loadable.pose_angle(a) for a in v.pose()])
     assert w.ang == pytest.approx(ang, abs=1e-6)
     for s in (v, w):
         s.integrate(0.25)

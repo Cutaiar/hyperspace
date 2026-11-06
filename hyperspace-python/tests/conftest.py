@@ -426,10 +426,10 @@ def old_shape_pads() -> list[dict]:
     plan 19 WP2 holds them in its `desk` (`preset.desk_json` of the rows
     `apc40.DEFAULT_MAP` had on the preset layer): pad k of row 4 sets shape
     k, pad k of row 5 shape 8 + k."""
-    from hyperspace import apc40, preset
+    from hyperspace import apc40, loadable
     from hyperspace.routing import Binding
 
-    return preset.desk_json(
+    return loadable.desk_json(
         Binding(f"note:{k}:{apc40.N_CLIP[3 + row]}", "view.shape", "set", float(8 * row + k),
                 feedback="led", on=apc40.GREEN, layer="preset")
         for row in range(2) for k in range(8))
@@ -443,7 +443,7 @@ def boot_home(home, *, corpus: bool = True):
     `<home>/bindings.json`, the router, the presets and the startup preset."""
     from types import SimpleNamespace
 
-    from hyperspace import lfo, preset, routing, tempo
+    from hyperspace import lfo, loadable, routing, tempo
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
@@ -472,7 +472,7 @@ def boot_home(home, *, corpus: bool = True):
     routing.register_desk(reg, table)
     lib.attach(reg)
     router = routing.Router(reg, table)
-    loaded_patch = preset.LoadedPatch(lib, reg, router)
+    loaded_patch = loadable.LoadedPatch(lib, reg, router)
     lib.project.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
                            router=router, loaded_patch=loaded_patch, clock=clock, home=home)
@@ -486,12 +486,12 @@ def _with_old_pads(path, re_aimed: dict | None = None) -> None:
     pads (WP2) they are written in, in the kind's own text."""
     import json
 
-    from hyperspace import apc40, preset
+    from hyperspace import apc40, loadable
 
     doc = json.loads(path.read_text())
     # (the fresh layer's device knobs, apc40.SCENE, came with plan 19 WP3:
     # a preset saved before it had none — its knobs dark, or what was learned)
-    scene = preset.desk_json(b for b in preset.fresh_desk()
+    scene = loadable.desk_json(b for b in loadable.fresh_desk()
                              if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS)
     desk = [row for row in doc.get("desk") or [] if row not in scene]
     have = {row["source"] for row in desk}
@@ -500,7 +500,7 @@ def _with_old_pads(path, re_aimed: dict | None = None) -> None:
     missing = [row for row in want if row["source"] not in have]
     if missing or len(desk) != len(doc.get("desk") or []):
         doc["desk"] = desk + missing
-        path.write_text(preset.dumps(doc))
+        path.write_text(loadable.dumps(doc))
 
 
 def far_pads() -> list[str]:
@@ -565,7 +565,7 @@ def build_owner_home(home):
     import json
     from pathlib import Path
 
-    from hyperspace import library, placement, preset
+    from hyperspace import library, placement, loadable
     from hyperspace.routing import Binding
 
     home = Path(home)
@@ -580,7 +580,7 @@ def build_owner_home(home):
     # NIGHT TWO: a pad of row 4 re-aimed and a device knob learned
     rows = [b for b in table.desk() if b.source != OWNER_PAD["source"]]
     rows.append(Binding.from_json({**OWNER_PAD, "layer": "preset"}))
-    rows.append(preset.device_knob(*OWNER_KNOB))
+    rows.append(loadable.device_knob(*OWNER_KNOB))
     table.set_desk(rows, load=False)
     reg["view.speed"].set(reg["view.speed"].value * 0.5)
     r.loaded_patch.save_as(two)

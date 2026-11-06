@@ -14,7 +14,7 @@ from test_routing import rig as full_rig
 import hyperspace.gamepad as gp
 from hyperspace import app
 from hyperspace.params import Registry
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Binding, Bindings, Router
 
 

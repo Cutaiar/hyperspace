@@ -54,7 +54,7 @@ from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Registry, build_registry, part_of
-from hyperspace.preset import LoadedPatch
+from hyperspace.loadable import LoadedPatch
 from hyperspace.routing import Bindings, Router, Sources, bindings_path
 from hyperspace.view import ViewState
 
