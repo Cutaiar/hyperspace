@@ -1,12 +1,25 @@
-"""Combobox: a Popover whose content is a Command.
+"""Combobox: Base UI's, where the trigger IS the input.
 
-**There is no `combobox` component in shadcn.** It is a recipe — a
-`Popover` (`src/components/ui/popover.tsx`) holding a `Command`
-(`src/components/ui/command.tsx`, which wraps `cmdk`) — so this module is
-the recipe, not a port of one file.
+**shadcn ships `src/components/ui/combobox.tsx`** and it wraps
+`@base-ui/react`'s Combobox: a `ComboboxInput` (an InputGroup around a
+real `<input>`, with a ghost chevron in an inline-end addon) over a
+portalled `ComboboxContent` holding a `ComboboxList`. You type into the
+thing you clicked.
 
-Everything numeric below came out of Chromium, off the `combobox.open`
-probe block in both themes, not out of a reading of the Tailwind classes.
+It is NOT the Popover-plus-Command recipe - a Button that opens a panel
+with a separate search box inside it - and the first version of this
+module was, because I told an agent that shadcn had no combobox
+component. Everything below that still refers to `Popover`, `Command`,
+`cmdk` or `CommandItem` is either the fuzzy ranking (which really is
+cmdk's `commandScore`, kept because Base UI's default filter is a plain
+substring match and the ranking is better) or a `_old_recipe_` entry kept
+as a record of what was wrong. **Read `combobox.tsx` before trusting any
+sentence here that names Command.** Two numbers - the group heading's
+weight and the separator's margin - were still `command.tsx`'s as late as
+the ergonomics pass, and nothing on the page exercised either.
+
+Everything numeric below came out of Chromium, off the `combobox.*` probe
+blocks in both themes, not out of a reading of the Tailwind classes.
 Getting the oracle to hold still was half the work and is worth recording:
 the route's forced-open *modal* Select puts `pointer-events: none` on
 `#root`, and its stealing focus at mount fires the Popover's own
@@ -203,7 +216,13 @@ COMBOBOX = {
     "row_gap": T.SPACE[2],
     "check_gap": T.SPACE[2],              # the indicator's `right-2` = 8
     "list_pad": T.SPACE[1],               # p-1
-    "list_max_h": 252.0,                  # max-h measured
+    # `max-h-[min(calc(--spacing(72)---spacing(9)), ...)]` = 288 - 36 = 252,
+    # and MEASURED on the LIST, whose box includes its own `p-1`: the
+    # 16-row `combobox.tight` block reports the list AND the content at
+    # 319x252, with `scrollHeight` 456. So 252 is the padded list's height
+    # - the PANEL's - not the rows' box. The kit clamped the rows at 252
+    # and then added the 4px rails, which made a clamped panel 260.
+    "list_max_h": 252.0,                  # the PANEL's clamp, rails included
     # ---- the old recipe's trigger, kept for reference --------------------
     # Its (height, radius key) is T.SELECT_SIZES, NOT a second table: the
     # Button and the SelectTrigger measured identical there (32, rounded-lg
@@ -257,7 +276,19 @@ COMBOBOX = {
     # superseded: the real component declares sideOffset 6. Kept only as a
     # record of what the OLD Popover+Command recipe used.
     "_old_recipe_side_offset": T.SPACE[1],
-    "align": "center",                    # popover.tsx's default
+    # `combobox.tsx` declares `align="start"`, not `popover.tsx`'s
+    # `center` - which is what this used to say, from the old recipe.
+    # Measured, the two are indistinguishable here: the panel and the
+    # trigger are the same width. Base UI anchors the positioner to the
+    # inner `<input>`, not to the InputGroup, so the real panel is
+    # `--anchor-width` (291 of a 320 trigger) plus `--spacing(7)` = 319,
+    # at the input's x - i.e. one pixel right of the trigger's left edge
+    # with its right edge exactly on the trigger's. The kit draws the
+    # panel at the trigger's own (x, w); that is a 1px difference on the
+    # left and none on the right, and it is left alone deliberately,
+    # because the panel's edge lining up with the field's is what the
+    # arrangement looks like it means.
+    "align": "center",                    # == "start" at equal widths
     "fade": 0.10,                         # animation: enter 0.1s, as menu.py
 
     # ---- CommandInput ---------------------------------------------------
@@ -289,7 +320,12 @@ COMBOBOX = {
     "head_h": 28.0,                       # py-1.5 on a 16px line box
     "head_pad_x": T.SPACE[2],             # px-2
     "head_font": 12.0,                    # text-xs
-    "head_weight": "medium",              # font-medium
+    # RE-MEASURED on `[data-slot="combobox-label"]`: `font-weight: 400`.
+    # `ComboboxLabel` is `px-2 py-1.5 text-xs text-muted-foreground` and
+    # carries no `font-medium` at all - that was `command.tsx`'s
+    # CommandGroup heading, i.e. the old recipe's, and it survived the
+    # rewrite the way the empty block's 68px did.
+    "head_weight": "regular",             # measured 400, NOT medium
     "head_ink": ("muted-foreground", 1.0),
 
     # ---- CommandItem ----------------------------------------------------
@@ -311,11 +347,16 @@ COMBOBOX = {
     # colour is DERIVED: `<CheckIcon/>` at currentColor.
     "check": 16.0,
     "check_ink": ("popover-foreground", 1.0),
-    # DERIVED from `-mx-1 h-px bg-border` on a child of CommandList: 1px, no
-    # margin block, pulled 4px out each side so it spans the whole panel.
-    # menu.py's separator is inset 1px from the panel edge instead, and
-    # carries my-1 (4) above and below; this one carries none.
+    # MEASURED on `[data-slot="combobox-separator"]` in the `combobox.grp`
+    # probe block: `margin: 4px -4px`, height 1, and it spans the panel's
+    # full 319 width - so it DOES carry `my-1`, four above and four below,
+    # and the block it occupies is 9 tall. `combobox.tsx`'s separator is
+    # `-mx-1 my-1 h-px bg-border`; `command.tsx`'s is `-mx-1 h-px bg-border`
+    # with no margin, and the kit had recorded the Command one. Checked
+    # against the layout: label 28 ends at 2782, row 28 ends at 2810,
+    # separator at 2814, next row at 2819.
     "sep_h": 1.0,
+    "sep_my": T.SPACE[1],                 # my-1 = 4, above AND below
     "sep_col": ("border", 1.0),
 
     # ---- ComboboxEmpty --------------------------------------------------
@@ -365,6 +406,103 @@ def combobox_table(theme_name: str) -> dict:
 # rather than 0 / -1, because 0 is a real index and -1 is a real Python one.
 SEL_FIRST = object()
 SEL_LAST = object()
+
+
+class _Cleared(str):
+    """The answer "the user emptied this", which is neither a choice nor
+    silence.
+
+    A `str` subclass, and empty, so a caller that has not been updated still
+    does the safe thing: `if got:` is False and nothing is set, exactly as
+    before. A caller that wants the behaviour writes `if got is not None`
+    and gets an empty string to store. The alternative - a bare `object()` -
+    would have gone into somebody's state dict and blown up at the next
+    `D.label`.
+    """
+    __slots__ = ()
+
+    def __repr__(self):
+        return "<CLEARED>"
+
+
+CLEARED = _Cleared()
+# "opened, and nothing was asked for". It cannot be a plain None, because
+# None is the real `nothing is highlighted` state the arrows fall into at
+# either end, and the committed value overrides an OPEN but must not
+# override a user who has arrowed off the end.
+SEL_NONE = object()
+SENTINELS = (SEL_FIRST, SEL_LAST, SEL_NONE)
+# `s.pop(k, None)` cannot tell "no scroll was asked for" from "scroll to
+# nothing", and the second is a real state: the highlight falls off the end
+# into None and the list must stay where it is.
+_MISSING = object()
+
+
+def _committed_row(shown, rows, label) -> int | None:
+    """Where the committed value sits in `rows`, or None.
+
+    MEASURED, and the thing the kit got most wrong about opening the list:
+    an open does NOT start with nothing highlighted - it starts on the row
+    that holds the committed value. On `combobox.many`, value `Gamma`
+    (index 2 of sixteen):
+
+        click the field     highlight = Gamma
+        click the chevron   highlight = Gamma
+        ArrowDown           highlight = Gamma      (not the first row)
+        ArrowUp             highlight = Gamma      (not the last row)
+
+    and on `combobox.kb`, which holds no value, the same four give none,
+    none, the first row and the last row. So the value wins over all of
+    them and the sentinels are the fallback.
+
+    Typing is the exception and stays at none - a filter clears the
+    highlight whatever the value is.
+
+    The row is found by exactly the rule the CHECK uses, so the highlighted
+    row and the ticked row cannot disagree: the real component highlights
+    and ticks the same row, measured (`data-highlighted` on item 2 with the
+    indicator rendered on item 2).
+    """
+    for n, i in enumerate(rows):
+        it = shown[i]
+        chk = _k(it, "checked", None)
+        if chk is None:
+            chk = bool(label) and _k(it, "label", "") == label
+        if chk:
+            return n
+    return None
+
+
+def resolve_open(want, shown, rows, label):
+    """Which row an open highlights: the measured table, in one place.
+
+                            holds a value      holds none
+        click the field     the value's row    nothing
+        click the chevron   the value's row    nothing
+        ArrowDown           the value's row    the FIRST row
+        ArrowUp             the value's row    the LAST row
+        typing              nothing            nothing
+
+    `want` is `SEL_NONE`, `SEL_FIRST` or `SEL_LAST` - which end the open
+    asked for - or None for a type-open, which stays at none whatever the
+    value is.
+
+    A function rather than four lines inside `combobox` so the rule can be
+    asked without a GL context: the dashboard's only Combobox holds a
+    value and matches a row, so the no-value half of this table is not
+    reachable by driving the app at all, and a driven test can only ever
+    cover the left-hand column.
+    """
+    if want not in SENTINELS:
+        return want
+    at = _committed_row(shown, rows, label)
+    if at is not None:
+        return at
+    if want is SEL_FIRST:
+        return 0 if rows else None
+    if want is SEL_LAST:
+        return len(rows) - 1 if rows else None
+    return None
 
 # How much room the popup window keeps around its content for the field's
 # focus ring.
@@ -716,7 +854,10 @@ def _rows_node(items, mw, tbl, *, empty: str = "") -> B.Node:
             # `-mx-1`: a separator is a child of the LIST and reaches out
             # past a group's padding, so it does not live inside a group.
             group = None
-            kids.append(B.Node(h=tbl["sep_h"], key=("sep", i)))
+            # `my-1` is 4 above and 4 below, so the block is 9 tall and the
+            # 1px rule is centred in it - measured; see `sep_my`.
+            kids.append(B.Node(h=tbl["sep_h"] + 2 * tbl["sep_my"],
+                               key=("sep", i)))
             continue
         if kind == "label":
             g = open_group()
@@ -772,8 +913,10 @@ def combobox_size(items, faces, *, min_w: float = 0.0, measure=None,
     # empty block - 36 tall, no 4px rails. Measured.
     if not any(_is_row(it) for it in items):
         pad = 0.0
+    # the clamp is the PANEL's, so the rows get it less the rails - see
+    # `list_max_h`
     panel = B.Node(dir="column", pad=(pad, pad, pad, pad), kids=[
-        B.Node(w=cw, h=min(ch, tbl["list_max_h"])),
+        B.Node(w=cw, h=min(ch, tbl["list_max_h"] - 2 * pad)),
     ])
     w, h = B.wants(panel)
     return max(w, min_w), h
@@ -882,7 +1025,15 @@ def _trigger(ui, tbl, x, y, w, h, radius, label, placeholder, *,
 
 
 def _field(ui, key, x, y, w, h, tbl, text, placeholder, *, focus: bool):
-    """The search box: a real `imgui.input_text` under the sandwich.
+    """DEAD CODE, kept as the old recipe's record. Nothing calls it.
+
+    This is the Popover+Command recipe's separate search box, which the
+    real component does not have - the trigger IS the search box, and
+    `_input_trigger` is what draws it. Kept because the `field_*` entries
+    in the table above are measured values for a `CommandInput` and this
+    is where they were used; delete both together if either goes.
+
+    The search box: a real `imgui.input_text` under the sandwich.
 
     The stock widget supplies the caret, the selection, the keyboard and the
     clipboard, none of which is worth rewriting; the sandwich replaces only
@@ -1039,6 +1190,25 @@ def _place_caret(item_id, pos: int) -> bool:
         return True
     except Exception:
         return False
+
+
+def _caret_pending(st: dict, slot: str, applied: bool | None) -> None:
+    """Hold a wanted caret until `_place_caret` takes it, then let go.
+
+    The retry is not belt-and-braces: measured, on the frame
+    `set_keyboard_focus_here()` is called `get_input_text_state` still
+    reports nothing for that id, so a single attempt ALWAYS fails and the
+    select-all stands. The budget is there so that a binding which stops
+    exposing the state degrades to the old behaviour instead of pinning the
+    caret on every frame for ever.
+    """
+    if st.get(slot) is None:
+        return
+    k = slot + "_try"
+    st[k] = st.get(k, 0) + 1
+    if applied or st[k] > 4:
+        st.pop(slot, None)
+        st.pop(k, None)
 
 
 def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
@@ -1214,28 +1384,56 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
 # whatever you press, which is how the first pass at this got it wrong.
 #
 #   closed  focus (a Tab into it)   stays CLOSED
-#   closed  click the input         opens, highlight NONE
-#   closed  ArrowDown               opens, highlight = first
-#   closed  ArrowUp                 opens, highlight = LAST
+#   closed  click the input         opens; VALUE's row, else none
+#   closed  click the chevron       opens; VALUE's row, else none
+#   closed  ArrowDown               opens; VALUE's row, else the first
+#   closed  ArrowUp                 opens; VALUE's row, else the LAST
 #   closed  typing                  opens, filters, highlight NONE
 #   open    typing                  filters, highlight back to NONE
 #   open    ArrowDown               none -> first, i -> i+1, last -> NONE
 #   open    ArrowUp                 none -> last,  i -> i-1, first -> NONE
-#   open    Home/End/PageUp/PageDn  nothing at all
-#   open    Enter, highlight set    selects it, closes, value = that item
-#   open    Enter, no highlight     closes, value reverts to the committed
-#   open    Escape                  closes, value reverts, focus STAYS
+#   open    arrows                  SCROLL the list to follow the highlight
+#   open    the wheel               scrolls; the highlight does not move
+#   open    the pointer, MOVING     takes the highlight; parked, it does not
+#   open    Home/End/PageUp/PageDn  move the CARET; the highlight is untouched
+#   open    Enter, highlight set    selects it, closes, focus STAYS, caret
+#                                   at the end of the new value
+#   open    Enter, no highlight     closes, value reverts, focus STAYS
+#   open    Escape                  closes, value reverts, focus and caret STAY
 #   open    Tab                     closes, value reverts, focus MOVES ON
-#   open    click away              closes
+#   open    click the field again   stays open, caret where clicked
+#   open    click the chevron       CLOSES it
+#   open    click away              closes, value reverts
+#   closed  Escape                  CLEARS the value   <- NOT implemented, see
+#                                   the note at the end of this comment
 #
-# Two things in there are easy to get wrong and were: the highlight has a
-# real NONE state - it does not wrap, it falls off either end into nothing
-# and comes back round on the next press - and Tab is not the list's key.
-# The kit trapped Tab inside the popup, so a keyboard user could get into
-# the combobox and not out of it.
-KEY_MODEL = """closed: focus keeps it closed; click/type/arrow open it.
-open: arrows move one highlight with a NONE state at both ends, Enter takes
-the highlight, Escape closes and keeps focus, Tab closes and moves on."""
+# Three things in there are easy to get wrong and were.
+#
+# The highlight has a real NONE state - it does not wrap, it falls off
+# either end into nothing and comes back round on the next press.
+#
+# Tab is not the list's key. The kit trapped it inside the popup, so a
+# keyboard user could get into the combobox and not out of it.
+#
+# And the VALUE beats the gesture. The first pass at this model was driven
+# on `?probe`'s `combobox.kb`, which carries no `defaultValue` - so every
+# open there falls through to the none / first / last case and that is the
+# only case it recorded. Re-driven on `combobox.many` (sixteen rows,
+# `defaultValue="Gamma"` at index 2) all four gestures open on Gamma, which
+# is also the row that carries the check. `resolve_open` is that table.
+#
+# A second Escape on a CLOSED combobox CLEARS the committed value -
+# measured: one Escape reverts the query and closes, the next sets
+# `input.value` to "". The kit could not express it, because `combobox()`
+# signals a choice by returning its id and a cleared value is a falsy id,
+# which every caller reads as "nothing happened". `CLEARED` is that third
+# answer: a sentinel distinct from both None and "", so
+# `if got is not None` separates the three cases.
+KEY_MODEL = """closed: focus keeps it closed; click/chevron/type/arrow open
+it, on the committed value's row if there is one. open: arrows move one
+highlight with a NONE state at both ends and scroll the list to follow it,
+Enter takes the highlight, Escape closes and keeps focus, Tab closes and
+moves on."""
 
 
 def combobox(ui, key, x, y, w, label, items, *, size="default",
@@ -1313,7 +1511,8 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         ui, key, tbl, x, y, w, hh, s["q"], placeholder,
         disabled=disabled, open_=open_now,
         grab_focus=regrab, chrome=True, ink=not open_now,
-        focus_hint=open_now)
+        focus_hint=open_now, caret=s.get("caret0"))
+    _caret_pending(s, "caret0", _cs)
     focused = focused or regrab
 
     def _open(sel):
@@ -1342,7 +1541,7 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
             if not was_open:
                 _open(None)
         elif clicked and not was_open:
-            _open(None)
+            _open(SEL_NONE)
         elif focused and not was_open:
             # an arrow OPENS it, and which arrow decides where the highlight
             # lands. `FIRST`/`LAST` are resolved once `rows` is known.
@@ -1350,6 +1549,12 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
                 _open(SEL_FIRST)
             elif imgui.is_key_pressed(imgui.Key.up_arrow, False):
                 _open(SEL_LAST)
+    # kept before it is overwritten: ImGui DEACTIVATES an input_text when
+    # Escape is pressed - that is its "cancel the edit" - so on the very
+    # frame the key arrives the field reports itself unfocused. Anything
+    # that asks "was this field focused when Escape came" has to ask about
+    # the frame before.
+    had_focus = bool(s.get("was_focused"))
     s["was_focused"] = focused
     # the chevron's own target, so clicking it toggles without stealing the
     # caret from the field
@@ -1358,8 +1563,10 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         if imgui.is_popup_open(pid):
             imgui.close_current_popup()
         else:
-            s["typed"], s["focus"] = False, True
-            imgui.open_popup(pid)
+            # measured: the chevron opens on the committed row exactly as a
+            # click on the field does
+            s["typed"] = False
+            _open(SEL_NONE)
     open_ = imgui.is_popup_open(pid)
 
     if not open_:
@@ -1367,18 +1574,34 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         ui.anim.to(f"{pid}:open", 0.0)
         s["typed"] = False               # the field goes back to the value
         s["side"] = ""                   # decided afresh on the next open
+        # The SECOND Escape, the one pressed while it is already closed,
+        # empties the field. Measured.
+        #
+        # No flag is needed to tell the two apart, and the flag I reached
+        # for first was the bug: the Escape that CLOSES the list is seen by
+        # the open branch, because `open_` was still true on that frame, so
+        # this branch cannot run until the frame after - by which time the
+        # key is no longer pressed. Any Escape that gets here is therefore
+        # already the second one.
+        if ((focused or had_focus) and not disabled and label
+                and imgui.is_key_pressed(imgui.Key.escape, False)):
+            s["q"] = ""
+            return CLEARED, False
         return None, False
 
     # filtered on what is IN the field, unless it still holds the value
     shown = filter_items(items, s["q"] if s.get("typed") else "")
     rows = [i for i, it in enumerate(shown)
             if _is_row(it) and _k(it, "enabled", True)]
-    # resolve the two tokens an arrow-open leaves behind, and drop a
-    # highlight the filter has taken away
-    if s["sel"] is SEL_FIRST:
-        s["sel"] = 0 if rows else None
-    elif s["sel"] is SEL_LAST:
-        s["sel"] = len(rows) - 1 if rows else None
+    # resolve the token an open leaves behind, and drop a highlight the
+    # filter has taken away. The committed value beats all three tokens -
+    # see `_committed_row`.
+    if s["sel"] in SENTINELS:
+        s["sel"] = resolve_open(s["sel"], shown, rows, label)
+        # an open scrolls the list to whatever it highlighted: measured,
+        # reopening with the LAST row committed comes up at scrollTop 204
+        # of a 204 range, not at the top
+        s["scroll_to"] = s["sel"]
     elif s["sel"] is not None and s["sel"] >= len(rows):
         s["sel"] = None
 
@@ -1405,6 +1628,9 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         s["side"] = ("bottom" if room_below >= min(ch + 2 * pad,
                                                    tbl["list_max_h"])
                      or room_below >= room_above else "top")
+        # `--available-height` only ever shrinks the clamp, so a panel that
+        # clamps never needs to flip - measured, filtering 16 rows down to
+        # one keeps `data-side="top"` and moves only the far edge.
     room = room_below if s["side"] == "bottom" else room_above
     # `data-empty:p-0`: with nothing to show the list collapses and the
     # panel is exactly the empty block. Measured at 319x36.
@@ -1412,7 +1638,8 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         pad = 0.0
     # no search row: the panel is the list and its padding, because the
     # search field IS the trigger
-    lh = max(tbl["row_h"], min(ch, tbl["list_max_h"], room - 2 * pad))
+    lh = max(tbl["row_h"],
+             min(ch, tbl["list_max_h"] - 2 * pad, room - 2 * pad))
     ph = pad + lh + pad
 
     # The popup spans the TRIGGER as well as the panel. ImGui gives a popup
@@ -1461,6 +1688,7 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
     imgui.push_style_color(imgui.Col_.popup_bg, imgui.ImVec4(0, 0, 0, 0))
 
     chosen = None
+    picked = None            # the committed row's label, for the caret
     # NO SCROLLBAR, and `begin_popup` will give you one unless you say so.
     #
     # `BeginPopup` adds `AlwaysAutoResize` to whatever flags you pass, and a
@@ -1493,20 +1721,13 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         # the field's own (x, y) rather than at the popup-relative one, so
         # the glyphs and the caret land exactly where the parent drew the
         # box even when the trigger's x is fractional.
-        want = s.get("caret")
         changed2, q2, _f2, _c2, caret_set = _input_trigger(
             ui, f"{key}.open", tbl, x, y, w, hh, s["q"],
             placeholder, disabled=disabled, open_=True,
             grab_focus=s.get("focus", False), chrome=False, ink=True,
-            caret=want)
+            caret=s.get("caret"))
         s["focus"] = False
-        if want is not None:
-            # a budget, so a binding that stops exposing the state cannot
-            # leave this pinning the caret every frame
-            s["caret_try"] = s.get("caret_try", 0) + 1
-            if caret_set or s["caret_try"] > 4:
-                s.pop("caret", None)
-                s.pop("caret_try", None)
+        _caret_pending(s, "caret", caret_set)
         if changed2:
             # typing clears the highlight, here as well as on the closed
             # field - measured, and the two paths have to agree or the
@@ -1522,14 +1743,22 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         if s.pop("armed", False):
             n = 0                       # this frame's arrow opened the list
         if n:
+            moved = False
             if imgui.is_key_pressed(imgui.Key.down_arrow, True):
                 cur = s["sel"]
                 s["sel"] = 0 if cur is None else (
                     None if cur + 1 >= n else cur + 1)
+                moved = True
             if imgui.is_key_pressed(imgui.Key.up_arrow, True):
                 cur = s["sel"]
                 s["sel"] = n - 1 if cur is None else (
                     None if cur - 1 < 0 else cur - 1)
+                moved = True
+            if moved:
+                # the KEYBOARD scrolls the list to follow itself; the
+                # pointer and the wheel do not - see SCROLL TO THE
+                # HIGHLIGHT below
+                s["scroll_to"] = s["sel"]
 
         # The scroll child spans the WHOLE panel and the rows are inset
         # inside it, rather than the child BEING the rows' box.
@@ -1563,14 +1792,59 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
                             imgui.ImVec2(r.x + r.w, r.y + r.h)):
                         s["sel"] = n
 
+            # SCROLL TO THE HIGHLIGHT.
+            #
+            # The real list follows its keyboard highlight: measured on
+            # `combobox.many`, sixteen rows in a 252px clamp, the arrows
+            # take `scrollTop` 0 -> 92 (row 11) -> 204 (row 15) and back to
+            # 0 when the highlight wraps round to the first row. The kit
+            # did not scroll at all, so arrowing past the ninth row moved a
+            # highlight nobody could see.
+            #
+            # Minimum movement, which is `scrollIntoView({block:
+            # "nearest"})`. The browser's list carries `scroll-py-1`, four
+            # pixels of scroll padding at each end - and it needs it
+            # because its own `p-1` is INSIDE the scrollable box. The
+            # kit's 4px rails are outside the scroll viewport, so the two
+            # cancel and the numbers come out identical with no padding
+            # here: row 11 wants 12*28 - 244 = 92, row 15 wants
+            # 16*28 - 244 = 204. Both are the measured values.
+            #
+            # Only the KEYBOARD scrolls. Measured, a wheel scroll moves the
+            # list and leaves the highlight where it was, and a highlight
+            # taken by the pointer is on a row that is visible by
+            # definition - so scrolling on either of those would fight the
+            # user.
+            at = s.pop("scroll_to", _MISSING)
+            # bounded as well as popped: a request that outlives the frame
+            # that made it - an empty panel draws no scroll area, so the
+            # pop does not run - would index a `rows` that has since
+            # shrunk under a filter
+            if (at is not _MISSING and at is not None
+                    and rows and 0 <= at < len(rows)):
+                r = place[("row", rows[at])]
+                sy = imgui.get_scroll_y()
+                top = r.y - ly + sy
+                bot = top + r.h
+                want = sy
+                if top < sy:
+                    want = top
+                elif bot > sy + lh:
+                    want = bot - lh
+                want = max(0.0, min(want, max(0.0, ch - lh)))
+                if abs(want - sy) > 0.5:
+                    imgui.set_scroll_y(want)
+
             for i, it in enumerate(shown):
                 kind = _k(it, "kind", "item")
                 if kind == "sep":
                     r = place[("sep", i)]
                     # `-mx-1`: it reaches out past the list, over the
-                    # panel's own padding
-                    D.fill(ui.dl, r.x - pad, r.y, r.w + 2 * pad,
-                           tbl["sep_h"], _col(ui, tbl["sep_col"]))
+                    # panel's own padding. `my-1` puts the rule 4 down
+                    # inside its own 9px block.
+                    D.fill(ui.dl, r.x - pad, r.y + tbl["sep_my"],
+                           r.w + 2 * pad, tbl["sep_h"],
+                           _col(ui, tbl["sep_col"]))
                     continue
                 r = place[("row", i)]
                 if kind == "label":
@@ -1606,7 +1880,13 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
             # the query reverts to the committed value on the way out
             if rows and s["sel"] is not None:
                 chosen = _k(shown[rows[s["sel"]]], "id", "")
+                picked = _k(shown[rows[s["sel"]]], "label", "")
             else:
+                # with no highlight it just closes, and the field keeps the
+                # focus - measured, `document.activeElement` is still the
+                # input after Enter either way
+                s["refocus"] = True
+                s["caret0"] = _CARET.get(f"{key}.open")
                 imgui.close_current_popup()
         # Tab is NOT the list's key. Measured: it closes the list and moves
         # focus on. The kit swallowed it inside the popup, so a keyboard
@@ -1614,10 +1894,26 @@ def combobox(ui, key, x, y, w, label, items, *, size="default",
         if imgui.is_key_pressed(imgui.Key.tab, False):
             imgui.close_current_popup()
         if chosen is not None:
+            # MEASURED: committing - by Enter or by clicking a row - leaves
+            # the field focused with the caret at the END of the new value
+            # and nothing selected. `Enter` on a 'et' query gives value
+            # `Beta` and selectionStart == selectionEnd == 4, with
+            # `document.activeElement` still the input. The kit dropped the
+            # focus on the floor, so the ring went out and the next arrow
+            # did nothing.
+            s["refocus"] = True
+            if picked is None:
+                picked = next((_k(it, "label", "") for it in shown
+                               if _k(it, "id", "") == chosen), "")
+            s["caret0"] = len(picked or "")
             imgui.close_current_popup()
         elif imgui.is_key_pressed(imgui.Key.escape, False):
-            # focus stays on the field, so the next arrow reopens the list
+            # focus stays on the field, so the next arrow reopens the
+            # list - and the caret stays where it was, measured: a click at
+            # +40px then Escape leaves selectionStart == 3, not 0 and not
+            # the end
             s["refocus"] = True
+            s["caret0"] = _CARET.get(f"{key}.open")
             # ImGui dismisses a popup on Escape on its own — but NOT while
             # an InputText inside it has the keyboard, because the field
             # takes the first Escape to cancel its own edit. Measured in a

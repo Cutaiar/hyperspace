@@ -690,10 +690,201 @@ def test_the_row_radius_is_rounded_md():
 
 def test_the_list_clamps_rather_than_growing():
     """`max-height: 252px` with `overflow-y: auto`. Sixteen rows measured
-    456 of content in a 252 box - it scrolls, it does not grow."""
+    456 of content in a 252 box - it scrolls, it does not grow.
+
+    And 252 is the PADDED list's height, which is the panel's. Measured on
+    `combobox.tight`, sixteen rows: the content element AND the list both
+    report 319x252, with `scrollHeight` 456 and `clientHeight` 252 - so the
+    `p-1` rails are INSIDE the clamp, not added to it.
+
+    This assertion used to read `h == list_max_h + 2 * pad`, i.e. 260. It
+    asked the source for the number and still got the answer wrong, because
+    it had the wrong model of what the number clamps: the rows, rather than
+    the box the browser measured. 252 is what Chromium paints.
+    """
     t = C.combobox_table("light")
     assert t["list_max_h"] == BROWSER_ITEM["list_max_h"]
     tall = items(*[f"Row {i}" for i in range(16)])
     _w, h = C.combobox_size(tall, None, measure=mw)
     assert C.list_content_h(tall, t) > t["list_max_h"]
-    assert h == t["list_max_h"] + 2 * t["pad"]
+    assert h == t["list_max_h"]
+    # and a list SHORT of the clamp is still its content plus the rails
+    short = items(*[f"Row {i}" for i in range(4)])
+    assert C.combobox_size(short, None, measure=mw)[1] == \
+        C.list_content_h(short, t) + 2 * t["pad"]
+
+
+# --------------------------------------------------------------------------
+# which row an open highlights - the table in `resolve_open`
+# --------------------------------------------------------------------------
+# Driven on `?probe`'s `combobox.many` (sixteen rows, `defaultValue="Gamma"`
+# at index 2) and `combobox.kb` (six rows, no value), reading
+# `data-highlighted` off the DOM after each gesture:
+#
+#                        combobox.many        combobox.kb
+#     click the field    Gamma   (idx 2)      none
+#     click the chevron  Gamma   (idx 2)      none
+#     ArrowDown          Gamma   (idx 2)      Alpha  (first)
+#     ArrowUp            Gamma   (idx 2)      Zeta   (last)
+#     typing             none                 none
+#
+# The left-hand column is the one the kit got wrong: it opened with nothing
+# highlighted on a click and with the first / last row on an arrow, in every
+# case, because the model was measured on the block that holds no value.
+BROWSER_OPEN = {
+    ("click", True): 2, ("chevron", True): 2,
+    ("down", True): 2, ("up", True): 2, ("type", True): None,
+    ("click", False): None, ("chevron", False): None,
+    ("down", False): 0, ("up", False): 5, ("type", False): None,
+}
+
+
+def _sixteen():
+    src = items(*["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta",
+                  "Eta", "Theta", "Iota", "Kappa", "Lambda", "Mu", "Nu",
+                  "Xi", "Omicron", "Pi"])
+    return src, list(range(len(src)))
+
+
+def _six():
+    src = items(*["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"])
+    return src, list(range(len(src)))
+
+
+WANT = {"click": C.SEL_NONE, "chevron": C.SEL_NONE, "down": C.SEL_FIRST,
+        "up": C.SEL_LAST, "type": None}
+
+
+def test_an_open_lands_on_the_committed_row_whatever_opened_it():
+    """The left column of BROWSER_OPEN: with a value, all four gestures
+    land on its row. The kit opened on none / first / last instead."""
+    src, rows = _sixteen()
+    for gesture in ("click", "chevron", "down", "up", "type"):
+        got = C.resolve_open(WANT[gesture], src, rows, "Gamma")
+        assert got == BROWSER_OPEN[(gesture, True)], \
+            f"{gesture} with a value: {got}"
+
+
+def test_with_no_committed_row_the_gesture_decides():
+    """The right column: none for a pointer, the first row for ArrowDown,
+    the LAST for ArrowUp. This half cannot be reached by driving the app -
+    the dashboard's only Combobox holds a value that matches a row - which
+    is why the rule is a function and not four lines inside `combobox`."""
+    src, rows = _six()
+    for gesture in ("click", "chevron", "down", "up", "type"):
+        got = C.resolve_open(WANT[gesture], src, rows, "")
+        assert got == BROWSER_OPEN[(gesture, False)], \
+            f"{gesture} with no value: {got}"
+
+
+def test_a_value_that_matches_nothing_shown_falls_back_to_the_gesture():
+    """After a filter the committed row may not be on screen. Measured:
+    query `et` on `combobox.many` (value Gamma, which does not match)
+    leaves nothing highlighted, and ArrowDown then takes `Beta`, the first
+    MATCH - not Gamma's old index."""
+    src, _ = _sixteen()
+    shown = C.filter_items(src, "et")
+    rows = [i for i, it in enumerate(shown) if C._is_row(it)]
+    assert shown and all(C._k(it, "label", "") != "Gamma" for it in shown)
+    assert C.resolve_open(C.SEL_FIRST, shown, rows, "Gamma") == 0
+    assert C.resolve_open(C.SEL_NONE, shown, rows, "Gamma") is None
+
+
+def test_an_empty_list_highlights_nothing_whatever_was_asked_for():
+    assert C.resolve_open(C.SEL_FIRST, [], [], "Gamma") is None
+    assert C.resolve_open(C.SEL_LAST, [], [], "") is None
+
+
+def test_the_highlighted_row_on_open_is_the_row_that_carries_the_check():
+    """Measured: `data-highlighted` and the rendered ItemIndicator are on
+    the SAME row (item 2) when `combobox.many` opens. They are found by one
+    rule here so they cannot drift apart."""
+    src, rows = _sixteen()
+    at = C.resolve_open(C.SEL_NONE, src, rows, "Gamma")
+    assert C._k(src[rows[at]], "label", "") == "Gamma"
+    # an explicit `checked` is honoured as well, exactly as `_row` honours
+    # it: a caller that ticks a row itself gets that row highlighted, with
+    # no label to match on
+    src2 = [C.Item(id="a", label="A"), C.Item(id="b", label="B", checked=True)]
+    assert C.resolve_open(C.SEL_NONE, src2, [0, 1], "") == 1
+
+
+# --------------------------------------------------------------------------
+# the group heading and the separator, re-measured on combobox.tsx
+# --------------------------------------------------------------------------
+# `?probe`'s `combobox.grp` block - a ComboboxGroup holding a ComboboxLabel,
+# an item, a ComboboxSeparator and a second item:
+#
+#     content  319 x 101 @ 25,2750    padding 0
+#     list     319 x 101 @ 25,2750    padding 4
+#     group    311 x  93 @ 29,2754    padding 0   margin 0
+#     label    311 x  28 @ 29,2754    padding 6px 8px   12px   weight 400
+#     item[0]  311 x  28 @ 29,2782
+#     sep      319 x   1 @ 25,2814    margin 4px -4px
+#     item[1]  311 x  28 @ 29,2819
+#
+# Two of those the kit had from `command.tsx` - the OLD Popover+Command
+# recipe - rather than from `combobox.tsx`: the heading's weight (that one
+# is `font-medium`, this one has no weight class at all) and the
+# separator's margin block (that one is `-mx-1 h-px bg-border`, this one is
+# `-mx-1 my-1 h-px bg-border`). Same failure as the empty block's 68px: an
+# exact measurement of the wrong component.
+BROWSER_GRP = {
+    "group_h": 93.0, "panel_h": 101.0, "label_h": 28.0, "label_weight": 400,
+    "label_pad_x": 8.0, "label_font": 12.0, "item_h": 28.0,
+    "sep_h": 1.0, "sep_margin": 4.0, "sep_w": 319.0, "content_w": 319.0,
+}
+
+
+def test_the_group_heading_is_regular_weight_not_medium():
+    """Measured `font-weight: 400` on `[data-slot=combobox-label]`.
+    `ComboboxLabel` is `px-2 py-1.5 text-xs text-muted-foreground` and
+    declares no weight, so it inherits the panel's. The kit carried
+    `medium`, which is `command.tsx`'s CommandGroup heading."""
+    t = C.combobox_table("light")
+    # asked of the source: the kit's variant names map to Geist's face
+    # files, and the one Chromium reports as 400 is the Regular face.
+    import draw as D
+    faces = dict(D.FACE_FILES)
+    assert faces[t["head_weight"]] == "Geist-Regular.ttf", \
+        f"{t['head_weight']} is not the 400 face"
+    assert faces["medium"] == "Geist-Medium.ttf"      # i.e. 500, which it is not
+    assert BROWSER_GRP["label_weight"] == 400
+    assert t["head_h"] == BROWSER_GRP["label_h"]
+    assert t["head_pad_x"] == BROWSER_GRP["label_pad_x"]
+    assert t["head_font"] == BROWSER_GRP["label_font"]
+
+
+def test_a_separator_carries_four_pixels_above_and_below():
+    """`my-1`, measured as `margin: 4px -4px`. The kit gave it one pixel of
+    height and no margin, so two rows either side of a separator sat 8px
+    closer together than the browser draws them."""
+    t = C.combobox_table("light")
+    assert t["sep_my"] == BROWSER_GRP["sep_margin"]
+    # the rows the probe block holds, in the probe block's order
+    src = [C.heading("Planes"), C.Item(id="a", label="Alpha"), C.sep(),
+           C.Item(id="b", label="Beta")]
+    assert C.list_content_h(src, t) == BROWSER_GRP["group_h"]
+    _w, h = C.combobox_size(src, None, measure=mw)
+    assert h == BROWSER_GRP["panel_h"]
+
+
+def test_the_separators_rule_is_centred_in_its_margin_block():
+    """One pixel of ink, four above it and four below - not a 9px rule and
+    not a rule flush to the row above. Asked of the placed tree, which is
+    what the widget draws from."""
+    t = C.combobox_table("light")
+    src = [C.Item(id="a", label="Alpha"), C.sep(), C.Item(id="b", label="B")]
+    node = C._rows_node(src, mw, t)
+    place = B.lay(node, B.Rect(0.0, 0.0, 311.0, C.list_content_h(src, t)))
+    row0, sep, row1 = place[("row", 0)], place[("sep", 1)], place[("row", 2)]
+    assert sep.h == t["sep_h"] + 2 * t["sep_my"]
+    # the ink, where `combobox` draws it
+    ink_y = sep.y + t["sep_my"]
+    assert ink_y - (row0.y + row0.h) == BROWSER_GRP["sep_margin"]
+    assert row1.y - (ink_y + t["sep_h"]) == BROWSER_GRP["sep_margin"]
+    # and `-mx-1` reaches it out over the list's own p-1, so the rule the
+    # widget draws is the PANEL's full width: measured 319 against a 311
+    # row in a 319 panel
+    assert sep.w + 2 * t["pad"] == BROWSER_GRP["sep_w"]
+    assert sep.w == BROWSER_GRP["sep_w"] - 2 * t["pad"]

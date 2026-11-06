@@ -192,7 +192,7 @@ def _s_combobox(faces, tn):
             ui, k, x, y, w, st.setdefault("g.cb", COMBO_ITEMS[0]),
             [CC.Item(id=s, label=s) for s in COMBO_ITEMS],
             empty="No such shape.")
-        if got:
+        if got is not None:
             st["g.cb"] = got
 
     def draw_off(ui, k, x, y, w, h, st):

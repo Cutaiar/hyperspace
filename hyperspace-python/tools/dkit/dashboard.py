@@ -655,7 +655,7 @@ def _body(ui, r, w, h, series, state):
         ui, "ctl.find", kx, ky, min(kw, 150.0), state["plane"],
         [CC.Item(id=p, label=p) for p in PLANES], disabled=off,
         search="Filter planes", empty="No such plane.")
-    if got:
+    if got is not None:
         state["plane"] = got
 
     # --- right: every state the gallery diffs ------------------------------
