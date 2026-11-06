@@ -147,7 +147,7 @@ from .modifiers import KINDS as MOD_KINDS
 from .modifiers import PARAMS as MOD_PARAMS
 from .modifiers import Modifier, smooth_motion
 from .motion import Motion
-from .params import Kind, Param, part_of
+from .params import Kind, Param, is_shared_meta_id, part_of
 from .routing import (
     SAVE_PARAM,
     SHIFT_PARAM,
@@ -818,6 +818,7 @@ def _pair_body(panel, asked: PairAsk) -> None:
 
 
 META_LINE = "the meta controller's: tuned before the show"
+PER_DECK_LINE = "the meta controller's: one per deck, a person's own"
 
 
 def ctx_item(panel, p: Param) -> None:
@@ -827,7 +828,7 @@ def ctx_item(panel, p: Param) -> None:
         return
     why = meta_refusal(real.id)
     if why is not None:                 # register row 743: the refusal, in words
-        imgui.text_disabled(META_LINE)
+        imgui.text_disabled(META_LINE if is_shared_meta_id(real.id) else PER_DECK_LINE)
         if imgui.is_item_hovered():
             ui.tooltip(why)
         return
@@ -1024,6 +1025,41 @@ def _param_combo(panel, label: str, current: str | None, width: float,
     return picked
 
 
+# plan 44 D5e: why an enabled row acts on nothing on the deck the panel shows. The
+# first is row 650's (a row onto a meta param, which row 745 lets stand until the next
+# load); the second is plan 55's, and what most of a deck off air's rows say
+DORMANT_OFF_AIR = "dormant off air: lands when this deck is on air"
+DORMANT_AWAY = "dormant: its controller is on the other deck"
+
+
+def dormant_words(reg, router: Router, b: Binding, p: Param | None) -> str | None:
+    """The line under a row that is dormant because of which `Deck` this is, or None. A
+    deck off air's other rows act: they build the look there, out of the room's sight.
+    Not for a row switched off or with no target, which say so already."""
+    if p is None or not b.enabled:
+        return None
+    if not reg.lands(p):
+        return DORMANT_OFF_AIR
+    # `lane`: as the pass reads it, a source qualified with the primary's own role is bare
+    return DORMANT_AWAY if router.lane(b.source)[0] in router.sources.away_from(router) else None
+
+
+def desk_elsewhere(panel, table) -> str | None:
+    """While the APC40 is on another `Deck` than the panel (DQ7): the words that say so.
+    What a person sees of the desk is the panel's deck's rows, and those and the hardware
+    then disagree on purpose. None with no meta controller, or no such desk connected: one
+    listed and unplugged plays nothing, though its pointer stands."""
+    meta = getattr(panel, "meta", None)
+    regs = getattr(panel, "devices", None)
+    if meta is None or table is None or regs is None:
+        return None
+    role = table.primary_role()
+    p, desk = meta.pointers.get(role), regs.get(role)
+    if p is None or desk is None or desk.status != "connected" or p.deck is meta.panel:
+        return None
+    return f"the desk plays {meta.deck_name(p.deck)}"
+
+
 def _row(panel, router: Router, b: Binding, k: int) -> bool:
     """One route, two lines; returns True when the row asked to be deleted.
     The source combo's list is the one `page` built for this draw (the
@@ -1149,6 +1185,11 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         _gate_combo(router, b, gates, gate_w)
     imgui.same_line()
     _live_bar(panel, router, b, p)
+    dormant = dormant_words(reg, router, b, p)
+    if dormant is not None:
+        imgui.dummy(imgui.ImVec2(18, 0))
+        imgui.same_line()
+        imgui.text_colored(ui.DIM, dormant)
     if b.motion is not None and b.motion.on:      # lines 3–4: the row's own feel
         _feel_line(panel, router, b)
     imgui.pop_id()
@@ -1523,6 +1564,9 @@ def desk(panel, router: Router) -> None:
     dimmed line per loadable patch control this loadable patch leaves dark."""
     table = router.table
     rows = table.desk()
+    elsewhere = desk_elsewhere(panel, table)
+    if elsewhere is not None:
+        imgui.text_colored(ui.RED, ui.fit_text(elsewhere, imgui.get_content_region_avail().x))
     ui._micro("desk  ·  preset layer")
     if imgui.is_item_hovered():
         ui.tooltip("The loaded preset's own controls on the APC40 (SHIFT off). "

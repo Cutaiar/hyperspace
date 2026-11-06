@@ -734,11 +734,15 @@ here; overturn → the change, then the same.
 | 700 | Plan 44 D5d (DQ6): a library verb from a row or a key (`preset.select`, `.next`, `.prev`, `.load.N`, `.list.*`, `.home`, F1–F8, Home) always loads into `MetaController.off_air`, whichever deck its player or the keys are on, and nothing on air changes; refused in words while the crossfader is between its ends or a timed fade runs; the panel's load and a save are not changed. A load is a meta controller verb, the named exception to row 733 | — | owner — 2026-11-06: "always loads into the off-air Deck, never touching the room" |
 | 701 | Plan 44 D5d: `meta.tick` is the frame's first act; `ui_media.media_of` reads the panel's deck's channels; an orbit moves the deck it is on (684 reversed); a chase is refused by nothing (656 gone) | 656, 684 | owner — 2026-11-04: a row acts only on the `Deck` its player is on |
 | 702 | Plan 44 D5d: `test_no_patch_reaches_the_other_deck`: nine roads each way round, no leak found. The accepted limits: the shared dream worker (DQ8); a Drive sync lands on the panel's deck | — | owner — 2026-11-04: "no preset can affect another preset"; the absolute rule |
+| 703 | Plan 44 D5e (DQ7): which `Deck` you look at, in every place that shows its rows: the head chip and title (#380), over the loaded look's strip ("deck 2 · off air", red), the desk diagram's header ("deck 2 · off air · the desk plays deck 1"), ROUTING's desk section, the ON AIR inset names its deck, SYSTEM's GPU blocks by number | — | owner — 2026-11-04: "DQ7 as recommended" |
+| 704 | Plan 44 D5e: the words checked against #380, #386, #387 and #388: a row's dormant line says which of two reasons, the verbs' tips and the sheet say off air, the Home tip and the sheet's ⌘Z say the latch, the sheet loses pad B, a per-`Deck` meta control is not "tuned", the footer's chip says players, `output.xfade`'s label is Crossfade | 650's rough edge | (rec) — pending the owner |
 | 715 | Plan 57 NM0: a loadable patch saves node mode as `{"player", "controller", "node"}`, the rows derived; `controller` is a device kind | 546 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on saving it and on naming a player; (rec) — pending the owner on `controller` |
 | 716 | Plan 57 NM0: the fill: what stays, what fills, what is listed; a `NODE_MODE` cable kind in green | 546, 548 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on the rule; (rec) — pending the owner on the colour and on a row elsewhere taking its freedom |
 | 717 | Plan 57: NM0 is an optional key, no bump; the rest is one migration, whose order and questions are in plan 57 | 547 | owner — 2026-11-06: yes, and all of it in one migration: "coordinating the migration is not hard" (`plans/57-format-lane.md` §6) |
 | 723 | Wave 4 B2: `pad:VIEW` holds `deck.chase`; `pad:VIEW → tempo.tap` and `hat:LEFT` / `hat:RIGHT → preset.list.*` leave the pad's factory rows; an old factory row moves at the next load, one the owner changed stays | 654 | owner — 2026-11-04: base chase is Back; tap tempo is not a default on every controller, "extremely sensitive"; no swapping presets from a controller or a pad |
 | 724 | Wave 4 B2: rows by model: a Joy-Con's chase is L / R in #365's `Model.layout`; hold-to-save is the Edge's, there too, by a qualified row until then; Learn goes on accepting `preset.list.*` and `tempo.tap`, unrefused | 723 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on the Joy-Con and the Edge; (rec) — pending the owner on Learn |
+| 729 | Wave 4 #287: the dial's readings are the patch's: `pad.dial.left`, `.right` and `.swap`, group `pad` in `PATCH_GROUPS`, one per `Deck`, and a pad reads the `Deck` it drives (that deck's `Registry.dial_modes` through its pointer each poll). Launch readings from `config.toml` are the fresh values. Replaces Dillon's one dict every pad read (#287) | 559 | owner — 2026-11-06 ("us", the readings the patch's); the per-deck read is the plan's rule, no loadable patch can affect another |
+| 730 | Wave 4 #287: the pad node shows them, SYSTEM no longer does; refused in a patch fragment (no member owns them); saved as two more `values`, with **no schema bump and no migration**; the corpus gains the two values | 559, 560 | (rec) — pending the owner |
 | 731 | Wave 4 PC: T2's ⇧ fine mode reaches every slider left out (a route's depth and rest, its feel's knobs, a macro subscriber's from and to, GRAPH's backdrop); the side pane's paper cuts at 240 px (the patch chips, the analyzer's scene row, meter tags, transfer row, spectrogram hint) | 561 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner |
 | 732 | Wave 4 PC: the on-screen desk draws SEND B as FINE, reserved from its clicks; `desk.fine` is declared beside `desk.save`; a row of the owner's on SEND B still takes the button | 562 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; the reservation follows the owner's seventh round, 2026-11-04 |
 | 733 | Plan 55: a row acts only on the `Deck` its player is on. `Router.feeds` hides a shared scheme whose controller's pointer is elsewhere, so the row is dormant by the road a source not live is; the analyzer and a deck's own lanes are nobody's. Answers DQ4; deck 2's rows on a controller wait for a player | — | owner — 2026-11-04: "A row acts only on the `Deck` its player is on" |
@@ -13122,6 +13126,42 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   re-lands on the deck the panel is on if that deck holds that name (the reading §4).
 - **Judge it.** 534.
 
+### 703. Which `Deck`, wherever a `Deck`'s rows are shown
+
+- **Answer.** The owner, 2026-11-04: "DQ7 as recommended"; 2026-11-06: "the panel may look at either `Deck`".
+- **Built.** #380 built the head chip, the window's title, the red frame and the inset. This adds the rest of (b): a line
+  over the loaded look's strip, red off air, not in its name's button, which is 14 characters wide and would cut the name;
+  and the desk diagram's header, which is the only word in the window with the panel hidden, and stays through a pick. While
+  the APC40 is connected and on another `Deck` than the panel the header and ROUTING's desk section say "the desk plays
+  deck 1": the rows drawn are the panel's and the hardware plays others, on purpose. Unplugged, it plays nothing and says
+  nothing. In a narrow header that clause goes first (the whole on hover). The inset says "ON AIR · deck 1".
+  SYSTEM's first GPU block was the panel's renderer, so with the panel off air it read the deck off air twice and never
+  the deck on air: it is now the deck on air's, by number.
+- **Rough edge.** With the panel hidden and neither diagram up, only the OS window's title says it.
+- **To reverse.** `ui_desk._deck_words`, `ui_loadable.page`'s line, `ui_routing.desk_elsewhere`.
+- **Judge it.** 535.
+
+### 704. The words, against what is true now
+
+- **Answer.** (rec) — pending the owner.
+- **Dormant.** Row 650's line, `not reg.lands(p)`: "dormant off air: lands when this deck is on air". Since row 743 no door
+  lets such a row in, and row 745 leaves one standing only until the next load, so this line is rare. The common case is
+  plan 55's, which the plan did not name: a row whose controller is on the other deck, "dormant: its controller is on the
+  other deck", by the lane the pass reads (`Router.lane`), so `axis@pad:RT` on the primary pad says it too. Other rows on a deck off air act, and say nothing. The line is on `_row`, which GRAPH's side pane draws
+  since plan 28 N7.
+- **Off air (#380).** `preset.next`, `.prev`, `.load.N`, `.list.*` say where they land. The sheet: "APC40 clip pads" is new,
+  QUANT says off air. The head chip's tip says a pad or an F-key loads off air, and the panel's own load lands on the deck it shows.
+- **False, and fixed.** The sheet's "the pad's B walks the list": `pad:B` is `view.points`, and no factory row walks it.
+- **The latch (#386).** The sheet's ⌘Z, "after a change here". Home's tip promised Undo on that deck. The latch goes by focus, not the mouse, so no
+  condition fits in a tip: it says the line at the foot says whether ⌘Z takes it back (`undo.takes_back`, `loaded_words`).
+- **#387.** Nothing was false: the pair's words were written with it.
+- **#388.** `ctx_item` called a per-`Deck` meta param "tuned before the show". Its line is now "one per deck, a person's own", which holds for a slider like `poi.length` too.
+- **Misread.** The footer's "on air 1 · off air —" counts players; beside "deck 2 · off air" it reads as a deck. It says "players:".
+- **Crossfade.** `output.xfade`'s label was "Deck fade", on the desk diagram; the glossary says crossfade. A label, not saved.
+- **Left.** "no worker in the preview" (`graph.py`): only a renderer with no `segment_cfg` says it, and both decks have
+  one, so it is unreachable in the app. "preset", "session" and "rig" are the owner's question, in the PR.
+- **Judge it.** 536.
+
 ### 715. What a loadable patch saves of node mode
 
 - **Asked.** What is saved, and whether rows are.
@@ -13266,6 +13306,53 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   must, since the file cannot say who wrote it. The same goes for `tempo.tap` by hand on BACK
   (`fire`, default value), which moves to the chase, and for a bare `pad:MENU → preset.save_new`.
 - **Judge it.** 555.
+
+### 729. The dial's readings are the patch's, and a pad reads the `Deck` it drives
+
+The owner, 2026-10-29, on Dillon's #287: "if this is in the graph, it should be treated like
+the rest of the settings and be saved in the preset". The owner, 2026-11-06: this PR is "us",
+not Dillon. So the intent is his and the build is rewritten on `main`, with one change.
+
+- **His design:** one dict (`Context.dial_modes`) every pad read, written by the params.
+- **Why it cannot stand:** `pad` is a patch group now, and a patch param is one per `Deck`.
+  A load on the deck off air would have changed the live pad's readings, and no loadable
+  patch may affect another.
+- **Built:** each registry declares its own (`params.declare_dial`, in `build_registry`), so a
+  pad connected or not, deck 1 or deck 2, headless or not. `PadDevice.poll` hands the pad the
+  dict of the registry it reaches through its pointer (`Base.reg`), each frame. Two
+  pads on two decks each read their own. `params` restates the two words, because the import
+  wall (row 747) keeps `gamepad` from it; `tests/test_dial.py` holds them equal.
+- **Launch:** `dial_left` and `dial_right` in `config.toml` now mean what a loadable patch that
+  names none gets. `app.main` sets them on the `MetaRegistry` before any deck's registry is built,
+  so both decks start on them and they are the fresh values, with no undo step on either. Read
+  at launch, on the first enabled pad only (a reading is a deck's, not a pad's); another pad's
+  that differ are said on the SYSTEM page, and an edit waits for the next launch.
+- **The panel's two decks:** the pad node shows the deck the panel shows. A pad driving the
+  other deck moves no face and the node says so, rather than draw one deck's readings under
+  another deck's sticks.
+- **Proof:** `test_a_load_on_the_other_deck_changes_nothing_a_pad_reads`, both ways round.
+
+### 730. On the pad node, refused in a fragment, no bump
+
+- **The move.** The faces, the two drop-downs and the swap leave SYSTEM for the pad node on
+  GRAPH, under the pad's picture, which fixes the long dials row 671 lists. Under `DIAL_WIDE`
+  (380 px; the pane is 240–320) a face has its legend under it, so the names keep their room.
+- **A patch fragment.** A reading is a whole loadable patch's: no member of a fragment owns
+  `pad.dial.*`, so `patches.check` refuses it as any value of no member, and
+  `graphview.OWNERS` needs no entry. A row on one lands on a `group:pad` node, in CONTROLLERS.
+- **The format.** Presets saved by this build carry two new values. No schema bump and no
+  migration: an older file names none and gets the launch readings, with no dirty dot; an older
+  build reading a new file notes "2 unknown id(s)" and applies the rest. Both Macs update
+  together. `/11` carries them through untouched, as any other id.
+- **The corpus** and one fixture gain the two values, so they still resave byte for byte.
+  Written by loading and saving each, checked to differ by those two keys alone.
+- **A row on the old ids.** `desk.pad.dial.*` were never saved as values, but plan 28 told the
+  performer to Learn a button onto Swap dials, and that row is in `bindings.json`, a saved id.
+  `remap_factory` moves it to `pad.dial.*` on load, with a note, a backup and one write. The row
+  stands: `meta_refusal` stops a patch's row on a meta param, and this is a meta row on a patch
+  param, like `pad:LB → view.shape`. It acts on the deck the pad is on.
+- **Open to overturn.** The owner may prefer the readings stay out of a save at their launch
+  values; that is not built, as it would make a file mean different things on the two Macs.
 
 ### 731. The pane's paper cuts: T2's reach, and what fits at 240 px
 - **Asked.** `wave-4-inherited.md` §3 and #364, AZ's report on #368. REVIEW: "a widget fits the

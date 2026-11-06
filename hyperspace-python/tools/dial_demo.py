@@ -6,7 +6,7 @@ tools/control_shots.py does) with the DIAL loadable patch loaded, and the gamepa
 is a `gamepad.Pad` whose sticks follow a script instead of hardware —
 every other piece is the app's own: `Pad.lanes` → `Router.pad` → the
 claims → `Router.modulate` → the registry → the renderer and the fx
-stack → the SYSTEM page's dial faces. The clock is simulated (1/FPS a
+stack → the dial faces in the GRAPH page's pad node details. The clock is simulated (1/FPS a
 frame), so effect speeds in the video are true to time however slowly
 the frames render; the wall time each frame took is recorded beside it.
 
@@ -60,7 +60,7 @@ from conftest import seed
 from OpenGL import GL
 from PIL import Image, ImageDraw, ImageFont
 
-from hyperspace import app, devices, gamepad, render, ui
+from hyperspace import app, devices, gamepad, render, ui, ui_graph
 from hyperspace.ui import PAGE_KEYS
 
 FPS = 30
@@ -167,13 +167,15 @@ _swap = glfw.swap_buffers
 
 def draw(self, dt, fps):
     state.panel = self
-    self.reg["ui.page"].set(PAGE_KEYS.index("system"))
+    self.reg["ui.page"].set(PAGE_KEYS.index("graph"))
+    if state.n <= WARM:                  # the pad node selected: its details hold the dials
+        ui_graph._state(self)["select_node"] = "device:pad"
     if not state.loaded and self.library is not None:
         self.library.loaded_patch.load("DIAL")
         state.loaded = True
     k, name, _, swap = at_frame(state.n)
     if swap:
-        self.reg["desk.pad.dial.swap"].fire()
+        self.reg["pad.dial.swap"].fire()
     state.phase = name
     try:
         _draw(self, dt, fps)
@@ -398,14 +400,13 @@ _dials = ui.Panel._dials
 def dials(self):
     """The faces' canvas, caught where `Panel._dials` puts it."""
     from imgui_bundle import imgui
-    # the SYSTEM page runs longer than the window (the device lines, the
-    # GPU timing): scroll it so the faces are at the top, from the next frame
+    # the pad node's details run longer than the side pane (the pad's picture
+    # first): scroll it so the faces are at the top, from the next frame
     imgui.set_scroll_here_y(0.0)
     p = imgui.get_cursor_screen_pos()
     w = imgui.get_content_region_avail().x
-    h = 2 * max(2 * self.DIAL_R + 8, (gamepad.DIAL + 1) * self.DIAL_ROW + 4)
-    state.dial_rect = (p.x, p.y, w, h)
     _dials(self)
+    state.dial_rect = (p.x, p.y, w, imgui.get_cursor_screen_pos().y - p.y)
 
 
 _pad_open = devices.PadDevice.open

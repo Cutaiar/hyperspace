@@ -317,7 +317,8 @@ MONITOR_TIP = "What is on air: output 1, as the room sees it. Behind the nodes i
 # plan 44 D5d: the head's deck row
 DECK_TIP = ("Which deck this panel shows and edits. Click for the other. Red: it is off air, "
             "so nothing here reaches the room until the crossfader brings it up. Controllers "
-            "go where their players' duties say, whichever you look at.")
+            "go where their players' duties say, whichever you look at, and a pad or an F-key "
+            "loads the deck off air. A load from this panel lands on the deck it shows.")
 COPY_LABEL = "copy on air to off air"
 COPY_TIP = ("Replace the deck off air with the look on air, running from where it is now, so "
             "the two are one until someone touches either. The deck on air does not move. "
@@ -1468,13 +1469,13 @@ def _monitor(panel, origin, avail) -> None:
                     imgui.ImVec2(origin[0] + avail[0] - edge, origin[1] + avail[1] - edge),
                     imgui.get_color_u32(ui.RED), 0.0, OFF_AIR_FRAME)
         if mon is not None:
-            _inset(mon, dl, origin, avail)
+            _inset(mon, dl, origin, avail, panel.meta.deck_name(panel.meta.on_air))
     finally:
         dl.pop_clip_rect()
 
 
-def _inset(mon, dl, origin, avail) -> None:
-    """What is on air, in the canvas's corner."""
+def _inset(mon, dl, origin, avail, deck: str) -> None:
+    """What is on air, in the canvas's corner, and which `Deck` that is."""
     mon.want()
     tex = mon.tex
     if tex is None or getattr(tex, "glo", 0) == 0:
@@ -1483,7 +1484,7 @@ def _inset(mon, dl, origin, avail) -> None:
     dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                  imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
     dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 2.0)
-    dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), "ON AIR")
+    dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), f"ON AIR · {deck}")
     m = imgui.get_mouse_pos()
     if a[0] <= m.x < b[0] and a[1] <= m.y < b[1]:
         ui.tooltip(MONITOR_TIP)
@@ -3630,6 +3631,10 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
         if "ui.pad_view" in panel.reg:          # its readout (map, faithful, lanes, cockpit),
             panel._combo("ui.pad_view", width=-1)   # as on SYSTEM; the header steps them too
         ui_pad.inline(panel)
+        if "pad.dial.left" in panel.reg:        # …and its sticks as dials, this deck's
+            imgui.spacing()
+            ui._micro("dials")
+            panel._dials()
         return                                  # — the picture says what the port lines would
     if _param_rows(panel, st, n):
         return
