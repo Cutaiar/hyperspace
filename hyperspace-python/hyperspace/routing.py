@@ -2697,11 +2697,11 @@ class Bindings:
             page = [b for b in self.page_rows if b.matches(kind, channel, number)]
             if page:
                 return [b for b in page if b.enabled]
-        above = self.above_layers(kind, channel, number, role)
-        if above is not None:
-            return above
         rows = [b for b in self.route(kind, channel, number)
                 if b.enabled and self.serves(role, b)]
+        above = self.above_layers(kind, channel, number, role, rows)    # (one scan a message)
+        if above is not None:
+            return above
         layer = self.layer_of(role)
         if layer == "preset":
             node = [b for b in self.node_rows(role) if b.matches(kind, channel, number)]
@@ -2709,14 +2709,16 @@ class Bindings:
                 return node
         return [b for b in rows if b.layer == layer]
 
-    def above_layers(self, kind: str, channel: int, number: int,
-                     role: str | None = None) -> list[Binding] | None:
+    def above_layers(self, kind: str, channel: int, number: int, role: str | None = None,
+                     rows: Iterable[Binding] | None = None) -> list[Binding] | None:
         """What answers a message ahead of every layer: the enabled invariant rows on its
         control, none at all on SHIFT or a reserved control, or None when the layers
         decide. `dispatch`'s rule, which node mode's fill asks too (`NodeDesk`): a control
-        this holds is no degree of freedom, since a row there could never be reached."""
-        inv = [b for b in self.route(kind, channel, number)
-               if b.enabled and self.serves(role, b) and b.layer is None]
+        this holds is no degree of freedom, since a row there could never be reached.
+        `rows`: a narrower list to look through than the table's, when the caller has one."""
+        inv = [b for b in (self.bindings if rows is None else rows)
+               if b.layer is None and b.enabled and b.matches(kind, channel, number)
+               and self.serves(role, b)]
         if inv:
             return inv
         if self.is_primary(role) and (

@@ -178,12 +178,14 @@ class NodeDesk:
         t = self.deck.table
         kept = [b for b in t.bindings if b.enabled and b.is_midi and b.layer == "preset"
                 and b.target in wanted and t.serves(role, b)]
+        pool = [b for b in t.bindings if b.is_midi and b.layer is None]     # (asked ~150 times)
         out = []
         for f in freedoms:
             probe = Binding(f[0], "")
             channels = range(16) if probe.channel is None else (probe.channel,)
             if not any(same_control(f[0], b) for b in kept) and all(
-                    t.above_layers(probe.kind, ch, probe.number, role) is None for ch in channels):
+                    t.above_layers(probe.kind, ch, probe.number, role, pool) is None
+                    for ch in channels):
                 out.append(f)
         return out
 
