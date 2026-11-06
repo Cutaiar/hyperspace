@@ -86,6 +86,25 @@ def corner_mask(shape: tuple[int, int]) -> np.ndarray:
     return m
 
 
+def vector_mask(shape: tuple[int, int]) -> np.ndarray:
+    """True where a NON-AXIS-ALIGNED vector feature is drawn.
+
+    Excluded from the strict metric for the reason corners are: that metric
+    is the test for straight edges, fills and flat areas, where the two
+    rasterizers must agree exactly. A round line cap and a 45 degree
+    silhouette are neither. See contour.icon_boxes for what is in here and
+    what each one measures instead - nothing is simply dropped: the chevron
+    still has to land on the right pixels, and the arrow's area is reported
+    below.
+    """
+    m = np.zeros(shape, bool)
+    for c in SPEC["cells"]:
+        for ix, iy, iw, ih in C.icon_boxes(c):
+            m[max(int(iy), 0):int(np.ceil(iy + ih)),
+              max(int(ix), 0):int(np.ceil(ix + iw))] = True
+    return m
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dir")
@@ -103,7 +122,7 @@ def main() -> int:
 
     strict = np.abs(react - mine).max(axis=2)
     tol = tolerant_delta(react, mine)
-    corners = corner_mask(strict.shape)
+    corners = corner_mask(strict.shape) | vector_mask(strict.shape)
     arcs = C.measure(react.astype(float), mine.astype(float))
 
     print(f"canvas {react.shape[1]}x{react.shape[0]}   "
@@ -182,6 +201,29 @@ def main() -> int:
                 continue
             print(f"  {c['id']:14} {ia[0]:4}x{ia[1]:<4} {ib[0]:4}x{ib[1]:<4} "
                   f"{ib[0] - ia[0]:+4} {ib[1] - ia[1]:+4}")
+
+    # --- advisory: the tooltip arrow, by area ------------------------------
+    # A 45 degree edge is out of the strict metric, so the arrow is checked
+    # as a SHAPE instead: total ink over its exposed tip, in square pixels.
+    # Robust to how either rasterizer spreads its antialiasing.
+    tips = [c for c in SPEC["cells"] if c["kind"] == "tooltip"]
+    if tips:
+        print()
+        print("tooltip arrow (advisory - exposed tip area, px^2):")
+        for c in tips:
+            ax, ay, aw, ah = C.arrow_box(c)
+            sl = (slice(int(ay), int(np.ceil(ay + ah)) + 1),
+                  slice(int(ax), int(np.ceil(ax + aw)) + 1))
+            # coverage against the panel's own fill and the page behind it
+            fgv = float(react[int(c["y"]) + 4, int(c["x"]) + int(c["w"] / 2)].max())
+            bgv = float(react[int(ay + ah) + 4, int(ax)].max())
+            if abs(fgv - bgv) < 8:
+                continue
+            cov = lambda im: float(np.clip(
+                (im[sl].max(axis=2) - bgv) / (fgv - bgv), 0, 1).sum())
+            ca, cb = cov(react), cov(mine)
+            print(f"  {c['id']:14} react {ca:7.3f}   imgui {cb:7.3f}   "
+                  f"{cb - ca:+.3f}")
 
     amp = np.clip(tol.astype(np.int32) * 4, 0, 255).astype(np.uint8)
     sheet = np.concatenate(

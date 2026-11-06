@@ -27,6 +27,13 @@ from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 SPEC = json.loads((HERE / "spec.json").read_text())
+
+import sys as _sys                                  # noqa: E402
+_sys.path.insert(0, str(HERE))
+from tokens import TOOLTIP                           # noqa: E402
+
+# a square of `arrow` px turned 45 degrees has this half-diagonal
+TOOLTIP_ARROW_HALF = TOOLTIP["arrow"] * math.sqrt(2.0) / 2.0
 # Per-kind chrome geometry: the requested corner radius, how far the chrome
 # reaches OUTSIDE the box (a card's ring is 1px out and its shadow ~3), and
 # whether the corner reads as a filled step or as a thin ring.
@@ -42,15 +49,64 @@ KIND = {
     # module exists to avoid.
     "slider": {"radius": 6.0, "outset": 3, "ring": True},
     "switch": {"radius": 9.195, "outset": 0, "ring": False},
+    # Input and the Select trigger are rounded-lg (10); sm is rounded-md (8),
+    # which `geom` takes from the cell's variant. Both read as a thin ring
+    # (a 1px border on a transparent or near-transparent fill), and the
+    # invalid Input's 3px ring reaches 3px outside its box.
+    "input": {"radius": 10.0, "outset": 3, "ring": True},
+    "select": {"radius": 10.0, "outset": 0, "ring": True},
+    # the tooltip panel is a filled rounded-md box
+    "tooltip": {"radius": 8.0, "outset": 0, "ring": False},
 }
 
 
 def geom(cell):
     """(clamped radius, outset, is_ring) for one cell."""
     k = KIND[cell["kind"]]
-    r = min(k["radius"], min(cell["w"], cell["h"]) / 2.0)
+    radius = k["radius"]
+    if cell["kind"] == "select" and cell["variant"] == "sm":
+        radius = 8.0                    # sm is rounded-md, not rounded-lg
+    r = min(radius, min(cell["w"], cell["h"]) / 2.0)
     ring = k["ring"] or cell.get("variant") == "outline"
     return r, k["outset"], ring
+
+
+def icon_boxes(cell):
+    """Vector features measured geometrically rather than photometrically.
+
+    Two kinds, both of them NOT axis-aligned, which is the whole reason the
+    strict metric does not apply: it is documented as the test for straight
+    edges, fills and flat areas, where two rasterizers must agree exactly.
+
+    * icon strokes - the Select's chevron. Its body matches to 2 levels; the
+      outermost pixel of each round line cap differs by up to 59, which is a
+      cap a third of a pixel longer in one renderer.
+    * the Tooltip's arrow - a 45 degree silhouette. Its straight edges agree
+      to 0.27 px of width and its area to 7%, but Chromium paints the union
+      of the rotated `rounded-[2px]` BOX and Radix's own svg polygon, so the
+      tip is blunter than a sharp triangle and sharper than a pure r=2
+      diamond. diff.py reports the arrow's area so this stays measured.
+    """
+    from tokens import SELECT, TOOLTIP
+    if cell["kind"] == "select":
+        cs = SELECT["chevron"]
+        return [(cell["x"] + cell["w"] - 1.0 - SELECT["pad_r"] - cs,
+                 cell["y"] + (cell["h"] - cs) / 2.0, cs, cs)]
+    if cell["kind"] == "tooltip":
+        return [arrow_box(cell)]
+    return []
+
+
+def arrow_box(cell):
+    """The Tooltip arrow's exposed tip, as a rect: (x, y, w, h).
+
+    The panel sits above its anchor, so the arrow's centre is `arrow_dy`
+    inside the panel's bottom edge and only the part below that edge shows.
+    """
+    half = TOOLTIP_ARROW_HALF
+    vis = half - TOOLTIP["arrow_dy"]
+    cx = cell["x"] + cell["w"] / 2.0
+    return (cx - vis - 1.0, cell["y"] + cell["h"], 2.0 * vis + 2.0, vis + 2.0)
 
 
 def sub_boxes(cell):

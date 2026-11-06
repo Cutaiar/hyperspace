@@ -11,6 +11,14 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
+import { SelectTrigger, SelectValue, Select } from "@/components/ui/select"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import spec from "../../../hyperspace-python/tools/dkit/spec.json"
 
 // The dashboard decorates its stat cards on top of the base Card; that
@@ -112,6 +120,68 @@ export default function Gallery({
             // for default), and reproducing that size is half of what is
             // being checked. The spec rect is that intrinsic size.
             <Switch checked={c.on} size={c.variant as "sm" | "default"} />
+          ) : c.kind === "input" ? (
+            <Input
+              className="h-full w-full"
+              aria-invalid={c.variant === "invalid" || undefined}
+              disabled={c.variant === "disabled"}
+              style={{ color: "transparent" }}
+            />
+          ) : c.kind === "select" ? (
+            <Select>
+              <SelectTrigger
+                size={c.variant as "sm" | "default"}
+                className="h-full w-full"
+                style={{ color: "transparent" }}
+              >
+                <SelectValue placeholder="" />
+              </SelectTrigger>
+            </Select>
+          ) : c.kind === "tooltip" ? (
+            // TooltipContent is PORTALLED to the body, so inline left/top on
+            // it resolve against the viewport and pinning it that way does
+            // nothing. Instead the TRIGGER is pinned - a zero-size point at
+            // the bottom centre of the cell - and Radix is left to place the
+            // panel itself, at sideOffset 0 and centred on that point. With
+            // the panel sized to the cell, it lands exactly on the cell
+            // rect, and the arrow comes with it in the right place.
+            <TooltipProvider>
+              <Tooltip open>
+                <TooltipTrigger
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    // + the arrow allowance: Radix reserves the arrow's full
+                    // declared size (10px) between the panel and the anchor,
+                    // so panel bottom = anchor top - 10. Putting the anchor
+                    // 10 below the cell lands the panel ON the cell.
+                    top: "calc(100% + 10px)",
+                    width: 0,
+                    height: 0,
+                    padding: 0,
+                  }}
+                />
+                <TooltipContent
+                  side="top"
+                  sideOffset={0}
+                  style={{
+                    width: c.w,
+                    height: c.h,
+                    maxWidth: "none",
+                    // `animation: none` alone leaves tw-animate-css's
+                    // --tw-enter-opacity in place, so the panel renders at
+                    // ~0.99 and the arrow's overlap composites 2 levels
+                    // darker than the token. Pinning opacity removes the
+                    // artifact rather than tolerating it.
+                    animation: "none",
+                    opacity: 1,
+                    color: "transparent",
+                  }}
+                >
+                  .
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : c.kind === "card" ? (
             <Card
               className={

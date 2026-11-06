@@ -227,6 +227,12 @@ TOOLTIP = {
     "arrow_radius": 2.0,
     "arrow_dy": 2.0,         # translate-y-[calc(-50% - 2px)]
     "side_offset": 0.0,
+    # Radix reserves the arrow's full DECLARED size between the panel and the
+    # anchor, so panel bottom = anchor top - arrow_space - side_offset.
+    # Measured: a 0x0 anchor at y 958 put the panel's bottom at 948. The
+    # rendered diamond only uses 5.071 px of that, so there is a ~4.9 px gap
+    # below the tip - which is Radix's doing, not a mistake to correct.
+    "arrow_space": 10.0,
 }
 
 # shadow-md, which the Select's popover carries on top of its 1px ring.

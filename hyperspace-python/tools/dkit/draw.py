@@ -16,7 +16,7 @@ import math
 
 from imgui_bundle import imgui
 
-from tokens import RADII, RING_W, rgba
+from tokens import RADII, RING_W, SELECT_SIZES, rgba
 
 
 def _u32(col) -> int:
@@ -761,20 +761,136 @@ def field(dl, x, y, w, h, theme, tbl, *, focus_f=0.0, invalid=False,
     """
     from ease import mix
     r = RADII[tbl.get("radius", "lg")] if radius is None else radius
+    # `disabled:opacity-50` is an opacity on the ELEMENT, so it multiplies the
+    # border and the fill alike - on top of a fill that is already themed
+    # (input/50 in light, input/80 in dark). Missing this left the whole
+    # 200x32 box wrong by 12 levels: the fill was right and the border was
+    # twice as dark as it should be.
+    from ease import over
+    dim = tbl.get("disabled_opacity", 0.5) if disabled else 1.0
+
+    def c(spec, mul=1.0):
+        tok, al = spec
+        return rgba(tok, al * mul, theme=theme)
+
     if invalid:
-        rc, bc = tbl["invalid_ring"], tbl["invalid_border"]
-        ring(dl, x, y, w, h, rgba(*rc, theme=theme), r)
-        bcol = rgba(*bc, theme=theme)
+        ring(dl, x, y, w, h, c(tbl["invalid_ring"]), r)
+        bcol = c(tbl["invalid_border"])
     else:
         if focus_f > 0.01:
-            ring(dl, x, y, w, h,
-                 rgba(tbl["ring"][0], tbl["ring"][1] * focus_f, theme=theme), r)
-        bcol = mix(rgba(*tbl["border"], theme=theme),
-                   rgba(*tbl.get("focus_border", tbl["border"]), theme=theme),
+            ring(dl, x, y, w, h, c(tbl["ring"], focus_f), r)
+        bcol = mix(c(tbl["border"]), c(tbl.get("focus_border", tbl["border"])),
                    focus_f)
-    bg = tbl["disabled_bg"] if (disabled and "disabled_bg" in tbl) else tbl["bg"]
-    box(dl, x, y, w, h, fill_col=rgba(*bg, theme=theme), border_col=bcol,
-        radius=r, border_w=1.0)
+    bg = c(tbl["disabled_bg"] if (disabled and "disabled_bg" in tbl)
+           else tbl["bg"])
+
+    if dim < 1.0:
+        # `disabled:opacity-50` is an opacity on the ELEMENT: CSS composites
+        # the fill and the border first and dims the RESULT. So the border's
+        # colour here is the border already stacked over the fill, and the
+        # fill is drawn inset by the border width so it is not counted twice.
+        # Scaling each layer's alpha instead leaves the fill showing through
+        # a border that should have covered it.
+        bcol = _dim(over(bcol, bg), dim)
+        bg = _dim(bg, dim)
+        fill(dl, x + 1.0, y + 1.0, w - 2.0, h - 2.0, bg, max(r - 1.0, 0.0))
+        border(dl, x, y, w, h, bcol, r, 1.0)
+        return r
+
+    box(dl, x, y, w, h, fill_col=bg, border_col=bcol, radius=r, border_w=1.0)
     return r
 
 
+def _dim(col, f: float):
+    return (col[0], col[1], col[2], col[3] * f)
+
+
+
+
+def select_trigger(dl, x, y, w, h, theme, tbl, *, size="default", hot=0.0,
+                   focus_f=0.0, disabled=False, open_=False):
+    """shadcn SelectTrigger: the Input's box, plus a chevron.
+
+    The chevron is `size-4 text-muted-foreground`, right-aligned inside the
+    padding and vertically centred - measured at x = w - 1 - 8 - 16 and
+    y = (h - 16) / 2 for both sizes.
+
+    The radius is NOT constant across sizes: default is rounded-lg (10) and
+    sm is rounded-md (8), which is the sort of thing that only shows up in a
+    dump.
+    """
+    from ease import mix
+    _h, rkey = SELECT_SIZES[size]
+    r = RADII[rkey]
+    # light has no hover tint at all and dark goes input/30 -> input/50, so
+    # this interpolates between two table entries rather than guessing one
+    # The hover tint is themed in an asymmetric way: light stays transparent
+    # at both ends and dark runs input/30 -> input/50. Interpolating between
+    # the two table entries covers both without a special case.
+    t2 = dict(tbl)
+    t2["bg"] = ("#00000000", 1.0)          # painted below, after the ring
+    field(dl, x, y, w, h, theme, t2, focus_f=focus_f, disabled=disabled,
+          radius=r)
+    bg = mix(rgba(*tbl["bg"], theme=theme),
+             rgba(*tbl["hover_bg"], theme=theme), hot)
+    fill(dl, x, y, w, h, bg, r)
+    cs = tbl["chevron"]
+    icon(dl, "chevron-down", x + w - 1.0 - tbl["pad_r"] - cs,
+         y + (h - cs) / 2.0, cs, rgba("muted-foreground", theme=theme))
+    return r
+
+
+def tooltip_panel(dl, x, y, w, h, theme, tbl, *, arrow_at=None, side="top"):
+    """shadcn TooltipContent: a rounded fill, plus a rotated-square arrow.
+
+    The arrow is `size-2.5 rotate-45 rounded-[2px]` with
+    `translate-y-[calc(-50%_-_2px)]`, which measures as: a 10px square turned
+    45 degrees (so a 14.142 px bounding box) whose CENTRE sits 2 px inside
+    the panel's edge. Half of it is therefore hidden behind the panel and
+    what shows is a triangle 5.071 px tall with a 10.142 px base - the
+    diamond's exposed tip, with one rounded corner on it.
+
+    It is centred on the TRIGGER rather than on the panel, which is what
+    `arrow_at` is for: pass the trigger's centre x. Radix shifts a panel to
+    stay on screen without moving the arrow, so the two genuinely come apart.
+    """
+    r = RADII[tbl["radius"]]
+    col = rgba(*tbl["bg"], theme=theme)
+    fill(dl, x, y, w, h, col, r)
+    if arrow_at is None:
+        return r
+    half = tbl["arrow"] * math.sqrt(2.0) / 2.0        # 7.071
+    inset = tbl["arrow_dy"]                            # 2
+    vis = half - inset                                 # 5.071, the exposed tip
+    cx = min(max(arrow_at, x + r + vis), x + w - r - vis)
+    cy = (y + h - inset) if side == "top" else (y + inset)
+    _diamond(dl, cx, cy, tbl["arrow"], tbl["arrow_radius"], col)
+    return r
+
+
+def _diamond(dl, cx, cy, side, radius, col) -> None:
+    """A square of `side` px turned 45 degrees, with `radius` corners.
+
+    The tooltip's arrow, and NOT a triangle: the square's `rounded-[2px]`
+    leaves a visibly blunt tip. Drawn as a sharp triangle the tip pixel came
+    out at 55% coverage against the browser's 23% - the single largest
+    remaining disagreement on the panel.
+
+    Only the half below the panel's edge is ever seen, but the whole shape
+    goes down: it is the same colour as the panel it overlaps, so there is
+    nothing to clip and nothing to see.
+
+    Built from the four corner arcs, which ImGui joins with the straight
+    edges by itself. A rotated rounded square is convex, so it fills convex.
+    """
+    a = side / 2.0
+    d = (a - radius) * math.sqrt(2.0)      # arc centres, along the 4 axes
+    c = _u32(col)
+    dl.path_clear()
+    # clockwise from the top corner; each corner's arc spans the 90 degrees
+    # between the outward normals of its two edges
+    for (ox, oy), a0 in (((0.0, -d), 225.0), ((d, 0.0), 315.0),
+                         ((0.0, d), 45.0), ((-d, 0.0), 135.0)):
+        dl.path_arc_to(imgui.ImVec2(cx + ox, cy + oy), radius,
+                       math.radians(a0), math.radians(a0 + 90.0))
+    dl.path_fill_convex(c)

@@ -169,3 +169,175 @@ def test_sidebar_selection_follows_clicks(DB):
 def test_every_widget_id_is_unique(DB):
     """Ui.hit refuses duplicates; a frame that draws is proof there are none."""
     DB.render("dark", W, H, script=[(700, 500)] * 4)
+
+
+# --------------------------------------------------------------------------
+# Tier 1 controls
+# --------------------------------------------------------------------------
+#
+# Same rule as above: every one of these dwells well past the 150ms easing
+# (DWELL = 40 frames against a 9-frame transition) and asserts stability over
+# time rather than the state of one frame. The kebab bug survived a six-frame
+# check because the oscillation had not started yet.
+
+
+def ctl_rect(DB, i):
+    return DB.lay_out(W, H).ctl_rows[i]
+
+
+def slider_track(DB):
+    """The Cutoff slider's track, as dashboard.paint lays it out."""
+    rx, ry, rw, rh = ctl_rect(DB, 0)
+    sx = rx + 92.0                      # the label column
+    return sx, ry, rw - 92.0 - 54.0, rh
+
+
+def test_slider_drag_moves_the_value(DB):
+    """Press at 20% of the track and drag to 80%: the value must follow.
+
+    A slider jumps to where it is pressed, so this also covers the press.
+    """
+    sx, sy, sw, sh = slider_track(DB)
+    y = sy + sh / 2
+    a, b = sx + sw * 0.2, sx + sw * 0.8
+    script = ([(a, y)] * 6 + [(a, y, True)] * 4
+              + [(a + (b - a) * i / 10.0, y, True) for i in range(11)] * 2
+              + [(b, y, False)] * DWELL)
+    DB.render("dark", W, H, script=script)
+    got = DB.render.last_state["cutoff"]
+    lo, hi = 20.0, 20000.0
+    want = lo + (hi - lo) * 0.8
+    assert abs(got - want) < (hi - lo) * 0.08, (
+        f"drag to 80% left the value at {got:.0f}, wanted about {want:.0f}")
+
+
+def test_slider_is_stable_while_hovered(DB):
+    """The kebab's failure mode, on a slider: the thumb's ring eases in on
+    hover, and must then sit still rather than breathe."""
+    sx, sy, sw, sh = slider_track(DB)
+    x, y = sx + sw * 0.5, sy + sh / 2
+    frames = DB.render("dark", W, H, script=[(x, y)] * DWELL)
+    settled = [ink(f, x, y) for f in frames[14:]]       # past the fade-in
+    spread = max(settled) - min(settled)
+    assert spread < 1.0, f"the slider flickered while hovered: {spread:.2f}"
+
+
+def test_slider_clamps_when_dragged_past_either_end(DB):
+    """Drag hard past both ends and the value stops at the domain's edge.
+
+    Checked on the VALUE rather than on pixels: the geometric half of this -
+    that the thumb is inset by its own width and so never overhangs the
+    track - is swept over every width and fraction in
+    test_components.test_slider_thumb_never_overhangs_the_track, where it can
+    be asserted exactly instead of inferred from ink.
+    """
+    sx, sy, sw, sh = slider_track(DB)
+    y = sy + sh / 2
+    lo, hi = 20.0, 20000.0
+    for target, want, name in ((sx - 400, lo, "left"),
+                               (sx + sw + 400, hi, "right")):
+        script = ([(sx + sw / 2, y)] * 4 + [(sx + sw / 2, y, True)] * 2
+                  + [(target, y, True)] * 10 + [(target, y, False)] * DWELL)
+        DB.render("dark", W, H, script=script)
+        got = DB.render.last_state["cutoff"]
+        assert abs(got - want) < 1e-6, (
+            f"dragging {name} left the value at {got} rather than {want}")
+
+
+def test_switch_toggles_and_settles(DB):
+    """Click it, then dwell: the thumb slides on the 150ms curve and must
+    come to rest, not oscillate."""
+    rx, ry, _, rh = ctl_rect(DB, 1)
+    x, y = rx + 92.0 + 16.0, ry + rh / 2
+    before = DB.render("dark", W, H, script=[(x, y)] * 4)
+    script = ([(x, y)] * 6 + [(x, y, True)] * 2 + [(x, y, False)] * DWELL)
+    frames = DB.render("dark", W, H, script=script)
+    assert DB.render.last_state["bypass"] is True, "the switch did not toggle"
+    settled = [ink(f, x, y) for f in frames[-12:]]      # long past the 9-frame slide
+    spread = max(settled) - min(settled)
+    assert spread < 0.8, f"the switch never settled: ink varied by {spread:.2f}"
+    assert len(before) == 4
+
+
+def test_switch_does_not_toggle_twice_on_one_click(DB):
+    """A press held down for many frames is still one click."""
+    rx, ry, _, rh = ctl_rect(DB, 1)
+    x, y = rx + 92.0 + 16.0, ry + rh / 2
+    script = [(x, y)] * 6 + [(x, y, True)] * DWELL + [(x, y, False)] * 6
+    DB.render("dark", W, H, script=script)
+    assert DB.render.last_state["bypass"] is True, (
+        "holding the press toggled the switch more than once")
+
+
+def test_select_opens_and_stays_open(DB):
+    """The kebab bug's shape again: open the panel, then dwell on it. It has
+    to still be there, and steady, forty frames later."""
+    rx, ry, _, rh = ctl_rect(DB, 2)
+    x, y = rx + 92.0 + 40.0, ry + rh / 2
+    script = [(x, y)] * 10 + [(x, y, True)] * 2 + [(x, y, False)] * DWELL
+    frames = DB.render("dark", W, H, script=script)
+    import menu as M
+    assert M.LAST_RECT.get("##sel.ctl.plane"), "the select panel did not open"
+    below = [ink(f, x, y + rh + 24) for f in frames[-16:]]
+    assert min(below) > 1.0, "the select panel vanished while open"
+    assert max(below) - min(below) < 1.0, "the select panel flickered"
+
+
+def test_select_choice_lands(DB):
+    """Open it, move onto an item, click: the state must change."""
+    rx, ry, _, rh = ctl_rect(DB, 2)
+    x, y = rx + 92.0 + 40.0, ry + rh / 2
+    open_script = [(x, y)] * 10 + [(x, y, True)] * 2 + [(x, y, False)] * 14
+    DB.render("dark", W, H, script=open_script)
+    import menu as M
+    r = M.LAST_RECT.get("##sel.ctl.plane")
+    assert r, "the select panel did not open"
+    mx, my, mw, _ = r
+    ix, iy = mx + mw / 2, my + M.PAD + M.ITEM_H / 2        # the first item, XY
+    script = (open_script + [(ix, iy)] * 12 + [(ix, iy, True)] * 2
+              + [(ix, iy, False)] * 6)
+    DB.render("dark", W, H, script=script)
+    assert DB.render.last_state["plane"] == "XY", (
+        f"choice did not land: {DB.render.last_state['plane']!r}")
+
+
+def test_tooltip_waits_for_the_delay_then_holds(DB):
+    """A tooltip opens on a delay and must then STAY open.
+
+    Both halves matter. Appearing instantly is wrong, and a tooltip that
+    takes the hover from the control it describes would blink at the easing's
+    period - the trap `row_action` exists to close, which a tooltip would
+    walk straight back into if it had a hit target of its own.
+    """
+    sx, sy, sw, sh = slider_track(DB)
+    x, y = sx + sw * 0.5, sy + sh / 2
+    # TOOLTIP_DELAY is 0.4s; render steps a fixed 1/60 dt, so 24 frames
+    frames = DB.render("dark", W, H, script=[(x, y)] * 70)
+    above = [ink(f, x, y - 34) for f in frames]
+    assert max(above[:12]) < 2.0, "the tooltip appeared before its delay"
+    tail = above[-20:]
+    assert min(tail) > 2.0, "the tooltip did not appear, or did not stay"
+    assert max(tail) - min(tail) < 1.0, "the tooltip flickered once open"
+
+
+def test_tooltip_goes_away_when_the_pointer_leaves(DB):
+    sx, sy, sw, sh = slider_track(DB)
+    x, y = sx + sw * 0.5, sy + sh / 2
+    away = (sx + sw * 0.5, sy - 220)
+    script = [(x, y)] * 50 + [away] * 20
+    frames = DB.render("dark", W, H, script=script)
+    assert ink(frames[49], x, y - 34) > 2.0, "the tooltip never opened"
+    assert ink(frames[-1], x, y - 34) < 2.0, "the tooltip outlived the hover"
+
+
+def test_input_takes_typing(DB):
+    """Click into the field and type: the sandwich must pass the keyboard
+    through to the real input_text underneath."""
+    rx, ry, _, rh = ctl_rect(DB, 3)
+    x, y = rx + 92.0 + 40.0, ry + rh / 2
+    script = [(x, y)] * 6 + [(x, y, True)] * 2 + [(x, y, False)] * 30
+    # characters, not keys: input_text is fed by character events
+    DB.render("dark", W, H, script=script, keys=[(12, "Z"), (16, "9")])
+    got = DB.render.last_state["name"]
+    assert got != "600-cell", f"typing did not reach the input ({got!r})"
+    assert "Z" in got and "9" in got, f"typed characters missing from {got!r}"

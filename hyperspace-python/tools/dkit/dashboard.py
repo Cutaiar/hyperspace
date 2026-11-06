@@ -108,6 +108,16 @@ def ticks(n=180, seed=0x4d21):
 # layout: a pure function of size, no imgui
 # --------------------------------------------------------------------------
 
+# The Tier 1 controls' starting values, in one place so `live` and `render`
+# cannot drift apart.
+CTL_STATE = {
+    "cutoff": 2400.0,
+    "bypass": False,
+    "plane": "XW",
+    "name": "600-cell",
+}
+
+
 @dataclass
 class Rects:
     sidebar: tuple = (0, 0, 0, 0)
@@ -119,6 +129,8 @@ class Rects:
     facets: list = field(default_factory=list)
     routing_card: tuple = (0, 0, 0, 0)
     routing_rows: list = field(default_factory=list)
+    controls_card: tuple = (0, 0, 0, 0)
+    ctl_rows: list = field(default_factory=list)
     table_tabs: tuple = (0, 0, 0, 0)
     table_rows: list = field(default_factory=list)
     table_head: tuple = (0, 0, 0, 0)
@@ -164,11 +176,29 @@ def lay_out(w: int, h: int, n_rows: int | None = None) -> Rects:
             [B.Item(0, 60, grow=1) for _ in range(3)], gap=24))
     y += 258 + CARD_GAP
 
-    r.routing_card = (inner_x, y, inner_w, 196)
+    # Routing and the Tier 1 controls share a row. Side by side rather than
+    # stacked because the control column is held to 280px whatever the window
+    # does - REVIEW.md puts GRAPH's side pane at 240-320 - so a full-width
+    # card would be mostly empty, and stacking them cost the table its rows.
+    rowh = 196
+    routing_box, controls_box = B.flex(
+        B.Rect(inner_x, y, inner_w, rowh),
+        [B.Item(0, rowh, grow=3), B.Item(0, rowh, grow=2)], gap=CARD_GAP)
+    r.routing_card = routing_box.as_tuple()
     ry = y + 56
     for i in range(6):
-        r.routing_rows.append((inner_x + 20, ry + i * 22, inner_w - 40, 18))
-    y += 196 + CARD_GAP
+        r.routing_rows.append((routing_box.x + 20, ry + i * 22,
+                               routing_box.w - 40, 18))
+
+    # Composing them is what exposes the gaps - truncation, the drawn trend
+    # marks and the per-segment area fill all came out of doing this rather
+    # than out of the diff.
+    r.controls_card = controls_box.as_tuple()
+    cyy = y + 52
+    for i in range(4):
+        r.ctl_rows.append((controls_box.x + 20, cyy + i * 32,
+                           min(280.0, controls_box.w - 40), 28))
+    y += rowh + CARD_GAP
 
     r.table_tabs = (inner_x, y, 0, 32)
     y += 32 + 12
@@ -316,6 +346,61 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
                 faces, "regular", 12, ink, align="right", box_w=60, baseline_box=rh,
                 tabular=True)
 
+    # ---- Tier 1 controls --------------------------------------------------
+    # Every one of these runs a real widget underneath (see interact.py), so
+    # they drag, type, open and toggle for real - and stay reachable to
+    # tests/ui_driver.py, which finds controls by the text after `##`.
+    x, y, cw, ch = r.controls_card
+    D.card(dl, {"x": x, "y": y, "w": cw, "h": ch, "variant": "plain"}, theme, None)
+    D.label(dl, x + 20, y + 14, "Controls", faces, "medium", 16, ink,
+            baseline_box=20)
+    D.label(dl, x + 20, y + 34,
+            "Slider, Switch, Select, Input - at the 280px the side pane gets",
+            faces, "regular", 13, T.rgba("muted-foreground", theme=theme),
+            baseline_box=18)
+    muted = T.rgba("muted-foreground", theme=theme)
+    LBL = 92.0
+
+    def _row(i, name):
+        rx, ry, rw, rh = r.ctl_rows[i]
+        D.label(dl, rx, ry, name, faces, "medium", 13, ink, baseline_box=rh,
+                max_w=LBL - 8)
+        return rx + LBL, ry, rw - LBL, rh
+
+    # a continuous param: 292 of the registry's 427 are this shape
+    sx, sy, sw, sh = _row(0, "Cutoff")
+    changed, state["cutoff"] = I.slider(
+        ui, "ctl.cutoff", sx, sy, sw - 54, sh, state["cutoff"], 20.0, 20000.0,
+        detents=(1000.0,), fmt="%.0f Hz")
+    D.label(dl, sx + sw - 50, sy, f"{state['cutoff']:.0f}", faces, "regular",
+            12, muted, align="right", box_w=50, baseline_box=sh, tabular=True)
+    # the tooltip hangs off the slider's own rect and takes no hit target of
+    # its own, so it cannot steal the hover from the control it describes
+    I.tooltip(ui, "ctl.cutoff.tip", (sx, sy, sw - 54, sh),
+              "Low-pass cutoff, 20 Hz - 20 kHz",
+              hovered=imgui.is_mouse_hovering_rect(
+                  imgui.ImVec2(sx, sy), imgui.ImVec2(sx + sw - 54, sy + sh)))
+
+    # a toggle param: 47 of them
+    wx, wy, _, wh = _row(1, "Bypass")
+    _, state["bypass"] = I.switch(ui, "ctl.bypass", wx, wy + (wh - 18.4) / 2,
+                                  state["bypass"])
+
+    # an enum param: 73 of them
+    ex, ey, ew, _ = _row(2, "Plane")
+    import menu as M
+    chosen, _open = I.select(
+        ui, "ctl.plane", ex, ey, min(ew, 150.0), state["plane"],
+        [M.Item(id=p, label=p, checked=(p == state["plane"]))
+         for p in ("XY", "XZ", "XW", "YZ", "YW", "ZW")])
+    if chosen:
+        state["plane"] = chosen
+
+    # a text param - a node rename, say
+    ix, iy, iw, _ = _row(3, "Name")
+    _, state["name"] = I.text_input(ui, "ctl.name", ix, iy, min(iw, 180.0),
+                                    state["name"], placeholder="Node name")
+
     # ---- table ------------------------------------------------------------
     tx, ty, _, th = r.table_tabs
     picked, _tabs_w = I.tabs(ui, "tab", tx, ty, th, TABS, state["tab"])
@@ -459,8 +544,8 @@ def live(theme_name: str, w: int, h: int) -> None:
     theme = T.LIGHT if theme_name == "light" else T.DARK
     bgc = T.rgba("background", theme=theme)
     series = ticks()
-    state = {"tab": 0, "nav": 0}
-    ui = I.Ui(None, faces, theme, Anim(), grad)
+    state = dict(CTL_STATE, tab=0, nav=0)
+    ui = I.Ui(None, faces, theme, Anim(), grad, theme_name=theme_name)
     rects, last_size = None, None
     prev = time.perf_counter()
 
@@ -528,14 +613,16 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
     rects = lay_out(w, h)
     bgc = T.rgba("background", theme=theme)
     anim = Anim()
-    state = {"tab": 0, "nav": 0}
+    state = dict(CTL_STATE, tab=0, nav=0)
     render.last_state = state           # so a caller can read what the script did
 
     # two warm-up frames settle the backend and the font atlas, and let the
     # animation store see every widget once before anything is scripted
     steps = [None, None] + list(script or [None])
-    # keys is [(frame_index_within_script, imgui.Key)] - pressed and released
-    # on that frame, for checking things ImGui owns, like Escape dismissal
+    # keys is [(frame_index_within_script, imgui.Key | str)] - pressed and
+    # released on that frame, for checking things ImGui owns, like Escape
+    # dismissal. A str is a CHARACTER: input_text is fed by character events,
+    # not key events, so a key alone never types anything into it.
     keymap = {}
     for at, k in (keys or []):
         keymap.setdefault(at + 2, []).append(k)
@@ -552,6 +639,10 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
             if len(mouse) > 2:            # (x, y, down) drives the button too
                 io.add_mouse_button_event(0, bool(mouse[2]))
         for k in keymap.get(i, ()):
+            if isinstance(k, str):
+                for ch in k:
+                    io.add_input_character(ord(ch))
+                continue
             io.add_key_event(k, True)
             io.add_key_event(k, False)
         imgui.new_frame()
@@ -566,7 +657,8 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
         # a real window's list, not the background list: replay.keep
         # (hyperspace/replay.py:91) only carries the page window's own list
         # into the canvas tap
-        ui = I.Ui(imgui.get_window_draw_list(), faces, theme, anim, grad_tex)
+        ui = I.Ui(imgui.get_window_draw_list(), faces, theme, anim, grad_tex,
+                  theme_name=theme_name)
         paint(ui, rects, w, h, series, state)
         imgui.end()
         imgui.pop_style_var(2)

@@ -53,7 +53,43 @@ class Ui:
     anim: Anim
     grad_tex: int | None = None
     scale: float = 1.0
+    theme_name: str = "light"
     _seen: set = field(default_factory=set)
+
+    # Per-widget state that outlives the frame lives on `anim`, because a Ui
+    # is rebuilt every frame (dashboard.py:569) and anything kept here would
+    # be thrown away before it could be read back.
+    @property
+    def drag(self) -> dict:
+        return self.anim.store["drag"]
+
+    @property
+    def texting(self) -> dict:
+        return self.anim.store["texting"]
+
+    # -- the measured component tables, resolved for this theme ----------
+    def __post_init__(self):
+        self.slider_tbl = T.slider_table(self.theme_name)
+        self.switch_tbl = T.switch_table(self.theme_name)
+        self.input_tbl = T.input_table(self.theme_name)
+        self.select_tbl = T.select_table(self.theme_name)
+        self.tooltip_tbl = T.tooltip_table(self.theme_name)
+
+    @property
+    def viewport(self):
+        import box as B
+        vp = imgui.get_main_viewport()
+        return B.Rect(vp.work_pos.x, vp.work_pos.y,
+                      vp.work_size.x, vp.work_size.y)
+
+    def hover_clock(self, key: str, hovered: bool) -> float:
+        """Seconds this id has been hovered without a break."""
+        h = self.anim.store["hover"]
+        if not hovered:
+            h.pop(key, None)
+            return 0.0
+        h[key] = h.get(key, 0.0) + self._dt
+        return h[key]
 
     # -- state ------------------------------------------------------------
     def hit(self, key: str, x, y, w, h, *, allow_overlap: bool = False) -> State:
@@ -80,8 +116,13 @@ class Ui:
             down=self.anim.to(f"{key}:down", 1.0 if held else 0.0),
         )
 
+    @property
+    def _dt(self) -> float:
+        return self.anim.store.get("dt", 1.0 / 60.0)
+
     def frame_done(self, dt: float) -> None:
         self.anim.step(dt)
+        self.anim.store["dt"] = dt
         self._seen.clear()
 
     def col(self, name, a: float = 1.0):
@@ -212,3 +253,245 @@ def row_action(ui: Ui, key, x, y, size, icon, row_hot: float, *,
         D.icon(ui.dl, icon, x + (size - glyph) / 2, y + (size - glyph) / 2,
                glyph, ink)
     return st
+
+
+# --------------------------------------------------------------------------
+# Tier 1: the sandwich, over stock widgets
+# --------------------------------------------------------------------------
+#
+# These run a REAL imgui widget for behaviour and paint dkit chrome under it,
+# which is Panel._track (hyperspace/ui.py:1311-1357) generalized. Using the
+# stock widget rather than hand-rolling the input is not a shortcut, it is the
+# constraint: tests/ui_driver.py:43-46 finds controls by wrapping stock
+# widgets and reading the text after `##`, and its `enter()` action drives a
+# slider by Ctrl+clicking it into a text field - behaviour only
+# `imgui.slider_float` has. Twenty-two test files depend on that.
+#
+# Taper is deliberately NOT in here. `_track` takes a `norm` in 0..1 along
+# the throw and lets the caller own the mapping, because a taper belongs to
+# the param model rather than to the chrome; the kit follows that.
+
+
+def _sandwich_begin(ui: Ui, clear_grab: bool = True) -> list:
+    """Split the draw list and make the stock widget's own chrome invisible.
+
+    Returns the pushed colour list so `_sandwich_end` can pop the right
+    number - the same bookkeeping ui.py:1327-1332 does by hand.
+    """
+    ui.dl.channels_split(2)
+    ui.dl.channels_set_current(1)
+    cols = [imgui.Col_.frame_bg, imgui.Col_.frame_bg_hovered,
+            imgui.Col_.frame_bg_active]
+    if clear_grab:
+        cols += [imgui.Col_.slider_grab, imgui.Col_.slider_grab_active]
+    clear = imgui.ImVec4(0, 0, 0, 0)
+    for c in cols:
+        imgui.push_style_color(c, clear)
+    return cols
+
+
+def _sandwich_end(ui: Ui, cols: list) -> None:
+    imgui.pop_style_color(len(cols))
+    ui.dl.channels_set_current(0)
+
+
+FINE = 0.1          # Shift scales a drag to a tenth, as the panel's does
+
+
+def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
+           snap=0.02, fine=True, disabled=False, fmt="%.3f") -> tuple:
+    """shadcn Slider over a real `imgui.slider_float`.
+
+    Returns (changed, value). `value` is in the caller's own domain; a taper
+    is the caller's business - pass a 0..1 norm if the mapping is not linear,
+    exactly as Panel._track expects.
+
+    `detents` are values to snap to when the result lands within `snap` of
+    one, as a fraction of the span. Shift makes a drag ten times finer, which
+    the stock slider has no notion of, so it is applied by hand from the
+    mouse delta while the item is active.
+    """
+    span = float(hi - lo) or 1.0
+    cols = _sandwich_begin(ui)
+    # The stock slider draws its format string across the middle of the
+    # widget. shadcn's has no inline text - a readout is a separate label -
+    # so it is pushed transparent, EXCEPT while Ctrl+click text entry is up,
+    # which is the one time those glyphs are the thing being typed into.
+    #
+    # imgui_bundle does not expose temp_input_is_active, but text entry lasts
+    # many frames, so last frame's answer is good enough: the only cost is
+    # that the first frame of entry draws the caret invisibly.
+    texting = ui.texting.get(key, False)
+    if not texting:
+        imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0, 0, 0, 0))
+    imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    imgui.push_item_width(w)
+    if disabled:
+        imgui.begin_disabled()
+    changed, out = imgui.slider_float(f"##{key}", float(value), float(lo),
+                                      float(hi), fmt)
+    if disabled:
+        imgui.end_disabled()
+    imgui.pop_item_width()
+    active, hovered = imgui.is_item_active(), imgui.is_item_hovered()
+    if not texting:
+        imgui.pop_style_color()
+    ui.texting[key] = bool(active and imgui.get_io().want_text_input)
+    _sandwich_end(ui, cols)
+
+    # --- Shift: a tenth of the drag -------------------------------------
+    st = ui.drag.get(key)
+    if fine and active and imgui.get_io().key_shift:
+        dx = imgui.get_io().mouse_delta.x
+        base = st if st is not None else float(value)
+        out = min(max(base + dx / max(w, 1.0) * span * FINE, lo), hi)
+        changed = out != value
+        ui.drag[key] = out
+    elif active:
+        ui.drag[key] = out
+    else:
+        ui.drag.pop(key, None)
+
+    # --- detents ---------------------------------------------------------
+    if changed and detents:
+        for d in detents:
+            if abs(out - d) <= snap * span:
+                out = d
+                break
+
+    frac = (out - lo) / span
+    tbl = ui.slider_tbl
+    ring_f = ui.anim.to(f"{key}:ring",
+                        1.0 if (hovered or active) and not disabled else 0.0)
+    D.slider(ui.dl, x, y, w, h, [min(max(frac, 0.0), 1.0)], ui.theme, tbl,
+             ring_f=ring_f, disabled=disabled)
+    ui.dl.channels_merge()
+    return changed, out
+
+
+def switch(ui: Ui, key, x, y, on: bool, *, size="default", disabled=False) -> tuple:
+    """shadcn Switch. Returns (clicked, on).
+
+    An invisible_button rather than a stock checkbox: the hit area shadcn
+    gives it (`after:-inset-x-3 after:-inset-y-2`) is bigger than the track,
+    and a checkbox would draw its own box inside ours. The id is still an
+    `##key` on a widget ui_driver knows.
+    """
+    tw, th, _ = T.SWITCH_SIZES[size]
+    st = ui.hit(key, x - 3.0, y - 2.0, tw + 6.0, th + 4.0)
+    out = on
+    if st.clicked and not disabled:
+        out = not on
+    on_f = ui.anim.to(f"{key}:on", 1.0 if out else 0.0)
+    # No hover chrome at all: measured, the track's fill is byte-identical
+    # hovered and at rest. The only ring it has is `focus-visible`, which
+    # needs keyboard focus the kit does not route yet.
+    D.switch(ui.dl, x, y, on_f, ui.theme, ui.switch_tbl, size=size,
+             disabled=disabled)
+    return (st.clicked and not disabled), out
+
+
+def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
+               invalid=False, disabled=False, flags=0) -> tuple:
+    """shadcn Input over a real `imgui.input_text`. Returns (changed, text).
+
+    The stock widget supplies the caret, the selection, the keyboard and the
+    clipboard, none of which is worth rewriting; the sandwich replaces only
+    its frame. Focus is read back off the widget so the 3px ring eases in on
+    shadcn's own curve rather than snapping.
+    """
+    tbl = ui.input_tbl
+    hh = tbl["h"] if h is None else h
+    cols = _sandwich_begin(ui, clear_grab=False)
+    imgui.set_cursor_screen_pos(
+        imgui.ImVec2(x + tbl["pad_x"], y + (hh - tbl["font"] * 1.3) / 2.0))
+    imgui.push_item_width(w - 2.0 * tbl["pad_x"])
+    if disabled:
+        imgui.begin_disabled()
+    changed, out = imgui.input_text(f"##{key}", text, flags=flags)
+    if disabled:
+        imgui.end_disabled()
+    imgui.pop_item_width()
+    focused = imgui.is_item_active()
+    _sandwich_end(ui, cols)
+
+    focus_f = ui.anim.to(f"{key}:focus", 1.0 if focused else 0.0)
+    D.field(ui.dl, x, y, w, hh, ui.theme, tbl, focus_f=focus_f,
+            invalid=invalid, disabled=disabled)
+    if placeholder and not out:
+        D.label(ui.dl, x + tbl["pad_x"], y, placeholder, ui.faces, "regular",
+                tbl["font"], ui.col(*tbl["placeholder"]), baseline_box=hh)
+    ui.dl.channels_merge()
+    return changed, out
+
+
+def select(ui: Ui, key, x, y, w, label, items, *, size="default",
+           disabled=False, placeholder="Select") -> tuple:
+    """shadcn Select: the trigger here, the panel on imgui's popup stack.
+
+    Returns (chosen_id_or_None, open). The popup is menu.popup - the hard
+    parts of a popover (focus, dismissal on click-away or Escape, nesting,
+    z-order) are already ImGui's and reimplementing them would be the wrong
+    kind of work.
+    """
+    import menu
+    hh, rkey = T.SELECT_SIZES[size]
+    st = ui.hit(key, x, y, w, hh)
+    if st.clicked and not disabled:
+        imgui.open_popup(f"##sel.{key}")
+    open_ = imgui.is_popup_open(f"##sel.{key}")
+    hot = ui.anim.to(f"{key}:hot", 1.0 if st.hovered and not disabled else 0.0)
+    focus_f = ui.anim.to(f"{key}:focus", 1.0 if open_ else 0.0)
+    D.select_trigger(ui.dl, x, y, w, hh, ui.theme, ui.select_tbl, size=size,
+                     hot=hot, focus_f=focus_f, disabled=disabled, open_=open_)
+    ink = "foreground" if label else "muted-foreground"
+    D.label(ui.dl, x + ui.select_tbl["pad_l"], y, label or placeholder,
+            ui.faces, "regular", ui.select_tbl["font"], ui.col(ink),
+            baseline_box=hh,
+            max_w=w - ui.select_tbl["pad_l"] - ui.select_tbl["pad_r"]
+            - ui.select_tbl["chevron"] - 4.0)
+    import box as B
+    chosen = menu.popup(ui, f"##sel.{key}", items, min_w=w,
+                        anchor=B.Rect(x, y, w, hh), side="bottom",
+                        align="start", offset=4.0) if open_ else None
+    return chosen, open_
+
+
+# tooltips open after a delay and close at once, which needs a clock rather
+# than an eased value: `delay` is in seconds of continuous hover.
+TOOLTIP_DELAY = 0.4
+
+
+def tooltip(ui: Ui, key, anchor, text, *, hovered: bool, side="top",
+            delay=TOOLTIP_DELAY, max_w=320.0) -> bool:
+    """shadcn Tooltip, placed against `anchor` = (x, y, w, h).
+
+    `hovered` comes from the control's own State, so a tooltip never needs a
+    hit target of its own - which matters because one that took the hover
+    would steal it from the thing it describes, the same trap `row_action`
+    exists to close.
+
+    Drawn straight into the draw list rather than into an imgui popup: a
+    tooltip is not interactive, so it needs none of the popup stack, and
+    replay.keep (hyperspace/replay.py:91) drops popups from the GRAPH canvas
+    tap anyway.
+    """
+    import box as B
+    held = ui.hover_clock(key, hovered)
+    if held < delay:
+        return False
+    tbl = ui.tooltip_tbl
+    tw = min(D.text_w(text, ui.faces, "regular", tbl["font"]), max_w)
+    pw = tw + 2.0 * tbl["pad_x"]
+    ph = tbl["font"] * 1.3 + 2.0 * tbl["pad_y"]
+    ax, ay, aw, ah = anchor
+    # Radix reserves the arrow's full declared size between panel and anchor
+    gap = tbl["arrow_space"] + tbl["side_offset"]
+    r, _flipped = B.place_popover(B.Rect(ax, ay, aw, ah), pw, ph, ui.viewport,
+                                  side=side, align="center", offset=gap)
+    D.tooltip_panel(ui.dl, r.x, r.y, r.w, r.h, ui.theme, tbl,
+                    arrow_at=ax + aw / 2.0,
+                    side="top" if r.y < ay else "bottom")
+    D.label(ui.dl, r.x + tbl["pad_x"], r.y, text, ui.faces, "regular",
+            tbl["font"], ui.col(*tbl["fg"]), baseline_box=r.h, max_w=tw)
+    return True

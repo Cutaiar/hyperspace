@@ -83,6 +83,17 @@ class Anim:
         self.curve = curve
         self._t: dict[str, _Track] = {}
         self._frame = 0
+        # Per-widget state that is NOT eased, but still has to survive from
+        # one frame to the next: a slider's value while Shift-fine is
+        # overriding the stock widget, which sliders are in Ctrl+click text
+        # entry, and how long each id has been hovered without a break.
+        #
+        # It lives here because `Anim` is the one object the kit already
+        # threads across frames - interact.Ui is rebuilt every frame
+        # (dashboard.py:569), so anything kept on the Ui is lost immediately.
+        # That is not a hypothetical: the tooltip's hover clock was reset on
+        # every frame and the tooltip could never reach its delay.
+        self.store: dict[str, dict] = {"drag": {}, "texting": {}, "hover": {}}
 
     def to(self, key: str, target: float) -> float:
         tr = self._t.get(key)
@@ -141,3 +152,27 @@ def mix(a, b, f: float):
     if al <= 1e-6:
         return (0.0, 0.0, 0.0, 0.0)
     return (r / al, g / al, bl / al, al)
+
+
+def over(src, dst):
+    """Composite `src` over `dst`, premultiplied - the Porter-Duff OVER.
+
+    The companion to `mix`. `mix` blends two colours by a factor, which is
+    what a transition does; this stacks one on top of another, which is what
+    PAINTING does, and the kit needs it to fold CSS's group opacity into
+    flat colours.
+
+    `opacity` on an element is not the same as alpha on each of its layers.
+    CSS composites the element's own fill and border FIRST and applies the
+    opacity to that composite; scaling both layers' alpha instead leaves the
+    fill showing through a semi-transparent border that should have covered
+    it. On a disabled Input that came out as 2 levels across the border -
+    small, but it was the only thing in the gallery above 1.
+    """
+    sr, sg, sb, sa = src
+    dr, dg, db, da = dst
+    oa = sa + da * (1.0 - sa)
+    if oa <= 1e-6:
+        return (0.0, 0.0, 0.0, 0.0)
+    f = lambda cs, cd: (cs * sa + cd * da * (1.0 - sa)) / oa
+    return (f(sr, dr), f(sg, dg), f(sb, db), oa)

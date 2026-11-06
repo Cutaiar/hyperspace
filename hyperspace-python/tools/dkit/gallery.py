@@ -77,6 +77,9 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     badges = T.badge_table(theme_name)
     sliders = T.slider_table(theme_name)
     switches = T.switch_table(theme_name)
+    inputs = T.input_table(theme_name)
+    selects = T.select_table(theme_name)
+    tips = T.tooltip_table(theme_name)
     ink = T.rgba("foreground", theme=theme)
 
     # Two frames: the first builds the font atlas and settles the backend.
@@ -98,6 +101,21 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
             elif cell["kind"] == "switch":
                 D.switch(dl, cell["x"], cell["y"], 1.0 if cell["on"] else 0.0,
                          theme, switches, size=cell["variant"])
+            elif cell["kind"] == "input":
+                D.field(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                        theme, inputs,
+                        invalid=cell["variant"] == "invalid",
+                        disabled=cell["variant"] == "disabled")
+            elif cell["kind"] == "select":
+                D.select_trigger(dl, cell["x"], cell["y"], cell["w"],
+                                 cell["h"], theme, selects,
+                                 size=cell["variant"])
+            elif cell["kind"] == "tooltip":
+                # The oracle pins the TRIGGER at the cell's bottom centre and
+                # lets Radix place the panel, so the arrow is centred there.
+                D.tooltip_panel(dl, cell["x"], cell["y"], cell["w"],
+                                cell["h"], theme, tips,
+                                arrow_at=cell["x"] + cell["w"] / 2.0)
             elif cell["kind"] == "text":
                 D.text_cell(dl, cell, faces, ink)
         imgui.render()

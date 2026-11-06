@@ -2,7 +2,7 @@
   "_comment": "The shared gallery spec. Both the React oracle and the ImGui kit read this file and draw the SAME rects, so a diff measures chrome, never text metrics. Rects are CSS/content-box pixels at device-pixel-ratio 1, origin top-left.",
   "canvas": {
     "w": 760,
-    "h": 1000,
+    "h": 1060,
     "bg": "#ffffff"
   },
   "cells": [
@@ -379,6 +379,66 @@
       "fracs": [
         0.333
       ]
+    },
+    {
+      "id": "input.rest",
+      "kind": "input",
+      "variant": "rest",
+      "x": 40,
+      "y": 880,
+      "w": 200,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "input.invalid",
+      "kind": "input",
+      "variant": "invalid",
+      "x": 280,
+      "y": 880,
+      "w": 200,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "input.disabled",
+      "kind": "input",
+      "variant": "disabled",
+      "x": 520,
+      "y": 880,
+      "w": 200,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "select.default",
+      "kind": "select",
+      "variant": "default",
+      "x": 40,
+      "y": 930,
+      "w": 160,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "select.sm",
+      "kind": "select",
+      "variant": "sm",
+      "x": 240,
+      "y": 930,
+      "w": 160,
+      "h": 28,
+      "text": ""
+    },
+    {
+      "id": "tooltip.panel",
+      "kind": "tooltip",
+      "variant": "plain",
+      "x": 440,
+      "y": 930,
+      "w": 140,
+      "h": 28,
+      "text": ""
     }
   ]
 }

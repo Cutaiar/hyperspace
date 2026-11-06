@@ -75,7 +75,10 @@ const PROPS = [
       const id = block.getAttribute("data-probe")
       const origin = block.getBoundingClientRect()
       const parts = [rd(block, origin)]
-      for (const el of block.querySelectorAll("[data-slot]")) parts.push(rd(el, origin))
+      // svg too: the Select's chevron and the Tooltip's arrow carry no
+      // data-slot, and their offset inside the trigger is exactly what the
+      // kit has to reproduce
+      for (const el of block.querySelectorAll("[data-slot], svg")) parts.push(rd(el, origin))
       res[id] = { origin: { w: +origin.width.toFixed(3), h: +origin.height.toFixed(3) }, parts }
     }
     // Portalled content (Select, Tooltip) lives at the document root, not
@@ -85,7 +88,7 @@ const PROPS = [
     const vp = { x: 0, y: 0 }
     const portal = []
     for (const el of document.querySelectorAll(
-      "body > [data-radix-popper-content-wrapper] [data-slot], body > div > [data-slot]"
+      "body > [data-radix-popper-content-wrapper] [data-slot], body > div > [data-slot], [data-slot=\"tooltip-content\"] svg, [data-slot=\"select-content\"] [data-slot], [data-slot=\"select-item\"] svg"
     )) {
       if (el.closest("[data-probe]")) continue
       portal.push(rd(el, vp))
