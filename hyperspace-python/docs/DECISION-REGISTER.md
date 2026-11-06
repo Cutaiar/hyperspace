@@ -757,6 +757,7 @@ here; overturn → the change, then the same.
 | 750 | Plan 56: the factory's `hat:UP/DOWN → view.bright ±3` and `pad:LB/RB → view.shape ±1` stay two rows and act exactly as they did; no saved-format change, an older build reads a pair's row as dormant | 748 | (rec) — pending the owner |
 | 751 | Plan 56: not built, poles on keys or MIDI notes; a route on a pair leaves its poles' own rows alone, and both act | 748 | (rec) — pending the owner |
 | 752 | Plan 44 D5d: no preset may carry a row on a library verb, a load (`is_load_verb`) or a save (`is_save_verb`: `preset.save.<k>`, `preset.save_new`). `routing.meta_refusal` refuses a desk row or route on one at every door, dropped with a note on load and gone at the next save; the meta controller's own rows pass, so a person's saves are as they were. `preset.*` stays out of `is_session_id` until SEM. Not a format change | 700, 743 | owner — 2026-11-06: "no patch can affect another patch" |
+| 754 | Plan 56: a row a person makes on a `pair:` lane while a pole already has a row asks first: keep both, let the pair take over, or cancel, with no default. A file, a migration and a factory row do not ask, and both act. A taken row goes on its own layer's stack | 580 | owner — 2026-11-06 |
 
 "—": no hand check shows it; tests only.
 
@@ -13674,3 +13675,49 @@ still wins, as does a sink row.
   a held empty pad and SAVE plus a pad on the invariant row, ⇧F1–F8, and the Edge's hold-to-save (`pad@edge:MENU`, row 723), all the
   meta controller's rows. `preset.save_new` can no longer be learned onto a desk control, as with `preset.list.*` above.
 - **Judge it.** 578.
+
+### 754. A pair that overlaps a mapping asks first
+
+- **Answer.** The owner, 2026-11-06: "when you create the pair in general, it should tell you that part of this pair is already mapped. Then you should have to explicitly consent to either keeping both mappings on that control or the option to remove the existing mapping and let the pair take over that axis."
+- **Built.** `learn.pair_question` makes a `PairAsk` when `learn.pole_rows` finds a row: a
+  row of its own on either pole, or another pair's sharing one, in this `Deck`'s table,
+  switched on, same pad. Nothing changes until `learn.settle_pair`. `ui_routing.modal`
+  draws it, centred like Replace / Keep, not in the pane.
+- **The roads that ask:** Learn pair (`Learn.learn_pair`, the `step` row), Learn pair
+  (spring) and any adapter's Learn (`Learn.learn_source`), a GRAPH cable onto a continuous
+  param (`Edit._add`) or a stepped one (`Edit._pair_step_row`), Route from (through
+  `Edit.connect_value`, though it offers no pair today), ROUTING's add (`add_route`) and a
+  row's source combo (`_move_source`).
+- **What does not ask.** A preset load, undo, a patch spawn (its conflict sheet is its own
+  question, over a file's rows), node mode's derived rows, a `bindings.json` or factory row:
+  both act, and no saved file changes. A modifier's input on a pair lane is no route on it.
+  A modifier deleted puts back the route it stood in for. Waking or retargeting a row
+  already on the pair makes no new mapping. The same pair on the same param again is the
+  same mapping; a Learn moving its own route is the one-axis-one-param rule it already had
+  (`_place`). A switched-off row acts on nothing.
+- **Step rows changed.** Learn pair used to replace the rows on its poles without saying so.
+  It now asks like every other road. A plain Learn pad on one button still replaces that
+  button's rows, as a button learn always did.
+- **One question.** A target that already has a performer does not add Replace / Keep on top:
+  the same question says it lets go either way, and the answer that lands replaces it,
+  read at that moment.
+- **Layers.** A person's answer is not a patch: nothing in a patch's file can remove a meta
+  row, and loading one still only makes both act, so `meta_refusal` and "no patch can
+  affect another patch" hold and both answers are offered. The words say a meta row goes
+  "for every patch". One step on each stack the answer changes (`settle_pair`): the new
+  row's layer, and a taken row's. So taking a meta row with a patch's route is one step on
+  the `Deck`'s stack and one on the meta controller's, and ⌘Z does not cross between them
+  (plan 44 D5b): the words say a meta row comes back with ⌘Z over OUTPUT, AUDIO, ANALYZER or
+  HANDS, written back to `bindings.json` by `SessionTable.set_rows`. **Decide:** whether one
+  ⌘Z should take back both. It would mean a stack reaching into another, which D5b forbids.
+- **Another `Deck`.** The question reads this `Deck`'s rows and takes only those and the meta
+  controller's. A route the other loaded patch has on a shared pole is neither said nor
+  touched.
+- **A patch loaded under the question** withdraws it, says nothing landed
+  (`Bindings.routes_set_n`), so an answer cannot land one patch's row in the next.
+- **`Model.layout`** (#365, not on main) is read duck-typed by `ui_routing.layout_stays`, and
+  the question says such a pole stays. It adds to a question and does not raise one:
+  with #365 `models.control_free` keeps a layout's controls from being poles at all.
+- **To reverse.** `pair_question` returning None is row 751's behaviour for routes; the `step`
+  road then needs its old removal back.
+- **Judge it.** 580.

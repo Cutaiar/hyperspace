@@ -225,6 +225,7 @@ from . import (
 from .bands import CEIL
 from .graph import Effect
 from .groupwords import group_title
+from .learn import PairAsk
 from .library import LibraryError
 from .params import Kind
 from .routing import base_refusal, is_macro
@@ -4021,6 +4022,9 @@ def _settle(panel, res):
     st = _state(panel)
     if isinstance(res, graphview.Ask):
         ui_routing.ask(panel, res.old, res.new, res.commit)
+        _note(st, None)
+    elif isinstance(res, PairAsk):
+        ui_routing.ask_pair(panel, res)
         _note(st, None)
     elif isinstance(res, graphview.Refusal):
         _note(st, str(res))

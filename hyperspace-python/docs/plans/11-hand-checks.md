@@ -8222,6 +8222,24 @@ learn press that also steps the param, or a pair lost on reload.
 pad's press is refused in words and the learn still waits; the row names the second
 pad's role, and only that pad moves it. Fail: a stuck offset.
 
+## CS. A pair that overlaps a mapping asks (plan 56)
+Register row 754, 2026-11-06. Headless: `tests/test_pair_consent.py`: each road asks and
+doesn't, each answer, a file load, undo on the real three stacks. A real panel by the
+mouse: `tools/app_driver.py`, Let the pair take over.
+**580. Consent, by your eye.** (a pad with the factory's D-pad rows)
+1. On a continuous param: **Learn pair (spring)**, press ↑, then ↓. Read the question. Press
+   Enter. Press **Keep both**, then press ↑.
+2. ⌘Z. Learn it again. **Let the pair take over**, then press ↑.
+3. ⌘Z with the mouse over the graph, then ⌘Z with it over OUTPUT.
+4. On GRAPH, drag from the pad node's `UP / DOWN` onto another param's mod. **Cancel**.
+5. Quit and reopen after step 3's undo. Load a saved patch whose route is on `pair:UP/DOWN`.
+*Pass:* (1) the question names d-pad up and down, Brightness, and the meta controller; Enter
+does nothing; after **Keep both** ↑ moves both. (2) ↑ moves only the param, and the line says
+where the rows come back. (3) The first ⌘Z takes the route; the second brings ↑ and ↓ back on
+Brightness. Say whether one ⌘Z should take back both (row 754). (4) Nothing lands. (5) No
+question at any load, and both act. Fail: a row landing or going before you answer, or a
+meta row not coming back.
+
 ## What no test covers
 
 Only a person can settle these:
