@@ -165,13 +165,50 @@ def row(ui: Ui, key, x, y, w, h) -> State:
     return st
 
 
-def icon_button(ui: Ui, key, x, y, size, icon, *, glyph=16) -> State:
-    """A square ghost button holding one icon — the kebab trigger's shape."""
+def icon_button(ui: Ui, key, x, y, size, icon, *, glyph=16,
+                alpha: float = 1.0) -> State:
+    """A square ghost button holding one icon — the kebab trigger's shape.
+
+    `alpha` fades the chrome WITHOUT withdrawing the hit target. A control
+    that only reveals on hover must still be submitted every frame: gate its
+    submission on the row's hover and it oscillates, because taking the hover
+    is exactly what stops the row being hovered. See `row_action`.
+    """
     st = ui.hit(key, x, y, size, size)
+    if alpha <= 0.001:
+        return st
     f = min(1.0, st.hot + st.down * 0.4)
     D.fill(ui.dl, x, y, size, size,
-           mix(ui.col("transparent"), ui.col("accent"), f), T.RADII["md"])
-    ink = mix(ui.col("muted-foreground"), ui.col("foreground"), f)
+           mix(ui.col("transparent"), ui.col("accent", alpha), f),
+           T.RADII["md"])
+    ink = mix(ui.col("muted-foreground", alpha), ui.col("foreground", alpha), f)
     D.icon(ui.dl, icon, x + (size - glyph) / 2, y + (size - glyph) / 2,
            glyph, ink)
+    return st
+
+
+def row_action(ui: Ui, key, x, y, size, icon, row_hot: float, *,
+               pinned: bool = False, glyph=16) -> State:
+    """A control that appears on row hover — a kebab, usually.
+
+    The trap this exists to close: gating submission on `row_hot` makes the
+    control flicker and become unclickable. The control takes the hover from
+    the row, so the row stops being hovered, so `row_hot` decays, so the
+    control is withdrawn, so the row is hovered again. It oscillates at the
+    easing's period and a press can land on a frame where the button does not
+    exist.
+
+    So it is always submitted, and visibility is `max(row hover, its own
+    hover, pinned)` — which is stable under the handover.
+    """
+    st = ui.hit(key, x, y, size, size)
+    vis = max(row_hot, st.hot, 1.0 if pinned else 0.0)
+    if vis > 0.001:
+        f = min(1.0, st.hot + st.down * 0.4)
+        D.fill(ui.dl, x, y, size, size,
+               mix(ui.col("transparent"), ui.col("accent", vis), f),
+               T.RADII["md"])
+        ink = mix(ui.col("muted-foreground", vis), ui.col("foreground", vis), f)
+        D.icon(ui.dl, icon, x + (size - glyph) / 2, y + (size - glyph) / 2,
+               glyph, ink)
     return st

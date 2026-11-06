@@ -334,14 +334,14 @@ def paint(ui: I.Ui, r: Rects, w, h, series, state):
     for ri, (row, rect) in enumerate(zip(rows[:shown], r.table_rows)):
         rx, ry, rw, rh = rect
         hovered = I.row(ui, f"row.{ri}", rx, ry, rw, rh).hot
-        # the kebab shows on hover, as shadcn's row actions do, but stays put
-        # once its menu is open
+        # the kebab reveals on row hover and stays while its menu is open.
+        # row_action submits it every frame regardless - see its docstring for
+        # why gating submission on the hover makes it unclickable.
         mkey = f"rowmenu.{ri}"
-        if hovered > 0.01 or imgui.is_popup_open(mkey):
-            if I.icon_button(ui, f"kebab.{ri}", rx + rw - 30,
-                             ry + (rh - 26) / 2, 26,
-                             "ellipsis-vertical", glyph=15).clicked:
-                imgui.open_popup(mkey)
+        if I.row_action(ui, f"kebab.{ri}", rx + rw - 30, ry + (rh - 26) / 2,
+                        26, "ellipsis-vertical", hovered,
+                        pinned=imgui.is_popup_open(mkey), glyph=15).clicked:
+            imgui.open_popup(mkey)
         picked = M.popup(ui, mkey, ROW_MENU)
         if picked:
             state["said"] = f"{picked} \u00b7 {row['name']}"
@@ -447,6 +447,8 @@ def live(theme_name: str, w: int, h: int) -> None:
     win, impl, io, faces, grad = _boot(theme_name, w, h, visible=True,
                                        retina=True)
     glfw.swap_interval(1)
+    # without this Escape does not dismiss a popup - see render()
+    io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
     theme = T.LIGHT if theme_name == "light" else T.DARK
     bgc = T.rgba("background", theme=theme)
     series = ticks()
@@ -482,7 +484,8 @@ def live(theme_name: str, w: int, h: int) -> None:
     glfw.terminate()
 
 
-def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
+def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0,
+           keys=None):
     """Draw the dashboard, optionally stepping a script of mouse positions.
 
     `script` is a list of (x, y) or (x, y, down) — one per frame — so a hover
@@ -506,7 +509,7 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
         glfw.terminate()
         raise SystemExit("could not create the hidden window")
     glfw.make_context_current(win)
-    imgui.create_context()
+    ctx = imgui.create_context()
     impl = GlfwRenderer(win)
 
     io = imgui.get_io()
@@ -524,6 +527,15 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
     # two warm-up frames settle the backend and the font atlas, and let the
     # animation store see every widget once before anything is scripted
     steps = [None, None] + list(script or [None])
+    # keys is [(frame_index_within_script, imgui.Key)] - pressed and released
+    # on that frame, for checking things ImGui owns, like Escape dismissal
+    keymap = {}
+    for at, k in (keys or []):
+        keymap.setdefault(at + 2, []).append(k)
+    # ImGui routes Escape (and every other key) through its nav system, which
+    # is OFF by default - so without this a menu cannot be dismissed with the
+    # keyboard at all. tests/ui_driver.py:172 turns it on for the same reason.
+    io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
     frames = []
     for i, mouse in enumerate(steps):
         glfw.poll_events()
@@ -532,6 +544,9 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
             io.add_mouse_pos_event(float(mouse[0]), float(mouse[1]))
             if len(mouse) > 2:            # (x, y, down) drives the button too
                 io.add_mouse_button_event(0, bool(mouse[2]))
+        for k in keymap.get(i, ()):
+            io.add_key_event(k, True)
+            io.add_key_event(k, False)
         imgui.new_frame()
         GL.glClearColor(bgc[0], bgc[1], bgc[2], 1.0)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
@@ -563,6 +578,7 @@ def render(theme_name: str, w: int, h: int, *, script=None, dt=1 / 60.0):
             frames.append(px.copy())
 
     impl.shutdown()
+    imgui.destroy_context(ctx)      # or the next render() inherits this state
     glfw.terminate()
     return frames
 

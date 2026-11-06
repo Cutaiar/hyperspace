@@ -31,6 +31,12 @@ import draw as D
 import tokens as T
 from ease import mix
 
+# Where each menu was last drawn, keyed by popup id: {key: (x, y, w, h)}.
+# ImGui places the popup, so a test cannot know the rect ahead of time, and
+# finding it from pixels is unreliable — a hovered table row composites to
+# within a level of the popover fill. This is the seam instead.
+LAST_RECT: dict = {}
+
 PAD = 4.0            # p-1
 ITEM_H = 26.0        # py-1 either side of a 14px line
 ITEM_PAD_X = 6.0     # px-1.5
@@ -147,6 +153,7 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W) -> str | None:
         dl = imgui.get_window_draw_list()
         p = imgui.get_window_pos()
         x, y = p.x, p.y
+        LAST_RECT[key] = (x, y, w, h)
         saved, ui.dl = ui.dl, dl
         # the shadow and the ring fall OUTSIDE the window rect, which imgui
         # clips to; widen the clip while the chrome is drawn
@@ -171,6 +178,7 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W) -> str | None:
         ui.dl = saved
         imgui.end_popup()
     else:
+        LAST_RECT.pop(key, None)
         ui.anim.to(f"{key}:open", 0.0)
     imgui.pop_style_color()
     imgui.pop_style_var(3)

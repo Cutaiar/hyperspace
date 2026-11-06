@@ -202,6 +202,30 @@ Two things worth knowing:
   appear in the `panel:graph` texture that feeds the render graph. Fine on
   the panel; it cannot be part of anything projected.
 
+## Testing it
+
+`test_interaction.py` drives synthetic input and reads the result back, so
+the kit's behaviour is checked without a person at the window.
+
+It exists because of a bug it would have caught and a manual check did not:
+the row kebab flickered and could never be clicked, and the screenshot I
+took looked fine because **the script hovered for six frames — shorter than
+the 150ms transition**, so the oscillation had not started. Every test here
+dwells well past the easing period and asserts stability over time rather
+than the state of one frame. A bug that needs time to appear needs a test
+that spends time.
+
+```bash
+uv run python -m pytest tools/dkit/test_interaction.py tools/dkit/test_ease.py -q
+```
+
+Two seams make it possible: `render(..., script=[(x, y[, down])],
+keys=[(frame, key)])` drives the pointer and the keyboard a frame at a time,
+and `menu.LAST_RECT` records where ImGui actually put each popup. Reading
+the menu's position from pixels was tried first and is unreliable — a
+hovered table row composites to within one level of the popover fill, so the
+bounding box swallowed the row.
+
 ## Running it
 
 Nothing here needs `HYPERSPACE_HOME` — dkit touches none of the app's state.
