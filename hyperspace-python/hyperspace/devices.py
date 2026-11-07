@@ -108,7 +108,7 @@ import numpy as np
 RETRY_S = 2.0
 RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
-WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
+WATCH_FRAMES = 30        # the device list's mtime is looked at this often (as the shaders are)
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
 # fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
 # not a device
@@ -1717,7 +1717,9 @@ class DeviceRegistry:
     own entry (`open_all`), polled in order each frame, closed in one
     list (reverse order). `entries` are checked entries (config.devices);
     `devices` may be given ready-made (tests, the frame-order stubs).
-    `path` is the config.toml to watch, `clock` the retry clock
+    `store` is the list both Macs share (`devicelist.DeviceList`), which it
+    watches and `relist`s from; `path`, with no store, a config.toml to
+    watch instead (RT1 retires that road). `clock` is the retry clock
     (monotonic, as midi.Ports'). `listeners` are called after any open
     or close, so the host can re-point what holds an adapter (the panel,
     the ghost renderer).
@@ -1736,10 +1738,11 @@ class DeviceRegistry:
 
     def __init__(self, entries: list[dict] | None = None, ctx: Context | None = None, *,
                  devices: list | None = None, path: Path | None = None,
-                 clock=time.monotonic, notes: list[str] | None = None):
+                 clock=time.monotonic, notes: list[str] | None = None, store=None):
         self.ctx = ctx if ctx is not None else Context()
         self.notes = notes if notes is not None else self.ctx.notes
         self.path = Path(path) if path is not None else None
+        self.store = store
         self.clock = clock
         self.entries: list[dict] = [dict(e) for e in (entries or [])]
         if getattr(self.ctx, "devices", None) is None:
@@ -2256,7 +2259,7 @@ class DeviceRegistry:
                 on = p.deck.reg if p is not None else reg
                 self._guard(d, lambda d=d, on=on: d.send(on, analyzer))
 
-    # ---- config.toml, watched ----
+    # ---- the list, watched ----
 
     def _stat(self) -> float | None:
         if self.path is None:
@@ -2266,10 +2269,32 @@ class DeviceRegistry:
         except OSError:
             return None
 
+    def relist(self) -> bool:
+        """The list as the store has it, applied (an adopt, here on this Mac: an entry
+        that won't check is left out, and the rest stand). True when anything changed."""
+        store = self.__dict__.get("store")
+        if store is None:
+            return False
+        entries, problems, _notes = store.checked()
+        for why in problems:
+            self._note(why)
+        return self.apply(entries)
+
     def watch(self) -> bool:
-        """Re-read the `[[devices]]` list when config.toml's mtime moved;
-        True when the list changed. A file that will not parse, or a list
-        with a bad entry, is a note and the old list stands."""
+        """Re-read the list when its file moved; True when the list changed. A file
+        that will not parse, or a list with a bad entry, is a note and the old list
+        stands, with every device still running. The store's list when there is one
+        (`DeviceList.look`: the other Mac's change lands here, and no local adopt is
+        lost to it); else `path`'s `[[devices]]`."""
+        store = self.__dict__.get("store")
+        if store is not None:
+            if not store.look():
+                return False
+            entries, problems, _notes = store.checked()
+            if problems:
+                self._note(f"devices: the list not applied — {problems[0]} — the old list stands")
+                return False
+            return self.apply(entries)
         if self.path is None:
             return False
         mtime = self._stat()

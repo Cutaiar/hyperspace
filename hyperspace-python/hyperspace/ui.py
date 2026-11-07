@@ -3121,7 +3121,7 @@ class Panel:
             else:
                 imgui.text_disabled(line)
         if not len(regs):
-            imgui.text_disabled("no devices — [[devices]] in config.toml")
+            imgui.text_disabled("no devices — drag one from the player board's tray")
         for line in devices.wanted_lines(ui_graph.panel_wants(self)):
             imgui.text_colored(WARN, line)          # plan 40 T4: what the loadable patch waits for
 

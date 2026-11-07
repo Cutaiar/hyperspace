@@ -97,7 +97,9 @@ from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library
+from .devicelist import DeviceList
 from .library import home as library_home
+from .midiports import port_names
 from .media import pool as media_pool
 from .media import proxy as media_proxy
 from .media import publish
@@ -810,7 +812,7 @@ def _hand_settings(reg: Registry, cfg: dict):
 
 
 def _open_devices(cfg: dict, ctx: devices.Context, home: Path | None,
-                  clock=time.monotonic) -> devices.DeviceRegistry:
+                  clock=time.monotonic, store: DeviceList | None = None) -> devices.DeviceRegistry:
     """The device registry (devices.py, plan 27 B1) over the config's
     `[[devices]]` list — the old `[midi]` / `[gamepad]` / `[hands]` /
     `[bridge]` tables translated when there is none — every device opened
@@ -818,12 +820,16 @@ def _open_devices(cfg: dict, ctx: devices.Context, home: Path | None,
     `[hands] tape` that is missing) is said on stderr and in
     `cfg["notes"]`, which the SYSTEM page lists and the HANDS page shows
     in place of "tracker off" (plan 21 WP5 R10), and is tried again on
-    the Ports schedule. The registry watches `<home>/config.toml` for
-    edits to the list."""
-    path = (home / config.FILE) if home is not None else None
+    the Ports schedule. With a `store` (`devicelist.DeviceList`, `main`'s) the
+    registry watches that for the other Mac's changes, and the tray can adopt;
+    with none, `<home>/config.toml` for edits to the list. The first look for
+    MIDI ports is made here, before any frame, as it takes up to a second."""
+    path = (home / config.FILE) if home is not None and store is None else None
     reg = devices.DeviceRegistry(config.devices(cfg), ctx, path=path, clock=clock,
-                                 notes=cfg.setdefault("notes", []))
+                                 notes=cfg.setdefault("notes", []), store=store)
     reg.open_all()
+    if not cfg.get("no_midi_look"):
+        port_names()
     return reg
 
 
@@ -1453,6 +1459,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.laptop:
         config.laptop(cfg)
     home = library_home()                 # the folder config.load has just ensured
+    # the controllers both Macs share, from the library's configured path: before anything
+    # reads `cfg`'s device tables, and whether or not that folder is mounted
+    device_list = DeviceList.open(cfg, home)
     # the players, on this Mac (plan 55): beside bindings.json, before the devices
     # read who holds what
     players = Players.load(home, cfg.setdefault("notes", []))
@@ -1611,7 +1620,7 @@ def main(argv: list[str] | None = None) -> None:
                                                  audio=audio, hand_settings=hand_settings,
                                                  notes=cfg.setdefault("notes", []), home=home,
                                                  players=players),
-                            home)
+                            home, store=device_list)
 
         def point_at_devices() -> None:
             panel.midi = device_reg.adapter("midi")         # the first desk listed: the APC40's page

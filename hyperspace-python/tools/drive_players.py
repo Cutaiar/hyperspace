@@ -1,15 +1,18 @@
 """tools/app_driver.py script: the player screen with a full set of controllers
 (stood in: the driver's home lists none), by mouse — at 320 and 240 px in the pane,
-a token dragged across, then the large window and a controller dragged between tokens.
+a token dragged across, then the large window and a controller dragged between tokens,
+then a MIDI port and a pad nobody lists, waiting in the tray, each dragged to a player:
+adopted, through the real list in the driver's scratch home (wave 5 CT1).
 
     uv run python tools/app_driver.py tools/drive_players.py --out <scratch>/run --every 10
 
-Nothing is written: the players' file is cut off first.
+The players' file is cut off first; the device list is written, in that scratch home.
 """
 
 from types import SimpleNamespace as NS
 
-from hyperspace import ui_graph
+from hyperspace import ui_graph, ui_players
+from hyperspace.midiports import PortNames
 from hyperspace.pads import models
 from hyperspace.ui import PAGE_KEYS
 
@@ -71,3 +74,36 @@ def script(d, panel):
     yield from d.press(False)
     yield from d.park()
     yield from d.wait(60)
+    # the tray: seen on this Mac, in no entry. Each waits until it is dragged
+    regs = panel.devices
+    regs.get = real                 # the real list from here on
+    meta.players.tell = type(meta.players).tell.__get__(meta.players)
+    seen = ["Launch Control XL"]
+    ui_players.port_names = lambda: PortNames(list(seen), [], "")
+    regs.ctx.pads = NS(taken={}, hub=NS(readers={"a": NS(name="Joy-Con (L)", model=models.MODELS["joycon-l"])},
+                                        held={}))
+    ui_players._state(panel)["loose_at"] = -1e9
+    regs.relist()
+    yield from d.park()
+    yield from d.wait(60)           # two in the tray; nothing written
+    assert "launch-control-xl" not in regs.store.path.read_text()
+    yield from d.move("players.big.tray.0", frames=10)
+    yield from d.press(True)
+    yield from d.move(head(d, "players.big.p2"), frames=30)
+    yield from d.wait(30)           # a new one in the air
+    yield from d.press(False)
+    seen.clear()
+    ui_players._state(panel)["loose_at"] = -1e9
+    yield from d.park()
+    yield from d.wait(60)           # adopted, and said
+    yield from d.move("players.big.tray.0", frames=10)
+    yield from d.press(True)
+    yield from d.move(head(d, "players.big.p4"), frames=30)
+    yield from d.press(False)
+    regs.ctx.pads.hub.readers.clear()
+    ui_players._state(panel)["loose_at"] = -1e9
+    yield from d.park()
+    yield from d.wait(60)
+    text = regs.store.path.read_text()
+    assert "launch-control-xl" in text and "joycon-l" in text
+    print(text)
