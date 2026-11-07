@@ -179,19 +179,30 @@ def _node_key(table, role: str) -> tuple:
     return (role, table.node_rows_serial(role)) if role and hasattr(table, "node_rows_serial") else ()
 
 
-def _stick_quiet(panel, source: str) -> bool:
-    """Is a route on this stick address not heard now (`PadDevice.quiet_stick`, the
-    device's own answer, lane by lane: node mode may hold one axis of the stick)?"""
+def _quiet_lanes(panel) -> frozenset[int]:
+    """The `axis` lanes a route on the drawn pad isn't heard on (`PadDevice.quiet_stick`, the
+    device's own answer, for the rows of the deck this window draws, which may not be the one
+    the pad acts on). Once a draw: `_body` keeps it in `_state` while it draws."""
     model = _model(panel)
-    lane = source.removeprefix("axis:")
-    if (not totem.own_layout(model) or lane == source or lane not in gamepad.LANES
-            or gamepad.LANES.index(lane) not in gamepad.left_stick_lanes()):
-        return False
+    if not totem.own_layout(model):
+        return frozenset()
     d = _device(panel)
     if d is None:
-        return totem.quiet_stick(model, getattr(panel, "reg", None), "")
+        quiet = totem.quiet_stick(model, getattr(panel, "reg", None), "")
+        return gamepad.left_stick_lanes() if quiet else frozenset()
     reg = d.reg if d.reg is not None else getattr(panel, "reg", None)
-    return gamepad.LANES.index(lane) in d.quiet_stick(model, reg)
+    router = getattr(panel, "router", None)        # the panel's deck: what this window draws
+    return d.quiet_stick(model, reg, drawn=router)
+
+
+def _stick_quiet(panel, source: str) -> bool:
+    """Is a route on this stick address not heard now? Lane by lane: node mode may hold one
+    axis of the stick (`_quiet_lanes`)."""
+    lane = source.removeprefix("axis:")
+    if lane == source or lane not in gamepad.LANES:
+        return False
+    quiet = _state(panel).get("quiet")
+    return gamepad.LANES.index(lane) in (_quiet_lanes(panel) if quiet is None else quiet)
 
 
 def built_in(panel, source: str) -> str:
@@ -921,6 +932,15 @@ def _says_of(panel, table):
 
 
 def _body(panel, table) -> None:
+    st = _state(panel)
+    st["quiet"] = _quiet_lanes(panel)
+    try:
+        _drawn(panel, table)
+    finally:
+        del st["quiet"]         # (outside a draw, asked afresh: nothing to go stale)
+
+
+def _drawn(panel, table) -> None:
     # the × only on the floating window, not GRAPH's inline picture (`inline`)
     _header(panel, table, imgui.internal.get_current_window().name == "##pad")
     if table is None:

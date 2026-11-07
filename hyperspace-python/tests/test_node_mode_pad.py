@@ -595,9 +595,9 @@ def test_a_second_pad_of_a_player_is_refused_and_its_own_player_has_its_own_rows
     assert rows(p, SECOND) == []
     assert [h.role for h in p.nd1.held()] == [ROLE]
 
-    players = p.meta.players
-    players.player_of = lambda role: SimpleNamespace(number=2 if role == SECOND else 1,
-                                                     duty=players.player_of)
+    p.meta.register(SECOND, 2)                      # the real door: the player screen's
+    p.meta.point(SECOND, p.one)                     # (and onto this deck, to act here)
+    assert p.meta.players.player_of(SECOND).number == 2
     assert p.patch.point_node_mode(2, "gamepad", node) is None
     first, second = rows(p), rows(p, SECOND)
     assert second[0].source == "axis@p2:LX"
@@ -861,3 +861,183 @@ def test_a_joycons_window_says_the_row_and_the_device_agrees(shell_rig):  # noqa
     assert not ui_pad._stick_quiet(panel, "axis:LX")     # the mode holds it
     assert ui_pad._stick_quiet(panel, "axis:LY")         # the other axis orbits
     table.node_desk = None
+
+
+# ---------------------------------------------------------------- review fixes (#433)
+
+
+def test_a_control_a_gate_or_a_modifier_reads_is_no_freedom(rig):
+    """Review 1: moving it would also open the gate or drive the modifier."""
+    t, reg = rig.one.table, rig.one.reg
+    aim = params_for(rig.one, 1)[0]
+    t.set_routes([*t.routes(), Binding("lane:0", aim, "push", 0.5, when="axis:RT")])
+    t.add_modifier("smooth", ["axis:LX"], reg)
+    t.add_modifier("smooth", ["axis@p2:RY"], reg)       # another pad's: holds nothing of this one
+    point(rig, *params_for(rig.one, skip=(aim,)))
+    got = [b.source for b in rows(rig)]
+    assert "axis:RT" not in got and "axis:LX" not in got
+    assert got[:4] == ["axis:LY", "axis:RX", "axis:RY", "axis:LT"]
+
+
+def test_a_gate_edited_in_place_moves_the_fill(rig):
+    t = rig.one.table
+    aim = params_for(rig.one, 1)[0]
+    gated = Binding("lane:0", aim, "push", 0.5)
+    t.set_routes([*t.routes(), gated])
+    point(rig, *params_for(rig.one, skip=(aim,)))
+    assert rows(rig)[0].source == "axis:LX"
+    gated.when = "axis:LX"
+    assert rows(rig)[0].source == "axis:LY"
+
+
+def test_a_nap_moves_no_map_and_no_later_pads(tmp_path):
+    """Review 2: a `controller = any` pad asleep reads as no model. The map stays the last one
+    read, and so does every pad after it."""
+    p = _rig(tmp_path, MODELS["joycon-l"], second=MODELS["edge"])
+    p.meta.register(SECOND, 2)
+    p.meta.point(SECOND, p.one)
+    pids = params_for(p.one)
+    p.patch.node_params = lambda _n: pids
+    node = a_node(p.one)
+    p.patch.point_node_mode(1, "gamepad", node)
+    p.patch.point_node_mode(2, "gamepad", node)
+    first, second = list(rows(p)), list(rows(p, SECOND))
+    assert [b.source for b in first] == ["axis:LX", "axis:LY", "axis:LT"]
+    p.io.lose()
+    assert p.pad.model is None                       # what the fill used to read
+    assert all(a is b for a, b in zip(first, rows(p), strict=True)) and len(rows(p)) == 3
+    assert all(a is b for a, b in zip(second, rows(p, SECOND), strict=True))
+    p.io.source = "usb"                              # awake
+    assert all(a is b for a, b in zip(first, rows(p), strict=True))
+    undo.install(None)
+
+
+def test_a_frame_that_reads_no_model_moves_no_map(tmp_path):
+    p = _rig(tmp_path, MODELS["joycon-l"])
+    point(p, *params_for(p.one, 3))
+    had = list(rows(p))
+    p.io.model = None                                # on, and read as nothing for a frame
+    assert all(a is b for a, b in zip(had, rows(p), strict=True)) and len(rows(p)) == 3
+    undo.install(None)
+
+
+def test_a_pad_never_seen_fills_as_its_entry_says(tmp_path):
+    p = _rig(tmp_path)
+    p.io.lose()
+    p.pad.entry["controller"] = "joycon-r"
+    point(p, *params_for(p.one, 3))
+    assert [b.source for b in rows(p)] == ["axis:LX", "axis:LY", "axis:RT"]
+    undo.install(None)
+
+
+def test_the_pad_in_hand_holds_node_mode_not_an_unplugged_one_listed_first(tmp_path):
+    """Review 3: two real pads of player 1, the x360 listed first and unplugged."""
+    p = _rig(tmp_path, MODELS["x360"], second=MODELS["joycon-l"])
+    assert p.meta.players.player_of(SECOND).number == 1
+    p.io.lose()
+    pid = point(p, *params_for(p.one, 1))[0]
+    assert [h.role for h in p.nd1.held()] == [SECOND]
+    assert rows(p, ROLE) == [] and [b.source for b in rows(p, SECOND)] == ["axis@p2:LX"]
+    assert p.nd1.refusal(ROLE, a_node(p.one)) == node_desk.NOT_FIRST_PAD.format(role=ROLE, player=1)
+    assert p.devs.live_adapter("gamepad") is p.io2          # what the window draws
+    q = p.one.reg[pid]
+    q.set_norm(0.5)
+    for _ in range(3):
+        step(p, push(lx=1.0), pad=p.pad2)
+    assert q.eff_norm == pytest.approx(1.0, abs=1e-6)
+    p.io.source = "usb"                                       # plugged back: first listed again
+    assert [h.role for h in p.nd1.held()] == [ROLE] and rows(p, SECOND) == []
+    undo.install(None)
+
+
+def test_with_none_in_hand_it_is_the_first_listed(tmp_path):
+    p = _rig(tmp_path, second=MODELS["joycon-l"])
+    p.io.lose()
+    p.io2.lose()
+    point(p, *params_for(p.one, 1))
+    assert [h.role for h in p.nd1.held()] == [ROLE]
+    undo.install(None)
+
+
+def test_the_window_asks_about_the_deck_it_draws(shell_rig):  # noqa: F811
+    """Review 4: a Joy-Con acting on deck 2 with the panel on deck 1, whose patch points it."""
+    row = _row("axis:LX", "view.alpha", "Filled here")
+    panel, table = _window(shell_rig, [row], away=True, model=MODELS["joycon-l"])
+    dev = panel.devices.get(ROLE)
+    elsewhere = SimpleNamespace(table=SimpleNamespace(node_rows=lambda _r: []))
+    dev._acted_on = elsewhere
+    dev.steers = lambda _r: True
+    assert gamepad.AX_LX in dev.quiet_stick(MODELS["joycon-l"], panel.reg)      # on deck 2
+    assert not ui_pad._stick_quiet(panel, "axis:LX")                          # as drawn here
+    c = gamepad.control_in(gamepad.layout_for(MODELS["joycon-l"]), "axis:LX")
+    frame(panel)
+    assert ui_pad.says(panel, c, row) == "Filled here"
+    table.node_desk = None
+
+
+def test_the_window_asks_the_device_once_a_draw(shell_rig, monkeypatch):  # noqa: F811
+    """Review 7: the quiet lanes once a draw, not once a control, however many rows."""
+    rows_ = [_row("axis:LX", "view.alpha"), _row("axis:LY", "view.alpha")]
+    panel, table = _window(shell_rig, rows_, model=MODELS["joycon-l"])
+    dev = panel.devices.get(ROLE)
+    calls = []
+    real = dev.quiet_stick
+    monkeypatch.setattr(dev, "quiet_stick", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+    frame(panel)
+    calls.clear()
+    frame(panel)
+    assert len(calls) == 1
+    assert "quiet" not in ui_pad._state(panel)        # nothing kept past the draw
+    table.node_desk = None
+
+
+def test_a_pads_wire_follows_its_stick_and_sleeps_with_it(rig):
+    """Review 5: a pad's row reads a lane, so its wire is the lane's, not the param's."""
+    point(rig, *params_for(rig.one, 2))
+    step(rig, push(lx=1.0))
+    view = view_of(rig.one, rig.devs)
+    graphview.refresh(view, rig.one.reg, rig.one.router)
+    lx = next(c for c in view.cables if c.kind == NM and c.addr == "axis:LX")
+    assert lx.live == pytest.approx(1.0) and not lx.dormant
+    rig.io.lose()
+    rig.pad.act(rig.one.router)
+    graphview.refresh(view, rig.one.reg, rig.one.router)
+    assert lx.live is None and lx.dormant
+
+
+def test_a_pad_of_a_class_from_before_a_reload_still_fills_and_an_off_entry_never(rig):
+    """Review 6: the real app re-classes its devices on a reload (`DeviceRegistry.targets`), so
+    `isinstance` held there; the check is by what a pad can do now anyway, and an entry switched
+    off, which has the kind and nothing else, is still none."""
+    assert any(obj is rig.pad for obj, _m, _c in rig.devs.targets())
+
+    class Old(devices.PadDevice):                     # a class the module no longer has
+        pass
+    rig.pad.__class__ = Old
+    point(rig, *params_for(rig.one, 1))
+    assert rows(rig) and node_desk.is_pad(rig.pad)
+    off = devices.OffDevice("off", "gamepad", {})
+    assert not node_desk.is_pad(off) and off.kind == node_desk.PAD_KIND
+
+
+def test_one_rule_for_whose_pad_a_row_is(rig):
+    """Review 9: `Bindings.pad_serves`, which `Router.pad` and the fill both ask."""
+    t = rig.one.table
+    t.primaries = {**getattr(t, "primaries", {}), "pad": ROLE}
+    assert t.pad_serves("", Binding("pad:A", "x"))
+    assert t.pad_serves("", Binding(f"pad@{ROLE}:A", "x"))
+    assert not t.pad_serves("", Binding("pad@p2:A", "x"))
+    assert t.pad_serves("p2", Binding("pad@p2:A", "x")) and not t.pad_serves("p2", Binding("pad:A", "x"))
+
+
+def test_one_accessor_for_what_runs_and_the_panel_names_the_stick(rig):
+    """Review 10: `Router.performers` and `performer_of`, so the panel says who holds it."""
+    pid = params_for(rig.one, 1)[0]
+    route = _route_on(rig.one, pid)
+    point(rig, pid)
+    r = rig.one.router
+    assert rows(rig)[0] in r.performers() and route in r.performers()
+    assert r.performer_of(pid) is rows(rig)[0]
+    assert "axis:LX" in r.describe(rows(rig)[0]) or r.describe(rows(rig)[0])
+    rig.patch.leave_node_mode(1, "gamepad")
+    assert r.performer_of(pid) is route

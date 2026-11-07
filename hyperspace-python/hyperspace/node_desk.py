@@ -48,10 +48,13 @@ stick has no ring to catch and a pad's rows are routes: each is a `push` about t
 release (NQ5). `Router` runs them while the pad is on this `Deck` (`routed`), and that is also how
 the camera job stands down (`Router.claimed`) and a Joy-Con's stick stays heard
 (`PadDevice.quiet_stick`). Its freedoms are its axes, then its natural pairs (plan 56); a lone
-button has no lane for a route to read, so it fills nothing. A control with any enabled row, or
-one the model's own layout holds (`routing.layout_of`), is no freedom: node mode takes no button
-that does something (NQ6), and it needs no hold on any. Desks fill first and pads in list order,
-each leaving what an earlier one filled, so a pad pointed second never changes a desk's map.
+button has no lane for a route to read, so it fills nothing. A control an enabled row reads, or
+gates on, or a modifier reads, or one the model's own layout holds (`routing.layout_of`), is no
+freedom: node mode takes no button that does something (NQ6), and it needs no hold on any. Desks
+fill first and pads in list order, each leaving what an earlier one filled, so a pad pointed second
+never changes a desk's map. **Whose pad:** the player's first that is connected, else their first
+listed (`is_first`), as the pad window picks. **A nap changes no map:** a pad asleep is filled as
+the last model it read (`DeviceRegistry.pad_model`).
 """
 
 from __future__ import annotations
@@ -60,9 +63,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import nodemode
-from .devices import MidiDevice, PadDevice
 from .routing import Binding, layout_of
-from .routing_sources import PAIR_SCHEME, pair_poles, qualified
+from .routing_sources import PAIR_SCHEME, pair_address, pair_poles, qualified
 
 KIND = "midi"                  # what a saved entry's `controller` says of a desk
 PAD_KIND = "gamepad"           # ...and of a pad (`PadDevice.kind`)
@@ -73,7 +75,8 @@ PAD_DEPTH = 1.0
 PAD_SCHEMES = ("axis", "pad", "hat", PAIR_SCHEME)   # what can hold a freedom of a pad's
 
 NOT_FIRST = "{role} is player {player}'s second desk: a patch points at a player's first"
-NOT_FIRST_PAD = "{role} is player {player}'s second pad: a patch points at a player's first"
+NOT_FIRST_PAD = ("{role} is not player {player}'s pad in hand: a patch points at a player's "
+                 "first connected")
 NO_SHAPE = "{role} has no known knobs or faders to fill"
 
 
@@ -128,8 +131,19 @@ def _pad_source(sources: tuple[str, ...], qualifier: str) -> str:
     """The source a pad's row reads for one freedom: an axis, or a pair's lane."""
     if len(sources) == 1:
         return _address(sources[0], qualifier)
-    return (f"{qualified(PAIR_SCHEME, qualifier)}:"
-            + "/".join(s.partition(":")[2] for s in sources))
+    pos, neg = (s.partition(":")[2] for s in sources)
+    return pair_address(pos, neg, qualifier)
+
+
+def is_desk(d) -> bool:
+    """A desk that is open or could be. By what it can do, not `isinstance`: an entry switched off
+    has this kind too and none of this, and a kind's class is new after a reload."""
+    return d.kind == KIND and hasattr(d, "profile")
+
+
+def is_pad(d) -> bool:
+    """A pad that is open or could be, as `is_desk`."""
+    return d.kind == PAD_KIND and hasattr(d, "quiet_stick")
 
 
 @dataclass
@@ -178,17 +192,17 @@ class NodeDesk:
 
     # ---- who ----
 
-    def _desks(self) -> list[MidiDevice]:
+    def _desks(self) -> list:
         """The desks that are open or could be (an entry switched off is no `MidiDevice`),
         in the order that makes one first: `DeviceRegistry.midi_roles`, whose first is the
         desk the bindings were written for, so a generic box listed above the APC40 is
         not its player's first desk."""
-        desks = {d.role: d for d in self.devices.devices if isinstance(d, MidiDevice)}
+        desks = {d.role: d for d in self.devices.devices if is_desk(d)}
         return [desks[r] for r in self.devices.midi_roles() if r in desks]
 
-    def _pads(self) -> list[PadDevice]:
+    def _pads(self) -> list:
         """The pads that are open or could be, in list order: what `first_pad_on` reads."""
-        return [d for d in self.devices.devices if isinstance(d, PadDevice)]
+        return [d for d in self.devices.devices if is_pad(d)]
 
     def _controllers(self) -> list:
         """Every controller a patch can reach, in the order they fill: desks, then pads."""
@@ -196,17 +210,23 @@ class NodeDesk:
 
     def kind_of(self, role: str) -> str:
         """What a saved entry calls `role`'s controller."""
-        return PAD_KIND if isinstance(self.devices.get(role), PadDevice) else KIND
+        d = self.devices.get(role)
+        return PAD_KIND if d is not None and is_pad(d) else KIND
 
     def player_of(self, role: str) -> int:
         return self.meta.players.player_of(role).number
 
     def is_first(self, role: str) -> bool:
-        """Is `role` its player's first controller of its kind listed, the one a saved
-        entry reaches?"""
+        """Is `role` the controller of its kind a saved entry reaches: its player's first
+        desk listed, or its player's first pad connected, else first listed? The pad in hand
+        wins, as `DeviceRegistry.live_adapter` draws it: an x360 listed first and unplugged
+        must not hold the Joy-Con's node mode, dead, with the window drawing the Joy-Con."""
         n = self.player_of(role)
-        same = self._pads() if self.kind_of(role) == PAD_KIND else self._desks()
-        return next((d.role for d in same if self.player_of(d.role) == n), None) == role
+        if self.kind_of(role) == PAD_KIND:
+            mine = [d for d in self._pads() if self.player_of(d.role) == n]
+            first = next((d for d in mine if getattr(d.io, "on", False)), mine[0] if mine else None)
+            return first is not None and first.role == role
+        return next((d.role for d in self._desks() if self.player_of(d.role) == n), None) == role
 
     def on_here(self, role: str) -> bool:
         return self.meta.pointer(role).deck is self.deck
@@ -275,19 +295,27 @@ class NodeDesk:
                 if b.enabled and not b.is_sink and not b.is_modulator_route
                 and b.target in wanted]
 
-    def _pad_free(self, pad: PadDevice) -> list[tuple[str, ...]]:
-        """The freedoms of `pad` nothing holds: not a control an enabled row of this pad
-        reads, wherever it aims (`fill`'s rule: one stick never moves two things by accident),
-        nor one the model's own layout holds. This table's rows, not the file's: the meta
-        controller's buttons are in it too, so node mode never takes one."""
+    def _pad_free(self, pad, model) -> list[tuple[str, ...]]:
+        """The freedoms of `pad` nothing holds: not a control this pad's enabled row reads,
+        wherever it aims (`fill`'s rule: one stick never moves two things by accident), nor one
+        a row gates on or a modifier reads, which moving it would also drive, nor one the model's
+        own layout holds. This table's rows, not the file's: the meta controller's buttons are
+        in it too, so node mode never takes one."""
         t, q = self.deck.table, pad.qualifier
-        own = getattr(t, "primaries", {}).get("pad", "")
-        held = set(layout_of(pad.model).sources)
+        held = set(layout_of(model).sources)
+        addresses: list[str] = []
         for b in t.bindings:
-            if b.enabled and b.scheme in PAD_SCHEMES and (
-                    b.device == q or (not q and own and b.device == own)):
-                held.update(_reads(b.bare))
-        return [f for f in pad_freedoms(pad.model) if not held.intersection(f)]
+            if b.enabled:
+                addresses.append(b.source)
+                if b.when:
+                    addresses.append(b.when)
+        for m in t.modifiers:
+            addresses.extend(a for a in m.inputs if a)
+        for a in addresses:
+            probe = Binding(a, "")
+            if probe.scheme in PAD_SCHEMES and t.pad_serves(q, probe):
+                held.update(_reads(probe.bare))
+        return [f for f in pad_freedoms(model) if not held.intersection(f)]
 
     def _filled_before(self, role: str) -> tuple[str, ...]:
         """The params the controllers that fill ahead of `role` hold, wherever they are: a
@@ -299,7 +327,7 @@ class NodeDesk:
             out.extend(b.target for b in self._follow(d.role).rows)
         return tuple(out)
 
-    def _pad_rows(self, pad: PadDevice, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
+    def _pad_rows(self, pad, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
         """The rows of `fit` on a pad: pushes, each kept while it says the same."""
         reg = self.deck.reg
         keep = {(b.source, b.target): b for b in had}
@@ -321,10 +349,14 @@ class NodeDesk:
         dev = self.devices.get(role)
         shape: tuple = ()
         before: tuple[str, ...] = ()
-        if isinstance(dev, PadDevice):
-            before = self._filled_before(role) if node is not None else ()
-            shape = (getattr(dev.model, "id", ""), dev.qualifier,
-                     getattr(t, "primaries", {}).get("pad", ""), before)
+        pad = kind == PAD_KIND
+        model = self.devices.pad_model(dev) if pad else None
+        if pad and node is not None:
+            before = self._filled_before(role)
+            shape = (getattr(model, "id", ""), dev.qualifier,
+                     getattr(t, "primaries", {}).get("pad", ""), before,
+                     tuple(b.when for b in t.bindings if b.when),
+                     tuple(a for m in t.modifiers for a in m.inputs))
         key = (node, player, getattr(deck.reg, "serial", 0), id(t.bindings), len(t.bindings),
                t.rows_serial, t.desk_serial, getattr(t, "redraw_serial", 0),
                getattr(dev, "profile", ""), t.is_primary(role), shape)
@@ -332,10 +364,10 @@ class NodeDesk:
             return now
         now.key, now.node, now.player = key, node, player
         fit, rows = nodemode.Fit(), []
-        if node is not None and isinstance(dev, PadDevice):
+        if node is not None and pad:
             params = nodemode.fillable(deck.reg, self.params_of(node), routed=True)
             wanted = set(params)
-            fit = nodemode.fill(params, self._pad_free(dev),
+            fit = nodemode.fill(params, self._pad_free(dev, model),
                                 [*self._kept(wanted), *(("", p) for p in before)])
             rows = self._pad_rows(dev, fit, now.rows)
         elif node is not None:
@@ -465,12 +497,13 @@ class NodeDesk:
     def control_word(self, role: str, b: Binding) -> str:
         """What a person calls row `b`'s control: "K3", "L2", "↑/↓"."""
         dev = self.devices.get(role)
-        if isinstance(dev, PadDevice):
+        if dev is not None and is_pad(dev):
             from . import gamepad
             scheme, _, rest = b.bare.partition(":")
             poles = pair_poles(rest) if scheme == PAIR_SCHEME else None
             sources = [p.source for p in poles] if poles else [b.bare]
-            return "/".join(gamepad.models.glyph(dev.model, s.partition(":")[2],
+            model = self.devices.pad_model(dev)
+            return "/".join(gamepad.models.glyph(model, s.partition(":")[2],
                                                  gamepad.glyph(s) or s) for s in sources)
         glyph = getattr(self._profile(role), "glyph", None)
         return (glyph(b.bare) if glyph is not None else None) or b.describe()

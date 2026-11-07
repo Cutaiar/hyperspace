@@ -119,6 +119,26 @@ def script(d, panel):
         + ", ".join(f"{b.source} → {b.target}" for b in rows[:4]))
     assert not any(b is x for b in rows for x in table.bindings)
 
+    # a hot reload of what holds it (HR's real swap): nothing goes
+    reloader = panel.reloader
+    for name in ("devices", "node_desk"):
+        reloader.status, reloader.error = "", ""
+        reloader._mtimes[name] = 0.0                # as if the module had just been saved
+        for _ in range(4000):
+            if reloader.status.startswith("hot:") or reloader.error:
+                break
+            yield
+        assert not reloader.error, f"reloading {name}: {reloader.error}"
+        # the swap puts a pad's reader on `gamepad.Pad` (`PadDevice.targets`), as it should a
+        # real one; this one is a stand-in with no hardware behind it, so it goes back
+        if type(io) is not StandIn:
+            io.__class__, io.source, io.model = StandIn, "usb", MODEL
+        yield from d.wait(3)
+        after = table.node_rows(ROLE)
+        say(f"reloaded {name}: {len(after)} rows, the same {[b.source for b in after] == [b.source for b in rows]}")
+        assert [(b.source, b.target) for b in after] == [(b.source, b.target) for b in rows]
+    rows = table.node_rows(ROLE)
+
     # a route at rest
     assert table.node_holds(route)
     still = yield from _span(deck, pid, d, 30)

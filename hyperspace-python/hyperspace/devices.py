@@ -958,17 +958,18 @@ class PadDevice(Base):
                 skip |= totem.skip_of(io)
         return {"skip": skip} if skip else {}
 
-    def quiet_stick(self, model, reg, router=None) -> frozenset[int]:
+    def quiet_stick(self, model, reg, router=None, drawn=None) -> frozenset[int]:
         """The lanes a route lets go of, `totem.quiet_stick`: a Joy-Con's stick while it
         orbits, less the axes node mode holds, which the view leaves (`Router.claimed`), or
         the claim would be dead with the view orbiting under it. `router`, the deck it acts
-        on (None: the last one, for the pad window)."""
+        on (None: the last one, for the pad window). `drawn`, the deck whose rows are being
+        asked about, when that is another (the window's panel may be looking elsewhere)."""
         from . import gamepad, totem
         router = router if router is not None else self.__dict__.get("_acted_on")
         steers = router is None or self.steers(router)
         if not totem.quiet_stick(model, reg, self.role, steers):
             return frozenset()
-        return gamepad.left_stick_lanes() - self._node_lanes(router)
+        return gamepad.left_stick_lanes() - self._node_lanes(drawn if drawn is not None else router)
 
     def _node_lanes(self, router) -> frozenset[int]:
         """The `axis` lanes node mode fills on this pad on `router`'s deck."""
@@ -2198,6 +2199,18 @@ class DeviceRegistry:
                         got.setdefault(s, p)
             self._holders = got
         return got
+
+    def pad_model(self, pad):
+        """What a pad's node mode fills as (`node_desk`): the model it reads, or its entry
+        names, else the last it read, kept by role. `PadDevice.model` is None (an Xbox's
+        face) for a `controller = any` pad asleep, and a nap must not move a map: nor may a
+        frame that reads no model while it wakes. Nothing to go on yet, before a pad has ever
+        been read: None."""
+        seen = self.__dict__.setdefault("_pad_models", {})
+        model = pad.model
+        if model is not None:
+            seen[pad.role] = model
+        return seen.get(pad.role)
 
     def first_pad_on(self, router):
         """The first listed pad pointed at `router`'s deck, or None."""
