@@ -527,7 +527,6 @@ SURFACE_NAMES = {
 # …and the handles at run time. (`Project.session` goes with the shows, in plan 57 §5.)
 META_ATTRS = {"meta", "decks", "meta_stack", "push_meta", "players", "session", "meta_reg", "meta_table"}
 SURFACE_ATTRS = {
-    ("loadable", "project.session"): "seeds a landing group's params from the open show",
     ("dream", "w.meta"): "not ours: a model file's download record",
     ("segment", "w.meta"): "not ours: a model file's download record",
 }

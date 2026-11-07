@@ -541,10 +541,9 @@ def test_a_loadable_says_two_acids_in_data_and_carries_the_seconds_values(tmp_pa
 
 def test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror(tmp_path):
     """`ghost.2.*`: the naming rule's same group, so (plan 44 D3) the
-    loadable patch's look — a loadable patch that names `ghost.2.alpha` lands it — but for
-    `ghost.2.mirror`, the room's (`params.SHARED_META_KEYS`); its own
+    loadable patch's look — a loadable patch that names `ghost.2.alpha` lands it; its own
     `GhostState`, handed to the renderer for the second node's Ghost and
-    kept while the app runs, so the mirror comes back with the node."""
+    kept while the app runs, following the room's one `ghost.mirror` (LY1)."""
     from hyperspace.params import part_of
 
     rig = boot(tmp_path)
@@ -557,17 +556,20 @@ def test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror(tmp_path):
     reg = rig.reg
     assert part_of(reg["ghost.2.alpha"]) == "patch" and reg["ghost.2.alpha"].label == \
         "Ghost 2 opacity"
-    assert part_of(reg["ghost.2.mirror"]) == "shared_meta"
+    assert "ghost.2.mirror" not in reg
     assert rig.loaded_patch.notes == [] and reg["ghost.2.alpha"].value == pytest.approx(0.2)
     state = stub.ghost_states["ghost.2"]
-    reg["ghost.2.mirror"].set(True)
-    assert state.mirror and not reg["ghost.mirror"].value
+    reg["ghost.mirror"].set(True)
+    assert state.mirror
     assert stub.wiring.extra == (G.HandsAt(2),)
     reg["ghost.2.alpha"].set(0.9)
     rig.lib.load(LOADABLE, "party-tumble")
-    assert "ghost.2.mirror" not in reg and stub.ghost_states == {}
+    assert "ghost.2.alpha" not in reg and stub.ghost_states == {}
+    reg["ghost.mirror"].set(False)
+    assert not state.mirror                     # (kept, and still following)
+    reg["ghost.mirror"].set(True)
     rig.lib.load(LOADABLE, "Glass")
-    assert reg["ghost.2.mirror"].value is True and stub.ghost_states["ghost.2"] is state
+    assert state.mirror and stub.ghost_states["ghost.2"] is state
     assert reg["ghost.2.alpha"].value == pytest.approx(0.2)        # the loadable patch's again
 
 
@@ -634,11 +636,10 @@ def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
     """Plan 44 D3: an old (`/2`) show held a second hands node's settings in
     its session; its look (`ghost.2.on`, `.alpha`, `.style`) is handed to
     the loadable patches before `/10` a load reads while it is open (`old_look`,
-    `graphmigrate.ten`), its mirror is the show's own and is seeded into
-    the node when the startup loadable patch first declares it. No unknown id is
-    said and the show is clean; a loadable patch without the node leaves the show
-    holding the mirror alone (the look is each loadable patch's), and opening the
-    show again brings it back."""
+    `graphmigrate.ten`); its mirror is no param since LY1, and the show keeps
+    the id and reads nothing from it: the node follows `ghost.mirror`. No unknown
+    id is said and the show is clean, with or without the node, and a save
+    carries the id."""
     from hyperspace.library import PROJECT_SUFFIX, PROJECTS
 
     rig = boot(tmp_path)
@@ -656,10 +657,11 @@ def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
     reg = rig.reg
     assert missing == [] and "unknown" not in rig.lib.warning
     assert rig.lib.current(LOADABLE) == "Glass"
-    assert {pid: reg[pid].value for pid in session} == session
-    assert rig.lib.project.old_look == {k: v for k, v in session.items() if k != "ghost.2.mirror"}
+    look = {k: v for k, v in session.items() if k != "ghost.2.mirror"}
+    assert {pid: reg[pid].value for pid in look} == look and "ghost.2.mirror" not in reg
+    assert rig.lib.project.old_look == look
     state = rig.loaded_patch.graph.states["ghost.2"]
-    assert state.on and state.mirror and state.style == 3
+    assert state.on and state.mirror is reg["ghost.mirror"].value and state.style == 3
     assert not rig.lib.project.is_dirty()
     # the loadable patch saved: the look is its own now, `/10`
     saved = json.loads(rig.loaded_patch.save_as("Glass").read_text())
@@ -674,7 +676,7 @@ def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
         "ghost.2.mirror": True}
     # opening the show again: the mirror back from it, the look from the loadable patch
     rig.lib.project.load("rig")
-    assert reg["ghost.2.mirror"].value is True and reg["ghost.2.alpha"].value == 0.3
+    assert "ghost.2.mirror" not in reg and reg["ghost.2.alpha"].value == 0.3
     assert not rig.lib.project.is_dirty()
 
 
