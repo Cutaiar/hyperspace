@@ -698,13 +698,16 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
     midi_table = data.get("midi")
     cfg["no_midi_look"] = isinstance(midi_table, dict) and midi_table.get("enabled") is False
     cfg["device_seed_listed"] = isinstance(raw, list)
-    cfg["devices_off"] = []
+    # (a file that didn't read seeds nothing: `DeviceList` then leaves its one read for later)
+    readable = not cfg.get("error")
     if raw is None:
         entries = _translate(cfg, data)
-        cfg["device_seed"] = [_compact(e) for e in entries]
-        cfg["devices_off"] = [kind for section, kind, _ in DEVICE_TABLES
-                              if isinstance(data.get(section), dict)
-                              and data[section].get("enabled") is False]
+        if readable:
+            cfg["device_seed"] = [_compact(e) for e in entries]
+            cfg["device_here"] = {e["role"]: data[section]["enabled"]
+                                  for (section, _kind, _role), e in zip(DEVICE_TABLES, entries, strict=True)
+                                  if isinstance(data.get(section), dict)
+                                  and isinstance(data[section].get("enabled"), bool)}
         if isinstance(data.get("hands"), dict) and "out" in data["hands"]:
             wrote_out = {e["role"] for e in entries if e["kind"] == "hands"}
     else:
@@ -722,8 +725,10 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
             if got is not None:
                 entries.append(got)
                 seed.append({**copy.deepcopy(e), "role": got["role"], "kind": got["kind"]})
-        if cfg["device_seed_listed"]:
+        if cfg["device_seed_listed"] and readable:
             cfg["device_seed"] = seed
+            cfg["device_here"] = {e["role"]: e["enabled"] for e in seed
+                                  if isinstance(e.get("enabled"), bool)}
         for section, kind, _ in DEVICE_TABLES:
             if isinstance(data.get(section), dict):
                 _note(cfg, f"config: [[devices]] is listed, so [{section}] is ignored — "
@@ -760,7 +765,7 @@ def take_devices(cfg: dict, entries: list[dict]) -> None:
 def _compact(entry: dict) -> dict:
     """An old table's entry as `devices.json` holds it: what differs from its kind's
     defaults. A table's `enabled = false` on a kind that's on by default stays out: it is
-    this Mac's to say (`cfg["devices_off"]`), and the list is both Macs'."""
+    this Mac's to say (`cfg["device_here"]`), and the list is both Macs'."""
     kind = entry["kind"]
     defaults = _kind_defaults(kind)
     out = {"role": entry["role"], "kind": kind}
@@ -771,10 +776,11 @@ def _compact(entry: dict) -> dict:
     return copy.deepcopy(out)
 
 
-def listed_devices(raw: list, base: Path, off=()) -> tuple[list[dict], list[str], list[str]]:
+def listed_devices(raw: list, base: Path, here: dict | None = None
+                   ) -> tuple[list[dict], list[str], list[str]]:
     """Entries as a list holds them, checked as `[[devices]]` is: (entries, problems,
     notes), printing nothing. `base` is the folder a relative path means on this Mac, and
-    a kind in `off` is off here, whatever the list says."""
+    `here` (role → bool) is on or off on this Mac, whatever the list says."""
     import contextlib
     import io
 
@@ -791,8 +797,8 @@ def listed_devices(raw: list, base: Path, off=()) -> tuple[list[dict], list[str]
         entries = _daw(scratch, entries, set())
     _resolve(entries, base)
     for e in entries:
-        if e["kind"] in off:
-            e["enabled"] = False
+        if e["role"] in (here or {}):
+            e["enabled"] = here[e["role"]]
     return entries, problems, scratch["notes"]
 
 

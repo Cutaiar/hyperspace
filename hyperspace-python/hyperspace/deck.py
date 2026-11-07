@@ -682,6 +682,16 @@ class MetaController:
         for fn in self.on_players:
             fn()
 
+    def rename_controller(self, old: str, new: str) -> None:
+        """The controller `old` is called `new`, as the other Mac took the name first:
+        its holder, its seat and its pointer go with it. `old`, now that Mac's controller,
+        starts where any new one does."""
+        self.players.rename(old, new)
+        if old in self.seats:
+            self.seats[new] = self.seats.pop(old)
+        if old in self.pointers:
+            self.pointers[new] = self.pointers.pop(old)
+
     def _ours(self, deck: Deck) -> Deck:
         if not any(deck is d for d in self.decks):
             raise ValueError("MetaController: that deck is not one of its two")

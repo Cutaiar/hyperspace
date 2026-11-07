@@ -77,10 +77,12 @@ HINT = "Drag a player across to change duty. Drag a controller to another player
 TRAY_NONE = "nothing loose"
 ADOPT_TIP = ("Seen on this Mac, and nobody holds it. Drag it to a player: it joins the list "
              "both Macs share, as {role}, and rows can name it. Nothing joins by plugging in.")
+TWINS_TIP = " Two desks with one name show as one here: MIDI can't tell them apart."
+HERE_TIP = "On this Mac only. The other Mac says for itself, as it may not have this one."
 TRAY_TIP = "Seen on this Mac, and nobody can hold it here: this panel has no device list."
 OPEN_TIP = "The player screen, large: who is on air, and what they hold (O)"
 LARGE_TIP = "The same board, large, for across the room (O, or the footer's chip)"
-STATE_WORDS = {"on": "connected", "lost": "lost", "off": "switched off",
+STATE_WORDS = {"on": "connected", "lost": "lost", "off": "off on this Mac",
                "error": "error", "gone": "not listed now"}
 
 GREEN = imgui.ImVec4(0.30, 0.86, 0.42, 1.0)
@@ -250,30 +252,40 @@ def held(panel, number: int) -> list[Held]:
 
 
 def _loose_midi(regs, st: dict | None) -> list[Held]:
-    """MIDI ports the Mac sees that no entry reads, when this Mac may look. A port a
-    listed entry names, on or off, in or out, is that entry's; a virtual one is our own.
-    Why it could not look is the board's to say (`st["midi_why"]`)."""
+    """MIDI ports the Mac sees that no entry reads, when this Mac may look. A desk's entry,
+    on or off, reads the one port `midi.find_port` gives it, so another port that it merely
+    resembles is still loose. A sink's ports aren't controllers, and all they match stay
+    out; a virtual one is our own. Why it could not look is the board's to say
+    (`st["midi_why"]`)."""
     store = getattr(regs, "store", None)
     if store is None or store.no_midi_look:
         return []
+    from .midi import find_port  # (late: midi is imported behind a device's entry)
     seen = port_names()
     if st is not None:
         st["midi_why"] = seen.in_why
-    names: list[str] = []
+    read: set[str] = set()
+    sinks: list[str] = []
+    an_apc = False
     for d in regs:
         e = getattr(d, "entry", None) or {}
-        names += [str(e[k]) for k in ("port", "out", "in") if e.get(k)]
-        if getattr(d, "kind", "") == "midi" and not e.get("port") and str(
-                e.get("profile") or "apc40") == "apc40":
-            names.append(apc40.PORT_MATCH)
-    theirs = [n.lower() for n in names]
+        if getattr(d, "kind", "") == "midi":
+            apc = str(e.get("profile") or "apc40") == "apc40"
+            an_apc = an_apc or apc
+            match = e.get("port") or (apc40.PORT_MATCH if apc else None)
+            port = find_port(seen.inputs, str(match)) if match else None
+            if port is not None:
+                read.add(port)
+        else:
+            sinks += [str(e[k]).lower() for k in ("port", "out", "in") if e.get(k)]
     out = []
     for port in seen.inputs:
         low = port.lower()
-        if OURS in low or any(n in low for n in theirs):
+        if port in read or OURS in low or any(n in low for n in sinks):
             continue
         apc = apc40.PORT_MATCH.lower() in low
-        out.append(Held(port, "apc40" if apc else "midi", port, "on", devicelist.midi_entry(port)))
+        out.append(Held(port, "apc40" if apc else "midi", port, "on",
+                        devicelist.midi_entry(port, another=an_apc)))
     return out
 
 
@@ -369,8 +381,10 @@ def give_words(role: str, number: int, deck: int, reopened: bool, address: str |
 
 
 def adopt_words(name: str, role: str, number: int, deck: int) -> str:
-    """What adopting a controller does, said as it happens."""
-    return f"{name} adopted as {role}: on both Macs now. Player {number} holds it here, on deck {deck}."
+    """What adopting a controller does, said as it happens. Not that the other Mac has it:
+    that's for the library to deliver, and `DeviceList.said` warns if it can't."""
+    return (f"{name} adopted as {role}: player {number} holds it here, on deck {deck}. "
+            "It goes on the list both Macs share.")
 
 
 def _say(panel, st: dict, words: str, warn: str = "") -> None:
@@ -421,6 +435,13 @@ def adopt(panel, h: Held, number: int) -> None:
     store = getattr(regs, "store", None)
     if meta is None or regs is None or store is None or h.entry is None:
         return
+    # gone from the tray now, and looked for again next frame, where its entry speaks for it:
+    # the cell still drawn this second can't adopt a second seat
+    st = _state(panel)
+    shown = list(st.get("loose", ()))
+    if h in shown:
+        shown.remove(h)
+    st["loose"], st["loose_at"] = shown, -LOOSE_S
     role = store.adopt(h.entry)
     meta.players.hold(role, number)
     regs.relist()
@@ -826,7 +847,8 @@ def _board(panel, sfx: str, s: float) -> None:
             _dragging(st, sfx, (SEL_CTL, role))
             if imgui.is_item_hovered() and st["drag"] is None:
                 ui.tooltip(f"{role}  ·  {h.name}  ·  {STATE_WORDS[h.state]}  ·  "
-                           f"{_on_deck(meta, role)}.\nDrag to another player.")
+                           f"{_on_deck(meta, role)}.\nDrag to another player, or click it "
+                           "to turn it on or off on this Mac.")
     store = getattr(getattr(panel, "devices", None), "store", None)
     for k, (h, rect) in enumerate(zip(tray, bd.tray_cells, strict=False)):
         hit = _button(f"##players{sfx}.tray.{k}", rect, over=False)
@@ -835,8 +857,10 @@ def _board(panel, sfx: str, s: float) -> None:
                 act = partial(_clicked_tray, st, h)
             _dragging(st, sfx, (SEL_TRAY, h))
         if imgui.is_item_hovered() and st["drag"] is None:
-            ui.tooltip(f"{h.name}. " + (ADOPT_TIP.format(role=store.role_for(h.entry))
-                                        if store is not None and h.entry is not None else TRAY_TIP))
+            ui.tooltip(f"{h.name}. " + (
+                ADOPT_TIP.format(role=store.role_for(h.entry))
+                + (TWINS_TIP if h.entry.get("kind") == "midi" else "")
+                if store is not None and h.entry is not None else TRAY_TIP))
     # the room the drawing took, as an item the window scrolls by
     imgui.set_cursor_screen_pos(origin)
     imgui.dummy(_v(room, bd.h))
@@ -861,11 +885,27 @@ def _board(panel, sfx: str, s: float) -> None:
     imgui.push_text_wrap_pos(0.0)
     imgui.text_colored(ui.WARN if st.get("said_warn") else ui.TEXT if st["said"] else ui.FAINT,
                        st["said"] or HINT)
+    if store is not None and st["sel"] is not None and st["sel"][0] == SEL_CTL and any(
+            e.get("role") == st["sel"][1] for e in store.raw):
+        _here_chip(panel, st, store, sfx)
     # what stands whatever was last done: the library not there; no MIDI to look at
     for words in (getattr(store, "said", ""), st.get("midi_why", "")):
         if words:
             imgui.text_colored(ui.WARN, words)
     imgui.pop_text_wrap_pos()
+
+
+def _here_chip(panel, st: dict, store, sfx: str) -> None:
+    """The controller picked: on or off on this Mac, which is the door for what config.toml
+    used to say (a Mac with no Leap, or one that has it)."""
+    role = st["sel"][1]
+    on = store.is_on(role)
+    if ui.lit_chip(f"{role}: {'on' if on else 'off'} on this Mac##players{sfx}.here", on):
+        store.set_here(role, not on)
+        getattr(panel, "devices").relist()
+        _say(panel, st, f"{role} {'off' if on else 'on'}, on this Mac only.")
+    if imgui.is_item_hovered():
+        ui.tooltip(HERE_TIP)
 
 
 def section(panel, dt: float = 0.0) -> None:

@@ -566,7 +566,7 @@ def state(panel) -> tuple[str, str]:
     the pad is read, or why there is none."""
     pad = getattr(panel, "pad", None)
     if pad is None:
-        return "off", "The pad is off: [gamepad] enabled = false in config.toml."
+        return "off", "No pad is on: click one on the player board (O) to turn it on on this Mac."
     source = getattr(pad, "source", None)
     read = "The pad is read raw, over Bluetooth or USB (gamepad.py)."
     if source == "usb":

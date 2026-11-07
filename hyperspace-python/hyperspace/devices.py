@@ -69,10 +69,10 @@ hardware is not there reports `lost` and **reconnects itself** on its own
 schedule — today's adapters do (`midi.Ports.retry`, the pad's GLFW poll
 and USB rescan, the hands' Leap thread and DAW port), and a B2 / B4
 device must too; the registry never closes or reopens a `lost` device
-(a `Ports` of its own inside `poll` is the pattern). The registry watches `config.toml`'s
-mtime every `WATCH_FRAMES` frames and re-reads only the device list,
-closing what left and opening what arrived; a bad edit is a note and the
-old list stands.
+(a `Ports` of its own inside `poll` is the pattern). The registry asks the list
+(`devicelist.DeviceList`, whose worker does the disk) every `WATCH_FRAMES` frames
+whether it changed, closing what left and opening what arrived; a bad list is a note
+and the old one stands.
 
 **Sinks** (plan 27 B3). A sink takes values *out* of the app: a device's
 `sinks` are its sink ports (a `Port` whose `scheme` is the device's role and
@@ -1736,6 +1736,14 @@ class DeviceRegistry:
         """The status-change hook (plan 40 T4): a no-op until the app sets
         an instance's own (`rig.said = …`, app.py)."""
 
+    def renamed(self, old: str, new: str) -> None:
+        """A controller adopted here is `new`: the file gave `old` to the other Mac's. A
+        hook the app sets to the meta controller's (`rename_controller`), so who holds it
+        follows; with none, the players'."""
+        players = getattr(self.ctx, "players", None)
+        if players is not None:
+            players.rename(old, new)
+
     def __init__(self, entries: list[dict] | None = None, ctx: Context | None = None, *,
                  devices: list | None = None, path: Path | None = None,
                  clock=time.monotonic, notes: list[str] | None = None, store=None):
@@ -1903,7 +1911,7 @@ class DeviceRegistry:
         its role — **once per role**, marked done in `bindings.json` itself
         (`Bindings.sinks_seeded`, never by consuming the owner's config
         key): a role in that list is never seeded again, so deleting every
-        row of it on ROUTING, or saving config.toml mid-session, brings
+        row of it on ROUTING, or the list changing mid-run, brings
         nothing back. A file that already holds sink rows on a role counts
         as seeded for it (the mark is added). Written with one note; from
         then on the rows say and the key is not read."""
@@ -2077,6 +2085,9 @@ class DeviceRegistry:
         close list for a quit and a restart (the pad included)."""
         for d in reversed(self.devices):
             self._close(d)
+        store = self.__dict__.get("store")
+        if store is not None:
+            store.close()
 
     # ---- the frame ----
 
@@ -2275,6 +2286,8 @@ class DeviceRegistry:
         store = self.__dict__.get("store")
         if store is None:
             return False
+        for old, new in store.take_renames():
+            self.renamed(old, new)
         entries, problems, _notes = store.checked()
         for why in problems:
             self._note(why)
@@ -2288,13 +2301,19 @@ class DeviceRegistry:
         lost to it); else `path`'s `[[devices]]`."""
         store = self.__dict__.get("store")
         if store is not None:
-            if not store.look():
+            try:
+                if not store.look():
+                    return False
+                for old, new in store.take_renames():
+                    self.renamed(old, new)
+                entries, problems, _notes = store.checked()
+                if problems:
+                    self._note(f"devices: the list not applied — {problems[0]} — the old list stands")
+                    return False
+                return self.apply(entries)
+            except Exception as e:  # noqa: BLE001 — what's in a shared file never stops a frame
+                self._note(_err("devices: the list not applied, and the old one stands", e))
                 return False
-            entries, problems, _notes = store.checked()
-            if problems:
-                self._note(f"devices: the list not applied — {problems[0]} — the old list stands")
-                return False
-            return self.apply(entries)
         if self.path is None:
             return False
         mtime = self._stat()

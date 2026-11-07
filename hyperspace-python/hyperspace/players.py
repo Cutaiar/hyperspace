@@ -156,6 +156,13 @@ class Players:
             self.held[role] = number
             self.save()
 
+    def rename(self, old: str, new: str) -> None:
+        """The controller `old` is called `new` from now on (`devicelist`, a name the
+        other Mac took first): who holds it, remembered, and `old` is nobody's."""
+        if old in self.held:
+            self.held[new] = self.held.pop(old)
+            self.save()
+
     # ---- the file ----
 
     def to_json(self) -> dict:
