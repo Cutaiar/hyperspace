@@ -1449,7 +1449,8 @@ def cable_tints(st: dict, view: graphview.View) -> dict[str, imgui.ImVec4]:
         if c.type != graphview.IMAGE:
             continue
         hit = view.owner(c.src_port)
-        got = th.hue(thumb_name(hit[0])) if hit is not None else None
+        pin = graphview.pin_picture(view, c.src_port)
+        got = th.hue(pin or thumb_name(hit[0])) if hit is not None else None
         if got is not None:
             out[c.id] = imgui.ImVec4(*tint(*got), 1.0)
     return out
@@ -2419,7 +2420,7 @@ def _group_node(panel, st: dict, view: graphview.View, g, drawn: set[str]) -> No
         ed.resume()
     imgui.same_line(NODE_W - PIN)
     _stub(st, graphview.stub_out(g.id), ed.PinKind.output, False, drawn)
-    n = view.node(g.thumb) if g.thumb else None
+    n = graphview.group_picture(view, g)
     if n is not None and n.thumb is not None:   # plan 37: its last picture outlet's
         _thumb(st, n)
     k = len(g.members)
@@ -3017,11 +3018,26 @@ def thumb_wants(st: dict, view: graphview.View, where) -> dict[str, str]:
             continue
         out[thumb_name(n)] = n.thumb
     for g in view.groups:               # plan 40 T2: a folded group's last picture outlet
-        n = view.node(g.thumb) if not g.open and g.thumb else None
+        n = graphview.group_picture(view, g) if not g.open else None
         if n is None or n.thumb is None or by_preview(n):
             continue
         if rect is None or on_screen(rect, *where(g.id)):
             out[thumb_name(n)] = n.thumb
+    return out
+
+
+def tint_wants(st: dict, view: graphview.View, want: dict[str, str]) -> dict[str, str]:
+    """While **tint cables** is lit, the segment pins a cable leaves whose
+    node is wanted (SM3): a hue is read from a thumbnail, and a pin's picture
+    has none otherwise. One copy each, only while the switch is lit."""
+    if not st.get("tint"):
+        return {}
+    out: dict[str, str] = {}
+    for c in view.cables:
+        pin = graphview.pin_picture(view, c.src_port)
+        hit = view.owner(c.src_port) if pin else None
+        if hit is not None and thumb_name(hit[0]) in want:
+            out[pin] = graphview.PICTURE
     return out
 
 
@@ -3040,6 +3056,7 @@ def _want_thumbs(st: dict, view: graphview.View) -> None:
     if th is None:
         return
     want = thumb_wants(st, view, lambda nid: _where(st, nid))
+    want.update(tint_wants(st, view, want))
     if want:
         th.want(want)
     pv = st.get("preview")
@@ -3088,11 +3105,39 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
     dl = imgui.get_window_draw_list()
     dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
     tex, k = _body_of(st, n)
-    if tex is None or k <= 0.0 or getattr(tex, "glo", 0) == 0:
-        return
-    a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
-    dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
-                 imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
+    if tex is not None and k > 0.0 and getattr(tex, "glo", 0) != 0:
+        a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
+        dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
+                     imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
+    words = graphview.mask_words(n) if k < 1.0 else ""
+    if words:                                   # SM3: no mask, and it says why, on the node
+        step = imgui.get_text_line_height_with_spacing()
+        for i, line in enumerate(box_lines(words, imgui.calc_text_size, NODE_W - 12.0)):
+            dl.add_text(imgui.ImVec2(p0.x + 6.0, p0.y + 6.0 + i * step), ui.u32(ui.WARN), line)
+
+
+# as many lines of a mask node's refusal as sit in the picture's box
+BOX_LINES = 4
+
+
+def box_lines(words: str, measure, width: float) -> list[str]:
+    """`words` broken at spaces to fit `width` (`measure(text).x`), at most
+    `BOX_LINES` of them, the last ending "…" when some are left over."""
+    lines: list[str] = []
+    line = ""
+    parts = words.split()
+    for word in parts:
+        wider = f"{line} {word}".strip()
+        if line and measure(wider).x > width:
+            if len(lines) == BOX_LINES - 1:
+                while line and measure(f"{line}…").x > width:
+                    line = line[:-1]
+                return [*lines, f"{line}…"]
+            lines.append(line)
+            line = word
+        else:
+            line = wider
+    return [*lines, line] if line else lines
 
 
 def thumb_tip(st: dict, n: graphview.VNode) -> str:

@@ -4712,6 +4712,8 @@ class MatteNode(Node):
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
     OUTPUT = MASK
     TIMED = True
+    MADE = "#mask"            # where this frame's mask is kept (`mask_made`)
+    refused = ""              # why it makes no mask, in words (`graphview.mask_words`)
 
     def __init__(self, name: str, image: Node | None = None, after: tuple[Node, ...] = ()):
         super().__init__(name, after, image=image)
@@ -4785,8 +4787,9 @@ class MatteNode(Node):
     def run(self, frame: Frame) -> None:
         """What it says (GRAPH's summary)."""
         if not self.reads(frame):
-            self.said = "its input reads nothing: no mask"
+            self.said = self.refused = "its input reads nothing: no mask"
             return
+        self.refused = ""
         st = self.state(frame)
         w, h = self.size_for("image", frame)
         said = f"{w}×{h} mask · {_pick(MATTE_FROM, st.source)} at {float(st.key):.2f}"
@@ -4861,10 +4864,21 @@ def mask_of(node: Node, frame: Frame) -> tuple[moderngl.Texture | None, bool]:
     down, so it lands the right way up."""
     native = getattr(node, "native", None)
     tex = native(frame) if native is not None else node.image(frame)
-    if tex is None:
-        return None, False
+    return (None, False) if tex is None else (tex, mask_flip(node, frame))
+
+
+def mask_flip(node: Node, frame: Frame) -> bool:
+    """Are mask node `node`'s rows top first (`mask_of`)?"""
     top = getattr(node, "rows_top_first", None)
-    return tex, bool(top(frame)) if top is not None else False
+    return bool(top(frame)) if top is not None else False
+
+
+def mask_made(node: Node, frame: Frame) -> moderngl.Texture | None:
+    """The mask this frame has already made for node `node`, at its own size,
+    or None. It never makes one: no pass runs, nothing is drawn (`mask_of`
+    makes it). What a thumbnail reads (SM3)."""
+    made = getattr(node, "MADE", None)
+    return frame.root.data.get(node.name + made) if made is not None else None
 
 
 def mask_port(node: Node, frame: Frame) -> moderngl.Texture | None:
@@ -5091,6 +5105,8 @@ class SegmentNode(Node):
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
     OUTPUT = MASK
     TIMED = True
+    MADE = "#matte"           # where this frame's matte is kept (`mask_made`)
+    refused = ""              # why it makes no matte, in words (`graphview.mask_words`)
 
     def __init__(self, name: str, image: Node | None = None, after: tuple[Node, ...] = ()):
         super().__init__(name, after, image=image)
@@ -5132,6 +5148,7 @@ class SegmentNode(Node):
             tex, said = self._make(root)
             root.data[key] = tex
             self.said = said
+            self.refused = said if tex is None else ""
         return root.data[key]
 
     def _make(self, frame: Frame) -> tuple[moderngl.Texture | None, str]:
