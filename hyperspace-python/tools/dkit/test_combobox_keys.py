@@ -372,8 +372,12 @@ def test_the_caret_lands_where_the_field_was_clicked(DB):
     the popup, which is a different imgui id in a different window."""
     val = DB.CTL_STATE["plane"]
     assert len(val) == 2, f"this test is written for a 2-glyph value: {val}"
-    # +10 is `input_pad_l`, so the text starts there; +14 is inside glyph 1
-    assert _query_after(DB, 14, "Q") == val[0] + "Q" + val[1:], \
+    # +10 is `input_pad_l`, so the text starts there. +16 is 6px into an
+    # "X" 8.484 wide at 14px - past its middle, so the caret goes after it.
+    # This was +14, 4px in: past the middle of a HINTED "X", which was 8
+    # (a tie at 4 that went to 1), and before the middle of the real one -
+    # where Chromium would put the caret at 0 too. RETRO row 67.
+    assert _query_after(DB, 16, "Q") == val[0] + "Q" + val[1:], \
         "the caret did not land between the glyphs"
     assert _query_after(DB, 40, "Q") == val + "Q", \
         "a click past the text did not put the caret at the end"

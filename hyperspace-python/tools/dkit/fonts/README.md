@@ -3,8 +3,9 @@
 The diff oracle renders in **Geist**, so the ImGui side has to as well or the
 text comparison means nothing.
 
-Geist ships only as a *variable* font in *woff2*. Dear ImGui's stb_truetype
-rasterizer can read neither: it has no woff2 decompressor, and it cannot
+Geist ships only as a *variable* font in *woff2*. Dear ImGui's font
+loader (FreeType in imgui_bundle; stb_truetype upstream) can read neither:
+it has no woff2 decompressor, and it cannot
 select an instance along a variation axis. So these are static instances cut
 from that exact file.
 
@@ -27,6 +28,13 @@ instancer.instantiateVariableFont(f, {"wght": 500}, inplace=True)
 f.flavor = None
 f.save("Geist-Medium.ttf")
 ```
+
+Since RETRO row 61 `build_fonts.py` also changes four tables and nothing
+else (checked by comparing every other table byte for byte): `hhea` and the
+`OS/2` typo metrics get a one-em line box, 800 / -200, so that ImGui's font
+size is the CSS px; each `liga` output glyph is mapped to a Private Use
+codepoint in the `cmap`; and `head` keeps the source's timestamp. Geist's
+real metrics, kerning, ligature rules and advances go to `metrics.json`.
 
 Geist is OFL 1.1 with **no Reserved Font Name** declared, so derived instances
 may keep the family name. Latin subset only — this is a measuring rig, not the
