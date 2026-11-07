@@ -256,12 +256,12 @@ def test_the_tray_shows_a_pad_no_entry_reads(rig):
     assert "players.tray.0" in r.d.rects
 
 
-def test_the_header_and_the_footer_say_who_is_where(rig):
+def test_the_footer_says_who_is_where_and_the_pane_chip_does_not(rig):
     r, d, meta = rig, rig.d, rig.meta
     assert ui_players.summary(r.panel) == "on air 1 2  ·  off air —"
     meta.move_player(2, Duty.OFF_AIR)
     assert ui_players.summary(r.panel) == "on air 1  ·  off air 2"
-    assert ui_pane._said(r.panel, "players", "") == ui_players.summary(r.panel)
+    assert ui_pane._said(r.panel, "players", "") == ""          # the chip: PLAYERS alone
     assert "players.open" in d.rects
 
 

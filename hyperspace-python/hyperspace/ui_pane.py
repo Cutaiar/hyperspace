@@ -77,7 +77,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_loadable, ui_players, ui_playlist, undo
+from . import library, ui, ui_fx, ui_loadable, ui_playlist, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -370,12 +370,14 @@ def timing_line(panel) -> str:
 
 def _said(panel, key: str, said: str) -> str:
     """What a chip names beside its title: the selection's what is selected;
-    the playlist's where it is; the players' who is where."""
+    the playlist's where it is. The players' chip is its title alone (Dillon,
+    2026-11-07: who is on and off air read as the chip's own words); the
+    footer's chip says who is where."""
     if key == "selection":
         return said
     if key == "playlist" and getattr(panel, "playing", None) is not None:
         return ui_playlist.where(panel.playing)
-    return ui_players.summary(panel) if key == "players" else ""
+    return ""
 
 
 def _chip(panel, cid: str, title: str, lit: bool, said: str, dot: bool,
