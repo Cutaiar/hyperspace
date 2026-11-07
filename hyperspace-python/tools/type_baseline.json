@@ -16,7 +16,7 @@
       "reportOptionalOperand": 1
     },
     "hyperspace/bridge.py": {
-      "reportAttributeAccessIssue": 4,
+      "reportAttributeAccessIssue": 3,
       "reportReturnType": 1
     },
     "hyperspace/deck.py": {
@@ -177,7 +177,7 @@
     },
     "hyperspace/midi.py": {
       "reportArgumentType": 5,
-      "reportAttributeAccessIssue": 48,
+      "reportAttributeAccessIssue": 46,
       "reportIndexIssue": 1,
       "reportOptionalCall": 2,
       "reportReturnType": 1

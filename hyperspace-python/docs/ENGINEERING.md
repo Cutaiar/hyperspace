@@ -1812,7 +1812,7 @@ the panel at 540 and the desk takes what is left.
 | CAMERA | Zoom (0.005–200×, log, so 1× sits at the knob's noon — far enough out to frame a field of thousands), yaw, pitch, pan, reset. |
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
 | FX | The effect stack (§2). |
-| AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
+| AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3; while on, a line under it says off air reacts, row 790) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | Under its head, ANALYZER TUNING: the analyzer's scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
 | ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the meta controller's MIDI rows read-only, the sinks, and a filter (§9). |
 | GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
@@ -2425,10 +2425,9 @@ else stands and the glide stops; a loadable patch load ends every glide but a
 shared meta param's; off, an unplug or a quit lands every value at once. The
 setting is saved with the show, never with a loadable patch, and is on no knob.
 
-**Reconnect.** With no desk connected the app looks for it every 2 s
-five times, then every 10 s (`midi.RECONNECT_S`, `RECONNECT_FAST`,
-`RECONNECT_SLOW_S`); a desk that vanishes is looked for at the fast pace
-again. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
+**Reconnect.** With no desk connected the app looks for it every 2 s,
+all night (`midi.RECONNECT_S`, row 791), so a desk back from any absence
+is found as fast. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
 comes, it gets its power-up and every light. `enabled = false` on its
 entry (or `[midi] enabled = false` in the old form) stops all of it.
 
@@ -3591,9 +3590,10 @@ What only a person at the machine can check is
   fullscreen output tears, is unknown. **A window on a 60 Hz display here
   swaps at 120** (measured on this Mac, row 782: macOS's swap doesn't follow the
   window's own display), so the floor goes by the fastest display, not the window's.
-- **With no desk connected the app keeps looking** — every 2 s five
-  times, then every 10 s. Each look creates a CoreMIDI client; `enabled
-  = false` on the desk's entry (or `[midi] enabled = false`) stops it.
+- **With no desk connected the app keeps looking** — every 2 s. A look
+  makes no client (`midiports`, audit R15, closed) and costs about 0.25 ms
+  a pair of ports on the frame thread; `enabled = false` on the desk's
+  entry (or `[midi] enabled = false`) stops it.
 - **At most one hands node makes the layer.** Since plan 28 a loadable patch's
   `graph` section can wire which output gets which hands node and which
   effects it alone takes (§2, the wire list); an output no wire names
@@ -3619,5 +3619,4 @@ What only a person at the machine can check is
   held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
-- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R14, R15,
-  U9, U10, P6.
+- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): P6.

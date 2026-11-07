@@ -488,7 +488,7 @@ PATCH_MODULES = _mods(
 # what is set for a performance or an install
 META_MODULES = _mods(
     "deck", "playlist", "players", "pointer", "app", "devices", "control", "config", "placement",
-    "hotreload", "watchdog", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
+    "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
     "osc", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
     "tempo", "seq_page", "replay", "pinch", "pacing")
 # one module holding both layers' classes, which an import cannot tell apart. The list is the
