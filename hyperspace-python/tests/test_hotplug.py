@@ -421,6 +421,26 @@ def test_the_control_window_moves_to_one_still_there_and_comes_back(rig):
     assert r.plug.lines() == []
 
 
+def test_the_display_it_left_coming_and_going_before_settling_raises_nothing(rig):
+    """It left a display with no row saying, which comes back and goes again inside `SETTLE_S`."""
+    r = rig(mons=[_laptop(), _tv(), _projector()], rows={"TV": row("output.1")})
+    laptop, _, pr = r.g.mons
+    r.g.set_window_pos(r.ctrl, 100, 100)
+    r.plug._note_where()
+    r.g.unplug(laptop)
+    r.run_for(HOLD_S + 0.1)
+    assert r.on(r.ctrl, pr) and r.plug._ctrl_left == "Built-in"
+    r.g.plug(laptop)
+    r.tick()
+    r.g.unplug(laptop)
+    r.run_for(SETTLE_S + 1.0)
+    assert not r.plug.failed and not any("failed" in s for s in r.warned), r.warned
+    assert r.on(r.ctrl, pr) and not r.plug._arrived
+    r.g.plug(laptop)
+    r.run_for(SETTLE_S)
+    assert r.on(r.ctrl, laptop) and r.plug._ctrl_left == ""
+
+
 def test_the_control_window_floats_over_a_render_with_nowhere_free(rig, monkeypatch):
     floated = []
     monkeypatch.setattr(GlfwBackend, "float_over_renders", lambda self, win, on: floated.append((win, on)))

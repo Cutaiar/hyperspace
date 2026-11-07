@@ -313,7 +313,7 @@ class Hotplug:
         was = set(self._keys())
         self.screens = scr
         keys = self._keys()
-        self._arrived |= set(keys) - was
+        self._arrived = (self._arrived | (set(keys) - was)) & set(keys)     # (not one that left again)
         for sl, also in reversed(self._open_now()):     # (a slot's first last: its next takes over)
             where = also.display if also is not None else sl.display
             if memory(where) not in keys:

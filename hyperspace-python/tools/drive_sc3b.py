@@ -71,7 +71,6 @@ def _watched(d, panel, until, secs, times, what):
     """Frames until `until()` holds, each frame's length kept, and whose it was. A stop at `secs`."""
     end = time.perf_counter() + secs
     last = time.perf_counter()
-    swaps = panel.outputs[0].presenter.presented if panel.outputs[0].presenter else 0
     while not until():
         if time.perf_counter() > end:
             raise AssertionError(f"{what}: not within {secs} s; {panel.displays.plug.lines()}")
@@ -82,7 +81,6 @@ def _watched(d, panel, until, secs, times, what):
         times.append((now - last) * 1000.0, )
         SLICES.append({"at": id(times), "n": len(times) - 1, **SLICE})
         last = now
-    return swaps
 
 
 def _stats(times):
@@ -133,11 +131,9 @@ def script(d, panel):
     yield from _watched(d, panel, lambda: _tag(run) is not None, 8.0, times, "the display arrives")
     uid_line = _uid(plug)
     say("arrived", uid_line, _stats(times))
-    wait_times = []
     t0 = time.perf_counter()
     while time.perf_counter() - t0 < 1.0:
         yield
-        wait_times.append(0.0)
     assert not two.opened, "an unknown display waits"
     out["steps"]["arrives unknown"] = {**_stats(times), "uid": uid_line, "opened": False}
 
