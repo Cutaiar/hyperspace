@@ -226,6 +226,11 @@ def test_the_private_names_that_cross_a_module_boundary_are_known():
     assert crossing == {
         "comp_combobox._is_row": {"comp_command.py"},
         "comp_combobox._k": {"comp_command.py"},
+        # item 3b: the facade re-exports it because
+        # test_a_fractional_delta_marks_the_device_precise_for_good flips
+        # `I._PRECISE["seen"]`. Safe only while wheel.py MUTATES the dict
+        # and never rebinds it - see wheel.py's docstring.
+        "wheel._PRECISE": {"interact.py"},
     }, (
         "the set of PRIVATE names imported across modules changed:\n  "
         + "\n  ".join(f"{k} <- {sorted(v)}" for k, v in sorted(crossing.items())))
