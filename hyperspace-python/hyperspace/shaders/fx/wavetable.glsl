@@ -9,7 +9,9 @@
 // @tip the knob to scrub or ride with an LFO. At 0 nothing has moved.
 // @clock u_flow_t flow
 
-// Each cell of a jittered grid has a root; from it run Blades paths. A path
+// Each cell of a grid can hold a root (Density says how many do, Jitter how
+// far from the cell's middle, Offset X and Y slide the grid over the
+// picture); from each root run Blades paths. A path
 // is a chain of SEGS circular arcs, each with its own turn, so its shape is
 // closed form: a blade curling more toward its tip, a noodle wiggling, a
 // curl winding in. The stamp is a disc of Brush radius at the root, and the
@@ -21,19 +23,26 @@
 // about the nearest — never marched. Where no paste lands the frame shows
 // through, and a root's own disc at s 0 is the frame itself, so at
 // Position 0 the effect is a copy of its input.
+// Profile shades each paste by where in its stamp the pixel lies, so the
+// last pastes along a tube's sides draw its cross-section.
 uniform float u_pos;     // @param 0 1 0.5 "Position" How far along its path each stamp has been dragged: 0 at the root, 1 at the tip. The knob to scrub, or ride with an LFO.
 uniform int   u_mode;    // @param choice [grass|noodles|curls] 0 "Field" The paths: blades of grass from above, each curling over toward its tip; noodles wiggling from end to end; or curls winding in like a fern's fiddlehead.
 uniform float u_scale;   // @param 1 24 5 log "Scale" Roots across the frame's height.
+uniform float u_density; // @param 0 1 1 "Density" How many of the roots grow a path: 1 every one, lower thins the field out; a path fades in by its brush widening, never pops.
+uniform float u_jitter;  // @param 0 1 0.7 "Jitter" How far each root strays from the middle of its cell: 0 a regular grid, 1 anywhere in its cell.
+uniform float u_offset_x; // @param -1 1 0 "Offset X" Slides the field of paths across the picture, in frame heights; each root copies what is under it now.
+uniform float u_offset_y; // @param -1 1 0 "Offset Y" Slides the field of paths up and down the picture, in frame heights.
 uniform float u_length;  // @param 0.2 1.5 0.9 "Length" How long each path is, in cells between roots.
 uniform float u_brush;   // @param 0.03 0.5 0.15 log "Brush" The stamp's radius, in cells: how much of the picture about each root is copied and dragged.
 uniform int   u_blades;  // @param 1 5 1 "Blades" Paths from each root, fanned around it: a tuft extrudes the same stamp several ways at once.
 uniform float u_trail;   // @param 0 1 1 "Trail" How much of the drag stays pasted behind the head: 1 the whole extrusion back to the root, 0 only the stamp where it is now.
 uniform float u_stagger; // @param 0 1 0 "Stagger" Starts each path late by its own amount, so they set off one by one; at 1 Position reaches every tip.
 uniform float u_flow;    // @param 0 4 0.3 "Flow" How fast the paths sway and wiggle; a step changes the speed, never where the paths are.
-uniform float u_rim;     // @param 0 1 0.35 "Rim" Darkens each paste toward its edge, so the copies under the head read as the sides of an extrusion.
+uniform int   u_profile; // @param choice [rim|round|bevel|ridge|groove|fluted|flat] 0 "Profile" The tube's cross-section: rim darkens each paste toward its edge; round, bevel (a flat top, chamfered), ridge (a peaked roof), groove (a gutter) and fluted (ribs along it) light it as relief from the upper left; flat leaves the copies as they are.
+uniform float u_depth;   // @param 0 1 0.35 "Depth" How strongly the profile shows: the rim's darkening, or the relief's light and shadow.
 
 const int SEGS = 4;
-const int REACH = 3;          // the cell search's widest half width: Length + Brush + root jitter ≤ 3 cells
+const int REACH = 3;          // the cell search's widest half width: Length + Brush + a root's reach into its neighbour ≤ 3 cells
 const float PHI = 1.6180340;
 const float STRAIGHT = 0.02;  // a curvature (per cell) under this is a straight segment
 
@@ -131,22 +140,49 @@ float path_hit(vec2 p, vec2 root, float th, float seed, float s0, float s1, floa
     return best;
 }
 
+// the profile's light on a paste, x its point from the stamp's centre in
+// brushes (|x| ≤ 1): rim darkens toward the edge; the others are a height
+// across the tube, h(|x|), lit from the upper left as grow lights its
+// relief — a flat top lights to 1 — so only the slope h′ shows
+float profile(vec2 x, float depth) {
+    float d = min(length(x), 1.0);
+    if (u_profile == 0) return 1.0 - depth * smoothstep(0.65, 1.0, d);
+    if (u_profile == 6) return 1.0;
+    float slope;                                             // dh/d|x|
+    if (u_profile == 1) slope = -d / sqrt(max(1.0 - d * d, 0.04));        // round: a half cylinder
+    else if (u_profile == 2) slope = d < 0.6 ? 0.0 : -2.5;               // bevel: flat top, a chamfer
+    else if (u_profile == 3) slope = -1.5;                                // ridge: a peaked roof
+    else if (u_profile == 4) slope = 2.0 * d;                            // groove: a gutter, lowest along the middle
+    else slope = -2.5 * sin(d * 3.0 * PI);                               // fluted: three ribs a side
+    vec2 g = slope * (d > 1e-4 ? x / length(x) : vec2(0.0));
+    vec3 n = normalize(vec3(-g, 1.0));
+    vec3 l = normalize(vec3(-0.5, 0.6, 0.6));
+    return mix(1.0, clamp(dot(n, l) / l.z, 0.0, 1.6), depth);
+}
+
 vec4 effect(vec2 uv) {
-    vec2 p = centred(uv) * u_scale;
+    vec2 p = (centred(uv) - vec2(u_offset_x, u_offset_y)) * u_scale;
     float r = u_brush;
     // no head has gone past Position × Length, so no paste lies further
-    // than that and a brush from its root (the root within 0.85 of its cell)
+    // than that and a brush from its root, the root up to half a cell
+    // and half its jitter from its cell's middle
     float most = u_length * u_pos;
-    int reach = min(int(ceil(most + r + 0.85)), REACH);
+    float stray = 0.5 * u_jitter;
+    int reach = min(int(ceil(most + r + 0.5 + stray)), REACH);
     vec2 c0 = floor(p);
     float best = -1.0;
     vec2 from = p, to = p;      // the stamp's root and where it was pasted
+    float br = r;               // that path's brush
     for (int j = -reach; j <= reach; j++)
     for (int i = -reach; i <= reach; i++) {
         vec2 cell = c0 + vec2(i, j);
-        vec2 root = cell + 0.15 + 0.7 * hash22(cell);
+        vec2 root = cell + 0.5 + u_jitter * (hash22(cell) - 0.5);
         float far = length(p - root);
         if (far > most + r) continue;
+        // Density: a root grows once Density passes its own share, its
+        // brush widening over the next 0.08 so it never pops in
+        float rr = r * clamp((u_density - 0.92 * hash21(cell + 11.0)) / 0.08, 0.0, 1.0);
+        if (rr <= 0.0) continue;
         float seed = hash21(cell + 3.0);
         for (int b = 0; b < 5; b++) {
             if (b >= u_blades) break;
@@ -155,18 +191,19 @@ vec4 effect(vec2 uv) {
                      + 0.6 * (fract(bseed * 3.7) - 0.5) / float(u_blades);
             float delay = u_stagger * 0.6 * fract(bseed * PHI * 5.0);
             float head = u_length * clamp((u_pos - delay) / (1.0 - delay), 0.0, 1.0);
-            if (far > head + r) continue;                  // a path's arc length bounds its reach
+            if (far > head + rr) continue;                 // a path's arc length bounds its reach
             float tail = max(head - u_trail * u_length, 0.0);
             vec2 c;
-            float s = path_hit(p, root, th, bseed, tail, head, r, c);
-            if (s > best) { best = s; from = root; to = c; }
+            float s = path_hit(p, root, th, bseed, tail, head, rr, c);
+            if (s > best) { best = s; from = root; to = c; br = rr; }
         }
     }
     if (best < 0.0) return src(uv);
     vec2 aspect = vec2(u_res.y / u_res.x, 1.0);
     vec4 col = src(uv + (from - to) / u_scale * aspect);
-    // the rim, faded in over the first brush of travel so Position 0 stays the frame
-    float edge = smoothstep(0.65, 1.0, length(p - to) / r);
-    col.rgb *= 1.0 - u_rim * edge * min(1.0, best / r);
+    // the profile, faded in over the first brush of travel so Position 0
+    // stays the frame
+    vec2 across = (p - to) / br;           // from the stamp's centre, 1 at its edge
+    col.rgb *= profile(across, u_depth * min(1.0, best / br));
     return col;
 }
