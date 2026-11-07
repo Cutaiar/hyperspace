@@ -77,7 +77,7 @@
       "reportOptionalSubscript": 3
     },
     "hyperspace/graphview.py": {
-      "reportArgumentType": 61,
+      "reportArgumentType": 62,
       "reportAttributeAccessIssue": 7,
       "reportCallIssue": 2,
       "reportGeneralTypeIssues": 2,
@@ -190,7 +190,7 @@
     },
     "hyperspace/outputs.py": {
       "reportArgumentType": 7,
-      "reportAttributeAccessIssue": 55,
+      "reportAttributeAccessIssue": 59,
       "reportOptionalMemberAccess": 25,
       "reportOptionalSubscript": 17,
       "reportReturnType": 1
@@ -226,8 +226,7 @@
       "reportOperatorIssue": 3,
       "reportOptionalCall": 1,
       "reportOptionalMemberAccess": 9,
-      "reportOptionalOperand": 8,
-      "reportReturnType": 1
+      "reportOptionalOperand": 8
     },
     "hyperspace/patches.py": {
       "reportArgumentType": 4,
@@ -256,7 +255,7 @@
       "reportArgumentType": 9,
       "reportAttributeAccessIssue": 136,
       "reportGeneralTypeIssues": 1,
-      "reportOptionalMemberAccess": 18,
+      "reportOptionalMemberAccess": 19,
       "reportOptionalSubscript": 7,
       "reportReturnType": 4
     },
@@ -306,7 +305,7 @@
       "reportReturnType": 2
     },
     "hyperspace/ui_graph.py": {
-      "reportArgumentType": 10,
+      "reportArgumentType": 11,
       "reportAttributeAccessIssue": 1,
       "reportOptionalIterable": 1,
       "reportOptionalMemberAccess": 6,

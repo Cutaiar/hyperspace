@@ -14052,7 +14052,7 @@ still wins, as does a sink row.
 
 ### 788. Stop the type errors growing
 
-- **The rule.** Plan 58's assumed rule, which the owner hasn't objected to: "a new type-checker complaint fails a PR, old ones don't." Marked pending for that reason. No errors are fixed and `hyperspace/` has no diff: 1,548 complaints stand as the baseline (1,547 errors and 1 warning, on pyright 1.1.414), as of main at WORDS.
+- **The rule.** Plan 58's assumed rule, which the owner hasn't objected to: "a new type-checker complaint fails a PR, old ones don't." Marked pending for that reason. No errors are fixed and `hyperspace/` has no diff: 1,554 complaints stand as the baseline (1,553 errors and 1 warning, on pyright 1.1.414), as of main at SM2.
 - **What counts.** A count by file and rule over its baseline. A file the baseline doesn't name has a baseline of none. Lines aren't kept, so moving code inside a file changes nothing, and the tool prints all of a grown pair's complaints since it can't tell which is the new one. Fewer in one file doesn't buy more in another.
 - **Where it runs: the fast tier.** One run took 12 to 22 s on the Mac on one xdist worker, 13.38 s in a full `-n 4` fast tier of 137.78 s: about 3 s of wall time there by division, not measured apart. By the tier's rule of thumb a test this long belongs in `slow`, but `slow` isn't in CI, and CI is where a PR fails, so it stays fast and CI holds the rule without the workflow changing. The optional workflow step only gives the failure its own name.
 - **Why not a step only.** The workflow needs the owner's token, so a step alone would leave nothing enforcing the rule until then.
