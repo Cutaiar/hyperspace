@@ -496,6 +496,6 @@ def test_an_empty_folder_the_owner_made_under_presets_moves(tool, tmp_path):
 
 def test_start_at_launch_on_an_unsaved_show_writes_nothing(tmp_path):
     lib = Library(tmp_path, period=0.0)
-    lib.project.path = None
-    lib.project.play_at_launch("cart")
+    lib.install.path = None
+    lib.install.play_at_launch("cart")
     assert not (tmp_path / "installs").exists() or not any((tmp_path / "installs").iterdir())

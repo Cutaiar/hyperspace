@@ -216,7 +216,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
                               "render:composite")} == {graphview.EFFECTS_AREA}
     assert {area[k] for k in ("render:output.all", "render:output.1", "render:output.2",
                               "group:output")} == {graphview.OUTPUTS_AREA}
-    assert {area[k] for k in ("group:patch", "group:ui", "group:desk",
+    assert {area[k] for k in ("group:preset", "group:ui", "group:desk",
                               "group:missing")} == {graphview.OTHER}
 
 

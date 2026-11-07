@@ -1206,7 +1206,7 @@ FRAME_KIND_UNWIRED = ("{kind} node: only in a wired frame (plan 35: the section 
 # ---------------------------------------------------------------- the meta controller's wires (plan 36 T1)
 #
 # Plan 36 W1, decision D1: what reaches a window is a drawn cable. All
-# outputs is a bus: the meta controller — the open show, `library.Project.rig` — owns
+# outputs is a bus: the meta controller — the open show, `library.Install.rig` — owns
 # one cable per window and port, `output.all.<port> → output.<n>.<port>`
 # for the picture, the hands and the guide (`bus_wire`), present until
 # the show cuts it, drawn on GRAPH and cut or joined there like any wire.

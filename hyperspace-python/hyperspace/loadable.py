@@ -804,7 +804,7 @@ class LoadedPatch:
         self.lib = lib = on_deck(self) if on_deck is not None else lib
         base = getattr(lib, "base", lib)
         # the patch groups' landings (`Library._labels`) and the bank's
-        # lit slot (`Project.active`) on this deck
+        # lit slot (`Install.active`) on this deck
         self.labels: dict[str, tuple] = {}
         first = getattr(base, "loaded_patch", None) is None
         self.active_slot = (getattr(base.install, "__dict__", {}).get("active", -1)
@@ -911,7 +911,7 @@ class LoadedPatch:
 
     def new(self, at: tuple[float, float] = (0.0, 0.0)) -> list[str]:
         """A new loadable patch (plan 35 T7, row 387): the library's fresh values
-        for every patch group (the reset `Project.new` uses, so
+        for every patch group (the reset `Install.new` uses, so
         nothing of the loadable patch loaded before survives), no routes, the desk
         written out as the default patch layer (a file with no `desk` key
         gets that layer and `"desk": []` an empty one — the blank loadable patch
@@ -989,11 +989,11 @@ class LoadedPatch:
         #    they expand to — and a save writes that `/7` as `/9` (row 394, plan 43 C2)
         #    0. and the one orbit camera (plan 43 C2): a file before `/9`
         #    never named the eye — it drew through the open show's — so it
-        #    takes the eye an old show's session held (`Project.old_eye`)
+        #    takes the eye an old show's session held (`Install.old_eye`)
         #    and the camera node's GRAPH position that show kept
         #    (`camera_at`), silent; and the look made whole (plan 44 D3): a
         #    file before `/10` takes what an old show's session and `rig`
-        #    held (`Project.old_look`, `old_cuts`), its module labels and
+        #    held (`Install.old_look`, `old_cuts`), its module labels and
         #    its desk template's name dropped — the template said.
         #    Plan 50: these steps are the one ladder, `graphmigrate.forward`
         #    (a fragment's is `patches.forward`). What the show handed on

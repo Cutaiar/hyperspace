@@ -1100,7 +1100,7 @@ def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
 
 
 def test_active_follows_the_loaded_loadable_from_one_place(tmp_path):
-    """`Project.follow` is the one spelling of "the lit slot follows the
+    """`Install.follow` is the one spelling of "the lit slot follows the
     loaded preset": kept where it is while that slot still names it, else
     the first slot that names it, else none; none when nothing is loaded.
     A loadable patch on two slots lights the one that was pressed."""

@@ -472,7 +472,7 @@ def _full_registry(tmp_path):
 def test_every_persisted_group_is_patch_or_meta(tmp_path):
     """Plan 13 §4 / exit criterion 1: every persisted param is in exactly
     one part, the two tuples are disjoint, and each persisted id's first
-    segment is its group (Project._is_session splits an unattached file by it)."""
+    segment is its group (Install._is_session splits an unattached file by it)."""
     reg = _full_registry(tmp_path)
     assert not set(PATCH_GROUPS) & set(SHARED_META_GROUPS)
     persisted = [p for p in reg if p.persist]

@@ -1275,7 +1275,7 @@ def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
     """An older loadable patch (before `/9`) as its `/9` reads it — pure, one way,
     on load (`LoadedPatch.load_doc`) and so in tools/migrate_library.py's
     resave: the eye written into `values` from `eye` (the open show's
-    `session`, read out of an old show by `library.Project`; an id it lacks
+    `session`, read out of an old show by `library.Install`; an id it lacks
     is left out, and the load fills it from the build's default), and the
     camera node's GRAPH position from `camera_at` (the old show's layout
     entry, ``render:camera``) into the loadable patch's `layout` where the file
@@ -1310,7 +1310,7 @@ def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
     pure, one way, on load (`LoadedPatch.load_doc`, after `nine`) and so in
     tools/migrate_library.py's resave: the hands' and the clouds' looks
     written into `values` from `look` (what the open show's `session` held,
-    `library.Project.old_look`: an id the file already names stays, an id
+    `library.Install.old_look`: an id the file already names stays, an id
     neither names takes the build's default at the load), the bus cuts into
     `bus` from `cuts` (the open show's `rig`, a `graph.BusCuts`; a file
     that names its own keeps them), and the retired keys (`TEN_RETIRED`:

@@ -858,7 +858,7 @@ class MidiIO:
         row whose param saves into its choice (`Param.save_into`: a bank
         pad) saves the live state into that slot — an empty slot as #158's
         hold does, a filled one as a **new** loadable patch the slot then points
-        at (`library.Project.save_into`: nothing is overwritten or
+        at (`library.Install.save_into`: nothing is overwritten or
         trashed) — instead of loading it, and starts no hold. The pad
         blinks for BLINK_S when the save worked. SAVE and the pads are
         invariant, so this is the same under SHIFT. True when the press was

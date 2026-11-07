@@ -556,7 +556,7 @@ class MetaController:
     `mix` is the crossfader (`output.xfade`, `output.xfade_s`): `tick` runs a
     timed `crossfade` and follows the fader, and `parked` is the one list of decks
     off air, what `Host.off_air` reads. `row_load` is where a bank verb from a row
-    lands (each deck's `DeckProject` asks it), and `bars_load` why it may not now."""
+    lands (each deck's `DeckInstall` asks it), and `bars_load` why it may not now."""
 
     # (class-level: read by a meta controller from before a hot reload)
     timed: TimedFade | None = None

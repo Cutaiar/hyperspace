@@ -419,7 +419,7 @@ PLAY_TIP = ("Play the playlist: each look loads off air, then the crossfader run
 
 def at_launch(playing: Playing, install) -> bool:
     """SM6 (the owner, 2026-11-06): a cart starts by itself after launch: the one key in the
-    install file names the list (`Project.plays`). A list that is gone or empty says so and
+    install file names the list (`Install.plays`). A list that is gone or empty says so and
     nothing plays. True when it started."""
     name = getattr(install, "plays", None)
     if not name or not playing.select(name):

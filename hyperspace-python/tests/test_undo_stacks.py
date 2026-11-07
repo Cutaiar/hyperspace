@@ -562,7 +562,7 @@ def test_a_where_that_raises_is_not_inside_a_meta_section(rig):
 
 def test_a_decks_step_across_a_show_change_that_changes_nothing_of_it_drops(rig):
     """A deck's marks name the show only for its layout: a step whose `put` would
-    change nothing is no step, whatever the show is called now. `Project.new` on a
+    change nothing is no step, whatever the show is called now. `Install.new` on a
     deck already at fresh values leaves "undid new show" unsaid."""
     pr, one = rig.lib.install, rig.one
     pr.new("first")

@@ -364,7 +364,7 @@ def test_the_hold_on_an_empty_pad_still_saves_and_a_filled_one_only_loads(rig):
 
 
 def test_save_into_and_save_empty_on_the_project(rig):
-    """`Project.save_into` grew the filled case; `save_empty` is #158's
+    """`Install.save_into` grew the filled case; `save_empty` is #158's
     hold (empty only). Neither overwrites a file."""
     pr = rig.loaded_patch
     pr.load_slot(4)

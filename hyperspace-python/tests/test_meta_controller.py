@@ -415,7 +415,7 @@ def test_a_new_loadable_on_deck_2_stays_on_deck_2(rig):
 
 
 def test_nothing_of_a_deck_s_view_is_a_second_copy(rig):
-    """`DeckLibrary` and `DeckProject` hold the one library's and show's state;
+    """`DeckLibrary` and `DeckInstall` hold the one library's and show's state;
     only which deck differs, and a hot reload can re-class them."""
     one, two, lib = rig.one, rig.two, rig.r.lib
     view = two.loaded_patch.lib
@@ -429,7 +429,7 @@ def test_nothing_of_a_deck_s_view_is_a_second_copy(rig):
     # as a reload makes them: new classes over new bases (row 802: this test kept the old
     # bases, so it passed while the real swap refused; test_hot_reload_app.py runs that one)
     new_view = type("DeckLibrary", (DeckLibrarySlots, type("Library", (), {})), {})
-    new_bank = type("DeckProject", (DeckInstallSlots, type("Project", (), {})), {})
+    new_bank = type("DeckInstall", (DeckInstallSlots, type("Install", (), {})), {})
     bank = view.install
     view.__class__ = new_view
     bank.__class__ = new_bank

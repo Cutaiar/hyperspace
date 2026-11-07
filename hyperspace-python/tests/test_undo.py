@@ -467,7 +467,7 @@ def test_save_after_undoing_a_load_writes_the_earlier_loadable(rig):
 def test_a_show_load_and_its_startup_loadable_are_one_step_each(rig):
     """A show is the meta controller's and the loadable patch it starts on is a load on
     its deck (plan 44 D5b): one step on each stack, each undoing its own, and
-    both undone the `Project` comes back as it was."""
+    both undone the `Install` comes back as it was."""
     reg, lib, pr = rig.reg, rig.lib, rig.lib.install
     reg["master.gain"].step(-3)                        # a meta controller edit
     settle(rig)

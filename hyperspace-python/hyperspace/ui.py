@@ -808,7 +808,7 @@ class Panel:
         self.graph_selected: str | None = None
         self.graph_selected_at: int = 0
         self.library = library      # library.Library, or None: no strips, no project row
-        # the F1–F8 loadable patch bank is the open project's (library.Project)
+        # the F1–F8 loadable patch bank is the open project's (library.Install)
         self.bank = bank if bank is not None else (
             library.install if library is not None else None
         )

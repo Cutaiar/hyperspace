@@ -138,7 +138,7 @@ def main() -> None:
         "2 green blink")
 
     say()
-    say('1. "clear slot" on F6 (the PRESETS page\'s menu item calls Project.clear_slot)')
+    say('1. "clear slot" on F6 (the PRESETS page\'s menu item calls Install.clear_slot)')
     proj.clear_slot(5)
     say(f"    footer: {footer(r)}")
     say(f"    bank: {bank(r)}")
@@ -229,7 +229,7 @@ def main() -> None:
     say(f"    bank: {bank(r)}")
 
     say()
-    say("7. A preset put on a slot and a slot cleared (Project.put_slot / clear_slot)")
+    say("7. A preset put on a slot and a slot cleared (Install.put_slot / clear_slot)")
     was = files(r)
     proj.put_slot(1, "TRIP 3")
     say(f"    put TRIP 3 on F2:  footer: {footer(r)}")

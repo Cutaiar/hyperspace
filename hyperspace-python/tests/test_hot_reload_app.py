@@ -1,6 +1,6 @@
 """A hot reload through the real swap, over the real app's long-lived objects (HR, row 802).
 
-Plan 44 D5a gave `DeckLibrary` and `DeckProject` slots over a hot base, and from that day
+Plan 44 D5a gave `DeckLibrary` and `DeckInstall` slots over a hot base, and from that day
 no save before `library` on the list completed: `swap: TypeError: __class__ assignment:
 'DeckLibrary' object layout differs from 'DeckLibrary'`. Nothing failed, because no reload
 test assigned a `__class__` on a class whose base had reloaded. The fast tier holds the

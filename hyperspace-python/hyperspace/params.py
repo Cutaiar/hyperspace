@@ -197,7 +197,7 @@ SHARED_META_IDS = ("app.restart", "edit.undo", "edit.redo", "seq.page", "seq.sel
 # so it is no base, no undo step and no dirty dot
 POSE_IDS = tuple(f"rot.phase.{name}" for name in PLANE_NAMES)
 # SEM (register row 746): the meta controller's params that are one per `Deck`. They
-# close over one deck (`preset.*` its `DeckProject`, `deck.chase` its registry's
+# close over one deck (`preset.*` its `DeckInstall`, `deck.chase` its registry's
 # `chasing`, `totem.*` and `poi.*` their `on_reg`), so they cannot be a shared meta param,
 # which `Registry.add` makes one object on every deck. They count as the meta controller's
 # for `routing.meta_refusal` and the one-layer test, and stay each deck's own object.
@@ -878,7 +878,7 @@ def is_instance_id(pid: str) -> bool:
     or `ghost.<n>.<key>`, n ≥ 2 — one that exists only while a loadable patch's
     graph holds that instance (plan 26 A4)? A loadable patch load sorts such ids
     against the graph it lands; an old show's `ghost.<n>.*` ones the registry
-    lacks are held back (`Project._held_back`)."""
+    lacks are held back (`Install._held_back`)."""
     parts = pid.split(".")
     if parts[0] == "fx" and len(parts) >= 4:
         mark = parts[2]
@@ -2126,7 +2126,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     renderer's ghost hands), and `media` (media.channels.MediaState, the
     eight channels the ``media.*`` params write; kept as ``r.media``, the
     one the loadable patch's bins and the renderer read). `bank` is the open project
-    (library.Project), whose loadable patch slots the ``preset.*`` params
+    (library.Install), whose loadable patch slots the ``preset.*`` params
     load, save and cycle. `restart` is the host's request to
     restart the process (``app.restart``; app.py polls a flag) — a no-op
     without a host. Only the panel's own state (``ui.*``) is added by the
@@ -2860,7 +2860,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                          "own from → to. Own it with a hand or LFO to ride the depths.")
 
     # ---- the loadable patch bank ----
-    if bank is not None:                   # library.Project: the bank of loadable patch names
+    if bank is not None:                   # library.Install: the bank of loadable patch names
         g = "preset"
         names = lambda: [n or f"SLOT {k + 1}" for k, n in enumerate(bank.bank)]
         # active is −1 until a loadable patch loads: no choice selected, no LED lit

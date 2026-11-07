@@ -294,7 +294,7 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
     """Code review of PR #44 (A2): every band document the library writes
     is built by Library.document, so a band preset that has no file when
     the project is saved is copied inline with its layout. (Applying a
-    module's layout on project load is a separate, older gap: Project._apply
+    module's layout on project load is a separate, older gap: Install._apply
     never ran the layout hook; filed for plan 11's library sweep.)"""
     lib, control, chain = rig.lib, rig.control, rig.chain
     lib.on_layout("band", control.apply_layout)
@@ -362,7 +362,7 @@ def test_the_home_is_ensured_once_per_process(tmp_path, monkeypatch):
 
 def test_a_project_restores_a_modules_layout(rig, tmp_path):
     """Audit L8: a project saved on eight bands comes back with eight —
-    `Project._apply` takes the same road a strip load does, layout first."""
+    `Install._apply` takes the same road a strip load does, layout first."""
     lib, control, chain = rig.lib, rig.control, rig.chain
     band(tmp_path, "Balanced")
     lib.on_layout("band", control.apply_layout)
@@ -486,7 +486,7 @@ def test_a_project_naming_the_old_routing_layer_is_ignored(rig, tmp_path):
 
 
 def test_a_project_never_carries_the_loaded_loadable(rig, tmp_path):
-    """Audit L3, and plan 13 §2.2: `Project.io` is gone, and the loaded
+    """Audit L3, and plan 13 §2.2: `Install.io` is gone, and the loaded
     loadable patch (routes and all) stays out of a project's modules — the bank
     names loadable patches, the project holds the meta controller."""
     lib = rig.lib
@@ -901,7 +901,7 @@ def test_next_empty_reads_the_banks_own_length(tmp_path):
 # ------------------------------------------- plan 19 WP1: a bank of twenty-four
 
 def bak8(show):
-    """The backups `Project.write` has made of an eight-slot show file."""
+    """The backups `Install.write` has made of an eight-slot show file."""
     return sorted(show.parent.glob(f"{show.name}.bak-v{library.BANK8_BACKUP}*"))
 
 
@@ -1298,7 +1298,7 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     assert lib.status == "renamed NIGHT TWO → SUNRISE (2 shows updated)"
     assert "spare (it could not be kept in the trash)" in lib.warning
     assert "old (a hyperspace.project/1 show" in lib.warning and "other" not in lib.warning
-    # the open show, through its Project: the name on the slot, clean, the light on it
+    # the open show, through its Install: the name on the slot, clean, the light on it
     assert pr.bank[1] == "SUNRISE" and pr.startup == "SUNRISE" and not pr.is_dirty()
     assert lib.current("loadable") == "SUNRISE" and pr.active == 1
     assert "SUNRISE" in lib.list("loadable") and "NIGHT TWO" not in lib.list("loadable")

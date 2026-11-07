@@ -308,7 +308,7 @@ def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_pa
 
 def test_a_bank_autosave_before_the_tool_still_hands_old_loadables_the_eye(tmp_path):
     """Review 2.2: the first write of an old show on this build (here the
-    bank's autosave, `Project.write`) drops its eye into `.bak-v2-eye`; an
+    bank's autosave, `Install.write`) drops its eye into `.bak-v2-eye`; an
     old loadable patch opened on the next launch — before the tool ran — still
     takes that eye and the camera's position from the backup."""
     home = tmp_path / "lib"

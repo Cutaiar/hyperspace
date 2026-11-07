@@ -36,16 +36,16 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   layout). The **bank** is twenty-four pointers to loadable patch
                   files (``SLOTS``; loadable.py) — the desk's pads: the
                   APC40's clip rows 1, 4 and 5 load one each
-                  (``Project.load_slot``), F1–F8 the first eight
+                  (``Install.load_slot``), F1–F8 the first eight
                   (``F_KEYS``), ⇧F1–F8 save the live state *as* it
                   (``save_slot``); ``startup`` is the loadable patch Home brings
-                  up (``Project.home``) and a launch opens with, kept in
+                  up (``Install.home``) and a launch opens with, kept in
                   the file, set by nothing on the panel since 2026-10-28.
                   The file holds the bank only as far as its last filled
                   slot, never fewer than eight entries (``bank_doc``, plan
                   19 WP1), and the first write that makes a file's bank
                   longer keeps the eight-slot file beside it first
-                  (``<file>.bak-v2-bank8``, ``Project.write``). A module
+                  (``<file>.bak-v2-bank8``, ``Install.write``). A module
                   the project names by a loadable patch that carries a ``layout``
                   gets that layout back on load, the same road a strip
                   load takes. A schema-1 project is refused (no old-schema
@@ -56,7 +56,7 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   ``cloud.*``) are each loadable patch's now. A ``/2`` show is
                   read as its ``/3`` (`show_without_look`): what it held
                   of the look is handed to every loadable patch before ``/10``
-                  a load reads while it is open (``Project.old_look``,
+                  a load reads while it is open (``Install.old_look``,
                   ``old_cuts``), and its first write keeps the ``/2``
                   beside it (``<file>.bak-v2-look``).
 
@@ -171,21 +171,21 @@ SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
 # never shorter. It is imported from params, where the F-keys' load / save
 # triggers are declared (params may not import library); `library.F_KEYS`
 # is the name the rest of the app reads.
-# BANK8_BACKUP: the copy `Project.write` makes before the first write that
+# BANK8_BACKUP: the copy `Install.write` makes before the first write that
 # puts more than F_KEYS entries in a show file, <file>.bak-v2-bank8
 # (routing.backup's schema argument)
 BANK8_BACKUP = "2-bank8"
-# SPRING_BACKUP: the copy `Project.write` makes before the first write that
+# SPRING_BACKUP: the copy `Install.write` makes before the first write that
 # drops a show's stick spring as it was stored before 2026-10-29
 # (`desk.pad.hz` / `.damp`, read as today's knobs by routing.renamed_session),
 # <file>.bak-v2-spring
 SPRING_BACKUP = "2-spring"
-# EYE_BACKUP (plan 43 C2): the copy `Project.write` makes before the first
+# EYE_BACKUP (plan 43 C2): the copy `Install.write` makes before the first
 # write that drops a show's eye — `eye.fov` / `eye.distance` in its
-# `session`, which the loadable patches hold since `/9` (`Project.old_eye`) —
+# `session`, which the loadable patches hold since `/9` (`Install.old_eye`) —
 # <file>.bak-v2-eye
 EYE_BACKUP = "2-eye"
-# LOOK_BACKUP (plan 44 D3): the copy `Project.write` makes before the first
+# LOOK_BACKUP (plan 44 D3): the copy `Install.write` makes before the first
 # write of a `/2` show as `/3` — which drops its bus cuts (`rig`) and the
 # hands' and clouds' looks from its `session`, each loadable patch's since `/10` —
 # <file>.bak-v2-look
@@ -254,9 +254,9 @@ PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
 LAST_SHOW = "last_show"             # <home>/last_show: read once, into LAST_INSTALL
 UNTITLED = "untitled"
-# the tail of save-as's note on a full bank (`Project.save_new`)
+# the tail of save-as's note on a full bank (`Install.save_new`)
 BANK_FULL = "the bank is full: it is in the patch list"
-# what `Project.home` says when the show names no startup loadable patch (plan 15 WP2)
+# what `Install.home` says when the show names no startup loadable patch (plan 15 WP2)
 HOME_UNSET = "home: this show names no startup patch"
 # plan 28 N2: where the GRAPH page's nodes sit, ``{"<node id>": [x, y]}`` —
 # a show's own key for the meta controller's nodes (devices, the analyzer, the LFOs,
@@ -577,7 +577,7 @@ def _json_text(doc: dict) -> str:
 
 
 def show_text(doc: dict) -> str:
-    """A show (or any library document) as `Project.write` spells it."""
+    """A show (or any library document) as `Install.write` spells it."""
     return _json_text(doc)
 
 
@@ -585,7 +585,7 @@ def show_without_eye(doc: dict) -> dict | None:
     """A show file's document without what plan 43 C2 made the loadable patches' —
     the eye in its `session` (`EYE_IDS`) and the camera node's position in
     its `layout` (``render:camera``, or the old canvas id ``render:eye``) —
-    as `Project.write` would write it; None when it holds neither (nothing
+    as `Install.write` would write it; None when it holds neither (nothing
     to rewrite). Pure: tools/migrate_library.py's step over the shows."""
     session = doc.get("session")
     layout = doc.get(LAYOUT)
@@ -617,7 +617,7 @@ def show_look(doc: Any) -> tuple[dict[str, Any], BusCuts]:
     """What a `/2` show held of the look (plan 44 D3): the hands' and the
     clouds' values in its `session` (`_look_ids`) and its bus cuts (`rig`,
     `graph.BusCuts`) — ({}, no cut) for neither, and for any `/3`. The one
-    reader: `Project._take`, `kept_look`, `headless.show_seed` and the
+    reader: `Install._take`, `kept_look`, `headless.show_seed` and the
     migration tool all ask it."""
     if not isinstance(doc, dict) or doc.get("schema") not in (PROJECT_V2, None):
         return {}, BusCuts()
@@ -797,11 +797,11 @@ def _order(path: Path) -> tuple[str, int]:
 # a module preset's and a patch's `patches.forward` — review fix 8)
 MIGRATIONS: dict[tuple[str, int], Any] = {
     # plan 44 D3: a /2 show less what each loadable patch holds now (read out first:
-    # `Project._take`, `show_look`)
+    # `Install._take`, `show_look`)
     ("hyperspace.project", 2): lambda doc: show_without_look(doc) or dict(doc),
 }
 # no project 1 → 2 step: a schema-1 show (an inline theme bank) is refused
-# (`Project._take`) — no old-schema support since 2026-10-25
+# (`Install._take`) — no old-schema support since 2026-10-25
 CURRENT = {"hyperspace.project": 3}
 
 
@@ -979,7 +979,7 @@ class Install:
 
     # ---- documents ----
 
-    def _take(self, doc: dict, path: Path | None, where: str = "install") -> None:
+    def _take(self, doc: dict, path: Path | None, where: str = "the show") -> None:
         if doc.get("schema") == PROJECT_V1:
             raise LibraryError(f"{where} is a schema-1 show, which this build does not read "
                                "(no old-schema support, 2026-10-25)")
@@ -1220,7 +1220,7 @@ class Install:
 
     @property
     def lit(self) -> int:
-        """The slot a bank pad shows lit: `active`. `DeckProject`'s is the deck
+        """The slot a bank pad shows lit: `active`. `DeckInstall`'s is the deck
         off air's, the deck a press would load."""
         return self.active
 
@@ -1706,7 +1706,7 @@ def without_unsaved(session: dict) -> dict:
 def mirrors_apart(session: dict) -> list[str]:
     """The `ghost.<n>.mirror` ids an old show holds at another value than its
     `ghost.mirror`. No param since LY1, so nothing reads them and the picture
-    changes: what `Project.load` says (REVIEW: a removed id reads an old file as
+    changes: what `Install.load` says (REVIEW: a removed id reads an old file as
     it was, or reports it). Goes with the old reader, in CL1."""
     room = bool(session.get("ghost.mirror", False))
     return [pid for pid, v in session.items()
@@ -1718,7 +1718,7 @@ def show_eye(doc: Any) -> tuple[dict[str, Any], list[float] | None]:
     """What a show document kept of the camera (plan 43 C2): the eye in its
     `session` (`EYE_IDS`) and the camera node's GRAPH position in its
     `layout` (either id, `CAMERA_NODES`) — ({}, None) for neither. The one
-    reader of a show's camera: `Project._take`, `kept_eye`,
+    reader of a show's camera: `Install._take`, `kept_eye`,
     `headless.show_seed` and the migration tool all ask it."""
     if not isinstance(doc, dict):
         return {}, None
@@ -1739,7 +1739,7 @@ def kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
     """The eye (and the camera's GRAPH position) a show's ``.bak-v2-eye``
     copy kept — the oldest copy that holds an eye (`show_eye`) — or ({},
     None): what an old show's `session` held before its first write on
-    this build dropped it (plan 43 C2, `Project.write`). Remembered per
+    this build dropped it (plan 43 C2, `Install.write`). Remembered per
     show file and its folder's state (a new backup changes the folder), so
     a show from this build — which has no such copy — costs a stat."""
     try:
@@ -1993,7 +1993,7 @@ class MetaMarks(_Landings):
 
     def put(self, mark: tuple) -> None:
         """Last in a restore: the shared meta groups' names, references and re-apply
-        roads as they were. The show's own fields go back (`Project.remark`) only
+        roads as they were. The show's own fields go back (`Install.remark`) only
         when the show itself differs — the undo of a show load. Otherwise the bank
         and startup are left as they are: they are in the show's file the moment
         they change, and reverting them in memory would make the show's dirty dot
@@ -2123,7 +2123,7 @@ class Library:
         self.reg = reg
         self._fresh = reg.snapshot()
         # what a group's `extra` hook says now — the analyzer's layout as the
-        # app started — is the fresh layout `Project.new` goes back to
+        # app started — is the fresh layout `Install.new` goes back to
         self._fresh_extra = {g: hook() for g, hook in self._extra_hooks.items()}
         self._defaults.clear()
         missing = self.install._apply()
@@ -2210,7 +2210,7 @@ class Library:
 
     def remember(self, name: str) -> None:
         """Note `name` — a show's file name less ``.hyp.json``
-        (`Project.stem`) — as the show a launch opens (decision 22); a
+        (`Install.stem`) — as the show a launch opens (decision 22); a
         write that fails costs only the memory."""
         if name == self.last_show():
             return
@@ -2881,7 +2881,7 @@ class Library:
         """Apply `doc` as the group's current loadable patch `name` that no file
         holds (plan 35 T7's `LoadedPatch.new`): the one road in (`_apply_doc`,
         no path), then nothing to be clean against — dirty until it is saved,
-        the Project's own rule for a show never saved. Returns the unknown
+        the Install's own rule for a show never saved. Returns the unknown
         ids."""
         missing = self._apply_doc(group, name, doc)
         self._landed(group, name, ())
@@ -3068,12 +3068,12 @@ class Library:
         5. every ``hyperspace.project/2`` show in ``<home>/projects`` whose
            bank or startup names the old loadable patch is copied to the trash,
            then written with the new name — the open show through its
-           `Project` (its dot and the bank's light stay right). A show whose
+           `Install` (its dot and the bank's light stay right). A show whose
            copy or write fails is left as it is; a schema-1 show is left
            alone; both are named in the warning. *Stopped mid-way: the
            shows done name the new name and their old files are in the
            trash; the rest name the old one*;
-        6. `Project.follow()`; the status says how many shows changed."""
+        6. `Install.follow()`; the status says how many shows changed."""
         self.writable()
         # plan 40 T1: a patch renames the same way, less step 5 (no show
         # names a patch; a group's provenance slug is the loadable patch's to keep)
@@ -3147,7 +3147,7 @@ class Library:
         stage 2, many loadable patches at once): `to(n)` is the name a slot or the
         startup naming `n` takes now, None to leave it. Every user show with
         a hit is copied to the trash once, then written; the open show
-        through its `Project` (its dot and the bank's light stay right).
+        through its `Install` (its dot and the bank's light stay right).
         Returns (shows written, shows left as they were with why)."""
 
         def hit(n) -> bool:
@@ -3246,7 +3246,7 @@ class Library:
         told); then, for the loadable patches, every show's slots and startup
         (`_repoint_by`: a slot naming a file by any spelling that found it
         before — its name, its file key, a loose read, review of #334) and
-        `Project.follow()`. The status says how many shows (a patch: none
+        `Install.follow()`. The status says how many shows (a patch: none
         names one)."""
         byfold: dict[str, str] = {}
         for p, now in moves.items():
@@ -3824,7 +3824,7 @@ class Library:
                     hit.append(f"{group_word(group)}/{name}")
             if self.install.path in changed:
                 self.install.load(self.install.path, startup=False)
-                hit.append(f"project {self.install.name}")
+                hit.append(f"show {self.install.name}")
             self.error = ""
         except LibraryError as e:                     # a half-saved file: keep running
             self.error = f"library: {e}"
@@ -3849,14 +3849,14 @@ class DeckInstall(DeckInstallSlots, Install):
     `MetaController`) says where (`row_load`), or why not. No patch can press any
     `preset.*`: `routing.meta_refusal` refuses a patch's row on one at every door. A
     person's save does not change the picture, so it stays on its own deck, as does the panel's load,
-    which is the plain `Project`'s and the intentional one. `meta` None (no second
+    which is the plain `Install`'s and the intentional one. `meta` None (no second
     deck): a load lands on this deck. Its own two fields can't be in the shared `__dict__`,
-    so they are slots, held on a cold base: `DeckProjectSlots` says why."""
+    so they are slots, held on a cold base: `DeckInstallSlots` says why."""
 
     lib: DeckLibrary
     meta: Any
 
-    def __init__(self, lib: DeckLibrary):        # never `Project.__init__`: nothing is new
+    def __init__(self, lib: DeckLibrary):        # never `Install.__init__`: nothing is new
         self.__dict__ = lib.base.install.__dict__
         self.lib = lib
         self.meta = None
@@ -3928,7 +3928,7 @@ class DeckLibrary(DeckLibrarySlots, Library):
     so its load, save, new and marks cannot reach another deck, whichever the
     panel is on; the plain `Library` is the panel's view of the same state
     (`Library.pointer`). The loadable patches kind's and load hooks are this deck's too.
-    Its own three fields are slots on a cold base, as `DeckProject`'s are."""
+    Its own three fields are slots on a cold base, as `DeckInstall`'s are."""
 
     _project: DeckInstall
     base: Library

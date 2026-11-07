@@ -715,7 +715,7 @@ def test_the_show_line_names_the_show_and_its_dot(rig, monkeypatch):  # noqa: F8
 
 
 def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa: F811
-    """The open ▾ combo lists `Project.list()` — the library's shows — and
+    """The open ▾ combo lists `Install.list()` — the library's shows — and
     a pick opens that show with its startup loadable patch."""
     panel, lib = rig.panel, rig.lib
     assert lib.install.list() == ["house", "party"]

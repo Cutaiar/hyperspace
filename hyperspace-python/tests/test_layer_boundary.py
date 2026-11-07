@@ -515,7 +515,7 @@ SURFACE = {
 }
 # The meta controller's names inside `BOTH_LAYERS`, and who may import them
 META_NAMES = ("SHARED_META_", "PER_DECK_", "META_", "MetaRegistry", "MetaTable", "MetaMarks",
-              "DeckProject", "is_shared_meta_", "is_meta_", "is_per_deck_", "meta_", "push_meta",
+              "DeckInstall", "is_shared_meta_", "is_meta_", "is_per_deck_", "meta_", "push_meta",
               "install_meta")
 SURFACE_NAMES = {
     "loadable": {"SHARED_META_GROUPS": "which groups a file's values may not hold",
@@ -524,7 +524,7 @@ SURFACE_NAMES = {
     "patches": {"meta_refusal": "a patch file naming a meta param is refused (row 744)"},
     "nodemode": {"meta_refusal": "a node's meta params fill no degree of freedom"},
 }
-# …and the handles at run time. (`Project.session` goes with the shows, in plan 57 §5.)
+# …and the handles at run time. (`Install.session` goes with the shows, in plan 57 §5.)
 META_ATTRS = {"meta", "decks", "meta_stack", "push_meta", "players", "session", "meta_reg", "meta_table"}
 SURFACE_ATTRS = {
     ("dream", "w.meta"): "not ours: a model file's download record",

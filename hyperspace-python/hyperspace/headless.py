@@ -104,7 +104,7 @@ def show_seed(doc: dict | None, eye: dict | None = None,
     / `cuts` stand in where `doc` kept none (a `.bak-v2-eye` or
     `.bak-v2-look` copy's, `library.kept_eye` / `kept_look`). Written as a
     `/2` show, so the app reads it as the old show it stands for
-    (`Project.old_eye`, `old_look`, `old_cuts`). None when there is
+    (`Install.old_eye`, `old_look`, `old_cuts`). None when there is
     nothing: an old loadable patch takes the build's defaults."""
     from .graphmigrate import CAMERA_NODE
     from .library import PROJECT_V2, RIG, show_eye, show_look

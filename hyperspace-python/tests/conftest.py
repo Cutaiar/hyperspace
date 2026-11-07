@@ -573,7 +573,7 @@ def owner_home(tmp_path):
 def build_owner_home(home):
     """Make `home` (a folder that does not exist yet) a home shaped like
     the owner's after a night on the build from before plan 19, by running
-    the writers (`LoadedPatch.save_as`, `Project.save`, `Bindings.write`,
+    the writers (`LoadedPatch.save_as`, `Install.save`, `Bindings.write`,
     `placement.save`, `to_trash`), not by hand-written JSON, so it tracks
     the formats (tools/bank_demo.py builds its home here too):
 
