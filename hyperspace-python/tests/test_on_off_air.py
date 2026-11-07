@@ -1121,13 +1121,35 @@ def test_a_held_empty_pad_on_the_invariant_row_writes_its_file(rig):
 
 
 def test_the_edges_hold_to_save_still_saves(rig):
-    """The Edge's factory row (row 723): `pad@edge:MENU`, a hold, the meta controller's."""
+    """The stopgap row 724 named: `pad@edge:MENU`, a hold, a person's, the meta controller's."""
     row = Binding("pad@edge:MENU", "preset.save_new", "hold")
     assert is_meta_row(row) and rig.one.table.add(row) is row
     rig.one.table.primaries = {"pad": "edge"}
     listed = set(rig.lib.list(LOADABLE))
     pad = ScriptedPad()
     for now in (1.0, 1.0 + routing.HOLD_S):      # the real road: held for `HOLD_S`
+        pad.frame(held={gamepad.MENU})
+        rig.one.router.pad(pad, now=now)
+    assert len(set(rig.lib.list(LOADABLE)) - listed) == 1
+
+
+def test_the_edges_own_layout_saves_on_any_table_and_a_brush_does_not(rig):
+    """Row 686: the row on the Edge's `Model`, by the real road, on the real library. No
+    row in the table, and any role; a table's stopgap under it does not save twice."""
+    from hyperspace.pads import models
+    assert not [b for b in rig.one.table.of("pad") if b.bare == "pad:MENU" and b.target == "preset.save_new"]
+    listed = set(rig.lib.list(LOADABLE))
+    pad = ScriptedPad()
+    pad.model = models.MODELS["edge"]
+    for now in (1.0, 1.0 + routing.HOLD_S / 2):  # a brush
+        pad.frame(held={gamepad.MENU})
+        rig.one.router.pad(pad, now=now)
+    pad.frame()
+    rig.one.router.pad(pad, now=2.0)
+    assert set(rig.lib.list(LOADABLE)) == listed
+    rig.one.table.add(Binding("pad@edge:MENU", "preset.save_new", "hold"))
+    rig.one.table.primaries = {"pad": "edge"}
+    for now in (3.0, 3.0 + routing.HOLD_S, 3.1 + routing.HOLD_S):
         pad.frame(held={gamepad.MENU})
         rig.one.router.pad(pad, now=now)
     assert len(set(rig.lib.list(LOADABLE)) - listed) == 1

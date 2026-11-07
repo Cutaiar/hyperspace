@@ -275,7 +275,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from functools import cache, lru_cache
 from pathlib import Path
-from typing import Protocol
+from typing import NamedTuple, Protocol
 
 import numpy as np
 
@@ -1022,6 +1022,36 @@ def _macro_n(mid: str) -> int:
 
 
 # ------------------------------------------------------------------- ops
+
+class PadLayout(NamedTuple):
+    """A pad model's own controls as rows (`models.Model.layout`): `rows`
+    stand in for every table row on `sources`. Empty for a pad with none: its
+    table as ever."""
+
+    rows: tuple[Binding, ...] = ()
+    sources: frozenset[str] = frozenset()
+
+    def hides(self, b: Binding) -> bool:
+        """Is this table row not heard by this pad?"""
+        return b.bare in self.sources
+
+
+NO_LAYOUT = PadLayout()
+
+
+@cache
+def _layout(spec: tuple, role: str) -> PadLayout:
+    head = f"pad{QUALIFIER}{role}" if role else "pad"
+    return PadLayout(tuple(Binding(f"{head}:{c}", t, op, v) for c, t, op, v in spec),
+                     frozenset(f"pad:{c}" for c, _, _, _ in spec))
+
+
+def layout_of(model, role: str = "") -> PadLayout:
+    """`model`'s `PadLayout`, its rows under the qualifier `role` ("" the
+    primary pad's bare rows). Asked every frame, so kept by the rows themselves."""
+    spec = getattr(model, "layout", ())
+    return _layout(spec, role) if spec else NO_LAYOUT
+
 
 def act(reg: Registry, b: Binding) -> None:
     """A discrete row fires: keys, pad buttons and MIDI buttons share this.
@@ -3520,7 +3550,7 @@ class Router:
                     act(self.reg, b)
 
     def pad(self, pad, now: float | None = None, *, buttons: bool = True,
-            role: str = "", skip=frozenset()) -> None:
+            role: str = "", skip=frozenset(), quiet=frozenset()) -> None:
         """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
         the `axis` lanes (None while no pad is on, so their routes let go),
         then its pad / hat rows — unless `buttons` is False (the frame's
@@ -3543,7 +3573,14 @@ class Router:
         before the skip does not fire when the skip ends mid-press. A
         `momentary` row's press is let go by a skip of its own button, by
         its row going, or by the pad going away (`pad_lost`), whose release
-        would never come (plan 52)."""
+        would never come (plan 52).
+
+        A pad model with a layout of its own (`layout_of`: a Joy-Con's, the
+        Edge's hold-to-save) hears those rows in place of the table's on the
+        same controls.
+
+        `quiet`: the `axis` lanes that read NaN this frame, so their routes
+        let go (a Joy-Con's stick while the totem is off: it orbits then)."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3552,7 +3589,10 @@ class Router:
         if not pad.on:
             self.pad_lost(role)
             return
-        self.sources.feed(axis, pad.lanes())
+        lanes = pad.lanes()
+        if quiet:
+            lanes = [math.nan if i in quiet else v for i, v in enumerate(lanes)]
+        self.sources.feed(axis, lanes)
         # plan 56: each published pair's lane (nothing published, nothing fed)
         pairs = qualified(PAIR_SCHEME, role)
         pair_names = self.sources.names.get(pairs)
@@ -3570,15 +3610,20 @@ class Router:
                 if b.op == "step" and b.enabled and (
                         b.device == role or (not role and own and b.device == own)):
                     self._pair_step(pad, b, skip)
-        rows = self.table.of("pad", "hat")
+        layout = layout_of(getattr(pad, "model", None), role)
+        table_rows = self.table.of("pad", "hat")
+        n_table = len(table_rows)
+        rows = (*table_rows, *layout.rows)
         if down_now:                         # a row gone or off under a held button
             for key in down_now - {(b.source, b.target) for b in rows if b.enabled}:
                 self._let_go_pad(down_now, key)
-        for b in rows:
+        for i, b in enumerate(rows):
             code = self._code(b)
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
                 continue
+            if i < n_table and layout.hides(b):
+                continue                         # not this pad's: nor are its timer or press
             if skip and b.bare in skip:
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)

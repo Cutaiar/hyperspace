@@ -63,9 +63,9 @@ import math
 
 from imgui_bundle import imgui
 
-from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
+from . import gamepad, totem, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
 from .params import dial_id
-from .routing import PAIR_SCHEME, Binding, pair_poles
+from .routing import PAIR_SCHEME, Binding, layout_of, pair_poles
 from .ui_diagram import EDGE, GLYPH_PX, HEAD_H, PAD  # as the desk sits (ui_diagram.py)
 
 SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")   # the schemes a pad control's row can have
@@ -102,15 +102,19 @@ def _state(panel) -> dict:
     return panel.__dict__.setdefault("_pad_state", {})
 
 
-def rows(table) -> dict[str, Binding]:
+def rows(table, model=None) -> dict[str, Binding]:
     """{source: the row that acts} for every enabled pad, D-pad or axis
     row of the table — the first row a control has wins, as the adapters
     read them. Keyed by the layout's source, so a lane addressed by
-    number (``axis:4``) lands on the control it names."""
+    number (``axis:4``) lands on the control it names. `model`, the pad
+    read: its own layout's rows stand in for the table's (`layout_of`)."""
     out: dict[str, Binding] = {}
     every = gamepad.layout_for(gamepad.models.MODELS["edge"])   # every control a pad can have
+    layout = layout_of(model)
+    for b in layout.rows:
+        out[b.source] = b
     for b in table.of(*SCHEMES):
-        if not b.enabled:
+        if not b.enabled or layout.hides(b):
             continue
         # (the window's controls are the primary's: a second pad's row is not on them)
         poles = pair_poles(":".join(b.parts)) if b.scheme == PAIR_SCHEME and not b.device else None
@@ -122,15 +126,59 @@ def rows(table) -> dict[str, Binding]:
     return out
 
 
-def source_rows(table) -> dict[str, Binding]:
+def source_rows(table, model=None) -> dict[str, Binding]:
     """{source: the row that acts} by the exact address a row names — the
     lanes view's (``touch:pinch`` apart from ``touch:x``), where `rows`
-    folds every touch row onto the touchpad."""
-    out: dict[str, Binding] = {}
+    folds every touch row onto the touchpad. `model` as `rows`."""
+    layout = layout_of(model)
+    out: dict[str, Binding] = {b.source: b for b in layout.rows}
     for b in table.of(*SCHEMES):
-        if b.enabled:
+        if b.enabled and not layout.hides(b):
             out.setdefault(b.source, b)
     return out
+
+
+def _model(panel):
+    """The model the window draws, for its own layout (`gamepad.shown_model`): a pad
+    asleep is still labelled with what it will do when it wakes."""
+    return gamepad.shown_model(getattr(panel, "pad", None))
+
+
+def _device(panel):
+    """The device that reads the pad the panel draws, or None."""
+    pad = getattr(panel, "pad", None)
+    listed = getattr(panel, "devices", None)
+    return next((d for d in (listed if listed is not None else ())
+                 if pad is not None and getattr(d, "io", None) is pad), None)
+
+
+def _stick_quiet(panel, source: str) -> bool:
+    """Is a route on this stick address not heard now (`PadDevice.quiet_stick`, the
+    device's own answer)?"""
+    model = _model(panel)
+    lane = source.removeprefix("axis:")
+    if (not totem.own_layout(model) or lane == source or lane not in gamepad.LANES
+            or gamepad.LANES.index(lane) not in gamepad.left_stick_lanes()):
+        return False
+    d = _device(panel)
+    if d is None:
+        return totem.quiet_stick(model, getattr(panel, "reg", None), "")
+    return bool(d.quiet_stick(model, d.reg if d.reg is not None else getattr(panel, "reg", None)))
+
+
+def built_in(panel, source: str) -> str:
+    """What an axis does with no route on it, for the pad read now: `BUILT_IN`,
+    less what a pad with a layout of its own keeps free (`PadDevice._no_camera_job`)."""
+    model = _model(panel)
+    if totem.own_layout(model):
+        if source in ("axis:LT", "axis:RT"):
+            return ""
+        if source in ("axis:LX", "axis:LY"):
+            d = _device(panel)
+            reg = d.reg if d is not None and d.reg is not None else getattr(panel, "reg", None)
+            if totem.reads_stick(model, reg, d.role if d is not None else ""):
+                return ""
+    return BUILT_IN.get(source, "")
 
 
 def view_of(panel) -> str:
@@ -173,9 +221,10 @@ def dialed(table) -> set[str]:
 
 def rows_cached(panel, table) -> dict[str, Binding]:
     st = _state(panel)
-    key = _key(table)
+    model = _model(panel)
+    key = (*_key(table), getattr(model, "id", ""))
     if st.get("key") != key or st.get("table") is not table:
-        st.update(key=key, table=table, rows=rows(table), dialed=dialed(table))
+        st.update(key=key, table=table, rows=rows(table, model), dialed=dialed(table))
     return st["rows"]
 
 
@@ -194,17 +243,19 @@ def _dial_of(panel, source: str) -> str | None:
 
 def _free_words(panel, source: str) -> str:
     """What a control with no row says, in every view: an X or Y of a stick a route reads
-    as a dial, "Left dial · petal"; else its built-in meaning, if it has one."""
+    as a dial and this pad hears, "Left dial · petal"; else its built-in meaning, if any."""
     stick = _dial_of(panel, source)
     p = panel.reg.get(dial_id(stick)) if stick is not None and source.startswith("axis:") else None
-    return f"{p.label} · {p.text()}" if p is not None else BUILT_IN.get(source, "")
+    if p is not None and not _stick_quiet(panel, source):
+        return f"{p.label} · {p.text()}"
+    return built_in(panel, source)
 
 
 def _sectors(panel, pad, c: gamepad.Control) -> list[float] | None:
     """The eight sectors to draw in stick `c`'s well, how far each reads; None: this
     stick is no dial. At rest while the pad is on the other deck: it reads that deck's."""
     stick = _dial_of(panel, c.source)
-    if stick is None:
+    if stick is None or _stick_quiet(panel, c.source):
         return None
     if pad is None or not panel.pad_reads_here():
         return [0.0] * gamepad.DIAL
@@ -283,7 +334,7 @@ def says(panel, c: gamepad.Control, b: Binding | None) -> str:
     (`ui_desk.text`), else, an X or Y of a stick a route reads as a dial,
     "Left dial · petal", else the built-in meaning of a free axis
     (`BUILT_IN`), else "" — a dark control."""
-    if b is not None:
+    if b is not None and not _stick_quiet(panel, c.source):
         if b.scheme != PAIR_SCHEME:
             return ui_desk.text(panel.reg, b)
         poles = pair_poles(":".join(b.parts))
@@ -300,16 +351,21 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     it; a free axis names the app's own hand on it, a dark control says
     it is free."""
     said = says(panel, c, b)
+    if b is not None and b in layout_of(_model(panel)).rows:
+        return f"{c.glyph} · {b.target} · {said}\n{c.name}\nthis pad's own control: Learn leaves it alone"
     learn = "right-click a param → Learn pad, then press it here"
     model = gamepad.shown_model(getattr(panel, "pad", None))
     other = gamepad.paired_with(c.source, model)
     if other is not None:             # plan 56: one degree of freedom with its partner
         word = gamepad.models.glyph(model, other.partition(":")[2], gamepad.glyph(other) or other)
         learn += f"\none axis with {word}: right-click a param → Learn pair"
+    if b is not None and _stick_quiet(panel, c.source):
+        return (f"{c.glyph} · {said}\n{c.name}\nits row on {b.target} is heard only while "
+                "the totem reads this pad")
     if b is not None:
         return (f"{c.glyph} · {b.target} · {said} · {b.describe()}\n{c.name}"
                 f"\n{learn} to move it")
-    stick = _dial_of(panel, c.source)
+    stick = None if _stick_quiet(panel, c.source) else _dial_of(panel, c.source)
     dial = ""
     if stick is not None:
         reading = panel.reg.get(dial_id(stick))
@@ -636,8 +692,8 @@ def _header(panel, table, closable: bool = False) -> None:
         if said:
             imgui.text_colored(ui.DIM, said)
             if imgui.is_item_hovered():
-                ui.tooltip(f"{n} controls with a row in bindings.json. A grey label is the "
-                           "app's own hand on a free axis, not a row.")
+                ui.tooltip(f"{n} controls with a row: bindings.json's, or this pad's own. A grey "
+                           "label is the app's own hand on a free axis, not a row.")
     if closable:
         imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(ui_desk.CLOSE), start.y))
         if ui.chip(f"{ui_desk.CLOSE}##pad.close"):
@@ -659,8 +715,8 @@ def totem_word(reg) -> tuple[str, str] | None:
     tip = ("The Joy-Con as a 4D totem (plan 47, an experiment) — click to switch it "
            f"{'off' if state.on else 'on'}. Its gyro turns three planes, one per axis "
            "(x → YZ, y → XZ, z → XY); X / Y / B throw x / y / z into W (XW, YW, ZW); "
-           "A (or ↓) resets the shape to the world's axes from where the pad is; the "
-           "tilt moves the shape.")
+           "A (or ↓; a Joy-Con's − or +) resets the shape to the world's axes from where the pad is; a "
+           "DualSense's tilt moves the shape, a Joy-Con's moves nothing.")
     if not state.on:
         return "totem off", tip
     word = f"totem {totem.readout(state)}"
@@ -685,15 +741,16 @@ def _totem(panel) -> None:
             reg["totem.on"].set(not on)
 
 
-def poi_word(reg) -> tuple[str, str] | None:
+def poi_word(reg, pad=None) -> tuple[str, str] | None:
     """The poi's word for the header (plan 47, the poi): "poi off", or its
     dials (``poi 1.00 · 0.30 · 0.20``: length, weight, springiness); None
-    with no poi in the registry."""
+    with no poi in the registry. `pad`, the one drawn: a Joy-Con is told it can't drive it."""
     state = getattr(reg, "poi", None)
     if state is None or "poi.on" not in reg:
         return None
     from . import poi
-    tip = ("The Joy-Con as the handle of a poi (plan 47, an experiment) — click to "
+    tip = ("A DualSense as the handle of a poi (plan 47, an experiment; a Joy-Con's sensors "
+           "move no position) — click to "
            f"switch it {'off' if state.on else 'on'}. The shape is the weight on the "
            "string: swing the pad and it flies round. Length · weight · springiness; "
            "its dials are in the Poi window (\"dials\" beside this) while it is on. "
@@ -702,14 +759,14 @@ def poi_word(reg) -> tuple[str, str] | None:
         return "poi off", tip
     word = f"poi {poi.readout(state)}"
     if state.driving is None:
-        word += " (no pad)"
+        word += " (not on a Joy-Con)" if poi.no_position(pad) else " (no pad)"
     return word, tip + (f" Last: {state.note}." if state.note else "")
 
 
 def _poi(panel) -> None:
     """The poi's word in the header, after the totem's; a click switches it."""
     reg = getattr(panel, "reg", None)
-    said = poi_word(reg) if reg is not None else None
+    said = poi_word(reg, getattr(panel, "pad", None)) if reg is not None else None
     if said is None:
         return
     word, tip = said
@@ -790,15 +847,16 @@ def _says_of(panel, table):
     """`says(source)` for a view: (the words, the row) — a row's param in
     the panel's words, else an axis's built-in meaning, else nothing."""
     st = _state(panel)
-    key = _key(table)
+    model = _model(panel)
+    key = (*_key(table), getattr(model, "id", ""))
     if st.get("src_key") != key or st.get("src_table") is not table:
-        st.update(src_key=key, src_table=table, src_rows=source_rows(table))
+        st.update(src_key=key, src_table=table, src_rows=source_rows(table, model))
     rows_ = st["src_rows"]
     rows_cached(panel, table)            # (what `_free_words` asks: the sticks read as dials)
 
     def says_(source: str) -> tuple[str, Binding | None]:
         b = rows_.get(source)
-        if b is not None:
+        if b is not None and not _stick_quiet(panel, source):
             words = ui_desk.text(panel.reg, b)
             if b.scheme == PAIR_SCHEME and b.op == "step":      # the lane: both ways
                 words = f"{words.rpartition(' ')[0]} ±{abs(b.value):g}"

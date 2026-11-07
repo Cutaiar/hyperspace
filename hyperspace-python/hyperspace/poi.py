@@ -1,4 +1,5 @@
-"""The Joy-Con as the handle of a poi — an experiment beside the totem
+"""A pad as the handle of a poi (the app's: not a Joy-Con's since register row 686,
+`no_position`) — an experiment beside the totem
 (plan 47, "The poi"; not a plan item).
 
 A poi is a weight on a string; the performer holds the string's other end
@@ -295,8 +296,9 @@ def register(reg, state: PoiState, cfg: dict | None = None) -> None:
         state.say(f"on — {readout(state)}" if v else "off")
     reg.toggle(f"{GROUP}.on", "Poi", lambda: state.on, set_on, group=GROUP,
                persist=False, modulatable=False,
-               tip="The Joy-Con as the handle of a poi (an experiment, plan 47): the shape "
-                   "is the weight on its string, swung by the pad. A resets.")
+               tip="A DualSense as the handle of a poi (an experiment, plan 47): the shape "
+                   "is the weight on its string, swung by the pad. A resets. A Joy-Con "
+                   "doesn't drive it: its sensors move no position.")
 
     tips = {
         "weight": ("Poi weight", "{:.2f}", True,
@@ -404,9 +406,22 @@ def guides(state: PoiState, reg) -> bool:
     return meta_reg is None or meta_reg.on_air_reg is None or meta_reg.on_air_reg is reg
 
 
+NO_POSITION = "a Joy-Con moves no position: the poi needs a DualSense"
+
+
+def no_position(pad) -> bool:
+    """Is `pad` one whose sensors move no position? The Nintendo pads, for
+    now (the owner, 2026-11-04: their version 0 is buttons, sticks, the gyro
+    and shake; an IMU this size cannot hold a place). Every other pad is as
+    it was."""
+    return getattr(getattr(pad, "model", None), "family", "") == "nintendo"
+
+
 def _live(pad) -> bool:
     has = getattr(pad, "has", None)
     lanes = getattr(pad, "motion_lanes", None)
+    if no_position(pad):
+        return False
     return (bool(getattr(pad, "on", False)) and has is not None and has("motion")
             and lanes is not None and lanes() is not None)
 
@@ -426,6 +441,8 @@ def step(state: PoiState | None, pad, reg, dt: float, role: str = "") -> None:
         if state.driving == role:
             state.driving = None
             state.say("the pad's sensors went quiet")
+        elif state.driving is None and no_position(pad) and state.note != NO_POSITION:
+            state.say(NO_POSITION)              # once: on, with only a Joy-Con, nothing moves
         return
     if state.on_reg is not None and state.on_reg is not reg:
         # another deck than it last wrote, by whichever road (a move, a pad back
