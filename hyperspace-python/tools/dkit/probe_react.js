@@ -219,6 +219,127 @@ const PROPS = [
   await grab("switch.track.off.hover", '[data-probe="switch.default.off"] [data-slot="switch"]')
   await p.mouse.move(0, 0)
 
+  // --- Checkbox --------------------------------------------------------
+  // The recipe has no `hover:` class; measured anyway, because "no class"
+  // is a reading of the source and the hover answer is a measurement.
+  for (const st of ["off", "on"]) {
+    const sel = `[data-probe="checkbox.${st}"] [data-slot="checkbox"]`
+    await grab(`checkbox.${st}.rest`, sel)
+    await p.hover(sel)
+    await p.waitForTimeout(350)
+    await grab(`checkbox.${st}.hover`, sel)
+    await p.mouse.move(0, 0)
+    // keyboard focus: `data-checked:border-primary` and
+    // `focus-visible:border-ring` both set the border, so which one wins on
+    // a CHECKED box is a cascade question, answered here rather than read
+    await p.locator(sel).evaluate((e) => e.focus())
+    await p.waitForTimeout(350)
+    await grab(`checkbox.${st}.focus`, sel)
+    await p.locator(sel).evaluate((e) => e.blur())
+    await p.waitForTimeout(350)
+  }
+  {
+    // The hit area. `after:absolute after:-inset-x-3 after:-inset-y-2`
+    // stretches the click target 12px left/right and 8px up/down of a 16px
+    // box. Real clicks, one per offset, each read back as toggled or not;
+    // the state is restored by a second click at the centre when it did.
+    const sel = "[data-probe-cbhit]"
+    const box = await p.locator(sel).boundingBox()
+    const state = () => p.locator(sel).getAttribute("data-state")
+    const hit = {}
+    const probe = async (dx, dy) => {
+      const before = await state()
+      await p.mouse.click(box.x + dx, box.y + dy)
+      await p.waitForTimeout(30)
+      const after = await state()
+      if (after !== before) {
+        await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+        await p.waitForTimeout(30)
+      }
+      return after !== before
+    }
+    const cy = box.height / 2, cx = box.width / 2
+    hit.box = { w: box.width, h: box.height }
+    hit.x = {}
+    for (const dx of [-13, -12.5, -12, -11.5, -1, 0.5, 8, 15.5, 16.5, 27.5, 28, 28.5, 29])
+      hit.x[dx] = await probe(dx, cy)
+    hit.y = {}
+    for (const dy of [-9, -8.5, -8, -7.5, 0.5, 8, 15.5, 23.5, 24, 24.5, 25])
+      hit.y[dy] = await probe(cx, dy)
+    // after a POINTER click the box has focus but must not match
+    // :focus-visible - read the ring straight after one
+    await p.mouse.click(box.x + cx, box.y + cy)
+    await p.waitForTimeout(350)
+    await grab("checkbox.pointer_click", sel)
+    states["checkbox.pointer_click"].is_focused = await p.locator(sel)
+      .evaluate((e) => document.activeElement === e)
+    states["checkbox.pointer_click"].state = await state()
+    // and the keyboard: Space toggles; Enter does NOT (a WAI-ARIA checkbox
+    // is Space-only, and Radix prevents Enter on it)
+    const before = await state()
+    await p.keyboard.press("Enter")
+    await p.waitForTimeout(30)
+    hit.enter_toggles = (await state()) !== before
+    const b2 = await state()
+    await p.keyboard.press("Space")
+    await p.waitForTimeout(30)
+    hit.space_toggles = (await state()) !== b2
+    // the ::after box itself: its insets resolve against the PADDING box,
+    // 1px inside the border, so -inset-x-3 is 11px past the border edge,
+    // not 12. Both instruments are recorded so they can be checked against
+    // each other - a sparse click scan alone first read this as lopsided.
+    hit.after = await p.locator(sel).evaluate((e) => {
+      const c = getComputedStyle(e, "::after")
+      return { w: parseFloat(c.width), h: parseFloat(c.height),
+               left: parseFloat(c.left), top: parseFloat(c.top) }
+    })
+    states["checkbox.hit"] = hit
+    await p.mouse.click(box.x + cx, box.y + cy)   // leave it as found
+    await p.locator(sel).evaluate((e) => e.blur())
+    await p.mouse.move(0, 0)
+  }
+  {
+    // The transition: `transition-colors` on the root (150ms) but
+    // `transition-none` on the indicator, and Radix unmounts the indicator
+    // when unchecked. So on a check, does the tick appear at once over a
+    // fill that is still easing in? Sampled on the uncontrolled box.
+    const sel = "[data-probe-cbhit]"
+    const samples = []
+    // start from UNCHECKED whatever the hit scan left behind - the first
+    // version assumed it, and recorded an uncheck under the label "check"
+    if ((await p.locator(sel).getAttribute("data-state")) === "checked") {
+      await p.locator(sel).evaluate((e) => e.click())
+      await p.waitForTimeout(400)
+    }
+    await p.locator(sel).evaluate((e) => e.click())
+    const t0 = Date.now()
+    for (let i = 0; i < 8; i++) {
+      samples.push(await p.locator(sel).evaluate((e) => ({
+        bg: getComputedStyle(e).backgroundColor,
+        border: getComputedStyle(e).borderTopColor,
+        tick: !!e.querySelector("svg"),
+        state: e.getAttribute("data-state"),
+      })))
+      samples[samples.length - 1].ms = Date.now() - t0
+      await p.waitForTimeout(25)
+    }
+    states["checkbox.transition.check"] = samples
+    await p.waitForTimeout(400)
+    await p.locator(sel).evaluate((e) => e.click())
+    const un = []
+    const t1 = Date.now()
+    for (let i = 0; i < 3; i++) {
+      un.push(await p.locator(sel).evaluate((e) => ({
+        bg: getComputedStyle(e).backgroundColor,
+        tick: !!e.querySelector("svg"),
+      })))
+      un[un.length - 1].ms = Date.now() - t1
+      await p.waitForTimeout(25)
+    }
+    states["checkbox.transition.uncheck"] = un
+    await p.locator(sel).evaluate((e) => e.blur())
+  }
+
   // The four controls interact.py rings with nothing. Focused with a real
   // keyboard focus, because `:focus-visible` is the thing being measured and
   // a forced class would measure a guess about what the class resolves to.

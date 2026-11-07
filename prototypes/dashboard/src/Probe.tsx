@@ -45,6 +45,8 @@ import {
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -105,6 +107,42 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
       </P>
       <P id="slider.disabled.v40">
         <Slider value={[40]} min={0} max={100} disabled />
+      </P>
+
+      {/* ---- Checkbox: both states, enabled and disabled ----
+           One size only: the registry ships no size variant. `checkbox.row`
+           is the shadcn demo's own composition (flex gap-3 + Label htmlFor),
+           which is what a toggle param row would be; `checkbox.hit` is
+           uncontrolled so probe_react.js can CLICK it at the edges of the
+           `after:-inset-x-3 -inset-y-2` hit area and read whether it toggled. */}
+      <P id="checkbox.off" w={80}>
+        <Checkbox checked={false} />
+      </P>
+      <P id="checkbox.on" w={80}>
+        <Checkbox checked />
+      </P>
+      <P id="checkbox.disabled.off" w={80}>
+        <Checkbox checked={false} disabled />
+      </P>
+      <P id="checkbox.disabled.on" w={80}>
+        <Checkbox checked disabled />
+      </P>
+      <P id="checkbox.row">
+        <div className="flex items-center gap-3">
+          <Checkbox id="probe-cb-row" checked />
+          <Label htmlFor="probe-cb-row">Accept terms</Label>
+        </div>
+      </P>
+      <P id="checkbox.row.disabled">
+        <div className="flex items-center gap-3">
+          <Checkbox id="probe-cb-row-d" checked={false} disabled />
+          <Label htmlFor="probe-cb-row-d">Accept terms</Label>
+        </div>
+      </P>
+      <P id="checkbox.hit" w={120}>
+        <div style={{ padding: "20px 40px" }}>
+          <Checkbox data-probe-cbhit="" defaultChecked={false} />
+        </div>
       </P>
 
       {/* ---- Switch: both sizes, both states ---- */}

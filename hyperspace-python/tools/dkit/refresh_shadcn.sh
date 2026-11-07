@@ -23,7 +23,7 @@ cd "$APP"
 DEFAULT=(button button-group combobox input select slider switch tooltip
          context-menu scroll-area card badge dialog sheet popover command
          input-group separator dropdown-menu table tabs toggle-group avatar
-         skeleton textarea)
+         skeleton textarea checkbox label)
 COMPONENTS=("${@:-${DEFAULT[@]}}")
 
 BEFORE="$(mktemp -d)"
