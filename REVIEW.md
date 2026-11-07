@@ -77,6 +77,13 @@ In Claude Code, `/deep-review` runs this review on the current branch
 - **Text matches the current model.** Tooltips and labels describe the
   model as it is now, not one the branch replaced.
 
+## The base
+
+- **The branch is on current `main`.** `git fetch origin main`, then
+  `git merge-base --is-ancestor origin/main HEAD` must succeed. If it
+  doesn't, the branch is rebased and its tests rerun before anything else
+  is reviewed: a stale base reads as reverting whatever merged since.
+
 ## Leftovers
 
 When a branch went through several designs, search its diff for anything

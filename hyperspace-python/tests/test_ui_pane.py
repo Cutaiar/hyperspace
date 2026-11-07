@@ -1106,3 +1106,25 @@ def test_the_short_hints_tooltip_only_over_a_plot_nothing_covers(tmp_path, monke
         tips.clear()
         d.run(d.move(over), d.wait(2))
         assert ui_bands.HINT not in tips
+
+
+def test_the_chips_hold_still_whatever_they_say(pane, monkeypatch):
+    """The rows of chips, and so the body under them, never jump while you
+    work: a node selected, a dot coming up on every chip, the sections chip
+    naming another section — every chip keeps its place and size."""
+    r, d = pane
+    ids = [f"pane.{k}" for k in ui_pane.TABS] + ["pane.sections"]
+    d.run(d.wait(1))
+    before = {k: d.rect(k) for k in ids}
+    view = ui_graph.view_of(r.panel)
+    node = max((n for n in view.nodes if n.kind != "modifier"), key=lambda n: len(n.label or ""))
+    r.panel.select_graph_node(node.id)
+    d.run(d.wait(3))
+    assert r.panel.graph_selected == node.id
+    monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)
+    d.run(d.wait(2))
+    assert {k: d.rect(k) for k in ids} == before
+    _only(r, "camera")                                 # the sections chip says CAMERA ▾
+    d.run(d.wait(2))
+    after = {k: d.rect(k) for k in ids}
+    assert after == before

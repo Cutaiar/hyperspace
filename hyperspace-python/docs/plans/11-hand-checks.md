@@ -8703,17 +8703,20 @@ Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the a
 4. ⌘-scroll to a new zoom during a look with the output up. *Pass:* no visible stutter on the output when you stop, about a third of a second later.
 5. Resize the window. *Pass:* the zoom doesn't change.
 *Fail:* a start as small as before, words too soft to read, a stutter you can see, or a zoom that follows the resize.
-## DO. The side pane is one viewer (2026-11-07)
+## DR. The side pane is one viewer (2026-11-07)
 
 Headless: `tests/test_ui_pane.py` (every view by the mouse, a canvas click, open on … and ←, ⌘[ / ⌘], the body's height, the band). A restart after pulling.
 
 **629. Every view, by the mouse.** (Mac, the panel wide) The pane shows the selection at launch. Click each chip — patches, audio, routing, playlist, players, system — then each row of **sections ▾**. *Pass:* each fills the pane under the chips, alone, its chip lit (the menu's chip naming it); **selection** brings the selection back. *Fail:* a section you can't reach, or two at once.
 
 **630. A node and its section.** Click a node on the canvas while patches is up: the selection shows it. Click **open on …**: its section, at full height, with **← <node>** at its top; click it: the node again. Select a node from OUTPUT's open on GRAPH: the section you were in stays. *Fail:* a click on the bare canvas that changes the view.
+**635. Every view, by the mouse.** (Mac, the panel wide) The pane shows the selection at launch. Click each chip — presets, audio, routing, playlist, players, system — then each row of **sections ▾**. *Pass:* each fills the pane under the chips, alone, its chip lit (the menu's chip naming it); **selection** brings the selection back. *Fail:* a section you can't reach, or two at once.
 
-**631. ⌘[ and ⌘].** After 629 and 630, press ⌘[ again and again, then ⌘]. *Pass:* back through every view in the order seen, forward again, each scrolled where you left it. Select node A, then node B (the selection up): ⌘[ selects A again and centres it on the canvas, ⌘] B. Delete A, then ⌘[ to where it was: the pane shows what is selected, and ⌘] still goes forward.
+**636. A node and its section.** Click a node on the canvas while presets is up: the selection shows it. Click **open on …**: its section, at full height, with **← <node>** at its top; click it: the node again. Select a node from OUTPUT's open on GRAPH: the section you were in stays. *Fail:* a click on the bare canvas that changes the view.
 
-**632. The narrow band.** (the desk up, the panel narrow) The band shows the chips and the selection; a section grows it to all but a strip of canvas; **selection** shrinks it back. No chip passes the band's edge, a long playlist name included.
+**637. ⌘[ and ⌘].** After 635 and 636, press ⌘[ again and again, then ⌘]. *Pass:* back through every view in the order seen, forward again, each scrolled where you left it. Select node A, then node B (the selection up): ⌘[ selects A again and centres it on the canvas, ⌘] B. Delete A, then ⌘[ to where it was: the pane shows what is selected, and ⌘] still goes forward.
+
+**638. The narrow band.** (the desk up, the panel narrow) The band shows the chips and the selection; a section grows it to all but a strip of canvas; **selection** shrinks it back. No chip passes the band's edge, a long playlist name included.
 
 ## DS. The one migration (rows 830–835, 839)
 
@@ -8763,6 +8766,7 @@ Register rows 840–843, 2026-11-07. Headless: `tests/test_person_words.py`.
 2. Put the file back.
 *Fail:* patches saved into `~/Hyperspace` instead of the Drive.
 **633. Every node in view.** (Mac, the rig's display) Launch: every node is on screen, centred left of the pane, not under it. Zoom right in and drag away, then load another preset (F-key or PRESETS): its nodes all come into view, gliding. **save as…** and an edit leave the view where it is. Load a preset with three nodes: they're not blown up past the size they open at. With the band under the canvas (the desk up), the nodes sit above the band.
+**639. Every node in view.** (Mac, the rig's display) Launch: every node is on screen, centred left of the pane, not under it. Zoom right in and drag away, then load another preset (F-key or PRESETS): its nodes all come into view, gliding. **save as…** and an edit leave the view where it is. Load a preset with three nodes: they're not blown up past the size they open at. With the band under the canvas (the desk up), the nodes sit above the band.
 
 ## What no test covers
 

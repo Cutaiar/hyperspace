@@ -138,6 +138,7 @@ SELECTION = "selection"
 # node's "open on …" leads to (`ui_graph.home_page`), so the mouse reaches them
 TABS = (SELECTION, "loadable", "audio", "routing", "playlist", "players", "system")
 MENU = tuple(k for k in KEYS if k not in TABS)  # the sections chip's menu: the rest, in order
+SAYS = (SELECTION, "playlist")   # chips whose words say something live: a fixed width (`_chip`)
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)
 CHIP_MAX = 220.0         # px: the most a chip's words take
 WRITE_AFTER_S = 0.5      # a setting in ui.json is written this long after the last change
@@ -284,11 +285,14 @@ def _bar(panel, key: str, said: str) -> None:
     groups = {k: g for k, _, g, _ in SECTIONS}
     for i, k in enumerate(TABS):
         if _chip(panel, f"pane.{k}", titles[k].upper(), k == key, _said(panel, k, said),
-                 _dirty(panel, groups[k]), first=i == 0, tip=VIEW_TIP):
+                 _dirty(panel, groups[k]), first=i == 0, tip=VIEW_TIP,
+                 dots=bool(groups[k]), full=k in SAYS):
             show(panel, k)
     words = f"{titles[key].upper()}  ▾" if key in MENU else "SECTIONS  ▾"
+    widest = max((f"{titles[k].upper()}  ▾" for k in MENU), key=len)
     if _chip(panel, "pane.sections", words, key in MENU, "",
-             any(_dirty(panel, groups[k]) for k in MENU), first=False, tip=MENU_TIP):
+             any(_dirty(panel, groups[k]) for k in MENU), first=False, tip=MENU_TIP,
+             dots=True, wide=("SECTIONS  ▾", widest)):
         imgui.open_popup("##pane.menu")
     if imgui.begin_popup("##pane.menu"):
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
@@ -381,21 +385,29 @@ def _said(panel, key: str, said: str) -> str:
 
 
 def _chip(panel, cid: str, title: str, lit: bool, said: str, dot: bool,
-          first: bool, tip: str) -> bool:
+          first: bool, tip: str, dots: bool = False, full: bool = False,
+          wide: tuple[str, ...] = ()) -> bool:
     """One chip of the bar: `title` in the micro face with `said` after it,
-    as wide as its words (at most `CHIP_MAX`, and never past the pane's
-    edge), lit while `lit`, a dot where
-    its section's group has moved off its loadable patch, on the row of the
-    chip before it (`first`: there is none) unless it would pass the edge.
-    True when clicked."""
-    room = 2 * ui.HEADER_DOT_R + 12 if dot else 0.0
+    lit while `lit`, a dot where its section's group has moved off its
+    loadable patch, on the row of the chip before it (`first`: there is
+    none) unless it would pass the edge. True when clicked.
+
+    **Its width never follows what changes** (the rows of chips, and so the
+    body under them, must not jump while you work): a chip that can show a
+    dot (`dots`) keeps the dot's room with or without it; one whose words
+    say something live (`full`: the selection's node, the playlist's place)
+    is `CHIP_MAX` wide whatever they say; one whose words are one of a few
+    (`wide`) is as wide as the widest. Otherwise as wide as its words. Never
+    past the pane's edge."""
+    room = 2 * ui.HEADER_DOT_R + 12 if (dot or dots) else 0.0
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)   # measured in the face it is drawn in
     try:
         pad = 2 * imgui.get_style().frame_padding.x
         # (the cursor is at a row's start here: the room is the whole row's)
         most = min(CHIP_MAX, imgui.get_content_region_avail().x - room - pad)
         words = ui.fit_text(f"{title}  ·  {said}" if said else title, most)
-        size = imgui.ImVec2(imgui.calc_text_size(words).x + room, 0)
+        w = most if full else max([imgui.calc_text_size(t).x for t in (words, *wide)])
+        size = imgui.ImVec2(min(w, most) + room, 0)
         if not first:               # a selectable pads its words by the frame's padding
             ui.beside(size.x + pad)
         hit, _ = imgui.selectable(f"{words}##{cid}", lit, 0, size)
