@@ -284,7 +284,7 @@ def test_a_drag_from_an_invariant_control_says_invariant_not_the_rule(rig):
     e = graphview.Edit(table, rig.reg, rig.router, view)
     fader = next(b.source for b in table.invariant_rows() if b.target == "output.dim")
     why = e._value_refusal(f"out:{fader}", "base:tempo.bpm")
-    assert "invariant" in why and "meta controller" not in why
+    assert why == f"{fader} is invariant (the meta controller's)"
     lrn = Learn(rig.reg, table)
     lrn.arm("tempo.bpm", "desk")
     assert lrn.learn_control(fader) is False

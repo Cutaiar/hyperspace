@@ -482,7 +482,7 @@ def register_switches(reg: Registry, slots) -> list[str]:
         reg.toggle(f"{pre}.scene", label("picture"), *flag("scene"), group="output",
                    tip=f"The picture wired into this window{whose} (GRAPH, OUTPUT). Off: "
                        "this window ignores the picture wired into it and shows its "
-                       "ground, the hands over. A mute, not the preset: a rig setting, "
+                       "ground, the hands over. A mute, not the preset: a meta controller setting, "
                        "the config's launch value comes back at a restart.", **settings)
         reg.toggle(f"{pre}.hands", label("hands"), *flag("hands"), group="output",
                    tip=f"The hands and the guide wired into this window{whose}. Off: "

@@ -322,7 +322,7 @@ def test_a_folded_group_hides_its_members_and_inside_cables_and_reends_the_rest(
 def test_a_meta_node_is_never_a_member_and_loadable_only_keeps_the_group(rig):
     st = noita(rig)
     assert ui_graph.group_nodes(rig.panel, ["device:apc40", "analyzer"]) is None
-    assert st["note"] == ("device:apc40 is the rig's; left out; analyzer is the rig's; left "
+    assert st["note"] == ("device:apc40 is the meta controller's; left out; analyzer is the meta controller's; left "
                           "out; nothing to group")
     st = noita(rig, [dict(ENTRY, nodes=[*NOITA_CORE, "device:apc40"])])
     (g,) = st["view"].groups
@@ -1196,7 +1196,7 @@ def test_a_spawn_with_no_conflict_lands_at_once(rig):
     st = ui_graph._state(rig.panel)
     assert st["said"].startswith("spawned acid wash: 4 nodes, its pins open")
     # P4: no sheet asked, so the spawn says what its rows wait for (this rig lists no leap)
-    assert st["said"].endswith("; waits for leap (not in this rig): right hand y")
+    assert st["said"].endswith("; waits for leap (not set up on this Mac): right hand y")
 
 
 def test_a_landing_refused_after_its_dry_run_leaves_no_undo_step(rig, monkeypatch):
@@ -1264,7 +1264,7 @@ def test_a_row_the_sheet_kept_for_the_loadable_waits_for_nothing(rig):
     trip(rig)
     spawned(rig, keep=True)
     said = ui_graph._state(rig.panel)["said"]
-    assert said.endswith("; waits for leap (not in this rig): right hand y")
+    assert said.endswith("; waits for leap (not set up on this Mac): right hand y")
     assert "apc40" not in said
 
 

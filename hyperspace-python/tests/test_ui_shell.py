@@ -845,7 +845,7 @@ def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monke
         {"depth": {"source": "lane:0", "target": "rot.rate.ZW"}, "from": 0.0, "to": 1.0}]}
         for k in range(1, 9)})
     rig.panel.learn = Learn(rig.reg, table)
-    rig.panel.learn.refuse("track knob 1 is on the global layer (the session's) — "
+    rig.panel.learn.refuse("track knob 1 is on the global layer (the meta controller's) — "
                            "latch SHIFT off to learn into the preset")
     # dark now: only clip row 3's first three buttons (the global band scenes' own)
     assert [f.source for f in ui_routing.unmapped(table)] == [

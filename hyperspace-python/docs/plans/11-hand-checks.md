@@ -8354,6 +8354,17 @@ Register rows 775–776, 2026-11-06. Headless: `tests/test_meta_rule.py`, on the
 4. Open a look whose routes are scaled by `master.gain` (`party-tumble`). Pull `master.gain` down. *Pass:* its motion shrinks with it, and `master.gain` itself doesn't move.
 5. Turn the analyzer's post-drive up on a band with a route on its lane. *Pass:* the route moves more.
 *Fail:* a fader or button that stops acting, a "not modulatable" on any meta param's menu, or a look that stops following `master.gain`.
+## DE. "Session" and "rig" are gone (rows 778-780)
+Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans every string; the existing tests pin the words. Drawn by `tools/app_driver.py` with the pane at 240 and 320 px: the SHOW line, ROUTING's two headings and a placeholder's node. Not seen drawn: a placeholder's side pane, the cable hovers, an APC40's refusal.
+**605. The panel's longer words fit.** (any Mac, no devices needed)
+1. PRESETS, SHOW: read the line under the SHOW label, and hover it. *Pass:* "SHOW: PADS, META CONTROLLER" whole at the pane's first width; drag its grip to the narrowest and it ends in "…", never cut off bare; the hover says the bus cables are the preset's.
+2. ROUTING: find the "meta controller" heading over the invariant rows, and "its own rows — edit bindings.json" beside it. Do the same for SINKS, "the meta controller's — out to a sink · right-click a param: Learn sink". *Pass:* at the pane's narrowest (240 px) and its first width (320 px), every word shows, "Learn sink" too, with the note under the heading if there's no room beside it.
+3. With the APC40 connected, Learn desk on MASTER. *Pass:* the refusal says "invariant (the meta controller's)", and the line fits where it lands.
+*Fail:* "session" anywhere; a line cut so it can't be read.
+**606. A missing controller, and a bus cable.**
+1. Load a patch whose rows want a controller that isn't plugged in. On GRAPH, read its placeholder node, and PRESETS' line. *Pass:* "not set up on this Mac"; the node's side pane names `[[devices]]` in config.toml. A controller plugged in but not listed says the same, which is the point.
+2. On GRAPH, hover a cable from All outputs into a window. *Pass:* it starts "the bus cable", and hovering All outputs says "The meta controller's bus". Cut it, then read the line GRAPH says it on. *Pass:* "cut the bus cable". Then cut a cloud's wire into the scene, if a cloud is wired: *Pass:* its hover says "this cloud's wire into the scene", and the line "cut the cloud's wire".
+*Fail:* "rig" anywhere.
 ## DA. Screens by name (wave 5 SC1)
 Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tests/test_app_boundary.py`, on stand-in screens. Only a real replug shows what macOS does. A name is read at the launch; a replug while the app runs is SC3b's, not this.
 **600. Outputs stay put across a replug.** (the rig, with two outputs on HDMI)
