@@ -46,6 +46,8 @@ SCHEMA = "players/1"
 NUMBERS = (1, 2, 3, 4)
 _ROLE = re.compile(r"p([1-4])")
 NAMES = frozenset(f"p{n}" for n in NUMBERS[1:])     # what a row calls players 2, 3, 4
+# where a controller is, for an undo of a move (`DeviceRegistry.presence`, row 800)
+THERE, UNPLUGGED, UNLISTED = "there", "unplugged", "unlisted"
 
 
 class Duty(StrEnum):
@@ -162,6 +164,15 @@ class Players:
         if old in self.held:
             self.held[new] = self.held.pop(old)
             self.save()
+
+    def put(self, doc: dict) -> None:
+        """Back to `to_json`'s `doc`, remembered: an undo's (row 740).
+        `MetaController.put_players` also moves the pointers: call that."""
+        duties = doc["duties"]
+        for p in self:
+            p.duty = Duty(duties.get(str(p.number), Duty.ON_AIR))
+        self.held = dict(doc["controllers"])
+        self.save()
 
     # ---- the file ----
 

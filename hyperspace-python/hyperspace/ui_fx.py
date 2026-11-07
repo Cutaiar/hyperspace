@@ -71,7 +71,7 @@ IDLE = {
             "Switch this effect on."),
     UNREACHED: ("it reaches nothing — wire it on GRAPH to see it", None, None, None),
     "faces off": ("it ends on the faces, and Faces is off", "faces on", "view.faces",
-                  "Switch the faces on (the Faces check on the VIEW and FACES pages)."),
+                  "Switch the faces on (the Faces check in the VIEW and FACES sections)."),
     "bypassed": ("every effect is bypassed", "effects on", "fx.on",
                  "Switch the effects on (the Effects check at the top)."),
     "fx mix 0": ("FX mix is at 0", None, None, None),     # its fader is at the top of the page

@@ -8434,6 +8434,9 @@ Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tes
 4. Quit, unplug the left one, launch. *Pass:* "MStar #1" opens on the one still there, with a note that only one is connected and it may be either of a pair; "MStar #2" doesn't open, with a note saying 1 is connected.
 *Fail:* #2 on the left with the arrangement unchanged, step 4 with no note, or a launch that stops.
 
+## DL. A player's moves on the meta stack (SM5, rows 800, 801)
+
+623. On the player screen, with two controllers plugged in. Drag player 2 to off air, leave the mouse on the board, and read the line: it ends "⌘Z takes it back". Press ⌘Z: player 2 is on air again, its controller's rows act on the deck on air, and the line says "undid player 2 to off air". Press ⇧⌘Z: off air again. Drag a controller to another player and press ⌘Z: it goes back, and its rows answer as before. Drag it across again, unplug it and press ⌘Z: it stays, and the line says it was unplugged since. Plug it back in and press ⌘Z: it goes back. Change a HANDS setting, come to the board and press ⌘Z: the setting stays, and the line says so in the warning colour. Move a player, go to the HANDS section and press ⌘Z: the move stays, and the footer says to press over the player screen. Quit and open the app: the players are as you left them. Over a tip that used to say "HANDS page" (Ghost hands' output switch), read "HANDS section".
 ## DJ. Audit faults closed (SM4)
 Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which also runs a real refusal in a sandbox. Restart first: `midiports.py` is a new module.
 **615. A desk comes and goes.** (the Mac, with the APC40)

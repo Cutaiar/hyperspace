@@ -1396,7 +1396,7 @@ def test_a_deleted_loadable_says_which_slots_still_name_it(owner_home):
     assert (home / "projects" / "mine.hyp.json").read_bytes() == show
     pr.load("party", startup=False)                          # a show that names it nowhere
     assert lib.delete("presets", "NIGHT THREE")
-    assert lib.status == "NIGHT THREE is in the trash — the PRESETS page's trash can restore it"
+    assert lib.status == "NIGHT THREE is in the trash — the PRESETS section's trash can restore it"
 
 
 def test_the_watcher_never_resurrects_or_reloads(owner_home):

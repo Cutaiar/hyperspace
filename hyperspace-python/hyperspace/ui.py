@@ -655,7 +655,7 @@ CHEATSHEET = [
     ("Cmd+Z", "undo, after a change here · ⇧ redo (or Ctrl+Z)"),
     ("Home", "home preset, off air (fn ←)"),
     ("Cmd+R", "restart process"),
-    ("Cmd+[ ]", "panel page back · forward"),
+    ("Cmd+[ ]", "panel section back · forward"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
@@ -898,19 +898,20 @@ class Panel:
                    "to the top of the pane, and folds again when the focus moves on unless "
                    "you unfolded it yourself. graph lets go of the focus.")
 
-    def in_meta_section(self) -> bool | None:
+    def in_meta_section(self) -> bool | str | None:
         """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
         panel's deck's. **What is under the mouse decides:** a param undo watches
         says by its own layer, wherever it is drawn (a mixed section: hands with
         `ghost.*`, SYSTEM with `desk.slew`, a fixture node in the selection); else the
-        section under it (`ui_pane.where`); else the deck. None over the player
-        screen and the playlist's section: no stack, since a move or an edit there is on
-        none of them (`undo.here`)."""
+        section under it (`ui_pane.where`); else the deck. Over the player screen, its
+        own window too, `undo.BOARD`: the meta stack, for a player's moves alone (row
+        800). None over the playlist's section: no stack, since an edit there is on none
+        of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "patch"
         if ui_players.over(self):
-            return None
+            return undo.BOARD
         section = ui_pane.where(self)
         if section == "playlist":    # a list's edits are files, on no stack (row 709)
             return None
@@ -2343,7 +2344,7 @@ class Panel:
             sw = sl.switches
             why = []
             if sw.hands and ghost is not None and not ghost.value:
-                why.append("hands: ghost hands are off (HANDS page)")
+                why.append("hands: ghost hands are off (HANDS section)")
             elif sw.hands and getattr(self, "hands", None) is None:
                 why.append("hands: no tracker")
             if through_layer(wiring, sl.n, bus_cuts) is not None and not fx_on:
