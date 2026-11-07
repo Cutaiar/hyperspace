@@ -474,6 +474,13 @@ def chip_w(*labels: str) -> float:
     return w + s.item_spacing.x * max(len(labels) - 1, 0)
 
 
+def flush_right(w: float) -> None:
+    """On this row, go to where `w` px end at the content's right edge. `same_line`
+    counts from the window's edge, so `same_line(avail - w)` alone stops the window's
+    padding short and overruns a row budgeted to `avail` (audit U10)."""
+    imgui.same_line(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x - w)
+
+
 def button_w(*labels: str) -> float:
     """chip_w for full-size buttons (frame padding from the style)."""
     s = imgui.get_style()
@@ -1788,7 +1795,7 @@ class Panel:
             if _micro_width(note) > room:
                 note = fit_micro(note, room, 24.0)
         if note:
-            imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
+            flush_right(_micro_width(note) + 4)
             _micro(note, FAINT)
         lib = self.library
         if group is not None and lib is not None and lib.reg is not None:
@@ -2123,7 +2130,7 @@ class Panel:
         if lib is not None and lib.reg is not None:
             proj = lib.project
             text = f"{proj.name}{' ●' if proj.is_dirty() else ''}"
-            imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(text).x)
+            flush_right(imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
                 tooltip("the open show — the presets section")

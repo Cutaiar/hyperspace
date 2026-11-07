@@ -235,7 +235,7 @@ launch, wait twenty seconds, plug in: lit within ten seconds (five
 tries two seconds apart, then every ten). *Fail:* no LEDs →
 `apc40.enter` / `[midi] port`; wrong param → `apc40.DEFAULT_MAP` (its
 `layer`); knob jumps back → check 31; fader jumps → pickup in
-`MidiIO._apply`; late desk never found → `midi.retry_after`.
+`MidiIO._apply`; late desk never found → `midi.Ports.retry`.
 
 **11. Rings show the setting, LEDs show the state.**
 Headless: `tests/test_midi.py::{test_ring_shows_the_base_and_never_chases_a_performer,test_select_buttons_and_led_state}`.
@@ -8437,6 +8437,25 @@ Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tes
 ## DL. A player's moves on the meta stack (SM5, rows 800, 801)
 
 623. On the player screen, with two controllers plugged in. Drag player 2 to off air, leave the mouse on the board, and read the line: it ends "⌘Z takes it back". Press ⌘Z: player 2 is on air again, its controller's rows act on the deck on air, and the line says "undid player 2 to off air". Press ⇧⌘Z: off air again. Drag a controller to another player and press ⌘Z: it goes back, and its rows answer as before. Drag it across again, unplug it and press ⌘Z: it stays, and the line says it was unplugged since. Plug it back in and press ⌘Z: it goes back. Change a HANDS setting, come to the board and press ⌘Z: the setting stays, and the line says so in the warning colour. Move a player, go to the HANDS section and press ⌘Z: the move stays, and the footer says to press over the player screen. Quit and open the app: the players are as you left them. Over a tip that used to say "HANDS page" (Ghost hands' output switch), read "HANDS section".
+## DJ. Audit faults closed (SM4)
+Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which also runs a real refusal in a sandbox. Restart first: `midiports.py` is a new module.
+**615. A desk comes and goes.** (the Mac, with the APC40)
+1. Launch with the desk unplugged. *Pass:* no crash, and the SYSTEM page says it isn't there.
+2. Plug it in. *Pass:* it comes up by itself within a few seconds, LEDs lit, with no relaunch.
+3. Pull it mid-run, wait a minute, plug it back. *Pass:* no crash, and it's back within a few seconds, however long it was out.
+*Fail:* an app that quits, or a desk that needs a relaunch.
+
+**616. A knob won't take the bank.** (the Mac, with the APC40)
+1. PRESETS page: right-click a bank pad's param, Learn desk, if it's offered. Turn a track knob. *Pass:* it's refused in words, or Learn desk isn't offered, and the knob doesn't load anything.
+*Fail:* a knob that loads presets as it turns.
+
+**617. The nudge chips' menu.** (the Mac)
+1. LFO page: right-click nudge −, then nudge +. *Pass:* each opens one menu, with no item listed twice.
+*Fail:* a doubled menu.
+
+**618. The strip in a narrow pane.** (the Mac)
+1. GRAPH: click a node with a strip (view, output) so the side pane shows it, and edit a value so the dot shows. Drag the pane from narrow to wide. *Pass:* ◀ name ● ▶ and save · as… · reset never touch, and the chips drop to their own row when it's narrowest.
+*Fail:* a chip over ▶ or over the name.
 
 ## What no test covers
 
