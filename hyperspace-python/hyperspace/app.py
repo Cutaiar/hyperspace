@@ -250,6 +250,13 @@ class MediaIO:
         self.off_air: list = []       # the channels of the decks but the first (plan 44 D4)
         self.heard: Callable[[], Any] | None = None   # the channels on air; None: `state`
 
+    def seat(self, meta) -> None:
+        """The meta controller's two `Deck`s: `state` is the first's channels and the other's
+        are polled beside it, and the mixer plays whichever `Deck` is on air, as it moves."""
+        self.off_air[:] = [c for c in (d.loaded_patch.media for d in meta.decks)
+                           if c is not self.state]
+        self.heard = lambda: meta.on_air.loaded_patch.media
+
     def poll(self, dt: float, now: float) -> None:
         # each source read once a frame from here on, whichever deck asks
         # (plan 44 §8: both renderers handed the same `MediaFrame`)
@@ -1680,7 +1687,6 @@ def main(argv: list[str] | None = None) -> None:
     channels2 = Channels(sources=media.state.sources)
     renderer2.media = channels2
     rendering.append(renderer2)
-    media.off_air.append(channels2)
     deck2 = Deck.beside(deck, renderer=renderer2, media=channels2)
     renderer2.ghost.router = deck2.router       # the guide lights what its table routes
     deck2.learn.devices = device_reg                   # what can be armed, on either deck's Learn
@@ -1689,7 +1695,7 @@ def main(argv: list[str] | None = None) -> None:
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
     meta = MetaController(deck, deck2, players, mix=mix)
     fade = Fade(deck, deck2, mix, ctx, dream=dream_io, pointer=meta.on_air_pointer)
-    media.heard = lambda: meta.on_air.loaded_patch.media
+    media.seat(meta)
     fade.said = lambda text: library.say(warning=text)    # a warm draw's failure, at once
     panel.fade = fade                  # the SYSTEM page's second GPU block
     panel.pointer = library.pointer = meta.panel_pointer

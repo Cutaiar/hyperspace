@@ -259,7 +259,11 @@ its backdrop is that deck's picture (`Fade.preview`), output 1 rides a second `P
 ON AIR inset), and GRAPH frames its canvas red. Two verbs and no others: the crossfade, by
 hand or timed, and `copy_on_air`. HOLD, TAKE and DROP are gone (plan 38's program and preview,
 `hold.py`), since with two decks there is nothing to hold. No patch reaches the other deck:
-`tests/test_on_off_air.py::test_no_patch_reaches_the_other_deck`.
+`tests/test_on_off_air.py::test_no_patch_reaches_the_other_deck`. One accepted exception (the
+owner, 2026-11-06, row 790): with the analyzer on the mix, the on-air deck's video sound reaches
+the off-air deck's audio routes, because the analyzer hears what the room hears
+(`tests/test_video_sound_path.py`; the toggle says so). Row 702 has the other known limits: the
+shared dream worker, and a Drive sync landing on the panel's deck.
 
 A Scene or Layer node *makes* a texture; the history, composite and
 effect nodes *paint* into the framebuffer their consumer hands them, so
