@@ -1,5 +1,5 @@
 """The device registry (plan 27): every input or output the meta controller has,
-listed in ``config.toml`` as ``[[devices]]``, opened behind its own entry,
+listed in the library's ``devices.json`` (`devicelist`), opened behind its own entry,
 polled in order each frame, and closed in one list.
 
 A *device* is anything that satisfies the `Device` protocol below:

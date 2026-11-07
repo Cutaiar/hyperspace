@@ -93,13 +93,12 @@ from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
 from .deck import KEYS, MOUSE, Deck, DeckHooksMade, Fade, MetaController, Mix, register_xfade
+from .devicelist import DeviceList
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library
-from .devicelist import DeviceList
 from .library import home as library_home
-from .midiports import port_names
 from .media import pool as media_pool
 from .media import proxy as media_proxy
 from .media import publish
@@ -107,6 +106,7 @@ from .media.channels import Channels, MediaState
 from .media.folder import MediaFolder
 from .media.panel import GRAPH as PANEL_GRAPH
 from .media.panel import PanelSource
+from .midiports import port_names
 from .outputs import (
     CanvasTap,
     Offscreen,

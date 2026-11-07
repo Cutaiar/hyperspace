@@ -44,6 +44,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
+from functools import partial
 
 from imgui_bundle import imgui
 
@@ -418,7 +419,7 @@ def adopt(panel, h: Held, number: int) -> None:
     applied, so it opens under its right name the first time."""
     meta, regs = _meta(panel), getattr(panel, "devices", None)
     store = getattr(regs, "store", None)
-    if store is None or h.entry is None:
+    if meta is None or regs is None or store is None or h.entry is None:
         return
     role = store.adopt(h.entry)
     meta.players.hold(role, number)
@@ -814,14 +815,14 @@ def _board(panel, sfx: str, s: float) -> None:
     free = st["drag"] is None and not st.get("no_drag")   # a release ending a drag is no click
     for duty in LANES:
         if _button(f"##players{sfx}.lane.{duty.value}", bd.lanes[duty]) and free:
-            act = (_clicked_lane, panel, st, duty)
+            act = partial(_clicked_lane, panel, st, duty)
     for n, card in bd.cards.items():
         if _button(f"##players{sfx}.p{n}", card.rect) and free:
-            act = (_clicked_card, panel, st, n)
+            act = partial(_clicked_card, panel, st, n)
         _dragging(st, sfx, (SEL_PLAYER, n))
         for h, (role, rect) in zip(hold[n], card.cells, strict=False):
             if _button(f"##players{sfx}.ctl.{role}", rect, over=False) and free:
-                act = (_clicked_ctl, panel, st, role)
+                act = partial(_clicked_ctl, panel, st, role)
             _dragging(st, sfx, (SEL_CTL, role))
             if imgui.is_item_hovered() and st["drag"] is None:
                 ui.tooltip(f"{role}  ·  {h.name}  ·  {STATE_WORDS[h.state]}  ·  "
@@ -831,7 +832,7 @@ def _board(panel, sfx: str, s: float) -> None:
         hit = _button(f"##players{sfx}.tray.{k}", rect, over=False)
         if store is not None and h.entry is not None:
             if hit and free:
-                act = (_clicked_tray, st, h)
+                act = partial(_clicked_tray, st, h)
             _dragging(st, sfx, (SEL_TRAY, h))
         if imgui.is_item_hovered() and st["drag"] is None:
             ui.tooltip(f"{h.name}. " + (ADOPT_TIP.format(role=store.role_for(h.entry))
@@ -849,14 +850,14 @@ def _board(panel, sfx: str, s: float) -> None:
         if not imgui.is_mouse_down(0):
             st["drag"] = None
             aim = _drop_on(bd, drag[1], mouse.x, mouse.y) if inside else None
-            if aim is not None and drag[1] == SEL_PLAYER:
+            if isinstance(aim, Duty):
                 move(panel, drag[2], aim)
             elif aim is not None and drag[1] == SEL_TRAY:
                 adopt(panel, drag[2], aim)
             elif aim is not None:
                 give(panel, drag[2], aim)
     if act is not None:
-        act[0](*act[1:])
+        act()
     imgui.push_text_wrap_pos(0.0)
     imgui.text_colored(ui.WARN if st.get("said_warn") else ui.TEXT if st["said"] else ui.FAINT,
                        st["said"] or HINT)

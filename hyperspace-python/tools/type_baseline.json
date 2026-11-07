@@ -349,7 +349,7 @@
       "reportOptionalSubscript": 3
     },
     "hyperspace/ui_players.py": {
-      "reportArgumentType": 6,
+      "reportArgumentType": 1,
       "reportCallIssue": 2,
       "reportOptionalMemberAccess": 14
     },

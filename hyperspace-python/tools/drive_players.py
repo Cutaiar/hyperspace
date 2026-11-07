@@ -12,6 +12,7 @@ The players' file is cut off first; the device list is written, in that scratch 
 from types import SimpleNamespace as NS
 
 from hyperspace import ui_graph, ui_players
+from hyperspace.devicelist import pad_entry
 from hyperspace.midiports import PortNames
 from hyperspace.pads import models
 from hyperspace.ui import PAGE_KEYS
@@ -80,8 +81,10 @@ def script(d, panel):
     meta.players.tell = type(meta.players).tell.__get__(meta.players)
     seen = ["Launch Control XL"]
     ui_players.port_names = lambda: PortNames(list(seen), [], "")
-    regs.ctx.pads = NS(taken={}, hub=NS(readers={"a": NS(name="Joy-Con (L)", model=models.MODELS["joycon-l"])},
-                                        held={}))
+    looked = ui_players.loose
+    joy = models.MODELS["joycon-l"]
+    pads = [ui_players.Held(joy.name, ui_players.glyph_of_model(joy), joy.name, "on", pad_entry(joy))]
+    ui_players.loose = lambda panel, st=None: [*looked(panel, st), *pads]
     ui_players._state(panel)["loose_at"] = -1e9
     regs.relist()
     yield from d.park()
@@ -100,7 +103,7 @@ def script(d, panel):
     yield from d.press(True)
     yield from d.move(head(d, "players.big.p4"), frames=30)
     yield from d.press(False)
-    regs.ctx.pads.hub.readers.clear()
+    pads.clear()
     ui_players._state(panel)["loose_at"] = -1e9
     yield from d.park()
     yield from d.wait(60)

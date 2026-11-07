@@ -18,7 +18,16 @@ import pytest
 
 import hyperspace
 from hyperspace import app, config, devicelist, devices
-from hyperspace.devicelist import COPY, DEFAULTS, FILE, HOLD_S, SCHEMA, DeviceList, midi_entry, pad_entry
+from hyperspace.devicelist import (
+    COPY,
+    DEFAULTS,
+    FILE,
+    HOLD_S,
+    SCHEMA,
+    DeviceList,
+    midi_entry,
+    pad_entry,
+)
 from hyperspace.library import Library
 from hyperspace.pads import models
 from hyperspace.players import Players
@@ -484,5 +493,5 @@ def test_main_reads_the_list_before_the_windows_and_the_library():
     src = inspect.getsource(app.main)
     at = src.index("DeviceList.open(cfg, home)")
     assert at < src.index("_windows(") and at < src.index("Library(")
-    assert at < src.index("Players.load(home") or src.index("Players.load(home") < src.index("_open_devices(cfg")
+    assert at < src.index("Players.load(home") < src.index("_open_devices(cfg")
     assert "store=device_list" in src

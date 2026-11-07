@@ -9,6 +9,7 @@ the poi follow the player. Every player on air is what the app did before.
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 from test_deck import _compare, _walk
@@ -1117,7 +1118,7 @@ class Counted(devices.Base):
 
     kind = "counted"
     feeds = ()
-    log: list[str] = []
+    log: ClassVar[list[str]] = []
 
     def open(self):
         self.io = object()
