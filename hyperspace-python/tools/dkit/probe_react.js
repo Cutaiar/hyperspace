@@ -43,6 +43,9 @@ const PROPS = [
   "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
   "fontSize", "fontWeight", "lineHeight", "color",
   "width", "height", "overflow",
+  // a Dialog/Sheet scrim is `bg-black/10 backdrop-blur-sm`, and the
+  // blur is the half of it a draw list cannot do at all
+  "backdropFilter", "zIndex", "position", "gap",
 ]
 
 ;(async () => {
@@ -129,7 +132,12 @@ const PROPS = [
     const vp = { x: 0, y: 0 }
     const portal = []
     for (const el of document.querySelectorAll(
-      "body > [data-radix-popper-content-wrapper] [data-slot], body > div > [data-slot], [data-slot=\"tooltip-content\"] svg, [data-slot=\"select-content\"] [data-slot], [data-slot=\"select-item\"] svg"
+      // `body > [data-slot]` is not redundant with `body > div > [data-slot]`:
+      // a Radix Dialog and Sheet put their OVERLAY and CONTENT as direct
+      // children of body, with no portal wrapper, so the two-level selector
+      // caught their headers and footers and missed the two slots that
+      // matter - the scrim and the panel.
+      "body > [data-slot], body > [data-radix-popper-content-wrapper] [data-slot], body > div > [data-slot], [data-slot=\"tooltip-content\"] svg, [data-slot=\"select-content\"] [data-slot], [data-slot=\"select-item\"] svg"
     )) {
       if (el.closest("[data-probe]")) continue
       portal.push(rd(el, vp))

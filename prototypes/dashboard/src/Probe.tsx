@@ -29,6 +29,13 @@ import {
   DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -221,6 +228,45 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
           <Button size={z as never}>{z.startsWith("icon") ? "✕" : "Button"}</Button>
         </P>
       ))}
+      {/* ---- The modal LAYER, which is what layer.py has to be: a scrim,
+           a centred panel, and a close affordance. Behind ?probe&open with
+           the other modal layers, because an open Dialog puts
+           pointer-events:none on the body and `aria-hidden` on everything
+           outside it - exactly the thing that makes every hover below it
+           unmeasurable. Measuring the scrim's own colour is the point: it is
+           the one piece of chrome in the kit with nothing underneath it to
+           compare against. ---- */}
+      {open ? (
+        <>
+          <P id="dialog.open" w={420}>
+            <Dialog defaultOpen modal>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete preset</DialogTitle>
+                  <DialogDescription>
+                    This cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline">Cancel</Button>
+                  <Button variant="destructive">Delete</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </P>
+          <P id="sheet.open" w={420}>
+            <Sheet defaultOpen modal>
+              <SheetContent side="right">
+                <SheetHeader>
+                  <SheetTitle>Node</SheetTitle>
+                  <SheetDescription>A side panel.</SheetDescription>
+                </SheetHeader>
+              </SheetContent>
+            </Sheet>
+          </P>
+        </>
+      ) : null}
+
       {/* ---- The four controls interact.py draws with NO focus ring. The
            point of measuring rather than porting Button's: a TabsTrigger
            carries an OUTLINE as well as a ring, and a SidebarMenuButton's

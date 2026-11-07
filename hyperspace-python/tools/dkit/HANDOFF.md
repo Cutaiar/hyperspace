@@ -53,7 +53,7 @@ A reasonable opening message for a new session:
 ## Where it stands
 
 ```
-751 passed, 16 skipped.   chrome diff: 64 cells, flat 0-2 levels, worst
+771 passed, 16 skipped.   chrome diff: 64 cells, flat 0-2 levels, worst
 corner 0.776 px, "all cells within the bar" in BOTH themes.
 ```
 
@@ -74,8 +74,9 @@ row 19 is the last time that bit. Run `-n0` before believing it.
 | keyboard model (Combobox, menus, ContextMenu, Select) | done, measured per component |
 | scroll (rate, momentum, whole pixels, monotone rounding) | done — see the decision record in `interact.py` |
 | `comp_command.py` (cmdk scorer, verified, no UI yet) | parked for the Command palette |
-| Dialog, Sheet, Toast, Kbd, Breadcrumb, Checkbox, Collapsible, Resizable | **not started** |
-| `layer.py` (scrim, focus trap, z-order) | **not started — blocks Dialog and Sheet** |
+| Toast, Kbd, Breadcrumb, Checkbox, Collapsible, Resizable | **not started** |
+| `layer.py` (scrim, panels, focus trap, z-order) | done, measured, 20 tests |
+| Dialog, Sheet on top of it | **not started — but no longer blocked** |
 | variant resolver (cva) | not started, eight ad-hoc tables |
 | text wrapping / multi-line measure | not started |
 | **adoption** | **nothing imports the kit.** Unchanged since day one. |
@@ -152,13 +153,35 @@ both the `Ui` object and every primitive. `comp_combobox.py` (~1700) is the
 largest file in the kit and holds the keyboard model, the filter, the panel
 and the trigger.
 
-`layer.py` does not exist and Dialog and Sheet both need it — a scrim, a
-focus trap, z-order and click-outside. **Do `layer.py` BEFORE those two
-components, not after.**
+`layer.py` **exists now** — the scrim, the two panels' chrome, the geometry,
+and ImGui's own `begin_popup_modal` borrowed for the focus trap, the z-order
+and the click-outside, the way `menu.py` borrows its popup. Measured on a new
+`?probe&open` pair of blocks, and three of the numbers are ones a reading of
+the classes gets wrong:
 
 ```bash
-ls tools/dkit/layer.py          # -> No such file
+xvfb-run -a uv run python -m pytest tools/dkit/test_layer.py -q -n0
 ```
+
+* **the scrim is `bg-black/10`** — ten percent, not the fifty or eighty a
+  guess lands on — and a LITERAL black, not a token, because a scrim drawn in
+  `foreground` would go white in dark;
+* **it also carries `backdrop-filter: blur(4px)`**, which a draw list cannot
+  do at all, and at 10% the wash is doing almost none of the separating. That
+  is a recorded DEVIATION, not a detail: a dkit modal reads as less separated
+  from the page than the browser's. Whether Hyperspace wants a heavier wash
+  instead is a design call the module deliberately does not make;
+* **a Dialog has NO drop shadow** — its only box-shadow is a 1px
+  `foreground/10` ring — where a Sheet has `shadow-lg` and no ring. They are
+  not one panel with a different position, and the obvious implementation
+  gives both a popover's shadow.
+
+What is left on it: **Dialog and Sheet themselves**, on top of this, and a
+way to get their chrome into the pixel diff. The second is a real harness
+question rather than a cell: an open modal scrims and `aria-hidden`s the
+whole page, so a Dialog cannot share the `?gallery` canvas with the other 64
+cells. It needs its own canvas and its own spec, which is the first thing to
+decide before building either component.
 
 One thing to fold in while moving code: the scrollbar's TRACK geometry is
 worked out twice over, from different arguments. `draw.scroll_bar` takes a

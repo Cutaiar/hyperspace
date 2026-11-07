@@ -379,6 +379,10 @@ TOOLTIP = {
 
 # shadow-md, which the Select's popover carries on top of its 1px ring.
 SHADOW_MD = ((0.0, 4.0, 6.0, -1.0, 0.10), (0.0, 2.0, 4.0, -2.0, 0.10))
+# shadow-lg, measured on a Sheet panel: `0 10px 15px -3px rgba(0,0,0,.1),
+# 0 4px 6px -4px rgba(0,0,0,.1)`. A Dialog does NOT carry one - it has a 1px
+# ring instead, which is the kind of thing only a dump tells you.
+SHADOW_LG = ((0.0, 10.0, 15.0, -3.0, 0.10), (0.0, 4.0, 6.0, -4.0, 0.10))
 
 
 def _themed(base: dict, dark: dict, theme_name: str) -> dict:
