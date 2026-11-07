@@ -239,15 +239,11 @@ def room(display: tuple[float, float], panel_x: float | None
 
 
 def _room(panel) -> tuple[float, float, float, float]:
-    """`room` for this frame: the panel's edge is last frame's (the pad is
-    drawn before the panel), its launch place before there is one."""
+    """`room` for this frame: the panel is pinned (`ui.panel_rect`), so its
+    edge is this frame's though the panel draws after."""
     io = imgui.get_io()
     display = (io.display_size.x, io.display_size.y)
-    panel_x = None
-    if panel.open:
-        panel_x = getattr(panel, "_panel_x", None)
-        if panel_x is None:
-            panel_x = display[0] - ui.panel_w(display) - EDGE
+    panel_x = panel.panel_left()
     return room(display, panel_x)
 
 
@@ -586,9 +582,29 @@ def state(panel) -> tuple[str, str]:
     return "no pad", f"{read} None is connected" + (f" — {note}." if note else ".")
 
 
-def _header(panel, table) -> None:
-    """One line `HEAD_H` tall: gamepad · how it is read · what is mapped."""
+CLOSE_TIP = "Close the pad diagram (the system section's Pad diagram brings it back)"
+
+
+def close(panel) -> None:
+    """Close the pad diagram (`ui.pad_diagram` off). With the panel hidden
+    and no desk to fill the window, the panel comes back, so the window
+    is never left empty (as the desk's `_close`)."""
+    if not panel.open and not getattr(panel, "desk", False):
+        ui_desk._show_panel(panel, True)
+    p = panel.reg.get("ui.pad_diagram")
+    if p is not None:
+        p.set(False)
+    else:                                   # (a registry from before the panel's params)
+        panel.pad_diagram = False
+
+
+def _header(panel, table, closable: bool = False) -> None:
+    """One line `HEAD_H` tall: gamepad · how it is read · what is mapped;
+    with `closable` (the floating window, not GRAPH's inline picture) the ×
+    flush right that turns `ui.pad_diagram` off, as the desk has its own."""
     start = imgui.get_cursor_pos()
+    full = imgui.get_content_region_avail().x
+    x_w = ui.chip_w(ui_desk.CLOSE) + imgui.get_style().item_spacing.x if closable else 0.0
     ui._micro("gamepad")
     imgui.same_line()
     word, why = state(panel)
@@ -619,13 +635,19 @@ def _header(panel, table) -> None:
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
-        room = imgui.get_content_region_avail().x       # narrow in GRAPH's side panel
+        room = imgui.get_content_region_avail().x - x_w   # narrow in GRAPH's side panel
         said = next((w for w in (f"{n} mapped", str(n)) if imgui.calc_text_size(w).x <= room), "")
         if said:
             imgui.text_colored(ui.DIM, said)
             if imgui.is_item_hovered():
                 ui.tooltip(f"{n} controls with a row in bindings.json. A grey label is the "
                            "app's own hand on a free axis, not a row.")
+    if closable:
+        imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(ui_desk.CLOSE), start.y))
+        if ui.chip(f"{ui_desk.CLOSE}##pad.close"):
+            close(panel)
+        if imgui.is_item_hovered():
+            ui.tooltip(CLOSE_TIP)
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
 
@@ -791,7 +813,8 @@ def _says_of(panel, table):
 
 
 def _body(panel, table) -> None:
-    _header(panel, table)
+    # the × only on the floating window, not GRAPH's inline picture (`inline`)
+    _header(panel, table, imgui.internal.get_current_window().name == "##pad")
     if table is None:
         imgui.text_disabled("no table")
         return

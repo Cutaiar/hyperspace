@@ -611,15 +611,11 @@ def room(display: tuple[float, float], panel_x: float | None,
 
 
 def _room(panel) -> tuple[float, float, float, float]:
-    """`room` for this frame: the panel's edge is last frame's (the desk
-    is drawn before the panel), its launch place before there is one."""
+    """`room` for this frame: the panel is pinned (`ui.panel_rect`), so its
+    edge is this frame's though the panel draws after."""
     io = imgui.get_io()
     display = (io.display_size.x, io.display_size.y)
-    panel_x = None
-    if panel.open:
-        panel_x = getattr(panel, "_panel_x", None)
-        if panel_x is None:
-            panel_x = display[0] - ui.panel_w(display) - EDGE
+    panel_x = panel.panel_left()
     sheet = None
     if panel.cheatsheet:
         sheet = (getattr(panel, "_sheet_w", 0.0), getattr(panel, "_sheet_h", 0.0))

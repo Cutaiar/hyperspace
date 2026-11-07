@@ -345,8 +345,8 @@ def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
                         or chip(label, *a, **k))
     frame(rig.panel, "graph")
     assert "tidy##graph" in chips and "expand all##graph" in chips
-    # the control window's narrow page, nothing selected: the chip (plan 49)
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    # a narrow control window's page, nothing selected: the chip (plan 49)
+    imgui.get_io().display_size = imgui.ImVec2(ui.PANEL_W + 2 * ui.PANEL_EDGE, CONTROL_SIZE[1])
     frame(rig.panel, "graph")
     chips.clear()
     frame(rig.panel, "graph")
@@ -1116,12 +1116,12 @@ def test_the_side_column_takes_its_width_from_this_mac_and_a_drag(rig):
     moved, resizes it, and letting go writes the width back."""
     st = party(rig)
     io = imgui.get_io()
+    rig.panel.desk = False          # the panel fills the window (the rig's desk would take a column)
 
     def sized(width: float) -> None:                    # a frame with the panel this wide
-        io.display_size = imgui.ImVec2(max(width + 40.0, 820.0), 900.0)
+        io.display_size = imgui.ImVec2(width + 2 * ui.PANEL_EDGE, 900.0)   # CONTROLS fills it
         rig.panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(width, 876.0))
         rig.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
 
