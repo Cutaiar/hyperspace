@@ -140,7 +140,8 @@ def _key(table) -> tuple:
             getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings),
             getattr(table, "rows_serial", 0),
             getattr(table, "page_serial", 0),
-            id(table.page_rows) if getattr(table, "page", None) is not None else None)
+            id(table.page_rows) if getattr(table, "page", None) is not None else None,
+            table.node_rows_serial())
 
 
 PAGE_OWNS = "the sequencer page owns this"

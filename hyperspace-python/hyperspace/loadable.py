@@ -1312,6 +1312,20 @@ class LoadedPatch:
             undo.push_on(self.reg, "leave node mode", load=True)
             self.node_mode = self.node_mode.leaving(player, controller)
 
+    def pointable(self, node: str) -> bool:
+        """May node mode point at canvas node `node` (`_pointable`)?"""
+        return node in self._pointable()
+
+    def node_params(self, node: str) -> list[str]:
+        """The registry ids under canvas node `node`, for `nodemode.fillable`: the
+        panel's list (`graphview.param_ids`), read off the section, so the rows do
+        not wait for a panel to have drawn."""
+        spec = getattr(self._graph_section(), "spec", None)
+        name = node.partition(":")[2] if node.startswith("render:") else node
+        frame = graphview.frame_of(spec)
+        of = next((c.of for c in getattr(frame, "copies", ()) if c.name == name), "")
+        return graphview.param_ids(self.reg, node, of)
+
     def document(self, name: str) -> dict:
         """The live state as a loadable patch document, named — what a save writes."""
         # row 394 (the owner, 2026-10-25): every save is the newest schema,
