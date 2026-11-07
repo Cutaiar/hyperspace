@@ -598,6 +598,7 @@ nuance). Built so far: D1, D2, D3, D4.
 | Legibility at a distance comes first: rounded frames, pill chips, filled faders, no page scroll at the control size. The master faders are on the AUDIO page. | `ui.py` | owner |
 | The Replace / Keep prompt is drawn on every page, even with the panel collapsed. | `ui_routing.py` | owner |
 | The ROUTING page is one page over the loaded preset: its desk rows and macros, and the session's rows read-only below (its routes and modifiers are the GRAPH page's since plan 28 N7; a pointer line says so). | `ui_routing.page` | owner |
+| **"Session" and "rig" leave what a person reads,** said as what each means; "preset" goes with the migration. A test fails if either returns in a string (rows 778-780). | `tests/test_person_words.py` | owner |
 | **The cheat sheet is off at every launch.** `/` and the APC40's DETAIL toggle it (the pad's MENU did until 2026-10-14). The desk diagram stays on. | `ui.cheatsheet` | owner |
 | The desk's glyphs (K1–K8, D1–D8, S1–S8, SM, X, C, G, B1–B22, ⇧) appear on every ROUTING row and Learn message, with an APC40 diagram of the layer that is up. | `apc40.LAYOUT`, `ui_desk.py` | owner |
 | The on-screen desk takes the room it has, and there is no DESK page. Once a unit is 44 × 32 px, every lit control carries its label. | `ui_desk.room`, `ui_desk.LABEL_UNIT` | row 57 |
