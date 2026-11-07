@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 from conftest import seed
+from walls import family
 
 from hyperspace import app, config, devices
 from hyperspace.analysis import Analyser
@@ -27,11 +28,17 @@ from hyperspace.ui import PageHistory
 IMPORT_SCRIPT = """
 import sys
 import hyperspace.app
-gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "hyperspace.osc",
-         "leap", "torch", "pythonosc",
+gated = ("leap", "torch", "pythonosc",
          "av", "pillow_heif", "syphon", "cyndilib", "AVFoundation",
-         "hyperspace.segment", "Vision", "Vision._Vision", "CoreML", "torchvision")
-print(sorted(m for m in gated if m in sys.modules), "hyperspace.hands" in sys.modules)
+         "Vision", "Vision._Vision", "CoreML", "torchvision")
+# a gated module of ours, and any split of it (row 788): midi.py, midi_x.py, midi/x.py
+ours = ("midi", "bridge", "dream", "osc", "segment")
+found = [m for m in gated if m in sys.modules]
+for m in sys.modules:
+    name = m.removeprefix("hyperspace.")
+    if m.startswith("hyperspace.") and name.split(".")[0].split("_")[0] in ours:
+        found.append(m)
+print(sorted(found), "hyperspace.hands" in sys.modules)
 """
 
 
@@ -693,8 +700,9 @@ def test_the_library_never_imports_config():
     """The library never imports config: app.main reads [library] path and
     hands the library its root and the machine home (plan 25)."""
     pkg = Path(app.__file__).parent
-    lib = _imports(pkg / "library.py")
-    assert not any(m.endswith("config") for m in lib), lib
+    for f in family("library", pkg):
+        lib = _imports(f)
+        assert not any(m.endswith("config") for m in lib), (f, lib)
 
 
 # ---- decision 21 (a): the transparent framebuffer only when the config asks ----

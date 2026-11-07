@@ -12,6 +12,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from walls import family, module_of, shown
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
@@ -64,12 +65,13 @@ WRITES = {"modulate", "set", "set_norm", "nudge", "fire", "toggle", "apply", "re
           "begin_frame", "snapshot"}
 
 
-def test_the_shared_sources_write_no_param():
+@pytest.mark.parametrize("path", family("routing_sources"), ids=shown)
+def test_the_shared_sources_write_no_param(path):
     """The AST pin extended to the new file: routing_sources.py calls no
     param writer — no `modulate`, no `set`, no `apply` — and names no
     registry or param, so the one performer path stays `Router.modulate`
     and a `Sources` shared by two decks cannot write either's values."""
-    tree = ast.parse((PKG / "routing_sources.py").read_text())
+    tree = ast.parse(path.read_text())
     found = [(n.lineno, n.func.attr) for n in ast.walk(tree)
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
              and n.func.attr in WRITES]
@@ -89,13 +91,15 @@ def test_the_shared_sources_write_no_param():
 # writes, nor anything that imports them
 ABOVE = ("ui", "app", "hands", "midi", "bridge", "learn", "dream", "hotreload", "library")
 SOURCES_ABOVE = (*ABOVE, "routing", "params", "loadable", "undo", "deck", "devices")
-WALLS = {"routing.py": ABOVE, "routing_sources.py": SOURCES_ABOVE}
+WALLS = {"routing_sources.py": SOURCES_ABOVE}      # every other routing file: ABOVE
 # the lazy imports each file is allowed: name resolution for key and pad
 # rows (§1's "only lazily to resolve names") — pinned so a new one is a
 # decision (the Library `Router.load_patch` took went with it, plan 13
 # WP5). Plan 44 D2 moved that resolution (`_resolve`, behind
 # `Sources.code`) into routing_sources.py, so routing.py has none now
-LAZY = {"routing.py": set(), "routing_sources.py": {"glfw", "gamepad"}}
+# Globbed (row 788): a split's new file is behind the wall, with no lazy import.
+LAZY = {"routing_sources.py": {"glfw", "gamepad"}}
+FILES = family("routing")
 
 
 def _imports(tree):
@@ -125,9 +129,11 @@ def _imports(tree):
     return out
 
 
-@pytest.mark.parametrize("name", sorted(WALLS))
-def test_routing_imports_nothing_above_it(name):
-    tree = ast.parse((PKG / name).read_text())
+@pytest.mark.parametrize("path", FILES, ids=shown)
+def test_routing_imports_nothing_above_it(path):
+    name = shown(path)
+    wall = WALLS.get(name, ABOVE)
+    tree = ast.parse(path.read_text())
     lazy = set()
     for mod, level, inside in _imports(tree):
         if level == 0 and not mod.startswith("hyperspace"):
@@ -138,23 +144,24 @@ def test_routing_imports_nothing_above_it(name):
         if inside:
             lazy.add(head)                # allowed only if LAZY names it, below
             continue
-        assert head not in WALLS[name], f"{name} imports {'.' * level}{mod}"
-    assert lazy == LAZY[name], lazy
+        assert head not in wall, f"{name} imports {'.' * level}{mod}"
+    assert lazy == LAZY.get(name, set()), lazy
 
 
-@pytest.mark.parametrize("name", ["routing", "routing_sources"])
-def test_importing_routing_pulls_in_no_adapter_or_panel(name):
+@pytest.mark.parametrize("path", FILES, ids=shown)
+def test_importing_routing_pulls_in_no_adapter_or_panel(path):
     """Fresh interpreter: `import hyperspace.routing` — and its shared
     half, plan 44 D2 — leaves the panel, the host and every adapter out of
     sys.modules; the shared half pulls in no registry and no table."""
     import subprocess
     import sys
 
+    name = ".".join(module_of(path))
     code = (f"import sys, hyperspace.{name}; "
             "print(' '.join(sorted(m for m in sys.modules if m.startswith('hyperspace.'))))")
     got = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
                          check=True, cwd=PKG.parent).stdout.split()
-    wall = WALLS[f"{name}.py"]
+    wall = WALLS.get(shown(path), ABOVE)
     bad = [m for m in got if m.split(".")[1] in wall]
     assert not bad, bad
     assert f"hyperspace.{name}" in got

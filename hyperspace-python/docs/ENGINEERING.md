@@ -3495,6 +3495,18 @@ four cores.
   process) and the kernel killed it. Per test, a worker peaks near 1 GB.
   `test_golden_frames.py` and `test_graph_frame.py` keep their own
   module-scoped context for their module-scoped rigs.
+- **The type ratchet** (row 788). A new pyright complaint fails, an old
+  one doesn't: `tools/type_ratchet.py` counts them against
+  `tools/type_baseline.json` by file and rule, under `[tool.pyright]`
+  (pyright pinned exactly in the dev group). It holds in the fast tier,
+  `tests/test_type_ratchet.py::test_no_new_complaint_in_the_app`, so CI
+  holds it with no step of its own. It takes 12 to 22 s of one worker on
+  the Mac (13.38 s in a full `-n 4` fast tier of 137.78 s), about 3 s of
+  that tier's wall time by division, not measured apart.
+  `uv run python tools/type_ratchet.py` lowers the baseline where errors
+  went (commit it), on a full sync only; `--check` writes nothing;
+  `--accept` is the one way up, for a split or a pyright bump, and the PR
+  says why. Pyright reads the source and opens no GL.
 - **Making it blocking** is a setting on `main`, not a file: Settings →
   Rules → Rulesets → New branch ruleset, target `main`, "Require status
   checks to pass", add `tests` (or Settings → Branches → a protection
