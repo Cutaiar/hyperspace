@@ -330,7 +330,7 @@ def _block(panel, nd, monkeypatch, chips, press=None):
 
 def _nd(**kw):
     h = SimpleNamespace(role="apc40", player=1, node="render:acid", on_here=False,
-                        fit=nodemode.Fit(), rows=())
+                        fit=nodemode.Fit(), rows=(), kind="midi")
     h.__dict__.update(kw)
     entered = []
     return SimpleNamespace(pointable=lambda _n: True, held=lambda: [h], refusal=lambda *_a: None,
@@ -400,7 +400,7 @@ def test_the_head_keeps_the_decks_clause_with_node_mode_up(panel_rig, monkeypatc
     table = ui_routing.router_of(panel).table
     row = Binding(f"cc:0:{K1}", "view.bright", "abs", layer="preset")
     monkeypatch.setattr(table, "node_rows", lambda role=None: [row])
-    monkeypatch.setattr(table, "node_row_away", lambda b: node_away)
+    monkeypatch.setattr(table, "node_row_away", lambda b, _role=None: node_away)
     monkeypatch.setattr(ui_desk, "_deck_words",
                         lambda p, t: ("deck 1 · on air", "the desk plays deck 2", True))
     said, micro = _header_words(panel, table, monkeypatch)
@@ -516,7 +516,7 @@ def test_the_desk_asks_once_a_draw_not_once_a_control(panel_rig, monkeypatch):
     row = next(iter(ui_desk.lit(table).values()))
     asked = []
     monkeypatch.setattr(table, "node_rows", lambda role=None: (asked.append("rows"), [row])[1])
-    monkeypatch.setattr(table, "node_row_away", lambda b: (asked.append("away"), True)[1])
+    monkeypatch.setattr(table, "node_row_away", lambda b, _role=None: (asked.append("away"), True)[1])
     edges = []
     real = ui_desk._edge
     monkeypatch.setattr(ui_desk, "_edge", lambda f, b, on: (edges.append((b, f.get(id(b)))),

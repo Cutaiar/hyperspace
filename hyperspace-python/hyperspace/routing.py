@@ -2317,7 +2317,8 @@ class NodeRows(Protocol):
     def serial(self, role: str | None = None) -> int: ...
     def under(self, b: Binding) -> bool: ...
     def holding(self) -> frozenset[str]: ...
-    def away(self, b: Binding) -> bool | None: ...
+    def away(self, b: Binding, role: str | None = None) -> bool | None: ...
+    def routed(self) -> list[Binding]: ...
 
 
 class Bindings:
@@ -2873,11 +2874,19 @@ class Bindings:
         nd = self.node_desk
         return nd is not None and nd.under(b)
 
-    def node_row_away(self, b: Binding) -> bool | None:
-        """`b` as the on-screen desk asks: None when node mode did not derive it, else
-        whether the first desk is on the other `Deck` (`NodeDesk.away`)."""
+    def node_row_away(self, b: Binding, role: str | None = None) -> bool | None:
+        """`b` as a picture of a controller asks (`role`; None, the first desk): None when
+        node mode did not derive it, else whether that controller is on the other `Deck`
+        (`NodeDesk.away`)."""
         nd = self.node_desk
-        return nd.away(b) if nd is not None else None
+        return nd.away(b, role) if nd is not None else None
+
+    def node_routes(self) -> list[Binding]:
+        """The rows node mode runs as routes on this deck (N2, `NodeDesk.routed`): each pad's
+        here. Never in `bindings`, so not in `mods`, `routes`, the file or the undo; `Router`
+        joins them where it reads those."""
+        nd = self.node_desk
+        return nd.routed() if nd is not None else []
 
     def node_held(self) -> frozenset[str]:
         """The params a desk in node mode holds on this deck (`NodeDesk.holding`)."""
@@ -2895,6 +2904,15 @@ class Bindings:
         """How many times those rows have changed: a desk redraws on one."""
         nd = self.node_desk
         return nd.serial(role) if nd is not None else 0
+
+    def pad_serves(self, role: str, b: Binding) -> bool:
+        """Is row `b` the pad's whose qualifier is `role` ("" the primary)? A second pad's those
+        qualified with its role; the primary's the bare ones and, as a desk's `serves`, any
+        qualified with the primary's own role (``pad@pad:S``)."""
+        if b.device == role:
+            return True
+        own = getattr(self, "primaries", {}).get("pad", "")
+        return not role and bool(own) and b.device == own
 
     def layer_of(self, role: str | None = None) -> str:
         """The layer up on the device of `role`: the first role's is
@@ -3652,14 +3670,10 @@ class Router:
         holds = self._pad_timing(role)
         down_now = self._pad_pressed(role)
         now = time.monotonic() if now is None else now
-        # each pad hears its own rows: a second pad those qualified with its
-        # role; the primary the bare ones and — as a desk's `serves` — any
-        # qualified with the primary's own role (``pad@pad:S``)
-        own = role or getattr(self.table, "primaries", {}).get("pad", "")
+        # each pad hears its own rows (`Bindings.pad_serves`)
         if buttons:
             for b in self.table.of(PAIR_SCHEME):
-                if b.op == "step" and b.enabled and (
-                        b.device == role or (not role and own and b.device == own)):
+                if b.op == "step" and b.enabled and self.table.pad_serves(role, b):
                     self._pair_step(pad, b, skip)
         layout = layout_of(getattr(pad, "model", None), role)
         table_rows = self.table.of("pad", "hat")
@@ -3670,8 +3684,7 @@ class Router:
                 self._let_go_pad(down_now, key)
         for i, b in enumerate(rows):
             code = self._code(b)
-            if code is None or not b.enabled or not (
-                    b.device == role or (not role and own and b.device == own)):
+            if code is None or not b.enabled or not self.table.pad_serves(role, b):
                 continue
             if i < n_table and layout.hides(b):
                 continue                         # not this pad's: nor are its timer or press
@@ -3765,10 +3778,29 @@ class Router:
 
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
-        one is off its default camera job (gamepad.steer). A named address
-        resolves through what the scheme's device has published."""
-        return {i for b in self.table.mods() for s, i in [self.lane(b.source)]
+        one is off its default camera job (gamepad.steer), and so is one node
+        mode fills (N2). A named address resolves through what the scheme's
+        device has published."""
+        return {i for b in self.performers() for s, i in [self.lane(b.source)]
                 if s == scheme and i >= 0}
+
+    def performers(self, *, switched_off: bool = False) -> list[Binding]:
+        """The rows the pass runs, in order: the table's performer rows (`switched_off`: those
+        that are off too, as a graph draws them), then those node mode derives on this deck
+        (`Bindings.node_routes`), in no file. Everything here that asks what runs, asks this."""
+        t = self.table
+        rows = t.routes() if switched_off else t.mods()
+        node = getattr(t, "node_routes", None)      # (a `Router` may be handed a shim)
+        return [*rows, *node()] if node is not None else rows
+
+    def performer_of(self, pid: str) -> Binding | None:
+        """The row performing `pid` now, for the panel's words: a filled stick's, ahead of any
+        modulator's it rests (row 711), else the table's owner."""
+        node = getattr(self.table, "node_routes", None)
+        for b in node() if node is not None else ():
+            if b.target == pid:
+                return b
+        return self.table.owner(pid)
 
     def _code(self, b: Binding) -> int | None:
         """The key / button / hat constant a source names; None if there is none."""
@@ -3969,7 +4001,7 @@ class Router:
         is rebuilt only when one of them changes, never per frame."""
         t = self.table
         rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when)
-                     for b in t.bindings if b.op in MOD_OPS)
+                     for b in self.performers(switched_off=True))
         subs = tuple((mid, id(s), s.depth, s.base) for mid, m in t.macros.items() for s in m.subs)
         mods = (getattr(t, "modifiers_serial", 0),
                 *((getattr(m, "id", ""), getattr(m, "kind", ""),
@@ -4016,7 +4048,7 @@ class Router:
                     g.link(source(inp), _modifier_node(m), "in")
         if held is None:
             held = t.node_held() if hasattr(t, "node_held") else frozenset()
-        for b in t.routes():
+        for b in self.performers(switched_off=True):
             # (a route node mode holds off is an edge switched off, so it closes no loop)
             cable, on = (b.source, b.target), b.enabled and not (held and t.node_holds(b, held))
             src = source(b.source)
@@ -4157,7 +4189,7 @@ class Router:
         reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
         resting: list[Binding] = []
-        for b in t.mods():
+        for b in self.performers():
             if (b.source, b.target) in cut:
                 continue
             if held and t.node_holds(b, held):
