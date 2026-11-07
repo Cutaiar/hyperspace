@@ -21,19 +21,24 @@ Three things, in this order of importance:
 
 It adds no new looks or controllers: the owner confirmed that scope on 2026-11-06.
 
-## 2. Before it can start
+## 2. What waits, and for what
 
-Wave 5's runs depend on wave 4 being finished, because the cleanup must follow the last change to saved
-files or it runs twice.
+**The owner, 2026-11-06: getting wave 5 running matters most.** After the rename, only the cleanup needs the migration. So screens, hot-plug, controllers, leak fixes, words and types start now, beside the end of wave 4. See the prompt's three tracks; where §5 disagrees, the prompt is right.
 
-| Must be true | Why |
-| --- | --- |
-| Wave 4 merged: SEM, D5e, N1, N2, D6, #287, #365, NSEW, the migration | Every item here is built on the renamed code and the `/11` library |
-| **The owner ran the migration, and both Macs have opened the new library** | Stage 1 removes the code that reads the old files. Only the owner can say this, and they coordinate the other Mac. The `/11` run's own hand check, which plan 57 §7a tells the format lane to add, is the same fact checked |
+**The cleanup (CL1–CL4) waits for one thing:** the owner says the migration ran and both Macs have opened the new library. The `/11` run's own hand check is the same fact checked. In §4, **After** is a hard dependency.
 
-Items H1, H2 and SM1 need none of this and can land at any time, including during wave 4.
+### 2a. Dylan's Mac
 
-In §4, **After** is a hard dependency. **Stage** in §5 is when to start.
+The library is one shared Drive folder, so there's no separate library to fetch. Dylan needs **the new code**, and needs to **open the app once**.
+
+1. **Before the migration:** quit Hyperspace when told, and leave it closed while it runs. A save from the old build during it could put old files back.
+2. **After it:** let Google Drive finish syncing. Then, in the repo: `git checkout main`, `git pull`, `uv sync`, in `hyperspace-python/`.
+3. **Launch once.** Each Mac moves its own `bindings.json` at that launch, with a backup. Load a few patches. Tell the owner it worked.
+
+**If Dylan doesn't, before wave 5's cleanup:**
+- **Old code on the migrated library:** that Mac refuses every file until it updates. Nothing is lost; it just can't open looks.
+- **Updated code but never launched, then the cleanup lands (CL3):** the reader for the old `bindings.json` is gone, so Dylan's mappings wouldn't move. That is what the gate prevents. The backup and `git` can recover it, but it's a bad day before a show.
+- **Saving from the old build after the migration:** old-format files reappear in the Drive, in the old folder. CL1's dry run would catch them.
 
 ### What wave 4's remainder must carry, found by this planning
 
@@ -235,7 +240,9 @@ They overrule anything above. The wording is in `wave-5-session-prompt.md`.
 9. `dkit` is orthogonal. No UI preparation in this wave.
 10. Pending rows bulk accepted and marked so. Row 417: all 17 face patterns stay. Row 609: SEND B stays FINE. Row 751: pairs ask (wave 4 PC2).
 11. Merge on green holds for this wave too.
-12. A display's target may go to several displays.
+12. A display's target may go to several displays; the control window goes to one.
+13. The panel says patches; session, rig and preset leave its words, preset with the migration.
+14. A cart starts by itself after launch: **SM6**, one key in the install file, after the migration.
 
 Assumed unless the owner objects: patches may read `master.gain` (457 saved rows do), since reading is not
 writing; a tapped BPM comes back at launch and a nudge does not; totem and poi are meta, following the player's
