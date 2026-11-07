@@ -802,6 +802,7 @@ here; overturn → the change, then the same.
 | 800 | SM5 amends row 740: moving a controller between players, or a player's duty, is one step on the meta stack, and ⌘Z over the board takes it back under the latch (row 753). `players.json` follows; the rows act on the deck the player is back on. A controller unplugged since refuses in words, and the step stays where it is (rec). On the one meta stack the board answers for moves and every other place for the rest (rec) | 623 | answered, the owner's instruction for SM5, 2026-11-06; what a refused step blocks, and the board's own, (rec) — pending the owner |
 | 801 | SM5: row 668's words pass. "Page" meaning a section of the pane leaves what a person reads; the APC40's sequencer page stays, a page of a desk. "Preset" stays for the migration | 623 | answered, the wave 4 prompt's "if wanted"; built, the plan names it |
 | 802 | HR: hot reload failed on every save before `library` on the list, since plan 44 D5a. The deck's views keep their slots, on a cold base; a test saves through the real swap in the real app | 624 | the orchestrator's item, found building SC3a; built, no owner question |
+| 803 | `test_an_adopt_survives_two_launches_that_did_not_read` failed CI twice, and passed on re-run: **the test's race, not a lost adopt.** It started its "next launch" while the first store's own worker was still writing the copy, which the app can't do, as a launch follows a quit and `DeviceList.close` waits on that worker. Under load the same file's stopwatch failed too. Tests now wait on the worker's own signal, and a launch's 3 s is out of reach except where a test sets it. |
 | 789 | TY2: #273's structural audit lands as a record, unedited under a dated header: the headline figures re-measured at `e869a408` by one script in its appendix, old names mapped, and which proposals plan 58 §6 rejected. Plan 58 §3 and §6 decide what's done. Replaces #273. | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
@@ -14343,3 +14344,11 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 - **The driver.** `tools/app_driver.py` wrapped `ui.Panel.draw` on the class, so a reload of `ui` dropped the wrapper and the script stopped with the app still running. The wrapper is now on the panel object, which a re-class leaves in place, and it steps even when a draw raises.
 - **Restart.** Needed once: `hotreload.py` and `hot_slots.py` are cold and the layout changes. No saved format changes.
 - **Judge it.** 624.
+### 803. A red test in `test_devicelist.py`: the test's race
+
+- **Seen.** CI at e1961aac and b4072cc: `assert ('xbox' in ['pad', 'apc40', 'leap', 'bridge'])`, the second launch's list from before the adopt. 5 of 5 alone on the Mac.
+- **Cause.** `_broken(root, home).adopt(XBOX)`, then a second `_broken` at once. An adopt's write to `devices.last.json` is on the local worker, off the frame thread (row 798), and nothing waited for it, so a loaded machine read the copy first.
+- **Not the app.** No adopt is lost: a launch in the app follows a quit, and `close` joins that worker, `CLOSE_S` at most (`test_a_quit_waits_for_an_adopt_on_a_slow_disk…`). What the bound leaves open: a kill or a crash in the moment before the write, or a home disk slower than 0.5 s at a quit.
+- **Audit of the file.** Under load, also: `test_a_stalled_drive_never_touches_the_frame_thread` held a stopwatch to 20 ms and to `touches == 1` before the worker might have started; now it asks which thread touched the disk, on the worker's own signal. A launch's `LAUNCH_S`, which tests read through, is out of reach unless a stalled test sets it. Two tests that looked at a folder with a worker still writing to it now wait.
+- **Count.** 50 runs of the file under `yes` × cores with `-n 16`: before, 6 failed (this test 5, the stopwatch 1); after, 0 failed.
+
