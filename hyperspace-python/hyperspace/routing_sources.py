@@ -63,6 +63,10 @@ BUILTIN_LANES = ("lane", "lfo", "env", "seq")
 # banks' and `modifiers.SCHEME` by tests/test_routing_sources.py
 DECK_SCHEMES = frozenset(("lfo", "env", "seq", "mod"))
 
+# the schemes no controller feeds: an analyzer's lanes and a deck's own. A route from one is
+# no mapping for node mode, which holds its param off it instead (`Bindings.node_holds`)
+MODULATOR_SCHEMES = frozenset(BUILTIN_LANES) | DECK_SCHEMES
+
 MIDI_SCHEMES = ("cc", "note", "pitch")
 # the row kinds the table dispatches itself (plan 27 B2): the keys
 # (`Router.keys`), the pad's buttons and D-pad (`Router.pad`) and MIDI

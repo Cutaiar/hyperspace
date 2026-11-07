@@ -1060,6 +1060,23 @@ def params_of(name: str, of: str = "") -> str:
     return rgraph.param_prefix(name)
 
 
+def param_ids(reg, nid: str, of: str = "") -> list[str]:
+    """The registry ids under canvas node `nid`: the ids with `params_of`'s prefix
+    (`of`: what a copy draws again; its knobs are its original's), the continuous
+    ones first and then the rest, each run in registry order; an alias left out.
+    [] for a node with no param (a device's, a lane's). A scan of the registry, so
+    asked when something moves, never per frame. The panel's selection and node
+    mode's rows both read this, so a node has one list of params."""
+    name = nid.partition(":")[2] if nid.startswith("render:") else nid
+    pre = params_of(name, of)
+    head = pre + "."
+    # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key; no other
+    # node's prefix starts so)
+    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
+           and (not p.id.startswith("dream.") or patches.dream_owner(p.id) == name)]
+    return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
+
+
 def _params_said(name: str, of: str = "") -> str:
     """A node's params' prefix for its hover and side head, where it differs
     from its id; `dream.*`, split between the look-back and the dream (wave 3
