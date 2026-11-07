@@ -491,7 +491,7 @@ def test_the_build_keeps_mains_order():
     loadable patches, learn, the devices, the startup loadable patch, the marks and undo."""
     src = textwrap.dedent(inspect.getsource(Deck.build))
     src = src[src.index('"""', src.index('"""') + 3) + 3:]       # the body, not the docstring
-    seq = ["s = ViewState()", "build_registry(s, control, audio, on_deck.project",
+    seq = ["s = ViewState()", "build_registry(s, control, audio, on_deck.install",
            "hands(reg)",
            "tempo.register(reg, clock)", "lfo.register(reg, lfos, clock)",
            "envelope.register(reg, envs, clock)", "sequencer.register(reg, seq, clock)",
@@ -501,7 +501,7 @@ def test_the_build_keeps_mains_order():
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
            "LoadedPatch(on_deck, reg, router", "loaded_patch.graph.attach(renderer)",
            "Learn(reg, router.table", "devices(reg, router, learn, panel=",
-           "library.project.load_startup()", "geometry.warm_all(first=s.shape)",
+           "library.install.load_startup()", "geometry.warm_all(first=s.shape)",
            "Marks(loaded_patch.lib)", "undos.Undo(reg, router.table", "undos.install(undo_obj)"]
     at = [src.index(s) for s in seq]
     assert at == sorted(at), [s for s, a, b in zip(seq, at, sorted(at), strict=True) if a != b]

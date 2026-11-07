@@ -291,7 +291,7 @@ def test_a_groups_folder_refuses_what_is_no_patch_of_that_group(tmp_path):
     (folder / "blank.json").write_text(json.dumps({**patches.group_doc("dream", "b", {}),
                                                     "group": ""}))
     app = headless.make_app(tmp_path)
-    for name, words in (("dial", "dial.json is a whole patch, not a patch of the dream group"),
+    for name, words in (("dial", "dial.json is a whole loadable patch, not a patch of the dream group"),
                         ("acid wash", "acid.json is a canvas patch, not a patch of the dream"),
                         ("cam", "cam.json is a patch of the camera group, not a patch of"),
                         ("b", "the key names no param group")):

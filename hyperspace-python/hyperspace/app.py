@@ -2097,7 +2097,7 @@ def main(argv: list[str] | None = None) -> None:
         (root.pacer, "pacing", "Pacer"),
         (root.pacer.floor, "pacing", "Floor"),
         (library, "library", "Library"),
-        (library.install, "library", "Project"),
+        (library.install, "library", "Install"),
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
         # the devices' adapters, the shims and the registry (devices.py):

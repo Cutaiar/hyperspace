@@ -378,7 +378,7 @@ class Deck:
             (self.router, "routing", "Router"),
             (self.loaded_patch, "loadable", "LoadedPatch"),
             # plan 44 D5a: its view of the library (getattr: a stand-in deck has none)
-            *([(on, "library", "DeckLibrary"), (on.install, "library", "DeckProject")]
+            *([(on, "library", "DeckLibrary"), (on.install, "library", "DeckInstall")]
               if (on := getattr(self.loaded_patch, "lib", None)) is not None else []),
             (self.loaded_patch.graph, "loadable", "GraphSection"),      # plan 26 A4
             (self.learn, "learn", "Learn"),

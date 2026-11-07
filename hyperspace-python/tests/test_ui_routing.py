@@ -377,7 +377,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
         (g,) = rig.lib.loaded_patch.groups
         (kept,) = g["kept_by_host"]
         assert graphview.kept_words(kept) == "K1 kept by the loadable patch"
-        assert "1 row kept by the patch" in ui_graph._state(panel)["said"]
+        assert "1 row kept by the loadable patch" in ui_graph._state(panel)["said"]
         frame(panel)
         assert not ui_routing._state(panel)["modal"]
         # a second spawn, cancelled: nothing lands, no step

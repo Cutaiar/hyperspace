@@ -3955,7 +3955,7 @@ class DeckLibrary(DeckLibrarySlots, Library):
         return self.own.reg if self.own is not None else self.base.reg
 
     @property
-    def project(self) -> DeckInstall:
+    def install(self) -> DeckInstall:
         return self._project
 
     @property
