@@ -202,6 +202,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     is_switch_id,
     pan_world,
     part_of,
+    part_of_id,
     retaper_depths,
 )
 from .routing import MOD_OPS, Binding, is_continuous, meta_row_refusal
@@ -366,9 +367,8 @@ class GraphSection:
     Owned by `LoadedPatch` (`LoadedPatch.graph`); the app and the tools attach the
     renderer."""
 
-    def __init__(self, reg, fx=None, renderer=None, lib=None):
+    def __init__(self, reg, fx=None, renderer=None):
         self.reg = reg
-        self.lib = lib                          # the open show's session seeds a new hands node
         self.fx = fx if fx is not None else getattr(reg, "fx_state", None)
         self.renderer = None
         self.spec: GraphSpec | None = None      # None: nothing landed (black)
@@ -829,7 +829,7 @@ class LoadedPatch:
         self.unsaved = False
         # plan 26 A4: the loaded patch's graph section (its instances'
         # params, the renderer's wiring once one is attached)
-        self.graph = GraphSection(reg, lib=lib)
+        self.graph = GraphSection(reg)
         # plan 44 D3: the bus cuts the loaded patch holds (`graph.BusCuts`)
         self.bus = BusCuts()
         self.landing = (None, None, None)
@@ -1168,7 +1168,10 @@ class LoadedPatch:
             late: list[str] = []
             for pid, v in later.items():
                 p = reg.get(pid)
-                if p is None:
+                if p is None and part_of_id(pid) == "shared_meta":
+                    # (`ghost.<n>.mirror`, no param since LY1, in an old file)
+                    notes.append(f"{pid} is the session's, ignored")
+                elif p is None:
                     if pid not in from_show:
                         late.append(pid)
                 elif part_of(p) == "shared_meta":
@@ -1416,7 +1419,7 @@ class LoadedPatch:
         before plan 26 A4 (a hot reload re-classes, never re-inits)."""
         gs = self.__dict__.get("graph")
         if gs is None:
-            gs = self.graph = GraphSection(self.reg, lib=self.lib)
+            gs = self.graph = GraphSection(self.reg)
             gs.on_land = self.settle_groups
         return gs
 

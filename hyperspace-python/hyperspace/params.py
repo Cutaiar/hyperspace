@@ -69,6 +69,7 @@ from __future__ import annotations
 import copy
 import math
 import re
+import warnings
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import Enum
@@ -870,8 +871,8 @@ def is_instance_id(pid: str) -> bool:
     """Is `pid` a param of an extra node instance — `fx.<file>.<n>.<key>`
     or `ghost.<n>.<key>`, n ≥ 2 — one that exists only while a loadable patch's
     graph holds that instance (plan 26 A4)? A loadable patch load sorts such ids
-    against the graph it lands; a show holds back the `ghost.<n>.*` ones
-    the registry lacks until a graph declares them."""
+    against the graph it lands; an old show's `ghost.<n>.*` ones the registry
+    lacks are held back (`Project._held_back`)."""
     parts = pid.split(".")
     if parts[0] == "fx" and len(parts) >= 4:
         mark = parts[2]
@@ -1003,12 +1004,14 @@ class Registry:
         """Drop a param (a band that was deleted). Bindings to it go dormant —
         every adapter already treats an unknown id as a no-op. A shared meta param
         is the meta controller's to drop, on `MetaRegistry.remove`, and it leaves
-        every deck there. A deck's registry keeps it and returns None (LY1):
+        every deck there. A deck's registry keeps it, warns and returns None (LY1):
         whatever a deck's own section drops, no other deck loses anything."""
         meta_reg = self.meta_reg
         if meta_reg is not None and meta_reg is not self:
             q = meta_reg.get(pid)
             if q is not None and q is self._p.get(pid):
+                warnings.warn(f"{pid} is shared: a deck's registry doesn't drop it, "
+                              "MetaRegistry.remove does", stacklevel=2)
                 return None
         p = self._p.pop(pid, None)
         if p is not None:

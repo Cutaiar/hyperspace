@@ -7,14 +7,23 @@ another", the owner). The leak tests run both ways on two real `Deck`s.
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+from pathlib import Path
 
+import numpy as np
 import pytest
 from test_loadable import put
 from test_undo import boot
 
+from hyperspace import graph as G
 from hyperspace.deck import Deck
-from hyperspace.library import PROJECT_SUFFIX, PROJECTS
-from hyperspace.params import is_shared_meta_id
+from hyperspace.ghost import GhostState
+from hyperspace.ghost import register as declare_ghost
+from hyperspace.graphmigrate import wired_wiring
+from hyperspace.library import PROJECT_SUFFIX, PROJECTS, mirrors_apart
+from hyperspace.outputs import Switches as S
+from hyperspace.params import Registry, is_shared_meta_id
 from hyperspace.routing import is_meta_row
 
 TWO_HANDS = {"nodes": [{"kind": "hands", "into": "scene"}, {"kind": "hands", "instance": 2}]}
@@ -107,8 +116,11 @@ def test_no_section_a_deck_drops_reaches_the_shared_table(two, dropper, holder):
     two.land(drops, "Plain", ONE_HAND)
     for bank in (drops.lfos, drops.envs):
         bank.remove(bank.ids()[-1])
-    for prefix in ("fx.", "ghost.", "lfo.", "env.", "seq.", "switch", "mod."):
-        drops.reg.remove_prefix(prefix)
+    def sweep():
+        for prefix in ("fx.", "ghost.", "lfo.", "env.", "seq.", "switch", "mod."):
+            drops.reg.remove_prefix(prefix)
+    with pytest.warns(UserWarning, match="is shared"):
+        sweep()
 
     assert {p.id: p for p in two.meta} == shared
     assert {p.id: p for p in holds.reg} == other
@@ -121,7 +133,8 @@ def test_a_decks_registry_cannot_drop_a_shared_param(two):
     the caller; the meta controller's own remove takes it from every deck."""
     pid = next(p.id for p in two.meta if is_shared_meta_id(p.id))
     param = two.meta[pid]
-    assert two.a.reg.remove(pid) is None and two.b.reg.remove_prefix(pid) == []
+    with pytest.warns(UserWarning, match=f"{pid} is shared"):
+        assert two.a.reg.remove(pid) is None and two.b.reg.remove_prefix(pid) == []
     assert two.a.reg[pid] is param and two.b.reg[pid] is param and two.meta[pid] is param
     assert two.meta.remove(pid) is param
     assert pid not in two.a.reg and pid not in two.b.reg and pid not in two.meta
@@ -142,6 +155,7 @@ def test_a_show_that_holds_the_old_id_still_opens_clean_and_keeps_it(tmp_path):
     rig.lib.warning = ""
     assert rig.lib.project.load("old") == []
     assert "unknown" not in rig.lib.warning and not rig.lib.project.is_dirty()
+    assert "ghost.2.mirror differs from the Mirror" in rig.lib.warning
     state = rig.deck.graph.states["ghost.2"]
     assert "ghost.2.mirror" not in rig.reg and state.mirror is False
     rig.reg["ghost.mirror"].set(True)
@@ -149,3 +163,114 @@ def test_a_show_that_holds_the_old_id_still_opens_clean_and_keeps_it(tmp_path):
     rig.reg["ghost.mirror"].set(False)
     rig.lib.project.save()
     assert json.loads(show.read_text())["session"]["ghost.2.mirror"] is True
+
+
+def test_only_a_mirror_that_differs_is_said():
+    assert mirrors_apart({"ghost.mirror": True, "ghost.2.mirror": True}) == []
+    assert mirrors_apart({"ghost.mirror": False, "ghost.2.mirror": False}) == []
+    assert mirrors_apart({"ghost.2.mirror": False, "ghost.2.alpha": 0.2}) == []
+    assert mirrors_apart({"ghost.mirror": True, "ghost.2.mirror": False,
+                          "ghost.3.mirror": True, "ghost.alpha": 1.0}) == ["ghost.2.mirror"]
+
+
+def test_a_patch_file_naming_the_old_id_is_ignored_with_a_note_not_unknown(two):
+    """§9's "keep tolerating": a loadable patch holding `ghost.2.mirror`, with
+    or without the node, as it was before LY1."""
+    for graph in (TWO_HANDS, ONE_HAND):
+        doc = json.loads(put(two.home, "Old", graph=graph,
+                             values={"ghost.2.mirror": True}).read_text())
+        two.rig.lib.warning = ""
+        two.a.loaded_patch.load_doc(doc, None)
+        notes = two.a.loaded_patch.notes
+        assert "ghost.2.mirror is the session's, ignored" in notes
+        assert not [n for n in notes if "unknown" in n] and "unknown" not in two.rig.lib.warning
+        assert "ghost.2.mirror" not in two.a.reg
+
+
+def test_an_extra_node_on_a_bare_registry_declares_the_one_mirror_and_follows_it():
+    reg = Registry()
+    extra, main = GhostState(), GhostState()
+    declare_ghost(reg, extra, 2)
+    assert "ghost.mirror" in reg and "ghost.2.mirror" not in reg
+    declare_ghost(reg, main)
+    reg["ghost.mirror"].set(True)
+    assert extra.mirror is True and main.mirror is True
+
+
+RELOAD_SCRIPT = """
+from hyperspace import ghost as G
+from hyperspace.hotreload import HotReloader
+from hyperspace.params import Registry
+
+reg = Registry()
+main, held, new = G.GhostState(), G.GhostState(), G.GhostState()
+G.register(reg, main)
+G.register(reg, held, 2)
+# what a running app from before LY1 holds: the node on its own stale param
+stale = G.RoomSetting(False)
+stale.follow(held)
+reg.toggle("ghost.2.mirror", "Ghost 2 mirror", lambda: stale.value, stale.set, group="ghost",
+           modulatable=False).__dict__["room"] = stale
+old_room = reg["ghost.mirror"].room
+old_room._states = [ref for ref in old_room._states if ref() is not held]
+
+r = HotReloader(lambda: [], modules=("ghost",), period=0.0)
+r._mtimes["ghost"] = 0.0                     # as if ghost.py had just been saved
+assert r.poll(now=1.0), r.error
+assert not isinstance(old_room, G.RoomSetting), "the reload should leave the old class behind"
+
+G.register(reg, new, 3)                      # the first new extra node after the reload
+assert reg["ghost.mirror"].room is old_room and isinstance(old_room, G.RoomSetting)
+G.register(reg, held, 2)                     # a held node landed again: the early return
+reg["ghost.mirror"].set(True)
+assert main.mirror is True, "the main hands stopped following"
+assert new.mirror is True, "the new node does not follow"
+assert held.mirror is True, "the held node does not follow"
+reg["ghost.mirror"].set(False)
+assert (main.mirror, new.mirror, held.mirror) == (False, False, False)
+print("ok")
+"""
+
+
+def test_a_real_hot_reload_keeps_every_node_on_the_one_mirror():
+    out = subprocess.run([sys.executable, "-c", RELOAD_SCRIPT], capture_output=True, text=True,
+                         check=False, cwd=str(Path(__file__).parents[1]), timeout=120)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "ok"
+
+
+# ---- what a window's Flip X gives instead of a second mirror (row 773, check 213)
+
+def _hands_only(ctx, second, *switches):
+    """`hands-glass-only` through the real `draw_outputs`: hands in the scene,
+    `ghost.2` the layer, wired to output 2's hands."""
+    from test_graph_wires import _fixture
+    from test_hands_node import _draw
+    from test_outputs import rig as gl_rig
+    from test_outputs import views
+
+    r = gl_rig(ctx, effects=())
+    r.ghost_states = {"ghost.2": second}
+    r.wiring = wired_wiring(G.read_graph(_fixture("hands-glass-only")["graph"]).wiring())
+    return _draw(ctx, r, views(ctx, *switches))
+
+
+def test_on_a_glass_of_hands_alone_flip_x_puts_the_hands_where_a_second_mirror_did(ctx):
+    old = _hands_only(ctx, GhostState(on=True, mirror=True), S(), S(scene=False))
+    new = _hands_only(ctx, GhostState(on=True), S(), S(scene=False, flip_x=True))
+    plain = _hands_only(ctx, GhostState(on=True), S(), S(scene=False))
+    assert np.array_equal(old[0], new[0])            # the projector: not a byte
+
+    def lit(pic):
+        return pic[..., :3].sum(axis=2) > 0
+    assert (lit(old[1]) != lit(plain[1])).sum() > 500            # (a flip that shows)
+    assert (lit(old[1]) != lit(new[1])).sum() < 0.03 * lit(old[1]).sum()     # the rim
+    # …but not the same bytes: the light stays in the hands' space under a mirror
+    assert not np.array_equal(old[1], new[1])
+
+
+def test_where_the_glass_also_shows_the_picture_flip_x_is_not_a_second_mirror(ctx):
+    old = _hands_only(ctx, GhostState(on=True, mirror=True), S(), S())
+    new = _hands_only(ctx, GhostState(on=True), S(), S(flip_x=True))
+    differ = (old[1][..., :3] != new[1][..., :3]).any(axis=2)
+    assert differ.mean() > 0.05                      # the picture flipped with it

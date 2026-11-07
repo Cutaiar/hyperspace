@@ -3007,20 +3007,23 @@ two chips, "Acid" and "Acid 2", each with its own strip and twist
 the first.
 
 **213. Two hands nodes: one in the scene, one over the glass.** (copy, glass and projector)
-Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_session_params_and_state,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`.
-The rig of 206; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
+Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`, `tests/test_one_mirror.py`.
+*Changed by LY1 (row 773, pending the owner): `ghost.2.mirror` is gone. The glass's own flip is its **Flip X** on the OUTPUT page, which flips everything in that window.*
+The rig of 206, the glass with **scene** off; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
 desk) switch **Ghost 2 hands** (`ghost.2.on`) on — off by default, like
-every new switch — and set `ghost.2.mirror` on and `ghost.2.style` to
-CAGE. Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
+every new switch — set `ghost.2.style` to CAGE, and tick the glass's Flip X.
+Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
 load TWO-HANDS.
-*Pass:* the projector shows solid hands inside the shape; the glass shows
-mirrored cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
+*Pass:* the projector shows solid hands inside the shape, not flipped; the glass shows
+flipped cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
 `readout` with times; TRIP takes the glass back to the first node's
-layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the mirror and the
-cage back; after the relaunch they are still there and the show is
-clean. *Fail:* the same hands on both outputs; the glass mirrored on the
-projector too; a stale `hands.2` line; the cage lost after the relaunch
-(the show's held-back `ghost.2.*`).
+layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the cage back; after the
+relaunch they are still there, the flip kept, and the show is
+clean. **Judge:** the hands are in the same place as the old mirror put them, but
+lit from the other side (the light is fixed in the hands' space, so a window flip
+flips it too), and a guide's labels read backwards. *Fail:* the same hands on both
+outputs; the projector flipped too; a stale `hands.2` line; the cage lost after the
+relaunch.
 
 **214. Hands as lines.** (copy)
 Headless: `tests/test_graph_json.py::test_hands_as_lines_draw_their_edges`, goldens `hands-lines|present|*`.

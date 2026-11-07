@@ -668,8 +668,9 @@ follows the room's one `ghost.mirror`, LY1),
 its layer `hands.2` and its lone readout `readout.2`. Every `into:
 "scene"` node is in the scene; the `into: "layer"` node (else the first)
 makes the one layer, laid on the outputs without the hands in their
-scene. An old show's `ghost.<n>.*` ids are held back, kept by a save and read by
-nothing. `draw: "lines"` draws a style's meshes as their
+scene. An old show's `ghost.<n>.*` ids are held back and kept by a save; its look
+still lands (`old_look`). Only `ghost.<n>.mirror` is read by nothing, and the show
+says so at open if it differs from `ghost.mirror` (row 773). `draw: "lines"` draws a style's meshes as their
 triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
 solid.
 

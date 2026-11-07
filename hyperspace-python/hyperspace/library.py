@@ -909,10 +909,6 @@ class Project:
         # the loadable patches before `/9` (`old_eye`), and never landed or written
         # as the show's
         self.old_eye = {pid: self.session.pop(pid) for pid in EYE_IDS if pid in self.session}
-        # how many shows this project object has taken: a hands node of a
-        # loadable patch's graph is seeded from a show's session once per show
-        # opened (plan 26 A4, loadable.GraphSection)
-        self.opened = getattr(self, "opened", 0) + 1
         self.modules = dict(doc.get("modules") or {})
         bank = [str(s) if isinstance(s, str) and s else None
                 for s in list(doc.get("bank") or [])[:SLOTS]]
@@ -1434,6 +1430,11 @@ class Project:
         lib.remember(self.stem)
         if startup:
             self.load_startup()
+        apart = mirrors_apart(self.session)
+        if apart:
+            lib.say(warning=f"{path.name}: {', '.join(apart)} differs from the Mirror, and "
+                            "there is one Mirror now: those hands follow it. To flip one "
+                            "window, use its Flip X on the OUTPUT page")
         return missing
 
     def new(self, name: str = UNTITLED) -> None:
@@ -1565,6 +1566,17 @@ class Project:
         reg = self.lib.reg
         return {pid: v for pid, v in (self.session or {}).items()
                 if is_instance_id(pid) and (reg is None or pid not in reg)}
+
+
+def mirrors_apart(session: dict) -> list[str]:
+    """The `ghost.<n>.mirror` ids an old show holds at another value than its
+    `ghost.mirror`. No param since LY1, so nothing reads them and the picture
+    changes: what `Project.load` says (REVIEW: a removed id reads an old file as
+    it was, or reports it). Goes with the old reader, in CL1."""
+    room = bool(session.get("ghost.mirror", False))
+    return [pid for pid, v in session.items()
+            if pid.startswith("ghost.") and pid.endswith(".mirror")
+            and is_instance_id(pid) and bool(v) != room]
 
 
 def show_eye(doc: Any) -> tuple[dict[str, Any], list[float] | None]:

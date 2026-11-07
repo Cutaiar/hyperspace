@@ -154,9 +154,14 @@ def _the_mirror(reg, state: GhostState) -> RoomSetting:
     room = mirror.__dict__.get("room") if mirror is not None else None
     if isinstance(room, RoomSetting):
         return room
+    if room is not None:
+        # a room from before a hot reload, which re-classes no room by itself:
+        # the same object, so everything that follows it still does
+        room.__class__ = RoomSetting
+        return room
     if mirror is not None:
-        # a param from before this build (a hot reload): its setting kept,
-        # given a room of its own — never declared twice (review of #351)
+        # a param from before the room existed: its setting kept, given a room
+        # of its own — never declared twice (review of #351)
         room = RoomSetting(bool(mirror.get()))
         mirror.get, mirror.put = (lambda: room.value), room.set
     else:
@@ -197,6 +202,9 @@ def register(reg, state: GhostState, n: int = 1) -> None:
     shared and none is left behind when a deck drops it."""
     pre, lb = prefix(n), "Ghost" if n == 1 else f"Ghost {n}"
     if f"{pre}.on" in reg:
+        # (declared already, each deck's landing of a held node: it follows still,
+        # a node from before a hot reload included)
+        _the_mirror(reg, state).follow(state)
         return
     reg.toggle(f"{pre}.on", f"{lb} hands", lambda: state.on,
                lambda v: setattr(state, "on", bool(v)), group=GROUP,
@@ -206,8 +214,7 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                    lambda v: setattr(state, "alpha", float(v)), lo=0.0, hi=1.0,
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
-    if n == 1 or f"{GROUP}.mirror" in reg:
-        _the_mirror(reg, state).follow(state)
+    _the_mirror(reg, state).follow(state)
     reg.enum(f"{pre}.guide", f"{lb} guide", lambda: state.guide,
              lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
              modulatable=False,
