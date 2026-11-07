@@ -11,23 +11,39 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from conftest import seed
 from test_graph_groups import BREATH
 from test_loadable import boot, put
+from test_midi import cc, push, shift
+from test_midi import rig as midi_rig  # noqa: F401 — the fixture
 from test_pad_learn import ScriptedPad
+from test_routing import rig as analyzer_rig
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import gamepad, graphview, headless, patches, ui_graph, ui_routing, undo
-from hyperspace.learn import Learn
-from hyperspace.params import part_of, part_of_id
+from hyperspace import apc40, gamepad, graphview, headless, patches, ui_graph, ui_routing, undo
+from hyperspace.bands import CEIL
+from hyperspace.learn import PAIR_SPRING_WANT, Learn
+from hyperspace.params import (
+    META_PARTS,
+    Kind,
+    Param,
+    chase_reaches,
+    is_meta_id,
+    part_of,
+    part_of_id,
+)
 from hyperspace.routing import (
     MOD_OPS,
+    TURN_OP,
     Binding,
     Bindings,
     Macro,
     Sub,
+    act,
     factory_desk,
     is_meta_row,
     meta_refusal,
@@ -342,6 +358,217 @@ def test_a_route_end_moved_onto_a_meta_param_is_refused(rig):
     res = e.move("mod:view.bright", "mod:master.gain")
     assert isinstance(res, graphview.Refusal) and WORDS in res
     assert b.target == "view.bright"
+
+
+# ------------------------------------------------- the flag says what is true
+
+def _lanes(n=64):
+    """What `Router.modulate` reads of an analyzer: every lane at its ceiling."""
+    return SimpleNamespace(lanes=np.full(n, CEIL))
+
+
+def test_no_meta_param_says_a_lane_may_drive_it(rig):
+    """Row 775: over the whole panel's registry, by the one rule and no list of ids.
+    §9 counted 102 that said otherwise on a 6-band rig, 89 shared and 13 per deck."""
+    reg = rig.reg
+    meta = [p for p in reg if part_of(p) in META_PARTS]
+    assert len(meta) > 102 and not [p.id for p in meta if p.modulatable]
+    for pid in ("master.gain", "master.dyn", "master.trim", "band.0.f", "band.0.curve",
+                "band.reset", "tempo.bpm", "tempo.nudge", "output.bg", "output.alpha",
+                "scene.select", "scene.reset_all", "audio.mic", "preset.load.0", "preset.next"):
+        assert is_meta_id(pid) and not reg[pid].modulatable, pid
+    assert reg["view.bright"].modulatable and reg["view.speed"].modulatable
+
+
+def test_a_declaration_cannot_say_otherwise():
+    say = {"kind": Kind.CONTINUOUS, "modulatable": True}
+    assert not Param("master.new", "New", group="master", **say).modulatable
+    assert Param("view.new", "New", group="view", **say).modulatable
+    # a group of the patch's with one key of the meta controller's goes by its part
+    assert not Param("ghost.mirror", "Mirror", group="ghost", **say).modulatable
+
+
+def test_the_flag_changes_nothing_a_file_holds(rig):
+    """Nothing saved moves here: the saved half of row 776 waits for the migration, so
+    the same ids stay saved, those it will stop saving or move among them."""
+    reg = rig.reg
+    held = reg.snapshot(part="shared_meta")
+    for pid in ("master.gain", "band.0.post", "tempo.bpm", "tempo.nudge", "output.bg",
+                "output.alpha", "scene.select"):
+        assert reg[pid].persist and pid in held, pid
+
+
+# (the rows act: each is the meta controller's, on a real table and a real adapter)
+
+@pytest.mark.parametrize("pid", ["master.gain", "master.dyn", "master.trim", "band.0.post",
+                                 "band.0.f", "tempo.bpm", "tempo.nudge", "output.bg"])
+def test_a_meta_desk_row_still_moves_its_param(midi_rig, pid):  # noqa: F811
+    """How a person plays the meta controller: a global-layer fader sets the param, with
+    no lane and no `modulate` in the way."""
+    r = midi_rig
+    p = r.reg[pid]
+    assert not p.modulatable
+    r.midi.table.add(Binding("cc:7:99", pid, "abs", layer="global", pickup=False))
+    r.midi.table.set_layer("global")
+    for v in (0, 127, 64):
+        push(r, cc(99, v, channel=7))
+        assert p.norm == pytest.approx(v / 127, abs=0.01), (pid, v)
+    assert not p.modulated                  # set, not held: its base is the value
+
+
+def test_the_factorys_shift_faders_still_ride_the_band_and_the_master(midi_rig):  # noqa: F811
+    """The APC itself, nothing added: SHIFT up, S1 is `band.0.post`, S7 `master.dyn`,
+    S8 `master.trim`, each caught at its own value, then moved."""
+    r = midi_rig
+    shift(r)
+    for channel, pid in ((0, "band.0.post"), (6, "master.dyn"), (7, "master.trim")):
+        p = r.reg[pid]
+        here = round(p.norm * 127)
+        to = here + 5 if here < 100 else here - 5
+        push(r, cc(apc40.CC_FADER, here, channel=channel),
+             cc(apc40.CC_FADER, to, channel=channel))
+        assert p.norm == pytest.approx(to / 127, abs=0.02), pid
+
+
+@pytest.mark.parametrize("row", [
+    Binding("pad:A", "output.passthrough", "toggle"),
+    Binding("pad:A", "band.0.curve", "step", 1.0),
+    Binding("key:b", "band.0.fn", "step", 1.0),
+    Binding("pad:A", "scene.select", "step", 1.0),
+    Binding("pad:A", "tempo.bpm", "step", 1.0),
+])
+def test_a_key_or_a_pad_button_still_lands_on_a_meta_param(rig, row):
+    p = rig.reg[row.target]
+    was = p.value
+    assert Bindings().add(row) is row
+    act(rig.reg, row)
+    assert p.value != was, row.target
+
+
+def test_a_pad_button_still_fires_a_meta_trigger(rig):
+    """`preset.*` and `band.reset`: a press is a person's, with the flag off."""
+    fired = []
+    p = rig.reg.trigger("band.poke", "Poke", lambda: fired.append(1), group="band")
+    assert not p.modulatable
+    act(rig.reg, Binding("pad:A", p.id, "fire"))
+    assert fired == [1]
+
+
+@pytest.mark.parametrize("op", MOD_OPS)
+def test_a_row_past_every_door_moves_no_meta_param(tmp_path, op):
+    """The one thing the flag changes: a performer row already in a live table (a hot
+    reload) used to act until a save dropped it. Now it sits dormant, whatever its op,
+    and the page says so (`ui_routing` "the row is dormant", the graph's `off`)."""
+    r = boot(tmp_path)
+    p = r.reg["master.gain"]
+    p.set_norm(0.5)
+    r.router.table.bindings.append(Binding(
+        "lane:0", "master.gain", op, 1.0, when="hand:left.pinch.index" if op == TURN_OP else None))
+    for _ in range(2):
+        r.router.modulate(_lanes())
+        r.reg.apply()
+    assert p.norm == pytest.approx(0.5) and not p.modulated
+
+
+# (the doors that ask the flag: the rule's words come first at each, as before)
+
+def test_learn_keeps_the_rules_words_and_not_the_flags(tmp_path):
+    """`learn.py` asks `meta_refusal` before the flag: flipped, a person reads what they
+    read before, the rule, never "not modulatable". A patch param's flag has its own."""
+    r = boot(tmp_path)
+    lrn = Learn(r.reg, r.router.table)
+    for pid, source in (("master.gain", "hand:left.y"), ("band.0.post", "axis:RX"),
+                        ("preset.next", "hand:left.y")):
+        lrn.arm(pid)
+        lrn.learn_source(source)
+        assert lrn.refused and f"{pid} is the meta controller's" in lrn.last, pid
+        assert "not modulatable" not in lrn.last
+    lrn.arm("ghost.guide")
+    lrn.learn_source("hand:left.y")
+    assert "can't follow a hand (not modulatable)" in lrn.last
+
+
+def test_learn_pair_spring_is_not_offered_and_still_refuses_in_words(tmp_path):
+    """`ui.py`'s "Learn pair (spring)" sits inside `_desk_target`, False on every meta
+    param, so the flag is never read there and the menu is as it was. A learn armed for
+    it anyway ends at the rule, not the flag."""
+    r = boot(tmp_path)
+    for pid in ("master.gain", "band.0.post", "tempo.bpm"):
+        assert not ui_routing.desk_target(r.reg[pid]) and ui_routing.pad_target(r.reg[pid])
+    lrn = Learn(r.reg, r.router.table)
+    lrn.arm("master.gain", PAIR_SPRING_WANT)
+    assert lrn.learn_pair("pair:UP/DOWN")
+    assert lrn.refused and WORDS in lrn.last
+    assert not r.router.table.routes_to("master.gain")
+
+
+def test_the_graph_says_the_rule_not_the_flag(rig):
+    table = rig.router.table
+    view = graphview.build(table, rig.reg, rig.router, None, None, None)
+    e = graphview.Edit(table, rig.reg, rig.router, view)
+    for pid in ("band.0.post", "master.dyn", "tempo.nudge"):
+        why = e._value_refusal("out:hand:left.y", f"mod:{pid}")
+        assert why.startswith(f"{pid} is the meta controller's"), why
+
+
+def test_a_patch_params_position_row_and_chase_read_as_before(tmp_path):
+    """The flag only moved on meta params: `chase_reaches` never took one, and a
+    position row on a patch's fader still lands its value."""
+    r = boot(tmp_path)
+    bright = r.reg["view.bright"]
+    assert chase_reaches(bright) and not chase_reaches(r.reg["master.gain"])
+    r.router.table.set_routes([])
+    r.router.table.add(Binding("lane:0", "view.bright", "position", 0.5))
+    r.router.modulate(_lanes())
+    r.reg.apply()
+    assert bright.modulated and bright._norm_of(bright.value) == pytest.approx(0.5)
+
+
+# (what must not change: reading. A patch may read the meta controller)
+
+def test_a_patch_row_may_still_read_master_gain_as_its_scale(tmp_path):
+    """A scale reads and never writes: 457 saved rows do this."""
+    r = boot(tmp_path)
+    gain, bright = r.reg["master.gain"], r.reg["view.bright"]
+    bright.set_norm(0.25)
+    table = r.router.table
+    table.set_routes([])
+    table.add(Binding("lane:0", "view.bright", "push", 0.5, rest=0.0, scale="master.gain"))
+    moved = {}
+    for at in (0.0, 1.0):
+        gain.set(at)
+        r.router.modulate(_lanes())
+        r.reg.apply()
+        moved[at] = bright._norm_of(bright.value)
+    assert moved[0.0] == pytest.approx(0.25) and moved[1.0] == pytest.approx(0.75)
+    assert gain.value == 1.0 and not gain.modulated
+
+
+def test_a_saved_scale_on_a_meta_param_loads(tmp_path):
+    """`party-tumble`'s six rows, through a real load: the rule is on a row's target,
+    and a row's source or scale is not touched."""
+    r = boot(tmp_path)
+    r.loaded_patch.load("party-tumble")
+    assert sum(b.scale == "master.gain" for b in r.router.table.routes()) == 6
+    assert not [n for n in r.loaded_patch.notes if "meta controller" in n]
+
+
+def test_the_analyzers_lanes_still_read_its_bands():
+    """A lane comes out of `band.*` as ever: what a person sets there reaches the chain a
+    route reads, and more post-drive makes more lane, with the flag off."""
+    tone = np.sin(2 * np.pi * 60.0 * np.arange(800) / 48_000.0).astype(np.float32)
+    out = {}
+    for at in (0.5, 1.5):
+        r = analyzer_rig()
+        post = r.reg["band.0.post"]
+        assert not post.modulatable
+        post.set(at)
+        assert r.chain.params[0].post == pytest.approx(at)
+        for _ in range(40):
+            r.chain.an.feed(tone)
+            lanes = r.chain.step(1 / 60)
+        out[at] = float(lanes[0])
+    assert out[1.5] > out[0.5] > 0.0
 
 
 # ----------------------------------------------------------- macros, modifiers

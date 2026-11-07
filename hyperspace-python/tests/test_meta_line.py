@@ -312,6 +312,7 @@ def test_a_meta_param_is_applied_once_a_frame_whichever_deck_applies():
     frame shares one mark."""
     meta_reg, a, b = _two_decks()
     p = meta_reg["master.gain"]
+    p.modulatable = True    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
     base = p.value
     assert meta_reg.on_air_reg is a
     for _ in range(3):
@@ -459,6 +460,7 @@ def test_the_lead_is_named_and_a_stale_follower_never_lands_the_meta():
     live = build_patch(ViewState(), meta_reg=meta_reg)
     meta_reg.on_air_reg = live
     p = meta_reg["master.gain"]
+    p.modulatable = True    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
     base = p.value
     live.begin_frame()
     p.modulate(0.1)
@@ -482,6 +484,7 @@ def test_the_meta_own_apply_lands_each_param_once_a_frame():
     frame's shared mark), never releasing the modulation."""
     meta_reg, a, _b = _two_decks()
     p = meta_reg["master.gain"]
+    p.modulatable = True    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
     base = p.value
     for order in ("lead first", "session first"):
         a.begin_frame()

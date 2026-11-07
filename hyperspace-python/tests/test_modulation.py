@@ -77,7 +77,7 @@ def test_flags_say_what_a_param_is_for(rig):
         assert not reg[pid].persist, pid
     assert not reg["preset.select"].modulatable
     assert not reg["preset.save.0"].modulatable
-    assert reg["preset.load.0"].modulatable     # a kick may load a loadable patch
+    assert not reg["preset.load.0"].modulatable  # a person's press, no row's (rows 746, 775)
     assert not reg["camera.reset"].persist       # triggers never persist
     assert reg["view.bright"].persist and reg["view.bright"].modulatable
     assert not reg["view.test_file"].modulatable

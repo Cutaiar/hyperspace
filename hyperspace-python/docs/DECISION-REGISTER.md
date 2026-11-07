@@ -775,6 +775,8 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 775 | Honest flags (LY2): every meta param now says `modulatable` False, by one line in `Param.__post_init__` on its part, not by flipping 102 declarations. Each door that reads the flag was walked: none changes what it does or says, because the rule comes first at every one. Meta desk rows, keys and pad buttons never ask the flag. The one change: a performer row left in a live table sits dormant on the on-air deck too. | 603 | (rec) — pending the owner |
+| 776 | LY2's saved half waits for the migration: `tempo.nudge` stays saved, `output.bg` and `.alpha` stay where they are, and nothing in a file or a golden changes here. Reading is not writing: a `scale` on `master.gain` and an analyzer lane on `band.*` are untouched. | 603 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -14034,3 +14036,31 @@ still wins, as does a sink row.
 - **A person joining a controller's step.** `_opens` was decided only when a step began, so a typed commit landing inside a controller's settle time neither moved focus nor opened the latch, and ⌘Z refused right after typing. A change seen with the hand up now counts on a step already open (`Undo._observe`); a held step (`keep_open`) still opens nothing. The same goes for the mouse, so row 753's known limit, a mouse held anywhere, now also takes a controller's step already open.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
+
+### 775. A meta param's flag says what is true
+
+- **Asked.** Plan 58 LY2: meta params say `modulatable=True` and are refused anyway. §9 counted 102 on a 6-band rig (89 shared, 13 per `Deck`). It warned the flag is more than a label, so each door needed walking.
+- **Built, (rec) — pending the owner.** A derived flag, not a flip at each site: `Param.__post_init__` sets `modulatable = False` when the param's part is in `META_PARTS`, whatever the declaration said. A band added later and a meta param not yet written are right with no list to keep. Declarations are left as they are.
+- **Every reader of the flag, walked:**
+  - **`Param.modulate`** (`params.py`): its only caller is `Router.modulate`'s route pass. A meta desk row, key or pad button lands through `act`, `land` or `set_norm` and never comes here. This is the one door that changes, below.
+  - **Position rows, turn rows** (`Router.modulate`, `_turn`): `MOD_OPS` rows, which `meta_row_refusal` refuses on a meta param at every door. Only a row left standing reaches them.
+  - **Learn's words** (`learn.py`): `meta_refusal` comes first, so a person reads the rule as before and never "not modulatable".
+  - **"Learn pair (spring)"** (`ui.py`): it sits inside `_desk_target`, False on every meta param, so the flag isn't read and the menu is as it was. Armed anyway, it goes through `learn_source` and ends at the rule.
+  - **`Learn.routable`, `ui_routing.route_target`, `nodemode.fillable`, `Edit._value_refusal`, `Edit._move_refusal`, `ui_routing.ctx_item`:** the rule or a both-at-once test, with the rule's words first. `_move_refusal` only picks up route and input cables, so a meta desk row never reaches its flag test.
+  - **`graphview` stub ports:** already `not is_meta_id`. **`graphview` `off`, `ui_routing`'s "the row is dormant":** now true of a row left standing.
+  - **`loadable`'s drop:** has `not is_meta_id`, so a saved row still drops in the rule's words, not "not modulatable".
+  - **`chase_reaches`:** the deck's own params only. **`tools/learn_demo.py`:** patch groups only, so unaffected.
+- **The one change in behaviour.** A performer row on a meta param that got into a live table past the doors (a hot reload, row 745) used to act on the on-air deck until the next load. It is dormant now, on either deck. A hot reload keeps a param's old flag, so this takes a restart.
+- **Tests that had to change, all named.**
+  - **They said the old rule, and now say the new one.** `test_routing` `test_a_lane_may_modulate_the_analyzer` (row 743 ended it; now `test_a_lane_reads_the_analyzer_and_never_drives_it`). `test_modulation` `test_flags_say_what_a_param_is_for` ("a kick may load a loadable patch", ended by row 746). `test_loadable` `test_home_loads_what_the_show_starts_on`. `test_overlay` `test_meta_settings_never_persist_or_modulate` ("a lane may drive them").
+  - **They used a meta param as the subject of a modulation path.** `test_analyzer` `test_a_scene_lands_on_the_base_under_a_performer_and_reads_clean`, `test_ui_bands` `test_handle_writes_land_on_the_base_while_modulated` and `test_modulated_centre_draws_a_ghost_in_the_editor`, `test_ui_shell` `test_ghost_on_a_compact_slider_and_a_fader_in_a_table`, and `test_meta_line`'s `test_a_meta_param_is_applied_once_a_frame_whichever_deck_applies`, `test_the_lead_is_named_and_a_stale_follower_never_lands_the_meta` and `test_the_meta_own_apply_lands_each_param_once_a_frame`. Each sets `p.modulatable = True` first, the state of a param from before this build, which a hot reload keeps. Their assertions didn't change.
+- **Now reachable only that way (not removed here).** The ghost on the band editor and the analyzer's strip, a scene landing under a performer on `band.*`, and `Registry.apply`'s one-landing for a shared meta param. Row 743 had already made them so for any row through a door. A later cleanup could remove them.
+- **Proof.** `tests/test_meta_rule.py`, "the flag says what is true": a global-layer fader on `master.*`, `band.*`, `tempo.*` and `output.bg`, through the real MIDI adapter; the factory's SHIFT faders; a key and pad button on a step, a toggle and a trigger.
+- **Judge it.** 603.
+
+### 776. What LY2 leaves alone
+
+- **Asked.** Plan 58 LY2 also had `tempo.nudge` stop being saved, and SC2 moves `output.bg` and `.alpha`.
+- **Built, (rec) — pending the owner.** Neither here. They live in show files, and the owner's rule holds that nothing in W5 changes a saved format before the migration (`wave-5-session-prompt.md`). They wait for it. `persist` is untouched on every param, the test pins those ids in `snapshot(part="shared_meta")`, and no golden can move.
+- **Reading is not writing.** A row's `scale` on `master.gain` (457 saved rows) and an analyzer lane reading `band.*` are untouched, and a route's source isn't judged by this. Tests: a route's depth follows `master.gain`, `party-tumble`'s six rows load, and more `band.0.post` makes more lane.
+- **Judge it.** 603.

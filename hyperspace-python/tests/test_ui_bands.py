@@ -133,6 +133,7 @@ def test_handle_writes_land_on_the_base_while_modulated(rig):
     reg, chain = rig.reg, rig.chain
     pf = reg["band.0.f"]
     base = pf.base
+    pf.modulatable = True   # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
     pf.modulate(0.2)
     reg.apply()
     assert pf.modulated and pf.value > base and pf.base == pytest.approx(base)
@@ -185,6 +186,7 @@ def test_modulated_centre_draws_a_ghost_in_the_editor(rig):
     panel, reg = rig.panel, rig.reg
     frame(panel, "analyzer")
     assert panel.ghosts == 0
+    reg["band.0.f"].modulatable = True  # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
     reg["band.0.f"].modulate(0.15)
     reg.apply()
     frame(panel)

@@ -296,7 +296,7 @@ class Param:
     touched: Callable[[float], bool] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a loadable patch or a project's session (part_of)
-    modulatable: bool = True     # a lane may drive it
+    modulatable: bool = True     # a lane may drive it; never on a meta param (`__post_init__`)
     alias: bool = False          # a view onto another param (band.sel.*)
     # modulation state — runtime only
     _base: float | None = field(default=None, repr=False)   # norm; None = not modulated
@@ -328,6 +328,11 @@ class Param:
         # a group never change, and `snapshot(part=)` asks every frame the
         # dirty dot is drawn
         self._part = None if self.group is None else part_of_id(self.id, self.group)
+        # register row 775: no route lands on a meta param (row 743), so the flag says so,
+        # by the one rule, whatever the declaration said or left out. Its desk rows, keys
+        # and pad buttons set it (`routing.act`, `Router.dispatch`) and never ask this
+        if self._part in META_PARTS:
+            self.modulatable = False
 
     # ---- generic value access ----
 

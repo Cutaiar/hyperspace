@@ -530,6 +530,7 @@ def test_a_scene_lands_on_the_base_under_a_performer_and_reads_clean(tmp_path):
     an offset off."""
     reg, control, _, lib = wired(tmp_path)
     p = reg["band.1.atk"]
+    p.modulatable = True    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
     p.modulate(0.1)                                   # a lane holds BASS attack
     reg.apply()
     control.select_scene(SCENES.index("Kick & Sizzle"))

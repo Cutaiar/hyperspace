@@ -1226,6 +1226,8 @@ def test_ghost_on_a_compact_slider_and_a_fader_in_a_table(rig):
     assert panel.ghosts == 1
     # the selected band's strip (two columns) on the analyzer page, and a
     # master fader, which sits with the source on the audio page
+    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
+    reg["band.0.atk"].modulatable = reg["master.gain"].modulatable = True
     _hold(reg, {"band.0.atk": 0.1, "master.gain": -0.1})
     frame(panel, "analyzer")
     assert panel.ghosts == 1

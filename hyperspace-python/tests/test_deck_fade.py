@@ -214,8 +214,8 @@ def test_the_leads_offset_lands_in_the_frame_of_its_pass(tmp_path):
 def test_no_deck_takes_a_row_on_a_meta_param_and_one_left_standing_is_dormant(tmp_path):
     """Register row 743: no deck's door takes a row onto a shared meta param, so one
     loadable patch cannot reach through the room to the other. A hot reload can leave one
-    in the live table until the next load (row 745): off air it stays dormant
-    (row 650), and it acts only on the lead, as before."""
+    in the live table until the next load (row 745): it stays dormant off air (row 650),
+    and on the lead too since the param's flag says so (row 775)."""
     a, b = _pair(tmp_path)
     for t in (a.table, b.table):
         with pytest.raises(ValueError, match="master.gain is the meta controller's"):
