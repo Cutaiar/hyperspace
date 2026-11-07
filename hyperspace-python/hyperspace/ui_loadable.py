@@ -84,7 +84,7 @@ FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). 
               "Drag a preset onto it to move it in. Right-click: a new folder inside, "
               "rename, remove (an empty folder only)")
 # what a show is, in one line under the SHOW label and in its hover
-SHOW_LINE = "show  ·  the desk's pads, the meta controller, the bus cables"
+SHOW_LINE = "show  ·  the desk's pads, meta controller, bus cables"
 SHOW_TIP = ("A show is the room the presets play in: which preset each of the desk's "
             "twenty-four pads loads, off air (set on the desk — hold a pad, or SAVE + a pad), the "
             "meta controller (tempo, hands, the analyzer, the outputs), the analyzer's scene, and the "

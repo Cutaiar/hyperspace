@@ -14041,7 +14041,7 @@ still wins, as does a sink row.
 ### 778. "Session" leaves what a person reads
 
 - **The owner, 2026-11-06:** "Session and rig need to go away." Counted in #393 at 30 strings; on `main` at this PR, 30 again by the same scan, plus one it could not see: `ui._micro("session")`, ROUTING's heading, has no space or capital.
-- **Built.** Said as what it means, by hand. "the session's" is "the meta controller's", in the refusals, the Learn notes, the load notes, ROUTING and the desk. SHOW's line and tips say "the meta controller". ROUTING's heading is "meta controller", with "its own rows — edit bindings.json" beside it, so the name isn't said twice.
+- **Built.** Said as what it means, by hand. "the session's" is "the meta controller's", in the refusals, the Learn notes, the load notes, ROUTING and the desk. SHOW's tips say "the meta controller"; its line says "meta controller, bus cables", short: the old line measured 387 px, already wider than a 320 px side pane, this one 397, and the fuller wording 456. ROUTING's heading is "meta controller", with "its own rows — edit bindings.json" beside it, so the name isn't said twice.
 - **Not touched.** No saved key, param id, file name, schema or config key. `"session"` in a show file and `RIG` stay until the migration. Comments and docstrings aren't read by a person; SEM's word pass owns those. "Preset" (155 strings) moves with the migration. "Performance param" in one programmer error stays: not asked.
 - **Judge it.** 605.
 

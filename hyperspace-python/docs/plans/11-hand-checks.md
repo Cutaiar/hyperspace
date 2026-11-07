@@ -8345,9 +8345,9 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
 ## DE. "Session" and "rig" are gone (rows 778-780)
-Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans every string; the existing tests pin the words. No picture was taken of the longer lines.
+Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans every string; the existing tests pin the words. No picture was taken: the driver was not run. The SHOW line was measured headless.
 **605. The panel's longer words fit.** (any Mac, no devices needed)
-1. PRESETS, SHOW: read the line under the SHOW label, and hover it. *Pass:* "the meta controller, the bus cables" whole, or cut in the way the panel always cuts; nothing sits over the buttons beside it.
+1. PRESETS, SHOW: read the line under the SHOW label, and hover it. *Pass:* it says "meta controller, bus cables", and the hover says the rest.
 2. ROUTING: find the "meta controller" heading over the invariant rows, and "its own rows — edit bindings.json" beside it. *Pass:* it reads as one line on your window's width.
 3. With the APC40 connected, Learn desk on MASTER. *Pass:* the refusal says "invariant (the meta controller's)", and the line fits where it lands.
 *Fail:* "session" anywhere; a line cut so it can't be read.
