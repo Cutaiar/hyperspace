@@ -775,6 +775,7 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 794 | Audit U10, fixed, not moot: plan 49's squeeze left the window's padding out of the strip's budget, so in a band of widths the save chip still covered ▶ by 6 px. `_strip_beside` now counts it. A test draws every module strip at three widths. |
 | 793 | Audit U9, fixed: the two nudge chips on the LFO page each build their own popup (`panel._ctx(nudge, f".{tag}")`), so a right-click draws the menu's items once. |
 | 792 | Audit R14, closed as moot: since row 746 `preset.*` is meta, one per `Deck`, so `learn_control` refuses a knob on `preset.select` through `meta_refusal`, a hand or stick likewise, and the desk rows' combo doesn't offer it. No change to `set_norm`. A test holds every door. |
 | 791 | Audit R15, closed: `midiports.port_names()` is the one road to the MIDI ports. CoreMIDI's refusal of a process's first client is a sentence, not RtMidi's abort; a look after that is 0.05 ms and makes no client, so CT1's tray may call it once a second. Only this module lists ports, and an open looks here first. |
@@ -14051,6 +14052,14 @@ still wins, as does a sink row.
 - **A person joining a controller's step.** `_opens` was decided only when a step began, so a typed commit landing inside a controller's settle time neither moved focus nor opened the latch, and ⌘Z refused right after typing. A change seen with the hand up now counts on a step already open (`Undo._observe`); a held step (`keep_open`) still opens nothing. The same goes for the mouse, so row 753's known limit, a mouse held anywhere, now also takes a controller's step already open.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
+
+### 794. Audit U10: the strip's budget, measured
+
+- **Measured once, as asked.** It was likely moot, and it isn't. At the audit's 258 px the chips now wrap to their own row and nothing overlaps. At 340 px, dirty, `strip.backdrop.save` starts at x 173 and `strip.backdrop.next` ends at 179: 6 px.
+- **The cause.** `same_line(avail - chip_w)` counts from the window's edge, and the row is laid from the content's, so the row has `avail` minus the window's padding. `_strip_beside` budgeted all of `avail`. Only a squeezed name shows it, since a full-width name leaves room.
+- **The fix.** `_strip_beside` adds `get_cursor_start_pos().x`. The chips stay where they were, and the name gives up the difference. The loadable patches' strip gets it too.
+- **The test:** `tests/test_ui_loadable.py::test_a_module_strip_does_not_overlap`, every module strip with its reset at 258, 340 and 600 px.
+- **Judge it.** 618.
 
 ### 793. Audit U9: a popup each for the nudge chips
 
