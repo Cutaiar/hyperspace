@@ -53,6 +53,7 @@ it calls.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import os
 import shutil
@@ -677,12 +678,15 @@ def _close_publishers(win, slots: list[Slot]) -> None:
 def _gl_flush() -> None:
     """glFlush in the current context: a presenter's context samples the
     renderer's frame textures, and without the flush it sees last frame's
-    (plan 21 §1, measured: 199 of 200 frames late). The raw call: PyOpenGL's
-    checked one raises on any error moderngl left pending, which would make
-    this line the frame's failure now that every frame runs it (SC3a)."""
-    from OpenGL.raw.GL.VERSION.GL_1_0 import glFlush
+    (plan 21 §1, measured: 199 of 200 frames late). PyOpenGL checks after the
+    call, so a `GLError` here means the flush ran and found an error someone
+    else left pending (moderngl can leave one): not this frame's
+    failure, now that every frame comes through here (SC3a)."""
+    from OpenGL import GL
+    from OpenGL.error import GLError
 
-    glFlush()
+    with contextlib.suppress(GLError):
+        GL.glFlush()
 
 
 def _bands(audio) -> tuple[float, ...]:

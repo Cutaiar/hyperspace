@@ -937,7 +937,7 @@ def v8(a) -> None:
             reloaded, still = gf.Rig(slug, hands, ctx), gf.Rig(slug, hands, ctx)
             off = Offscreen(ctx)
 
-            def draw(rig):
+            def draw(rig, off=off):
                 for _ in range(2):
                     v = View(Switches(), size, target=off.fit(size), viewport=(0, 0, *size), samples=4)
                     rig.frame([v], size, 1.0)
