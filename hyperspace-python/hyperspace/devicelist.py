@@ -74,6 +74,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
+import threading
 import time
 from collections import deque
 from collections.abc import Callable
@@ -98,7 +100,8 @@ RETRY_S = 2.0                   # what failed is tried again after this, doublin
 RETRY_MAX_S = 30.0              # …up to this
 STALL_S = 5.0                   # a look unanswered this long is said on the board
 LAUNCH_S = 3.0                  # how long a launch waits for the first read
-CLOSE_S = 0.5                   # how long a quit waits for this Mac's own files
+CLOSE_S = 0.5                   # how long a quit waits for a write already under way, then writes anyway
+SYNC_S = 60.0                   # `sync`'s ceiling: past it, an error, not a guess
 # nothing listed and nothing in config.toml: the devices that are there with no config
 DEFAULTS: tuple[dict, ...] = (
     {"role": "pad", "kind": "gamepad"},
@@ -344,6 +347,10 @@ class DeviceList:
         self._delay = RETRY_S
         self._may_make = not hold_seed
         self._told: set[str] = set()
+        self._hold = hold_seed
+        self._here_text: str | None = None      # set this run, so a quit saves it
+        self._local_lock = threading.Lock()     # one write of this Mac's files at a time
+        self._closing = False
         self._copy_was_held = False
         self._held_list = False         # this run's list is only the defaults: not to be kept as one
         self._open([dict(e) for e in seed], listed, said_here or {}, hold_seed)
@@ -460,14 +467,17 @@ class DeviceList:
 
     # ---- keeping up ----
 
+    def _job(self) -> _Job:
+        unwritten = any(w.until is None for w in self.waiting.values())
+        return _Job([dict(e) for e in self.raw],
+                    [(r, dict(w.entry), w.adopted) for r, w in self.waiting.items()],
+                    self._seen, bool(unwritten or self._unread or self._said), self._may_make)
+
     def _give(self) -> None:
         """A cycle, on the worker. At most one is out."""
         if self.local_only:
             return
-        unwritten = any(w.until is None for w in self.waiting.values())
-        job = _Job([dict(e) for e in self.raw],
-                   [(r, dict(w.entry), w.adopted) for r, w in self.waiting.items()],
-                   self._seen, bool(unwritten or self._unread or self._said), self._may_make)
+        job = self._job()
         self._asked, self._asked_at = True, self.clock()
         path, root, tmp = self.path, self.root, self._tmp
         self._shared.give(lambda: self._done.append(_cycle(path, root, job, tmp)))
@@ -540,30 +550,38 @@ class DeviceList:
             self._backoff(now)
         self._keep_copy()
 
-    def _keep_copy(self) -> None:
-        if self.copy is None:
-            return
+    def _copy_now(self) -> str:
         unwritten = [{"entry": w.entry, "adopted": w.adopted}
                      for w in self.waiting.values() if w.until is None]
         more: dict = {"held": True} if self._held_list else {}
         if not self.local_only:
             more["library"] = str(self.root)    # (for a launch whose config.toml doesn't say)
-        text = _text(self.raw, unwritten=unwritten, **more)
+        return _text(self.raw, unwritten=unwritten, **more)
+
+    def _keep_copy(self) -> None:
+        if self.copy is None:
+            return
+        text = self._copy_now()
         if text == self._copy_text:
             return
         self._copy_text = text
         self._local.give(lambda path=self.copy, text=text: self._put_local(path, text))
 
     def _save_here(self) -> None:
-        if self.here_path is not None:
+        # (not on a launch that didn't read config.toml: the file is the mark of that read)
+        if self.here_path is not None and not self._hold:
             text = json.dumps({"schema": HERE_SCHEMA, "on": self.here}, indent=2) + "\n"
+            self._here_text = text
             self._local.give(lambda path=self.here_path, text=text: self._put_local(path, text))
 
     def _put_local(self, path: Path, text: str) -> None:
-        try:
-            _put(path, text)
-        except OSError as e:
-            self._note(f"devices: {path.name} not written: {e}")
+        with self._local_lock:
+            if self._closing:
+                return                      # a quit writes the newest itself
+            try:
+                _put(path, text, still=lambda: not self._closing)
+            except OSError as e:
+                self._note(f"devices: {path.name} not written: {e}")
 
     def look(self) -> bool:
         """Has the list changed? Called every `devices.WATCH_FRAMES`, and it reads memory:
@@ -582,19 +600,47 @@ class DeviceList:
         dirty, self._dirty = self._dirty, False
         return dirty
 
-    def sync(self, timeout: float | None = 10.0) -> None:
-        """Wait for a whole cycle, for what isn't the frame: the tests, and tools."""
-        self._shared.wait(timeout)
+    def sync(self, timeout: float = SYNC_S) -> None:
+        """Wait for a whole cycle, for what isn't the frame: the tests, and tools. A TimeoutError
+        past `timeout`: going on would be a guess at what the disk holds."""
+        def waited(worker: _Worker) -> None:
+            if not worker.wait(timeout):
+                raise TimeoutError(f"{worker.name}: nothing after {timeout} s")
+        waited(self._shared)
         self._take()
         self._give()
-        self._shared.wait(timeout)
+        waited(self._shared)
         self._take()
-        self._local.wait(timeout)
+        waited(self._local)
 
     def close(self) -> None:
-        """A quit: this Mac's own files get a moment. A stalled Drive holds up nothing."""
+        """A quit, which may block: this Mac's own files are written here and now, and a
+        failure is said, as an adopt made with no library lives only in the copy. A write
+        already under way gets `CLOSE_S`, and one that outlasts it won't land over this. With
+        the library in the home there is no copy, so what's unwritten goes to the file. A stalled
+        Drive holds up nothing."""
         self._take()
-        self._local.wait(CLOSE_S)
+        self._closing = True
+        got = self._local_lock.acquire(timeout=CLOSE_S)
+        try:
+            saves = [(self.copy, self._copy_now())] if self.copy is not None else []
+            if self.here_path is not None and self._here_text is not None:
+                saves.append((self.here_path, self._here_text))
+            for path, text in saves:
+                try:
+                    _put(path, text, f"{path.name}.quit.tmp")
+                except OSError as e:
+                    words = f"devices: {path.name} not saved at quit ({e}): what only it held is lost"
+                    self._note(words)
+                    print(words, file=sys.stderr)
+        finally:
+            if got:
+                self._local_lock.release()
+        if self.copy is None and any(w.until is None for w in self.waiting.values()):
+            self._shared.wait(CLOSE_S)
+            self._take()
+            if any(w.until is None for w in self.waiting.values()):
+                self._landed(_cycle(self.path, self.root, self._job(), f"{self._tmp}.quit"))
 
     # ---- adopting, and on or off ----
 

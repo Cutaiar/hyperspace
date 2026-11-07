@@ -287,12 +287,69 @@ def test_the_library_not_there_falls_back_on_this_macs_copy_and_says_so(macs):
     assert on_disk(root)["TV"]["target"] == "output.2" and store.said == ""
 
 
+def test_a_row_chosen_survives_a_quit_with_this_macs_own_disk_stalled(macs, monkeypatch):
+    """As `DeviceList.close`: the quit writes the copy itself. A write stuck on the local worker
+    has `CLOSE_S`, and when it lands late it doesn't go over what the quit wrote."""
+    root, one, _ = macs
+    store = opened(root, one, seed={"TV": row("output.1")})
+    hold, entered = threading.Event(), threading.Event()
+    real = sharedfile.put
+
+    def stuck(path, text, tmp_name=None, still=None):
+        if tmp_name is None:            # the worker's write, not the quit's
+            entered.set()
+            hold.wait(displays.SYNC_S)
+        real(path, text, tmp_name, still)
+
+    monkeypatch.setattr(sharedfile, "put", stuck)
+    monkeypatch.setattr(displays, "CLOSE_S", 0.0)
+    store.set("TV", target="output.2")
+    assert entered.wait(displays.SYNC_S)
+    store.set("TV", flip_x=True)
+    store.close()
+    saved = json.loads((one / COPY).read_text())["displays"]["TV"]
+    assert saved["target"] == "output.2" and saved["flip_x"] is True, "the newest, at the quit"
+    hold.set()
+    assert store._local.wait(displays.SYNC_S)
+    assert json.loads((one / COPY).read_text())["displays"]["TV"]["flip_x"] is True, "and it stays"
+    monkeypatch.setattr(sharedfile, "put", real)
+    again = opened(root, one)
+    assert displays.read_row(again.current["TV"])["flip_x"] is True
+
+
+def test_a_quit_says_a_copy_it_cant_write(macs, monkeypatch, capsys):
+    root, one, _ = macs
+    notes = []
+    store = opened(root, one, notes=notes)
+    store.set("TV", target="output.2")
+    store.sync()
+
+    def refused(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(sharedfile, "put", refused)
+    store.close()
+    assert any("not saved at quit" in n for n in notes) and "not saved at quit" in capsys.readouterr().err
+
+
+def test_sync_raises_on_its_ceiling_rather_than_guessing(macs, monkeypatch):
+    root, one, _ = macs
+    release = threading.Event()
+    real = displays._cycle
+    monkeypatch.setattr(displays, "LAUNCH_S", 0.0)
+    monkeypatch.setattr(displays, "_cycle", lambda *a: (release.wait(displays.SYNC_S), real(*a))[1])
+    store = DisplayList(root, one)
+    with pytest.raises(TimeoutError):
+        store.sync(0.0)
+    release.set()
+
+
 def test_a_stalled_drive_holds_up_neither_the_launch_nor_a_frame(macs, monkeypatch):
     root, one, _ = macs
     release = threading.Event()
     real = displays._cycle
     monkeypatch.setattr(displays, "LAUNCH_S", 0.05)
-    monkeypatch.setattr(displays, "_cycle", lambda *a: (release.wait(5), real(*a))[1])
+    monkeypatch.setattr(displays, "_cycle", lambda *a: (release.wait(displays.SYNC_S), real(*a))[1])
     clock = Clock(10.0)
     store = DisplayList(root, one, seed={"TV": row("output.1")}, clock=clock)
     assert store.rows == {"TV": row("output.1")} and "isn't answering" in store.said
@@ -317,7 +374,7 @@ def test_a_quiet_file_costs_one_stat_a_look(macs, monkeypatch):
     for _ in range(4):
         clock.t += displays.LOOK_S
         store.look()
-        store._shared.wait(5)
+        store._shared.wait(displays.SYNC_S)
         store._take()
     assert not reads
 

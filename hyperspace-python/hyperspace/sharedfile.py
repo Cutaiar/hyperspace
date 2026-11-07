@@ -15,11 +15,16 @@ from pathlib import Path
 OK, ABSENT, GONE, BAD, SAME = "ok", "absent", "gone", "bad", "same"
 
 
-def put(path: Path, text: str, tmp_name: str | None = None) -> None:
-    """Whole, through a temporary file beside it; an OSError if not."""
+def put(path: Path, text: str, tmp_name: str | None = None,
+        still: Callable[[], bool] | None = None) -> None:
+    """Whole, through a temporary file beside it; an OSError if not. `still`: asked before it
+    takes the file's place, so a write outrun by a newer one doesn't land over it."""
     tmp = path.with_name(tmp_name or f"{path.name}.tmp")
     try:
         tmp.write_text(text)
+        if still is not None and not still():
+            tmp.unlink(missing_ok=True)
+            return
         tmp.replace(path)
     except OSError:
         try:

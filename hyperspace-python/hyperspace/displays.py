@@ -66,6 +66,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
+import threading
 import time
 from collections import deque
 from collections.abc import Callable
@@ -89,7 +91,8 @@ RETRY_S = 2.0                   # what failed is tried again after this, doublin
 RETRY_MAX_S = 30.0              # …up to this
 STALL_S = 5.0                   # a look unanswered this long is said on the panel
 LAUNCH_S = 3.0                  # how long a launch waits for the first read
-CLOSE_S = 0.5                   # how long a quit waits for this Mac's own copy
+CLOSE_S = 0.5                   # how long a quit waits for a write of this Mac's copy under way
+SYNC_S = 60.0                   # `sync`'s ceiling: past it, an error, not a guess
 
 _OUTPUT = re.compile(r"output\.([1-9][0-9]*)")
 
@@ -399,6 +402,8 @@ class DisplayList:
         self._tmp = f"{FILE}.{os.getpid()}.{id(self):x}.tmp"
         self._shared = Worker("display rows: library")
         self._local = Worker("display rows: this Mac")
+        self._local_lock = threading.Lock()     # one write of this Mac's copy at a time
+        self._closing = False
         self._done: deque[_Seen] = deque()
         self._asked = False
         self._asked_at = 0.0
@@ -547,21 +552,27 @@ class DisplayList:
             self._backoff(now)
         self._keep_copy()
 
+    def _copy_now(self) -> str:
+        # (`library`: for a launch whose config.toml doesn't say)
+        more = {} if self.local_only else {"library": str(self.root)}
+        return _text(self.rows, seeded=self.seeded, **more)
+
     def _keep_copy(self) -> None:
         if self.copy is None:
             return
-        # (`library`: for a launch whose config.toml doesn't say)
-        more = {} if self.local_only else {"library": str(self.root)}
-        text = _text(self.rows, seeded=self.seeded, **more)
+        text = self._copy_now()
         if text != self._copy_text:
             self._copy_text = text
             self._local.give(lambda path=self.copy, text=text: self._put_local(path, text))
 
     def _put_local(self, path: Path, text: str) -> None:
-        try:
-            sharedfile.put(path, text)
-        except OSError as e:
-            self._note(f"displays: {path.name} not written: {e}")
+        with self._local_lock:
+            if self._closing:
+                return                      # a quit writes the newest itself
+            try:
+                sharedfile.put(path, text, still=lambda: not self._closing)
+            except OSError as e:
+                self._note(f"displays: {path.name} not written: {e}")
 
     def look(self) -> None:
         """Each frame, and it reads memory: what the worker found, and it gives the worker its
@@ -575,21 +586,38 @@ class DisplayList:
         elif now >= self._next:
             self._give()
 
-    def sync(self, timeout: float | None = 10.0) -> None:
-        """Wait for a whole cycle, for what isn't the frame: the tests, and tools."""
-        self._shared.wait(timeout)
+    def sync(self, timeout: float = SYNC_S) -> None:
+        """Wait for a whole cycle, for what isn't the frame: the tests, and tools. A TimeoutError
+        past `timeout`: going on would be a guess at what the disk holds."""
+        def waited(worker: Worker) -> None:
+            if not worker.wait(timeout):
+                raise TimeoutError(f"{worker.name}: nothing after {timeout} s")
+        waited(self._shared)
         self._take()
         self._give()
-        self._shared.wait(timeout)
+        waited(self._shared)
         self._take()
-        self._local.wait(timeout)
+        waited(self._local)
 
     def close(self) -> None:
-        """A quit, or ⌘R: this Mac's copy gets a moment, and carries a change the shared file
-        hasn't had yet into the next launch. A stalled Drive holds up nothing."""
+        """A quit, or ⌘R, which may block: this Mac's copy is written here and now, and a failure
+        is said, as a row chosen a moment ago may live only there until the next launch carries it
+        to the shared file. A write already under way gets `CLOSE_S`, and one that outlasts it
+        won't land over this. A stalled Drive holds up nothing."""
         self._take()
-        self._keep_copy()
-        self._local.wait(CLOSE_S)
+        if self.copy is None:
+            return
+        self._closing = True
+        got = self._local_lock.acquire(timeout=CLOSE_S)
+        try:
+            sharedfile.put(self.copy, self._copy_now(), f"{self.copy.name}.quit.tmp")
+        except OSError as e:
+            words = f"displays: {self.copy.name} not saved at quit ({e}): a row just chosen is lost"
+            self._note(words)
+            print(words, file=sys.stderr)
+        finally:
+            if got:
+                self._local_lock.release()
 
     # ---- choosing ----
 
