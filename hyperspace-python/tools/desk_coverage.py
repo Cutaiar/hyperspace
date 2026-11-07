@@ -139,7 +139,7 @@ def boot(home: Path) -> SimpleNamespace:
     control = Control(chain)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState())
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)

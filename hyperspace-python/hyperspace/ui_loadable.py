@@ -81,15 +81,15 @@ FOLDERS_KEY = "\0folders" # the listings cache: the loadable patches' folders
 LOADABLE_DRAG = "PRESET"    # a row's drag payload (the name kept in `_state`'s preset_drag)
 OLD_UI_KEY = "presets"    # (read once: this Mac's folds from before the one migration)
 UI_KEY = "loadable"       # <machine>/ui.json: {"loadable": {"folded": [folder, …]}}
-FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). "
-              "Drag a preset onto it to move it in. Right-click: a new folder inside, "
+FOLDER_TIP = ("A folder of patches: click to fold or unfold (kept on this Mac). "
+              "Drag a patch onto it to move it in. Right-click: a new folder inside, "
               "rename, remove (an empty folder only)")
 # what a show is, in one line under the SHOW label and in its hover
 SHOW_LINE = "show: pads, meta controller"
-SHOW_TIP = ("A show is the room the presets play in: which preset each of the desk's "
+SHOW_TIP = ("A show is the room the patches play in: which patch each of the desk's "
             "twenty-four pads loads, off air (set on the desk — hold a pad, or SAVE + a pad), the "
             "meta controller (tempo, hands, the analyzer, the outputs) and the analyzer's scene. "
-            "A preset is the look, with the bus cables it cuts on GRAPH; the show is everything "
+            "A patch is the look, with the bus cables it cuts on GRAPH; the show is everything "
             "around it. Open another, save this one, or start a new one here.")
 
 
@@ -128,7 +128,7 @@ def names(panel, key: str) -> list[str]:
     hit = st["lists"].get(key)
     if hit is None or now - hit[0] >= LIST_POLL:
         try:
-            listing = lib.project.list() if key == PROJECT else lib.list(key)
+            listing = lib.install.list() if key == PROJECT else lib.list(key)
         except (LibraryError, OSError) as e:
             lib.error = f"library: {e}"
             listing = hit[1] if hit else []
@@ -223,7 +223,7 @@ def _said(panel, fn, *args):
 
 # ---- the name field: the strip while a save-as is being typed ----
 
-def _name_field(panel, key: str, commit, hint: str = "preset name") -> bool:
+def _name_field(panel, key: str, commit, hint: str = "patch name") -> bool:
     """Draw the inline name field for `key`; returns True while it is open."""
     st = _state(panel)
     if st["naming"] != key:
@@ -266,7 +266,7 @@ def save_tip(lib, group: str) -> str:
     """The save chip's hover, in the label's terms."""
     cur = lib.current(group)
     if cur is None:
-        return "No preset loaded: as… saves the settings as a new one"
+        return "No patch loaded: as… saves the settings as a new one"
     return f"Write the settings over {cur} (the old file goes to the trash)"
 
 
@@ -354,16 +354,16 @@ def strip(panel, group: str) -> None:
     _rect(panel, f"strip.{group}.name")
     if imgui.is_item_hovered():
         if cur is None:
-            ui.tooltip(f"no preset loaded{_on_deck(meta)}")
+            ui.tooltip(f"no patch loaded{_on_deck(meta)}")
         elif group == LOADABLE:
-            ui.tooltip(f"{cur}{_on_deck(meta)}  ·  the loaded preset — the list below "
+            ui.tooltip(f"{cur}{_on_deck(meta)}  ·  the loaded patch — the list below "
                        "loads onto this deck")
         else:
             ui.tooltip(f"{cur}  ·  click for the list")
     st["rects"].pop(f"strip.{group}.dot", None)
     if is_dirty:
         imgui.same_line(0, 2)
-        st["rects"][f"strip.{group}.dot"] = ui.dirty_dot("edited since the preset loaded — "
+        st["rects"][f"strip.{group}.dot"] = ui.dirty_dot("edited since the patch loaded — "
                                                    "save writes it")
     imgui.same_line(0, 2)
     if imgui.arrow_button("next", imgui.Dir.right):
@@ -388,7 +388,7 @@ def strip(panel, group: str) -> None:
             invalidate(panel, group)
         _rect(panel, f"strip.{group}.new")
         if imgui.is_item_hovered():
-            ui.tooltip("A new preset: default values, shape → scene → All outputs — "
+            ui.tooltip("A new patch: default values, shape → scene → All outputs — "
                        "a shape on every window")
         imgui.same_line()
     # R17: a loadable patch `new` made and nothing saved names itself — a loadable patch
@@ -408,7 +408,7 @@ def strip(panel, group: str) -> None:
         _begin_naming(panel, group, "" if unsaved else (cur or ""))
     _rect(panel, f"strip.{group}.as")
     if imgui.is_item_hovered():
-        ui.tooltip("Save the settings as a new preset")
+        ui.tooltip("Save the settings as a new patch")
     if not kind:
         imgui.same_line()
         if ui.chip("reset"):
@@ -416,7 +416,7 @@ def strip(panel, group: str) -> None:
         _rect(panel, f"strip.{group}.reset")
         if imgui.is_item_hovered():
             d = lib.default_name(group)
-            ui.tooltip(f"Back to the default preset — {d}" if d
+            ui.tooltip(f"Back to the default patch — {d}" if d
                        else "Back to the values the module started with")
     if not wants_beside:
         from . import ui_graph
@@ -534,7 +534,7 @@ def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
             + 3 * style.item_spacing.x + ui.chip_w("×"))
     imgui.dummy(imgui.ImVec2(wide + style.scrollbar_size, 0))     # the list's width
     if not listing:
-        imgui.text_disabled("no presets — save as… makes one")
+        imgui.text_disabled("no patches — save as… makes one")
     else:
         size = imgui.ImVec2(wide + style.scrollbar_size,
                             list_row_h() * min(len(listing), LIST_ROWS))
@@ -555,7 +555,7 @@ def page(panel) -> None:
     lib = panel.library
     if lib is None or lib.reg is None or LOADABLE not in lib.kinds:
         return
-    ui._micro("preset")
+    ui._micro("patch")
     meta = getattr(panel, "meta", None)
     if meta is not None:    # plan 44 D5e, DQ7: its own room, so no name is cut for it
         imgui.same_line()
@@ -610,7 +610,7 @@ def loadable_list(panel) -> None:
     height = max(room, list_row_h() * MIN_ROWS)
     if imgui.begin_child("##presets.rows", imgui.ImVec2(0, height)):
         if not tree["count"].get(""):  # no loadable patch anywhere, folders or none
-            imgui.text_disabled("no presets — new, then save as… makes one")
+            imgui.text_disabled("no patches — new, then save as… makes one")
         _folder_body(panel, "", tree, cur, drawn, rect)
     imgui.end_child()
     rect("rows")
@@ -639,8 +639,8 @@ def loadable_list(panel) -> None:
     imgui.pop_style_color()
     rect("new_folder")
     if imgui.is_item_hovered():
-        ui.tooltip("A new folder at the top of the presets (a folder's right-click makes "
-                   "one inside it). Drag a preset onto a folder, or right-click it: "
+        ui.tooltip("A new folder at the top of the patches (a folder's right-click makes "
+                   "one inside it). Drag a patch onto a folder, or right-click it: "
                    "move to ▸")
 
 
@@ -1048,7 +1048,7 @@ def show_line(panel) -> None:
     lib = panel.library
     if lib is None or lib.reg is None:
         return
-    proj = lib.project
+    proj = lib.install
     imgui.push_id("show")
     # the line's right edge: a chip that would pass it starts a new row
     # (GRAPH's side pane, plan 49; every page has the room for one row)
@@ -1119,7 +1119,7 @@ def _beside(right: float, w: float) -> None:
 
 
 def _project_save_as(panel, name: str) -> None:
-    _guard(panel, panel.library.project.save, name)
+    _guard(panel, panel.library.install.save, name)
     invalidate(panel, PROJECT)
 
 

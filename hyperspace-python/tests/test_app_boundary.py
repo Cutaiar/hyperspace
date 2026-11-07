@@ -1136,7 +1136,7 @@ def _launch(home):
     chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(home, period=0.0)
-    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project)
+    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.install)
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     clock = tempo.Clock(now=lambda: 0.0)
@@ -1151,8 +1151,8 @@ def _launch(home):
     lib.attach(reg)
     router = Router(reg, table)
     LoadedPatch(lib, reg, router)
-    lib.project.load_startup()
-    return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.project)
+    lib.install.load_startup()
+    return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.install)
 
 
 def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tmp_path):

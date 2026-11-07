@@ -281,7 +281,7 @@ def _input_row(panel, k: int, mode: int, sp: float) -> None:
             ui_routing.add_route(panel, pid, source=offer[0], depth=ROUTE_DEPTH)
         elif imgui.is_item_hovered():
             ui.tooltip(f"Route {offer[1]} here: a push at depth {ROUTE_DEPTH}, into "
-                              "the loaded preset. ROUTING shows and edits it.")
+                              "the loaded patch. ROUTING shows and edits it.")
     imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - (ROWS_GAP - ROW_GAP))
     # the second line: the slider, then neutral
     chip = f"{NEUTRAL_CHIP}##neutral.{pid}"

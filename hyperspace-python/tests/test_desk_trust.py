@@ -237,7 +237,7 @@ def test_save_held_and_a_filled_pad_tapped_saves_a_new_loadable_and_keeps_the_ol
     assert user_files(lib)["trip-2.json"] == old["trip-2.json"]       # untouched
     assert "TRIP 2" in lib.list("loadable") and "TRIP 2" not in pr.bank   # listed, unpadded
     assert trash(lib) == gone
-    assert lib.status == "saved TRIP 3 → slot 11 (TRIP 2 is still in the preset list)"
+    assert lib.status == "saved TRIP 3 → slot 11 (TRIP 2 is still in the patch list)"
     fac = lib.path_of("loadable", "FIELD")
     before = fac.read_bytes()
     at(5.5, *tap(2), save_up())
@@ -364,7 +364,7 @@ def test_the_hold_on_an_empty_pad_still_saves_and_a_filled_one_only_loads(rig):
 
 
 def test_save_into_and_save_empty_on_the_project(rig):
-    """`Project.save_into` grew the filled case; `save_empty` is #158's
+    """`Install.save_into` grew the filled case; `save_empty` is #158's
     hold (empty only). Neither overwrites a file."""
     pr = rig.loaded_patch
     pr.load_slot(4)
@@ -545,11 +545,11 @@ def test_the_desk_log_keeps_the_last_twenty_presses(rig):
     at(0.0, *tap(4))
     e = log.events[-1]
     assert (e.control, e.layer) == ("G1·5 (clip 1·5)", "both")
-    assert e.what == "Preset → TRIP"
+    assert e.what == "Patch → TRIP"
     at(0.5, note(apc40.N_SCENE[0]))                                   # points, invariant
     assert log.events[-1].what == "Points → on" and log.events[-1].layer == "both"
     at(0.6, note(apc40.N_ACTIVATOR, channel=6))                       # nothing maps it
-    assert log.events[-1].what == "nothing (no row on the preset layer)"
+    assert log.events[-1].what == "nothing (no row on the patch layer)"
     assert log.events[-1].layer == "preset"
     shift(rig)
     assert (log.events[-1].what, log.events[-1].layer) == ("Shift → on", "both")
@@ -569,7 +569,7 @@ def test_the_desk_log_keeps_the_last_twenty_presses(rig):
     at(3.0 + midi.HOLD_S)
     at(3.5 + midi.HOLD_S, note(n, 0, channel=ch))
     assert log.events[-1].what == "held: nothing saved (a filled pad only loads)"
-    assert log.events[-2].what == "Preset → FACES"
+    assert log.events[-2].what == "Patch → FACES"
     for i in range(30):
         at(4.0 + i, note(apc40.N_TAP), note(apc40.N_TAP, 0))
     assert len(log) == 20 and len(log.lines()) == 20
@@ -580,11 +580,11 @@ def test_the_desk_log_keeps_the_last_twenty_presses(rig):
 
 def test_the_desk_log_lines_have_a_time_a_control_what_and_a_layer():
     log = midi.DeskLog(size=3, wall=lambda: "21:04:13")
-    log.add("G1·3 (clip 1·3)", "Preset → FIELD", "both")
+    log.add("G1·3 (clip 1·3)", "Patch → FIELD", "both")
     log.add("D1 (device knob 1)", "nothing (no row on the global layer)", "global")
     assert log.lines() == [
         "21:04:13  D1 (device knob 1)  nothing (no row on the global layer)  [global]",
-        "21:04:13  G1·3 (clip 1·3)  Preset → FIELD  [both]"]
+        "21:04:13  G1·3 (clip 1·3)  Patch → FIELD  [both]"]
     for k in range(5):
         log.add(f"c{k}", "x", "preset")
     assert [e.control for e in log.events] == ["c2", "c3", "c4"]
@@ -601,4 +601,4 @@ def test_the_system_page_helper_reads_the_log(rig, missing):
         assert ui.desk_log_lines(None) == []
     push(rig, *tap(0))
     lines = ui.desk_log_lines(rig.midi)
-    assert len(lines) == 1 and "Preset → TUMBLE" in lines[0]
+    assert len(lines) == 1 and "Patch → TUMBLE" in lines[0]

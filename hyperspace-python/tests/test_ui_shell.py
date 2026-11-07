@@ -78,7 +78,7 @@ def build_rig(tmp_path, renderer=None):
     lib = Library(tmp_path, period=0.0)
     live = {} if renderer is None else {"dream": renderer.lookback.state,
                                         "fx": renderer.fx.state}
-    reg = build_registry(view, control, audio, lib.project, **live)
+    reg = build_registry(view, control, audio, lib.install, **live)
     lib.on_layout("band", control.apply_layout)
     # the rig has everything app.py gives the panel, so every page is
     # measured full: a hands setup over a tracker that sees no hands, an
@@ -102,7 +102,7 @@ def build_rig(tmp_path, renderer=None):
     table = Bindings.factory(path=tmp_path / "bindings.json")
     routing.register_desk(reg, table)
     lib.attach(reg)
-    panel = Panel(control, audio, view, renderer=renderer, bank=lib.project, registry=reg,
+    panel = Panel(control, audio, view, renderer=renderer, bank=lib.install, registry=reg,
                   library=lib)
     # the launch defaults (GRAPH, no desk) asserted once, by
     # test_the_panel_opens_on_graph_filling_the_window; the rig keeps the
@@ -834,7 +834,7 @@ def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monke
     lib.load("loadable", "BIG BLUE WAVE")
     assert table.desk()
     over = _page_scroll(rig, monkeypatch)
-    assert over["routing"] == 0, "the ROUTING page scrolled with a preset loaded"
+    assert over["routing"] == 0, "the ROUTING page scrolled with a patch loaded"
     full = [*table.desk(), *[Binding(f"cc:*:{0x10 + k}", "view.speed", "abs",
                                      feedback="ring", layer="preset") for k in range(8)],
             *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
@@ -849,7 +849,7 @@ def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monke
         for k in range(1, 9)})
     rig.panel.learn = Learn(rig.reg, table)
     rig.panel.learn.refuse("track knob 1 is on the global layer (the meta controller's) — "
-                           "latch SHIFT off to learn into the preset")
+                           "latch SHIFT off to learn into the patch")
     # dark now: only clip row 3's first three buttons (the global band scenes' own)
     assert [f.source for f in ui_routing.unmapped(table)] == [
         f"note:{k}:{0x37}" for k in range(3)]
@@ -1033,8 +1033,8 @@ def test_strip_name_field_draws(rig):
 def test_strip_survives_a_bad_library_call(rig):
     """A LibraryError from a strip action shows in lib.error, never raises."""
     panel, lib = rig.panel, rig.lib
-    assert ui_loadable._guard(panel, lib.load, "view", "no such preset") is None
-    assert "no preset" in lib.error
+    assert ui_loadable._guard(panel, lib.load, "view", "no such patch") is None
+    assert "no patch" in lib.error
     frame(panel, "view")
 
 
@@ -1056,7 +1056,7 @@ def test_dirty_dots_follow_the_poll_cadence(rig):
 
 def test_project_row_and_dirty_state(rig, tmp_path):
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    proj = lib.project
+    proj = lib.install
     frame(panel, "loadable")
     assert not proj.is_dirty()                     # the party show as saved: clean
     ui_loadable._project_save_as(panel, "Show")
@@ -1121,17 +1121,17 @@ def test_the_footer_says_what_was_undone(rig, monkeypatch):
     assert shown() == ["·  nothing to undo"]
     # the library's lines, without opening the PRESETS page: the newest wins
     clock[0] += 1.0
-    lib.status = "loadable: saved TRIP 2"
-    assert shown("lfo") == ["·  loadable: saved TRIP 2"]
+    lib.status = "patch: saved TRIP 2"
+    assert shown("lfo") == ["·  patch: saved TRIP 2"]
     lib.warning = "F3: an empty slot — ⇧F3 saves the live state into it"
     assert shown("lfo") == [f"·  {lib.warning}"]
     u.redo()
     assert shown("lfo") == [f"·  {u.status}"] and u.status.startswith("redid ")
     # a line longer than the room is cut to fit beside the show's name
     clock[0] += 1.0
-    lib.status = "loadable: " + "a very long preset name " * 12
+    lib.status = "patch: " + "a very long patch name " * 12
     (cut,) = shown("view")
-    assert cut.endswith("…") and cut.startswith("·  loadable: a very long")
+    assert cut.endswith("…") and cut.startswith("·  patch: a very long")
     assert imgui.calc_text_size(cut).x < ui.PANEL_W
     assert ui.fit_text("short", 500.0) == "short"
     # …and shorter still while the dim readout (plan 15 WP3) shares the line
@@ -1152,7 +1152,7 @@ def test_loadable_bank_and_strip_on_the_loadables_page(rig):
     frame(panel, "loadable")
     reg["view.shape"].set(5)
     reg["preset.save.2"].fire()
-    assert lib.project.active == 2 and lib.project.bank[2] == "FIELD"
+    assert lib.install.active == 2 and lib.install.bank[2] == "FIELD"
     assert lib.read("loadable", "FIELD")["values"]["view.shape"] == 5
     assert lib.current("loadable") == "FIELD" and not lib.is_dirty("loadable")
     reg["view.shape"].set(1)
@@ -1827,7 +1827,7 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
     assert lrn.control is None and ui_desk.picking(panel) is None
     assert [b.source for b in table.desk() if b.target == "view.speed" and b.kind == "cc"] \
         == [d3.source]
-    assert lrn.last == "learned view.speed ← D3 (device knob 3) (into the preset); K2 let go"
+    assert lrn.last == "learned view.speed ← D3 (device knob 3) (into the patch); K2 let go"
     assert pushes == ["learn view.speed"]
     assert (reg["view.speed"].base, reg["view.bright"].base) == (speed, bright)   # nothing moved
     # bright again: the same click now moves the fader

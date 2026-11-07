@@ -428,7 +428,7 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     assert edit.drop_node("acid.3") is None and "fx.acid.3.on" not in rig.reg
     # plan 33 T7 (R21): instance 1 is in the graph where it is wired, and
     # deleting it takes it out like any instance — not in it, it says so
-    assert edit.drop_node("zoomblur") == "zoomblur is not in the preset's graph"
+    assert edit.drop_node("zoomblur") == "zoomblur is not in the patch's graph"
     # … wired (a branch, not D1's `after`: the owner, 2026-10-24): deleting
     # it takes it, and its wire, out of the graph
     assert edit.wire("hands.layer", "palette.image") is None

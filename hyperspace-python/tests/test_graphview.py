@@ -303,7 +303,7 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
            "render:hands.2.guide": [11, 12], "render:acid.2": [13, 14], "lfo.1": [15, 16]}
     assert M.renamed_layout(old) == new
     assert M.renamed_layout(new) == new           # (new ids: untouched — `render:hands` too)
-    lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.project
+    lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.install
     lib.load("loadable", "party-trip")
     doc = loaded_patch.document("party-trip")
     doc[LAYOUT_KEY] = old
@@ -326,7 +326,7 @@ def test_layout_round_trips_through_the_loadable_and_the_show(rig):
     (every corpus loadable patch) loads with no note and no dirt; one with a bad
     entry keeps the good ones and says so."""
     from hyperspace.loadable import LAYOUT_KEY
-    lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.project
+    lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.install
     lib.load("loadable", "party-trip")
     # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
     # values, which this rig — the panel's, built without them — lacks)
@@ -513,7 +513,7 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     rig.lib.load("loadable", "party-trip")
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
-    assert rig.lib.loaded_patch.layout == {} and rig.lib.project.layout == {}
+    assert rig.lib.loaded_patch.layout == {} and rig.lib.install.layout == {}
     assert not rig.lib.is_dirty("loadable")
 
     def move():
@@ -524,12 +524,12 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     frame(rig.panel, "graph")
     # N9: lfo.2 is idle, not drawn
     assert rig.lib.loaded_patch.layout == {"render:camera": [700, 50], "lfo.1": [30, 640]}
-    assert rig.lib.project.layout == {"analyzer": [40, 20]}
+    assert rig.lib.install.layout == {"analyzer": [40, 20]}
     assert rig.lib.is_dirty("loadable")
     # tidy forgets them both
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert rig.lib.loaded_patch.layout == {} and rig.lib.project.layout == {}
+    assert rig.lib.loaded_patch.layout == {} and rig.lib.install.layout == {}
 
 
 def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_close(rig,
@@ -639,7 +639,7 @@ def test_undoing_a_load_puts_the_earlier_layout_back(tmp_path):
     load gives the earlier show's map back, clean."""
     from hyperspace.library import LOADABLE
     r, settle = _undo_rig(tmp_path)
-    lib, loaded_patch, pr = r.lib, r.loaded_patch, r.lib.project
+    lib, loaded_patch, pr = r.lib, r.loaded_patch, r.lib.install
     loaded_patch.save_as("plain")
     loaded_patch.layout["render:shape"] = [40, 80]
     loaded_patch.save_as("laid")
@@ -673,7 +673,7 @@ def test_a_tidy_is_one_undo_step(tmp_path):
 
     from hyperspace.library import LOADABLE
     r, settle = _undo_rig(tmp_path)
-    lib, loaded_patch, pr = r.lib, r.loaded_patch, r.lib.project
+    lib, loaded_patch, pr = r.lib, r.loaded_patch, r.lib.install
     loaded_patch.layout["render:shape"] = [40, 80]
     pr.layout["lfo.1"] = [0, 10]
     settle(r)

@@ -197,7 +197,7 @@ SHARED_META_IDS = ("app.restart", "edit.undo", "edit.redo", "seq.page", "seq.sel
 # so it is no base, no undo step and no dirty dot
 POSE_IDS = tuple(f"rot.phase.{name}" for name in PLANE_NAMES)
 # SEM (register row 746): the meta controller's params that are one per `Deck`. They
-# close over one deck (`preset.*` its `DeckProject`, `deck.chase` its registry's
+# close over one deck (`preset.*` its `DeckInstall`, `deck.chase` its registry's
 # `chasing`, `totem.*` and `poi.*` their `on_reg`), so they cannot be a shared meta param,
 # which `Registry.add` makes one object on every deck. They count as the meta controller's
 # for `routing.meta_refusal` and the one-layer test, and stay each deck's own object.
@@ -878,7 +878,7 @@ def is_instance_id(pid: str) -> bool:
     or `ghost.<n>.<key>`, n ≥ 2 — one that exists only while a loadable patch's
     graph holds that instance (plan 26 A4)? A loadable patch load sorts such ids
     against the graph it lands; an old show's `ghost.<n>.*` ones the registry
-    lacks are held back (`Project._held_back`)."""
+    lacks are held back (`Install._held_back`)."""
     parts = pid.split(".")
     if parts[0] == "fx" and len(parts) >= 4:
         mark = parts[2]
@@ -2126,7 +2126,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     renderer's ghost hands), and `media` (media.channels.MediaState, the
     eight channels the ``media.*`` params write; kept as ``r.media``, the
     one the loadable patch's bins and the renderer read). `bank` is the open project
-    (library.Project), whose loadable patch slots the ``preset.*`` params
+    (library.Install), whose loadable patch slots the ``preset.*`` params
     load, save and cycle. `restart` is the host's request to
     restart the process (``app.restart``; app.py polls a flag) — a no-op
     without a host. Only the panel's own state (``ui.*``) is added by the
@@ -2177,7 +2177,7 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     r.enum("scene.select", "Scene", lambda: control.scene, control.select_scene,
            control.scene_names, group=g,
            tip="The eleven factory scenes, re-tuned onto the analyzer's bands; the "
-               "preset strip loads an analyzer file whole, layout included.")
+               "patch strip loads an analyzer file whole, layout included.")
     r.trigger("scene.reset_all", "Reset all", control.reset_all_clicked, group=g,
               tip="Reloads the selected scene across the whole analyzer. Undoable for 8 s.")
 
@@ -2677,7 +2677,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                  fmt=lambda v: f"{v:.1f}°", group=g,
                  tip="How wide the eye sees, across the shorter side of the picture. "
                      f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "
-                     "view the shape was always drawn in. The preset's: a lane on it "
+                     "view the shape was always drawn in. The patch's: a lane on it "
                      "breathes the framing.")
     r.continuous("eye.distance", "Eye distance", *_attr(view, "eye_distance"),
                  lo=EYE_DISTANCE_RANGE[0], hi=EYE_DISTANCE_RANGE[1], log=True,
@@ -2860,14 +2860,14 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                          "own from → to. Own it with a hand or LFO to ride the depths.")
 
     # ---- the loadable patch bank ----
-    if bank is not None:                   # library.Project: the bank of loadable patch names
+    if bank is not None:                   # library.Install: the bank of loadable patch names
         g = "preset"
         names = lambda: [n or f"SLOT {k + 1}" for k, n in enumerate(bank.bank)]
         # active is −1 until a loadable patch loads: no choice selected, no LED lit
         # meta-controls: they *apply* loadable patches, so no loadable patch stores them
         # every slot is a choice (plan 19 WP1: twenty-four); `has` says
         # which hold a loadable patch, for a pad's "filled" light
-        r.enum("preset.select", "Preset", lambda: bank.lit, bank.load_slot, names,
+        r.enum("preset.select", "Patch", lambda: bank.lit, bank.load_slot, names,
                group=g, persist=False, modulatable=False,
                has=lambda k: 0 <= k < len(bank.bank) and bank.bank[k] is not None,
                # a pad held on an empty slot saves the live state into it
@@ -2878,10 +2878,10 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                # that slot, filled or empty; the old loadable patch stays listed
                save_into=bank.save_into,
                tip="The show's twenty-four pads: the desk's clip rows 1, 4 and 5, the "
-                   "first eight on F1–F8. Each one points at a preset — the whole "
+                   "first eight on F1–F8. Each one points at a patch — the whole "
                    "performance: the look, its routes, its LFOs and macros, never the "
                    "tempo, the hands or the analyzer. Hold SAVE (track 8's clip stop) "
-                   "and tap a pad to save the live state into it as a new preset, or "
+                   "and tap a pad to save the live state into it as a new patch, or "
                    "hold an empty pad. A pad always loads into the deck off air and never "
                    "touches the room; it is lit for what that deck holds. The panel's "
                    "own load goes to the deck the panel is on.")
@@ -2889,44 +2889,44 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         # them are reached through `preset.select` and the page (plan 19
         # fork 1: no params added)
         for k in range(min(len(bank.bank), F_KEYS)):
-            r.trigger(f"preset.load.{k}", f"Load preset {k + 1}",
+            r.trigger(f"preset.load.{k}", f"Load patch {k + 1}",
                       lambda k=k: bank.load_slot(k), group=g,
-                      tip=f"Load pad {k + 1}'s preset into the deck off air (F{k + 1}). "
+                      tip=f"Load pad {k + 1}'s patch into the deck off air (F{k + 1}). "
                           "The room does not move.")
-            r.trigger(f"preset.save.{k}", f"Save preset {k + 1}",
+            r.trigger(f"preset.save.{k}", f"Save patch {k + 1}",
                       lambda k=k: bank.save_slot(k), group=g, modulatable=False)
         # save-as into the next empty slot (plan 15 WP4): no desk row any
         # more, learnable onto a pad button, never a loadable patch's row (row 752)
-        r.trigger("preset.save_new", "Save as a new preset", bank.save_new,
+        r.trigger("preset.save_new", "Save as a new patch", bank.save_new,
                   group=g, modulatable=False,
-                  tip="Save the live state as a new preset, named from the loaded "
+                  tip="Save the live state as a new patch, named from the loaded "
                       "one (moo → moo 2), into the next empty pad. It never "
-                      "overwrites a preset. On the desk, hold SAVE (track 8's clip "
+                      "overwrites a patch. On the desk, hold SAVE (track 8's clip "
                       "stop) and tap a pad instead to choose the pad.")
-        r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g,
-                  tip="Load the next filled pad's preset into the deck off air (the desk's "
+        r.trigger("preset.next", "Next patch", lambda: bank.cycle(1), group=g,
+                  tip="Load the next filled pad's patch into the deck off air (the desk's "
                       "QUANT). The room does not move.")
-        r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g,
-                  tip="Load the previous filled pad's preset into the deck off air. The "
+        r.trigger("preset.prev", "Previous patch", lambda: bank.cycle(-1), group=g,
+                  tip="Load the previous filled pad's patch into the deck off air. The "
                       "room does not move.")
         # the preset list, not the bank (2026-10-14): they step what the PRESETS
         # page lists, saved ones included. No factory row: a pad button's Learn or
         # the bindings file puts them on a control, never a loadable patch's row (row 700)
-        r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
+        r.trigger("preset.list.next", "Next patch in the list", lambda: bank.walk(1),
                   group=g,
-                  tip="Load the next preset of the PRESETS section's list — every "
-                      "preset by name, a new one included — into the deck off air, "
+                  tip="Load the next patch of the PATCHES section's list — every "
+                      "patch by name, a new one included — into the deck off air, "
                       "wrapping at the end. The room does not move. "
                       "The desk's QUANT walks the pads instead.")
-        r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
+        r.trigger("preset.list.prev", "Previous patch in the list", lambda: bank.walk(-1),
                   group=g,
-                  tip="Load the previous preset of the PRESETS section's list into the deck "
+                  tip="Load the previous patch of the PATCHES section's list into the deck "
                       "off air, wrapping at the start. The room does not move.")
         # home (plan 15 WP2, decision 27): the show's startup loadable patch. Lit
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
                   lit=lambda: bool(bank.startup),
-                  tip="Home: load this show's startup preset into the deck off air — "
+                  tip="Home: load this show's startup patch into the deck off air — "
                       "the Home key (fn ← on a laptop) and OVERDUB (B11) on the desk. "
                       "The room does not move. The line at the foot of the window says "
                       "whether ⌘Z takes it back.")

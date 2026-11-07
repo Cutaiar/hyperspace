@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ACID_WASH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 WAKE = CORPUS / "patches" / "dream" / "wake.json"
 OLD_MODULE = {"schema": "hyperspace.preset/1", "group": "dream", "name": "OLD",
-              "note": "a module preset from before plan 50",
+              "note": "a module patch from before plan 50",
               "values": {"dream.mix": 0.25, "dream.echoes": 12}}
 
 
@@ -53,7 +53,7 @@ def test_the_one_ladder_reads_every_fragment_as_its_patch_2():
     new = patches.forward(old)
     assert old == OLD_MODULE                                   # the input is never changed
     assert new == {"schema": "hyperspace.patch/2", "name": "OLD",
-                   "note": "a module preset from before plan 50", "group": "dream",
+                   "note": "a module patch from before plan 50", "group": "dream",
                    "values": {"dream.mix": 0.25, "dream.echoes": 12}}
     one = json.loads(ACID_WASH.read_text())
     assert one["schema"] == "hyperspace.patch/1"
@@ -291,7 +291,7 @@ def test_a_groups_folder_refuses_what_is_no_patch_of_that_group(tmp_path):
     (folder / "blank.json").write_text(json.dumps({**patches.group_doc("dream", "b", {}),
                                                     "group": ""}))
     app = headless.make_app(tmp_path)
-    for name, words in (("dial", "dial.json is a whole preset, not a patch of the dream group"),
+    for name, words in (("dial", "dial.json is a whole loadable patch, not a patch of the dream group"),
                         ("acid wash", "acid.json is a canvas patch, not a patch of the dream"),
                         ("cam", "cam.json is a patch of the camera group, not a patch of"),
                         ("b", "the key names no param group")):

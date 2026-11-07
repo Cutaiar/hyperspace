@@ -170,10 +170,10 @@ def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
                       "not a group"]
     app.loaded_patch.load_doc(doc)
     assert app.loaded_patch.notes == [
-        "group acid wash: acid.3 is not in the preset — left out",
-        "group gone: kaleido is not in the preset — left out",
-        "group gone: nothing of it is in the preset — left out",
-        "group frame: mod.9 is not in the preset — left out",
+        "group acid wash: acid.3 is not in the patch — left out",
+        "group gone: kaleido is not in the patch — left out",
+        "group gone: nothing of it is in the patch — left out",
+        "group frame: mod.9 is not in the patch — left out",
         "group twice: warp is in group acid wash already — left out",
         "groups: an entry that is not a group, ignored"]
     # (plan 50: a group holds any node the loadable patch saves — the scene too;
@@ -1412,7 +1412,7 @@ def test_a_second_spawn_takes_the_next_ids_and_its_kept_rows_are_said(rig):
     assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["fx.acid.speed"]
     (kept,) = g2["kept_by_host"]
     assert kept["source"] == "cc:0:48" and kept["target"] == "fx.acid.2.speed"
-    assert graphview.kept_words(kept) == "K1 kept by the preset"
+    assert graphview.kept_words(kept) == "K1 kept by the loadable patch"
     assert ("lane:0", "fx.acid.2.speed") in {(b.source, b.target) for b in table.routes()}
     frame(rig.panel, "graph")
     vg = st["view"].group("group.2")

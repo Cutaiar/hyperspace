@@ -31,7 +31,7 @@ from hyperspace.ui import PAGE_KEYS
 
 ACID_WASH = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
 # what the page must never say (the owner, 2026-10-28): whole words, lower case
-BANNED = r"\b(starts on|f[1-8]|hidden|factory|slots?|project|startup|module presets?)\b"
+BANNED = r"\b(starts on|f[1-8]|hidden|factory|slots?|project|startup|module patches?)\b"
 
 
 def _overlap(a, b) -> bool:
@@ -165,14 +165,14 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     _click(panel, page["rects"]["×.DIAL"])
     assert not (tmp_path / "loadable" / "dial.json").exists()
     assert [t.name for t in lib.trash()] == ["DIAL"] and "DIAL" not in lib.list("loadable")
-    assert lib.status == "DIAL is in the trash — the PRESETS section's trash can restore it"
+    assert lib.status == "DIAL is in the trash — the PATCHES section's trash can restore it"
     page_frame(panel)
     page = st["page"]
     assert "DIAL" not in [n for n, _ in page["rows"]] and len(page["rows"]) == 24
     assert page["foot"] == ["trash (1) ▸"] and "trash" in page["rects"]
     _click(panel, page["rects"]["×.ACID"])                       # F6's loadable patch
     assert lib.warning.startswith("ACID is in the trash — F6 still names it")
-    assert lib.project.bank[5] == "ACID" and "ACID" not in lib.list("loadable")
+    assert lib.install.bank[5] == "ACID" and "ACID" not in lib.list("loadable")
     page_frame(panel)
     assert st["page"]["foot"] == ["trash (2) ▸"]
 
@@ -322,13 +322,13 @@ def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
         groups = [g for _k, _t, grp, _b in ui_pane.SECTIONS for g in grp]
         lit = [g for g in groups if ui_loadable.dirty(panel, g)]
         assert lit == [], f"{name}: dirty dots on {lit}"
-        assert not lib.project.is_dirty(), "the show is not unsaved"
+        assert not lib.install.is_dirty(), "the show is not unsaved"
     page_frame(panel, "loadable")
     reg["view.bright"].set_value(reg["view.bright"].value + 1.0)   # an edit: the dot comes back
     assert ui_loadable.dirty(panel, "view") and ui_loadable.dirty(panel, "loadable")
-    assert not lib.project.is_dirty()                     # a performance move: the loadable patch's
+    assert not lib.install.is_dirty()                     # a performance move: the loadable patch's
     reg["master.gain"].set(reg["master.gain"].value + 1.0)  # a meta controller move: the show's
-    assert ui_loadable.dirty(panel, "master") and lib.project.is_dirty()
+    assert ui_loadable.dirty(panel, "master") and lib.install.is_dirty()
 
 
 def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noqa: F811
@@ -360,7 +360,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
                 "strip.loadable.as", "show.name"):
         assert rects[key][1] == clean[key][1] and rects[key][3] == clean[key][3], key
     _click(panel, rects["strip.loadable.save"])
-    assert not lib.is_dirty("loadable") and lib.status == "loadable: saved BIG BLUE WAVE"
+    assert not lib.is_dirty("loadable") and lib.status == "patch: saved BIG BLUE WAVE"
     assert [t.name for t in lib.trash()] == ["BIG BLUE WAVE"]      # the old text, kept
     page_frame(panel)
     assert "strip.loadable.dot" not in st["rects"]
@@ -368,7 +368,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
     # nothing loaded: "save", disabled, and the hover says what as… does
     lib.reland("loadable", (None, None, None))
     assert ui_loadable.save_label(lib, "loadable") == "save"
-    assert ui_loadable.save_tip(lib, "loadable").startswith("No preset loaded")
+    assert ui_loadable.save_tip(lib, "loadable").startswith("No patch loaded")
 
 
 def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa: F811
@@ -528,7 +528,7 @@ def test_the_routing_head_draws_save_and_as_over_the_loadables(rig):  # noqa: F8
     page_frame(panel)
     assert st["save"]["head"] == ("save", True) and "head.dot" in st["rects"]
     _click(panel, st["rects"]["head.save"])
-    assert not lib.is_dirty("loadable") and lib.status == "loadable: saved BIG BLUE WAVE"
+    assert not lib.is_dirty("loadable") and lib.status == "patch: saved BIG BLUE WAVE"
     page_frame(panel)
     assert st["save"]["head"] == ("save", False) and "head.dot" not in st["rects"]
     ui_loadable._begin_naming(panel, ui_routing.NAMING, "Mine")
@@ -550,7 +550,7 @@ def _trash_view(panel):
 
 def test_old_trash_rows_say_so_and_nothing_to_empty_draws_no_chip(rig, monkeypatch):  # noqa: F811
     """Plan 48 review: a row from the library's old trash carries
-    "loadable · library" in itself; when only such rows are listed there is
+    "patch · library" in itself; when only such rows are listed there is
     nothing "empty" would remove, so no chip to arm."""
     from hyperspace.library import Trashed
     panel, lib = rig.panel, rig.lib
@@ -561,7 +561,7 @@ def test_old_trash_rows_say_so_and_nothing_to_empty_draws_no_chip(rig, monkeypat
     ui_loadable.invalidate(panel, "loadable")
     _st, view = _trash_view(panel)
     assert view["rows"] == [("loadable", "GONE", "Oct 1 12:00")]
-    assert view["tags"] == ["loadable · library"] and view["old"] == 1
+    assert view["tags"] == ["patch · library"] and view["old"] == 1
     assert view["empty"] is None and "empty" not in view["rects"]
 
 
@@ -705,22 +705,22 @@ def test_the_show_line_names_the_show_and_its_dot(rig, monkeypatch):  # noqa: F8
     st = _page(panel)
     assert ui_loadable.SHOW_LINE.upper() in texts and "party" in texts
     assert "●" not in texts and "show.dot" not in st["rects"]
-    assert not lib.project.is_dirty()
+    assert not lib.install.is_dirty()
     reg["master.gain"].set(reg["master.gain"].value + 1.0)      # a meta controller move
     texts.clear()
     page_frame(panel)
-    assert lib.project.is_dirty() and "●" in texts and "show.dot" in st["rects"]
+    assert lib.install.is_dirty() and "●" in texts and "show.dot" in st["rects"]
     name, dot = st["rects"]["show.name"], st["rects"]["show.dot"]
     assert name[2] <= dot[0] and not _overlap(name, dot)
 
 
 def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa: F811
-    """The open ▾ combo lists `Project.list()` — the library's shows — and
+    """The open ▾ combo lists `Install.list()` — the library's shows — and
     a pick opens that show with its startup loadable patch."""
     panel, lib = rig.panel, rig.lib
-    assert lib.project.list() == ["house", "party"]
+    assert lib.install.list() == ["house", "party"]
     st = _page(panel)
-    assert lib.project.name == "party" and lib.current("loadable") is None
+    assert lib.install.name == "party" and lib.current("loadable") is None
     seen: list[str] = []
     real = imgui.selectable
     monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
@@ -732,9 +732,9 @@ def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa:
     monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
         (True, True) if label == "house" else real(label, *a, **k)))
     page_frame(panel)
-    assert lib.project.name == "house" and lib.project.stem == "house"
+    assert lib.install.name == "house" and lib.install.stem == "house"
     assert lib.current("loadable") == "BIG BLUE WAVE"             # the house show's startup
-    assert lib.project.bank[0] == "BIG BLUE WAVE" and not lib.project.is_dirty()
+    assert lib.install.bank[0] == "BIG BLUE WAVE" and not lib.install.is_dirty()
 
 
 def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
@@ -742,7 +742,7 @@ def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
     key, and its commit writes under the new name; new starts an unsaved
     `untitled` show with every pad empty and nothing to start on."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    proj = lib.project
+    proj = lib.install
     show = tmp_path / "installs" / "party.json"
     st = _page(panel)
     reg["master.gain"].set(reg["master.gain"].value + 1.0)
@@ -808,14 +808,14 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     again in the same words: a save-as that meets a full bank twice, a
     pad cleared, refilled and cleared again."""
     panel, lib = rig.panel, rig.lib
-    proj = lib.project
+    proj = lib.install
     clock = [1000.0]
     monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
     page_frame(panel, "view")                                      # the first look only remembers
     assert panel._message() == ("", False)
     proj.clear_slot(5)
     said = lib.status
-    assert said == "F6: cleared — ACID is still in the preset list"
+    assert said == "F6: cleared — ACID is still in the patch list"
     assert panel._message() == (said, False)
     clock[0] += ui.MESSAGE_S + 1
     assert panel._message() == ("", False)                    # …and it goes
@@ -825,7 +825,7 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     # a warning said again shows again, and an old warning is not dragged
     # back by a later status
     clock[0] += ui.MESSAGE_S + 1
-    lib.say(warning="saved TRIP 9 — the bank is full: it is in the preset list")
+    lib.say(warning="saved TRIP 9 — the bank is full: it is in the patch list")
     assert panel._message() == (lib.warning, True)
     clock[0] += ui.MESSAGE_S + 1
     lib.say(warning=lib.warning)
@@ -852,7 +852,7 @@ def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
     shows them again — an empty F-key, home on a show that names no
     startup loadable patch, a pad naming no file, a show saved twice."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    proj = lib.project
+    proj = lib.install
     clock = [1000.0]
     monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
     page_frame(panel, "view")                                      # the first look only remembers
@@ -871,7 +871,7 @@ def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
         clock[0] += ui.MESSAGE_S + 1
         assert panel._message() == ("", False)
         reg["preset.load.3"].fire()
-        assert panel._message() == ("F4: no preset 'GONE'", True)
+        assert panel._message() == ("F4: no patch 'GONE'", True)
     for _ in range(2):                                        # a status as well
         clock[0] += ui.MESSAGE_S + 1
         assert panel._message() == ("", False)

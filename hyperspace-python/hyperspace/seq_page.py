@@ -189,7 +189,7 @@ def register(reg, table) -> SeqPage | None:
                tip="The APC40's SEND A, latched: on, the clip grid is the step "
                    "sequencer's — rows 1–5 the lanes' steps, scene 1–5 select a lane "
                    "(again: mute it), clip stop k the length. Off, the bank, SAVE and the "
-                   "render toggles are back. A preset load leaves it as it is.")
+                   "render toggles are back. A patch load leaves it as it is.")
     reg.enum(SELECT_PARAM, "Seq lane", lambda: page.lane,
              lambda v: setattr(page, "lane", min(max(int(v), 0), LANES - 1)),
              [f"lane {i + 1}" for i in range(LANES)], group="desk", persist=False,

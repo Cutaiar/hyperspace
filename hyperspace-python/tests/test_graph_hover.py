@@ -116,13 +116,13 @@ def test_the_tint_switch_reaches_neither_the_loadable_nor_the_show(rig):
     st = party(rig)
     lib = rig.lib
     plain = json.loads(lib.loaded_patch.save_as("UNTINTED").read_text())
-    lib.project.save("plain-show")
-    show_plain = json.loads(lib.project.path.read_text())
+    lib.install.save("plain-show")
+    show_plain = json.loads(lib.install.path.read_text())
     st["tint"] = True
     frame(rig.panel, "graph")
     tinted = json.loads(lib.loaded_patch.save_as("TINTED").read_text())
-    lib.project.save("tinted-show")
-    show_tinted = json.loads(lib.project.path.read_text())
+    lib.install.save("tinted-show")
+    show_tinted = json.loads(lib.install.path.read_text())
     for doc in (plain, tinted, show_plain, show_tinted):
         doc.pop("name", None)
         assert "tint cables" not in json.dumps(doc)

@@ -69,7 +69,7 @@ def test_new_undoes_its_section_and_layout_in_one_step(tmp_path):
         u.tick(2.0)
         was = rig.loaded_patch.graph.spec.to_json()
         rig.loaded_patch.new((0.0, 0.0))
-        assert u.stack[-1].label == "new preset"
+        assert u.stack[-1].label == "new patch"
         assert len(rig.loaded_patch.layout) == 3
         assert u.undo()
     finally:

@@ -1181,7 +1181,7 @@ class Renderer:
         # the registry of the deck this renderer draws (`Deck.build`); None: no deck
         self.deck_reg = None
         # plan 36 T1: whoever holds the meta controller's own wires (the open show,
-        # `library.Project.rig`, by `app`); None: every bus cable standing
+        # `library.Install.rig`, by `app`); None: every bus cable standing
         self.bus_source = None
         # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
         # …), handed over by whoever declared their params (the loadable patch's

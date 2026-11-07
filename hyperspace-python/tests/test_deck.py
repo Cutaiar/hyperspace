@@ -76,7 +76,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     audio = SimpleNamespace(chain=chain, on=True)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, audio, lib.project,
+    reg = build_registry(view, control, audio, lib.install,
                          dream=dream if dream is not None else DreamState(),
                          fx=fx if fx is not None else FxState(),
                          ghost=ghost if ghost is not None else GhostState())
@@ -112,7 +112,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     learn = Learn(reg, router.table, lane=router.lane)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
-    lib.project.load_startup()
+    lib.install.load_startup()
     u = undo.Undo(reg, router.table, marks=Marks(lib), only=in_patch,
                   on_restore=router.sync_macros)
     undo.install(u)
@@ -188,13 +188,13 @@ def _compare(old: list[dict], new: list[dict], *, exact: bool) -> None:
     for i, (a, b) in enumerate(zip(old, new, strict=True)):
         for key in ("table", "routes", "desk", "macros", "modifiers", "lfos", "envs",
                     "labels"):
-            assert a[key] == b[key], f"preset {i}: {key} differs"
+            assert a[key] == b[key], f"patch {i}: {key} differs"
         if exact:
-            assert a["snapshot"] == b["snapshot"], f"preset {i}: snapshot differs"
+            assert a["snapshot"] == b["snapshot"], f"patch {i}: snapshot differs"
         else:
             assert a["snapshot"].keys() == b["snapshot"].keys()
             for g in a["snapshot"]:
-                assert _alike(a["snapshot"][g], b["snapshot"][g]), f"preset {i}: {g} differs"
+                assert _alike(a["snapshot"][g], b["snapshot"][g]), f"patch {i}: {g} differs"
         assert len(a["states"]) == len(b["states"])
         assert all(_same_state(x, y) for x, y in zip(a["states"], b["states"], strict=True)), i
 
@@ -491,7 +491,7 @@ def test_the_build_keeps_mains_order():
     loadable patches, learn, the devices, the startup loadable patch, the marks and undo."""
     src = textwrap.dedent(inspect.getsource(Deck.build))
     src = src[src.index('"""', src.index('"""') + 3) + 3:]       # the body, not the docstring
-    seq = ["s = ViewState()", "build_registry(s, control, audio, on_deck.project",
+    seq = ["s = ViewState()", "build_registry(s, control, audio, on_deck.install",
            "hands(reg)",
            "tempo.register(reg, clock)", "lfo.register(reg, lfos, clock)",
            "envelope.register(reg, envs, clock)", "sequencer.register(reg, seq, clock)",
@@ -501,7 +501,7 @@ def test_the_build_keeps_mains_order():
            "router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)",
            "LoadedPatch(on_deck, reg, router", "loaded_patch.graph.attach(renderer)",
            "Learn(reg, router.table", "devices(reg, router, learn, panel=",
-           "library.project.load_startup()", "geometry.warm_all(first=s.shape)",
+           "library.install.load_startup()", "geometry.warm_all(first=s.shape)",
            "Marks(loaded_patch.lib)", "undos.Undo(reg, router.table", "undos.install(undo_obj)"]
     at = [src.index(s) for s in seq]
     assert at == sorted(at), [s for s, a, b in zip(seq, at, sorted(at), strict=True) if a != b]
@@ -606,8 +606,8 @@ def test_the_band_hooks_are_the_meta_and_two_decks_leave_them_once(tmp_path, mon
     assert r.control.library is r.lib
     hooks = (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"], r.lib._load_hooks["band"])
     startups: list = []
-    real_startup = type(r.lib.project).load_startup
-    monkeypatch.setattr(type(r.lib.project), "load_startup",
+    real_startup = type(r.lib.install).load_startup
+    monkeypatch.setattr(type(r.lib.install), "load_startup",
                         lambda self: (startups.append(1), real_startup(self))[1])
     loaded = r.lib.current(LOADABLE)
     # a second deck leaves the process's one-of-a-kind steps alone (plan 44

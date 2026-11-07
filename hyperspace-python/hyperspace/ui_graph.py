@@ -310,7 +310,7 @@ ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them
 # plan 36 T6 (D4): the **preset only** chip starts lit, for every loadable patch
 # (a constant so the tests' autouse fixture can start them on the full canvas)
 PATCH_ONLY = True
-PATCH_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
+PATCH_ONLY_TIP = ("Lit: only the patch's own nodes, what is wired to them and the windows "
                    "they reach. Controllers, modulation and macros are left off the canvas "
                    "(nothing is changed, only not drawn). Click to show everything.")
 # 2026-10-26: output 1's picture behind the canvas, fixed to the canvas (not
@@ -366,7 +366,7 @@ TINT_TIP = ("Lit: each picture cable's red leans by the colour of the picture it
             "carries — toward orange for yellow-green pictures, toward rose for "
             "blue-violet ones; red, cyan and grey pictures leave it red — read from its "
             "maker's thumbnail once a second. Off: plain red. A view setting: not saved "
-            "with the preset or the show")
+            "with the patch or the show")
 TINT_SPAN = 20.0 / 360.0
 TINT_FULL = 0.25
 
@@ -558,7 +558,7 @@ def _layouts(panel) -> tuple[dict | None, dict | None]:
     None where the panel has no library."""
     lib = getattr(panel, "library", None)
     loaded_patch = getattr(lib, "loaded_patch", None)
-    project = getattr(lib, "project", None)
+    project = getattr(lib, "install", None)
     pre = getattr(loaded_patch, "layout", None) if loaded_patch is not None else None
     if loaded_patch is not None and pre is None:
         pre = loaded_patch.layout = {}
@@ -1270,7 +1270,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(TIDY_TIP)
     imgui.same_line()
-    if ui.lit_chip("preset only##graph", st["patch_only"]):
+    if ui.lit_chip("patch only##graph", st["patch_only"]):
         st["patch_only"] = not st["patch_only"]
     if imgui.is_item_hovered():
         ui.tooltip(PATCH_ONLY_TIP)
@@ -1350,7 +1350,7 @@ def _wants_chip(panel, beside: bool = True) -> None:
         imgui.same_line()
     ui.chip(f"{text}##wants")
     if imgui.is_item_hovered():
-        ui.tooltip("\n".join(["the preset's rows that wait for a device:",
+        ui.tooltip("\n".join(["the patch's rows that wait for a device:",
                               *devices.want_lines(ws)]))
 
 
@@ -2629,14 +2629,14 @@ DROP_COLOUR = imgui.ImVec4(1.0, 0.86, 0.35, 1.0)    # the cable a dragged patch 
 DROP_WIRE = 6.0
 SPOT_ALPHA = 0.15       # every other cable while a hot node is dragged (refused, its own)
 PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins open — "
-               "nothing wired to this preset. Drag one onto a picture cable to splice it in")
+               "nothing wired to this loadable patch. Drag one onto a picture cable to splice it in")
 NO_PATCHES = "no patches yet — a group's menu: save as patch…"
-WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this preset has that "
+WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this loadable patch has that "
                      "node and the port is free — the rest said, nothing else touched")
 SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows and the cables "
                   "across its edge — the patch's file, nothing else written")
-SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
-SHEET_REPLACES = "this preset already has {nodes}: the sheet asks to replace it"
+SHEET_UP = "{n} control{s} the loadable patch already uses: the sheet asks which keeps each"
+SHEET_REPLACES = "this loadable patch already has {nodes}: the sheet asks to replace it"
 SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
 NO_LIBRARY = "no library: nothing to spawn"
 WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the meta controller lacks (`devices.want_words`')
@@ -3371,7 +3371,7 @@ def render_edit(panel) -> graphview.Edit:
     rg = getattr(getattr(panel, "renderer", None), "_graph", None)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
-    e.show = getattr(lib, "project", None)
+    e.show = getattr(lib, "install", None)
     e.loaded_patch = getattr(lib, "loaded_patch", None)           # (plan 44 D3: the bus cuts are the loadable patch's)
     return e
 
@@ -4262,7 +4262,7 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
     e = graphview.Edit(table, panel.reg, router, view, profile,
                        graph=getattr(getattr(lib, "loaded_patch", None), "graph", None),
                        render=getattr(getattr(panel, "renderer", None), "_graph", None))
-    e.show = getattr(lib, "project", None)              # (plan 36 T1: the meta controller's wires)
+    e.show = getattr(lib, "install", None)              # (plan 36 T1: the meta controller's wires)
     # row 563: a modifier or a voice deleted leaves its group at once
     e.loaded_patch = getattr(lib, "loaded_patch", None)
     return e

@@ -444,7 +444,7 @@ def make_app(tmp_path):
     control = Control(chain)
     view = ViewState()
     lib = Library(tmp_path)
-    reg = build_registry(view, control, NS(chain=chain), lib.project)
+    reg = build_registry(view, control, NS(chain=chain), lib.install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
 
     class Quiet:
@@ -481,7 +481,7 @@ def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     rows[0].motion = None                             # off here: the arithmetic is under test
     assert app.table.owner("view.inst_amp") is rows[0]
     assert app.learn.last == ("learned view.inst_amp ← hand right.pitch pushes +0.25 "
-                              "(into the preset)")
+                              "(into the patch)")
     # the hand pushes about the base — in floats, off its 100 detents —
     # through the Router like every route; the base is what the panel set
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=app.learn, router=app.router)
@@ -786,7 +786,7 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
     MidiIO anywhere — `[midi] enabled = false`, or the adapter failed to
     open — right-click → Learn, move a hand, and the row lands."""
     chain = Analyzer(Analyser())
-    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), Library(tmp_path).project)
+    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), Library(tmp_path).install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     learn, router = Learn(reg, table), Router(reg, table)
     r = rig()
@@ -868,11 +868,11 @@ def test_hands_page_draws_live_and_offline(tmp_path):
         audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
-        reg = build_registry(view, control, audio, lib.project)
+        reg = build_registry(view, control, audio, lib.install)
         r = rig()
         hands.register(reg, r.s)
         lib.attach(reg)
-        panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+        panel = Panel(control, audio, view, bank=lib.install, registry=reg, library=lib)
         panel.hand_settings = r.s
         reg["ui.page"].set(PAGE_KEYS.index("hands"))
 
@@ -1908,11 +1908,11 @@ def test_hands_page_draws_the_box_and_a_hand_outside_it(tmp_path):
         audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
-        reg = build_registry(view, control, audio, lib.project)
+        reg = build_registry(view, control, audio, lib.install)
         r = boxed()
         hands.register(reg, r.s)
         lib.attach(reg)
-        panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+        panel = Panel(control, audio, view, bank=lib.install, registry=reg, library=lib)
         panel.hand_settings = r.s
         reg["ui.page"].set(PAGE_KEYS.index("hands"))
         said = []

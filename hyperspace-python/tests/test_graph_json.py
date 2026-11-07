@@ -653,30 +653,30 @@ def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
                                 "startup": "Glass", "bank": ["Glass"],
                                 "session": session, "modules": {}}))
     rig.lib.warning = ""
-    missing = rig.lib.project.load("rig")
+    missing = rig.lib.install.load("rig")
     reg = rig.reg
     assert missing == [] and "unknown" not in rig.lib.warning
     assert rig.lib.current(LOADABLE) == "Glass"
     look = {k: v for k, v in session.items() if k != "ghost.2.mirror"}
     assert {pid: reg[pid].value for pid in look} == look and "ghost.2.mirror" not in reg
-    assert rig.lib.project.old_look == look
+    assert rig.lib.install.old_look == look
     state = rig.loaded_patch.graph.states["ghost.2"]
     assert state.on and state.mirror is reg["ghost.mirror"].value and state.style == 3
-    assert not rig.lib.project.is_dirty()
+    assert not rig.lib.install.is_dirty()
     # the loadable patch saved: the look is its own now, `/10`
     saved = json.loads(rig.loaded_patch.save_as("Glass").read_text())
     assert saved["values"]["ghost.2.alpha"] == 0.3 and "ghost.2.mirror" not in saved["values"]
     # a loadable patch without the node: the show holds the mirror alone, clean
     rig.lib.load(LOADABLE, "party-tumble")
-    assert "ghost.2.on" not in reg and not rig.lib.project.is_dirty()
-    rig.lib.project.save()
+    assert "ghost.2.on" not in reg and not rig.lib.install.is_dirty()
+    rig.lib.install.save()
     doc = json.loads(show.read_text())
     assert doc["schema"] == "hyperspace.install/1"
     assert {k: v for k, v in doc["tuning"].items() if k.startswith("ghost.2.")} == {}
     # opening the show again: the mirror back from it, the look from the loadable patch
-    rig.lib.project.load("rig")
+    rig.lib.install.load("rig")
     assert "ghost.2.mirror" not in reg and reg["ghost.2.alpha"].value == 0.3
-    assert not rig.lib.project.is_dirty()
+    assert not rig.lib.install.is_dirty()
 
 
 def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):

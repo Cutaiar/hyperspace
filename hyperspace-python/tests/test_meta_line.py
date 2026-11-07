@@ -154,7 +154,7 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     before = show.read_bytes()
     _old_loadable(home)
     rig = boot(home, show="rig")
-    pr, reg, pre = rig.lib.project, rig.reg, rig.loaded_patch
+    pr, reg, pre = rig.lib.install, rig.reg, rig.loaded_patch
     # the show: its look and cuts read out, its mirror the room's
     assert pr.old_look == LOOK and pr.old_cuts.cut == {CUT}
     assert reg["ghost.mirror"].value is True and reg["tempo.bpm"].value == 128.0
@@ -183,7 +183,7 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     assert reg["ghost.mirror"].value is True                  # the room's stays
     # a fresh launch on the /3 show: the old look still from its backup
     again = boot(home, show="rig")
-    assert again.lib.project.old_look == LOOK and again.lib.project.old_cuts.cut == {CUT}
+    assert again.lib.install.old_look == LOOK and again.lib.install.old_cuts.cut == {CUT}
     again.loaded_patch.load("OLD")
     assert again.reg["ghost.alpha"].value == 0.25 and again.loaded_patch.bus.cut == {CUT}
 
@@ -251,7 +251,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     assert tool.main(["--library", str(lib)], picture=same_picture) == 0
     out = capsys.readouterr().out
     assert {p: p.read_bytes() for p in lib.rglob("*") if p.is_file()} == tree
-    assert "1 bus cut(s) into every preset: output.all.image → output.2.image" in out
+    assert "1 bus cut(s) into every loadable patch: output.all.image → output.2.image" in out
     assert "would rewrite 2 as /11, leave 1 untouched (already /11)" in out
     assert "show rig.hyp.json → installs/rig.json" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
@@ -278,15 +278,15 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
 def test_a_newer_file_is_refused_as_an_older_build_refuses_a_ten(tmp_path):
     """The two-Macs rule, as this build sees it: a `/12`, a `/4` show and an install `/2` are
     refused, as a build from before refuses an `/11`; the words say what to do."""
-    from hyperspace.library import Library, LibraryError, Project, migrate_doc
+    from hyperspace.library import Install, Library, LibraryError, migrate_doc
     assert loadable.VERSIONS[-1] == 11
     with pytest.raises(LibraryError, match="newer than this build"):
         migrate_doc({"schema": "hyperspace.project/4"}, "hyperspace.project")
     lib = Library(tmp_path)
     with pytest.raises(LibraryError):
-        Project(lib)._take({"schema": "hyperspace.project/4", "name": "x"}, None)
+        Install(lib)._take({"schema": "hyperspace.project/4", "name": "x"}, None)
     with pytest.raises(LibraryError, match="git pull and uv sync"):
-        Project(lib)._take({"schema": "hyperspace.install/2", "name": "x"}, None)
+        Install(lib)._take({"schema": "hyperspace.install/2", "name": "x"}, None)
 
 
 # ---------------------------------------------------------------- review of #351

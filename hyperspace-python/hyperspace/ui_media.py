@@ -213,7 +213,7 @@ def _banner(state) -> None:
     gone = state.missing()
     if not gone:
         return
-    ui._micro("this preset relies on sources this Mac lacks", ui.WARN)
+    ui._micro("this patch relies on sources this Mac lacks", ui.WARN)
     w = imgui.get_content_region_avail().x
     tail = " — shows black"     # the heading says why; a long id is fitted, never this
     for sid in gone[:BANNER_LINES]:

@@ -442,8 +442,8 @@ def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
     frame(panel)
     assert ui_routing.POINTER in texts
     assert "ROUTES" not in texts and "MODIFIERS" not in texts and not rows and not strips
-    assert {"DESK  ·  PRESET LAYER", "MACROS", "META CONTROLLER", "SINKS"} <= set(texts)
-    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
+    assert {"DESK  ·  PATCH LAYER", "MACROS", "META CONTROLLER", "SINKS"} <= set(texts)
+    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PATCH LAYER")
     # the functions stay
     assert ui_routing._sources(panel, router) and ui_routing._targets(panel)
     b = ui_routing.add_route(panel, "fx.acid.mix", source=m.address, depth=0.4)

@@ -265,7 +265,7 @@ def test_a_pad_press_on_the_off_air_deck_reaches_only_it(rig):
     rig.meta.register("apc40", 2)
     rig.meta.move_player(2, "off_air")
     theirs = _state(rig.one)
-    rig.two.loaded_patch.lib.project.bank[0] = "party-wake"
+    rig.two.loaded_patch.lib.install.bank[0] = "party-wake"
     rig.two.reg["preset.select"].set(0)
     assert rig.two.loaded_patch.current == "WAKE"
     assert _state(rig.one) == theirs
@@ -783,7 +783,7 @@ def _press(reg, verb, k=0):
 
 
 def _bank(rig, *names):
-    project = rig.one.loaded_patch.lib.project
+    project = rig.one.loaded_patch.lib.install
     project.bank[:] = [None] * len(project.bank)
     for k, name in enumerate(names):
         project.bank[k] = name
@@ -917,7 +917,7 @@ def test_the_apc_on_air_loads_off_air_by_a_real_press_and_lights_that(rig):
 def test_the_pads_light_says_the_deck_off_air_from_both_decks_and_follows_the_fader(rig):
     _bank(rig, "party-wake", "party-tumble")
     rig.two.reg["preset.select"].set(0)
-    rig.one.loaded_patch.lib.project.active = 1
+    rig.one.loaded_patch.lib.install.active = 1
     for d in (rig.one, rig.two):
         assert d.reg["preset.select"].value == 0, "the slot off air, whoever reads it"
     rig.mix.xfade = 1.0
@@ -945,7 +945,7 @@ def test_a_held_empty_pad_on_air_still_saves_there_and_blinks(rig):
     blink that confirms it does not wait for the light to change."""
     from hyperspace import midi
 
-    project = rig.one.loaded_patch.lib.project
+    project = rig.one.loaded_patch.lib.install
     empty = project.next_empty()
     n, ch = _clip(empty)
     t = [0.0]
@@ -961,7 +961,7 @@ def test_a_held_empty_pad_on_air_still_saves_there_and_blinks(rig):
 
 def test_an_empty_pad_says_how_to_fill_it_and_a_hold_still_saves_on_air(rig):
     d = rig.one
-    project = d.loaded_patch.lib.project
+    project = d.loaded_patch.lib.install
     empty = project.next_empty()
     rig.lib.warning = ""
     d.reg["preset.select"].set(empty)
@@ -1071,7 +1071,7 @@ def _files(rig) -> dict:
     """Every loadable patch file and the show's, byte for byte, with the bank."""
     home = rig.lib.home
     return {"files": {str(f): f.read_bytes() for f in home.rglob("*.json")},
-            "bank": list(rig.one.loaded_patch.lib.project.bank)}
+            "bank": list(rig.one.loaded_patch.lib.install.bank)}
 
 
 @pytest.mark.parametrize("carrier", [0, 1], ids=["on air carries", "off air carries"])
@@ -1107,7 +1107,7 @@ def test_the_panels_save_still_saves(rig):
 def test_a_held_empty_pad_on_the_invariant_row_writes_its_file(rig):
     from hyperspace import midi
 
-    project = rig.one.loaded_patch.lib.project
+    project = rig.one.loaded_patch.lib.install
     empty = project.next_empty()
     n, ch = _clip(empty)
     row = next(b for b in rig.one.table.active() if b.target == "preset.select" and int(b.value) == empty)
@@ -1353,7 +1353,7 @@ def test_a_click_on_the_fade_chip_during_a_run_does_nothing(rig):
 
 def test_a_load_with_nowhere_to_land_is_refused_never_this_deck(rig):
     """Finding 7: it fails closed."""
-    project = rig.one.loaded_patch.lib.project
+    project = rig.one.loaded_patch.lib.install
     _bank(rig, "party-wake")
     project.meta = NS(row_load=lambda: (None, None))
     theirs = _state(rig.one)

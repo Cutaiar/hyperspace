@@ -488,7 +488,7 @@ def boot_home(home, *, corpus: bool = True):
     control = Control(chain)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
@@ -502,7 +502,7 @@ def boot_home(home, *, corpus: bool = True):
     lib.attach(reg)
     router = routing.Router(reg, table)
     loaded_patch = loadable.LoadedPatch(lib, reg, router)
-    lib.project.load_startup()
+    lib.install.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
                            router=router, loaded_patch=loaded_patch, clock=clock, home=home)
 
@@ -573,7 +573,7 @@ def owner_home(tmp_path):
 def build_owner_home(home):
     """Make `home` (a folder that does not exist yet) a home shaped like
     the owner's after a night on the build from before plan 19, by running
-    the writers (`LoadedPatch.save_as`, `Project.save`, `Bindings.write`,
+    the writers (`LoadedPatch.save_as`, `Install.save`, `Bindings.write`,
     `placement.save`, `to_trash`), not by hand-written JSON, so it tracks
     the formats (tools/bank_demo.py builds its home here too):
 
@@ -601,7 +601,7 @@ def build_owner_home(home):
     if home.exists():
         raise FileExistsError(f"{home}: an owner-like home is built in a new folder")
     r = boot_home(home)                             # a fresh home: the factory party show
-    reg, pr, table = r.reg, r.lib.project, r.router.table
+    reg, pr, table = r.reg, r.lib.install, r.router.table
     one, two, three = OWNER_LOADABLES
     # NIGHT ONE: TUMBLE, dimmer
     reg["view.bright"].set(reg["view.bright"].value * 0.8)

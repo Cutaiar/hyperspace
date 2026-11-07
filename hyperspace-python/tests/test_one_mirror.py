@@ -154,15 +154,15 @@ def test_a_show_that_holds_the_old_id_still_opens_clean_and_keeps_it(tmp_path):
                                 "bank": ["Glass"], "modules": {},
                                 "session": {"ghost.mirror": False, "ghost.2.mirror": True}}))
     rig.lib.warning = ""
-    assert rig.lib.project.load("old") == []
-    assert "unknown" not in rig.lib.warning and not rig.lib.project.is_dirty()
+    assert rig.lib.install.load("old") == []
+    assert "unknown" not in rig.lib.warning and not rig.lib.install.is_dirty()
     assert "ghost.2.mirror differs from the Mirror" in rig.lib.warning
     state = rig.deck.graph.states["ghost.2"]
     assert "ghost.2.mirror" not in rig.reg and state.mirror is False
     rig.reg["ghost.mirror"].set(True)
     assert state.mirror is True
     rig.reg["ghost.mirror"].set(False)
-    rig.lib.project.save()
+    rig.lib.install.save()
     assert "ghost.2.mirror" not in json.loads(show.read_text())["tuning"]    # (plan 58 §9: no more)
 
 
@@ -312,7 +312,7 @@ def test_no_normal_load_raises_the_shared_drop_warning(two):
     shared param on the app's own roads."""
     lib = two.rig.lib
     names = sorted(lib.list(LOADABLE))
-    shows = lib.project.list()
+    shows = lib.install.list()
     assert names and shows
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -325,8 +325,8 @@ def test_no_normal_load_raises_the_shared_drop_warning(two):
         two.land(two.a, "Plain", ONE_HAND)
         two.land(two.b, "Plain", ONE_HAND)
         for show in shows:
-            lib.project.load(show)
-        lib.project.new()
+            lib.install.load(show)
+        lib.install.new()
         assert _shared_drops(caught) == []
         two.a.reg.remove("ghost.mirror")              # (the recorder does see one)
     said = _shared_drops(caught)

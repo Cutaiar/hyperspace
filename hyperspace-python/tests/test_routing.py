@@ -68,7 +68,7 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
     audio = SimpleNamespace(chain=chain, on=True)
     view = ViewState()
     lib = Library(tmp_path) if full else None
-    project = lib.project if full else None
+    project = lib.install if full else None
     reg = build_registry(view, control, audio, project)
     if full:
         lib.attach(reg)
@@ -1722,7 +1722,7 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_loadable_bank(tm
     assert [b.target for b in t.bindings if b.source == f"note:2:{apc40.N_CLIP[0]}"] \
         == ["preset.select"]
     assert not any(b.target.startswith("theme.") for b in t.bindings)
-    assert "remapped key:F3: theme.load.2 → preset.load.2 (the preset bank of plan 13)" in err
+    assert "remapped key:F3: theme.load.2 → preset.load.2 (the patch bank of plan 13)" in err
     n = len(t.notes)
     # F-keys, clip row, QUANT, pad B (straight onto the newest layout's
     # points, PAD_REMAP), the user's — and clip rows 4 and 5,
@@ -2140,7 +2140,7 @@ def test_a_row_the_owner_put_on_a_bank_pad_is_left_alone(owner_home, capsys):
     old = path.read_bytes()
     capsys.readouterr()
     r = boot_home(home)
-    t, pr = r.router.table, r.lib.project
+    t, pr = r.router.table, r.lib.install
     rest = [s for s in far if s != far[3]]
     assert _added(capsys.readouterr().err, path, rest)
     assert t.said.startswith("bindings.json updated (15 rows changed)")
@@ -2210,12 +2210,12 @@ def test_a_remap_whose_backup_fails_writes_nothing(owner_home, capsys, monkeypat
                    for rows in _bank_rows(t).values())
         # (a far slot of `mine` cannot be filled here: its first long write
         # needs a backup of the show too, which this test makes impossible)
-        r.lib.project.bank[12] = "WAKE"
+        r.lib.install.bank[12] = "WAKE"
         n, ch = apc40.BANK_PADS[12]
         (b,) = t.dispatch("note", ch, n)
         routing.act(r.reg, b)
         assert r.lib.current("loadable") == "WAKE"
-        r.lib.project.bank[12] = None
+        r.lib.install.bank[12] = None
         # a later write of the table: the copy is tried again, and nothing is written
         t.write()
         assert as_it_was() and t.error == routing.NOT_REWRITTEN

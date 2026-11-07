@@ -107,7 +107,7 @@ def owner_rig(tmp_path):
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
     lib = Library(tmp_path)
-    reg = build_registry(view, control, audio, lib.project)
+    reg = build_registry(view, control, audio, lib.install)
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
     reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
@@ -212,7 +212,7 @@ def test_quant_sent_on_a_banked_channel_still_steps_the_bank(tmp_path):
     device selected; it is read as the one button it is (channel 0 in
     Alternate mode) — and it tells the app the desk fell back."""
     r = owner_rig(tmp_path)
-    bank = r.lib.project
+    bank = r.lib.install
     dev = Apc40(r)
     dev.press(apc40.N_SELECT, 2)            # nothing reaches the app: the device banks
     was = bank.active
@@ -257,7 +257,7 @@ def test_the_diagram_says_what_the_band_rows_and_the_corner_do(rig):
         "Click-through (overlay)"
     assert text(reg, Binding("note:0:81", "scene.reset_all", "toggle")) == \
         "Reset analyzer (again: undo)"
-    assert text(reg, Binding("note:0:63", "preset.next", "toggle")) == "Next bank preset"
+    assert text(reg, Binding("note:0:63", "preset.next", "toggle")) == "Next bank patch"
 
 
 def test_a_revealing_press_is_finished_so_the_next_press_is_no_second_sign(tmp_path):

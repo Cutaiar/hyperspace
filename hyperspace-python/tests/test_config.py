@@ -163,7 +163,7 @@ def test_library_git_leftover_is_ignored_with_a_note(tmp_path, capsys):
     p.write_text("[library]\ngit = true\n")
     cfg = config.load(p)
     assert cfg["library"] == {"path": ""}
-    assert cfg["notes"] == [("config: [library] git is gone (plan 25) — presets are shared "
+    assert cfg["notes"] == [("config: [library] git is gone (plan 25) — patches are shared "
                             "through [library] path; remove the line")]
     assert "[library] git is gone" in capsys.readouterr().err
 

@@ -55,7 +55,7 @@ def moving(t):
 
 
 def lines_twice(r) -> None:
-    lib, proj, reg = r.lib, r.lib.project, r.reg
+    lib, proj, reg = r.lib, r.lib.install, r.reg
     panel = SimpleNamespace(undo=r.undo, library=lib)
     t = 1000.0
     footer(panel, t)                                   # the first look only remembers
@@ -176,7 +176,7 @@ def main() -> None:
     say("Hyperspace — plan 16 WP7's follow-ups, headless (tools/followups_demo.py)")
     say(f"home folder: {demo.HOME}  (a temp folder made by this script)")
     frames(r, 5)
-    say(f"show: {r.lib.project.name}   preset: {r.lib.current(LOADABLE)}")
+    say(f"show: {r.lib.install.name}   preset: {r.lib.current(LOADABLE)}")
     say()
     lines_twice(r)
     round_off(r)

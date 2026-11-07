@@ -34,7 +34,7 @@ def test_folders_lists_every_folder_down_empty_ones_too_never_hidden(lib_dirs): 
 def test_a_move_keeps_the_bytes_and_the_bank_and_the_shows_follow(lib_dirs):  # noqa: F811
     _second_show(lib_dirs, ["A", "a", None])
     r = make(lib_dirs)
-    lib, pr = r.lib, r.lib.project
+    lib, pr = r.lib, r.lib.install
     lib.load(LOADABLE, "A")
     before = (lib_dirs.loaded_patch / "a.json").read_bytes()
     dst = lib.move("A", "party")
@@ -59,15 +59,15 @@ def test_a_move_into_a_nested_folder_and_its_refusals(lib_dirs):  # noqa: F811
     lib = r.lib
     lib.move("party/B", "party/deep")
     assert "party/deep/B" in lib.list(LOADABLE)
-    assert lib.project.bank[1] == "party/deep/B"
+    assert lib.install.bank[1] == "party/deep/B"
     assert lib.move("party/deep/B", "Party/Deep") == lib_dirs.loaded_patch / "party/deep/b.json"
     with pytest.raises(LibraryError, match="no folder"):
         lib.move("A", "nowhere")
-    with pytest.raises(LibraryError, match="no preset"):
+    with pytest.raises(LibraryError, match="no patch"):
         lib.move("ZZZ", "party")
     _put(lib_dirs.loaded_patch / "party" / "deep" / "a.json", "A")
     lib._sync()
-    with pytest.raises(LibraryError, match="already has a preset by that name"):
+    with pytest.raises(LibraryError, match="already has a patch by that name"):
         lib.move("A", "party/deep")
     assert (lib_dirs.loaded_patch / "a.json").is_file()              # nothing moved
 
@@ -89,7 +89,7 @@ def test_make_folder_at_the_top_and_inside_and_its_refusals(lib_dirs):  # noqa: 
 
 def test_a_folder_rename_keeps_every_leaf_and_the_slots_follow(lib_dirs):  # noqa: F811
     r = make(lib_dirs)
-    lib, pr = r.lib, r.lib.project
+    lib, pr = r.lib, r.lib.install
     pr.put_slot(2, "party/deep/C")
     lib.load(LOADABLE, "party/deep/C")
     b = (lib_dirs.loaded_patch / "party" / "b.json").read_bytes()
@@ -157,7 +157,7 @@ def test_a_case_change_renames_and_another_folder_by_that_name_is_refused(
     r = make(lib_dirs)
     lib = r.lib
     assert lib.rename_folder("party", "Party") == "Party"     # this very folder: allowed
-    assert "Party/B" in lib.list(LOADABLE) and lib.project.bank[1] == "Party/B"
+    assert "Party/B" in lib.list(LOADABLE) and lib.install.bank[1] == "Party/B"
     # a case-sensitive volume: `party` beside `Party` is another folder — the
     # disk says so (samefile), not the fold, and nothing is replaced. Where
     # the disk allows it (Linux CI) the sibling is real; where it folds case

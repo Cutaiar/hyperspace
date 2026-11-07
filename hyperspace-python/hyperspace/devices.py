@@ -2694,7 +2694,7 @@ def wanted_lines(ws) -> list[str]:
     rig; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
     wait". Nothing for a connected role, nothing when the loadable patch wants
     nothing."""
-    return [f"wanted by the preset: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"
+    return [f"wanted by the patch: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"
             for w in ws if w.lacking]
 
 

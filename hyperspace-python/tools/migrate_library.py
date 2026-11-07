@@ -220,7 +220,7 @@ def rig_show(library: Path, home: Path, name: str | None = None
         else:
             why = "no show in the library" if not shows else (
                 f"{len(shows)} shows and none is this Mac's last: name one with --show")
-            return None, None, (f"show: none ({why}) — every preset takes the build's "
+            return None, None, (f"show: none ({why}) — every loadable patch takes the build's "
                                 "default eye, hands' and clouds' looks, and no bus cut")
     doc = _read(path)
     eye, _at = show_eye(doc)
@@ -236,7 +236,7 @@ def rig_show(library: Path, home: Path, name: str | None = None
     said = (", ".join(f"{k} {v:.4g}" for k, v in sorted(session.items())) if session
             else "no eye nor look (the build's defaults)")
     cut = (seed or {}).get("rig", {}).get("cut", [])
-    said += (f"; {len(cut)} bus cut(s) into every preset: "
+    said += (f"; {len(cut)} bus cut(s) into every loadable patch: "
              + ", ".join(f"{c['from']} → {c['to']}" for c in cut) if cut else "; no bus cut")
     return path, seed, f"show: {path.name[: -len(SHOW_SUFFIX)]} ({how}) — {said}"
 
@@ -465,7 +465,7 @@ def install_plan(library: Path) -> tuple[list[InstallMove], list[str]]:
                 continue
             # it opens in the new reader, before its show goes
             try:
-                names.project._take(json.loads(data), dest, dest.name)
+                names.install._take(json.loads(data), dest, dest.name)
             except (LibraryError, ValueError, TypeError) as e:
                 left.append(f"{path.name}: its install file does not open ({e}) — left as it is")
                 continue

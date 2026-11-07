@@ -212,7 +212,7 @@ def test_a_pose_in_values_is_no_pose(tmp_path):
     doc["values"]["rot.phase.XY"] = 1.0
     rig.view.ang = [0.1] * 6
     rig.loaded_patch.load_doc(doc)
-    assert "rot.phase.XY is not part of a preset, ignored" in rig.loaded_patch.notes
+    assert "rot.phase.XY is not part of a patch, ignored" in rig.loaded_patch.notes
     assert rig.view.ang == [0.1] * 6
 
 
@@ -268,7 +268,7 @@ def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_pa
     (home / "loadable").mkdir(parents=True)
     (home / "loadable" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig = boot(home, show="rig")
-    pr, reg = rig.lib.project, rig.reg
+    pr, reg = rig.lib.install, rig.reg
     assert pr.name == "rig" and pr.old_eye == EYE and pr.camera_at == CAMERA_AT
     assert not any(k.startswith("eye.") for k in pr.session)
     assert "render:camera" not in pr.layout and pr.layout["device:apc40"] == [1, 2]
@@ -300,15 +300,15 @@ def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_pa
     # a fresh launch: the show holds no eye now, but its `.bak-v2-eye` does
     # — still handed to old loadable patches (review 2.2) — and the /9 carries its own
     again = boot(home, show="rig")
-    assert again.lib.project.old_eye == EYE and again.lib.project.camera_at == CAMERA_AT
-    assert not any(k.startswith("eye.") for k in again.lib.project.session)
+    assert again.lib.install.old_eye == EYE and again.lib.install.camera_at == CAMERA_AT
+    assert not any(k.startswith("eye.") for k in again.lib.install.session)
     again.loaded_patch.load("OLD")
     assert again.reg["eye.fov"].value == 30.0 and again.reg["eye.distance"].value == 5.0
 
 
 def test_a_bank_autosave_before_the_tool_still_hands_old_loadables_the_eye(tmp_path):
     """Review 2.2: the first write of an old show on this build (here the
-    bank's autosave, `Project.write`) drops its eye into `.bak-v2-eye`; an
+    bank's autosave, `Install.write`) drops its eye into `.bak-v2-eye`; an
     old loadable patch opened on the next launch — before the tool ran — still
     takes that eye and the camera's position from the backup."""
     home = tmp_path / "lib"
@@ -316,12 +316,12 @@ def test_a_bank_autosave_before_the_tool_still_hands_old_loadables_the_eye(tmp_p
     (home / "loadable").mkdir(parents=True)
     (home / "loadable" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig = boot(home, show="rig")
-    rig.lib.project.put_slot(0, "OLD")                # a pad: the bank's autosave
+    rig.lib.install.put_slot(0, "OLD")                # a pad: the bank's autosave
     show = json.loads((home / "projects" / "rig.hyp.json").read_text())
     assert "eye.fov" not in show["tuning"]
     assert (home / "projects" / "rig.hyp.json.bak-v2-eye").is_file()
     again = boot(home, show="rig")
-    assert again.lib.project.old_eye == EYE and again.lib.project.camera_at == CAMERA_AT
+    assert again.lib.install.old_eye == EYE and again.lib.install.camera_at == CAMERA_AT
     again.reg["eye.fov"].set(90.0)
     again.loaded_patch.load("OLD")
     assert again.reg["eye.fov"].value == 30.0 and again.reg["eye.distance"].value == 5.0
@@ -352,7 +352,7 @@ def test_an_old_loadable_with_no_old_eye_takes_the_builds(tmp_path):
     rig.reg["eye.fov"].set(90.0)
     (tmp_path / "loadable" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig.loaded_patch.load("OLD")
-    assert rig.lib.project.old_eye == {}
+    assert rig.lib.install.old_eye == {}
     assert rig.reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
     assert rig.reg["eye.distance"].value == pytest.approx(G.EYE_DISTANCE)
 
@@ -361,7 +361,7 @@ def test_the_shows_mark_carries_its_old_eye(tmp_path):
     home = tmp_path / "lib"
     _write(home / "projects" / "rig.hyp.json", old_show())
     rig = boot(home, show="rig")
-    pr = rig.lib.project
+    pr = rig.lib.install
     mark = pr.mark()
     pr.old_eye, pr.camera_at = {}, None
     pr.remark(mark)
@@ -387,7 +387,7 @@ def test_a_hand_axis_learns_onto_the_eye_and_breathes_the_framing(tmp_path):
     own linear range (its taper unchanged, review 4)."""
     chain = Analyzer(Analyser())
     view = ViewState()
-    reg = build_registry(view, Control(chain), NS(chain=chain), L.Library(tmp_path).project)
+    reg = build_registry(view, Control(chain), NS(chain=chain), L.Library(tmp_path).install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     lrn = Learn(reg, table)
     for pid, axis in (("eye.fov", "hand:right.y"), ("eye.distance", "hand:left.y")):
@@ -870,7 +870,7 @@ def test_an_old_show_with_the_camera_under_its_old_id_and_no_eye(tmp_path):
                    "layout": {"render:eye": [7, 8], "device:apc40": [1, 2]}})
     before = show.read_bytes()
     rig = boot(home, show="rig")
-    pr = rig.lib.project
+    pr = rig.lib.install
     assert pr.camera_at == [7, 8] and pr.old_eye == {}
     assert not any(k in pr.layout for k in graphmigrate.CAMERA_NODES)
     assert L.show_without_eye(json.loads(before)) is not None

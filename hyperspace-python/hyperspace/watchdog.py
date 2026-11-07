@@ -142,7 +142,7 @@ class Watchdog:
             name = _quiet_call(self.loadable)
             with self._lock:
                 f = self._file
-                f.write(f"\n=== {kind} {_stamp(self.wall())} · preset "
+                f.write(f"\n=== {kind} {_stamp(self.wall())} · patch "
                         f"{name or '(none)'}: {headline} ===\n")
                 if body:
                     f.write(body if body.endswith("\n") else body + "\n")

@@ -1444,6 +1444,14 @@ def backup(path: Path, schema: str) -> Path | None:
 OLD_DIAL = "desk.pad.dial."
 
 
+LAYER_WORDS = {"preset": "patch"}     # a desk row's `layer`, saved, in a person's words
+
+
+def layer_word(layer) -> str:
+    """A desk layer as a person reads it: the patch layer, the global layer."""
+    return LAYER_WORDS.get(layer, str(layer))
+
+
 def old_words(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
     """A file before `bindings/4` in today's words (plan 57): the sources (`nsew`) and the
     `overlay.*` aliases' targets. Returns (rows, a note per row that moved)."""
@@ -1516,7 +1524,7 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = "
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
         elif key in FADER_SHIFT_ROWS and b.layer is None:
             notes.append(f"moved {b.source} → {b.target} to the SHIFT layer (the APC40 "
-                         "map of plan 24: the track faders are the presets')")
+                         "map of plan 24: the track faders are the patches')")
             b = replace(b, layer="global")
         elif key in PAD_REMAP and PAD_REMAP[key][0] > seen:
             when, hit = PAD_REMAP[key]
@@ -1530,7 +1538,7 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = "
             b = replace(b, target=target, op=op, value=value)
         elif b.target in THEME_TO_BANK:
             target = THEME_TO_BANK[b.target]
-            notes.append(f"remapped {b.source}: {b.target} → {target} (the preset bank "
+            notes.append(f"remapped {b.source}: {b.target} → {target} (the patch bank "
                          "of plan 13)")
             b = replace(b, target=target)
         out.append(b)
@@ -1650,7 +1658,7 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
 
 
 # the words every door refuses a loadable patch's row on a meta param in (row 743)
-META_WORDS = "{pid} is the meta controller's, tuned before the show; no preset row may drive it"
+META_WORDS = "{pid} is the meta controller's, tuned before the show; no patch row may drive it"
 # ...and on a meta param that is one per `Deck` (register row 746: `preset.*`, `deck.chase`,
 # `totem.*`, `poi.*`): a press of one is a person's, whatever it does
 PER_DECK_WORDS = "{pid} is the meta controller's, one per deck, a person's own; no patch's row may drive it"
@@ -1695,14 +1703,14 @@ def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
     if p is None:
         part = part_of_id(pid)
         if part == "shared_meta":
-            return "a meta controller param, never a preset's (plan 13 D9)"
-        return None if part == "patch" else "not part of a preset"
+            return "a meta controller param, never a patch's (plan 13 D9)"
+        return None if part == "patch" else "not part of a patch"
     if part_of(p) == "shared_meta":
-        return "a meta controller param, never a preset's (plan 13 D9)"
+        return "a meta controller param, never a patch's (plan 13 D9)"
     if p.alias:
-        return "an alias, not part of a preset"
+        return "an alias, not part of a patch"
     if part_of(p) != "patch" or not p.persist:
-        return "not part of a preset"
+        return "not part of a patch"
     return None
 
 
@@ -1892,7 +1900,7 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    persist=False, modulatable=False,
                    tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
                        "(the analyzer strip, the hand feel, BPM, the analyzer scenes); off, the "
-                       "loaded preset's. Loading a preset turns it off.")
+                       "loaded patch's. Loading a patch turns it off.")
     if SAVE_PARAM not in reg:
         # held by the hand on SAVE, never saved: a reconnect lets go of it
         # (midi.MidiIO._enter), so a lost note-off cannot leave it down
@@ -1902,8 +1910,8 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    persist=False, modulatable=False,
                    tip="The APC40's SAVE (track 8's clip stop): hold it and tap a bank "
                        "pad to save the live state into that slot. An empty slot gets a "
-                       "new preset; a filled one gets a new preset too (TRIP → TRIP 2) "
-                       "and the old one stays in the preset list. Nothing is ever "
+                       "new patch; a filled one gets a new patch too (TRIP → TRIP 2) "
+                       "and the old one stays in the patch list. Nothing is ever "
                        "overwritten. SAVE alone does nothing.")
     if FINE_PARAM not in reg:
         fine = [False]                  # (as SAVE's: `midi.HELD_PARAMS` lets go of it)

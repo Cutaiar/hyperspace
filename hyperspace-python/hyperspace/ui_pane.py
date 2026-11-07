@@ -110,7 +110,7 @@ def _wrapped(key: str) -> Callable:
 # rows, then the room and the meta controller
 SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("selection", "selection", (), None),
-    ("loadable", "presets", ("loadable",), _paged("loadable")),
+    ("loadable", "patches", ("loadable",), _paged("loadable")),
     ("view", "view", ("view",), _paged("view")),
     ("fx", "fx", ("fx",), _fx),
     ("lookback", "lookback", ("dream",), _paged("lookback")),

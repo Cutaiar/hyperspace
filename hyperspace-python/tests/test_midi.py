@@ -54,7 +54,7 @@ def rig(tmp_path):
     view = ViewState()
     seed(tmp_path)              # the corpus: the party show's bank, TUMBLE first
     lib = Library(tmp_path)
-    project = lib.project
+    project = lib.install
     reg = build_registry(view, control, audio, project)
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
@@ -865,7 +865,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert pr.next_empty() is None
     at(20.0, note(STOP, channel=0))
     at(20.65)
-    assert pr.lib.warning == "saved TRIP 4 — the bank is full: it is in the preset list"
+    assert pr.lib.warning == "saved TRIP 4 — the bank is full: it is in the patch list"
     assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2]] * len(BAR)
     assert [m.velocity for m in rig.out.sent[mark:]                 # TRIP 3's pad: amber
             if m.type == "note_on" and m.note == pad] == [apc40.YELLOW]

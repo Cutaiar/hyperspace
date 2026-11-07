@@ -712,7 +712,7 @@ def test_a_wire_into_an_output_nothing_shows_is_wanted():
     loaded = SimpleNamespace(graph=SimpleNamespace(spec=SimpleNamespace(wires=[wire])), bus=None)
     panel = SimpleNamespace(library=SimpleNamespace(loaded_patch=loaded),
                             outputs=[Slot(1, win="w"), Slot(2), Slot(3), Slot(4)])
-    assert ui_graph.window_wants(panel)[0].startswith("this preset wires Output 3")
+    assert ui_graph.window_wants(panel)[0].startswith("this patch wires Output 3")
     panel.outputs[2].win = "w3"
     assert ui_graph.window_wants(panel) == []
     panel.outputs[2].win, panel.outputs[2].missing = None, "its display is not connected (Glass)"

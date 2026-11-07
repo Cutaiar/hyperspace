@@ -64,7 +64,7 @@ def rig(tmp_path):
     chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(tmp_path)
-    reg = build_registry(ViewState(), control, NS(chain=chain), lib.project)
+    reg = build_registry(ViewState(), control, NS(chain=chain), lib.install)
     path = tmp_path / "bindings.json"
     table = Bindings.load(path, legacy_midi=None)
     router = Router(reg, table)

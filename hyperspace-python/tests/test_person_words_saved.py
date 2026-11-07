@@ -50,7 +50,7 @@ def test_a_meta_nodes_position_saved_in_a_show_lands_where_it_was(rig):  # noqa:
     pre, show = graphview.split(view, {node.id: (123, 456)})
     assert pre == {} and show == {node.id: [123, 456]}
 
-    project = rig.lib.project
+    project = rig.lib.install
     project.layout.update(show)
     path = project.save("words position")
     doc = json.loads(path.read_text())
@@ -69,7 +69,7 @@ def test_a_meta_nodes_position_saved_in_a_show_lands_where_it_was(rig):  # noqa:
 def test_the_sections_word_changes_no_byte_of_a_saved_show(rig, monkeypatch):  # noqa: F811
     view = _view(rig)
     node = view.node(graphview.ANALYZER)
-    project = rig.lib.project
+    project = rig.lib.install
 
     def saved() -> dict:
         _pre, show = graphview.split(view, {node.id: (7, 8)})
@@ -97,7 +97,7 @@ def test_a_cloud_wires_cut_is_saved_by_its_ends_never_by_a_cable_id():
 
 
 def test_a_saved_show_holds_no_cable_id(rig):  # noqa: F811
-    project = rig.lib.project
+    project = rig.lib.install
     doc = json.loads(project.save("words cables").read_text())
     said = list(_strings(doc))
     assert not [s for s in said if s.startswith((OLD_CABLE, NEW_CABLE))]

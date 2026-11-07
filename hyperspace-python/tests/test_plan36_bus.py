@@ -113,7 +113,7 @@ def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_p
     loadable patch's file (`bus`) and read back by its load; a drag from All
     outputs' pin joins it again."""
     app, e, pushed = _party(tmp_path)
-    show, pre = app.lib.project, app.loaded_patch
+    show, pre = app.lib.install, app.loaded_patch
     show_dirty = show.is_dirty()
     section = app.loaded_patch.graph.spec.to_json()
     _, view = _build(app)

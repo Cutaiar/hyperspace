@@ -25,7 +25,7 @@ def rig(tmp_path):
     chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(tmp_path)
-    reg = build_registry(ViewState(), control, NS(chain=chain), lib.project)
+    reg = build_registry(ViewState(), control, NS(chain=chain), lib.install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     return NS(reg=reg, control=control, table=table, learn=Learn(reg, table))
 
@@ -72,7 +72,7 @@ def test_a_learned_axis_drives_one_param(rig):
     lrn.arm("view.inst_amp")
     lrn.learn_source("hand:3")                                 # a position row (today's)
     assert lrn.last == ("learned view.inst_amp ← hand 3 positions "
-                        "(into the preset; moved from view.bright, camera.zoom)")
+                        "(into the patch; moved from view.bright, camera.zoom)")
     assert not t.routes_to("view.bright")                      # the push row went with it
     assert off not in t.bindings                               # and the one switched off
     twin = t.add(Binding("hand:3", "view.speed", "position", enabled=False))
@@ -82,19 +82,19 @@ def test_a_learned_axis_drives_one_param(rig):
     speed = t.owner("view.speed")
     assert (speed.source, speed.op, speed.value, speed.when) == ("hand:3", "push", 0.25, "hand:14")
     assert lrn.last == ("learned view.speed ← hand 3 pushes +0.25 while hand:14 "
-                        "(into the preset; moved from view.inst_amp)")
+                        "(into the patch; moved from view.inst_amp)")
     assert twin not in t.bindings and t.routes_to("view.speed") == [speed]   # not held twice
     lrn.arm("camera.yaw")
     lrn.learn_source("hand:3", centred=True)                   # a push row moves too
     assert t.owner("view.speed") is None and t.owner("camera.yaw").source == "hand:3"
-    assert lrn.last.endswith("(into the preset; moved from view.speed)")
+    assert lrn.last.endswith("(into the patch; moved from view.speed)")
     assert [b for b in t.of("hand", "lfo") if b.source != "hand:3"] == [other, lfo]
     yaw = t.owner("camera.yaw")
     lrn.arm("camera.yaw")
     lrn.learn_source("hand:3", when="hand:14")                 # same axis, same param
     assert lrn.pending is None and t.owner("camera.yaw") is yaw and yaw.when == "hand:14"
     assert len(t.routes_to("camera.yaw")) == 1
-    assert lrn.last == "learned camera.yaw ← hand 3 pushes +0.25 while hand:14 (into the preset)"
+    assert lrn.last == "learned camera.yaw ← hand 3 pushes +0.25 while hand:14 (into the patch)"
 
 
 def test_the_prompts_answer_replaces_or_keeps(rig):
@@ -455,7 +455,7 @@ def test_a_learn_onto_a_performed_param_is_still_held_whatever_the_op(rig):
     assert lrn.resolve_pending(True) is t.owner("rot.rate.XY")                     # Replace
     assert old not in t.bindings and mine not in t.bindings
     assert lrn.last == ("learned rot.rate.XY ← hand 3 pushes +0.25 "
-                        "(into the preset; moved from view.bright)")
+                        "(into the patch; moved from view.bright)")
 
 
 def test_existing_rows_are_never_rewritten(rig):
@@ -587,7 +587,7 @@ def test_a_hand_learn_writes_a_route_into_the_loaded_loadable(tmp_path):
     lrn.arm("view.inst_amp")
     lrn.learn_source("hand:3")
     b = table.owner("view.inst_amp")
-    assert (b.source, b.op) == ("hand:3", "position") and "into the preset" in lrn.last
+    assert (b.source, b.op) == ("hand:3", "position") and "into the patch" in lrn.last
     assert lib.is_dirty("loadable") and untouched(r)
     lrn.arm("view.inst_amp")
     lrn.learn_source("hand:7")                               # taken: the prompt's question
@@ -632,7 +632,7 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     before, depth4 = rows(), reg["view.depth4"].value
     lrn.arm("view.depth4", "desk")
     refusal = ("K1 (track knob 1) is on the global layer (the meta controller's) — "
-               "latch SHIFT off to learn into the preset")
+               "latch SHIFT off to learn into the patch")
     for _ in range(2):                                       # refused, and again: still armed
         push(r, cc(0x30, 90))                                # track knob 1, SHIFT on
         assert lrn.learning == "view.depth4" and lrn.want == "desk" and lrn.refused
@@ -654,11 +654,11 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     # OVERDUB too: it sends the show home, as it always does
     r.reg["preset.load.2"].fire()
     loaded = lib.current("loadable")
-    assert loaded != lib.project.startup
+    assert loaded != lib.install.startup
     lrn.arm("view.depth4", "desk")
     before = rows()
     push(r, note(apc40.N_OVERDUB), note(apc40.N_OVERDUB, 0))
-    assert lib.current("loadable") == lib.project.startup and lrn.learning == "view.depth4"
+    assert lib.current("loadable") == lib.install.startup and lrn.learning == "view.depth4"
     # nothing learned: depth's one desk row is the fresh layer's D1 (apc40.SCENE, plan 19 WP3)
     assert [b.source for b in table.desk() if b.target == "view.depth4" and b.is_midi] \
         == ["cc:*:16"]
@@ -666,7 +666,7 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     # …and after SHIFT the same knob lands, and a good learn clears the flag
     push(r, cc(0x30, 64))
     assert lrn.learning is None and lrn.want is None and not lrn.refused
-    assert lrn.last.startswith("learned view.depth4 ← K1 (track knob 1) (into the preset)")
+    assert lrn.last.startswith("learned view.depth4 ← K1 (track knob 1) (into the patch)")
     assert [b.source for b in table.desk() if b.target == "view.depth4"] == ["cc:0:48"]
     assert lib.is_dirty("loadable") and untouched(r)
     push(r, cc(0x30, 70))                                    # nothing armed: nothing more
@@ -747,7 +747,7 @@ def test_learn_control_needs_no_adapter(tmp_path):
     assert table.redraw_serial > serial and table.desk_serial == desk_serial
     assert lrn.learning is None and not lrn.refused
     # its old knob lets go and is named: D1, the fresh layer's (apc40.SCENE, plan 19 WP3)
-    assert lrn.last == "learned view.depth4 ← D3 (device knob 3) (into the preset); D1 let go"
+    assert lrn.last == "learned view.depth4 ← D3 (device knob 3) (into the patch); D1 let go"
     assert (table.path.read_bytes() if table.path.exists() else None) == on_disk
     settle(r)
     assert labels(r) == ["learn view.depth4"]
@@ -758,7 +758,7 @@ def test_learn_control_needs_no_adapter(tmp_path):
         == ["cc:0:48"]
     lrn.arm("view.bright", "desk")
     assert lrn.learn_control("cc:0:19", apc40)
-    assert lrn.last == "learned view.bright ← D4 (device knob 4) (into the preset); K1 let go"
+    assert lrn.last == "learned view.bright ← D4 (device knob 4) (into the patch); K1 let go"
     assert [b.source for b in table.desk() if b.target == "view.bright" and b.kind == "cc"] \
         == ["cc:0:19"]
     # the op: a note is a toggle with an LED, the cue knob is relative, a
@@ -776,7 +776,7 @@ def test_learn_control_needs_no_adapter(tmp_path):
     assert lrn.learn_control("cc:0:20")
     row = next(b for b in table.desk() if b.source == "cc:0:20")
     assert (row.target, row.op, row.feedback) == ("view.speed", "abs", None)
-    assert lrn.last.startswith("learned view.speed ← MIDI CC 20 ch1 (into the preset)")
+    assert lrn.last.startswith("learned view.speed ← MIDI CC 20 ch1 (into the patch)")
     # a learn armed for a hand is not the desk's to complete… by the adapter
     # (`MidiIO._handle` asks `accepts`); an id the registry lacks never lands
     lrn.arm("no.such.param", "desk")
@@ -812,7 +812,7 @@ def test_a_learn_is_one_undo_step(tmp_path):
     lrn.learn_source("hand:3")
     assert table.owner("view.speed").source == "hand:3" and table.owner("view.inst_amp") is None
     assert table.owner("view.depth4") is None
-    assert lrn.last.endswith("(into the preset; moved from view.inst_amp, view.depth4)")
+    assert lrn.last.endswith("(into the patch; moved from view.inst_amp, view.depth4)")
     settle(r)
     assert labels(r) == ["learn view.speed"]
     assert u.undo() and routes() == was and u.status == "undid learn view.speed"
@@ -1032,7 +1032,7 @@ def test_pick_then_param_maps_through_the_learn(tmp_path):
     (row,) = [b for b in table.desk() if b.target == "view.speed" and b.kind == "cc"]
     assert (row.source, row.op, row.layer, row.feedback, row.ring) \
         == ("cc:*:18", "abs", "preset", "ring", apc40.RING_VOLUME)
-    assert lrn.last == "learned view.speed ← D3 (device knob 3) (into the preset); K2 let go"
+    assert lrn.last == "learned view.speed ← D3 (device knob 3) (into the patch); K2 let go"
     assert table.redraw_serial > serial                      # an adapter would redraw the desk
     assert (table.path.read_bytes() if table.path.exists() else None) == on_disk
     assert r.lib.is_dirty("loadable")                         # the loaded patch's edit: its dot
@@ -1108,13 +1108,13 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     assert learn.blocked(table, s3.source) == "invariant"       # invariant on both layers
     assert ui_desk.mappable(table, k1) == (
         "K1 (track knob 1) is on the global layer (the meta controller's) — latch SHIFT off to map "
-        "into the preset")
+        "into the patch")
     assert ui_desk.mappable(table, k6) is not None
     lrn.pick(k1.source)
     assert not lrn.map_picked("view.depth4", apc40)
     assert lrn.refused and lrn.last == (
         "K1 (track knob 1) is on the global layer (the meta controller's) — latch SHIFT off to learn "
-        "into the preset")
+        "into the patch")
     assert lrn.control == k1.source and lrn.learning is None and rows() == before
     settle(r)
     assert labels(r) == []
