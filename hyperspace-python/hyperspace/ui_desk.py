@@ -86,16 +86,12 @@ from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .groupwords import group_part, group_word
 from .params import PATCH_GROUPS, Kind
 from .routing import FINE_PARAM, Binding, fine_gives_way, led_shade
+from .ui_diagram import EDGE, GAP, GLYPH_PX, HEAD_H, PAD  # shared with the pad (ui_diagram.py)
 
 MIN_W = 300.0              # the window is never narrower, px
 MIN_H = 120.0              # …or shorter (a control window with no room above the sheet)
 LABEL_UNIT = 44.0          # a layout unit this wide or wider carries labels…
 LABEL_UNIT_H = 32.0        # …if it is also this tall (a short, wide window: glyphs only)
-EDGE = 12.0                # from the control window's edges, the panel and the sheet
-PAD = 8.0
-HEAD_H = 26.0              # the header's line: the layer, the loadable patch, the chip
-GLYPH_PX = 10.0            # the glyphs' type size
-GAP = EDGE                 # from the cheat sheet
 LABEL_PX = (11.0, 18.0)    # the labels' type size: 0.2 of a unit, kept in this range
 LABEL_LINES = 2            # a label wraps to at most this many lines
 BIG, PANEL = "big", "panel"    # the header's chip: hide the panel / bring it back

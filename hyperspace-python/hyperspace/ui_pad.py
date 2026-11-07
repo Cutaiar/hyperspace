@@ -66,13 +66,9 @@ from imgui_bundle import imgui
 from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
 from .params import dial_id
 from .routing import PAIR_SCHEME, Binding, pair_poles
+from .ui_diagram import EDGE, GLYPH_PX, HEAD_H, PAD  # as the desk sits (ui_diagram.py)
 
 SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")   # the schemes a pad control's row can have
-EDGE = ui_desk.EDGE                 # from the control window's edges, as the desk sits
-PAD = ui_desk.PAD
-GAP = ui_desk.GAP                   # between this and the desk under it
-HEAD_H = ui_desk.HEAD_H             # the header's line
-GLYPH_PX = ui_desk.GLYPH_PX
 MIN_W = 240.0                       # the window is never narrower…
 MAX_UNIT = 58.0                     # …and a layout unit never wider than this
 MAX_H = 0.42                        # …nor the window taller than this much of the display
