@@ -179,13 +179,13 @@ changes brightness or volume instead).
 
 ## Running the automated tests (tiers)
 
-`uv run pytest` is the inner loop: it runs the fast tier (about 3,940
-tests) on every core, in about 17 s on the owner's Mac. It leaves out three
+`uv run pytest` is the inner loop: it runs the fast tier on every core
+(its size and cost: the last-measured line in `ENGINEERING.md` §16). It leaves out three
 tiers that `tests/conftest.py` marks by name:
 
-- `golden`: the golden-frame draws (`tests/test_golden_frames.py`: 128
-  tests, one per rig job, comparing hashes, the shader programs pooled;
-  about 12 s and 0.33 GB). Run them after touching rendering, shaders, a preset or
+- `golden`: the golden-frame draws (`tests/test_golden_frames.py`: one
+  test per rig job, comparing hashes, the shader programs pooled).
+  Run them after touching rendering, shaders, a preset or
   the graph's evaluation, and once before a merge.
 - `slow`: about 1 s or more each (torch dream, undo, plan 12 presets,
   whole-library sweeps).
@@ -201,7 +201,7 @@ lock. Why it can hang on the Mac, how to find the stuck process and how to
 recover: `ENGINEERING.md` §16, "Why `glfwInit()` hangs on the Mac". Never run
 two test tiers at once on the Mac.
 
-`uv run pytest --all` runs every tier (about 50 s). Pick a tier with
+`uv run pytest --all` runs every tier. Pick a tier with
 `-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
 use `-n0` to run serially (for a debugger). A test named by node id is
 still skipped by the default `-m`: add `--all`. A new test that takes a
@@ -2526,8 +2526,8 @@ on the hands entry), with **Ghost hands** ticked on the HANDS page.
 (it takes under a minute; it uses a throwaway home folder, never yours). Then
 open a few pictures in `tests/golden/frames/png/`.
 
-**Right if:** it ends "all 757 frames match their goldens (Apple M3 Max,
-4.1 Metal - 90.5)" (after a macOS update it may add a note naming two
+**Right if:** it ends "all 789 frames match their goldens (Apple M3 Max,
+4.1 Metal - 90.5)", 789 on 2026-11-06 and more after a build that adds some (after a macOS update it may add a note naming two
 versions); the pictures show the presets, some with two made-up hands
 (the left open, the right a fist).
 
@@ -8445,7 +8445,7 @@ the pad grid (G6 is the clip-stop row), B-numbers the single buttons
 (B11 OVERDUB, B20 TAP TEMPO…).
 
 **Golden picture (golden frame)** — a picture of a factory preset the
-automated tests draw and compare to the last byte; 596 of them, kept in
+automated tests draw and compare to the last byte; hundreds of them, kept in
 `hyperspace-python/tests/golden/frames/`.
 
 **GRAPH page** — the page (after ROUTING) that draws every control,
