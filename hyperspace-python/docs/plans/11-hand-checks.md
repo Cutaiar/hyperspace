@@ -8344,6 +8344,16 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
+## DB. One mirror (LY1)
+Register rows 773, 774, 2026-11-06. Headless: `tests/test_one_mirror.py`, on two real `Deck`s, both ways.
+**602. One mirror, two decks.** (the rig, with the hands tracker)
+1. Make a patch with a second hands node (GRAPH, add a hands node, its on-switch on) and load it on both decks. Hold your hands up. *Pass:* both hands nodes draw, on each deck as you crossfade.
+2. HANDS page, more ▸, tick Mirror. *Pass:* every hands node flips, on both decks. There's no second mirror to tick anywhere.
+3. With the crossfader on deck 1, load a patch with no second hands node onto deck 2, off air. *Pass:* deck 1's picture doesn't change, and its second hands node still flips when you tick Mirror off and on.
+4. Crossfade to deck 2, load the same one-hands patch onto deck 1, then crossfade back and forth. *Pass:* no error, the mirror still reaches deck 2's hands.
+5. Save the show, quit, open again. *Pass:* no "unknown" line, the show isn't marked changed, Mirror as you left it.
+*Fail:* a hands node that stops following Mirror, or a picture that moves on the deck you didn't load.
+
 ## What no test covers
 
 Only a person can settle these:

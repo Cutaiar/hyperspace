@@ -346,9 +346,9 @@ class GraphSection:
       (`FxState.set_instances` + `fx.declare`: its own on, mix, order,
       clock — patch params, so the loadable patch's `values` carry them),
       and an extra hands node's, `ghost.2.*` (`ghost.register`: the
-      loadable patch's, like `ghost.*`, its values in the loadable patch's `values` — but
-      `ghost.2.mirror`, the room's, which the open show keeps — on a
-      `GhostState` of its own that is kept while the app runs); and (plan 33
+      loadable patch's, like `ghost.*`, its values in the loadable patch's `values`, on a
+      `GhostState` of its own that is kept while the app runs and follows the
+      room's one mirror, `ghost.mirror`, LY1); and (plan 33
       S) each switch's `switch[.n].select` (`params.declare_switches`: a
       patch param, its pick in the loadable patch's `values`); and (plan
       34 Z) each resize's `resize[.n].*` (`params.declare_resizes`, by its
@@ -446,19 +446,16 @@ class GraphSection:
         wired frame, and that is what a save writes (row 394: `/7`, plan 36
         T3; `/9` since plan 43 C2).
 
-        An extra hands node declared for the first time this run takes
-        its room setting (`ghost.2.mirror`, the meta controller's) from the open
-        show; its look is the loadable patch's values (plan 44 D3)."""
+        An extra hands node's look is the loadable patch's values (plan 44 D3);
+        its mirror is the room's one, `ghost.mirror` (LY1). Dropping a node
+        takes only this deck's params."""
         wiring = spec.wiring() if spec is not None else EMPTY
         reg = self.reg
         want = {ghost_prefix(h.n): h.n for h in wiring.extra}
         for name in sorted(self.declared - set(want)):
             reg.remove_prefix(name + ".")
         for name, n in want.items():
-            was = name in self.declared
             declare_ghost(reg, self.states.setdefault(name, GhostState()), n)
-            if not was:
-                self._seed(name)
         self.declared = set(want)
         self._settle(spec)
         self.spec, self.doc = spec, copy.deepcopy(doc)
@@ -513,31 +510,6 @@ class GraphSection:
         else `doc`."""
         free = getattr(self, "free", None)      # (a section from before a hot reload)
         return free if free is not None else self.doc
-
-    def _seed(self, name: str) -> None:
-        """A newly declared hands node's shared meta params (plan 44 D3: its
-        mirror, `params.SHARED_META_KEYS`; its look is the loadable patch's) from the
-        open show's session, where it holds them (`library.Project.session`)
-        — once per show opened (`Project.opened`): after that the node's
-        kept state is the live one."""
-        project = getattr(getattr(self, "lib", None), "project", None)
-        seeded = self.__dict__.setdefault("_seeded", {})
-        show = getattr(project, "opened", None)
-        if name in seeded and seeded[name] == show:
-            return
-        seeded[name] = show
-        session = getattr(project, "session", None) or {}
-        held = {pid: v for pid, v in session.items()
-                if pid.startswith(name + ".") and pid in self.reg
-                and part_of(self.reg[pid]) == "shared_meta"}
-        if held:
-            self.reg.restore(held)
-        if project is not None and isinstance(getattr(project, "session", None), dict):
-            # an id the show lacks takes the state this landing left, as a
-            # show's `_apply` does for a param added since: the show stays clean
-            for pid, v in self.reg.snapshot(part="shared_meta").items():
-                if pid.startswith(name + "."):
-                    project.session.setdefault(pid, v)
 
     def mark(self) -> tuple:
         """What is landed, for an undo of a load (`library.Marks`) — and

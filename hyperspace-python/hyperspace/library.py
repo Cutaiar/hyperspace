@@ -1047,9 +1047,9 @@ class Project:
                 hook(doc["layout"])                   # its params exist before the values land
                 lib._fresh_of(group)                  # …and their build values are "fresh"
         missing = lib.restore(self.session) if self.session else []
-        # an extra hands node's settings (`ghost.2.*`, plan 26 A4) wait for
-        # the loadable patch whose graph declares the node (`GraphSection` seeds it
-        # from this session): held back, not unknown
+        # an old show's extra hands node settings (`ghost.2.*`, plan 26 A4; the
+        # look goes to the loadable patches, `old_look`, and `ghost.2.mirror`,
+        # no param since LY1, is read by nothing): held back, not unknown
         missing = [pid for pid in missing if not is_instance_id(pid)]
         # ids the file lacks (a param added since) take the state this load
         # left, so an untouched project is not dirty the moment it opens
@@ -1558,9 +1558,10 @@ class Project:
                 or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {}))
 
     def _held_back(self) -> dict:
-        """The meta controller's settings of node instances the registry lacks now
-        (`ghost.2.*` while no loadable patch's graph holds the second hands node,
-        plan 26 A4): kept by a save and never counted as an edit."""
+        """The ids of node instances an old show holds and the registry lacks
+        now (`ghost.2.*`, plan 26 A4; `ghost.2.mirror` always, no param since
+        LY1): kept by a save and never counted as an edit. The old reader goes
+        in CL1."""
         reg = self.lib.reg
         return {pid: v for pid, v in (self.session or {}).items()
                 if is_instance_id(pid) and (reg is None or pid not in reg)}

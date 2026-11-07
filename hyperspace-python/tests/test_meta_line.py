@@ -390,8 +390,11 @@ def test_the_mirror_is_the_rooms_one_setting_and_a_rebuilt_deck_lets_its_old_sta
     assert fresh.mirror is True and c["ghost.mirror"] is p and len(room.states) == 2
     p.set(False)
     assert fresh.mirror is False and p.value is False
-    declare_ghost(c, GhostState(), 2)
-    assert c["ghost.2.mirror"].room is not room
+    extra = GhostState()
+    declare_ghost(c, extra, 2)
+    assert "ghost.2.mirror" not in c and extra.mirror is False and len(room.states) == 3
+    p.set(True)
+    assert extra.mirror is True
 
 
 def test_an_old_shows_extra_hands_look_is_no_unknown_id_for_a_loadable_without_the_node(tmp_path):

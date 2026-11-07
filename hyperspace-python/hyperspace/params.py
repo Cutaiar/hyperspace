@@ -176,10 +176,12 @@ PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media
 SHARED_META_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "playlist")
 # plan 44 D3 (row 612): the shared meta params inside a patch group, by
-# group → the last segment of their ids — `ghost.mirror`, and an extra
-# hands node's `ghost.2.mirror`. They keep their group (the HANDS page
-# lists the group; an id is a saved format) and are the meta controller's single copy:
-# `part_of` asks here first, so a loadable patch never names one and the show keeps it
+# group → the last segment of their ids — `ghost.mirror`. They keep their group
+# (the HANDS page lists the group; an id is a saved format) and are the meta
+# controller's single copy: `part_of` asks here first, so a loadable patch never names
+# one and the show keeps it. `ghost.2.mirror` is no param since LY1 (a hands node's
+# state follows `ghost.mirror`); an old show may hold the id, which stays classed here
+# so no look ever takes it, until the old reader goes (CL1)
 SHARED_META_KEYS: dict[str, tuple[str, ...]] = {"ghost": ("mirror",)}
 # review of #371: the shared meta params whose group is not their id's first segment
 # (`edit.undo`, `app.restart`: group `ui`; `seq.page`: group `desk`). The app's
@@ -999,13 +1001,15 @@ class Registry:
 
     def remove(self, pid: str) -> Param | None:
         """Drop a param (a band that was deleted). Bindings to it go dormant —
-        every adapter already treats an unknown id as a no-op. A meta controller
-        param is the meta controller's to drop (plan 44 D3): it leaves every deck."""
+        every adapter already treats an unknown id as a no-op. A shared meta param
+        is the meta controller's to drop, on `MetaRegistry.remove`, and it leaves
+        every deck there. A deck's registry keeps it and returns None (LY1):
+        whatever a deck's own section drops, no other deck loses anything."""
         meta_reg = self.meta_reg
         if meta_reg is not None and meta_reg is not self:
             q = meta_reg.get(pid)
             if q is not None and q is self._p.get(pid):
-                return meta_reg.remove(pid)
+                return None
         p = self._p.pop(pid, None)
         if p is not None:
             self.serial += 1
@@ -1015,7 +1019,8 @@ class Registry:
         return p
 
     def remove_prefix(self, prefix: str) -> list[Param]:
-        return [self.remove(pid) for pid in list(self._p) if pid.startswith(prefix)]
+        gone = (self.remove(pid) for pid in list(self._p) if pid.startswith(prefix))
+        return [p for p in gone if p is not None]
 
     # ---- frame ----
 

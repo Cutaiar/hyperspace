@@ -2160,7 +2160,7 @@ def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeyp
     with build_rig(tmp_path) as r:
         for p in list(r.reg):
             if p.id.startswith(("output.2.", "output.3.", "output.4.", "output.1.")):
-                r.reg.remove_prefix(p.id.rsplit(".", 1)[0] + ".")
+                r.reg.meta_reg.remove_prefix(p.id.rsplit(".", 1)[0] + ".")
         one = [Slot(1, win="w1")]
         reg_sw(r.reg, one)
         r.panel.outputs = one
