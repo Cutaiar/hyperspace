@@ -120,15 +120,17 @@ _L_BUTTONS = (
     (4, 0x01, "VIEW"), (4, 0x20, "SHARE"), (4, 0x08, "LSTICK"),          # − capture L3
 )
 # the (R)'s face by position, as the (L)'s arrows: its B sits at the bottom
-# (``A``), its A at the right (``B``), its Y at the left (``X``), its X at
-# the top (``Y``) — the rows keep the position's name, the glyph its letter
+# (``S``), its A at the right (``E``), its Y at the left (``W``), its X at
+# the top (``N``) — the rows keep the position's name, the glyph its letter
 _R_BUTTONS = (
     (3, 0x01, "W"), (3, 0x02, "N"), (3, 0x04, "S"), (3, 0x08, "E"),      # Y X B A on the face
     (3, 0x10, "RP"), (3, 0x20, "LP"), (3, 0x40, "RB"),                   # SR SL R
     (4, 0x02, "MENU"), (4, 0x10, "GUIDE"), (4, 0x04, "LSTICK"),          # + HOME R3 (the one stick)
 )
+# the Pro's face by position too (review of #435): byte 3's bits are the (R)'s,
+# Y X B A, so Y is the left button, X the top, B the bottom, A the right
 _PRO_BUTTONS = (
-    (3, 0x01, "N"), (3, 0x02, "W"), (3, 0x04, "E"), (3, 0x08, "S"), (3, 0x40, "RB"),
+    (3, 0x01, "W"), (3, 0x02, "N"), (3, 0x04, "S"), (3, 0x08, "E"), (3, 0x40, "RB"),
     (5, 0x40, "LB"),
     (4, 0x01, "VIEW"), (4, 0x02, "MENU"), (4, 0x04, "RSTICK"), (4, 0x08, "LSTICK"),
     (4, 0x10, "GUIDE"), (4, 0x20, "SHARE"),

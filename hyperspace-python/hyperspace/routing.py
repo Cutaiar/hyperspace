@@ -268,6 +268,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import sys
 import time
 import weakref
@@ -2288,7 +2289,14 @@ class MetaTable:
             self.said = f"{self.path.name} updated, the old file kept as {bak.name}"
         self.unbacked = None
         try:
-            self.path.write_text(self.dumps(rows))
+            # (review of #435: a temp file beside it, then renamed over: a crash
+            # mid-write never leaves half a file)
+            tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
+            try:
+                tmp.write_text(self.dumps(rows))
+                tmp.replace(self.path)
+            finally:
+                tmp.unlink(missing_ok=True)
             self.error = ""
         except OSError as e:
             self.error = f"bindings: {e}"

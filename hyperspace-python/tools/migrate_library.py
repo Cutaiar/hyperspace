@@ -52,6 +52,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -74,7 +75,9 @@ NEWEST = "hyperspace.loadable/11"         # plan 57 (FQ4)
 OLD_BACKUPS = "presets-backup-"           # a hand-made copy, deleted with the trash (§7a)
 TRASH = "trash"
 NOTHING_FILES = ("Icon\r", "Icon", ".DS_Store")   # what makes no folder worth keeping
-KEPT_FOLDERS = {"media", "media-cache", "weights", "trash", LOADABLE, INSTALLS, "patches"}
+# (OLD_LOADABLE too: a folder the owner made under presets/ and left empty moves with it)
+KEPT_FOLDERS = {"media", "media-cache", "weights", "trash", LOADABLE, OLD_LOADABLE, INSTALLS,
+                "patches"}
 # what a load note says of a graph section the build refused (loadable.py:
 # `GraphSection.read`, `UNWIRED_SAID`)
 NOT_READ = "not read — black"
@@ -108,11 +111,16 @@ def machine_home() -> Path:
 
 
 def configured_library(home: Path) -> Path:
-    """The config's ``[library] path`` (home/config.toml), else `home`."""
+    """The config's ``[library] path`` (home/config.toml), else `home`. A config.toml that
+    won't parse raises LookupError: the run never falls back to the home then (row 843)."""
     from hyperspace import config
     cfg_path = home / config.FILE
     if cfg_path.is_file():
-        lp = config.load(cfg_path).get("library", {}).get("path", "")
+        cfg = config.load(cfg_path)
+        if cfg.get("error"):
+            raise LookupError(f"{cfg_path} does not read ({cfg['error']}): fix it, or give "
+                              "--library FOLDER")
+        lp = cfg.get("library", {}).get("path", "")
         if lp:
             return Path(lp)
     return home
@@ -662,8 +670,23 @@ def backup(library: Path, home: Path) -> Path:
         dest = home / f"{BACKUP_PREFIX}{stamp}-{k}"
         k += 1
     home.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(library, dest, ignore=shutil.ignore_patterns(f"{BACKUP_PREFIX}*"))
+    ignore = shutil.ignore_patterns(f"{BACKUP_PREFIX}*")
+    shutil.copytree(library, dest, ignore=ignore)
+    want, got = _file_count(library, ignore), _file_count(dest, ignore)
+    if want != got:
+        raise OSError(f"the backup at {dest} holds {got} files, the library {want}: "
+                      "nothing was changed")
     return dest
+
+
+def _file_count(root: Path, ignore) -> int:
+    """Files under `root` as `shutil.copytree` walks it with `ignore` (links not followed)."""
+    n = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        left = ignore(dirpath, dirnames + filenames)
+        dirnames[:] = [d for d in dirnames if d not in left]
+        n += sum(1 for f in filenames if f not in left)
+    return n
 
 
 def write(path: Path, data: bytes) -> None:
@@ -738,6 +761,9 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
                     help="write this loadable patch despite a picture or fixed-point difference: "
                          "its path under the folder less .json (party/trip), or its file "
                          "stem alone when no other folder has one of that stem; repeatable")
+    ap.add_argument("--closed", action="store_true",
+                    help="with --apply, when this Mac can't tell whether Hyperspace is open: "
+                         "you've checked that it isn't")
     ap.add_argument("--to", type=Path, default=None, metavar="FOLDER",
                     help="write each loadable patch that passed into FOLDER (the library is "
                          "only read; no backup)")
@@ -745,7 +771,12 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
     if a.to is not None and a.apply:
         ap.error("--to writes elsewhere; --apply rewrites the library: one of the two")
     home = machine_home()
-    library = (a.library if a.library is not None else configured_library(home)).expanduser()
+    try:
+        library = (a.library if a.library is not None
+                   else configured_library(home)).expanduser()
+    except LookupError as e:
+        print(str(e), file=sys.stderr)
+        return 2
     library = library.resolve()
     if not (library / LOADABLE).is_dir() and not (library / OLD_LOADABLE).is_dir():
         print(f"no loadable patches at {library / LOADABLE} or {library / OLD_LOADABLE}",
@@ -755,6 +786,10 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
     print(words)
     if a.apply and is_open:
         print("not run: quit Hyperspace on both Macs first", file=sys.stderr)
+        return 2
+    if a.apply and is_open is None and not a.closed:
+        print("not run: check that Hyperspace is closed on both Macs, then add --closed",
+              file=sys.stderr)
         return 2
     if a.apply:
         print("the other Mac can't be seen from here: it must be closed too, and stay closed "
@@ -809,7 +844,11 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
                 or stayed):
             print("nothing to do: this library is already moved")
             return 0
-        where = backup(library, home)
+        try:
+            where = backup(library, home)
+        except OSError as e:
+            print(f"not run: the backup failed ({e})", file=sys.stderr)
+            return 2
         print(f"backup: {where}")
         for problem in delete(trash):
             print(problem)
@@ -861,12 +900,20 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
             write(paths[r.file], r.data)
         print(f"rewrote {len(writes)} as /11, left {len(untouched)} untouched (already /11), "
               f"skipped {len(skipped)}")
-        # the shows, last of the file rewrites: `install_plan` again, over what is written now
-        installs, stayed = install_plan(library)
-        troubles = list(stayed)
-        troubles += install_write(installs)
-        print(f"wrote {len(installs)} install file(s)")
-        troubles += delete(tidy_plan(library))
+        if skipped:
+            # (review of #434: an old patch not written still takes the show's eye, looks
+            # and bus cuts at load, from the show and its .bak-v2-* files: both stay)
+            troubles = [(f"shows and .bak-v2-* files left as they are: {len(skipped)} "
+                        "patch(es) not written still read them; --force or fix those, "
+                        "then run again")]
+        else:
+            # the shows, last of the file rewrites: `install_plan` again, over what is
+            # written now
+            installs, stayed = install_plan(library)
+            troubles = list(stayed)
+            troubles += install_write(installs)
+            print(f"wrote {len(installs)} install file(s)")
+            troubles += delete(tidy_plan(library))
         troubles += delete(empty_folders(library))
         troubles += folder_move(library)
         for words in troubles:
@@ -878,6 +925,9 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
               + f"; write {len(installs)} install file(s); delete {len(trash) + len(tidy)} and "
                 f"{len(empties)} empty folder(s)"
               + (f"; write {len(moves)} patch(es) as {_patch_schema()}" if moves else ""))
+        if skipped:
+            print("with any patch skipped, --apply leaves the shows and the .bak-v2-* files "
+                  "as they are")
     if skipped:
         print("\nnot written" + (" (rerun with --force NAME to write one anyway)"
                                  if any(not r.error for r in skipped) else "") + ":")

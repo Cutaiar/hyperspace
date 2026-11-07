@@ -293,18 +293,19 @@ def check(live: Live, rec, out: Path) -> None:
 # which button of a Joy-Con lands where (plan 43): what to press, the
 # canonical button (or axis) it should read as
 JOYCON_PRESSES = {
-    "l": (("the ↓ arrow", "A"), ("the ↑ arrow", "Y"), ("the → arrow", "B"), ("the ← arrow", "X"),
+    "l": (("the ↓ arrow", "S"), ("the ↑ arrow", "N"), ("the → arrow", "E"), ("the ← arrow", "W"),
           ("SL (on the rail)", "LP"), ("SR (on the rail)", "RP"), ("L (the shoulder)", "LB"),
           ("ZL (the trigger)", "axis:LT"), ("− (minus)", "VIEW"), ("the capture button", "SHARE"),
           ("the stick in (click)", "LSTICK")),
     # the (R)'s face by position: its B is the bottom button (pad:S), its A the
     # right one (pad:E), its Y the left (pad:W), its X the top (pad:N)
-    "r": (("B (the bottom button)", "A"), ("A (the right button)", "B"),
-          ("Y (the left button)", "X"), ("X (the top button)", "Y"),
+    "r": (("B (the bottom button)", "S"), ("A (the right button)", "E"),
+          ("Y (the left button)", "W"), ("X (the top button)", "N"),
           ("SL (on the rail)", "LP"), ("SR (on the rail)", "RP"), ("R (the shoulder)", "RB"),
           ("ZR (the trigger)", "axis:RT"), ("+ (plus)", "MENU"), ("HOME", "GUIDE"),
           ("the stick in (click)", "LSTICK")),
-    "pro": (("A", "A"), ("B", "B"), ("X", "X"), ("Y", "Y"), ("L", "LB"), ("R", "RB"),
+    "pro": (("A (the right button)", "E"), ("B (the bottom button)", "S"),
+            ("X (the top button)", "N"), ("Y (the left button)", "W"), ("L", "LB"), ("R", "RB"),
             ("ZL", "axis:LT"), ("ZR", "axis:RT"), ("−", "VIEW"), ("+", "MENU"),
             ("HOME", "GUIDE"), ("capture", "SHARE"), ("the left stick in", "LSTICK"),
             ("the right stick in", "RSTICK"), ("D-pad up", "hat:N")),

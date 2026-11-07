@@ -107,7 +107,7 @@ _SONY_OUT = frozenset({"touch", "motion", "light", "rumble", "triggers", "player
 # its six-axis sensor. What it has reads by position: its one stick is the
 # left stick (``axis:LX`` / ``LY``, its click ``pad:LSTICK``); the (L)'s
 # four arrow buttons are the face by where they sit (↓ ``pad:S``, →
-# ``B``, ← ``X``, ↑ ``Y``); its L and ZL ``pad:LB`` and ``axis:LT``, the
+# ``E``, ← ``W``, ↑ ``N``); its L and ZL ``pad:LB`` and ``axis:LT``, the
 # (R)'s R and ZR ``pad:RB`` and ``axis:RT``; SL and SR on the rail are the
 # back pair ``pad:LP`` / ``pad:RP`` (as the Edge's paddles); − ``VIEW``,
 # + ``MENU``, capture ``SHARE``, HOME ``GUIDE``. No D-pad, no right stick,
@@ -135,13 +135,13 @@ _JOYCON_L_GLYPHS = {
     "VIEW": "−", "SHARE": "◉", "LSTICK": "L3",
 }
 # the (R)'s face by position too: its B sits at the bottom (``pad:S``), its
-# A at the right (``B``), its Y at the left (``X``), its X at the top (``Y``)
+# A at the right (``E``), its Y at the left (``W``), its X at the top (``N``)
 _JOYCON_R_GLYPHS = {
     "S": "B", "E": "A", "W": "Y", "N": "X",
     "RB": "R", "RT": "ZR", "LP": "SL", "RP": "SR", "MENU": "+", "GUIDE": "HOME",
     "LSTICK": "R3",
 }
-_PRO_GLYPHS = {"LB": "L", "RB": "R", "LT": "ZL", "RT": "ZR", "VIEW": "−", "MENU": "+",
+_PRO_GLYPHS = {"S": "B", "E": "A", "W": "Y", "N": "X", "LB": "L", "RB": "R", "LT": "ZL", "RT": "ZR", "VIEW": "−", "MENU": "+",
                "GUIDE": "HOME", "SHARE": "◉", "LSTICK": "L3", "RSTICK": "R3"}
 
 MODELS: dict[str, Model] = {m.id: m for m in (
