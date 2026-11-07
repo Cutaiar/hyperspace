@@ -529,9 +529,9 @@ def _clock(codec, raw: bytes):
     return f(raw) if f is not None else None
 
 
-OFFSET_S = 1.0               # sensor seconds of rest before its mean is the gyro's offset
+OFFSET_S = 2.0               # sensor seconds of rest before its mean is the gyro's offset
 OFFSET_SPREAD_DPS = 3.0      # …every axis within this, top to bottom (a still Joy-Con's ~2)
-OFFSET_MAX_DPS = 20.0        # …and no axis past this: a real offset is far less
+OFFSET_MAX_DPS = 6.0         # …and no axis past this (`Turn`: why so low)
 
 
 class Turn:
@@ -549,8 +549,13 @@ class Turn:
     on its own: a sensor axis that holds
     within `OFFSET_SPREAD_DPS`, under `OFFSET_MAX_DPS` on all three, for
     `OFFSET_S` of sensor time is at rest, and its mean becomes the offset
-    taken off every reading after. A hand is never that steady, so a slow
-    real turn is not learned away."""
+    taken off every reading after.
+
+    The rate alone can't tell an offset from a slow even turn, so the ceiling is the
+    trade-off. Under `OFFSET_MAX_DPS` an even turn held for `OFFSET_S` is taken for rest:
+    the shape stops, then drifts back at no more than that less the dead band until the
+    next rest is learned. Above it, a turn is never touched, and a pad whose real offset
+    is past it isn't corrected and turns on its own. This pad's own is about 0.2 deg/s."""
 
     def __init__(self, learn: bool = False):
         self.learn = learn

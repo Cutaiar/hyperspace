@@ -866,7 +866,7 @@ class PadDevice(Base):
         """The pad's rows, then the sticks' camera job — on the registry
         of the deck it is on (`Base.reg`), else the router's. The camera
         job is one pad's on each deck (plan 27 B6, decision 24: defaults
-        author no look; plan 55, `_steers`): another's unrouted axes do nothing."""
+        author no look; plan 55, `steers`): another's unrouted axes do nothing."""
         self._router = router       # `close` lets go through it: no later frame will
         io = self.io
         if io is None:
@@ -878,29 +878,33 @@ class PadDevice(Base):
         if was is not None and was is not router:
             was.pad_left(q)
         self._acted_on = router
-        from . import gamepad
+        from . import gamepad, totem
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
         reg = self.reg if self.reg is not None else getattr(router, "reg", None)
         skip = self._totem(io, reg)
-        quiet = self._quiet_stick(io, reg)
+        model = getattr(io, "model", None)
+        quiet = self.quiet_stick(model, reg, router)
         if quiet:
             skip = {**skip, "quiet": quiet}
         if q:
             router.pad(io, buttons=not self._taken, role=q, **skip)
         else:
             router.pad(io, buttons=not self._taken, **skip)
+        state = totem.state_of(reg)
+        if totem.drives(state, self.role):
+            totem.keep_turn(state, reg)
         if io.on:
             axis = f"axis@{q}" if q else "axis"
             routed = (claimed(axis) or ()) if claimed is not None else ()
             self._dialed = gamepad.dialed(routed)
-            if reg is not None and self._steers(router):
+            if reg is not None and self.steers(router):
                 gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0),
-                              routed={*(set(routed) - quiet), *self._no_camera_job(io, reg)},
+                              routed={*(set(routed) - quiet), *self._no_camera_job(model, reg)},
                               scheme=axis)
 
-    def _steers(self, router) -> bool:
+    def steers(self, router) -> bool:
         """Is the camera job this pad's: the first pad listed on the deck it is on
         (plan 55)? So with every player on air it is the first pad's, as ever, and
         a player off air alone, or the only pad given to player 2, keeps a stick
@@ -954,26 +958,24 @@ class PadDevice(Base):
                 skip |= totem.skip_of(io)
         return {"skip": skip} if skip else {}
 
-    def _quiet_stick(self, io, reg) -> frozenset[int]:
-        """A pad with a layout of its own (a Joy-Con) hears a stick route only
-        while the totem reads it (the owner, 2026-11-04); otherwise those
-        lanes are quiet, the routes let go and the stick orbits."""
+    def quiet_stick(self, model, reg, router=None) -> frozenset[int]:
+        """The lanes a route lets go of, `totem.quiet_stick`: a Joy-Con's stick while it
+        orbits. `router`, the deck it acts on (None: the last one, for the pad window)."""
         from . import gamepad, totem
-        if (not getattr(getattr(io, "model", None), "totem_layout", False)
-                or totem.drives(totem.state_of(reg), self.role)):
-            return frozenset()
-        return gamepad.left_stick_lanes()
+        router = router if router is not None else self.__dict__.get("_acted_on")
+        steers = router is None or self.steers(router)
+        return gamepad.left_stick_lanes() if totem.quiet_stick(model, reg, self.role, steers) else frozenset()
 
-    def _no_camera_job(self, io, reg) -> tuple[int, ...]:
+    def _no_camera_job(self, model, reg) -> tuple[int, ...]:
         """The axes a pad with a layout of its own (a Joy-Con) keeps off the
         sticks' camera job (`gamepad.steer`), free for a learned route: its
         triggers always, and its stick while the totem reads this pad, whose
         gyro has the rotation."""
         from . import gamepad, totem
-        if not getattr(getattr(io, "model", None), "totem_layout", False):
+        if not totem.own_layout(model):
             return ()
         free = (gamepad.AX_LT, gamepad.AX_RT)
-        if totem.drives(totem.state_of(reg), self.role):
+        if totem.reads_stick(model, reg, self.role):
             free += (gamepad.AX_LX, gamepad.AX_LY)
         return free
 

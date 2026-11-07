@@ -63,7 +63,7 @@ import math
 
 from imgui_bundle import imgui
 
-from . import gamepad, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
+from . import gamepad, totem, ui, ui_desk, ui_pad_nvg, ui_pad_views, ui_routing
 from .params import dial_id
 from .routing import PAIR_SCHEME, Binding, layout_of, pair_poles
 from .ui_diagram import EDGE, GLYPH_PX, HEAD_H, PAD  # as the desk sits (ui_diagram.py)
@@ -139,31 +139,44 @@ def source_rows(table, model=None) -> dict[str, Binding]:
 
 
 def _model(panel):
-    """The model of the pad read now, for its own layout; None with no pad."""
-    return getattr(_pad(panel), "model", None)
+    """The model the window draws, for its own layout (`gamepad.shown_model`): a pad
+    asleep is still labelled with what it will do when it wakes."""
+    return gamepad.shown_model(getattr(panel, "pad", None))
+
+
+def _device(panel):
+    """The device that reads the pad the panel draws, or None."""
+    pad = getattr(panel, "pad", None)
+    listed = getattr(panel, "devices", None)
+    return next((d for d in (listed if listed is not None else ())
+                 if pad is not None and getattr(d, "io", None) is pad), None)
 
 
 def _stick_quiet(panel, source: str) -> bool:
-    """Is a route on this stick address not heard now? A Joy-Con's, with the
-    totem off (`PadDevice._quiet_stick`)."""
-    if not getattr(_model(panel), "totem_layout", False):
+    """Is a route on this stick address not heard now (`PadDevice.quiet_stick`, the
+    device's own answer)?"""
+    model = _model(panel)
+    lane = source.removeprefix("axis:")
+    if (not totem.own_layout(model) or lane == source or lane not in gamepad.LANES
+            or gamepad.LANES.index(lane) not in gamepad.left_stick_lanes()):
         return False
-    if source not in ("axis:LX", "axis:LY") and not source.startswith("axis:L."):
-        return False
-    reg = getattr(panel, "reg", None)
-    return not (reg is not None and "totem.on" in reg and reg["totem.on"].value)
+    d = _device(panel)
+    if d is None:
+        return totem.quiet_stick(model, getattr(panel, "reg", None), "")
+    return bool(d.quiet_stick(model, d.reg if d.reg is not None else getattr(panel, "reg", None)))
 
 
 def built_in(panel, source: str) -> str:
     """What an axis does with no route on it, for the pad read now: `BUILT_IN`,
     less what a pad with a layout of its own keeps free (`PadDevice._no_camera_job`)."""
     model = _model(panel)
-    if getattr(model, "totem_layout", False):
+    if totem.own_layout(model):
         if source in ("axis:LT", "axis:RT"):
             return ""
         if source in ("axis:LX", "axis:LY"):
-            reg = getattr(panel, "reg", None)
-            if reg is not None and "totem.on" in reg and reg["totem.on"].value:
+            d = _device(panel)
+            reg = d.reg if d is not None and d.reg is not None else getattr(panel, "reg", None)
+            if totem.reads_stick(model, reg, d.role if d is not None else ""):
                 return ""
     return BUILT_IN.get(source, "")
 
@@ -346,6 +359,9 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     if other is not None:             # plan 56: one degree of freedom with its partner
         word = gamepad.models.glyph(model, other.partition(":")[2], gamepad.glyph(other) or other)
         learn += f"\none axis with {word}: right-click a param → Learn pair"
+    if b is not None and _stick_quiet(panel, c.source):
+        return (f"{c.glyph} · {said}\n{c.name}\nits row on {b.target} is heard only while "
+                "the totem reads this pad")
     if b is not None:
         return (f"{c.glyph} · {b.target} · {said} · {b.describe()}\n{c.name}"
                 f"\n{learn} to move it")
@@ -676,8 +692,8 @@ def _header(panel, table, closable: bool = False) -> None:
         if said:
             imgui.text_colored(ui.DIM, said)
             if imgui.is_item_hovered():
-                ui.tooltip(f"{n} controls with a row in bindings.json. A grey label is the "
-                           "app's own hand on a free axis, not a row.")
+                ui.tooltip(f"{n} controls with a row: bindings.json's, or this pad's own. A grey "
+                           "label is the app's own hand on a free axis, not a row.")
     if closable:
         imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(ui_desk.CLOSE), start.y))
         if ui.chip(f"{ui_desk.CLOSE}##pad.close"):
@@ -699,8 +715,8 @@ def totem_word(reg) -> tuple[str, str] | None:
     tip = ("The Joy-Con as a 4D totem (plan 47, an experiment) — click to switch it "
            f"{'off' if state.on else 'on'}. Its gyro turns three planes, one per axis "
            "(x → YZ, y → XZ, z → XY); X / Y / B throw x / y / z into W (XW, YW, ZW); "
-           "A (or ↓; a Joy-Con's − or +) resets the shape to the world's axes from where the pad is; the "
-           "tilt moves the shape.")
+           "A (or ↓; a Joy-Con's − or +) resets the shape to the world's axes from where the pad is; a "
+           "DualSense's tilt moves the shape, a Joy-Con's moves nothing.")
     if not state.on:
         return "totem off", tip
     word = f"totem {totem.readout(state)}"
@@ -725,15 +741,16 @@ def _totem(panel) -> None:
             reg["totem.on"].set(not on)
 
 
-def poi_word(reg) -> tuple[str, str] | None:
+def poi_word(reg, pad=None) -> tuple[str, str] | None:
     """The poi's word for the header (plan 47, the poi): "poi off", or its
     dials (``poi 1.00 · 0.30 · 0.20``: length, weight, springiness); None
-    with no poi in the registry."""
+    with no poi in the registry. `pad`, the one drawn: a Joy-Con is told it can't drive it."""
     state = getattr(reg, "poi", None)
     if state is None or "poi.on" not in reg:
         return None
     from . import poi
-    tip = ("The Joy-Con as the handle of a poi (plan 47, an experiment) — click to "
+    tip = ("A DualSense as the handle of a poi (plan 47, an experiment; a Joy-Con's sensors "
+           "move no position) — click to "
            f"switch it {'off' if state.on else 'on'}. The shape is the weight on the "
            "string: swing the pad and it flies round. Length · weight · springiness; "
            "its dials are in the Poi window (\"dials\" beside this) while it is on. "
@@ -742,14 +759,14 @@ def poi_word(reg) -> tuple[str, str] | None:
         return "poi off", tip
     word = f"poi {poi.readout(state)}"
     if state.driving is None:
-        word += " (no pad)"
+        word += " (not on a Joy-Con)" if poi.no_position(pad) else " (no pad)"
     return word, tip + (f" Last: {state.note}." if state.note else "")
 
 
 def _poi(panel) -> None:
     """The poi's word in the header, after the totem's; a click switches it."""
     reg = getattr(panel, "reg", None)
-    said = poi_word(reg) if reg is not None else None
+    said = poi_word(reg, getattr(panel, "pad", None)) if reg is not None else None
     if said is None:
         return
     word, tip = said

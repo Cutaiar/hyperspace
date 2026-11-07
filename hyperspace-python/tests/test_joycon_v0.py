@@ -300,8 +300,8 @@ def test_a_layout_alone_gives_a_pad_none_of_the_totems_gates():
     assert JOYCON.totem_layout and models.MODELS["joycon-r"].totem_layout
     reg, _, _, pad = layout_rig(EDGE)
     dev = PadDevice("edge", {}, Context(reg=reg), io=pad)
-    assert dev._quiet_stick(pad, reg) == frozenset()
-    assert dev._no_camera_job(pad, reg) == ()
+    assert dev.quiet_stick(pad.model, reg) == frozenset()
+    assert dev._no_camera_job(pad.model, reg) == ()
     assert totem.skip_of(pad) == totem.SKIP
     assert dev._totem_skip(reg, pad) == {"pad:MENU"}        # a learn leaves its save alone
 
@@ -384,7 +384,7 @@ def test_the_edge_keeps_its_table_its_a_reset_and_its_camera_job():
     dev = PadDevice("edge", {}, Context(reg=reg), io=pad)
     reg["totem.on"].set(True)
     state.driving = "edge"
-    assert dev._no_camera_job(pad, reg) == ()
+    assert dev._no_camera_job(pad.model, reg) == ()
     state.ang[0] = 1.0
     pad.frame(hold=("A",))
     totem.step(state, pad, reg, DT, "edge")
@@ -415,15 +415,51 @@ def test_a_real_rest_turns_nothing():
 
 
 def test_a_joycon_whose_rest_reads_past_the_dead_band_stops_turning_within_seconds():
-    """Rest read 8 deg/s off, past the 3 deg/s band: unlearned, the shape
+    """Rest read 5 deg/s off, past the 3 deg/s band: unlearned, the shape
     would spin at that rate for ever."""
-    reports, cal = windows()["rest"], calibration(round(8.0 / 0.061))
-    split = reports[0][0] + 3.0
+    reports, cal = windows()["rest"], calibration(round(5.0 / 0.061))
+    split = reports[0][0] + 6.0
     turn = hid.Turn(learn=True)
     early = turned([x for x in reports if x[0] <= split], cal, turn)
     assert max(abs(v) for v in early) < 30.0
     late = turned([x for x in reports if x[0] > split], cal, turn)
     assert max(abs(v) for v in late) < 0.05
+
+
+class IdentityCal:
+    def gyro_dps(self, s):
+        return s
+
+
+def even_turn(turn, rate, seconds, t0=0.0):
+    """`rate` deg/s about x, dead even, three samples a report: what no tape has."""
+    total, n = 0.0, round(seconds / 0.015)
+    for i in range(n):
+        turn.add(((rate, 0.0, 0.0),) * 3, t0 + i * 0.015, IdentityCal())
+        total += turn.take()[0][0]
+    return total
+
+
+def test_a_steady_slow_turn_past_the_ceiling_is_never_learned():
+    """10 deg/s, dead even for six seconds: it goes on turning, and no back-spin follows."""
+    turn = hid.Turn(learn=True)
+    went = even_turn(turn, 10.0, 6.0)
+    assert turn.offset == [0.0, 0.0, 0.0]
+    assert went == pytest.approx(even_turn(hid.Turn(), 10.0, 6.0))
+    assert went > 30.0
+    assert even_turn(turn, 0.0, 3.0, t0=6.1) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_an_even_turn_under_the_ceiling_is_the_trade_off_and_its_back_drift_is_bounded():
+    """Row 687's trade-off, held: 5 deg/s for three seconds is taken for rest. Stopped,
+    it drifts back slowly, and the next rest learned ends it."""
+    turn = hid.Turn(learn=True)
+    even_turn(turn, 5.0, 3.0)
+    assert turn.offset[0] == pytest.approx(5.0, abs=0.1)
+    back = even_turn(turn, 0.0, 2.1, t0=3.1)
+    assert -10.0 < back <= 0.0
+    assert turn.offset[0] == pytest.approx(0.0, abs=0.1)
+    assert even_turn(turn, 0.0, 2.0, t0=5.3) == pytest.approx(0.0, abs=1e-6)
 
 
 def test_a_real_moving_hand_is_never_learned_as_an_offset():
@@ -541,24 +577,118 @@ def test_every_layout_row_names_a_param_a_real_registry_has():
     assert not missing
 
 
+def panel_of(reg, pad, dev=None):
+    return types.SimpleNamespace(reg=reg, pad=pad, pad_reads_here=lambda: True,
+                                 devices=[dev] if dev is not None else None)
+
+
 def test_a_joycons_stick_with_the_totem_off_says_what_it_does_and_no_dial():
     from hyperspace import ui_pad
-    reg, _, pad, _ = stick_rig()
-    panel = types.SimpleNamespace(reg=reg, pad=pad, pad_reads_here=lambda: True)
+    reg, router, pad, dev = stick_rig()
+    panel = panel_of(reg, pad, dev)
+    pad.frame()
+    dev.act(router)
     assert ui_pad._stick_quiet(panel, "axis:LX") and ui_pad._stick_quiet(panel, "axis:L.NE")
-    assert not ui_pad._stick_quiet(panel, "axis:RX")
+    assert not ui_pad._stick_quiet(panel, "axis:RX") and not ui_pad._stick_quiet(panel, "pad:LSTICK")
     assert ui_pad.built_in(panel, "axis:LX") and not ui_pad.built_in(panel, "axis:LT")
     ui_pad._state(panel)["dialed"] = {"L"}
     assert ui_pad._free_words(panel, "axis:LX") == ui_pad.built_in(panel, "axis:LX")
     c = gamepad.Control("axis:LX", "stick", "LX", 0, 0, 1, 1)
     assert ui_pad._sectors(panel, pad, c) is None
+    route = routing.Binding("axis:LX", "camera.pan.x", "push")
+    words = ui_pad.label(panel, c, route)                     # names no route as acting
+    assert "heard only while the totem" in words and "· push" not in words
+    assert ui_pad.built_in(panel, "axis:LX") in words
+
+
+def test_the_window_and_the_device_agree_with_the_totem_on_and_reading_another_pad():
+    """`totem.on` is not the question: the totem may be on and reading someone else."""
+    from hyperspace import ui_pad
+    reg, router, pad, dev = stick_rig()
+    panel = panel_of(reg, pad, dev)
     reg["totem.on"].set(True)
-    assert not ui_pad._stick_quiet(panel, "axis:LX") and not ui_pad.built_in(panel, "axis:LX")
+    reg.totem.driving, reg.totem.seen = "another", math.inf     # another pad holds it
+    pad.frame()
+    dev.act(router)
+    assert math.isnan(lane(router))                             # the device: quiet
+    assert ui_pad._stick_quiet(panel, "axis:LX")                # the window: the same
+    assert ui_pad.built_in(panel, "axis:LX")                    # …it orbits, and says so
+    reg.totem.driving = dev.role
+    pad.frame()
+    dev.act(router)
+    assert lane(router) == 1.0 and not ui_pad._stick_quiet(panel, "axis:LX")
+    assert not ui_pad.built_in(panel, "axis:LX")
+
+
+def test_a_joycon_with_no_camera_job_keeps_its_stick_routes():
+    """Not the first pad on its deck: nothing else takes the stick, so a route is heard
+    (Learn accepts `axis@p2:LX`), or the stick would be dead."""
+    reg, router, pad, dev = stick_rig()
+    dev.steers = lambda _router: False
+    pad.frame()
+    dev.act(router)
+    assert lane(router) == 1.0
+    assert reg["camera.yaw"].base == pytest.approx(0.0, abs=1e-9)
+
+
+def test_the_stick_click_under_the_totem_shows_no_frame_at_zero_rotation():
+    """The real road: `totem.step` writes the phases, the row's `camera.reset` zeroes them,
+    and nothing may leave them there for the frame to draw."""
+    reg, router, pad, dev = stick_rig()
+    reg["totem.on"].set(True)
+    pad.frame()
+    dev.act(router)
+    reg.totem.ang[0] = 1.0
+    pad.frame()
+    dev.act(router)
+    phase_id = f"rot.phase.{totem.PLANES[0]}"
+    assert reg[phase_id].value == pytest.approx(1.0)
+    reg["camera.zoom"].set(2.0)
+    pad.frame(hold=("LSTICK",))
+    dev.act(router)
+    assert reg["camera.zoom"].value == 1.0, "the reset ran"
+    assert reg[phase_id].value == pytest.approx(1.0), "this frame's picture keeps the rotation"
+    assert reg.totem.ang[0] == pytest.approx(1.0)
+
+
+def test_a_sleeping_pad_is_labelled_with_what_it_will_do():
+    from hyperspace import ui_pad
+    for spec, source, target in (("joycon-l", "pad:LB", params.CHASE_PARAM),
+                                 ("edge", "pad:MENU", "preset.save_new")):
+        reg, router, pad = layout_rig()[0], layout_rig()[2], types.SimpleNamespace(on=False, controller=spec)
+        panel = panel_of(reg, pad)
+        assert ui_pad._model(panel) is models.MODELS[spec]
+        assert ui_pad.rows_cached(panel, router.table)[source].target == target
+
+
+def test_a_poi_on_with_only_a_joycon_says_so_once_and_the_header_too():
+    from hyperspace import ui_pad
+    reg, state, _ = poi_rig()
+    pad = types.SimpleNamespace(on=True, model=JOYCON, has=lambda _cap: True, motion_lanes=lambda: [0.0])
+    state.on = True
+    for _ in range(3):
+        poi.step(state, pad, reg, DT, "joy")
+    assert state.note == poi.NO_POSITION and state.driving is None
+    assert "not on a Joy-Con" in ui_pad.poi_word(reg, pad)[0]
+    assert "no pad" in ui_pad.poi_word(reg)[0]
+
+
+def test_the_feel_plot_reads_the_pad_and_not_the_quiet_feed():
+    """A stick orbiting with its routes quiet: NaN in the shared feed, its real lanes here."""
+    from hyperspace.ui import Panel
+    _, router, pad, dev = stick_rig()
+    pad.frame()
+    dev.act(router)
+    assert math.isnan(lane(router))
+    raws = Panel._pad_raw_lanes(types.SimpleNamespace(pad=pad, router=router))
+    assert raws[gamepad.AX_LX] == 1.0 and not any(math.isnan(v) for v in raws)
+    pad.on = False
+    assert Panel._pad_raw_lanes(types.SimpleNamespace(pad=pad, router=router)) is router.feeds.get("axis")
 
 
 def test_the_pad_window_says_a_layout_row_is_not_learned():
     from hyperspace import ui_pad
     reg, _, _, pad = layout_rig()
-    panel = types.SimpleNamespace(reg=reg, pad=pad, pad_reads_here=lambda: True)
+    panel = panel_of(reg, pad)
     b = next(r for r in routing.layout_of(JOYCON).rows if r.source == "pad:LB")
     assert "Learn leaves it alone" in ui_pad.label(panel, gamepad.Control("pad:LB", "button", "L", 0, 0, 1, 1), b)

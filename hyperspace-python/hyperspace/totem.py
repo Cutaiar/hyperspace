@@ -2,7 +2,8 @@
 
 A pad with motion sensors (a Joy-Con, a DualSense) held in the hand turns
 the shape: its gyro, integrated, drives **three of the six rotation
-planes**, and its tilt holds the shape off centre. Off by default
+planes**, and its tilt holds the shape off centre (not a Joy-Con's: `poi.no_position`,
+register row 686). Off by default
 (`totem.on`), and nothing here runs while it is off.
 
 **The planes.** A turn about one of the pad's axes is a turn in the plane
@@ -173,7 +174,8 @@ def register(reg, state: TotemState) -> None:
     reg.toggle(f"{GROUP}.on", "Totem", lambda: state.on, set_on, group=GROUP,
                persist=False, modulatable=False,
                tip="The Joy-Con as a 4D totem (an experiment, plan 47): its gyro turns "
-                   "three of the six rotation planes, its tilt moves the shape. X / Y / B "
+                   "three of the six rotation planes, and a DualSense's tilt moves the shape (a Joy-Con's "
+                   "moves nothing). X / Y / B "
                    "throw the x / y / z turn into the W planes; A (a Joy-Con's − or +) resets.")
     for i, axis in enumerate(AXES):
         def set_w(v, i=i, axis=axis) -> None:
@@ -339,14 +341,36 @@ def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
     _pan(state, motion, reg, dt, pad)
 
 
-def _own_layout(pad) -> bool:
-    return bool(getattr(getattr(pad, "model", None), "totem_layout", False))
+def own_layout(model) -> bool:
+    """Has this model's stick and reset its own arrangement with the totem (a Joy-Con's)?"""
+    return bool(getattr(model, "totem_layout", False))
+
+
+def reads_stick(model, reg, role: str) -> bool:
+    """Is the totem reading a pad of `model` and `role`, so its stick is off the camera
+    job and free for a route? The one question, the device's and the pad window's."""
+    return own_layout(model) and drives(state_of(reg), role)
+
+
+def quiet_stick(model, reg, role: str, steers: bool = True) -> bool:
+    """Does a route on this pad's stick let go, because the stick orbits instead (the
+    owner, 2026-11-04)? Only where the stick has that job: a pad that doesn't `steer`
+    keeps its routes, or the stick would be dead."""
+    return own_layout(model) and steers and not drives(state_of(reg), role)
+
+
+def keep_turn(state: TotemState, reg) -> None:
+    """The phases back to the totem's angles, after the pad's rows ran: a row that fired
+    `camera.reset` (a Joy-Con's stick click) would otherwise show the shape at no
+    rotation for a frame, and the totem would put it back on the next."""
+    for p, name in enumerate(PLANES):
+        _set(reg, f"rot.phase.{name}", state.ang[p])
 
 
 def skip_of(pad) -> frozenset:
     """The rows held off `pad` while the totem reads it: `SKIP`, less the
     reset for a pad whose layout has its own."""
-    return SKIP - {f"pad:{RESET_BUTTON}"} if _own_layout(pad) else SKIP
+    return SKIP - {f"pad:{RESET_BUTTON}"} if own_layout(getattr(pad, "model", None)) else SKIP
 
 
 def _buttons(state: TotemState, pad, reg) -> None:
@@ -357,7 +381,7 @@ def _buttons(state: TotemState, pad, reg) -> None:
             p = reg.get(f"{GROUP}.w.{AXES[i]}")
             if p is not None:
                 p.set(not state.w[i])
-    if _own_layout(pad):
+    if own_layout(getattr(pad, "model", None)):
         return                                    # its reset is a row of its layout
     code = named.get(RESET_BUTTON)
     if (code is not None and pad.pressed(code)) or pad.hat_pressed(HAT_DOWN):
