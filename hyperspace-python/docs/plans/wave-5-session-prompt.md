@@ -11,18 +11,20 @@ cheaper changes. The plan is `hyperspace-python/docs/plans/58-wave-5.md`. The Py
 `hyperspace-python/`. Enter a scratch worktree before anything else (EnterWorktree); never run reviews or
 checkouts in the owner's checkout.
 
-## First: check that you may start
+## Three tracks: start now
 
-Stop and tell the owner plainly if any of these is not true. Do not start around them.
+**The owner, 2026-11-06: what matters most is getting wave 5 running and accomplishing its spirit.** The rename is merged, so only the cleanup truly needs the migration. Run these side by side, and don't wait on one for another:
 
-1. **Wave 4 is merged:** SEM, D5e, N1, N2, D6, #287's content (rewritten by us, so the original PR may close unmerged), #365, NSEW, the one migration. Check with
-   `git log` and `gh pr list`. If not, wave 4's remainder comes first, by `docs/plans/wave-4-session-prompt.md`
-   and the handoff at `~/.claude/handoffs/wave4/HANDOFF.md`. Say so and ask whether to finish it.
-2. **The owner says they ran the migration, and that both Macs have opened the new library.** Only the owner
-   can say this, so ask. They coordinate the other Mac. Stage 1 removes the code that reads old files;
-   this is the one gate you must never assume.
+- **Track W5, wave 5's work, starts now:** screens, hot-plug, controllers, leak fixes, words, types. Nothing here needs the migration.
+- **Track W4, the end of wave 4, as its gates open:** you orchestrate it too.
+  - **N1 #396 + #397:** reviewed once, with the owner's ruling on routes being built on top: check their PR bodies, give the new work a review, `--all`, then merge when the owner says hand checks 506–509 passed.
+  - **#365 Joy-Con:** another session's; it lands when the owner has run check 520–521. Then N2a + N2b (`53-node-mode.md`; `PadDevice._quiet_stick` and `steer` stand down on axes node mode holds), then NSEW.
+  - **WORDS, starts now:** "session" and "rig" leave what a person reads (155 preset, 30 session, 19 rig strings, listed in #393's body). "Preset" becomes "patch" in the panel **with the migration**, when the folder renames. Say each one as what it means: "the rig's cable" is the bus cable, "not in this rig" is "not on this Mac".
+  - **Row 740:** player moves on the meta stack; the words pass, row 668.
+  - **The one migration,** `57-format-lane.md` §7 and §7a: after NSEW; the owner runs it, both Macs closed.
+- **Track CL, the cleanup, only after the gate:** CL2, CL1, CL3, CL4. **The gate: the owner says the migration ran and that both Macs have opened the new library.** Only the owner can say this, and they coordinate with Dylan: ask, and never assume it. Removing old-file code before then would strand a Mac that hasn't updated.
 
-H1, H2 and SM1 need none of this.
+Nothing in W5 may change an existing saved format before the migration. `output.bg`, `.alpha` and `tempo.nudge` live in show files today, so LY2's saved half and SC2's move of them wait for the migration; everything else in those items goes now. If W5 and the migration collide in `library.py`, the migration wins.
 
 ## Read first, in this order
 
@@ -66,6 +68,10 @@ Given 2026-11-06. These overrule every other document.
   preparation in this wave.
 - **Merge on green holds** for this wave.
 
+- **Patches:** the panel says patches. "Session and rig need to go away. Presets need to go away." Timing as Track W4 says.
+- **Node mode:** LFO and audio routes may be overwritten, "as long as they come back when you disengage node mode". SHIFT reaches the meta layer. Knobs fill before faders. Dylan cares about the clip launch buttons and the meta controls ("where's the master brightness fader? how do I change the shape?"), not the layout of knobs and faders, so node mode never takes those.
+- **Playlist:** repeated ⌘Z may reach a look it loaded. **A cart starts by itself after launch:** one key in the install file, once `installs/` exists: add it as SM6, after the migration. Dwell runs from fade start to fade start.
+- **Saves carry the pad dial readings,** even at their launch values.
 - **A display has one target, and a target may go to several displays.**
 - **Rows pending the owner were bulk accepted,** and marked so. All 17 face patterns stay; SEND B stays FINE; creating a pair
   over an existing mapping asks (wave 4).
@@ -78,17 +84,16 @@ conflicts, and stop the type errors growing.
 
 ## The work
 
-`58-wave-5.md` §4 has every item, with its files, size, dependency and proof, and §5 the schedule:
+`58-wave-5.md` §4 has every item, with its files, size, dependency and proof.
 
-| Stage | Items |
+| Order | Track W5, now |
 | --- | --- |
-| Any time | H1, H2, SM1 |
-| 1 | CL2, alone among anything touching tests' builders; beside it LY1, LY2, SC1, SM2, SM3 |
-| 2 | CL1, once the owner's dry run is clean; then CL3 and CL4 together; TY1, TY2; SM4 |
-| 2b | SC3a, alone on the render loop, after a short spike. If the spike fails, stop and tell the owner |
-| 3 | SC2, CT1, LY3, SM5 |
-| 4 | SC3b, then RT1 only after SC3b's hand check with a real unplug |
-| 5 | TY3, then TY4 |
+| 1 | H2, SM1 (H1 is merged); SC1; LY1, LY2's unsaved half; SM2, SM3; TY1, TY2 |
+| 2 | **SC3a, alone on the render loop, after a short spike.** If the spike fails, stop and tell the owner: hot-plug is required |
+| 3 | SC2, CT1, LY3, SM4, SM5 |
+| 4 | SC3b; the hand check with a real unplug goes to the owner |
+| 5 | TY3, then TY4, last, so they annotate what survived |
+| After the gate | CL2, alone among anything touching tests' builders; CL1 once the owner's dry run is clean; CL3, CL4; then RT1, after SC3b's unplug and CT1 |
 
 **Numbers:** plan 58 is this; rows from 770, checks from 600, groups from DA. Pre-assign each item's block when
 you brief it, as parallel builders collide. If wave 4's remainder ran past those, take the next free.
@@ -117,7 +122,7 @@ plan in the same PR as the first item, and tell the owner only what changes scop
   as in wave 4. Doc tails merge on their own in a local merge only: GitHub's server doesn't honour the attribute
   (retested 2026-11-06, plan 58 §3), so a PR showing doc conflicts still needs main merged locally and pushed,
   which union then resolves with no hand work. Keep `tools/sort_register.py`.
-- **Merging:** the owner authorised merging on green for wave 5, but for CL1, which waits for their dry run, and RT1, which waits for the unplug. `main` has no required checks, so `--auto` merges at once: wait first with
+- **Merging:** the owner authorised merging on green for wave 5, but for CL1, which waits for their dry run, RT1, which waits for the unplug, and N1, which waits for 506–509. `main` has no required checks, so `--auto` merges at once: wait first with
   `~/.claude/handoffs/wave4/wait-green.sh <pr> <head>`, or its replacement from H2, then call `gh pr ready` and `gh pr merge <pr>
   --squash --delete-branch --body-file <file>` directly, with the review and test counts and the trailer lines in the
   body. A wrapper around `gh pr merge` gets refused. If `gh` then errors that `main` is used by a worktree, the merge
@@ -137,6 +142,8 @@ old files. SC3b can only be proved by unplugging a real display, so nothing abou
 that old files stop opening, and what to do if a Mac hasn't updated.
 
 **In your first status message to the owner,** ask for the per-face render check (`58-wave-5.md` §4), and list §8's "Assumed unless the owner objects", so they can object.
+
+**Dylan's Mac:** the steps are `58-wave-5.md` §2a. Give them to the owner when the migration nears.
 
 ## After the last merge
 
