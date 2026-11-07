@@ -495,7 +495,7 @@ META_MODULES = _mods(
 # finding, not a licence: splitting them is the structure audit's (draft #273), and until then
 # `META_NAMES` below stands guard over what a patch module takes from them
 BOTH_LAYERS = _mods("params", "routing", "routing_sources", "library", "undo", "learn",
-                    "outputs", "groupwords")
+                    "outputs", "groupwords", "hot_slots")
 # above both: the panel and the headless tools, which may read either
 ABOVE = _mods("ui", "graphview", "headless", "offline")
 

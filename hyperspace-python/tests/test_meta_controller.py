@@ -29,7 +29,8 @@ from hyperspace import (
     undo,
 )
 from hyperspace.deck import KEYS, MOUSE, Deck, MetaController
-from hyperspace.hotreload import MODULES, DeckLibrarySlots, DeckProjectSlots
+from hyperspace.hot_slots import DeckLibrarySlots, DeckProjectSlots
+from hyperspace.hotreload import MODULES
 from hyperspace.library import LOADABLE
 from hyperspace.pointer import Pointer, Through
 from hyperspace.routing import Binding
