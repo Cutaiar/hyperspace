@@ -7,7 +7,7 @@ per-report turn on the report clock (`hid.Turn`), the frame's newest sample,
 These hold the poi to this tape, and the tool's own working. Row 786 is what
 the tape showed before row 817: the hand run to eight units and the shape off
 the screen. It stays on the screen now, and the pad going still stops the hand
-in about half a second. Where it ends is still drift: at the screen's edge,
+within a second. Where it ends is still drift: at the screen's edge,
 until A. No test says it stays near the centre, because it doesn't."""
 
 import dataclasses
@@ -116,7 +116,7 @@ def test_the_pad_going_still_stops_the_hand_within_a_second():
             stopped = t
             assert rig.state.wrist_v == [0.0, 0.0, 0.0]
             break
-    assert stopped is not None and stopped < 34.6
+    assert stopped is not None and stopped < 34.75
 
 
 def test_no_pull_home_what_the_hold_gathered_stays():

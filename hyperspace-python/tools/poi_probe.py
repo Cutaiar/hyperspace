@@ -21,7 +21,7 @@ between the accel through the attitude and straight up — this is what
 leaks gravity into the hand), the push left after gravity (lin, g), how
 long the pad has read still, the hand's speed and place, the weight, the
 pan and zoom the shape would get, and the walls it is held at: `hand` at
-the screen's box (`poi.box_limits`): x, y, z as the hand or the weight touch it. Type a word and Enter to put a note in the tape ("carry right",
+the screen's box: x, y, z as the hand or the shape touch it. Type a word and Enter to put a note in the tape ("carry right",
 "swing") — a bare Enter notes "mark"; A on the pad resets, as in the app;
 Ctrl-C ends it. The calibration the reader found goes beside the tape
 (``<tape>.findings.json``: the flash records, as the probe's --check
@@ -102,8 +102,11 @@ class Rig:
         err = math.degrees(math.acos(max(-1.0, min(1.0, up[1] / a)))) if a > 1e-6 else float("nan")
         lin = poi._norm(poi._sub(up, [0.0, st.g_mag, 0.0]))
         lo, hi = poi.box_limits(st)
-        walls = "".join(ax for i, ax in enumerate("xyz") if any(
-            p[i] <= lo[i] + 1e-9 or p[i] >= hi[i] - 1e-9 for p in (st.wrist, st.ball)))
+        off = st.offset()
+        shape = (abs(self.view.pan[0]) >= st.box[0] - 1e-9, abs(self.view.pan[1]) >= st.box[1] - 1e-9,
+                 st.depth and abs(off[2]) >= st.box[2] - 1e-9)
+        walls = "".join(ax for i, ax in enumerate("xyz") if shape[i]
+                        or st.wrist[i] <= lo[i] + 1e-9 or st.wrist[i] >= hi[i] - 1e-9)
         return {"a": a, "rate": poi._norm(list(m.gyro)), "err": err, "lin": lin,
                 "still": st.still, "speed": poi._norm(st.wrist_v), "wrist": list(st.wrist),
                 "ball": list(st.ball), "pan": list(self.view.pan), "zoom": self.view.zoom,

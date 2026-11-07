@@ -8574,9 +8574,9 @@ Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_gui
 1. Turn the poi on. Hold the pad as you did on the tape for ten seconds, without walking. *Pass:* the shape's centre never leaves the screen, and its size stays within half to double.
 2. Hold the pad dead still after a move. *Pass:* the shape stops moving within about a second, and then doesn't creep.
 3. Press A. *Pass:* the shape goes back under the handle.
-4. Carry the pad about half a metre to one side, gently, then hold it. *Pass:* the shape follows and stays there, with no pull back. *Fail:* it hardly moves: a gentle carry is being read as still.
+4. Carry the pad about half a metre to one side in a second or so, then hold it. *Pass:* the shape follows and stays there, with no pull back. *Fail:* it hardly moves: the carry is being read as still. A much slower carry can come back short, and the tests show it: say how slow matters.
 5. Swing it round hard for ten seconds. *Pass:* the shape swings and stays on the screen.
-6. Try a second output with a different shape, or resize it. *Pass:* the limit follows what that output shows.
+6. Resize the first output to another shape. *Pass:* the limit follows that frame. A second output of another shape has no limit of its own: the limit is the frame's, not each output's. *Report:* if it clips there.
 *Report, not pass or fail:* how often the hand ends up stuck at an edge until A, and whether that's acceptable for a show. If it isn't, the choices are less hand push (`poi.hand`), or to take position out as #365 does.
 
 ## What no test covers

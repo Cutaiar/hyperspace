@@ -14,7 +14,6 @@ from hyperspace.devices import Context, PadDevice
 from hyperspace.pads import nintendo
 
 FLAT = (0.0, 1.0, 0.0)
-WIDE = [50.0, 50.0, 50.0]        # a box no swing reaches: the physics on its own
 
 
 def rig(**cfg):
@@ -118,10 +117,9 @@ def test_a_still_pad_hangs_the_shape_under_the_handle_and_it_does_not_creep():
 def test_a_longer_string_hangs_lower_a_softer_or_heavier_one_stretches_further():
     def hang(**dials):
         reg, state, _ = rig(**dials)
-        state.box = list(WIDE)
         pad = FakePad()
         on(reg, state, pad, settle=600)
-        return pan(reg)[1]
+        return -state.ball[1]            # the string's own: the box holds the shape, not it
     assert hang(length=2.0) == pytest.approx(2 * hang(length=1.0), rel=0.05)
     stiff, soft = hang(spring=0.0), hang(spring=0.8)
     assert soft > stiff + 0.1
@@ -247,8 +245,8 @@ def shove(reg, state, pad, seconds=2.0, axis=0, g=0.5, dt=DT):
 
 
 def test_the_hand_and_the_weight_are_held_on_the_screen():
-    """Row 817, from #342: a carry past the edge stops at it, the wrist, the
-    weight, so the pan; the weight's depth stops an octave of zoom each way."""
+    """Row 817, from #342: a carry past the edge stops the hand at it and the
+    shape, an octave of zoom each way, while the weight itself swings on."""
     reg, state, _ = rig()
     pad = FakePad()
     on(reg, state, pad)
@@ -256,7 +254,7 @@ def test_the_hand_and_the_weight_are_held_on_the_screen():
     assert state.box == poi.DEFAULT_BOX and hx > hy > 1.0
     wrist, ball, panned = shove(reg, state, pad)                   # right, hard
     assert wrist == pytest.approx(hx, abs=1e-9)                    # to the edge, not past it
-    assert ball <= hx + 1e-9 and panned <= hx + 1e-9
+    assert panned == pytest.approx(hx, abs=1e-9) and ball > hx
     poi.reset(state)
     wrist, _, panned = shove(reg, state, pad, axis=1, g=-0.5)      # down: pan.y is down
     assert wrist == pytest.approx(hy, abs=1e-9) and panned <= hy + 1e-9
@@ -267,7 +265,6 @@ def test_the_hand_and_the_weight_are_held_on_the_screen():
         poi.step(state, pad, reg, DT)
         zooms.append(reg["camera.zoom"].value)
     assert max(zooms) <= 2.0 ** (hz * poi.DEPTH_OCTAVES) + 1e-6
-    assert state.ball[2] <= poi.HANDLE + hz + 1e-9
 
 
 def test_a_home_off_centre_is_held_to_the_same_screen():
@@ -291,7 +288,138 @@ def test_the_box_is_what_the_eye_sees_and_the_default_is_a_16_by_9_output():
         assert box[2] == poi.DEPTH_HALF
     want = poi.box_for(1920, 1080, geometry.EYE_FOV, geometry.EYE_DISTANCE)
     assert poi.DEFAULT_BOX == pytest.approx(want, abs=1e-6)
-    assert geometry.PAN_REF_PX == pytest.approx(324.0)
+
+
+def test_the_string_swings_on_past_the_edge_at_ordinary_dials():
+    """The dials still say how it hangs when the shape is at the wall."""
+    def hung(**dials):
+        reg, state, _ = rig(**dials)
+        pad = FakePad()
+        on(reg, state, pad, settle=300)
+        return state.ball[1], pan(reg)[1], state.box[1]
+    long_string, shape, wall = hung(length=3.0)
+    assert long_string < -2.9 and shape == pytest.approx(wall, abs=1e-9)
+    assert hung(spring=0.8, length=2.0)[0] < hung(spring=0.0, length=2.0)[0] - 0.1
+
+
+def test_a_hard_swing_over_3_g_is_a_reading_not_a_still_pad():
+    """Finding 1 on #430: over `VALID_G` it read as a stalled pad, and zeroed
+    the hand. It's the push of a swing: it pushes, and nothing stops."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    state.wrist_v = [1.0, 0.0, 0.0]
+    for _ in range(8):
+        pad.frame(accel=(4.0, 1.0, 0.0), dt=DT)
+        poi.step(state, pad, reg, DT)
+    assert state.still == 0.0 and state.wrist_v[0] > 1.0
+
+
+def test_a_reading_with_no_gravity_is_not_still_and_a_stalled_pad_is():
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    assert state.still > 0.0
+    run(reg, state, pad, 4, accel=(0.0, 0.0, 0.0))
+    assert state.still == 0.0
+    pad.frame()
+    poi.step(state, pad, reg, DT)
+    before = state.still
+    for _ in range(30):                                            # no new reports
+        poi.step(state, pad, reg, DT)
+    assert state.still > before
+
+
+@pytest.mark.parametrize("rest", [0.93, 1.07, 1.15])
+def test_a_pad_resting_off_1_g_settles_on_what_it_reads_and_a_second_does_too(rest):
+    """Finding 2 on #430: a pad at 1.07 g could never be still, so never
+    learned, and a phantom push ran to the wall on a table. A restarted it."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    reg["poi.on"].set(True)
+    run(reg, state, pad, 600, accel=(0.0, rest, 0.0))
+    assert state.g_mag == pytest.approx(rest, abs=1e-6)
+    assert math.hypot(*state.wrist) < 1e-6
+    poi.reset(state)                                               # A, or another pad
+    run(reg, state, pad, 600, accel=(0.0, 1.0, 0.0))
+    assert state.g_mag == pytest.approx(1.0, abs=1e-6)
+    assert math.hypot(*state.wrist) < 1e-6
+
+
+def test_a_wrong_1_g_at_settling_cannot_lock_a_pad_out_of_still():
+    """Settled mid-move on 1.1 g, resting at 1.0: the sensors alone say still."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    reg["poi.on"].set(True)
+    run(reg, state, pad, 1, accel=(0.0, 1.1, 0.0))
+    run(reg, state, pad, 120)
+    assert state.still >= poi.STILL_S and state.wrist_v == [0.0, 0.0, 0.0]
+
+
+def test_a_steady_lift_walks_the_1_g_no_further_than_the_limit():
+    """Finding 7 on #430."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad, settle=120)
+    run(reg, state, pad, 600, accel=(0.0, 1.05, 0.0))
+    assert state.g_mag == pytest.approx(1.0 + poi.G_MAG_LEARN_G, abs=1e-6)
+
+
+def test_waiting_for_gravity_writes_the_shape_on_the_screen():
+    """Finding 6 on #430: a just-hung weight, a long string, invalid readings."""
+    reg, state, _ = rig(length=4.0)
+    pad = FakePad()
+    on(reg, state, pad, settle=1)
+    poi.reset(state)
+    run(reg, state, pad, 5, accel=(0.0, 0.0, 0.0))
+    assert not state.settled
+    assert abs(pan(reg)[1]) <= state.box[1] + 1e-9
+
+
+def test_with_depth_off_no_wall_stands_along_depth():
+    """Finding 10 on #430: no zoom shows it, so nothing is clipped for it."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    reg["poi.depth"].set(False)
+    on(reg, state, pad)
+    state.wrist = [0.0, 0.0, 10.0]
+    state.wrist_v = [0.0, 0.0, 1.0]
+    poi._bound(state, state.wrist, state.wrist_v)
+    assert state.wrist[2] == 10.0 and state.wrist_v[2] == 1.0
+    assert reg["camera.zoom"].value == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(("g", "seconds"), [(0.3, 1.0), (0.25, 1.5)])
+def test_a_smooth_carry_lands_past_its_zero_crossing(g, seconds):
+    """Finding 4 on #430: the hand read still where the push crossed zero, then
+    the slowing drove it back. `STILL_S` outlasts a carry this quick. A carry
+    slower than this can still lose it (hand check 633 says so)."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    n = int(seconds / DT)
+    for i in range(n):
+        pad.frame(accel=(g * math.sin(2 * math.pi * (i + 0.5) / n), 1.0, 0.0), dt=DT)
+        poi.step(state, pad, reg, DT)
+    want = g * poi.G_MPS2 * poi.UNITS_PER_M * seconds ** 2 / (2 * math.pi)
+    assert want < state.box[0]
+    assert state.wrist[0] == pytest.approx(want, rel=0.2)
+
+
+def test_a_steady_push_outlasts_half_a_second_then_reads_as_a_wrong_attitude():
+    """Finding 5 on #430: a push held dead steady with the pad not turning
+    can't be told from a wrong attitude. It moves the hand for this long."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    zeroed = None
+    for i in range(120):
+        pad.frame(accel=(0.1, 1.0, 0.0), dt=DT)
+        poi.step(state, pad, reg, DT)
+        if zeroed is None and i > 3 and state.wrist_v == [0.0, 0.0, 0.0]:
+            zeroed = (i + 1) * DT
+    assert 0.5 < zeroed < 1.0
+    assert state.wrist[0] > 0.3
 
 
 def test_sensor_samples_with_no_gravity_in_them_push_nothing_and_settle_nothing():
@@ -314,13 +442,13 @@ def test_sensor_samples_with_no_gravity_in_them_push_nothing_and_settle_nothing(
 def test_a_still_pad_whose_attitude_is_off_recovers_soon_and_the_hand_holds():
     """Row 817: the tape's dead-lock. Dead still, 6° off, the push through the
     attitude reads 0.1 g, "not still", and only a still pad is corrected. The
-    sensors alone end it in a fraction of a second, not 1.5 s."""
+    sensors alone end it within a second, not 1.5 s and a restart."""
     reg, state, _ = rig()
     pad = FakePad()
     on(reg, state, pad)
     state.att = poi._rodrigues([0.0, 0.0, 1.0], math.radians(6.0))
     state.still = 0.0
-    run(reg, state, pad, 30)                                       # half a second
+    run(reg, state, pad, 60)                                       # a second
     assert state.still >= poi.STILL_S and state.wrist_v == [0.0, 0.0, 0.0]
     run(reg, state, pad, 60)
     up = poi._apply(state.att, [0.0, 1.0, 0.0])
@@ -507,7 +635,8 @@ def test_while_the_poi_swings_the_totems_tilt_pan_steps_aside_and_its_turn_still
         totem.step(tstate, pad, reg, DT)
     assert tstate.pan_out == [0.0, 0.0]
     assert abs(reg["rot.phase.XY"].value) > 0.3
-    assert pan(reg)[0] == pytest.approx(state.pan_home[0] + state.offset()[0], abs=1e-6)
+    want = state.pan_home[0] + state.offset()[0]        # the poi's, held to the screen
+    assert pan(reg)[0] == pytest.approx(min(state.box[0], max(-state.box[0], want)), abs=1e-6)
 
 
 def test_a_reset_that_fires_both_leaves_the_pan_at_the_poi_hanging_from_zero():

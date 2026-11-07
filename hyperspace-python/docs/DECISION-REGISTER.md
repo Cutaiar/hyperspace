@@ -818,7 +818,7 @@ here; overturn → the change, then the same.
 | 814 | SC3b: the hold, `[output] unplug_hold_s`, 3 s by default, so a TV's re-sync of a second or two costs no window: hidden at once, the same window back, restarted by each return. Arrivals settle 0.25 s. A display off but still listed is no change. | (rec) — pending the owner |
 | 815 | SC3b: the control window waits out the hold, then goes to a display with no render, or floats over a render above a fullscreen one's level; it returns with its row's display. Displays keep their numbers for the run by the Mac's display id, so a twin plugged in on the left leaves the window where it is, the panel says so, and a restart numbers them across the desk again. | (rec) — pending the owner |
 | 816 | SC3b: a row chosen on this Mac acts at once. **What the other Mac chose for a display showing something here waits behind a line and a button,** as a shared row must not move a window in a show. A display not here takes its row as it comes. | (rec) — pending the owner |
-| 817 | The poi's runaway (row 786), fixed in `poi.py`, keeping no pull home: a pad hardly turning and reading steadily stops the hand in about half a second even with its attitude out, and the hand and the weight are held to the screen rather than eight units. Parts taken from #342, named in the section. **Accepted by the owner, 2026-11-07.** How it feels at a real pad is unproved | 633 | Built on the owner's word; feel pending check 633 |
+| 817 | The poi's runaway (row 786), fixed in `poi.py`, keeping no pull home: a pad hardly turning and reading steadily stops the hand within a second even with its attitude out, and the hand and the shape are held to the screen rather than eight units, with the string's physics left free. Parts taken from #342, named in the section. **Accepted by the owner, 2026-11-07.** How it feels at a real pad is unproved | 633 | Built on the owner's word; feel pending check 633 |
 | 808 | CONTROLS is pinned, not a window inside the window: no title bar, no drag, no resize, no close box. It fills the control window, or sits `ui.panel_w` wide at the right while the desk or pad diagram is up (`ui.panel_rect`), and follows the OS window's size every frame. The column is as wide as what is in it wants (the desk a 4:3 slice of the height, the pad its own far narrower width, the wider when both are up), never more than half the window (`ui.COLUMN_MAX`), so the graph keeps room. H, the desk's chip and `ui.panel` show and hide it; the graph is primary and has no ×. The pad diagram gains the × the desk has (`ui_pad._header`), which turns `ui.pad_diagram` off; clicked, it stays behind the cheat sheet, poi and players windows. The desk and pad read its edge in the same frame (`Panel.panel_left`), not last frame's. Widening the page is widening the OS window. The imgui name stays `CONTROLS` for `replay` and the tests | — | owner — 2026-11-07: "for now just show and hide is fine"; the pad's split left the graph too little room; "the graph panel never needed an x. the pad diagram does. the graph is primary"; a splitter between the column and the panel later |
 | 789 | TY2: #273's structural audit lands as a record, unedited under a dated header: the headline figures re-measured at `e869a408` by one script in its appendix, old names mapped, and which proposals plan 58 §6 rejected. Plan 58 §3 and §6 decide what's done. Replaces #273. | — | (rec) — pending the owner |
 | 812 | HR: row 802's rule imported the package in hash-seed order and flaked. It now imports in `MODULES`'s order and skips only a missing third-party package. Row 808 removed the cause | — | the orchestrator's item, found by `--all` on #425; built, no owner question |
@@ -14570,7 +14570,7 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 ### 817. The poi's runaway, fixed
 
 - **The owner, 2026-11-07:** "I haven't seen the poi thing with the tape", accepting row 786's recommendation: a still pad stops the hand sooner, and the hand's limit is the screen's size rather than 8. No pull home stays (the owner, 2026-11-03).
-- **The tape, default dials, before (`main` at e8469ed9):**
+- **The tape, default dials, before (`main`'s `poi.py`):**
 
   ```
   window            secs still   err° med/max   lin g med/max   travel end/max  v max  pan max  walled
@@ -14582,27 +14582,28 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 
   ```
   window            secs still   err° med/max   lin g med/max   travel end/max  v max  pan max  walled
-  pickup             5.5   28%    2.6/ 40.7   0.064/ 1.330    0.27/  1.13   1.32     1.17      0%
-  hold               8.0   50%    1.9/ 54.5   0.043/ 0.901    3.55/  3.55   3.76     2.96     67%
+  pickup             5.5   19%    2.6/ 40.9   0.063/ 1.322    0.47/  0.99   1.17     1.24      0%
+  hold               8.0   44%    2.5/ 54.1   0.060/ 0.901    3.74/  3.74   3.89     2.96     67%
   ```
 
   `walled` isn't comparable across the two: before it counted the eight-unit limit, after it counts any wall of a much smaller box.
-- **What that means.** The hold stays on the screen on every frame, and the zoom never leaves an octave of home (0.50 at the end, against 0.085). The pad going still stops the hand about half a second after 33.6 s, against 3.1 s. **It doesn't stay near the centre.** The move at 31 to 33.5 s still gathers drift the pad didn't travel, so the hand runs to the wall and stays: the hold ends with the pan at the screen's corner, +2.96, +1.67, half size, until A. That's the limit doing its work, and no pull home's price.
-- **Taken from #342** (`origin/worktree-poi-hand-fix`, closed):
-  - The box: `box_for`, `DEFAULT_BOX`, `DEPTH_HALF`, `BOX_MIN`, `_bound` on the wrist and the weight, and `poi_guide` setting it from the real output each frame.
-  - `_valid` / `VALID_G`: a reading with no gravity in it pushes nothing and settles nothing.
-  - `g_mag`: the 1 g this pad reads, learned while still, with `HAND_DEADBAND_G` at 0.04. The owner's Joy-Con reads 1.022.
-  - The reading's short average as a test of steadiness (`a_lp`).
-  - The tests for each.
-- **Changed from #342.** Its stillness was the sensors alone, always. That swallows a gentle steady carry, which `main`'s stillness guards against and the owner's "a metre stays there" test holds. So stillness keeps `main`'s push test, and the sensors alone are a second road, stricter than #342's (`QUIET_DPS` 5, against 15) and only after `CALM_S`. `CALM_S` falls from 1.5 s to 0.25 s, because the steadiness test now does the work the long wait did.
+- **What that means.** The shape stays on the screen on every frame, and the zoom never leaves an octave of home (about 0.5 at the end, against 0.085). The pad going still stops the hand about 0.8 s after 33.6 s, against 3.1 s. **It doesn't stay near the centre.** The move at 31 to 33.5 s still gathers drift the pad didn't travel, so the hand runs to the wall and stays: the hold ends with the pan at the screen's corner, +2.96, +1.67, until A. That's the limit doing its work, and no pull home's price.
+- **The limit is on the hand and the shape, not the string.** The weight swings on past the edge, so `poi.length`, `.weight` and `.spring` keep meaning something at the wall, and `_write` holds what's drawn.
+- **Stillness.** `main`'s push test stays, and the sensors alone are a second road: under `QUIET_DPS` (5 deg/s) and steady against the reading's short average, for `CALM_S` (0.35 s, was 1.5). `STILL_S` goes from 0.08 s to 0.2 s, so a carry of a second or two isn't read as still where its push crosses zero.
+  - A slower carry can still lose its second half: 0.15 g over 2 s ends near home. `main` did the same. Check 633 says so.
+  - A push held dead steady with the pad not turning can't be told from a wrong attitude. 0.1 g held steady moves the hand for 0.7 s (0.59 units, 5.6° of tilt), then reads as still. A real hand isn't that steady; check 633 step 4 asks.
+- **This pad's 1 g.** Read at settling, from the reading, so a pad resting at 1.07 g is no push, and A or a second pad reads it afresh. Learned while still after that, no further than `G_MAG_LEARN_G` (0.03) from what it settled on.
+- **Readings.** Under 0.3 g there's no gravity in it (a sensor not yet on): no push, no settling, and not still. Over 3 g it's a hard swing: it pushes, nothing settles on it. A stalled pad alone counts as still.
+- **Taken from #342** (`origin/worktree-poi-hand-fix`, closed): the box (`box_for`, `DEFAULT_BOX`, `DEPTH_HALF`, `BOX_MIN`, `_bound`), the no-gravity reading, `g_mag`, `HAND_DEADBAND_G` at 0.04, the short average, and the tests for each.
+- **Changed from #342.** Its stillness was the sensors alone, always, which swallows a gentle steady carry. Its weight was clamped with its hand. Its box was set by the guide; `Renderer._poi_layer` sets it here, and `box_for` is `geometry.px_per_unit`'s, once.
 - **Not taken from #342:**
   - `poi.home` and `HAND_BLEED_S`: the pull home the owner ruled out.
   - `TILT_TRUST`, the tilt pulled while moving. Measured on this tape, it moved the hold's travel from 3.55 to 3.48, and it left a metre's carry at 2.09 units rather than 2.5.
   - `_hook_view_reset`: not this fix. A view reset with the hand out still draws the shape home for one frame, then back out, now within the screen.
-- **#342's closing note:** "the owner dropped position for the Joy-Con on 2026-11-04", with draft #365 replacing it for now. #365 is still open and the poi's position code is on `main`, so this fixes what's there, at the owner's word of 2026-11-07. When #365 lands, position may go, and this with it.
-- **The tests:** `tests/test_poi.py`, `tests/test_poi_real.py`, `tests/test_poi_guide.py`. The hold on the screen on every frame of the owner's tape, the stop within a second, no pull home, the box the output's. The totem is untouched.
+- **What's left of the poi.** #431, open as this lands, stops it on Nintendo pads (`poi.no_position`), since the owner dropped position for the Joy-Con on 2026-11-04. So this is for Sony and other gyro pads. The tape is a Joy-Con's; when #431 lands the probe and these tests must still reach `poi.step` for it.
+- **The tests:** `tests/test_poi.py`, `tests/test_poi_real.py`, `tests/test_poi_guide.py`. The totem is untouched.
 - **Limits.**
-  - The poi's feel at a real pad is **unproved**: one tape, replayed. A carry and a swing may feel different with the lower `CALM_S` and the new limits, and only a person can judge that (check 633).
-  - The box is the frame's size through the deck's eye, set where the guide runs, so it's the default 16:9 until a frame has rendered.
+  - The poi's feel at a real pad is **unproved**: one tape, replayed, and it isn't even the kind of pad this now serves. Only a person can judge that (check 633).
+  - The box is the frame's, through the deck's eye: one limit, not one an output. It's the default 16:9 until a frame has rendered.
   - The shape's centre is what's held on the screen: at the wall, part of it is off.
 - **Judge it.** 633.
