@@ -371,6 +371,13 @@ def test_a_bundle_of_only_node_mode_cables_is_its_colour_and_a_mix_is_not():
 
 
 def test_a_node_mode_cable_cannot_be_deleted_as_a_cable():
-    """A delete goes through the kind's table: this kind is not in it (leaving
+    """A delete goes through the kind's table: this kind's refuses, in words (leaving
     node mode is the chip's, N1b)."""
-    assert graphview.NODE_MODE not in ui_graph.DELETE
+    st, said = {}, []
+    real = ui_graph.ed.reject_deleted_item
+    ui_graph.ed.reject_deleted_item = lambda: said.append("rejected")
+    try:
+        ui_graph.DELETE[graphview.NODE_MODE](None, st, None, None)
+    finally:
+        ui_graph.ed.reject_deleted_item = real
+    assert said == ["rejected"] and st["note"] == graphview.LEAVE_WORDS

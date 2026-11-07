@@ -738,6 +738,9 @@ here; overturn → the change, then the same.
 | 704 | Plan 44 D5e: the words checked against #380, #386, #387 and #388: a row's dormant line says which of two reasons, the verbs' tips and the sheet say off air, the Home tip and the sheet's ⌘Z say the latch, the sheet loses pad B, a per-`Deck` meta control is not "tuned", the footer's chip says players, `output.xfade`'s label is Crossfade | 650's rough edge | (rec) — pending the owner |
 | 710 | Plan 53 N1a: a desk's node mode rows are patch-layer rows on the deck the patch is on, derived per player's first desk; K1–K8, D1–D8, S1–S8; shadow only what they fill; SHIFT's layer untouched | 541, 542 | **answered by the owner, 2026-11-06:** SHIFT reaches the meta layer, knobs before faders, as built |
 | 711 | Plan 53 N1a: a modulator's route (LFO, envelope, lane, sequencer, modifier) is no mapping: its param fills, and the route rests while a desk acting on that `Deck` holds the param, back on leave, unsaved | 541 | **answered by the owner, 2026-11-06:** reverses the first reading of this row |
+| 712 | Plan 53 N1b: a node mode cable: drawn whenever the patch points, on the deck whose patch it is; its reading is its param; faint with the desk elsewhere; a saved row under a filled control drawn faint and said | 543, 544 | (rec) — pending the owner |
+| 713 | Plan 53 N1b: node mode's rows have their own bundle per node pair; where a saved bundle joins the same two collapsed nodes the two lie on one line, the green on top | 543 | (rec) — pending the owner |
+| 714 | Plan 53 N1b: entered from a chip per desk in the selection section: point, move, bring, leave; the side pane lists the map, what stayed, what did not fit; the on-screen desk outlines the filled controls; no delete on the cable | 543, 545 | (rec) — pending the owner |
 | 705 | Plan 44 D6a: a playlist is a file kind of the library's, `<library>/playlists/<slug>.json`, `hyperspace.playlist/1`, `{name, entries: [{loadable, dwell_s, fade_s?}]}`; `read` checks it, nothing lands it, a load of one is refused in words | — | owner — 2026-11-04: "seconds, `playlists/`, no pausing" |
 | 706 | Plan 44 D6a: an advance is `LEAD_S` (2 s) of load and warm on the deck off air, then `MetaController.crossfade`; dwell runs fade start to fade start; `fade_s` absent is `output.xfade_s`; a missing patch is skipped and said, every entry in a row stays on, says so once and retries a dwell later; the file is read again before each load, by the name it was chosen by | — | owner — 2026-11-04: "a new look every five minutes"; the reading's DQ5 |
 | 707 | Plan 44 D6a: no guards against the operator. It does not wait on a dirty deck, an open undo step or the panel; it does wait while the crossfader is between its ends, a fact of the mixer, and a hand across to the look armed has played it. No third deck; no second dream worker | — | owner — 2026-11-04: "it needs no guards against the operator"; overrules plan 44 §6 and the reading's DQ5 rec |
@@ -13266,7 +13269,16 @@ disengage node mode." A branch to keep them is future work, "not important enoug
   (`NodeDesk.holding`), the modulators' routes on it are out of `Router`'s plan and their edges off:
   the knob is the param. The route stays in the table, the file and ROUTING. So a leave, an undo, a
   re-point and a load are the route back, by the same road, and a save holds what it held. The
-  cable says so ("off: node mode holds this param"), and the side pane counts them.
+  cable says so ("off: node mode holds this param, back on leave"), and the side pane counts this
+  desk's. **Only of a route that returns** (`graphview.routes_held`): a switched-off one is promised
+  nothing, and one a loop will cut says so. A held route's edge is off, so it closes no loop and the
+  live cut does not name it; `Router.modgraph_stays_cut` reads the loops with no desk holding.
+- **A base chase across a visit.** A rested route is no row lost: `_forget_lost_rows` keeps the
+  param's ledger (plan 52), so a look the verb left stands where it stood after a leave, as through a
+  source's flicker, instead of jumping by the route's offset. A knob turned in the visit stays where
+  it was left, and the route rides again once it has been home: **the owner, 2026-11-07:** "The knob's
+  value after a chase commit across a node visit, holding on leave, I think is the right default". A
+  route deleted in the visit is a row lost, and the ledger goes.
 - **What does not rest.** A param past the desk's freedoms (`Fit.over`), which no knob holds. A pad's
   or a hand's route, kept. **Nothing on another `Deck`,** so no patch reaches another. A pointing whose
   desk is on the other `Deck`, or not plugged in: nothing holds the param, so the modulators run.
@@ -13355,6 +13367,50 @@ disengage node mode." A branch to keep them is future work, "not important enoug
   back it reaches a load the playlist made on that deck. Left as row 753 has it, and asked of the owner.
 - **Memory.** A load's step is about 65 KB headless (tracemalloc, 100 steps 6.9 MB, 130 loads still 100 steps, 7.0 MB), so at most about 7 MB a deck. **The leak this found:** `SceneTarget.ensure` never kept its multisampled colour renderbuffer, so never released it, since 2026-09-19. One went at every fade's rest, 10 to 15 MB each here: footprint 3138 MB after 120 advances, over 4 GB a day at one every five minutes. Isolated by the kernel's counter: idle, a load and a warm draw flat, only fades grew; counted by call site, `render.py:724` held 16 of 16 made. Fixed here: 964 to 950 MB over the same 120 advances, flat at idle. Any fade or window resize gains, not only a playlist.
 - **Judge it.** 540.
+
+### 712. What a node mode cable says
+
+The owner, 2026-11-04: "drawn and labelled", a colour other than the white control cables,
+saved. `graphview.build` asks the table's `NodeDesk` and draws a `NODE_MODE` cable per row, from
+the desk's patch-layer node to the param's base pin, adding the port if the param had none. Its
+label names the player and the control ("node mode: player 1, K1 → Pattern scale"). A knob
+publishes no lane, so its thickness reads the param. **Faint** when the desk is on the other
+`Deck` (the owner's "drawn dormant"), when the desk is lost, and under SHIFT, as any row of a
+layer that is down. A saved patch-layer row on a control node mode fills does nothing until it
+leaves, so its cable is faint too, "(under node mode)": rows that do not act say so.
+
+**Judge it.** 543, 544.
+
+### 713. Their own bundle
+
+The brief, from the owner's rule: a mixed bundle on a collapsed node reads white. `wiring` keys
+node mode's cables apart (`bundle:<a>>z|node`). **What this does not fix:** where a saved bundle
+joins the same two collapsed nodes, both lie on the same line between the same two stubs; the
+green is drawn second and is what you see, and the white shows only past its width. **Rec:** live
+with it, since hovering lists each and expanding parts them. If it reads badly at the machine,
+the fix is a pin of its own on the node, which is a small change to the stubs.
+
+**Judge it.** 543.
+
+### 714. How you enter, and how you see it
+
+The owner: "you enter from the panel, with a node already selected", and the operator may attach
+a held controller from the on-air graph. In the selection section, a chip per desk a patch can
+point: **point apc40 here**, **move apc40 here** when it is on another node, **apc40 on this node
+· leave** in the cable's colour, and **bring apc40 here** when the patch says this node and the
+desk is on the other `Deck`. Each acts on the patch of the deck the panel looks at. A node nothing
+can fill greys the chip, and hovering says why (`nodemode.enter_refusal`). Below it, the map in the
+same colour: "K1 → Pattern scale", then what stayed, then `Fit.too_many`'s list. A cable's right-click
+offers leave, and ⌫ keeps the cable and says how to end it (`ui_graph._node_mode_cut`, its entry in
+`ui_graph.DELETE`, printing `graphview.LEAVE_WORDS`). The on-screen desk draws the filled
+controls with an outline in that colour and says "node · 7" in its head, and `Learn` is free on them.
+
+**Judge it.** 543, 545.
+
+The review of #397 added: Delete on one, or on its bundle, says how to leave; the bundle's menu
+offers leave. A node of a copy gets its cables on the copy, on a port of its own (`NODE_PIN`), as the
+pane names it. The on-screen desk's outlines go faint with the cable when the desk is on the other
+`Deck`, and its head says so. A chip that may not enter is grey, with why on hover.
 
 ### 715. What a loadable patch saves of node mode
 
