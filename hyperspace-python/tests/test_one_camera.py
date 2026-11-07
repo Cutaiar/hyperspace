@@ -47,7 +47,7 @@ from hyperspace.routing import Bindings
 from hyperspace.view import ViewState
 
 ROOT = Path(__file__).resolve().parents[1]
-TRIP = CORPUS / "presets" / "party-trip.json"
+TRIP = CORPUS / "loadable" / "party-trip.json"
 OLD_PATCH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 EYE = {"eye.fov": 30.0, "eye.distance": 5.0}
 CAMERA_AT = [40, 50]
@@ -167,7 +167,7 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     pose = view.pose()
     path = rig.loaded_patch.save_as("FRAMED")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/10" == loadable.SAVE_SCHEMA   # (plan 44 D3)
+    assert doc["schema"] == "hyperspace.loadable/11" == loadable.SAVE_SCHEMA   # (plan 44 D3)
     assert doc["values"]["eye.fov"] == 31.0 and doc["values"]["eye.distance"] == 6.0
     assert list(doc[loadable.POSE_KEY]) == list(POSE_IDS)
     assert [doc[loadable.POSE_KEY][k] for k in POSE_IDS] == pytest.approx(pose, abs=1e-6)
@@ -186,16 +186,16 @@ def test_frame_save_load_another_and_load_back_puts_the_framing_and_the_turn_bac
     assert view.ang == pytest.approx(pose, abs=1e-6) and view.body is None
     got = G.shape_view(shape, view.ang, 0.0, 0.0, flat=view.held, body=view.body)[:2]
     assert all(np.allclose(a, b, atol=1e-4) for a, b in zip(got, want))
-    assert rig.loaded_patch.notes == [] and not rig.lib.is_dirty("presets")
+    assert rig.loaded_patch.notes == [] and not rig.lib.is_dirty("loadable")
     # the turn moving is no edit
     view.integrate(0.5)
     view.ang[0] += 1.0
-    assert not rig.lib.is_dirty("presets")
+    assert not rig.lib.is_dirty("loadable")
 
 
 def test_a_pose_that_is_not_six_numbers_is_said_and_the_turn_left_spinning(tmp_path):
     rig = boot(tmp_path)
-    doc = json.loads((CORPUS / "presets" / "dial.json").read_text())
+    doc = json.loads((CORPUS / "loadable" / "dial.json").read_text())
     for bad in ({k: 0.5 for k in POSE_IDS[:5]}, {**{k: 0.5 for k in POSE_IDS}, "rot.phase.XY": "x"},
                 {**{k: 0.5 for k in POSE_IDS}, "rot.phase.ZW": float("nan")}, [0.5] * 6):
         rig.view.ang = [0.1] * 6
@@ -208,7 +208,7 @@ def test_a_pose_in_values_is_no_pose(tmp_path):
     """A hand-edited `rot.phase.*` in `values` is not part of a loadable patch (it
     is no base), said as ever; the turn is left."""
     rig = boot(tmp_path)
-    doc = json.loads((CORPUS / "presets" / "dial.json").read_text())
+    doc = json.loads((CORPUS / "loadable" / "dial.json").read_text())
     doc["values"]["rot.phase.XY"] = 1.0
     rig.view.ang = [0.1] * 6
     rig.loaded_patch.load_doc(doc)
@@ -265,8 +265,8 @@ def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_pa
     same framing."""
     home = tmp_path / "lib"
     _write(home / "projects" / "rig.hyp.json", old_show())
-    (home / "presets").mkdir(parents=True)
-    (home / "presets" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
+    (home / "loadable").mkdir(parents=True)
+    (home / "loadable" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig = boot(home, show="rig")
     pr, reg = rig.lib.project, rig.reg
     assert pr.name == "rig" and pr.old_eye == EYE and pr.camera_at == CAMERA_AT
@@ -289,7 +289,7 @@ def test_an_old_show_hands_its_eye_to_old_loadables_and_keeps_none_itself(tmp_pa
     before = show.read_bytes()
     pr.save()
     doc = json.loads(show.read_text())
-    assert not any(k.startswith("eye.") for k in doc["session"])
+    assert not any(k.startswith("eye.") for k in doc["tuning"])
     assert "render:camera" not in doc.get("layout", {})
     bak = home / "projects" / "rig.hyp.json.bak-v2-eye"
     assert bak.read_bytes() == before
@@ -313,12 +313,12 @@ def test_a_bank_autosave_before_the_tool_still_hands_old_loadables_the_eye(tmp_p
     takes that eye and the camera's position from the backup."""
     home = tmp_path / "lib"
     _write(home / "projects" / "rig.hyp.json", old_show())
-    (home / "presets").mkdir(parents=True)
-    (home / "presets" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
+    (home / "loadable").mkdir(parents=True)
+    (home / "loadable" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig = boot(home, show="rig")
     rig.lib.project.put_slot(0, "OLD")                # a pad: the bank's autosave
     show = json.loads((home / "projects" / "rig.hyp.json").read_text())
-    assert "eye.fov" not in show["session"]
+    assert "eye.fov" not in show["tuning"]
     assert (home / "projects" / "rig.hyp.json.bak-v2-eye").is_file()
     again = boot(home, show="rig")
     assert again.lib.project.old_eye == EYE and again.lib.project.camera_at == CAMERA_AT
@@ -350,7 +350,7 @@ def test_an_old_loadable_with_no_old_eye_takes_the_builds(tmp_path):
     the build's default, the picture it drew before."""
     rig = boot(tmp_path)
     rig.reg["eye.fov"].set(90.0)
-    (tmp_path / "presets" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
+    (tmp_path / "loadable" / "old.json").write_text(loadable.dumps({**old_loadable(), "name": "OLD"}))
     rig.loaded_patch.load("OLD")
     assert rig.lib.project.old_eye == {}
     assert rig.reg["eye.fov"].value == pytest.approx(G.EYE_FOV)
@@ -573,12 +573,12 @@ def _library(tmp_path: Path) -> Path:
     two `/7` loadable patches (one with the taper marker, one without), a `/9`
     already, a patch and a desk template from before the tapers."""
     lib = tmp_path / "Drive" / "Hyperspace"
-    loadable_dir = lib / "presets"
+    loadable_dir = lib / "loadable"
     loadable_dir.mkdir(parents=True)
     (loadable_dir / "trip-old.json").write_text(loadable.dumps(old_loadable()))
     (loadable_dir / "trip-unmarked.json").write_text(
         loadable.dumps({**old_loadable(marked=False), "name": "TRIP UNMARKED"}))
-    shutil.copyfile(CORPUS / "presets" / "dial.json", loadable_dir / "dial.json")
+    shutil.copyfile(CORPUS / "loadable" / "dial.json", loadable_dir / "dial.json")
     _write(lib / "projects" / "rig.hyp.json", old_show())
     (lib / "patches").mkdir()
     shutil.copyfile(OLD_PATCH, lib / "patches" / "acid-wash.json")
@@ -613,40 +613,37 @@ def test_the_tool_retapers_backs_up_and_moves_the_eye_into_every_loadable(tmp_pa
     assert "show: rig (the library's one show) — eye.distance 5, eye.fov 30" in out
     assert "retaper first: 1 document(s)" in out and "patch acid-wash.json" in out
     assert "desk old-desk.json" not in out                  # (plan 44 D3: retired)
-    assert "shows to rewrite as /3: 1 — rig.hyp.json" in out
-    assert "would rewrite 2 as /10, leave 1 untouched (already /10), skip 0" in out
+    assert "show rig.hyp.json → installs/rig.json" in out
+    assert "would rewrite 2 as /11, leave 1 untouched (already /11), skip 0" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
     backups = list(home.glob("library-backup-*"))
     assert len(backups) == 1 and f"backup: {backups[0]}" in out
     assert _tree(backups[0]) == before
     for name in ("trip-old", "trip-unmarked"):
-        doc = json.loads((lib / "presets" / f"{name}.json").read_text())
+        doc = json.loads((lib / "loadable" / f"{name}.json").read_text())
         assert doc["schema"] == loadable.SAVE_SCHEMA, name
         assert {k: doc["values"][k] for k in EYE} == EYE, name
         assert doc["layout"]["render:camera"] == CAMERA_AT, name
         assert loadable.POSE_KEY not in doc, name
         assert doc["units"]["fx.depth"] == "taper", name
-    assert (lib / "presets" / "dial.json").read_bytes() == before["presets/dial.json"]
-    show = json.loads((lib / "projects" / "rig.hyp.json").read_text())
-    assert show["session"] == {"tempo.bpm": 128.0} and show["layout"] == {"device:apc40": [1, 2]}
-    assert show["schema"] == "hyperspace.project/3" and "rig" not in show
-    assert (lib / "projects" / "rig.hyp.json.bak-v2-look").read_bytes() == \
-        before["projects/rig.hyp.json"]
+    assert (lib / "loadable" / "dial.json").read_bytes() == before["loadable/dial.json"]
+    show = json.loads((lib / "installs" / "rig.json").read_text())
+    assert show["tuning"] == {"tempo.bpm": 128.0} and show["layout"] == {"device:apc40": [1, 2]}
+    assert show["schema"] == "hyperspace.install/1" and "rig" not in show
+    assert not (lib / "projects").exists()                     # (the backup holds the show)
     assert json.loads((lib / "patches/acid-wash.json").read_text())["units"]["fx.depth"] == \
         "taper"
     assert (lib / "desk/old-desk.json").read_bytes() == before["desk/old-desk.json"]
-    assert "retapered 1 document(s)" in out and "rewrote 2 as /10" in out
-    assert "rewrote 1 show(s) as /3" in out
-    # once more: nothing to do, the eye read from the show's backup
+    assert "retapered 1 document(s)" in out and "rewrote 2 as /11" in out
+    assert "wrote 1 install file(s)" in out
+    # once more: nothing to do
     after = _tree(lib)
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
-    assert "its eye from a backup of rig.hyp.json" in out
-    assert "retaper first" not in out and "shows to rewrite" not in out
-    assert "rewrote 0 as /10, left 3 untouched (already /10)" in out
-    assert {k: v for k, v in _tree(lib).items() if "bak" not in k} == \
-        {k: v for k, v in after.items() if "bak" not in k}
+    assert "retaper first" not in out and "show rig" not in out
+    assert "nothing to do" in out
+    assert _tree(lib) == after
 
 
 def test_the_tool_takes_the_named_or_last_show_and_refuses_an_unknown_one(tmp_path, capsys):
@@ -657,7 +654,7 @@ def test_the_tool_takes_the_named_or_last_show_and_refuses_an_unknown_one(tmp_pa
     assert tool.main(["--library", str(lib)], picture=same_picture) == 0
     assert "show: none (2 shows and none is this Mac's last" in capsys.readouterr().out
     home.mkdir(parents=True, exist_ok=True)
-    (home / "last_show").write_text("other\n")
+    (home / "last_install").write_text("other\n")
     tool.main(["--library", str(lib)], picture=same_picture)
     assert "show: other (this Mac's last show) — eye.fov 70" in capsys.readouterr().out
     tool.main(["--library", str(lib), "--show", "rig"], picture=same_picture)

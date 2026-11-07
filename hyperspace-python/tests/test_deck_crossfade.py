@@ -35,7 +35,7 @@ from hyperspace.params import part_of
 from hyperspace.pointer import Pointer
 from hyperspace.routing import Binding, Bindings
 
-CORPUS = Path(__file__).parent / "corpus" / "presets"
+CORPUS = Path(__file__).parent / "corpus" / "loadable"
 
 
 @pytest.fixture()

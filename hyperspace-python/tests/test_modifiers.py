@@ -266,9 +266,9 @@ def test_a_modifiers_param_is_modulatable_by_a_route(rig):
 # ---------------------------------------------------------------- the loadable patch
 
 def put(lib, *names: str) -> None:
-    (lib.home / "presets").mkdir(parents=True, exist_ok=True)
+    (lib.home / "loadable").mkdir(parents=True, exist_ok=True)
     for n in names:
-        shutil.copy(FIXTURES / "presets" / f"{n}.json", lib.home / "presets" / f"{n}.json")
+        shutil.copy(FIXTURES / "presets" / f"{n}.json", lib.home / "loadable" / f"{n}.json")
 
 
 def test_modifiers_live_in_the_loadable_and_never_in_bindings_json(rig):
@@ -290,10 +290,10 @@ def test_modifiers_live_in_the_loadable_and_never_in_bindings_json(rig):
     want = json.loads((FIXTURES / "presets" / "mod-energy.json").read_text())[MODIFIERS_KEY]
     assert doc[MODIFIERS_KEY] == [Modifier.from_json(d).to_json() for d in want]
     assert not any(k.startswith("mod.") for k in doc["values"])   # loads on an older build
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     # an edit is the loadable patch's: its dirty dot
     reg["mod.1.release"].set(1.0)
-    assert lib.is_dirty("presets")
+    assert lib.is_dirty("loadable")
     assert loaded_patch.document("X")[MODIFIERS_KEY][0]["release"] == 1.0
     # a save, reloaded, is the same loadable patch
     loaded_patch.save_as("MOD ENERGY 2")
@@ -313,7 +313,7 @@ def test_a_route_onto_a_missing_modifier_is_dropped_with_a_note(rig):
     assert [(b.source, b.target) for b in table.routes()] == [("mod:1", "view.speed")]
     assert loaded_patch.notes == ["dropped mod:3 → view.bright: no modifier mod.3"]
     # the file is left as it is
-    assert len(json.loads((lib.home / "presets" / "mod-missing.json").read_text())["routes"]) == 2
+    assert len(json.loads((lib.home / "loadable" / "mod-missing.json").read_text())["routes"]) == 2
 
 
 def test_a_modifier_whose_input_the_meta_lacks_is_dormant(rig):
@@ -342,7 +342,7 @@ def test_an_older_loadable_without_the_key_loads_as_before(rig):
         doc = loaded_patch.document(name)
         assert MODIFIERS_KEY not in doc
         assert not any(k.startswith("mod.") for k in doc["values"])
-        assert not lib.is_dirty("presets")
+        assert not lib.is_dirty("loadable")
     # a modifier left by the last loadable patch goes with any load
     put(lib, "mod-energy")
     loaded_patch.load("mod-energy")
@@ -354,11 +354,11 @@ def test_an_older_loadable_without_the_key_loads_as_before(rig):
 
 def test_a_bad_modifier_entry_is_a_note_and_the_rest_load(rig):
     lib, loaded_patch, table = rig.lib, rig.loaded_patch, rig.router.table
-    (lib.home / "presets").mkdir(parents=True, exist_ok=True)
+    (lib.home / "loadable").mkdir(parents=True, exist_ok=True)
     doc = json.loads((FIXTURES / "presets" / "mod-energy.json").read_text())
     doc["name"] = "MOD BAD"
     doc[MODIFIERS_KEY] = [{"id": "mod.1", "kind": "wobble"}, *doc[MODIFIERS_KEY][1:], "junk"]
-    (lib.home / "presets" / "mod-bad.json").write_text(json.dumps(doc))
+    (lib.home / "loadable" / "mod-bad.json").write_text(json.dumps(doc))
     loaded_patch.load("mod-bad")
     assert [m.id for m in table.modifiers] == ["mod.2"]
     assert any("wobble" in n for n in loaded_patch.notes)

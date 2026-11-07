@@ -85,7 +85,7 @@ def put(home, name, **doc):
     """A user loadable patch file, the rest of the shape filled in."""
     body = {"schema": loadable.SCHEMA, "name": name, "values": {}, "routes": [],
             "desk": [], "macros": {}, **doc}
-    path = home / "presets" / f"{name.lower()}.json"
+    path = home / "loadable" / f"{name.lower()}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(body))
     return path
@@ -143,7 +143,7 @@ def test_a_loadable_load_lands_every_base_and_replaces_every_route(rig):
     assert [b.to_json() for b in table.bindings
             if b.op not in routing.MOD_OPS and b.layer != "preset"] == keys
     assert table.desk() == []                               # the file's `desk: []`
-    assert rig.loaded_patch.current == "PARTIAL" and not lib.is_dirty("presets")
+    assert rig.loaded_patch.current == "PARTIAL" and not lib.is_dirty("loadable")
 
 
 def test_a_loadable_with_per_frame_echo_ids_is_read_in_seconds(rig):
@@ -209,7 +209,7 @@ def test_a_loadable_load_never_touches_a_meta_param(rig):
     assert rig.clock.bpm == 100.0 and reg.snapshot(part="shared_meta") == before
     assert out.dim == 0.4
     rig.lib.project.load("party")                     # a show load, startup loadable patch and all
-    assert rig.lib.current("presets") == "TUMBLE" and out.dim == 0.4
+    assert rig.lib.current("loadable") == "TUMBLE" and out.dim == 0.4
     assert slew.value == 0.12                         # the party show names no smoothing
     rig.lib.project.save("mine")                      # a show keeps the number
     assert rig.lib.project.session["desk.slew"] == 0.12
@@ -249,7 +249,7 @@ def test_a_value_that_will_not_land_leaves_the_state_whole(rig):
         rig.loaded_patch.load("BROKEN")
     assert reg.snapshot() == snap
     assert [b.to_json() for b in rig.router.table.routes()] == routes
-    assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
+    assert lib.current("loadable") == "BIG BLUE WAVE" and not lib.is_dirty("loadable")
 
 
 def test_a_project_reload_keeps_the_loaded_loadable(rig):
@@ -261,17 +261,17 @@ def test_a_project_reload_keeps_the_loaded_loadable(rig):
     path = pr.save("Set")
     lib.poll(now=1.0)
     doc = json.loads(path.read_text())
-    doc["session"]["master.gain"] = 3.0
+    doc["tuning"]["master.gain"] = 3.0
     path.write_text(json.dumps(doc))
     import os
     os.utime(path, (2e9, 2e9))
     assert lib.poll(now=2.0) and rig.chain.gain == 3.0
-    assert lib.current("presets") == "EMBER ORBIT" and not lib.is_dirty("presets")
+    assert lib.current("loadable") == "EMBER ORBIT" and not lib.is_dirty("loadable")
     assert pr.active == 1
     doc["startup"] = None
-    (rig.home / "projects" / "bare.hyp.json").write_text(json.dumps(doc))
+    (rig.home / "installs" / "bare.json").write_text(json.dumps(doc))
     pr.load("bare")
-    assert lib.current("presets") == "EMBER ORBIT" and pr.active == 1
+    assert lib.current("loadable") == "EMBER ORBIT" and pr.active == 1
 
 
 def test_a_strip_save_as_moves_the_banks_light(rig):
@@ -280,9 +280,9 @@ def test_a_strip_save_as_moves_the_banks_light(rig):
     lights that slot."""
     lib, pr = rig.lib, rig.lib.project
     pr.load_slot(1)
-    lib.save_as("presets", "Elsewhere")
-    assert lib.current("presets") == "Elsewhere" and pr.active == -1
-    lib.save_as("presets", "STROBE CAGE")
+    lib.save_as("loadable", "Elsewhere")
+    assert lib.current("loadable") == "Elsewhere" and pr.active == -1
+    lib.save_as("loadable", "STROBE CAGE")
     assert pr.active == 2
 
 
@@ -296,7 +296,7 @@ def test_a_loadable_carries_the_macros(rig):
     m = rig.reg["macro.1"]
     m.set_value(0.3)
     rig.lib.project.save_slot(4)
-    assert rig.lib.read("presets", rig.lib.project.bank[4])["values"]["macro.1"] == 0.3
+    assert rig.lib.read("loadable", rig.lib.project.bank[4])["values"]["macro.1"] == 0.3
     m.set_value(0.8)
     rig.lib.project.load_slot(4)
     assert m.value == 0.3
@@ -328,7 +328,7 @@ def test_a_step_or_cycle_on_the_bank_skips_empty_slots(rig):
     assert select.value == 6
     select.step(3)
     assert select.value == 12
-    assert pr.active == 12 and rig.lib.current("presets") == pr.bank[12]
+    assert pr.active == 12 and rig.lib.current("loadable") == pr.bank[12]
 
 
 def test_the_bank_names_the_house_loadables(rig):
@@ -336,7 +336,7 @@ def test_the_bank_names_the_house_loadables(rig):
     # plan 19 WP1: twenty-four slots; the house show fills the F-keys' eight
     assert len(pr.bank) == SLOTS == 24 and pr.bank[0] == "BIG BLUE WAVE"
     eight = pr.bank[:F_KEYS]
-    assert len(set(eight)) == F_KEYS and all(n in rig.lib.list("presets") for n in eight)
+    assert len(set(eight)) == F_KEYS and all(n in rig.lib.list("loadable") for n in eight)
     assert pr.bank[F_KEYS:] == [None] * (SLOTS - F_KEYS)
     select = rig.reg["preset.select"]
     assert select.names == eight + [f"SLOT {k + 1}" for k in range(F_KEYS, SLOTS)]
@@ -348,7 +348,7 @@ def test_a_slot_names_a_loadable_file(rig):
     load nothing, change nothing, and say so."""
     lib, reg, pr = rig.lib, rig.reg, rig.lib.project
     reg["preset.load.1"].fire()
-    assert lib.current("presets") == "EMBER ORBIT" and pr.active == 1 and rig.view.shape == 10
+    assert lib.current("loadable") == "EMBER ORBIT" and pr.active == 1 and rig.view.shape == 10
     pr.bank[5], pr.bank[3] = None, "NOPE"
     assert reg["preset.select"].names[5] == "SLOT 6"
     snap, routes = reg.snapshot(), [b.to_json() for b in rig.router.table.routes()]
@@ -357,7 +357,7 @@ def test_a_slot_names_a_loadable_file(rig):
     reg["preset.load.3"].fire()
     assert lib.warning == "F4: no preset 'NOPE'"
     assert reg.snapshot() == snap and [b.to_json() for b in rig.router.table.routes()] == routes
-    assert pr.active == 1 and lib.current("presets") == "EMBER ORBIT"
+    assert pr.active == 1 and lib.current("loadable") == "EMBER ORBIT"
 
 
 def test_cycle_flips_through_the_filled_slots(rig):
@@ -377,7 +377,7 @@ def test_cycle_flips_through_the_filled_slots(rig):
     assert pr.active == F_KEYS - 1                         # and backwards
     pr.put_slot(19, "WAKE")                                # a far slot is in the round
     pr.cycle()
-    assert pr.active == 19 and rig.lib.current("presets") == "WAKE"
+    assert pr.active == 19 and rig.lib.current("loadable") == "WAKE"
     pr.cycle()
     assert pr.active == 0
 
@@ -390,13 +390,13 @@ def test_shift_f_saves_the_live_state_as_the_slots_loadable(rig):
     rig.view.shape = 12
     rig.router.table.add(Binding("hand:7", "view.speed", "push", 0.3))
     reg["preset.save.2"].fire()
-    user = json.loads((home / "presets" / "strobe-cage.json").read_text())
+    user = json.loads((home / "loadable" / "strobe-cage.json").read_text())
     assert user["name"] == "STROBE CAGE" and user["values"]["view.shape"] == 12
     assert {"source": "hand:7", "target": "view.speed", "op": "push", "value": 0.3} in user["routes"]
     assert "tempo.bpm" not in user["values"] and "master.gain" not in user["values"]
     assert pr.bank[2] == "STROBE CAGE" and pr.active == 2
-    doc = json.loads((home / "projects" / "house.hyp.json").read_text())
-    assert doc["schema"] == "hyperspace.project/3"   # (plan 44 D3)
+    doc = json.loads((home / "installs" / "house.json").read_text())
+    assert doc["schema"] == "hyperspace.install/1"   # (plan 44 D3)
     assert doc["bank"] == pr.bank[:F_KEYS] == bank_doc(pr.bank)     # eight in the file
     # an empty slot: a new name, made unique against what is there
     put(home, "PRESET 8")
@@ -404,8 +404,8 @@ def test_shift_f_saves_the_live_state_as_the_slots_loadable(rig):
     reg["preset.save.6"].fire()
     reg["preset.save.7"].fire()
     assert pr.bank[6] == "PRESET 7" and pr.bank[7] == "PRESET 8 (2)"
-    assert (home / "presets" / "preset-7.json").is_file()
-    assert (json.loads((home / "projects" / "house.hyp.json").read_text())["bank"]
+    assert (home / "loadable" / "preset-7.json").is_file()
+    assert (json.loads((home / "installs" / "house.json").read_text())["bank"]
             == bank_doc(pr.bank))
     assert not pr.is_dirty() and pr.bank_error == ""
 
@@ -425,16 +425,16 @@ def test_the_startup_loadable_loads_on_launch(tmp_path):
     startup with no file says so and the app keeps running."""
     r = boot(tmp_path)
     assert r.lib.project.startup == "BIG BLUE WAVE"
-    assert r.lib.current("presets") == "BIG BLUE WAVE" and r.lib.project.active == 0
+    assert r.lib.current("loadable") == "BIG BLUE WAVE" and r.lib.project.active == 0
     assert r.view.shape == 17 and len(r.router.table.routes()) == 12
-    doc = json.loads((tmp_path / "projects" / "house.hyp.json").read_text())
+    doc = json.loads((tmp_path / "installs" / "house.json").read_text())
     doc["startup"] = "GONE"
-    (tmp_path / "projects" / "house.hyp.json").write_text(json.dumps(doc))
+    (tmp_path / "installs" / "house.json").write_text(json.dumps(doc))
     r2 = boot(tmp_path)
     assert r2.lib.warning == "startup: no preset 'GONE'"
-    assert r2.lib.current("presets") is None and r2.lib.project.active == -1
+    assert r2.lib.current("loadable") is None and r2.lib.project.active == -1
     r2.reg["preset.load.2"].fire()                          # and the bank still works
-    assert r2.lib.current("presets") == "STROBE CAGE"
+    assert r2.lib.current("loadable") == "STROBE CAGE"
 
 
 # ---------------------------------------------------------------- home (plan 15 WP2)
@@ -454,10 +454,10 @@ def test_home_loads_what_the_show_starts_on(rig):
                 [b.to_json() for b in rig.router.table.desk()])
     reg["preset.load.2"].fire()
     reg["view.bright"].set_value(reg["view.bright"].value + 1.0)       # an unsaved edit
-    assert lib.current("presets") == "STROBE CAGE" and lib.is_dirty("presets")
+    assert lib.current("loadable") == "STROBE CAGE" and lib.is_dirty("loadable")
     assert proj.active == 2 and rig.view.shape != 17
     home.fire()
-    assert lib.current("presets") == "BIG BLUE WAVE" and not lib.is_dirty("presets")
+    assert lib.current("loadable") == "BIG BLUE WAVE" and not lib.is_dirty("loadable")
     assert proj.active == 0 and rig.view.shape == 17 and not lib.warning
     assert (reg.snapshot(part="patch"),
             [b.to_json() for b in rig.router.table.routes()],
@@ -465,12 +465,12 @@ def test_home_loads_what_the_show_starts_on(rig):
     # home follows "starts on": no pointer of its own
     proj.startup = "STROBE CAGE"
     home.fire()
-    assert lib.current("presets") == "STROBE CAGE" and proj.active == 2
+    assert lib.current("loadable") == "STROBE CAGE" and proj.active == 2
     # a "starts on" whose file is gone says so, as a launch does, and loads nothing
     proj.startup = "GONE"
     home.fire()
     assert lib.warning == "startup: no preset 'GONE'"
-    assert lib.current("presets") == "STROBE CAGE"
+    assert lib.current("loadable") == "STROBE CAGE"
 
 
 def test_home_with_no_starts_on_says_so_and_loads_nothing(rig):
@@ -482,11 +482,11 @@ def test_home_with_no_starts_on_says_so_and_loads_nothing(rig):
     assert reg["preset.home"].get() is False                           # dark: nothing to go to
     reg["preset.home"].fire()
     assert lib.warning == "home: this show names no startup preset"
-    assert lib.current("presets") == "STROBE CAGE" and lib.is_dirty("presets")
+    assert lib.current("loadable") == "STROBE CAGE" and lib.is_dirty("loadable")
     assert reg.snapshot(part="patch") == before and proj.active == 2
     proj.startup = "BIG BLUE WAVE"                                     # picked: home goes there,
     reg["preset.home"].fire()                                          # and the note is gone
-    assert lib.current("presets") == "BIG BLUE WAVE" and lib.warning == ""
+    assert lib.current("loadable") == "BIG BLUE WAVE" and lib.warning == ""
 
 
 def test_home_is_one_undo_step(tmp_path):
@@ -504,22 +504,22 @@ def test_home_is_one_undo_step(tmp_path):
     reg["view.bright"].step(7)                         # an unsaved edit of TRIP
     settle(r)
     trip = look(r)
-    assert lib.current("presets") == "TRIP" and lib.is_dirty("presets")
+    assert lib.current("loadable") == "TRIP" and lib.is_dirty("loadable")
     r.undo.clear()
     reg["preset.home"].fire()
     assert len(r.undo.stack) == 1                      # at once: the inner push opened none
     settle(r)
     assert labels(r) == ["home → TUMBLE"]
-    assert lib.current("presets") == "TUMBLE" and proj.active == 0
+    assert lib.current("loadable") == "TUMBLE" and proj.active == 0
     tumble = look(r)
     assert not same_look(tumble, trip)
     assert r.undo.undo() and r.undo.status == "undid home → TUMBLE"
     assert same_look(look(r), trip)
-    assert lib.current("presets") == "TRIP" and lib.is_dirty("presets") and proj.active == 4
+    assert lib.current("loadable") == "TRIP" and lib.is_dirty("loadable") and proj.active == 4
     frames(r, 5)
     assert same_look(look(r), trip) and r.undo.stack == []
     assert r.undo.redo() and r.undo.status == "redid home → TUMBLE"
-    assert same_look(look(r), tumble) and lib.current("presets") == "TUMBLE"
+    assert same_look(look(r), tumble) and lib.current("loadable") == "TUMBLE"
     settle(r)
     # nothing to go home to, or a "starts on" with no file: no step
     r.undo.clear()
@@ -527,7 +527,7 @@ def test_home_is_one_undo_step(tmp_path):
         proj.startup = name
         reg["preset.home"].fire()
         settle(r)
-        assert r.undo.stack == [] and lib.current("presets") == "TUMBLE"
+        assert r.undo.stack == [] and lib.current("loadable") == "TUMBLE"
 
 
 # ---------------------------------------------------------------- module labels
@@ -553,7 +553,7 @@ def test_module_labels_are_dropped_and_a_missing_id_is_the_build_value(rig):
     assert reg["dream.echoes"].base == lib._fresh_of("dream")["dream.echoes"]
     assert reg["dream.echoes"].base != wake["values"]["dream.echoes"]   # no default.json
     doc = rig.loaded_patch.document("LABELS")
-    assert "modules" not in doc and doc["schema"] == "hyperspace.preset/10"
+    assert "modules" not in doc and doc["schema"] == "hyperspace.loadable/11"
     reg["dream.mix"].set(0.3)
     assert lib.is_dirty("dream")                            # the dot is live against the load
 
@@ -599,10 +599,10 @@ def test_a_loadable_round_trips(rig):
     rig.reg["camera.zoom"].set(2.0)
     sig = rig.loaded_patch.signature()
     path = rig.loaded_patch.save_as("Round Trip")
-    assert path == rig.home / "presets" / "round-trip.json"
+    assert path == rig.home / "loadable" / "round-trip.json"
     doc = json.loads(path.read_text())
     # (row 394: every save is the newest schema)
-    assert doc["schema"] == "hyperspace.preset/10" and doc["name"] == "Round Trip"
+    assert doc["schema"] == "hyperspace.loadable/11" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
     assert "modules" not in doc                     # (plan 44 D3: the labels are retired)
     # every performance base, the media family's too — and no retired id
@@ -614,7 +614,7 @@ def test_a_loadable_round_trips(rig):
     rig.reg["camera.zoom"].set(1.0)
     rig.lib.project.load_slot(0)                            # something else in between
     rig.loaded_patch.load("Round Trip")
-    assert rig.loaded_patch.signature() == sig and not lib.is_dirty("presets")
+    assert rig.loaded_patch.signature() == sig and not lib.is_dirty("loadable")
     assert loadable.desk_json(table.desk()) == desk and table.macros_doc() == macros
     assert lib.current("dream") is None             # (plan 44 D3: no module label)
 
@@ -652,7 +652,7 @@ def test_a_loadable_load_replaces_the_desk_and_the_macros(rig):
     assert table.macros_doc() == MACROS
     depth4 = reg["view.depth4"]
     assert depth4.norm == pytest.approx(0.5, abs=1e-6)        # 0.2 + 0.5 · (0.8 − 0.2)
-    assert not lib.is_dirty("presets")                        # landed before the clean reference
+    assert not lib.is_dirty("loadable")                        # landed before the clean reference
     assert rig.router.follow_macros() == []                   # nothing left to land next frame
     put(rig.home, "DARK", desk=[], macros={})
     rig.loaded_patch.load("DARK")
@@ -685,20 +685,20 @@ def test_a_loadable_with_a_desk_and_macros_round_trips(rig):
     put(rig.home, "SHOW", desk=DESK, macros=MACROS,
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}])
     rig.loaded_patch.load("SHOW")
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     table.desk()[0].target = "view.instances"                 # the page's retarget
-    assert lib.is_dirty("presets")
+    assert lib.is_dirty("loadable")
     table.macros["macro.1"].label = "Cold"
     path = rig.loaded_patch.save_as("SHOW")
     doc = json.loads(path.read_text())
     assert doc["desk"][0]["target"] == "view.instances" and "layer" not in doc["desk"][0]
     assert doc["macros"]["macro.1"]["label"] == "Cold"
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     rig.loaded_patch.load("TRIP")
     assert table.macros_doc() != doc["macros"]
     rig.loaded_patch.load("SHOW")
     assert loadable.desk_json(table.desk()) == doc["desk"] and table.macros_doc() == doc["macros"]
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
 
 
 def test_a_loadable_edited_on_disk_is_re_applied(rig):
@@ -711,14 +711,14 @@ def test_a_loadable_edited_on_disk_is_re_applied(rig):
     import os
     os.utime(path, (2e9, 2e9))
     assert rig.lib.poll(now=2.0)
-    assert rig.view.shape == 9 and rig.lib.current("presets") == "LIVE"
+    assert rig.view.shape == 9 and rig.lib.current("loadable") == "LIVE"
 
 
 # ---------------------------------------------------------------- the project
 
 def test_a_project_load_brings_its_startup_loadable(rig):
     rig.lib.project.load("party")
-    assert rig.lib.current("presets") == "TUMBLE" and rig.view.shape == 10
+    assert rig.lib.current("loadable") == "TUMBLE" and rig.view.shape == 10
     assert rig.lib.project.active == 0 and rig.lib.current("band") == "Balanced"
 
 
@@ -765,9 +765,9 @@ def test_a_load_tells_the_listeners_its_name(rig):
     heard: list = []
     rig.loaded_patch.listeners.append(heard.append)
     rig.loaded_patch.listeners.append(lambda name: 1 / 0)
-    name = rig.lib.list("presets")[0]
+    name = rig.lib.list("loadable")[0]
     assert rig.loaded_patch.load(name) == []
-    assert heard == [rig.lib.current("presets")]
+    assert heard == [rig.lib.current("loadable")]
     assert rig.lib.warning.startswith("preset listener: ZeroDivisionError")
     assert not rig.loaded_patch.note.startswith("preset listener")   # the loadable patch's own note
 
@@ -794,12 +794,12 @@ def party(tmp_path, full: bool = True):
         fill_far(pr)
     pr.clear_slot(5)
     r.reg["preset.load.4"].fire()
-    assert r.lib.current("presets") == "TRIP" and pr.active == 4
+    assert r.lib.current("loadable") == "TRIP" and pr.active == 4
     return r
 
 
 def user_loadables(home):
-    return sorted(p.name for p in (home / "presets").glob("*.json"))
+    return sorted(p.name for p in (home / "loadable").glob("*.json"))
 
 
 def test_save_new_never_overwrites(tmp_path):
@@ -812,43 +812,43 @@ def test_save_new_never_overwrites(tmp_path):
     # the folder: a file whose stem is trip-4 and whose name is not,
     # trip-2.json under another name, a "TRIP 3" in a file of another
     # stem; and the bank names a "TRIP 5" that has no file
-    four = home / "presets" / "trip-4.json"
-    four.write_text((home / "presets" / "party-wake.json").read_text()
+    four = home / "loadable" / "trip-4.json"
+    four.write_text((home / "loadable" / "party-wake.json").read_text()
                     .replace('"WAKE"', '"FOUR"', 1))
-    two = put(home, "SOMETHING ELSE").rename(home / "presets" / "trip-2.json")
-    three = put(home, "TRIP 3").rename(home / "presets" / "mine.json")
+    two = put(home, "SOMETHING ELSE").rename(home / "loadable" / "trip-2.json")
+    three = put(home, "TRIP 3").rename(home / "loadable" / "mine.json")
     kept = {p: p.read_bytes() for p in (two, three, four)}
-    assert "FOUR" in lib.list("presets")
+    assert "FOUR" in lib.list("loadable")
     pr.bank[5] = "TRIP 5"
     pr.clear_slot(6)
     before = user_loadables(home)
     reg["view.shape"].set(9)
     reg["preset.save_new"].fire()
-    assert lib.current("presets") == "TRIP 6" and pr.bank[6] == "TRIP 6"
+    assert lib.current("loadable") == "TRIP 6" and pr.bank[6] == "TRIP 6"
     assert user_loadables(home) == sorted([*before, "trip-6.json"])
     assert all(p.read_bytes() == was for p, was in kept.items())
-    assert lib.read("presets", "TRIP")["values"]["view.shape"] != 9     # TRIP itself untouched
-    assert json.loads((home / "presets" / "trip-6.json").read_text())["values"]["view.shape"] == 9
+    assert lib.read("loadable", "TRIP")["values"]["view.shape"] != 9     # TRIP itself untouched
+    assert json.loads((home / "loadable" / "trip-6.json").read_text())["values"]["view.shape"] == 9
     assert not (home / "trash").exists()                    # nothing was replaced
     # held again and again: a new file each time, never the same one twice
     for n in (7, 8, 9):
         reg["preset.save_new"].fire()
-        assert lib.current("presets") == f"TRIP {n}"
+        assert lib.current("loadable") == f"TRIP {n}"
     assert user_loadables(home) == sorted([*before, *[f"trip-{n}.json" for n in (6, 7, 8, 9)]])
     assert not (home / "trash").exists()
     # a file stem in another case is the same file on a filesystem that
     # folds case (this rig's): it counts too (review of PR #87)
-    ten = put(home, "SUNSET").rename(home / "presets" / "Trip-10.json")
+    ten = put(home, "SUNSET").rename(home / "loadable" / "Trip-10.json")
     was = ten.read_bytes()
     assert reg["preset.save_new"].fire() is True
-    assert lib.current("presets") == "TRIP 11" and ten.read_bytes() == was
-    assert "SUNSET" in lib.list("presets") and not (home / "trash").exists()
+    assert lib.current("loadable") == "TRIP 11" and ten.read_bytes() == was
+    assert "SUNSET" in lib.list("loadable") and not (home / "trash").exists()
     # no loadable patch loaded at all: PRESET 1, then PRESET 2
-    lib._landed("presets", None, None)
+    lib._landed("loadable", None, None)
     reg["preset.save_new"].fire()
-    assert lib.current("presets") == "PRESET 1"
+    assert lib.current("loadable") == "PRESET 1"
     reg["preset.save_new"].fire()
-    assert lib.current("presets") == "PRESET 2"
+    assert lib.current("loadable") == "PRESET 2"
 
 
 def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_loadable(tmp_path):
@@ -859,23 +859,23 @@ def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_loadable(tmp_
     TRIP."""
     r = party(tmp_path)
     lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
-    show = home / "projects" / "party.hyp.json"
+    show = home / "installs" / "party.json"
     assert pr.next_empty() == 5
     pr.clear_slot(1)                                         # two holes: the first is taken first
     assert pr.next_empty() == 1
     reg["view.bright"].set(reg["view.bright"].value + 0.5)
-    assert lib.is_dirty("presets")
+    assert lib.is_dirty("loadable")
     reg["preset.save_new"].fire()
     assert pr.bank[1] == "TRIP 2" and pr.active == 1 and pr.bank[4] == "TRIP"
-    assert lib.current("presets") == "TRIP 2" and not lib.is_dirty("presets")
+    assert lib.current("loadable") == "TRIP 2" and not lib.is_dirty("loadable")
     assert lib.status == "saved TRIP 2 → F2" and pr.bank_error == ""
     assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank) and not pr.is_dirty()
     assert reg["preset.select"].names[1] == "TRIP 2" and reg["preset.select"].value == 1
-    doc = lib.read("presets", "TRIP 2")
+    doc = lib.read("loadable", "TRIP 2")
     assert doc["name"] == "TRIP 2" and doc["values"]["view.bright"] == reg["view.bright"].value
     # the second counts on from the new one, into the next hole
     reg["preset.save_new"].fire()
-    assert pr.bank[5] == "TRIP 3" and pr.active == 5 and lib.current("presets") == "TRIP 3"
+    assert pr.bank[5] == "TRIP 3" and pr.active == 5 and lib.current("loadable") == "TRIP 3"
     assert lib.status == "saved TRIP 3 → F6"
     assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
     assert pr.next_empty() is None
@@ -897,13 +897,13 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     reg["preset.load.4"].fire()
     bank = list(pr.bank)
     assert pr.next_empty() is None
-    shows = sorted(p.name for p in (home / "projects").iterdir())
+    shows = sorted(p.name for p in (home / "installs").iterdir())
     reg["preset.save_new"].fire()
     assert lib.warning == "saved TRIP 2 — the bank is full: it is in the preset list"
-    assert pr.bank == bank and sorted(p.name for p in (home / "projects").iterdir()) == shows
-    assert "TRIP 2" in lib.list("presets") and lib.current("presets") == "TRIP 2"
+    assert pr.bank == bank and sorted(p.name for p in (home / "installs").iterdir()) == shows
+    assert "TRIP 2" in lib.list("loadable") and lib.current("loadable") == "TRIP 2"
     assert pr.active == -1 and reg["preset.select"].value == -1
-    assert not lib.is_dirty("presets") and not pr.is_dirty()
+    assert not lib.is_dirty("loadable") and not pr.is_dirty()
     said = dict(lib.said)
     reg["preset.save_new"].fire()
     assert lib.warning == "saved TRIP 3 — the bank is full: it is in the preset list"
@@ -924,20 +924,20 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     # the loadable patch saves but the show's file will not take the bank: the
     # slot stays as the file has it, no pad is lit, and it is said
     # (review of PR #87)
-    show = home / "projects" / "party.hyp.json"
-    before, cur = show.read_text(), lib.current("presets")
+    show = home / "installs" / "party.json"
+    before, cur = show.read_text(), lib.current("loadable")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(pr, "write", full)
         assert reg["preset.save_new"].fire() is True
-    name = lib.current("presets")
-    assert name != cur and name in lib.list("presets")
+    name = lib.current("loadable")
+    assert name != cur and name in lib.list("loadable")
     assert pr.bank[3] is None and pr.active == -1 and show.read_text() == before
     assert "disk full" in pr.bank_error and not pr.is_dirty()
     # the footer says why (plan 19 WP1: a show that cannot be backed up says so here)
     assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
                            "preset list (disk full)")
     reg["preset.save_new"].fire()                            # the disk is back: F4, and no error
-    assert pr.bank[3] == lib.current("presets") and pr.bank_error == ""
+    assert pr.bank[3] == lib.current("loadable") and pr.bank_error == ""
 
 
 def test_the_new_slot_loads_from_the_loadable_row(tmp_path):
@@ -955,16 +955,16 @@ def test_the_new_slot_loads_from_the_loadable_row(tmp_path):
     reg["preset.save_new"].fire()
     assert pr.bank[5] == "TRIP 2" and pr.active == 5
     push(desk, note(apc40.N_CLIP[0], channel=0), note(apc40.N_CLIP[0], 0, channel=0))
-    assert lib.current("presets") == "TUMBLE" and pr.active == 0
+    assert lib.current("loadable") == "TUMBLE" and pr.active == 0
     assert reg["view.shape"].value != 11
     push(desk, note(apc40.N_CLIP[0], channel=5), note(apc40.N_CLIP[0], 0, channel=5))
-    assert lib.current("presets") == "TRIP 2" and pr.active == 5
-    assert reg["view.shape"].value == 11 and not lib.is_dirty("presets")
+    assert lib.current("loadable") == "TRIP 2" and pr.active == 5
+    assert reg["view.shape"].value == 11 and not lib.is_dirty("loadable")
     leds = [m.velocity for m in out.sent
             if m.type == "note_on" and m.note == apc40.N_CLIP[0] and m.channel == 5]
     assert leds[-1] == apc40.GREEN
     reg["preset.load.5"].fire()                              # and F6 is the same slot
-    assert lib.current("presets") == "TRIP 2"
+    assert lib.current("loadable") == "TRIP 2"
 
 
 def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
@@ -974,24 +974,24 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     follows the loaded patch."""
     r = boot(tmp_path, None)
     lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
-    show = home / "projects" / "party.hyp.json"
+    show = home / "installs" / "party.json"
     put(home, "MINE")
     files = user_loadables(home)
-    assert lib.current("presets") == "TUMBLE" and pr.active == 0
+    assert lib.current("loadable") == "TUMBLE" and pr.active == 0
     pr.clear_slot(5)
     assert pr.bank[5] is None and json.loads(show.read_text())["bank"][5] is None
     assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
     assert not pr.is_dirty()                                # written
     assert lib.status == "F6: cleared — ACID is still in the preset list"
-    assert "ACID" in lib.list("presets")
+    assert "ACID" in lib.list("loadable")
     pr.put_slot(5, "MINE")
     assert pr.bank[5] == "MINE" and json.loads(show.read_text())["bank"][5] == "MINE"
-    assert lib.status == "F6: MINE" and lib.current("presets") == "TUMBLE" and pr.active == 0
+    assert lib.status == "F6: MINE" and lib.current("loadable") == "TUMBLE" and pr.active == 0
     reg["preset.load.5"].fire()
-    assert lib.current("presets") == "MINE" and pr.active == 5
+    assert lib.current("loadable") == "MINE" and pr.active == 5
     # the loaded patch's slot cleared: no pad lit; put back elsewhere: that one
     pr.clear_slot(5)
-    assert pr.active == -1 and lib.current("presets") == "MINE"
+    assert pr.active == -1 and lib.current("loadable") == "MINE"
     pr.put_slot(2, "MINE")
     assert pr.bank[2] == "MINE" and pr.active == 2
     # the slot of the loaded patch pointed elsewhere: its light goes
@@ -1056,8 +1056,8 @@ def test_rename_and_trash_are_no_undo_step(tmp_path):
     settle(r)
     r.undo.clear()
     steps = []
-    for fn, *args in ((lib.rename, "presets", "TRIP 2", "SUNRISE"),
-                      (lib.delete, "presets", "SUNRISE")):
+    for fn, *args in ((lib.rename, "loadable", "TRIP 2", "SUNRISE"),
+                      (lib.delete, "loadable", "SUNRISE")):
         fn(*args)
         settle(r)
         steps.append(len(r.undo.stack))
@@ -1068,7 +1068,7 @@ def test_rename_and_trash_are_no_undo_step(tmp_path):
     settle(r)
     steps.append(len(r.undo.stack))
     assert steps == [0, 0, 0] and not r.undo.undo()
-    assert "SUNRISE" in lib.list("presets") and lib.trash() == []
+    assert "SUNRISE" in lib.list("loadable") and lib.trash() == []
 
 
 # ------------------------------------------- plan 19 WP1: a bank of twenty-four
@@ -1080,9 +1080,9 @@ def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
     twenty-four slots in place: no backup."""
     r = boot(tmp_path, None)
     lib, reg, pr, home = r.lib, r.reg, r.lib.project, r.home
-    show = home / "projects" / "party.hyp.json"
+    show = home / "installs" / "party.json"
     reg["preset.load.4"].fire()
-    assert lib.current("presets") == "TRIP" and pr.next_empty() == 9
+    assert lib.current("loadable") == "TRIP" and pr.next_empty() == 9
     assert len(json.loads(show.read_text())["bank"]) == 9           # as the corpus has it
     for n in range(15):
         assert reg["preset.save_new"].fire() is True
@@ -1095,7 +1095,7 @@ def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
     bank = list(pr.bank)
     assert reg["preset.save_new"].fire() is True
     assert lib.warning == "saved TRIP 17 — the bank is full: it is in the preset list"
-    assert pr.bank == bank and "TRIP 17" in lib.list("presets") and pr.active == -1
+    assert pr.bank == bank and "TRIP 17" in lib.list("loadable") and pr.active == -1
     assert not list(home.rglob("*.bak-*")) and not pr.is_dirty()
 
 
@@ -1112,7 +1112,7 @@ def test_active_follows_the_loaded_loadable_from_one_place(tmp_path):
     lib, reg, pr = r.lib, r.reg, r.lib.project
     pr.put_slot(13, "WAKE")                                # WAKE on F4 and on slot 14
     pr.load_slot(13)
-    assert lib.current("presets") == "WAKE" and pr.active == 13       # the one pressed
+    assert lib.current("loadable") == "WAKE" and pr.active == 13       # the one pressed
     reg["preset.load.3"].fire()
     assert pr.active == 3
     reg["preset.select"].set(13)
@@ -1122,12 +1122,12 @@ def test_active_follows_the_loaded_loadable_from_one_place(tmp_path):
     pr.clear_slot(13)                                      # its slot cleared: the other one
     assert pr.active == 3
     pr.clear_slot(3)                                       # no slot names it: none
-    assert pr.active == -1 and lib.current("presets") == "WAKE"
+    assert pr.active == -1 and lib.current("loadable") == "WAKE"
     pr.put_slot(22, "WAKE")                                # one names it again
     assert pr.active == 22
-    lib.load("presets", "FACES")                           # the strip: the first slot that names it
+    lib.load("loadable", "FACES")                           # the strip: the first slot that names it
     assert pr.active == 1
-    lib.load("presets", "hands-play")                      # a loadable patch in no slot
+    lib.load("loadable", "hands-play")                      # a loadable patch in no slot
     assert pr.active == -1
     pr.active = 5
     with pytest.MonkeyPatch.context() as mp:               # nothing loaded: none
@@ -1150,7 +1150,7 @@ def test_active_follows_the_loaded_loadable_from_one_place(tmp_path):
 
 def _files(home) -> dict:
     return {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
-            for p in sorted((home / "presets").glob("*.json"))}
+            for p in sorted((home / "loadable").glob("*.json"))}
 
 
 def _on_bank_rows(rows) -> list:
@@ -1170,7 +1170,7 @@ def _is_device_knob(b: Binding) -> bool:
 
 def wake_knobs(home) -> list[str]:
     """WAKE's eight device knobs, D1–D8, as the corpus file has them."""
-    doc = json.loads((home / "presets" / "party-wake.json").read_text())
+    doc = json.loads((home / "loadable" / "party-wake.json").read_text())
     by_source = {d["source"]: d["target"] for d in doc["desk"]}
     return [by_source[s] for s in DEVICE_KNOBS]
 
@@ -1188,50 +1188,50 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
     before = _files(home)
     assert NIGHT_FILES <= set(before)
     for name in NIGHT_FILES:                               # each file does hold the sixteen
-        desk = json.loads((home / "presets" / name).read_text())["desk"]
+        desk = json.loads((home / "loadable" / name).read_text())["desk"]
         assert len(_on_bank_rows(desk)) == 16, name
     r = boot_home(home)                                    # the launch lands NIGHT ONE
     lib, table, pr, loaded_patch = r.lib, r.router.table, r.lib.project, r.loaded_patch
     # saved before plan 19: the fresh layer had no device knob then (WP3's SCENE)
     fresh = len([b for b in loadable.fresh_desk() if not _is_device_knob(b)])
     # NIGHT ONE: the sixteen exact rows — nothing said
-    assert lib.current("presets") == "NIGHT ONE"
+    assert lib.current("loadable") == "NIGHT ONE"
     assert loaded_patch.desk_notes == [] and loaded_patch.notes == [] and lib.warning == ""
     assert _on_bank_rows(table.desk()) == [] and len(table.desk()) == fresh
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     # NIGHT TWO: fifteen quiet, the owner's re-aimed pad with its note, the knob kept
     pr.load_slot(1)
     said = (f"dropped {OWNER_PAD['source']} → {OWNER_PAD['target']}: that control is "
             "invariant, the meta controller's (plan 13 D6)")
-    assert lib.current("presets") == "NIGHT TWO"
+    assert lib.current("loadable") == "NIGHT TWO"
     assert loaded_patch.desk_notes == [said] and loaded_patch.notes == [said]
     assert lib.warning == f"preset NIGHT TWO: {said}"       # one note: no "(+15 more)"
     assert _on_bank_rows(table.desk()) == []
     knob = loadable.device_knob(*OWNER_KNOB)
     assert [(b.source, b.target) for b in table.desk() if b.source == knob.source] \
         == [(knob.source, knob.target)]
-    assert len(table.desk()) == fresh + 1 and not lib.is_dirty("presets")
+    assert len(table.desk()) == fresh + 1 and not lib.is_dirty("loadable")
     # the pad the owner had re-aimed is the bank's now, on both layers
     kind, ch, n = OWNER_PAD["source"].split(":")
     assert [b.target for b in table.dispatch(kind, int(ch), int(n))] == ["preset.select"]
     # NIGHT THREE (WAKE's eight device knobs): quiet, the eight kept
     lib.warning = ""
-    lib.load("presets", "NIGHT THREE")
+    lib.load("loadable", "NIGHT THREE")
     assert loaded_patch.desk_notes == [] and lib.warning == ""
     assert [b.target for b in table.desk() if _is_device_knob(b)] == wake_knobs(home)
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     # an undo's restore of a desk meets the same rule (`set_desk(load=False)`)
     notes = table.set_desk([*old_shape_pads(), OWNER_PAD], load=False)
     assert notes == [said]
-    lib.load("presets", "NIGHT ONE")
+    lib.load("loadable", "NIGHT ONE")
     # every load, from the bank, the list and the file watch: no file moved
     lib.poll()
     assert _files(home) == before
-    assert len(list((home / "trash" / "presets").iterdir())) == 1      # nothing new in the trash
+    assert len(list((home / "trash" / "loadable").iterdir())) == 1      # nothing new in the trash
     # emptying the list is fork 4's way back: every row on those pads is noted again
     with pytest.MonkeyPatch.context() as m:
         m.setattr(routing, "RETIRED_DESK_ROWS", frozenset())
-        lib.load("presets", "NIGHT ONE")
+        lib.load("loadable", "NIGHT ONE")
         assert len(loaded_patch.desk_notes) == 16 and "(+15 more)" in lib.warning
 
 
@@ -1244,12 +1244,12 @@ def test_the_next_save_of_an_old_loadable_writes_the_desk_without_the_pads(owner
     r = boot_home(home)
     lib = r.lib
     r.lib.project.load_slot(1)                             # NIGHT TWO
-    path = home / "presets" / "night-two.json"
-    trash = home / "trash" / "presets"
+    path = home / "loadable" / "night-two.json"
+    trash = home / "trash" / "loadable"
     assert not list(trash.glob("night-two.*.json"))
     r.reg["view.bright"].set(r.reg["view.bright"].value * 0.9)
-    assert lib.is_dirty("presets")
-    assert lib.overwrite("presets") == path
+    assert lib.is_dirty("loadable")
+    assert lib.overwrite("loadable") == path
     doc = json.loads(path.read_text())
     assert _on_bank_rows(doc["desk"]) == []
     knob = loadable.desk_json([loadable.device_knob(*OWNER_KNOB)])[0]
@@ -1263,9 +1263,9 @@ def test_the_next_save_of_an_old_loadable_writes_the_desk_without_the_pads(owner
     assert {k: v for k, v in after.items() if k != "night-two.json"} \
         == {k: v for k, v in before.items() if k != "night-two.json"}
     # it loads clean and quiet from now on
-    lib.load("presets", "NIGHT ONE")
-    lib.load("presets", "NIGHT TWO")
-    assert r.loaded_patch.desk_notes == [] and not lib.is_dirty("presets")
+    lib.load("loadable", "NIGHT ONE")
+    lib.load("loadable", "NIGHT TWO")
+    assert r.loaded_patch.desk_notes == [] and not lib.is_dirty("loadable")
 
 
 # ------------------------------- plan 19 WP3: a user's desk and the re-cut
@@ -1288,23 +1288,23 @@ def test_a_users_desk_is_untouched_by_the_recut(owner_home):
     def dials() -> dict[str, str]:
         return {b.source: b.target for b in table.desk()
                 if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS}
-    assert lib.current("presets") == "NIGHT ONE" and dials() == {}       # all eight dark
+    assert lib.current("loadable") == "NIGHT ONE" and dials() == {}       # all eight dark
     assert [b.target for b in table.dispatch("cc", 0, 0x10)] == []        # D1 does nothing
-    lib.load("presets", "NIGHT TWO")
+    lib.load("loadable", "NIGHT TWO")
     knob = loadable.device_knob(*OWNER_KNOB)
     assert dials() == {knob.source: knob.target}                         # D3 alone, learned
-    lib.load("presets", "NIGHT THREE")
+    lib.load("loadable", "NIGHT THREE")
     assert list(dials().values()) == wake_knobs(home)
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     lib.poll()
     assert _files(home) == before
     # a user loadable patch with no desk key: the fresh layer, SCENE on D1–D4
-    doc = json.loads((home / "presets" / "night-one.json").read_text())
+    doc = json.loads((home / "loadable" / "night-one.json").read_text())
     doc.pop("desk")
     doc["name"] = "NO DESK"
-    (home / "presets" / "no-desk.json").write_text(loadable.dumps(doc))
+    (home / "loadable" / "no-desk.json").write_text(loadable.dumps(doc))
     lib.poll()
-    lib.load("presets", "NO DESK")
+    lib.load("loadable", "NO DESK")
     assert list(dials().values()) == list(apc40.SCENE)
 
 
@@ -1344,21 +1344,21 @@ def test_a_wired_loadable_saves_as_v6(rig):
     `hyperspace.preset/9` — the frame edited or not; the ladder reads `/2`
     … `/9` (plan 40 T2's `/8` a `/7` with groups) — and a `/10` file is
     refused in its words."""
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
     assert graphmigrate.WIRED_SCHEMA == loadable.WIRED_SCHEMA == "hyperspace.preset/7"
     rig.loaded_patch.load_doc({"schema": loadable.SCHEMA, "name": "edited", "values": {}})
     section = rig.loaded_patch.graph.free_doc()
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
                                    if w["to"] != "lookback.capture"]}
-    assert rig.loaded_patch.document("edited")["schema"] == "hyperspace.preset/10"
+    assert rig.loaded_patch.document("edited")["schema"] == "hyperspace.loadable/11"
     rig.loaded_patch.graph.land(G.read_graph(edited), edited)
     doc = rig.loaded_patch.document("edited")
-    assert doc["schema"] == "hyperspace.preset/10" and doc["graph"] == edited
+    assert doc["schema"] == "hyperspace.loadable/11" and doc["graph"] == edited
     put(rig.home, "ELEVEN", schema="hyperspace.preset/11")
     rig.lib.poll()
-    with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-        rig.lib.read("presets", "ELEVEN")
+    with pytest.raises(LibraryError, match="is not a hyperspace.loadable"):
+        rig.lib.read("loadable", "ELEVEN")
 
 
 @pytest.mark.parametrize("name", WIRED_FIXTURES)
@@ -1370,8 +1370,8 @@ def test_a_wired_frame_loadable_saves_and_loads(tmp_path, name):
     assert json.loads(src.read_text())["schema"] == "hyperspace.preset/6"
     spec, saved = None, None
     for home in (tmp_path / "a", tmp_path / "b"):
-        (home / "presets").mkdir(parents=True, exist_ok=True)
-        (home / "presets" / src.name).write_text(saved or src.read_text())
+        (home / "loadable").mkdir(parents=True, exist_ok=True)
+        (home / "loadable" / src.name).write_text(saved or src.read_text())
         r = boot(home)
         r.loaded_patch.load(name)
         got = r.loaded_patch.graph.spec
@@ -1381,7 +1381,7 @@ def test_a_wired_frame_loadable_saves_and_loads(tmp_path, name):
             assert got == spec
         spec = got
         saved = r.loaded_patch.save_as(name).read_text()
-        assert json.loads(saved)["schema"] == "hyperspace.preset/10"
+        assert json.loads(saved)["schema"] == "hyperspace.loadable/11"
 
 
 # ---------------------------------------------------------------- a new loadable patch (plan 35 T7)
@@ -1425,9 +1425,9 @@ def test_a_new_loadable_is_fresh_values_and_the_scene_chain(rig, name):
             "wires": [{"from": "shape", "to": "scene.geometry"},
                       {"from": "scene", "to": "output.all.image"}]}   # (plan 36 T3: hands written)
     assert G.reaches(spec) == frozenset({"shape", "scene"})
-    assert lib.current("presets") == loadable.UNTITLED_PATCH
-    assert lib.is_dirty("presets")
-    assert lib.path_of("presets", loadable.UNTITLED_PATCH) is None
+    assert lib.current("loadable") == loadable.UNTITLED_PATCH
+    assert lib.is_dirty("loadable")
+    assert lib.path_of("loadable", loadable.UNTITLED_PATCH) is None
 
 
 def test_a_new_loadable_does_not_depend_on_what_was_loaded(rig):
@@ -1451,23 +1451,23 @@ def test_a_new_loadable_undoes_in_one_step(rig):
         u.tick(1.0)
         u.tick(2.0)
         before = rig.reg.snapshot(part="patch")
-        loaded = rig.lib.current("presets")
+        loaded = rig.lib.current("loadable")
         rig.loaded_patch.new()
         assert u.stack[-1].label == "new preset"
         assert u.undo()
     finally:
         undo.install(None)
     assert rig.reg.snapshot(part="patch") == before
-    assert rig.lib.current("presets") == loaded
+    assert rig.lib.current("loadable") == loaded
     assert len(rig.router.table.routes()) >= 1
-    assert rig.lib.is_dirty("presets")        # (the spoiled loadable patch's dot, back)
+    assert rig.lib.is_dirty("loadable")        # (the spoiled loadable patch's dot, back)
 
 
 def test_a_new_loadable_empties_the_bins_macros_and_modifiers(rig):
     """T7's deferred check (final review): after a loadable patch with a channel's
     bin, a macro and a modifier, New leaves no bin filled, no macro
     subscriber and no modifier — and its save writes none of them."""
-    doc = json.loads((rig.home / "presets" / "lfo-breathe.json").read_text())
+    doc = json.loads((rig.home / "loadable" / "lfo-breathe.json").read_text())
     doc.update(name="full", media={"channels": {"a": ["local:x.png"]}},
                modifiers=[{"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy", None]}])
     rig.loaded_patch.load_doc(doc)
@@ -1556,10 +1556,10 @@ def test_resize_values_save_and_load_with_the_loadable(tmp_path):
     assert r.loaded_patch.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
     saved = r.loaded_patch.save_as("CROP").read_text()
-    assert json.loads(saved)["schema"] == "hyperspace.preset/10"
+    assert json.loads(saved)["schema"] == "hyperspace.loadable/11"
     assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
-    (b / "presets").mkdir(parents=True)
-    (b / "presets" / "crop.json").write_text(saved)
+    (b / "loadable").mkdir(parents=True)
+    (b / "loadable" / "crop.json").write_text(saved)
     r = boot(b)
     assert r.loaded_patch.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3

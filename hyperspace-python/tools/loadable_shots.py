@@ -2,7 +2,7 @@
 """Plan 12 — the party loadable patches, offscreen: each loadable patch's look under a set
 of hand poses, and the sweep tables the plan cites.
 
-Every ``party-*`` loadable patch of the test corpus (``tests/corpus/presets/``, copied
+Every ``party-*`` loadable patch of the test corpus (``tests/corpus/loadable/``, copied
 into a scratch library home) is loaded through the real ``LoadedPatch`` over a
 ``Router`` — its values and its routes in one load, as its pad does — and
 two fake hands are driven through the real ``HandsIO`` chain
@@ -55,7 +55,7 @@ from hyperspace.render import Renderer, ViewState
 from hyperspace.routing import Bindings, Router
 
 OUT = ROOT / "docs" / "plans" / "assets" / "12-presets"
-CORPUS = ROOT / "tests" / "corpus" / "presets"      # the loadable patches, as test data
+CORPUS = ROOT / "tests" / "corpus" / "loadable"      # the loadable patches, as test data
 HAND_AXES = tuple(DEFAULT_DOFS)                       # x y z roll pitch yaw
 W, H = 960, 600
 DT = 1 / 60

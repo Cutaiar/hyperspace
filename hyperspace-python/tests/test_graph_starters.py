@@ -89,11 +89,11 @@ def test_new_from_the_strip_lays_out_at_the_page_s_view(page):
     st["seen"], st["pan"] = (300.0, 200.0), (50.0, -10.0)
     at = ui_graph.in_view(panel)
     assert at == (300 + ui_graph.IN_VIEW_MARGIN[0] - 50, 200 + ui_graph.IN_VIEW_MARGIN[1] + 10)
-    frame(panel, "presets")
+    frame(panel, "loadable")
     frame(panel)
     at = ui_graph.in_view(panel)            # (GRAPH is always drawn: as it sees it now)
-    _click(panel, ui_loadable._state(panel)["rects"]["strip.presets.new"])
-    assert page.lib.current("presets") == loadable.UNTITLED_PATCH
+    _click(panel, ui_loadable._state(panel)["rects"]["strip.loadable.new"])
+    assert page.lib.current("loadable") == loadable.UNTITLED_PATCH
     assert page.lib.loaded_patch.layout["render:shape"] == list(at)
     assert wired_wires(page.lib) == CHAIN
 

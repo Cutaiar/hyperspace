@@ -391,7 +391,7 @@ def test_the_meta_sections_are_named_and_exist():
     """The owner's three, and audio, which holds the master faders (row 692)."""
     assert {"analyzer", "hands", "output"} <= set(META_SECTIONS)
     assert set(META_SECTIONS) <= set(PAGE_KEYS)
-    assert not {"view", "graph", "routing", "lfo", "presets"} & set(META_SECTIONS)
+    assert not {"view", "graph", "routing", "lfo", "loadable"} & set(META_SECTIONS)
 
 
 def test_where_you_are_is_the_section_under_the_mouse(pane):
@@ -408,7 +408,7 @@ def test_where_you_are_is_the_section_under_the_mouse(pane):
     d.run(d.move((x0 + 4, y0 + 3)), d.wait(1))
     assert ui_pane.where(p) == "analyzer" and p.in_meta_section()
     d.run(d.move("new##new"), d.wait(1))               # the loadable patches section
-    assert ui_pane.where(p) == "presets" and not p.in_meta_section()
+    assert ui_pane.where(p) == "loadable" and not p.in_meta_section()
 
 
 def test_the_panel_says_when_the_person_is_working_it(pane):

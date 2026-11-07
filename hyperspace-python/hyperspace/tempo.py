@@ -164,6 +164,6 @@ def register(reg, clock: Clock) -> None:
                     "the BPM. Tapping never restarts the LFOs — the trigger does.")
     reg.continuous(f"{GROUP}.nudge", "Nudge", lambda: clock.nudge,
                    lambda v: setattr(clock, "nudge", float(v)), lo=-0.5, hi=0.5,
-                   fmt=lambda v: f"{v:+.2f} beat", group=GROUP,
+                   fmt=lambda v: f"{v:+.2f} beat", group=GROUP, persist=False,
                    tip="Shift the downbeat by a fraction of a beat without changing "
                        "the tempo — the APC's NUDGE buttons step it by a hundredth.")

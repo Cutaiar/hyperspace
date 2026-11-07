@@ -52,7 +52,7 @@ def party(rig):
     acid and palette in the run, output 2 the hands through them — is
     landed as the loadable patch's graph too."""
     seed(rig.lib.home)
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     spec = land_frame(rig, stacked(("acid", "palette")), Shows(), Shows(through=True))
     g = thru(stacked(("acid", "palette")), ("acid", "palette"), Shows(), Shows(through=True))
     g.section = spec.to_json()          # (what a reload lands again: test_graph_areas.load)
@@ -429,7 +429,7 @@ def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
     of the two sections stay and keep working (the canvas and the tests
     call them)."""
     panel, router = rig.panel, rig.router
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     m = ui_routing.add_modifier(panel, "smooth", ["lane:0"])
     texts, rows, strips = [], [], []
     td, tc = imgui.text_disabled, imgui.text_colored

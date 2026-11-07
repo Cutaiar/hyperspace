@@ -1,15 +1,15 @@
 {
- "schema": "hyperspace.preset/10",
- "name": "hands-pinch",
- "note": "Plan 08: a pinch picks what a hand's height moves \u2014 the left index pinch fades the hue cycle in.",
+ "schema": "hyperspace.loadable/11",
+ "name": "lfo-breathe",
+ "note": "The macro demo: device knob 1 is Breathe \u2014 the picture brightens and the spin slows as the LFO's swell of the fx mix deepens; the right hand's height deepens LFO 1's pulse.",
  "graph": {"frame": "wired",
  "nodes": [
   {"kind": "hands", "laid": "over"}
  ],
  "wires": [
   {"from": "shape", "to": "scene.geometry"},
-  {"from": "scene", "to": "huecycle.image"},
-  {"from": "huecycle", "to": "output.all.image"},
+  {"from": "scene", "to": "plasma.image"},
+  {"from": "plasma", "to": "output.all.image"},
   {"from": "hands.layer", "to": "output.all.hands"},
   {"from": "hands.layer", "to": "output.all.guide"},
   {"from": "pattern", "to": "shape.faces"},
@@ -18,7 +18,7 @@
  "values": {
   "view.shape": 3,
   "view.bright": 1.0,
-  "view.speed": 0.3,
+  "view.speed": 0.25,
   "view.depth4": 2.6,
   "view.plane.XY": false,
   "view.plane.XZ": false,
@@ -164,16 +164,16 @@
   "dream.mask_decay": 0.99,
   "dream.jitter": 8.0,
   "fx.on": true,
-  "fx.mix": 0.0,
+  "fx.mix": 0.5,
   "fx.face_map": 0,
-  "fx.huecycle.on": true,
-  "fx.huecycle.mix": 1.0,
-  "fx.huecycle.speed": 0.25,
-  "fx.huecycle.blend": 0,
-  "fx.huecycle.paint": 0.7,
-  "fx.huecycle.spread": 0.8,
-  "fx.huecycle.rings": 0.5,
-  "fx.huecycle.sat": 1.0,
+  "fx.plasma.on": true,
+  "fx.plasma.mix": 1.0,
+  "fx.plasma.speed": 0.5,
+  "fx.plasma.blend": 2,
+  "fx.plasma.level": 0.35,
+  "fx.plasma.scale": 4.0,
+  "fx.plasma.fold": 1.0,
+  "fx.plasma.bands": 1.0,
   "ghost.on": false,
   "ghost.alpha": 0.6,
   "ghost.guide": 0,
@@ -181,7 +181,7 @@
   "ghost.style": 0,
   "pad.dial.left": 0,
   "pad.dial.right": 1,
-  "macro.1": 1.0,
+  "macro.1": 0.0,
   "macro.2": 1.0,
   "macro.3": 1.0,
   "macro.4": 1.0,
@@ -191,12 +191,12 @@
   "macro.8": 1.0,
   "lfo.1.shape": 0,
   "lfo.1.rate": 1.0,
-  "lfo.1.sync": 0,
-  "lfo.1.depth": 1.0,
+  "lfo.1.sync": 3,
+  "lfo.1.depth": 0.6,
   "lfo.1.phase": 0.0,
   "lfo.2.shape": 0,
   "lfo.2.rate": 1.0,
-  "lfo.2.sync": 0,
+  "lfo.2.sync": 5,
   "lfo.2.depth": 1.0,
   "lfo.2.phase": 0.0,
   "lfo.3.shape": 0,
@@ -320,10 +320,9 @@
   "seq.gate": 0.5
  },
  "routes": [
-  {"source": "hand:right.y", "target": "view.bright", "op": "position", "when": "hand:right.pinch.index"},
-  {"source": "hand:right.y", "target": "view.speed", "op": "position", "when": "hand:right.pinch.middle"},
-  {"source": "hand:left.y", "target": "fx.mix", "op": "position", "when": "hand:left.pinch.index"},
-  {"source": "hand:left.y", "target": "camera.zoom", "op": "position", "when": "hand:left.pinch.middle"}
+  {"source": "lfo:0", "target": "view.bright", "op": "push", "value": 0.5},
+  {"source": "hand:right.y", "target": "lfo.1.depth", "op": "position"},
+  {"source": "lfo:1", "target": "fx.mix", "op": "push", "value": 0.3}
  ],
  "desk": [
   {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
@@ -348,15 +347,39 @@
   {"source": "note:0:86", "target": "camera.reset", "op": "toggle", "feedback": "led"},
   {"source": "note:0:94", "target": "view.bright", "op": "step", "value": 3, "feedback": "led"},
   {"source": "note:0:95", "target": "view.bright", "op": "step", "value": -3, "feedback": "led"},
-  {"source": "cc:*:16", "target": "fx.mix", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:17", "target": "fx.huecycle.paint", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:18", "target": "fx.huecycle.spread", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:19", "target": "view.depth4", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:20", "target": "camera.yaw", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:21", "target": "camera.pitch", "op": "abs", "feedback": "ring"},
-  {"source": "cc:*:22", "target": "view.pattern", "op": "abs", "feedback": "ring"}
+  {"source": "cc:*:16", "target": "macro.1", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:17", "target": "fx.mix", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:18", "target": "fx.plasma.level", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:19", "target": "lfo.1.depth", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:20", "target": "view.depth4", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:21", "target": "camera.yaw", "op": "abs", "feedback": "ring"},
+  {"source": "cc:*:22", "target": "camera.pitch", "op": "abs", "feedback": "ring"}
  ],
- "macros": {},
+ "macros": {
+  "macro.1": {
+   "label": "Breathe",
+   "subs": [
+    {
+     "depth": {
+      "source": "lfo:1",
+      "target": "fx.mix"
+     },
+     "from": 0.0,
+     "to": 1.0
+    },
+    {
+     "base": "view.bright",
+     "from": 0.6,
+     "to": 0.8
+    },
+    {
+     "base": "view.speed",
+     "from": 0.5,
+     "to": 0.25
+    }
+   ]
+  }
+ },
  "units": {
   "camera.pan": "world",
   "fx.depth": "taper"

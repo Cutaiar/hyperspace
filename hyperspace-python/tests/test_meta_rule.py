@@ -180,8 +180,8 @@ def test_a_saved_row_drops_with_a_note_and_a_later_save_removes_it(tmp_path):
     assert any("depth subscriber on hand:left.y → master.gain" in n for n in notes)
     assert [b.target for b in table.routes()] == ["view.speed"]
     assert [b.target for b in table.desk()] == ["view.bright"]
-    assert path.read_bytes() == before and not r.lib.is_dirty("presets")
-    r.lib.save_as("presets", "LEANS")
+    assert path.read_bytes() == before and not r.lib.is_dirty("loadable")
+    r.lib.save_as("loadable", "LEANS")
     doc = json.loads(path.read_text())
     assert [x["target"] for x in doc["routes"]] == ["view.speed"]
     assert [x["target"] for x in doc["desk"]] == ["view.bright"]
@@ -193,13 +193,13 @@ def test_a_saved_row_drops_with_a_note_and_a_later_save_removes_it(tmp_path):
 def test_no_corpus_file_holds_a_row_on_a_meta_param():
     """party-tumble's `hand:left.y → master.gain` was the only one, removed."""
     t = tool()
-    for kind in ("presets", "patches"):
+    for kind in ("loadable", "patches"):
         assert t.scan(ROOT / "tests" / "corpus" / kind)[1] == [], kind
 
 
 def test_party_tumble_keeps_its_other_rows_and_its_scale():
     """A `scale` reads a meta param and never moves it (row 18 (a)): it stays."""
-    doc = json.loads((ROOT / "tests/corpus/presets/party-tumble.json").read_text())
+    doc = json.loads((ROOT / "tests/corpus/loadable/party-tumble.json").read_text())
     assert not [r for r in doc["routes"] if r["target"] == "master.gain"]
     assert sum(r.get("scale") == "master.gain" for r in doc["routes"]) == 6
     assert Bindings().add(Binding("lane:0", "rot.rate.XY", "push", 0.1, scale="master.gain"))
@@ -401,9 +401,10 @@ def test_the_flag_changes_nothing_a_file_holds(rig):
     the same ids stay saved, those it will stop saving or move among them."""
     reg = rig.reg
     held = reg.snapshot(part="shared_meta")
-    for pid in ("master.gain", "band.0.post", "tempo.bpm", "tempo.nudge", "output.bg",
+    for pid in ("master.gain", "band.0.post", "tempo.bpm", "output.bg",
                 "output.alpha", "scene.select"):
         assert reg[pid].persist and pid in held, pid
+    assert not reg["tempo.nudge"].persist and "tempo.nudge" not in held    # (plan 58 §8)
 
 
 # (the rows act: each is the meta controller's, on a real table and a real adapter)
@@ -670,7 +671,7 @@ def test_a_spawn_lands_the_rest_and_says_what_it_refused(tmp_path):
     `check`) loses that row with a note and lands the rest, as any other row
     the referee refuses at a spawn does."""
     app = headless.make_app(seed(tmp_path))
-    app.lib.load("presets", "party-trip")
+    app.lib.load("loadable", "party-trip")
     pre, table, reg = app.loaded_patch, app.router.table, app.reg
     u = undo.Undo(reg, table, banks=pre.banks)
     undo.install(u)
@@ -694,20 +695,20 @@ def test_a_spawn_lands_the_rest_and_says_what_it_refused(tmp_path):
 # ------------------------------------------------------------------ the tool
 
 def _library(root: Path) -> Path:
-    (root / "presets" / "sub").mkdir(parents=True)
-    (root / "presets" / "trash").mkdir()
+    (root / "loadable" / "sub").mkdir(parents=True)
+    (root / "loadable" / "trash").mkdir()
     (root / "patches").mkdir()
     row = {"source": "hand:left.y", "target": "master.gain", "op": "push", "value": 0.375}
-    (root / "presets" / "a.json").write_text(json.dumps({"routes": [row], "desk": [
+    (root / "loadable" / "a.json").write_text(json.dumps({"routes": [row], "desk": [
         {"source": "cc:0:48", "target": "tempo.bpm", "op": "abs"},
         {"source": "cc:0:49", "target": "view.bright", "op": "abs"}]}))
-    (root / "presets" / "sub" / "b.json").write_text(json.dumps({"routes": [row], "macros": {
+    (root / "loadable" / "sub" / "b.json").write_text(json.dumps({"routes": [row], "macros": {
         "macro.1": {"subs": [{"base": "master.dyn"},
                              {"depth": {"source": "hand:1", "target": "master.gain"}}]}}}))
-    (root / "presets" / "clean.json").write_text(json.dumps({"routes": [
+    (root / "loadable" / "clean.json").write_text(json.dumps({"routes": [
         {"source": "lane:0", "target": "view.bright", "op": "push", "scale": "master.gain"}]}))
-    (root / "presets" / "trash" / "gone.json").write_text(json.dumps({"routes": [row]}))
-    (root / "presets" / "bad.json").write_text("{nope")
+    (root / "loadable" / "trash" / "gone.json").write_text(json.dumps({"routes": [row]}))
+    (root / "loadable" / "bad.json").write_text("{nope")
     (root / "patches" / "p.json").write_text(json.dumps({"routes": [row]}))
     return root
 
@@ -720,7 +721,7 @@ def test_the_tool_lists_every_row_that_would_drop_and_writes_nothing(tmp_path, c
     out = capsys.readouterr().out
     assert before == {p: (p.read_bytes(), p.stat().st_mtime_ns)
                       for p in lib.rglob("*") if p.is_file()}
-    assert "presets: 5 row(s) in 2 of 3 file(s), dropped at the next load of each" in out
+    assert "loadable: 5 row(s) in 2 of 3 file(s), dropped at the next load of each" in out
     assert "patches: 1 row(s) in 1 of 1 file(s), each patch refused whole when read" in out
     assert "a.json  [routes]  hand:left.y → master.gain  push 0.375" in out
     assert "a.json  [desk]  cc:0:48 → tempo.bpm" in out
@@ -736,8 +737,8 @@ def test_a_malformed_row_names_its_file_and_the_report_goes_on(tmp_path, capsys)
     t = tool()
     lib = _library(tmp_path / "lib")
     row = {"source": "hand:left.y", "target": "master.gain", "op": "push", "value": None}
-    (lib / "presets" / "nulled.json").write_text(json.dumps({"routes": [row]}))
-    (lib / "presets" / "subbed.json").write_text(json.dumps(
+    (lib / "loadable" / "nulled.json").write_text(json.dumps({"routes": [row]}))
+    (lib / "loadable" / "subbed.json").write_text(json.dumps(
         {"macros": {"macro.1": {"subs": [{"depth": 3}]}}}))
     assert t.main([str(lib)]) == 0
     out = capsys.readouterr().out

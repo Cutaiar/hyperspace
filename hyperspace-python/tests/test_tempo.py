@@ -209,7 +209,7 @@ def test_register_declares_the_tempo_group():
     bpm, tap, nudge = reg["tempo.bpm"], reg["tempo.tap"], reg["tempo.nudge"]
     assert bpm.kind is Kind.CONTINUOUS and bpm.persist and bpm.lo == 20 and bpm.hi == 300
     assert tap.kind is Kind.TRIGGER and not tap.modulatable   # decision register row 2 (c)
-    assert nudge.kind is Kind.CONTINUOUS and nudge.persist and (nudge.lo, nudge.hi) == (-0.5, 0.5)
+    assert nudge.kind is Kind.CONTINUOUS and not nudge.persist and (nudge.lo, nudge.hi) == (-0.5, 0.5)
     assert {p.group for p in reg.group("tempo")} == {"tempo"}
     bpm.set_value(100.0)
     assert c.bpm == 100.0 and bpm.text() == "100.0 BPM"
@@ -220,4 +220,4 @@ def test_register_declares_the_tempo_group():
     c.tick(1.5)
     tap.fire()
     assert c.bpm == pytest.approx(120.0)
-    assert reg.snapshot("tempo") == {"tempo.bpm": 120.0, "tempo.nudge": pytest.approx(0.01)}
+    assert reg.snapshot("tempo") == {"tempo.bpm": 120.0}    # a nudge doesn't come back at launch

@@ -22,7 +22,7 @@ from hyperspace.library import LibraryError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "merge-31-32"
 V2, V3, V4 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/4"
-V6 = "hyperspace.preset/10"   # (plan 43 C2: the save schema, named for the row it pinned)
+V6 = "hyperspace.loadable/11"
 CLIP = "shared:loops/tunnel.mp4"
 
 
@@ -67,7 +67,7 @@ def _pattern_and_bin(app) -> None:
 
 
 def test_the_ladder_is_one_list():
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (… plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)   # (… plan 40 T2: /8; plan 43 C2: /9)
     assert (loadable.SCHEMA, loadable.SCHEMA_V3, loadable.MEDIA_SCHEMA) == (V2, V3, V4)
     assert loadable.SAVE_SCHEMA == V6
 
@@ -111,15 +111,15 @@ def test_an_older_build_refuses_the_combined_save(app):
     _pattern_and_bin(app)
     app.loaded_patch.save_as("both")
     lib = app.lib
-    assert lib.read("presets", "both")["schema"] == V6
+    assert lib.read("loadable", "both")["schema"] == V6
     kinds = lib._kinds
     try:
         for versions in ((2, 3, 4, 5), (2, 3), (2,)):
-            kinds["presets"] = replace(kinds["presets"], versions=versions)
-            with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-                lib.read("presets", "both")
+            kinds["loadable"] = replace(kinds["loadable"], versions=versions)
+            with pytest.raises(LibraryError, match="git pull and uv sync"):
+                lib.read("loadable", "both")
     finally:
-        kinds["presets"] = replace(kinds["presets"], versions=loadable.VERSIONS)
+        kinds["loadable"] = replace(kinds["loadable"], versions=loadable.VERSIONS)
 
 
 def test_what_each_branch_wrote_loads_and_saves_as_6(app, tmp_path):

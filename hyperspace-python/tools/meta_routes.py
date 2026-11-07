@@ -42,7 +42,7 @@ if str(ROOT) not in sys.path:
 from hyperspace.library import _walk
 from hyperspace.routing import Binding, Macro, meta_row_refusal
 
-LOADABLE, PATCHES = "presets", "patches"
+LOADABLE, PATCHES = "loadable", "patches"
 
 
 @dataclass(frozen=True)

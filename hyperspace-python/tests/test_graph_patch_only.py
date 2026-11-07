@@ -92,11 +92,11 @@ def test_off_is_todays_canvas_and_the_view_is_untouched(rig):
 def test_state_survives_a_loadable_load(rig):
     st = party(rig)
     st["patch_only"] = False
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     frame(rig.panel, "graph")
     assert ui_graph._state(rig.panel)["patch_only"] is False
     st["patch_only"] = True
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     frame(rig.panel, "graph")
     assert ui_graph._state(rig.panel)["patch_only"] is True
 

@@ -1204,9 +1204,9 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     assert r.table.slew == 0.08
 
     # a show saved before the param existed: no key, 80 ms, clean
-    path = home / "projects" / "mine.hyp.json"
+    path = home / "installs" / "mine.json"
     doc = json.loads(path.read_text())
-    assert doc["session"].pop("desk.slew") == 0.2
+    assert doc["tuning"].pop("desk.slew") == 0.2
     path.write_text(json.dumps(doc))
     r = _launch(home)
     assert r.show.name == "mine" and r.table.slew == 0.08

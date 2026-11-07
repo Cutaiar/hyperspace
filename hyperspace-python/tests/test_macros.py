@@ -152,7 +152,7 @@ def test_scale_on_a_macro_migrates_to_a_depth_subscriber(tmp_path):
                              "macros": {"macro.1": {"subs": [depth_sub("lfo:1", "fx.mix")]}}})
     assert len(t2.macros["macro.1"].subs) == 1
     # the corpus's lfo-breathe (what the build shipped): its macro.1 is a subscriber
-    lfo_breathe = json.loads((CORPUS / "presets" / "lfo-breathe.json").read_text())
+    lfo_breathe = json.loads((CORPUS / "loadable" / "lfo-breathe.json").read_text())
     assert lfo_breathe["macros"]["macro.1"]["subs"][0] == depth_sub("lfo:1", "fx.mix")
     assert "scale" not in json.dumps(lfo_breathe["routes"])
 
@@ -165,7 +165,7 @@ def test_a_scale_on_a_meta_param_is_left_alone():
            "scale": "master.gain"}
     t = Bindings.from_json({"schema": routing.SCHEMA_V2, "bindings": [row]})
     assert t.bindings[0].scale == "master.gain" and t.macros == {} and not t.changed
-    legacy6 = json.loads((CORPUS / "presets" / "legacy6.json").read_text())
+    legacy6 = json.loads((CORPUS / "loadable" / "legacy6.json").read_text())
     assert sum(b.get("scale") == "master.gain" for b in legacy6["routes"]) == 6
     assert legacy6["macros"] == {}
     assert all(b.scale == "master.gain" for b in routing.legacy6_routes()

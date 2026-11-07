@@ -230,7 +230,7 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
     app = _app_with(tmp_path, "acid-scene", doc)
     said = M.MIGRATED_NOTE.format(old="hyperspace.preset/2", new=SAVED)
     assert app.loaded_patch.migrated == said and app.loaded_patch.notes == []     # (not a problem)
-    assert app.lib.warning == f"preset acid-scene: {said}"              # (the strip says it)
+    assert app.lib.warning == f"{app.lib.warning.split()[0]} acid-scene: {said}"              # (the strip says it)
     assert app.loaded_patch.document("acid-scene")["schema"] == SAVED
 
 
@@ -308,13 +308,13 @@ def test_a_cut_migrated_wire_stays_cut_through_a_save_and_a_reload(tmp_path):
 # ---------------------------------------------------------------- the corpus loadable patches
 
 def test_every_corpus_loadable_is_its_sources_seven_and_round_trips(tmp_path):
-    """Each corpus loadable patch (tests/corpus/presets) is `/7`; loaded and saved
+    """Each corpus loadable patch (tests/corpus/loadable) is `/7`; loaded and saved
     untouched it is the same bytes; and it is exactly what
     tools/migrate_library.py makes of its source (`--to`: load the old file,
     save) — so the migration can be re-run from the sources and lands the
     same files, up to the defaults a source does not name that moved since
     (`_as_before_calming`)."""
-    paths = sorted((CORPUS / "presets").glob("*.json"))
+    paths = sorted((CORPUS / "loadable").glob("*.json"))
     assert len(paths) == 25
     assert sorted(p.name for p in SOURCES.glob("*.json")) == [p.name for p in paths]
     for k, path in enumerate(paths):

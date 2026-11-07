@@ -88,6 +88,7 @@ from . import (
     playlist,
     poi,
     replay,
+    sharedfile,
     tempo,
     totem,
 )
@@ -97,6 +98,8 @@ from .bands import CEIL
 from .control import Control
 from .deck import KEYS, MOUSE, Deck, DeckHooksMade, Fade, MetaController, Mix, register_xfade
 from .devicelist import DeviceList
+from .displays import COPY as DISPLAYS_COPY
+from .displays import FILE as DISPLAYS_FILE
 from .displays import DisplayList, Running, Wanted, opened_of, wanted
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotplug import Hotplug
@@ -140,6 +143,9 @@ from .view import ViewState
 from .watchdog import LOG_NAME, RenderWatch, Watchdog
 
 TITLE = "Hyperspace"
+# the library's name when config.toml didn't read and nothing says where it is: never a
+# folder, so nothing is listed and every save is refused in words (`Library.missing`)
+CONFIG_UNREAD = "(config.toml did not read)"
 RENDER_SIZE = (1280, 820)
 ROOT_SIZE = (64, 64)     # the hidden window that holds the render context: never drawn on
 # two 4:3 panes side by side: the desk diagram on the left, the panel on
@@ -1823,12 +1829,20 @@ def main(argv: list[str] | None = None) -> None:
     # loadable patches, projects, the loadable patch bank (its project's): in the home, or in
     # the folder [library] path names (plan 25) — the machine files
     # (config, bindings, windows, logs, last_show) stay in the home either way
+    # A config.toml that doesn't read says nothing of [library]: the library is where this
+    # Mac's copy says it last was, not the home, whose saves the next good launch would lose
     lp = cfg.get("library", {}).get("path", "")
-    library = Library(Path(lp), machine=home) if lp else Library()
+    lib_root, unknown = sharedfile.library_root(lp, bool(cfg.get("error")), home / DISPLAYS_COPY,
+                                                home, DISPLAYS_FILE)
+    library = (Library(home / CONFIG_UNREAD, machine=home) if unknown
+               else Library() if lib_root == home else Library(lib_root, machine=home))
+    if library.not_moved:
+        print(f"library: {library.not_moved}", file=sys.stderr)
+        library.say(warning=library.not_moved)
     # the media folder and the eight channels (plan 32): the channels'
     # params are declared over this one `MediaState`, the loadable patch's bins are
     # its, and the renderer reads its frames
-    media = _open_media(lp, home)
+    media = _open_media(str(lib_root) if lib_root != home and not unknown else "", home)
     renderer.media = media.state
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
@@ -2024,6 +2038,7 @@ def main(argv: list[str] | None = None) -> None:
     # the playlist (plan 44 D6b): ticked by the meta controller, said in its pane section
     meta.playing = panel.playing = playlist.Playing(meta, library, fade)
     playlist.register(deck.reg, meta.playing)
+    playlist.at_launch(meta.playing, library.project)     # SM6: `plays` in the install file
     # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())

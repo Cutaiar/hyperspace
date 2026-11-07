@@ -831,7 +831,7 @@ def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monke
     from hyperspace.learn import Learn
 
     lib, table = rig.lib, rig.router.table
-    lib.load("presets", "BIG BLUE WAVE")
+    lib.load("loadable", "BIG BLUE WAVE")
     assert table.desk()
     over = _page_scroll(rig, monkeypatch)
     assert over["routing"] == 0, "the ROUTING page scrolled with a preset loaded"
@@ -1057,10 +1057,10 @@ def test_dirty_dots_follow_the_poll_cadence(rig):
 def test_project_row_and_dirty_state(rig, tmp_path):
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     proj = lib.project
-    frame(panel, "presets")
+    frame(panel, "loadable")
     assert not proj.is_dirty()                     # the party show as saved: clean
     ui_loadable._project_save_as(panel, "Show")
-    assert proj.name == "Show" and proj.path == tmp_path / "projects" / "show.hyp.json"
+    assert proj.name == "Show" and proj.path == tmp_path / "installs" / "show.json"
     assert not proj.is_dirty()
     assert ui_loadable.names(panel, ui_loadable.PROJECT) == ["house", "party", "show"]
     frame(panel)
@@ -1107,7 +1107,7 @@ def test_the_footer_says_what_was_undone(rig, monkeypatch):
     assert shown() == []                               # an edit says nothing
     assert u.undo() and p.base == was
     line = f"·  undid {p.label} {p.fmt(was)} → {p.fmt(was + 0.4)}"
-    for page in ("view", "routing", "presets", "system"):
+    for page in ("view", "routing", "loadable", "system"):
         clock[0] += 0.5
         assert shown(page) == [line], page
     clock[0] += ui.MESSAGE_S                           # …and it goes
@@ -1121,17 +1121,17 @@ def test_the_footer_says_what_was_undone(rig, monkeypatch):
     assert shown() == ["·  nothing to undo"]
     # the library's lines, without opening the PRESETS page: the newest wins
     clock[0] += 1.0
-    lib.status = "presets: saved TRIP 2"
-    assert shown("lfo") == ["·  presets: saved TRIP 2"]
+    lib.status = "loadable: saved TRIP 2"
+    assert shown("lfo") == ["·  loadable: saved TRIP 2"]
     lib.warning = "F3: an empty slot — ⇧F3 saves the live state into it"
     assert shown("lfo") == [f"·  {lib.warning}"]
     u.redo()
     assert shown("lfo") == [f"·  {u.status}"] and u.status.startswith("redid ")
     # a line longer than the room is cut to fit beside the show's name
     clock[0] += 1.0
-    lib.status = "presets: " + "a very long preset name " * 12
+    lib.status = "loadable: " + "a very long preset name " * 12
     (cut,) = shown("view")
-    assert cut.endswith("…") and cut.startswith("·  presets: a very long")
+    assert cut.endswith("…") and cut.startswith("·  loadable: a very long")
     assert imgui.calc_text_size(cut).x < ui.PANEL_W
     assert ui.fit_text("short", 500.0) == "short"
     # …and shorter still while the dim readout (plan 15 WP3) shares the line
@@ -1149,17 +1149,17 @@ def test_loadable_bank_and_strip_on_the_loadables_page(rig):
     """Plan 13 WP2: the bank row loads and saves loadable patches by F-key param,
     the one preset strip shows what is loaded and its dirty dot."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    frame(panel, "presets")
+    frame(panel, "loadable")
     reg["view.shape"].set(5)
     reg["preset.save.2"].fire()
     assert lib.project.active == 2 and lib.project.bank[2] == "FIELD"
-    assert lib.read("presets", "FIELD")["values"]["view.shape"] == 5
-    assert lib.current("presets") == "FIELD" and not lib.is_dirty("presets")
+    assert lib.read("loadable", "FIELD")["values"]["view.shape"] == 5
+    assert lib.current("loadable") == "FIELD" and not lib.is_dirty("loadable")
     reg["view.shape"].set(1)
-    assert ui_loadable.dirty(panel, "presets")
+    assert ui_loadable.dirty(panel, "loadable")
     frame(panel)
     reg["preset.load.2"].fire()
-    assert rig.view.shape == 5 and not lib.is_dirty("presets")
+    assert rig.view.shape == 5 and not lib.is_dirty("loadable")
     frame(panel)
 
 
@@ -1510,7 +1510,7 @@ def test_the_footer_says_what_a_learn_waits_for_and_what_it_did(rig, monkeypatch
     short = min((p.id for p in rig.reg), key=len)            # room for the whole line
     lrn.arm(short, "hand:left")
     line = f"·  learning {short} — move the left hand… (click to cancel)"
-    for page in ("view", "routing", "presets", "system", "hands"):
+    for page in ("view", "routing", "loadable", "system", "hands"):
         clock[0] += 0.5
         (said,) = footer(page)
         assert said[0] == line and said[1] == rgb(ui.RED), page
@@ -2183,7 +2183,7 @@ def test_the_footer_names_a_black_output(rig, monkeypatch):
     assert not any("black" in s for s in drawn)
     reg["output.2.scene"].set(False)
     reg["output.2.hands"].set(False)
-    for page in ("view", "presets", "output"):
+    for page in ("view", "loadable", "output"):
         drawn, _ = _output_page(rig, monkeypatch, page)
         assert "·  output 2 black" in drawn, page
     reg["output.4.dim"].set(0.0)

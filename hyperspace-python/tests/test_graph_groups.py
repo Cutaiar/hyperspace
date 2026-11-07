@@ -52,7 +52,7 @@ def rig(shell_rig):  # noqa: F811
 def noita(rig, groups=None):
     """party-noita on the GRAPH page (its `groups` set as a load would),
     drawn twice. Returns the page's state."""
-    rig.lib.load("presets", "party-noita")
+    rig.lib.load("loadable", "party-noita")
     rig.lib.loaded_patch.groups = [{**g, "nodes": list(g["nodes"])} for g in groups or ()]
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
@@ -90,8 +90,8 @@ def main_run(doc: dict) -> tuple[str, ...]:
     return G.run_back(G.read_graph(doc["graph"]), "output.all.image")
 
 
-# the corpus: the loadable patches the build once shipped (tests/corpus/presets, one tier)
-CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
+# the corpus: the loadable patches the build once shipped (tests/corpus/loadable, one tier)
+CORPUS_LOADABLES = sorted((CORPUS / "loadable").glob("*.json"))
 RUNS = {p.stem: main_run(json.loads(p.read_text())) for p in CORPUS_LOADABLES}
 NO_RUN = {slug for slug, run in RUNS.items() if not run}
 
@@ -127,10 +127,10 @@ def test_one_rule_reads_a_group_number_for_the_load_and_for_group():
 
 def test_a_loadable_with_groups_round_trips_through_document_and_load_doc(tmp_path):
     app = headless.make_app(seed(tmp_path))
-    app.lib.load("presets", "party-noita")
+    app.lib.load("loadable", "party-noita")
     app.loaded_patch.groups = [dict(ENTRY, patch="noita-core")]
     doc = app.loaded_patch.document("noita grouped")
-    assert doc["schema"] == "hyperspace.preset/10"          # (plan 43 C2: every save)
+    assert doc["schema"] == "hyperspace.loadable/11"          # (plan 43 C2: every save)
     assert doc["groups"] == [{"id": "group.1", "name": "noita core", "patch": "noita-core",
                               "nodes": NOITA_CORE, "open": False}]
     keys = list(doc)
@@ -149,7 +149,7 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     C2) loaded and saved untouched is the same bytes — and so is every
     corpus loadable patch, with no groups (a `/9` without the key)."""
     raw = FIXTURE.read_bytes()
-    assert json.loads(raw)["schema"] == "hyperspace.preset/10"
+    assert json.loads(raw)["schema"] == "hyperspace.loadable/11"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
     assert notes == [] and again == raw
     for k, path in enumerate(CORPUS_LOADABLES):
@@ -160,7 +160,7 @@ def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
 
 def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
     app = headless.make_app(tmp_path)
-    doc = json.loads((CORPUS / "presets" / "party-noita.json").read_text())
+    doc = json.loads((CORPUS / "loadable" / "party-noita.json").read_text())
     doc = grouped_twin(doc, ["render:warp", "render:acid.3"], "acid wash")
     doc["groups"] += [{"id": "group.2", "name": "gone", "nodes": ["render:kaleido"],
                        "open": True},
@@ -191,7 +191,7 @@ def test_with_no_bank_the_held_voices_are_the_ones_the_registry_holds(rig):
     the registry), never any id up to 99 — a save drops a member no voice
     is."""
     pre = rig.lib.loaded_patch
-    rig.lib.load("presets", "party-noita")
+    rig.lib.load("loadable", "party-noita")
     assert pre.banks() == {}
     lfos = graphview.bank_ids(None, rig.reg, "lfo")
     held = pre._held_canvas()
@@ -204,20 +204,20 @@ def test_with_no_bank_the_held_voices_are_the_ones_the_registry_holds(rig):
 
 def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_member(tmp_path):
     app = headless.make_app(seed(tmp_path))
-    app.lib.load("presets", "party-noita")
+    app.lib.load("loadable", "party-noita")
     clean = app.loaded_patch.signature()
-    assert not app.lib.is_dirty("presets")
+    assert not app.lib.is_dirty("loadable")
     app.loaded_patch.groups = [dict(ENTRY)]
-    assert app.loaded_patch.signature() != clean and app.lib.is_dirty("presets")
+    assert app.loaded_patch.signature() != clean and app.lib.is_dirty("loadable")
     app.loaded_patch.groups = []
-    assert app.loaded_patch.signature() == clean and not app.lib.is_dirty("presets")
+    assert app.loaded_patch.signature() == clean and not app.lib.is_dirty("loadable")
     # a member deleted since: the save leaves it out, and the group with it
     app.loaded_patch.groups = [dict(ENTRY, nodes=["render:warp", "render:acid.4"]),
                           dict(ENTRY, id="group.2", nodes=["render:acid.4"])]
     assert app.loaded_patch.document("x")["groups"] == [dict(ENTRY, nodes=["render:warp"])]
     app.loaded_patch.groups = [dict(ENTRY, nodes=["render:acid.4"])]
     doc = app.loaded_patch.document("x")
-    assert "groups" not in doc and doc["schema"] == "hyperspace.preset/10"   # (C2: /9 either way)
+    assert "groups" not in doc and doc["schema"] == "hyperspace.loadable/11"   # (C2: /9 either way)
 
 
 # ---------------------------------------------------------------- the proof: the renderer learns nothing
@@ -450,7 +450,7 @@ def test_a_group_made_then_undone_is_gone_and_the_signature_is_back(rig):
     try:
         ui_graph.group_nodes(rig.panel, NOITA_CORE)
         assert u.stack[-1].label == "group 3 nodes"
-        assert rig.lib.loaded_patch.signature() != sig and rig.lib.is_dirty("presets")
+        assert rig.lib.loaded_patch.signature() != sig and rig.lib.is_dirty("loadable")
         assert u.undo()
         assert rig.lib.loaded_patch.groups == [] and rig.lib.loaded_patch.signature() == sig
         assert u.redo() and len(rig.lib.loaded_patch.groups) == 1
@@ -721,7 +721,7 @@ def test_groups_keep_their_invariants_over_the_corpus(tmp_path, path):
     and the loadable patch round-trips through save and load with its groups
     whole — and, while nothing was deleted, with everything else unchanged."""
     app = headless.make_app(seed(tmp_path))
-    app.lib.load("presets", path.stem)
+    app.lib.load("loadable", path.stem)
     pre, table = app.loaded_patch, app.router.table
     assert pre.groups == []
     before = _stripped(pre.document("x"))
@@ -793,7 +793,7 @@ def test_a_refused_load_leaves_the_loaded_loadables_groups_whole(tmp_path):
 
     from hyperspace.library import LibraryError
     app = headless.make_app(seed(tmp_path))
-    app.lib.load("presets", "party-noita")
+    app.lib.load("loadable", "party-noita")
     pre = app.loaded_patch
     pre.groups = [dict(ENTRY)]
     pre.group_high = 5
@@ -802,10 +802,10 @@ def test_a_refused_load_leaves_the_loaded_loadables_groups_whole(tmp_path):
                                                          {"from": "acid", "to": "output.all.image"}]},
         values={"view.speed": "fast"})
     with pytest.raises(LibraryError, match="nothing loaded"):
-        app.lib.load("presets", "BROKEN")
+        app.lib.load("loadable", "BROKEN")
     assert pre.groups == [ENTRY] and pre.group_high == 5
     assert "warp" in patches.spec_names(pre.graph.spec)
-    assert app.lib.current("presets") == "NOITA"           # (still the loaded one)
+    assert app.lib.current("loadable") == "NOITA"           # (still the loaded one)
 
 
 def test_every_road_that_removes_a_node_settles_its_group(tmp_path):
@@ -816,7 +816,7 @@ def test_every_road_that_removes_a_node_settles_its_group(tmp_path):
     a bare `Bindings.remove_modifier` each leave the group right at once."""
     from hyperspace import ui_lfo, ui_routing, ui_seq
     app = headless.make_app(seed(tmp_path))
-    app.lib.load("presets", "party-noita")
+    app.lib.load("loadable", "party-noita")
     pre, table = app.loaded_patch, app.router.table
     m1 = table.add_modifier("scale", ["lane:1"], app.reg)
     m2 = table.add_modifier("scale", ["lane:2"], app.reg)
@@ -852,7 +852,7 @@ def test_undoing_a_load_keeps_the_floor_under_the_groups_numbers(rig):
         assert ui_graph.ungroup(rig.panel, "group.3") is None
         u.tick(3.0)
         u.tick(4.0)
-        rig.lib.load("presets", "party-acid")
+        rig.lib.load("loadable", "party-acid")
         assert pre.groups == [] and pre.group_high == 0
         assert u.undo()
         assert [g["id"] for g in pre.groups] == ["group.1", "group.2"] and pre.group_high == 3
@@ -1046,7 +1046,7 @@ def with_patch(rig, doc: dict | None = None, slug: str = "acid-wash") -> None:
 def trip(rig):
     """party-trip on GRAPH with acid-wash in the library, drawn twice."""
     with_patch(rig)
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     return ui_graph._state(rig.panel)
@@ -1113,7 +1113,7 @@ def test_spawn_lands_through_the_doors_as_one_step_and_one_undo_takes_it_all(rig
         assert {k: pre.layout[k] for k in ACID} == {
             "render:acid": [100, 50], "render:wobble": [360, 50], "render:delay": [620, 50],
             "mod.1": [100, 250]}
-        assert rig.lib.is_dirty("presets") and files(rig.lib.home) == home
+        assert rig.lib.is_dirty("loadable") and files(rig.lib.home) == home
         frame(rig.panel, "graph")
         (vg,) = st["view"].groups
         opened = [p.name for p in vg.ports if "/open:" in p.id]
@@ -1149,7 +1149,7 @@ def test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks(tmp
     group and its layout back off."""
     assert patches.check(BREATH) == []
     app = headless.make_app(seed(tmp_path))
-    app.lib.load("presets", "party-trip")
+    app.lib.load("loadable", "party-trip")
     pre, table, reg = app.loaded_patch, app.router.table, app.reg
     u = undo.Undo(reg, table, marks=Marks(app.lib), banks=pre.banks)
     undo.install(u)

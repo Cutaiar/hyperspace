@@ -701,8 +701,8 @@ def _final_alpha(ctx, b, bg_alpha, w=240, h=160, frames=4):
 
 
 def _corpus_loadables():
-    """The loadable patches the build once shipped (tests/corpus/presets), by slug."""
-    return sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
+    """The loadable patches the build once shipped (tests/corpus/loadable), by slug."""
+    return sorted(p.stem for p in (CORPUS / "loadable").glob("*.json"))
 
 
 # every effect on at its own blend, then every one forced to multiply
@@ -719,10 +719,10 @@ def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name
     the FX chain and the look-back composite."""
     b = _preset_rig(ctx, tmp_path)
     first = _corpus_loadables()[0] if name in STRESS else name
-    path = b.lib.path_of("presets", first)
+    path = b.lib.path_of("loadable", first)
     assert path is not None, first
     b.loaded_patch.load(json.loads(path.read_text())["name"])
-    assert b.lib.current("presets") is not None
+    assert b.lib.current("loadable") is not None
     if name in STRESS:
         # (plan 36 T3: every effect file exists for the stress, as before a
         # graph landed — `FxState.hold(None)`)

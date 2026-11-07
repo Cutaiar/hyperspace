@@ -560,7 +560,7 @@ def test_no_corpus_loadable_places_an_effect():
     copies."""
     for path in sorted(SOURCES.glob("*.json")):
         assert "graph" not in json.loads(path.read_text()), path
-    for path in sorted((CORPUS / "presets").glob("*.json")):
+    for path in sorted((CORPUS / "loadable").glob("*.json")):
         nodes = json.loads(path.read_text())["graph"]["nodes"]
         assert not any(k in e for e in nodes for k in G.PLACE_KEYS), path
     for sw in ((Shows(),), (Shows(), Shows(through=True)),
@@ -586,7 +586,7 @@ def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
     rig.loaded_patch.graph.attach(stub)
     for slug in WIRED:
         doc = _fixture(slug)
-        dst = rig.home / "presets" / f"{slug}.json"
+        dst = rig.home / "loadable" / f"{slug}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text((FIXTURES / f"{slug}.json").read_text())
         assert rig.lib.load(LOADABLE, slug) == [] and rig.loaded_patch.notes == [], slug

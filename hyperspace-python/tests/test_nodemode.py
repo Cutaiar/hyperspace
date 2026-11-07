@@ -12,7 +12,7 @@ from hyperspace.library import LibraryError, Marks
 from hyperspace.nodemode import NodeMode, Slot, fill
 from hyperspace.pads import models
 
-CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
+CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "loadable").glob("*.json"))
 ENTRY = {"player": 2, "controller": "gamepad", "node": "macro.1"}
 
 
@@ -116,7 +116,7 @@ def test_a_new_loadable_points_at_nothing(app):
 
 def test_the_migration_road_keeps_the_key_as_a_fixed_point(tmp_path):
     src = tmp_path / "with.json"
-    doc = json.loads((CORPUS / "presets" / f"{CORPUS_LOADABLES[0]}.json").read_text())
+    doc = json.loads((CORPUS / "loadable" / f"{CORPUS_LOADABLES[0]}.json").read_text())
     doc["node_mode"] = [ENTRY]
     src.write_text(loadable.dumps(doc))
     once, notes, _ = headless.resave(src, tmp_path / "a")

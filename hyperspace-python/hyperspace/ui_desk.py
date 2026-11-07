@@ -387,7 +387,7 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     lib = getattr(panel, "library", None)
     key = (getattr(getattr(panel, "learn", None), "control", None), _key(table),
            getattr(table, "macros_serial", 0),
-           lib.current("presets") if lib is not None else None)
+           lib.current("loadable") if lib is not None else None)
     hit = st.get("offer")
     if hit is not None and hit[0] == key:
         return hit[1]

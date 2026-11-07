@@ -1,7 +1,7 @@
 """Plan 22 B5: the macro candidates (kept as test fixtures in
 tests/fixtures/macro-candidates/ since plan 25 retired shared/; the owner
 has them in his library) load cleanly through the real road — copied into
-a library's presets/, then `LoadedPatch.load` — with no note, no dropped row,
+a library's loadable/, then `LoadedPatch.load` — with no note, no dropped row,
 every subscriber on a real param or a route the file carries. Whether
 the macros are any good is the
 owner's listening rig (docs/plans/22-macro-candidates.md), not a test's."""
@@ -44,9 +44,9 @@ WHOLE_SETS = ("macro-performance", "macro-streams")
 @pytest.fixture()
 def rig(tmp_path):
     home = tmp_path / "home"
-    (home / "presets").mkdir(parents=True)
+    (home / "loadable").mkdir(parents=True)
     for f in FILES:
-        shutil.copyfile(f, home / "presets" / f.name)
+        shutil.copyfile(f, home / "loadable" / f.name)
     return boot_home(home)
 
 

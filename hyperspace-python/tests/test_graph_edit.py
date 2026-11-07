@@ -140,7 +140,7 @@ def test_moving_a_cables_end_moves_the_route_and_its_depth_subs_follow(rig):
     and the macro subscriber scaling its depth follows it. Onto a taken
     param it asks, and Replace retargets the row (`replace_owner(…,
     target=)`)."""
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     table = rig.router.table
     _mid, s = next((mid, s) for mid, m in table.macros.items() for s in m.subs
                   if s.depth is not None)
@@ -251,7 +251,7 @@ def test_deleting_a_cable_removes_the_route_and_undo_puts_it_back(tmp_path):
     from test_undo import boot, settle
     r = boot(tmp_path / "home")
     settle(r)
-    r.lib.load("presets", "lfo-breathe")
+    r.lib.load("loadable", "lfo-breathe")
     settle(r)
     r.undo.clear()
     table = r.table
@@ -367,7 +367,7 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
     (`wire`, `unwire`, `remove_render_node`, `wire_refusal`); their plain
     words come back as a `Refusal` (the page's note), a landing as None;
     the page's drag and delete tables route those types to N4's handlers."""
-    rig.lib.load("presets", "party-wake")            # (plan 35 T5: a wired frame landed)
+    rig.lib.load("loadable", "party-wake")            # (plan 35 T5: a wired frame landed)
     table = rig.router.table
     view = graphview.build(table, rig.reg, rig.router, None, None, None)
     e = graphview.Edit(table, rig.reg, rig.router, view, graph=rig.lib.loaded_patch.graph)
@@ -477,7 +477,7 @@ def test_the_page_draws_with_its_editing_menus(rig):
     cable, a node, the picker) and a refusal on its head — the create and
     delete queries open every frame without a drag and change nothing."""
     panel = rig.panel
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     frame(panel, "graph")
     st = ui_graph._state(panel)
     view = st["view"]
@@ -556,7 +556,7 @@ def _two_cable_rig(rig):
     put(rig.lib.home, "Two", schema="hyperspace.preset/7", graph=_section(
         *FRAME0, ("lookback", "acid.image"), ("acid", "output.all.image"),
         nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
-    rig.lib.load("presets", "Two")
+    rig.lib.load("loadable", "Two")
     gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
                                                    effects=("acid", "wobble.2")))
@@ -719,13 +719,13 @@ def test_a_route_from_the_canvas_is_a_performer_row_in_the_loadable(rig):
     """What the canvas adds is the loaded patch's (a performer row): the
     loadable patch is dirty, bindings.json is not written."""
     lib, table = rig.lib, rig.router.table
-    lib.load("presets", "party-trip")
-    assert not lib.is_dirty("presets")
+    lib.load("loadable", "party-trip")
+    assert not lib.is_dirty("loadable")
     before = table.path.read_text() if table.path.exists() else None
     frame(rig.panel, "graph")
     b = ui_graph.connect(rig.panel, "out:lane:1", f"mod:{free_param(rig, centred=False).id}")
     assert b.op in MOD_OPS and not is_meta_row(b)
-    assert lib.is_dirty("presets")
+    assert lib.is_dirty("loadable")
     assert (table.path.read_text() if table.path.exists() else None) == before
 
 
@@ -1130,7 +1130,7 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     put(rig.lib.home, "Free", schema="hyperspace.preset/7", graph=_section(
         *FRAME0, ("lookback", "output.all.image"),
         nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
-    rig.lib.load("presets", "Free")
+    rig.lib.load("loadable", "Free")
     gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
                                                    effects=("wobble", "wobble.2")))
@@ -1176,7 +1176,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
     doc = json.loads(rig.loaded_patch.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/10"
+    assert doc["schema"] == "hyperspace.loadable/11"
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
@@ -1208,7 +1208,7 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     for name, on in (("On", True), ("Off", False)):
         rig.reg["fx.huecycle.on"].set(on)
         doc = json.loads(rig.loaded_patch.save_as(name).read_text())
-        assert doc["schema"] == "hyperspace.preset/10", name
+        assert doc["schema"] == "hyperspace.loadable/11", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
         assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
@@ -1282,7 +1282,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Run", schema="hyperspace.preset/7", graph=_section(
         ("lookback", "acid.image"), ("acid", "wobble.image"), ("wobble", "output.all.image")))
-    rig.lib.load("presets", "Run")
+    rig.lib.load("loadable", "Run")
     gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
                                                    effects=("acid", "wobble")))
@@ -1723,11 +1723,11 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
         put(rig.home, "Wired", schema="hyperspace.preset/7", graph=graph)
         rig.lib.load(LOADABLE, "Wired")
     elif fixture.exists():          # (a graph fixture, loaded and migrated as a file is)
-        (rig.home / "presets").mkdir(parents=True, exist_ok=True)
-        (rig.home / "presets" / fixture.name).write_text(fixture.read_text())
+        (rig.home / "loadable").mkdir(parents=True, exist_ok=True)
+        (rig.home / "loadable" / fixture.name).write_text(fixture.read_text())
         rig.lib.load(LOADABLE, slug)
     else:                           # (a corpus loadable patch, seeded into the scratch library)
-        seed(rig.home, "presets", "dream")
+        seed(rig.home, "loadable", "dream")
         rig.lib.load(LOADABLE, slug)
     stub = Stub()
     rig.loaded_patch.graph.attach(stub)
@@ -2108,7 +2108,7 @@ def _drag_rig(rig, monkeypatch, *pairs, nodes=(), effects=("acid", "wobble.2"), 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Drag", schema="hyperspace.preset/7", graph=_section(*pairs, nodes=nodes),
         **({"layout": layout} if layout else {}))
-    rig.lib.load("presets", "Drag")
+    rig.lib.load("loadable", "Drag")
     gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
                                                    effects=effects))

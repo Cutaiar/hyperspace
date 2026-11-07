@@ -218,7 +218,7 @@ def test_the_sheet_is_stale_when_another_loadable_loads_under_it(rig):  # noqa: 
     slug = dreamy(rig)
     landing, choices = sheet_up(rig, slug)
     assert landing.asked
-    rig.lib.load("presets", "party-wake")
+    rig.lib.load("loadable", "party-wake")
     before = state(rig)
     e = ui_graph.group_edit(rig.panel)
     name = landing.group["name"]
@@ -485,7 +485,7 @@ def test_the_panes_sections_are_the_same_split():
 def test_a_saved_loadable_is_unmoved_by_who_draws_its_params(rig, name):  # noqa: F811
     """Behaviour-neutral: the section and every `dream.*` value read back as
     the file has them, the row ids as they were."""
-    path = CORPUS / "presets" / f"{name}.json"
+    path = CORPUS / "loadable" / f"{name}.json"
     file = json.loads(path.read_text())
     on_graph(rig, name)
     for k, v in file.get("values", {}).items():

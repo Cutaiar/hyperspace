@@ -658,7 +658,7 @@ def test_a_performers_round_off_lights_no_dot(rig):
         now = reg.snapshot()
         moved |= {k for k, v in now.items() if v != ref[k]}
         assert undo.alike(now, ref), name              # …in their last bits only
-        dots = [g for g in ("presets", "view", "fx", "dream", "band") if lib.is_dirty(g)]
+        dots = [g for g in ("loadable", "view", "fx", "dream", "band") if lib.is_dirty(g)]
         assert dots == [] and not lib.project.is_dirty(), name
     assert moved, "no base moved: this rig no longer shows the round-off"
     # a real edit, the smallest there is, on a param the round-off touched

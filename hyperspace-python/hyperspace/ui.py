@@ -727,7 +727,7 @@ META_SECTIONS = ("output", "audio", "analyzer", "hands")
 VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-             "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
+             "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
 
 
 class PageHistory:
@@ -2787,7 +2787,7 @@ class Panel:
         """The Ultraleap hands: live view and setup (hands/panel.py)."""
         ui_hands.page(self, dt)
 
-    def _page_presets(self, dt: float) -> None:
+    def _page_loadable(self, dt: float) -> None:
         """The PRESETS page, 2026-10-28, top to bottom
         (ui_loadable.page): the preset strip — ◀ name ● ▶ · new · save ·
         as… — then every loadable patch as a list that fills the room it has, its
@@ -2795,7 +2795,7 @@ class Panel:
         library's notes. GRAPH's side pane draws it as its loadable patches section
         (ui_pane.py, plan 49)."""
         if self.library is None:
-            self._section("presets")
+            self._section("loadable")
             imgui.text_disabled("no library attached")
             return
         ui_loadable.page(self)
@@ -2814,6 +2814,9 @@ class Panel:
                       "(restart once it is there)"), True)]
         else:
             lines = [(f"library: {root}", False)]
+            said = getattr(lib, "not_moved", "")
+            if said:
+                lines.append((said, True))
         if machine != root:
             lines.append((f"machine: {machine}", False))
         return lines

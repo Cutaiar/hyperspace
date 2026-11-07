@@ -107,6 +107,9 @@ READS = (1, 2)
 # a module preset as it was before plan 50 — `hyperspace.preset/1` with a
 # `group` — read through `forward` as a `/2`, never written
 MODULE_KIND, MODULE_VERSION = "hyperspace.preset", 1
+# plan 57 (FQ4): a whole loadable patch's kind since `/11` (`graphmigrate.LOADABLE_KIND`, restated:
+# tests/test_format_lane.py holds them equal)
+LOADABLE_KIND = "hyperspace.loadable"
 # plan 50: the key that makes a patch one param group's, its value the
 # registry group (``"dream"``). Such a patch holds `values` — and, for a
 # group that lays out its own params (the analyzer's bands, `Library.extra`),
@@ -284,7 +287,8 @@ def shape_of(doc: Mapping) -> str:
     still a group patch's key, and `check` refuses it in one line,
     `GROUP_EMPTY_WORDS`)."""
     kind, version = _schema(doc)
-    if kind == MODULE_KIND and version is not None and version > MODULE_VERSION:
+    if kind == LOADABLE_KIND or (
+            kind == MODULE_KIND and version is not None and version > MODULE_VERSION):
         return LOADABLE_SHAPE
     if GROUP_KEY in doc:
         return GROUP_SHAPE

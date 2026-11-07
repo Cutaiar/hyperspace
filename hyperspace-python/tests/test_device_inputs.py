@@ -283,8 +283,8 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     completes from the APC40 too."""
     r = build(entries())
     lib, t = r.lib, r.table
-    lib.load("presets", lib.list("presets")[0])
-    assert not lib.is_dirty("presets")
+    lib.load("loadable", lib.list("loadable")[0])
+    assert not lib.is_dirty("loadable")
     before = r.path.read_bytes() if r.path.exists() else None
     knob = Binding(f"cc:0:{apc40.DEVICE_KNOBS[7]}", "view.inst_amp", "abs", layer="preset")
     t.bind(knob, write=False)                      # the param's knob on the APC40…
@@ -295,7 +295,7 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
         "cc@launch:0:21", "abs", "preset", None, True)
     assert r.learn.learning is None and "learned view.inst_amp" in r.learn.last
-    assert lib.is_dirty("presets")                                 # into the loadable patch…
+    assert lib.is_dirty("loadable")                                 # into the loadable patch…
     assert (r.path.read_bytes() if r.path.exists() else None) == before   # …not the file
     amp = r.reg["view.inst_amp"]
     for v in (60, 40):                     # soft pickup: crossing the base catches it
@@ -502,11 +502,11 @@ def test_a_pre_run_bindings_json_and_every_loadable_load_quietly_with_two_desks(
     assert all(not b.device for b in t.midi())
     assert len(r.devices.get("apc40").io.bindings) == len(t.midi())
     lib = r.lib
-    for name in lib.list("presets"):
+    for name in lib.list("loadable"):
         lib.loaded_patch.load(name)
         frame(r)
         assert lib.loaded_patch.desk_notes == [], name
-        assert not lib.is_dirty("presets"), name
+        assert not lib.is_dirty("loadable"), name
     assert r.path.read_text() == text                # never rewritten
     assert not r.notes                               # the registry said nothing either
 
@@ -525,10 +525,10 @@ def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build)
     rows = t.of("pad", "hat")
     assert rows and all(not b.device and t.role_of(b) == "pad" for b in rows)
     lib = r.lib
-    for name in lib.list("presets"):
+    for name in lib.list("loadable"):
         lib.loaded_patch.load(name)
         frame(r)
-        assert not lib.is_dirty("presets"), name
+        assert not lib.is_dirty("loadable"), name
     one, two = r.devices.get("pad").io, r.devices.get("p2").io
     faces = r.reg["view.faces"].value                    # pad:A's
     one.frame()

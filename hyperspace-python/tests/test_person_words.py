@@ -34,7 +34,7 @@ SAVED_SHOW_KEY = "a key of a saved show file; goes with the one migration"
 # count and no line numbers: others move lines, and a new use has to come through here.
 LEFT: dict[tuple[str, str], tuple[int, str]] = {
     ("headless.py", "session"): (1, SAVED_SHOW_KEY),
-    ("library.py", "session"): (8, SAVED_SHOW_KEY),
+    ("library.py", "session"): (11, SAVED_SHOW_KEY),
     ("library.py", "rig"): (1, SAVED_SHOW_KEY),
 }
 

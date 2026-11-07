@@ -240,15 +240,15 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
                                                "to": "output.all.image"}]}})
     app.loaded_patch.save_as("six")
     lib = app.lib
-    assert lib.read("presets", "six")["schema"] == M.SAVE_SCHEMA
+    assert lib.read("loadable", "six")["schema"] == M.SAVE_SCHEMA
     kinds = lib._kinds
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)   # (plan 40 T2: /8; plan 43 C2: /9)
     try:
-        kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
-        with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-            lib.read("presets", "six")
+        kinds["loadable"] = replace(kinds["loadable"], versions=(2, 3, 4, 5))
+        with pytest.raises(LibraryError, match="git pull and uv sync"):
+            lib.read("loadable", "six")
     finally:
-        kinds["presets"] = replace(kinds["presets"], versions=loadable.VERSIONS)
+        kinds["loadable"] = replace(kinds["loadable"], versions=loadable.VERSIONS)
 
 
 def test_an_empty_run_is_written_as_frame_to_fx():
@@ -305,8 +305,8 @@ def _values_of(doc: dict) -> dict:
 TESTS = Path(__file__).parent
 LOADABLE_FIXTURES = sorted([*(TESTS / "fixtures" / "presets").glob("*.json"),
                           *(TESTS / "fixtures" / "merge-31-32").glob("*.json")])
-# the corpus: the loadable patches the build once shipped (tests/corpus/presets, one tier)
-CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
+# the corpus: the loadable patches the build once shipped (tests/corpus/loadable, one tier)
+CORPUS_LOADABLES = sorted((CORPUS / "loadable").glob("*.json"))
 # a name that is only ever an old id (V2): `ghost[.n]`, `readout[.n]`,
 # `history`, `media.<c>` (`hands` is the geometry now, not the old layer)
 _OLD_ONLY = r"ghost(\.[0-9]+)?|readout(\.[0-9]+)?|history|media\.[a-h]"
@@ -317,11 +317,11 @@ def loaded(tmp_path: Path, path: Path):
     app is seeded with the corpus), a fixture copied in as a user's loadable patch
     — on the app's presets: (the graph section's spec, its free section,
     the load's notes)."""
-    if path.parent != CORPUS / "presets":
-        (tmp_path / "presets").mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, tmp_path / "presets" / path.name)
+    if path.parent != CORPUS / "loadable":
+        (tmp_path / "loadable").mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, tmp_path / "loadable" / path.name)
     app = make_app(tmp_path)
-    app.lib.load("presets", path.stem)
+    app.lib.load("loadable", path.stem)
     gs = app.loaded_patch.graph
     return gs.spec, gs.free_doc(), list(app.loaded_patch.notes)
 

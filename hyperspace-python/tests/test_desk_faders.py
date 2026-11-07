@@ -42,8 +42,8 @@ SHIFT_TARGETS = (*(f"band.{i}.post" for i in range(6)), "master.dyn", "master.tr
 
 def load_fixture(rig, name="faders.json"):
     lib = rig.loaded_patch.lib
-    (lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURES / name, lib.home / "presets" / name)
+    (lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES / name, lib.home / "loadable" / name)
     lib.loaded_patch.load("FADERS")
     rig.midi.poll()
     return lib
@@ -93,11 +93,11 @@ def test_every_corpus_loadable_leaves_the_faders_dark_and_shift_lights_the_audio
     desk binds no track fader, and each loads with S1–S8 dark on the
     patch layer and the audio strip under SHIFT, with no desk note."""
     lib, t = rig.loaded_patch.lib, rig.midi.table
-    for path in sorted((CORPUS / "presets").glob("*.json")):
+    for path in sorted((CORPUS / "loadable").glob("*.json")):
         desk = json.loads(path.read_text()).get("desk") or []
         assert not [d for d in desk if d["source"].endswith(f":{FADER}")
                     and d["source"].startswith("cc:")], path.name
-    for name in lib.list("presets"):
+    for name in lib.list("loadable"):
         lib.loaded_patch.load(name)
         rig.midi.poll()
         assert lib.loaded_patch.desk_notes == [], name
@@ -124,9 +124,9 @@ def test_a_loadable_with_fader_rows_lights_s1_s8_and_drives_them(rig):
     faders are the audio strip."""
     lib = load_fixture(rig)
     t = rig.midi.table
-    assert lib.current("presets") == "FADERS"
+    assert lib.current("loadable") == "FADERS"
     assert lib.loaded_patch.desk_notes == []
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     assert faders_lit(t) == dict(zip(GLYPHS, TARGETS))
     for k, pid in enumerate(TARGETS):
         push(rig, cc(FADER, at(rig, pid), channel=k))           # picked up where it is

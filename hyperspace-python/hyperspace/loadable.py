@@ -1,5 +1,6 @@
 """The loadable patch — one file that holds everything a performance moment is
-(plan 13 D1, §2.1): ``hyperspace.preset/2``.
+(plan 13 D1, §2.1): ``hyperspace.loadable/11`` since the one migration (plan 57), the
+ladder below it ``hyperspace.preset/2`` to ``/10``.
 
   {"schema": "hyperspace.preset/2", "name": "TRIP", "note": "…",
    "values": {id: base, …},            the patch part (params.PARTS)
@@ -63,7 +64,7 @@ folded in (`ViewState.pose`), and a load **sets** the turn there
 before ``/9``, and every file the migration rewrote: `headless.resave`)
 leaves the turn spinning, as it always did.
 
-One file per loadable patch, ``<library>/presets/<slug>.json`` — one tier, every
+One file per loadable patch, ``<library>/loadable/<slug>.json`` — one tier, every
 loadable patch the user's (2026-10-28: nothing ships, nothing is "factory", nothing
 is hidden). `LoadedPatch` registers the folder with the library as a
 **document kind** (`Library.kind`), so listing, load / save as / delete /
@@ -225,8 +226,11 @@ EYE_SCHEMA = graphmigrate.EYE_SCHEMA
 # plan 44 D3 (rows 611–625): `/10` is `/9` with the look made whole — the
 # hands' and clouds' looks in `values`, the bus cuts in `bus`, no module
 # labels, no desk template — what every save writes
-LOOK_SCHEMA = SAVE_SCHEMA = graphmigrate.LOOK_SCHEMA
-VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10)
+LOOK_SCHEMA = graphmigrate.LOOK_SCHEMA
+# plan 57 (FQ4): `/11` is `/10` under `hyperspace.loadable`: what every save writes
+SAVE_SCHEMA = graphmigrate.ELEVEN_SCHEMA
+KIND = graphmigrate.LOADABLE_KIND
+VERSIONS = (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
 # plan 44 D3: the loadable patch's bus cuts, `{"cut": [{"from", "to"}, …]}` — the
 # meta controller's cables from All outputs into a window that this loadable patch cuts
 # (`graph.BusCuts`); no key: every cable stands
@@ -843,13 +847,13 @@ class LoadedPatch:
         # one library's read through `lib.loaded_patch`, the loadable patches of the deck the
         # panel is on (plan 44 D5a): the first `LoadedPatch` over a library declares
         # them and is that until a pointer takes over
-        self.doc_kind = DocKind(SCHEMA.rpartition("/")[0], tuple(VERSIONS),
+        self.doc_kind = DocKind(KIND, tuple(VERSIONS),
                                 lambda doc, path: self.load_doc(doc, path),
                                 lambda name: self.document(name),
                                 lambda: self.signature(),
                                 lambda doc: dumps(doc))
         if first:
-            base.kind(GROUP, SCHEMA.rpartition("/")[0],
+            base.kind(GROUP, KIND,
                       load=lambda doc, path: base.loaded_patch.load_doc(doc, path),
                       document=lambda name: base.loaded_patch.document(name),
                       signature=lambda: base.loaded_patch.signature(),

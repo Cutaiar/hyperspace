@@ -22,7 +22,7 @@ from hyperspace.deck import Deck
 from hyperspace.ghost import GhostState
 from hyperspace.ghost import register as declare_ghost
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.library import LOADABLE, PROJECT_SUFFIX, PROJECTS, mirrors_apart
+from hyperspace.library import INSTALL_SUFFIX, INSTALLS, LOADABLE, mirrors_apart
 from hyperspace.outputs import Switches as S
 from hyperspace.params import Registry, is_shared_meta_id
 from hyperspace.routing import is_meta_row
@@ -148,7 +148,7 @@ def test_a_show_that_holds_the_old_id_still_opens_clean_and_keeps_it(tmp_path):
     home = tmp_path / "home"
     rig = boot(home)
     put(home, "Glass", graph=TWO_HANDS)
-    show = home / PROJECTS / f"old{PROJECT_SUFFIX}"
+    show = home / INSTALLS / f"old{INSTALL_SUFFIX}"
     show.parent.mkdir(parents=True, exist_ok=True)
     show.write_text(json.dumps({"schema": "hyperspace.project/3", "name": "old", "startup": "Glass",
                                 "bank": ["Glass"], "modules": {},
@@ -163,7 +163,7 @@ def test_a_show_that_holds_the_old_id_still_opens_clean_and_keeps_it(tmp_path):
     assert state.mirror is True
     rig.reg["ghost.mirror"].set(False)
     rig.lib.project.save()
-    assert json.loads(show.read_text())["session"]["ghost.2.mirror"] is True
+    assert "ghost.2.mirror" not in json.loads(show.read_text())["tuning"]    # (plan 58 §9: no more)
 
 
 def test_only_a_mirror_that_differs_is_said():

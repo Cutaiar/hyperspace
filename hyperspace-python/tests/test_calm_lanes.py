@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "tests" / "corpus" / "presets"
+CORPUS = ROOT / "tests" / "corpus" / "loadable"
 
 
 def _tool():
@@ -101,26 +101,26 @@ def test_the_run_writes_as_the_app_writes_and_backs_up_first(tmp_path, monkeypat
     t = _tool()
     home = tmp_path / "home"
     library = tmp_path / "library"
-    (library / "presets").mkdir(parents=True)
+    (library / "loadable").mkdir(parents=True)
     monkeypatch.setenv("HYPERSPACE_HOME", str(home))
     src = json.loads((CORPUS / "party-trip.json").read_text())
     assert any(str(r.get("source", "")).startswith("lane:") for r in src["routes"])
-    (library / "presets" / "party-trip.json").write_text(json.dumps(src, indent=1) + "\n")
+    (library / "loadable" / "party-trip.json").write_text(json.dumps(src, indent=1) + "\n")
     calm_doc = {"schema": "hyperspace.preset/7", "name": "calm", "routes": [
         {"source": "lane:0", "target": "pattern.mod.0", "op": "push", "value": 0.05,
          "motion": dict(SMOOTH)}]}
-    (library / "presets" / "calm.json").write_text(json.dumps(calm_doc, indent=1) + "\n")
-    (library / "presets" / ".party-trip.json.tmp").write_text("{}")
+    (library / "loadable" / "calm.json").write_text(json.dumps(calm_doc, indent=1) + "\n")
+    (library / "loadable" / ".party-trip.json.tmp").write_text("{}")
 
     assert t.main(["--library", str(library)]) == 0
-    assert json.loads((library / "presets" / "party-trip.json").read_text()) == src
+    assert json.loads((library / "loadable" / "party-trip.json").read_text()) == src
     assert not list(home.glob("library-backup-*"))
 
     assert t.main(["--library", str(library), "--apply"]) == 0
     backups = list(home.glob("library-backup-*"))
     assert len(backups) == 1
-    assert json.loads((backups[0] / "presets" / "party-trip.json").read_text()) == src
-    text = (library / "presets" / "party-trip.json").read_text()
+    assert json.loads((backups[0] / "loadable" / "party-trip.json").read_text()) == src
+    text = (library / "loadable" / "party-trip.json").read_text()
     out = json.loads(text)
     assert text == json.dumps(out, indent=1) + "\n"
     for k in src:
@@ -132,8 +132,8 @@ def test_the_run_writes_as_the_app_writes_and_backs_up_first(tmp_path, monkeypat
     others = [r for r in src["routes"] if not str(r["source"]).startswith("lane:")]
     assert [r for r in out["routes"] if not str(r["source"]).startswith("lane:")] == others
     # the already-calm loadable patch and the dot-file were left alone
-    assert json.loads((library / "presets" / "calm.json").read_text()) == calm_doc
-    assert (library / "presets" / ".party-trip.json.tmp").read_text() == "{}"
+    assert json.loads((library / "loadable" / "calm.json").read_text()) == calm_doc
+    assert (library / "loadable" / ".party-trip.json.tmp").read_text() == "{}"
 
 
 @pytest.mark.parametrize("value", [0.12, -0.12, 0.0])

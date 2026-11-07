@@ -14,7 +14,7 @@ the frames render; the wall time each frame took is recorded beside it.
         uv run python tools/dial_demo.py [--out DIR] [--scale 0.5]
 
 (The throwaway home is seeded with the test corpus first — DIAL is
-`tests/corpus/presets/dial.json`; a fresh library ships no loadable patches.)
+`tests/corpus/loadable/dial.json`; a fresh library ships no loadable patches.)
 
 Writes, under --out (default docs/plans/assets/28-gamepad-dial/):
   dial-trace.csv     a row per frame: phase, both sticks, each stick's

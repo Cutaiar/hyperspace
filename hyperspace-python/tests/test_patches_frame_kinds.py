@@ -29,7 +29,7 @@ from hyperspace.library import PATCHES
 from hyperspace.patches import Host, spawn
 from hyperspace.routing import Bindings
 
-CORPUS_LOADABLES = sorted((CORPUS / "presets").glob("*.json"))
+CORPUS_LOADABLES = sorted((CORPUS / "loadable").glob("*.json"))
 # the wired-frame nodes of party-wake a "dream + fx + composite" cut names
 DREAM_CUT = ["render:dream", "render:composite"]
 
@@ -53,7 +53,7 @@ def cut(name: str = "wake", ids=None) -> dict:
 
 
 def on_graph(rig, name: str) -> None:
-    rig.lib.load("presets", name)
+    rig.lib.load("loadable", name)
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
 

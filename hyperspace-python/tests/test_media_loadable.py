@@ -155,7 +155,7 @@ def test_a_media_loadable_and_one_without_are_both_six(rig):
     """Row 394: with media or without, the save is `/6`, with the bins (an
     empty section when none is assigned) and every media-family value."""
     doc = rig.loaded_patch.document("x")
-    assert doc["schema"] == loadable.SAVE_SCHEMA == "hyperspace.preset/10"
+    assert doc["schema"] == loadable.SAVE_SCHEMA == "hyperspace.loadable/11"
     assert doc[loadable.MEDIA_KEY] == {"channels": {}}
     rig.reg.media.assign("a", 0, "shared:loops/tunnel.mp4")
     doc = rig.loaded_patch.document("x")
@@ -204,7 +204,7 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(1)
     path = rig.loaded_patch.save_as("MEDIA")
     text = path.read_text()
-    assert '"schema": "hyperspace.preset/10"' in text
+    assert '"schema": "hyperspace.loadable/11"' in text
     assert '  "a": ["shared:loops/tunnel.mp4", "camera:FaceTime HD Camera"]' in text
     want = m.to_json()
     m.from_json({})
@@ -266,7 +266,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     assert rig.loaded_patch.load("BOTH") == []
     assert real.value == 0.6                       # the file's own new id wins
     # a corpus loadable patch's knob 7 row (party-faces, seeded) lands on the real param
-    seed(rig.home, "presets")
+    seed(rig.home, "loadable")
     rig.loaded_patch.load("party-faces")
     knob =[b for b in rig.router.table.desk() if b.target == "view.bmp_alpha"]
     assert knob and all(reg.real(reg[b.target]) is real for b in knob)
@@ -284,9 +284,9 @@ def test_bad_id_in_bin_is_a_note(rig):
 def test_bins_change_lights_the_dirty_dot(rig):
     rig.loaded_patch.save_as("CLEAN")
     rig.loaded_patch.load("CLEAN")
-    assert not rig.lib.is_dirty("presets")
+    assert not rig.lib.is_dirty("loadable")
     rig.reg.media.assign("e", 2, "local:a.png")
-    assert rig.lib.is_dirty("presets")
+    assert rig.lib.is_dirty("loadable")
 
 
 def test_undo_of_a_slot_change_restores_the_source(tmp_path):

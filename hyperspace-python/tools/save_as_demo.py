@@ -8,7 +8,7 @@ nothing; the desk never overwrites. This builds the app's objects the
 way `tools/undo_demo.py` does — no window, a `MidiIO` over fake ports,
 its clock the demo's own — and prints a transcript: a slot cleared, a
 tap, a hold with every LED velocity the desk is sent and when, the
-footer's line, the files in `<home>/presets`, a second hold onto a full
+footer's line, the files in `<home>/loadable`, a second hold onto a full
 bank, two buttons held at once, the new slot's pad loading it, the
 PRESETS page's "put preset here…" and "clear slot" calls, and a Learn
 the bar refuses.
@@ -82,7 +82,7 @@ def bank(r) -> str:
 
 
 def files(r) -> str:
-    return ", ".join(sorted(p.name for p in (demo.HOME / "presets").glob("*.json"))) or "(none)"
+    return ", ".join(sorted(p.name for p in (demo.HOME / "loadable").glob("*.json"))) or "(none)"
 
 
 def leds(r, since: int, t0: float) -> None:
@@ -120,7 +120,7 @@ def main() -> None:
     r.log = []                                        # (time, message) the desk was sent
     send = r.ports.send
     r.ports.send = lambda m: (r.log.append((r.t, m)), send(m))[1]
-    show = demo.HOME / "projects" / "party.hyp.json"
+    show = demo.HOME / "installs" / "party.json"
 
     say("Hyperspace — save-as on the desk, headless (tools/save_as_demo.py; plan 15 WP4, "
         "decision 29)")
@@ -133,7 +133,7 @@ def main() -> None:
         f"{r.midi.control_name(rows[-1])}  →  {rows[0].target}  op {rows[0].op}  "
         f"layer {rows[0].layer} (None: invariant)")
     say(f"bank: {bank(r)}   (* the loaded one)")
-    say(f"<home>/presets: {files(r)}")
+    say(f"<home>/loadable: {files(r)}")
     say("LED velocities: 0 off · 1 on · 2 blink (a plain button); the clip grid: 1 green · "
         "2 green blink")
 
@@ -143,7 +143,7 @@ def main() -> None:
     say(f"    footer: {footer(r)}")
     say(f"    bank: {bank(r)}")
     say(f"    the show's file now holds: {json.loads(show.read_text())['bank']}")
-    say(f"    ACID is still a preset: {'ACID' in lib.list(LOADABLE)}   <home>/presets: {files(r)}")
+    say(f"    ACID is still a preset: {'ACID' in lib.list(LOADABLE)}   <home>/loadable: {files(r)}")
 
     say()
     say("2. TRIP (pad G1·5), an edit, then a tap on the bar: pressed 0.3 s, let go")
@@ -160,7 +160,7 @@ def main() -> None:
     wait(r, 2.0)
     say("    LEDs (time since the press):")
     leds(r, mark, t0)
-    say(f"    after:  {where(r)}   <home>/presets: {files(r)}")
+    say(f"    after:  {where(r)}   <home>/loadable: {files(r)}")
 
     say()
     say("3. A hold: G6·4 down and kept down")
@@ -179,8 +179,8 @@ def main() -> None:
     leds(r, mark, t0)
     say(f"    bank: {bank(r)}")
     say(f"    the show's file now holds: {json.loads(show.read_text())['bank']}")
-    say(f"    <home>/presets: {files(r)}")
-    doc = json.loads((demo.HOME / "presets" / "trip-2.json").read_text())
+    say(f"    <home>/loadable: {files(r)}")
+    doc = json.loads((demo.HOME / "loadable" / "trip-2.json").read_text())
     say(f"    trip-2.json: name {doc['name']!r}, view.bright {doc['values']['view.bright']:g} "
         f"(the edit); TRIP itself is untouched: "
         f"{lib.read(LOADABLE, 'TRIP')['values']['view.bright']:g}")
@@ -198,22 +198,22 @@ def main() -> None:
     say("    LEDs (time since the press):")
     leds(r, mark, t0)
     say(f"    bank: {bank(r)}")
-    say(f"    <home>/presets: {files(r)}")
+    say(f"    <home>/loadable: {files(r)}")
 
     say()
     say("5. Two buttons held (a hand across G6·2 and G6·3, the second 0.2 s later), "
         "both kept down 3 s")
-    before = len(list((demo.HOME / "presets").glob("*.json")))
+    before = len(list((demo.HOME / "loadable").glob("*.json")))
     down(r, STOP, 1)
     wait(r, 0.2)
     down(r, STOP, 2)
     wait(r, 3.0)
     up(r, STOP, 1, 2)
     wait(r, 1.0)
-    after = len(list((demo.HOME / "presets").glob("*.json")))
+    after = len(list((demo.HOME / "loadable").glob("*.json")))
     say(f"    {where(r)}   new files: {after - before}")
     say(f"    footer: {footer(r)}")
-    say(f"    <home>/presets: {files(r)}")
+    say(f"    <home>/loadable: {files(r)}")
 
     say()
     say("6. The new slot's pad: G1·1 (TUMBLE), then G1·6")
@@ -253,7 +253,7 @@ def main() -> None:
 
     say()
     say("8. A Learn armed on a param, then a button of the bar held: refused (invariant, D6)")
-    count = len(list((demo.HOME / "presets").glob("*.json")))
+    count = len(list((demo.HOME / "loadable").glob("*.json")))
     r.learn.arm("view.depth4")
     down(r, STOP, 4)
     wait(r, 1.0)

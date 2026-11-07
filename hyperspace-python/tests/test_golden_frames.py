@@ -438,7 +438,7 @@ def test_every_loadable_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, 
     seven = tmp_path / "seven" / f"{slug}.json"
     seven.parent.mkdir()
     seven.write_bytes(raw)
-    assert json.loads(raw)["schema"] == "hyperspace.preset/10", slug
+    assert json.loads(raw)["schema"] == "hyperspace.loadable/11", slug
     if slug in _SHIPPED_FIXTURES:
         got, _ = tool.picture(seven, slug=slug, states=tool.SHIPPED)
         assert got == tool.picture(path, slug=slug, states=tool.SHIPPED)[0], slug

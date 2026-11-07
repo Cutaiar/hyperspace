@@ -295,8 +295,8 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
     assert src["schema"] == "hyperspace.preset/7"
     spec, saved = None, None
     for home in (tmp_path / "a", tmp_path / "b"):
-        (home / "presets").mkdir(parents=True, exist_ok=True)
-        (home / "presets" / FIXTURE.name).write_text(saved or FIXTURE.read_text())
+        (home / "loadable").mkdir(parents=True, exist_ok=True)
+        (home / "loadable" / FIXTURE.name).write_text(saved or FIXTURE.read_text())
         r = boot(home)
         r.loaded_patch.load("segment-motion")
         got = r.loaded_patch.graph.spec
@@ -311,7 +311,7 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
         spec = got
         saved = r.loaded_patch.save_as("segment-motion").read_text()
         doc = json.loads(saved)
-        assert doc["schema"] == "hyperspace.preset/10"
+        assert doc["schema"] == "hyperspace.loadable/11"
         assert {"kind": "segment"} in doc["graph"]["nodes"]
         assert doc["values"]["segment.mode"] == 1
 
@@ -320,8 +320,8 @@ def test_a_new_loadable_holds_no_segment_values(tmp_path):
     from test_loadable import boot
 
     home = tmp_path / "h"
-    (home / "presets").mkdir(parents=True)
-    (home / "presets" / FIXTURE.name).write_text(FIXTURE.read_text())
+    (home / "loadable").mkdir(parents=True)
+    (home / "loadable" / FIXTURE.name).write_text(FIXTURE.read_text())
     r = boot(home)
     r.loaded_patch.load("segment-motion")
     r.loaded_patch.new()

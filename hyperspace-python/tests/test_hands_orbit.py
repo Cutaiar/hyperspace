@@ -786,7 +786,7 @@ def test_a_save_has_the_row_and_the_turned_camera(deck, tmp_path):
     Run(deck, tmp_path, script, steps=deck.undo)
     path = deck.loaded_patch.save_as("ORBIT")
     doc = json.loads(path.read_text())
-    assert doc["schema"].endswith("/10")                  # no schema move
+    assert doc["schema"].endswith("/11")                  # no schema move
     assert doc["values"]["camera.yaw"] == pytest.approx(math.radians(30.0), abs=0.01)
     assert {"source": YAW, "target": "camera.yaw", "op": TURN_OP, "when": GRAB}.items() <= next(
         r for r in doc["routes"] if r["target"] == "camera.yaw").items()

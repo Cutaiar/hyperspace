@@ -58,7 +58,7 @@ from hyperspace.routing import (
     meta_row_refusal,
 )
 
-CORPUS = Path(__file__).parent / "corpus" / "presets"
+CORPUS = Path(__file__).parent / "corpus" / "loadable"
 SIZE = (160, 100)
 T = 7.0
 
@@ -577,7 +577,7 @@ def test_the_frame_is_under_a_popup_and_out_of_panel_graph(shell_rig, monkeypatc
 
 
 def _on_party(rig):
-    seed(rig.lib.home, "presets")
+    seed(rig.lib.home, "loadable")
     return _party(rig)
 
 

@@ -37,7 +37,7 @@ The default is a **dry run**: one line per loadable patch with what would change
 ``--apply`` first copies the whole library folder to
 ``~/Hyperspace/library-backup-<stamp>/`` (the machine's home, never
 inside the library; `migrate_library.backup`) and says where, then
-writes. The test corpus (``tests/corpus/presets``) is test data behind
+writes. The test corpus (``tests/corpus/loadable``) is test data behind
 the goldens and is never touched by this tool.
 """
 
