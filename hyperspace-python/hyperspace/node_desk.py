@@ -1,0 +1,313 @@
+"""Node mode on a desk (plan 53 N1a): the rows `nodemode` says, per player and per `Deck`.
+
+The owner, 2026-11-04: a controller points at one node, "its degrees of freedom filled
+by that node's params", saved in the loadable patch, with no latch and no paging. So this
+holds nothing of its own to save: each `Deck`'s table has a `NodeDesk`
+(`Bindings.node_desk`), which reads what that deck's loadable patch points where
+(`LoadedPatch.node_mode`) and derives the rows (`nodemode.fill`), the same objects until
+what they say moves. A row's state (its catch, its last ring) is kept on it.
+
+**Whose rows.** A saved entry names a player and a kind, so the rows are for that player's
+first MIDI controller (`controller_of`), read on this deck's table: a desk reads the table
+of the deck its pointer is on (`MidiIO.table`), so a desk on the other `Deck` is not reached,
+and the rows it would have wait, drawn dormant (`on_here`). A load moves no pointer: the
+patch says where a player points, and the meta controller says where the player is.
+
+**Choosing the `Deck`.** `enter` is the panel's verb: it is run on the deck the panel looks
+at, an edit of that patch, and it brings the controller there (one controller points at one
+patch at a time, and mapping it elsewhere moves it, plan 55). Its player's duty stays;
+moving the player brings it back. Undoing the edit does not move the controller: the
+pointer is the meta controller's, the undo stack the patch's.
+
+**The layers.** They are patch-layer rows on the deck's own registry, so:
+- under SHIFT the global layer is as it was (`Bindings.dispatch`, `active`);
+- a saved patch-layer row on a control they fill is shadowed while they stand, and comes
+  back when they go; a control they do not fill keeps its row;
+- a meta param is none of them (`nodemode.fillable`, `routing.meta_refusal`);
+- they are in no `bindings`, so not in the file, the dirty dot or `routes()`; a learn takes
+  their control freely (`is_invariant` does not read them), and a pair's consent (row 754)
+  does not ask about them, since no one made them.
+
+A mapping stays, whoever's: a row from any controller on one of the node's params keeps it
+out of the fill.
+
+**A modulator gives way, and comes back** (the owner, 2026-11-06, row 711): "we need to have
+LFOs and audio routes be allowed to be overwritten for node mode, as long as they come back when
+you disengage node mode." So a route from an LFO, an envelope, an analyzer lane, the sequencer or
+a modifier does not keep its param from filling, and while a desk here holds that param
+(`holding`) the route does not run: the knob is the param. `Router` leaves it out of its plan;
+nothing edits the saved route, so a leave, an undo, a re-point or a load is the route back, and
+the file holds what it held. A desk that does not act here holds nothing, so the modulators run:
+one on the other `Deck`, or one that is not plugged in. SHIFT does not let go: a held key is no
+reason for the look to jump. A branch to keep them is future work ("not important enough yet").
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from . import nodemode
+from .devices import MidiDevice
+from .routing import Binding
+from .routing_sources import qualified
+
+KIND = "midi"                  # what a saved entry's `controller` says of a desk
+
+NOT_FIRST = "{role} is player {player}'s second desk: a patch points at a player's first"
+NO_SHAPE = "{role} has no known knobs or faders to fill"
+
+
+def _address(source: str, qualifier: str) -> str:
+    """A bare source, as this desk's rows spell it."""
+    scheme, _, rest = source.partition(":")
+    return f"{qualified(scheme, qualifier)}:{rest}"
+
+
+def same_control(a: Binding | str, b: Binding) -> bool:
+    """Are these one physical control of one desk? Their qualifiers have been settled by
+    the caller (`Bindings.serves`): a first desk's row may spell its own role or none."""
+    bare = a if isinstance(a, str) else a.bare
+    return Binding(bare, "").overlaps(Binding(b.bare, ""))
+
+
+def profile_of(devices, role: str):
+    """The MIDI profile module of the desk `role`, None for a role with none. `midi.PROFILES`,
+    asked for here because `midi` (and mido) is imported only once a desk opens."""
+    from .midi import PROFILES
+    return PROFILES.get(getattr(devices.get(role), "profile", ""))
+
+
+def freedoms_of(profile) -> list[tuple[str, ...]]:
+    """What a MIDI profile's desk has to fill: none for a desk of unknown shape."""
+    fn = getattr(profile, "degrees_of_freedom", None)
+    return fn() if fn is not None else []
+
+
+@dataclass
+class Row(Binding):
+    """A derived row: `words`, what the on-screen desk says of it. Never saved."""
+
+    words: str = ""
+
+
+@dataclass
+class _Now:
+    """One desk's rows on one deck."""
+
+    key: tuple | None = None
+    node: str | None = None
+    player: int = 0
+    fit: nodemode.Fit = field(default_factory=nodemode.Fit)
+    rows: list[Binding] = field(default_factory=list)
+    serial: int = 0
+
+
+@dataclass(frozen=True)
+class Held:
+    """A desk a patch can point: its role, its player, the node it is on here (None:
+    none), and whether the desk is on this `Deck` now."""
+
+    role: str
+    player: int
+    node: str | None
+    on_here: bool
+    fit: nodemode.Fit
+    rows: tuple[Binding, ...]
+
+
+class NodeDesk:
+    """A `Deck`'s derived desk rows. It reads the deck's loadable patch, registry and
+    table, and only asks the meta controller who holds what and where it is."""
+
+    def __init__(self, deck, devices, meta):
+        self.deck = deck
+        self.devices = devices      # `DeviceRegistry`
+        self.meta = meta            # `MetaController`: who holds what, and where it is
+        self._now: dict[str, _Now] = {}
+
+    # ---- who ----
+
+    def _desks(self) -> list[MidiDevice]:
+        """The desks that are open or could be (an entry switched off is no `MidiDevice`),
+        in the order that makes one first: `DeviceRegistry.midi_roles`, whose first is the
+        desk the bindings were written for, so a generic box listed above the APC40 is
+        not its player's first desk."""
+        desks = {d.role: d for d in self.devices.devices if isinstance(d, MidiDevice)}
+        return [desks[r] for r in self.devices.midi_roles() if r in desks]
+
+    def player_of(self, role: str) -> int:
+        return self.meta.players.player_of(role).number
+
+    def is_first(self, role: str) -> bool:
+        """Is `role` its player's first desk listed, the one a saved entry reaches?"""
+        n = self.player_of(role)
+        return next((d.role for d in self._desks() if self.player_of(d.role) == n), None) == role
+
+    def on_here(self, role: str) -> bool:
+        return self.meta.pointer(role).deck is self.deck
+
+    def _profile(self, role: str):
+        return profile_of(self.devices, role)
+
+    # ---- the rows ----
+
+    def _free(self, role: str, wanted: set[str], freedoms) -> list[tuple[str, ...]]:
+        """The freedoms a row here would really be reached on, by `dispatch`'s own rule:
+        not a control held above the layers on any channel it can arrive on
+        (`Bindings.above_layers`), and not one of this desk's patch-layer rows on the
+        node's params, which stay, on every control they name (an any-channel row on the
+        faders stays on all eight). The desk's other patch-layer rows give way."""
+        t = self.deck.table
+        kept = [b for b in t.bindings if b.enabled and b.is_midi and b.layer == "preset"
+                and b.target in wanted and t.serves(role, b)]
+        pool = [b for b in t.bindings if b.is_midi and b.layer is None]     # (asked ~150 times)
+        out = []
+        for f in freedoms:
+            probe = Binding(f[0], "")
+            channels = range(16) if probe.channel is None else (probe.channel,)
+            if not any(same_control(f[0], b) for b in kept) and all(
+                    t.above_layers(probe.kind, ch, probe.number, role, pool) is None
+                    for ch in channels):
+                out.append(f)
+        return out
+
+    def _kept(self, wanted: set[str]) -> list[tuple[str, str]]:
+        """Any controller's enabled row on the node's params: `fill` keeps those params
+        out. With no source, since `_free` has settled which freedoms are taken (a pad's
+        row takes no knob, and a SHIFT layer row takes no patch-layer control)."""
+        return [("", b.target) for b in self.deck.table.bindings
+                if b.enabled and not b.is_sink and not b.is_modulator_route
+                and b.target in wanted]
+
+    def _follow(self, role: str) -> _Now:
+        """`role`'s rows, derived again only when what they are made of moved."""
+        now = self._now.setdefault(role, _Now())
+        deck, t = self.deck, self.deck.table
+        player = self.player_of(role)
+        node = deck.loaded_patch.node_mode.of(player, KIND) if self.is_first(role) else None
+        key = (node, player, getattr(deck.reg, "serial", 0), id(t.bindings), len(t.bindings),
+               t.rows_serial, t.desk_serial, getattr(t, "redraw_serial", 0),
+               getattr(self.devices.get(role), "profile", ""), t.is_primary(role))
+        if key == now.key:
+            return now
+        now.key, now.node, now.player = key, node, player
+        fit, rows = nodemode.Fit(), []
+        if node is not None:
+            freedoms = freedoms_of(self._profile(role))
+            params = nodemode.fillable(deck.reg, deck.loaded_patch.node_params(node))
+            wanted = set(params)
+            fit = nodemode.fill(params, self._free(role, wanted, freedoms), self._kept(wanted))
+            rows = self._rows_of(role, fit, now.rows)
+        if [(b.source, b.target) for b in rows] != [(b.source, b.target) for b in now.rows]:
+            now.serial += 1
+        now.fit, now.rows = fit, rows
+        return now
+
+    def _rows_of(self, role: str, fit: nodemode.Fit, had: list[Binding]) -> list[Binding]:
+        """The rows of `fit`, keeping each one that says the same (its catch, its ring)."""
+        t, reg = self.deck.table, self.deck.reg
+        q = "" if t.is_primary(role) else role
+        keep = {(b.source, b.target): b for b in had}
+        profile = self._profile(role)
+        out = []
+        for slot in fit.slots:
+            source = _address(slot.sources[0], q)
+            b = keep.get((source, slot.param))
+            if b is None:
+                b = Row(source, slot.param, "abs", layer="preset",
+                        words=reg[slot.param].label or slot.param)
+                b.feedback_from(profile)
+            out.append(b)
+        return out
+
+    def _role(self, role: str | None) -> str:
+        return role or self.deck.table.primary_role()
+
+    def rows(self, role: str | None = None) -> list[Binding]:
+        role = self._role(role)
+        return self._follow(role).rows if role else []
+
+    def serial(self, role: str | None = None) -> int:
+        role = self._role(role)
+        return self._follow(role).serial if role else 0
+
+    def holding(self) -> frozenset[str]:
+        """The params a desk acting on this `Deck` holds now: filled, its rows the ones a
+        message reaches. Read each frame by `Router._modgraph_key`."""
+        out: set[str] = set()
+        for d in self._desks():
+            if self.is_first(d.role) and self.on_here(d.role) and getattr(d.io, "on", False):
+                out.update(b.target for b in self._follow(d.role).rows)
+        return frozenset(out)
+
+    def under(self, b: Binding) -> bool:
+        """Is saved row `b` shadowed by a row of node mode now (a patch-layer row on a
+        control they fill)? It does not act until they go."""
+        if not b.is_midi or b.layer != "preset":
+            return False
+        role = self.deck.table.role_of(b) or None
+        rows = self.rows(role)
+        if not rows:
+            return False
+        # `Bindings.dispatch`'s rule, for each control the row names: an any-channel row
+        # on the eight faders still fires from a fader node mode has not filled
+        controls = getattr(self._profile(self._role(role)), "controls", None)
+        names = [c.source for c in controls(b.bare)] if controls is not None else []
+
+        def taken(source: str) -> bool:
+            probe = Binding(source, "")
+            if probe.kind is None:
+                return False
+            if probe.channel is None:
+                return any(x.kind == probe.kind and x.number == probe.number
+                           and x.channel is None for x in rows)
+            return any(x.matches(probe.kind, probe.channel, probe.number) for x in rows)
+        return all(taken(s) for s in names or [b.bare])
+
+    def held(self) -> list[Held]:
+        """Every desk this patch can point, in list order: a player's first of each."""
+        out = []
+        for d in self._desks():
+            if self.is_first(d.role):
+                now = self._follow(d.role)
+                out.append(Held(d.role, now.player, now.node, self.on_here(d.role), now.fit,
+                                tuple(now.rows)))
+        return out
+
+    # ---- the panel's verbs: edits of this deck's patch ----
+
+    def refusal(self, role: str, node: str | None) -> str | None:
+        """Why desk `role` may not enter node mode on `node`, or None."""
+        if not self.is_first(role):
+            return NOT_FIRST.format(role=role, player=self.player_of(role))
+        if not freedoms_of(self._profile(role)):
+            return NO_SHAPE.format(role=role)
+        patch = self.deck.loaded_patch
+        return nodemode.enter_refusal(self.deck.reg, node,
+                                      patch.node_params(node) if node else ())
+
+    def enter(self, role: str, node: str | None) -> str | None:
+        """Desk `role` on `node` of this deck's patch: one undo step of it, the dot lit,
+        and the desk is brought here. Another node just switches. Why not, in words."""
+        why = self.refusal(role, node)
+        if why is None:
+            why = self.deck.loaded_patch.point_node_mode(self.player_of(role), KIND, node)
+        if why is None:
+            self.meta.point(role, self.deck)
+        return why
+
+    def leave(self, role: str) -> None:
+        """Desk `role` off its node here, an edit too. It stays on this `Deck`."""
+        self.deck.loaded_patch.leave_node_mode(self.player_of(role), KIND)
+
+    def key(self) -> tuple[Any, ...]:
+        """What a drawing of these rows is made of, for `graphview.key`."""
+        return tuple((h.role, h.player, h.node, h.on_here,
+                      tuple((b.source, b.target) for b in h.rows)) for h in self.held())
+
+
+def install(meta, devices) -> None:
+    """A `NodeDesk` on each of the two `Deck`s' tables (`app.main`)."""
+    for deck in meta.decks:
+        deck.table.node_desk = NodeDesk(deck, devices, meta)

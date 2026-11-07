@@ -209,6 +209,17 @@ def feedback_for(kind: str, channel: int, number: int) -> dict | None:
     return None
 
 
+def degrees_of_freedom() -> list[tuple[str, ...]]:
+    """What node mode fills (N1a, as `gamepad.degrees_of_freedom`), in order: the
+    track knobs, the device knobs, the track faders. Knobs first, since a ring says
+    where a param is and re-bases the knob onto it; a fader has to be brought to it.
+    MASTER and the crossfader are the meta controller's (`META_CONTROLS`), and CUE
+    is a relative encoder, so neither is here. Spelled as the factory rows are."""
+    return [*((f"cc:0:{n}",) for n in TRACK_KNOBS),
+            *((f"cc:*:{n}",) for n in DEVICE_KNOBS),
+            *((f"cc:{k}:{CC_FADER}",) for k in range(8))]
+
+
 def blink_of(number: int, on: int) -> int:
     """The velocity that blinks a button's LED, from the row's "on"
     velocity (the protocol table in the module docstring): on the clip
