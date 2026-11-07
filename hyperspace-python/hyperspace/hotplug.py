@@ -700,6 +700,14 @@ class Hotplug:
         was = self._ctrl_spots.get(key)
         spot = dict(zip("xywh", was, strict=True)) if was else None
         rect = self._where("control", self.control_size, keys[key], spot)
+        if was is None:
+            # a display it's never been on: all of it there. A launch lets a window overhang, but
+            # in an accident the pinned panel has to be reachable, its foot too. Where it was on
+            # a display it's been on is the operator's, overhang or not
+            x, y, w, h = rect
+            s = self.screens[keys[key]]
+            w, h = min(int(w), s.w), min(int(h), s.h)
+            rect = (min(max(int(x), s.x), s.x + s.w - w), min(max(int(y), s.y), s.y + s.h - h), w, h)
         g = self.glfw
         g.set_window_pos(self.ctrl_win, int(rect[0]), int(rect[1]))
         g.set_window_size(self.ctrl_win, int(rect[2]), int(rect[3]))

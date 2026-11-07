@@ -3060,7 +3060,7 @@ to the mix is V3's.
 
 ## 14. Outputs
 
-**A display can come and go with no restart** (`hotplug.py`, rows 808–811): which display shows what is its row's (`displays.py`), and what's below about the config is its seed. A row's target acts at once. A display gone has its window hidden at once and closed after `[output] unplug_hold_s`, and its job comes back with it.
+**A display can come and go with no restart** (`hotplug.py`, rows 813–816): which display shows what is its row's (`displays.py`), and what's below about the config is its seed. A row's target acts at once. A display gone has its window hidden at once and closed after `[output] unplug_hold_s`, and its job comes back with it.
 
 **One output** by default: the render window, from `[output] monitor` /
 `fullscreen`. **Several** from `[[output.screens]]` (§5), up to four

@@ -8528,7 +8528,7 @@ Since SC3b (group DO) a change of target acts at once, so the ⌘R below is only
 
 **628. Two with one name.** (two identical TVs) They read "TV #1" and "TV #2", left to right. Swap their cables and ⌘R: each position keeps its job. Unplug one and ⌘R: the row left is the first's job. A window dragged on a display and left there comes back to that spot.
 
-## DO. A display coming and going (SC3b, rows 808–811)
+## DO. A display coming and going (SC3b, rows 813–816)
 
 **Do these first in this group, and nothing about hot-plug is done until 629 has passed.** Every number so far came from a private virtual display on a locked Mac, with no cable, no TV and no one watching. RT1 waits for 629.
 

@@ -16,7 +16,7 @@ from imgui_bundle import imgui
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import app, config, hotplug, placement, ui_displays
+from hyperspace import app, config, hotplug, placement, ui, ui_displays
 from hyperspace.displays import CONTROL, DisplayList, Running, row, wanted
 from hyperspace.hotplug import HOLD_S, LOOK_S, REOPEN_S, SETTLE_S, Hotplug
 from hyperspace.outputs import Offscreen, Root, Slot
@@ -439,6 +439,28 @@ def test_the_display_it_left_coming_and_going_before_settling_raises_nothing(rig
     r.g.plug(laptop)
     r.run_for(SETTLE_S)
     assert r.on(r.ctrl, laptop) and r.plug._ctrl_left == ""
+
+
+def test_the_control_window_fits_a_smaller_display_and_the_pinned_panel_with_it(rig):
+    """`Panel.panel_rect` follows the OS window every frame (row 808), so the move has to leave a
+    window that fits: its full 2372 × 900 on a 1280 × 720 display, and the panel is off the edge."""
+    small = Mon("Small", (1728, 0, 1280, 720), 5)
+    r = rig(mons=[_laptop(), small], rows={"Built-in": row(CONTROL)})
+    laptop = r.g.mons[0]
+    r.g.set_window_pos(r.ctrl, 10, 10)
+    r.g.set_window_size(r.ctrl, 1700, 1000)
+    r.run_for(1.2)
+    r.g.unplug(laptop)
+    r.run_for(HOLD_S + 0.1)
+    x, y = r.g.get_window_pos(r.ctrl)
+    w, h = r.g.get_window_size(r.ctrl)
+    assert r.on(r.ctrl, small) and x >= small.rect[0] and x + w <= small.rect[0] + 1280 and y + h <= 720
+    for desk, pad in ((False, False), (True, False), (False, True), (True, True)):
+        px, py, pw, ph = ui.panel_rect((w, h), desk, pad)
+        assert 0 <= px and px + pw <= w and 0 <= py and py + ph <= h and pw > 0 and ph > 0
+    r.g.plug(laptop)
+    r.run_for(SETTLE_S)
+    assert r.g.get_window_size(r.ctrl) == (1700, 1000), "and its own size, back on its own"
 
 
 def test_the_control_window_floats_over_a_render_with_nowhere_free(rig, monkeypatch):
