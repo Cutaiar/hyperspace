@@ -1,10 +1,10 @@
 """The output section's rows (wave 5 SC2): one per connected display, each choosing what
 targets it, with its fullscreen and flips. Not a dropdown of screens: the owner, 2026-11-06.
 
-What the rows are, and the file they go to, is `displays.py`. A change of target acts on ⌘R
-until SC3b, and the section says so; fullscreen and flips act at once on a window that's open
-there. Nothing here touches the disk or a window system's list but `Running.screens`, drawn only
-while the section is.
+What the rows are, and the file they go to, is `displays.py`. A change of target acts at once
+(`hotplug.py`, at the next frame), and so do fullscreen and flips on a window that's open there.
+Nothing here touches the disk or a window system's list but `Running.screens`, drawn only while
+the section is.
 """
 
 from __future__ import annotations
@@ -13,16 +13,17 @@ from imgui_bundle import imgui
 
 from . import displays, placement, ui
 from .displays import CONTROL, NOTHING, Running
+from .hotplug import OTHER_MAC
 
 TIP_TARGET = ("What this display shows: the control window, an output, or nothing. A display has "
               "one target; an output may go to several displays; the control window goes to one. "
               "Both Macs share this, each display remembering its job by name. A change of "
-              "target acts on ⌘R.")
+              "target acts at once. Unplug a display and its job comes back with it.")
 TIP_FULLSCREEN = ("Borderless, covering this display. No video-mode switch. It covers the control "
                   "window too, if that's on this display.")
 TIP_FLIP = ("Mirrors the whole picture on this display, for a glass that reflects it. Each display "
             "of an output has its own.")
-ON_RESTART = "⌘R to apply: "
+TIP_TAKE = "What the other Mac chose for a display here. It waits for you, as it would move a window."
 NO_RENDER = "No display shows an output: the picture is only on GRAPH."
 
 
@@ -114,23 +115,31 @@ def _row(panel, run: Running, k: int, tag: str, connected: list[str]) -> None:
 
 
 def section(panel, run: Running) -> None:
-    """Every connected display, across the desk, and what's waiting."""
+    """Every connected display, across the desk, and what's going on with them."""
     scr = run.screens()
     if not scr:
         imgui.text_disabled("no display says it's connected")
         return
-    tags = placement.labels(scr)
+    tags = run.labels(scr)
     connected = [tags[i] for i in placement.arranged(scr)]
     for k, tag in enumerate(connected):
         _row(panel, run, k, tag, connected)
     if run.store.said:
         _warn(run.store.said)
-    want = displays.wanted(run.store.current, scr)
+    want = displays.wanted(run.store.current, scr, tags)
     if not want.renders:
         _warn(NO_RENDER)
     for note in want.notes:
         _warn(note)
-    waiting = displays.pending(run.store.current, scr, run.opened)
-    if waiting:
-        _warn(ON_RESTART + ", ".join(f"{tag} shows {words(t, run.slots)}" for tag, t in waiting))
+    plug = run.plug
+    if plug is not None:
+        for line in plug.lines():
+            _warn(line)
+        waiting = plug.others_chose()
+        if waiting:
+            _warn(OTHER_MAC + ", ".join(f"{tag} shows {words(t, run.slots)}" for tag, t in waiting))
+            if ui.chip("take it##display.others"):
+                plug.take_others()
+            if imgui.is_item_hovered():
+                ui.tooltip(TIP_TAKE)
     imgui.dummy(imgui.ImVec2(0, 2))

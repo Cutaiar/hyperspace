@@ -98,6 +98,7 @@ from .deck import KEYS, MOUSE, Deck, DeckHooksMade, Fade, MetaController, Mix, r
 from .devicelist import DeviceList
 from .displays import DisplayList, Running, Wanted, opened_of, wanted
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
+from .hotplug import Hotplug
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library
@@ -336,7 +337,7 @@ def _restart(audio, adapters, impl, ctrl_win, save=None, windows=()) -> None:
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
-def _save_windows(home, render_win, ctrl_win, output, more=(), slots=()) -> None:
+def _save_windows(home, render_win, ctrl_win, output, more=(), slots=(), away=None) -> None:
     """Remember where the windows are, in <home>/windows.json
     (placement.py) — on quit and on restart only. Always the *windowed*
     rect: a fullscreen or overlay render window is remembered by the rect
@@ -345,7 +346,7 @@ def _save_windows(home, render_win, ctrl_win, output, more=(), slots=()) -> None
     (plan 21 WP3), None for one not opened this run — its old entry is
     kept, as a minimised window's is. `slots`: every window's spot again, by
     the display it's on (`placement.spot`, SC2). `render_win` None: output 1 has
-    no display this run."""
+    no display this run. `away`: where windows closed or held were (`Hotplug.away_spots`)."""
     def minimised(win) -> bool:
         return bool(glfw.get_window_attrib(win, glfw.ICONIFIED))
 
@@ -358,7 +359,7 @@ def _save_windows(home, render_win, ctrl_win, output, more=(), slots=()) -> None
     render = [rect_of(output) if render_win is not None else None, *(rect_of(o) for o in more)]
     spots = {sl.display: rect_of(sl.output) for sl in slots if sl.opened and sl.display}
     spots.update({a.display: rect_of(a.output) for sl in slots for a in sl.also})
-    placement.save(home, control, render, placement.screens(glfw), spots)
+    placement.save(home, control, render, placement.screens(glfw), spots, away)
 
 
 def _slots(cfg: dict | None, scr: list | None = None, notes: list | None = None) -> list[Slot]:
@@ -523,11 +524,11 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     `want` (SC2): what the display rows say, in place of the config's screens: where
     each opens and whether it does. Output 1 too: with no display it has no window. The
     config then says only each output's name, mutes, dim and what it publishes. With no
-    `want` (`--laptop`), or no screens to want them on, the config says as before."""
+    screens at all, none has a window, until one comes (SC3b). With no `want` (`--laptop`), the
+    config says as before."""
     scr = placement.screens(glfw)
     oc = (cfg or {}).get("output", {})
     oc = oc if isinstance(oc, dict) else {}
-    want = want if scr else None
     if want is not None:
         one = want.renders.get(1)
         oc["monitor"] = one[0].index if one else -1
@@ -721,6 +722,12 @@ def _promote(slot: Slot, also: Also) -> None:
     slot.win, slot.presenter, slot.display = also.win, also.presenter, also.display
     slot.monitor, slot.fullscreen, slot.missing = also.monitor, also.fullscreen, ""
     slot.switches.flip_x, slot.switches.flip_y = also.flip_x, also.flip_y
+
+
+def _outputs_now(slots: list[Slot]) -> list:
+    """Every open window's `Output`, output 1's first: applied once a frame."""
+    return [*(sl.output for sl in slots if sl.output is not None),
+            *(a.output for sl in slots for a in sl.also)]
 
 
 def _slot_windows(slots: list[Slot]) -> list:
@@ -940,7 +947,8 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
     pacer.choose(_slot_windows(presented), root.win)
     # output 1's own size and DPI (a 1080p projector next to a retina laptop); with no display
     # on it, the first that shows anything's, each frame: a window goes fullscreen, or is moved
-    measured = first if first.opened else next(iter(presented), None)
+    # (a display that dropped a moment ago may be back: nothing resizes for it yet, SC3b)
+    measured = None if root.hold_size else first if first.opened else next(iter(presented), None)
     if measured is not None:
         root.measure(glfw.get_window_size(measured.win), glfw.get_framebuffer_size(measured.win))
     w, h = root.logical
@@ -1010,14 +1018,21 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
         for sl, v in sorted(shown, key=lambda p: p[0].win is pacer.owner):
             # output 1's picture is already whole on the frame target: flip, hands,
             # mix and dim are in it, so its window only shows it, 1:1
-            ho = (Handoff(root.frame.tex, (fbw, fbh), (0, 0, fbw, fbh), bg_alpha=v.bg_alpha)
-                  if sl is first else v.handoff)
+            ho, size = v.handoff, sl.size
+            if sl is first:
+                rect = (0, 0, fbw, fbh)
+                if root.hold_size:
+                    # its first display is away a moment: this one shows the frame in its own shape
+                    wx, wy = glfw.get_framebuffer_size(sl.win)
+                    size = (int(wx), int(wy))
+                    rect = fit((fbw, fbh), size)
+                ho = Handoff(root.frame.tex, (fbw, fbh), rect, bg_alpha=v.bg_alpha)
             sl.error = v.error
-            if v.exc is not None or ho is None or sl.size[0] <= 0 or sl.size[1] <= 0:
+            if v.exc is not None or ho is None or size[0] <= 0 or size[1] <= 0:
                 continue                # a failed or empty picture: it holds what it shows
             try:
                 glfw.make_context_current(sl.win)
-                sl.presenter.present(ho, sl.size)
+                sl.presenter.present(ho, size)
                 glfw.swap_buffers(sl.win)
                 if sl.win is pacer.owner:
                     pacer.swapped()
@@ -1209,7 +1224,7 @@ class Keys:
 
     def __init__(self, render_win, ctrl_win, more=()):
         self.render_win, self.ctrl_win = render_win, ctrl_win
-        self.more = tuple(more)     # every other render window (plan 21 WP3, SC2)
+        self.more = tuple(more)     # every other render window (plan 21 WP3, SC2); SC3b keeps both
         self.typing = False
         self.prev: dict[int, bool] = {}
         self.down_since: dict[int, float] = {}
@@ -1268,7 +1283,21 @@ class Mouse:
         self.drag = {"btn": None, "x": 0.0, "y": 0.0}
         self._wheel = 0.0
         if win is not None:         # (no display shows output 1: nothing to orbit from, SC2)
-            glfw.set_scroll_callback(win, self._on_scroll)
+            self._listen(win)
+
+    def aim(self, win) -> None:
+        """Output 1's window now (SC3b: its display came or went); a drag under way ends."""
+        if win is self.win:
+            return
+        self.win = win
+        self.drag = {"btn": None, "x": 0.0, "y": 0.0}
+        if win is not None:
+            self._listen(win)
+
+    def _listen(self, win) -> None:
+        """The wheel over `win`, while it's output 1's. A window that stops being one may be alive
+        as a further display, and one may be destroyed, so it's filtered, never cleared."""
+        glfw.set_scroll_callback(win, lambda w, dx, dy: self._on_scroll(w, dx, dy) if self.win is win else None)
 
     def use(self, reg: Registry, view: ViewState) -> None:
         """The camera params it writes and the view it reads: `reg`'s."""
@@ -1760,7 +1789,6 @@ def main(argv: list[str] | None = None) -> None:
     root = Root(root_win, Offscreen(ctx), Pacer(glfw), logical=RENDER_SIZE, size=RENDER_SIZE)
     # each output: a presenter on its own context, none waiting yet
     _open_presenters(slots, root_win, notes=cfg.setdefault("notes", []))
-    later = [sl for sl in slots[1:] if sl.opened]
     root.pacer.choose(_slot_windows(slots), root_win)
     # the outputs published out (plan 32 T9), the root's context current
     _open_publishers(slots, ctx, cfg.setdefault("notes", []))
@@ -1825,14 +1853,17 @@ def main(argv: list[str] | None = None) -> None:
     def hands_setup(reg: Registry):
         return _hand_settings(reg, cfg)       # before attach: "default" includes them
 
+    plug: Hotplug | None = None         # displays coming and going; made once the panel is
+
     def outputs_setup(reg: Registry) -> Output:
         # the render window's placement registers before attach, so "default"
         # includes output.* and reset / the dirty dot see them (audit L6)
         output = _make_output(render_win, reg, cfg)
         register_xfade(reg, mix)               # the deck fade (plan 44 D4): meta controls
         slots[0].output = output
-        for sl in later:                       # no params: the config says (fork F10)
-            sl.output = _later_output(sl)
+        for sl in slots[1:]:                   # no params: the config says (fork F10)
+            if sl.opened:
+                sl.output = _later_output(sl)
         for sl in slots:                       # a further display's: likewise (SC2)
             for also in sl.also:
                 also.output = _also_output(also)
@@ -2034,13 +2065,16 @@ def main(argv: list[str] | None = None) -> None:
         (output.backend, "overlay", "GlfwBackend"),
         # the later render outputs (plan 21 WP3); a presenter rebuilds its
         # programs at its next present, in its own context
-        *[(sl.output, "overlay", "Output") for sl in later],
-        *[(sl.output.backend, "overlay", "GlfwBackend") for sl in later],
+        *[(sl.output, "overlay", "Output") for sl in slots[1:] if sl.output is not None],
+        *[(sl.output.backend, "overlay", "GlfwBackend") for sl in slots[1:] if sl.output is not None],
         *[(sl.presenter, "outputs", "Presenter") for sl in slots if sl.presenter],
         *[(a.output, "overlay", "Output") for sl in slots for a in sl.also],
         *[(a.output.backend, "overlay", "GlfwBackend") for sl in slots for a in sl.also],
         *[(a.presenter, "outputs", "Presenter") for sl in slots for a in sl.also],
         *([(display_list, "displays", "DisplayList")] if display_list is not None else []),
+        *([(plug, "hotplug", "Hotplug"), (plug.backend, "overlay", "GlfwBackend"),
+           *[(h.output, "overlay", "Output") for h in plug.held],
+           *[(h.presenter, "outputs", "Presenter") for h in plug.held]] if plug is not None else []),
         (root, "outputs", "Root"),
         (root.frame, "outputs", "Offscreen"),
         (root.pacer, "pacing", "Pacer"),
@@ -2053,6 +2087,15 @@ def main(argv: list[str] | None = None) -> None:
         # re-evaluated each swap, so a device the list brought in counts
         *device_reg.targets(),
     ], watchers=[library])
+    if display_list is not None:
+        # the windows follow the rows and the connected list from here on (SC3b)
+        plug = Hotplug(glfw, panel.displays, root, ctrl_win, output, seen=placement.load(home),
+                       hold_s=float(cfg.get("output", {}).get("unplug_hold_s", 3.0)),
+                       sizes=(RENDER_SIZE, CONTROL_SIZE), title=TITLE,
+                       overlay=_overlay_allowed(cfg), notes=cfg.setdefault("notes", []),
+                       say=library.say, warn=lambda text: library.say(warning=text))
+        panel.displays.plug = plug
+        panel.displays.screens = lambda: plug.screens
     panel.reloader = reloader
     panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
     if router.table.said:                       # what the launch did to bindings.json
@@ -2060,7 +2103,7 @@ def main(argv: list[str] | None = None) -> None:
     # …or that wants a section renamed, and what the device list did since
     # (the registry appends to this very list, so the page follows)
     panel.config_notes = cfg["notes"]
-    # keys from every window
+    # keys from every window (`hotplug.py` points them at what's open, as is the mouse)
     keys = Keys(render_win, ctrl_win, [w for w in _slot_windows(slots) if w is not render_win])
     mouse = Mouse(render_win, reg, s, slots[0].switches,          # the mouse: output 1 only
                   pointer=meta.pointer(MOUSE))
@@ -2094,15 +2137,21 @@ def main(argv: list[str] | None = None) -> None:
                         loadable=lambda: meta.on_air.loaded_patch.current)
     # with two or more outputs the stall is "no output presented", and one
     # output dark while another presents is a warning naming it (WP3)
-    # (a further display counts: its window is a picture too, SC2)
-    opened = [*((sl.label, sl.output) for sl in slots if sl.opened and sl.output is not None),
-              *((f"{sl.label} on {a.display}", a.output) for sl in slots for a in sl.also)]
+    # (a further display counts: its window is a picture too, SC2). What's open now, each time:
+    # a display gone isn't a stall, and a picture that stopped still is (SC3b)
+    def opened() -> list:
+        return [*((sl.label, sl.output) for sl in slots if sl.opened and sl.output is not None),
+                *((f"{sl.label} on {a.display}", a.output) for sl in slots for a in sl.also)]
+
+    def first_state() -> dict:
+        # output 1's window, else the first there is: a projector that stopped is said, whichever
+        open_now = opened()
+        return open_now[0][1].backend.window_state(open_now[0][1].win) if open_now else {}
+
     render_watch = RenderWatch(
         watchdog,
-        # output 1's window, else the first there is: a projector that stopped is said, whichever
-        info=(lambda win=opened[0][1].win: output.backend.window_state(win)) if opened else None,
-        outputs=(lambda: [(label, o.backend.window_state(o.win))
-                          for label, o in opened]) if len(opened) > 1 else None)
+        info=first_state,
+        outputs=lambda: [(label, o.backend.window_state(o.win)) for label, o in opened()])
     panel.watchdog, panel.render_watch = watchdog, render_watch
 
     def dream_check(on: Deck, name: str | None) -> None:
@@ -2126,13 +2175,15 @@ def main(argv: list[str] | None = None) -> None:
                                               fade.close)))
 
     def all_windows() -> list:            # both exits destroy these before terminate, the root last
-        return [*(a.win for sl in slots for a in sl.also), *(sl.win for sl in slots[1:]),
-                ctrl_win, render_win, root_win]
+        return [*(plug.windows() if plug is not None else ()),
+                *(a.win for sl in slots for a in sl.also), *(sl.win for sl in slots[1:]),
+                ctrl_win, slots[0].win, root_win]
 
     def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
         if args.laptop:                   # the show machine's spots are kept for it
             return
-        _save_windows(home, render_win, ctrl_win, output, [sl.output for sl in slots[1:]], slots)
+        _save_windows(home, slots[0].win, ctrl_win, output, [sl.output for sl in slots[1:]], slots,
+                      plug.away_spots() if plug is not None else None)
 
     # the flat handles are the deck's (plan 44 D1), so `frame` is unchanged
     host = Host(reg=deck.reg, view=deck.view, control=control, audio=audio, router=deck.router,
@@ -2148,10 +2199,20 @@ def main(argv: list[str] | None = None) -> None:
                 quit=lambda: glfw.set_window_should_close(ctrl_win, True),
                 devices=device_reg, dream_io=dream_io, learn=deck.learn, render_watch=render_watch,
                 undo=deck.undo, media=media,
-                outputs=[*(sl.output for sl in slots if sl.output is not None),
-                         *(a.output for sl in slots for a in sl.also)], deck=deck,
+                outputs=_outputs_now(slots), deck=deck,
                 off_air=meta.parked, stacks=meta.stacks, on_air_pointer=meta.on_air_pointer,
                 panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS), meta=meta)
+
+    def rewired() -> None:
+        # what holds a window, as the displays came or went (`hotplug.py`)
+        keys.render_win = slots[0].win
+        keys.more = tuple(w for w in _slot_windows(slots) if w is not slots[0].win)
+        mouse.aim(slots[0].win)
+        host.outputs[:] = _outputs_now(slots)
+
+    if plug is not None:
+        plug.wired = rewired
+        plug.start()
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
     frames_left = int(os.environ.get("HYPERSPACE_FRAMES", "0")) or None
@@ -2160,7 +2221,8 @@ def main(argv: list[str] | None = None) -> None:
 
     last = time.perf_counter()
     fps = 0.0
-    # the loop ends when any window is closed (the smoke run closes output 1)
+    # the loop ends when a person closes a window (the smoke run closes output 1). A window whose
+    # display went is `hotplug.py`'s to close, and is in no slot by then
     while not (any(glfw.window_should_close(w) for w in _slot_windows(slots))
                or glfw.window_should_close(ctrl_win)):
         if frames_left is not None:
@@ -2170,6 +2232,8 @@ def main(argv: list[str] | None = None) -> None:
         if display_list is not None:
             display_list.look()        # memory: its worker does the disk
         glfw.poll_events()
+        if plug is not None:
+            plug.between_frames()      # a display came or went: never inside the poll, or a frame
         # the control window's imgui frame starts BEFORE input handling:
         # with the 1.87+ event queue, want_capture_keyboard only holds this
         # frame's value once new_frame() has run — reading it earlier sees

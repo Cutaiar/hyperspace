@@ -47,12 +47,13 @@ in, and the home folder is the caller's (app.py takes it from
 
 from __future__ import annotations
 
+import ctypes
 import json
 import math
 import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 FILE = "windows.json"
@@ -74,6 +75,20 @@ class Screen:
     w: int
     h: int
     at: tuple[int, int] | None = None     # the monitor's own frame, Dock or no Dock
+    # the window system's id for this display, this boot (`labels`' `held`); 0: it won't say
+    uid: int = field(default=0, compare=False)
+
+
+def _uid(glfw, m) -> int:
+    """A display's id for this boot: on a Mac its CGDirectDisplayID, which Apple says stays the
+    same until a restart, across a replug too; elsewhere GLFW's handle, while it's connected;
+    0 when neither will say."""
+    for read in (lambda: glfw.get_cocoa_monitor(m), lambda: ctypes.addressof(m.contents)):
+        try:
+            return int(read())
+        except Exception:  # noqa: BLE001, S112 — not a Mac, or a stand-in: it won't say
+            continue
+    return 0
 
 
 def screens(glfw) -> list[Screen]:
@@ -96,7 +111,7 @@ def screens(glfw) -> list[Screen]:
             return []      # indices must keep meaning what the config says: all or nothing
         if w <= 0 or h <= 0:
             return []
-        out.append(Screen(name or f"screen {i + 1}", x, y, w, h, (px, py)))
+        out.append(Screen(name or f"screen {i + 1}", x, y, w, h, (px, py), _uid(glfw, m)))
     return out
 
 
@@ -156,10 +171,12 @@ def load(home: Path) -> dict:
 
 
 def save(home: Path, control: Rect | None, render: list[Rect | None],
-         scr: list[Screen], spots: dict[str, Rect | None] | None = None) -> None:
+         scr: list[Screen], spots: dict[str, Rect | None] | None = None,
+         away: dict[str, tuple] | None = None) -> None:
     """Write the windowed rects. A None (a minimised window) keeps that
     window's old entry. `spots`: each window's rect by the label of the display
-    it's on (`spot`). Atomic — a temp file, then a rename — and a failed
+    it's on (`spot`). `away` (SC3b): where a window was on a display with no window now, by its
+    memory, kept though no display here can show it: `place` says if it's any use later. Atomic — a temp file, then a rename — and a failed
     write costs only the memory: it is said on stderr and never raised."""
     home = Path(home)
     old = load(home)
@@ -173,6 +190,10 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
            "render": entries}
     kept = old.get("displays")
     kept = dict(kept) if isinstance(kept, dict) else {}
+    for key, rect in (away or {}).items():
+        r = _rect(dict(zip("xywh", rect, strict=False)))
+        if r is not None:
+            kept[key] = {"x": r[0], "y": r[1], "w": r[2], "h": r[3], "screen": key}
     for tag, rect in (spots or {}).items():
         new = _entry(rect, scr)
         if new is not None:
@@ -392,10 +413,18 @@ def memory(label: str) -> str:
     return (_family(base) if hash_ and n == "1" else label if hash_ else _family(label))
 
 
-def labels(scr: list[Screen]) -> list[str]:
+def labels(scr: list[Screen], held: dict[int, str] | None = None) -> list[str]:
     """What to write in the config for each screen, in `scr`'s order: its
     name when that is enough, and otherwise its family and ordinal. `match`
-    finds each screen by its own label, always."""
+    finds each screen by its own label, always.
+
+    **`held` (SC3b), a running app's:** each display's `memory` by its `Screen.uid`, kept and
+    updated here. A display keeps its number for the run, wherever a twin plugs in or whichever
+    goes: across the desk says nothing of which is which once one comes or goes, and the window
+    stays on the display it's on. So the one that goes leaves its number free, and one that
+    comes takes its old number if the id says it's the same, else the lowest free. With
+    nothing in `held`, the first call, these are the labels by arrangement. A restart goes back to
+    those, so numbers kept this way can swap then: `differs` says when, for the panel."""
     out = []
     for i, s in enumerate(scr):
         fam = _family(s.name)
@@ -404,7 +433,44 @@ def labels(scr: list[Screen]) -> list[str]:
             out.append(f"{fam} #{same.index(i) + 1}")
         else:
             out.append(s.name if match(s.name, scr) == i else f"{fam} #1")
+    if held is None or not all(s.uid for s in scr):
+        return out
+    for fam in {_family(s.name) for s in scr}:
+        same = _same(fam, scr)
+        numbers: dict[int, int] = {}            # index in `scr` → its number in the family
+        for i in same:
+            n = _number(held.get(scr[i].uid), fam)
+            if n is not None and n not in numbers.values():
+                numbers[i] = n
+        free = (n for n in range(1, 2 * len(same) + len(held) + 2) if n not in numbers.values())
+        for i in same:
+            if i not in numbers:
+                numbers[i] = next(free)
+            if len(same) > 1 or numbers[i] > 1:
+                out[i] = f"{fam} #{numbers[i]}"
+    now = {s.uid: memory(out[i]) for i, s in enumerate(scr)}
+    # a number taken is no longer held for one that went: back, it takes a free one, so no two
+    # connected displays can ever claim one number and swap jobs by list order
+    for uid in [u for u, key in held.items() if key in now.values() and u not in now]:
+        del held[uid]
+    held.update(now)
     return out
+
+
+def _number(key: str | None, fam: str) -> int | None:
+    """Which of family `fam` the memory `key` is; None when it's no memory of that family."""
+    if key is None:
+        return None
+    n = _ordinal(key)
+    if n is not None and n[0] == fam:
+        return n[1]
+    return 1 if key == fam else None
+
+
+def differs(scr: list[Screen], held: dict[int, str]) -> list[str]:
+    """The labels `held` kept that a restart would give another display, across the desk."""
+    now, plain = labels(scr, dict(held)), labels(scr)
+    return [now[i] for i in arranged(scr) if memory(now[i]) != memory(plain[i])]
 
 
 def resolve(asked: str, scr: list[Screen]) -> tuple[int, str]:

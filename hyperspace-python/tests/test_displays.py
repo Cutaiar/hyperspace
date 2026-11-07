@@ -96,13 +96,6 @@ def test_an_order_of_plugging_doesnt_move_a_job():
     assert a.renders[2][0].index == 2 and b.renders[2][0].index == 1
 
 
-def test_what_waits_for_a_restart_is_what_differs_from_whats_open():
-    rows = {"Built-in": row(CONTROL), "TV #1": row("output.2")}
-    opened_now = {"Built-in": CONTROL, "TV #1": "output.1"}
-    assert displays.pending(rows, SCREENS, opened_now) == [("TV #1", "output.2")]
-    assert displays.pending(rows, SCREENS, {"Built-in": CONTROL, "TV #1": "output.2"}) == []
-
-
 # ---- the seed
 
 
@@ -609,8 +602,8 @@ def test_a_render_on_two_displays_has_flips_on_each_at_once(rows):
 
 
 def test_a_second_of_a_name_plugged_in_mid_run_is_the_same_window(tmp_path, monkeypatch):
-    """"TV" becomes "TV #1" with the window still open on it: its ticks reach it, and nothing
-    claims to wait for ⌘R. Through the real panel, the store and SC1's labels."""
+    """"TV" becomes "TV #1" with the window still open on it: its ticks reach it. Through the
+    real panel, the store and SC1's labels."""
     root = tmp_path / "Drive"
     root.mkdir()
     (tmp_path / "home").mkdir()
@@ -630,12 +623,10 @@ def test_a_second_of_a_name_plugged_in_mid_run_is_the_same_window(tmp_path, monk
         r.reg["ui.page"].set(PAGE_KEYS.index("output"))
         d.run(d.wait(3))
         assert run.opened == {"TV": "output.1", "Built-in": CONTROL}
-        assert not any(t.startswith(ui_displays.ON_RESTART) for t in _texts(r, d))
         scr.append(TV_RIGHT)                # the second plugged in: "TV" is "TV #1" now
         assert placement.labels(scr) == ["Built-in", "TV #1", "TV #2"]
         d.run(d.wait(2))
         assert run.window_on("TV #1") == (slots[0], None) and run.opened_on("TV #1") == "output.1"
-        assert not any(t.startswith(ui_displays.ON_RESTART) for t in _texts(r, d)), "the same window"
         d.run(d.click("display.1.flip_x"), d.park(), d.wait(2))
         assert slots[0].switches.flip_x is True, "the tick reaches it"
         store.sync()
@@ -646,16 +637,16 @@ def test_a_second_of_a_name_plugged_in_mid_run_is_the_same_window(tmp_path, monk
         assert run.window_on("TV") == (slots[0], None)
 
 
-def test_a_change_of_target_is_written_and_says_it_waits_for_a_restart(rows):
+def test_a_change_of_target_is_written_and_says_nothing_of_a_restart(rows):
+    """It acts at once: `tests/test_hotplug.py`, which has the windows."""
     r, d = rows, rows.d
-    said = _texts(r, d)
-    assert not any(t.startswith(ui_displays.ON_RESTART) for t in said)
     d.run(d.pick("display.2.target", 3), d.park(), d.wait(2))     # nothing, control, output 1, output 2
     r.store.sync()
     assert on_disk(r.root)["TV #2"]["target"] == "output.2"
-    assert r.panel.displays.opened["TV #2"] == "output.1", "nothing has opened or closed"
-    said = _texts(r, d)
-    assert any(t.startswith(ui_displays.ON_RESTART) and "TV #2" in t for t in said), said
+    assert r.store.chosen, "what a running app acts on"
+    assert not any("⌘R" in t for t in _texts(r, d))
+    assert "⌘R" not in ui_displays.TIP_TARGET
+    assert not hasattr(displays, "pending") and not hasattr(ui_displays, "ON_RESTART")
 
 
 def test_choosing_the_control_window_takes_it_from_where_it_was(rows):
@@ -668,12 +659,12 @@ def test_choosing_the_control_window_takes_it_from_where_it_was(rows):
     assert "display.1.flip_x" not in r.d.rects
 
 
-def test_a_window_with_other_target_chosen_keeps_its_flips_until_the_restart(rows):
+def test_a_window_with_other_target_chosen_keeps_its_flips(rows):
     r, d = rows, rows.d
     one = r.panel.outputs[0]
     d.run(d.pick("display.1.target", 3), d.park(), d.wait(2))
     d.run(d.click("display.1.flip_y"), d.park(), d.wait(2))
-    assert one.switches.flip_y is False, "what's open is output 1's: the row waits for ⌘R"
+    assert one.switches.flip_y is False, "what's open is output 1's until the window has changed"
     r.store.sync()
     assert on_disk(r.root)["TV"]["flip_y"] is True
 
@@ -992,7 +983,8 @@ def test_the_watch_reads_the_first_window_there_is():
     import inspect
 
     src = inspect.getsource(app.main)
-    assert "info=(lambda win=opened[0][1].win: output.backend.window_state(win)) if opened else None" in src
+    assert "open_now[0][1].backend.window_state(open_now[0][1].win) if open_now else {}" in src
+    assert "info=first_state" in src, "and what's open now, each time: a window can close (SC3b)"
 
 
 def test_a_control_window_seeded_onto_a_renders_display_stays_there(monkeypatch):

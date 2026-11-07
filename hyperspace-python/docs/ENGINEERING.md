@@ -1509,6 +1509,7 @@ on_start = false        # launch straight into overlay (needs overlay = true)
 passthrough = true      # overlay: clicks go to the window underneath
 bg = 0.0                # overlay: ground, 0 see-through … 1 black
 alpha = 1.0             # overlay: whole-window opacity
+unplug_hold_s = 3.0     # how long a window waits for its display to come back (hotplug.py)
 
 [[output.screens]]      # optional; one table per render output, at most 4 (§14)
 name = "glass"
@@ -3059,6 +3060,8 @@ to the mix is V3's.
 
 ## 14. Outputs
 
+**A display can come and go with no restart** (`hotplug.py`, rows 813–816): which display shows what is its row's (`displays.py`), and what's below about the config is its seed. A row's target acts at once. A display gone has its window hidden at once and closed after `[output] unplug_hold_s`, and its job comes back with it.
+
 **One output** by default: the render window, from `[output] monitor` /
 `fullscreen`. **Several** from `[[output.screens]]` (§5), up to four
 (`outputs.MAX_OUTPUTS`), numbered by their place in the list whether or
@@ -3645,4 +3648,4 @@ What only a person at the machine can check is
   held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
-- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): P6.
+- **A display coming and going** (`hotplug.py`, audit P6) has only met a virtual display on a locked Mac: hand check 629 is a real cable.
