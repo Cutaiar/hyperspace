@@ -29,7 +29,7 @@ from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
-from hyperspace import graphview, modifiers, ui, ui_graph, ui_routing
+from hyperspace import graphview, modifiers, ui, ui_graph, ui_pane, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import CEIL
 from hyperspace.graphmigrate import Shows
@@ -1098,13 +1098,13 @@ def test_the_side_column_width_is_clamped_and_this_macs(tmp_path):
     pos, size = ui_graph.details_rect((10.0, 20.0), (1000.0, 600.0), wide=True, side_w=460.0)
     assert (pos, size) == ((10.0 + 1000.0 - 460.0, 20.0), (460.0, 600.0))
     assert ui_graph.read_side(tmp_path) is None                        # no file
-    (tmp_path / ui_graph.UI_FILE).write_text("{not json")
+    (tmp_path / ui_pane.UI_FILE).write_text("{not json")
     assert ui_graph.read_side(tmp_path) is None                        # a broken one
-    (tmp_path / ui_graph.UI_FILE).write_text('{"graph": {"side_w": "wide"}, "other": 1}')
+    (tmp_path / ui_pane.UI_FILE).write_text('{"graph": {"side_w": "wide"}, "other": 1}')
     assert ui_graph.read_side(tmp_path) is None                        # not a number
     ui_graph.write_side(tmp_path, 460.25)
     assert ui_graph.read_side(tmp_path) == 460.2                       # rounded to a tenth
-    doc = json.loads((tmp_path / ui_graph.UI_FILE).read_text())
+    doc = json.loads((tmp_path / ui_pane.UI_FILE).read_text())
     assert doc["other"] == 1 and doc["graph"]["side_w"] == 460.2       # the rest kept
     ui_graph.write_side(tmp_path / "missing" / "dir", 300.0)           # a failed write: no raise
 

@@ -85,7 +85,9 @@ def report() -> None:
 
     hot = {f"{PACKAGE}.{name}" for name in MODULES}
     wrong, unmodelled, skipped, checked = {}, {}, {}, 0
-    for name in hot:
+    # sorted: a set's order moves with the hash seed, and a cold import of some
+    # modules first (ui_desk) meets a cycle the app never takes — it imports `ui`
+    for name in sorted(hot):
         try:
             mod = importlib.import_module(name)
         except ImportError as e:
