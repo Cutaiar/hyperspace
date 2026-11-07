@@ -1584,6 +1584,7 @@ def main(argv: list[str] | None = None) -> None:
             raise RuntimeError("Deck.build: the panel hook needs the outputs hook's Output")
         panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
         panels.append(panel)
+        panel.graph_start_zoom = placement.window_zoom(glfw, ctrl_win)   # plan 58 SM2
         panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
         panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
         panel.output = output

@@ -283,6 +283,77 @@ def test_placement_imports_nothing_from_the_package():
             assert root not in {"hyperspace", "glfw", "moderngl", "imgui_bundle"}, mod
 
 
+# ---- GRAPH's start zoom (plan 58 SM2) ----
+
+@pytest.mark.parametrize(("density", "height", "zoom"), [
+    (1.0, 1080, 1.0),       # a 1080p monitor: as it always opened
+    (1.0, 1050, 1.0),       # less its menu bar: still 1:1, never below
+    (2.0, 1084, 1.3),       # the laptop's own screen
+    (2.0, 1050, 1.3),       # a TV the Mac calls 2x
+    (1.5, 800, 1.15),       # between the two densities
+    (1.0, 2046, (2046 / 1080) ** 0.5),   # a 4K panel at 1x
+    (2.0, 1440, 1.3),       # a 5K panel: the larger of the two, not the product
+    (1.0, 2700, 1.5),       # capped, under what a 900-point window can't use
+])
+def test_start_zoom_follows_the_display(density, height, zoom):
+    assert placement.start_zoom(density, height) == pytest.approx(zoom)
+
+
+class _Windows:
+    """The glfw calls `window_zoom` makes, on two screens."""
+
+    @staticmethod
+    def get_monitors():
+        return ["big", "laptop"]
+
+    @staticmethod
+    def get_monitor_workarea(m):
+        return {"big": (0, 30, 3840, 2046), "laptop": (3840, 1076, 1728, 1084)}[m]
+
+    @staticmethod
+    def get_monitor_name(m):
+        return m
+
+    @staticmethod
+    def get_monitor_pos(m):
+        return {"big": (0, 0), "laptop": (3840, 1000)}[m]
+
+    @staticmethod
+    def get_monitor_content_scale(m):
+        return {"big": (1.0, 1.0), "laptop": (2.0, 2.0)}[m]
+
+    def __init__(self, pos):
+        self.pos = pos
+
+    def get_window_pos(self, _win):
+        return self.pos
+
+    @staticmethod
+    def get_window_size(_win):
+        return (960, 720)
+
+    @staticmethod
+    def get_window_content_scale(_win):     # stale: from the screen it opened on, before any event
+        return (2.0, 2.0)
+
+
+def test_window_zoom_reads_the_display_the_window_is_on():
+    """Its density from the monitor it matched: `_Windows` says 2x for the
+    window wherever it is, as one just moved off a 2x screen does."""
+    assert placement.window_zoom(_Windows((100, 100)), None) == pytest.approx((2046 / 1080) ** 0.5)
+    assert placement.window_zoom(_Windows((4000, 1200)), None) == pytest.approx(1.3)
+
+
+def test_window_zoom_never_stops_a_launch():
+    class Silent:
+        def get_window_pos(self, _win):
+            raise RuntimeError("no window system")
+
+    assert placement.window_zoom(Silent(), None) == 1.0
+    off = _Windows((90000, 90000))      # on no screen at all
+    assert placement.window_zoom(off, None) == 1.0
+
+
 # ---- screens by name (row 771) ----
 #
 # `TV_L` is left of `TV_R` on the desk, whatever order the window system lists

@@ -18,7 +18,7 @@ import pytest
 from conftest import seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
-from test_ui_shell import frame
+from test_ui_shell import build_rig, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from wiredframe import Shows
 from wiredframe import wiring as wired_for
@@ -894,3 +894,187 @@ def test_a_drops_reach_is_never_under_near_screen_px():
     assert graphview.drop_reach() == graphview.NEAR
     assert graphview.drop_reach(0.5) == graphview.NEAR
     assert graphview.drop_reach(4.0) == 4 * graphview.NEAR
+
+
+# ---- GRAPH's start zoom (plan 58 SM2) ----
+
+def _start(rig, zoom: float, frames: int = 3) -> dict:
+    from test_graph_legible import party
+    rig.panel.graph_start_zoom = zoom       # (before the editor's first draw: it reads it once)
+    party(rig)
+    for _ in range(frames):
+        frame(rig.panel, "graph")
+    return ui_graph._state(rig.panel)
+
+
+def test_scale_is_what_saved_layouts_are_in():
+    """Saved positions are in canvas units behind SCALE: a display's zoom
+    must never get there by changing it."""
+    assert graphview.SCALE == 1.25
+
+
+def test_the_start_zoom_lands_and_leaves_no_file(rig, monkeypatch, tmp_path):
+    spare = tmp_path / "spare"
+    spare.mkdir()
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
+    st = _start(rig, 1.6)
+    assert st["zoom"] == pytest.approx(1 / 1.6)     # the editor's zoom reads canvas units a point
+    assert ed.get_config(st["editor"]).settings_file == ""
+    assert list(spare.iterdir()) == []              # read, off, gone: nothing saved into it
+
+
+def test_the_start_zoom_keeps_the_view_at_the_corner(rig):
+    """Zoomed from the canvas's origin, as 1:1 opens, not about its middle."""
+    st = _start(rig, 1.6)
+    assert st["seen"][0] == pytest.approx(0.0, abs=12.0)
+    assert st["seen"][1] == pytest.approx(0.0, abs=12.0)
+
+
+def test_a_start_zoom_of_one_writes_nothing(rig, monkeypatch):
+    written = []
+    monkeypatch.setattr(ui_graph.tempfile, "mkstemp", lambda **k: written.append(k))
+    st = _start(rig, 1.0)
+    assert written == [] and st["zoom"] == pytest.approx(1.0)
+
+
+def test_the_start_zoom_moves_no_position(rig, tmp_path):
+    st = _start(rig, 1.6)
+    moved = dict(st["applied"])
+    assert moved
+    (tmp_path / "other").mkdir()
+    with build_rig(tmp_path / "other") as other:
+        assert dict(_start(other, 1.0)["applied"]) == moved
+
+
+def test_the_start_zoom_is_not_set_twice(rig):
+    """A person's zoom during a run stays: the view framed to fit stands in
+    for one, and a loaded patch and more frames leave it."""
+    st = _start(rig, 1.6)
+    assert st["zoom"] == pytest.approx(1 / 1.6)
+    st["frame"] = True
+    for _ in range(90):
+        frame(rig.panel, "graph")
+    theirs = st["zoom"]
+    assert theirs != pytest.approx(1 / 1.6)
+    rig.panel.graph_start_zoom = 1.9        # (a new number changes nothing: read once)
+    for _ in range(5):
+        frame(rig.panel, "graph")
+    assert st["zoom"] == pytest.approx(theirs)
+    assert st["created"] == 1
+
+
+def _resized(monkeypatch, narrower: float, shorter: float) -> None:
+    real = ui_graph._canvas
+    monkeypatch.setattr(ui_graph, "_canvas", lambda panel, st, view, size, through=0.0: real(
+        panel, st, view, imgui.ImVec2(size.x - narrower, size.y - shorter), through))
+
+
+def _node_on_canvas(monkeypatch, st) -> dict:
+    """Each frame: a drawn node's screen point, less the canvas's corner."""
+    seen = {}
+    real = ui_graph._moved
+
+    def moved(panel, st_, view):
+        n = next(n for n in view.nodes if ui_graph.drawn_node(st_, n))
+        at = ed.canvas_to_screen(ed.get_node_position(ed.NodeId(ui_graph._id(st_, "n:" + n.id))))
+        corner = ed.canvas_to_screen(imgui.ImVec2(*st_["seen"]))
+        seen["at"] = (at.x - corner.x, at.y - corner.y)
+        return real(panel, st_, view)
+    monkeypatch.setattr(ui_graph, "_moved", moved)
+    return seen
+
+
+@pytest.mark.parametrize("zoom", [1.0, 1.6])
+@pytest.mark.parametrize(("narrower", "shorter"), [(0.0, 23.0), (40.0, 0.0), (40.0, 165.0)])
+def test_a_change_of_canvas_size_moves_no_node(rig, monkeypatch, zoom, narrower, shorter):
+    """The zoom stands, and every node stays where it was against the canvas's
+    top-left (the owner, 2026-10-24): a head's extra line, a window's resize."""
+    st = _start(rig, zoom)
+    seen = _node_on_canvas(monkeypatch, st)
+    frame(rig.panel, "graph")
+    before = seen["at"]
+    _resized(monkeypatch, narrower, shorter)
+    frame(rig.panel, "graph")
+    assert st["zoom"] == pytest.approx(1 / zoom)
+    assert seen["at"] == pytest.approx(before, abs=1.5 * zoom)      # (the pan is in whole units)
+
+
+def test_a_line_on_the_head_moves_no_node(rig, monkeypatch):
+    """What changes the canvas's height with no window touched: a patch that
+    wires a window this Mac lacks puts a line on the head."""
+    st = _start(rig, 1.6)
+    seen = _node_on_canvas(monkeypatch, st)
+    frame(rig.panel, "graph")
+    tall, before = st["canvas_size"], seen["at"]
+    laid = dict(rig.lib.loaded_patch.layout)
+    monkeypatch.setattr(ui_graph, "window_wants", lambda _panel: ["a window this Mac lacks"])
+    frame(rig.panel, "graph")
+    assert st["canvas_size"][1] < tall[1]
+    assert seen["at"] == pytest.approx(before, abs=2.4)
+    assert st["zoom"] == pytest.approx(1 / 1.6)
+    assert rig.lib.loaded_patch.layout == laid      # a pan, never a move
+
+
+def test_the_page_has_no_scrollbar_and_the_canvas_keeps_its_width(rig, monkeypatch):
+    """The canvas's size is one from its first frame: the footer counted whole,
+    CONTROLS doesn't overflow into a scrollbar on its second."""
+    sizes = []
+    real = ui_graph._canvas
+
+    def spy(panel, st, view, size, through=0.0):
+        sizes.append((size.x, size.y, imgui.internal.get_current_window().parent_window.scrollbar_y))
+        real(panel, st, view, size, through)
+    monkeypatch.setattr(ui_graph, "_canvas", spy)
+    for _ in range(4):
+        frame(rig.panel, "graph")
+    assert len(set(sizes)) == 1 and sizes[0][2] is False
+
+
+def test_a_begin_that_raises_leaves_the_editor_holding_no_file(rig, monkeypatch, tmp_path):
+    """Or the next frame's editor would save its nodes into that file: it only
+    reads the view on the frame it's made."""
+    spare = tmp_path / "spare"
+    spare.mkdir()
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
+
+    def fails(*_a):
+        raise RuntimeError("no")
+    monkeypatch.setattr(ui_graph.ed, "begin", fails)
+    rig.panel.graph_start_zoom = 1.6
+    with pytest.raises(RuntimeError):
+        frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    assert ed.get_config(st["editor"]).settings_file == ""
+    assert list(spare.iterdir()) == []
+
+
+def test_a_failed_write_leaves_no_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(tmp_path))
+
+    def full(*_a, **_k):
+        raise OSError("disk full")
+    monkeypatch.setattr(ui_graph.json, "dump", full)
+    assert ui_graph.start_view(1.6) == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_failed_open_closes_the_file_and_leaves_none(monkeypatch, tmp_path):
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(tmp_path))
+    closed = []
+    real_close = ui_graph.os.close
+
+    def full(fd, *_a, **_k):
+        closed.append(fd)
+        raise OSError("no")
+    monkeypatch.setattr(ui_graph.os, "fdopen", full)
+    monkeypatch.setattr(ui_graph.os, "close", lambda fd: (closed.append(-fd), real_close(fd)))
+    assert ui_graph.start_view(1.6) == ""
+    assert closed[1] == -closed[0]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_no_file_means_the_editors_own_start(monkeypatch):
+    def refused(**_k):
+        raise OSError("disk full")
+    monkeypatch.setattr(ui_graph.tempfile, "mkstemp", refused)
+    assert ui_graph.start_view(1.6) == ""

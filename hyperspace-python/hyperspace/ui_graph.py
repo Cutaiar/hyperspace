@@ -194,15 +194,27 @@ context and makes no second one; destroyed by `close` (`Panel.close`,
 which app.py calls on quit and on ⌘R before imgui shuts down). Its
 settings file is off (`Config.settings_file = ""`): the positions are
 the loadable patch's and the show's, never a NodeEditor.json beside the app.
+
+**The start zoom** (plan 58 SM2) is that settings file's one use: the binding
+has no zoom setter, and only the editor's first load reads a zoom. `_canvas`
+makes a temporary file holding just a view (`start_view`) for the editor it
+creates, and `_start_view_read` turns the file off again right after the first
+`ed.begin`, before that frame can save anything. So a zoom is set once per
+editor, and `graphview.SCALE` and every saved position stay as they were.
+Nothing else sets one, and a canvas's change of size keeps both the zoom
+(`CanvasSizeMode.center_only`) and the corner (`keep_corner`).
 """
 
 from __future__ import annotations
 
 import colorsys
 import dataclasses
+import json
 import math
+import os
+import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
@@ -418,13 +430,66 @@ def _state(panel) -> dict:
 EDIT_STATE = (("note", str), ("pin_xy", dict), ("menu", lambda: None), ("menu_at", tuple))
 
 
-def editor(panel):
-    """The panel's editor context, made on first use (settings file off)."""
+def start_view(zoom: float) -> str:
+    """A temporary settings file saying only "start at `zoom`" (screen points
+    per canvas unit), for `Config.settings_file`. "" for 1:1 or if no file can
+    be written: the editor's own start, since no zoom is worth a launch."""
+    if zoom == 1.0:
+        return ""
+    view = {"scroll": {"x": 0, "y": 0}, "zoom": zoom,   # (an empty rect: the zoom is taken as given)
+            "visible_rect": {"min": {"x": 0, "y": 0}, "max": {"x": 0, "y": 0}}}
+    try:
+        fd, path = tempfile.mkstemp(prefix="hyperspace-graph-view-", suffix=".json")
+    except OSError:
+        return ""
+    try:
+        f = os.fdopen(fd, "w")
+    except OSError:
+        os.close(fd)
+        with suppress(OSError):
+            os.unlink(path)
+        return ""
+    try:
+        with f:
+            json.dump({"nodes": {}, "selection": None, "view": view}, f)
+    except OSError:
+        with suppress(OSError):
+            os.unlink(path)
+        return ""
+    return path
+
+
+def _start_view_read(ctx, path: str) -> None:
+    """After the first `ed.begin`, which read the start view: the settings file
+    off before the editor can save into it, and gone."""
+    ed.get_config(ctx).settings_file = ""
+    with suppress(OSError):
+        os.unlink(path)
+
+
+def keep_corner(st: dict, size: tuple[float, float]) -> None:
+    """Before `ed.begin`: a canvas that changed size stays at its top-left. The
+    editor re-centres on any change of size, moving every node by half of it;
+    the pan moves them back in the same frame (`st["pan"]`, as a scroll does)."""
+    last, st["canvas_size"] = st.get("canvas_size"), size
+    if last is None or last == size:
+        return
+    k = st.get("zoom", 1.0) / 2.0       # canvas units a point
+    px, py = st["pan"]
+    st["pan"] = (px + (last[0] - size[0]) * k, py + (last[1] - size[1]) * k)
+
+
+def editor(panel, settings_file: str = ""):
+    """The panel's editor context, made on first use (settings file off, but
+    for the start view `_canvas` hands the one it makes)."""
     st = _state(panel)
     if st["editor"] is None:
         cfg = ed.Config()
-        cfg.settings_file = ""
+        cfg.settings_file = settings_file
         cfg.enable_smooth_zoom = True       # a trackpad's small steps zoom a little each
+        # a canvas that changes size keeps its zoom. The editor's default rescales
+        # with the height: a head's extra line would change a person's zoom.
+        cfg.canvas_size_mode = ed.CanvasSizeMode.center_only
         st["editor"] = ed.create_editor(cfg)
         st["created"] += 1
         st["applied"] = {}      # a new context knows no position yet
@@ -439,6 +504,7 @@ def close(panel) -> None:
         ui_pane.flush(st, force=True)       # plan 49: a fold not yet written
     if not st or st.get("editor") is None:
         return
+    st.pop("canvas_size", None)
     ctx, st["editor"] = st["editor"], None
     st["applied"] = {}
     ed.destroy_editor(ctx)
@@ -745,7 +811,8 @@ def page(panel, dt: float) -> None:
     # the canvas is always the page's whole size: the node editor re-centres
     # its view whenever its canvas changes size (no `CanvasSizeMode` keeps the
     # top-left), so a selection that narrowed it panned every node (the
-    # owner, 2026-10-24). The details are laid over its edge instead.
+    # owner, 2026-10-24). The details are laid over its edge instead, and what
+    # else changes the size (a window, a head's line) is `keep_corner`'s.
     origin = imgui.get_cursor_screen_pos()
     if st["machine"] is None:                   # asked until a library is attached
         st["machine"] = getattr(getattr(panel, "library", None), "machine", None)
@@ -1610,12 +1677,18 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
 def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             through: float = 0.0) -> None:
     """The editor, its ground faded to 1 − `through` over the backdrop."""
-    ed.set_current_editor(editor(panel))
-    if through > 0.0:
-        bg = ed.get_style().color_(ed.StyleColor.bg)
-        ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
-    corner = imgui.get_cursor_screen_pos()
-    ed.begin("##graph", size)
+    view_file = start_view(panel.graph_start_zoom) if st["editor"] is None else ""
+    ed.set_current_editor(editor(panel, view_file))
+    keep_corner(st, (size.x, size.y))
+    try:
+        if through > 0.0:
+            bg = ed.get_style().color_(ed.StyleColor.bg)
+            ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
+        corner = imgui.get_cursor_screen_pos()
+        ed.begin("##graph", size)
+    finally:        # whatever happens, the editor never holds a file a later frame could save into
+        if view_file:
+            _start_view_read(st["editor"], view_file)
     # plan 36 T5: the canvas point at the view's top-left corner, kept for
     # what a new loadable patch lays out where you are looking (`in_view`)
     seen = ed.screen_to_canvas(corner)
