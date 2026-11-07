@@ -294,7 +294,7 @@ IDLE_TIP = ("Nothing in, nothing out: not drawn so the canvas stays readable. + 
             "them here to patch one; patched, it is drawn like any node. The picker "
             "(right-click the canvas) still offers every idle macro.")
 BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it — widen "
-              "CONTROLS to give both room (on a page this wide they sit beside by themselves)")
+              "CONTROLS to give both room (in a window this wide they sit beside by themselves)")
 # plan 28 N7: a bundle's thickness follows how many cables it holds, capped
 FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
@@ -311,10 +311,10 @@ PATCH_ONLY = True
 PATCH_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
                    "they reach. Controllers, modulation and macros are left off the canvas "
                    "(nothing is changed, only not drawn). Click to show everything.")
-# 2026-10-26: output 1's picture behind the canvas, fixed to the page (not
+# 2026-10-26: output 1's picture behind the canvas, fixed to the canvas (not
 # the canvas: it neither pans nor zooms), the editor's own ground laid
 # over it at 1 − `backdrop_alpha`
-BACKDROP_TIP = ("Output 1's picture behind the nodes, fixed to the page — the slider "
+BACKDROP_TIP = ("Output 1's picture behind the nodes, fixed to the canvas — the slider "
                 "beside it sets how strongly it shows")
 BACKDROP_ALPHA = 0.35    # how strongly it shows by default
 # 2026-10-26 (the trackpad; ported from Dan's graph-quick-wins): two
@@ -4100,7 +4100,7 @@ def timing_line(panel) -> str:
         return ""
     v = st["view"]
     size = f"  ({len(v.nodes)} nodes, {len(v.cables)} cables)" if v is not None else ""
-    return f"graph page: {times[len(times) // 2] * 1000:.2f} ms median{size}"
+    return f"graph draw: {times[len(times) // 2] * 1000:.2f} ms median{size}"
 
 
 # ---------------------------------------------------------------- editing (plan 28 N3)

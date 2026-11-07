@@ -487,7 +487,7 @@ def test_the_page_draws_with_a_corpus_loadable_and_a_render_graph(rig):
     assert ui_graph._selection(st, view)[1].id == "render:acid"
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert ui_graph.timing_line(rig.panel).startswith("graph page: ")
+    assert ui_graph.timing_line(rig.panel).startswith("graph draw: ")
     frame(rig.panel, "system")
 
 

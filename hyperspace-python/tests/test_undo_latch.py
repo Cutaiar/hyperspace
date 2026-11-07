@@ -754,7 +754,7 @@ def test_the_words_name_each_stack_from_birth(rig):
     )
 
 
-def test_over_the_player_screen_nothing_moves_the_focus(rig):
+def test_over_a_playlist_s_section_nothing_moves_the_focus(rig):
     """No stack answers there (`NOTHING_HERE`), so a press there is no focus event."""
     p = rig.one.reg[BRIGHT]
     was = p.base
