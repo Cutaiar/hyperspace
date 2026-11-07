@@ -202,9 +202,13 @@ def panel_rect(display: tuple[float, float], desk: bool = False,
     """(x, y, w, h) of CONTROLS in a control window of `display`: pinned,
     never dragged. With the left column up (the `desk` or the `pad`
     diagram) it is `panel_w` wide at the right; without, it fills the
-    window. Both `PANEL_EDGE` from the window's edges."""
+    window. Both `PANEL_EDGE` from the window's edges, and never wider
+    than the window allows: in a window too narrow for `PANEL_W` beside
+    the column, the panel keeps the window and the column is under it
+    (the graph is primary; nothing can drag it back into view)."""
     dw, dh = display
-    w = panel_w(display, desk, pad) if desk or pad else dw - 2 * PANEL_EDGE
+    full = dw - 2 * PANEL_EDGE
+    w = min(panel_w(display, desk, pad), full) if desk or pad else full
     return float(int(dw - w - PANEL_EDGE)), PANEL_EDGE, float(int(w)), dh - 2 * PANEL_EDGE
 
 

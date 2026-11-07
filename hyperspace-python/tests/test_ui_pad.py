@@ -53,6 +53,17 @@ def test_the_pads_x_closes_it_and_never_leaves_the_window_empty(rig, monkeypatch
     assert not panel.pad_diagram and not panel.open
 
 
+def test_the_panel_stays_in_a_window_too_narrow_for_it_and_the_column():
+    """Review of #426: at the narrowest window placement opens (320 wide),
+    with only the pad up, the panel's `PANEL_W` floor put its left edge off
+    the window, where nothing could drag it back. It keeps the window."""
+    from hyperspace import placement, ui
+    for desk, pad in ((False, True), (True, False), (True, True)):
+        for dw in (placement.MIN_SIZE[0], 400, ui.PANEL_W + 2 * ui.PANEL_EDGE + 1):
+            x, _, w, _ = ui.panel_rect((dw, 900), desk, pad)
+            assert x >= ui.PANEL_EDGE and x + w <= dw - ui.PANEL_EDGE + 1e-6, (desk, pad, dw, x, w)
+
+
 # ---------------------------------------------------------------- the layout
 
 
