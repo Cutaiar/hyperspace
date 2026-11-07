@@ -289,9 +289,14 @@ def test_placement_imports_nothing_from_the_package():
     (1080, 1.3),            # the show's 1080p display (the owner, 2026-11-07)
     (1050, 1.3),            # less its menu bar
     (985, 1.3),             # and a dock
+    (960, 1.3),
     (1084, 1.3),            # the laptop's own screen
-    (800, 1.3),             # a smaller display: still words to read
+    (840, 1.15),            # a small display eases
+    (768, 1.06),
+    (720, 1.0),             # 1:1, as it opened before
+    (600, 1.0),
     (1440, 1.3),            # a 5K panel: its height's wish is under what a word needs
+    (2160, 2 ** 0.5),       # an 8K at 2x: taller than 1825 points, so over ZOOM_READ
     (2046, (2046 / 1080) ** 0.5),   # a 4K panel at 1x
     (2700, 1.5),            # capped, under what a 900-point window can't use
 ])
@@ -346,9 +351,17 @@ def test_window_zoom_never_stops_a_launch():
         def get_window_pos(self, _win):
             raise RuntimeError("no window system")
 
-    assert placement.window_zoom(Silent(), None) == 1.0
+    assert placement.window_zoom(Silent(), None) == placement.ZOOM_READ
     off = _Windows((90000, 90000))      # on no screen at all
-    assert placement.window_zoom(off, None) == 1.0
+    assert placement.window_zoom(off, None) == placement.ZOOM_READ
+
+
+def test_window_zoom_survives_a_screen_lookup_that_fails(monkeypatch):
+    """The `try` covers the lookup and the rule too, not only the window's rect."""
+    def fails(*_a):
+        raise RuntimeError("no")
+    monkeypatch.setattr(placement, "on_screen", fails)
+    assert placement.window_zoom(_Windows((100, 100)), None) == placement.ZOOM_READ
 
 
 # ---- screens by name (row 771) ----

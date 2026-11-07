@@ -258,6 +258,9 @@ DORMANT_ALPHA = 0.22
 THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
 WIRE = 3.0               # a render cable, a trigger
 NODE_W = 190.0 * graphview.SCALE    # a node's inner width
+DENSITY_STEP = 0.1                  # `canvas_density`: 1.3 lands exactly
+DENSITY_MAX = 4.0
+DENSITY_SETTLE_S = 0.3              # `held_density`
 PIN = 12.0               # a pin's square: a bigger target for a trackpad (2026-10-26)
 # 2026-10-31 (the show of 2026-10-30: cable targets "way too small" zoomed
 # out): a pin's hit target is never under MIN_PX screen px, however far out
@@ -464,6 +467,35 @@ def _start_view_read(ctx, path: str) -> None:
     ed.get_config(ctx).settings_file = ""
     with suppress(OSError):
         os.unlink(path)
+
+
+def canvas_density(base: float, units: float) -> float:
+    """The density to bake the canvas's glyphs at, with `units` canvas units a
+    point: the editor scales vertices, so a word zoomed 1.3× at 1x is a 20 px
+    glyph stretched to 26, and soft. Baked at the size it lands, it's sharp. Up in
+    `DENSITY_STEP`s, so a zoom's sweep bakes a few sizes, not one a frame; never
+    under `base` (zoomed out, as before), never over `DENSITY_MAX`."""
+    wanted = base / max(units, 1e-3)
+    return max(base, min(math.ceil(wanted / DENSITY_STEP - 1e-3) * DENSITY_STEP, DENSITY_MAX))
+
+
+def held_density(st: dict, wanted: float, now: float | None = None) -> float:
+    """The density to draw at: `wanted` at the start, then only once it has held
+    `DENSITY_SETTLE_S`. A new density is a bake and can be a new atlas, up to
+    230 ms measured, on the one thread the render shares: a person's zoom makes
+    one at its end, soft while it moves, not one a step."""
+    now = time.monotonic() if now is None else now
+    held = st.get("density_held")
+    if held is None or held == wanted:
+        st["density_held"], st["density_since"] = wanted, None
+        return wanted
+    since = st.get("density_since")
+    if since is None or since[0] != wanted:
+        st["density_since"] = (wanted, now)
+    elif now - since[1] >= DENSITY_SETTLE_S:
+        st["density_held"], st["density_since"] = wanted, None
+        return wanted
+    return held
 
 
 def keep_corner(st: dict, size: tuple[float, float]) -> None:
@@ -1706,6 +1738,8 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     st["thumbs"], st["preview"], st["gpu_ms"] = picture_sources(panel)
     st["thumb_hover"] = None
     imgui.push_font(None, ui.FONT_BASE * graphview.SCALE)    # the canvas's own text size
+    density = imgui.internal.get_font_rasterizer_density()
+    imgui.internal.set_font_rasterizer_density(held_density(st, canvas_density(density, st["zoom"])))
     _place(panel, st, view)
     lay = st["auto"][1]
     _titles(st, lay)                    # plan 28 N9: behind the nodes
@@ -1772,6 +1806,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     _hover(st, view, panel)
     _moved(panel, st, view)
     _patch_drop(panel, st, view)        # plan 40 T3: let go on a lit cable: splice
+    imgui.internal.set_font_rasterizer_density(density)
     imgui.pop_font()
     ed.end()
     if through > 0.0:

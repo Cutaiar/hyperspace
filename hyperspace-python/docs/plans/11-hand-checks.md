@@ -8361,7 +8361,7 @@ Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a f
 ## DH. GRAPH's start zoom (plan 58 SM2, row 787)
 Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
 **612. It reads where it opens.** (each display you'll run the control window on)
-1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the numbers are `placement.ZOOM_DENSE` and `ZOOM_HEIGHT`.
+1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the number is `placement.ZOOM_READ`.
 *Fail:* a start as small as before, or a view opening away from the first column.
 **613. Your zoom stays, and layouts don't move.** (the rig)
 1. ⌘+scroll to a zoom of your own and note what's in the canvas's top-left. Load another patch, then resize the control window taller and shorter. *Pass:* your zoom stands through both, and the same node stays in the top-left. This is new: a resize used to zoom the canvas.
@@ -8552,8 +8552,10 @@ Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the a
 **634. The show's display.** (the display you'll run the show on, at 1080p)
 1. Open the control window on it, launch, and load a patch. *Pass:* the node words read from where you'll stand, and the first column is at the canvas's top-left.
 2. Count the columns beside the pane. *Pass:* enough to work without panning all the time; about four. Say if you want it tighter or looser: the number is `placement.ZOOM_READ`.
-3. Resize the window. *Pass:* the zoom doesn't change.
-*Fail:* a start as small as before, or a zoom that follows the resize.
+3. Look at a node's words up close, at a 1x display if you have one. *Pass:* sharp enough not to bother you. They're softer than the head's words above the canvas at any zoom but 1:1; say if it bothers you.
+4. ⌘-scroll to a new zoom during a look with the output up. *Pass:* no visible stutter on the output when you stop, about a third of a second later.
+5. Resize the window. *Pass:* the zoom doesn't change.
+*Fail:* a start as small as before, words too soft to read, a stutter you can see, or a zoom that follows the resize.
 
 ## What no test covers
 

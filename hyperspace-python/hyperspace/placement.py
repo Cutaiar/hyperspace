@@ -122,29 +122,33 @@ def screens(glfw) -> list[Screen]:
 # 598 mm wide). The show's display is 1080p (the owner, 2026-11-07).
 
 ZOOM_READ = 1.3         # by eye at 1920x1080: words read from a distance, four columns on the canvas
+ZOOM_FULL = 960.0       # a display at least this tall gets ZOOM_READ: 1080p, less a menu bar and a dock
+ZOOM_SMALL = 720.0      # at this height or under, 1:1: 1.3 left under two columns at 1024x768
 ZOOM_HEIGHT = 1080.0    # the height whose square root is 1: only a much taller display passes ZOOM_READ
 ZOOM_MAX = 1.5          # by eye: 1.38 reads well in a 900-point window, 1.89 held two nodes
 
 
 def start_zoom(height: float) -> float:
-    """GRAPH's first zoom on a display, in screen points per canvas unit:
-    `ZOOM_READ` at 1080p and on anything smaller or denser, more on a much
-    taller screen, up to `ZOOM_MAX`. The height counts by its square root: a
-    taller screen is seen from further off, but a window on it needn't fill it."""
-    return min(max(ZOOM_READ, math.sqrt(max(height, 0.0) / ZOOM_HEIGHT)), ZOOM_MAX)
+    """GRAPH's first zoom on a display, in screen points per canvas unit, by its
+    usable height alone: `ZOOM_READ` from `ZOOM_FULL` up, easing to 1 at
+    `ZOOM_SMALL`; above about 1825 points the square root of the height over
+    `ZOOM_HEIGHT`, up to `ZOOM_MAX` (a taller screen is seen from further off,
+    but a window on it needn't fill it)."""
+    room = (height - ZOOM_SMALL) / (ZOOM_FULL - ZOOM_SMALL)
+    read = 1.0 + (ZOOM_READ - 1.0) * min(max(room, 0.0), 1.0)
+    return min(max(read, math.sqrt(max(height, 0.0) / ZOOM_HEIGHT)), ZOOM_MAX)
 
 
 def window_zoom(glfw, win) -> float:
-    """`start_zoom` for the display `win` is on: the one its centre is over,
-    else the one it lands on. 1.0 when the window system won't say: a launch
-    must not die for a zoom."""
-    scr = screens(glfw)
+    """`start_zoom` for the display `win` is on (`on_screen`). `ZOOM_READ` when
+    the window system won't say: the show's display is the likeliest, and a launch
+    must not die for a zoom, nor run its whole length too small to read."""
     try:
         rect = (*glfw.get_window_pos(win), *glfw.get_window_size(win))
+        on = on_screen(rect, screens(glfw))
+        return start_zoom(on.h) if on is not None else ZOOM_READ
     except Exception:  # noqa: BLE001 — as above
-        return 1.0
-    on = _centre_screen(rect, scr) or _landing(rect, scr)
-    return start_zoom(on.h) if on is not None else 1.0
+        return ZOOM_READ
 
 
 # ---- the file ----
