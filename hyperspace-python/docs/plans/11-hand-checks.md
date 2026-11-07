@@ -8457,6 +8457,14 @@ Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which 
 1. GRAPH: click a node with a strip (view, output) so the side pane shows it, and edit a value so the dot shows. Drag the pane from narrow to wide. *Pass:* ◀ name ● ▶ and save · as… · reset never touch, and the chips drop to their own row when it's narrowest.
 *Fail:* a chip over ▶ or over the name.
 
+## DM. A save lands in the running app (HR, row 802)
+
+Headless: `tests/test_hot_reload_app.py`, which runs the real app with one output and no devices. Restart first: `hotreload.py` is cold.
+
+**624. Saves on the rig.** (the Mac, with the second output and the desk)
+1. Launch with the show's outputs and devices. Save `outputs.py`, `render.py`, `ghost.py` and `ui.py` in turn, with no edit needed beyond the save. *Pass:* the SYSTEM section says `hot: <file>` each time, and the picture and the panel keep going, on every output.
+*Fail:* `swap: …` on the SYSTEM section, or an output that stops.
+
 ## What no test covers
 
 Only a person can settle these:

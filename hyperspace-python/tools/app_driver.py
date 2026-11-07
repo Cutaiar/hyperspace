@@ -91,9 +91,10 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
     st = {"n": 0, "action": None, "done": False, "windows": {}}   # address → window
     shots: list[dict] = []
     draw = ui.Panel.draw
+    st["draw"] = draw
 
     def stepped(self, dt, fps):
-        draw(self, dt, fps)
+        st["draw"](self, dt, fps)
         st["n"] += 1
         if st["done"]:
             return
@@ -113,6 +114,9 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
     swap = glfw.swap_buffers
 
     def captured(window):
+        if ui.Panel.draw is not stepped:    # a hot reload made a new `Panel`: step that one
+            st["draw"] = ui.Panel.draw
+            ui.Panel.draw = stepped
         st["windows"][ctypes.addressof(window.contents)] = window
         n = st["n"]
         if st["action"] is not None and not st["done"] and n % every == 0:

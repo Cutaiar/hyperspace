@@ -3162,6 +3162,16 @@ media sound playing: the live mixer is re-classed by `MediaState` and
 the stream's callback reaches the new code through the class; adding
 the module itself needed a restart.
 
+A class in a hot module adds no `__slots__` over another hot class. Python
+refuses to re-class such an object once the base has reloaded (`object layout
+differs`), and the swap stops there, so no save completes. `DeckLibrary` and
+`DeckProject` share another object's `__dict__` and must keep their own fields
+out of it, so they take slots from a base in `hotreload.py`, which no reload
+re-executes. `tests/test_hot_reload_app.py` holds the rule by name over every
+class, and runs a save through the real swap in the real app. That test and
+`tools/drive_hot_reload.py` are how to see a reload working: `tools/app_driver.py`
+follows a reload, so a script keeps stepping after one (row 802).
+
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded patch, what happened — and every
 thread's stack, for:

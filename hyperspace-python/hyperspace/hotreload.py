@@ -24,6 +24,12 @@ Contract for hot classes:
   - a changed __init__ does NOT re-run on live instances; attributes it
     would have added are missing until restart (the frame guard in app.py
     catches the resulting error and shows it instead of crashing)
+  - a class in a hot module adds no __slots__ over another hot class: a live
+    instance can't be re-classed once the base was reloaded ("object layout
+    differs", which stopped every reload for two days, row 802). A class that
+    needs slots there takes them from a base in this cold module, as the deck's
+    views do; slots directly over `object` or a cold base re-class while the
+    names stay the same. tests/test_hot_reload_app.py holds both.
   - an Enum defined in a reloaded module keeps its identity: the class the
     process first built is put back after the re-execution, so a live
     object's member still `is` the module's (params.Kind was the case that
@@ -65,6 +71,20 @@ MODULES = (
 # `render`, which binds its MaskPasses. Plan 39 T4: `segment` is left out —
 # cold, as `app` is: a worker module whose threads outlive any reload, so a
 # re-executed copy would be a second module beside the live workers.)
+
+
+class DeckProjectSlots:
+    """`library.DeckProject`'s own fields. The view shares its show's `__dict__`, so
+    nothing of its own can live there; and this class is here because a reload never
+    re-executes this module, so the view's slots stay one layout across every reload."""
+
+    __slots__ = ("lib", "meta")
+
+
+class DeckLibrarySlots:
+    """`library.DeckLibrary`'s own fields, for the same reasons as `DeckProjectSlots`."""
+
+    __slots__ = ("_project", "base", "own")
 
 
 def _enums(mod) -> dict[str, type[Enum]]:
