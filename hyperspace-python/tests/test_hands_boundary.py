@@ -5,44 +5,33 @@ loudly, which is the point: the boundary erodes one convenient import at
 a time, and nobody notices until the day someone tries to extract it.
 """
 
-import ast
-from pathlib import Path
-
 import pytest
+from walls import family, imports, inside, module_of, shown
 
-PKG = Path(__file__).resolve().parents[1] / "hyperspace" / "hands"
-# the instrument: no host imports allowed. panel.py is deliberately absent
-# — it is the adapter to *this* host, and extracting means replacing it.
-STANDALONE = ("core.py", "room.py", "signal.py", "tape.py")
-
-
-def _imports(path: Path):
-    """(module, level) for every import in the file."""
-    out = []
-    for n in ast.walk(ast.parse(path.read_text())):
-        if isinstance(n, ast.ImportFrom):
-            out.append((n.module or "", n.level))
-        elif isinstance(n, ast.Import):
-            out += [(a.name, 0) for a in n.names]
-    return out
+# the adapters to *this* host: extracting means replacing them. Everything else
+# in the package is the instrument, a new file included: no host imports allowed.
+ADAPTERS = ("device", "panel")
+FILES = family("hands")
+INSTRUMENT = [f for f in FILES if not any(a in module_of(f)[1:2] for a in ADAPTERS)]
 
 
-@pytest.mark.parametrize("name", STANDALONE)
-def test_the_instrument_imports_nothing_from_the_host(name):
-    for mod, level in _imports(PKG / name):
-        if level:                       # relative: only inside this package
-            assert level == 1 and mod in ("signal", "core", "room", "tape"), \
-                f"{name} reaches outside the hands package: {'.' * level}{mod}"
+@pytest.mark.parametrize("path", INSTRUMENT, ids=shown)
+def test_the_instrument_imports_nothing_from_the_host(path):
+    for mod, level in imports(path):
+        if level:                       # relative: only inside this package, never an adapter
+            where = inside(path, mod, level) or ()
+            assert where[:1] == ("hands",) and where[1:2] and where[1] not in ADAPTERS, \
+                f"{shown(path)} reaches outside the instrument: {'.' * level}{mod}"
         else:
-            assert not mod.startswith("hyperspace"), f"{name} imports {mod}"
+            assert not mod.startswith("hyperspace"), f"{shown(path)} imports {mod}"
 
 
 def test_the_panel_is_the_only_piece_that_knows_the_host():
     """If this fails, the adapter has spread and extraction got harder."""
-    reaching = [f.name for f in sorted(PKG.glob("*.py"))
-                if any(lv > 1 or m.startswith("hyperspace")
-                       for m, lv in _imports(f))]
-    assert reaching == ["device.py", "panel.py"]
+    reaching = [shown(f) for f in FILES
+                if any((inside(f, m, lv) or ("",))[0] != "hands" if lv
+                       else m.startswith("hyperspace") for m, lv in imports(f))]
+    assert reaching == ["hands/device.py", "hands/panel.py"]
 
 
 def test_the_instrument_runs_with_no_host_at_all():
