@@ -775,6 +775,7 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 786 | SM1: `tools/poi_probe.py` and its tape salvaged from the closed #342 and ported to `main`'s `poi.step`, without #342's fixes. On the owner's own tape it shows `main`'s poi running the hand to `HAND_LIMIT` during a hold and leaving it there: **a question for the owner**, not fixed here. (rec) — pending the owner | 611 |
 
 "—": no hand check shows it; tests only.
 
@@ -14034,3 +14035,20 @@ still wins, as does a sink row.
 - **A person joining a controller's step.** `_opens` was decided only when a step began, so a typed commit landing inside a controller's settle time neither moved focus nor opened the latch, and ⌘Z refused right after typing. A change seen with the hand up now counts on a step already open (`Undo._observe`); a held step (`keep_open`) still opens nothing. The same goes for the mouse, so row 753's known limit, a mouse held anywhere, now also takes a controller's step already open.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
+
+### 786. The poi probe, and what it shows
+
+- **Built.** `tools/poi_probe.py` and `tests/fixtures/pads/joycon-poi-excerpt.jsonl` from `origin/worktree-poi-hand-fix` (#342, closed). No `hyperspace/` diff. Every reader and motion name it asks for is on `main` (`Motion.add_turn`, `.decay`, `.lanes`, `hid.Turn`, `hid.Recorder`, `nintendo.kind_of`, `axis_map_for`, `gyro_of`, `report_clock`). What changed: `numbers()` reads the push against 1 g (no `g_mag` on `main`) and its walls are `poi.HAND_LIMIT` and `params.PAN_RANGE` (no `box` on `main`); `--home` is gone with its dial; the table gains the share of frames at a wall; `frames()` is the tape through the app's path, so the tests and the table read one road.
+- **`tests/test_poi_real.py` keeps what is true on `main`:** the limits `poi.py` has, the end of the pickup and of the hold, the A press, `poi.hand` 0. #342's "stays on the screen" tests are dropped, because on `main` it doesn't. The live loop is tested on a stand-in for the reader, held to the real class. No test pins the drift below, so a fix moves nothing here.
+- **What it shows, default dials, the owner's tape of 2026-11-02:**
+
+  | window | secs | frames read still | attitude error median/worst | travel end/farthest | speed max | pan max | frames at the wall |
+  |---|---|---|---|---|---|---|---|
+  | pickup | 5.5 | 24% | 2.6° / 40.8° | 0.42 / 1.88 | 1.75 | 1.17 | 0% |
+  | hold | 8.0 | 15% | 7.1° / 57.4° | **8.00 / 8.00** | 6.65 | 7.16 | 58% |
+
+  In the hold, the hand reaches `HAND_LIMIT` at 33.48 s, 3.5 s in. 8 world units is 3.2 m at `UNITS_PER_M`; the pad was in a hand. From 33.6 s the pad turns under 7 deg/s and reads 1.01 to 1.05 g, with 5.5° to 8.4° of attitude error read as a 0.11 to 0.15 g push. The velocity runs on at up to 3.6 units/s until `CALM_S` lets the stillness in at about 36.7 s: 3.1 s rather than 1.5, because a reading at the edge of `STILL_G` restarted the timer once, near 35.1 s. The attitude then comes right (0.1° at the end) and the velocity zeroes, but no pull home is by design (the owner, 2026-11-03), so the window ends with the hand at 8.00, the pan at +7.13, +2.06 and the zoom at 0.22. Through the default eye a 16:9 output shows about ±3 across and ±1.7 down (#342's reading of the rig's TV), so the shape is off the screen, a fifth of its size, until A.
+- **It is not the tape's gap.** The excerpt jumps from 21.5 s to 30 s, so the hold starts on a stale attitude. Replayed from a pad levelled at 30 s, the hold still reaches the wall: 8.00 / 8.00, 53% of frames, pan max 5.75. It takes the turn of up to 178 deg/s at 31 to 33 s to raise the error; no still moment follows it to correct it.
+- **`--hand 0`:** the same tape with no push, pan max 1.24 and the hand at home. The turn alone is well behaved.
+- **The question for the owner, (rec) — pending the owner.** The poi is off by default, so this only shows with it on. Did it look like this at the machine? Recommendation: a live bug, fixed as one small item, keeping no pull home: the pad dead still stops the hand sooner, and the hand's limit is the screen's size rather than 8. Not built here: the item says don't.
+- **Judge it.** 611.
