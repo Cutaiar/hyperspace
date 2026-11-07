@@ -486,11 +486,11 @@ def register_switches(reg: Registry, slots) -> list[str]:
                        "the config's launch value comes back at a restart.", **settings)
         reg.toggle(f"{pre}.hands", label("hands"), *flag("hands"), group="output",
                    tip=f"The hands and the guide wired into this window{whose}. Off: "
-                       "a mute — this window ignores them. Ghost hands (HANDS page) is "
+                       "a mute — this window ignores them. Ghost hands (HANDS section) is "
                        "the switch for every output at once.", **settings)
         # plan 23 WP1: this output's mirror, its last step — the scene, the
         # hands and the readout together, to undo a Pepper's Ghost glass
-        mirror = ("Ghost mirror (HANDS page) flips the hands only: with this on, "
+        mirror = ("Ghost mirror (HANDS section) flips the hands only: with this on, "
                   "leave it off or the hands flip twice. Launch value: the "
                   "config's flip_x / flip_y.")
         reg.toggle(f"{pre}.flip_x", label("flip X"), *flag("flip_x"), group="output",

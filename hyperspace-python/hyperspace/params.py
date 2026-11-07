@@ -2911,13 +2911,13 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         # the bindings file puts them on a control, never a loadable patch's row (row 700)
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
-                  tip="Load the next preset of the PRESETS page's list — every "
+                  tip="Load the next preset of the PRESETS section's list — every "
                       "preset by name, a new one included — into the deck off air, "
                       "wrapping at the end. The room does not move. "
                       "The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
-                  tip="Load the previous preset of the PRESETS page's list into the deck "
+                  tip="Load the previous preset of the PRESETS section's list into the deck "
                       "off air, wrapping at the start. The room does not move.")
         # home (plan 15 WP2, decision 27): the show's startup loadable patch. Lit
         # while the show names one — the light the desk's OVERDUB shows

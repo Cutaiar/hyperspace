@@ -2142,7 +2142,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     reg["ghost.on"].set(False)
     drawn, _ = _output_page(rig, monkeypatch, body=True)
     why = [s for s in drawn if s.startswith(("hands:", "through:"))]
-    assert why[0] == why[-1] == "hands: ghost hands are off (HANDS page)"
+    assert why[0] == why[-1] == "hands: ghost hands are off (HANDS section)"
     assert "paced by output 1 · frame 1920×1080 · below: output 1's window" in drawn
     # an output the config lists but that did not open: one line, why
     slots[1].win, slots[1].missing = None, "screen 2 is not connected"

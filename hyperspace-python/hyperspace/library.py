@@ -1434,7 +1434,7 @@ class Project:
         if apart:
             lib.say(warning=f"{path.name}: {', '.join(apart)} differs from the Mirror, and "
                             "there is one Mirror now: those hands follow it. To flip one "
-                            "window, use its Flip X on the OUTPUT page")
+                            "window, use its Flip X in the OUTPUT section")
         return missing
 
     def new(self, name: str = UNTITLED) -> None:
@@ -2887,7 +2887,7 @@ class Library:
                                  f"name{'s' if len(still) == 1 else ''} it; restore it from "
                                  "the trash, or clear the slot")
             else:
-                self.say(f"{shown} is in the trash — the PRESETS page's trash can restore it")
+                self.say(f"{shown} is in the trash — the PRESETS section's trash can restore it")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:

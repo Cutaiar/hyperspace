@@ -164,7 +164,7 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     _click(panel, page["rects"]["×.DIAL"])
     assert not (tmp_path / "presets" / "dial.json").exists()
     assert [t.name for t in lib.trash()] == ["DIAL"] and "DIAL" not in lib.list("presets")
-    assert lib.status == "DIAL is in the trash — the PRESETS page's trash can restore it"
+    assert lib.status == "DIAL is in the trash — the PRESETS section's trash can restore it"
     page_frame(panel)
     page = st["page"]
     assert "DIAL" not in [n for n, _ in page["rows"]] and len(page["rows"]) == 24

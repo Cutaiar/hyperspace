@@ -676,7 +676,7 @@ def test_the_page_draws_in_every_state(rig):
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert ui_graph.timing_line(rig.panel).startswith("graph page: ")
+    assert ui_graph.timing_line(rig.panel).startswith("graph draw: ")
     assert view is not None
     frame(rig.panel, "system")
 

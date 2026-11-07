@@ -648,7 +648,7 @@ CHEATSHEET = [
     ("Cmd+Z", "undo, after a change here · ⇧ redo (or Ctrl+Z)"),
     ("Home", "home preset, off air (fn ←)"),
     ("Cmd+R", "restart process"),
-    ("Cmd+[ ]", "panel page back · forward"),
+    ("Cmd+[ ]", "panel section back · forward"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
@@ -2333,7 +2333,7 @@ class Panel:
             sw = sl.switches
             why = []
             if sw.hands and ghost is not None and not ghost.value:
-                why.append("hands: ghost hands are off (HANDS page)")
+                why.append("hands: ghost hands are off (HANDS section)")
             elif sw.hands and getattr(self, "hands", None) is None:
                 why.append("hands: no tracker")
             if through_layer(wiring, sl.n, bus_cuts) is not None and not fx_on:

@@ -322,8 +322,8 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     if stick is not None:
         reading = panel.reg.get(dial_id(stick))
         dial = (f"\nread as a dial ({reading.text() if reading is not None else ''}): its "
-                f"routes are axis:{stick}.N … axis:{stick}.NW, off the camera; the GRAPH "
-                "page's pad node has each sector's param, and the reading")
+                f"routes are axis:{stick}.N … axis:{stick}.NW, off the camera; GRAPH's "
+                "pad node has each sector's param, and the reading")
     if said:
         whose = "" if dial else " — the app's own, no row in the table"
         return f"{c.glyph} · {said}{whose}\n{c.name}{dial}\n{learn} to take it over"
