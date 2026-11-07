@@ -147,3 +147,21 @@ flake and three cells were failing at 26.
 **Fetch, then look.** Row 54 is the cheapest mistake in this file to avoid and
 the most expensive to make, because the output of a stale clone is
 indistinguishable from the truth and arrives with evidence attached.
+
+## Mine, from building the Checkbox
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 57 | **The Switch's hit area was `x - 3, y - 2`** — the Tailwind STEP numbers of `after:-inset-x-3 -inset-y-2` read as pixels. The real one is the pointer target 11px past each end and 7px above and below, so the kit had an 8px dead strip at each end that the browser does not. Its own docstring named the class | `rect.stretched_hit`, one answer for the Switch and the Checkbox, from `tokens.HIT_STRETCH` | Found only because the Checkbox carries the identical class and its hit area was MEASURED rather than read. **A number in a class name is an index into a scale, not a length.** And row 29's rule again: nothing ever clicked the Switch off its track. `test_the_switch_takes_a_click_off_its_left_end` does now. |
+| 58 | My first hit scan of the Checkbox read its target as LOPSIDED — reaching 12px left and 8 up but stopping short right and down | A dense scan plus the `::after`'s own computed box: 38 x 30, symmetric, 11px and 7px — the pseudo element is inset from the PADDING box, a border inside the edge | **Sixth time a probe of mine reported a defect that is not there** (rows 35, 51, 55). Sparse sampling across a half-pixel edge. The fix was the same as every time: a second instrument that does not share the first one's assumption, and only then a conclusion. |
+| 59 | The transition probe recorded an UNCHECK under the label "check": it assumed the box was unchecked, and the hit scan before it had left it checked | The probe sets its own starting state | **A probe step owns its precondition.** It ran after another step that mutated the same control, so it measured whatever that step left behind. The data was right and the label was wrong, which is the more dangerous way round. |
+| 60 | One of the six revert-checks for the new tests went red for the WRONG reason: the mutation I wrote raised a NameError, so "the Switch tests fail on the old hit area" was briefly a claim about a crash | Rewritten as a clean mutation; the failure is now the missed click itself (`False is True`) | **A mutation that crashes is not a mutation.** Habit 3 says watch the test go red; read WHY it went red, or a typo in the revert passes for a proof. |
+
+### What this batch says
+
+The Checkbox itself came out right on the first diff - every cell within
+0-1 levels in both themes - because every number came off `?probe` first.
+What the measuring found was in the component NEXT to it. Measuring the
+second of two similar components is how the first one's bugs surface (row
+38 said the same of menus); it is worth doing even when the second one is
+"the cheap one".

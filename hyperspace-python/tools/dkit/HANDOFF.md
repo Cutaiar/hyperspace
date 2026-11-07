@@ -59,12 +59,11 @@ A reasonable opening message for a new session:
 > `git fetch` first — RETRO row 54, and it is why this sentence is here.
 >
 > Then read `hyperspace-python/tools/dkit/RETRO.md`, `ROADMAP.md` and
-> `HANDOFF.md`. Branch `claude/magical-ritchie-fkh5e0`. Items 1, 2 and 3a-3c
-> of the "Pick up here" list are done. **Decide between 3d and item 4** -
+> `HANDOFF.md`. Branch `claude/magical-ritchie-fkh5e0`. Items 1, 2, 3a-3c
+> and the Checkbox are done. **The one that decides it all is item 5** -
+> port one real `ui_pane.py` section onto the kit; nothing imports it yet.
 > 3d (splitting the 492-line `combobox()` by phase) is a behaviour refactor
-> with three RETRO rows living inside it, so it wants a session of its own
-> and the driven keyboard tests run after every step; item 4 (Checkbox
-> first) is new coverage and independent of it.
+> with three RETRO rows living inside it and wants a session of its own.
 >
 > Re-run the suite and the diff before trusting any figure in these docs,
 > and a skip is not a pass (row 56).
@@ -74,10 +73,14 @@ A reasonable opening message for a new session:
 ## Where it stands
 
 ```
-826 passed, 59 skipped, plus the gallery flake below (its tests pass with
--n0).   chrome diff: 64 cells, flat 0-2 levels, worst corner 0.776 px,
-"all cells within the bar" in BOTH themes.
+852 passed, 60 skipped (842 with test_gallery.py deselected under xdist,
+plus its 10 run -n0).   chrome diff: 68 cells, flat 0-2 levels, worst
+corner 0.776 px, "all cells within the bar" in BOTH themes.
 ```
+
+Measured after the Checkbox. Adding it changed ZERO ImGui gallery pixels
+outside its own four cells, in both themes, checked against the capture
+taken at the start of the session.
 
 Re-measured after 3a-3c, not carried over. The figures moved from 815/51
 only by the nine new modules: each adds two `test_module_surface` cases,
@@ -116,7 +119,8 @@ someone else's work. Run it serially before believing it.
 | keyboard model (Combobox, menus, ContextMenu, Select) | done, measured per component |
 | scroll (rate, momentum, whole pixels, monotone rounding) | done — see the decision record in `interact.py` |
 | `comp_command.py` (cmdk scorer, verified, no UI yet) | parked for the Command palette |
-| Toast, Kbd, Breadcrumb, Checkbox, Collapsible, Resizable | **not started** |
+| **Checkbox** (+ Label) | done, in the pixel diff, driven - see below |
+| Toast, Kbd, Breadcrumb, Collapsible, Resizable | **not started** |
 | `layer.py` (scrim, panels, focus trap, z-order) | done, measured, 20 tests |
 | Dialog, Sheet on top of it | **not started — but no longer blocked** |
 | variant resolver (cva) | not started, eight ad-hoc tables |
@@ -442,7 +446,37 @@ The diff should still say **"all cells within the bar"** with a worst
 flat-region delta of 2 levels. A pure move cannot change a pixel, so if it
 does, something was not a move.
 
-**4. Then coverage**: Dialog, Sheet, Toast, Kbd, Breadcrumb, Checkbox.
+**4. Then coverage**: Dialog, Sheet, Toast, Kbd, Breadcrumb. **Checkbox is
+DONE** (commits ending `dkit: Checkbox`):
+
+* measured on `?probe` (`checkbox.*` blocks, both themes): 16px,
+  `rounded-[4px]`, no hover chrome, keyboard-only ring that also swaps a
+  CHECKED box's border to `ring`, Space toggles and Enter does not, the fill
+  eases while the tick snaps, and a 38 x 30 hit area;
+* four cells in the pixel diff, 0-1 levels in both themes, the tick measured
+  by `icon_ink` from a box derived from Lucide's path and the cell;
+* `test_checkbox.py`, 24 driven tests, each of the six mechanisms reverted
+  once to watch its tests go red;
+* `interact.checkbox(label=...)` - Label `htmlFor` included - on the
+  dashboard (Solo, beside Mute) and in the Gallery tab.
+
+Two things it turned up that reach beyond it:
+
+* **the Switch's hit area was wrong** (RETRO row 57) - fixed, with a test;
+* **a disabled control with a layer over its fill needs its backdrop.**
+  CSS `opacity` is a group opacity; halving each colour puts a quarter of
+  the fill under the tick - 57 levels, measured by breaking it on purpose.
+  `draw.checkbox(backdrop=...)` folds it exactly. The disabled SWITCH has
+  the same shape (a thumb over a track, per-colour alpha in `draw.switch`)
+  and no disabled-switch cell is in the diff, so it is unmeasured - the
+  next cheap cell to add.
+
+And one gap it did not close: **the React DASHBOARD page carries no Tier 1
+control at all** - no Switch, Slider, Select or Input, only the gallery and
+probe routes do. ROADMAP rule 3 says every component lands on both pages;
+for Tier 1 the React dashboard half was never done, so the Checkbox
+follows the Switch rather than inventing a Controls card for one
+component.
 Checkbox is 47 toggle params and the cheapest of them.
 
 **5. And the one that decides it all**: port one real `ui_pane.py` section.
