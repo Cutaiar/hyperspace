@@ -337,9 +337,13 @@ def _save_windows(home, render_win, ctrl_win, output, more=()) -> None:
     placement.save(home, control, render, placement.screens(glfw))
 
 
-def _slots(cfg: dict | None) -> list[Slot]:
+def _slots(cfg: dict | None, scr: list | None = None, notes: list | None = None) -> list[Slot]:
     """The render outputs the config lists (config.screens: one with no
-    list), numbered from 1, with their launch switches; no window yet."""
+    list), numbered from 1, with their launch switches; no window yet.
+    A monitor given by name is an index from here on, by `scr` (row 771).
+    A later output whose name no screen has is `missing`, as one whose
+    index no screen has is (fork F9), said in `notes`; output 1's words are
+    `place`'s, since it always opens."""
     from . import config
 
     out = []
@@ -347,10 +351,18 @@ def _slots(cfg: dict | None) -> list[Slot]:
         sw = Switches(scene=bool(e["scene"]), hands=bool(e["hands"]), dim=float(e["dim"]),
                       flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
-                        monitor=placement.index(e["monitor"]),
+                        monitor=placement.index(e["monitor"], scr=scr or None),
                         fullscreen=bool(e["fullscreen"]),
                         window=bool(e.get("window", True)) or k == 0,
                         syphon=str(e.get("syphon", "") or ""), ndi=str(e.get("ndi", "") or "")))
+        name = placement.named(e["monitor"])
+        if k and scr and name and out[-1].window:
+            at, said = placement.resolve(name, scr)
+            if at < 0:
+                out[-1].missing = f'screen "{name}" is not connected'
+            if said and notes is not None:
+                tail = " — not opened" if at < 0 else ""
+                notes.append(f"config: {out[-1].label}: monitor = {name!r} {said}{tail}")
     return out
 
 
@@ -410,13 +422,13 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     scr = placement.screens(glfw)
     oc = (cfg or {}).get("output", {})
     oc = oc if isinstance(oc, dict) else {}
-    slots = _slots(cfg)
+    idle: list[str] = []
+    slots = _slots(cfg, scr, idle)
     render_rect = ctrl_rect = None
     later_rects: list = [None] * len(slots)
     notes: list[str] = []
     # plan 32 T9: a publish-only output never has a window, so no screen
     # or spot is looked for; one with nothing to publish is not drawn either
-    idle = []
     for slot in slots[1:]:
         if slot.publish_only and not (slot.syphon or slot.ndi):
             slot.missing = NOTHING_TO_PUBLISH
@@ -432,7 +444,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             notes += [n1, n2]
             taken = [tuple(render_rect[:2])]
             for k, slot in enumerate(slots[1:], start=1):
-                if slot.publish_only:
+                if slot.publish_only or slot.missing:
                     continue
                 later_rects[k], n = _later_rect(slot, k, scr, renders, taken)
                 notes.append(n)
@@ -455,10 +467,12 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     if scr:
         # …and the config is left saying what was done: an index no screen
         # has (or no number at all) is −1 from here on, as the note above
-        # said, so `Output.monitor` cannot carry it further (plan 16 WP7)
+        # said, so `Output.monitor` cannot carry it further (plan 16 WP7), and
+        # a name is the index it found: `Output.monitor` is an index at
+        # runtime until SC3b (row 771)
         for key in ("monitor", "control_monitor"):
             if key in oc:
-                oc[key] = placement.index(oc[key], len(scr))
+                oc[key] = placement.index(oc[key], len(scr), scr)
     slots[0].monitor = placement.index(oc.get("monitor", -1))
     render_size = render_rect[2:] if render_rect else RENDER_SIZE
     ctrl_size = ctrl_rect[2:] if ctrl_rect else CONTROL_SIZE

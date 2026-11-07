@@ -8344,9 +8344,25 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
+## DA. Screens by name (wave 5 SC1)
+Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tests/test_app_boundary.py`, on stand-in screens. Only a real replug shows what macOS does. A name is read at the launch; a replug while the app runs is SC3b's, not this.
+**600. Outputs stay put across a replug.** (the rig, with two outputs on HDMI)
+1. In the OUTPUT page's Screen list, read the exact names of the screens. In `config.toml` give each `[[output.screens]]` its `monitor` by name, and `[output] control_monitor` too. Launch. *Pass:* each window opens on the screen named, no note in SYSTEM.
+2. Quit. Unplug both HDMI cables, plug them back in the other order, launch. *Pass:* the same pictures on the same screens. An index in the same place would have swapped them.
+3. Set one output's `monitor` to the name cut short (`"MSta"`, or lower case). Launch. *Pass:* that output doesn't open (or output 1 opens at its last spot), and the note lists the screens connected.
+4. Put an index back on one output and launch. *Pass:* it works as it always did.
+*Fail:* a swap in step 2, a window on a screen that matched only part of the name, or a launch that stops.
+
+**601. Two identical screens.** (two displays of one model, if the rig has them; otherwise say skipped)
+1. Launch with one `monitor` given as the bare name. *Pass:* it opens on the left of the two, and the note names both, such as "MStar #1, MStar #2". If they appear as "DELL (1)" and "DELL (2)", they are already two names: write that in row 772 and use them as written.
+2. Set the two outputs to `"MStar #1"` and `"MStar #2"`. Launch. *Pass:* #1 on the left one, #2 on the right.
+3. Quit, swap the two cables, launch. *Pass:* the same again. **Say what you saw either way:** if macOS moved them, two identical screens can't be told apart without a serial, and row 772 needs the owner's word.
+*Fail:* #2 on the left with the arrangement unchanged, or a launch that stops.
+
 ## What no test covers
 
 Only a person can settle these:
+- what macOS does to screens across a real replug, and to two of one model (600, 601): the tests list stand-in screens in either order;
 - the dream's look (9) and the default hand feel (16);
 - a spawned dream patch's picture with a worker running (497): the tests read
   the section and the values, no worker;

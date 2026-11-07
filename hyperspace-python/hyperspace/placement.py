@@ -3,7 +3,8 @@
 Two sources, in this order (plan 16 WP4, fork F4):
 
 - ``[output] monitor`` / ``control_monitor`` in config.toml — a screen
-  index. At 0 or above the window opens on that screen.
+  index, or a screen's name (row 771: `match`). At 0 or above, or on a name
+  that is connected, the window opens on that screen.
 - ``<home>/windows.json`` — the windowed rects at the last quit (or ⌘R).
   It fills in what the config leaves at −1, and on a configured screen it
   still supplies the spot when the last position was on that screen.
@@ -238,14 +239,97 @@ def _key(kind: str) -> str:
     return "control_monitor" if kind == "control" else "monitor"
 
 
-def read(key: str, monitor) -> tuple[int, str]:
+def named(value) -> str:
+    """The screen name a config value asks for, "" when it asks by index:
+    a string `int()` will not read. "1" is an index written as text."""
+    if isinstance(value, str):
+        v = value.strip()
+        if v:
+            try:
+                int(v)
+            except ValueError:
+                return v
+    return ""
+
+
+def _same(name: str, scr: list[Screen]) -> list[int]:
+    """The indices of the screens with exactly this name, left to right
+    across the desk (then top to bottom), which is what an ordinal counts:
+    `glfw.get_monitors()` order can change with the plug order, the
+    arrangement in System Settings should not (hand check 600)."""
+    return sorted((i for i, s in enumerate(scr) if s.name == name),
+                  key=lambda i: (scr[i].x, scr[i].y, i))
+
+
+def match(asked: str, scr: list[Screen]) -> int:
+    """The index of the screen a name asks for, −1 for none (row 771).
+
+    The name is exact, whole and case and all: "TV" does not find
+    "TV Samsung". Two screens of one name are two screens: "TV #2" is the
+    second of them left to right, and "TV" or "TV #1" the first (`resolve`
+    says so when "TV" alone could be either). A screen really called
+    "TV #2" is found by that name first."""
+    want = asked.strip()
+    same = _same(want, scr)
+    if same:
+        return same[0]
+    base, hash_, n = want.rpartition(" #")
+    if hash_ and n.isascii() and n.isdecimal() and len(n) <= 3 and int(n) >= 1:
+        same = _same(base.strip(), scr)
+        if int(n) <= len(same):
+            return same[int(n) - 1]
+    return -1
+
+
+def labels(scr: list[Screen]) -> list[str]:
+    """What to write in the config for each screen, in `scr`'s order: its
+    name, with its ordinal when another screen has the same name."""
+    out = []
+    for i, s in enumerate(scr):
+        same = _same(s.name, scr)
+        out.append(s.name if len(same) == 1 else f"{s.name} #{same.index(i) + 1}")
+    return out
+
+
+def resolve(asked: str, scr: list[Screen]) -> tuple[int, str]:
+    """`match`, and what to say about it: (index, words or ""). The words
+    finish a sentence that begins with the config key and its value."""
+    i = match(asked, scr)
+    if i < 0:
+        return -1, f"matches no screen (connected: {', '.join(labels(scr)) or 'none'})"
+    same = _same(asked.strip(), scr)
+    if len(same) > 1:
+        each = ", ".join(labels(scr)[k] for k in same)
+        return i, f"is {len(same)} screens ({each}) — using the first; say which to be sure"
+    return i, ""
+
+
+def kept(key: str, monitor) -> tuple[int | str, str]:
+    """A config value as `config.load` keeps it, before any window system:
+    a name stays a name for the launch to `resolve`, and anything else is
+    `read`."""
+    name = named(monitor)
+    return (name, "") if name else read(key, monitor)
+
+
+def read(key: str, monitor, scr: list[Screen] | None = None) -> tuple[int, str]:
     """A config value as a screen index: (index, note or ""). The index
     is what `int()` reads of it, and −1 for anything under −1; a value
-    `int()` will not read ("left", None, a NaN) is −1 with the note. The
-    one reading of ``[output] monitor`` / ``control_monitor`` (plan 16
-    WP7) — `config.load`, `place` below and `app._make_output` all go
-    through it, so a window's screen and the one fullscreen covers agree.
-    It never raises. Whether a screen has that index is `place`'s to say."""
+    `int()` will not read (None, a NaN) is −1 with the note. The one
+    reading of ``[output] monitor`` / ``control_monitor`` (plan 16 WP7) —
+    `config.load`, `place` below and `app._make_output` all go through it,
+    so a window's screen and the one fullscreen covers agree.
+
+    A name needs `scr` to be an index: with them it is `resolve`'s answer,
+    and without (no window system yet) −1 and no note, for a later call to
+    settle. It never raises. Whether a screen has an index is `place`'s."""
+    name = named(monitor)
+    if name:
+        if scr is None:
+            return -1, ""
+        i, said = resolve(name, scr)
+        tail = " — using the last position" if i < 0 else ""
+        return i, f"config: [output] {key} = {monitor!r} {said}{tail}" if said else ""
     try:
         return max(int(monitor), -1), ""
     except (TypeError, ValueError, OverflowError):
@@ -253,19 +337,19 @@ def read(key: str, monitor) -> tuple[int, str]:
                     "using the last position")
 
 
-def index(monitor, n: int | None = None) -> int:
+def index(monitor, n: int | None = None, scr: list[Screen] | None = None) -> int:
     """`read`'s index alone; with `n` screens connected, −1 for an index
     none of them has. Says nothing: the notes are `read`'s and `place`'s."""
-    i, _ = read("monitor", monitor)
+    i, _ = read("monitor", monitor, scr)
     return -1 if n is not None and i >= n else i
 
 
 def place(kind: str, size: tuple[int, int], scr: list[Screen],
-          monitor: int, remembered: dict | None, what: str = "") -> tuple[Rect, str]:
+          monitor: int | str, remembered: dict | None, what: str = "") -> tuple[Rect, str]:
     """Where one window opens: (rect, note or "").
 
     `kind` is "render" or "control"; `monitor` is that window's config
-    index (−1: no say); `remembered` is its entry from the file, or None.
+    index or screen name (−1: no say); `remembered` is its entry from the file, or None.
     `what` names the window in the notes in place of `kind` ("output 2",
     plan 21: one call per render output); it changes nothing else.
 
@@ -282,7 +366,7 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
     notes = []
     target = None
     # read as app._make_output reads it for `output.monitor`
-    monitor, note = read(_key(kind), monitor)
+    monitor, note = read(_key(kind), monitor, scr)
     if note:
         notes.append(note)
     if monitor >= len(scr):

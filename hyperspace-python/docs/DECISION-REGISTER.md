@@ -775,6 +775,8 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 771 | A screen in the config may be a name: `[output] monitor`, `control_monitor` and `[[output.screens]] monitor`. **Exact whole name, case and all, plus an ordinal among screens of that name** ("MStar #2"), not #223's first case-blind substring. An index keeps working. A name is an index from the launch on: `Output.monitor` and `Slot.monitor` stay indices until SC3b. A later output whose name isn't connected isn't opened, with a note, as with an index (fork F9) | 600 | plan 58 SC1, §9 |
+| 772 | The ordinal counts **left to right across the desk**, then top to bottom, not in `glfw.get_monitors()` order. "MStar" alone on two is the first of them **with a note naming both**, rather than a refusal. A screen really called "TV #2" is found by that name before any ordinal | 600, 601 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -14034,3 +14036,21 @@ still wins, as does a sink row.
 - **A person joining a controller's step.** `_opens` was decided only when a step began, so a typed commit landing inside a controller's settle time neither moved focus nor opened the latch, and ⌘Z refused right after typing. A change seen with the hand up now counts on a step already open (`Undo._observe`); a held step (`keep_open`) still opens nothing. The same goes for the mouse, so row 753's known limit, a mouse held anywhere, now also takes a controller's step already open.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
+
+### 771. A screen by name
+
+- **Why.** An index means a different screen when the plug order changes, so two outputs swap on a replug. And `monitor = "MStar"` read as "not a screen index", with a note.
+- **Built, as plan 58 §4 and §9 say.** `placement.match`: the exact whole name, then an ordinal among screens of that name. "TV" doesn't find "TV Samsung", and "tv samsung" doesn't find it either. `tests/test_placement.py` pins this, the opposite of `origin/venues`' `tests/test_placement.py:304`, which pinned the first case-blind substring. Only the idea came from #223; its branch isn't merged.
+- **A string is now a name.** `monitor = "left"` used to say "is not a screen index"; it now says "matches no screen (connected: ...)" and the list says what to write instead. A number written as text is still an index. `[1]` or a NaN still gets the old note.
+- **When it resolves.** `config.load` has no screens, so it keeps the string (`placement.kept`). `app._windows` turns it into an index once, at the launch, and `Output.monitor` and `Slot.monitor` stay indices at runtime until SC3b. So a replug **while running** still means what it meant before; this row fixes the next launch.
+- **A later output.** A name not connected means not opened, the same as an index (fork F9). Output 1 always opens. A publish-only output looks for no screen, so a name there is unused.
+- **Not here.** No row per display and no change to the OUTPUT page's Screen enum: SC2. Nothing moved in `windows.json`, whose `screen` stays a name kept for the note.
+- **Judge it.** 600.
+
+### 772. What the ordinal counts, and a bare name on two screens
+
+- **Left to right, (rec) — pending the owner.** `get_monitors()` order is the very thing that can change with the plug order, so counting in it would bring the swap back. The arrangement in System Settings is what a person can see and change. Not verified at the machine: whether macOS keeps two identical screens in their arrangement across a replug when they report no distinct serial. If it doesn't, nothing in software can tell them apart and a person sees a swap. That's hand check 601.
+- **A bare name on two, (rec) — pending the owner.** It opens on the first and says so, with the words that pick. The alternative is refusing it, which would leave a window in the wrong place at a load-in for a line in a config. It isn't #223's first-match-wins: that was silent, and gave no way to reach the second.
+- **macOS may already split the names.** Unverified: macOS can list twins as "DELL (1)" and "DELL (2)". Then they are two different exact names, each found as written. Hand check 601 reads what the rig's screens really say.
+- **A literal "TV #2".** A screen really called that is found by that name first. The ordinal form is the fallback.
+- **Judge it.** 600, 601.
