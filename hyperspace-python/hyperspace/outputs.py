@@ -148,6 +148,9 @@ class Handoff:
     # SC2: `mix` is mirrored as it was drawn; a further display of this output with
     # other flips (`Also`) says how far off that is
     mix_flip: tuple[bool, bool] = (False, False)
+    # SC2: `mix` is that display's shape, and this window may have another: the viewport
+    # that lays the picture in it over this one's `rect`. None: the whole framebuffer
+    mix_viewport: tuple[int, int, int, int] | None = None
 
     @staticmethod
     def name(tex: moderngl.Texture | None) -> int | None:
@@ -211,11 +214,13 @@ class Also:
     """A further display of one output (SC2, plan 58): a window of its own with a
     `Presenter` of its own, and flips of its own. The frame is offscreen, so a further
     window is one more present of the output's picture, and its flips are a `Handoff`'s:
-    nothing is drawn again. `display` is the label of its row (`displays.py`), `output`
-    its `overlay.Output`, for fullscreen, `size` its framebuffer at the last frame,
-    `error` its last present that raised."""
+    nothing is drawn again. `display` is the label of its row (`displays.py`), `monitor` and
+    `fullscreen` where its window goes, `output` its `overlay.Output`, for fullscreen, `size`
+    its framebuffer at the last frame, `error` its last present that raised."""
 
     display: str
+    monitor: int = -1
+    fullscreen: bool = False
     win: Any = None
     presenter: Any = None
     output: Any = None
@@ -1150,7 +1155,8 @@ class Presenter:
         self._wrap(mix).use(location=0)              # settled before anything is multiplied
         # it was mirrored when it was drawn, for this output's first display
         prog["u_flip"].value = tuple(int(bool(v)) for v in getattr(ho, "mix_flip", (False, False)))
-        prog["u_scaled"].value = int(tuple(mix.size) != tuple(full[2:]))
+        lay = getattr(ho, "mix_viewport", None) or full
+        prog["u_scaled"].value = int(tuple(mix.size) != tuple(lay[2:]))
         prog["u_origin"].value = (0, 0)
         prog["u_k"].value = k
         prog["u_opaque"].value = 0
@@ -1162,7 +1168,9 @@ class Presenter:
         self._dim_vao.render(moderngl.TRIANGLES, vertices=3)
         ctx.blend_func = (moderngl.ONE, moderngl.ONE,
                           moderngl.ZERO if opaque else moderngl.ONE, moderngl.ONE)
+        ctx.viewport = lay
         self._vao.render(moderngl.TRIANGLES, vertices=3)
+        ctx.viewport = full
 
     def on_reload(self) -> None:
         """Hot reload: rebuild at the next `present`, in this context."""

@@ -6,6 +6,7 @@ package.
 
 from __future__ import annotations
 
+import json
 import threading
 from collections import deque
 from collections.abc import Callable
@@ -35,6 +36,26 @@ def stat(path: Path, root: Path) -> tuple:
     except OSError:
         return (ABSENT if root.is_dir() else GONE,)
     return st.st_mtime_ns, st.st_size
+
+
+def library_root(path: str, hold: bool, copy: Path, home: Path, file: str) -> tuple[Path, bool]:
+    """(the library, whether to stay off it). `path` is config.toml's; `hold`: config.toml
+    didn't read, so a "" there says nothing. Then it's where this Mac's copy says it last
+    was. With no copy that says, and no `file` (the shared file's name) in the home to show
+    that the library is the home, this launch doesn't know: the home is no stand-in, as what's
+    written there is lost on the next good launch, so it stays on the copy alone."""
+    if path:
+        return Path(path), False
+    if not hold:
+        return home, False
+    try:
+        doc = json.loads(copy.read_bytes().decode("utf-8"))
+        known = doc.get("library") if isinstance(doc, dict) else None
+    except (OSError, ValueError, RecursionError):
+        known = None
+    if isinstance(known, str) and known:
+        return Path(known), False
+    return home, not (home / file).exists()
 
 
 class Worker:

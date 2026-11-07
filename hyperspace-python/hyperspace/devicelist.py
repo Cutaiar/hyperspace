@@ -35,6 +35,10 @@ read seeds nothing and spends nothing:** the read waits for a launch that can do
 the board says so. With no list yet, nothing is made, as that would be the defaults: an adopt
 waits in this Mac's copy, which marks its own list as only those.
 
+**A config.toml that won't parse names no library either,** so the list is looked for where
+this Mac's copy says the library last was (`sharedfile.library_root`), and with no copy that
+says, the launch stays on its copy: an adopt waits there for a good launch.
+
 **On or off is each Mac's.** One Mac may have no Leap, so `enabled` in the file is only
 what a Mac that has never said goes by. `<home>/devices.here.json` holds what this Mac
 said: seeded once from its config.toml, and set from the player board.
@@ -306,12 +310,15 @@ class DeviceList:
     def __init__(self, root: Path, home: Path | None = None, *, seed=DEFAULTS, listed: bool = False,
                  said_here: dict[str, bool] | None = None, no_midi_look: bool = False,
                  hold_seed: bool = False, notes: list[str] | None = None,
-                 clock: Callable[[], float] = time.monotonic):
+                 clock: Callable[[], float] = time.monotonic, local_only: bool = False):
         self.root = Path(root)
         self.path = self.root / FILE
         self.base = Path(home) if home is not None else self.root
         self.has_home = home is not None
-        self.copy = self.base / COPY if home is not None and self.base != self.root else None
+        # (the library in the home needs no copy of it, unless a launch that couldn't say left one)
+        self.copy = (self.base / COPY if home is not None
+                     and (self.base != self.root or local_only or (self.base / COPY).exists()) else None)
+        self.local_only = local_only            # no library known: this Mac's copy alone
         self.here_path = self.base / HERE if home is not None else None
         self.no_midi_look = no_midi_look
         self.notes = notes if notes is not None else []
@@ -349,9 +356,11 @@ class DeviceList:
         lp = cfg.get("library", {}).get("path", "")
         notes = cfg.setdefault("notes", [])
         hold = "device_seed" not in cfg
-        out = cls(Path(lp) if lp else home, home, seed=cfg.get("device_seed", DEFAULTS),
+        root, local = sharedfile.library_root(lp, hold, home / COPY, home, FILE)
+        out = cls(root, home, seed=cfg.get("device_seed", DEFAULTS),
                   listed=bool(cfg.get("device_seed_listed")), said_here=cfg.get("device_here"),
-                  no_midi_look=bool(cfg.get("no_midi_look")), hold_seed=hold, notes=notes)
+                  no_midi_look=bool(cfg.get("no_midi_look")), hold_seed=hold, notes=notes,
+                  local_only=local)
         entries, problems, said = out.checked()
         notes += [*problems, *said]
         config.take_devices(cfg, entries)
@@ -453,6 +462,8 @@ class DeviceList:
 
     def _give(self) -> None:
         """A cycle, on the worker. At most one is out."""
+        if self.local_only:
+            return
         unwritten = any(w.until is None for w in self.waiting.values())
         job = _Job([dict(e) for e in self.raw],
                    [(r, dict(w.entry), w.adopted) for r, w in self.waiting.items()],
@@ -534,7 +545,9 @@ class DeviceList:
             return
         unwritten = [{"entry": w.entry, "adopted": w.adopted}
                      for w in self.waiting.values() if w.until is None]
-        more = {"held": True} if self._held_list else {}
+        more: dict = {"held": True} if self._held_list else {}
+        if not self.local_only:
+            more["library"] = str(self.root)    # (for a launch whose config.toml doesn't say)
         text = _text(self.raw, unwritten=unwritten, **more)
         if text == self._copy_text:
             return

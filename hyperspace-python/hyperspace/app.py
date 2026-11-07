@@ -96,7 +96,7 @@ from .bands import CEIL
 from .control import Control
 from .deck import KEYS, MOUSE, Deck, DeckHooksMade, Fade, MetaController, Mix, register_xfade
 from .devicelist import DeviceList
-from .displays import DisplayList, Opening, Running, Wanted, opened_of, wanted
+from .displays import DisplayList, Running, Wanted, opened_of, wanted
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotreload import HotReloader
 from .learn import Learn
@@ -412,7 +412,8 @@ def _take_rows(slots: list[Slot], want: Wanted) -> list[Slot]:
         first, *more = shows
         sl.window, sl.monitor, sl.fullscreen, sl.display = True, first.index, first.fullscreen, first.display
         sl.switches.flip_x, sl.switches.flip_y = first.flip_x, first.flip_y
-        sl.also = [Also(o.display, flip_x=o.flip_x, flip_y=o.flip_y) for o in more]
+        sl.also = [Also(o.display, o.index, o.fullscreen, flip_x=o.flip_x, flip_y=o.flip_y)
+                   for o in more]
     return slots
 
 
@@ -476,17 +477,14 @@ def _root_window():
     return win
 
 
-def _open_also(slots: list[Slot], want: Wanted, scr: list, seen: dict, root,
-               notes: list[str]) -> None:
+def _open_also(slots: list[Slot], scr: list, seen: dict, root, notes: list[str]) -> None:
     """Each output's further displays (SC2): a window like a later output's, in the root's
     share group. One that won't open is said and goes, and the output's others stand."""
     for slot in slots:
         kept = []
-        openings = {o.display: o for o in want.renders.get(slot.n, [])}
         for also in slot.also:
-            o = openings[also.display]
-            rect, note = placement.place("render", RENDER_SIZE, scr, o.index,
-                                         placement.spot(seen, o.display, slot.n), what=slot.label)
+            rect, note = placement.place("render", RENDER_SIZE, scr, also.monitor,
+                                         placement.spot(seen, also.display, slot.n), what=slot.label)
             if note:
                 notes.append(note)
             also.win = glfw.create_window(*rect[2:], f"{TITLE} — {also.display}", None, root)
@@ -534,7 +532,8 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
         one = want.renders.get(1)
         oc["monitor"] = one[0].index if one else -1
         oc["fullscreen"] = one[0].fullscreen if one else False
-        oc["control_monitor"] = want.control.index if want.control else -1
+        where = want.control or want.floats
+        oc["control_monitor"] = where.index if where else -1
     # a name in the config is an index from here on, said once (row 771)
     said = placement.settle(oc, scr) if scr else []
     slots = _slots(cfg, None if want is not None else scr, said)
@@ -653,7 +652,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             glfw.set_window_pos(win, *rect[:2])
     if want is not None:
         more: list[str] = []
-        _open_also(slots, want, scr, seen, root, more)
+        _open_also(slots, scr, seen, root, more)
         for note in more:
             print(note, file=sys.stderr)
             if cfg is not None:
@@ -708,12 +707,20 @@ def _later_output(slot: Slot) -> Output:
     return out
 
 
-def _also_output(also: Also, opening: Opening) -> Output:
+def _also_output(also: Also) -> Output:
     """A further display's window settings (SC2), as a later output's."""
     out = Output(also.win, GlfwBackend(glfw), allowed=False)
-    out.monitor = placement.index(opening.index)
-    out.fullscreen = bool(opening.fullscreen)
+    out.monitor = placement.index(also.monitor)
+    out.fullscreen = bool(also.fullscreen)
     return out
+
+
+def _promote(slot: Slot, also: Also) -> None:
+    """A further display takes over as `slot`'s first: its flips become the ones the output is
+    drawn with, as what a first display has."""
+    slot.win, slot.presenter, slot.display = also.win, also.presenter, also.display
+    slot.monitor, slot.fullscreen, slot.missing = also.monitor, also.fullscreen, ""
+    slot.switches.flip_x, slot.switches.flip_y = also.flip_x, also.flip_y
 
 
 def _slot_windows(slots: list[Slot]) -> list:
@@ -765,8 +772,11 @@ def _open_presenters(slots: list[Slot], root, make_context=None, notes: list | N
                 print(note, file=sys.stderr)
                 if notes is not None:
                     notes.append(note)
-        # (a first display gone with its window has nothing to be further from)
-        slot.also = kept if slot.opened else []
+        # a first display that wouldn't build: the next takes over, so no window that's fine
+        # goes undrawn, and the output still has its picture
+        if not slot.opened and kept:
+            _promote(slot, kept.pop(0))
+        slot.also = kept
     glfw.make_context_current(root)
 
 
@@ -846,7 +856,25 @@ def _also_handoff(sl: Slot, v: View, also: Also, first: Slot, frame_tex, frame_s
     if sl is first:
         return Handoff(frame_tex, frame_size, fit(frame_size, also.size), flip=off)
     ho = v.handoff
-    return None if ho is None else replace(ho, rect=fit(ho.frame_size, also.size), flip=fl, mix_flip=off)
+    if ho is None:
+        return None
+    rect = fit(ho.frame_size, also.size)
+    return replace(ho, rect=rect, flip=fl, mix_flip=off,
+                   mix_viewport=_mix_viewport(ho.mix, ho.frame_size, rect))
+
+
+def _mix_viewport(mix, frame_size, rect) -> tuple[int, int, int, int] | None:
+    """Where to lay `mix`, the other deck's whole picture at the first display's shape, so its
+    frame lands on `rect`, this window's: it may stick out past the window, where nothing is
+    but its bars. None with no mix on."""
+    if mix is None:
+        return None
+    ix, iy, iw, ih = fit(frame_size, mix.size)
+    if iw <= 0 or ih <= 0:
+        return None
+    sx, sy = rect[2] / iw, rect[3] / ih
+    return (round(rect[0] - ix * sx), round(rect[1] - iy * sy),
+            round(mix.size[0] * sx), round(mix.size[1] * sy))
 
 
 def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, flush=None,
@@ -910,9 +938,11 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
     presented = [sl for sl in slots if sl.opened and sl.presenter is not None]
     pacer = root.pacer
     pacer.choose(_slot_windows(presented), root.win)
-    # output 1's own size and DPI (a 1080p projector next to a retina laptop)
-    if first.opened:
-        root.measure(glfw.get_window_size(first.win), glfw.get_framebuffer_size(first.win))
+    # output 1's own size and DPI (a 1080p projector next to a retina laptop); with no display
+    # on it, the first that shows anything's, each frame: a window goes fullscreen, or is moved
+    measured = first if first.opened else next(iter(presented), None)
+    if measured is not None:
+        root.measure(glfw.get_window_size(measured.win), glfw.get_framebuffer_size(measured.win))
     w, h = root.logical
     fbw, fbh = root.size
     first.size = (fbw, fbh)
@@ -1728,11 +1758,6 @@ def main(argv: list[str] | None = None) -> None:
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
     root = Root(root_win, Offscreen(ctx), Pacer(glfw), logical=RENDER_SIZE, size=RENDER_SIZE)
-    # with no window on output 1, the frame takes its size from the first display that shows
-    # anything, not the default's: output 1 keeps it from there on (`Root.measure`)
-    sized = next((sl.win for sl in slots if sl.opened), None)
-    if sized is not None and render_win is None:
-        root.measure(glfw.get_window_size(sized), glfw.get_framebuffer_size(sized))
     # each output: a presenter on its own context, none waiting yet
     _open_presenters(slots, root_win, notes=cfg.setdefault("notes", []))
     later = [sl for sl in slots[1:] if sl.opened]
@@ -1809,9 +1834,8 @@ def main(argv: list[str] | None = None) -> None:
         for sl in later:                       # no params: the config says (fork F10)
             sl.output = _later_output(sl)
         for sl in slots:                       # a further display's: likewise (SC2)
-            shows = {o.display: o for o in want.renders.get(sl.n, [])} if want is not None else {}
             for also in sl.also:
-                also.output = _also_output(also, shows[also.display])
+                also.output = _also_output(also)
         # each opened output's switches (plan 21 WP4): meta settings, seeded
         # from the config's launch values already on the slots, never saved
         register_switches(reg, slots)
@@ -2075,7 +2099,8 @@ def main(argv: list[str] | None = None) -> None:
               *((f"{sl.label} on {a.display}", a.output) for sl in slots for a in sl.also)]
     render_watch = RenderWatch(
         watchdog,
-        info=(lambda: output.backend.window_state(render_win)) if render_win is not None else None,
+        # output 1's window, else the first there is: a projector that stopped is said, whichever
+        info=(lambda win=opened[0][1].win: output.backend.window_state(win)) if opened else None,
         outputs=(lambda: [(label, o.backend.window_state(o.win))
                           for label, o in opened]) if len(opened) > 1 else None)
     panel.watchdog, panel.render_watch = watchdog, render_watch

@@ -12,6 +12,9 @@ it's fullscreen, and its flips. ::
      "displays": {"TV #2": {"target": "output.2", "fullscreen": true,
                             "flip_x": false, "flip_y": false, "at": 1730000000.25}}}
 
+A pair's first and a lone display are one row (`placement.memory`): "TV" is "TV #1" when a
+second is plugged in, and "TV" again when it goes.
+
 `target` is `output.N`, `control`, or "" for nothing. **A display has one target; a target
 may go to several displays; the control window goes to one.** The first is the file's shape,
 the second is `wanted`'s, and the third is `set_target`'s, on this Mac's displays, with
@@ -26,9 +29,14 @@ monitor callback will too, which is when a change of target stops waiting for �
 `[[output.screens]]` are a seed, read once per Mac (`seed_rows`): where each window would
 have opened goes on that display's row. From then on config.toml is not read for this, and
 a note says so; RT1 retires it. Two outputs asking for one display: the first has it, and a
-note says the other has none. A control window on a display a render has gets no row of its
-own, and floats there as it always did. **A config.toml that didn't read seeds nothing and
-spends nothing:** this launch runs on a default in memory, never written.
+note says the other has none. A window config.toml has no say on (`monitor = -1`) goes in only
+if no row has its target yet, as a Mac that finds rows mustn't add a display to them. A control window on a display a render has gets no row of its
+own, and floats there as it always did: config.toml naming that display leaves `floats_control`
+on the row, which says where it opens while no row has it. **A config.toml that didn't read
+seeds nothing and spends nothing:** this launch runs on a default in memory, never written, that
+gives way to any row read, and the rows are looked for where this Mac's copy says the library
+last was (`sharedfile.library_root`). With no copy that says, they stay on the copy for a good
+launch to carry over.
 
 **`--laptop` leaves all this alone:** no read, no write, no seed. One plain output on the
 primary display, by `config.laptop`, as ever.
@@ -75,7 +83,7 @@ COPY = "displays.last.json"     # in the home, beside devices.last.json
 SCHEMA = "displays/1"
 CONTROL = "control"
 NOTHING = ""
-TICKS = ("fullscreen", "flip_x", "flip_y")
+TICKS = ("fullscreen", "flip_x", "flip_y", "floats_control")
 LOOK_S = 1.0                    # the worker stats the file this often
 RETRY_S = 2.0                   # what failed is tried again after this, doubling…
 RETRY_MAX_S = 30.0              # …up to this
@@ -89,8 +97,9 @@ Rows = dict[str, dict]
 
 
 def row(target: str = NOTHING, *, fullscreen: bool = False, flip_x: bool = False,
-        flip_y: bool = False, at: float = 0.0) -> dict:
-    return {"target": target, "fullscreen": fullscreen, "flip_x": flip_x, "flip_y": flip_y, "at": at}
+        flip_y: bool = False, floats_control: bool = False, at: float = 0.0) -> dict:
+    return {"target": target, "fullscreen": fullscreen, "flip_x": flip_x, "flip_y": flip_y,
+            "floats_control": floats_control, "at": at}
 
 
 def output_of(target) -> int | None:
@@ -104,15 +113,19 @@ def _at(entry: dict) -> float:
     return 0.0 if at is None else at
 
 
+def normal(rows: Rows) -> Rows:
+    """Each row under its memory (`placement.memory`): the later of any two that are one."""
+    out: Rows = {}
+    for tag, e in rows.items():
+        k = placement.memory(tag)
+        if k not in out or _at(e) > _at(out[k]):
+            out[k] = e
+    return out
+
+
 def find(rows: Rows, tag: str) -> dict | None:
-    """The row of the display labelled `tag`. A pair's first and a lone one are the same
-    memory: with one "TV" on the desk, and then two, the row carries on as "TV #1"."""
-    if tag in rows:
-        return rows[tag]
-    base, hash_, n = tag.rpartition(" #")
-    if hash_ and n == "1":
-        return rows.get(base)
-    return rows.get(f"{tag} #1")
+    """The row of the display labelled `tag`, in `normal` rows."""
+    return rows.get(placement.memory(tag))
 
 
 def read_row(entry: dict | None) -> dict:
@@ -139,12 +152,14 @@ class Opening:
 @dataclass
 class Wanted:
     """What should be open. `renders`: each output's displays across the desk; `control`:
-    the control window's, None for no row of its own; `away`: outputs with a row on a display
+    the control window's, None for no row of its own; `floats`: the display it opens on with
+    none, None for wherever it was; `away`: outputs with a row on a display
     that isn't connected; `notes`: what the rows asked that can't be; `shown`: each connected
     label's target, as it takes effect."""
 
     renders: dict[int, list[Opening]] = field(default_factory=dict)
     control: Opening | None = None
+    floats: Opening | None = None
     away: dict[int, list[str]] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     shown: dict[str, str] = field(default_factory=dict)
@@ -153,6 +168,7 @@ class Wanted:
 def wanted(rows: Rows, scr: list[Screen]) -> Wanted:
     """The rows and the connected list, and what should be open (SC3b's seam)."""
     out = Wanted()
+    rows = normal(rows)
     tags = placement.labels(scr)
     used: set[int] = set()
     for i in placement.arranged(scr):
@@ -165,6 +181,8 @@ def wanted(rows: Rows, scr: list[Screen]) -> Wanted:
         r = read_row(entry)
         target, n = r["target"], output_of(r["target"])
         here = Opening(tag, i, r["fullscreen"], r["flip_x"], r["flip_y"])
+        if r["floats_control"] and out.floats is None:
+            out.floats = here
         if target == CONTROL:
             if out.control is None:
                 out.control = here
@@ -196,10 +214,11 @@ def pending(rows: Rows, scr: list[Screen], opened: dict[str, str]) -> list[tuple
 
 def seed_rows(cfg: dict, scr: list[Screen], seen: dict, notes: list[str],
               render_size: tuple[int, int] = (1280, 820),
-              control_size: tuple[int, int] = (960, 900)) -> Rows:
+              control_size: tuple[int, int] = (960, 900), no_say: set[str] | None = None) -> Rows:
     """The rows `cfg`'s `[output]` says, once: where each window would have opened, by
     `placement`, as that display's row. An output asking for a display another has gets
-    none, and a note. `seen`: `placement.load`'s. The sizes are the windows' defaults."""
+    none, and a note. `seen`: `placement.load`'s. The sizes are the windows' defaults.
+    `no_say` gets the rows config.toml has no say on: where a window merely was."""
     if not scr:
         return {}
     tags = placement.labels(scr)
@@ -231,16 +250,25 @@ def seed_rows(cfg: dict, scr: list[Screen], seen: dict, notes: list[str],
                     "render", render_size)
         if tag is None:
             continue
-        if tag in out:
-            notes.append(f"displays: output {n} and {out[tag]['target']} both ask for {tag}, and a "
+        key = placement.memory(tag)
+        if no_say is not None and key not in out and placement.read("monitor", e.get("monitor", -1))[0] < 0 \
+                and not placement.named(e.get("monitor", -1)):
+            no_say.add(key)
+        if key in out:
+            notes.append(f"displays: output {n} and {out[key]['target']} both ask for {tag}, and a "
                          f"display has one target: output {n} has none, so choose it one")
             continue
-        out[tag] = row(f"output.{n}", fullscreen=bool(e.get("fullscreen")),
+        out[key] = row(f"output.{n}", fullscreen=bool(e.get("fullscreen")),
                        flip_x=e.get("flip_x") is True, flip_y=e.get("flip_y") is True)
     tag = where(oc.get("control_monitor", -1), "[output] control_monitor", seen.get("control"),
                 "control", control_size)
-    if tag is not None and tag not in out:
-        out[tag] = row(CONTROL)
+    key = placement.memory(tag) if tag is not None else None
+    if key is not None and key not in out:
+        out[key] = row(CONTROL)
+        if no_say is not None and oc.get("control_monitor", -1) == -1:
+            no_say.add(key)
+    elif key is not None and oc.get("control_monitor", -1) != -1:
+        out[key]["floats_control"] = True      # it asked for this display: it floats here
     return out
 
 
@@ -306,6 +334,7 @@ class _Seen:
     why: str = ""
     stat: tuple = ()
     rows: Rows | None = None
+    foreign: bool = False       # the file holds a row this Mac didn't give it
     wrote: bool = False
     write_error: str = ""
 
@@ -321,8 +350,9 @@ def _cycle(path: Path, root: Path, mine: Rows, seen: tuple, force: bool, tmp_nam
         doc, state, why = _read(path, root)
         if doc is None and state != sharedfile.ABSENT:
             return _Seen(state, why=why, stat=sharedfile.stat(path, root))
-        rows = merged(doc or {}, mine)
-        out = _Seen(state, rows=rows)
+        read = normal(doc or {})
+        rows = merged(read, mine)
+        out = _Seen(state, rows=rows, foreign=any(t not in mine for t in read))
         if rows == (doc or {}):
             out.wrote = True        # (nothing to say yet makes no file)
         else:
@@ -349,11 +379,12 @@ class DisplayList:
                  hold_seed: bool = False, notes: list[str] | None = None,
                  config_says: list[str] | None = None,
                  clock: Callable[[], float] = time.monotonic,
-                 wall: Callable[[], float] = time.time):
+                 wall: Callable[[], float] = time.time, local_only: bool = False,
+                 no_say: set[str] | None = None):
         self.root = Path(root)
         self.path = self.root / FILE
-        base = Path(home) if home is not None else self.root
-        self.copy = base / COPY if home is not None and base != self.root else None
+        self.copy = Path(home) / COPY if home is not None else None
+        self.local_only = local_only    # no library known: this Mac's copy alone
         self.notes = notes if notes is not None else []
         self.clock, self.wall = clock, wall
         self.rows: Rows = {}
@@ -373,7 +404,8 @@ class DisplayList:
         self._asked_at = 0.0
         self._next = float("-inf")
         self._delay = RETRY_S
-        self._open(seed or {}, hold_seed, config_says or [])
+        self._answered = False          # a cycle has read the file, or found none
+        self._open(seed or {}, hold_seed, config_says or [], no_say or set())
 
     @classmethod
     def open(cls, cfg: dict, home: Path, scr: list[Screen],
@@ -383,9 +415,11 @@ class DisplayList:
         lp = cfg.get("library", {}).get("path", "")
         notes = cfg.setdefault("notes", [])
         hold = bool(cfg.get("error"))
-        seed = seed_rows(cfg, scr, placement.load(home), [] if hold else notes, *sizes)
-        return cls(Path(lp) if lp else home, home, seed=seed, hold_seed=hold, notes=notes,
-                   config_says=_config_says(cfg))
+        no_say: set[str] = set()
+        seed = seed_rows(cfg, scr, placement.load(home), [] if hold else notes, *sizes, no_say=no_say)
+        root, local = sharedfile.library_root(lp, hold, home / COPY, home, FILE)
+        return cls(root, home, seed=seed, hold_seed=hold, notes=notes,
+                   config_says=_config_says(cfg), local_only=local, no_say=no_say)
 
     @property
     def said(self) -> str:
@@ -393,8 +427,8 @@ class DisplayList:
 
     @property
     def current(self) -> Rows:
-        """What to act on: the rows, or with none at all, a launch's default."""
-        return self.rows or self.fallback
+        """What to act on: the rows, over a launch's default while no row has been read."""
+        return {**self.fallback, **self.rows}
 
     # ---- the launch ----
 
@@ -411,21 +445,25 @@ class DisplayList:
         except (OSError, ValueError, TypeError, RecursionError) as e:
             self._note(f"displays: {COPY} could not be read ({e}): not used")
             return
-        self.rows = {str(t): e for t, e in raw.items() if isinstance(e, dict)}
+        self.rows = normal({str(t): e for t, e in raw.items() if isinstance(e, dict)})
         self.seeded = doc.get("seeded") is True
         self._from = "this Mac's last rows"
 
-    def _open(self, seed: Rows, hold: bool, config_says: list[str]) -> None:
+    def _open(self, seed: Rows, hold: bool, config_says: list[str], no_say: set[str]) -> None:
         self._read_copy()
+        waits: Rows = {}
         if hold:
             self.held = ("config.toml didn't read, so the displays it names weren't either: fix it "
                          "and relaunch. A display you choose here is kept.")
             self._note(f"displays: {self.held}")
-            self.fallback = {t: dict(e) for t, e in seed.items()}
+            if not self.rows:
+                self.fallback = {t: dict(e) for t, e in normal(seed).items()}
         elif not self.seeded:
             # this Mac's one read of its config.toml: what's in the file stands
+            seed = normal(seed)
+            waits = {t: e for t, e in seed.items() if t in no_say}
             self.seeded = True
-            self.rows = merged(seed, self.rows)
+            self.rows = merged(self.rows, {t: e for t, e in seed.items() if t not in no_say})
             self._force = True
         elif config_says:
             self._note(f"displays: config.toml's {', '.join(config_says)} isn't read: {FILE} in the "
@@ -435,12 +473,29 @@ class DisplayList:
             self._take()
         else:
             self._say(f"The shared library isn't answering: displays from {self._from}.")
+        if not hold and waits:
+            self._no_say(waits)
         self._keep_copy()
+
+    def _no_say(self, waits: Rows) -> None:
+        """Where config.toml's no-say windows were: into the rows if none has their target. With
+        the file not read yet that can't be known, so they're run on, and a later launch decides."""
+        if not self._answered:
+            self.fallback = waits
+            self.seeded = False
+            return
+        taken = {read_row(e)["target"] for e in self.rows.values()}
+        add = {t: e for t, e in waits.items() if read_row(e)["target"] not in taken and t not in self.rows}
+        if add:
+            self.rows = {**add, **self.rows}
+            self._force = True
 
     # ---- keeping up ----
 
     def _give(self) -> None:
         """A cycle, on the worker. At most one is out."""
+        if self.local_only:
+            return
         force = bool(self._force or self._said)
         mine = {t: dict(e) for t, e in self.rows.items()}
         self._asked, self._asked_at = True, self.clock()
@@ -473,7 +528,10 @@ class DisplayList:
             self._keep_copy()
             self._backoff(now)
             return
+        self._answered = True
         self.rows = merged(r.rows, self.rows)     # (and what was chosen since this cycle went)
+        if r.foreign:
+            self.fallback = {}                    # real rows: the default gives way
         self._force = self._force or self.rows != r.rows
         if r.state == sharedfile.ABSENT and r.wrote and r.rows:
             self._note(f"displays: {self.path} made from {self._from}: from now on it says which "
@@ -492,7 +550,9 @@ class DisplayList:
     def _keep_copy(self) -> None:
         if self.copy is None:
             return
-        text = _text(self.rows, seeded=self.seeded)
+        # (`library`: for a launch whose config.toml doesn't say)
+        more = {} if self.local_only else {"library": str(self.root)}
+        text = _text(self.rows, seeded=self.seeded, **more)
         if text != self._copy_text:
             self._copy_text = text
             self._local.give(lambda path=self.copy, text=text: self._put_local(path, text))
@@ -538,7 +598,7 @@ class DisplayList:
         the row it replaces, whatever this Mac's clock says."""
         old = read_row(find(self.current, tag))
         at = round(max(self.wall(), old["at"] + 0.001), 3)
-        self.rows[tag] = {**old, **changes, "at": at}
+        self.rows[placement.memory(tag)] = {**old, **changes, "at": at}
         self._force = True
         self._next = float("-inf")          # (the next look gives it, if one is out now)
         self._keep_copy()

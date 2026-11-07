@@ -14416,6 +14416,9 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 - **Shared with CT1:** `sharedfile.py`, the worker, the whole write and the stat, moved out of `devicelist.py`, which imports them under the names its tests patch. Its merge isn't shared: a list only grows, and a row changes.
 - **Different from CT1, (rec).** An adopt is added once, so CT1 can hold it for ten minutes. A row is chosen again and again, so holding two different choices would make two Macs take turns. Each row carries `at`, and both Macs take the later of each row, which comes out the same in any order. An older copy that Drive lands over ours loses, and is written back over once. An edit is always later than the row it replaces, whatever the Mac's clock says.
 - **The seed.** Once per Mac: where each window would have opened goes on that display's row, with `at` 0. A name that isn't connected is kept by name; an index no display has is not.
+- **A config.toml that won't parse names no library.** Both `displays` and `devicelist` now look where this Mac's copy says the library last was (`sharedfile.library_root`, `library` in the copy). A shared file in the home says the library is the home. With neither, the launch doesn't know, and stays on the copy, which a good launch carries over. Writing to the home instead was lost on the next good launch, and CT1 had the same fault. A default this launch runs on gives way to any row read, and survives a choice made meanwhile.
+- **A window config.toml has no say on,** `monitor = -1`, goes in only if no row has its target yet: a Mac that finds rows mustn't add its own primary display to them. With the file unread at launch it's run on, not written, and the seed isn't spent.
+- **One memory.** `placement.memory`: a row and a spot go under "TV" for a lone display and for the first of a pair, so plugging a second in and out never leaves two rows for one display. A file with "TV #1" in it is put right once.
 - **`--laptop`, (rec).** No read, no write, no seed. It stays what `config.laptop` always made: one plain output on the primary display, the control window beside it. **Recommendation:** keep it, since a demo on a laptop must not rewrite the show's memory of a display both Macs share.
 - **Judge it.** 626.
 
@@ -14423,6 +14426,9 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 
 - **Read first.** SC3a made the frame offscreen, so a further window costs one more present. `Slot` keeps its `win`, `presenter` and `switches` as its first display's, and `Slot.also` holds the rest, each with its own `Presenter`, `overlay.Output` and flips.
 - **Flips per window.** Output 1's frame is baked with its first display's flips, so a further display presents it with what's left to undo. Another output's `Handoff` carries its own, and `Handoff.mix_flip` keeps a crossfade's other picture the right way round. No view, target or publisher changes, so one display per output is byte for byte what it was.
+- **The frame's size** follows what's shown, every frame: output 1's window, else the first there is.
+- **A crossfade on another shape.** The other deck's picture is at the first display's shape, so a further display lays it with a viewport (`Handoff.mix_viewport`) that puts its frame on this window's rect. Seen in the real app at 0.5, against a control with it stretched.
+- **A first display that won't build** hands over to the next (`_promote`), so no window that's fine goes undrawn. A further display that won't build is destroyed and said.
 - **`output.N.flip_x`,** which the desk may name, is the first display's: a tick there and on that row are one. **Recommendation:** leave it.
 - **N never renumbers.** Every slot up to `MAX_OUTPUTS` exists from launch, and `register_switches` declares `output.N.*` for all of them, so SC3b can open one with no param appearing. An output no display shows draws nothing unless the config has it publish, and then it keeps publishing. A wire into one says so (`graphview.WINDOW_WANTED`).
 - **No fallback window, (rec).** A display row of "control window" and none on a render means no render window. The panel says "No display shows an output". **Recommendation:** keep it: a window nobody chose breaks "choose what targets that display". With one display, a row on output 1 has the control window floating over it, so that's the seed.
@@ -14432,6 +14438,7 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 
 - **Why.** `render[k]` is by output place, and a row can now move an output to another display, so the same place can mean a spot on either.
 - **(rec).** `/1` stays. A new key, `displays`, holds each window's windowed spot by its display's label, read first (`placement.spot`). `render` is still written, so an older build reads the file, and a display with no spot of its own looks there once. `place` still decides if a spot is any use on that display.
+- **A control window seeded onto a render's display** has no row, as a display has one target. `floats_control` on that row keeps where config.toml named, so it opens there while no row has it. With `control_monitor = -1` it's where it was.
 - **A clash in a seed, (rec).** Two outputs asking for one display: the first has it, and a note says the other has none. A later output with `monitor = -1` used to cascade onto the primary, and now loses to output 1 there. **Recommendation:** accept that: it's what "a display has one target" says, and the note and the row fix it in one click.
 - **Judge it.** 628.
 

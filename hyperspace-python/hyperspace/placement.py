@@ -176,7 +176,7 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
     for tag, rect in (spots or {}).items():
         new = _entry(rect, scr)
         if new is not None:
-            kept[tag] = new
+            kept[memory(tag)] = new
     if kept:
         doc["displays"] = kept
     tmp = home / f"{FILE}.{os.getpid()}.tmp"     # its own: two instances may share a home
@@ -197,8 +197,8 @@ def spot(seen: dict, tag: str, n: int) -> dict | None:
     gave it: its own entry, else that output's old place in ``render``. `place` says
     whether it's any use there."""
     own = seen.get("displays")
-    if isinstance(own, dict) and tag in own:
-        return own[tag]
+    if isinstance(own, dict) and memory(tag) in own:
+        return own[memory(tag)]
     old = seen.get("render") or []
     return old[n - 1] if 0 <= n - 1 < len(old) else None
 
@@ -382,6 +382,14 @@ def match(asked: str, scr: list[Screen]) -> int:
         return min(exact, key=lambda i: _along(i, scr))
     same = _same(want, scr)
     return same[0] if same else -1
+
+
+def memory(label: str) -> str:
+    """What a display's memory goes under, for a label `labels` gave: a lone display and the
+    first of a pair are one, so "TV" carries on as "TV #1" when a second is plugged in, and
+    back. "DELL (2)" alone is its family's first too: that number can follow the plug order."""
+    base, hash_, n = label.rpartition(" #")
+    return (_family(base) if hash_ and n == "1" else label if hash_ else _family(label))
 
 
 def labels(scr: list[Screen]) -> list[str]:

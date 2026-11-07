@@ -335,8 +335,8 @@ SCREEN: dict = {"name": "", "monitor": -1, "fullscreen": False,
 # the keys that publish an output (plan 32 T9): a Syphon server's and an
 # NDI sender's name ("" = not published)
 PUBLISH_KEYS = ("syphon", "ndi")
-ONE_WINDOW = ("output 1 holds the GL context and paces the loop — it always opens a window "
-              "(publish it, or set a later output's window = false)")
+ONE_WINDOW = ("whether output 1 has a window is the display rows' to say, on the output section "
+              "(and --laptop always opens one), so this isn't read: publish it, and leave it no row")
 DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 fork F4)
 # plan 35 M: an entry's `through` (plan 21 WP2's switch) is the loadable patch's
 # wiring now — read, ignored, said once

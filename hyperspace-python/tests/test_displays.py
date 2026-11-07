@@ -83,8 +83,9 @@ def test_a_row_on_a_display_away_says_so_and_opens_nothing():
 def test_a_lone_display_and_the_first_of_a_pair_are_one_memory():
     assert wanted({"TV": row("output.1")}, [LAPTOP, TV_LEFT, TV_RIGHT]).shown["TV #1"] == "output.1"
     assert wanted({"TV #1": row("output.1")}, [LAPTOP, TV_LEFT]).shown["TV"] == "output.1"
-    both = wanted({"TV": row("output.1"), "TV #1": row("output.2")}, [TV_LEFT, TV_RIGHT])
-    assert both.shown["TV #1"] == "output.2" and both.shown["TV #2"] == ""
+    both = wanted({"TV": row("output.1", at=1.0), "TV #1": row("output.2", at=2.0)}, [TV_LEFT, TV_RIGHT])
+    assert both.shown["TV #1"] == "output.2" and both.shown["TV #2"] == "", "the later of the two"
+    assert both.away == {}, "and neither is away"
 
 
 def test_an_order_of_plugging_doesnt_move_a_job():
@@ -125,7 +126,7 @@ def test_the_seed_of_a_list_keeps_each_entrys_flips_and_says_a_clash():
                         {**config.SCREEN, "window": False, "syphon": "x"}])
     rows = displays.seed_rows(cfg, SCREENS, {}, notes)
     assert rows["TV #2"] == row("output.1", flip_x=True)
-    assert rows["TV #1"] == row("output.2", fullscreen=True)
+    assert rows["TV"] == row("output.2", fullscreen=True), "a first's memory"
     assert "output.3" not in {e["target"] for e in rows.values()}
     assert len(notes) == 1 and "output 3" in notes[0] and "one target" in notes[0]
 
@@ -391,7 +392,7 @@ def test_a_render_on_two_displays_opens_a_window_on_each_with_its_own_flips(monk
     (also,) = one.also
     assert also.display == "TV #2" and g.pos[also.win] == (3648 + 16, 16)
     assert (also.flip_x, also.flip_y) == (False, True)
-    assert app._also_output(also, want.renders[1][1]).fullscreen is True
+    assert app._also_output(also).fullscreen is True and also.monitor == 1
     assert app._slot_windows(slots)[:2] == [one.win, also.win]
     assert displays.opened_of(slots, want.control) == {"TV #1": "output.1", "TV #2": "output.1", "Built-in": CONTROL}
     assert g.pos[ctrl][0] < 1728
@@ -441,7 +442,7 @@ def test_the_exits_save_every_windows_spot_by_its_display(monkeypatch, tmp_path)
     two.also[0].output = Output(two.also[0].win, Backend())
     app._save_windows(tmp_path, None, ctrl, None, [s.output for s in slots[1:]], slots)
     doc = placement.load(tmp_path)
-    assert doc["displays"]["TV #1"]["x"] == 16 and doc["displays"]["TV #2"]["x"] == 1936
+    assert doc["displays"]["TV"]["x"] == 16 and doc["displays"]["TV #2"]["x"] == 1936
 
 
 def test_a_publisher_with_no_display_keeps_publishing_and_an_empty_slot_is_not_drawn(monkeypatch):
@@ -546,7 +547,7 @@ def test_a_render_on_two_displays_has_flips_on_each_at_once(rows):
     assert r.panel.output.fullscreen is True
     r.store.sync()
     disk = on_disk(r.root)
-    assert (disk["TV #1"]["flip_x"], disk["TV #1"]["flip_y"], disk["TV #1"]["fullscreen"]) == (True, True, True)
+    assert (disk["TV"]["flip_x"], disk["TV"]["flip_y"], disk["TV"]["fullscreen"]) == (True, True, True)
     assert (disk["TV #2"]["flip_x"], disk["TV #2"]["flip_y"], disk["TV #2"]["fullscreen"]) == (True, True, True)
 
 
@@ -567,7 +568,7 @@ def test_choosing_the_control_window_takes_it_from_where_it_was(rows):
     d.run(d.pick("display.1.target", 1), d.park(), d.wait(2))
     r.store.sync()
     disk = on_disk(r.root)
-    assert disk["TV #1"]["target"] == CONTROL and disk["Built-in"]["target"] == ""
+    assert disk["TV"]["target"] == CONTROL and disk["Built-in"]["target"] == ""
     assert wanted(r.store.current, SCREENS).control.display == "TV #1"
     assert "display.1.flip_x" not in r.d.rects
 
@@ -579,7 +580,7 @@ def test_a_window_with_other_target_chosen_keeps_its_flips_until_the_restart(row
     d.run(d.click("display.1.flip_y"), d.park(), d.wait(2))
     assert one.switches.flip_y is False, "what's open is output 1's: the row waits for ⌘R"
     r.store.sync()
-    assert on_disk(r.root)["TV #1"]["flip_y"] is True
+    assert on_disk(r.root)["TV"]["flip_y"] is True
 
 
 def _texts(r, d):
@@ -632,6 +633,274 @@ def test_a_wire_into_an_output_nothing_shows_is_wanted():
     assert ui_graph.window_wants(panel) == []
 
 
+# ---- the review of #424
+
+
+def test_a_tick_under_a_held_seed_keeps_the_other_rows():
+    """Finding 2: the first choice emptied the default."""
+    store = DisplayList(Path("/nonexistent-sc2"), None, seed={"Built-in": row("output.1"), "B": row("")},
+                        hold_seed=True, local_only=True)
+    store.set("B", flip_x=True)
+    assert wanted(store.current, [LAPTOP]).renders[1][0].display == "Built-in"
+    assert read_flip(store, "B")
+
+
+def read_flip(store, tag):
+    return displays.read_row(store.rows[tag])["flip_x"]
+
+
+def test_real_rows_read_under_a_held_seed_replace_the_default(macs):
+    root, one, _ = macs
+    (root / FILE).write_text(json.dumps({"schema": SCHEMA, "displays": {"TV": row("output.2", at=5.0)}}))
+    store = opened(root, one, seed={"Built-in": row("output.1")}, hold_seed=True)
+    assert set(store.current) == {"TV"}, "a default nobody chose gives way"
+
+
+def test_a_config_that_wont_parse_finds_the_library_from_this_macs_copy(tmp_path):
+    """Finding 3: a typo on show night has no library path to read."""
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    root.mkdir()
+    home.mkdir()
+    good = {**_cfg(monitor=0), "library": {"path": str(root)}}
+    store = DisplayList.open(good, home, [LAPTOP])
+    store.sync()
+    store.close()
+    typo = {**_cfg(), "library": {"path": ""}, "error": "config: bad"}
+    store = DisplayList.open(typo, home, [LAPTOP])
+    assert store.root == root and displays.read_row(store.current["Built-in"])["target"] == "output.1"
+    store.set("Built-in", flip_x=True)
+    store.sync()
+    assert on_disk(root)["Built-in"]["flip_x"] is True
+    assert not (home / FILE).exists(), "nothing goes astray in the home"
+
+
+def test_a_choice_with_no_library_known_is_kept_for_a_good_launch(tmp_path):
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    root.mkdir()
+    home.mkdir()
+    typo = {**_cfg(), "library": {"path": ""}, "error": "config: bad"}
+    store = DisplayList.open(typo, home, [LAPTOP])
+    assert store.local_only and store.current == {"Built-in": row("output.1")}
+    store.set("Built-in", flip_y=True)
+    store.sync()
+    store.close()
+    assert not (home / FILE).exists() and not (root / FILE).exists()
+    good = {**_cfg(), "library": {"path": str(root)}}
+    store = DisplayList.open(good, home, [LAPTOP])
+    store.sync()
+    assert on_disk(root)["Built-in"]["flip_y"] is True, "what was chosen reaches the library"
+
+
+def test_a_library_in_the_home_is_still_found_with_no_copy(tmp_path):
+    """A file in the home says the library is the home, as a Mac with no [library] path has it."""
+    (tmp_path / FILE).write_text(json.dumps({"schema": SCHEMA, "displays": {"TV": row("output.2", at=5.0)}}))
+    typo = {**_cfg(), "library": {"path": ""}, "error": "config: bad"}
+    store = DisplayList.open(typo, tmp_path, [LAPTOP])
+    assert not store.local_only and displays.read_row(store.current["TV"])["target"] == "output.2"
+    assert set(store.current) == {"TV"}
+
+
+def test_the_device_list_finds_the_library_the_same_way(tmp_path):
+    """Finding 3 in CT1: a copy ignored, and an adopt lost."""
+    from test_devicelist import LISTED, XBOX, on_disk as devices_on_disk, roles, toml
+
+    from hyperspace import devicelist
+
+    root, home, home2 = tmp_path / "Drive", tmp_path / "home", tmp_path / "home2"
+    for d in (root, home, home2):
+        d.mkdir()
+    store = devicelist.DeviceList.open(toml(home, LISTED.format(root=root)), home)
+    store.sync()
+    store.close()
+    store = devicelist.DeviceList.open(toml(home, "[library"), home)
+    assert store.root == root and roles(store.raw) == ["pad", "launch"]
+    # no copy that says: the adopt waits in the copy, and a good launch writes it
+    store = devicelist.DeviceList.open(toml(home2, "[library"), home2)
+    assert store.local_only
+    store.adopt(XBOX)
+    store.sync()
+    store.close()
+    assert not (home2 / devicelist.FILE).exists() and "xbox" in (home2 / devicelist.COPY).read_text()
+    store = devicelist.DeviceList.open(toml(home2, LISTED.format(root=root)), home2)
+    store.sync()
+    assert "xbox" in roles(devices_on_disk(root))
+
+
+def test_the_seed_is_spent_when_the_library_is_the_home(tmp_path, monkeypatch):
+    """Finding 4: launch on A, then B primary, and output 1 gained a display."""
+    home = tmp_path / "home"
+    home.mkdir()
+    a, b = Screen("A", 0, 0, 1920, 1080, (0, 0)), Screen("B", 1920, 0, 1920, 1080, (1920, 0))
+    store = DisplayList.open(_cfg(monitor=-1), home, [a, b])
+    store.sync()
+    store.close()
+    assert store.path.parent == home and (home / COPY).exists()
+    store = DisplayList.open(_cfg(monitor=-1), home, [b, a])
+    store.sync()
+    assert set(store.rows) == {"A"} and list(wanted(store.current, [b, a]).renders[1]) == [
+        displays.Opening("A", 1)]
+
+
+def test_a_mac_with_no_say_adds_no_display_to_rows_it_finds(tmp_path):
+    """The same fault across Macs: `monitor = -1` isn't asking for this Mac's primary, so
+    the other Mac's output 1 isn't joined by it. With no rows it is where the window goes."""
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    root.mkdir()
+    home.mkdir()
+    cfg = {**_cfg(), "library": {"path": str(root)}}
+    (root / FILE).write_text(json.dumps({"schema": SCHEMA, "displays": {"Projector": row("output.1", at=5.0)}}))
+    store = DisplayList.open(cfg, home, [LAPTOP])
+    store.sync()
+    assert set(store.rows) == {"Projector"}, "output 1 has a row: nothing added"
+    (root / FILE).unlink()
+    (home / COPY).unlink()
+    store = DisplayList.open(cfg, home, [LAPTOP])
+    store.sync()
+    assert on_disk(root) == {"Built-in": row("output.1")}
+
+
+def test_no_say_never_replaces_a_row_with_another_job(tmp_path):
+    """The display has a row, whatever its target: output 1's no say doesn't take it over."""
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    root.mkdir()
+    home.mkdir()
+    (root / FILE).write_text(json.dumps({"schema": SCHEMA, "displays": {"Built-in": {"target": "output.2"}}}))
+    store = DisplayList.open({**_cfg(), "library": {"path": str(root)}}, home, [LAPTOP])
+    store.sync()
+    assert displays.read_row(store.current["Built-in"])["target"] == "output.2"
+
+
+def test_no_say_with_the_library_away_runs_on_a_default_and_isnt_spent(tmp_path):
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    home.mkdir()
+    cfg = {**_cfg(), "library": {"path": str(root)}}
+    store = DisplayList.open(cfg, home, [LAPTOP])
+    assert wanted(store.current, [LAPTOP]).renders[1][0].display == "Built-in" and not store.seeded
+    store.close()
+    root.mkdir()
+    (root / FILE).write_text(json.dumps({"schema": SCHEMA, "displays": {"Projector": row("output.1", at=5.0)}}))
+    store = DisplayList.open(cfg, home, [LAPTOP])
+    store.sync()
+    assert set(store.current) == {"Projector"} and store.seeded
+
+
+def test_a_second_tv_plugged_in_and_out_is_one_memory(macs):
+    """Finding 5, through SC1's labels: one row, never away, and never back to a stale one."""
+    root, one, _ = macs
+    store = opened(root, one, seed={"TV": row("output.1")})
+    pair = [TV_LEFT, TV_RIGHT]
+    tag = placement.labels(pair)[0]
+    assert tag == "TV #1"
+    store.set(tag, flip_x=True)
+    store.sync()
+    assert list(store.rows) == ["TV"] and on_disk(root)["TV"]["flip_x"] is True
+    want = wanted(store.current, pair)
+    assert want.away == {} and want.renders[1][0].flip_x is True and want.renders[1][0].display == "TV #1"
+    store.set("TV #2", target="output.2")
+    assert set(store.rows) == {"TV", "TV #2"}
+    alone = wanted(store.current, [TV_LEFT])
+    assert alone.renders[1][0].display == "TV" and alone.renders[1][0].flip_x is True
+    assert alone.away == {2: ["TV #2"]}, "the second's job waits for it"
+    assert placement.memory("TV #1") == placement.memory("TV") == "TV"
+    assert placement.memory("TV #2") == "TV #2" and placement.memory("DELL (2)") == "DELL"
+
+
+def test_a_row_under_an_old_label_in_the_file_is_put_right_once(macs):
+    root, one, _ = macs
+    (root / FILE).write_text(json.dumps({"schema": SCHEMA, "displays": {"TV #1": row("output.1", at=5.0)}}))
+    store = opened(root, one)
+    assert list(on_disk(root)) == ["TV"] and list(store.rows) == ["TV"]
+
+
+def test_a_first_display_that_wont_build_hands_over_to_the_next(monkeypatch):
+    """Finding 7: further displays were dropped with their windows and contexts live. The next
+    takes over, flips and all, so nothing goes undrawn; the first's window is destroyed."""
+    from test_app_boundary import _SwapGlfw
+
+    log: list[str] = []
+    monkeypatch.setattr(app, "glfw", _SwapGlfw(log))
+    destroyed: list = []
+    app.glfw.destroy_window = destroyed.append
+    one = Slot(1, win="w1")
+    two = Slot(2, win="w2", display="A")
+    b, c = app.Also("B", 3, True, win="w3", flip_x=True), app.Also("C", 4, win="w4")
+    two.also = [b, c]
+    made = iter([object(), RuntimeError("no context"), object(), object()])
+
+    def make():
+        m = next(made)
+        if isinstance(m, Exception):
+            raise m
+        return m
+
+    notes: list[str] = []
+    app._open_presenters([one, two], "root", make, notes)
+    assert destroyed == ["w2"]
+    assert two.win == "w3" and two.display == "B" and two.monitor == 3 and two.fullscreen is True
+    assert two.switches.flip_x is True and isinstance(two.presenter, app.Presenter)
+    assert two.missing == "" and two.also == [c] and c.presenter is not None
+    assert app._slot_windows([one, two]) == ["w1", "w3", "w4"]
+
+
+def test_a_further_display_that_wont_build_is_destroyed_and_said(monkeypatch):
+    from test_app_boundary import _SwapGlfw
+
+    log: list[str] = []
+    monkeypatch.setattr(app, "glfw", _SwapGlfw(log))
+    destroyed: list = []
+    app.glfw.destroy_window = destroyed.append
+    two = Slot(2, win="w2", display="A")
+    two.also = [app.Also("B", 3, win="w3")]
+    made = iter([object(), RuntimeError("no context")])
+
+    def make():
+        m = next(made)
+        if isinstance(m, Exception):
+            raise m
+        return m
+
+    notes: list[str] = []
+    app._open_presenters([two], "root", make, notes)
+    assert destroyed == ["w3"] and two.also == [] and two.opened and "on B" in notes[0]
+
+
+def test_a_fullscreen_tick_reads_what_the_desk_set(rows):
+    """Finding 8: it read the row, went stale, and took two clicks."""
+    r, d = rows, rows.d
+    assert r.panel.output.fullscreen is False
+    r.reg["output.fullscreen"].set(True)
+    d.run(d.wait(2))
+    d.run(d.click("display.1.fullscreen"), d.park(), d.wait(2))
+    assert r.panel.output.fullscreen is False, "one click takes it off"
+    r.store.sync()
+    assert on_disk(r.root)["TV"]["fullscreen"] is False
+
+
+def test_the_watch_reads_the_first_window_there_is():
+    """Finding 9: on `main`'s source, so a lone later window's stall is seen."""
+    import inspect
+
+    src = inspect.getsource(app.main)
+    assert "info=(lambda win=opened[0][1].win: output.backend.window_state(win)) if opened else None" in src
+
+
+def test_a_control_window_seeded_onto_a_renders_display_stays_there(monkeypatch):
+    """Finding 10: `control_monitor` named the projector, the render has it too, and it opened
+    on the primary."""
+    rows_ = displays.seed_rows(_cfg(monitor=1, control_monitor=1), [LAPTOP, TV_LEFT], {}, [])
+    assert rows_ == {"TV": row("output.1", floats_control=True)}
+    g, slots, ctrl, cfg, want = _launch(monkeypatch, {"Projector": row("output.1", floats_control=True)})
+    assert want.control is None and want.floats.display == "Projector"
+    assert g.pos[ctrl][0] >= 1728 and cfg["output"]["control_monitor"] == 1
+    # a row that has it wins, and with neither it's where it was
+    assert wanted({"Built-in": row(CONTROL), "TV": row("output.1", floats_control=True)}, [LAPTOP, TV_LEFT]).control.index == 0
+    assert displays.seed_rows(_cfg(), [LAPTOP], {}, []) == {"Built-in": row("output.1")}
+
+
+def test_the_stale_words_about_output_1_are_gone():
+    assert "GL context" not in config.ONE_WINDOW and "rows" in config.ONE_WINDOW
+
+
 def test_no_old_words():
     """The glossary's: a display, a row, an output; no layer of configuration."""
     for mod in (displays, ui_displays):
@@ -652,5 +921,6 @@ def test_also_handoff_undoes_output_1s_flips_and_keeps_anothers_mix_right():
     also2 = app.Also("A", flip_x=True, size=(1000, 1000))
     got = app._also_handoff(other, view, also2, first, "frame", (1280, 720))
     assert got.flip == (True, False) and got.factor == 0.5 and got.mix_flip == (True, True)
+    assert got.mix_viewport is None, "no fade on"
     assert got.rect == (0, 219, 1000, 562)
     assert app._also_handoff(other, SimpleNamespace(handoff=None), also2, first, "f", (1, 1)) is None

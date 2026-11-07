@@ -63,9 +63,12 @@ def _tick(panel, run: Running, tag: str, key: str, on: bool, target: str) -> Non
 def _shown(run: Running, tag: str, key: str, row: dict, target: str) -> bool:
     """What a tick says: the open window's, as the desk may have moved it; else the row's."""
     open_on = run.window_on(tag)
-    if open_on is None or run.opened.get(tag) != target or key == "fullscreen":
+    if open_on is None or run.opened.get(tag) != target:
         return row[key]
     sl, also = open_on
+    if key == "fullscreen":
+        window = also.output if also is not None else sl.output
+        return row[key] if window is None else bool(window.fullscreen)
     return bool(getattr(also if also is not None else sl.switches, key))
 
 

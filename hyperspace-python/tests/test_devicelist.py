@@ -579,7 +579,9 @@ def test_an_adopt_with_a_config_that_did_not_read_makes_no_file_of_defaults(macs
 
 def test_an_adopt_survives_two_launches_that_did_not_read(macs):
     root, home, _ = macs
-    _broken(root, home).adopt(XBOX)
+    first = _broken(root, home)
+    first.adopt(XBOX)
+    first.close()          # (its copy, written on a worker: a quit waits for it)
     store = _broken(root, home)
     store.sync()
     assert "xbox" in roles(store.raw) and "pad" in roles(store.raw)

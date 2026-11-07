@@ -9,12 +9,21 @@ stderr; a step that doesn't do what it should stops the run.
 The rows go in `<home>/displays.json`: its library, as the driver's home names no other. It
 never reaches the real library. A home whose `displays.json` you wrote first is a launch from
 those rows: a render on two displays, say. Loads go through `panel.library.load("presets", name)`.
+
+`DISPLAYS_FADE=1`: first, a real crossfade with an output's further display made square, so its
+shape isn't its first display's (party-tumble on both decks, shots at the fade's middle and with
+the fade off). After the watch's limit, what the red banner says. `DISPLAYS_STATE=dark` or `live`:
+the watch's read of each window stood in (a locked Mac reports them all covered): `dark` says the
+first output window is covered and the rest fine, `live` says all are fine.
 """
 
 import json
+import os
 import sys
 
-from hyperspace import placement, ui_displays, ui_graph
+import glfw
+
+from hyperspace import app, overlay, placement, ui_displays, ui_graph
 from hyperspace.displays import CONTROL, FILE
 from hyperspace.ui import PAGE_KEYS
 
@@ -23,12 +32,45 @@ def say(*words):
     print("drive_displays:", *words, file=sys.stderr)
 
 
+def fade(d, panel):
+    also = next(a for sl in panel.outputs for a in sl.also)
+    glfw.set_window_size(also.win, 700, 700)
+    if os.environ["DISPLAYS_FADE"] == "stretch":    # the control: the fault this guards against
+        app._mix_viewport = lambda *_a: None
+    yield from d.click("graph.copy", frames=10)     # on air to off air: the same look on both
+    yield from d.park()
+    yield from d.wait(60)
+    say("fade off: shots to here; further window size", glfw.get_framebuffer_size(also.win))
+    panel.reg["output.xfade"].set(0.5)
+    yield from d.wait(60)
+    say("fade at 0.5: shots to here; errors", [also.error, *(sl.error for sl in panel.outputs)],
+        "mix", panel.meta.mix.xfade)
+    panel.reg["output.xfade"].set(0.0)
+    yield from d.wait(10)
+
+
+def banner(panel, words):
+    w = panel.render_watch
+    say(words, "alerts:", w.alerts(), "stalled:", repr(w.stalled),
+        "states:", [(label, st.get("occluded"), st.get("presentable")) for label, st in w._others])
+
+
 def script(d, panel):
     run = panel.displays
     assert run is not None, "no rows: was this --laptop?"
     panel.library.load("presets", "party-tumble")
     panel.reg["ui.page"].set(PAGE_KEYS.index("output"))
     yield from d.wait(10)
+    if os.environ.get("DISPLAYS_FADE"):
+        yield from fade(d, panel)
+    state = os.environ.get("DISPLAYS_STATE")
+    if state:
+        dark = next(sl.win for sl in panel.outputs if sl.opened) if state == "dark" else None
+        overlay.GlfwBackend.window_state = lambda self, win: {
+            "visible": True, "iconified": False, "occluded": win == dark, "presentable": win != dark}
+        panel.render_watch.stalled = ""
+    yield from d.wait(420)      # past the watch's limit, on any frame rate
+    banner(panel, "after the watch's limit:")
     scr = run.screens()
     tags = placement.labels(scr)
     across = [tags[i] for i in placement.arranged(scr)]
