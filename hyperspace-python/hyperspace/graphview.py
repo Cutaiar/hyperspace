@@ -1742,6 +1742,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                   + (UNDER_NODE_MODE if under else ""),
                                   addr=b.source, inside=inside))
     for h in held:
+        word = node_desk.control_word if node_desk is not None else None
         for b in h.rows:
             src = row_pin(b)[0]
             p = reg.get(b.target)
@@ -1756,7 +1757,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                        group=_sub_group(b.target, p), pins=(dst,),
                                        param=b.target, live=_norm(p)))
             view.cables.append(node_mode_cable(
-                h.player, src, dst, node_desk.control_word(h.role, b),
+                h.player, src, dst, word(h.role, b) if word is not None else b.source,
                 (p.label if p is not None else "") or b.target, dormant=not h.on_here,
                 live=_norm(p), addr=b.source, ref=(h.role, b)))
     keyed = {(b.source, b.target) for b in routes}
@@ -2017,7 +2018,8 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
         if c.kind == "render":
             continue
         if c.kind == NODE_MODE:     # a knob publishes no lane: what it holds is its param
-            c.live = _norm(reg.get(c.ref[1].target)) if c.ref is not None else c.live
+            at = c.ref          # (a name of its own: testing `c.ref` narrows it for the rest)
+            c.live = _norm(reg.get(at[1].target)) if at is not None else c.live
         elif c.addr is not None:
             c.live = reading(router, c.addr, lanes)
         elif c.kind == "sub":

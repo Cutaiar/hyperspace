@@ -13275,8 +13275,9 @@ disengage node mode." A branch to keep them is future work, "not important enoug
 - **A base chase across a visit.** A rested route is no row lost: `_forget_lost_rows` keeps the
   param's ledger (plan 52), so a look the verb left stands where it stood after a leave, as through a
   source's flicker, instead of jumping by the route's offset. A knob turned in the visit stays where
-  it was left, and the route rides again once it has been home. A route deleted in the visit is a row
-  lost, and the ledger goes.
+  it was left, and the route rides again once it has been home: **the owner, 2026-11-07:** "The knob's
+  value after a chase commit across a node visit, holding on leave, I think is the right default". A
+  route deleted in the visit is a row lost, and the ledger goes.
 - **What does not rest.** A param past the desk's freedoms (`Fit.over`), which no knob holds. A pad's
   or a hand's route, kept. **Nothing on another `Deck`,** so no patch reaches another. A pointing whose
   desk is on the other `Deck`, or not plugged in: nothing holds the param, so the modulators run.

@@ -5140,6 +5140,12 @@ DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
                "channel": _delete_render_node}
 
 
+def _leave(panel, role: str) -> None:
+    nd = _node_desk(panel)
+    if nd is not None:
+        nd.leave(role)
+
+
 def _leave_chip(panel, role: str) -> None:
     """The side pane's leave, for a selected node mode cable or bundle."""
     nd = _node_desk(panel)
@@ -5325,7 +5331,7 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> No
     if c.kind == graphview.NODE_MODE:           # not a row: leaving the node is what ends it
         role = c.ref[0] if c.ref is not None else None
         if role is not None and imgui.menu_item_simple(f"{role}: leave node mode"):
-            _node_desk(panel).leave(role)
+            _leave(panel, role)
         return
     if c.kind in ("route", "input") and imgui.begin_menu("insert"):
         for kind in modifiers.KINDS:
@@ -5368,7 +5374,7 @@ def _bundle_menu(panel, st: dict, view: graphview.View, b: graphview.VBundle) ->
     roles = _node_mode_roles(b)
     for role in roles:
         if imgui.menu_item_simple(f"{role}: leave node mode"):
-            _node_desk(panel).leave(role)
+            _leave(panel, role)
     if not roles:
         imgui.menu_item_simple(f"delete: {graphview.EXPAND_TO_EDIT}", enabled=False)
 
