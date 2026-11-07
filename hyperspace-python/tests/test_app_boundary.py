@@ -875,6 +875,27 @@ def test_screens_by_name_survive_the_plug_order(monkeypatch, tmp_path, capsys):
         assert "notes" not in cfg
 
 
+def test_output_1_named_only_in_the_list_is_resolved_and_said(monkeypatch, tmp_path, capsys):
+    """`_slots` leaves output 1 to `settle`, which reads `[output] monitor`:
+    `config.load` copies the list's first entry there, so a name given only
+    in `[[output.screens]]` reaches it, from a real file."""
+    from hyperspace import config
+
+    p = tmp_path / "config.toml"
+    p.write_text('[[output.screens]]\nmonitor = "MStar #2"\n')
+    cfg = config.load(p)
+    g, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_RIGHT, TV_LEFT)
+    assert g.pos[slots[0].win] == (3648 + 16, 16) and slots[0].monitor == 1
+    assert "notes" not in cfg
+    # a name no screen has: −1, as output 1 always opens, and said once
+    p.write_text('[[output.screens]]\nmonitor = "nothing"\n')
+    cfg = config.load(p)
+    g, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_LEFT)
+    assert slots[0].opened and slots[0].monitor == -1
+    assert cfg["notes"] == ["config: [output] monitor = 'nothing' matches no screen "
+                            "(connected: Built-in, MStar) — using the last position"]
+
+
 def test_a_later_output_whose_named_screen_is_absent_is_not_opened(monkeypatch, tmp_path, capsys):
     """Fork F9 holds for a name as for an index; output 1 always opens."""
     from hyperspace import config
