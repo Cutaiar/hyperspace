@@ -129,9 +129,9 @@ def test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none():
     for kind, made in G.WIRED_MAKES.items():
         if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, *G.SEGMENT_PINS):
             assert graphview.THUMBS[kind] == graphview.PICTURE, kind
-    # plan 39: a matte makes a mask and a segment's own output is its matte: text
-    assert graphview.thumb_of("matte", G.MatteNode("matte")) is None
-    assert graphview.thumb_of("segment", G.SegmentNode("segment")) is None
+    # SM3: a matte makes a mask and a segment.s own output is its matte: in grey
+    assert graphview.thumb_of("matte", G.MatteNode("matte")) == graphview.MASK_PIC
+    assert graphview.thumb_of("segment", G.SegmentNode("segment")) == graphview.MASK_PIC
     assert graphview.THUMBS["shape"] == graphview.THUMBS["cloud"] == graphview.SCENE_PIC
     assert graphview.THUMBS["hands"] == graphview.LAYER_PIC
     assert graphview.thumb_of("output.2") == graphview.WINDOW_PIC

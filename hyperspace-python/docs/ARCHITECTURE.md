@@ -1523,7 +1523,8 @@ a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
   - for a shape or a cloud, its scene's picture, faint;
   - for a hands node, its layer;
   - for an output, its window: output 1 is the page's existing `Preview`,
-    outputs 2–4 are their `Handoff.frame`.
+    outputs 2–4 are their `Handoff.frame`;
+  - for a matte or a segment, its mask in grey (row 777).
 
   The modulation side stays text.
 - **Wanted only on screen.** Each frame, the page `want`s the nodes that

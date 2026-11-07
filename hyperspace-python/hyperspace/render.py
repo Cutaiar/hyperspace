@@ -141,6 +141,7 @@ from .graph import (
     EMPTY,
     FACE_PIC,
     IMAGE,
+    MASK,
     MEDIA_CHANNELS,
     Delay,
     Frame,
@@ -156,6 +157,7 @@ from .graph import (
     channel_into,
     cloud_roles,
     graph_key,
+    mask_of,
     param_prefix,
     picture,
 )
@@ -1060,7 +1062,10 @@ def thumb_source(frame: Frame, name: str, how: str,
     - ``window``: an output after the first: its presenter's picture (the
       `Handoff`'s frame, a texture of this context: no readback), or a
       publish-only output's own target; output 1 is the page's `Preview`,
-      never asked here."""
+      never asked here;
+    - ``mask``: a matte or a segment (SM3): its mask at its own size
+      (`graph.mask_of`), as the frame made it: nothing painted or refitted
+      for this. The caller reads it as a mask (`PreviewTextures.put`)."""
     g = frame.graph
     node = g.nodes.get(name) if g is not None else None
     if node is None:
@@ -1084,7 +1089,7 @@ def thumb_source(frame: Frame, name: str, how: str,
         if scene is None:
             return None
         node = scene
-    if getattr(node, "OUTPUT", None) != IMAGE:
+    if getattr(node, "OUTPUT", None) != (MASK if how == "mask" else IMAGE):
         return None
     # (review: every kind — a composite, a delay, a resize, a copy behind a
     # switch's unpicked input made nothing this frame, and painting it would
@@ -1094,7 +1099,7 @@ def thumb_source(frame: Frame, name: str, how: str,
         return None
     if not node.reads(frame):
         return None
-    return picture(frame, node)
+    return mask_of(node, frame)[0] if how == "mask" else picture(frame, node)
 
 
 class Renderer:
@@ -1953,7 +1958,12 @@ class Renderer:
                         continue
                     # (a picture the frame had not made — painted, or made
                     # into a texture — leaves a new entry in the frame's data)
-                    if src is not None:
+                    if src is None:
+                        continue
+                    if how == "mask":
+                        th.put(name, src, mask=True,
+                               flip=mask_of(frame.graph.nodes[name], frame)[1])
+                    else:
                         th.put(name, src, repainted=len(frame.data) > held)
             finally:
                 frame.stats.clear()

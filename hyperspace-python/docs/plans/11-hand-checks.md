@@ -8344,6 +8344,17 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
+## DD. Matte and segment thumbnails (SM3)
+Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real GL with a fake worker; the real app seen in motion mode only. Person mode's orientation on real Vision is yours.
+**604. A mask on the node.** (either Mac, a camera or a clip with a person in it)
+1. Wire a channel into a `matte` and the matte into a `cut`. *Pass:* the matte's node shows grey, white where it passes, not red, and turning `matte.key` changes it live.
+2. Wire the same channel into a `segment`, mode person, and `segment.fg` into an output. *Pass:* the segment's node shows the person in white on black, the right way up, lined up with the channel's picture.
+3. Mode motion, then back to person. *Pass:* the right way up in both.
+4. Hover each node's picture. *Pass:* the hover ends "… mask" with its size, and gives the node's own words.
+5. Lit `pictures · tint cables`. *Pass:* cables out of the two nodes stay plain.
+6. Pan both nodes off the canvas and watch the SYSTEM page's thumbnail line for a second. *Pass:* their count drops, and FPS doesn't change noticeably with them on or off screen.
+*Fail:* a red box, an upside-down person, or a frame-rate dip that follows the nodes on screen.
+
 ## What no test covers
 
 Only a person can settle these:

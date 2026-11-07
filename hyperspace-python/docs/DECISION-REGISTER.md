@@ -775,6 +775,7 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 777 | SM3: a matte and a segment show their mask on GRAPH, in grey, white where it passes. A segment is its matte, not its foreground; a folded group whose last picture outlet is a segment's `fg` shows no picture; a mask's hue is never read | 604 | plan 58 SM3; (rec) — pending the owner, on those choices |
 
 "—": no hand check shows it; tests only.
 
@@ -9056,6 +9057,7 @@ Plan 40's rows (501–536) follow, in their own section at the end.
 - **Other options.** A segment drawn as its foreground (`segment.fg`'s picture), a matte as its mask in white on black (each a `THUMBS` entry and a `render.thumb_source` case; nothing else changes).
 - **To reverse.** One table entry each.
 - **Rough edge.** The node that cuts a dancer out shows no picture on GRAPH; its fg and bg are seen only where they are wired.
+- **Reversed by row 777** (SM3, 2026-11-06), by the road "Other options" names for a matte.
 - **Judge it.** —
 
 ## Plan 40 — patches (rows 501–536)
@@ -14034,3 +14036,13 @@ still wins, as does a sink row.
 - **A person joining a controller's step.** `_opens` was decided only when a step began, so a typed commit landing inside a controller's settle time neither moved focus nor opened the latch, and ⌘Z refused right after typing. A change seen with the hand up now counts on a step already open (`Undo._observe`); a held step (`keep_open`) still opens nothing. The same goes for the mouse, so row 753's known limit, a mouse held anywhere, now also takes a controller's step already open.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
+
+### 777. A matte and a segment show their mask on GRAPH
+
+- **Answer.** Plan 58 SM3 asks for row 500's reversal. The choices below are (rec) — pending the owner.
+- **Built.** `graphview.THUMBS` gives `matte` and `segment` the word `mask`. `render.thumb_source` hands over the mask at its own size (`graph.mask_of`), as the frame made it, and `PreviewTextures.put(mask=, flip=)` copies it by the one `THUMB_FS` pass, red drawn as grey. A segment's worker keeps its rows top first, so that pass reads it upside down, by `mask_of`'s own flag. The hover says "1280×820 mask".
+- **What it costs.** One downsample pass for each mask on screen: nothing while it is off screen, as any thumbnail. No readback, no `#fit` refit, no second feed to a worker. A mask is grey, so it never takes a turn at the one hue read a frame. A mask nothing pulls isn't made for its thumbnail. The outputs stay byte identical, so no golden can move.
+- **Other options.** A segment drawn as its foreground: one more case in `thumb_source`, and an extra cut pass whenever nothing wires `fg`. A folded group with a segment's `fg` outlet showing the matte anyway: wrong picture, since the group's outlet is the foreground. So it stays without one, as it was.
+- **To reverse.** Two `THUMBS` entries.
+- **Rough edge.** A thumbnail's node keeps its lines in the hover (plan 37 P1), so a matte's and a segment's own words ("no worker in the preview", "subject is not in this build") move from the node's body to the hover. Their box is black while they say so. An unpicked or unreached mask is black too, as any picture node's.
+- **Judge it.** 604.

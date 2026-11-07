@@ -580,19 +580,25 @@ THUMB_BLACK_S = 1.0
 # 1920-wide picture's ten texels a thumbnail texel are read eight across,
 # in one draw, with no mipmap built on (and no filter changed on) a
 # texture the frame owns. Written opaque: the picture over black, so a
-# see-through layer reads on the node as it would on a black window
+# see-through layer reads on the node as it would on a black window. A mask
+# (`u_mask`, SM3) is one channel, so its red is drawn as grey; one whose rows
+# are top first (`u_flip`: a segment's worker) is read upside down
 THUMB_FS = """
 #version 330
 in vec2 v_uv;
 uniform sampler2D u_src;
 uniform vec2 u_step;          // one thumbnail texel, in the source's uv
+uniform int u_mask;
+uniform int u_flip;
 out vec4 f_color;
 void main() {
+    vec2 uv = u_flip != 0 ? vec2(v_uv.x, 1.0 - v_uv.y) : v_uv;
     vec4 c = vec4(0.0);
     for (int j = 0; j < 4; ++j)
         for (int i = 0; i < 4; ++i)
-            c += texture(u_src, v_uv + (vec2(i, j) - 1.5) * 0.25 * u_step);
-    f_color = vec4(c.rgb / 16.0, 1.0);
+            c += texture(u_src, uv + (vec2(i, j) - 1.5) * 0.25 * u_step);
+    c /= 16.0;
+    f_color = vec4(u_mask != 0 ? c.rrr : c.rgb, 1.0);
 }
 """
 
@@ -693,6 +699,7 @@ class PreviewTextures:
         self.hue_at: dict[str, float] = {}
         self.hue_asked: float | None = None
         self.hue_reads = 0
+        self.masks: set[str] = set()            # names whose thumbnail is a mask: no hue
         self._hue_pending = None                # (name, pixel buffer) started last frame
         self._hue_target = self._hue_buf = None
 
@@ -777,8 +784,9 @@ class PreviewTextures:
         if self.hue_asked is None or self.clock() - self.hue_asked >= THUMB_DROP_S:
             return
         now = self.clock()
+        # (a mask is grey, so it has no hue to read: SM3 adds no readback)
         due = [(self.hue_at.get(n, -math.inf), n) for n in self.tex
-               if now - self.hue_at.get(n, -math.inf) >= HUE_EVERY_S]
+               if n not in self.masks and now - self.hue_at.get(n, -math.inf) >= HUE_EVERY_S]
         if not due:
             return
         _, name = min(due)
@@ -813,19 +821,23 @@ class PreviewTextures:
         fbo.read_into(self._hue_buf, components=4)
         self._hue_pending = (name, self._hue_buf)
 
-    def put(self, name: str, src, repainted: bool = False) -> bool:
+    def put(self, name: str, src, repainted: bool = False, mask: bool = False,
+            flip: bool = False) -> bool:
         """`src` (a texture of the render context) copied into `name`'s
         thumbnail by one downsample pass; True when it was. `repainted`: the
         frame had not made `src`, it was painted for this (`repainted`).
-        A pass that raises leaves the last thumbnail (`error` says why)."""
+        `mask`: `src` is a mask, drawn in grey (`THUMB_FS`), `flip` when its
+        rows are top first (`graph.mask_of`). A pass that raises leaves the
+        last thumbnail (`error` says why)."""
         try:
             size = tuple(int(v) for v in src.size)
             if self.ctx is not None:
-                self._copy(name, src, size)
+                self._copy(name, src, size, mask, flip)
         except Exception as e:  # noqa: BLE001 — a thumbnail must not take the frame down
             self.error = f"{type(e).__name__}: {e}"[:120]
             return False
         self.sizes[name] = size
+        (self.masks.add if mask else self.masks.discard)(name)
         self.made[name] = self.clock()
         self.made_in[name] = self.frame
         self.count += 1
@@ -842,6 +854,7 @@ class PreviewTextures:
         for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted,
                   self.hues, self.hue_at):
             d.pop(name, None)
+        self.masks.discard(name)
         got = self.tex.pop(name, None)
         if got is not None:
             for res in (got[1], got[0]):
@@ -883,11 +896,12 @@ class PreviewTextures:
         got = self.tex[name] = (tex, fbo)
         return got
 
-    def _copy(self, name: str, src, size: tuple[int, int]) -> None:
+    def _copy(self, name: str, src, size: tuple[int, int], mask: bool = False,
+              flip: bool = False) -> None:
         tex, fbo = self._target(name, size)
-        self._pass(src, tex, fbo)
+        self._pass(src, tex, fbo, mask, flip)
 
-    def _pass(self, src, tex, fbo) -> None:
+    def _pass(self, src, tex, fbo, mask: bool = False, flip: bool = False) -> None:
         """One `THUMB_FS` pass: `src` downsampled into `tex` (`fbo`'s)."""
         ctx = self.ctx
         if self._prog is None:
@@ -906,6 +920,8 @@ class PreviewTextures:
             self._sampler.use(location=0)
             self._prog["u_src"].value = 0
             self._prog["u_step"].value = (1.0 / tex.size[0], 1.0 / tex.size[1])
+            self._prog["u_mask"].value = int(mask)
+            self._prog["u_flip"].value = int(flip)
             self._vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             self._sampler.clear(location=0)
