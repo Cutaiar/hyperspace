@@ -9,10 +9,10 @@
     uv run python tools/poi_probe.py --replay tests/fixtures/pads/joycon-poi-excerpt.jsonl \
         --findings docs/plans/assets/46-joycon/joycon-findings.json        # the owner's own tape
 
-The pad is read exactly as the app reads it (`pads.hid.HidPad`, its
-per-report turn on the report clock, the frame's newest sample through
-the calibration and the axis map, `poi.step` on a registry with the
-camera's pan and zoom), so what prints here is what the shape does. Close
+The pad is read by the app's own code: a real `gamepad.Pad` polls the
+reader (`pads.hid.HidPad` live, `pads.hid.TapePad` on a replay), and
+`poi.step` runs on the real camera params (`params.build_patch`), so what
+prints here is what the shape does. Close
 the app first: hidapi opens the pad exclusively.
 
 **Live**, each line is the poi's state now: the reading (|accel| in g,
@@ -29,10 +29,12 @@ writes them), so a replay reads the sensors exactly as live did.
 
 **Replay** prints, for each note's window, how still the pad read, the
 attitude error and the push (median / worst), the hand's travel (at the
-end / farthest) and speed, and the pan's farthest reach — the numbers the
+end / farthest) and speed, the pan's farthest reach and the frames at a wall — the numbers the
 2026-11-02 tape was diagnosed with — and with ``--series`` every frame
 between two times. ``--findings`` names the calibration file when it is
-not beside the tape (the probe's ``joycon-findings.json`` does).
+not beside the tape (the probe's ``joycon-findings.json`` does). A replay
+runs a frame at least every 1/60 s, so a pause in the tape is what the app
+would have seen: after `hid.STALE_S` the pad is lost and reads afresh.
 
 The tool reads `hyperspace/poi.py` as it stands and shows what that does;
 the tape is a recording, not a verdict. Salvaged from #342 (closed), whose
@@ -48,55 +50,48 @@ import sys
 import threading
 import time
 from pathlib import Path
-from types import SimpleNamespace
 
-from hyperspace import poi
+from hyperspace import gamepad, poi
 from hyperspace.pads import gesture, hid, models, nintendo
-from hyperspace.params import PAN_RANGE, Registry
+from hyperspace.params import PAN_RANGE, build_patch
+from hyperspace.view import ViewState
+
+FRAME_S = 1 / 60          # the longest a replay goes between frames
 
 # ---------------------------------------------------------------- the poi on a reading
 
+class ProbePad(gamepad.Pad):
+    """The app's pad, polling the reader it is handed (None: nothing lent
+    this frame). A tape entry never looks for a joystick or the libusb road."""
+
+    def __init__(self):
+        super().__init__(tape="probe")
+        self.reader = None
+
+    def _hid_reader(self):
+        return self.reader
+
+
 class Rig:
-    """A registry with the camera's pan and zoom, the poi registered on it
-    and on, and a pad the poi reads (duck-typed as gamepad.Pad)."""
+    """The real camera params, the poi registered on them and on, and the
+    app's pad for it to read."""
 
     def __init__(self, **dials):
-        self.view = SimpleNamespace(zoom=1.0, pan=[0.0, 0.0])
-        reg = self.reg = Registry()
-        for i, axis in enumerate("xy"):
-            reg.continuous(f"camera.pan.{axis}", f"Pan {axis.upper()}",
-                           lambda i=i: self.view.pan[i],
-                           lambda v, i=i: self.view.pan.__setitem__(i, v),
-                           lo=-PAN_RANGE, hi=PAN_RANGE)
-        reg.continuous("camera.zoom", "Zoom", lambda: self.view.zoom,
-                       lambda v: setattr(self.view, "zoom", v), lo=0.005, hi=200.0, log=True)
+        self.view = ViewState()
+        self.reg = build_patch(self.view)
         self.state = poi.PoiState()
-        poi.register(reg, self.state, dials)
-        reg["poi.on"].set(True)
-        self.motion = gesture.Motion()
-        self.buttons: list[int] = []
-        self.was: list[int] = []
-        self.pad = SimpleNamespace(on=True, has=lambda cap: cap == "motion",
-                                   motion_lanes=lambda: self.motion.lanes(), motion=self.motion,
-                                   buttons_named={"A": models.CANON["A"]},
-                                   pressed=self._pressed, hat_pressed=lambda h: False,
-                                   hat=0, prev_hat=0)
+        poi.register(self.reg, self.state, dials)
+        self.reg["poi.on"].set(True)
+        self.pad = ProbePad()
 
-    def _pressed(self, code: int) -> bool:
-        down = code < len(self.buttons) and bool(self.buttons[code])
-        before = code < len(self.was) and bool(self.was[code])
-        return down and not before
+    @property
+    def motion(self) -> gesture.Motion:
+        return self.pad.motion           # a lost pad comes back with a new one
 
-    def frame(self, f, turned, n: int, cal, amap, dt: float) -> None:
-        """One frame as `gamepad.Pad._extras` makes it: the reader's summed
-        turn (degrees, the sensor's axes), the frame's newest sample."""
-        self.was, self.buttons = self.buttons, list(f.buttons) if f is not None else []
-        self.motion.add_turn(amap.pick(turned, amap.gyro))
-        if f is not None and n:
-            self.motion.step(amap.pick(cal.gyro_dps(f.gyro), amap.gyro),
-                             amap.pick(cal.accel_g(f.accel), amap.accel), dt, integrate=False)
-        else:
-            self.motion.decay(dt)
+    def frame(self, reader, dt: float) -> None:
+        """One frame as the app makes it: `Pad.poll` on `reader`, `poi.step`."""
+        self.pad.reader = reader
+        self.pad.poll(dt)
         poi.step(self.state, self.pad, self.reg, dt, "probe")
 
     def numbers(self) -> dict:
@@ -136,8 +131,7 @@ def live(info: dict, record: Path | None, dials: dict) -> None:
     model = models.by_ids(info["vendor_id"], info["product_id"])
     rec = None
     if record is not None:
-        bus = {1: "usb", 2: "bluetooth"}.get(info.get("bus_type"), "")
-        rec = hid.Recorder(record, model.id, bus)
+        rec = hid.Recorder(record, model.id, "usb" if hid._on_usb(info) else "bluetooth")
     reader = hid.HidPad(info, recorder=rec)
     rig = Rig(**dials)
     notes: list[str] = []
@@ -158,12 +152,8 @@ def live(info: dict, record: Path | None, dials: dict) -> None:
     try:
         while True:
             now = time.monotonic()
-            dt, last = now - last, now
-            f = reader.latest()
-            turned, n = reader.take_turn()
-            cal = reader.calibration
-            amap = gesture.axis_map_of(None, reader)
-            rig.frame(f, turned, n, cal, amap, dt)
+            dt, last = min(0.25, now - last), now
+            rig.frame(reader, dt)
             if not wrote_findings and reader.flash and record is not None:
                 side = record.with_suffix(record.suffix + ".findings.json")
                 side.write_text(json.dumps({"model": model.id, "flash": flash_of(reader),
@@ -179,7 +169,7 @@ def live(info: dict, record: Path | None, dials: dict) -> None:
                 if rec is not None:
                     rec.note(note)
                 print(f"--- {note}")
-            if f is None:
+            if not rig.pad.on:
                 if now - shown >= 0.5:
                     print(f"{now - t0:7.2f}s waiting for the pad… {reader.note}")
                     shown = now
@@ -198,56 +188,84 @@ def live(info: dict, record: Path | None, dials: dict) -> None:
 
 # ---------------------------------------------------------------- replay
 
-def calibration_for(tape: Path, findings: Path | None, kind: str) -> nintendo.Calibration:
+def calibration_for(tape: Path, findings: Path | None, reader: hid.TapePad):
+    """The calibration the live run read: from `findings` if named (it must
+    be there), else from beside the tape, else nominal, and said."""
     side = findings or tape.with_suffix(tape.suffix + ".findings.json")
     if not side.exists():
+        if findings is not None:
+            raise SystemExit(f"no such findings file: {side}")
         print(f"no calibration beside the tape ({side.name}): nominal", file=sys.stderr)
-        return nintendo.Calibration()
-    found = json.loads(side.read_text())
-    records = {int(a, 16): bytes.fromhex(h) for a, h in found["flash"].items()}
-    return nintendo.calibration(records, kind)
+        return reader.codec.Calibration()
+    try:
+        found = json.loads(side.read_text())
+    except ValueError as e:
+        raise SystemExit(f"{side}: not JSON ({e})") from None
+    if not reader.nintendo:
+        print(f"{side.name}: a {reader.model.id} tape's calibration is not read from it: nominal",
+              file=sys.stderr)
+        return reader.codec.Calibration()
+    flash = found.get("flash") if isinstance(found, dict) else None
+    if not isinstance(flash, dict):
+        raise SystemExit(f"{side}: no flash records")
+    try:
+        records = {int(a, 16): bytes.fromhex(h) for a, h in flash.items()}
+    except (TypeError, ValueError) as e:
+        raise SystemExit(f"{side}: bad flash records ({e})") from None
+    return nintendo.calibration(records, reader.kind)
+
+
+def notes_of(tape: Path) -> list[tuple[float, str]]:
+    """The tape's notes and their times. `TapePad` reads the reports and
+    leaves these; as it does, a line cut short or not a row is skipped."""
+    out = []
+    for text in tape.read_text(encoding="utf-8").splitlines():
+        try:
+            d = json.loads(text)
+            if isinstance(d, dict) and "note" in d:
+                out.append((float(d["t"]), str(d["note"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
 
 
 def frames(tape: Path, findings: Path | None, dials: dict):
-    """The tape through the app's path, a frame a report: (the note it is
-    under, the tape's time, the rig, `Rig.numbers`)."""
-    rows = [json.loads(ln) for ln in tape.read_text().splitlines() if ln.strip()]
-    head = rows[0] if rows and "tape" in rows[0] else {}
-    model = str(head.get("model", "joycon-l"))
-    kind = nintendo.kind_of(model)
-    cal = calibration_for(tape, findings, kind)
-    amap = nintendo.axis_map_for(kind)
+    """The tape through the app's path, on the tape's own time: (which note
+    this is since the tape began, the note, the time, the rig, `Rig.numbers`)
+    for each report's frame that has sensors. Between reports further apart
+    than `FRAME_S` the app's frames run too, on the last report, and past
+    `hid.STALE_S` on none: the reader says the pad is lost."""
+    now = [0.0]
+    try:
+        reader = hid.TapePad(tape, loop=False, clock=lambda: now[0])
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"{tape}: {e}") from None
+    reader.calibration = calibration_for(tape, findings, reader)
     rig = Rig(**dials)
-    turn = hid.Turn()
-    note, last = "(start)", None
-    for d in rows[1:]:
-        if "note" in d:
-            note = str(d["note"])
-            continue
-        if "r" not in d:
-            continue
-        t, r = float(d["t"]), bytes.fromhex(d["r"])
-        samples = nintendo.gyro_of(r, None)
-        if samples is not None:
-            turn.add(samples, t, cal, nintendo.report_clock(r))
-        f = nintendo.decode(r, kind, cal)
-        if f is None or not f.full:
-            continue
-        dt = 0.0 if last is None else min(0.25, t - last)
-        last = t
-        turned, n = turn.take()
-        rig.frame(f, turned, n, cal, amap, dt)
-        yield note, t, rig, rig.numbers()
+    notes = notes_of(tape)
+    window, note, read = 0, "(start)", None
+    for t, _raw in reader.reports:
+        while notes and notes[0][0] <= t:
+            window, note = window + 1, notes.pop(0)[1]
+        if read is not None:
+            while t - now[0] > FRAME_S:
+                now[0] += FRAME_S
+                rig.frame(None if now[0] - read > hid.STALE_S else reader, FRAME_S)
+        dt, now[0], read = (0.0 if read is None else t - now[0]), t, t
+        rig.frame(reader, dt)
+        if rig.pad.motion_lanes() is not None:
+            yield window, note, t, rig, rig.numbers()
 
 
 def replay(tape: Path, findings: Path | None, dials: dict, series: tuple[float, float] | None,
-           every: float) -> dict[str, dict]:
-    """The table, and each window's numbers behind it."""
-    stats: dict[str, dict] = {}
+           every: float) -> list[dict]:
+    """The table, a row a note, and each row's numbers behind it. A tape
+    with nothing in it that reads as a pad's sensors is an error."""
+    rows: dict[int, dict] = {}
     shown = -1e9
-    for note, t, _rig, num in frames(tape, findings, dials):
-        s = stats.setdefault(note, {"n": 0, "still": 0, "err": [], "lin": [], "travel": [],
-                                    "speed": [], "pan": [], "walls": 0, "t0": t})
+    for window, note, t, _rig, num in frames(tape, findings, dials):
+        s = rows.setdefault(window, {"note": note, "n": 0, "still": 0, "err": [], "lin": [],
+                                     "travel": [], "speed": [], "pan": [], "walls": 0, "t0": t})
         s["n"] += 1
         s["still"] += num["still"] >= poi.STILL_S
         s["err"].append(num["err"])
@@ -260,23 +278,23 @@ def replay(tape: Path, findings: Path | None, dials: dict, series: tuple[float, 
         if series is not None and series[0] <= t <= series[1] and t - shown >= every:
             print(line(t, num, None, note))
             shown = t
+    if not rows:
+        raise SystemExit(f"{tape}: no report here decoded with sensors, so there is nothing to show")
 
     def med(v):
         v = sorted(x for x in v if math.isfinite(x))
         return v[len(v) // 2] if v else float("nan")
     print(f"\n{'window':16} {'secs':>5} {'still':>5}  {'err° med/max':>13}  {'lin g med/max':>14}  "
           f"{'travel end/max':>15}  {'v max':>5}  {'pan max':>7}  {'walled':>6}")
-    for name, s in stats.items():
-        if not s["n"]:
-            continue
-        print(f"{name[:16]:16} {s['t1'] - s['t0']:5.1f} {100 * s['still'] / s['n']:4.0f}%  "
+    for s in rows.values():
+        print(f"{s['note'][:16]:16} {s['t1'] - s['t0']:5.1f} {100 * s['still'] / s['n']:4.0f}%  "
               f"{med(s['err']):5.1f}/{max(s['err']):5.1f}  {med(s['lin']):6.3f}/{max(s['lin']):6.3f}  "
               f"{s['travel'][-1]:6.2f}/{max(s['travel']):6.2f}  {max(s['speed']):5.2f}  "
               f"{max(s['pan']):7.2f}  {100 * s['walls'] / s['n']:5.0f}%")
     print(f"\nthe walls: the hand at {poi.HAND_LIMIT:.1f} world units from home, the pan at "
           f"±{PAN_RANGE:.1f}; a 16:9 output through the default eye shows about ±3 across, "
           "±1.7 down")
-    return stats
+    return list(rows.values())
 
 
 # ---------------------------------------------------------------- main
@@ -291,9 +309,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--series", nargs=2, type=float, metavar=("FROM", "TO"),
                     help="--replay: every frame between two tape times (seconds)")
     ap.add_argument("--every", type=float, default=0.0, help="--series: at most a line this often")
-    dial = ap.add_argument             # a flag per dial, named by the loop, read by getattr below
     for key, (lo, hi) in poi.RANGES.items():
-        dial(f"--{key}", type=float, default=None, help=f"poi.{key} ({lo}–{hi})")
+        ap.add_argument(f"--{key}", type=float, default=None, help=f"poi.{key} ({lo}–{hi})")
     args = ap.parse_args(argv)
     dials = {k: getattr(args, k) for k in poi.RANGES if getattr(args, k) is not None}
     if args.replay is not None:
