@@ -18,7 +18,7 @@ import pytest
 from conftest import seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
-from test_ui_shell import frame
+from test_ui_shell import build_rig, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from wiredframe import Shows
 from wiredframe import wiring as wired_for
@@ -894,3 +894,104 @@ def test_a_drops_reach_is_never_under_near_screen_px():
     assert graphview.drop_reach() == graphview.NEAR
     assert graphview.drop_reach(0.5) == graphview.NEAR
     assert graphview.drop_reach(4.0) == 4 * graphview.NEAR
+
+
+# ---- GRAPH's start zoom (plan 58 SM2) ----
+
+def _start(rig, zoom: float, frames: int = 3) -> dict:
+    from test_graph_legible import party
+    rig.panel.graph_start_zoom = zoom       # (before the editor's first draw: it reads it once)
+    party(rig)
+    for _ in range(frames):
+        frame(rig.panel, "graph")
+    return ui_graph._state(rig.panel)
+
+
+def test_scale_is_what_saved_layouts_are_in():
+    """Saved positions are in canvas units behind SCALE: a display's zoom
+    must never get there by changing it."""
+    assert graphview.SCALE == 1.25
+
+
+def test_the_start_zoom_lands_and_leaves_no_file(shell_rig, monkeypatch, tmp_path):
+    rig = shell_rig
+    spare = tmp_path / "spare"
+    spare.mkdir()
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
+    st = _start(rig, 1.6)
+    assert st["zoom"] == pytest.approx(1 / 1.6)     # the editor's zoom reads canvas units a point
+    assert ed.get_config(st["editor"]).settings_file == ""
+    assert "start_view" not in st
+    assert list(spare.iterdir()) == []              # read, off, gone: nothing saved into it
+
+
+def test_the_start_zoom_keeps_the_view_at_the_corner(shell_rig):
+    """Zoomed from the canvas's origin, as 1:1 opens, not about its middle."""
+    st = _start(shell_rig, 1.6)
+    assert st["seen"][0] == pytest.approx(0.0, abs=12.0)
+    assert st["seen"][1] == pytest.approx(0.0, abs=12.0)
+
+
+def test_a_start_zoom_of_one_writes_nothing(shell_rig, monkeypatch):
+    written = []
+    monkeypatch.setattr(ui_graph.tempfile, "mkstemp", lambda **k: written.append(k))
+    st = _start(shell_rig, 1.0)
+    assert written == [] and st["zoom"] == pytest.approx(1.0)
+
+
+def test_the_start_zoom_moves_no_position(shell_rig, tmp_path):
+    st = _start(shell_rig, 1.6)
+    moved = dict(st["applied"])
+    assert moved
+    (tmp_path / "other").mkdir()
+    with build_rig(tmp_path / "other") as other:
+        assert dict(_start(other, 1.0)["applied"]) == moved
+
+
+def test_the_start_zoom_is_not_set_twice(shell_rig):
+    """A person's zoom during a run stays: the view framed to fit stands in
+    for one, and a loaded patch and more frames leave it."""
+    rig = shell_rig
+    st = _start(rig, 1.6)
+    assert st["zoom"] == pytest.approx(1 / 1.6)
+    st["frame"] = True
+    for _ in range(90):
+        frame(rig.panel, "graph")
+    theirs = st["zoom"]
+    assert theirs != pytest.approx(1 / 1.6)
+    rig.panel.graph_start_zoom = 1.9        # (a new number changes nothing: read once)
+    for _ in range(5):
+        frame(rig.panel, "graph")
+    assert st["zoom"] == pytest.approx(theirs)
+    assert st["created"] == 1
+
+
+def test_a_resize_leaves_the_zoom(shell_rig, monkeypatch):
+    """The window taller or shorter: the view re-centres, the zoom stands.
+    The editor's default rescales with the height."""
+    st = _start(shell_rig, 1.6)
+    real = ui_graph._canvas
+    monkeypatch.setattr(ui_graph, "_canvas", lambda panel, st, view, size, through=0.0: real(
+        panel, st, view, imgui.ImVec2(size.x - 40, size.y - 165), through))
+    for _ in range(3):
+        frame(shell_rig.panel, "graph")
+    assert st["zoom"] == pytest.approx(1 / 1.6)
+
+
+def test_a_start_view_never_read_is_cleaned_up(shell_rig, monkeypatch, tmp_path):
+    rig = shell_rig
+    spare = tmp_path / "spare"
+    spare.mkdir()
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
+    rig.panel.graph_start_zoom = 1.6
+    ui_graph.editor(rig.panel)
+    assert len(list(spare.iterdir())) == 1
+    ui_graph.close(rig.panel)
+    assert list(spare.iterdir()) == []
+
+
+def test_no_file_means_the_editors_own_start(monkeypatch):
+    def refused(**_k):
+        raise OSError("disk full")
+    monkeypatch.setattr(ui_graph.tempfile, "mkstemp", refused)
+    assert ui_graph.start_view(1.6) == ""

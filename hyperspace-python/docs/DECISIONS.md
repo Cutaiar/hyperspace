@@ -596,6 +596,7 @@ nuance). Built so far: D1, D2, D3, D4.
 |---|---|---|
 | Legibility at a distance comes first: rounded frames, pill chips, filled faders, no page scroll at the control size. The master faders are on the AUDIO page. | `ui.py` | owner |
 | The Replace / Keep prompt is drawn on every page, even with the panel collapsed. | `ui_routing.py` | owner |
+| **GRAPH's start zoom follows the display the control window opens on, not `SCALE`** (plan 58 SM2). The larger of 1.3 on a 2x display and the square root of its height over 1080 points, from 1 to 2. Set once per launch, through the editor's own settings file since the binding has no zoom setter; a person's zoom stands, a window's resize included (`center_only`). `SCALE` and saved positions don't move. | `placement.start_zoom`, `ui_graph.start_view` | row 787 |
 | The ROUTING page is one page over the loaded preset: its desk rows and macros, and the session's rows read-only below (its routes and modifiers are the GRAPH page's since plan 28 N7; a pointer line says so). | `ui_routing.page` | owner |
 | **The cheat sheet is off at every launch.** `/` and the APC40's DETAIL toggle it (the pad's MENU did until 2026-10-14). The desk diagram stays on. | `ui.cheatsheet` | owner |
 | The desk's glyphs (K1–K8, D1–D8, S1–S8, SM, X, C, G, B1–B22, ⇧) appear on every ROUTING row and Learn message, with an APC40 diagram of the layer that is up. | `apc40.LAYOUT`, `ui_desk.py` | owner |

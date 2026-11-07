@@ -8344,6 +8344,17 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
+## DH. GRAPH's start zoom (plan 58 SM2, row 787)
+Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
+**612. It reads where it opens.** (each display you'll run the control window on)
+1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the numbers are `placement.ZOOM_DENSE` and `ZOOM_HEIGHT`.
+*Fail:* a start as small as before, or a view opening away from the first column.
+**613. Your zoom stays, and layouts don't move.** (the rig)
+1. ⌘+scroll to a zoom of your own. Load another patch, then resize the control window taller and shorter. *Pass:* your zoom stands through both; the view only re-centres.
+2. Open a patch you laid out by hand before this build. *Pass:* every node is where you put it relative to its neighbours.
+3. After a run, look in the temp folder for `hyperspace-graph-view-*`. *Pass:* none.
+*Fail:* a zoom that changes by itself, or a node moved.
+
 ## What no test covers
 
 Only a person can settle these:
