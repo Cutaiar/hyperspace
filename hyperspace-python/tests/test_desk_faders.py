@@ -28,7 +28,6 @@ import pytest
 from conftest import CORPUS
 from test_midi import cc, push, rig, shift  # noqa: F401 — the fixture
 
-import hyperspace.ui  # noqa: F401 — first: ui_desk imports through the panel (ui_pad reads its EDGE)
 from hyperspace import apc40, loadable, routing, ui_desk
 from hyperspace.routing import Binding, Bindings, bindings_path
 from hyperspace.view import ViewState
