@@ -24,6 +24,10 @@ import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel,
   ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Slider } from "@/components/ui/slider"
@@ -414,6 +418,102 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
         </Combobox>
        </div>
       </div>
+
+      {/* ---- THE KEYBOARD BLOCKS. ----------------------------------------
+
+           Every menu block that existed before these carried `defaultOpen`,
+           and a forced-open component cannot answer a keyboard question:
+           `data-state` reads "open" whatever you press, so "did this key
+           open it" and "did this key close it" both come back yes. That is
+           exactly how the Combobox's first keyboard model came out wrong
+           (RETRO row 17), and `combobox.kb` exists for the same reason.
+
+           So: a DropdownMenu with a REAL trigger and a Select with no
+           `defaultOpen`, driven with playwright.
+
+           `menu.kb` carries one of everything the arrows have to step over
+           or skip: a label (not focusable), a separator, a DISABLED item,
+           a destructive item, and six enabled items whose initials are all
+           different so typeahead has something unambiguous to jump to. ---- */}
+      <P id="menu.kb" w={320}>
+        <DropdownMenu>
+          <DropdownMenuTrigger data-probe-menu-trigger>Open menu</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuLabel>Node</DropdownMenuLabel>
+            <DropdownMenuItem>
+              Alpha<DropdownMenuShortcut>⌘O</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem>Beta</DropdownMenuItem>
+            <DropdownMenuItem disabled>Gamma</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>Delta</DropdownMenuItem>
+            <DropdownMenuItem>Epsilon</DropdownMenuItem>
+            <DropdownMenuItem variant="destructive">Zeta</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </P>
+
+      {/* ---- Sixteen items, so PageUp / PageDown have somewhere to go and
+           the list is taller than its clamp. The Combobox needed exactly
+           this block (`combobox.many`) to find that its highlight never
+           scrolled the list (RETRO row 30). ---- */}
+      <P id="menu.long" w={320}>
+        <DropdownMenu>
+          <DropdownMenuTrigger data-probe-menu-trigger>Open long</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {["Alpha","Beta","Gamma","Delta","Epsilon","Zeta","Eta","Theta",
+              "Iota","Kappa","Lambda","Mu","Nu","Xi","Omicron","Pi"].map(n => (
+              <DropdownMenuItem key={n}>{n}</DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </P>
+
+      {/* ---- A Select with a REAL trigger and a committed value. The one
+           question `select.open` cannot be asked: when it opens, is the
+           SELECTED item highlighted, or the first? The Combobox's answer
+           was the selected one and the kit had it wrong (RETRO row 26), so
+           this is the column that has to be probed with the state AND
+           without — hence the valueless twin below. ---- */}
+      <P id="select.kb">
+        <Select defaultValue="c">
+          <SelectTrigger data-probe-select-trigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="a">Alpha</SelectItem>
+            <SelectItem value="b">Beta</SelectItem>
+            <SelectItem value="c">Gamma</SelectItem>
+            <SelectItem value="d">Delta</SelectItem>
+            <SelectItem value="e">Epsilon</SelectItem>
+            <SelectItem value="f">Zeta</SelectItem>
+          </SelectContent>
+        </Select>
+      </P>
+
+      {/* ---- The same Select holding NOTHING. One probe block answers one
+           COLUMN of the table. ---- */}
+      <P id="select.kbnone">
+        <Select>
+          <SelectTrigger data-probe-select-trigger>
+            <SelectValue placeholder="Select" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="a">Alpha</SelectItem>
+            <SelectItem value="b">Beta</SelectItem>
+            <SelectItem value="c">Gamma</SelectItem>
+            <SelectItem value="d">Delta</SelectItem>
+            <SelectItem value="e">Epsilon</SelectItem>
+            <SelectItem value="f">Zeta</SelectItem>
+          </SelectContent>
+        </Select>
+      </P>
+
+      {/* ---- Something to Tab ONTO, so "where does focus land" has an
+           answer that is not "the body". ---- */}
+      <P id="menu.after" w={320}>
+        <Button data-probe-after>after</Button>
+      </P>
 
       {/* ---- Tooltip, forced open ---- */}
       <P id="tooltip.open">

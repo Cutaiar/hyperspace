@@ -1107,8 +1107,14 @@ def test_a_mouse_opened_select_trigger_has_no_ring(DB):
 
     ground = ground_of("light")
     rest = one_widget("light", paint, DWELL, script=[FAR] * DWELL)
+    # A TAB and nothing else. The ArrowDown that used to stand here was
+    # there only to set `Ui.focus_visible`, which a Tab does on its own -
+    # and ArrowDown is now an OPENER, measured on `?probe`'s `select.kb`
+    # (Enter, Space, ArrowDown and ArrowUp all open a Select). An open
+    # trigger has no ring by design, which is the next assertion down, so
+    # pressing it here asked this test for both answers at once.
     kb = one_widget("light", paint, DWELL, script=[FAR] * DWELL,
-                    keys=[(2, imgui.Key.tab), (6, imgui.Key.down_arrow)])
+                    keys=[(2, imgui.Key.tab)])
     on = (PROBE_X + 40.0, PROBE_Y + hh / 2)
     click = [on] * 6 + [(*on, True)] * 2 + [(*on, False)] * DWELL
     opened = one_widget("light", paint, len(click), script=click,

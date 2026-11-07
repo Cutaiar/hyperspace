@@ -109,6 +109,28 @@ Two more things the sweep showed, both of which this module reproduces:
   deliberate divergence, documented there, which can only bite in a window
   narrower than `min_w + 2`.
 
+**The KEYBOARD is `menu.popup`'s, and that is a measurement rather than an
+assumption.** Driven on `?probe`'s `contextmenu.target` with a real
+right-click - Radix's ContextMenu has no `defaultOpen`, which is the one way
+this block was already right - the keyboard is the DropdownMenu's to the
+key: a right-click opens the panel with NOTHING highlighted and focus on the
+content; ArrowDown then takes the first row and ArrowUp the LAST; the arrows
+move one row and CLAMP at both ends rather than wrapping; Home and PageUp go
+to the first row and End and PageDown to the last; a letter jumps by prefix
+with a 1s buffer; Enter and Space take the highlight and close; Escape
+closes; and Tab is SWALLOWED - the panel stays open and focus does not move.
+
+The one difference from a DropdownMenu is where the focus goes afterwards,
+and it is forced rather than chosen: a ContextMenu has no trigger button, so
+Escape and Enter leave `document.activeElement` on the BODY where a
+DropdownMenu returns it to the trigger.
+
+So this module needs no keyboard of its own. The full measured table lives
+above THE KEYBOARD in `menu.py`, with the probe block each row came from
+named beside it, and `test_menu_keys.py::test_a_right_clicked_menu_answers_the_same_keys`
+drives this panel through it - which is what makes "it inherits" a claim and
+not a hope.
+
 **One caveat before this goes near the GRAPH canvas.** `replay.keep`
 (`hyperspace/replay.py:91`) carries only the page window's own draw list into
 the canvas tap and explicitly drops "every popup, menu and tooltip (their own

@@ -745,10 +745,16 @@ def select(ui: Ui, key, x, y, w, label, items, *, size="default",
     """
     import menu
     hh, rkey = T.SELECT_SIZES[size]
+    pkey = f"##sel.{key}"
     st = ui.hit(key, x, y, w, hh)
-    if st.clicked and not disabled:
-        imgui.open_popup(f"##sel.{key}")
-    open_ = imgui.is_popup_open(f"##sel.{key}")
+    # THE KEYBOARD, and the whole of it is `menu`'s. A Select's panel IS
+    # `menu.popup`, so the open panel's model comes with it; this one call is
+    # the TRIGGER's half - measured on `?probe`'s `select.kb` / `select.kbnone`,
+    # a click, Enter, Space, ArrowDown and ArrowUp all open it, on the CHECKED
+    # row if there is one and on the first row if there is not. It lives in
+    # menu.py so that a second trigger cannot disagree with this one.
+    menu.open_from_trigger(ui, pkey, st, role="listbox", disabled=disabled)
+    open_ = imgui.is_popup_open(pkey)
     hot = ui.anim.to(f"{key}:hot", 1.0 if st.hovered and not disabled else 0.0)
     # Measured, and the opposite of what this used to do. A trigger reached
     # with the KEYBOARD and still CLOSED rings: `ring/50 0 0 0 3px` and its
@@ -767,9 +773,20 @@ def select(ui: Ui, key, x, y, w, label, items, *, size="default",
             max_w=w - ui.select_tbl["pad_l"] - ui.select_tbl["pad_r"]
             - ui.select_tbl["chevron"] - 4.0)
     import box as B
-    chosen = menu.popup(ui, f"##sel.{key}", items, min_w=w,
+    # `role="listbox"`: a Select's measured keyboard differs from a menu's in
+    # exactly two places - an open lands on the CHECKED row whatever the
+    # gesture, and PageUp / PageDown do nothing at all.
+    # Called EITHER WAY, and the `if open_` that stood here was a seam bug.
+    # `menu.popup`'s closed branch is what resets the open animation and pops
+    # `menu.LAST_RECT`, so a Select that was never handed a closed frame left
+    # its entry in that dict for the rest of the process - and `LAST_RECT` is
+    # how a test knows whether the panel is up, so a probe reading it after a
+    # Select closed was sampling page pixels through a rect that no longer
+    # existed. Same shape, and same fix, as `comp_context_menu.context_menu`,
+    # which already says so in its own comment.
+    chosen = menu.popup(ui, pkey, items, min_w=w,
                         anchor=B.Rect(x, y, w, hh), side="bottom",
-                        align="start", offset=4.0) if open_ else None
+                        align="start", offset=4.0, role="listbox")
     return chosen, open_
 
 
