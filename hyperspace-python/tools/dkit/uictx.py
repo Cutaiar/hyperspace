@@ -90,6 +90,7 @@ class Ui:
     def __post_init__(self):
         self.slider_tbl = T.slider_table(self.theme_name)
         self.switch_tbl = T.switch_table(self.theme_name)
+        self.checkbox_tbl = T.checkbox_table(self.theme_name)
         self.input_tbl = T.input_table(self.theme_name)
         self.select_tbl = T.select_table(self.theme_name)
         self.tooltip_tbl = T.tooltip_table(self.theme_name)

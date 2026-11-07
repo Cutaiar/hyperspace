@@ -91,6 +91,10 @@ KIND = {
     # without sub-boxes. `in-data-[slot=button-group]:rounded-lg` puts every
     # size back to 10, measured.
     "buttongroup": {"radius": 10.0, "outset": 0, "ring": False},
+    # rounded-[4px]. Off it is a 1px border on a transparent (light) or
+    # near-transparent (dark) fill, which reads as a ring; on it is a filled
+    # primary box. `geom` promotes the checked cells to filled.
+    "checkbox": {"radius": 4.0, "outset": 0, "ring": True},
 }
 
 
@@ -108,6 +112,8 @@ def geom(cell):
         radius = CB.button_radius(cell["size"])
     r = min(radius, min(cell["w"], cell["h"]) / 2.0)
     ring = k["ring"] or cell.get("variant") == "outline"
+    if cell["kind"] == "checkbox" and cell.get("on"):
+        ring = False                    # a checked box is a filled primary box
     return r, k["outset"], ring
 
 
@@ -144,6 +150,31 @@ def icon_boxes(cell):
         g = _CB["field_icon"]
         return [(cell["x"] + cell["w"] - _CB["field_chevron_right"] - g,
                  cell["y"] + (cell["h"] - g) / 2.0, g, g)]
+    if cell["kind"] == "checkbox":
+        # The tick, and only on a CHECKED box: an unchecked one has none, and
+        # leaving it in the flat metric is what holds both sides to "no tick
+        # here" - and keeps the dark `input/30` fill under strict compare.
+        #
+        # The box is Lucide's own `check` path, scaled into the indicator's
+        # 14px padding box as ?probe measured it (14 x 14 at 1,1), padded by
+        # a pixel past the stroke. Anchored on the CELL, not on the draw
+        # code's constants, so a tick drawn in the wrong place moves the
+        # ink and not the hole (RETRO row 44). Its perimeter is all fill,
+        # which is the background icon_ink needs.
+        if not cell.get("on"):
+            return []
+        import sys as _s
+        _s.path.insert(0, str(HERE))
+        from icons import BOX, ICONS, STROKE
+        pts = [(op[1], op[2]) for sub in ICONS["check"] for op in sub
+               if op[0] in ("M", "L")]
+        k = (cell["w"] - 2.0) / BOX             # 14 / 24
+        pad = STROKE * k / 2.0 + 1.0
+        x0 = cell["x"] + 1.0 + min(p[0] for p in pts) * k - pad
+        x1 = cell["x"] + 1.0 + max(p[0] for p in pts) * k + pad
+        y0 = cell["y"] + 1.0 + min(p[1] for p in pts) * k - pad
+        y1 = cell["y"] + 1.0 + max(p[1] for p in pts) * k + pad
+        return [(x0, y0, x1 - x0, y1 - y0)]
     if cell["kind"] == "tooltip":
         return [arrow_box(cell)]
     if cell["kind"] == "scroll":

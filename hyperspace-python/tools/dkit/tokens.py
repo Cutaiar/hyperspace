@@ -302,6 +302,58 @@ SWITCH_DARK = {
     "thumb_on": ("primary-foreground", 1.0),
 }
 
+# `after:absolute after:-inset-x-3 after:-inset-y-2` - the stretched hit
+# area a Switch and a Checkbox both carry, so a click a few px off a small
+# control still lands. The CLASSES say 12 and 8; the browser says 11 and 7,
+# because an absolutely positioned ::after is inset from its containing
+# block's PADDING box, which sits one border-width inside the edge. Measured
+# on ?probe by real clicks AND by the ::after's computed box (38 x 30 around
+# a 16px checkbox, 54 x 32.39 around a 32 x 18.39 switch) - the two
+# instruments agree. `rect.stretched_hit` applies it.
+HIT_STRETCH = (SPACE[3], SPACE[2])
+
+# shadcn Checkbox (radix-ui), measured on ?probe in both themes. One size:
+# the registry ships no size variant.
+CHECKBOX = {
+    "size": 16.0,                         # size-4
+    # rounded-[4px] is a LITERAL in the recipe, not a step on RADII - it is
+    # neither `sm` nor `md`, so it is spelled here rather than borrowed.
+    "radius": 4.0,
+    "border_w": 1.0,
+    # the indicator is the 14px padding box, and the Lucide `check` inside
+    # it is [&>svg]:size-3.5 = 14px at Lucide's own stroke width
+    "icon": 14.0,
+    "off_bg": ("transparent", 1.0),
+    "off_border": ("input", 1.0),
+    "on_bg": ("primary", 1.0),            # data-checked:bg-primary
+    "on_border": ("primary", 1.0),        # data-checked:border-primary
+    "tick": ("primary-foreground", 1.0),  # data-checked:text-primary-foreground
+    # MEASURED, and a cascade question rather than a reading: on a CHECKED
+    # box `focus-visible:border-ring` beats `data-checked:border-primary`,
+    # so a keyboard-focused checked box has a `ring` border around a
+    # `primary` fill - in both themes. Keyboard only: a pointer click
+    # focuses it and paints neither half.
+    "focus_border": ("ring", 1.0),
+    "ring": ("ring", 0.5),
+    # `disabled:opacity-50` on the WHOLE control - a group opacity, which is
+    # not the same as halving each colour where a tick sits over a fill.
+    # See draw.checkbox.
+    "disabled_opacity": 0.5,
+    # No hover chrome: measured byte-identical hovered and at rest, both
+    # states, both themes.
+    #
+    # The label beside it, as the registry's own demo composes it:
+    # `flex items-center gap-3` + Label (`text-sm leading-none font-medium`).
+    # Measured: the label box is 14 tall at x 28, y 1 - vertically centred
+    # on the 16px box - and `peer-disabled:opacity-50` dims it with the box.
+    "label_gap": SPACE[3],
+    "label_font": 14.0,
+    "label_ink": ("foreground", 1.0),
+}
+CHECKBOX_DARK = {
+    "off_bg": ("input", 0.3),             # dark:bg-input/30
+}
+
 INPUT = {
     "h": 32.0,               # h-8
     "radius": "lg",          # rounded-lg = 10
@@ -398,6 +450,10 @@ def slider_table(theme_name: str) -> dict:
 
 def switch_table(theme_name: str) -> dict:
     return _themed(SWITCH, SWITCH_DARK, theme_name)
+
+
+def checkbox_table(theme_name: str) -> dict:
+    return _themed(CHECKBOX, CHECKBOX_DARK, theme_name)
 
 
 def input_table(theme_name: str) -> dict:

@@ -151,6 +151,7 @@ CTL_STATE = {
     "win_lo": 0.25,
     "win": 0.70,
     "mute": True,
+    "solo": False,
     "mode": "Locked",
     "tag": "bad id",
     "tip_frames": 0,
@@ -673,6 +674,18 @@ def _body(ui, r, w, h, series, state):
     mx, my, _, mh = _row(7, "Mute")
     _, state["mute"] = I.switch(ui, "ctl.mute", mx, my + (mh - 14.0) / 2,
                                 state["mute"], size="sm", disabled=off)
+    # A Checkbox beside it, with its Label: the other shape of a toggle
+    # param, and the one a row of independent flags reads best as. Placed
+    # 24px past the small switch's track: the switch's stretched target
+    # reaches 11px past its end and the checkbox's 11px before its box, so
+    # 2px separate them and neither steals the other's clicks.
+    # On a CARD, so the card is the backdrop its disabled state folds
+    # against - the page's `background` would be the wrong colour here.
+    sw_w = T.SWITCH_SIZES["sm"][0]
+    _, state["solo"] = I.checkbox(
+        ui, "ctl.solo", mx + sw_w + T.HIT_STRETCH[0] * 2,
+        my + (mh - T.CHECKBOX["size"]) / 2, state["solo"], label="Solo",
+        disabled=off, backdrop=T.rgba("card", theme=theme))
 
     # the small select - rounded-md (8) rather than rounded-lg (10)
     ox, oy, ow, _ = _row(8, "Mode")

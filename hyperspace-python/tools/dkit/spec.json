@@ -368,6 +368,54 @@
       "on": true
     },
     {
+      "id": "checkbox.off",
+      "kind": "checkbox",
+      "variant": "default",
+      "x": 340,
+      "y": 791,
+      "w": 16.0,
+      "h": 16.0,
+      "text": "",
+      "on": false,
+      "disabled": false
+    },
+    {
+      "id": "checkbox.on",
+      "kind": "checkbox",
+      "variant": "default",
+      "x": 400,
+      "y": 791,
+      "w": 16.0,
+      "h": 16.0,
+      "text": "",
+      "on": true,
+      "disabled": false
+    },
+    {
+      "id": "checkbox.disabled.off",
+      "kind": "checkbox",
+      "variant": "default",
+      "x": 460,
+      "y": 791,
+      "w": 16.0,
+      "h": 16.0,
+      "text": "",
+      "on": false,
+      "disabled": true
+    },
+    {
+      "id": "checkbox.disabled.on",
+      "kind": "checkbox",
+      "variant": "default",
+      "x": 520,
+      "y": 791,
+      "w": 16.0,
+      "h": 16.0,
+      "text": "",
+      "on": true,
+      "disabled": true
+    },
+    {
       "id": "slider.frac",
       "kind": "slider",
       "variant": "default",

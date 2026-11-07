@@ -92,6 +92,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     MENU_CELL_ITEMS = _menu_items()
     sliders = T.slider_table(theme_name)
     switches = T.switch_table(theme_name)
+    checkboxes = T.checkbox_table(theme_name)
     inputs = T.input_table(theme_name)
     selects = T.select_table(theme_name)
     tips = T.tooltip_table(theme_name)
@@ -129,6 +130,14 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 elif cell["kind"] == "switch":
                     D.switch(dl, cell["x"], cell["y"], 1.0 if cell["on"] else 0.0,
                              theme, switches, size=cell["variant"])
+                elif cell["kind"] == "checkbox":
+                    # the canvas colour is the backdrop a disabled checked
+                    # box folds its group opacity against - see draw.checkbox
+                    D.checkbox(dl, cell["x"], cell["y"],
+                               1.0 if cell["on"] else 0.0, bool(cell["on"]),
+                               theme, checkboxes,
+                               disabled=cell.get("disabled", False),
+                               backdrop=bg)
                 elif cell["kind"] == "input":
                     D.field(dl, cell["x"], cell["y"], cell["w"], cell["h"],
                             theme, inputs,

@@ -22,7 +22,7 @@ resolves (`test_module_surface.py` checks each one):
 
 * `rect.py` - `Rect`, popover placement, and the component geometry that is
   nothing but rectangles (`card_body`, `slider_geom`, `switch_geom`,
-  `scroll_thumb`).
+  `scroll_thumb`, `stretched_hit`).
 * `flex.py` - `Flow`, `Item`, `flex`, `stack`. Needs `Rect`.
 * `tree.py` - `Node`, `AUTO`, `measure_tree`, `place_tree`, `lay`,
   `lay_auto`, `wants`. Needs `Rect`, `Item` and `flex`.
@@ -37,7 +37,7 @@ existing call sites, and doing so is churn rather than a fix.
 from __future__ import annotations
 
 from rect import (Rect, card_body, place_popover, scroll_thumb, slider_geom,
-                  switch_geom)
+                  stretched_hit, switch_geom)
 from flex import Flow, Item, flex, stack
 from tree import (AUTO, Node, lay, lay_auto, measure_tree, place_tree,
                   wants)
@@ -45,7 +45,7 @@ from tree import (AUTO, Node, lay, lay_auto, measure_tree, place_tree,
 __all__ = [
     # rect
     "Rect", "place_popover", "card_body", "slider_geom", "switch_geom",
-    "scroll_thumb",
+    "scroll_thumb", "stretched_hit",
     # flex
     "Flow", "Item", "flex", "stack",
     # tree

@@ -256,3 +256,19 @@ def scroll_thumb(bar_x, bar_y, bar_w, bar_h, viewport_h, content_h, scroll_y,
     frac = min(max(scroll_y / span, 0.0), 1.0)
     return Rect(bar_x + thumb_inset, track_y + frac * (track_h - th),
                 thumb_w, th)
+
+
+def stretched_hit(x, y, w, h, *, stretch=(12.0, 8.0), border=1.0) -> Rect:
+    """The pointer target of a control carrying `after:-inset-x-N -inset-y-M`.
+
+    Pure geometry. An absolutely positioned `::after` is laid out against
+    its containing block's PADDING box, one `border` inside the border box,
+    so `-inset-x-3` (12px) reaches 11px past a 1px-bordered control's edge,
+    not 12. Measured on ?probe both ways - real clicks, and the pseudo
+    element's computed size (38 x 30 around a 16px Checkbox, 54 x 32.39
+    around a 32 x 18.39 Switch).
+
+    `stretch` is the CSS insets, `tokens.HIT_STRETCH`.
+    """
+    sx, sy = stretch[0] - border, stretch[1] - border
+    return Rect(x - sx, y - sy, w + 2.0 * sx, h + 2.0 * sy)

@@ -43,6 +43,7 @@ from ease import mix
 # The per-frame context and the sandwich live in uictx.py. Re-exported for
 # `I.Ui` / `I.chrome` / `I._sandwich_end` callers, and used unqualified below.
 from uictx import State, Ui, _sandwich_begin, _sandwich_end, chrome
+from rect import stretched_hit
 # The wheel lives in wheel.py; these are re-exported for `I.x` callers, and
 # `snap_scroll` is also called unqualified by `scroll_area` below.
 from wheel import (_PRECISE, install_wheel, note_wheel_step, scale_wheel,
@@ -346,9 +347,16 @@ def switch(ui: Ui, key, x, y, on: bool, *, size="default", disabled=False) -> tu
     gives it (`after:-inset-x-3 after:-inset-y-2`) is bigger than the track,
     and a checkbox would draw its own box inside ours. The id is still an
     `##key` on a widget ui_driver knows.
+
+    That hit area was `x - 3, y - 2` until the Checkbox was measured: the
+    Tailwind STEP numbers read as pixels. `-inset-x-3` is 12px, and measured
+    on ?probe the real Switch is the pointer target 11px either side and 7px
+    above and below - so the kit had an 8px dead strip at each end that the
+    browser does not. `rect.stretched_hit` is now the one answer for both.
     """
     tw, th, _ = T.SWITCH_SIZES[size]
-    st = ui.hit(key, x - 3.0, y - 2.0, tw + 6.0, th + 4.0)
+    hr = stretched_hit(x, y, tw, th, stretch=T.HIT_STRETCH, border=1.0)
+    st = ui.hit(key, hr.x, hr.y, hr.w, hr.h)
     out = on
     if st.clicked and not disabled:
         out = not on
@@ -363,6 +371,80 @@ def switch(ui: Ui, key, x, y, on: bool, *, size="default", disabled=False) -> tu
     D.switch(ui.dl, x, y, on_f, ui.theme, ui.switch_tbl, size=size,
              focus_f=focus_f, disabled=disabled)
     return (st.clicked and not disabled), out
+
+
+def checkbox_size(label: str | None, faces: dict, *,
+                  text_w: float | None = None) -> tuple:
+    """(w, h) of a Checkbox row: the 16px box, and with a label the 12px gap
+    and the label's own width. The row is 16 tall either way - the label's
+    line box is `leading-none` 14, centred on the box (?probe: y 1).
+
+    `text_w` overrides the measurement, as `comp_button.button_size`'s does,
+    so a layout can be tested with no font atlas. `checkbox` places its
+    label by the same arithmetic, so the two cannot disagree.
+    """
+    c = T.CHECKBOX
+    if not label:
+        return c["size"], c["size"]
+    tw = text_w if text_w is not None else D.text_w(
+        label, faces, "medium", c["label_font"])
+    return c["size"] + c["label_gap"] + tw, c["size"]
+
+
+def checkbox(ui: Ui, key, x, y, on: bool, *, label: str | None = None,
+             disabled=False, backdrop=None) -> tuple:
+    """shadcn Checkbox, optionally with its Label. Returns (clicked, on).
+
+    Everything here was measured on ?probe (`checkbox.*`), in both themes:
+
+    * the pointer target is `rect.stretched_hit` - 11px either side and 7px
+      above and below the 16px box, from `after:-inset-x-3 -inset-y-2`;
+    * **Space toggles and Enter does not.** Radix follows WAI-ARIA here, and
+      ImGui activates a focused button on BOTH, so Enter is filtered out;
+    * no hover chrome at all, checked or not;
+    * the ring is `:focus-visible` - keyboard only. A pointer click focuses
+      the box and paints neither the band nor the border swap;
+    * the fill and border ease, the tick snaps (see `draw.checkbox`).
+
+    `label` is the registry demo's `flex items-center gap-3` + Label
+    `htmlFor`: drawn 12px right of the box in `text-sm font-medium`, and a
+    click on it toggles the box exactly as a click on the box does - the
+    label is its own pointer target, kept out of the Tab order because a
+    <label> takes no focus. `peer-disabled:opacity-50` dims it with the box.
+
+    `backdrop` is the opaque colour under the control, which a DISABLED
+    checked box needs to fold CSS's group opacity into flat colours; it
+    defaults to the theme's `background`, which is what a page is.
+    """
+    tbl = ui.checkbox_tbl
+    size = tbl["size"]
+    hr = stretched_hit(x, y, size, size, stretch=T.HIT_STRETCH,
+                       border=tbl["border_w"])
+    st = ui.hit(key, hr.x, hr.y, hr.w, hr.h)
+    clicked = st.clicked
+    if clicked and not imgui.is_mouse_released(0) and (
+            imgui.is_key_pressed(imgui.Key.enter, False)
+            or imgui.is_key_pressed(imgui.Key.keypad_enter, False)):
+        clicked = False                 # Enter is not a checkbox key
+    a = tbl["disabled_opacity"] if disabled else 1.0
+    if label:
+        lx = x + size + tbl["label_gap"]
+        fs = tbl["label_font"]
+        lw = checkbox_size(label, ui.faces)[0] - (lx - x)
+        lst = ui.hit(f"{key}.label", lx, y + (size - fs) / 2.0, lw, fs,
+                     nav=False)
+        clicked = clicked or lst.clicked
+        ink = tbl["label_ink"]
+        D.label(ui.dl, lx, y, label, ui.faces, "medium", fs,
+                ui.col(ink[0], ink[1] * a), baseline_box=size)
+    clicked = clicked and not disabled
+    out = (not on) if clicked else on
+    on_f = ui.anim.to(f"{key}:on", 1.0 if out else 0.0)
+    focus_f = ui.focus_f(key, st.focused, disabled=disabled)
+    D.checkbox(ui.dl, x, y, on_f, out, ui.theme, tbl, focus_f=focus_f,
+               disabled=disabled,
+               backdrop=backdrop if backdrop is not None else ui.col("background"))
+    return clicked, out
 
 
 def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",

@@ -225,6 +225,27 @@ def _s_switch(faces, tn):
             "Chromium lays out on a 1/64 px grid.", rows)
 
 
+def _s_checkbox(faces, tn):
+    def mk(cap, key, init=False, label=None, **kw):
+        size = I.checkbox_size(label, faces)
+
+        def draw(ui, k, x, y, w, h, st, key=key, init=init, label=label,
+                 kw=kw):
+            _c, on = I.checkbox(ui, k, x, y, st.setdefault(key, init),
+                                label=label, **kw)
+            st[key] = on
+        return (cap, size, draw)
+    rows = [[mk("off", "g.cb1"), mk("on", "g.cb2", init=True),
+             mk("disabled", "g.cb3", disabled=True),
+             mk("disabled on", "g.cb4", init=True, disabled=True),
+             mk("with label", "g.cb5", init=True, label="Bypass when idle"),
+             mk("label, disabled", "g.cb6", label="Locked", disabled=True)]]
+    return ("Checkbox",
+            "Space toggles and Enter does not; the click target reaches 11px "
+            "past each side, and a click on the label toggles the box.",
+            rows)
+
+
 def _s_slider(faces, tn):
     def mk(cap, key, init, **kw):
         def draw(ui, k, x, y, w, h, st, key=key, init=init, kw=kw):
@@ -370,7 +391,7 @@ def _s_tokens(faces, tn):
 
 
 SECTIONS = (_s_button, _s_button_group, _s_input, _s_select, _s_combobox,
-            _s_switch, _s_slider, _s_tooltip, _s_menu, _s_scroll,
+            _s_switch, _s_checkbox, _s_slider, _s_tooltip, _s_menu, _s_scroll,
             _s_icons, _s_type, _s_tokens)
 
 

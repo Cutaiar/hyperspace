@@ -23,6 +23,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { SelectTrigger, SelectValue, Select } from "@/components/ui/select"
 import {
@@ -137,6 +138,10 @@ export default function Gallery({
             // for default), and reproducing that size is half of what is
             // being checked. The spec rect is that intrinsic size.
             <Switch checked={c.on} size={c.variant as "sm" | "default"} />
+          ) : c.kind === "checkbox" ? (
+            // Intrinsic size (size-4), like the Switch: the spec rect IS that
+            // size, so reproducing it is part of what is checked.
+            <Checkbox checked={!!c.on} disabled={c.disabled} />
           ) : c.kind === "input" ? (
             <Input
               className="h-full w-full"

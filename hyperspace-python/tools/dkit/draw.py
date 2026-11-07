@@ -829,6 +829,68 @@ def switch(dl, x, y, on_f, theme, tbl, *, size="default", focus_f=0.0,
     return track
 
 
+def checkbox(dl, x, y, on_f, tick, theme, tbl, *, focus_f=0.0,
+             disabled=False, backdrop=None):
+    """shadcn Checkbox's box: fill, border, tick, and the focus ring.
+
+    `on_f` is 0..1 and eases the FILL and BORDER (`transition-colors`, the
+    same 150ms curve as everything else). `tick` is a bool and does NOT ease:
+    the indicator is `transition-none` and Radix unmounts it when unchecked,
+    so measured on ?probe the tick is fully there on the first frame of a
+    check, over a fill still at 0-8%, and gone on the first frame of an
+    uncheck while the fill fades out. Passing the eased value for both would
+    fade a tick the browser snaps.
+
+    `focus_f` is `:focus-visible`, eased, and draws both halves of the
+    answer: the 3px `ring/50` band outside the box, and the border swapping
+    to `ring` - on a CHECKED box too, where it replaces `primary`.
+
+    `disabled` is `opacity: 0.5` on the whole control, which is a GROUP
+    opacity: the tick and the border are composited over the fill FIRST and
+    the result is then faded. Halving each colour's alpha instead puts a
+    quarter of the fill under the tick - about 58 levels too dark on a light
+    page. Doing it exactly needs the colour underneath, so `backdrop` is that
+    (opaque) colour; without one they fall back to `draw.field`'s rule. The
+    fill is exact either way: a single layer needs no backdrop.
+    """
+    from ease import mix, over
+    size = tbl["size"]
+    bx, by, bw, bh = snap(x, y, size, size)
+    r = tbl["radius"]
+    if focus_f > 0.01 and not disabled:
+        ring(dl, bx, by, bw, bh,
+             rgba(tbl["ring"][0], tbl["ring"][1] * focus_f, theme=theme), r)
+    fill_c = mix(rgba(*tbl["off_bg"], theme=theme),
+                 rgba(*tbl["on_bg"], theme=theme), on_f)
+    bord_c = mix(mix(rgba(*tbl["off_border"], theme=theme),
+                     rgba(*tbl["on_border"], theme=theme), on_f),
+                 rgba(*tbl["focus_border"], theme=theme),
+                 0.0 if disabled else focus_f)
+    tick_c = rgba(*tbl["tick"], theme=theme)
+    a = tbl["disabled_opacity"] if disabled else 1.0
+
+    def faded(top):
+        """`top` painted over the fill, then the group faded to `a`."""
+        if a >= 1.0:
+            return top
+        if backdrop is None:
+            # draw.field's rule: stack over the fill, then dim. Exact while
+            # the fill is transparent; short by a quarter of the fill under
+            # an opaque one, which is the case `backdrop` exists for.
+            c = over(top, fill_c)
+            return (c[0], c[1], c[2], c[3] * a)
+        bd = (backdrop[0], backdrop[1], backdrop[2], 1.0)
+        return mix(bd, over(top, over(fill_c, bd)), a)
+
+    box(dl, bx, by, bw, bh,
+        fill_col=(fill_c[0], fill_c[1], fill_c[2], fill_c[3] * a),
+        border_col=faded(bord_c), radius=r, border_w=tbl["border_w"])
+    if tick:
+        bw_ = tbl["border_w"]
+        icon(dl, "check", bx + bw_, by + bw_, tbl["icon"], faded(tick_c))
+    return bx, by, bw, bh
+
+
 def field(dl, x, y, w, h, theme, tbl, *, focus_f=0.0, invalid=False,
           disabled=False, radius=None):
     """The chrome an Input and a Select trigger share: a 1px bordered box
