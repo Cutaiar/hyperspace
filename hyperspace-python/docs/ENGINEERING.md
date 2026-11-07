@@ -3524,6 +3524,16 @@ conflicts were these files, not code.
 - **What it can't see.** Two PRs that edit one prose line keep both versions, so read
   the merged preamble of a doc you edited. Each side's added lines stay in one block,
   but a line both ends share, usually the blank between them, is kept once.
+- **What a section can lose.** `tests/test_doc_numbers.py` also fails on a heading with
+  nothing under it, two "Judge it." lines under one heading, a row with no section or a
+  section with no row, a table row's cell count, and a check outside a lettered group.
+  **Row 819's audit, 2026-11-07: keep the union with this test.** In 86 merges where both
+  sides appended, siblings at one tail cost blank lines and no text. The one loss, 770's
+  and 771's, was #411's review commit deleting from its own section to the file's end; the
+  union then hid that from a merge that would have stopped on it. So edit your section up
+  to the next heading, never to the end of the file, and read a tail's `-` lines in your
+  diff: a removed line you didn't write is the warning. Per-row section files would end
+  this, at 800 files and a conflict for every open PR: only if a merge itself loses text.
 - **Order.** Rows land in merge order. `uv run python tools/sort_register.py` puts the
   register back; it changes no text.
 - **A branch from before `.gitattributes`.** `git merge` reads the attribute from the
