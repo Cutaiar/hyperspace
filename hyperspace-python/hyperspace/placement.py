@@ -102,7 +102,7 @@ def screens(glfw) -> list[Screen]:
 
 ZOOM_HEIGHT = 1080.0    # a display this many points tall starts at 1:1 ...
 ZOOM_DENSE = 1.3        # ... and a 2x one, whose points are small, this much bigger
-ZOOM_MAX = 2.0          # (by eye: at 1.9 a 900-point window held only two nodes)
+ZOOM_MAX = 1.5          # by eye: 1.38 reads well in a 900-point window, 1.89 held two nodes
 
 
 def start_zoom(density: float, height: float) -> float:
@@ -118,16 +118,18 @@ def window_zoom(glfw, win) -> float:
     """`start_zoom` for the display `win` is on: the one its centre is over,
     else the one it lands on. 1.0 when the window system won't say: a launch
     must not die for a zoom."""
+    scr = screens(glfw)
     try:
-        x, y = glfw.get_window_pos(win)
-        w, h = glfw.get_window_size(win)
-        density = float(glfw.get_window_content_scale(win)[0])
+        rect = (*glfw.get_window_pos(win), *glfw.get_window_size(win))
+        on = _centre_screen(rect, scr) or _landing(rect, scr)
+        if on is None:
+            return 1.0
+        # the monitor's, not the window's: the window's is stale until an event
+        # is pumped after it was moved, and this runs before any is
+        mon = glfw.get_monitors()[scr.index(on)]
+        return start_zoom(float(glfw.get_monitor_content_scale(mon)[0]), on.h)
     except Exception:  # noqa: BLE001 — as above
         return 1.0
-    scr = screens(glfw)
-    rect = (x, y, w, h)
-    on = _centre_screen(rect, scr) or _landing(rect, scr)
-    return start_zoom(density, on.h) if on is not None else 1.0
 
 
 # ---- the file ----

@@ -8351,7 +8351,7 @@ Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_p
 1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the numbers are `placement.ZOOM_DENSE` and `ZOOM_HEIGHT`.
 *Fail:* a start as small as before, or a view opening away from the first column.
 **613. Your zoom stays, and layouts don't move.** (the rig)
-1. ⌘+scroll to a zoom of your own. Load another patch, then resize the control window taller and shorter. *Pass:* your zoom stands through both; the view only re-centres.
+1. ⌘+scroll to a zoom of your own and note what's in the canvas's top-left. Load another patch, then resize the control window taller and shorter. *Pass:* your zoom stands through both, and the same node stays in the top-left. This is new: a resize used to zoom the canvas.
 2. Open a patch you laid out by hand before this build. *Pass:* every node is where you put it relative to its neighbours.
 3. After a run, look in the temp folder for `hyperspace-graph-view-*`. *Pass:* none.
 *Fail:* a zoom that changes by itself, or a node moved.

@@ -293,7 +293,7 @@ def test_placement_imports_nothing_from_the_package():
     (1.5, 800, 1.15),       # between the two densities
     (1.0, 2046, (2046 / 1080) ** 0.5),   # a 4K panel at 1x
     (2.0, 1440, 1.3),       # a 5K panel: the larger of the two, not the product
-    (1.0, 8640, 2.0),       # capped
+    (1.0, 2700, 1.5),       # capped, under what a 900-point window can't use
 ])
 def test_start_zoom_follows_the_display(density, height, zoom):
     assert placement.start_zoom(density, height) == pytest.approx(zoom)
@@ -314,8 +314,16 @@ class _Windows:
     def get_monitor_name(m):
         return m
 
-    def __init__(self, pos, density=1.0):
-        self.pos, self.density = pos, density
+    @staticmethod
+    def get_monitor_pos(m):
+        return {"big": (0, 0), "laptop": (3840, 1000)}[m]
+
+    @staticmethod
+    def get_monitor_content_scale(m):
+        return {"big": (1.0, 1.0), "laptop": (2.0, 2.0)}[m]
+
+    def __init__(self, pos):
+        self.pos = pos
 
     def get_window_pos(self, _win):
         return self.pos
@@ -324,13 +332,16 @@ class _Windows:
     def get_window_size(_win):
         return (960, 720)
 
-    def get_window_content_scale(self, _win):
-        return (self.density, self.density)
+    @staticmethod
+    def get_window_content_scale(_win):     # stale: from the screen it opened on, before any event
+        return (2.0, 2.0)
 
 
 def test_window_zoom_reads_the_display_the_window_is_on():
+    """Its density from the monitor it matched: `_Windows` says 2x for the
+    window wherever it is, as one just moved off a 2x screen does."""
     assert placement.window_zoom(_Windows((100, 100)), None) == pytest.approx((2046 / 1080) ** 0.5)
-    assert placement.window_zoom(_Windows((4000, 1200), 2.0), None) == pytest.approx(1.3)
+    assert placement.window_zoom(_Windows((4000, 1200)), None) == pytest.approx(1.3)
 
 
 def test_window_zoom_never_stops_a_launch():

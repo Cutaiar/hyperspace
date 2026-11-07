@@ -1975,8 +1975,13 @@ class Panel:
         self.page = max(0, min(self.page, len(PAGE_KEYS) - 1))
         if self.page != getattr(self, "_focus_seen", None):   # set straight, not through ui.page
             self.go_page(self.page)
-        foot = imgui.get_frame_height_with_spacing()
-        if imgui.begin_child("##page", imgui.ImVec2(0, -foot)):
+        # the footer's line and its separator: short by the separator, CONTROLS
+        # overflowed by a few points and wore a scrollbar from its second frame.
+        # The page fills itself and never scrolls (the pane does): its first
+        # frame's content would give it a scrollbar, and the canvas a narrower
+        # second frame, which the editor answers by moving the view.
+        foot = imgui.get_frame_height_with_spacing() + imgui.get_style().item_spacing.y + 1.0
+        if imgui.begin_child("##page", imgui.ImVec2(0, -foot), 0, imgui.WindowFlags_.no_scrollbar):
             # a desk control is picked and can be mapped (plan 17 WP4): the
             # canvas and the sections are drawn disabled — dimmed, no widget
             # takes a click — and the click on a param is `_ctx_pick`'s. Never
