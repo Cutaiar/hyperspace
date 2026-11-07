@@ -845,7 +845,7 @@ def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monke
         {"depth": {"source": "lane:0", "target": "rot.rate.ZW"}, "from": 0.0, "to": 1.0}]}
         for k in range(1, 9)})
     rig.panel.learn = Learn(rig.reg, table)
-    rig.panel.learn.refuse("track knob 1 is on the global layer (the session's) — "
+    rig.panel.learn.refuse("track knob 1 is on the global layer (the meta controller's) — "
                            "latch SHIFT off to learn into the preset")
     # dark now: only clip row 3's first three buttons (the global band scenes' own)
     assert [f.source for f in ui_routing.unmapped(table)] == [
@@ -1224,14 +1224,14 @@ def test_ghost_on_a_compact_slider_and_a_fader_in_a_table(rig):
     _hold(reg, {"camera.zoom": 0.1})   # a _row on the camera page (log range)
     frame(panel, "camera")
     assert panel.ghosts == 1
-    # the selected band's strip (two columns) on the analyzer page, and a
-    # master fader, which sits with the source on the audio page
-    _hold(reg, {"band.0.atk": 0.1, "master.gain": -0.1})
-    frame(panel, "analyzer")
-    assert panel.ghosts == 1
-    _hold(reg, {"band.0.atk": 0.1, "master.gain": -0.1})
+    # a half-width slider and a fader, both on the view page: a meta param's own
+    # pages draw no ghost, since no lane may drive one (row 775)
+    _hold(reg, {"view.points_alpha": 0.1, "view.bright": -0.1})
+    frame(panel, "view")
+    assert panel.ghosts == 2
+    _hold(reg, {"master.gain": -0.1})
     frame(panel, "audio")
-    assert panel.ghosts == 1
+    assert panel.ghosts == 0
 
 
 def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):

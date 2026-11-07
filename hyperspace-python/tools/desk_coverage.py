@@ -227,7 +227,7 @@ def report(controls: list[apc40.Control], rows: list[Row],
         f"**The preset layer** is {n} controls: the device knobs D1–D8, the track knobs "
         "K1–K8, the track faders S1–S8, and every other control the default map gives a "
         "preset-layer row (" + ", ".join(c.glyph for c in controls if not is_strip(c))
-        + "), less any control the session holds on both layers. Each preset is loaded as "
+        + "), less any control the meta controller holds on both layers. Each preset is loaded as "
         f"the app loads it, from a scratch library holding {source}.",
         "",
         (f"**{MARK[MAPPED]} mapped**: a preset row is on the control and the preset can show "

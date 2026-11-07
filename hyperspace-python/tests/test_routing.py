@@ -889,8 +889,9 @@ def test_routes_are_editable_at_runtime():
     assert added in router.table.mods()
 
 
-def test_a_lane_may_modulate_the_analyzer():
-    """Allowed by design: the offset lands with apply(), the next step reads it."""
+def test_a_lane_reads_the_analyzer_and_never_drives_it():
+    """Row 743 ended "a lane may modulate the analyzer"; row 775: the flag says so,
+    and a row built past every door (`test_meta_rule` has the doors) sits dormant."""
     r = rig()
     thr = r.reg["band.3.thr"]
     thr.set_norm(0.2)
@@ -899,9 +900,8 @@ def test_a_lane_may_modulate_the_analyzer():
     r.chain.out[0] = CEIL
     router.modulate(r.chain)
     r.reg.apply()
-    assert r.chain.params[3].thr == thr._value_of_norm(base + 0.3)
-    r.chain.step(1 / 60)                               # the chain reads the modulated value
-    assert thr.norm == base                            # the user's setting is untouched
+    assert not thr.modulated and thr.norm == base
+    assert r.chain.params[3].thr == thr.value
 
 
 def test_the_legacy6_loadable_replaces_routes_and_lands_bases(tmp_path):
