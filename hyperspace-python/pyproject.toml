@@ -142,14 +142,14 @@ hyperspace = "hyperspace.app:main"
 
 [tool.pyright]
 # The ratchet's settings (tools/type_ratchet.py, ENGINEERING §16): the app only,
-# basic mode, the Mac's view of `sys.platform` on every machine. Imports that
-# don't resolve aren't complaints: CI has no torch, no Ultraleap SDK and no
-# pyobjc, so counting them would make the two machines disagree.
+# basic mode, the Mac's view of `sys.platform` on every machine. A missing import
+# stays a complaint, a stale one of our own above all; the tool's OPTIONAL names
+# the packages CI lacks. Moving any of this moves every count, so
+# tests/test_type_ratchet.py pins the whole table.
 include = ["hyperspace"]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
 pythonPlatform = "Darwin"
-reportMissingImports = false
 reportMissingModuleSource = false
 
 [tool.uv]

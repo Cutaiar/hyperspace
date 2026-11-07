@@ -112,7 +112,7 @@
     },
     "hyperspace/learn.py": {
       "reportArgumentType": 4,
-      "reportAttributeAccessIssue": 3,
+      "reportAttributeAccessIssue": 1,
       "reportReturnType": 1
     },
     "hyperspace/library.py": {

@@ -1,7 +1,7 @@
 """The type ratchet (tools/type_ratchet.py, row 788) and the import walls' glob (tests/walls.py).
 
-A new pyright complaint fails, an old one doesn't, and the baseline only falls unless someone
-says `--accept`. The one test that runs pyright runs it for real, here in the fast tier, so CI
+A new pyright complaint fails, an old one doesn't, and no rule's total rises unless someone
+says `--raise-baseline`. The one test that runs pyright runs it for real, here in the fast tier, so CI
 holds the rule without a step of its own: see ENGINEERING §16, CI, for what it costs.
 """
 
@@ -12,10 +12,12 @@ import json
 import os
 import subprocess
 import sys
+import time
+import warnings
 from pathlib import Path
 
 import pytest
-from walls import family, inside, module_of, shown
+from walls import family, inside, module_of, reaches, shown
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("type_ratchet", ROOT / "tools" / "type_ratchet.py")
@@ -130,12 +132,31 @@ def test_nothing_gone_writes_nothing(tmp_path):
     assert p.read_text() == before
 
 
-def test_accept_is_the_one_way_up(tmp_path):
-    """A split moves old complaints to a new file; the raise shows in the PR's diff."""
+def test_accept_takes_a_split_that_moved_old_complaints(tmp_path):
     p = base(tmp_path, {A: {"r": 1}})
+    assert run(["--check"], p, diag(B, "r")) == 1
     assert run(["--accept"], p, diag(B, "r")) == 0
     assert ratchet.read(p) == (VERSION, {B: {"r": 1}})
     assert run(["--check"], p, diag(B, "r")) == 0
+
+
+def test_accept_refuses_a_split_that_swept_a_new_complaint_in(tmp_path, capsys):
+    p = base(tmp_path, {A: {"r": 1}})
+    before = p.read_text()
+    assert run(["--accept"], p, diag(B, "r"), diag(B, "r")) == 1
+    assert p.read_text() == before
+    assert "r: 2 over the app, baseline 1" in capsys.readouterr().out
+
+
+def test_accept_refuses_a_rule_that_is_new_to_the_app(tmp_path):
+    p = base(tmp_path, {A: {"r": 1}})
+    assert run(["--accept"], p, diag(B, "s")) == 1
+
+
+def test_raise_is_the_one_way_up(tmp_path):
+    p = base(tmp_path, {A: {"r": 1}})
+    assert run(["--raise-baseline"], p, diag(B, "r"), diag(B, "r")) == 0
+    assert ratchet.read(p) == (VERSION, {B: {"r": 2}})
 
 
 def test_the_file_is_one_rule_a_line_and_sorted(tmp_path):
@@ -165,41 +186,144 @@ def test_another_pyright_cant_be_judged_until_the_pin_moves(tmp_path, capsys):
     p = base(tmp_path, {A: {"r": 1}}, version="1.1.1")
     assert run(["--check"], p, diag(A, "r")) == 2
     assert "1.1.1" in capsys.readouterr().out
-    assert run(["--accept"], p, diag(A, "r")) == 0
+    assert run(["--accept"], p, diag(A, "r")) == 2
+    assert run(["--raise-baseline"], p, diag(A, "r")) == 0
     assert ratchet.read(p)[0] == VERSION
+
+
+def test_an_empty_range_has_no_range_and_is_still_a_complaint(tmp_path, capsys):
+    """Pyright leaves `range` out when it's empty."""
+    d = diag(A, "r")
+    del d["range"]
+    assert run(["--check"], base(tmp_path, {}), d) == 1
+    assert f"{A}:0: bad" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("bad", [
+    {"version": VERSION, "summary": {"filesAnalyzed": 2}},                     # no diagnostics
+    {"generalDiagnostics": [], "summary": {"filesAnalyzed": 2}},               # no version
+    doc({"file": str(ROOT / A), "severity": "error"}),                         # no message
+    doc({**diag(A, "r"), "file": "/elsewhere/a.py"}),                          # outside the root
+    doc({**diag(A, "reportMissingImports"), "message": "no quotes"}),
+])
+def test_output_it_cant_read_cant_be_judged_not_a_new_complaint(tmp_path, bad):
+    code = ratchet.main(["--check"], pyright=lambda: ratchet.parse(bad),
+                        baseline=base(tmp_path, {}), found=lambda m: True)
+    assert code == 2
+
+
+@pytest.mark.parametrize("text", ["not json", "[]", '{"pyright": "1"}', '{"files": {}}',
+                                  '{"pyright": "1", "files": []}',
+                                  '{"pyright": "1", "files": {"a": {"r": "x"}}}',
+                                  '{"pyright": 1, "files": {}}'])
+def test_a_bad_baseline_cant_be_judged(tmp_path, text):
+    p = tmp_path / "b.json"
+    p.write_text(text)
+    assert run(["--check"], p) == 2
+    assert run(["--accept"], p) == 2
+
+
+def test_a_missing_baseline_cant_be_judged(tmp_path):
+    assert run(["--check"], tmp_path / "none.json") == 2
+
+
+def test_nothing_is_left_running_when_pyright_times_out(tmp_path):
+    """The wrapper's node child, about 1 GB, goes with it: a stand-in with a child of its own."""
+    pid_file = tmp_path / "pid"
+    stand_in = tmp_path / "stand_in.py"
+    stand_in.write_text(
+        "import pathlib, subprocess, sys, time\n"
+        "kid = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(kid.pid))\n"
+        "time.sleep(60)\n")
+    with pytest.raises(subprocess.TimeoutExpired):
+        ratchet._run([sys.executable, str(stand_in)], 3)
+    kid = int(pid_file.read_text())
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            os.kill(kid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+    os.kill(kid, 9)
+    pytest.fail("the stand-in's child outlived the timeout")
+
+
+# ---- missing imports ----
+
+def missing(name: str) -> dict:
+    return {**diag(A, "reportMissingImports"), "message": f'Import "{name}" could not be resolved'}
+
+
+@pytest.mark.parametrize("name", [".routing_old", "hyperspace.routing_old", "nosuchpackage",
+                                  "..routing.old"])
+def test_a_stale_import_of_ours_or_a_typo_is_a_complaint(tmp_path, name):
+    assert run(["--check"], base(tmp_path, {}), missing(name)) == 1
+
+
+@pytest.mark.parametrize("name", ["torch", "torch.nn", "objc", "Vision", "leap"])
+def test_a_known_optional_package_missing_is_not(tmp_path, name):
+    assert run(["--check"], base(tmp_path, {}), missing(name)) == 0
 
 
 # ---- a machine without the full sync (CI) ----
 
-def _no_torch(module: str) -> bool:
-    return module != "torch"
+def _ci(module: str) -> bool:
+    return module not in ratchet.FULL_SYNC
 
 
-def test_a_file_that_needs_a_missing_module_isnt_judged():
-    """CI has no torch: dream.py complains once more there, and that isn't a new complaint."""
-    dream = "hyperspace/dream.py"
-    assert ratchet.NEEDS[dream] == "torch"
-    p_counts = {dream: {"r": 1}, A: {"r": 1}}
-    assert ratchet.judged(p_counts, _no_torch) == {A: {"r": 1}}
-    assert ratchet.judged(p_counts, lambda m: True) == p_counts
+DREAM = "hyperspace/dream.py"
 
 
-def test_it_is_judged_again_where_the_module_is(tmp_path):
-    dream = "hyperspace/dream.py"
-    p = base(tmp_path, {dream: {"r": 1}})
-    assert run(["--check"], p, diag(dream, "r"), diag(dream, "r"), found=_no_torch) == 0
-    assert run(["--check"], p, diag(dream, "r"), diag(dream, "r")) == 1
+def test_the_syncs_are_told_apart():
+    assert ratchet.sync_of(lambda m: True) == "full"
+    assert ratchet.sync_of(_ci) == "ci"
+    assert ratchet.sync_of(lambda m: m != "torch") == "mixed"
+
+
+def test_ci_is_allowed_the_known_difference_and_no_more(tmp_path):
+    """dream.py complains once more without torch: that one passes, and a second one is new."""
+    p = base(tmp_path, {DREAM: {"reportOptionalMemberAccess": 1}})
+    two = [diag(DREAM, "reportOptionalMemberAccess")] * 2
+    assert run(["--check"], p, *two, found=_ci) == 0
+    assert run(["--check"], p, *two) == 1
+    assert run(["--check"], p, *two, diag(DREAM, "reportOptionalMemberAccess"), found=_ci) == 1
+
+
+def test_ci_has_no_spare_room_where_it_sees_fewer(tmp_path):
+    """pinch.py has two fewer there: the two freed places can't take a new complaint."""
+    pinch = "hyperspace/pinch.py"
+    rule = "reportAttributeAccessIssue"
+    p = base(tmp_path, {pinch: {rule: 3}})
+    assert ratchet.CI_SYNC[pinch] == {rule: -2}
+    assert run(["--check"], p, diag(pinch, rule), found=_ci) == 0
+    assert run(["--check"], p, diag(pinch, rule), diag(pinch, rule), found=_ci) == 1
+
+
+def test_a_difference_never_makes_a_limit_negative():
+    got = ratchet.limits({}, "ci")
+    assert all(n >= 0 for rules in got.values() for n in rules.values())
+    assert ratchet.limits({A: {"r": 1}}, "full") == {A: {"r": 1}}
 
 
 def test_only_a_full_sync_writes_the_baseline(tmp_path, capsys):
     """Fewer types means fewer complaints: lowering to CI's count would fail the Mac after."""
     p = base(tmp_path, {A: {"r": 2}})
     before = p.read_text()
-    assert run([], p, diag(A, "r"), found=_no_torch) == 2
-    assert run(["--accept"], p, diag(A, "r"), found=_no_torch) == 2
+    assert run([], p, diag(A, "r"), found=_ci) == 2
+    assert run(["--accept"], p, diag(A, "r"), found=_ci) == 2
+    assert run(["--raise-baseline"], p, diag(A, "r"), found=_ci) == 2
     assert p.read_text() == before
     assert "--check" in capsys.readouterr().out
-    assert run(["--check"], p, diag(A, "r"), found=_no_torch) == 0
+    assert run(["--check"], p, diag(A, "r"), found=_ci) == 0
+    assert p.read_text() == before
+
+
+def test_a_mixed_sync_cant_be_judged(tmp_path, capsys):
+    p = base(tmp_path, {A: {"r": 1}})
+    assert run(["--check"], p, diag(A, "r"), found=lambda m: m != "torch") == 2
+    assert "can't be judged" in capsys.readouterr().out
 
 
 # ---- the real thing ----
@@ -216,6 +340,9 @@ def test_the_tool_imports_nothing_of_the_app_and_no_gl():
 @pytest.mark.timeout(300)
 def test_no_new_complaint_in_the_app():
     """The rule itself. 12-22 s of one worker on the Mac, under the fast tier's other workers."""
+    sync = ratchet.sync_of()
+    if sync == "mixed":
+        pytest.skip("a mixed sync can't be judged: see the tool's sync_of")
     try:
         report = ratchet.run_pyright()
     except ratchet.Unjudged as e:
@@ -224,8 +351,10 @@ def test_no_new_complaint_in_the_app():
         pytest.skip(f"pyright can't run here: {e}")
     pin, baseline = ratchet.read(ratchet.BASELINE)
     assert report.version == pin, "the pin and the baseline disagree: see the tool's docstring"
-    grown, _ = ratchet.compare(ratchet.judged(baseline), ratchet.judged(report.counts()))
+    grown, gone = ratchet.compare(ratchet.limits(baseline, sync), report.counts())
     assert not grown, "new type complaints:\n" + "\n".join(ratchet.describe_new(grown, report))
+    if gone:                            # an old rule's fix isn't a failure: see row 788
+        warnings.warn(f"{sync} sync, under the baseline: {gone}", stacklevel=1)
 
 
 def test_the_settings_the_baseline_was_made_under_are_there():
@@ -233,10 +362,17 @@ def test_the_settings_the_baseline_was_made_under_are_there():
     import tomllib
 
     py = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    got = py["tool"]["pyright"]
-    assert got["include"] == ["hyperspace"]
-    assert got["typeCheckingMode"] == "basic" and got["pythonPlatform"] == "Darwin"
+    assert py["tool"]["pyright"] == {
+        "include": ["hyperspace"],
+        "typeCheckingMode": "basic",
+        "pythonVersion": "3.12",
+        "pythonPlatform": "Darwin",
+        "reportMissingModuleSource": False,
+    }
     assert any(d.startswith("pyright[nodejs]==") for d in py["dependency-groups"]["dev"])
+    # either of these would take over from the table above
+    assert not (ROOT / "pyrightconfig.json").exists()
+    assert not (ROOT.parent / "pyrightconfig.json").exists()
 
 
 # ---- the walls' glob: a split stays behind its wall ----
@@ -256,9 +392,23 @@ def test_a_family_is_the_module_its_split_and_its_package(pkg):
         "audio/__init__.py", "audio/deep/x.py", "audio.py", "audio_capture.py"]
 
 
-def test_a_wall_on_nothing_fails(pkg):
-    with pytest.raises(AssertionError, match="no such module"):
-        family("gone", pkg)
+def test_a_stem_with_no_file_is_the_file_it_should_be_and_collection_goes_on(pkg):
+    """family runs while pytest collects, so it can't raise: the tests reading it fail by name."""
+    assert family("gone", pkg) == [pkg / "gone.py"]
+    assert not family("gone", pkg)[0].is_file()
+
+
+def test_reaches_says_what_each_import_names(pkg):
+    f = pkg / "audio/deep/x.py"
+    f.write_text(
+        "import os\nimport hyperspace.ui.x\nfrom hyperspace import tapers\nfrom .. import sib\n"
+        "from ...ui_pane import y\nfrom hyperspace.deck import d\n"
+        "def later():\n    import glfw\n    from . import near\n"
+        "class C:\n    from .kid import z\n")
+    assert [(r.ours, r.lazy) for r in reaches(f, pkg)] == [
+        (None, False), (("ui", "x"), False), (("tapers",), False), (("audio", "sib"), False),
+        (("ui_pane",), False), (("deck",), False), (None, True), (("audio", "deep", "near"), True),
+        (("audio", "deep", "kid"), False)]
 
 
 def test_a_relative_import_resolves_from_where_the_file_sits(pkg):
@@ -275,4 +425,4 @@ def test_a_relative_import_resolves_from_where_the_file_sits(pkg):
                                   "tempo", "lfo", "routing", "routing_sources", "library", "hands"])
 def test_every_module_a_wall_names_is_there(stem):
     """A rename takes its wall with it, or fails here by name."""
-    assert family(stem)
+    assert all(f.is_file() for f in family(stem))

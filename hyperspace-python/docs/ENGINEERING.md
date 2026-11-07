@@ -3549,8 +3549,8 @@ The fast tier takes about four minutes on four cores (§16's last-measured line)
   that tier's wall time by division, not measured apart.
   `uv run python tools/type_ratchet.py` lowers the baseline where errors
   went (commit it), on a full sync only; `--check` writes nothing;
-  `--accept` is the one way up, for a split or a pyright bump, and the PR
-  says why. Pyright reads the source and opens no GL.
+  `--accept` takes a split that leaves every rule's total level;
+  `--raise-baseline` is the one way up, and the PR says why. Pyright reads the source and opens no GL.
 - **Making it blocking** is a setting on `main`, not a file: Settings →
   Rules → Rulesets → New branch ruleset, target `main`, "Require status
   checks to pass", add `tests` (or Settings → Branches → a protection

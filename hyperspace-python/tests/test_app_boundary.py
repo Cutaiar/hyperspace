@@ -30,8 +30,9 @@ import sys
 import hyperspace.app
 gated = ("leap", "torch", "pythonosc",
          "av", "pillow_heif", "syphon", "cyndilib", "AVFoundation",
-         "Vision", "Vision._Vision", "CoreML", "torchvision")
-# a gated module of ours, and any split of it (row 788): midi.py, midi_x.py, midi/x.py
+         "Vision", "Vision._Vision", "CoreML", "torchvision", "hyperspace.hands.device")
+# a gated module of ours, and any split of it (row 788): midi.py, midi_x.py, midi/x.py. Not
+# hands: importing app imports that package on purpose, and only its device is gated
 ours = ("midi", "bridge", "dream", "osc", "segment")
 found = [m for m in gated if m in sys.modules]
 for m in sys.modules:
