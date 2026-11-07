@@ -719,6 +719,8 @@ here; overturn → the change, then the same.
 | 683 | Plan 51 O2: no schema move for `turn`: an older build drops the row with a note and lands the rest, and a save there loses it; both Macs update together | — | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner |
 | 684 | Plan 51 O2: the clutch is the same hand's grab, landed in the preset's row; a lost hand is an opened clutch; one undo step per closure with a 0.15 s grace; under the hold it moved the preview as a knob does | — | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner; **the hold's part reversed, row 701** |
 | 685 | Plan 51 O2: within 20° of vertical, a yaw straying 20° or stepping 5° on leaving the cone makes the hand read NaN until it has left, then restart, not a camera jump; `ghost.mirror` does not flip a turn row, its depth does; a room lane on a clamped target stays `position`; a moved row lands as `row_for` would | — | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner |
+| 686 | The Joy-Con's version 0 is buttons, sticks, the gyro and shake: its sensors move no position (`poi.no_position`); the Edge and `motion:shake` are unchanged. An idealized control object for the acceleration comes later. Its own layout (`models.Model.layout`, `routing.layout_of`): SL / SR the shape, stick click the view's reset, − (+ on the R) the totem's reset, capture (HOME on the R) the totem on and off; L (R) holds the base chase (row 724); ZL free; a stick route heard only while the totem reads it, else the stick orbits. Replaces the table on those controls for this pad only. The Edge's layout is hold-to-save on `pad:MENU` (row 724). A model's rows are a person's: no loadable patch holds or reaches one | 520, 521 | owner — 2026-11-04 |
+| 687 | The hid reader learns a Joy-Con's gyro rest offset (`hid.Turn(learn=True)`): every axis within 3 deg/s for one sensor second, none past 20 deg/s | 520 | (rec) — pending the owner |
 | 688 | Plan 44 D5a: the owner of the two `Deck`s is `deck.MetaController`, named from the glossary; a `Pointer` per holder (each controller by role, the keys, the mouse) and the panel's apart; exactly two `Deck`s; no `swap`; a deck's presets see the library through `library.DeckLibrary`, so they cannot reach another deck | — | "name the owner of the two Decks from the glossary"; "Two fixed Decks and no swapping" (owner, 2026-11-04) |
 | 689 | Plan 44 D5a: the holders moved onto pointers, those the reading named (`SeqPage.reg`, `Library.reg` and `presets`, `dream_check`, `Mouse`'s params, `draw_render`, `Marks`) and those found while building (`rig.said`'s table, deck 2's `Learn.devices`, the totem's and poi's params, the watchdog's preset, the bank's verbs, its lit slot and the section references); `Bindings.page` is the session's; `claim` retired | — | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: (rec) — pending the owner |
 | 690 | Plan 44 D5a: `docs/GLOSSARY.md`, one row per concept; a controller moved mid-gesture releases what it holds on the deck it left, and its real release goes nowhere | — | owner — 2026-11-06: glossary signed, reviewed with Dillon |
@@ -12849,6 +12851,53 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
   same way.
 - **Judge it.** 519.
 
+### 686. The Joy-Con's version 0: buttons, sticks, the gyro and shake
+
+- **Answer.** Owner, 2026-11-04: drop position for this pad for now, and leave
+  the DualSense Edge and the meaning of a shake as they are. An idealized
+  control object for the acceleration takes tuning there is no time for yet.
+  The layout too: SL / SR the shape, stick click the view's reset, − (+ on the R)
+  the totem's reset, capture (HOME on the R) the totem on and off, L (R) the
+  chase (row 724). Owner, 2026-11-07, on landing it unchecked: "there's going to be
+  a laundry list of things that we have to test now, which is totally fine. As long
+  as everything's merged in, that's all that really matters."
+- **Built.** `poi.no_position(pad)`, true for the Nintendo family: the poi does
+  not read such a pad and the totem's tilt adds no pan from it. `motion:shake`
+  is unchanged. Draft PR #342 is the record of the position work. `Router.pad`
+  hears `layout_of(pad.model, role)`'s rows and hides the table's on those controls;
+  `Model.totem_layout` is separate and only the Joy-Cons set it, so the Edge keeps
+  its camera job, its stick routes and its A reset. `PadDevice._no_camera_job` frees
+  ZL / ZR always and the stick while the totem reads the pad. Learn ignores the
+  layout's controls, `models.control_free` says none of them is a pole, and the pad
+  window says what the pad will do. A stick route is heard only while the totem reads
+  the pad (`PadDevice._quiet_stick`): off, its lanes read NaN, the route lets go and
+  the stick orbits. ↓ goes back to its row now the reset is on −; X, Y and B stay the
+  totem's W planes. On the Edge a row on `pad:MENU` is no longer heard or learned.
+- **The two layers.** A model's rows live on the model: in no table, no file and no
+  patch, so a load leaves them and no loadable patch can reach them. `deck.chase`,
+  `preset.save_new` and `totem.*` are meta (rows 746, 755), and a pad button is a
+  person's row, so `meta_row_refusal` lets them stand as it does `pad:VIEW`'s chase.
+  A patch's route on one is refused as ever.
+- **Not proved.** Checked on the owner's tapes and a stand-in pad; no live pad yet.
+- **Limits.** Those controls cannot be relearned without editing the layout. GRAPH's rig
+  cables show the table's rows, not the layout. The totem still applies its turn as angles
+  in a fixed plane order, so a big turn about two axes lands where Euler angles do.
+- **To reverse.** Make `no_position` answer False; empty `layout` and clear `totem_layout`
+  on the two Joy-Con models.
+- **Judge it.** 520, 521.
+
+### 687. Learning a Joy-Con's gyro rest offset
+
+- **Answer.** (rec) — pending the owner.
+- **Built.** `hid.Turn(learn=True)` for a Nintendo pad only. The turn is
+  otherwise unchanged: on both tapes, neither a longer gap allowance nor
+  bridging gaps was reliably better, so the 50 ms limit stands. The offset only
+  matters for a pad whose rest reads past the 3 deg/s dead band, which the
+  owner's does not (about 0.2 deg/s).
+- **Limit.** A pad held in the hand and never set down learns nothing.
+- **To reverse.** Build `Turn` without `learn`.
+- **Judge it.** 520.
+
 ### 688. The meta controller and its pointers
 
 - **Answer.** The owner, 2026-11-04: "`rig`, `session` and lowercase "deck" all become the
@@ -13408,19 +13457,14 @@ Built on `wave1/l1`; tests in `tests/test_preset_folders.py` and
 
 ### 724. Rows by model: the Joy-Con's chase, the Edge's hold-to-save; whether Learn offers the list
 
-- **Joy-Con.** The owner, 2026-11-04: its chase is L on the left and R on the right, added to
-  `Model.layout` in #365 by that session; − and capture are the totem's. So on this build the
-  generic row chases on the (L)'s − and does nothing on the (R), which has no −, until #365 lands.
-  Nothing is built here for it. Its check is with #365's.
+- **Joy-Con.** The owner, 2026-11-04: its chase is L on the left and R on the right, in
+  `Model.layout` (row 686); − and capture are the totem's. Its check is with row 686's.
 - **The Edge's hold-to-save.** The owner, 2026-11-04: hold-to-save is the Edge's only, "the
   controller Dylan will be using for VJ-style setups"; press-and-hold save must not be mapped on
   other controllers; a controller is generic with extensions by model. The generic row goes
-  (row 723). `Model.layout` in #365 is its home: one line on the Edge's `Model`. **Today**, with no
-  code: an entry `role = "edge"`, `controller = "edge"` and a row `pad@edge:MENU` in that Mac's
-  `bindings.json`. `controller =` pins the Edge to the role, the qualifier gives the row to that
-  role alone, primary or not, and no load moves a qualified row. It takes both lines by hand, so an
-  Edge in the default `role = "pad"` has no save. A factory `pad@edge:MENU` would tie a row to a
-  role's name, not a model, and is not built.
+  (row 723). `Model.layout` is its home, one line on the Edge's `Model` (row 686), so an Edge has
+  it in any role on any table. A Mac that took the earlier stopgap (`pad@edge:MENU` in its
+  `bindings.json`) saves once as before: the layout hides that row. The line may go.
 - **How a row gets there.** `Learn.learn_pad_button` lands `deck.chase` as `momentary`, but the
   panel arms Learn pad from a widget's right-click, and `deck.chase` and `preset.list.*` have no
   widget (`tempo.tap` has, the tempo line's "tap"). So plan 53 §5's "one Learn pad" is not reachable
@@ -14239,6 +14283,7 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
   In the hold, a turn of up to 178 deg/s at 31 to 33 s raises the attitude error from 0.1° to 16.8°, and no still moment follows to correct it. The hand reaches `HAND_LIMIT` at 33.81 s, 3.8 s in. 8 world units is 3.2 m at `UNITS_PER_M`; the pad was in a hand. From 33.6 s the pad settles (mostly under 2 deg/s, 24 at worst), reading about 1.02 g, while 4.6° to 10.0° of error reads as a 0.08 to 0.19 g push. The stillness only gets in at 36.72 s, 3.1 s later rather than `CALM_S`'s 1.5, because one reading of 0.93 g at 35.13 s restarted the timer at 1.35 s. The attitude then comes right (0.1° at the end) and the velocity zeroes, but no pull home is by design (the owner, 2026-11-03), so the window ends with the hand at 8.00, the pan at +4.63, +1.06 and the zoom at 0.085. Through the default eye a 16:9 output shows about ±3 across and ±1.7 down (#342's reading of the rig's TV, not measured on `main`), so the shape is off the screen, a twelfth of its size, until A.
 - **`--hand 0`:** the same tape with no push: pan max 1.24 and the hand at home. The turn alone is well behaved.
 - **The question for the owner, (rec) — pending the owner.** The poi is off by default, so this only shows with it on. Did it look like this at the machine? Recommendation: a live bug, fixed as one small item, keeping no pull home: the pad dead still stops the hand sooner, and the hand's limit is the screen's size rather than 8. Not built here: the item says don't.
+- **Since row 686:** the app's poi no longer reads a Nintendo pad (`poi.no_position`), so the numbers above can't be seen on the shape with a Joy-Con. The probe still runs the same code on a Joy-Con's tape, by design: its pad is of no family.
 - **Judge it.** 611.
 
 ### 777. A matte and a segment show their mask on GRAPH
