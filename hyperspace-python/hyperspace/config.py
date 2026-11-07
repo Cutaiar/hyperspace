@@ -151,9 +151,11 @@ like the rename above. The SYSTEM page shows both.
                             #                profile = "generic"  port = "Launch Control"
                             # SHIFT (desk.shift) is the first MIDI role's latch;
                             # bindings.json's "profile" never overrides an entry's.
-                            # The app watches this file: an edit to the list lands
-                            # without a relaunch (a bad edit is a note; the old list
-                            # stands). [dream] is a worker, not a device: it stays a table
+                            # **Read once per Mac (wave 5 CT1), as the seed of
+                            # devices.json in the library, which then says, on both
+                            # Macs:** a new controller comes in by dragging it from the
+                            # player board's tray, and an edit here lands nowhere.
+                            # devicelist.py has the rules. [dream] is a worker, not a device: it stays a table
                             # Sinks (plan 27 B3) send values out: the bridge's out
                             # half, and a "midi-out" entry — a MIDI port of its
                             # own, carrying a hands device's DAW messages and any
@@ -691,8 +693,21 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
     resolved against the file's folder in both."""
     raw = data.get("devices")
     wrote_out: set[str] = set()
+    # what `devicelist` takes from this file: the seed of `<library>/devices.json`, what
+    # this Mac alone has said off, and whether it may look for MIDI ports at all
+    midi_table = data.get("midi")
+    cfg["no_midi_look"] = isinstance(midi_table, dict) and midi_table.get("enabled") is False
+    cfg["device_seed_listed"] = isinstance(raw, list)
+    # (a file that didn't read seeds nothing: `DeviceList` then leaves its one read for later)
+    readable = not cfg.get("error")
     if raw is None:
         entries = _translate(cfg, data)
+        if readable:
+            cfg["device_seed"] = [_compact(e) for e in entries]
+            cfg["device_here"] = {e["role"]: data[section]["enabled"]
+                                  for (section, _kind, _role), e in zip(DEVICE_TABLES, entries, strict=True)
+                                  if isinstance(data.get(section), dict)
+                                  and isinstance(data[section].get("enabled"), bool)}
         if isinstance(data.get("hands"), dict) and "out" in data["hands"]:
             wrote_out = {e["role"] for e in entries if e["kind"] == "hands"}
     else:
@@ -700,6 +715,7 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
             problems.append(f"config: devices = {raw!r} is not a list of [[devices]] tables")
             raw = []
         entries, roles, pins = [], set(), set()
+        seed = []
         for i, e in enumerate(raw):
             if not isinstance(e, dict):
                 problems.append(f"config: [[devices]] entry {i + 1} is not a table ({e!r}) "
@@ -708,6 +724,11 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
             got = _device(i + 1, e, cfg, roles, problems, pins)
             if got is not None:
                 entries.append(got)
+                seed.append({**copy.deepcopy(e), "role": got["role"], "kind": got["kind"]})
+        if cfg["device_seed_listed"] and readable:
+            cfg["device_seed"] = seed
+            cfg["device_here"] = {e["role"]: e["enabled"] for e in seed
+                                  if isinstance(e.get("enabled"), bool)}
         for section, kind, _ in DEVICE_TABLES:
             if isinstance(data.get(section), dict):
                 _note(cfg, f"config: [[devices]] is listed, so [{section}] is ignored — "
@@ -715,11 +736,22 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
         wrote_out = {str(e.get("role", "")).strip() for e in raw
                      if isinstance(e, dict) and "out" in e}
     entries = _daw(cfg, entries, wrote_out)
+    _resolve(entries, path.parent)
+    take_devices(cfg, entries)
+
+
+def _resolve(entries: list[dict], base: Path) -> None:
+    """A relative `map`, `calibration` or `tape`, against `base`, in place."""
     for e in entries:
         for key in ("map", "calibration", "tape"):
             v = e.get(key)
             if isinstance(v, str) and v and not Path(v).is_absolute():
-                e[key] = str(path.parent / v)
+                e[key] = str(base / v)
+
+
+def take_devices(cfg: dict, entries: list[dict]) -> None:
+    """`entries` are the device list; the first of each old kind folds back into its
+    table (`_devices`' docstring)."""
     for section, kind, _ in DEVICE_TABLES:
         first = next((e for e in entries if e["kind"] == kind), None)
         if first is None:
@@ -728,6 +760,46 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
         cfg[section] = {**cfg[section], **{k: v for k, v in first.items() if k not in DEVICE_KEYS},
                         "enabled": first["enabled"]}
     cfg["devices"] = entries
+
+
+def _compact(entry: dict) -> dict:
+    """An old table's entry as `devices.json` holds it: what differs from its kind's
+    defaults. A table's `enabled = false` on a kind that's on by default stays out: it is
+    this Mac's to say (`cfg["device_here"]`), and the list is both Macs'."""
+    kind = entry["kind"]
+    defaults = _kind_defaults(kind)
+    out = {"role": entry["role"], "kind": kind}
+    if kind in ("hands", "bridge"):       # off with nothing said, so the list must say
+        out["enabled"] = entry["enabled"]
+    out.update({k: v for k, v in entry.items()
+                if k not in DEVICE_KEYS and (k not in defaults or defaults[k] != v)})
+    return copy.deepcopy(out)
+
+
+def listed_devices(raw: list, base: Path, here: dict | None = None
+                   ) -> tuple[list[dict], list[str], list[str]]:
+    """Entries as a list holds them, checked as `[[devices]]` is: (entries, problems,
+    notes), printing nothing. `base` is the folder a relative path means on this Mac, and
+    `here` (role → bool) is on or off on this Mac, whatever the list says."""
+    import contextlib
+    import io
+
+    scratch: dict = {"notes": []}
+    problems: list[str] = []
+    entries: list[dict] = []
+    roles: set[str] = set()
+    pins: set[int] = set()
+    with contextlib.redirect_stderr(io.StringIO()):
+        for i, e in enumerate(raw):
+            got = _device(i + 1, e, scratch, roles, problems, pins)
+            if got is not None:
+                # (on or off first: `_daw` asks it of a hands entry)
+                got["enabled"] = here.get(got["role"], got["enabled"]) if here else got["enabled"]
+                entries.append(got)
+        # (`wrote_out` only chooses a note: the sink is made either way)
+        entries = _daw(scratch, entries, set())
+    _resolve(entries, base)
+    return entries, problems, scratch["notes"]
 
 
 def devices(cfg: dict) -> list[dict]:

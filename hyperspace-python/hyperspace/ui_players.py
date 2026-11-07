@@ -8,6 +8,7 @@ desk (the owner, 2026-11-04). A move stays until someone moves it back.
 
 - **A duty:** drag a token to the other lane, or click the token and then the lane.
 - **A controller:** drag it to another token, or click it and then the token.
+- **A new controller:** drag it from the tray to a token, or click it and then the token.
 
 Each is said the moment it happens: on the line under the lanes and in the
 footer (`Library.say`). The moves go through `MetaController.move_player` and
@@ -26,11 +27,13 @@ if one is learned onto it the row has it and the board does not (`_key_toggles`)
 size is `lay_out`, a plain function of the width, tested at 240, 320 and large.
 
 **The tray** is what nobody holds. By plan 55's rule every listed controller has a
-holder (player 1, unless told), so what can be in it today is what the Mac sees and
-no ``[[devices]]`` entry lists: a pad, read-only until it is in the config
-(`loose`, looked for every `LOOSE_S`; a MIDI desk is not looked for). A token may
-hold nothing: a player with no controller is drawn dim, as an empty seat, and takes
-a controller like any other.
+holder (player 1, unless told), so what can be in it is what the Mac sees and the
+device list doesn't: a pad or a MIDI port (`loose`, looked for every `LOOSE_S`, and
+for MIDI not at all if ``[midi] enabled = false``). **It waits there until it is dragged
+to a player (the owner, 2026-11-06):** that adopts it (`adopt`, `devicelist`), on both
+Macs, under a role that rows can name from then on. Nothing is adopted by plugging in.
+A token may hold nothing: a player with no controller is drawn dim, as an empty seat,
+and takes a controller like any other.
 
 **Ids** for `tests/ui_driver.py`: ``players.lane.on_air``, ``players.lane.off_air``,
 ``players.p<n>``, ``players.ctl.<role>``, ``players.open`` (the footer's chip),
@@ -44,17 +47,19 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
+from functools import partial
 
 from imgui_bundle import imgui
 
-from . import devices, ui
+from . import apc40, devicelist, devices, ui
 from . import undo as undos
+from .midiports import port_names
 from .pads import models
 from .players import Duty
 from .pointer import deck_number
 
 STATE = "_players_ui"     # on the panel: {"sel", "drag", "said", "large", …}
-SEL_PLAYER, SEL_CTL = "player", "ctl"
+SEL_PLAYER, SEL_CTL, SEL_TRAY = "player", "ctl", "tray"
 LANES = (Duty.ON_AIR, Duty.OFF_AIR)
 WORDS = {Duty.ON_AIR: "on air", Duty.OFF_AIR: "off air"}
 
@@ -68,16 +73,20 @@ BIG_W, BIG_H = 980.0, 620.0   # the large window at first, at most
 BIG_DESIGN = 520.0       # its scale: its width over this
 BIG_MAX = 2.4
 DRAG_PX = 4.0            # past this a press on a token is a drag
-LOOSE_S = 1.0            # how often the tray looks for a pad nobody lists
+LOOSE_S = 1.0            # how often the tray looks for a controller nobody lists
+OURS = "hyperspace"      # a virtual port of our own is listed as an input too: never loose
 KEY = "O"                # opens the board: no row in `routing.keymap` (a test holds it so)
 STAYS = " Stays until moved."
-HINT = "Drag a player across to change duty. Drag a controller to another player."
+HINT = "Drag a player across to change duty. Drag a controller to another player, or a new one from the tray."
 TRAY_NONE = "nothing loose"
-TRAY_TIP = ("Seen on this Mac, in no [[devices]] entry of config.toml, so nobody can hold it "
-            "yet. Add an entry and it comes in on player 1.")
+ADOPT_TIP = ("Seen on this Mac, and nobody holds it. Drag it to a player: it joins the list "
+             "both Macs share, as {role}, and rows can name it. Nothing joins by plugging in.")
+TWINS_TIP = " Two desks with one name show as one here: MIDI can't tell them apart."
+HERE_TIP = "On this Mac only. The other Mac says for itself, as it may not have this one."
+TRAY_TIP = "Seen on this Mac, and nobody can hold it here: this panel has no device list."
 OPEN_TIP = "The player screen, large: who is on air, and what they hold (O)"
 LARGE_TIP = "The same board, large, for across the room (O, or the footer's chip)"
-STATE_WORDS = {"on": "connected", "lost": "lost", "off": "off in config.toml",
+STATE_WORDS = {"on": "connected", "lost": "lost", "off": "off on this Mac",
                "error": "error", "gone": "not listed now"}
 
 GREEN = imgui.ImVec4(0.30, 0.86, 0.42, 1.0)
@@ -96,6 +105,7 @@ class Held:
     glyph: str               # `GLYPHS`' key
     name: str                # in words: "DualSense Edge"
     state: str               # `STATE_WORDS`' key
+    entry: dict | None = None    # a loose one's: what adopting it lists (`devicelist`)
 
 
 @dataclass
@@ -245,8 +255,46 @@ def held(panel, number: int) -> list[Held]:
     return out
 
 
-def loose(panel) -> list[Held]:
-    """Pads the Mac sees that no entry reads (the module's tray). A pad an entry
+def _loose_midi(regs, st: dict | None) -> list[Held]:
+    """MIDI ports the Mac sees that no entry reads, when this Mac may look. A desk's entry,
+    on or off, reads the one port `midi.find_port` gives it, so another port that it merely
+    resembles is still loose. A sink's ports aren't controllers, and all they match stay
+    out; a virtual one is our own. Why it could not look is the board's to say
+    (`st["midi_why"]`)."""
+    store = getattr(regs, "store", None)
+    if store is None or store.no_midi_look:
+        return []
+    from .midi import find_port  # (late: midi is imported behind a device's entry)
+    seen = port_names()
+    if st is not None:
+        st["midi_why"] = seen.in_why
+    read: set[str] = set()
+    sinks: list[str] = []
+    an_apc = False
+    for d in regs:
+        e = getattr(d, "entry", None) or {}
+        if getattr(d, "kind", "") == "midi":
+            apc = str(e.get("profile") or "apc40") == "apc40"
+            an_apc = an_apc or apc
+            match = e.get("port") or (apc40.PORT_MATCH if apc else None)
+            port = find_port(seen.inputs, str(match)) if match else None
+            if port is not None:
+                read.add(port)
+        else:
+            sinks += [str(e[k]).lower() for k in ("port", "out", "in") if e.get(k)]
+    out = []
+    for port in seen.inputs:
+        low = port.lower()
+        if port in read or OURS in low or any(n in low for n in sinks):
+            continue
+        apc = apc40.PORT_MATCH.lower() in low
+        out.append(Held(port, "apc40" if apc else "midi", port, "on",
+                        devicelist.midi_entry(port, another=an_apc)))
+    return out
+
+
+def loose(panel, st: dict | None = None) -> list[Held]:
+    """What the Mac sees that no entry reads (the module's tray). A pad an entry
     is off for, or is waiting to take, is that entry's: one pad each. Never raises: a
     tray costs nothing if it cannot look."""
     regs = getattr(panel, "devices", None)
@@ -264,11 +312,19 @@ def loose(panel) -> list[Held]:
     hub = getattr(claims, "hub", None)
     out: list[Held] = []
     try:
+        if regs is not None:
+            out += _loose_midi(regs, st)
+    except Exception as e:  # noqa: BLE001 — see the docstring; the pads are still looked for
+        if st is not None:
+            st["midi_why"] = f"MIDI: {type(e).__name__}: {e}"[:120]
+    try:
         if hub is not None:
             for path, r in list(hub.readers.items()):
                 if path not in hub.held and not spoken_for(
                         r.model, getattr(r, "vid", None), getattr(r, "pid", None)):
-                    out.append(Held(str(r.name), glyph_of_model(r.model), str(r.name), "on"))
+                    out.append(Held(str(r.name), glyph_of_model(r.model), str(r.name), "on",
+                                    devicelist.pad_entry(r.model, getattr(r, "vid", None),
+                                                         getattr(r, "pid", None))))
         import glfw
         taken = getattr(claims, "taken", {})
         for j in range(glfw.JOYSTICK_1, glfw.JOYSTICK_LAST + 1):
@@ -280,7 +336,8 @@ def loose(panel) -> list[Held]:
             if model.road == "hid" and hub is not None:
                 continue
             if not spoken_for(model, vid, pid):
-                out.append(Held(model.name, glyph_of_model(model), model.name, "on"))
+                out.append(Held(model.name, glyph_of_model(model), model.name, "on",
+                                devicelist.pad_entry(model, vid, pid)))
     except Exception:  # noqa: BLE001 — see the docstring
         return out
     return out
@@ -289,7 +346,7 @@ def loose(panel) -> list[Held]:
 def _tray(panel, st: dict, now: float | None = None) -> list[Held]:
     now = time.monotonic() if now is None else now
     if now - st.get("loose_at", -LOOSE_S) >= LOOSE_S:
-        st["loose_at"], st["loose"] = now, loose(panel)
+        st["loose_at"], st["loose"] = now, loose(panel, st)
     return st.get("loose", [])
 
 
@@ -333,19 +390,27 @@ def give_words(role: str, number: int, deck: int, reopened: bool, address: str |
     return words
 
 
+def adopt_words(name: str, role: str, number: int, deck: int) -> str:
+    """What adopting a controller does, said as it happens. Not that the other Mac has it:
+    that's for the library to deliver, and `DeviceList.said` warns if it can't."""
+    return (f"{name} adopted as {role}: player {number} holds it here, on deck {deck}. "
+            "It goes on the list both Macs share.")
+
+
 def _takes_it_back(meta) -> bool:
     """May the board promise ⌘Z? A move's mouse is on the board, so the stack is the one
     it reaches, even on a drop's frame, when `undo.here` can't yet say."""
     return undos.takes_back(meta.undo, here_now=True)
 
 
-def _say(panel, st: dict, words: str) -> None:
+def _say(panel, st: dict, words: str, warn: str = "", *, undoable: bool = True) -> None:
     """The line under the lanes and the footer. A move the file did not keep says so,
-    in the warning colour, and does not promise it stays (`Players.save`)."""
-    error = _meta(panel).players.error
+    in the warning colour, and does not promise it stays (`Players.save`). `undoable`
+    False: not a move ⌘Z takes back, so it isn't promised."""
+    error = _meta(panel).players.error or warn
     if error:
         words = f"{words.removesuffix(STAYS).rstrip()} {error}"
-    elif _takes_it_back(_meta(panel)):
+    elif undoable and _takes_it_back(_meta(panel)):
         words = f"{words} ⌘Z takes it back."
     st["said"], st["said_warn"] = words, bool(error)
     lib = getattr(panel, "library", None)
@@ -393,6 +458,31 @@ def give(panel, role: str, number: int) -> None:
         bool(pads) and all(d.qualifier for d in pads)))
 
 
+def adopt(panel, h: Held, number: int) -> None:
+    """A controller from the tray to player `number`: into the list both Macs share, then
+    held and pointed as any other (`MetaController.register`); said. Held before it's
+    applied, so it opens under its right name the first time. Who holds it is a step on the
+    meta stack like any move, so an earlier move's undo can't take it from them. ⌘Z gives it
+    back to player 1 and leaves it on the list, shared as that is, so ⌘Z isn't promised."""
+    meta, regs = _meta(panel), getattr(panel, "devices", None)
+    store = getattr(regs, "store", None)
+    if meta is None or regs is None or store is None or h.entry is None:
+        return
+    # gone from the tray now, and looked for again next frame, where its entry speaks for it:
+    # the cell still drawn this second can't adopt a second seat
+    st = _state(panel)
+    shown = list(st.get("loose", ()))
+    if h in shown:
+        shown.remove(h)
+    st["loose"], st["loose_at"] = shown, -LOOSE_S
+    role = store.adopt(h.entry)
+    undos.by_hand(True)         # the mouse's: the step opens the meta stack (row 753)
+    meta.register(role, number)
+    regs.relist()
+    _say(panel, st, adopt_words(h.name, role, number, _deck_no(meta, meta.deck_of_player(number))),
+         store.said, undoable=False)
+
+
 def _clicked_lane(panel, st: dict, duty: Duty) -> None:
     sel = st["sel"]
     if sel is not None and sel[0] == SEL_PLAYER:
@@ -402,11 +492,18 @@ def _clicked_lane(panel, st: dict, duty: Duty) -> None:
         st["said"], st["said_warn"] = "Click a player first, then the lane.", False
 
 
+def _clicked_tray(st: dict, h: Held) -> None:
+    st["sel"] = None if st["sel"] == (SEL_TRAY, h) else (SEL_TRAY, h)
+
+
 def _clicked_card(panel, st: dict, number: int) -> None:
     sel = st["sel"]
     if sel is not None and sel[0] == SEL_CTL:
         give(panel, sel[1], number)
         st["sel"] = None
+    elif sel is not None and sel[0] == SEL_TRAY:
+        st["sel"] = None
+        adopt(panel, sel[1], number)
     else:
         st["sel"] = None if sel == (SEL_PLAYER, number) else (SEL_PLAYER, number)
 
@@ -416,6 +513,10 @@ def _clicked_ctl(panel, st: dict, role: str) -> None:
     controller picked, the click is on this player, as anywhere on their token."""
     sel = st["sel"]
     players = _meta(panel).players
+    if sel is not None and sel[0] == SEL_TRAY:
+        st["sel"] = None
+        adopt(panel, sel[1], players.player_of(role).number)
+        return
     if sel is not None and sel[0] == SEL_CTL and sel[1] != role:
         number = players.player_of(role).number
         if players.player_of(sel[1]).number != number:
@@ -711,7 +812,8 @@ def _draw_carried(hold: dict, drag: tuple, mouse, s: float) -> None:
         dl.add_rect(_v(x0, y0), _v(x1, y1), ui.u32(_accent(n)), 6 * s, 2.5 * s)
         _badge(dl, n, x0 + PAD * s, y0 + PAD * s, s)
         return
-    h = next((x for hs in hold.values() for x in hs if x.role == drag[2]), None)
+    h = drag[2] if drag[1] == SEL_TRAY else next(
+        (x for hs in hold.values() for x in hs if x.role == drag[2]), None)
     if h is not None:
         w, tall = CELL_W * s, CELL_H * s
         r = (mouse.x - w / 2, mouse.y - tall / 2, mouse.x + w / 2, mouse.y + tall / 2)
@@ -759,7 +861,7 @@ def _board(panel, sfx: str, s: float) -> None:
     dl.add_text(_v(x0 + PAD * s + 2, y0 + 6 * s), ui.u32(ui.FAINT), ui.fit_text(title, x1 - x0 - 8))
     imgui.pop_font()
     for h, r in zip(tray, bd.tray_cells, strict=False):
-        _draw_held(dl, h, r, s)
+        _draw_held(dl, h, r, s, lit=st["sel"] == (SEL_TRAY, h))
 
     # the buttons, on what was drawn: lane, then token, then controller. A move runs
     # below, past the last of them: `register` can close and open a device
@@ -767,22 +869,31 @@ def _board(panel, sfx: str, s: float) -> None:
     free = st["drag"] is None and not st.get("no_drag")   # a release ending a drag is no click
     for duty in LANES:
         if _button(f"##players{sfx}.lane.{duty.value}", bd.lanes[duty]) and free:
-            act = (_clicked_lane, panel, st, duty)
+            act = partial(_clicked_lane, panel, st, duty)
     for n, card in bd.cards.items():
         if _button(f"##players{sfx}.p{n}", card.rect) and free:
-            act = (_clicked_card, panel, st, n)
+            act = partial(_clicked_card, panel, st, n)
         _dragging(st, sfx, (SEL_PLAYER, n))
         for h, (role, rect) in zip(hold[n], card.cells, strict=False):
             if _button(f"##players{sfx}.ctl.{role}", rect, over=False) and free:
-                act = (_clicked_ctl, panel, st, role)
+                act = partial(_clicked_ctl, panel, st, role)
             _dragging(st, sfx, (SEL_CTL, role))
             if imgui.is_item_hovered() and st["drag"] is None:
                 ui.tooltip(f"{role}  ·  {h.name}  ·  {STATE_WORDS[h.state]}  ·  "
-                           f"{_on_deck(meta, role)}.\nDrag to another player.")
+                           f"{_on_deck(meta, role)}.\nDrag to another player, or click it "
+                           "to turn it on or off on this Mac.")
+    store = getattr(getattr(panel, "devices", None), "store", None)
     for k, (h, rect) in enumerate(zip(tray, bd.tray_cells, strict=False)):
-        _button(f"##players{sfx}.tray.{k}", rect, over=False)
-        if imgui.is_item_hovered():
-            ui.tooltip(f"{h.name}. {TRAY_TIP}")
+        hit = _button(f"##players{sfx}.tray.{k}", rect, over=False)
+        if store is not None and h.entry is not None:
+            if hit and free:
+                act = partial(_clicked_tray, st, h)
+            _dragging(st, sfx, (SEL_TRAY, h))
+        if imgui.is_item_hovered() and st["drag"] is None:
+            ui.tooltip(f"{h.name}. " + (
+                ADOPT_TIP.format(role=store.role_for(h.entry))
+                + (TWINS_TIP if h.entry.get("kind") == "midi" else "")
+                if store is not None and h.entry is not None else TRAY_TIP))
     # the room the drawing took, as an item the window scrolls by
     imgui.set_cursor_screen_pos(origin)
     imgui.dummy(_v(room, bd.h))
@@ -796,17 +907,39 @@ def _board(panel, sfx: str, s: float) -> None:
         if not imgui.is_mouse_down(0):
             st["drag"] = None
             aim = _drop_on(bd, drag[1], mouse.x, mouse.y) if inside else None
-            if aim is not None and drag[1] == SEL_PLAYER:
+            if isinstance(aim, Duty):
                 move(panel, drag[2], aim)
+            elif aim is not None and drag[1] == SEL_TRAY:
+                adopt(panel, drag[2], aim)
             elif aim is not None:
                 give(panel, drag[2], aim)
     if act is not None:
-        act[0](*act[1:])
+        act()
     _heard_undo(meta, st)
     imgui.push_text_wrap_pos(0.0)
     imgui.text_colored(ui.WARN if st.get("said_warn") else ui.TEXT if st["said"] else ui.FAINT,
                        st["said"] or HINT)
+    if store is not None and st["sel"] is not None and st["sel"][0] == SEL_CTL and any(
+            e.get("role") == st["sel"][1] for e in store.raw):
+        _here_chip(panel, st, store, sfx)
+    # what stands whatever was last done: the library not there; no MIDI to look at
+    for words in (getattr(store, "said", ""), st.get("midi_why", "")):
+        if words:
+            imgui.text_colored(ui.WARN, words)
     imgui.pop_text_wrap_pos()
+
+
+def _here_chip(panel, st: dict, store, sfx: str) -> None:
+    """The controller picked: on or off on this Mac, which is the door for what config.toml
+    used to say (a Mac with no Leap, or one that has it)."""
+    role = st["sel"][1]
+    on = store.is_on(role)
+    if ui.lit_chip(f"{role}: {'on' if on else 'off'} on this Mac##players{sfx}.here", on):
+        store.set_here(role, not on)
+        panel.devices.relist()
+        _say(panel, st, f"{role} {'off' if on else 'on'}, on this Mac only.", undoable=False)
+    if imgui.is_item_hovered():
+        ui.tooltip(HERE_TIP)
 
 
 def section(panel, dt: float = 0.0) -> None:

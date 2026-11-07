@@ -300,7 +300,7 @@ def _empty_words(panel, tab: int) -> str:
     if _state(panel)["search"]:
         return "nothing matches"
     if tab == 2:
-        return "no live feeds — Syphon, NDI and cameras listed in config.toml show here"
+        return "no live feeds — Syphon, NDI and cameras in the device list show here"
     if folder_of(panel) is None:
         return "no media folder"
     if tab == 0 and getattr(folder_of(panel), "shared", None) is None:
