@@ -8518,7 +8518,7 @@ Headless: `tests/test_hot_reload_app.py`; its real-app test, one output and no d
 
 ## DN. One row per display (SC2, rows 804–807)
 
-Nothing here opens or closes a window while the app runs: that's SC3b. A change of target takes ⌘R.
+Since SC3b (group DO) a change of target acts at once, so the ⌘R below is only ever needed for what the row can't change; a window opening or closing is DO's.
 
 **625. Set the screens up.** (the rig, every display plugged in) On the output section, each display has a row with its name. Choose what targets each. ⌘R. Each display shows what its row says, and the control window is on its own. Quit and launch: the same, fullscreen included. Pass: set up in a minute, with no config.toml.
 
@@ -8527,6 +8527,25 @@ Nothing here opens or closes a window while the app runs: that's SC3b. A change 
 **627. One output, two displays, different flips.** (two displays, a Pepper's Ghost glass if it's there) Put one output on two rows, with flip X on one. ⌘R. The two pictures are mirror images, moving together, each filling its own display, and neither drops the frame rate by eye. Tick a flip and it changes at once on that display only. Run a crossfade: both stay right. Then with output 2 in place of output 1.
 
 **628. Two with one name.** (two identical TVs) They read "TV #1" and "TV #2", left to right. Swap their cables and ⌘R: each position keeps its job. Unplug one and ⌘R: the row left is the first's job. A window dragged on a display and left there comes back to that spot.
+
+## DO. A display coming and going (SC3b, rows 813–816)
+
+**Do these first in this group, and nothing about hot-plug is done until 629 has passed.** Every number so far came from a private virtual display on a locked Mac, with no cable, no TV and no one watching. RT1 waits for 629.
+
+**629. A real cable.** (the rig, every display plugged in, a look running, the output section open, ideally a real show file)
+1. *A render.* Pull the HDMI of a display showing an output, mid-look. Passes: the other displays' pictures never stop, and nothing appears on them from the one you pulled. The section says "… has gone: output N waits for it" for 3 s. No restart, no red banner, and nothing moved under your hands. A hitch on the other pictures once, at the pull, is expected; say how long it looked.
+2. *Back after the hold.* Wait 10 s, and plug it in. Passes: within about a second the same output is on that display, with its fullscreen and flips, and the picture is live. If it was fullscreen, it covers the display, with no menu bar.
+3. *The control window.* Pull the cable of the display the control window is on. For 3 s it's wherever macOS puts it. Then it's on a display showing no render, or if there's none, floating over a render, even a fullscreen one, and it still takes clicks. Plug it back: it returns to where it was.
+4. *A row.* Choose another output on a row. It changes at once, with no ⌘R.
+5. *Two of one name,* if there are two identical TVs. Unplug the left: the right keeps its job. Plug it back: both have theirs. Unplug both, plug the right back first, then the left: say whether each got its job, as this is what the Mac's id must tell apart. With one TV on, plug the other in on its left: the first keeps its picture, the new one shows nothing, and the section says a restart numbers them left to right.
+
+Fails: an app that needs a restart; a picture that stops; a window sitting on the wrong display; a control window you can't reach. Look at `hotplug.py`, `<home>/stall.log`, and the SYSTEM page, whose notes give each change and its milliseconds. Tell the owner's Mac's numbers: **"displays: … (N ms)"**.
+
+**630. A TV going to sleep.** (a TV with a sleep timer or a power button, showing an output) Turn it off with its remote and leave it 30 s, then turn it on. Passes: either nothing changes (it kept its link), or it's a display gone and back, as 629. The other pictures go on either way, and it shows its output when it wakes. If a TV takes more than 3 s to come back and its window reopens each time, say so: that's only a hitch, but `[output] unplug_hold_s` in config.toml can be raised. Do the same with a projector.
+
+**631. A re-sync.** (a display that shows an output, fullscreen) In System Settings → Displays, change that display's refresh rate or resolution, then change it back. Or pull and replug its HDMI within a second. Passes: it's black for a moment and comes back showing the same thing, covering the display, and `SYSTEM` says "dropped and came back: the same window", or nothing at all. Fails: another display's picture stops, or the window comes back the wrong size.
+
+**632. Every display out.** (a Mac mini or a closed laptop on external displays, or as many as you can pull; audio on so you can hear it's alive) Pull every display. Nothing can show you anything: wait 10 s, keep the desk moving, and plug them back in any order, one at a time. Passes: the sound never stopped, each display takes up its job as it arrives, the control window returns, and the desk's changes have landed. `<home>/stall.log` has no "render stall" while the picture was drawing with no window.
 
 ## What no test covers
 
@@ -8668,6 +8687,7 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- **a real cable, a real TV and a real projector coming and going (629–632): SC3b's real-app runs used a private virtual display, on a locked Mac, and its id changed every time, so a real display keeping its number across a replug is unproven;**
 - the rows on the rig, both Macs through a real Drive, identical displays and a glass (625–628): SC2's real-app runs used this Mac's three different displays, a scratch library and a stand-in pair;
 - the picture and the pacing on real displays, the overlay over a real window, a locked Mac (607–610): SC3a's real-app runs read the back buffers on one Mac, and one person hasn't watched them;
 - video sound by ear (510–513): the tests read a ramp through the callback by

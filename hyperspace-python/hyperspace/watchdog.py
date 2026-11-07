@@ -399,6 +399,8 @@ class RenderWatch:
         output's own answer); each one dark for `limit` while another
         presents is a warning naming it, with its window state."""
         others = self._others
+        for label in set(self._dark) - {label for label, _ in others}:
+            del self._dark[label]       # its window has closed: back later, it starts afresh (SC3b)
         if len(others) < 2:
             return first
         live = [bool(st.get("presentable", True)) for _, st in others]

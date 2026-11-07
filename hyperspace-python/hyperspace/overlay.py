@@ -83,6 +83,7 @@ _JOIN_ALL_SPACES = 1 << 0
 _STATIONARY = 1 << 4
 _FULLSCREEN_AUX = 1 << 8
 _OVERLAY_LEVEL = 1000        # NSScreenSaverWindowLevel
+_OVER_A_RENDER = _OVERLAY_LEVEL + 1   # the control window, over a fullscreen render (SC3b)
 
 # the render cap (output.render): the box the frame must fit inside, its
 # aspect kept (outputs.capped); "full" is output 1's framebuffer, uncapped.
@@ -196,6 +197,14 @@ class GlfwBackend:
             ns.setHasShadow_(shadow)
             self._ns_saved = None
 
+    def float_over_renders(self, win, on: bool) -> None:
+        """The control window over a render on its display, a fullscreen one too, which is at
+        `_OVERLAY_LEVEL` (SC3b: it had nowhere free to go). Back to a normal window with off."""
+        self.set_attrib(win, "FLOATING", on)
+        ns = self._nswindow(win)
+        if ns is not None:
+            ns.setLevel_(_OVER_A_RENDER if on else 0)
+
 
 class Output:
     """The render window's output state, its params, and the once-per-frame apply."""
@@ -307,6 +316,29 @@ class Output:
     def screen_names(self) -> list[str]:
         """The enum's choices: "follow window" (monitor −1), then every screen."""
         return [self.FOLLOW, *self.monitor_names()]
+
+    # ---- a window coming and going (SC3b) ----
+
+    def swap_window(self, other: Output) -> None:
+        """Trade windows with `other`, and all that goes with one: its backend (which caches
+        its NSWindow), what's been applied to it, where it is. Output 1's params stay with this
+        object, whichever window is output 1's now. `win` None: no window, and `apply` does nothing."""
+        for key in ("win", "backend", "fullscreen", "monitor", "_applied", "_saved_rect", "error"):
+            mine, theirs = getattr(self, key), getattr(other, key)
+            setattr(self, key, theirs)
+            setattr(other, key, mine)
+
+    def back_at(self, rect: tuple[int, int, int, int]) -> None:
+        """The window is back from a moment away, and macOS may have moved it. A plain window goes
+        to `rect`. A fullscreen one covers its display again at the next `apply`, even if the index
+        and the rect are as they were, and `rect` is where it goes when it's a plain window again."""
+        if self._applied["mode"] == "window":
+            if self.backend is not None:
+                self.backend.set_rect(self.win, *rect)
+        else:
+            self._saved_rect = (int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]))
+            self._applied.pop("monitor", None)
+            self._applied.pop("cover", None)
 
     # ---- per frame ----
 

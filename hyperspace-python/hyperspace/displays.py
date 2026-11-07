@@ -22,8 +22,8 @@ the second is `wanted`'s, and the third is `set_target`'s, on this Mac's display
 and bus cuts use, so a row names an output and N never renumbers.
 
 **`wanted(rows, screens)` is the seam.** It takes the rows and the connected list and gives
-what should be open, and it opens nothing. A launch (`app._windows`) acts on it; SC3b's
-monitor callback will too, which is when a change of target stops waiting for ⌘R.
+what should be open, and it opens nothing. A launch (`app._windows`) acts on it, and so does a
+running app (`hotplug.py`), when a display comes or goes or a row is chosen.
 
 **What's in charge.** `[output] monitor`, `control_monitor`, `fullscreen` and
 `[[output.screens]]` are a seed, read once per Mac (`seed_rows`): where each window would
@@ -168,11 +168,12 @@ class Wanted:
     shown: dict[str, str] = field(default_factory=dict)
 
 
-def wanted(rows: Rows, scr: list[Screen]) -> Wanted:
-    """The rows and the connected list, and what should be open (SC3b's seam)."""
+def wanted(rows: Rows, scr: list[Screen], tags: list[str] | None = None) -> Wanted:
+    """The rows and the connected list, and what should be open (SC3b's seam). `tags`: each
+    screen's label, a running app's (`Running.labels`); by default, by arrangement."""
     out = Wanted()
     rows = normal(rows)
-    tags = placement.labels(scr)
+    tags = placement.labels(scr) if tags is None else tags
     used: set[int] = set()
     for i in placement.arranged(scr):
         tag = tags[i]
@@ -204,15 +205,6 @@ def wanted(rows: Rows, scr: list[Screen]) -> Wanted:
         if n is not None and id(entry) not in used:
             out.away.setdefault(n, []).append(tag)
     return out
-
-
-def pending(rows: Rows, scr: list[Screen], opened: dict[str, str]) -> list[tuple[str, str]]:
-    """(label, target) for each connected display that a launch would open differently from
-    what's open, across the desk."""
-    now = wanted(rows, scr).shown
-    was = {placement.memory(tag): target for tag, target in opened.items()}
-    return [(tag, target) for tag, target in now.items()
-            if was.get(placement.memory(tag), NOTHING) != target]
 
 
 # ---------------------------------------------------------------- the seed
@@ -378,7 +370,10 @@ class DisplayList:
     """The rows, on this Mac. `root` the library, `home` this Mac's folder (None: tests, no
     copy). `said` is what the panel shows, "" when all's well. `seed` is what this Mac's
     config.toml says, spent once; `hold_seed`: this launch could not read it, and `seed` is
-    only a default to run on."""
+    only a default to run on. `chosen`: the rows chosen on this Mac since a running app last looked
+    (`set`), which it acts on at once; what the other Mac chose only lands in the rows (`hotplug.py`)."""
+
+    chosen: tuple[str, ...] = ()
 
     def __init__(self, root: Path, home: Path | None = None, *, seed: Rows | None = None,
                  hold_seed: bool = False, notes: list[str] | None = None,
@@ -629,6 +624,7 @@ class DisplayList:
         old = read_row(find(self.current, tag))
         at = round(max(self.wall(), old["at"] + 0.001), 3)
         self.rows[placement.memory(tag)] = {**old, **changes, "at": at}
+        self.chosen = (*self.chosen, placement.memory(tag))
         self._force = True
         self._next = float("-inf")          # (the next look gives it, if one is out now)
         self._keep_copy()
@@ -659,14 +655,21 @@ class DisplayList:
 @dataclass
 class Running:
     """What the panel's rows act on: the rows, the connected list (`screens`, a call), the
-    slots, and `opened`, each display's target as this run opened them. A display is always
-    asked for by its label now and matched by its memory: a second of its name plugged in mid-run
-    makes "TV" "TV #1", and it's the same window."""
+    slots, and `opened`, each display's target as it's open now (`hotplug.py` keeps it). A display
+    is always asked for by its label now and matched by its memory: a second of its name plugged
+    in mid-run makes "TV" "TV #1", and it's the same window. `held`: the numbers displays keep for
+    the run (`placement.labels`). `plug`: the running app's `hotplug.Hotplug`, None in a test."""
 
     store: DisplayList
     screens: Callable[[], list[Screen]]
     slots: list
     opened: dict[str, str] = field(default_factory=dict)
+    held: dict[int, str] = field(default_factory=dict)
+    plug: Any = None
+
+    def labels(self, scr: list[Screen]) -> list[str]:
+        """Each of `scr`'s labels, this run: see `placement.labels`."""
+        return placement.labels(scr, self.held)
 
     def window_on(self, tag: str) -> tuple[Any, Any] | None:
         """(slot, its `Also` or None for its first display) of the window open on `tag`."""

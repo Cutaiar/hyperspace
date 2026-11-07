@@ -61,9 +61,8 @@ class _Stage:
         return slot
 
     def close_output(self, slot: Slot) -> None:
-        """SC3b's order (the spike's trap): the window current, its objects let go,
-        then destroyed. With the root current, a release deleted the root's VAO of
-        the same name."""
+        """SC3b's order: the window current, its objects let go, then destroyed. GL's
+        array numbers are per context (`tests/test_hotplug.py`)."""
         win = slot.win
         glfw.make_context_current(win)
         slot.presenter.release()

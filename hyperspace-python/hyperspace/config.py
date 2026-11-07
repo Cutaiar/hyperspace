@@ -304,7 +304,7 @@ DEFAULTS: dict = {
     # (placement.py)
     "output": {"overlay": False, "monitor": -1, "control_monitor": -1, "fullscreen": False,
                "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0,
-               "keep_awake": True, "render": "1080p",
+               "keep_awake": True, "render": "1080p", "unplug_hold_s": 3.0,
                "flip_x": False, "flip_y": False,
                "syphon": "", "ndi": "", "window": True},
     # gamepad.py: the Xbox pad — on by default, inert when absent
@@ -890,6 +890,13 @@ def load(path: Path | None = None) -> dict:
             cfg["output"][key] = DEFAULTS["output"][key]
             _note(cfg, f"config: [output] {key} = {v!r} is not a number — "
                        f"{DEFAULTS['output'][key]}")
+    # how long a window waits for its display to come back (hotplug.py)
+    v = cfg["output"].get("unplug_hold_s", DEFAULTS["output"]["unplug_hold_s"])
+    hold = number(v)
+    if hold is None or hold < 0:
+        cfg["output"]["unplug_hold_s"] = DEFAULTS["output"]["unplug_hold_s"]
+        _note(cfg, f"config: [output] unplug_hold_s = {v!r} is not a number of seconds — "
+                   f"{DEFAULTS['output']['unplug_hold_s']}")
     # a screen is a whole number or a name: anything else is −1 from here
     # on (where the window was last time) and the SYSTEM page says so —
     # whether that screen exists is placement's to say, at the launch
