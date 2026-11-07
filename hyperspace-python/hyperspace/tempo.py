@@ -156,10 +156,10 @@ def register(reg, clock: Clock) -> None:
                    tip="The clock's tempo. Tap it (B, the APC's TAP TEMPO) or set it "
                        "here; a change keeps every synced LFO where it is and only "
                        "alters its rate.")
-    # not modulatable (decision register row 2, option c): a performer on
-    # tap tempo — an audio band, say — would tap on every transient. The
+    # the meta controller's, so no lane may drive it (rows 743, 775), which also keeps a
+    # performer from tapping on every transient (decision register row 2, option c). The
     # LFO triggers stay ownable (lfo.py).
-    reg.trigger(f"{GROUP}.tap", "Tap tempo", clock.tap, group=GROUP, modulatable=False,
+    reg.trigger(f"{GROUP}.tap", "Tap tempo", clock.tap, group=GROUP,
                 tip="Tap on the beat: two or more taps within 2 s of each other set "
                     "the BPM. Tapping never restarts the LFOs — the trigger does.")
     reg.continuous(f"{GROUP}.nudge", "Nudge", lambda: clock.nudge,

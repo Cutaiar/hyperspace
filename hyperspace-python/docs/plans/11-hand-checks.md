@@ -8357,6 +8357,15 @@ Register rows 773, 774, 2026-11-06. Headless: `tests/test_one_mirror.py`, on two
 4. Crossfade to deck 2, load the same one-hands patch onto deck 1, then crossfade back and forth. *Pass:* no error, the mirror still reaches deck 2's hands.
 5. Save the show, quit, open again. *Pass:* no "unknown" line, the show isn't marked changed, Mirror as you left it.
 *Fail:* a hands node that stops following Mirror, or a picture that moves on the deck you didn't load.
+## DC. The flag says what is true (LY2)
+Register rows 775–776, 2026-11-06. Headless: `tests/test_meta_rule.py`, on the real table, MIDI adapter and router. Restart first: a hot reload leaves a param's old flag until a restart.
+**603. The meta controller still plays.** (the rig, with the APC40)
+1. Latch SHIFT. Ride S1 and S7, then S8: `band.0.post` on the analyzer and `master.dyn`, then `master.trim` on the audio page. *Pass:* each is caught at its own value, then follows the fader.
+2. SHIFT off. Move the APC's MASTER and its crossfader. *Pass:* both act as they did.
+3. Right-click `master.gain`. *Pass:* no "Route a lane here…", the menu reads as it did, and Learn pad is still there. Learn pad with a button: *Pass:* it lands, and the button acts on `master.gain`.
+4. Open a look whose routes are scaled by `master.gain` (`party-tumble`). Pull `master.gain` down. *Pass:* its motion shrinks with it, and `master.gain` itself doesn't move.
+5. Turn the analyzer's post-drive up on a band with a route on its lane. *Pass:* the route moves more.
+*Fail:* a fader or button that stops acting, a "not modulatable" on any meta param's menu, or a look that stops following `master.gain`.
 ## DE. "Session" and "rig" are gone (rows 778-780)
 Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans every string; the existing tests pin the words. Drawn by `tools/app_driver.py` with the pane at 240 and 320 px: the SHOW line, ROUTING's two headings and a placeholder's node. Not seen drawn: a placeholder's side pane, the cable hovers, an APC40's refusal.
 **605. The panel's longer words fit.** (any Mac, no devices needed)
