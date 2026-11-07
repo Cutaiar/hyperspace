@@ -472,11 +472,11 @@ def test_the_head_and_the_title_say_which_deck_the_panel_is_on(rig):
 
 
 def _draws(monkeypatch, log, size=None):
-    from test_app_boundary import _Ctx, _rig_slots, _SwapGlfw
+    from test_app_boundary import _Ctx, _rig_root, _rig_slots, _SwapGlfw
 
-    monkeypatch.setattr(app, "glfw", _SwapGlfw(log, {"w1": size} if size else None or {}))
-    monkeypatch.setattr(app, "_samples_of", lambda ctx, target: None)     # (no GL here)
-    return _Ctx(log), _rig_slots("x")
+    g = _SwapGlfw(log, {"w1": size} if size else None or {})
+    monkeypatch.setattr(app, "glfw", g)
+    return _Ctx(log), _rig_slots("x"), _rig_root(log, (), g)
 
 
 class _Tap:
@@ -497,7 +497,7 @@ def test_off_air_the_outputs_draw_on_air_and_the_backdrop_is_the_panels_deck(mon
     from the on-air renderer, output 1 riding the inset (`monitor`), the page's backdrop
     the deck off air's own picture, one flush."""
     log: list[str] = []
-    ctx, slots = _draws(monkeypatch, log, (1600, 1000))
+    ctx, slots, root = _draws(monkeypatch, log, (1600, 1000))
     calls = []
     main = NS(bg_alpha=1.0, max_frame=None,
               draw_outputs=lambda s, w, h, dpr, views, t_now=None: calls.append(views))
@@ -506,7 +506,7 @@ def test_off_air_the_outputs_draw_on_air_and_the_backdrop_is_the_panels_deck(mon
     preview.tap, monitor.tap = _Tap(), object()
     preview.want()
     monitor.want()
-    app._draw_render(main, ctx, object(), slots, flush=lambda: log.append("flush"),
+    app._draw_render(main, ctx, object(), slots, root, flush=lambda: log.append("flush"),
                      preview=preview, monitor=monitor, fade=_fade_stub(log, off), panel_deck=off)
     assert len(calls) == 1 and calls[0][0].publish == [monitor]
     assert calls[0][0].tap is monitor.tap
@@ -517,17 +517,17 @@ def test_off_air_the_outputs_draw_on_air_and_the_backdrop_is_the_panels_deck(mon
 def test_with_the_page_closed_the_deck_off_air_draws_nothing(monkeypatch):
     """Was `test_held_with_the_page_closed_draws_no_preview`."""
     log: list[str] = []
-    ctx, slots = _draws(monkeypatch, log)
+    ctx, slots, root = _draws(monkeypatch, log)
     off = object()
     main = NS(bg_alpha=1.0, draw_outputs=lambda *a, **k: log.append("draw"))
-    app._draw_render(main, ctx, object(), slots, flush=lambda: log.append("flush"),
+    app._draw_render(main, ctx, object(), slots, root, flush=lambda: log.append("flush"),
                      preview=Preview(), monitor=Preview(), fade=_fade_stub(log, off), panel_deck=off)
     assert log.count("draw") == 1 and "preview" not in log and "flush" not in log
 
 
 def test_on_the_on_air_deck_the_backdrop_is_output_1_and_no_inset(monkeypatch):
     log: list[str] = []
-    ctx, slots = _draws(monkeypatch, log)
+    ctx, slots, root = _draws(monkeypatch, log)
     calls = []
     on, off = object(), object()
     main = NS(bg_alpha=1.0, draw_outputs=lambda s, w, h, dpr, views, t_now=None: calls.append(views))
@@ -535,7 +535,7 @@ def test_on_the_on_air_deck_the_backdrop_is_output_1_and_no_inset(monkeypatch):
     preview.tap = object()
     preview.want()
     monitor.want()
-    app._draw_render(main, ctx, object(), slots, flush=lambda: None, preview=preview,
+    app._draw_render(main, ctx, object(), slots, root, flush=lambda: None, preview=preview,
                      monitor=monitor, fade=_fade_stub(log, off), panel_deck=on)
     assert calls[0][0].publish == [preview] and monitor.wanted
 

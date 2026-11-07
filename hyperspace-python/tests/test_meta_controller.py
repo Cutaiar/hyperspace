@@ -588,7 +588,7 @@ def test_main_points_every_holder_and_moves_none():
                  "device_reg.point(meta.pointer, meta.panel_pointer)", "pointer=meta.pointer(MOUSE)",
                  "on_air_pointer=meta.on_air_pointer", "panel_pointer=meta.panel_pointer",
                  "keys_pointer=meta.pointer(KEYS)", "on_air = meta.on_air",
-                 "_draw_render(on_air.renderer, ctx, on_air.view,",
+                 "_draw_render(on_air.renderer, ctx, on_air.view, slots, root,",
                  "for on in meta.decks", "meta.on_air.loaded_patch.current"):
         assert line in src, line
     for gone in ("_draw_render(renderer, ctx, s,", "loaded_patch.listeners.append(dream_check)"):

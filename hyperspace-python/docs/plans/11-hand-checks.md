@@ -8368,6 +8368,28 @@ Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_p
 2. Open a patch you laid out by hand before this build. *Pass:* every node is where you put it relative to its neighbours.
 3. After a run, look in the temp folder for `hyperspace-graph-view-*`. *Pass:* none.
 *Fail:* a zoom that changes by itself, or a node moved.
+## DF. The picture rests on no display (wave 5 SC3a, rows 781-785)
+Register rows 781-785, 2026-11-06. Headless and on this Mac: `tests/test_root_frame.py` and `tests/test_pacing.py`, the real `_draw_render` against the old shape on 48 looks, and the real app against the old build. No person has looked at a real projector, the glass, or the overlay over a real window.
+**607. Pacing on an unlocked Mac.** (either Mac, unlocked, the app closed, every display on. The builder's unlocked run met this on 2026-11-06, so it doesn't block a merge. Run it on the show Mac.)
+1. From `hyperspace-python/`: `.venv/bin/python tools/sc3a_spike.py state`. *Pass:* `"locked": false`. Locked, stop: the numbers below would mean nothing.
+2. `tools/sc3a_spike_pacing.sh 3 20`, about twelve minutes. Windows open and close by themselves. *Pass:* on each display, `today` and `presenter-vsync` agree on `fps` within about 2. `guarded` matches `presenter-vsync` on that display. `occluded` is at most 240, never hundreds more. `runaway` is 240. `hidden-timer` is 60.
+3. `.venv/bin/python tools/sc3a_spike.py handover --phase 6`. *Pass:* each phase's `settled_fps` is its new rate: the phases with a pacer at the display's real rate, about 120 here, `timer` 60.
+*A whole run sometimes drops to about 81 fps with `p50` near 13.6, in the old shape `today` as well as the new, cause unknown. Once in the rounds is not a fail; a shape that stays there is.*
+*Fail:* `presenter-vsync` well under `today`, `guarded` under `presenter-vsync`, `runaway` over 250, or a phase that doesn't settle. **Send the lines as they are.**
+**608. The picture on real displays.** (the rig: output 1 on the projector or TV, fullscreen)
+1. Launch. Load `party-tumble` and `woven-lattice`, and watch the thin lines. *Pass:* the edges are as soft as before this build, no stair-steps.
+2. With `[[output.screens]]`, a second output on another display, flip it. *Pass:* both show the picture, each right, and neither stutters where it didn't.
+3. Move the fader `output.xfade` through a fade. *Pass:* it mixes on every output, as before.
+4. Quit with Q, launch, then ⌘R. *Pass:* no crash report, either way.
+*Fail:* stair-steps on the lines, a dark or stale window, or a crash on the way out.
+**609. Overlay over a real window.** (`[output] overlay = true`, either Mac)
+1. Open a video in another app. In the app, press T. *Pass:* the picture floats over the video, the video shows through where the picture is black, and clicks reach the video.
+2. Move `output.bg` up and `output.alpha` down. *Pass:* the ground darkens and the whole window fades, as before.
+*Fail:* an opaque black ground, or a window that won't let the video through.
+**610. A Mac that isn't looking.** (either Mac, app open)
+1. Note the fps on the SYSTEM page. Lock the Mac for a minute. Unlock. *Pass:* the fans climb less than on the old build (it's 240 fps at most while locked, where the old build ran flat out), `<home>/stall.log` has no new `stall`, and the fps returns to the first number.
+2. Minimise the render window for a minute, then bring it back. *Pass:* the same.
+*Fail:* fans climbing, or a picture that doesn't come back.
 ## DG. The poi probe on a real Joy-Con (wave 5 SM1, row 786)
 Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's tape through the tool, the live loop on a stand-in for the reader. Only a person can run a real pad through it.
 **611. The probe, live, then its own tape.** (a Joy-Con paired, the app closed: hidapi opens the pad exclusively)
@@ -8634,6 +8656,7 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- the picture and the pacing on real displays, the overlay over a real window, a locked Mac (607–610): SC3a's real-app runs read the back buffers on one Mac, and one person hasn't watched them;
 - video sound by ear (510–513): the tests read a ramp through the callback by
   hand with no audio device, so the slew's numbers, the linear resampler's
   sound above rate 1, an uncut clip's seam and a long clip's gap at its wrap

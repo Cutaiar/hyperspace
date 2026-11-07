@@ -39,6 +39,10 @@ import moderngl
 from .glsl import QUAD_VS
 
 MAX_OUTPUTS = 4
+# the scene's MSAA sample count (SC3a). It was read off output 1's window, which
+# only ever supplied the number: the multisampling is the renderer's own
+# framebuffers' (`render.SceneTarget`), and an `Offscreen` says 0 if asked
+FRAME_SAMPLES = 4
 
 
 @dataclass
@@ -151,8 +155,8 @@ class Handoff:
 @dataclass
 class View:
     """One output, for one frame. `target` is a framebuffer on the
-    renderer's context (the first output's window, or an offscreen
-    stand-in); `presenter` an output in another window's context (WP3),
+    renderer's context (the first output's `Offscreen`, SC3a); `presenter`
+    an output in another window's context (WP3),
     which `draw_outputs` leaves a `handoff` for. `viewport` is the rect of
     `target` (or of the presenter's framebuffer) to draw (None: (0, 0) and
     `size`).
@@ -208,7 +212,7 @@ class Slot:
     output.N.* params write them, WP4), and its window — or, for a later
     output whose screen is not connected, `missing`, the reason it was not
     opened (fork F9). `output` is its `overlay.Output`, `presenter` its
-    `Presenter` (outputs after the first), `error` the last present that
+    `Presenter` (every opened output, SC3a), `error` the last present that
     raised ("" once one succeeds), `size` its framebuffer at the last frame.
     The app fills it; the renderer never sees it, only the `View` built
     from it each frame.
@@ -306,6 +310,29 @@ class Offscreen:
             except Exception:  # noqa: BLE001, S110 — teardown is best-effort
                 pass
 
+
+
+@dataclass
+class Root:
+    """What the picture rests on (SC3a, plan 58), which no display can take away:
+    `win`, the hidden window holding the renderer's context; `frame`, the
+    `Offscreen` the first view draws into, whichever displays are live;
+    `pacer`, a `pacing.Pacer`. `logical` and `size` are the frame's window
+    points and framebuffer pixels: output 1's, or the last known while it has
+    no window or says nothing usable. The app fills it; the renderer never
+    sees it."""
+
+    win: Any
+    frame: Offscreen
+    pacer: Any
+    logical: tuple[int, int] = (1, 1)
+    size: tuple[int, int] = (1, 1)
+
+    def measure(self, logical: tuple[int, int], size: tuple[int, int]) -> None:
+        """A window's sizes this frame; an empty one keeps the last known."""
+        if min(*logical, *size) > 0:
+            self.logical = (int(logical[0]), int(logical[1]))
+            self.size = (int(size[0]), int(size[1]))
 
 
 # the off-air picture's long side at most: the GRAPH page's backdrop, not a show
@@ -972,8 +999,8 @@ void main() { f_color = vec4(0.0, 0.0, 0.0, u_factor); }
 
 
 class Presenter:
-    """One output after the first (plan 21 WP3): a moderngl handle on that
-    window's context and its own programs and vertex arrays — a share
+    """One output's window, output 1's too (plan 21 WP3, SC3a): a moderngl handle on
+    that window's context and its own programs and vertex arrays — a share
     group shares textures and programs, never framebuffers or vertex
     arrays, so the renderer's cannot draw here (§1 row 1).
 
@@ -1122,5 +1149,7 @@ class Presenter:
         self._ext = {}
 
     def release(self) -> None:
-        """Free the programs and arrays; call with this context current."""
+        """Free the programs and arrays; call with this context current, every
+        output's alike, before its window is destroyed: with the root's current, a
+        release deleted the root's object of the same name (SC3a's spike)."""
         self._drop()
