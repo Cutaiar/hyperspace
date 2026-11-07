@@ -60,9 +60,9 @@ Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on
 | 3 | CT1 controllers set up in the app | #418 | Merged. Rows 796-799 ask. Not met real hardware or a real Drive |
 | 3 | HR hot reload, broken since #370 (not in the plan) | #421 | Merged |
 | 3 | A test of CT1's flaking on `main`; a quit saves its own files (row 803) | #423 | Merged |
-| 3 | HR's rule's import order, flaking on `main` (row 812) | #427 | Reviewed; merging |
+| 3 | HR's rule's import order, flaking on `main` (row 812) | #427 | Merged |
 | 3 | SC2 a row per display | #424 | Merged. Pictures byte-identical to `main`. Rows 804-807 |
-| 4 | **SC3b** hot-plug | #425 | Merged. **Not done: no real cable has been unplugged.** Hand check 629 goes first; RT1 waits on it. Rows 813-816 ask |
+| 4 | **SC3b** hot-plug | #425 | Merged. **Not done: no real cable has been unplugged.** On merged `main` it passed end to end with a private virtual display on a locked Mac: only the app's half. Hand check 629 goes first; RT1 waits on it. Rows 813-816 ask |
 | New | **Library's reads off the frame thread:** `Library` and its scan read the Drive on the main thread (`library.py:1944`, `:3649`), so a stalled Drive can hang launch or freeze frames; and `Library()` opens the home on a `config.toml` that won't parse (`app.py`, `sharedfile.library_root` is the fix). Found by CT1 and SC2; not in plan 58 | | Not started; after the migration, which owns `library.py` until then |
 | 5 | TY3, then TY4, annotations only: last, after the cleanup, so they annotate what survived | | Not started |
 | Gated | CL2, then CL1 after the owner's dry run; CL3, after CT1's defaults; CL4, once `fx/` is deleted | | **Gate:** the owner says the migration ran and both Macs have opened the new library |
