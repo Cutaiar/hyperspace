@@ -56,16 +56,21 @@ sitting above three cells failing at 26.
 
 A reasonable opening message for a new session:
 
-> Read `hyperspace-python/tools/dkit/RETRO.md` first, then `ROADMAP.md` and
+> `git fetch` first — RETRO row 54, and it is why this sentence is here.
+>
+> Then read `hyperspace-python/tools/dkit/RETRO.md`, `ROADMAP.md` and
 > `HANDOFF.md`. Branch `claude/magical-ritchie-fkh5e0`. Items 1 and 2 of the
-> "Pick up here" list are done; start at 3, which is `layer.py` and the
-> modularisation, because Dialog and Sheet are both blocked on it. Use the
-> oracle-first method: `refresh_shadcn.sh`, then measure the real component
-> on `?probe`, then match it, then diff on `?gallery`. Do not implement from
-> a reading of the spec, and verify every new test against the broken code
-> it covers. Re-run the suite and the diff before trusting any figure in
-> these docs — the last session found three cells failing at 26 levels under
-> a line that said 0-2.
+> "Pick up here" list are done and `layer.py` exists; **start at item 3, the
+> modularisation**, and do it in the order 3a → 3b → 3c written there. Run
+> `test_module_surface.py` after every move — it is what lets the split be a
+> move rather than a rewrite of 188 call sites. **Stop before 3d**: the
+> 492-line `combobox()` is a behaviour refactor, not a move, and three RETRO
+> rows describe bugs that live inside it.
+>
+> A pure move cannot change a pixel, so finish on the diff and expect "all
+> cells within the bar". Re-run the suite and the diff before trusting any
+> figure in these docs — the last session found three cells failing at 26
+> levels under a line that said 0-2, and a skip is not a pass (row 56).
 
 ---
 
