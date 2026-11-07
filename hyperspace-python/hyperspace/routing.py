@@ -2773,6 +2773,18 @@ class Bindings:
         nd = self.node_desk
         return nd is not None and nd.under(b)
 
+    def node_held(self) -> frozenset[str]:
+        """The params a desk in node mode holds on this deck (`NodeDesk.holding`)."""
+        nd = self.node_desk
+        return nd.holding() if nd is not None else frozenset()
+
+    def node_holds(self, b: Binding, held: frozenset[str] | None = None) -> bool:
+        """Does node mode hold route `b` off its param now? A modulator's, on a filled
+        param (the owner, row 711). The row is untouched: this is read, never written."""
+        if b.op not in MOD_OPS or base_scheme(b.scheme) not in MODULATOR_SCHEMES:
+            return False
+        return b.target in (self.node_held() if held is None else held)
+
     def node_rows_serial(self, role: str | None = None) -> int:
         """How many times those rows have changed: a desk redraws on one."""
         nd = self.node_desk
@@ -3842,8 +3854,9 @@ class Router:
                 *((getattr(m, "id", ""), getattr(m, "kind", ""),
                    tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t)))
         banks = tuple((scheme, tuple(b.ids())) for scheme, b in self._banks().items())
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()    # (node mode, row 711)
         return (id(t), rows, t.macros_serial, subs, mods, banks,
-                getattr(self.reg, "serial", 0))
+                getattr(self.reg, "serial", 0), held)
 
     def build_modgraph(self) -> modgraph.ModGraph:
         """The modulation graph of this table (modgraph.py's nodes and edges):
@@ -3879,8 +3892,10 @@ class Router:
             for inp in getattr(m, "inputs", ()):
                 if inp:                                  # "" is an input not chosen yet
                     g.link(source(inp), _modifier_node(m), "in")
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()
         for b in t.routes():
-            cable, on = (b.source, b.target), b.enabled
+            # (a route node mode holds off is an edge switched off, so it closes no loop)
+            cable, on = (b.source, b.target), b.enabled and not (held and t.node_holds(b, held))
             src = source(b.source)
             gate = source(b.when) if b.when is not None else None
             scale = param(b.scale) if b.scale is not None else None
@@ -3993,8 +4008,9 @@ class Router:
         banks = self._banks()
         reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()
         for b in t.mods():
-            if (b.source, b.target) not in cut:
+            if (b.source, b.target) not in cut and not (held and t.node_holds(b, held)):
                 by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
         # a delay closing a loop runs before its input (`modgraph.ordering`):
         # it emits that input's lane as it stands — last frame's value

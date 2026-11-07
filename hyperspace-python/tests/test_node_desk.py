@@ -9,16 +9,19 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import mido
+import numpy as np
 import pytest
 from test_meta_controller import DESK, _pointed
 from test_midi import FakeIn, FakeOut
 from test_undo import boot
 
 from hyperspace import apc40, app, devices, generic, learn, node_desk, nodemode, routing, undo
+from hyperspace.bands import CEIL
 from hyperspace.midi import MidiIO
 from hyperspace.players import Duty
 from hyperspace.routing import Binding
@@ -163,7 +166,7 @@ def test_a_mapping_already_on_the_node_stays_and_the_rest_fill(rig):
     assert rig.nd1._follow(DESK).fit.kept == (params[0],)
 
 
-def test_a_route_from_a_modulator_is_no_mapping_but_a_pads_is(rig):
+def test_a_route_from_a_modulator_does_not_keep_its_param_from_filling_but_a_pads_does(rig):
     node, params = pick_node(rig.one)
     t = rig.one.table
     make_small(rig.one, *params[:2])
@@ -774,3 +777,192 @@ def test_a_narrower_list_gives_above_layers_the_same_answer(rig):
         for ch in range(16):
             assert (t.above_layers("cc", ch, number, DESK, pool)
                     == t.above_layers("cc", ch, number, DESK))
+
+
+# ---------------------------------------------------------------- the owner, 2026-11-06, row 711:
+# "LFOs and audio routes be allowed to be overwritten for node mode, as long as they come back
+# when you disengage node mode"
+
+
+def _modulated(rig, deck=None):
+    """A node, the param its K1 fills, and an analyzer route on that param, on `deck`."""
+    deck = deck or rig.one
+    node, params = pick_node(deck)
+    pid = next(p for p in params[:24] if deck.reg[p].modulatable)
+    deck.loaded_patch.node_params = lambda _n: [pid, *[p for p in params if p != pid]]
+    route = Binding("lane:0", pid, "push", 0.5)
+    deck.table.set_routes([*deck.table.routes(), route])
+    deck.reg[pid].set_norm(0.25)
+    return node, pid, route
+
+
+def _pass(deck) -> float:
+    """One pass with the analyzer's first lane full up: the param's value after it."""
+    lanes = np.zeros(32)
+    lanes[:] = CEIL
+    deck.router.modulate(SimpleNamespace(lanes=lanes), 1 / 60, 100.0)
+    deck.reg.apply()
+
+
+def _rides(deck, pid) -> bool:
+    """Does the route move the param, over a few frames (a follower may ease in)?"""
+    for _ in range(6):
+        _pass(deck)
+    return deck.reg[pid].value != pytest.approx(deck.reg[pid].base)
+
+
+def test_a_filled_param_rests_its_modulators_and_they_come_back_on_leave(rig):
+    node, pid, route = _modulated(rig)
+    deck = rig.one
+    assert _rides(deck, pid)
+    assert rig.nd1.enter(DESK, node) is None
+    assert deck.table.node_holds(route)
+    assert not _rides(deck, pid)                # the knob is the param
+    assert any(b is route for b in deck.table.routes())     # the row is where it was
+    rig.nd1.leave(DESK)
+    assert not deck.table.node_holds(route)
+    assert _rides(deck, pid)
+
+
+def test_undo_and_re_pointing_bring_them_back(rig):
+    node, pid, _route = _modulated(rig)
+    deck = rig.one
+    other = next(n for n in sorted(deck.loaded_patch._pointable()) if n != node
+                 and n != "render:camera")
+    undo.install(deck.undo)
+    rig.r.t += 10
+    deck.undo.tick(rig.r.t)
+    rig.nd1.enter(DESK, node)
+    assert not _rides(deck, pid)
+    rig.r.t += 10
+    deck.undo.tick(rig.r.t)
+    assert deck.undo.undo()
+    assert not deck.loaded_patch.node_mode
+    assert _rides(deck, pid)
+    rig.nd1.enter(DESK, node)
+    assert not _rides(deck, pid)
+    params = deck.loaded_patch.node_params
+    deck.loaded_patch.node_params = lambda n: params(n) if n == node else []
+    deck.loaded_patch.point_node_mode(1, "midi", other)     # another node holds other params
+    assert _rides(deck, pid)
+
+
+def test_a_load_rests_them_again_and_another_load_lets_go(rig):
+    node, pid, _route = _modulated(rig)
+    deck, patch = rig.one, rig.one.loaded_patch
+    patch.point_node_mode(1, "midi", node)
+    path = Path(patch.save_as("held"))
+    patch.leave_node_mode(1, "midi")
+    plain = Path(patch.save_as("plain"))
+    assert not _rides_after_load(deck, patch, path.stem, pid)
+    assert _rides_after_load(deck, patch, plain.stem, pid)
+
+
+def _rides_after_load(deck, patch, stem, pid) -> bool:
+    patch.load(stem)
+    deck.reg[pid].set_norm(0.25)
+    return _rides(deck, pid)
+
+
+def test_the_saved_file_is_byte_identical_and_only_the_key_differs(rig):
+    node, _pid, route = _modulated(rig)
+    patch = rig.one.loaded_patch
+    before = Path(patch.save_as("a")).read_bytes()
+    want = route.to_json()
+    patch.point_node_mode(1, "midi", node)
+    _rides(rig.one, _pid)
+    pointed = json.loads(Path(patch.save_as("b")).read_text())
+    assert want in pointed["routes"]
+    patch.leave_node_mode(1, "midi")
+    _rides(rig.one, _pid)
+    after = Path(patch.save_as("a")).read_bytes()
+    assert after == before
+    was = json.loads(before)
+    del pointed[nodemode.KEY]
+    pointed["name"] = was["name"]
+    assert {k: v for k, v in pointed.items() if k != "values"} == {
+        k: v for k, v in was.items() if k != "values"}
+
+
+def test_a_pads_route_stays_and_its_param_never_rests(rig):
+    node, params = pick_node(rig.one)
+    pid = params[0]
+    pad = Binding("axis:LX", pid, "push", 0.5)
+    rig.one.table.set_routes([*rig.one.table.routes(), pad])
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert pid in rig.nd1._follow(DESK).fit.kept and not rig.one.table.node_holds(pad)
+
+
+def test_a_param_past_the_desk_keeps_its_modulators(rig, monkeypatch):
+    node, params = pick_node(rig.one, 3)
+    monkeypatch.setattr(apc40, "degrees_of_freedom", lambda: [(f"cc:0:{K1}",)])
+    route = Binding("lane:0", params[1], "push", 0.5)
+    rig.one.table.set_routes([*rig.one.table.routes(), route])
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    assert params[1] in rig.nd1._follow(DESK).fit.over
+    assert not rig.one.table.node_holds(route)
+
+
+def test_a_desk_that_does_not_act_here_holds_nothing(rig):
+    node, _pid, route = _modulated(rig, rig.two)
+    patch = rig.two.loaded_patch
+    patch.point_node_mode(1, "midi", node)
+    assert not rig.nd2.on_here(DESK) and not rig.two.table.node_holds(route)   # the other Deck
+    assert rig.nd2.enter(DESK, node) is None
+    assert rig.two.table.node_holds(route)
+    assert rig.one.table.node_held() == frozenset()         # no patch reaches another
+    real, rig.desk.io.ports.inp, rig.desk.io.ports.out = (rig.desk.io.ports.inp, rig.desk.io.ports.out), None, None
+    assert not rig.two.table.node_holds(route)              # the cable's out: they come back
+    rig.desk.io.ports.inp, rig.desk.io.ports.out = real
+    assert rig.two.table.node_holds(route)
+
+
+def test_shift_does_not_let_a_held_param_go(rig):
+    node, _pid, route = _modulated(rig)
+    rig.nd1.enter(DESK, node)
+    rig.push(note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
+    assert rig.one.table.layer_of(DESK) == "global"
+    assert rig.one.table.node_holds(route)
+
+
+def test_nothing_changes_for_a_table_with_nothing_pointed(rig):
+    t = rig.one.table
+    assert t.node_held() == frozenset()
+    before = rig.one.router._modgraph_key()
+    assert rig.one.router._modgraph_key() == before
+
+
+# ---------------------------------------------------------------- Dillon's desk (2026-11-06):
+# he "cares mostly about the clip launch buttons" and "the meta controls on the APC"
+
+
+def test_node_mode_never_takes_a_clip_pad_master_the_crossfader_or_a_meta_control(rig):
+    t, deck = rig.one.table, rig.one
+
+    def desk():
+        out = {}
+        for c in apc40.LAYOUT:
+            b = Binding(c.source, "")
+            if c.source in {f[0] for f in apc40.degrees_of_freedom()}:
+                continue
+            out[c.source] = [id(x) for x in t.dispatch(b.kind, b.channel or 0, b.number, DESK)]
+        return out
+    was = desk()
+    freedoms = {f[0] for f in apc40.degrees_of_freedom()}
+    assert all(s.startswith("cc:") for s in freedoms)               # no pad, no button
+    assert not freedoms & set(apc40.META_CONTROLS)
+    assert not any(f"cc:{apc40.CC_CUE}" in s or s.endswith(f":{apc40.CC_CUE}") for s in freedoms)
+    pointed = 0
+    for node in sorted(deck.loaded_patch._pointable()):
+        if rig.nd1.refusal(DESK, node) is None:
+            deck.loaded_patch.point_node_mode(1, "midi", node)
+            pointed += 1
+            assert desk() == was, node
+            assert all(b.kind == "cc" for b in rig.nd1.rows())
+            shadowed = {b.control for b in rig.nd1.rows()}
+            for b in t.invariant_rows():
+                assert b.control not in shadowed, b
+    assert pointed > 5
+    # …and the SHIFT layer's own controls, node mode or not
+    rig.push(note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
+    assert not any(any(x is b for x in rig.nd1.rows()) for b in t.active(DESK))

@@ -29,8 +29,17 @@ pointer is the meta controller's, the undo stack the patch's.
   does not ask about them, since no one made them.
 
 A mapping stays, whoever's: a row from any controller on one of the node's params keeps it
-out of the fill. A modulator's route (an LFO, an analyzer lane) is no mapping: the knob
-sets the base under it, as any knob on a performed param does.
+out of the fill.
+
+**A modulator gives way, and comes back** (the owner, 2026-11-06, row 711): "we need to have
+LFOs and audio routes be allowed to be overwritten for node mode, as long as they come back when
+you disengage node mode." So a route from an LFO, an envelope, an analyzer lane, the sequencer or
+a modifier does not keep its param from filling, and while a desk here holds that param
+(`holding`) the route does not run: the knob is the param. `Router` leaves it out of its plan;
+nothing edits the saved route, so a leave, an undo, a re-point or a load is the route back, and
+the file holds what it held. A desk that does not act here holds nothing, so the modulators run:
+one on the other `Deck`, or one that is not plugged in. SHIFT does not let go: a held key is no
+reason for the look to jump. A branch to keep them is future work ("not important enough yet").
 """
 
 from __future__ import annotations
@@ -41,11 +50,12 @@ from typing import Any
 from . import nodemode
 from .devices import MidiDevice
 from .routing import Binding
-from .routing_sources import BUILTIN_LANES, DECK_SCHEMES, qualified
+from .routing_sources import MODULATOR_SCHEMES, qualified
 
 KIND = "midi"                  # what a saved entry's `controller` says of a desk
-# the schemes that are no controller's: what a route from one modulates is still free
-MODULATORS = frozenset(BUILTIN_LANES) | DECK_SCHEMES
+# the schemes that are no controller's: a route from one is no mapping, so its param fills,
+# and rests while it does (the owner, 2026-11-06, row 711)
+MODULATORS = MODULATOR_SCHEMES
 
 NOT_FIRST = "{role} is player {player}'s second desk: a patch points at a player's first"
 NO_SHAPE = "{role} has no known knobs or faders to fill"
@@ -217,6 +227,15 @@ class NodeDesk:
     def serial(self, role: str | None = None) -> int:
         role = self._role(role)
         return self._follow(role).serial if role else 0
+
+    def holding(self) -> frozenset[str]:
+        """The params a desk acting on this `Deck` holds now: filled, its rows the ones a
+        message reaches. Read each frame by `Router._modgraph_key`."""
+        out: set[str] = set()
+        for d in self._desks():
+            if self.is_first(d.role) and self.on_here(d.role) and getattr(d.io, "on", False):
+                out.update(b.target for b in self._follow(d.role).rows)
+        return frozenset(out)
 
     def under(self, b: Binding) -> bool:
         """Is saved row `b` shadowed by a row of node mode now (a patch-layer row on a
