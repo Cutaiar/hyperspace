@@ -3642,6 +3642,7 @@ def _node_desk(panel):
 NODE_CHIP = "node mode"
 OTHER_DECK_TIP = "It is on the other Deck: this brings it here. Its player stays where it is, and moving the player brings it back."
 ASLEEP = "dormant: {role} is on the other Deck"
+RESTING = "{n} modulator route{s} at rest on these, back on leave"
 
 
 def node_mode_words(nd, h, nid: str) -> list[str]:
@@ -3656,6 +3657,10 @@ def node_mode_words(nd, h, nid: str) -> list[str]:
     said = fit.too_many(nid)
     if said:
         out.append(said)
+    t = getattr(getattr(nd, "deck", None), "table", None)
+    rest = sum(1 for b in t.routes() if t.node_holds(b)) if t is not None else 0
+    if rest:
+        out.append(RESTING.format(n=rest, s="" if rest == 1 else "s"))
     if not h.on_here:
         out.append(ASLEEP.format(role=h.role))
     return out

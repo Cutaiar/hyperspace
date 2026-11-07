@@ -807,7 +807,7 @@ def where(inside_meta) -> None:
     _where = inside_meta
 
 
-NOTHING_HERE = "nothing to undo here: drag the player back"
+NOTHING_HERE = "nothing to undo here: a player's move and a playlist's edit are on no stack"
 
 
 def here() -> Undo | None:

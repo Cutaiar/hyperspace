@@ -741,6 +741,13 @@ here; overturn → the change, then the same.
 | 712 | Plan 53 N1b: a node mode cable: drawn whenever the patch points, on the deck whose patch it is; its reading is its param; faint with the desk elsewhere; a saved row under a filled control drawn faint and said | 543, 544 | (rec) — pending the owner |
 | 713 | Plan 53 N1b: node mode's rows have their own bundle per node pair; where a saved bundle joins the same two collapsed nodes the two lie on one line, the green on top | 543 | (rec) — pending the owner |
 | 714 | Plan 53 N1b: entered from a chip per desk in the selection section: point, move, bring, leave; the side pane lists the map, what stayed, what did not fit; the on-screen desk outlines the filled controls; no delete on the cable | 543, 545 | (rec) — pending the owner |
+| 710 | Plan 53 N1a: a desk's node mode rows are patch-layer rows on the deck the patch is on, derived per player's first desk; K1–K8, D1–D8, S1–S8; shadow only what they fill; SHIFT's layer untouched | 541, 542 | **answered by the owner, 2026-11-06:** SHIFT reaches the meta layer, knobs before faders, as built |
+| 711 | Plan 53 N1a: a modulator's route (LFO, envelope, lane, sequencer, modifier) is no mapping: its param fills, and the route rests while a desk acting on that `Deck` holds the param, back on leave, unsaved | 541 | **answered by the owner, 2026-11-06:** reverses the first reading of this row |
+| 705 | Plan 44 D6a: a playlist is a file kind of the library's, `<library>/playlists/<slug>.json`, `hyperspace.playlist/1`, `{name, entries: [{loadable, dwell_s, fade_s?}]}`; `read` checks it, nothing lands it, a load of one is refused in words | — | owner — 2026-11-04: "seconds, `playlists/`, no pausing" |
+| 706 | Plan 44 D6a: an advance is `LEAD_S` (2 s) of load and warm on the deck off air, then `MetaController.crossfade`; dwell runs fade start to fade start; `fade_s` absent is `output.xfade_s`; a missing patch is skipped and said, every entry in a row stays on, says so once and retries a dwell later; the file is read again before each load, by the name it was chosen by | — | owner — 2026-11-04: "a new look every five minutes"; the reading's DQ5 |
+| 707 | Plan 44 D6a: no guards against the operator. It does not wait on a dirty deck, an open undo step or the panel; it does wait while the crossfader is between its ends, a fact of the mixer, and a hand across to the look armed has played it. No third deck; no second dream worker | — | owner — 2026-11-04: "it needs no guards against the operator"; overrules plan 44 §6 and the reading's DQ5 rec |
+| 708 | Plan 44 D6b: `playlist.play`, `.next`, `.prev`, group `playlist`, a shared meta group, never saved, not modulatable, so `routing.meta_refusal` refuses a patch's row by the id; `MetaController.tick` ticks it last, one hook; a new pane section, `ui.PAGE_KEYS` appended; `MIN_BODY_H` stays 150, and `FRESH_BODY_H`, 120, with no more open than a fresh launch's two, so a fresh launch at 900 px keeps no scrollbar. `playlist.select` is not a param: a file's name is no enum, the section's list chooses | — | owner — 2026-11-06: "a playlist is an operator's verb", via the orchestrator's rule; (rec) on `playlist.select` |
+| 709 | Plan 44 D6b: the warm draw before each fade, waited for, and a look that will not draw is skipped. A load and a fade each latch the panel's stack on every advance, kept as row 753 has it; a load's step stays on its deck's stack, at most `undo.LIMIT`. Measured below | — | owner — 2026-11-06: row 753; (rec) that the latch is right on an install |
 | 715 | Plan 57 NM0: a loadable patch saves node mode as `{"player", "controller", "node"}`, the rows derived; `controller` is a device kind | 546 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on saving it and on naming a player; (rec) — pending the owner on `controller` |
 | 716 | Plan 57 NM0: the fill: what stays, what fills, what is listed; a `NODE_MODE` cable kind in green | 546, 548 | **bulk accepted by Dan, 2026-11-06, not heavily reviewed**; was: owner — 2026-11-04 on the rule; (rec) — pending the owner on the colour and on a row elsewhere taking its freedom |
 | 717 | Plan 57: NM0 is an optional key, no bump; the rest is one migration, whose order and questions are in plan 57 | 547 | owner — 2026-11-06: yes, and all of it in one migration: "coordinating the migration is not hard" (`plans/57-format-lane.md` §6) |
@@ -13176,7 +13183,12 @@ by `nodemode.fill`: the track knobs, then the device knobs, then the track fader
 the knob; a fader has to be brought there.
 
 - **Patch-layer rows, so SHIFT is untouched.** Plan 53's page shadowed the layers; this does
-  not. Tuning under SHIFT is the meta controller's and no patch has a say there.
+  not. Tuning under SHIFT is the meta controller's and no patch has a say there. **The owner,
+  2026-11-06: SHIFT reaches the meta layer, and knobs before faders, as built.**
+- **Dillon's desk, recorded 2026-11-06.** Dillon "cares mostly about the clip launch buttons" and
+  "the meta controls on the APC": "where's the master brightness fader? how do I change the shape
+  with this control?" Knobs and faders aren't invested. So node mode takes no clip pad, no button,
+  not MASTER, the crossfader or CUE, and a test walks every pointable node to say so.
 - **They shadow only what they fill.** A three-param node leaves K4–K8 on their saved rows.
 - **Per `Deck`.** A desk reads the table of the deck its pointer is on, so a patch on the other
   deck reaches no knob: its rows wait, and the cable is dormant (row 712). A load moves no
@@ -13199,17 +13211,108 @@ the knob; a fader has to be brought there.
 
 **Judge it.** 541, 542.
 
-### 711. What counts as a mapping that stays
+### 711. A modulator gives way to a filled knob, and comes back
 
-The owner, 2026-11-04: "a mapping already on that node's params stays, and the rest fill what
-is left." `fill` says "whoever's it is", and N1 had to say whose. **Rec:** a row from a
-controller (a desk, a pad, a hand) stays and keeps the param from filling. A route from a
-modulator (an LFO, an envelope, an analyzer lane, the sequencer, a modifier) is not a mapping:
-the party looks wire most effect params from the analyzer, and leaving those out would empty
-the node on the looks it is most wanted on. The knob sets the base under the route, as any
-knob on a performed param does. **If not:** one line, `node_desk.MODULATORS` emptied.
+**Answered by the owner, 2026-11-06, reversing what was built first:** "we need to have LFOs and
+audio routes be allowed to be overwritten for node mode, as long as they come back when you
+disengage node mode." A branch to keep them is future work, "not important enough yet".
+
+- **What fills.** A row from a controller (a desk, a pad, a hand) on the node's params stays, and
+  keeps that param from filling. A route from a modulator (an LFO, an envelope, an analyzer lane,
+  the sequencer, a modifier) does not.
+- **What rests.** While a desk acting on this `Deck` holds a filled param
+  (`NodeDesk.holding`), the modulators' routes on it are out of `Router`'s plan and their edges off:
+  the knob is the param. The route stays in the table, the file and ROUTING. So a leave, an undo, a
+  re-point and a load are the route back, by the same road, and a save holds what it held. The
+  cable says so ("off: node mode holds this param"), and the side pane counts them.
+- **What does not rest.** A param past the desk's freedoms (`Fit.over`), which no knob holds. A pad's
+  or a hand's route, kept. **Nothing on another `Deck`,** so no patch reaches another. A pointing whose
+  desk is on the other `Deck`, or not plugged in: nothing holds the param, so the modulators run.
+- **My call, for the owner to overturn.** SHIFT does not let go: a held key should not make the look
+  jump. A macro's subscribers are not routes and carry on: a macro's base subscriber and the knob
+  are two scene-setters, last touch wins.
 
 **Judge it.** 541.
+### 705. The playlist's file
+
+- **Answer.** The owner, 2026-11-04, DQ5: "seconds, `playlists/`, no pausing".
+- **Built.** `library.PLAYLISTS` is a document kind, as the patches are: `read` checks the schema, and `load`, `save_as` and
+  the file watch land nothing (`PLAYLIST_LANDED`). `Library.save_playlist` writes one as `save_patch` writes a patch.
+  `tools/migrate_library.py` skips the folder (`NOT_MODULES`), and `tools/move_library.py` carries it. An entry's key is
+  `loadable`, the signed word, and its value a name under the loadable patches' folder, so the format lane's folder move
+  (plan 57) changes nothing in a playlist. A new folder, so no schema moves. An older build lists it as a group and does
+  nothing with it (the reading, §4).
+- **Bounds.** `Entry` refuses what could not be played, so nothing writes what would not read: a dwell from 1 s to a week, a
+  fade from 0 to `output.xfade_s`'s own 30 s. `1e999` is refused, not a fade that never ends. A bad row is left out and said, and
+  the rest plays, as with a missing patch. A save goes over the file the name resolves to, as `save_as` does.
+- **Judge it.** 537.
+
+### 706. One advance
+
+- **Answer.** The owner, 2026-11-04, and the owner's "A playlist loads the next loadable patch into the off-air `Deck` and
+  crossfades".
+- **Built.** `Playing.tick`, duck-typed over the meta controller and the fade. `LEAD_S` before the fade the next entry
+  loads by the deck off air's own `LoadedPatch.load`, the road a bank pad takes; it fades when due and warm. `crossfade`
+  takes `seconds`, so an entry's `fade_s` writes nothing over `output.xfade_s`.
+- **Why fade to fade.** "A new look every five minutes" is 300, whatever the fade takes.
+- **Nothing will play.** An install runs on: Drive offline makes every patch missing, so it says so once, what is on air stays,
+  and it tries again a dwell later, and plays when they are back. It never stops itself.
+- **A hand on the fader.** Taken across to the look armed, that look has played: its dwell starts there, and it moves on.
+- **Why read the file each time.** It reads by the name it was chosen by, so a conflict copy stays itself. A save on the other Mac lands at the next advance, with no restart. `Library.read` keeps
+  the parse until the mtime moves. If the file has gone, the last list plays on, said.
+- **Judge it.** 538.
+
+### 707. No guards
+
+- **Answer.** The owner, 2026-11-04: "The playlist is for installations ... it needs no guards against the operator".
+- **Overruled.** Plan 44 §6's "never written while the operator is editing it", and the reading's "pauses under hold" and
+  "pauses on the dot", and its panel following on air: the panel stays where it was put (`MetaController`).
+- **Kept, and why they are no guards.** It waits while `MetaController.mixing`: the deck off air is in the picture then, and
+  a load would jump the room; row 700 refuses a pad there for the same reason. A load armed on a deck that has since gone
+  on air has played, and it moves on: otherwise the fade would run back to what was on air.
+- **DQ8.** No second dream worker: `test_an_advance_is_one_mix_pass` holds that the module imports only `library` and
+  names no fade, draw or worker of its own.
+
+### 708. Its controls and its section
+
+- **Answer.** A playlist is an operator's verb, so `routing.meta_refusal` applies.
+- **Built.** Group `playlist` joins `SHARED_META_GROUPS`, so the ids class by their first segment and no list of ids is
+  needed. `tests/test_layer_boundary.py`'s rig registers them, so the one-layer walk covers them. A route or desk row on one in
+  a file is dropped with a note at load, as any meta row is. A key or a pad's own row may press one: those are the meta
+  controller's.
+- **A new list.** A name whose slug is taken (`Cart!` is `cart`) is refused, since writing it would empty that list.
+- **An edit.** Over the file as it is now, so the other Mac's save stands, found by entry, into memory only once the save lands, to the
+  file the list was chosen from. What is on air, armed and next stay the entries they are, for the other Mac's save too. Editing a file
+  with a bad row in the section writes it without that row.
+- **Not built.** `playlist.select`, plan 44 §6's. A file's name is no enum, and nothing but the section chooses.
+- **Cost of a section.** One more header took a fresh launch at 900 px past the pane by 17 px. `MIN_BODY_H` stays 150; with no more open
+  than a fresh launch's two, the floor is `FRESH_BODY_H`, 120, so only that case changes.
+- **Frame cost.** `Playing.tick` costs about 30 ns a frame, stopped or dwelling (40 ns by `timeit`, less the call's 11 ns): one attribute write and one compare. `MetaController.tick` adds one `is not None`. The rest runs only around an advance.
+- **Judge it.** 539.
+
+### 709. Ready before the fade, and the latch
+
+- **Measured.** The real app, `tools/drive_playlist.py`, on the shared Mac with load averages of 7 to 11, nine runs, 16 fades each, eight
+  corpus looks, frames about 8 ms. A load: median 13 ms, worst 101 ms. A warm draw: median 3 ms, worst 27 ms. A fade's first frame, the
+  frame the warm draw is for: median 8 ms, worst 10 to 87 ms in eight runs and 205 ms in one. A frame in a fade: median 9 ms.
+- **What is left.** Frames over 100 ms, up to 365 ms: in the six runs that were counted, 38, 25 of them in a fade and 13 just after, all in
+  the first round; a second round of the same looks had none. So a cart hitches the first time it shows each look, and then not. Timed by
+  part, most have only a few ms in both renderers' draws (309 ms with 5 ms of draw), so the time is outside the draw code, in the panel, the
+  swap or the driver, and one had 115 ms in the draw. Not explained further, and this Mac's load may be part of it: for check 539 on the rig.
+  No fade or warm error in any run.
+- **One run that did not end.** The first full run, killed after 11 minutes with no output and no shot. Its stall log has it through ACID and
+  WAKE in its first 7 s, and 4.5 GB fits the leak at about 220 advances, so the room was very likely still playing and only the script had
+  stopped, which is what `Panel.draw` raising under the frame guard would do. Not proven: it left no words, and six further runs with a watchdog
+  thread that would catch it did not repeat it, 6 of 6 clean. An unexplained wedge on a cart: the driver now says what it finds if it recurs.
+- **⌘Z over the section.** Takes back nothing and says so (`undo.NOTHING_HERE`), as over the player screen, and moves no focus
+  (rows 753, 757). Chosen over leaving it out of `META_SECTIONS` alone, which would send it to the panel's deck, since nothing in the
+  section is on any stack: a ⌘Z after a × must not take back something unrelated, on air.
+- **The latch on an install.** Each load onto the other `Deck` shuts the panel's stack when the panel is on air, and each fade
+  shuts it whichever deck it is on (`undo.on_air`). So on a cart ⌘Z refuses after every advance until someone changes something:
+  nobody's ⌘Z takes a look out of the room. A change opens it, and then ⌘Z goes all the way down, as row 753 says, so far enough
+  back it reaches a load the playlist made on that deck. Left as row 753 has it, and asked of the owner.
+- **Memory.** A load's step is about 65 KB headless (tracemalloc, 100 steps 6.9 MB, 130 loads still 100 steps, 7.0 MB), so at most about 7 MB a deck. **The leak this found:** `SceneTarget.ensure` never kept its multisampled colour renderbuffer, so never released it, since 2026-09-19. One went at every fade's rest, 10 to 15 MB each here: footprint 3138 MB after 120 advances, over 4 GB a day at one every five minutes. Isolated by the kernel's counter: idle, a load and a warm draw flat, only fades grew; counted by call site, `render.py:724` held 16 of 16 made. Fixed here: 964 to 950 MB over the same 120 advances, flat at idle. Any fade or window resize gains, not only a playlist.
+- **Judge it.** 540.
 
 ### 712. What a node mode cable says
 

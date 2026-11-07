@@ -1710,7 +1710,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         dst = f"{MOD}:{b.target}"
         p = reg.get(b.target)
         off = (not b.enabled or p is None or not p.modulatable
-               or (b.source, b.target) in cut)
+               or (b.source, b.target) in cut
+               or (node_desk is not None and table.node_holds(b)))
         depth, said = route_said(b, table, reg, (b.source, b.target) in cut)
         view.cables.append(VCable(cable_id(f"route:{b.source}>{b.target}"), src, dst,
                                   pin_type.get(src, VALUE), ref=b, kind="route", off=off,
@@ -1914,6 +1915,9 @@ def route_said(b, table, reg: Registry, cut: bool = False) -> tuple[float, str]:
         said.append(f"while {b.when}")
     if cut:
         said.append("off: a loop needs a delay")
+    holds = getattr(table, "node_holds", None)
+    if holds is not None and holds(b):      # the owner, row 711: back when the desk leaves
+        said.append(NODE_MODE_HOLDS)
     return depth, "  ".join(said)
 
 
@@ -2368,6 +2372,7 @@ THROUGH = "through"    # a display-only wire over a run of hidden (off) effects
 NODE_MODE = "node_mode"    # a controller's control on a node's param (plan 57, `nodemode`)
 NODE_PIN = "node"          # the pin such a cable lands on when its param's port is another node's
 UNDER_NODE_MODE = "  (under node mode)"
+NODE_MODE_HOLDS = "off: node mode holds this param, back on leave"
 # its colour, read by the canvas and the on-screen desk (not in `ui`: `ui_graph` is made
 # while `ui` is being imported, and reads this at its top)
 NODE_MODE_RGB = (0.30, 0.90, 0.55)

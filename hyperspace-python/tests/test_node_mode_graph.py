@@ -153,6 +153,28 @@ def test_a_node_mode_cable_with_no_row_is_passed_over_by_a_group(rig):
     assert bare.id not in view.groups[0].ends
 
 
+def test_a_route_at_rest_says_so_and_comes_back(rig):
+    """The owner, row 711: the cable's words, and it is faint while it rests."""
+    node, params = pick_node(rig.one)
+    route = Binding("lane:0", params[0], "push", 0.5)
+    rig.one.table.set_routes([*rig.one.table.routes(), route])
+
+    def cable():
+        view = view_of(rig.one, rig.devs)
+        return next(c for c in view.cables if c.kind == "route" and c.ref is route)
+    assert graphview.NODE_MODE_HOLDS not in cable().label
+    was = graphview.key(rig.one.table, rig.one.reg, rig.one.router, rig.devs, None, None)
+    rig.nd1.enter(rig.desk.role, node)
+    assert graphview.key(rig.one.table, rig.one.reg, rig.one.router, rig.devs, None, None) != was
+    c = cable()
+    assert c.off and graphview.NODE_MODE_HOLDS in c.label
+    h = next(x for x in rig.nd1.held() if x.role == rig.desk.role)
+    assert ui_graph.RESTING.format(n=1, s="") in ui_graph.node_mode_words(rig.nd1, h, node)
+    rig.nd1.leave(rig.desk.role)
+    c = cable()
+    assert not c.off and graphview.NODE_MODE_HOLDS not in c.label
+
+
 def test_nothing_drops_a_node_onto_a_node_mode_cable():
     assert NM not in graphview.CABLE_KINDS
 

@@ -31,6 +31,7 @@ from hyperspace import (
     graphview,
     hands,
     patches,
+    playlist,
     poi,
     routing,
     totem,
@@ -81,6 +82,7 @@ def rig(air_rig):  # noqa: F811
     totem.register(r.one.reg, totem.TotemState())
     poi.register(r.one.reg, poi.PoiState(), {})
     app._share_experiments(r.one.reg, r.two.reg, poi_cfg={})
+    playlist.register(r.one.reg, playlist.Playing(r.meta, r.lib))
     return r
 
 
@@ -485,7 +487,7 @@ PATCH_MODULES = _mods(
     "segment", "dream", "media")
 # what is set for a performance or an install
 META_MODULES = _mods(
-    "deck", "players", "pointer", "app", "devices", "control", "config", "placement",
+    "deck", "playlist", "players", "pointer", "app", "devices", "control", "config", "placement",
     "hotreload", "watchdog", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
     "osc", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
     "tempo", "seq_page", "node_desk", "replay", "pinch")

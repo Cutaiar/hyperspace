@@ -487,7 +487,7 @@ def test_ui_page_on_fx_focuses_the_fx_section_and_every_slot_keeps_its_index(pan
     st = _st(r)
     assert PAGE_KEYS == [
         "output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-        "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players"]
+        "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
     fx = PAGE_KEYS.index("fx")
     assert "fx" not in st["pane_drawn"]
     r.reg["ui.page"].set(fx)

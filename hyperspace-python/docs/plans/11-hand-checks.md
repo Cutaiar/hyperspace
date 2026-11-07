@@ -8043,6 +8043,25 @@ Register rows 703, 704, 2026-11-06. Restart first (a param's label and tips are 
 3. The footer's chip starts "players:". On the desk diagram, X reads "Crossfade".
 4. With the panel on air, Home, then ⌘Z. *Pass:* refused in words; the room does not move. The foot's line after Home did not offer ⌘Z.
 *Fail:* a word that describes the old hold, or a load landing on air.
+## CC. The playlist's file (plan 44 D6a)
+Register rows 705–707, 2026-11-06. Nothing plays one until group CD. Headless: `tests/test_playlist.py`, over stand-ins.
+**537. The folder is harmless.** Put a `playlists/` folder with one `.json` in a scratch library, as `tests/test_playlist.py` writes one, and launch on it.
+*Pass:* the presets section lists nothing new, the footer says nothing, and a dry run of `tools/migrate_library.py` on that library leaves the folder out.
+**538. Read the plan's model.** No machine needed. `playlist.py`'s docstring against what you want from a cart left running.
+*Judge:* a dwell of 300 is a fade starting every 300 s, whatever the fade takes (row 706), not 300 s alone on air. Right?
+
+## CD. The playlist plays (plan 44 D6b)
+Register rows 708–709, 2026-11-06. Restart first. Headless: `tests/test_playlist.py`, on the real two decks. In the app: `tools/drive_playlist.py`. **One thing is new on purpose:** it writes over the deck off air, whatever is there.
+**539. A cart left running.** (a laptop, then the projector)
+1. In the playlist section at the pane's narrowest, type a name, new, add three looks and one you then delete from the library. Set each dwell to 20.
+   *Pass:* nothing passes the pane's edge, and a file appears in `<library>/playlists/`.
+2. Play. *Pass:* the first look fades in, each comes every 20 s, and the deleted one is skipped with a footer line naming it.
+3. Leave it ten minutes. *Pass:* no hitch you can see at a load or at a fade's first frame, on the projector. Try a look with a heavy shader and a dream look.
+4. Stop. *Pass:* what is on air stays.
+*Fail:* a hitch at a fade you would mind in a room, or a fade into black with a look to show.
+**540. ⌘Z at a running cart.** While it plays, change something on the panel's deck, wait for an advance, ⌘Z.
+*Pass:* refused, in words, and the room does not change. Change something, ⌘Z twice or more: the steps go back in order.
+*Judge:* far enough back, ⌘Z reaches a look the playlist loaded on that deck, and takes it off if that deck is on air (row 709). Right for an install, where nobody is at the panel?
 
 ## CE. Node mode on the APC (plan 53 N1)
 Register rows 710–714, 2026-11-06. Restart first, on one build on both Macs. The merge waits on
@@ -8053,9 +8072,14 @@ Work on a throwaway copy of a preset. Never the shared library's own file.
    **point apc40 here**.
 *Pass:* K1 onward's rings jump to that effect's values; turning K1 moves its first param on the
 picture; K1–K8 then D1–D8 then S1–S8 fill in order; the footer's dirty dot is lit. What does not
-fit is listed in the side pane, by name. An LFO on one of its params: the knob still sets the base.
+fit is listed in the side pane, by name. An LFO or an analyzer route on one of its params: that
+param stops riding it and sits where the knob puts it; press leave and it rides again, and a save
+then holds the route as it was (row 711).
 2. Press SHIFT. *Pass:* the knobs and faders are the global layer as ever (K1 hand smooth).
 3. Learn another param of acid onto D8 first and enter again. *Pass:* D8 stays; the rest fill.
+4. Dillon's desk, while pointed. *Pass:* every clip launch pad loads as ever; MASTER is the dim, the
+crossfader crossfades, CUE changes the shape; SHIFT, the transport and the scene pads as ever. Only
+knobs and faders moved. Ask Dillon.
 **542. FINE and node mode, on the same knob.** (row 609)
 Hold SEND B and turn a filled K1 slowly, let go, and turn on. *Pass:* it creeps while held, its
 LED lit; when let go the value does not jump, and the next detent is one detent.
