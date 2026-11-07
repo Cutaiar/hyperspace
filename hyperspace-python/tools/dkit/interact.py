@@ -416,6 +416,23 @@ def _sandwich_end(ui: Ui, cols: list) -> None:
     ui.dl.channels_set_current(0)
 
 
+# --------------------------------------------------------------------------
+# Scrolling: what was decided, and what was decided against
+# --------------------------------------------------------------------------
+# NO SMOOTHING, on purpose, for a trackpad or anything else. Nothing here
+# interpolates toward a target position; a delta arrives, it is scaled, the
+# page moves. Momentum is NOT smoothing and is not ours: macOS keeps sending
+# real events after the finger lifts, and we pass them through untouched.
+#
+# One multiplier, and it is measured rather than tuned - every delta a
+# trackpad sends is a multiple of 0.1, so a unit is ten points of finger and
+# the rate is 10 px (tokens.SCROLL). Whole pixels out, via `snap_scroll` and
+# `draw.px`, because the alternative is text that wobbles.
+#
+# The one deliberate difference from a browser: Chrome animates a glide per
+# NOTCHED WHEEL tick and we step. It only shows with a wheel mouse, and it
+# would be easy to add if it ever grates.
+#
 # Has this session ever seen a FRACTIONAL wheel delta? One is proof of a
 # pixel-precise device - a trackpad, a Magic Mouse - because a notched wheel
 # only ever sends whole units. It is sticky: a trackpad emits plenty of
