@@ -249,14 +249,17 @@ class _Glfw:
     def get_monitor_workarea(self, m):
         return self.mons[m]
 
+    def get_monitor_pos(self, m):
+        return self.mons[m][:2]
+
     def get_monitor_name(self, m):
         return m.encode()              # pyGLFW hands back bytes
 
 
 def test_screens_reads_the_work_areas_in_monitor_order():
     g = _Glfw({"Built-in": (0, 38, 1728, 1041), "DELL": (1728, 0, 1920, 1080)})
-    assert placement.screens(g) == [Screen("Built-in", 0, 38, 1728, 1041),
-                                    Screen("DELL", 1728, 0, 1920, 1080)]
+    assert placement.screens(g) == [Screen("Built-in", 0, 38, 1728, 1041, (0, 38)),
+                                    Screen("DELL", 1728, 0, 1920, 1080, (1728, 0))]
     assert placement.screens(_Glfw({})) == []
     assert placement.screens(object()) == []                   # a window system that will not say
     # with no screens there is nothing to place on: the size comes back, no note
@@ -278,3 +281,197 @@ def test_placement_imports_nothing_from_the_package():
         for mod in mods:
             root = mod.split(".")[0]
             assert root not in {"hyperspace", "glfw", "moderngl", "imgui_bundle"}, mod
+
+
+# ---- screens by name (row 771) ----
+#
+# `TV_L` is left of `TV_R` on the desk, whatever order the window system lists
+# them in. Dillon's #223 pinned the opposite of all of this: a case-blind
+# substring, and the first hit wins (its tests/test_placement.py:304).
+
+TV_L = Screen("MStar", 1728, 0, 1920, 1080)
+TV_R = Screen("MStar", 3648, 0, 1920, 1080)
+TWINS = [LAPTOP, TV_L, TV_R]
+PLUGGED_THE_OTHER_WAY = [LAPTOP, TV_R, TV_L]
+
+
+def test_two_screens_of_one_name_are_two_screens_not_a_first_hit():
+    assert placement.match("MStar #1", TWINS) == 1
+    assert placement.match("MStar #2", TWINS) == 2
+    assert placement.match("MStar #3", TWINS) == -1
+    assert placement.match("MStar #0", TWINS) == -1
+
+
+def test_the_ordinal_counts_across_the_desk_not_the_plug_order():
+    """The replug: the window system lists the twins the other way round, so
+    an index would swap the outputs. The ordinal does not."""
+    for want, screen in (("MStar #1", TV_L), ("MStar #2", TV_R)):
+        assert PLUGGED_THE_OTHER_WAY[placement.match(want, PLUGGED_THE_OTHER_WAY)] == screen
+        assert TWINS[placement.match(want, TWINS)] == screen
+    # top to bottom when one stands over the other
+    stacked = [Screen("TV", 0, 1080, 800, 600), Screen("TV", 0, 0, 800, 600)]
+    assert placement.match("TV #1", stacked) == 1
+
+
+def test_the_dock_does_not_flip_stacked_twins():
+    """A Dock on the left moves the upper one's work area right of the lower
+    one's. The ordinal goes by the monitor's frame."""
+    upper = Screen("TV", 70, 25, 1850, 1055, (0, 0))
+    lower = Screen("TV", 0, 1080, 1920, 1080, (0, 1080))
+    for scr, first in (([upper, lower], 0), ([lower, upper], 1)):
+        assert placement.match("TV #1", scr) == first
+
+
+def test_screens_gives_each_its_frame_as_well_as_its_work_area():
+    class Framed(_Glfw):
+        def get_monitor_pos(self, m):
+            return {"TV ": (0, 0)}[m]
+
+    (tv,) = placement.screens(Framed({"TV ": (70, 25, 1850, 1055)}))
+    assert tv == Screen("TV", 70, 25, 1850, 1055, (0, 0))     # and the name trimmed
+
+
+def test_a_name_is_exact_and_whole():
+    long = [LAPTOP, Screen("TV Samsung", 1728, 0, 1920, 1080)]
+    assert placement.match("TV", long) == -1
+    assert placement.match("TV Samsung", long) == 1
+    assert placement.match("Samsung", long) == -1
+    assert placement.match("tv samsung", long) == -1            # case and all
+    assert placement.match("  TV Samsung ", long) == 1          # the file's spaces are not the name
+    assert placement.match("TV Samsung #1", long) == 1
+    assert placement.match("TV Samsung #2", long) == -1
+
+
+def test_a_twin_alone_is_used_and_said_every_time():
+    """The partial replug: the left twin is out, and "MStar #1" on the one
+    left can't know it is the right one. It uses that screen, since a window
+    must open somewhere, and says so; "MStar #2" says how many there are."""
+    alone = [LAPTOP, TV_R]
+    i, said = placement.resolve("MStar #1", alone)
+    assert i == 1 and "only one is connected" in said and "'MStar'" in said
+    assert placement.resolve("MStar #1", alone) == (i, said)
+    i, said = placement.resolve("MStar #2", alone)
+    assert i == -1 and "asks for number 2 of 'MStar', and 1 connected" in said
+    assert "Built-in Retina Display, MStar" in said
+    # with both there, nothing to say; and the bare name of a lone screen is sure
+    assert placement.resolve("MStar #1", TWINS) == (1, "")
+    assert placement.resolve("MStar", alone) == (1, "")
+
+
+def test_a_macs_own_numbers_do_not_count():
+    """If a Mac lists twins as "DELL (1)" and "DELL (2)", those numbers may
+    follow the plug order. The ordinal counts the family across the desk."""
+    left, right = Screen("DELL (2)", 0, 0, 800, 600), Screen("DELL (1)", 800, 0, 800, 600)
+    scr = [right, left]
+    assert placement.labels(scr) == ["DELL #2", "DELL #1"]
+    assert placement.match("DELL #1", scr) == 1 and placement.match("DELL #2", scr) == 0
+    # an exact name asked for is that name, and it says what it risks
+    i, said = placement.resolve("DELL (1)", scr)
+    assert i == 0 and "plug order" in said and "'DELL #2'" in said
+    # the bare family is two screens, as twins of one name are
+    i, said = placement.resolve("DELL", scr)
+    assert i == 1 and "is 2 screens (DELL #1, DELL #2)" in said
+    # a lone "(n)" keeps its name, and a year in brackets is no such number
+    lone = [Screen("TV (1)", 0, 0, 800, 600), Screen("Model (2023)", 800, 0, 800, 600)]
+    assert placement.labels(lone) == ["TV (1)", "Model (2023)"]
+    assert placement.resolve("TV (1)", lone) == (0, "")
+    assert placement.match("Model", lone) == -1
+    # a real "Foo" beside a real "Foo (2)": each exact name is its own, unsaid
+    both = [Screen("Foo (2)", 0, 0, 800, 600), Screen("Foo", 800, 0, 800, 600)]
+    assert placement.resolve("Foo", both) == (1, "")
+
+
+def test_an_ordinal_goes_before_a_screen_really_called_that():
+    """So every screen has a word: `labels` needs "TV #2" for the second twin,
+    and the screen really called that is "TV #2 #1"."""
+    odd = [Screen("TV", 0, 0, 800, 600), Screen("TV", 800, 0, 800, 600),
+           Screen("TV #2", 1600, 0, 800, 600)]
+    assert placement.match("TV #2", odd) == 1
+    assert placement.match("TV #2 #1", odd) == 2
+    # with no second twin, the name is found as written
+    assert placement.match("TV #2", [odd[0], odd[2]]) == 1
+
+
+def test_an_ordinal_of_any_length_never_raises():
+    for odd in ("MStar #" + "9" * 5000, "MStar #\u0663", "MStar #-1", "MStar #", "#2", "#"):
+        assert placement.match(odd, TWINS) == -1
+        assert placement.resolve(odd, TWINS)[0] == -1
+
+
+def test_every_label_finds_its_own_screen():
+    a, b, c = (0, 0, 800, 600), (800, 0, 800, 600), (1600, 0, 800, 600)
+    for scr in (BOTH, TWINS, PLUGGED_THE_OTHER_WAY, [LAPTOP, TV_R],
+                [Screen("TV", *a), Screen("TV", *b), Screen("TV #2", *c)],
+                [Screen("TV #2", *a), Screen("TV", *b), Screen("TV", *c)],
+                [Screen("TV #1", *a), Screen("TV", *b)],
+                [Screen("TV #2", *a), Screen("TV #2 #1", *b), Screen("TV", *c)],
+                [Screen("TV", *a), Screen("TV", *b), Screen("TV #2", *c),
+                 Screen("TV #2 #1", 2400, 0, 800, 600)],
+                [Screen("DELL (1)", *a), Screen("DELL (2)", *b), Screen("DELL", *c)],
+                [Screen("DELL (1)", *a), Screen("DELL #1", *b)]):
+        for i, label in enumerate(placement.labels(scr)):
+            assert placement.match(label, scr) == i, (scr, label)
+    assert placement.labels(TWINS) == [LAPTOP.name, "MStar #1", "MStar #2"]
+    assert placement.labels(PLUGGED_THE_OTHER_WAY) == [LAPTOP.name, "MStar #2", "MStar #1"]
+
+
+def test_a_bare_name_on_two_screens_says_so():
+    """Never quietly the first: it opens there, and the note gives the words
+    that pick."""
+    out = {"monitor": "MStar"}
+    assert placement.settle(out, TWINS) == [
+        ("config: [output] monitor = 'MStar' is 2 screens (MStar #1, MStar #2) — "
+         "using the first; say which to be sure")]
+    assert out["monitor"] == 1
+
+
+def test_settle_makes_names_indices_once_and_leaves_the_rest():
+    out = {"monitor": "MStar #2", "control_monitor": 0}
+    assert placement.settle(out, TWINS) == [] and out == {"monitor": 2, "control_monitor": 0}
+    assert placement.settle(out, TWINS) == [] and out == {"monitor": 2, "control_monitor": 0}
+    out = {"monitor": "nothing"}
+    assert placement.settle(out, TWINS) == [
+        ("config: [output] monitor = 'nothing' matches no screen (connected: "
+         "Built-in Retina Display, MStar #1, MStar #2) — using the last position")]
+    assert out == {"monitor": -1}
+    assert placement.settle({}, TWINS) == []
+
+
+def test_a_settled_name_places_the_window_on_that_screen():
+    out = {"monitor": "MStar #2"}
+    placement.settle(out, TWINS)
+    assert place("control", CONTROL, TWINS, out["monitor"], None) == (
+        placement.default_rect("control", CONTROL, TV_R), "")
+    # the configured screen against the remembered one, as an index does (fork F4)
+    kept = entry(TV_R.x + 40, 60, 1000, 700, "MStar")
+    assert place("render", RENDER, TWINS, 2, kept)[0] == (TV_R.x + 40, 60, 1000, 700)
+    assert place("render", RENDER, TWINS, 1, kept)[0] == placement.default_rect(
+        "render", RENDER, TV_L)
+
+
+def test_an_index_in_the_config_keeps_working():
+    assert place("render", RENDER, BOTH, 1, None)[0] == placement.default_rect(
+        "render", RENDER, PROJECTOR)
+    assert placement.read("monitor", "1") == (1, "")
+    for text in ("1", " 1 ", "-1"):                             # a number written as text
+        assert placement.named(text) == ""
+    out = {"monitor": 1}
+    assert placement.settle(out, BOTH) == [] and out == {"monitor": 1}
+
+
+def test_what_is_a_name_and_what_is_not():
+    assert placement.named("MStar") == "MStar"
+    assert placement.named("  glass  ") == "glass"
+    for not_a_name in (1, -1, None, "", "   ", [1], float("nan"), True):
+        assert placement.named(not_a_name) == ""
+
+
+def test_before_the_window_system_a_name_is_kept_and_waits():
+    """`config.load` has no screens: the name stays, with no note, for the
+    launch to resolve. Anything else is `read` as ever, and a name nobody
+    resolved is no index."""
+    assert placement.kept("monitor", " MStar #2 ") == ("MStar #2", "")
+    assert placement.index("MStar") == -1
+    assert placement.kept("monitor", 2) == (2, "")
+    i, note = placement.kept("monitor", [1])
+    assert i == -1 and "not a screen index" in note
