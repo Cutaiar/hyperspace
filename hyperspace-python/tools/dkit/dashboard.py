@@ -603,8 +603,11 @@ def _body(ui, r, w, h, series, state):
             12, muted, align="right", box_w=44, baseline_box=sh, tabular=True)
     # the tooltip hangs off the slider's own rect and takes no hit target of
     # its own, so it cannot steal the hover from the control it describes
+    # The Kbd says what the slider already does: Shift scales a drag to a
+    # tenth (interact.FINE). A shortcut hint for a key that does nothing
+    # would be worse than none.
     shown = I.tooltip(ui, "ctl.cutoff.tip", (sx, sy, sw - 46, sh),
-                      "Low-pass cutoff, 20 Hz - 20 kHz",
+                      "Low-pass cutoff, 20 Hz - 20 kHz. Fine:", kbd="\u21e7",
                       hovered=imgui.is_mouse_hovering_rect(
                           imgui.ImVec2(sx, sy),
                           imgui.ImVec2(sx + sw - 46, sy + sh)))

@@ -416,6 +416,36 @@
       "disabled": true
     },
     {
+      "id": "kbd.letter",
+      "kind": "kbd",
+      "variant": "default",
+      "x": 300,
+      "y": 838,
+      "w": 20.0,
+      "h": 20.0,
+      "text": "K"
+    },
+    {
+      "id": "kbd.word",
+      "kind": "kbd",
+      "variant": "default",
+      "x": 340,
+      "y": 838,
+      "w": 29.203125,
+      "h": 20.0,
+      "text": "Ctrl"
+    },
+    {
+      "id": "kbd.tooltip",
+      "kind": "kbd",
+      "variant": "tooltip",
+      "x": 440,
+      "y": 838,
+      "w": 20.0,
+      "h": 20.0,
+      "text": "S"
+    },
+    {
       "id": "slider.frac",
       "kind": "slider",
       "variant": "default",

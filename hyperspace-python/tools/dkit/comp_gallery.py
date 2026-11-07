@@ -246,6 +246,36 @@ def _s_checkbox(faces, tn):
             rows)
 
 
+def _s_kbd(faces, tn):
+    tbl = T.kbd_table(tn)
+
+    def key(cap, s):
+        def draw(ui, k, x, y, w, h, st, s=s):
+            D.kbd(ui.dl, x, y, s, ui.faces, ui.theme, tbl)
+        return (cap, D.kbd_size(s, faces, tbl), draw)
+
+    def group(cap, keys, sep=None):
+        def draw(ui, k, x, y, w, h, st, keys=keys, sep=sep):
+            D.kbd_group(ui.dl, x, y, keys, ui.faces, ui.theme, tbl, sep=sep)
+        return (cap, D.kbd_group_size(keys, faces, tbl, sep=sep), draw)
+
+    def in_tip(ui, k, x, y, w, h, st):
+        # on the tooltip's own ground, which is what the restyle is for
+        D.fill(ui.dl, x, y, w, h, T.rgba("foreground", theme=ui.theme),
+               T.RADII["md"])
+        D.kbd(ui.dl, x + T.SPACE[1.5], y + T.SPACE[1.5], "S", ui.faces,
+              ui.theme, tbl, in_tooltip=True)
+    tip_w = D.kbd_size("S", faces, tbl)[0] + 2 * T.SPACE[1.5]
+    rows = [[key("letter", "K"), key("word", "Ctrl"), key("symbol", "\u2318"),
+             group("group", ["Ctrl", "B"], sep="+"),
+             group("chord", ["\u2318", "\u21e7", "P"]),
+             ("in a tooltip", (tip_w, tbl["h"] + 2 * T.SPACE[1.5]), in_tip)]]
+    return ("Kbd",
+            "min-w-5 or text + 8, whichever is wider. A KbdGroup's \"+\" is "
+            "MONOSPACE in the browser: the group is a <kbd> and never resets "
+            "the UA font.", rows)
+
+
 def _s_slider(faces, tn):
     def mk(cap, key, init, **kw):
         def draw(ui, k, x, y, w, h, st, key=key, init=init, kw=kw):
@@ -391,7 +421,7 @@ def _s_tokens(faces, tn):
 
 
 SECTIONS = (_s_button, _s_button_group, _s_input, _s_select, _s_combobox,
-            _s_switch, _s_checkbox, _s_slider, _s_tooltip, _s_menu, _s_scroll,
+            _s_switch, _s_checkbox, _s_kbd, _s_slider, _s_tooltip, _s_menu, _s_scroll,
             _s_icons, _s_type, _s_tokens)
 
 

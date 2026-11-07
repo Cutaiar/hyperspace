@@ -587,7 +587,7 @@ TOOLTIP_DELAY = 0.4
 
 
 def tooltip(ui: Ui, key, anchor, text, *, hovered: bool, side="top",
-            delay=TOOLTIP_DELAY, max_w=320.0) -> bool:
+            delay=TOOLTIP_DELAY, max_w=320.0, kbd: str | None = None) -> bool:
     """shadcn Tooltip, placed against `anchor` = (x, y, w, h).
 
     `hovered` comes from the control's own State, so a tooltip never needs a
@@ -599,6 +599,12 @@ def tooltip(ui: Ui, key, anchor, text, *, hovered: bool, side="top",
     tooltip is not interactive, so it needs none of the popup stack, and
     replay.keep (hyperspace/replay.py:91) drops popups from the GRAPH canvas
     tap anyway.
+
+    `kbd` puts a shortcut after the text, as the registry's Kbd demo does:
+    `gap-2`, the Kbd's tooltip restyle, a panel grown to hold it - 32 tall
+    where text alone is 28 - and the panel's right padding trimmed from 12
+    to 6 (`has-data-[slot=kbd]:pr-1.5`). Measured: "Save Changes" + S makes
+    a 124.547 x 32 panel, which is 12 + 78.547 + 8 + 20 + 6.
     """
     import box as B
     held = ui.hover_clock(key, hovered)
@@ -608,6 +614,11 @@ def tooltip(ui: Ui, key, anchor, text, *, hovered: bool, side="top",
     tw = min(D.text_w(text, ui.faces, "regular", tbl["font"]), max_w)
     pw = tw + 2.0 * tbl["pad_x"]
     ph = tbl["font"] * 1.3 + 2.0 * tbl["pad_y"]
+    if kbd:
+        kt = T.kbd_table(ui.theme_name)
+        kw, kh = D.kbd_size(kbd, ui.faces, kt)
+        pw += kt["tip_gap"] + kw - (tbl["pad_x"] - tbl["kbd_pad_r"])
+        ph = max(ph, kh + 2.0 * tbl["pad_y"])
     ax, ay, aw, ah = anchor
     # Radix reserves the arrow's full declared size between panel and anchor
     gap = tbl["arrow_space"] + tbl["side_offset"]
@@ -618,6 +629,10 @@ def tooltip(ui: Ui, key, anchor, text, *, hovered: bool, side="top",
                     side="top" if r.y < ay else "bottom")
     D.label(ui.dl, r.x + tbl["pad_x"], r.y, text, ui.faces, "regular",
             tbl["font"], ui.col(*tbl["fg"]), baseline_box=r.h, max_w=tw)
+    if kbd:
+        D.kbd(ui.dl, r.x + tbl["pad_x"] + tw + kt["tip_gap"],
+              r.y + (r.h - kh) / 2.0, kbd, ui.faces, ui.theme, kt,
+              in_tooltip=True)
     return True
 
 

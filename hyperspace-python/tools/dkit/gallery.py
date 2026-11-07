@@ -93,6 +93,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     sliders = T.slider_table(theme_name)
     switches = T.switch_table(theme_name)
     checkboxes = T.checkbox_table(theme_name)
+    kbds = T.kbd_table(theme_name)
     inputs = T.input_table(theme_name)
     selects = T.select_table(theme_name)
     tips = T.tooltip_table(theme_name)
@@ -130,6 +131,23 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 elif cell["kind"] == "switch":
                     D.switch(dl, cell["x"], cell["y"], 1.0 if cell["on"] else 0.0,
                              theme, switches, size=cell["variant"])
+                elif cell["kind"] == "kbd":
+                    # The width is the SPEC's - the browser's intrinsic one -
+                    # as a Button's is: the kit's text widths run a few
+                    # percent wide of Chromium's (see draw.kbd), so drawing
+                    # at the kit's own width would measure the font loader,
+                    # not the Kbd. test_kbd.py checks the width law.
+                    # The tooltip variant sits on a tooltip-coloured ground,
+                    # which is what its `in-data-[slot=tooltip-content]`
+                    # restyle is drawn against.
+                    tip = cell["variant"] == "tooltip"
+                    if tip:
+                        D.fill(dl, cell["x"] - 6, cell["y"] - 6,
+                               cell["w"] + 12, cell["h"] + 12,
+                               T.rgba("foreground", theme=theme))
+                    D.kbd(dl, cell["x"], cell["y"], cell["text"], faces,
+                          theme, kbds, in_tooltip=tip, glyphs=False,
+                          w=cell["w"])
                 elif cell["kind"] == "checkbox":
                     # the canvas colour is the backdrop a disabled checked
                     # box folds its group opacity against - see draw.checkbox

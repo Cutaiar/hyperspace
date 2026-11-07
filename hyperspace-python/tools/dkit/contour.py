@@ -95,6 +95,9 @@ KIND = {
     # near-transparent (dark) fill, which reads as a ring; on it is a filled
     # primary box. `geom` promotes the checked cells to filled.
     "checkbox": {"radius": 4.0, "outset": 0, "ring": True},
+    # rounded-sm (6), a filled `muted` box, at the browser's intrinsic
+    # size (the width law itself is test_kbd.py's).
+    "kbd": {"radius": 6.0, "outset": 0, "ring": False},
 }
 
 

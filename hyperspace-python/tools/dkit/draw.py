@@ -353,6 +353,12 @@ def text_w(s, faces, variant, size, tabular=False) -> float:
         imgui.pop_font()
 
 
+# `kbd_size` and `kbd_group_size` take a `text_w` OVERRIDE, as
+# comp_button.button_size does, which shadows this function inside them;
+# this alias is how they reach it.
+text_w_ = text_w
+
+
 # --------------------------------------------------------------------------
 # widgets
 # --------------------------------------------------------------------------
@@ -827,6 +833,93 @@ def switch(dl, x, y, on_f, theme, tbl, *, size="default", focus_f=0.0,
     qx, qy, qw, qh = snap(tx, off.y, off.w, off.h)
     fill(dl, qx, qy, qw, qh, tc, qw / 2.0)
     return track
+
+
+def kbd_size(s: str, faces, tbl, *, text_w: float | None = None) -> tuple:
+    """(w, h) of one shadcn Kbd: `max(min-w-5, text + px-1 twice)` by 20.
+
+    `text_w` overrides the measurement so the law is testable with no font
+    atlas, as `comp_button.button_size`'s is. ?probe: "K" and "W" are both
+    20 (min-w wins), "Ctrl" 29.203, and the fallback-font "⌘" 20.016 -
+    its glyph is 12.016 wide, so min-w loses by a sixty-fourth.
+    """
+    tw = text_w if text_w is not None else text_w_(s, faces, "medium",
+                                                     tbl["font"])
+    return max(tbl["min_w"], tw + 2.0 * tbl["pad_x"]), tbl["h"]
+
+
+def kbd(dl, x, y, s, faces, theme, tbl, *, in_tooltip=False,
+        text_w: float | None = None, glyphs: bool = True,
+        w: float | None = None) -> float:
+    """shadcn Kbd at (x, y). Returns its width.
+
+    The glyphs are centred in the box (`justify-center items-center`);
+    measured, a cap glyph's ink sits at y 5..14 of the 20, centroid ~9.6.
+    `in_tooltip` is the recipe's `in-data-[slot=tooltip-content]` restyle.
+    `glyphs=False` and `w` are the gallery's chrome pass: the box at the
+    width the SPEC pins - the browser's - with the text not drawn. Pinned
+    rather than intrinsic because the kit's text widths run a few percent
+    wide of Chromium's (whole-pixel glyph advances: "Ctrl" 22 against
+    21.192), which is a property of the font loader, not of this component;
+    `test_kbd.py` checks the width LAW against Chromium's own text widths.
+    """
+    kw, h = kbd_size(s, faces, tbl, text_w=text_w)
+    w = kw if w is None else w
+    bg = tbl["tip_bg"] if in_tooltip else tbl["bg"]
+    ink = tbl["tip_ink"] if in_tooltip else tbl["ink"]
+    # "Ctrl" is 29.203 wide, and the browser paints that box snapped to
+    # whole pixels while laying out on the fraction - the README's finding,
+    # and draw.switch's. Unsnapped, the right edge is a partial column: 6
+    # levels over 4px in dark, the first time this cell was diffed.
+    bx, by, bw, bh = snap(x, y, w, h)
+    fill(dl, bx, by, bw, bh, rgba(*bg, theme=theme), RADII[tbl["radius"]])
+    if glyphs:
+        label(dl, x, y, s, faces, "medium", tbl["font"],
+              rgba(*ink, theme=theme), align="center", box_w=w,
+              baseline_box=h)
+    return w
+
+
+def kbd_sep_w(sep: str, tbl, sep_font: float) -> float:
+    """A KbdGroup separator's advance: UA monospace, 0.6em a character -
+    see tokens.KBD["group_sep_em"] for why it is monospace at all."""
+    return len(sep) * tbl["group_sep_em"] * sep_font
+
+
+def kbd_group_size(keys, faces, tbl, *, sep: str | None = None,
+                   sep_font: float = 14.0, text_w=None) -> tuple:
+    """(w, h) of a KbdGroup: the keys `gap-1` apart, with `sep` - plain
+    text at the parent's size `sep_font` - between each pair. `text_w` is a
+    `(s, variant, size) -> width` measure, for tests."""
+    mw = text_w or (lambda t, v, size: text_w_(t, faces, v, size))
+    g = tbl["group_gap"]
+    ws = [kbd_size(k, faces, tbl, text_w=mw(k, "medium", tbl["font"]))[0]
+          for k in keys]
+    w = sum(ws) + g * (len(ws) - 1)
+    if sep and len(ws) > 1:
+        w += (kbd_sep_w(sep, tbl, sep_font) + g) * (len(ws) - 1)
+    return w, tbl["h"]
+
+
+def kbd_group(dl, x, y, keys, faces, theme, tbl, *, sep: str | None = None,
+              sep_font: float = 14.0, sep_ink=("foreground", 1.0),
+              in_tooltip=False) -> float:
+    """shadcn KbdGroup at (x, y): `inline-flex items-center gap-1`.
+
+    ?probe's `Ctrl + B`: the second key at 46.813 = 29.203 + 4 + the "+"
+    (9.609, monospace 0.6em at the parent's 16px) + 4. Returns the width.
+    """
+    g = tbl["group_gap"]
+    cx = x
+    for i, k in enumerate(keys):
+        if i and sep:
+            sw = kbd_sep_w(sep, tbl, sep_font)
+            label(dl, cx, y, sep, faces, "regular", sep_font,
+                  rgba(*sep_ink, theme=theme), align="center", box_w=sw,
+                  baseline_box=tbl["h"])
+            cx += sw + g
+        cx += kbd(dl, cx, y, k, faces, theme, tbl, in_tooltip=in_tooltip) + g
+    return cx - g - x
 
 
 def checkbox(dl, x, y, on_f, tick, theme, tbl, *, focus_f=0.0,

@@ -24,6 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Kbd } from "@/components/ui/kbd"
 import { Input } from "@/components/ui/input"
 import { SelectTrigger, SelectValue, Select } from "@/components/ui/select"
 import {
@@ -138,6 +139,21 @@ export default function Gallery({
             // for default), and reproducing that size is half of what is
             // being checked. The spec rect is that intrinsic size.
             <Switch checked={c.on} size={c.variant as "sm" | "default"} />
+          ) : c.kind === "kbd" ? (
+            // Intrinsic width - NOT pinned to the cell - because the width
+            // law (min-w-5 vs text + px-1) is half of what is checked; the
+            // kit draws at its own intrinsic width too. Text transparent, as
+            // in every chrome cell. The tooltip variant is the recipe's own
+            // `in-data-[slot=tooltip-content]` restyle, triggered by a real
+            // ancestor carrying that data-slot on a tooltip-coloured ground.
+            c.variant === "tooltip" ? (
+              <div data-slot="tooltip-content" style={{ position: "relative", display: "flex" }}>
+                <div style={{ position: "absolute", inset: -6, background: "var(--foreground)" }} />
+                <Kbd style={{ color: "transparent", position: "relative" }}>{c.text}</Kbd>
+              </div>
+            ) : (
+              <Kbd style={{ color: "transparent" }}>{c.text}</Kbd>
+            )
           ) : c.kind === "checkbox" ? (
             // Intrinsic size (size-4), like the Switch: the spec rect IS that
             // size, so reproducing it is part of what is checked.

@@ -427,6 +427,45 @@ TOOLTIP = {
     # rendered diamond only uses 5.071 px of that, so there is a ~4.9 px gap
     # below the tip - which is Radix's doing, not a mistake to correct.
     "arrow_space": 10.0,
+    # `has-data-[slot=kbd]:pr-1.5`: a tooltip holding a Kbd trims its RIGHT
+    # padding to 6. Measured: "Save Changes" (78.547) + S makes a 124.547
+    # panel = 12 + 78.547 + gap 8 + 20 + 6.
+    "kbd_pad_r": SPACE[1.5],
+}
+
+# shadcn Kbd, measured on ?probe (`kbd.*`) in both themes. A plain <kbd>:
+# no border, no shadow, no interaction (`pointer-events-none`).
+KBD = {
+    "h": 20.0,                    # h-5
+    "min_w": 20.0,                # min-w-5: one glyph is a 20 x 20 square
+    "pad_x": SPACE[1],            # px-1. Width = max(min_w, text + 2 pad_x):
+    #                               "Ctrl" measured 29.203 = 21.203 + 8
+    "radius": "sm",               # rounded-sm = 6, measured
+    "font": 12.0,                 # text-xs font-medium
+    "bg": ("muted", 1.0),
+    "ink": ("muted-foreground", 1.0),
+    # KbdGroup: `inline-flex items-center gap-1`. Anything between the keys
+    # (the demo's "+") is plain text at the PARENT's size - and in MONOSPACE:
+    # KbdGroup renders a <kbd>, the UA stylesheet gives <kbd> `font-family:
+    # monospace`, and unlike Kbd the group never resets it to font-sans.
+    # Measured: the "+" is 9.609 wide at 16px = 0.6em, the advance of every
+    # common UA monospace (Liberation Mono, SF Mono, Menlo). The kit has no
+    # mono face, so a separator ADVANCES by this and its glyph is centred in
+    # the slot - the layout is the browser's, the glyph shape is Geist's.
+    "group_gap": SPACE[1],
+    "group_sep_em": 0.6,
+    # Inside a Tooltip the recipe restyles it from the ancestor's data-slot:
+    # in-data-[slot=tooltip-content]:bg-background/20 text-background, /10
+    # in dark - measured oklab(1 0 0 / .2) light, background at .1 dark.
+    "tip_bg": ("background", 0.2),
+    "tip_ink": ("background", 1.0),
+    # the registry demo puts it `gap-2` after the tooltip's text, and the
+    # panel grows to hold it: 32 tall (20 + py-1.5 twice) where text alone
+    # is 28, and trims its right padding - see TOOLTIP["kbd_pad_r"].
+    "tip_gap": SPACE[2],
+}
+KBD_DARK = {
+    "tip_bg": ("background", 0.1),
 }
 
 # shadow-md, which the Select's popover carries on top of its 1px ring.
@@ -454,6 +493,10 @@ def switch_table(theme_name: str) -> dict:
 
 def checkbox_table(theme_name: str) -> dict:
     return _themed(CHECKBOX, CHECKBOX_DARK, theme_name)
+
+
+def kbd_table(theme_name: str) -> dict:
+    return _themed(KBD, KBD_DARK, theme_name)
 
 
 def input_table(theme_name: str) -> dict:
