@@ -687,6 +687,7 @@ def tray(rig, tmp_path, monkeypatch):
     (tmp_path / "home").mkdir()
     seed = [{"role": "pad", "kind": "gamepad", "enabled": False}, {"role": "apc40", "kind": "midi", "enabled": False}]
     r.store = devicelist.DeviceList(r.root, tmp_path / "home", seed=seed)
+    r.store.sync()
     ctx = devices.Context(players=r.meta.players, notes=[])
     regs = devices.DeviceRegistry(r.store.checked()[0], ctx, store=r.store)
     regs.point(r.meta.pointer, r.meta.panel_pointer)
@@ -701,10 +702,12 @@ def _lands(r, raw):
     """The other Mac changes the list, and the registry sees it."""
     (r.root / devicelist.FILE).write_text(json.dumps({"schema": devicelist.SCHEMA, "devices": raw}))
     r.store.waiting.clear()     # (the seed's hold, long over by then)
+    r.store.sync()
     assert r.panel.devices.watch()
 
 
 def _on_disk(r):
+    r.store.sync()
     return {e["role"]: e for e in json.loads((r.root / devicelist.FILE).read_text())["devices"]}
 
 
@@ -728,8 +731,8 @@ def test_dragging_from_the_tray_adopts_it_for_that_player(tray):
     assert meta.players.player_of(role).number == 2
     assert meta.pointer(role).deck is meta.off_air
     assert r.panel.devices.get(role).status == "connected"
-    assert _said(r) == ("Launch Control XL adopted as launch-control-xl: on both Macs now. "
-                        "Player 2 holds it here, on deck 2.")
+    assert _said(r) == ("Launch Control XL adopted as launch-control-xl: player 2 holds it here, "
+                        "on deck 2. It goes on the list both Macs share.")
     assert json.loads(r.meta.players.path.read_text())["controllers"] == {role: 2}, "who holds it is this Mac's"
     assert "controllers" not in json.loads((r.root / devicelist.FILE).read_text())
     ui_players._state(r.panel)["loose_at"] = -1e9
@@ -783,7 +786,7 @@ def test_an_apc40_with_no_entry_is_drawn_as_itself_and_is_apc40(tray):
     d.run(d.wait(3))
     assert [(h.glyph, h.entry["role"]) for h in ui_players._state(r.panel)["loose"]] == [("apc40", "apc40")]
     _drag(d, "players.tray.0", lambda: _head(d, "players.p1"))
-    assert _on_disk(r)["apc40"] == {"role": "apc40", "kind": "midi", "profile": "apc40"}
+    assert _on_disk(r)["apc40"]["profile"] == "apc40"
     assert r.panel.devices.midi_roles() == ("apc40",)
 
 
@@ -827,7 +830,7 @@ def test_the_board_says_the_library_is_not_there_and_an_adopt_still_lands_this_r
     r, d, meta = tray, tray.d, tray.meta
     (r.root / devicelist.FILE).unlink()
     r.root.rmdir()
-    r.panel.devices.watch()
+    r.store.sync()
     d.run(d.wait(2))
     assert "isn't there" in r.store.said
     _drag(d, "players.tray.0", lambda: _head(d, "players.p2"))
@@ -837,3 +840,62 @@ def test_the_board_says_the_library_is_not_there_and_an_adopt_still_lands_this_r
     assert said.endswith(r.store.said) and "isn't there" in said
     assert ui_players._state(r.panel)["said_warn"]
     assert not r.root.exists()
+
+
+def test_the_same_cell_clicked_again_is_no_second_seat(tray):
+    """Review 5: a pad has no same-check, as two of a model are two seats. What stops a
+    phantom is the tray: it's gone from there the moment it's adopted."""
+    r, d = tray, tray.d
+    r.ports = []
+    joy = models.MODELS["joycon-l"]
+    held = ui_players.Held(joy.name, "joycon-l", joy.name, "on", devicelist.pad_entry(joy))
+    st = ui_players._state(r.panel)
+    st["loose"], st["loose_at"] = [held], 1e12
+    d.run(d.wait(2))
+    _click(d, "players.tray.0")
+    _click(d, _head(d, "players.p2"))
+    assert held not in st["loose"], "not drawn again, this second or any other"
+    d.run(d.wait(1))
+    assert "players.tray.0" not in {k for k in d.rects if st["loose"]}
+    assert [role for role in _on_disk(r) if role.startswith("joycon")] == ["joycon-l"]
+
+
+def test_two_pads_of_one_model_loose_are_two_seats_one_drag_each(tray):
+    r = tray
+    joy = models.MODELS["joycon-l"]
+    one = ui_players.Held(joy.name, "joycon-l", joy.name, "on", devicelist.pad_entry(joy))
+    st = ui_players._state(r.panel)
+    st["loose"] = [one, one]
+    ui_players.adopt(r.panel, one, 2)
+    assert st["loose"] == [one]
+    ui_players.adopt(r.panel, one, 3)
+    assert [k for k in _on_disk(r) if k.startswith("joycon")] == ["joycon-l", "joycon-l-2"]
+
+
+def test_a_desk_like_another_is_still_loose_and_gets_a_port_of_its_own(tray):
+    r = tray
+    r.ports = ["Akai APC40", "APC40 mkII"]
+    got = ui_players.loose(r.panel)
+    assert [h.role for h in got] == ["APC40 mkII"], "the entry reads the first; the second is free"
+    assert got[0].entry["port"] == "APC40 mkII"
+    ui_players.adopt(r.panel, got[0], 2)
+    assert _on_disk(r)["apc40-2"]["port"] == "APC40 mkII"
+    assert not ui_players.loose(r.panel)
+
+
+def test_the_tray_says_two_desks_of_one_name_show_as_one():
+    assert "show as one" in ui_players.TWINS_TIP
+
+
+def test_the_chip_turns_a_controller_on_or_off_on_this_mac_alone(tray):
+    r, d = tray, tray.d
+    before = (r.root / devicelist.FILE).read_text()
+    assert r.panel.devices.get("pad").status.startswith("off")
+    _click(d, "players.ctl.pad")
+    d.run(d.wait(2))
+    _click(d, "players.here")
+    assert r.store.is_on("pad") and "on, on this Mac only" in _said(r)
+    assert not r.panel.devices.get("pad").status.startswith("off")
+    r.store.sync()
+    assert (r.root / devicelist.FILE).read_text() == before
+    assert json.loads((r.store.base / devicelist.HERE).read_text())["on"] == {"pad": True}

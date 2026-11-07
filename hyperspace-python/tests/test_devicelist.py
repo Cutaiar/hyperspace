@@ -12,6 +12,7 @@ import inspect
 import itertools
 import json
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ from hyperspace.devicelist import (
     COPY,
     DEFAULTS,
     FILE,
+    HERE,
     HOLD_S,
     SCHEMA,
     DeviceList,
@@ -55,6 +57,19 @@ def macs(tmp_path):
     for d in (root, one, two):
         d.mkdir()
     return root, one, two
+
+
+def looked(store) -> bool:
+    """A whole cycle of the worker, then what the registry's `watch` would ask."""
+    store.sync()
+    return store.look()
+
+
+def opened(cfg, home) -> DeviceList:
+    """A launch, and its own files written, as they are long before the next one."""
+    store = DeviceList.open(cfg, home)
+    store.sync()
+    return store
 
 
 def on_disk(root) -> list[dict]:
@@ -99,13 +114,13 @@ port = "Launch Control"
 def test_config_toml_is_read_once_and_then_says_nothing(macs):
     root, one, _ = macs
     cfg = toml(one, LISTED.format(root=root))
-    DeviceList.open(cfg, one)
+    opened(cfg, one)
     assert roles(on_disk(root)) == ["pad", "launch"]
     assert {e["role"]: e["enabled"] for e in config.devices(cfg)} == {"pad": True, "launch": True}
     assert any("made from" in n for n in cfg["notes"])
     # an edit to config.toml afterwards lands nowhere, and is told so
     cfg = toml(one, LISTED.format(root=root) + '\n[[devices]]\nrole = "later"\nkind = "gamepad"\n')
-    DeviceList.open(cfg, one)
+    opened(cfg, one)
     assert roles(on_disk(root)) == ["pad", "launch"]
     assert [e["role"] for e in config.devices(cfg)] == ["pad", "launch"]
     assert any("is not read" in n for n in cfg["notes"])
@@ -114,7 +129,7 @@ def test_config_toml_is_read_once_and_then_says_nothing(macs):
 def test_the_seed_is_held_as_it_was_written_and_a_bad_entry_stays_out(macs):
     root, one, _ = macs
     cfg = toml(one, LISTED.format(root=root) + '\nlight = "#00ff00"\n[[devices]]\nrole = "no:colon"\nkind = "gamepad"\n')
-    DeviceList.open(cfg, one)
+    opened(cfg, one)
     assert on_disk(root) == [{"role": "pad", "kind": "gamepad"},
                              {"role": "launch", "kind": "midi", "profile": "generic",
                               "port": "Launch Control", "light": "#00ff00"}]
@@ -122,19 +137,19 @@ def test_the_seed_is_held_as_it_was_written_and_a_bad_entry_stays_out(macs):
 
 def test_the_other_mac_adds_only_what_the_list_lacks_and_only_once(macs):
     root, one, two = macs
-    DeviceList.open(toml(one, LISTED.format(root=root)), one)
+    opened(toml(one, LISTED.format(root=root)), one)
     second = LISTED.format(root=root).replace('"Launch Control"', '"Other"') + (
         '\n[[devices]]\nrole = "joy"\nkind = "gamepad"\ncontroller = "joycon-l"\n')
     cfg = toml(two, second)
-    DeviceList.open(cfg, two)
+    opened(cfg, two)
     got = on_disk(root)
     assert roles(got) == ["pad", "launch", "joy"]
     assert next(e for e in got if e["role"] == "launch")["port"] == "Launch Control", "the file's stands"
     assert any("says otherwise of launch" in n for n in cfg["notes"])
-    assert (two / COPY).exists()
+    assert (two / COPY).exists() and (two / HERE).exists()
     # it was read once on this Mac: gone from the list by hand, it stays gone
     lands(root, [e for e in got if e["role"] != "joy"])
-    DeviceList.open(toml(two, second), two)
+    opened(toml(two, second), two)
     assert roles(on_disk(root)) == ["pad", "launch"]
 
 
@@ -150,7 +165,7 @@ def test_a_file_that_says_nothing_seeds_the_defaults_that_cl3_needs(tmp_path):
 def test_a_table_saying_off_is_this_macs_and_stays_out_of_the_list(macs):
     root, one, two = macs
     cfg = toml(one, f'[library]\npath = "{root}"\n[gamepad]\nenabled = false\ndial_left = "blend"\n[hands]\nenabled = true\n')
-    DeviceList.open(cfg, one)
+    opened(cfg, one)
     got = {e["role"]: e for e in on_disk(root)}
     assert "enabled" not in got["pad"] and got["pad"]["dial_left"] == "blend"
     assert got["leap"]["enabled"] is True, "off unless said, so the list must say"
@@ -158,7 +173,7 @@ def test_a_table_saying_off_is_this_macs_and_stays_out_of_the_list(macs):
     assert cfg["gamepad"]["enabled"] is False
     # …and the other Mac, whose file says nothing of it, has its pad on
     cfg = toml(two, f'[library]\npath = "{root}"\n')
-    DeviceList.open(cfg, two)
+    opened(cfg, two)
     assert next(e for e in config.devices(cfg) if e["role"] == "pad")["enabled"] is True
 
 
@@ -290,7 +305,7 @@ def test_an_unmounted_drive_starts_on_this_macs_seed_and_creates_nothing(tmp_pat
 def test_an_unmounted_drive_starts_on_the_last_list_seen(macs):
     root, home, _ = macs
     lands(root, LIST)
-    DeviceList(root, home, seed=[])
+    DeviceList(root, home, seed=[]).sync()
     (root / FILE).unlink()
     root.rmdir()
     store = DeviceList(root, home, seed=[{"role": "other", "kind": "gamepad"}])
@@ -304,14 +319,14 @@ def test_an_adopt_with_no_drive_stands_survives_a_restart_and_lands_when_it_is_b
     store = DeviceList(root, home, seed=LIST)
     assert store.adopt(XBOX) == "xbox"
     assert roles(store.raw)[-1] == "xbox" and not root.exists()
+    assert not looked(store), "still not there"
     assert store.said
-    assert not store.look(), "still not there"
     again = DeviceList(root, home, seed=LIST)
     assert roles(again.raw)[-1] == "xbox", "kept in this Mac's copy"
     # the Drive mounts, with the other Mac's list in it, and no restart
     root.mkdir()
     lands(root, [*LIST, EDGE])
-    assert again.look()
+    assert looked(again)
     assert roles(on_disk(root)) == [*roles(LIST), "edge", "xbox"]
     assert again.said == "" and roles(again.raw) == [*roles(LIST), "edge", "xbox"]
 
@@ -319,10 +334,11 @@ def test_an_adopt_with_no_drive_stands_survives_a_restart_and_lands_when_it_is_b
 def test_this_macs_seed_still_reaches_the_list_after_a_first_launch_with_no_drive(tmp_path):
     root, home = tmp_path / "Drive", tmp_path / "home"
     home.mkdir()
-    DeviceList(root, home, seed=[{"role": "mine", "kind": "gamepad"}], listed=True)
+    DeviceList(root, home, seed=[{"role": "mine", "kind": "gamepad"}], listed=True).sync()
     root.mkdir()
     lands(root, LIST)
     store = DeviceList(root, home, seed=[{"role": "mine", "kind": "gamepad"}], listed=True)
+    store.sync()
     assert roles(store.raw) == [*roles(LIST), "mine"]
     assert roles(on_disk(root)) == [*roles(LIST), "mine"]
 
@@ -332,7 +348,7 @@ def test_the_drive_going_away_mid_run_leaves_the_list_alone(macs):
     store = DeviceList(root, home, seed=LIST)
     (root / FILE).unlink()
     root.rmdir()
-    assert not store.look()
+    assert not looked(store)
     assert store.raw == LIST and "isn't there" in store.said
 
 
@@ -340,7 +356,8 @@ def test_a_folder_with_no_file_gets_the_list_back(macs):
     root, home, _ = macs
     store = DeviceList(root, home, seed=LIST)
     (root / FILE).unlink()
-    assert not store.look()
+    assert not looked(store)
+    store.sync()
     assert on_disk(root) == LIST
 
 
@@ -349,20 +366,22 @@ def test_a_folder_with_no_file_gets_the_list_back(macs):
 def test_a_change_from_the_other_mac_lands_and_our_own_write_does_not_read_as_one(macs):
     root, home, _ = macs
     store = DeviceList(root, home, seed=LIST)
-    assert not store.look()
+    assert not looked(store)
     store.adopt(XBOX)
-    assert not store.look(), "our own write"
+    store.sync()
+    assert not store.look(), "adopting isn't news, and nor is our own write"
+    assert not looked(store)
     lands(root, [*store.raw, EDGE])
-    assert store.look()
+    assert looked(store)
     assert roles(store.raw)[-1] == "edge"
-    assert not store.look()
+    assert not looked(store)
 
 
 def test_drive_touching_the_file_is_no_change(macs):
     root, home, _ = macs
     store = DeviceList(root, home, seed=LIST)
     lands(root, LIST)
-    assert not store.look()
+    assert not looked(store)
 
 
 @pytest.mark.parametrize("text", ['{"schema": "devices/1", "devi', '{"schema": "devices/2", "devices": []}',
@@ -371,12 +390,12 @@ def test_a_list_that_will_not_read_is_never_written_over_and_is_read_again(macs,
     root, home, _ = macs
     store = DeviceList(root, home, seed=LIST)
     (root / FILE).write_text(text)
-    assert not store.look()
+    assert not looked(store)
     assert store.raw == LIST and "could not be read" in store.said
     assert store.adopt(XBOX) == "xbox", "an adopt still stands for this run"
     assert (root / FILE).read_text() == text
     lands(root, LIST)
-    assert not store.look(), "the sync finished, and the list this Mac has is what it says"
+    assert not looked(store), "the sync finished, and the list this Mac has is what it says"
     assert store.said == ""
     assert roles(on_disk(root)) == [*roles(LIST), "xbox"], "and the adopt reached it"
 
@@ -386,18 +405,22 @@ def test_a_file_landing_without_our_adopt_gets_it_back_and_no_one_fights(macs):
     clock = Clock()
     a = DeviceList(root, one, seed=LIST, clock=clock)
     b = DeviceList(root, two, seed=LIST, clock=clock)
+    a.sync()
+    b.sync()
     before = (root / FILE).read_text()
     assert a.adopt(XBOX) == "xbox"
+    a.sync()
     # Mac B's adopt, from a file before A's: Drive's last writer drops A's
     (root / FILE).write_text(before)
     assert b.adopt(EDGE) == "edge"
+    b.sync()
     assert roles(on_disk(root)) == [*roles(LIST), "edge"]
-    assert a.look(), "A's is put back"
+    assert looked(a), "A's is put back"
     assert set(roles(on_disk(root))) == {*roles(LIST), "xbox", "edge"}
-    assert b.look()
+    assert looked(b)
     settled = (root / FILE).read_text()
     for _ in range(4):
-        assert not a.look() and not b.look()
+        assert not looked(a) and not looked(b)
     assert (root / FILE).read_text() == settled
     assert set(roles(a.raw)) == set(roles(b.raw)) == {*roles(LIST), "xbox", "edge"}
 
@@ -407,9 +430,12 @@ def test_a_removal_by_hand_stands_once_the_hold_is_over(macs):
     clock = Clock()
     store = DeviceList(root, home, seed=LIST, clock=clock)
     store.adopt(XBOX)
+    store.sync()
     clock.t += HOLD_S + 1
+    store.look()
+    store.sync()
     lands(root, LIST)
-    assert store.look()
+    assert looked(store)
     assert roles(store.raw) == roles(LIST) and roles(on_disk(root)) == roles(LIST)
 
 
@@ -419,9 +445,11 @@ def test_one_name_for_two_controllers_keeps_the_files_and_ours_moves(macs):
     b = DeviceList(root, two, seed=[])
     before = (root / FILE).read_text()
     a.adopt(midi_entry("Foo Bar"))
+    a.sync()
     (root / FILE).write_text(before)
     b.adopt(midi_entry("foo-bar"))
-    assert a.look()
+    b.sync()
+    assert looked(a)
     got = {e["role"]: e["port"] for e in on_disk(root)}
     assert got == {"foo-bar": "foo-bar", "foo-bar-2": "Foo Bar"}
     assert any("the other Mac named" in n for n in a.notes)
@@ -430,13 +458,382 @@ def test_one_name_for_two_controllers_keeps_the_files_and_ours_moves(macs):
 def test_a_write_that_fails_is_said_kept_and_tried_again(macs, monkeypatch):
     root, home, _ = macs
     store = DeviceList(root, home, seed=LIST)
-    real = devicelist.DeviceList._write
-    monkeypatch.setattr(devicelist.DeviceList, "_write", lambda self, raw: self._say("not written") or False)
+    real = devicelist._put
+
+    def refused(path, text, tmp=None):
+        if path.name == FILE:
+            raise OSError("read-only")
+        real(path, text, tmp)
+    monkeypatch.setattr(devicelist, "_put", refused)
     assert store.adopt(XBOX) == "xbox"
-    assert roles(on_disk(root)) == roles(LIST) and store.said == "not written"
-    monkeypatch.setattr(devicelist.DeviceList, "_write", real)
-    assert not store.look()
+    store.sync()
+    assert roles(on_disk(root)) == roles(LIST) and "not written (read-only)" in store.said
+    monkeypatch.setattr(devicelist, "_put", real)
+    store.sync()
     assert roles(on_disk(root))[-1] == "xbox" and store.said == ""
+
+
+# ---------------------------------------------------------------- what's in the file (review 1)
+
+BAD_BYTES = [b"", b"\xff\xfe\x00garbage", b'{"schema": "devices/1", "devi', b"[]", b"null", b"3", b"\x00" * 64,
+             b'{"schema": "devices/1"}', b'{"schema": "devices/1", "devices": [1]}',
+             b'{"schema": "devices/1", "devices": {"a": 1}}', b'{"schema": ["x"], "devices": []}',
+             b"[" * 200_000, '{"schema": "devices/1", "devices": [{"role": "\u00e9'.encode("latin-1")]
+
+
+@pytest.mark.parametrize("data", BAD_BYTES)
+def test_no_bytes_in_the_file_reach_a_launch_or_a_look(macs, data):
+    root, home, _ = macs
+    (root / FILE).write_bytes(data)
+    store = DeviceList(root, home, seed=LIST)
+    assert store.raw == LIST and "could not be read" in store.said
+    assert not looked(store)
+    assert (root / FILE).read_bytes() == data, "never written over"
+    (root / FILE).write_bytes(json.dumps({"schema": SCHEMA, "devices": LIST}).encode())
+    assert not looked(store) and store.said == ""
+
+
+@pytest.mark.parametrize("data", BAD_BYTES)
+def test_no_bytes_in_this_macs_own_files_stop_a_launch(macs, data):
+    root, home, _ = macs
+    lands(root, LIST)
+    (home / COPY).write_bytes(data)
+    (home / HERE).write_bytes(data)
+    assert DeviceList(root, home, seed=[]).raw == LIST
+
+
+FUZZ = [{"role": 3, "kind": "gamepad"}, {"role": ["x"], "kind": []}, {"kind": "midi"}, {},
+        {"role": "a", "kind": "gamepad", "controller": 5, "light": [], "player": "x", "joystick": {}, "tape": 1},
+        {"role": "b", "kind": "midi", "port": 5, "profile": {}}, {"role": "c", "kind": "hands", "map": 3, "out": 9},
+        {"role": "d", "kind": "bridge", "send": 7}, {"role": "e", "kind": "nonesuch", "enabled": "yes"},
+        {"role": "f", "kind": "midi-out", "port": [], "carries": 1}, {"role": "x" * 5000, "kind": "osc"}]
+
+
+@pytest.mark.parametrize("entry", FUZZ)
+def test_no_entry_in_the_list_raises_out_of_a_watch(macs, entry):
+    root, home, _ = macs
+    store = DeviceList(root, home, seed=LIST)
+    reg = devices.DeviceRegistry([], devices.Context(), store=store)
+    lands(root, [*LIST, entry])
+    store.sync()
+    reg.watch()         # (the old list, or a new one with a device in error: neither raises)
+    assert store.look() is False
+
+
+@pytest.mark.parametrize("entry", FUZZ)
+def test_no_entry_in_the_list_stops_a_launch(macs, entry):
+    root, home, _ = macs
+    lands(root, [*LIST, entry])
+    cfg = toml(home, f'[library]\npath = "{root}"\n')
+    store = DeviceList.open(cfg, home)
+    devices.DeviceRegistry(config.devices(cfg), devices.Context(), store=store)
+
+
+# ---------------------------------------------------------------- a config.toml that didn't read (review 2)
+
+def test_a_config_that_did_not_read_seeds_nothing_and_spends_nothing(macs):
+    root, home, _ = macs
+    broken = LISTED.format(root=root).replace('[library]\npath = "', '[library\npath = "')
+    cfg = toml(home, broken)
+    assert cfg.get("error") and "device_seed" not in cfg
+    # (it can't read [library] path either, so give it the library as the home's: the worst case)
+    cfg["library"]["path"] = str(root)
+    store = opened(cfg, home)
+    assert "didn't read" in store.said and any("didn't read" in n for n in cfg["notes"])
+    assert not (root / FILE).exists(), "defaults aren't written for both Macs"
+    assert not (home / HERE).exists(), "and the read isn't spent"
+    # the typo fixed: its list is read after all
+    opened(toml(home, LISTED.format(root=root)), home)
+    assert roles(on_disk(root)) == ["pad", "launch"]
+    assert (home / HERE).exists()
+
+
+def test_a_config_that_did_not_read_starts_on_the_list_there_is(macs):
+    root, home, _ = macs
+    lands(root, LIST)
+    cfg = toml(home, "[library")
+    cfg["library"]["path"] = str(root)
+    store = opened(cfg, home)
+    assert store.raw == LIST and [e["role"] for e in config.devices(cfg)] == roles(LIST)
+
+
+def test_an_adopt_with_a_config_that_did_not_read_still_lands(macs):
+    root, home, _ = macs
+    cfg = toml(home, "[library")
+    cfg["library"]["path"] = str(root)
+    store = opened(cfg, home)
+    store.adopt(XBOX)
+    store.sync()
+    assert "xbox" in roles(on_disk(root))
+    assert "didn't read" in store.said, "and the seed still waits"
+
+
+# ---------------------------------------------------------------- a seed across a restart (review 3)
+
+def test_a_seed_entry_stays_a_seed_across_a_restart_with_no_drive(tmp_path):
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    home.mkdir()
+    seed = [{"role": "pad", "kind": "gamepad", "controller": "edge"}]
+    DeviceList(root, home, seed=seed, listed=True).sync()
+    assert json.loads((home / COPY).read_text())["unwritten"][0]["adopted"] is False
+    again = DeviceList(root, home, seed=seed, listed=True)
+    assert again.waiting["pad"].adopted is False
+    root.mkdir()
+    lands(root, [{"role": "pad", "kind": "gamepad", "controller": "any"}])
+    again.sync()
+    assert roles(on_disk(root)) == ["pad"], "the file's stands: no pad-2 for a seed"
+
+
+def test_an_adopt_stays_an_adopt_across_a_restart(tmp_path):
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    home.mkdir()
+    store = DeviceList(root, home, seed=[])
+    store.adopt(XBOX)
+    store.sync()
+    again = DeviceList(root, home, seed=[])
+    assert again.waiting["xbox"].adopted is True
+    root.mkdir()
+    lands(root, [{"role": "xbox", "kind": "midi", "profile": "generic", "port": "Other"}])
+    again.sync()
+    assert roles(on_disk(root)) == ["xbox", "xbox-2"], "a different controller: it takes a free name"
+
+
+# ---------------------------------------------------------------- MIDI names (reviews 4, 6)
+
+def test_an_apc40_named_or_not_is_one_controller(tmp_path):
+    for listed in ({"role": "apc40", "kind": "midi", "port": "APC40"}, {"role": "apc40", "kind": "midi"},
+                   {"role": "desk", "kind": "midi", "profile": "apc40", "port": "apc40"}):
+        store = DeviceList(tmp_path, seed=[listed])
+        assert store.adopt(midi_entry("Akai APC40")) == listed["role"]
+        assert len(store.raw) == 1
+        (tmp_path / FILE).unlink()
+
+
+def test_a_desk_with_its_own_name_is_its_own_controller(tmp_path):
+    store = DeviceList(tmp_path, seed=[{"role": "apc40", "kind": "midi"}])
+    assert store.adopt(midi_entry("APC40 mkII", another=True)) == "apc40-2"
+    assert store.raw[-1]["port"] == "APC40 mkII"
+    assert store.adopt(midi_entry("Launch Control XL")) == "launch-control-xl"
+    assert store.adopt(midi_entry("Launch Control XL 2")) == "launch-control-xl-2"
+
+
+def test_an_exact_name_opens_that_port_not_one_it_is_part_of():
+    from hyperspace.midi import find_port
+    names = ["Launch Control XL 2", "Launch Control XL"]
+    assert find_port(names, "launch control xl") == "Launch Control XL"
+    assert find_port(names, "Launch Control XL 2") == "Launch Control XL 2"
+    assert find_port(names, "Launch") == "Launch Control XL 2", "else the first it's part of"
+    assert find_port(names, "APC") is None
+
+
+def test_two_desks_of_one_name_are_one_to_mido_so_an_ordinal_could_open_nothing(monkeypatch):
+    """Review finding 6's ordinal, disproved for a true twin: mido lists the name once, and
+    opens the first port of that name, so "X #2" has nothing to reach. The words say so."""
+    from mido.backends import rtmidi as backend
+
+    class Twins:
+        def __init__(self, **_):
+            pass
+
+        def get_ports(self):
+            return ["Twin", "Twin"]
+
+        def delete(self):
+            pass
+
+        def open_port(self, n):
+            opened.append(n)
+    opened: list[int] = []
+    monkeypatch.setattr(backend.rtmidi, "MidiIn", Twins)
+    monkeypatch.setattr(backend.rtmidi, "MidiOut", Twins)
+    assert [d["name"] for d in backend.get_devices()] == ["Twin"]
+    backend._open_port(Twins(), "Twin")
+    assert opened == [0]
+
+
+# ---------------------------------------------------------------- on or off, per Mac (review 7)
+
+def test_on_or_off_is_each_macs_whatever_the_list_says(macs):
+    root, one, two = macs
+    cfg = toml(one, f'[library]\npath = "{root}"\n')
+    a = opened(cfg, one)
+    assert not next(e for e in config.devices(cfg) if e["role"] == "leap")["enabled"]
+    cfg = toml(two, f'[library]\npath = "{root}"\n[hands]\nenabled = true\n')
+    b = opened(cfg, two)
+    assert next(e for e in config.devices(cfg) if e["role"] == "leap")["enabled"], "B has a Leap"
+    assert not a.is_on("leap") and b.is_on("leap")
+    assert next(e for e in on_disk(root) if e["role"] == "leap")["enabled"] is False, "the file didn't move"
+
+
+def test_the_board_is_the_door_and_it_outlives_a_restart(macs):
+    root, one, _ = macs
+    cfg = toml(one, f'[library]\npath = "{root}"\n')
+    store = opened(cfg, one)
+    before = (root / FILE).read_text()
+    store.set_here("leap", True)
+    assert next(e for e in store.checked()[0] if e["role"] == "leap")["enabled"] is True
+    store.sync()
+    assert (root / FILE).read_text() == before, "on this Mac alone"
+    cfg = toml(one, f'[library]\npath = "{root}"\n')
+    opened(cfg, one)
+    assert next(e for e in config.devices(cfg) if e["role"] == "leap")["enabled"] is True
+
+
+def test_config_toml_disagreeing_later_is_said_and_the_board_stands(macs):
+    root, one, _ = macs
+    opened(toml(one, f'[library]\npath = "{root}"\n'), one)
+    cfg = toml(one, f'[library]\npath = "{root}"\n[hands]\nenabled = false\n')
+    opened(cfg, one)
+    assert not any("leap" in n and "otherwise" in n for n in cfg["notes"]), "it agrees"
+    (one / HERE).write_text(json.dumps({"schema": devicelist.HERE_SCHEMA, "on": {"leap": True}}))
+    cfg = toml(one, f'[library]\npath = "{root}"\n[hands]\nenabled = false\n')
+    opened(cfg, one)
+    assert any("leap" in n and "otherwise" in n for n in cfg["notes"])
+    assert next(e for e in config.devices(cfg) if e["role"] == "leap")["enabled"] is True
+
+
+def test_a_second_mac_on_the_old_tables_adds_what_it_said_and_no_defaults(macs):
+    root, _, two = macs
+    lands(root, [{"role": "edge", "kind": "gamepad", "controller": "edge"}])
+    cfg = toml(two, f'[library]\npath = "{root}"\n[midi]\nprofile = "generic"\nport = "Box"\n')
+    opened(cfg, two)
+    got = roles(on_disk(root))
+    assert "generic" in got, "what its table said"
+    assert "pad" not in got and "leap" not in got, "a default isn't saying anything"
+
+
+# ---------------------------------------------------------------- a slow disk (review 8)
+
+class Stalled:
+    """The shared folder as a File Provider having a bad day: every touch of it blocks
+    until `free` is set. This Mac's own folder answers at once."""
+
+    def __init__(self, monkeypatch, root):
+        import threading
+        self.free = threading.Event()
+        self.touches = 0
+        real_stat, real_read = devicelist._stat, devicelist._read
+
+        def stat(path, r):
+            self.touches += 1
+            self.free.wait(30)
+            return real_stat(path, r)
+
+        def read(path, r):
+            self.touches += 1
+            self.free.wait(30)
+            return real_read(path, r)
+        monkeypatch.setattr(devicelist, "_stat", stat)
+        monkeypatch.setattr(devicelist, "_read", read)
+
+
+def test_a_stalled_drive_never_touches_the_frame_thread(macs, monkeypatch):
+    root, home, _ = macs
+    lands(root, LIST)
+    monkeypatch.setattr(devicelist, "LAUNCH_S", 0.05)
+    clock = Clock()
+    disk = Stalled(monkeypatch, root)
+    t0 = time.perf_counter()
+    store = DeviceList(root, home, seed=LIST, clock=clock)
+    assert time.perf_counter() - t0 < 1.0, "the launch is bounded"
+    assert "isn't answering" in store.said
+    worst = 0.0
+    for _ in range(200):
+        clock.t += 0.5
+        t0 = time.perf_counter()
+        store.look()
+        store.role_for(XBOX)
+        worst = max(worst, time.perf_counter() - t0)
+    t0 = time.perf_counter()
+    assert store.adopt(XBOX) == "xbox"
+    assert store.checked()[0][-1]["role"] != ""
+    worst = max(worst, time.perf_counter() - t0)
+    print(f"worst frame-thread call with a stalled library: {worst * 1000:.3f} ms")
+    assert worst < 0.02
+    assert disk.touches == 1, "one cycle out at a time, however long it takes"
+    assert roles(store.raw)[-1] == "xbox", "the adopt stands"
+    store._local.wait(5)
+    assert "xbox" in (home / COPY).read_text(), "and this Mac's own file isn't held up"
+    disk.free.set()
+    store.sync()
+    assert "xbox" in roles(on_disk(root))
+    assert store.said == ""
+
+
+def test_a_launch_that_gave_up_takes_the_file_when_it_answers(macs, monkeypatch):
+    root, home, _ = macs
+    lands(root, [*LIST, EDGE])
+    monkeypatch.setattr(devicelist, "LAUNCH_S", 0.05)
+    disk = Stalled(monkeypatch, root)
+    store = DeviceList(root, home, seed=LIST)
+    assert store.raw == LIST
+    reg = devices.DeviceRegistry(store.checked()[0], devices.Context(), store=store)
+    disk.free.set()
+    store.sync()
+    assert reg.watch()
+    assert "edge" in [d.role for d in reg]
+
+
+def test_what_fails_is_tried_less_and_less_often(tmp_path):
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    home.mkdir()
+    clock = Clock()
+    store = DeviceList(root, home, seed=[], clock=clock)
+    store.adopt(XBOX)
+    given = []
+    real = store._give
+    store._give = lambda: (given.append(clock.t), real())
+    store._shared.wait(5)
+    for _ in range(600):
+        clock.t += 0.5
+        store.look()
+        store._shared.wait(5)
+    gaps = [b - a for a, b in itertools.pairwise(given)]
+    assert len(given) < 25, "five minutes unmounted: not 600 tries"
+    assert gaps[-1] <= devicelist.RETRY_MAX_S + 1 and gaps[-1] > gaps[0]
+    root.mkdir()
+    clock.t += devicelist.RETRY_MAX_S + 1
+    store.look()
+    store.sync()
+    assert roles(on_disk(root)) == ["xbox"], "and it still lands"
+
+
+def test_a_quiet_list_costs_one_stat_a_look_on_the_worker(macs, monkeypatch):
+    root, home, _ = macs
+    clock = Clock()
+    store = DeviceList(root, home, seed=LIST, clock=clock)
+    store.sync()
+    reads = []
+    real = devicelist._read
+    monkeypatch.setattr(devicelist, "_read", lambda p, r: reads.append(1) or real(p, r))
+    clock.t += HOLD_S + 1
+    for _ in range(50):
+        clock.t += devicelist.LOOK_S
+        store.look()
+        store._shared.wait(5)
+    assert not reads
+
+
+# ---------------------------------------------------------------- a rename's holders (review 10)
+
+def test_a_rename_takes_who_holds_it_with_it(macs):
+    root, one, two = macs
+    a = DeviceList(root, one, seed=[])
+    b = DeviceList(root, two, seed=[])
+    before = (root / FILE).read_text()
+    players = Players(one / "players.json")
+    ctx = devices.Context(players=players)
+    reg = devices.DeviceRegistry([], ctx, store=a)
+    a.adopt(midi_entry("Foo Bar"))
+    players.hold("foo-bar", 2)
+    a.sync()
+    (root / FILE).write_text(before)
+    b.adopt(midi_entry("foo-bar"))
+    b.sync()
+    a.sync()
+    assert reg.watch()
+    assert players.held == {"foo-bar-2": 2}, "foo-bar is now the other Mac's controller"
+    assert players.player_of("foo-bar").number == 1
 
 
 # ---------------------------------------------------------------- where it stands
@@ -465,13 +862,14 @@ def test_a_root_file_is_safe_in_the_library(tmp_path):
 def test_this_macs_own_files_stay_in_its_home(macs):
     root, home, _ = macs
     DeviceList(root, home, seed=LIST)
-    assert sorted(p.name for p in home.iterdir()) == [COPY]
+    DeviceList(root, home, seed=LIST).sync()
+    assert sorted(p.name for p in home.iterdir()) == sorted([COPY, HERE])
     assert sorted(p.name for p in root.iterdir()) == [FILE]
 
 
 def test_with_the_library_in_the_home_there_is_no_copy(tmp_path):
-    DeviceList(tmp_path, tmp_path, seed=LIST)
-    assert sorted(p.name for p in tmp_path.iterdir()) == [FILE]
+    DeviceList(tmp_path, tmp_path, seed=LIST).sync()
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([HERE, FILE])
 
 
 def test_no_patch_reaches_the_list():

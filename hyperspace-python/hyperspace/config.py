@@ -797,7 +797,7 @@ def listed_devices(raw: list, base: Path, here: dict | None = None
         entries = _daw(scratch, entries, set())
     _resolve(entries, base)
     for e in entries:
-        if e["role"] in (here or {}):
+        if here and e["role"] in here:
             e["enabled"] = here[e["role"]]
     return entries, problems, scratch["notes"]
 

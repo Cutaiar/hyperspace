@@ -271,7 +271,6 @@ class _Seen:
     write_error: str = ""
     moved: list[tuple[str, dict]] = field(default_factory=list)
     differs: list[str] = field(default_factory=list)
-    asked: tuple[str, ...] = ()
 
 
 def _stat(path: Path, root: Path) -> tuple:
@@ -325,7 +324,6 @@ def _cycle(path: Path, root: Path, job: _Job, tmp_name: str) -> _Seen:
     """One look at the shared file: a stat; if it moved, or something must be written, a
     read, a merge and, only if the file doesn't say it, a write. On the worker. Whatever the
     disk does and whatever the file holds, a `_Seen`."""
-    asked = tuple(r for r, _, _ in job.waiting)
     try:
         stat = _stat(path, root)
         if stat == job.seen and not job.force:
@@ -336,7 +334,7 @@ def _cycle(path: Path, root: Path, job: _Job, tmp_name: str) -> _Seen:
         if state == _ABSENT and not job.may_make and not job.waiting:
             return _Seen(state, stat=stat)
         merged, moved, differs = _union(doc if doc is not None else job.fallback, job.waiting)
-        seen = _Seen(state, merged=merged, moved=moved, differs=differs, asked=asked)
+        seen = _Seen(state, merged=merged, moved=moved, differs=differs)
         if merged == doc:
             seen.wrote = True
         else:
@@ -433,7 +431,7 @@ class DeviceList:
         try:
             doc = json.loads(path.read_bytes().decode("utf-8"))
             if not isinstance(doc, dict):
-                raise ValueError("not a table")
+                raise TypeError("not a table")
             return doc
         except FileNotFoundError:
             return None
@@ -563,10 +561,9 @@ class DeviceList:
                 self._note(f"devices: {FILE} is back")
             self._said, self._from = "", "this Mac's last list"
             until = now + HOLD_S
-            for role in (*r.asked, *(str(e.get("role", "")) for e in r.merged)):
-                w = self.waiting.get(role)
-                if w is not None and w.until is None and any(
-                        str(e.get("role", "")) == role for e in r.merged):
+            written = {str(e.get("role", "")) for e in r.merged}
+            for role, w in self.waiting.items():
+                if w.until is None and role in written:
                     w.until = until
             self._next, self._delay = now + LOOK_S, RETRY_S
         else:

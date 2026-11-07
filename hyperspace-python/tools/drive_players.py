@@ -89,6 +89,7 @@ def script(d, panel):
     regs.relist()
     yield from d.park()
     yield from d.wait(60)           # two in the tray; nothing written
+    regs.store.sync()
     assert "launch-control-xl" not in regs.store.path.read_text()
     yield from d.move("players.big.tray.0", frames=10)
     yield from d.press(True)
@@ -107,6 +108,13 @@ def script(d, panel):
     ui_players._state(panel)["loose_at"] = -1e9
     yield from d.park()
     yield from d.wait(60)
+    yield from d.click("players.big.ctl.launch-control-xl", frames=10)
+    yield from d.wait(20)           # picked: its on-or-off chip, for this Mac
+    yield from d.click("players.big.here", frames=10)
+    yield from d.park()
+    yield from d.wait(30)
+    assert regs.store.here["launch-control-xl"] is False
+    regs.store.sync()
     text = regs.store.path.read_text()
     assert "launch-control-xl" in text and "joycon-l" in text
     print(text)

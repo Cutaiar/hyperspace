@@ -1155,19 +1155,25 @@ def _lands(root, raw):
     (root / devicelist.FILE).write_text(json.dumps({"schema": devicelist.SCHEMA, "devices": raw}))
 
 
+def _watched(r):
+    """A whole cycle of the list's worker, then the registry's look."""
+    r.store.sync()
+    return r.reg.watch()
+
+
 def test_the_registry_watches_the_list_not_config_toml(listed):
     r = listed
     _lands(r.root, [*r.store.raw, {"role": "xbox", "kind": "gamepad", "controller": "xbox"}])
-    assert r.reg.watch()
+    assert _watched(r)
     assert [d.role for d in r.reg] == ["pad", "apc40", "xbox"]
     assert Counted.log == ["open xbox"], "what was there is not touched"
-    assert not r.reg.watch()
+    assert not _watched(r)
 
 
 def test_a_list_that_will_not_read_closes_nothing(listed):
     r = listed
     (r.root / devicelist.FILE).write_text('{"schema": "devices/1", "dev')
-    assert not r.reg.watch()
+    assert not _watched(r)
     assert [d.role for d in r.reg] == ["pad", "apc40"] and not Counted.log
     assert r.reg.get("pad").io is not None
 
@@ -1177,7 +1183,7 @@ def test_the_drive_going_away_closes_nothing(listed):
     (r.root / devicelist.FILE).unlink()
     r.root.rmdir()
     for _ in range(3):
-        assert not r.reg.watch()
+        assert not _watched(r)
     assert [d.role for d in r.reg] == ["pad", "apc40"] and not Counted.log
     assert "isn't there" in r.store.said
 
@@ -1185,7 +1191,7 @@ def test_the_drive_going_away_closes_nothing(listed):
 def test_a_bad_entry_from_the_other_mac_is_said_and_the_old_list_stands(listed):
     r = listed
     _lands(r.root, [*r.store.raw, {"role": "no:colon", "kind": "gamepad"}])
-    assert not r.reg.watch()
+    assert not _watched(r)
     assert [d.role for d in r.reg] == ["pad", "apc40"] and not Counted.log
     assert any("the old list stands" in n for n in r.reg.notes)
 
@@ -1195,15 +1201,16 @@ def test_adopting_opens_only_the_new_one_and_a_change_from_the_other_mac_keeps_i
     role = r.store.adopt({"role": "xbox", "kind": "gamepad", "controller": "xbox"})
     r.players.hold(role, 2)
     assert r.reg.relist()
+    r.store.sync()
     assert Counted.log == ["open xbox"]
     assert [d.role for d in r.reg] == ["pad", "apc40", "xbox"]
     # the other Mac's copy, from before the adopt, lands with its own new one
     _lands(r.root, [{"role": "pad", "kind": "gamepad"}, {"role": "apc40", "kind": "midi"},
                     {"role": "edge", "kind": "gamepad", "controller": "edge"}])
-    assert r.reg.watch()
+    assert _watched(r)
     assert {d.role for d in r.reg} == {"pad", "apc40", "xbox", "edge"}, "the adopt stands"
     assert "close xbox" not in Counted.log
-    assert not r.reg.watch(), "and nobody takes turns"
+    assert not _watched(r), "and nobody takes turns"
 
 
 def test_the_first_look_for_midi_is_before_any_frame_unless_this_mac_said_no(tmp_path, monkeypatch):
@@ -1214,3 +1221,20 @@ def test_the_first_look_for_midi_is_before_any_frame_unless_this_mac_said_no(tmp
     assert looks == [1]
     app._open_devices({**cfg, "no_midi_look": True}, devices.Context(), None)
     assert looks == [1]
+
+
+def test_a_rename_moves_the_holder_the_seat_and_the_pointer(tmp_path, monkeypatch):
+    monkeypatch.setattr("hyperspace.deck.meta_stack", lambda first: SimpleNamespace())
+    monkeypatch.setattr("hyperspace.deck.undos.install_meta", lambda u: None)
+    meta = MetaController(SimpleNamespace(name="one", undo=SimpleNamespace()),
+                          SimpleNamespace(name="two", undo=SimpleNamespace()),
+                          Players(tmp_path / FILE))
+    meta.move_player(2, Duty.OFF_AIR)
+    meta.register("foo", 2)
+    pointer = meta.pointer("foo")
+    meta.rename_controller("foo", "foo-2")
+    assert meta.players.player_of("foo-2").number == 2
+    assert meta.players.player_of("foo").number == 1 and "foo" not in meta.seats
+    assert meta.seats["foo-2"] == 2 and meta.pointer("foo-2") is pointer
+    assert meta.pointer("foo") is not pointer, "the name's the other Mac's controller now"
+    assert json.loads((tmp_path / FILE).read_text())["controllers"] == {"foo-2": 2}

@@ -902,7 +902,7 @@ def _here_chip(panel, st: dict, store, sfx: str) -> None:
     on = store.is_on(role)
     if ui.lit_chip(f"{role}: {'on' if on else 'off'} on this Mac##players{sfx}.here", on):
         store.set_here(role, not on)
-        getattr(panel, "devices").relist()
+        panel.devices.relist()
         _say(panel, st, f"{role} {'off' if on else 'on'}, on this Mac only.")
     if imgui.is_item_hovered():
         ui.tooltip(HERE_TIP)

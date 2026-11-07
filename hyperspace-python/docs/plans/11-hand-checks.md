@@ -8462,6 +8462,7 @@ Register rows 796–799, 2026-11-06. Headless: `tests/test_devicelist.py`, `test
 2. Hover it. *Pass:* the tip names the role it would get.
 3. Drag it to player 2. *Pass:* said in words; it's on player 2's token, lit; the file has one new entry, last, and nothing else moved. Rows naming `@p2` move with it, on player 2's deck.
 4. Quit and relaunch. *Pass:* still there, same role, still player 2's, with no drag.
+5. Click it on the board, then its "on this Mac" chip. *Pass:* it goes off here and comes back, and `devices.json` doesn't change.
 *Fail:* adopted by plugging in, a role that changes, or an old row that goes dead.
 
 **620. The APC40 from the tray.** (the Mac, with the APC40)
@@ -8478,7 +8479,8 @@ Register rows 796–799, 2026-11-06. Headless: `tests/test_devicelist.py`, `test
 **622. No Drive.** (the Mac)
 1. Quit Google Drive, or point `[library] path` at a missing folder, and launch. *Pass:* the app starts, controllers work as last seen, and the board and SYSTEM say the library isn't there. No folder appears at that path.
 2. Adopt a controller. *Pass:* it works now, and the words say it's kept on this Mac.
-3. Bring the Drive back, with no restart. *Pass:* the warning goes, and the entry is in `devices.json`.
+3. Bring the Drive back, with no restart. *Pass:* within 30 s the warning goes, and the entry is in `devices.json`.
+4. With the projector running, pause Drive syncing, or take the network away, and watch the picture for a minute. *Pass:* no hitch that wasn't there before. (`Library`'s own scan reads this folder on the frame thread and isn't CT1's: a hitch here is worth saying, with that in mind.)
 *Fail:* no launch, a created folder, or a lost adopt.
 
 ## What no test covers
