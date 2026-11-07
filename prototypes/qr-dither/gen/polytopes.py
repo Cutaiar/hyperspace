@@ -138,11 +138,94 @@ POSES = {
     "cube_tilt":      ("cube", {(0, 1): R45}, 7.0, 3.0, 0.10),
 }
 
-# Subjects with no pose here are not oversights. The 5-cell has no axis to
-# align to and its edges staircase at any angle; the 3-8 duoprism's triangles
-# do the same; the 24-cell seen cell-first fills solid; and folding the
-# tesseract in XW mid-way (an angle that is neither 0 nor 45) turns its edges
-# into dotted staggers. Each was rendered and rejected by eye at 65 modules.
+# --- the taxonomy ---------------------------------------------------------
+#
+# The subjects above are not a flat list: they are members of families, and a
+# family is the useful unit for exploring them, because what survives module
+# quantisation is a property of the family's edge set rather than of any one
+# solid. Hypercubes have edges on the axes, so they survive; duoprisms built
+# from octagons put every edge on an axis or a 45, so they survive; a simplex
+# has neither and never will.
+#
+# `dim` is declared rather than measured: a 3-cube lives in the w = 0
+# hyperplane, so its vertices are still 4-tuples. Vertex and edge counts are
+# NOT declared -- they come off SUBJECTS, so they cannot drift from the shape.
+
+FAMILIES = [
+    ("hypercube", "Hypercubes",
+     "The measure polytopes. Every edge runs along an axis, which is exactly "
+     "what a square module grid samples cleanly, and is why this family is the "
+     "one the prototype is built around.",
+     ["cube", "tesseract"]),
+    ("orthoplex", "Cross-polytopes",
+     "The duals of the hypercubes: vertices on the axes, every non-opposite "
+     "pair joined. Several vertices project to the same point, so they read as "
+     "a figure inside a diamond rather than as nested cells.",
+     ["cell16"]),
+    ("duoprism", "Duoprisms",
+     "An m-gon times a k-gon. The angles available are the polygons' own, so "
+     "octagons work (every edge on an axis or a 45) and triangles do not.",
+     ["duo38", "duo48", "duo88"]),
+    ("simplex", "Simplexes",
+     "The minimum solid in each dimension. No two edges are parallel and none "
+     "aligns to an axis, which is the one thing this grid cannot draw.",
+     ["cell5"]),
+    ("exceptional", "The 24-cell",
+     "Self-dual, 96 edges, and no analogue in any other dimension \u2014 it is its "
+     "own family. The densest subject here that still reads.",
+     ["cell24"]),
+]
+
+SUBJECT_LABELS = {
+    "cube":      ("3-cube", 3),
+    "tesseract": ("Tesseract (4-cube)", 4),
+    "cell16":    ("16-cell", 4),
+    "cell24":    ("24-cell", 4),
+    "cell5":     ("5-cell", 4),
+    "duo38":     ("3-8 duoprism", 4),
+    "duo48":     ("4-8 duoprism", 4),
+    "duo88":     ("8-8 duoprism", 4),
+}
+
+# Subjects and orientations with no pose above are not oversights. Each was
+# rendered and rejected by eye at 65 modules, and the reason is the useful
+# part: an absence with no reason written down gets re-explored by whoever
+# comes next. Two kinds live here -- a subject that has no viable orientation
+# at all, and an orientation of a subject that does.
+REJECTED = {
+    "cell5":     [("any orientation",
+                   "No axis to align to, so its edges staircase at every angle.")],
+    "duo38":     [("any orientation",
+                   "The triangular ring's edges never land on 0, 45 or 90; they "
+                   "staircase the way the octagonal ones do not.")],
+    "cell24":    [("cell first",
+                   "Fills solid. 96 edges with no gaps left for a reader.")],
+    "tesseract": [("folded part-way through XW",
+                   "An angle that is neither 0 nor 45, so every edge becomes a "
+                   "dotted stagger.")],
+}
+
+
+def taxonomy():
+    """Families, their members, and what each member is -- for the manifest.
+
+    Counts come off SUBJECTS and the pose list comes off POSES, so this cannot
+    describe a shape that is not there or miss one that is.
+    """
+    out = []
+    for fid, label, note, members in FAMILIES:
+        subjects = []
+        for sid in members:
+            verts, edges = SUBJECTS[sid]
+            name, dim = SUBJECT_LABELS[sid]
+            subjects.append({
+                "id": sid, "label": name, "dim": dim,
+                "vertices": len(verts), "edges": len(edges),
+                "poses": [p for p, (s, *_) in POSES.items() if s == sid],
+                "rejected": [{"pose": p, "why": w} for p, w in REJECTED.get(sid, [])],
+            })
+        out.append({"id": fid, "label": label, "note": note, "subjects": subjects})
+    return out
 
 
 def render(n, subject="tesseract", angles=None, stroke=3, margin=0.10,

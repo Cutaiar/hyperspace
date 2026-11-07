@@ -24,10 +24,14 @@ cd app && npm install && npm run dev
 ```
 
 Then <http://localhost:5181>. Vite 8 binds IPv6 only, so `127.0.0.1` will not
-answer — use `localhost`. Three views:
+answer — use `localhost`. Five views:
 
 - **gallery** — 29 stills across eight 4D subjects, seven dot styles and six
   palettes. Pick a destination and every code gets a verdict against it.
+- **families** — the same stills grouped by what the solid *is*. Which
+  orientations survive module quantisation is a property of a family's edge
+  set, not of any one solid, so the family is the unit that explains why the
+  tesseract has six orientations and the 5-cell has none.
 - **live solver** — re-derives the whole code per update, **0.2 ms** a solve.
   Grab it and fold it.
 - **sprite** — 216 precomputed frames, 94 KB, every one decode-verified.
@@ -171,6 +175,14 @@ of the running page and decoded the same way (24/24 orientations, 15/15 across
 all five textures, 16/16 across every dot and eye style). `gen/gallery.py`
 rasterises each SVG it writes with headless Chrome and decodes *that* — the
 shipped file, not a model of it.
+
+The sticker exporters get the same treatment. [`app/src/lib/style.ts`](app/src/lib/style.ts)
+is the TypeScript twin of `gen/style.py`, so a sheet exports with the dot, eye
+and colour treatment it previews with — and [`gen/sheets.py`](gen/sheets.py)
+rasterises every sheet `npm run check` writes, with Chrome for the SVG and
+poppler for the PDF, decodes every sticker on the page and measures one of each
+code. **276/276**, 24/24 of them on a vendor sheet at zero gutter with inverted
+and light codes alternating.
 
 [`gen/robust.py`](gen/robust.py) measures the three things that actually kill a
 code in the world: minimum camera pixels per module, blur tolerance, and a

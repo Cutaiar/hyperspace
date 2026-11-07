@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Builder } from '@/components/Builder'
+import { Families } from '@/components/Families'
 import { Gallery } from '@/components/Gallery'
 import { LiveSolver } from '@/components/LiveSolver'
 import { Sprite } from '@/components/Sprite'
 
 const VIEWS = {
   gallery: { label: 'gallery', el: <Gallery /> },
+  families: { label: 'families', el: <Families /> },
   live:    { label: 'live solver', el: <LiveSolver /> },
   sprite:  { label: 'sprite', el: <Sprite /> },
   builder: { label: 'stickers', el: <Builder /> },

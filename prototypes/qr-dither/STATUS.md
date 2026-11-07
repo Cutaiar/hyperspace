@@ -13,18 +13,36 @@ cd app && npm install && npm run dev     # http://localhost:5181
 Vite 8 binds IPv6 only — `127.0.0.1` will not answer, use `localhost`.
 
 ```sh
-cd app && npm run check                  # layout model + a real export, no browser needed
+cd app && npm run check                  # layout model + real exports, no browser needed
 ```
+
+`npm run check` also writes eight sheets to `work/sheets/`. Decoding them is a
+separate step, because it needs Chrome and a Python stack the app does not:
+
+```sh
+uv run --with pillow --with numpy --with segno --with zxing-cpp \
+  python3 gen/sheets.py --url https://hyperspace.cutaiar.io
+```
+
+That one also wants **poppler** — the only system package this prototype needs
+beyond Chromium, and the one thing here that is not satisfied by a fresh macOS:
+`brew install poppler`, or `apt-get install poppler-utils`. It rasterises the
+PDFs, and it is poppler rather than Chrome on purpose, so the renderer that
+checks a file is not the renderer that checks the other one. `mutool` works
+too, `QRD_PDFRAST` overrides the lookup, and adding `--with pypdfium2` to the
+command above needs no system package at all — at the cost of being Chrome's
+PDF engine, which makes the two halves less independent.
 
 Regenerating artefacts needs `uv` and a Chromium (`QRD_CHROME` overrides the
 lookup). Nothing else is machine-specific; verified by cloning the branch
 clean and running the whole thing.
 
-## Four views
+## Five views
 
 | view | what it is |
 | --- | --- |
 | **gallery** | 29 stills. Pick a destination (screen px, sticker mm, etched, projected) and every code gets a verdict against it. |
+| **families** | The same stills grouped by what the solid *is* — hypercubes, cross-polytopes, duoprisms, simplexes, the 24-cell — including the members that have no still, and why. |
 | **live solver** | Re-derives the code per update, 0.2 ms a solve. Grab it and fold it. |
 | **sprite** | 216 precomputed frames, 94 KB, no solver on the client. |
 | **stickers** | Lay codes on a sheet, see the cut lines, export SVG or PDF. |
@@ -35,6 +53,11 @@ clean and running the whole thing.
   solves in 0.2 ms instead of 2 s. The URL is baked into the factorisation —
   point it elsewhere and every artefact must be rebuilt.
 - **29 stills** across eight subjects, seven dot styles, six palettes.
+- **The family tree.** `gen/polytopes.py` carries the taxonomy and the reject
+  log as data rather than a comment, `gallery.py` writes both into the
+  manifest, and the families view reads it. A subject that was rendered and
+  rejected is part of the answer, so it is shown with its reason instead of
+  being absent.
 - **Measurement.** `gen/robust.py` measures the *rendered* file, not the
   matrix: min px/module, blur tolerance, flash tolerance. The manifest carries
   those plus the module grid as base64.
@@ -42,6 +65,10 @@ clean and running the whole thing.
   the gallery as a medium.
 - **Sticker builder.** `lib/sheet.ts` (pure mm geometry), the preview, and
   `lib/export.ts` (SVG + a hand-written vector PDF).
+- **Styled exports.** `lib/style.ts` is the TypeScript twin of `gen/style.py`,
+  so a sheet exports with the dot, eye and colour treatment it previews with —
+  arcs in the SVG, the matching cubics and an axial shading in the PDF, still
+  no dependency and still no raster.
 
 ## Everything is verified against an independent path
 
@@ -52,8 +79,9 @@ Nothing here is trusted on looks.
 | the 29 stills | Chrome rasterises each SVG, zxing decodes it | 29/29 |
 | the sprite | every frame decoded before shipping | 216/216 |
 | the live solver | frame pulled off the React canvas, decoded in Python | lands on the URL |
-| the exports | PDF via macOS Quartz, SVG via Chrome, both decoded | 15/15 each |
-| the layout model | every figure in STICKERS.md asserted in code | 28 checks |
+| the exports | 8 sheets rasterised by Chrome (SVG) and poppler (PDF), every sticker decoded, one of each code measured | 276/276 |
+| the style port | all 29 stills drawn again by `lib/style.ts` and diffed against `gen/style.py`'s own render | 26 bit identical, 3 within a pixel |
+| the layout model | every figure in STICKERS.md asserted in code | 85 checks |
 
 ## Open — all four are physical, none are code
 
@@ -73,11 +101,16 @@ See STICKERS.md for the detail. In short, each needs one cheap real-world test:
 
 ## Smaller opens, in the code
 
-- **Exports carry geometry, not style.** A sheet of `pal-red` or `sty-dots`
-  previews styled and downloads as plain black squares, because the exporters
-  re-render from the module grid and the grid has no palette in it. The UI says
-  so. A real fix means porting `gen/style.py`'s renderer to TypeScript so the
-  exporters can draw dots, eyes and colours at a physical size.
+- **Three renderers draw a styled module grid, and only two are held together
+  by a test.** `lib/render.js` paints the canvas for the live solver,
+  `gen/style.py` writes the stills, `lib/style.ts` feeds the exporters, and all
+  three carry the same `FINDER`, the same `DOTS` table and the same eye ratios
+  independently. `gen/twins.py` pins the last two — change one and a command
+  tells you. Nothing pins `render.js`; the README calls it a twin and that is
+  an assertion, not a measurement. Deliberate: its drift is cosmetic and shows
+  up the moment you open the live view, where a divergent *export* would not,
+  and a third harness would be friction on every style change. If a constant
+  ever gets tuned in one file, this is the paragraph to remember.
 
 - Four of five texture blobs are gitignored (358 KB each). Only `gothic` ships;
   the live solver's texture picker prints the command for the others.
@@ -96,6 +129,12 @@ See STICKERS.md for the detail. In short, each needs one cheap real-world test:
 - **`destination-over` and Fast Refresh both produced false alarms.** Twice a
   change looked broken because the page was running a stale module. Reload
   before believing a negative result.
+- **`gen/gallery.py` is not reproducible, and that is pyqart, not a bug here.**
+  pyqart retries its elimination until the error count reaches zero, and the
+  retry is not seeded, so re-running the generator rewrites every `matrix` with
+  a different but equally valid code. Expect a 29-file diff for no change. The
+  style fields added to the manifest were therefore written from gallery.py's
+  own tables rather than by regenerating; `gallery.py` emits them from now on.
 - **Only `export_js.py` takes the fast path** through `basis.py`. Everything
   else calls pyqart directly and pays ~2 s per image — fine for a still,
   impossible for a frame.

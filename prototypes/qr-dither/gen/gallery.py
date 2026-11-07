@@ -52,6 +52,10 @@ def find_chrome():
 OUT = WEB / "gallery"
 RAST = WORK / "gallery-rast"
 
+# subject id -> family id, off the taxonomy rather than restated here
+FAMILY_OF = {s["id"]: f["id"]
+             for f in polytopes.taxonomy() for s in f["subjects"]}
+
 RED, INK, PAPER = "#ff2b2b", "#000000", "#ffffff"
 
 # (id, pose, stroke, version, title, blurb, style overrides)
@@ -202,7 +206,26 @@ def main():
                       "bytes": len(svg), "decodes": ok,
                       "dark": kw.get("bg", "#ffffff").lower() in ("#000000", "#000"),
                       "pose": pose, "stroke": stroke, "version": version,
+                      # which solid this is and which family it belongs to, so
+                      # the app can group by family without a second copy of
+                      # polytopes.py's taxonomy to drift from
+                      "subject": polytopes.POSES[pose][0] if pose in polytopes.POSES else None,
+                      "family": FAMILY_OF.get(
+                          polytopes.POSES[pose][0] if pose in polytopes.POSES else None),
+                      # Everything handed to style.to_svg, so the manifest
+                      # carries the look as well as the grid. The sticker
+                      # exporters re-render from the grid at a physical size
+                      # and need the same arguments this call used; a table of
+                      # them in the app would be a second place to drift.
+                      # Defaults mirror to_svg's own signature.
                       "dot": kw.get("dot", "square"),
+                      "eye_frame": kw.get("eye_frame", "square"),
+                      "eye_core": kw.get("eye_core", "square"),
+                      "fg": kw.get("fg", "#000000"),
+                      "fg2": kw.get("fg2"),
+                      "bg": kw.get("bg", "#ffffff"),
+                      "plate_radius": kw.get("plate_radius", 0),
+                      "style_eyes": kw.get("style_eyes", True),
                       "min_ppm": rb["min_ppm"], "blur": rb["blur"], "flash": rb["flash"],
                       "matrix": robust.pack(m)})
         if not ok:
@@ -256,6 +279,10 @@ def main():
 
     (OUT / "manifest.json").write_text(
         json.dumps({"url": base, "items": items, "baselines": baselines,
+                    # the whole family tree, including members with no still:
+                    # a subject that was rendered and rejected is part of the
+                    # answer, and the reason is the part worth keeping
+                    "families": polytopes.taxonomy(),
                     "matrix_encoding": "base64, row-major, MSB first, bit i = y*n + x"},
                    indent=1), encoding="utf-8")
 
