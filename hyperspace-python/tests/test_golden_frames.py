@@ -74,15 +74,15 @@ def test_every_corpus_loadable_has_every_state_recorded_and_nothing_else():
     assert doc["solo_fx_only"] == ["solo-scene+hands+through"]
     assert doc["wired_states"] == {
         "in-scene": {"wiring": {"hands": "scene"},
-                     "states": ["scene+hands", "hands", "hands+through"], "loadable": None},
+                     "states": ["scene+hands", "hands", "hands+through"], "presets": None},
         "depth": {"wiring": {"blend": "depth"},
-                  "states": ["scene+hands", "scene+hands+through"], "loadable": None},
+                  "states": ["scene+hands", "scene+hands+through"], "presets": None},
         "history+hands": {"wiring": {"history": "scene+hands"}, "states": ["scene+hands"],
-                          "loadable": ["party-wake", "party-tracer"]}}
+                          "presets": ["party-wake", "party-tracer"]}}
     tool = _tool()
     assert doc["cloud_states"] == {
         "cloud": {"config": tool.CLOUD_CONFIG, "fixture": "tests/fixtures/clouds/knot.npz",
-                  "states": ["scene", "scene+hands"], "loadable": ["legacy6", "party-faces"]}}
+                  "states": ["scene", "scene+hands"], "presets": ["legacy6", "party-faces"]}}
     assert 'kind = "cloud"' in tool.CLOUD_CONFIG and tool.CLOUD_FIXTURE.is_file()
     assert doc["size"] == [960, 600] and doc["dpr"] == 1.0 and doc["frames"] == 8
     assert abs(doc["dt"] - 1 / 60) < 1e-12
