@@ -14,14 +14,15 @@ It lives here because the Command palette is the component it belongs to —
 addressable params — and because the work is correct and worth keeping
 until that gets built.
 
-`Item`, `heading` and `sep` come from `comp_combobox`: a Command palette
+`Item`, `heading` and `sep` come from `combobox_items` (the Combobox's row
+model, split out of `comp_combobox` by HANDOFF item 3c): a Command palette
 shows the same kind of row, and duplicating the model to avoid the import
 would be worse than the import.
 """
 
 from __future__ import annotations
 
-from comp_combobox import Item, _is_row, _k, heading, sep  # noqa: F401
+from combobox_items import Item, _is_row, _k, heading, sep  # noqa: F401
 
 # --------------------------------------------------------------------------
 # the filter — pure, no imgui

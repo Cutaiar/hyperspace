@@ -211,8 +211,10 @@ def test_the_private_names_that_cross_a_module_boundary_are_known():
 
     A module's `_private` names are normally free to move. These are not:
     another module imports them by name, so a split that leaves them behind
-    breaks at import. `HANDOFF.md` item 3 splits `comp_combobox`, and three
-    of its four exported privates are in that list.
+    breaks at import. `HANDOFF.md` item 3 (3a-3c) grew this from two entries
+    to nine; each one it added carries the reason beside it. Item 3a added
+    none, because the box model's privates had no outside callers and the
+    facade does not re-export them.
 
     This is a LEDGER, not a prohibition - if a split moves one, update the
     list and the importer together. It exists so the next person finds them
@@ -224,8 +226,16 @@ def test_the_private_names_that_cross_a_module_boundary_are_known():
             if name.startswith("_"):
                 crossing.setdefault(f"{mod}.{name}", set()).add(p.name)
     assert crossing == {
-        "comp_combobox._is_row": {"comp_command.py"},
-        "comp_combobox._k": {"comp_command.py"},
+        # item 3c moved these two out of comp_combobox with the rest of the
+        # row model. comp_command imports them from the new home; the other
+        # importers are the widget and the two pure modules split beside it.
+        "combobox_items._is_row": {"comp_command.py", "comp_combobox.py",
+                                   "combobox_measure.py"},
+        "combobox_items._k": {"comp_command.py", "comp_combobox.py",
+                              "combobox_measure.py", "combobox_select.py"},
+        # item 3c: the widget reads both; neither had another caller.
+        "combobox_measure._rows_node": {"comp_combobox.py"},
+        "combobox_select._MISSING": {"comp_combobox.py"},
         # item 3b: the facade re-exports it because
         # test_a_fractional_delta_marks_the_device_precise_for_good flips
         # `I._PRECISE["seen"]`. Safe only while wheel.py MUTATES the dict
