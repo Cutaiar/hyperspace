@@ -89,11 +89,12 @@ a buffer kept for it (`_mono`); it counts nothing and moves nothing: the
 analyzer drains the ring once a frame exactly as it drains the mic's.
 `listen(None)` stops it. The ring is one reference, read once a callback.
 
-This is the one road a `Deck`'s video has to the other `Deck`, and the owner
-accepts it (2026-11-06, register row 790): only the `Deck` on air feeds the
-mixer, the analyzer hears what the room hears, and the `Deck` off air reads the
-same analyzer's lanes. The toggle says so (`ui.VIDEO_SOUND_REACHES`, the tip of
-``audio.mix``); `tests/test_video_sound_path.py` names the road.
+This is how a video's sound reaches the other `Deck`, and the owner accepts it
+(2026-11-06, register row 790; row 702 lists the other known limits): only the
+`Deck` on air feeds the mixer, the analyzer hears what the room hears, and the
+`Deck` off air reads the same analyzer's lanes. The toggle says so
+(`ui.VIDEO_SOUND_REACHES`, the tip of ``audio.mix``);
+`tests/test_video_sound_path.py` names the road.
 
 `sounddevice` is imported only when the stream is first opened (the
 package's rule: importing the app pulls no adapter library)."""

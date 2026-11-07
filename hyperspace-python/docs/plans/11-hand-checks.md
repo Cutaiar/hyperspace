@@ -7079,7 +7079,7 @@ Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not
 1. Launch with no channel's `audio` on. AUDIO: *Listen to video sound*.
 2. MEDIA: tick `audio` on A (the video playing at rate 1).
 3. Untick it; then pull the headphones or switch the output device.
-*Pass:* step 1 shows no error, the line "silent until a channel's sound
+*Pass:* step 1 shows no error, the line "silent until an on-air channel's sound
 is on (MEDIA)", the bands at rest and SYSTEM shows no `media sound` line
 (nothing opened); step 2 the bands come alive with the sound; unticked,
 the bands decay to rest (not frozen on the last block); a device change
@@ -8351,10 +8351,12 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 ## DI. Video sound on the toggle (plan 58 LY3, row 790)
 Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a fake sound card; the line seen in the real app at both widths, never read by a person.
 **614. It says so, and it's true.** (the rig; a video with sound)
-1. Unfold audio, and drag the side pane to its narrowest and then wider. *Pass:* under **Listen to video sound**, the words "Off air reacts to on air's video sound." read at a glance, whole, at each width. Hover the button: the whole sentence is there.
-2. Put a video on air with its channel's sound on, and **Listen to video sound**. Off air, load a look with an audio route. *Pass:* the off-air preview reacts to the sound you hear.
-3. Stop the on-air channel's sound. Turn on the sound of a video that's off air. *Pass:* you hear nothing, and off air stops reacting.
-*Fail:* words cut off or hidden, a look off air that doesn't react in step 2, or one that reacts in step 3.
+1. Unfold audio with the mic on, or no source. Hover **Listen to video sound**. *Pass:* the hover says off air's audio routes react while it's on, and no line stands under the button.
+2. Put a video on air with its channel's sound on, and load a look with an audio route off air. With the mic still on or no source: *Pass:* off air doesn't react to the video.
+3. Press **Listen to video sound**, and drag the side pane to its narrowest and then wider. *Pass:* the words "Off air reacts to on air's video sound." read at a glance, whole, at each width, and the off-air preview reacts to the sound you hear.
+4. Press **Listen to mic**. *Pass:* the words go, and off air stops reacting to the video.
+5. Back on **Listen to video sound**, stop the on-air channel's sound and turn on the sound of a video that's off air. *Pass:* you hear nothing, and off air doesn't react.
+*Fail:* words cut off or hidden, words standing while the analyzer is off the mix, a look off air that doesn't react in step 3, or one that reacts in step 2, 4 or 5.
 
 ## DH. GRAPH's start zoom (plan 58 SM2, row 787)
 Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.

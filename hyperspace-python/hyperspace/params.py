@@ -2297,9 +2297,10 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     if media is not None:
         r.toggle("audio.mix", "Video sound", mix_on, set_mix, group=g, persist=False,
                  tip="Listen to what the room hears of the videos: the on-air channels whose "
-                     "sound is on, summed after their gains. The analyzer hears what the room "
-                     "hears, and both looks read it, so the off-air look's audio routes react "
-                     "to that sound too. Nothing else crosses between them. Silent until a "
+                     "sound is on, summed after their gains. While this is on, the off-air "
+                     "look's audio routes react to that sound too: the analyzer hears what the "
+                     "room hears, and both looks read it. It moves only what those routes "
+                     "drive, and asks nothing of the off-air channels. Silent until an on-air "
                      "channel's sound is on; no input device is opened.")
     r.enum("audio.device", "Input device",
            lambda: int(getattr(audio, "device_sel", 0)),

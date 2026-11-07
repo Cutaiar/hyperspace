@@ -2623,10 +2623,10 @@ class Panel:
             words = "Stop video sound" if mix_on else "Listen to video sound"
             beside(button_w(words))
             self._button("audio.mix", words)
-            # under the toggle, not only on its hover (the owner, 2026-11-06: row 790)
-            imgui.push_text_wrap_pos(0.0)
-            imgui.text_disabled(VIDEO_SOUND_REACHES)
-            imgui.pop_text_wrap_pos()
+            if mix_on:      # true only then; the hover says it before the press (row 790)
+                imgui.push_text_wrap_pos(0.0)
+                imgui.text_colored(DIM, VIDEO_SOUND_REACHES)
+                imgui.pop_text_wrap_pos()
         else:
             beside(button_w("Load track"))
         if imgui.button("Load track"):
@@ -2659,7 +2659,9 @@ class Panel:
                 if getattr(mx, "failed", False):        # the mixer's error is the source's
                     imgui.text_colored(WARN, f"video sound silent — {mx.state}")
                 elif not getattr(mx, "playing", 0):
-                    imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
+                    imgui.push_text_wrap_pos(0.0)   # (longer than the pane's narrow widths)
+                    imgui.text_disabled("silent until an on-air channel's sound is on (MEDIA)")
+                    imgui.pop_text_wrap_pos()
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 
