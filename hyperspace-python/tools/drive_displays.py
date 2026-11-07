@@ -24,7 +24,7 @@ import sys
 import glfw
 
 from hyperspace import app, overlay, placement, ui_displays, ui_graph
-from hyperspace.displays import CONTROL, FILE
+from hyperspace.displays import CONTROL, FILE, NOTHING, find, normal, read_row
 from hyperspace.ui import PAGE_KEYS
 
 
@@ -107,25 +107,32 @@ def script(d, panel):
         yield from d.park()
         yield from d.wait(3)
 
-    # the last row's target: nothing, then back. Nothing opens or closes
+    # the last row's target: another, then back, each read from the file. Nothing opens or closes
     last = len(across) - 1
-    keep = run.store.current.get(across[last], {}).get("target", "")
+    label = across[last]
+    keep = read_row(find(run.store.current, label))["target"]
+    to = "output.4" if keep != "output.4" else NOTHING
+    picks = [t for t, _ in ui_displays.choices(panel.outputs)]
+
+    def on_file():
+        run.store.sync()
+        doc = json.loads((run.store.root / FILE).read_text())
+        return doc, read_row(find(normal(doc["displays"]), label))["target"]
+
     windows = len([w for w in (*(sl.win for sl in panel.outputs), *(a.win for sl in panel.outputs for a in sl.also)) if w])
-    yield from d.pick(f"display.{last}.target", 0)
+    yield from d.pick(f"display.{last}.target", picks.index(to))
     yield from d.park()
     yield from d.wait(3)
-    say(f"{across[last]}: target {keep!r} -> nothing;",
+    say(f"{label}: target {keep!r} -> {to!r};",
         "windows open", windows, "(no change, it waits:", ui_displays.ON_RESTART.strip(), ")")
     yield from d.wait(25)
-    run.store.sync()
-    doc = json.loads((run.store.root / FILE).read_text())
-    assert doc["displays"].get(across[last], {}).get("target", "") == "", doc
-    picks = [t for t, _ in ui_displays.choices(panel.outputs)]
+    doc, now = on_file()
+    assert now == to, (to, doc)
     yield from d.pick(f"display.{last}.target", picks.index(keep))
     yield from d.park()
     yield from d.wait(3)
-    run.store.sync()
-    doc = json.loads((run.store.root / FILE).read_text())
+    doc, now = on_file()
+    assert now == keep, (keep, doc)
     say("the file:", json.dumps(doc["displays"], sort_keys=True))
     assert sum(e.get("target") == CONTROL for e in doc["displays"].values()) <= 1
     say("notes:", [n for n in panel.config_notes if n.startswith("displays:")])

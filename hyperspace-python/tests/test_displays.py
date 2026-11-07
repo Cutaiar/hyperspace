@@ -451,7 +451,7 @@ def test_a_render_on_two_displays_opens_a_window_on_each_with_its_own_flips(monk
     assert (also.flip_x, also.flip_y) == (False, True)
     assert app._also_output(also).fullscreen is True and also.monitor == 1
     assert app._slot_windows(slots)[:2] == [one.win, also.win]
-    assert displays.opened_of(slots, want.control) == {"TV #1": "output.1", "TV #2": "output.1", "Built-in": CONTROL}
+    assert displays.opened_of(slots, want.control) == {"TV": "output.1", "TV #2": "output.1", "Built-in": CONTROL}
     assert g.pos[ctrl][0] < 1728
     assert not cfg.get("notes")
 
@@ -566,7 +566,7 @@ def rows(tmp_path, monkeypatch):
         for sl in slots[1:]:
             sl.win = None
         r.panel.displays = _running(r.store, SCREENS, slots, {
-            "Built-in": CONTROL, "TV #1": "output.1", "TV #2": "output.1"})
+            "Built-in": CONTROL, "TV": "output.1", "TV #2": "output.1"})
         d = Driver(step=lambda: frame(r.panel))
         d.record(monkeypatch.setattr)
         d.run(d.wait(2))
@@ -606,6 +606,44 @@ def test_a_render_on_two_displays_has_flips_on_each_at_once(rows):
     disk = on_disk(r.root)
     assert (disk["TV"]["flip_x"], disk["TV"]["flip_y"], disk["TV"]["fullscreen"]) == (True, True, True)
     assert (disk["TV #2"]["flip_x"], disk["TV #2"]["flip_y"], disk["TV #2"]["fullscreen"]) == (True, True, True)
+
+
+def test_a_second_of_a_name_plugged_in_mid_run_is_the_same_window(tmp_path, monkeypatch):
+    """"TV" becomes "TV #1" with the window still open on it: its ticks reach it, and nothing
+    claims to wait for ⌘R. Through the real panel, the store and SC1's labels."""
+    root = tmp_path / "Drive"
+    root.mkdir()
+    (tmp_path / "home").mkdir()
+    with build_rig(tmp_path) as r:
+        r.panel.desk = False
+        imgui.get_io().display_size = imgui.ImVec2(1600, 900)
+        store = opened(root, tmp_path / "home", seed={"Built-in": row(CONTROL), "TV": row("output.1")})
+        slots = r.panel.outputs
+        slots[0].win, slots[0].display, slots[0].output = "w1", "TV", r.panel.output
+        slots[0].also = []
+        scr = [LAPTOP, TV_LEFT]
+        run = Running(store, lambda: scr, slots, displays.opened_of(slots, displays.Opening("Built-in", 0)))
+        r.panel.displays = run
+        d = Driver(step=lambda: frame(r.panel))
+        d.record(monkeypatch.setattr)
+        d.run(d.wait(2))
+        r.reg["ui.page"].set(PAGE_KEYS.index("output"))
+        d.run(d.wait(3))
+        assert run.opened == {"TV": "output.1", "Built-in": CONTROL}
+        assert not any(t.startswith(ui_displays.ON_RESTART) for t in _texts(r, d))
+        scr.append(TV_RIGHT)                # the second plugged in: "TV" is "TV #1" now
+        assert placement.labels(scr) == ["Built-in", "TV #1", "TV #2"]
+        d.run(d.wait(2))
+        assert run.window_on("TV #1") == (slots[0], None) and run.opened_on("TV #1") == "output.1"
+        assert not any(t.startswith(ui_displays.ON_RESTART) for t in _texts(r, d)), "the same window"
+        d.run(d.click("display.1.flip_x"), d.park(), d.wait(2))
+        assert slots[0].switches.flip_x is True, "the tick reaches it"
+        store.sync()
+        assert on_disk(root)["TV"]["flip_x"] is True and "TV #1" not in on_disk(root)
+        # unplugged again: one row, one window
+        scr.pop()
+        d.run(d.wait(2))
+        assert run.window_on("TV") == (slots[0], None)
 
 
 def test_a_change_of_target_is_written_and_says_it_waits_for_a_restart(rows):
@@ -797,6 +835,21 @@ def test_the_seed_is_spent_when_the_library_is_the_home(tmp_path, monkeypatch):
     store.sync()
     assert set(store.rows) == {"A"} and list(wanted(store.current, [b, a]).renders[1]) == [
         displays.Opening("A", 1)]
+
+
+def test_no_display_connected_spends_no_seed(tmp_path):
+    """A launch that saw no displays has nothing to seed from: the next that does, does."""
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    root.mkdir()
+    home.mkdir()
+    cfg = {**_cfg(monitor=0), "library": {"path": str(root)}}
+    store = DisplayList.open(cfg, home, [])
+    store.sync()
+    store.close()
+    assert not store.seeded and not json.loads((home / COPY).read_text())["seeded"]
+    store = DisplayList.open(cfg, home, [LAPTOP])
+    store.sync()
+    assert store.seeded and on_disk(root) == {"Built-in": row("output.1")}
 
 
 def test_a_mac_with_no_say_adds_no_display_to_rows_it_finds(tmp_path):

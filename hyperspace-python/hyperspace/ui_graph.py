@@ -1300,8 +1300,8 @@ def panel_wants(panel) -> list:
 
 def window_wants(panel) -> list[str]:
     """Plan 44 D3 (row 623): the windows the loaded patch wires or cuts
-    that this rig has not open (`graphview.window_wanted_lines` over the
-    loadable patches' graph and bus cuts and the panel's outputs), one line each —
+    that this rig has not open (`graphview.wanted_windows` over the
+    loadable patches' graph and bus cuts, less the panel's outputs), one line each —
     what OUTPUT and the GRAPH head say; [] with no loadable patches (a test's panel)."""
     loaded_patch = getattr(getattr(panel, "library", None), "loaded_patch", None)
     if loaded_patch is None:

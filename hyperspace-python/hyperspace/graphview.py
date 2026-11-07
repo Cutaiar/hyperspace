@@ -847,27 +847,22 @@ WINDOW_WANTED = ("this preset wires Output {n}, which is not open on this Mac �
                  "display for it on OUTPUT to show it")
 
 
-def wanted_windows(spec, bus_cuts=None, count: int = 0) -> list[int]:
-    """The windows past this meta controller's `count` that the loadable patch asks for (plan 44
-    D3): every `output.<n>` its section wires into, and every one its bus
-    cuts (`rig`, the loadable patch's `graph.BusCuts`) name, n > `count`, in order —
-    what OUTPUT and GRAPH say (`WINDOW_WANTED`) so the owner can open them.
-    Pure; nothing is opened here."""
+def wanted_windows(spec, bus_cuts=None) -> list[int]:
+    """The windows the loadable patch asks for (plan 44 D3): every `output.<n>` its section
+    wires into, and every one its bus cuts (the loadable patch's `graph.BusCuts`) name, in
+    order. `ui_graph.window_wants` says those nothing shows (`WINDOW_WANTED`), so the owner can
+    give them a display. Pure; nothing is opened here."""
     want: set[int] = set()
     wires = list(getattr(spec, "wires", None) or ())
     cut = list(getattr(bus_cuts, "cut", None) or ())
     for w in (*wires, *cut):
         node = getattr(w, "node", "") or ""
         head, _, n = node.partition(".")
-        if head == "output" and n.isdecimal() and int(n) > count:
+        if head == "output" and n.isdecimal():
             want.add(int(n))
     return sorted(want)
 
 
-def window_wanted_lines(spec, bus_cuts=None, count: int = 0) -> list[str]:
-    """`WINDOW_WANTED` for each window `wanted_windows` names: the line OUTPUT
-    (beside the output blocks) and the GRAPH head both say, the same words."""
-    return [WINDOW_WANTED.format(n=n) for n in wanted_windows(spec, bus_cuts, count)]
 # plan 36 T2 (W2): a listed cloud's wire into the scene, the meta controller's too
 CLOUD_SAID = ("this cloud's wire into the scene — cut it and the scene "
               "draws no cloud with this preset (a preset saves its cuts)")

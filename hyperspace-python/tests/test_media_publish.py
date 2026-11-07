@@ -43,11 +43,11 @@ def test_config_reads_publish_keys(tmp_path):
     assert "ndi = 5 is not a name" in notes and "syphon = True is not a name" in notes
     assert "window = 'no' is not true or false" in notes
 
-    # output 1 holds the GL context and paces the loop: it always opens a window
+    # whether output 1 has a window is the display rows' to say, not this key (SC2)
     p.write_text('[[output.screens]]\nwindow = false\nsyphon = "RIG"\n')
     cfg = config.load(p)
     assert config.screens(cfg)[0]["window"] is True
-    assert any("output 1" in n and "always opens a window" in n for n in cfg["notes"])
+    assert any("output 1" in n and "the display rows' to say" in n for n in cfg["notes"])
 
     # the one-output form: [output] says for output 1
     p.write_text('[output]\nsyphon = "RIG"\nndi = "RIG"\n')
@@ -59,7 +59,7 @@ def test_config_reads_publish_keys(tmp_path):
     (one,) = config.screens(cfg)
     assert (one["ndi"], one["window"]) == ("", True)
     notes = " | ".join(cfg["notes"])
-    assert "[output] ndi = 3 is not a name" in notes and "always opens a window" in notes
+    assert "[output] ndi = 3 is not a name" in notes and "the display rows' to say" in notes
     # with a list, the list says: [output] syphon is ignored, with the note
     p.write_text('[output]\nsyphon = "X"\n[[output.screens]]\nname = "a"\n')
     cfg = config.load(p)

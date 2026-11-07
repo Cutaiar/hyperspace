@@ -210,7 +210,9 @@ def pending(rows: Rows, scr: list[Screen], opened: dict[str, str]) -> list[tuple
     """(label, target) for each connected display that a launch would open differently from
     what's open, across the desk."""
     now = wanted(rows, scr).shown
-    return [(tag, target) for tag, target in now.items() if opened.get(tag, NOTHING) != target]
+    was = {placement.memory(tag): target for tag, target in opened.items()}
+    return [(tag, target) for tag, target in now.items()
+            if was.get(placement.memory(tag), NOTHING) != target]
 
 
 # ---------------------------------------------------------------- the seed
@@ -467,7 +469,7 @@ class DisplayList:
             # this Mac's one read of its config.toml: what's in the file stands
             seed = normal(seed)
             waits = {t: e for t, e in seed.items() if t in no_say}
-            self.seeded = True
+            self.seeded = bool(seed)            # (no display connected, no seed: nothing spent)
             self.rows = merged(self.rows, {t: e for t, e in seed.items() if t not in no_say})
             self._force = True
         elif config_says:
@@ -657,7 +659,9 @@ class DisplayList:
 @dataclass
 class Running:
     """What the panel's rows act on: the rows, the connected list (`screens`, a call), the
-    slots, and `opened`, each display's target as this run opened them."""
+    slots, and `opened`, each display's target as this run opened them. A display is always
+    asked for by its label now and matched by its memory: a second of its name plugged in mid-run
+    makes "TV" "TV #1", and it's the same window."""
 
     store: DisplayList
     screens: Callable[[], list[Screen]]
@@ -666,19 +670,24 @@ class Running:
 
     def window_on(self, tag: str) -> tuple[Any, Any] | None:
         """(slot, its `Also` or None for its first display) of the window open on `tag`."""
+        key = placement.memory(tag)
         for sl in self.slots:
-            if sl.opened and sl.display == tag:
+            if sl.opened and placement.memory(sl.display) == key:
                 return sl, None
             for also in sl.also:
-                if also.display == tag:
+                if placement.memory(also.display) == key:
                     return sl, also
         return None
 
+    def opened_on(self, tag: str) -> str:
+        """What this run opened on the display labelled `tag`."""
+        return self.opened.get(placement.memory(tag), NOTHING)
+
 
 def opened_of(slots: list, control: Opening | None) -> dict[str, str]:
-    """Each display's target, as these slots have them."""
-    out = {sl.display: f"output.{sl.n}" for sl in slots if sl.opened and sl.display}
-    out.update({a.display: f"output.{sl.n}" for sl in slots for a in sl.also})
+    """Each display's target, as these slots have them, by its memory."""
+    out = {placement.memory(sl.display): f"output.{sl.n}" for sl in slots if sl.opened and sl.display}
+    out.update({placement.memory(a.display): f"output.{sl.n}" for sl in slots for a in sl.also})
     if control is not None:
-        out[control.display] = CONTROL
+        out[placement.memory(control.display)] = CONTROL
     return out

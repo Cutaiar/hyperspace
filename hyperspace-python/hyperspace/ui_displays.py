@@ -41,7 +41,7 @@ def _tick(panel, run: Running, tag: str, key: str, on: bool, target: str) -> Non
     window's first display goes through the params the desk's rows name."""
     run.store.set(tag, **{key: on})
     open_on = run.window_on(tag)
-    if open_on is None or run.opened.get(tag) != target:
+    if open_on is None or run.opened_on(tag) != target:
         return
     sl, also = open_on
     if also is not None:
@@ -63,7 +63,7 @@ def _tick(panel, run: Running, tag: str, key: str, on: bool, target: str) -> Non
 def _shown(run: Running, tag: str, key: str, row: dict, target: str) -> bool:
     """What a tick says: the open window's, as the desk may have moved it; else the row's."""
     open_on = run.window_on(tag)
-    if open_on is None or run.opened.get(tag) != target:
+    if open_on is None or run.opened_on(tag) != target:
         return row[key]
     sl, also = open_on
     if key == "fullscreen":
