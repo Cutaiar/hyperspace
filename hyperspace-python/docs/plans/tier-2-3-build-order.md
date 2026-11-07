@@ -7,11 +7,11 @@
 > figure did not export. Wave 2's checkpoint against it is in
 > [`wave-2-session-prompt.md`](wave-2-session-prompt.md).
 
-## Where we are, 2026-11-06
+## Where we are, 2026-11-06 (end of day)
 
-**Waves 0–3 are merged. Wave 4 is most of the way through and being finished now. Wave 5, which this document never had, is
-planned.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section,
-this section is right. Nothing in wave 4 has been tried on real hardware. Hand checks 419–580 are unrun but for 425.
+**Waves 0–3 are merged. Wave 4's rename and most of its spine are merged; what's left waits on the owner's hand checks. Wave 5 is running beside it, in three tracks.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section, this section is right. **Keep this section current: the wave 5 orchestrator updates it whenever an item changes state.**
+
+Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on are unrun, but for 425.
 
 | Wave | State | PRs |
 | --- | --- | --- |
@@ -19,30 +19,40 @@ this section is right. Nothing in wave 4 has been tried on real hardware. Hand c
 | 1 | **Merged** 2026-11-03 | D1 #327, C2 #333, K2 #325, K3 #328, K4 #326, V2 #329, L1 #334, plus #331 |
 | 2 | **Merged** 2026-11-04 | D2 #346, D3 #351, F1 #352, U1 #345, U2 #350, L2 #349, T2 #348, T3 #344, V3 #343, I1 #347 |
 | 3 | **Merged** 2026-11-04 | U3 #360, V4 #357, O1 #358, O2 #362, D4 #359, B1 #356, P1 #355, P2 #361, P3 #364, plus #366 |
-| 4 | **Being finished** | Below |
-| 5 | **Planned, not started** | [`58-wave-5.md`](58-wave-5.md), launched by [`wave-5-session-prompt.md`](wave-5-session-prompt.md) |
+| 4 | **Spine merged; the end waits on hand checks** | Below |
+| 5 | **Running** since 2026-11-06, in three tracks | Below; [`58-wave-5.md`](58-wave-5.md), [`wave-5-session-prompt.md`](wave-5-session-prompt.md) |
 
-**Wave 4 as it changed.** The owner's answers replaced much of rows 4.1–4.7: two fixed `Deck`s and a DJ crossfader instead of
-hold-as-copy, named players, node mode saved in the patch, N3 gone. Authority is
-[`wave-4-session-prompt.md`](wave-4-session-prompt.md), "The owner's answers".
+**Wave 4 as it changed.** The owner's answers replaced much of rows 4.1–4.7: two fixed `Deck`s and a DJ crossfader instead of hold-as-copy, named players, node mode saved in the patch, N3 gone. Authority is [`wave-4-session-prompt.md`](wave-4-session-prompt.md), "The owner's answers".
 
 | Item | State |
 | --- | --- |
 | Plan #367; AZ #368, MR #371, B2 #369, PA #372, CI #363, PC #375 | Merged |
 | D5a #370, D5b #373, PL #376, D5c #378, PS #379, NM0 #377, **D5d #380** (HOLD, TAKE and DROP gone) | Merged |
-| UL undo latch #386; PC2 pair consent | In build or review; both land before SEM |
-| **SEM**, the rename to the signed glossary, alone | Next |
-| D5e words, D6a + D6b playlist, #287 rewritten by us | After SEM |
-| N1a + N1b node mode on the APC | After SEM; merge waits on the owner's hand checks 506–509 |
-| #365 Joy-Con v0 | Waits on the owner's Joy-Con hand check, 520–521 |
-| N2a + N2b node mode on pads; NSEW | After #365 |
-| **The one migration:** `/11`, `loadable/`, shows into install files, trash deleted | After NSEW. The owner runs it; both Macs together |
+| UL undo latch #386; PC2 pair consent #387; glossary signed #384 | Merged |
+| **SEM** #388 and #389 (`preset.py` is `loadable.py`, `Presets` is `LoadedPatch`, `RigWires` is `BusCuts`) | Merged |
+| D5e words #393; D6a + D6b playlist #392, #400; #287's rewrite #395 (the original #287 is still open, for the owner to close); test undo leak #394; cursor-in-a-field fix #398; H1 doc tails #391 | Merged |
+| N1a #396 + N1b #397, node mode on the APC | Reviewed. **Waits on the owner's hand checks 506–509,** then `main` merged in, new work reviewed, `--all`, merged in that order |
+| #365 Joy-Con v0 | Another session's. **Waits on the owner's Joy-Con check, 520–521** |
+| N2a + N2b node mode on pads; then NSEW | Not started; after #365 |
+| WORDS: "session" and "rig" leave the panel | Not started; starts now, in wave 5's Track W4. "Preset" becomes "patch" in the panel with the migration |
+| Row 740, a player's moves on the meta stack; the words pass, row 668 | Not started |
+| **The one migration:** `/11`, `loadable/`, shows into install files, trash deleted (`57-format-lane.md` §7, §7a) | Not written; after NSEW. The owner runs it; both Macs closed |
 
-**Wave 5** runs after that, and after the owner says both Macs have opened the migrated library. Its order: delete what only
-read old files; close the last paths from one look to another; one row per display with hot-plug; controllers set up in the
-app; stop doc conflicts and the growth of type errors.
+**Wave 5: live table.** The prompt's order within each track. Numbers: rows from 770, checks from 600, groups from DA.
 
-**Waiting on the owner now:** the Joy-Con check and hand checks 506–509. Those two hold up the end of wave 4, and so all of wave 5 but its housekeeping (H1, H2, SM1).
+| Track | Item | State |
+| --- | --- | --- |
+| W5 | H1 | Merged #391 |
+| W5 | H2 test truth; SM1 poi probe; SC1 screens by name; LY1 one mirror; LY2 honest flags, unsaved half; SM2 graph zoom; SM3 matte thumbnails; TY1 pyright baseline; TY2 audit as the record | Stage 1: not started |
+| W5 | **SC3a** the picture stops depending on one display, alone on the render loop, after a spike. If the spike fails, stop and tell the owner | Stage 2: not started |
+| W5 | SC2 a row per display; CT1 controllers set up in the app; LY3 the toggle says it; SM4 audit faults; SM5 what wave 4 didn't reach | Stage 3: not started |
+| W5 | **SC3b** hot-plug. Not done until a real display has been unplugged | Stage 4: not started |
+| W5 | TY3, then TY4, annotations only | Stage 5: last |
+| W4 | N1, #365, N2, NSEW, WORDS, row 740, the migration | The table above |
+| CL | CL2, then CL1 after the owner's dry run; CL3, CL4; then RT1 after SC3b's unplug and CT1 | **Gated:** the owner says the migration ran and both Macs have opened the new library |
+| After the migration | SM6 a cart starts by itself; LY2's saved half; SC2's move of `output.bg`, `.alpha` | Not started |
+
+**Waiting on the owner now:** hand checks 506–509 (node mode on the APC), the Joy-Con check 520–521, and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup. They don't hold up Track W5.
 
 Nov 2, 2026 · @Robert
 
