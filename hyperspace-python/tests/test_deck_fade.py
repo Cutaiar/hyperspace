@@ -226,7 +226,8 @@ def test_no_deck_takes_a_row_on_a_meta_param_and_one_left_standing_is_dormant(tm
     p.set(p._value_of_norm(0.25))
     was = p.norm
     a.deck.sources.feed("hand", [1.0])
-    b.table.bindings.append(Binding("hand:0", "master.gain", "push", 0.25))
+    for t in (a.table, b.table):
+        t.bindings.append(Binding("hand:0", "master.gain", "push", 0.25))
     _pass((a.router, a.reg), (b.router, b.reg), chain=a.chain)
     assert p.eff_norm == pytest.approx(was) and not p.modulated
 

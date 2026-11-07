@@ -1124,7 +1124,7 @@ class Learn:
         an axis for a learn (`gamepad.learn_from`, `osc`): on a param no route
         can take, drift on a stick must not reach `learn_source` and end a
         learn a button could still land."""
-        return target is not None and target.modulatable and meta_refusal(target.id) is None
+        return target is not None and target.modulatable
 
     def learn_source(self, source: str, when: str | None = None, *,
                      centred: bool = False, depth: float | None = None) -> None:
@@ -1149,12 +1149,12 @@ class Learn:
         rather than taking the target or being lost. `learning` is cleared
         first, so the hands adapter, which keys off it, cannot fire again.
 
-        A target that is not modulatable (`Param.modulatable`: a meta controller or
-        show setting such as ``ghost.mirror``) is refused with a line the
-        performer can read in `last`, the table untouched: the panel never
-        offers Learn hand there, and this is the door's own check. A meta
-        param (register row 743: ``master.gain``) is refused the same way, in
-        its own words: a route is a loadable patch's, and no patch row may drive one.
+        A meta param (register row 743: ``master.gain``) is refused with a line
+        the performer can read in `last`, the table untouched, in the rule's
+        words: a route is a loadable patch's, and no patch row may drive one.
+        Any other target that is not modulatable (`Param.modulatable`: a patch's
+        setting such as ``ghost.guide``) is refused the same way in its own: the
+        panel never offers Learn hand there, and this is the door's own check.
         """
         if not self.accepts(source):     # nothing armed, or armed for something else
             return
@@ -1169,7 +1169,7 @@ class Learn:
             self.refuse(f"{why} — not learned")
             return
         if not p.modulatable:
-            # a setting no performer may drive (ghost.mirror, a meta switch):
+            # a setting of the patch's no performer may drive (ghost.guide):
             # a route on it would sit dormant, so none is made. The learn
             # is over — no hand can ever complete it — and nothing changed
             if Binding(source, p.id).scheme in ("axis", PAIR_SCHEME):     # any pad's (plan 27 B6)

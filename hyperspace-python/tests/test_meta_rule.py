@@ -17,6 +17,8 @@ import numpy as np
 import pytest
 from conftest import seed
 from test_graph_groups import BREATH
+from test_hands_orbit import GRAB, YAW, Run, closing, fist
+from test_hands_orbit import app as orbit_app  # noqa: F401 — the fixture
 from test_loadable import boot, put
 from test_midi import cc, push, shift
 from test_midi import rig as midi_rig  # noqa: F401 — the fixture
@@ -27,10 +29,12 @@ from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel 
 from hyperspace import apc40, gamepad, graphview, headless, patches, ui_graph, ui_routing, undo
 from hyperspace.bands import CEIL
 from hyperspace.learn import PAIR_SPRING_WANT, Learn
+from hyperspace.motion import Motion
 from hyperspace.params import (
     META_PARTS,
     Kind,
     Param,
+    Registry,
     chase_reaches,
     is_meta_id,
     part_of,
@@ -386,6 +390,10 @@ def test_a_declaration_cannot_say_otherwise():
     assert Param("view.new", "New", group="view", **say).modulatable
     # a group of the patch's with one key of the meta controller's goes by its part
     assert not Param("ghost.mirror", "Mirror", group="ghost", **say).modulatable
+    # the id alone says so, as it does at the doors: no group, or another's
+    assert not Param("master.x", "X", group="view", **say).modulatable
+    assert not Param("tempo.foo", "Foo", group="", **say).modulatable
+    assert not Registry().continuous("tempo.foo", "Foo", lambda: 0.0, lambda v: None).modulatable
 
 
 def test_the_flag_changes_nothing_a_file_holds(rig):
@@ -454,20 +462,58 @@ def test_a_pad_button_still_fires_a_meta_trigger(rig):
     assert fired == [1]
 
 
-@pytest.mark.parametrize("op", MOD_OPS)
+@pytest.mark.parametrize("op", ["push", "position"])
 def test_a_row_past_every_door_moves_no_meta_param(tmp_path, op):
     """The one thing the flag changes: a performer row already in a live table (a hot
-    reload) used to act until a save dropped it. Now it sits dormant, whatever its op,
-    and the page says so (`ui_routing` "the row is dormant", the graph's `off`)."""
+    reload) used to act until a save dropped it. Now it sits dormant and the page says
+    so (`ui_routing.undriven_words`, the graph's `off`). A turn row has its own test."""
     r = boot(tmp_path)
     p = r.reg["master.gain"]
     p.set_norm(0.5)
-    r.router.table.bindings.append(Binding(
-        "lane:0", "master.gain", op, 1.0, when="hand:left.pinch.index" if op == TURN_OP else None))
+    r.router.table.bindings.append(Binding("lane:0", "master.gain", op, 1.0))
     for _ in range(2):
         r.router.modulate(_lanes())
         r.reg.apply()
     assert p.norm == pytest.approx(0.5) and not p.modulated
+
+
+def test_a_turn_row_past_every_door_turns_no_meta_param(orbit_app, tmp_path):  # noqa: F811
+    """A real room lane and a closed clutch, which turn a patch's param through the
+    same script: only the flag stops the row on `master.gain`."""
+    gain, bright = orbit_app.reg["master.gain"], orbit_app.reg["view.bright"]
+    gain.set_norm(0.5)
+    bright.set_norm(0.5)
+    for pid in ("master.gain", "view.bright"):
+        orbit_app.table.bindings.append(Binding(YAW, pid, TURN_OP, when=GRAB))
+    Run(orbit_app, tmp_path, closing() + [fist(yaw=float(k)) for k in range(31)],
+        target="master.gain")
+    assert bright.norm > 0.5                                # the script does turn
+    assert gain.norm == pytest.approx(0.5)
+
+
+def test_a_dormant_row_does_no_work_and_a_live_one_keeps_its_feel(tmp_path):
+    """Checked once, right after the target is found: a feel on a dormant row keeps no
+    follower, and on a live row it does."""
+    r = boot(tmp_path)
+    table = r.router.table
+    table.set_routes([])
+    feel = Motion("follow", atk=0.2, rel=0.2)
+    table.bindings.append(Binding("lane:0", "master.gain", "push", 1.0, motion=feel))
+    r.router.modulate(_lanes())
+    r.reg.apply()
+    assert not r.router.__dict__.get("_movers")
+    table.add(Binding("lane:0", "view.bright", "push", 0.5, motion=feel))
+    r.router.modulate(_lanes())
+    r.reg.apply()
+    assert [k[1] for k in r.router.__dict__["_movers"]] == ["view.bright"]
+
+
+def test_a_row_standing_on_a_meta_param_is_dormant_in_the_rules_words(tmp_path):
+    r = boot(tmp_path)
+    said = ui_routing.undriven_words(r.reg["master.gain"])
+    assert WORDS in said and said.endswith("the row is dormant") and "modulatable" not in said
+    said = ui_routing.undriven_words(r.reg["ghost.guide"])
+    assert said == "ghost.guide is not modulatable — the row is dormant"
 
 
 # (the doors that ask the flag: the rule's words come first at each, as before)

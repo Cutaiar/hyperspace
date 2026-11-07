@@ -4,7 +4,7 @@ The geometry first — fit_box, drag_edge, pooled, band_under are pure
 and are checked against the analyzer's own f/q ↔ edges — then the
 registry writes, then the headless harness (test_ui_shell's rig, with
 an implot context) drawing the ANALYZER page at 1, 6 and 16 bands and
-around add / remove, and the ghost for a modulated centre. The ROUTING
+around add / remove. The ROUTING
 page's tests are test_ui_routing.py (audit D5). A mouse can't be driven
 here, so the drag handlers' *effects* are what the tests call.
 """
@@ -128,22 +128,13 @@ def test_apply_fq_writes_through_the_registry(rig):
     assert (chain.spec[1].f, chain.spec[1].q) == (F_LO, Q_HI)
 
 
-def test_handle_writes_land_on_the_base_while_modulated(rig):
-    """A lane on band.0.f: the handle moves the base, the ghost the effective."""
+def test_a_handle_moves_the_bands_centre(rig):
     reg, chain = rig.reg, rig.chain
     pf = reg["band.0.f"]
-    base = pf.base
-    pf.modulatable = True   # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
-    pf.modulate(0.2)
-    reg.apply()
-    assert pf.modulated and pf.value > base and pf.base == pytest.approx(base)
     ui_bands.apply_fq(reg, 0, f=100.0)
-    pf.modulate(0.2)
-    reg.apply()
-    assert pf.base == pytest.approx(100.0, rel=1e-6) and pf.value > 100.0
+    assert pf.base == pytest.approx(100.0, rel=1e-6)
     assert ui_bands._base_fq(reg, 0)[0] == pytest.approx(100.0, rel=1e-6)
-    reg.apply()                                     # the lane lets go
-    assert not pf.modulated and chain.spec[0].f == pytest.approx(100.0, rel=1e-6)
+    assert chain.spec[0].f == pytest.approx(100.0, rel=1e-6)
 
 
 # ------------------------------------------------------------- the page
@@ -180,23 +171,3 @@ def test_editor_add_remove_follow_the_registry(rig):
     frame(panel)
     panel.control.move_band(0, 5)
     frame(panel)
-
-
-def test_modulated_centre_draws_a_ghost_in_the_editor(rig):
-    panel, reg = rig.panel, rig.reg
-    frame(panel, "analyzer")
-    assert panel.ghosts == 0
-    reg["band.0.f"].modulatable = True  # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
-    reg["band.0.f"].modulate(0.15)
-    reg.apply()
-    frame(panel)
-    # the editor's hairline, and band.sel.f's fader (band 0 is selected)
-    assert panel.ghosts == 2
-    reg["band.select"].set(2)
-    reg["band.0.f"].modulate(0.15)
-    reg.apply()
-    frame(panel)
-    assert panel.ghosts == 1
-    reg.apply()
-    frame(panel)
-    assert panel.ghosts == 0

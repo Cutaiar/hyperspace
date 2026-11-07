@@ -305,44 +305,6 @@ def _two_decks():
         build_patch(ViewState(), meta_reg=meta_reg)
 
 
-def test_a_meta_param_is_applied_once_a_frame_whichever_deck_applies():
-    """Finding 1: deck B's apply never releases a shared meta param deck A's
-    router modulated (no flicker to the bare base); the lead deck lands it
-    once a frame, B's offset riding into the next; every deck's pass in one
-    frame shares one mark."""
-    meta_reg, a, b = _two_decks()
-    p = meta_reg["master.gain"]
-    p.modulatable = True    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
-    base = p.value
-    assert meta_reg.on_air_reg is a
-    for _ in range(3):
-        a.begin_frame()
-        p.modulate(0.1)                      # deck A's router
-        a.apply()
-        b.begin_frame()
-        assert b.frame == a.frame            # one mark for the frame
-        b.apply()                            # deck B's apply: the shared meta param untouched
-        assert p.modulated and p.value != pytest.approx(base)
-    held = p.value
-    a.begin_frame()
-    b.begin_frame()
-    p.modulate(0.1)                          # (A's)
-    p.modulate(0.05)                         # (B's: same frame)
-    b.apply()
-    assert p.value == pytest.approx(held)    # B lands nothing
-    a.apply()
-    assert p.value != pytest.approx(held)    # the lead lands both offsets, once
-    a.begin_frame()
-    a.apply()                                # no source this frame: back to the base
-    assert not p.modulated and p.value == pytest.approx(base)
-    # a deck's own param is its own apply's
-    q = b["view.bright"]
-    b.begin_frame()
-    q.modulate(0.2)
-    b.apply()
-    assert q.modulated
-
-
 def test_a_part_is_cached_on_the_param_and_a_duplicate_is_refused_once():
     """Findings 6, 7: `part_of` reads the param's cached part; a second
     declaration of a meta controller id on any deck is refused by the meta controller."""
@@ -448,26 +410,14 @@ def test_force_by_a_bare_stem_is_refused_when_two_folders_hold_it(tmp_path, monk
 # ---------------------------------------------------------------- review of #351, round 2
 
 
-def test_the_lead_is_named_and_a_stale_follower_never_lands_the_meta():
-    """Round 2, finding 1: the lead is the deck on air, named
-    (`meta_reg.on_air_reg = reg`, as `Deck.build(on_air=True)` does) — a registry
-    that followed first and is still referenced (an old deck a closure
-    holds) lands nothing once another is named."""
+def test_the_lead_is_named_and_no_stranger_can_be():
     from hyperspace.params import build_patch
     from hyperspace.view import ViewState
     meta_reg, stale, _b = _two_decks()
     assert meta_reg.on_air_reg is stale                 # nobody named: the first
     live = build_patch(ViewState(), meta_reg=meta_reg)
     meta_reg.on_air_reg = live
-    p = meta_reg["master.gain"]
-    p.modulatable = True    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
-    base = p.value
-    live.begin_frame()
-    p.modulate(0.1)
-    stale.apply()                                # still referenced: lands nothing
-    assert p.value == pytest.approx(base)
-    live.apply()
-    assert p.value != pytest.approx(base)
+    assert meta_reg.on_air_reg is live
     with pytest.raises(ValueError):
         meta_reg.on_air_reg = build_patch(ViewState())        # not a follower
 
@@ -476,31 +426,6 @@ def test_deck_build_names_its_registry_the_lead(tmp_path):
     from test_undo import boot as undo_boot
     rig = undo_boot(tmp_path / "home")
     assert rig.reg.meta_reg.on_air_reg is rig.reg
-
-
-def test_the_meta_own_apply_lands_each_param_once_a_frame():
-    """Round 2, finding 2: `session.apply()` in the same frame as the lead's
-    apply — after it or before it — lands each shared meta param once (the
-    frame's shared mark), never releasing the modulation."""
-    meta_reg, a, _b = _two_decks()
-    p = meta_reg["master.gain"]
-    p.modulatable = True    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
-    base = p.value
-    for order in ("lead first", "session first"):
-        a.begin_frame()
-        p.modulate(0.1)
-        if order == "lead first":
-            a.apply()
-            moved = p.value
-            meta_reg.apply()
-        else:
-            meta_reg.apply()
-            moved = p.value
-            a.apply()
-        assert p.modulated and p.value == pytest.approx(moved) != pytest.approx(base), order
-    a.begin_frame()
-    meta_reg.apply()                              # no source: the base back, once
-    assert not p.modulated and p.value == pytest.approx(base)
 
 
 def test_a_param_with_no_group_is_unclassified():

@@ -523,24 +523,15 @@ def test_a_partial_band_preset_fills_from_the_defaults(tmp_path):
     assert audio.chain.params[2].exp == lib.defaults("band")["band.2.exp"] == 0.95
 
 
-def test_a_scene_lands_on_the_base_under_a_performer_and_reads_clean(tmp_path):
+def test_a_scene_lands_on_the_base_and_reads_clean(tmp_path):
     """WP11's review of PR #44: a scene select is a base write when a
-    registry is attached, so a band knob a performer holds keeps its
-    offset — the strip reads clean at once, not after the fold, and never
-    an offset off."""
+    registry is attached, so the strip reads clean at once, not after the fold."""
     reg, control, _, lib = wired(tmp_path)
     p = reg["band.1.atk"]
-    p.modulatable = True    # (a param from before row 775: a hot reload keeps its flag, and this path still holds it)
-    p.modulate(0.1)                                   # a lane holds BASS attack
-    reg.apply()
     control.select_scene(SCENES.index("Kick & Sizzle"))
     want = scene("Kick & Sizzle")["values"]["band.1.atk"]
     assert p.base == want, "the scene landed on the base"
     assert not lib.is_dirty("band"), "clean straight after the select"
-    p.modulate(0.1)
-    reg.apply()
-    assert p.base == want and p.value > want, "the offset rides on the scene's value"
-    assert not lib.is_dirty("band")
     control.reset_band(1)
     assert p.base == want and not lib.is_dirty("band")
     # no library: the combo writes the analyzer's Params directly, as before

@@ -957,10 +957,16 @@ def reading(panel, router: Router, source: str) -> float | None:
 
 
 def route_target(p: Param) -> bool:
-    """Can a route land on this param? Modulatable, and not the meta
-    controller's (register row 743). One rule for the target combo, the
-    menu's Learn items and Route from ▸ (`ui_graph.route_from_items`)."""
-    return p.modulatable and meta_refusal(p.id) is None
+    """Can a route land on this param? Modulatable, which no meta param is
+    (register rows 743, 775). One rule for the target combo, the menu's Learn
+    items and Route from ▸ (`ui_graph.route_from_items`)."""
+    return p.modulatable
+
+
+def undriven_words(p: Param) -> str:
+    """Why a row standing on `p`, which no lane may drive, does nothing: the
+    rule's words on a meta param, as `ctx_item` says it."""
+    return f"{meta_refusal(p.id) or f'{p.id} is not modulatable'} — the row is dormant"
 
 
 def _targets(panel) -> list[Param]:
@@ -1110,7 +1116,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         if imgui.is_item_hovered():
             ui.tooltip(f"{b.target}: no such param — the row is dormant")
     elif not p.modulatable and imgui.is_item_hovered():
-        ui.tooltip(f"{b.target} is not modulatable — the row is dormant")
+        ui.tooltip(undriven_words(p))
     imgui.same_line()
     if b.op == TURN_OP:                     # a turn reads no feel: nothing to pick
         imgui.dummy(imgui.ImVec2(feel_w, 0))
