@@ -4420,7 +4420,7 @@ nodes; old presets migrate on load and save back unchanged. On
 `plan-33-free-graph` (PR #235, into `plan-31-32-integration`). Run on the
 copy (`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`, with a
 clip (`.mp4`) and a still in `~/Hyperspace-try/media/` and a camera for
-318. **A free graph saves as `hyperspace.preset/5`, which an older build
+**A free graph saves as `hyperspace.preset/5`, which an older build
 refuses:** both Macs must run this build before 322's last step and 328.
 Group AC assumes the control window at its usual 960 × 900. None of these
 has been run by a person; the goldens were recorded on the build machine.
@@ -8090,6 +8090,7 @@ Register rows 708–709, 2026-11-06. Restart first. Headless: `tests/test_playli
 *Judge:* far enough back, ⌘Z reaches a look the playlist loaded on that deck, and takes it off if that deck is on air (row 709). Right for an install, where nobody is at the panel?
 
 ## CE. Node mode on the APC (plan 53 N1)
+
 Register rows 710–714, 2026-11-06. Restart first, on one build on both Macs. The merge waits on
 506–509. Headless: `tests/test_node_desk.py` (N1a), `tests/test_node_mode_graph.py` (N1b).
 Work on a throwaway copy of a preset. Never the shared library's own file.
@@ -8647,6 +8648,7 @@ Fails: an app that needs a restart; a picture that stops; a window sitting on th
 **632. Every display out.** (a Mac mini or a closed laptop on external displays, or as many as you can pull; audio on so you can hear it's alive) Pull every display. Nothing can show you anything: wait 10 s, keep the desk moving, and plug them back in any order, one at a time. Passes: the sound never stopped, each display takes up its job as it arrives, the control window returns, and the desk's changes have landed. `<home>/stall.log` has no "render stall" while the picture was drawing with no window.
 
 ## DQ. GRAPH at 1080p (row 818)
+
 Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the app at a 1920x1080 window, but at 1x only on a taller display and on a real 1080p display only at 2x.
 **634. The show's display.** (the display you'll run the show on, at 1080p)
 1. Open the control window on it, launch, and load a patch. *Pass:* the node words read from where you'll stand, and the first column is at the canvas's top-left.
