@@ -156,6 +156,8 @@ from .graph import (
     channel_into,
     cloud_roles,
     graph_key,
+    mask_flip,
+    mask_made,
     param_prefix,
     picture,
 )
@@ -1060,7 +1062,10 @@ def thumb_source(frame: Frame, name: str, how: str,
     - ``window``: an output after the first: its presenter's picture (the
       `Handoff`'s frame, a texture of this context: no readback), or a
       publish-only output's own target; output 1 is the page's `Preview`,
-      never asked here."""
+      never asked here;
+    - ``mask``: a matte or a segment (SM3): the mask this frame already
+      made, at its own size (`graph.mask_made`), else None: a thumbnail
+      never makes one. The caller reads it as a mask (`PreviewTextures.put`)."""
     g = frame.graph
     node = g.nodes.get(name) if g is not None else None
     if node is None:
@@ -1073,6 +1078,8 @@ def thumb_source(frame: Frame, name: str, how: str,
             return v.handoff.frame
         own = getattr(v.target, "color_attachments", None) if v.target is not None else None
         return own[0] if own and isinstance(own[0], moderngl.Texture) else None
+    if how == "mask":
+        return mask_made(node, frame)
     if how in ("scene", "layer"):
         if how == "layer":
             layer = next((n for n in g.order if isinstance(n, HandsLayer)
@@ -1944,17 +1951,21 @@ class Renderer:
             saved = {k: list(v) if isinstance(v, list) else v for k, v in frame.stats.items()}
             try:
                 pulled = frame.graph.pulled(frame) if frame.graph is not None else None
-                for name, how in wanted.items():
+                # (masks last: one a picture's repaint just made is free to show)
+                for name, how in sorted(wanted.items(), key=lambda kv: kv[1] == "mask"):
                     held = len(frame.data)
                     try:
                         src = thumb_source(frame, name, how, pulled)
+                        flip = (how == "mask" and src is not None
+                                and mask_flip(frame.graph.nodes[name], frame))
                     except Exception as e:  # noqa: BLE001 — one node's picture: not the rest
                         th.error = f"{name}: {type(e).__name__}: {e}"[:120]
                         continue
                     # (a picture the frame had not made — painted, or made
                     # into a texture — leaves a new entry in the frame's data)
                     if src is not None:
-                        th.put(name, src, repainted=len(frame.data) > held)
+                        th.put(name, src, repainted=len(frame.data) > held,
+                               mask=how == "mask", flip=flip)
             finally:
                 frame.stats.clear()
                 frame.stats.update(saved)

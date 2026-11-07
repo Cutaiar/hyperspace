@@ -8357,6 +8357,18 @@ Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's ta
 4. Press A. *Pass:* `wrist` back to 0, `pan` near its start.
 5. Ctrl-C, then `uv run python tools/poi_probe.py --replay /tmp/poi.jsonl`. *Pass:* `tape written`, then a table with a `hold` row.
 *Fail:* a traceback at any step, or a line that never comes.
+## DD. Matte and segment thumbnails (SM3)
+Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real GL with a fake worker; the real app seen in motion mode only. Person mode's orientation on real Vision is yours.
+**604. A mask on the node.** (either Mac, a camera or a clip with a person in it)
+1. Wire a channel into a `matte` and the matte into a `cut`. *Pass:* the matte's node shows grey, white where it passes, not red, and turning `matte.key` changes it live.
+2. Wire the same channel into a `segment`, mode person, and `segment.fg` into an output. *Pass:* the segment's node shows the person in white on black, the right way up, lined up with the channel's picture.
+3. Mode motion, then back to person. *Pass:* the right way up in both.
+4. Hover each node's picture. *Pass:* the hover ends "… mask" with its size, and gives the node's own words.
+5. Lit `pictures · tint cables`. *Pass:* the matte's cable stays plain purple; a cable out of `segment.fg` leans toward the foreground's colour. Fold the segment into a group with `fg` going out: the group shows the foreground, not the white-on-black.
+6. Pan both nodes off the canvas and watch the SYSTEM page's thumbnail line for a second. *Pass:* their count drops, and FPS doesn't change noticeably with them on or off screen.
+7. Set the segment's mode to subject, then turn `segment.on` off. *Pass:* the box is black and says why in words readable at a distance, a different line for each.
+8. Open a saved patch of yours whose matte or segment you had placed by hand. *Pass:* no node has moved; if the taller node now covers another, drag it or press tidy, and say how many patches did this.
+*Fail:* a red box, an upside-down person, or a frame-rate dip that follows the nodes on screen.
 ## DB. One mirror (LY1)
 Register rows 773, 774, 2026-11-06. Headless: `tests/test_one_mirror.py`, on two real `Deck`s, both ways.
 **602. One mirror, two decks.** (the rig, with the hands tracker)

@@ -539,7 +539,7 @@ here; overturn → the change, then the same.
 | 497 | A removed segment's worker is stopped without waiting; one exit deadline | 392 | controller — 2026-10-27 |
 | 498 | While held, the GRAPH page's thumbnails, their hues and their GPU times are the preview renderer's | 378 | controller — 2026-10-27 |
 | 499 | While held, output 1's thumbnail is the program's picture (the PROJECTOR inset's), not the preview's | 378 | controller — 2026-10-27 |
-| 500 | A cut shows its picture on GRAPH; a matte and a segment stay text | — | controller — 2026-10-27 |
+| 500 | A cut shows its picture on GRAPH; a matte and a segment stay text **(reversed by row 777)** | — | controller — 2026-10-27 |
 | 501 | Plan 40 D1: the new thing is a patch; `patch.py` renamed `modgraph.py` | — | owner — 2026-10-27: "Calling this a patch and renaming the other module is fine." |
 | 502 | Plan 40 D2: host ports land as open pins, spliced, or by one press of wire as saved; never attached by themselves | 395, 396 | owner — 2026-10-27 |
 | 503 | Plan 40 D3: conflicts asked in one sheet, the patch or the preset per row | 397 | owner — 2026-10-27: "choose a resolution for each one: the patch or the existing preset" |
@@ -776,6 +776,7 @@ here; overturn → the change, then the same.
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
 | 786 | SM1: `tools/poi_probe.py` and its tape salvaged from the closed #342 and ported to `main`'s `poi.step`, without #342's fixes. On the owner's own tape it shows `main`'s poi running the hand to `HAND_LIMIT` during a hold and leaving it there: **a question for the owner**, not fixed here. | 611 | (rec) — pending the owner |
+| 777 | SM3: a matte and a segment show their mask on GRAPH, in grey, white where it passes. A thumbnail shows only a mask the frame already made. A segment is its matte, not its foreground; a folded group whose last picture outlet is a segment's `fg` shows that foreground; a refusal is said on the node; a mask's hue is never read | 604 | plan 58 SM3; (rec) — pending the owner, on those choices |
 | 773 | One mirror (LY1): `ghost.N.mirror` is no param. An extra hands node's `GhostState` follows `ghost.mirror`, so a hands node adds nothing to what's shared, and one `Deck` dropping its node no longer takes a param from the other (the leak §9 reports, reproduced first). A show file holding the id still opens clean and a save carries it; nothing reads it; a value that differs from `ghost.mirror` is said at open. No format move. **Pending the owner:** this removes check 213's mirrored glass beside unmirrored scene hands; the glass's Flip X replaces it only where the glass shows hands alone. | 602, 213 | (rec) — pending the owner |
 | 774 | A `Deck`'s registry cannot drop a shared meta param: `Registry.remove` keeps it, warns and returns None, `remove_prefix` leaves it out, and only `MetaRegistry.remove` takes one, from every deck. Audited every removal road. | 602 | (rec) — pending the owner |
 | 775 | Honest flags (LY2): every meta param now says `modulatable` False, by one line in `Param.__post_init__` on its part or id, not by flipping 102 declarations. Each door that reads the flag was walked: none changes what it does or says, because the rule comes first at every one. Meta desk rows, keys and pad buttons never ask the flag. The one change: a performer row left in a live table sits dormant on the on-air deck too. | 603 | (rec) — pending the owner |
@@ -9067,6 +9068,7 @@ Plan 40's rows (501–536) follow, in their own section at the end.
 - **Other options.** A segment drawn as its foreground (`segment.fg`'s picture), a matte as its mask in white on black (each a `THUMBS` entry and a `render.thumb_source` case; nothing else changes).
 - **To reverse.** One table entry each.
 - **Rough edge.** The node that cuts a dancer out shows no picture on GRAPH; its fg and bg are seen only where they are wired.
+- **Reversed by row 777** (SM3, 2026-11-06), by the road "Other options" names for a matte.
 - **Judge it.** —
 
 ## Plan 40 — patches (rows 501–536)
@@ -14065,6 +14067,19 @@ still wins, as does a sink row.
 - **The question for the owner, (rec) — pending the owner.** The poi is off by default, so this only shows with it on. Did it look like this at the machine? Recommendation: a live bug, fixed as one small item, keeping no pull home: the pad dead still stops the hand sooner, and the hand's limit is the screen's size rather than 8. Not built here: the item says don't.
 - **Judge it.** 611.
 
+### 777. A matte and a segment show their mask on GRAPH
+
+- **Answer.** Plan 58 SM3 asks for row 500's reversal. The choices below are (rec) — pending the owner.
+- **Built.** `graphview.THUMBS` gives `matte` and `segment` the word `mask`. `render.thumb_source` hands over the mask this frame already made, at its own size (`graph.mask_made`), and `PreviewTextures.put(mask=, flip=)` copies it by the one `THUMB_FS` pass, red drawn as grey. A segment's worker keeps its rows top first, so that pass reads it upside down, by `graph.mask_flip`. The hover says "1280×820 mask".
+- **A thumbnail never makes a mask.** The first build called `mask_of`, which makes one, so a mask the frame had pulled but not asked for (a matte into an output whose picture is muted) was drawn for the thumbnail alone. A wholly dangling matte is never built, by `reaches`, and is a stand-in. Now such a box is black. Masks are copied last in a frame, so one that a picture's own repaint just made still shows, free.
+- **What it costs.** One downsample pass for each mask on screen and made: nothing off screen, as any thumbnail. No readback, no `#fit` refit, no second feed to a worker. A mask is grey, so it never takes a turn at the one hue read a frame. The outputs stay byte identical, so no golden can move.
+- **A refusal is on the node.** A black box says why in `ui.WARN`, up to four lines (`graphview.mask_words`, `ui_graph.box_lines`): "subject is not in this build", a worker's error, off, nothing wired. The words are also in the hover. It clears when a fresh mask is made. A built mask nothing asked for has no refusal and stays plainly black. A refusal from before a switch went unpicked can stay until it is picked again, as the hover's `said` does.
+- **A segment's `fg` and `bg`.** `view.pins` gives an outlet its owning canvas node, whose thumbnail is the matte. `graphview.pin_picture` resolves the pin to its own built node (`segment.fg`), so a folded group ending in one shows that picture (`group_picture`), and its cables tint from that picture's hue while **tint cables** is lit (`ui_graph.tint_wants`: one copy per wired pin, only while lit; they never tinted before this row, as the segment had no thumbnail). The first build blanked the group; review showed the node exists, so it needed no blank.
+- **Positions.** These nodes grow by `THUMB_H`. A saved position never moves, by the WYSIWYG rule, so one stacked tight could overlap. Measured 2026-11-06: of 30 corpus files, 0 hold a matte or a segment; of 124 fixtures, 3 do (`cut-out`, `mask-as-picture`, `segment-motion`), and none of the 3 saves a layout, so they take the auto layout, which counts the new height: 0 overlaps, under test. The real library can't be measured here; the PR body has the read-only command. Hand check 604 step 8.
+- **Other options.** A segment drawn as its foreground: one more case in `thumb_source`, and an extra cut pass whenever nothing wires `fg`.
+- **To reverse.** Two `THUMBS` entries.
+- **Rough edge.** An unpicked or unreached mask is black, as any picture node's. A saved layout with a mask node stacked tight overlaps until someone drags it or presses tidy.
+- **Judge it.** 604.
 ### 773. One mirror
 
 - **The rule.** "No loadable patch can affect another" is absolute (the owner's concept, wave 5).
