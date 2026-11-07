@@ -344,7 +344,7 @@ def test_thumbnail_makes_go_on_the_thumbnail_worker(mk, monkeypatch):
     assert wait_for(lambda: names) and names[0].startswith("media-thumb-")
 
 
-# ---- the shared twin (row 790): a `local:`/`file:` id read through the
+# ---- the shared twin (row 802): a `local:`/`file:` id read through the
 # shared folder, and stored as the shared id by an assignment ----
 
 def test_local_id_reads_through_its_shared_twin(mk):

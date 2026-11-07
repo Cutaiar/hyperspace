@@ -429,7 +429,7 @@ def test_a_frozen_live_channel_says_frozen():
     assert m.status("a") == "lost"
 
 
-# ---- assign stores the shared id when there is one (row 790) ----
+# ---- assign stores the shared id when there is one (row 802) ----
 
 class Twinned(Here):
     """A resolver that offers `prefer_shared`, as `MediaFolder` does: the
