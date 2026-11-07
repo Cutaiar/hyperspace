@@ -52,7 +52,7 @@ Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on
 | CL | CL2, then CL1 after the owner's dry run; CL3, CL4; then RT1 after SC3b's unplug and CT1 | **Gated:** the owner says the migration ran and both Macs have opened the new library |
 | After the migration | SM6 a cart starts by itself; LY2's saved half; SC2's move of `output.bg`, `.alpha` | Not started |
 
-**Waiting on the owner now:** hand checks 506–509 (node mode on the APC), the Joy-Con check 520–521, and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup. They don't hold up Track W5.
+**Waiting on the owner now:** hand checks 506–509 (group BS, the panel fold: they gate node mode, they don't test it; node mode's own checks 541–545 come in with #396 and #397), the Joy-Con check 520–521 (group BW, written on #365's branch, not yet on `main`), and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup. They don't hold up Track W5.
 
 Nov 2, 2026 · @Robert
 
