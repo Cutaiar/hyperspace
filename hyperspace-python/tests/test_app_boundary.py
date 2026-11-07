@@ -764,6 +764,9 @@ class _PlaceGlfw(_HintGlfw):
     def get_monitor_workarea(self, m):
         return self.mons[m]
 
+    def get_monitor_pos(self, m):
+        return self.mons[m][:2]
+
     def get_monitor_name(self, m):
         return m.encode()
 
@@ -887,12 +890,14 @@ def test_a_later_output_whose_named_screen_is_absent_is_not_opened(monkeypatch, 
     assert not slots[1].opened and slots[1].missing == 'screen "MStar #2" is not connected'
     assert not slots[2].opened and slots[2].missing == 'screen "TV" is not connected'
     assert slots[3].publish_only and not slots[3].missing          # looks for no screen
-    assert cfg["notes"] == [
-        ("config: output 2 (wall): monitor = 'MStar #2' matches no screen "
-         "(connected: Built-in, MStar) — not opened"),
-        ("config: output 3: monitor = 'TV' matches no screen "
-         "(connected: Built-in, MStar) — not opened")]
-    assert cfg["notes"][0] in capsys.readouterr().err
+    first, wall, tv = cfg["notes"]              # each said once, output 1's too
+    assert first.startswith("config: [output] monitor = 'MStar #1' asks for number 1")
+    assert "only one is connected" in first
+    assert wall == ("config: output 2 (wall): monitor = 'MStar #2' asks for number 2 of 'MStar', "
+                    "and 1 connected (connected: Built-in, MStar) — not opened")
+    assert tv == ("config: output 3: monitor = 'TV' matches no screen "
+                  "(connected: Built-in, MStar) — not opened")
+    assert wall in capsys.readouterr().err
     # a bare name on two screens opens, and says which
     cfg = {"output": {**config.DEFAULTS["output"],
                       "screens": [{**config.SCREEN},

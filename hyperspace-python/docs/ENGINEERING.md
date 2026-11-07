@@ -3119,11 +3119,15 @@ see-through, clicks passing through (G or PAN takes them back);
 `control_monitor`, and `monitor` on a `[[output.screens]]` entry, may
 give a screen's exact whole name, case and all: "TV" does not find
 "TV Samsung". Two screens of one name are two screens: "MStar #2" is the
-second of them, counted left to right across the desk rather than in the
-window system's order, so a replug can't swap them. "MStar" alone on two
-is the first, with a note naming both (row 772). An index still works. A
-name becomes an index once, at the launch (`app._windows`):
-`Output.monitor` and `Slot.monitor` stay indices at runtime until SC3b.
+second of them, counted left to right across the desk by the monitor's
+frame rather than in the window system's order, so a replug can't swap
+them. A Mac's own " (n)" isn't counted, so "DELL #2" works when it lists
+"DELL (1)" and "DELL (2)". "MStar" alone on two is the first, with a note
+naming both; "MStar #1" on a twin alone uses it, with a note every launch
+(row 772). `placement.labels` gives the word for each screen. An index
+still works. A name becomes an index once, at the launch
+(`placement.settle`, `app._slots`): `Output.monitor` and `Slot.monitor`
+stay indices at runtime until SC3b.
 
 **Where windows open** (`placement.py`): a configured `monitor` /
 `control_monitor` first, then `windows.json` (the last quit's

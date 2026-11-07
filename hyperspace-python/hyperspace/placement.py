@@ -44,6 +44,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -66,6 +67,7 @@ class Screen:
     y: int
     w: int
     h: int
+    at: tuple[int, int] | None = None     # the monitor's own frame, Dock or no Dock
 
 
 def screens(glfw) -> list[Screen]:
@@ -80,13 +82,15 @@ def screens(glfw) -> list[Screen]:
     for i, m in enumerate(mons):
         try:
             x, y, w, h = (int(v) for v in glfw.get_monitor_workarea(m))
+            px, py = (int(v) for v in glfw.get_monitor_pos(m))
             name = glfw.get_monitor_name(m)
             name = name.decode(errors="replace") if isinstance(name, bytes) else str(name or "")
+            name = name.strip()            # what `match` compares a trimmed value with
         except Exception:  # noqa: BLE001 — as above
             return []      # indices must keep meaning what the config says: all or nothing
         if w <= 0 or h <= 0:
             return []
-        out.append(Screen(name or f"screen {i + 1}", x, y, w, h))
+        out.append(Screen(name or f"screen {i + 1}", x, y, w, h, (px, py)))
     return out
 
 
@@ -252,56 +256,116 @@ def named(value) -> str:
     return ""
 
 
-def _same(name: str, scr: list[Screen]) -> list[int]:
-    """The indices of the screens with exactly this name, left to right
-    across the desk (then top to bottom), which is what an ordinal counts:
-    `glfw.get_monitors()` order can change with the plug order, the
-    arrangement in System Settings should not (hand check 600)."""
-    return sorted((i for i, s in enumerate(scr) if s.name == name),
-                  key=lambda i: (scr[i].x, scr[i].y, i))
+def _family(name: str) -> str:
+    """A screen's name less the " (n)" a Mac may add to tell twins apart
+    ("DELL (2)"): that number can follow the plug order, so it is not what
+    an ordinal counts. A year in brackets is not such a number."""
+    return re.sub(r" \(\d{1,2}\)$", "", name)
+
+
+def _along(i: int, scr: list[Screen]) -> tuple:
+    """Left to right across the desk, then top to bottom: the arrangement
+    in System Settings, by the monitor's frame, since a Dock moves the work
+    area. `glfw.get_monitors()` order can change with the plug order."""
+    s = scr[i]
+    return (*(s.at or (s.x, s.y)), i)
+
+
+def _same(family: str, scr: list[Screen]) -> list[int]:
+    """The indices of this family's screens, in the order an ordinal counts."""
+    return sorted((i for i, s in enumerate(scr) if _family(s.name) == family),
+                  key=lambda i: _along(i, scr))
+
+
+def _ordinal(want: str) -> tuple[str, int] | None:
+    """("TV", 2) for "TV #2"; None when it is not written that way."""
+    base, hash_, n = want.rpartition(" #")
+    if base and hash_ and n.isascii() and n.isdecimal() and len(n) <= 3 and int(n) >= 1:
+        return base, int(n)
+    return None
 
 
 def match(asked: str, scr: list[Screen]) -> int:
     """The index of the screen a name asks for, −1 for none (row 771).
 
-    The name is exact, whole and case and all: "TV" does not find
-    "TV Samsung". Two screens of one name are two screens: "TV #2" is the
-    second of them left to right, and "TV" or "TV #1" the first (`resolve`
-    says so when "TV" alone could be either). A screen really called
-    "TV #2" is found by that name first."""
+    In this order:
+    1. "TV #2": the second of the "TV" family across the desk (`_same`).
+       It comes first so that `labels` can always name every screen.
+    2. The exact whole name, case and all: "TV" does not find "TV Samsung",
+       and "DELL (2)" finds that name whatever the Mac means by it today.
+       A screen really called "TV #2", beside two "TV", is "TV #2 #1".
+    3. The family: "DELL" finds the first of "DELL (1)" and "DELL (2)".
+
+    `resolve` says what this cannot be sure of."""
     want = asked.strip()
+    n = _ordinal(want)
+    if n:
+        same = _same(n[0], scr)
+        if n[1] <= len(same):
+            return same[n[1] - 1]
+    exact = [i for i, s in enumerate(scr) if s.name == want]
+    if exact:
+        return min(exact, key=lambda i: _along(i, scr))
     same = _same(want, scr)
-    if same:
-        return same[0]
-    base, hash_, n = want.rpartition(" #")
-    if hash_ and n.isascii() and n.isdecimal() and len(n) <= 3 and int(n) >= 1:
-        same = _same(base.strip(), scr)
-        if int(n) <= len(same):
-            return same[int(n) - 1]
-    return -1
+    return same[0] if same else -1
 
 
 def labels(scr: list[Screen]) -> list[str]:
     """What to write in the config for each screen, in `scr`'s order: its
-    name, with its ordinal when another screen has the same name."""
+    name when that is enough, and otherwise its family and ordinal. `match`
+    finds each screen by its own label, always."""
     out = []
     for i, s in enumerate(scr):
-        same = _same(s.name, scr)
-        out.append(s.name if len(same) == 1 else f"{s.name} #{same.index(i) + 1}")
+        fam = _family(s.name)
+        same = _same(fam, scr)
+        if len(same) > 1:
+            out.append(f"{fam} #{same.index(i) + 1}")
+        else:
+            out.append(s.name if match(s.name, scr) == i else f"{fam} #1")
     return out
 
 
 def resolve(asked: str, scr: list[Screen]) -> tuple[int, str]:
     """`match`, and what to say about it: (index, words or ""). The words
-    finish a sentence that begins with the config key and its value."""
-    i = match(asked, scr)
+    finish a sentence that begins with the config key and its value. The
+    one place a name becomes an index: each value is resolved once."""
+    want = asked.strip()
+    i = match(want, scr)
+    tags = labels(scr)
+    n = _ordinal(want)
+    many = _same(n[0], scr) if n else []
     if i < 0:
-        return -1, f"matches no screen (connected: {', '.join(labels(scr)) or 'none'})"
-    same = _same(asked.strip(), scr)
+        have = f"connected: {', '.join(tags) or 'none'}"
+        if many:
+            return -1, f"asks for number {n[1]} of {n[0]!r}, and {len(many)} connected ({have})"
+        return -1, f"matches no screen ({have})"
+    if n and many == [i]:
+        # a twin alone: the left of two and the right of two look the same
+        return i, (f"asks for number 1 of {n[0]!r}, and only one is connected, which may be "
+                   f"either of a pair — using it; if there is only ever one, write {tags[i]!r}")
+    same = _same(_family(want), scr)
     if len(same) > 1:
-        each = ", ".join(labels(scr)[k] for k in same)
-        return i, f"is {len(same)} screens ({each}) — using the first; say which to be sure"
+        each = ", ".join(tags[k] for k in same)
+        if sum(s.name == want for s in scr) != 1:
+            return i, f"is {len(same)} screens ({each}) — using the first; say which to be sure"
+        if _family(want) != want:
+            return i, (f"is the Mac's own number for one of {len(same)} screens ({each}), and it "
+                       f"can follow the plug order — say {tags[i]!r} to be sure")
     return i, ""
+
+
+def settle(output: dict, scr: list[Screen]) -> list[str]:
+    """`[output] monitor` and `control_monitor` as indices, where they are
+    names: once, at the launch, in place, with the notes to show."""
+    notes = []
+    for key in ("monitor", "control_monitor"):
+        name = named(output.get(key))
+        if name:
+            output[key], said = resolve(name, scr)
+            if said:
+                tail = " — using the last position" if output[key] < 0 else ""
+                notes.append(f"config: [output] {key} = {name!r} {said}{tail}")
+    return notes
 
 
 def kept(key: str, monitor) -> tuple[int | str, str]:
@@ -312,24 +376,14 @@ def kept(key: str, monitor) -> tuple[int | str, str]:
     return (name, "") if name else read(key, monitor)
 
 
-def read(key: str, monitor, scr: list[Screen] | None = None) -> tuple[int, str]:
-    """A config value as a screen index: (index, note or ""). The index
+def read(key: str, monitor) -> tuple[int, str]:
+    """A config number as a screen index: (index, note or ""). The index
     is what `int()` reads of it, and −1 for anything under −1; a value
-    `int()` will not read (None, a NaN) is −1 with the note. The one
-    reading of ``[output] monitor`` / ``control_monitor`` (plan 16 WP7) —
-    `config.load`, `place` below and `app._make_output` all go through it,
-    so a window's screen and the one fullscreen covers agree.
-
-    A name needs `scr` to be an index: with them it is `resolve`'s answer,
-    and without (no window system yet) −1 and no note, for a later call to
-    settle. It never raises. Whether a screen has an index is `place`'s."""
-    name = named(monitor)
-    if name:
-        if scr is None:
-            return -1, ""
-        i, said = resolve(name, scr)
-        tail = " — using the last position" if i < 0 else ""
-        return i, f"config: [output] {key} = {monitor!r} {said}{tail}" if said else ""
+    `int()` will not read (None, a NaN, a name nobody resolved) is −1 with
+    the note. The one reading of ``[output] monitor`` / ``control_monitor``
+    (plan 16 WP7) — `config.load`, `place` below and `app._make_output` all
+    go through it, so a window's screen and the one fullscreen covers agree.
+    It never raises. Whether a screen has that index is `place`'s to say."""
     try:
         return max(int(monitor), -1), ""
     except (TypeError, ValueError, OverflowError):
@@ -337,19 +391,19 @@ def read(key: str, monitor, scr: list[Screen] | None = None) -> tuple[int, str]:
                     "using the last position")
 
 
-def index(monitor, n: int | None = None, scr: list[Screen] | None = None) -> int:
+def index(monitor, n: int | None = None) -> int:
     """`read`'s index alone; with `n` screens connected, −1 for an index
     none of them has. Says nothing: the notes are `read`'s and `place`'s."""
-    i, _ = read("monitor", monitor, scr)
+    i, _ = read("monitor", monitor)
     return -1 if n is not None and i >= n else i
 
 
 def place(kind: str, size: tuple[int, int], scr: list[Screen],
-          monitor: int | str, remembered: dict | None, what: str = "") -> tuple[Rect, str]:
+          monitor: int, remembered: dict | None, what: str = "") -> tuple[Rect, str]:
     """Where one window opens: (rect, note or "").
 
     `kind` is "render" or "control"; `monitor` is that window's config
-    index or screen name (−1: no say); `remembered` is its entry from the file, or None.
+    index (−1: no say; `settle` has made any name one); `remembered` is its entry from the file, or None.
     `what` names the window in the notes in place of `kind` ("output 2",
     plan 21: one call per render output); it changes nothing else.
 
@@ -366,7 +420,7 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
     notes = []
     target = None
     # read as app._make_output reads it for `output.monitor`
-    monitor, note = read(_key(kind), monitor, scr)
+    monitor, note = read(_key(kind), monitor)
     if note:
         notes.append(note)
     if monitor >= len(scr):
