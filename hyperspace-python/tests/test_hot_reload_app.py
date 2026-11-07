@@ -8,6 +8,7 @@ rule on every real class in a hot module, with Python's own check; the `live` ti
 windows take the focus on a Mac, so `--all`, not CI) runs a save through the real app.
 """
 
+import importlib
 import json
 import os
 import subprocess
@@ -78,22 +79,23 @@ def _classes(owner, module: str):
             yield from _classes(c, module)
 
 
-def report() -> None:
+def report(importer=importlib.import_module) -> None:
     """Every class of every hot module against `refusal`, as one line of JSON. Run in a
-    process of its own: it imports all of them, torch and the media adapters included."""
-    import importlib
-
-    hot = {f"{PACKAGE}.{name}" for name in MODULES}
+    process of its own: it imports all of them, torch and the media adapters included.
+    Only a third-party package that isn't there is skipped: any other import error,
+    and one of our own above all, fails here, so no class leaves the rule for it."""
+    names = [f"{PACKAGE}.{name}" for name in MODULES]
+    hot = set(names)
     wrong, unmodelled, skipped, checked = {}, {}, {}, 0
-    # sorted: a set's order moves with the hash seed, and the run should not
-    # (a cold import cycle is `test_every_module_imports_alone`'s to catch)
-    for name in sorted(hot):
+    for name in names:
         try:
-            mod = importlib.import_module(name)
-        except ImportError as e:
+            mod = importer(name)
+        except ModuleNotFoundError as e:
+            if (e.name or PACKAGE).split(".")[0] == PACKAGE:
+                raise
             skipped[name] = str(e)
             continue
-        for cls in set(_classes(mod, name)):
+        for cls in dict.fromkeys(_classes(mod, name)):
             if issubclass(cls, Enum) or typing.is_typeddict(cls):
                 continue            # kept across a reload; a dict at runtime
             where = f"{name}.{cls.__qualname__}"
@@ -128,6 +130,37 @@ def test_every_class_in_a_hot_module_can_be_re_classed_after_a_reload():
     assert not got["unmodelled"], got["unmodelled"]
     assert not {f"{PACKAGE}.{name}" for name in CORE} & set(got["skipped"]), got["skipped"]
     assert got["checked"] > 300, got
+
+
+def test_the_rule_imports_in_the_lists_order(capsys):
+    """Row 812: `report` imports in `MODULES`'s order, with the importer passed in, so
+    this test patches nothing in a worker the other tests share."""
+    seen = []
+
+    def record(name):
+        seen.append(name)
+        raise ModuleNotFoundError("not here", name="third_party")
+
+    report(record)
+    assert seen == [f"{PACKAGE}.{name}" for name in MODULES]
+    assert len(json.loads(capsys.readouterr().out)["skipped"]) == len(MODULES)
+
+
+@pytest.mark.parametrize("error", [
+    ModuleNotFoundError("No module named 'hyperspace.gone'", name="hyperspace.gone"),
+    ImportError("cannot import name 'X' from partially initialized module",
+                name="hyperspace.ui_desk"),
+    ImportError("cannot open shared object file"),
+    ImportError("libfoo.so: cannot open shared object file", name="third_party"),
+])
+def test_the_rule_skips_only_a_missing_third_party_package(error):
+    """Only a third-party `ModuleNotFoundError` skips. A cycle in `from .x import Name`
+    form, or a package that's there and won't load, fails rather than leave classes unread."""
+    def importer(_name):
+        raise error
+
+    with pytest.raises(ImportError):
+        report(importer)
 
 
 def _hot(source: str) -> tuple[type, set[str]]:
@@ -217,7 +250,7 @@ print(json.dumps({"n": len(names), "bad": bad}))
 
 def test_every_module_imports_alone():
     """Each of the package's modules imports first, into a process with none of the
-    package loaded. A cycle the app never takes (it imports `ui` first) still broke
+    package loaded. A cycle the app's own order never meets still broke
     the report above whenever a set's order put the module first: `ui_pane` read by
     `ui_graph`, and `ui_desk` read by `ui_pad`, half made (row 808, ui_diagram.py)."""
     out = subprocess.run([sys.executable, "-c", COLD], capture_output=True, text=True,
