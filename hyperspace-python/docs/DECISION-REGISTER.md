@@ -775,6 +775,11 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 795 | The audit's list now says what's true: R13, R14, R15, U9 and U10 are gone, and P6 and V8 stay open, named for SC3b and SC3a. `ENGINEERING.md` and `CHECKPOINT.md` agree. |
+| 794 | Audit U10, fixed, not moot: `same_line(avail - w)` counts from the window's edge, so in a band of widths the save chip still covered ▶ by 6 px. `ui.flush_right` is the one call now, on the strip and every row that made the same mistake. A test draws every module strip at three widths. |
+| 793 | Audit U9, fixed: the two nudge chips on the LFO page each build their own popup (`panel._ctx(nudge, f".{tag}")`), so a right-click draws the menu's items once. |
+| 792 | Audit R14, closed as moot: since row 746 `preset.*` is meta, one per `Deck`, so `learn_control` refuses a knob on `preset.select` through `meta_refusal`, a hand or stick likewise, and the desk rows' combo doesn't offer it. No change to `set_norm`. A test holds every door. |
+| 791 | Audit R15, closed: `midiports.port_names()` is the one road to the MIDI ports. CoreMIDI's refusal of a process's first client is a sentence, not RtMidi's abort; a later look makes no client but costs about 0.25 ms a pair of ports on the frame thread, so a plain call shares one look per 2 s and CT1's tray may call it freely. Only this module lists ports, and an open looks here first. A desk's `Ports` now looks every 2 s all night, not 10 s after five looks: (rec) — pending the owner. |
 | 790 | LY3: video sound reaching the look off air through the analyzer is accepted (a limit beside row 702's), and the toggle says so: its hover always, and a line under it while the analyzer is on the mix. A test names the road and what it moves | 614 | The owner, 2026-11-06: accepted; "say so on the toggle" |
 | 788 | TY1: a new pyright complaint fails, an old one doesn't. `tools/type_ratchet.py` counts complaints against `tools/type_baseline.json` by file and rule, in the fast tier, so CI holds it today; the baseline falls when the tool runs; `--accept` takes a split that leaves every rule's total level, and only `--raise-baseline` raises one. The import walls now take a split's new files by glob (`tests/walls.py`). The per-file size cap comes with TY3. | — | (rec) — pending the owner |
 | 787 | GRAPH's start zoom follows the display the control window opens on, by density and height, through the editor's settings file; `SCALE` and saved positions unmoved. A change of canvas size keeps the zoom and the top-left, at every display: new behaviour on a window's resize | 612, 613 | (rec) — pending the owner |
@@ -14053,6 +14058,46 @@ still wins, as does a sink row.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
 
+### 795. The audit's list
+
+- **Gone:** R15 (791), R14 (792), U9 (793), U10 (794). R13 had already left the audit in f673a37a, and `ENGINEERING.md` no longer names it.
+- **Open:** P6, SC3b's. V8, SC3a's to decide, which SM4 leaves alone since it's on the render loop.
+- **Judge it.** Nothing to judge: a list.
+
+### 794. Audit U10: the strip's budget, measured
+
+- **Measured once, as asked.** It was likely moot, and it isn't. At the audit's 258 px the chips now wrap to their own row and nothing overlaps. At 340 px, dirty, `strip.backdrop.save` starts at x 173 and `strip.backdrop.next` ends at 179: 6 px.
+- **The cause.** `same_line(avail - chip_w)` counts from the window's edge, and the row is laid from the content's, so the chips stopped the window's padding short of the edge the strip budgeted for. Only a squeezed name shows it, since a full-width name leaves room.
+- **The fix, at the root (review).** `ui.flush_right(w)`, the idiom `ui_patterns.py` already had, at the strip, the list rows, and the same call on ROUTING and the section heads. So chips on those rows sit the window's padding further right than they did, on the true edge. The first build patched the budget and left the call.
+- **The test:** `tests/test_ui_loadable.py::test_a_module_strip_does_not_overlap`, every module strip with its reset at 258, 340 and 600 px.
+- **Judge it.** 618.
+
+### 793. Audit U9: a popup each for the nudge chips
+
+- **Verified, still true:** both chips called `panel._ctx(nudge)` with no key, so one popup id was built twice in a frame.
+- **Fixed as the audit said,** one key. The test records the popup ids: two, and different.
+- **Judge it.** 617.
+
+### 792. Audit R14: no door lands a knob on the bank
+
+- **Moot, verified.** The plan's note that nothing in `learn.py` refuses read the file for a rule about the bank. The rule is general: `Learn.learn_control` calls `routing.meta_refusal`, and row 746 made `preset.*` meta. Armed on `preset.select`, a knob gets "no patch's row…— not learned".
+- **The other doors:** `learn_source` (a hand, a stick) refuses the same way; `ui_routing.desk_target` keeps it out of the desk rows' combo; a saved desk row on it is dropped (`tests/test_layer_boundary.py`). A pad pair on it is `step` rows, and a step skips empty slots.
+- **The factory:** every row on `preset.select` is `set`.
+- **What's left:** only a hand-edited meta row in `bindings.json`. An empty slot then loads nothing and says how to fill it, which is harmless, so `set_norm` stays as it is.
+- **The test:** `tests/test_learn.py::test_no_absolute_knob_can_be_learned_onto_the_bank`.
+- **Judge it.** 616.
+
+### 791. The MIDI ports: one road, and CoreMIDI's no stays a sentence
+
+- **The audit's text was half stale.** "Each look creates a CoreMIDI client": not in the python-rtmidi we ship (1.5.8). Its binary keeps one client a process in `CoreMidiClientSingleton`, skips `MIDIClientCreate` while it holds one, and nothing calls its dispose. So only the first RtMidi object in a process can reach the abort, and mido's look makes two objects and no client after that.
+- **The abort is real and reproduced.** `sandbox-exec` denying the MIDI server: `MIDIClientCreate` returns -10833, and `mido.get_input_names()` dies with `terminating due to unexpected exception of type RtMidiError`, exit 134. Same place as the 2026-10-04 test-run crash (`getCoreMidiClientSingleton`, `plans/assets/24-26-27-run/reports/exit-crash-report.md`). A restricted shell is the likely way there; the app has never done it.
+- **The fix.** `midiports._create_client` calls `MIDIClientCreate` through ctypes and reads the status. No: empty lists and `why`, RtMidi untouched, and asked again at most every 10 s however often it's called. Yes: the client is held for the process, then RtMidi is asked. `Ports.connect` and `bridge._open_out` look through it.
+- **What's left.** A refusal in the moment between our yes and RtMidi's own ask would still abort. No Python can close that, since RtMidi's client setter isn't exported; holding ours keeps the server connection up across the gap.
+- **A short cache, no thread.** The review asked for real endpoints, and the first number (0.05 ms) was an empty list's. Virtual ports from another process, the first named as an APC40, 300 looks each, median / p99 / worst: 0 pairs 0.05 / 0.08 / 1.2 ms; 1, 0.29 / 0.60 / 0.6; 12, 3.2 / 7.3 / 19.9; 32, 7.7 / 10.6 / 15.2; 64, 14.6 / 24.5 / 33.0. About 0.25 ms a pair, on the frame thread. So a plain call shares one look per `LOOK_S` = 2 s, and `fresh=True` is for an open, on its own pace. A real device's names weren't measured: none was plugged in. A worker thread would move RtMidi's run-loop read off the main thread; a cache gets most of the gain for none of that. The first look in a process takes 0.1 to 1.2 s, so a panel that may be first should ask before the first frame.
+- **Found on the way.** A port going away can list as `None` (seen unplugging a virtual port); `find_port` raised on it, which read as a failed look. `port_names` leaves it out.
+- **A desk doesn't slow down any more: built on the orchestrator's word, (rec) — pending the owner.** The owner made hot-plug a requirement for displays, the same spirit. `Ports` looks every `RECONNECT_S` = 2 s all night, where it was every 10 s after five looks, so a desk replugged late is back within 2 s, not 10. The cost: one fresh look per missing desk per 2 s, about 1 ms with a rig's four or so ports, where it was every 10 s. `test_a_port_that_stays_missing...` moved with it; the old test pinned a pace R15 asked for. `bridge.OutPort` and `devices.retry_after` keep the slow pace: those are a failed open, not a look.
+- **For CT1:** `from .midiports import port_names`; `seen = port_names()`; `seen.inputs`, `seen.outputs`, `seen.why`. Main thread only, as often as you like: it really looks at most every 2 s, so a plug shows within that. `[midi] enabled = false` is the caller's to honour.
+- **Judge it.** 615.
 ### 790. Video sound reaches the look off air, and the toggle says so
 
 - **The owner, 2026-11-06:** "Video sound reaching the off-air look through the analyzer is accepted; say so on the toggle." It is not a breach of "no loadable patch can affect another" (row 702, `ARCHITECTURE.md` "On air and off air"): the analyzer hears what the room hears, and every patch may wire from it. Row 702 has the other known limits, which this road doesn't change. The glossary's sentence is absolute and names no exception; it's signed, so it's left as it is.

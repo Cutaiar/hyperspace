@@ -94,6 +94,25 @@ def test_the_page_has_no_conflicting_ids(rig, monkeypatch):
     assert len([lb for _, lb in ids if lb.endswith(".reset")]) == 4
 
 
+def test_the_two_nudge_chips_have_a_popup_each(rig, monkeypatch):
+    """Audit U9: with one id, a right-click on either chip drew the menu's items
+    twice. No popup id is built twice on the page, whichever param it stands for."""
+    popups: list[str] = []
+    real = imgui.begin_popup_context_item
+
+    def rec(popup_id=None, *a, **k):
+        popups.append(popup_id)
+        return real(popup_id, *a, **k)
+    monkeypatch.setattr(imgui, "begin_popup_context_item", rec)
+    imgui.new_frame()
+    imgui.begin("page")
+    ui_lfo.page(rig.panel, 1 / 60)
+    imgui.end()
+    imgui.end_frame()
+    assert len(popups) == len(set(popups)), sorted(p for p in popups if popups.count(p) > 1)
+    assert len([p for p in popups if p.startswith("##ctx.tempo.nudge.")]) == 2, popups
+
+
 def test_the_lfos_are_offered_as_routing_sources(rig):
     """The ROUTING page's source combo lists whatever the router has labels
     for — lanes, then lfo, then the rest in the order they spoke (plan 27
