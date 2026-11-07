@@ -829,6 +829,21 @@ here; overturn → the change, then the same.
 | 789 | TY2: #273's structural audit lands as a record, unedited under a dated header: the headline figures re-measured at `e869a408` by one script in its appendix, old names mapped, and which proposals plan 58 §6 rejected. Plan 58 §3 and §6 decide what's done. Replaces #273. | — | (rec) — pending the owner |
 | 812 | HR: row 802's rule imported the package in hash-seed order and flaked. It now imports in `MODULES`'s order and skips only a missing third-party package. Row 808 removed the cause | — | the orchestrator's item, found by `--all` on #425; built, no owner question |
 | 819 | The doc tails keep `merge=union`, with `tests/test_doc_numbers.py` now holding what a merge can lose: a heading with no text, two sections' text under one heading, a row with no section or a section with no row, a table row's cells, a check outside a group. Row 770's text, 771's whole section and 787's text are restored from the merged PRs' own diffs. **The loss was #411's review commit, not the union; the union hid it from a merge** | — | built, the orchestrator's item; keep the union, (rec) — pending the owner |
+| 830 | The one migration's kind and folder: `hyperspace.loadable/11` in `<library>/loadable/`. The old kind's rungs `/2`–`/10` are read through `graphmigrate.forward` until CL1; a save writes `/11` alone. A newer kind's refusal says what to do: `git pull` and `uv sync` | 645 | owner — 2026-11-06 (FQ4): "'loadable' is accurate to what the thing within the folder is, so I think that's fine" |
+| 831 | Shows go: one install file per install, `<library>/installs/<name>.json`, `hyperspace.install/1`: `tuning` (the show's `session`), `modules` (the analyzer scene in 5 of 6 shows), the bank, `startup`, `layout` and `plays` (SM6). This Mac's choice in `<home>/last_install`; `last_show` is read until then. Each show becomes an install | 645, 646 | owner — 2026-11-06 (FQ5): as recommended; FQ6: one migration, "coordinating the migration is not hard" |
+| 832 | The run: `tools/migrate_library.py`, a dry run by default; `--apply` refuses while the app is open on this Mac, backs up once to `<home>/library-backup-<stamp>`, deletes the trash and `presets-backup-*`, retapers, writes every loadable patch at `/11` with its three checks, the shows as install files, deletes `fx/`, `.bak-v2-*` and folders with nothing in them, and renames `presets/` to `loadable/` last. A second run does nothing and makes no backup | 645 | owner — 2026-11-06: "Just delete the trash items"; the rest (rec), the orchestrator's brief |
+| 833 | A show's `startup` that names no file is cleared, said (`mine`'s `MIGRATED`, media-playground's `TUMBLE`); bank slots that point at nothing are reported and left (6 of 24 in five shows, 8 in media-playground) | 645 | (rec) — pending the owner |
+| 834 | `output.bg` and `.alpha` stay in the install file's tuning, not `displays.json`: they are the overlay window's ground and opacity, one per app, not one per display | — | (rec) — pending the owner |
+| 835 | A Mac on the new code with a library not yet moved opens it as it is and saves in its old folders at the newest schema; the footer at launch and the SYSTEM page say to run the tool. The tool takes those files as they are, so nothing is stranded | 645 | (rec) — pending the owner; plan 58 §2a |
+| 836 | NSEW: `pad:N` / `S` / `E` / `W`, `hat:N` …, `pair:N/S` the cluster. The D-pad's pair is `pair:hat.N/hat.S`: once the cluster and the D-pad both say N/S, a pole's name alone can't say which. Plan 56's "adds no spelling of its own" is departed from here. A person reads "south button", "d-pad up", "pair D-pad up / down"; a pad with its own letters still draws them (row 552) | 648, 649 | owner — 2026-11-06 (FQ7): "those spellings"; the D-pad's pair (rec) — pending the owner |
+| 837 | `bindings/4`: each Mac's `bindings.json` moves at its own first launch on the new code, kept first as `.bak-v3`. The factory rows' and each file's `overlay.*` targets become `output.*` (plan 58 §9 item 6); the alias params stay for an old patch's route until CL3 | 647 | the orchestrator's brief (plan 58 §9 item 6) |
+| 838 | The layout stamp: `bindings.json` says which pad layouts it has seen (`pad_layout`). A layout moves a file that hasn't seen it, once, so a row written by hand later that happens to be a twin of an old one stays (row 723 left this) | — | (rec) — plan 57 §3, "[Rec] do it" |
+| 839 | What a save stopped writing with the migration: `tempo.nudge` (a tapped BPM comes back at launch, a nudge doesn't) and `ghost.<n>.mirror`. An old file's are read and dropped | 646 | plan 58 §8 (assumed unless the owner objects) and §9 |
+| 840 | The panel says patch: 155 strings, the section PATCHES, the desk's patch layer, "patch:" on the footer. "Loadable patch" where a spawned patch is in the same breath (the conflict sheet, a spawn's words). Ids stay: `preset.*`, the desk layer's saved value `preset`, the group `preset` (FQ4 named the kind and the folder only). `tests/test_person_words.py` holds it | 650, 651 | owner — 2026-11-06: "Presets need to go away"; ids (rec) |
+| 841 | SM6: a cart starts by itself after launch: `plays` in the install file names the playlist; a checkbox on the playlist section sets it | 652 | owner — 2026-11-06: "A cart starts by itself after launch" |
+| 842 | `Project` is `Install` in code (`Library.install`, `DeckInstall`), by tokens: every changed file's tree is the same but for the names, checked by comparing each file's AST with the old, node by node. Saved keys are unaffected | — | the orchestrator, 2026-11-07: "do it if it's mechanical and provable" |
+| 843 | `Library()` on a `config.toml` that won't parse opens the library this Mac last knew (`sharedfile.library_root`), never the home in its place; knowing none, it opens nothing and every save is refused in words | 653 | the orchestrator's brief |
+| 844 | The library's scan reads the Drive on the main thread (`Library.poll` → `_scan`, every `period`, every folder's `*.json`). Not done here: it needs the scan on a `sharedfile.Worker`, `poll` taking the last result, and the tests that call `poll(now)` expecting a synchronous answer given a way to wait. An item for the cleanup | — | (rec) — an item, not built |
 
 "—": no hand check shows it; tests only.
 
@@ -14736,3 +14751,106 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **Seen.** party-trip through `tools/app_driver.py`, by eye. This Mac has no 1080p display at 1x, so every 1x window here was that size on the 4K with the zoom set by hand. Through the real rule: the 1080p TV at 2x, opened at 1888x900, read 1.3.
 - **`SCALE` and saved positions don't move.** This changes a view's start and how its words are baked.
 - **Judge it.** 634.
+
+### 830. The kind and the folder: `hyperspace.loadable/11` in `loadable/`
+
+- **What.** The one migration's kind and folder: `hyperspace.loadable/11` in `<library>/loadable/`. The old kind's rungs `/2`–`/10` are read through `graphmigrate.forward` until CL1; a save writes `/11` alone. A newer kind's refusal says what to do: `git pull` and `uv sync`.
+- **Answer.** owner — 2026-11-06 (FQ4): "'loadable' is accurate to what the thing within the folder is, so I think that's fine".
+- **Built.** `graphmigrate.eleven` (also a pair route's poles, row 836); `loadable.SAVE_SCHEMA`; `library.loadable_dir`; `Library.read` reads the old kind below `/11` and says `NEWER_WORDS` above what it knows.
+- **Old code on the new library.** Proved against `main` at f9b312e on a copy of the migrated Drive: it lists nothing, refuses a `/11` with "is not a hyperspace.preset" and an install file with "is not a hyperspace.project", and changes no file (it makes two empty folders, which the tool's next run removes). Its words can't be changed now: they shipped.
+- **Judge it.** 645.
+
+### 831. Shows go: one install file per install
+
+- **What.** Shows go: one install file per install, `<library>/installs/<name>.json`, `hyperspace.install/1`: `tuning` (the show's `session`), `modules` (the analyzer scene in 5 of 6 shows), the bank, `startup`, `layout` and `plays` (SM6). This Mac's choice in `<home>/last_install`; `last_show` is read until then. Each show becomes an install.
+- **Answer.** owner — 2026-11-06 (FQ5): as recommended; FQ6: one migration, "coordinating the migration is not hard".
+- **Built.** `library.install_doc` (pure), `Install._take` reads either, `to_doc` writes the install; `install_files`, `installs_dir`, `LAST_INSTALL`.
+- **Judge it.** 645, 646.
+
+### 832. The run, in one pass, with one backup
+
+- **What.** The run: `tools/migrate_library.py`, a dry run by default; `--apply` refuses while the app is open on this Mac, backs up once to `<home>/library-backup-<stamp>`, deletes the trash and `presets-backup-*`, retapers, writes every loadable patch at `/11` with its three checks, the shows as install files, deletes `fx/`, `.bak-v2-*` and folders with nothing in them, and renames `presets/` to `loadable/` last. A second run does nothing and makes no backup.
+- **Answer.** owner — 2026-11-06: "Just delete the trash items"; the rest (rec), the orchestrator's brief.
+- **Counted on a copy of the Drive, 2026-11-07:** 110 loadable patches, all `/10`: 110 rewritten as `/11`, 0 skipped, every round-trip picture the same and every one a fixed point; 6 shows to 6 install files; 12 trashed files and `presets-backup-2026-10-14` deleted; `fx/` (1 file), 7 `.bak-v2-*` and 2 empty folders deleted; a second run: "nothing to do".
+- **Judge it.** 645.
+
+### 833. A startup that names nothing is cleared; empty slots are reported
+
+- **What.** A show's `startup` that names no file is cleared, said (`mine`'s `MIGRATED`, media-playground's `TUMBLE`); bank slots that point at nothing are reported and left (6 of 24 in five shows, 8 in media-playground).
+- **Answer.** (rec) — pending the owner.
+- **Why clear.** A launch would say "startup: no patch" for ever; the backup keeps the name.
+- **Judge it.** 645.
+
+### 834. `output.bg` and `.alpha` stay in the install file
+
+- **What.** `output.bg` and `.alpha` stay in the install file's tuning, not `displays.json`: they are the overlay window's ground and opacity, one per app, not one per display.
+- **Answer.** (rec) — pending the owner.
+- **The other way.** A per-display ground would need SC2's file to change, after it shipped.
+- **Judge it.** No hand check.
+
+### 835. A library not yet moved opens and saves where it is
+
+- **What.** A Mac on the new code with a library not yet moved opens it as it is and saves in its old folders at the newest schema; the footer at launch and the SYSTEM page say to run the tool. The tool takes those files as they are, so nothing is stranded.
+- **Answer.** (rec) — pending the owner; plan 58 §2a.
+- **Why.** A Mac that pulled before the run would otherwise strand its saves or refuse them; the run takes `/11` files where they are.
+- **Judge it.** 645.
+
+### 836. NSEW, and the D-pad's pair
+
+- **What.** NSEW: `pad:N` / `S` / `E` / `W`, `hat:N` …, `pair:N/S` the cluster. The D-pad's pair is `pair:hat.N/hat.S`: once the cluster and the D-pad both say N/S, a pole's name alone can't say which. Plan 56's "adds no spelling of its own" is departed from here. A person reads "south button", "d-pad up", "pair D-pad up / down"; a pad with its own letters still draws them (row 552).
+- **Answer.** owner — 2026-11-06 (FQ7): "those spellings"; the D-pad's pair (rec) — pending the owner.
+- **Built.** `models.HAT_PREFIX`, `pole_name`, `FACE_WORDS`, `HAT_WORDS`, `XBOX_FACE`; `routing_sources.nsew`, idempotent since old and new never overlap.
+- **Judge it.** 648, 649.
+
+### 837. `bindings/4`, each Mac's at its own launch, and the `overlay.*` aliases
+
+- **What.** `bindings/4`: each Mac's `bindings.json` moves at its own first launch on the new code, kept first as `.bak-v3`. The factory rows' and each file's `overlay.*` targets become `output.*` (plan 58 §9 item 6); the alias params stay for an old patch's route until CL3.
+- **Answer.** the orchestrator's brief (plan 58 §9 item 6).
+- **Counted on a copy of this Mac's file:** 10 rows renamed (4 cluster, 2 D-pad, 4 aliases), the file kept as `bindings.json.bak-v3`.
+- **Judge it.** 647.
+
+### 838. The layout stamp
+
+- **What.** The layout stamp: `bindings.json` says which pad layouts it has seen (`pad_layout`). A layout moves a file that hasn't seen it, once, so a row written by hand later that happens to be a twin of an old one stays (row 723 left this).
+- **Answer.** (rec) — plan 57 §3, "[Rec] do it".
+- **Built.** `routing.PAD_LAYOUT_KEY`, `remap_factory(seen=)`; the factory file carries it.
+- **Judge it.** No hand check: `tests/test_pad_learn.py`.
+
+### 839. What a save stopped writing
+
+- **What.** What a save stopped writing with the migration: `tempo.nudge` (a tapped BPM comes back at launch, a nudge doesn't) and `ghost.<n>.mirror`. An old file's are read and dropped.
+- **Answer.** plan 58 §8 (assumed unless the owner objects) and §9.
+- **Judge it.** 646.
+
+### 840. The panel says patch
+
+- **What.** The panel says patch: 155 strings, the section PATCHES, the desk's patch layer, "patch:" on the footer. "Loadable patch" where a spawned patch is in the same breath (the conflict sheet, a spawn's words). Ids stay: `preset.*`, the desk layer's saved value `preset`, the group `preset` (FQ4 named the kind and the folder only). `tests/test_person_words.py` holds it.
+- **Answer.** owner — 2026-11-06: "Presets need to go away"; ids (rec).
+- **Judge it.** 650, 651.
+
+### 841. SM6: a cart starts by itself
+
+- **What.** SM6: a cart starts by itself after launch: `plays` in the install file names the playlist; a checkbox on the playlist section sets it.
+- **Answer.** owner — 2026-11-06: "A cart starts by itself after launch".
+- **Built.** `playlist.at_launch`, `Install.play_at_launch`.
+- **Judge it.** 652.
+
+### 842. `Project` is `Install` in code
+
+- **What.** `Project` is `Install` in code (`Library.install`, `DeckInstall`), by tokens: every changed file's tree is the same but for the names, checked by comparing each file's AST with the old, node by node. Saved keys are unaffected.
+- **Answer.** the orchestrator, 2026-11-07: "do it if it's mechanical and provable".
+- **Proof.** A token rewrite, then each file's AST compared node by node with the old, every difference one of the renamed pairs. Restart, not hot reload: a field on a long-lived object.
+- **Judge it.** No hand check.
+
+### 843. A config.toml that won't parse never opens the home
+
+- **What.** `Library()` on a `config.toml` that won't parse opens the library this Mac last knew (`sharedfile.library_root`), never the home in its place; knowing none, it opens nothing and every save is refused in words.
+- **Answer.** the orchestrator's brief.
+- **Judge it.** 653.
+
+### 844. The library's scan on the main thread: an item
+
+- **What.** The library's scan reads the Drive on the main thread (`Library.poll` → `_scan`, every `period`, every folder's `*.json`). Not done here: it needs the scan on a `sharedfile.Worker`, `poll` taking the last result, and the tests that call `poll(now)` expecting a synchronous answer given a way to wait. An item for the cleanup.
+- **Answer.** (rec) — an item, not built.
+- **What it would take.** Medium: the walk cache (`_walked`) already keeps per-folder stamps; the scan and the stamp reads move to the worker, as `displays.py` does.
+- **Judge it.** No hand check.

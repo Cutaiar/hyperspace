@@ -214,6 +214,17 @@ items"), after the backup, along with `presets-backup-2026-10-14`. `TRASH` and `
 - **`scenes/band` files say `hyperspace.preset/1` and are analyzer tunings.** Rename their kind in the run, or
   rung `/1` must stay.
 
+## 7b. As built, wave 5 (rows 830–844), 2026-11-07
+
+Built in three PRs: the tool and the library road, NSEW and `bindings/4`, the words. **§7 stays the plan; where this departs, this is right.**
+
+- **The order of the run** is §7's but for the trash, deleted right after the backup, and the tidy, before the folder move (row 832). Step 6 holds: each Mac's `bindings.json` moves at its own launch. Step 7: the corpus is `tests/corpus/loadable/` and `tests/corpus/installs/`.
+- **NSEW departs from plan 56:** the D-pad's pair says `pair:hat.N/hat.S`; `pair:N/S` is the cluster (row 836).
+- **`overlay.*`** rode `bindings/4` (row 837), which §3 didn't list.
+- **A library not yet moved** opens and saves in its old folders (row 835), so the run takes files a Mac saved before it.
+- **`startup` naming nothing** is cleared, said (row 833).
+- **Counted on a copy of the Drive:** row 832.
+
 ## 8. Not verified
 
 The Drive library was not opened, as instructed: its counts of `pair:` rows, of folders that

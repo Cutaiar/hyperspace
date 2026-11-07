@@ -8668,6 +8668,54 @@ Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the a
 5. Resize the window. *Pass:* the zoom doesn't change.
 *Fail:* a start as small as before, words too soft to read, a stutter you can see, or a zoom that follows the resize.
 
+## DS. The one migration (rows 830–835, 839)
+
+Register rows 830–835, 2026-11-07. Proved on a copy of the Drive (counts in row 832). On both Macs, after the run.
+**645. Every file opens at `/11`.** (this Mac, then Dylan's)
+1. After the run, launch. *Pass:* no "this library still has files in presets/" on the footer or the SYSTEM page.
+2. Open PATCHES and load five patches, two from folders. *Pass:* each loads, looks as it did last night.
+3. Open each install on the install line. *Pass:* each opens; the analyzer scene is the one it was (Balanced, Kick & Sizzle on huuu).
+4. In Finder, the library holds `loadable/` and `installs/`, and no `presets/`, `projects/`, `trash/` or `fx/`.
+*Fail:* a patch that won't load, a look that changed, a missing install, or an old folder back.
+**646. What a save writes.** (one install)
+1. Nudge the tempo, then save the install. Quit and launch. *Pass:* the BPM is back, the nudge is not.
+2. Open `installs/<name>.json` in a text editor. *Pass:* `"schema": "hyperspace.install/1"`, a `tuning` key, no `session`, no `tempo.nudge`.
+*Fail:* a nudge that comes back, or a `session` key.
+
+## DT. NSEW on the pads (rows 836–838)
+
+Register rows 836–838, 2026-11-07. Headless: `tests/test_format_lane.py`, `tests/test_paired_axes.py`. Nothing tried on a pad.
+**647. This Mac's `bindings.json` moves once.** (each Mac, its first launch)
+1. Launch once. *Pass:* SYSTEM says `bindings.json migrated … kept as bindings.json.bak-v3`.
+2. Press the face buttons and the D-pad. *Pass:* faces, points, lines, screen strokes, and brightness, as before.
+3. Press T and G on the keyboard. *Pass:* overlay and click-through, as before.
+*Fail:* a button that does nothing, or a second backup at the next launch.
+**648. A pair on the D-pad.** (the Xbox pad)
+1. Right-click a param, Learn pair, press ↑ then ↓. *Pass:* the row reads "pair D-pad up / down".
+2. Learn pair on the face, Y then A. *Pass:* "pair Y / A".
+*Fail:* a pair that takes the face for the D-pad or the other way round.
+**649. The pad window says it by position.** (Joy-Con and DualSense)
+1. Open the pad window. *Pass:* each pad draws its own letters (✕ ○ □ △, the Joy-Con's arrows); a hover names "south button" and so on.
+*Fail:* an Xbox letter on a pad that has its own.
+
+## DU. The panel says patch (rows 840–843)
+
+Register rows 840–843, 2026-11-07. Headless: `tests/test_person_words.py`.
+**650. No preset anywhere a person reads.** (the panel, all sections)
+1. Walk the pane, the desk diagram, ROUTING, the footer after a save. *Pass:* "patch" or "loadable patch", never "preset".
+*Fail:* any "preset" on the panel.
+**651. The conflict sheet reads plainly.** (spawn a patch onto a loadable patch that uses one of its controls)
+1. Spawn. *Pass:* the sheet says "the patch's" for the spawned one and "the loadable patch's" for the open one.
+*Fail:* a line where both are "the patch".
+**652. A cart starts by itself.** (a playlist)
+1. Tick "start this list at launch", quit, launch. *Pass:* the list plays without a press.
+2. Untick, relaunch. *Pass:* it doesn't.
+*Fail:* a cart that doesn't start, or starts when unticked.
+**653. A config.toml that won't read.** (this Mac: a copy of `config.toml` kept first)
+1. Put a stray `[` in `config.toml`, launch. *Pass:* the library is the Drive's as before (or, never launched here, nothing listed and saves refused in words).
+2. Put the file back.
+*Fail:* patches saved into `~/Hyperspace` instead of the Drive.
+
 ## What no test covers
 
 Only a person can settle these:
