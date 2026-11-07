@@ -951,7 +951,7 @@ def test_the_start_zoom_is_not_set_twice(rig):
     for one, and a loaded patch and more frames leave it."""
     st = _start(rig, 1.6)
     assert st["zoom"] == pytest.approx(1 / 1.6)
-    st["frame"] = True
+    ui_graph.ask_fit(st)
     for _ in range(90):
         frame(rig.panel, "graph")
     theirs = st["zoom"]

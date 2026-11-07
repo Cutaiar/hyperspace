@@ -172,7 +172,8 @@ one can be patched; patched, it is drawn as any node. The picker still
 offers every idle macro. **Tidy** (`tidy`) collapses every node, closes
 the idle lines, forgets every position on the canvas and lays them all
 out again in their areas — one undo step for the positions (`forget`) —
-frames the canvas on them and says so on the head ("laid out 36 nodes in
+frames the canvas on them in what the side pane leaves of it (`ask_fit`, as the
+canvas's open and every load do) and says so on the head ("laid out 36 nodes in
 6 areas, every one collapsed · 12 idle off the canvas", or "already
 tidy"). **The side pane is always on** (plan 49: `ui_pane.py`), one
 view at a time at its full height (2026-11-07): the selection's details
@@ -274,6 +275,10 @@ STUB_REACH = (graphview.COL_W - NODE_W) / 2 + PIN   # a stub's hit, outward past
 GROW_LEFT, CENTRED, GROW_RIGHT = -1, 0, 1   # where a pin's hit rect grows from its drawn square
 SIDE_W = 320.0           # the side column's width at first, when the page is wide enough for it
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
+FIT_WAIT = 1             # frames a fit waits: a new loadable patch's nodes are measured on its second
+FIT_TRIES = 30           # …and frames it goes on asking while none is measured yet
+FIT_TOGETHER = 3         # frames apart a load's new name and new graph may land
+FIT_A, FIT_B = "n:@fit.a", "n:@fit.b"   # the fit's two invisible corners (`_fit_when_asked`)
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
 GRIP_W = 8.0             # the drag grip on the column's left edge
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
@@ -770,8 +775,8 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
     in its area (plan 28 N9), the idle lines closed — and the head says
     what it did (`tidied`: "laid out 36 nodes in 6 areas, every one
     collapsed · 12 idle off the canvas"), or "already tidy" when nothing
-    moved or folded. The canvas is framed on the nodes after it
-    (`st["frame"]`)."""
+    moved or folded. The canvas is framed on the nodes after it, in what
+    the pane leaves of it (`ask_fit`)."""
     was_open = bool(st["open"]) or bool(st.setdefault("idle_open", set()))
     st["open"] = set()
     st["idle_open"] = set()
@@ -785,7 +790,7 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
                 != tuple(round(v) for v in auto.get(n.id, (0.0, 0.0)))))
     said = tidied(view) if (moved or was_open) else ALREADY_TIDY
     st["note"], st["said"] = "", said
-    st["frame"] = True
+    ask_fit(st)
     return said
 
 
@@ -829,6 +834,7 @@ def page(panel, dt: float) -> None:
         imgui.end_child()
         return
     st["hide"] = hidden_ids(st, view)       # plan 36 T6: before anything asks `drawn_node`
+    _fit_on_a_load(panel, st)
     sel = _selection(st, view)
     if sel is not None and escaped():           # Esc closes the details: nothing selected
         st["deselect"], sel = True, None
@@ -1724,6 +1730,8 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             through: float = 0.0) -> None:
     """The editor, its ground faded to 1 − `through` over the backdrop."""
     view_file = start_view(panel.graph_start_zoom) if st["editor"] is None else ""
+    if st["editor"] is None and getattr(panel, "graph_fit", True):
+        ask_fit(st, instant=True)       # the canvas opens with every node in view
     ed.set_current_editor(editor(panel, view_file))
     keep_corner(st, (size.x, size.y))
     try:
@@ -1804,8 +1812,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     held = ui_routing._state(panel).pop("reveal", None)     # "Route a lane here…"
     if held is not None:
         reveal(st, view, held)
-    if st.pop("frame", False):          # a tidy: the canvas framed on its nodes
-        ed.navigate_to_content()
+    _fit_when_asked(panel, st, view, lay, size)    # open, a load, a tidy: every node in view
     area = st.pop("frame_area", None)   # N9: an area chip or a title clicked
     if area is not None:
         frame_area(st, view, area)
@@ -1967,6 +1974,130 @@ def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
     imgui.dummy(imgui.ImVec2(NODE_W, 0))
     imgui.pop_id()
     ed.end_node()
+
+
+def _fit_on_a_load(panel, st: dict) -> None:
+    """Another loadable patch on the canvas — its name and its graph both
+    new within `FIT_TOGETHER` frames (a load, a new, the other deck's), not
+    a save as (the name alone) nor an edit (the graph alone) — asks for
+    every node in view."""
+    lp = getattr(getattr(panel, "library", None), "loaded_patch", None)
+    name = (id(lp), (getattr(lp, "landing", None) or (None,))[0])
+    spec = getattr(getattr(lp, "graph", None), "spec", None)
+    now = imgui.get_frame_count()
+    seen = st.get("fit_seen")
+    st["fit_seen"] = (name, spec)
+    if seen is None:
+        return
+    moved = st.setdefault("fit_moved", {})
+    if seen[0] != name:
+        moved["name"] = now
+    if seen[1] is not spec:
+        moved["spec"] = now
+    if len(moved) == 2:
+        if abs(moved["name"] - moved["spec"]) <= FIT_TOGETHER and getattr(panel, "graph_fit", True):
+            ask_fit(st)
+        moved.clear()
+    elif moved and now - next(iter(moved.values())) > FIT_TOGETHER:
+        moved.clear()
+
+
+def ask_fit(st: dict, instant: bool = False) -> None:
+    """Ask the canvas to bring every node into view, centred in what the
+    pane leaves of it (`_fit_when_asked`), `FIT_WAIT` frames on: a new
+    loadable patch's nodes are placed on its first frame and measured on
+    the next. `instant`: no glide (the launch)."""
+    st["fit"] = {"wait": FIT_WAIT, "tries": FIT_TRIES, "instant": instant}
+
+
+def fit_box(content: tuple[float, float, float, float], canvas: tuple[float, float],
+            pane: tuple[str, float], most_zoom: float) -> tuple[float, float, float, float]:
+    """The canvas box (x0, y0, x1, y1, canvas units) the editor is to frame
+    so `content` sits centred in the part of the canvas the pane leaves —
+    `pane` is ("beside", its width) or ("below", its height), in screen px —
+    never larger on screen than `most_zoom` px a unit. The box has the
+    canvas's own aspect, so the editor's fit maps it onto the canvas
+    whole: the content's box grown to the visible part's aspect (and to
+    that part's size at `most_zoom`), then out under the pane. Pure."""
+    x0, y0, x1, y1 = content
+    cw, ch = max(canvas[0], 1.0), max(canvas[1], 1.0)
+    side, cut = pane
+    vw, vh = (max(cw - cut, 1.0), ch) if side == "beside" else (cw, max(ch - cut, 1.0))
+    w, h = max(x1 - x0, 1.0), max(y1 - y0, 1.0)
+    z = max(most_zoom, 1e-3)
+    w, h = max(w, vw / z), max(h, vh / z)
+    if w / h > vw / vh:                 # wider than the visible part: taller
+        h = w * vh / vw
+    else:
+        w = h * vw / vh
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    bx0, by0 = mx - w / 2, my - h / 2
+    if side == "beside":
+        return (bx0, by0, bx0 + w * cw / vw, by0 + h)
+    return (bx0, by0, bx0 + w, by0 + h * ch / vh)
+
+
+def _content_ids(st: dict, view: graphview.View, lay) -> list[str]:
+    """The editor names of what the canvas draws: its nodes, its groups
+    (folded, or an open one's title) and the idle lines it shows."""
+    names = ["n:" + n.id for n in view.nodes if drawn_node(st, n)]
+    names += ["n:" + (region_id(g.id) if g.open else g.id) for g in view.groups]
+    names += ["n:" + graphview.idle_id(a) for a in lay.lines
+              if not all(i in st["hide"] for i in lay.idle.get(a, []))]
+    return names
+
+
+def _fit_when_asked(panel, st: dict, view: graphview.View, lay, size: imgui.ImVec2) -> None:
+    """Inside the editor, after the nodes: what `ask_fit` asked, once its
+    wait is out and every node is measured (else again next frame, up to
+    `FIT_TRIES`, then on those measured). The binding has no zoom setter, so the box `fit_box` says
+    is marked by two invisible corner nodes, selected with the content and
+    framed (`navigate_to_selection`, zooming in as well as out); the
+    selection is then put back as it was."""
+    ask = st.get("fit")
+    if not ask:
+        return
+    if ask["wait"] > 0:
+        ask["wait"] -= 1
+        return
+    ids = [ed.NodeId(_id(st, k)) for k in _content_ids(st, view, lay)]
+    every = [(ed.get_node_position(k), ed.get_node_size(k)) for k in ids]
+    boxes = [(p, z) for p, z in every if z.x > 0 and z.y > 0]
+    if len(boxes) < len(every) or not boxes:    # a node not measured yet: next frame
+        ask["tries"] -= 1
+        if ask["tries"] > 0 or not boxes:
+            if ask["tries"] <= 0:
+                st.pop("fit", None)
+            return
+    st.pop("fit", None)
+    content = (min(p.x for p, _ in boxes), min(p.y for p, _ in boxes),
+               max(p.x + z.x for p, z in boxes), max(p.y + z.y for p, z in boxes))
+    (_x, _y), (pw, ph) = st.get("details_rect") or ((0.0, 0.0), (0.0, 0.0))
+    pane = ("beside", pw) if ph >= size.y - 1 else ("below", ph)
+    box = fit_box(content, (size.x, size.y), pane,
+                  float(getattr(panel, "graph_start_zoom", 1.0) or 1.0))
+    held = [k for k in ed.get_selected_nodes()]
+    clear = imgui.ImVec4(0, 0, 0, 0)
+    ed.push_style_color(ed.StyleColor.node_bg, clear)
+    ed.push_style_color(ed.StyleColor.node_border, clear)
+    ed.push_style_var(ed.StyleVar.node_padding, imgui.ImVec4(0, 0, 0, 0))
+    corners = []
+    for key, (x, y) in ((FIT_A, (box[0], box[1])), (FIT_B, (box[2] - 1.0, box[3] - 1.0))):
+        k = ed.NodeId(_id(st, key))
+        ed.set_node_position(k, imgui.ImVec2(x, y))
+        ed.begin_node(k)
+        imgui.dummy(imgui.ImVec2(1, 1))
+        ed.end_node()
+        corners.append(k)
+    ed.pop_style_var()
+    ed.pop_style_color(2)
+    ed.clear_selection()
+    for k in ids + corners:
+        ed.select_node(k, True)
+    ed.navigate_to_selection(True, 0.0 if ask["instant"] else -1.0)
+    ed.clear_selection()
+    for k in held:
+        ed.select_node(k, True)
 
 
 def pin_hit_size(zoom: float, row_h: float, pitch: float, min_px: float = MIN_PX,

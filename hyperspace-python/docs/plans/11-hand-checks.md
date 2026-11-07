@@ -8762,6 +8762,7 @@ Register rows 840–843, 2026-11-07. Headless: `tests/test_person_words.py`.
 1. Put a stray `[` in `config.toml`, launch. *Pass:* the library is the Drive's as before (or, never launched here, nothing listed and saves refused in words).
 2. Put the file back.
 *Fail:* patches saved into `~/Hyperspace` instead of the Drive.
+**633. Every node in view.** (Mac, the rig's display) Launch: every node is on screen, centred left of the pane, not under it. Zoom right in and drag away, then load another preset (F-key or PRESETS): its nodes all come into view, gliding. **save as…** and an edit leave the view where it is. Load a preset with three nodes: they're not blown up past the size they open at. With the band under the canvas (the desk up), the nodes sit above the band.
 
 ## What no test covers
 
