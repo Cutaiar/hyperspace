@@ -237,7 +237,8 @@
       "reportAttributeAccessIssue": 2
     },
     "hyperspace/placement.py": {
-      "reportArgumentType": 1
+      "reportArgumentType": 1,
+      "reportOptionalSubscript": 2
     },
     "hyperspace/players.py": {
       "reportOptionalMemberAccess": 5
