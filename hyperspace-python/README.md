@@ -104,10 +104,10 @@ onto it, or to unbind it.
 
 A **preset** is one whole performance moment — the look, its routes, the
 APC40's preset layer and the macros — and a load replaces all of it
-without touching the session (tempo, the hands' feel, the analyzer, the
+without touching the meta controller (tempo, the hands' feel, the analyzer, the
 outputs). A **show** is the desk's pads (a bank of
 twenty-four presets: F1–F8 and the APC40's clip rows 1, 4 and 5 load them,
-set on the desk only), the session and the rig's wires. Nothing ships with
+set on the desk only) and the meta controller. Nothing ships with
 the app: the library is the owner's, in `~/Hyperspace` (or
 `$HYPERSPACE_HOME`), as plain JSON the running app follows when you edit
 it; a fresh one opens an unsaved show called `untitled`. The band scenes

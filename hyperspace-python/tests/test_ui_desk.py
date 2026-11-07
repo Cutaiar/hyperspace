@@ -537,7 +537,7 @@ def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
     panel.learn = Learn(reg, table)
     panel.learn.pick(c.source)
     line, ok = ui_desk.pick_line(panel, table, c)
-    assert not ok and line == "G4·2 (clip 4·2) is invariant (the session's): an empty slot"
+    assert not ok and line == "G4·2 (clip 4·2) is invariant (the meta controller's): an empty slot"
     panel.learn.pick(None)
 
 
@@ -646,12 +646,12 @@ def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
     # the refusals are the knob learn's, and leave it armed
     lrn.arm("view.speed", "desk")
     _click(panel, ui_desk.rect(panel, s3))
-    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the session's) — not learned"
+    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the meta controller's) — not learned"
     assert lrn.learning == "view.speed" and lrn.control is None
     table.set_layer("global")
     frame(panel)
     _click(panel, ui_desk.rect(panel, d5))
-    assert lrn.refused and "is on the global layer (the session's)" in lrn.last
+    assert lrn.refused and "is on the global layer (the meta controller's)" in lrn.last
     assert lrn.learning == "view.speed"
     assert [b.to_json() for b in table.bindings] == rows and len(pushes) == 1
     table.set_layer("preset")
@@ -708,7 +708,7 @@ def test_a_pick_lets_go_by_itself(rig, monkeypatch):
     assert ui_desk.picking(panel) is None and ui_desk.picked(panel) is not None
     does = ui_desk.text(rig.reg, ui_desk.lit_cached(panel, table)["SM"])
     assert ui_desk.footer_line(panel) == (
-        f"SM (MASTER fader) is invariant (the session's): {does} (20 s)", False)
+        f"SM (MASTER fader) is invariant (the meta controller's): {does} (20 s)", False)
     clock[0] += ui_desk.PICK_S + 0.1
     frame(panel)
     assert lrn.control is None

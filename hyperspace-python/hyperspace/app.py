@@ -1440,7 +1440,7 @@ def _args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--laptop", "--single", action="store_true",
                    help="one screen, no projector: the render output is a plain window "
                         "(no fullscreen, no overlay, no later outputs) and the controls "
-                        "come to the front; the rig's remembered window spots are "
+                        "come to the front; this Mac's remembered window spots are "
                         "neither used nor overwritten")
     return p.parse_args(argv)
 

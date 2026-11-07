@@ -216,12 +216,7 @@ def mappable(table, c: apc40.Control) -> str | None:
     if on_page(table, c):                       # (learn.blocked says "invariant" too)
         return f"{name}: {PAGE_OWNS}"
     why = learn.blocked(table, c.source)        # the rule `learn_control` refuses by
-    if why == "invariant":
-        return f"{name} is invariant (the session's)"
-    if why == "global":
-        return (f"{name} is on the global layer (the session's) — latch SHIFT off to map "
-                "into the preset")
-    return None
+    return None if why is None else learn.blocked_words(name, why)
 
 
 def picked(panel) -> apc40.Control | None:
@@ -332,7 +327,7 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
     """What the desk's header says of the picked control, and whether a
     click on a param would map it: "D3 picked: click a param to put it
     here · click D3 again to let go", or why not and what the control
-    does ("S3 (track fader 3) is invariant (the session's): SUB Post-drive")."""
+    does ("S3 (track fader 3) is invariant (the meta controller's): SUB Post-drive")."""
     why = mappable(table, c)
     if why is None:
         if panel.open and ui_pane.shown(panel, ui_pane.ROUTING):
