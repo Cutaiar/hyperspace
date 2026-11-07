@@ -728,3 +728,16 @@ def test_the_hub_opens_a_let_go_joycon_afresh_on_its_next_scan():
     hub.scan()
     again = hub.readers[JOYCON_L["path"]]
     assert again is not first and again.alive
+
+
+def test_the_pro_reads_its_face_by_position_too():
+    """Review of #435: the Pro's A is the right button, B the bottom, X the top, Y the left
+    (byte 3's bits are the (R)'s), and it draws its own letters there."""
+    def one(**bits):
+        f = nintendo.decode(full_report(**bits), "pro")
+        return [NAMES[i] for i, v in enumerate(f.buttons) if v]
+    assert one(b3=0x08) == ["E"] and one(b3=0x04) == ["S"]       # A, B
+    assert one(b3=0x02) == ["N"] and one(b3=0x01) == ["W"]       # X, Y
+    pro = models.MODELS["pro"] if "pro" in models.MODELS else next(
+        m for m in models.MODELS.values() if "Pro" in m.name)
+    assert [models.glyph(pro, k, k) for k in ("E", "S", "N", "W")] == ["A", "B", "X", "Y"]

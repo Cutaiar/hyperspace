@@ -96,6 +96,7 @@ from . import modifiers as modmod
 from .groupwords import group_word
 from .lookback import is_lookback_key
 from .routing import Binding, Macro, base_scheme, is_continuous, is_macro, meta_refusal
+from .routing_sources import nsew
 
 KIND = "hyperspace.patch"
 # plan 50: `/2` is `/1` plus the optional `group` key (a patch of one param
@@ -832,7 +833,10 @@ def read(doc: Mapping) -> Patch:
                          key=lambda e: (entry_name(e) or "", str(e))))
     m = _members_of({**doc, "nodes": nodes})
     wires = _in_order(dict(w) for w in doc.get("wires") or () if isinstance(w, Mapping))
-    routes = tuple(dict(r) for r in doc.get("routes") or () if isinstance(r, Mapping))
+    # (review of #435: a patch saved before bindings/4 says its pad sources in the old
+    # words; `nsew` is idempotent, so every read takes them into today's)
+    routes = tuple({**r, "source": nsew(r["source"])} if isinstance(r.get("source"), str)
+                   else dict(r) for r in doc.get("routes") or () if isinstance(r, Mapping))
     desk = tuple(dict(r) for r in doc.get("desk") or () if isinstance(r, Mapping))
     mods = tuple(sorted((_entry(x) for x in doc.get("modifiers") or () if isinstance(x, Mapping)),
                         key=lambda x: modmod.number(x.get("id")) or 0))
