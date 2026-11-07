@@ -1523,6 +1523,9 @@ class Project:
     def play_at_launch(self, name: str | None) -> None:
         """SM6: the playlist a launch starts by itself, written into the install at once as
         the bank is; None for none. A file that cannot take it leaves it as it was, said."""
+        if getattr(self, "path", None) is None:
+            self.lib.say(warning="save the show first: then it can start a playlist at launch")
+            return
         was = getattr(self, "plays", None)
         self.plays = name
         try:

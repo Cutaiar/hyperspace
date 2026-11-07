@@ -373,3 +373,68 @@ def test_the_install_keeps_which_list_at_once(tmp_path):
     assert json.loads(lib.project.path.read_text())["plays"] == "cart"
     lib.project.play_at_launch(None)
     assert "plays" not in json.loads(lib.project.path.read_text())
+
+
+# ---------------------------------------------------------------- review of #434
+
+
+def test_a_skipped_patch_keeps_the_shows_it_reads(tool, tmp_path, capsys):
+    """A patch not written still takes the show's eye and looks at load: the shows and their
+    .bak-v2-* files stay until it is fixed or forced."""
+    lib = _old_library(tmp_path / "lib")
+    calls = iter(range(10_000))
+
+    def differs(path, *, library=None, show=None):
+        return [str(next(calls))], []
+    code = tool.main(["--library", str(lib), "--apply"], picture=differs,
+                     running=lambda: (False, "not open"))
+    out = capsys.readouterr().out
+    assert code == 1 and "shows and .bak-v2-* files left as they are" in out
+    assert (lib / "projects/party.hyp.json").is_file()
+    assert (lib / "projects/party.hyp.json.bak-v2-look").is_file()
+    assert not (lib / "installs").exists()
+
+
+def test_a_config_that_wont_parse_is_never_the_home(tool, tmp_path, capsys):
+    home = tmp_path / "home"
+    _old_library(home)
+    (home / "config.toml").write_text("[library\npath = 'x'")
+    before = _tree(home)
+    code = tool.main(["--apply"], picture=_pictureless, running=lambda: (False, "not open"))
+    assert code == 2 and "does not read" in capsys.readouterr().err
+    assert _tree(home) == before
+
+
+def test_apply_refuses_when_it_cant_tell_unless_told(tool, tmp_path, capsys):
+    lib = _old_library(tmp_path / "lib")
+    before = _tree(lib)
+    cant = (None, "can't tell whether Hyperspace is open")
+    code = tool.main(["--library", str(lib), "--apply"], picture=_pictureless,
+                     running=lambda: cant)
+    assert code == 2 and _tree(lib) == before and "--closed" in capsys.readouterr().err
+    assert tool.main(["--library", str(lib), "--apply", "--closed"], picture=_pictureless,
+                     running=lambda: cant) == 0
+
+
+def test_a_backup_short_of_files_stops_the_run(tool, tmp_path, monkeypatch, capsys):
+    lib = _old_library(tmp_path / "lib")
+    before = _tree(lib)
+    real = tool._file_count
+    monkeypatch.setattr(tool, "_file_count",
+                        lambda root, ignore: real(root, ignore) - ("backup" in root.name))
+    assert _run(tool, lib, "--apply") == 2
+    assert "the backup failed" in capsys.readouterr().err and _tree(lib) == before
+
+
+def test_an_empty_folder_the_owner_made_under_presets_moves(tool, tmp_path):
+    lib = _old_library(tmp_path / "lib")
+    (lib / "presets/later").mkdir()
+    assert _run(tool, lib, "--apply") == 0
+    assert (lib / "loadable/later").is_dir()
+
+
+def test_start_at_launch_on_an_unsaved_show_writes_nothing(tmp_path):
+    lib = Library(tmp_path, period=0.0)
+    lib.project.path = None
+    lib.project.play_at_launch("cart")
+    assert not (tmp_path / "installs").exists() or not any((tmp_path / "installs").iterdir())
