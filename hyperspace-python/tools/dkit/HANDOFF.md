@@ -7,16 +7,17 @@ calibration findings; this file is what changed after them, plus the
 pitfalls and the process revisions, so a fresh session does not relearn any
 of it.
 
-Branch: `claude/magical-ritchie-fkh5e0`. Tree clean at `2df969b`.
+Branch: `claude/magical-ritchie-fkh5e0`.
 
 ---
 
 ## Read in this order
 
-> **[`RETRO.md`](RETRO.md) is the shortest useful thing here.** Twenty-one
-> defects from one session, each with what would have caught it. Most were
-> found by a person looking at the running app while the pixel diff, the
-> browser oracle and 673 tests all said it was fine.
+> **[`RETRO.md`](RETRO.md) is the shortest useful thing here.** Forty-one
+> defects, each with what would have caught it. Nearly all were found by a
+> person looking at the running app while the pixel diff, the browser oracle
+> and 700-odd tests all said it was fine. Read it before writing any code:
+> the right-hand column is a list of checks, not a list of regrets.
 
 
 1. **`ROADMAP.md`** — what to build next and the constraints each component
@@ -30,393 +31,91 @@ Branch: `claude/magical-ritchie-fkh5e0`. Tree clean at `2df969b`.
 
 A reasonable opening message for a new session:
 
-> Read `hyperspace-python/tools/dkit/ROADMAP.md` and `HANDOFF.md`. Branch
-> `claude/magical-ritchie-fkh5e0`. Build <component> with the oracle-first
-> method: add the real shadcn component to `prototypes/dashboard` on the
-> `?probe` route, measure it with `probe_react.js`, then match it in the kit
-> and diff it on `?gallery`. Do not implement from a reading of the spec.
+> Read `hyperspace-python/tools/dkit/RETRO.md` first, then `ROADMAP.md` and
+> `HANDOFF.md`. Branch `claude/magical-ritchie-fkh5e0`. Work the "Pick up
+> here" list in HANDOFF in order — it is verified against the tree and each
+> item carries the command that proves it. Use the oracle-first method:
+> `refresh_shadcn.sh`, then measure the real component on `?probe`, then
+> match it, then diff on `?gallery`. Do not implement from a reading of the
+> spec, and verify every new test against the broken code it covers.
 
 ---
 
 ## Where it stands
 
 ```
-629 tests in tools/dkit, 664 with tests/test_ui_shell.py.  16 skipped.
-chrome diff: flat 0-2 levels across 33 cells, worst corner 0.776 px, both themes.
+733 passed, 16 skipped.   chrome diff: flat 0-2 levels, worst corner 0.776 px.
 ```
 
 | | state |
 |---|---|
-| tokens, draw primitives, box model, flex, interaction, popover placement, rounded clipping, pixel snapping | done |
-| **Tier 1** Slider, Switch, Input, Select, Tooltip | done, diffed |
-| **ScrollArea** | done — and the page scrolls, not just the table |
-| **intrinsic sizing** | done — `box.Node` + `measure_tree` + `place_tree` |
-| **Button, ButtonGroup** | done — 6 variants x 8 sizes, 116 tests |
-| **ContextMenu** | done — 171 tests; found six wrong numbers in `menu.py` |
-| **Combobox** | done — Base UI shape, the trigger IS the input |
-| focus-visible | modelled: `Ui.focus_visible` tracks keyboard-vs-mouse |
-| variant resolver (cva) | **still missing**, and now eight ad-hoc tables deep |
-| text wrapping / multi-line measure | still missing |
-| density / `Ui.scale` | still unused |
-| **adoption** | **still nothing.** The kit is imported by no app code. |
+| tokens, draw, box model, flex, interaction, popover placement, rounded clipping, pixel snapping, intrinsic sizing | done |
+| **Tier 1** Slider, Switch, Input, Select, Tooltip + ScrollArea | done, in the pixel diff |
+| **Button, ButtonGroup, ContextMenu, Combobox** | done, **NOT in the pixel diff** |
+| focus model (`:focus-visible`, one ring, no ImGui nav cursor) | done |
+| keyboard model (Combobox, menus, ContextMenu, Select) | done, measured per component |
+| scroll (rate, momentum, whole pixels, monotone rounding) | done — see the decision record in `interact.py` |
+| `comp_command.py` (cmdk scorer, verified, no UI yet) | parked for the Command palette |
+| Dialog, Sheet, Toast, Kbd, Breadcrumb, Checkbox, Collapsible, Resizable | **not started** |
+| `layer.py` (scrim, focus trap, z-order) | **not started — blocks Dialog and Sheet** |
+| variant resolver (cva) | not started, eight ad-hoc tables |
+| text wrapping / multi-line measure | not started |
+| **adoption** | **nothing imports the kit.** Unchanged since day one. |
 
-### Still to build, in the order I would take
+## Pick up here — the list, verified rather than remembered
 
-1. **Dialog** and **Sheet** — both need a modal layer and a scrim, which
-   nothing in the kit has yet. Do Dialog first; Sheet is Dialog with a side.
-2. **Toast** — needs a timed queue, which is the first thing in the kit with
-   a lifetime longer than a frame and no widget to hang state on.
-3. **Kbd**, **Breadcrumb**, **Checkbox** — small, and Checkbox is 47 toggle
-   params.
-4. **A variant resolver**, before a ninth table is written.
-5. **Port one real `ui_pane.py` section.** This is the untested hypothesis
-   and has been since the beginning. Everything else is rehearsal.
+Each line was re-checked against the tree, not recalled. The command that
+proves it is next to it.
 
-### Loose ends left deliberately
+**1. Four components are outside the pixel diff.** `spec.json` holds badge,
+card, input, menu, scroll, select, slider, switch, text, tooltip. Button,
+ButtonGroup, ContextMenu and Combobox are verified by unit tests and by eye
+only — which is exactly the standard that produced most of `RETRO.md`. They
+need `?gallery` cells, spec rects and a diff run.
 
-- No gallery cells for Button, ButtonGroup, ContextMenu or Combobox, so
-  their chrome is **not** in the pixel diff — only in unit tests and by eye.
-  That is the single biggest gap in coverage right now.
-- Old `draw.button` / `interact.button` stubs still exist; callers have not
-  been migrated to `comp_button`.
-- `interact.select` draws its label 1px left of where it should
-  (`x + pad_l`, should be `x + 1 + pad_l`; the chevron is already right).
-
----
-
-## Pitfalls — every one of these was paid for
-
-### ImGui's shape, not the browser's
-
-- **`imgui_bundle` reverses the C++ argument order** on `add_rect`,
-  `add_polyline` and `path_stroke`. Pass those by keyword, always. A
-  positional call silently puts the thickness where the rounding goes.
-- **`channels_split` must be matched by `channels_merge` in the same
-  frame.** ImGui asserts on a nested split rather than tolerating it, which
-  takes the window down — so a primitive that forgets the merge breaks every
-  control drawn *after* it, and the traceback points at the innocent one.
-  `_sandwich_begin`/`_sandwich_end` pair correctly; a hand-rolled split does
-  not.
-- **A popup window takes the keyboard the instant it appears.** An input
-  left behind in the parent window stops receiving characters exactly when
-  the list opens — so you can click a combobox, watch the panel appear, and
-  type into nothing. Fix: the popup spans the **trigger** as well as the
-  panel, so the field is inside the focused window.
-- **Having focus is not being active.** The popup can hold the keyboard
-  while nothing inside it is the active item, and characters still go
-  nowhere. `set_keyboard_focus_here()` on the frame it opens — and *only*
-  that frame, or it fights the user every frame after.
-- **ImGui draws a blue nav-cursor rectangle** around a keyboard-focused
-  item. No shadcn component has one. Push `Col_.nav_cursor` transparent
-  wherever the kit asks for focus itself.
-- **A stock slider draws its format string across the track.** Push
-  `Col_.text` transparent except during Ctrl+click entry.
-- **imgui's `Col_.text` defaults to white**, so an `input_text` is invisible
-  on the light theme until the theme's ink is pushed. The regression test for
-  this was written against the broken code first, which is the only way to
-  know it would have caught it.
-- **Screen-space vs window-space cursor inside a child window.**
-  `set_cursor_screen_pos` inside a scroll child inflates the scroll range
-  without bound (3238 → 5638 → 51238 px over three frames). Use
-  `set_cursor_pos`.
-- **A child window has its own draw list.** Content drawn into the parent's
-  list paints *over* the header that should occlude it. Swap `ui.dl` to the
-  child's list for the duration.
-- **Per-widget state cannot live on a per-frame object.** `Ui` is rebuilt
-  each frame, so anything stored on it is discarded before it can be read —
-  a tooltip could never reach its own delay. State goes in `anim.store`.
-
-### The focus model, which is one model and not seven
-
-Measured on the current registry components — button (default / outline /
-destructive), Input, Switch, SelectTrigger and the Slider thumb — and it is
-the same answer every time:
-
-```
-box-shadow: <ring> 0 0 0 3px      a solid 3px band immediately outside the
-                                  border box. No blur. No offset. No spread
-                                  past the 3.
-border-color: <ring>              the element's own 1px border swaps colour
-outline-style: none               in every state, on every control. The ring
-                                  is NEVER a CSS outline.
-```
-
-`destructive` is the only variant that differs: band `destructive/20`, border
-`destructive/40`. In dark, an `outline` button keeps `border-input` under
-focus, because `dark:border-input` sorts after `focus-visible:border-ring` in
-Tailwind's output — measured 46 where `ring` would be 115. Do not generalise
-that one to other components without measuring.
-
-Two things follow that are easy to get wrong:
-
-- **The rect does not change.** A ring is a shadow; it takes no layout space
-  and nothing reflows.
-- **It is `:focus-visible` only.** At mouse-down a control matches `:focus`
-  and NOT `:focus-visible`, so a control reached with the pointer is never
-  ringed at all. `interact.Ui.focus_visible` models this: any mouse press
-  turns it off, Tab or an arrow turns it on. Without it the ring stuck to
-  whichever control was clicked last and walked along behind the pointer.
-
-What was actually wrong was not the ring but what sat under it: **ImGui draws
-its own blue `nav_cursor` rectangle** around whatever holds keyboard focus,
-and shadcn has nothing of the kind. It is cleared in `interact.chrome()`,
-held for the whole frame so popups inherit it, and again in
-`_sandwich_begin` so a component used alone in a test or the gallery is
-covered too. Text selection goes the same way: ImGui's own is a pale
-`(0.26, 0.59, 0.98, 0.35)`; the browser's, measured on a focused Input with
-its value selected, is `rgba(0, 65, 198, 0.8)` in BOTH themes — nothing in
-the registry declares `::selection`, so a shadcn app gets the UA default, and
-`tokens.SELECTION` is it.
-
-### Measuring, and one thing that cannot be measured at all
-
-- **`invisible_button` cannot take keyboard focus** in ImGui 1.92.9 —
-  `is_item_focused()` is `False` for every `ui.hit` target, for ever. So the
-  focus ring the kit "already had" on Button had never painted, and copying
-  that implementation to the other controls would have delivered four more
-  rings that cannot appear and four tests that cannot fail. `Ui.hit` passes
-  `ButtonFlags_.enable_nav` now. The general version of this: before porting
-  a reference implementation, check that the reference WORKS.
-
-### Measuring
-
-- **Chromium lays out on a 1/64 px grid and snaps what it PAINTS to whole
-  device pixels.** Unsnapped, a switch disagreed by 91 levels — the largest
-  single residual the diff ever reported. Layout keeps the fraction; only
-  paint snaps.
-- **Radix's default `step` is 1**, which silently snapped a spec fraction of
-  0.375 to 0.38. Pass `step={0.0001}` in the oracle.
-- **The arc metric has to be told where the arcs are.** It walked *cell*
-  corners, which is nowhere near a slider thumb's. `contour.sub_boxes()`
-  takes per-box corner lists; a switch reported a phantom 0.996 px until
-  occluded corners were excluded.
-- **A portalled component defeats pinning** — pin the *trigger* instead, and
-  the dump then tells you Radix reserves the arrow's full 10px between
-  tooltip and anchor while drawing only 5.071 of it.
-- **`capture_react.js` runs a 1600px viewport now.** At 700 floating-ui
-  flipped the panel against the live viewport rather than the 1300px canvas,
-  which looks exactly like a placement bug in the kit.
-- **`_blur_layers` reach must scale with sigma.** Hardcoded 3 truncated
-  shadow-md's blur 6 (1345px of shadow became 312). Half-step layers made it
-  *worse*, because Skia uses a triple box blur, not a Gaussian — so the
-  soft-shadow edge is reported as an advisory rather than fitted.
-- **Group opacity is not per-element opacity.** A disabled field folds the
-  two with Porter-Duff OVER (`ease.over`) — but **only where the fill and
-  border share a box.** Button is `bg-clip-padding`, so its fill and border
-  are disjoint and folding predicts 33 where Chromium paints border 28 /
-  fill 14. I stated that rule too generally and an agent correctly overrode
-  it.
-- **An interaction test must dwell past the animation period.** shadcn's
-  transition is 150ms ≈ 9 frames; a six-frame check passed on a kebab menu
-  that flickered and was unclickable in practice. Every interaction test in
-  `test_interaction.py` dwells 40 frames.
-
-### Mine, not the tools' — the expensive kind
-
-These four all cost the user a round of looking at something I should have
-caught, and each has the same shape: I had the instrument and did not use it.
-
-- **I tested the contact sheet the way the pixel diff would have.** The
-  Gallery exists because the diff "cannot see that a control is
-  unclickable" — that sentence is in `comp_gallery.py`'s own docstring. The
-  first `test_gallery.py` rendered the page and asserted it was not blank.
-  Not one test clicked anything. Three Select specimens were handing
-  `interact.select` a `list[str]` where it wants `menu.Item`, and every one
-  of them raised `'str' object has no attribute 'kind'` the moment anybody
-  pressed it. `test_every_specimen_can_be_clicked` drives all 101 now, and
-  reverting the fix turns it red.
-
-- **I saw the stray lines and wrote them off.** Reviewing my own capture of
-  the Combobox earlier in the same session I wrote "there appear to be two
-  short vertical light strokes at the panel's top corners… Minor." I named
-  the defect, called it minor without measuring it, and moved on. The whole
-  method of this project is that looking is how you get it wrong. Measuring
-  it took eight minutes and the fix was one line: ImGui's `PopupBorderSize`
-  is 1.0 and `WindowBorderSize` does not cover it, so the popup's own border
-  ran down both sides of the gap at 75 against a 23 ground.
-
-- **Every other popup in the kit was hiding that border by luck.** Their
-  window IS their panel, so the stray pixel sits under chrome that covers
-  it. The Combobox's window is deliberately taller — it spans the trigger so
-  the caret is inside the focused window — and that is the only reason it
-  ever showed. `menu.popup` turns it off too now, rather than going on
-  relying on the accident.
-
-- **I blamed a subagent for failures my own test file caused.** Eight tests
-  in `test_interaction.py` went red while an agent was working, and I
-  reported them as its in-flight state. They were my `test_gallery.py`
-  calling `DB._boot(...)` per test and never shutting any of them down,
-  which left the current GL context pointing at a dead window; later
-  `render()` calls in the same xdist worker stopped receiving clicks and
-  keys. The agent found it and said so. The lesson is not about the leak —
-  it is that "the other thing changed, so it is the other thing" is a guess,
-  and a `git diff` would have shown my file in the failing set.
-
-
-- **A local constant shadowed a module one.** `lay_out`'s `ROW_H = 24.0`
-  shadowed the module's `ROW_H = 34.0`, so the table was laid out at a 24px
-  pitch while paint drew 34 and the kebab menu opened 2px above the pointer.
-  Renamed to `CTL_ROW_H`. Nothing in the diff could see this.
-- **A widget outside any window makes ImGui invent a "Debug" window.** The
-  gallery's menu cell needed `chrome_only=True`.
-- **A blanket find-and-replace gave a test a variable it does not have**, and
-  a stability window averaged pre-scroll frames. Read what a test asserts
-  after editing it mechanically.
-
----
-
-## Process revisions
-
-These are changes to **how** the work is done, and each replaced something
-that had already failed once.
-
-### 0. Get the current shadcn, then probe it — before anything else
+**2. The cross-library audit is HALF DONE.** The menu keyboard slice landed;
+these three did not:
 
 ```bash
-tools/dkit/refresh_shadcn.sh
+grep -rln "I.chrome(" --include=*.py .     # -> dashboard.py, test_interaction.py only
 ```
+`gallery.py` does not hold `interact.chrome()`, so anything drawn there
+still gets ImGui's blue nav cursor and its pale text selection.
 
-Pulls every component the kit uses from the live registry, overwrites the
-prototype's copies, and prints what actually moved (it ignores `"use client"`
-churn, which is inert under Vite). A clean run says "no component changed",
-which is an answer worth having rather than an assumption worth keeping.
+```bash
+for fn in button sidebar_item tabs row icon_button row_action; do ... done
+```
+Six controls in `interact.py` draw **no focus ring at all**: `button` (the
+old stub), `sidebar_item`, `tabs`, `row`, `icon_button`, `row_action`. The
+model is settled and uniform — `draw.ring`, `ui.focus_f`, `:focus-visible`
+only — so this is applying it, not deciding it. Measure the real Tabs
+trigger and sidebar button first; do not assume they match Button.
 
-The reason this is rule zero: the registry moves. `radix-nova` has changed
-its menu treatment, its focus ring and the entire shape of its Combobox
-inside this project's lifetime. A measurement of a vendored copy nobody
-refreshed is exact and useless, which is the same failure as (2) below and
-the one that cost the most.
+```bash
+grep -rn 'anim.to(f"{key}:focus"' --include=*.py .
+```
+`comp_button.py`, `comp_combobox.py` and `interact.py` ease focus by hand
+instead of going through `ui.focus_f`, which exists for it.
 
-### 1. The oracle comes before the implementation, without exception
+**3. Modularisation, which is mechanical and worth doing in one sitting.**
+`box.py` (616) holds three separable things: the `Rect` algebra and cuts,
+the flex solver, and the intrinsic-sizing tree. `interact.py` (1036) holds
+both the `Ui` object and every primitive. `layer.py` does not exist and
+Dialog and Sheet both need it — a scrim, a focus trap, z-order and
+click-outside. Do `layer.py` BEFORE those two components, not after.
 
-Not "usually". Every part of this that came out right came out of measuring;
-every part that came out wrong came out of reasoning from the Tailwind
-classes. `?probe` takes a minute to use.
+**4. Then coverage**: Dialog, Sheet, Toast, Kbd, Breadcrumb, Checkbox.
 
-### 2. Verifying an implementation against its spec is worthless if the
-premise picked the wrong spec
+**5. And the one that decides it all**: port one real `ui_pane.py` section.
+Nothing imports the kit. Until that happens the hypothesis is untested in
+the only place that matters.
 
-The hardest lesson of the session. I briefed an agent that shadcn's Combobox
-is Popover + Command, so it ported cmdk's `commandScore` and **verified it
-exactly against the shipped JavaScript over 382 input pairs**. Flawless
-work, and the wrong rule — shadcn ships `combobox.tsx` built on Base UI,
-whose filter is a plain case-insensitive substring match, and whose trigger
-*is* the input. The verification could never have caught that, because it
-was measuring the right answer to the wrong question.
+### Two smaller things, both recorded in code
 
-So: **verify the premise against the real component before verifying
-anything against the premise.** For a component, that means reading the
-actual registry file, not recalling its recipe. The cmdk port survives as
-`rank_items_cmdk()` for a future Command palette, where it is correct.
-
-### 3. The React app is the rubric, and it has two pages
-
-Set as a standing rule by the user, and it is a better framing than what I
-had been doing:
-
-> if I ask you for new components and new features, they get a gallery page
-> in the test shadcn dashboard. They're used in a realistic way on the
-> dashboard page to provide a reasonable view of what they might be used
-> for. This is where there's some creativity involved. Once they're in the
-> shadcn React dashboard, that's what you use as the rubric to grade the
-> ImGui version off of.
-
-So a component lands in `prototypes/dashboard` twice before the kit's
-version is judged: the **gallery page** enumerates every state it has, and
-the **dashboard page** uses it the way something real would. The second is
-where the judgement lives. A Combobox filtering 600 params is a different
-claim from a Combobox with three fruit in it, and only the realistic use
-shows whether the component earns its place.
-
-The ImGui side mirrors it: `dashboard.py --live` has a **Gallery** tab
-(`comp_gallery.py`) for the enumeration and the dashboard page for the
-realistic use. **Nothing belongs in both.** A Buttons card showing six
-variants and eight sizes was sitting on the dashboard page and has been
-removed - the Gallery already enumerates them, and a dashboard that
-enumerates its own controls is a gallery with worse framing.
-
-### 4. The demo is the dashboard, and "visible" means visible
-
-Three separate times I fixed a component's internals and left the thing on
-screen untouched — most recently shipping a Combobox whose table and filter
-were right while the *drawn* trigger was still the old Popover shape. The
-user had to ask twice. A component is not done until the state is reachable
-in `dashboard.py --live` and has been looked at.
-
-The gallery is a contact sheet: it proves chrome to a pixel and tells you
-nothing about how a control feels under the pointer. Three real bugs — the
-stray format string, the discarded per-frame state, the invisible light-theme
-input text — were invisible to the diff by construction.
-
-### 5. Spacing is a scale, not a pitch
-
-Prompted by "you're missing the concept of a gap". There was no space scale
-at all; containers were hand-sized and gaps were arithmetic at the draw
-site. Now `tokens.SPACE` (Tailwind's 4px scale with half-steps), tokenized
-component paddings, and `box.stack` / `box.card_body` rather than
-`i * pitch`. The failure mode is quiet — nothing looks broken, it just reads
-wrong, and no number in the file says which one is at fault.
-
-### 6. Precalculating bounding boxes is the antipattern it sounds like
-
-Prompted directly. Replaced by intrinsic sizing: `box.Node` with a bottom-up
-`measure_tree` and a top-down `place_tree`. Measured at **0.38 ms for 955
-nodes**, which is affordable per frame precisely because it never crosses an
-FFI boundary — the reason Taffy's Python bindings were rejected at 1.4 ms for
-180 boxes. Note `flex-basis: 0` (CSS `flex-1`) is not `flex-grow: 1` on an
-auto basis: grow distributes only leftover space.
-
-### 7. A test asks the source; it never copies a number
-
-Two tests held a literal `92.0` for a label column and went stale the moment
-the spacing moved. Where a pixel probe cannot distinguish two things — a
-tooltip floating over the card description behind it — count the thing
-instead of sampling it.
-
-### 8. Subagents work, on disjoint files, with the premise stated
-
-Three agents in parallel, each owning one `comp_*.py` + one `test_*.py` and
-nothing else, each independently verified against its own oracle pass. All
-three came back accurate and one correctly overrode an instruction of mine.
-What makes it work: disjoint file ownership, the measure-first method
-restated in the brief, and the reviewer re-measuring rather than reading.
-What broke it: a wrong premise in the brief propagates straight through
-everything downstream, and the agent's verification cannot see it (see 2).
-
-### 9. Hyperspace is not the authority on UI
-
-"hyperspace shouldn't be taken as gospel... don't be too corrupted by it."
-I had been arguing "the app does X, so dkit should". The only binding
-constraint from the app is the **test harness contract**:
-`tests/ui_driver.py:43-46` finds controls by the text after `##`, and 22
-`test_ui_*.py` files depend on it — so every interactive primitive keeps an
-`invisible_button` with the same id. Everything else about the app's current
-UI is a thing to improve, not a specification.
-
-And the standing caution: **do not restyle Hyperspace to look like shadcn.**
-What transfers is the method — scales, named tokens, measuring rather than
-reasoning. The palette does not: the app is one red and three greys on
-black, which is its own language and a deliberate one.
-
----
-
-## The Gallery tab
-
-`dashboard.py --live`, second item in the sidebar. Every component the kit
-has, in every state it can be in, drawn with the real interactive widgets —
-thirteen sections from Button to the colour swatches.
-
-It is not `gallery.py`, and the difference matters. `gallery.py` is the pixel
-diff: a fixed set of cells pinned to `spec.json` so the ImGui side and the
-React side can be subtracted. It proves chrome to a pixel and it cannot see
-that a control is unclickable. The tab is the contact sheet: it shows how a
-disabled Select feels under the pointer and it cannot tell you its border is
-a level off. Keep both; they find different things.
-
-Layout is `box.Node`, measured then placed, so adding a specimen makes its
-section grow rather than making the specimen land outside it —
-`test_gallery.py` asserts exactly that, plus that the height handed to the
-scroll area is the height drawn (they come out of one call for that reason).
+`menu.popup` has no scroll area or height clamp, so a long menu cannot
+scroll to follow its keyboard highlight — measured on the real one, noted in
+`menu.py`. And a Select's closed typeahead (a letter sets the value without
+opening) has nowhere to live until `interact.select` reads characters.
 
 ## Running it
 
