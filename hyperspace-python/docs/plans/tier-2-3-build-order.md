@@ -7,9 +7,9 @@
 > figure did not export. Wave 2's checkpoint against it is in
 > [`wave-2-session-prompt.md`](wave-2-session-prompt.md).
 
-## Where we are, 2026-11-06 (end of day)
+## Where we are
 
-**Waves 0–3 are merged. Wave 4's rename and most of its spine are merged; what's left waits on the owner's hand checks. Wave 5 is running beside it, in three tracks.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section, this section is right. **Keep this section current: the wave 5 orchestrator updates it whenever an item changes state.**
+**Last updated 2026-11-06.** **Waves 0–3 are merged. Most of wave 4 is merged, including the rename; of what's left, some waits on the owner's hand checks and some has no gate. Wave 5 is running beside it, in three tracks.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section, this section is right. **The wave 5 orchestrator updates this section whenever an item changes state** (`wave-5-session-prompt.md`, "Reporting").
 
 Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on are unrun, but for 425.
 
@@ -19,7 +19,7 @@ Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on
 | 1 | **Merged** 2026-11-03 | D1 #327, C2 #333, K2 #325, K3 #328, K4 #326, V2 #329, L1 #334, plus #331 |
 | 2 | **Merged** 2026-11-04 | D2 #346, D3 #351, F1 #352, U1 #345, U2 #350, L2 #349, T2 #348, T3 #344, V3 #343, I1 #347 |
 | 3 | **Merged** 2026-11-04 | U3 #360, V4 #357, O1 #358, O2 #362, D4 #359, B1 #356, P1 #355, P2 #361, P3 #364, plus #366 |
-| 4 | **Spine merged; the end waits on hand checks** | Below |
+| 4 | **Most merged; the rest below** | Below |
 | 5 | **Running** since 2026-11-06, in three tracks | Below; [`58-wave-5.md`](58-wave-5.md), [`wave-5-session-prompt.md`](wave-5-session-prompt.md) |
 
 **Wave 4 as it changed.** The owner's answers replaced much of rows 4.1–4.7: two fixed `Deck`s and a DJ crossfader instead of hold-as-copy, named players, node mode saved in the patch, N3 gone. Authority is [`wave-4-session-prompt.md`](wave-4-session-prompt.md), "The owner's answers".
@@ -31,28 +31,41 @@ Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on
 | UL undo latch #386; PC2 pair consent #387; glossary signed #384 | Merged |
 | **SEM** #388 and #389 (`preset.py` is `loadable.py`, `Presets` is `LoadedPatch`, `RigWires` is `BusCuts`) | Merged |
 | D5e words #393; D6a + D6b playlist #392, #400; #287's rewrite #395 (the original #287 is still open, for the owner to close); test undo leak #394; cursor-in-a-field fix #398; H1 doc tails #391 | Merged |
-| N1a #396 + N1b #397, node mode on the APC | Reviewed. **Waits on the owner's hand checks 506–509,** then `main` merged in, new work reviewed, `--all`, merged in that order |
-| #365 Joy-Con v0 | Another session's. **Waits on the owner's Joy-Con check, 520–521** |
+| N1a #396 + N1b #397, node mode on the APC | Earlier work reviewed. The owner's row 711 reversal (routes at rest while a knob holds a param) is on the stack and **still needs its review and `--all`.** The merge also waits on hand checks 506–509, then #396 before #397 |
+| #365 Joy-Con v0 | Another session's. **Waits on the owner's check 520–521, which needs the Joy-Con charged** (its PR: flat until the charger arrives). It also **conflicts with `main`** (register, `devices.py`, `routing.py`, `ui_pad.py`), which must be resolved before it lands |
 | N2a + N2b node mode on pads; then NSEW | Not started; after #365 |
-| WORDS: "session" and "rig" leave the panel | Not started; starts now, in wave 5's Track W4. "Preset" becomes "patch" in the panel with the migration |
-| Row 740, a player's moves on the meta stack; the words pass, row 668 | Not started |
-| **The one migration:** `/11`, `loadable/`, shows into install files, trash deleted (`57-format-lane.md` §7, §7a) | Not written; after NSEW. The owner runs it; both Macs closed |
+| WORDS: "session" and "rig" leave the panel | Not started. **No gate: starts now.** "Preset" becomes "patch" in the panel with the migration |
+| Row 740, a player's moves on the meta stack (amends row 740, which says ⌘Z over the board takes nothing back) | Not started; no gate. Counts as SM5 |
+| The PC words pass, row 668, "if wanted" | Optional; row 668 itself is the panel fold's. Counts as SM5 |
+| **The one migration:** `/11`, `loadable/`, shows into install files, trash deleted (`57-format-lane.md` §7, §7a) | Not written; after NSEW. The owner runs it, with Hyperspace quit on both Macs. Then both Macs update and launch once (`58-wave-5.md` §2a), which is the cleanup's gate. It should also carry the `overlay.*` aliases on the `bindings/4` road (plan 58 §9) |
 
-**Wave 5: live table.** The prompt's order within each track. Numbers: rows from 770, checks from 600, groups from DA.
+**Wave 5: live table.** Numbers: rows from 770, checks from 600, groups from DA.
 
-| Track | Item | State |
-| --- | --- | --- |
-| W5 | H1 | Merged #391 |
-| W5 | H2 test truth; SM1 poi probe; SC1 screens by name; LY1 one mirror; LY2 honest flags, unsaved half; SM2 graph zoom; SM3 matte thumbnails; TY1 pyright baseline; TY2 audit as the record | Stage 1: not started |
-| W5 | **SC3a** the picture stops depending on one display, alone on the render loop, after a spike. If the spike fails, stop and tell the owner | Stage 2: not started |
-| W5 | SC2 a row per display; CT1 controllers set up in the app; LY3 the toggle says it; SM4 audit faults; SM5 what wave 4 didn't reach | Stage 3: not started |
-| W5 | **SC3b** hot-plug. Not done until a real display has been unplugged | Stage 4: not started |
-| W5 | TY3, then TY4, annotations only | Stage 5: last |
-| W4 | N1, #365, N2, NSEW, WORDS, row 740, the migration | The table above |
-| CL | CL2, then CL1 after the owner's dry run; CL3, CL4; then RT1 after SC3b's unplug and CT1 | **Gated:** the owner says the migration ran and both Macs have opened the new library |
-| After the migration | SM6 a cart starts by itself; LY2's saved half; SC2's move of `output.bg`, `.alpha` | Not started |
+| Stage | Item | PR | State |
+| --- | --- | --- | --- |
+| Done | H1 doc tails | #391 | Merged |
+| 1 | H2 test truth | | Not started |
+| 1 | SM1 poi probe | | Not started |
+| 1 | SC1 screens by name | | Not started |
+| 1 | LY1 one mirror | | Not started |
+| 1 | LY2 honest flags, unsaved half | | Not started |
+| 1 | SM2 graph zoom | | Not started |
+| 1 | SM3 matte thumbnails | | Not started |
+| 1 | TY1 pyright baseline | | Not started |
+| 1 | TY2 audit as the record | | Not started |
+| 2 | **SC3a** the picture stops depending on one display, alone on the render loop, after a spike. If the spike fails, stop and tell the owner | | Not started |
+| 3 | SC2 a row per display | | Not started |
+| 3 | CT1 controllers set up in the app | | Not started |
+| 3 | LY3 the toggle says it | | Not started |
+| 3 | SM4 audit faults: R14, R15, U9, V8 open; R13 gone, U10 likely moot (plan 58 §9) | | Not started |
+| 3 | SM5 row 740, and row 668 if wanted | | Not started |
+| 4 | **SC3b** hot-plug. Not done until a real display has been unplugged | | Not started |
+| 5 | TY3, then TY4, annotations only: last, after the cleanup, so they annotate what survived | | Not started |
+| Gated | CL2, then CL1 after the owner's dry run; CL3, CL4 | | **Gate:** the owner says the migration ran and both Macs have opened the new library |
+| Gated | RT1 | | The same gate, plus SC3b's real unplug and CT1 |
+| After the migration | SM6 a cart starts by itself; LY2's saved half; SC2's move of `output.bg`, `.alpha` | | Not started |
 
-**Waiting on the owner now:** hand checks 506–509 (group BS, the panel fold: they gate node mode, they don't test it; node mode's own checks 541–545 come in with #396 and #397), the Joy-Con check 520–521 (group BW, written on #365's branch, not yet on `main`), and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup. They don't hold up Track W5.
+**Waiting on the owner now:** hand checks 506–509 (group BS, the panel fold: they gate node mode, they don't test it; node mode's own checks 541–545 come in with #396 and #397), the Joy-Con check 520–521 (group BW, written on #365's branch, not yet on `main`), and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup, and so TY3 and TY4. They don't hold up the rest of wave 5.
 
 Nov 2, 2026 · @Robert
 

@@ -6,7 +6,7 @@ gives your item, the files you own, your numbers and the commit trailer lines.
 
 ## Read first
 - `docs/plans/wave-5-session-prompt.md`, "The owner's answers". **They overrule every other document.**
-- `docs/plans/58-wave-5.md`: your item in §4, its neighbours in §5, what it doesn't do in §6.
+- `docs/plans/58-wave-5.md`: your item in §4, **its corrections in §9, which overrule §4,** its neighbours in §5, what it doesn't do in §6.
 - `docs/GLOSSARY.md`, signed 2026-11-06. Use its words.
 - `docs/plans/wave-4-session-prompt.md`, "The owner's answers", ten rounds: they still hold.
 - `REVIEW.md`, `docs/ENGINEERING.md` §15 (hot reload) and §16 (testing), `docs/ARCHITECTURE.md` §3–§4.
