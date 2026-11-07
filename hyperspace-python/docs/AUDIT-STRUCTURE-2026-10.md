@@ -39,12 +39,13 @@ star plus `hands.panel`; the members new since the audit are `ui_feel`, `ui_pad_
 - 933 is pyright 1.1.405, with no project settings.
 - 1,511 is plan 58's reading at `34caf3c`. It doesn't record the version or the settings.
 - 1,548 is pyright 1.1.414 with TY1's `[tool.pyright]` (row 788, #412), run over `e869a408`'s `hyperspace/` by the line
-  in the appendix: 1,547 errors and 1 warning in 75 of 121 files. The same run over SC1 (`2ac32e8d`) gives 1,550, which
-  is the sum of TY1's baseline (`tools/type_baseline.json`, row 788, #412) as read at SC1, so the run matches the
-  ratchet's count. `hyperspace/` does differ from SC1 to `e869a408`, and the run has two fewer there.
-- **To pin, once #412 merges:** the baseline above is `b2d70bc7`, #412's head at this writing, on a branch that is being
-  refreshed. This line then names #412's merge commit, to read as
-  `git show <sha>:hyperspace-python/tools/type_baseline.json`.
+  in the appendix: 1,547 errors and 1 warning in 75 of 121 files.
+- **TY1's baseline is 1,554 at `2c4f6cae`,** #412's merge commit (row 788, #412):
+  `git show 2c4f6cae:hyperspace-python/tools/type_baseline.json`, a later commit than the column above, so it's not the
+  column's number. The same run over `2c4f6cae`'s last `hyperspace/` change, `424faeee`, gives 1,554 too, so the run
+  matches the ratchet's count.
+- **Why 1,548 and 1,554 differ:** the run at each commit between them says SM3 (#405) added 7 before the ratchet
+  existed, and LY1 (#408) removed 1. Before `e869a408`, the run has 1,550 at SC1 (`2ac32e8d`) and WORDS (#407) removed 2.
 
 | Rule | Audit | `e869a408` |
 | --- | --- | --- |
