@@ -156,8 +156,8 @@ from .routing import (
 # which profile the file's unqualified rows were written for)
 PROFILES = {"apc40": apc40, "generic": generic}
 RECONNECT_S = 2.0
-RECONNECT_FAST = 5        # looks at RECONNECT_S after a port goes missing, then
-RECONNECT_SLOW_S = 10.0   # this often; a port that opens starts the count again
+RECONNECT_FAST = 5        # bridge.OutPort: looks at RECONNECT_S after a port goes missing,
+RECONNECT_SLOW_S = 10.0   # then this often; a port that opens starts the count again
 HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
 REENTER_S = 2.0     # the intro is sent again at most this often (`MidiIO._reenter`)
 
@@ -241,8 +241,8 @@ def find_port(names: list[str], match: str) -> str | None:
 
 
 def retry_after(misses: int) -> float:
-    """Seconds until the next look for a missing port, after `misses` looks
-    in a row that opened nothing."""
+    """Seconds until `bridge.OutPort`'s next try, after `misses` in a row that opened
+    nothing (`devices.retry_after` is held equal). A desk's `Ports` doesn't slow down."""
     return RECONNECT_S if misses <= RECONNECT_FAST else RECONNECT_SLOW_S
 
 
@@ -253,10 +253,9 @@ class Ports:
     `inp`/`out` may be injected (tests hand in fakes with iter_pending()
     and send()). A controller names both by one substring; the bridge
     names each side on its own — None leaves that side closed. An error
-    on either side drops both, and `retry` reopens them after RECONNECT_S
-    — after RECONNECT_FAST looks that found nothing, every RECONNECT_SLOW_S
-    (`retry_after`); a port that opens puts the count back to zero, so one
-    that drops mid-set is looked for quickly again.
+    on either side drops both, and `retry` looks again every RECONNECT_S,
+    all night: a look is cheap (`midiports`), and a desk plugged back in late
+    comes back as soon as one that was only just lost (row 791).
     """
 
     def __init__(self, in_match: str | None, out_match: str | None = None, *,
@@ -269,7 +268,6 @@ class Ports:
         self.in_name = self.out_name = self.name
         self.error = ""
         self._next_try = 0.0
-        self.misses = 0           # looks in a row that opened nothing
 
     @property
     def on(self) -> bool:
@@ -277,11 +275,12 @@ class Ports:
 
     def connect(self) -> bool:
         """Open whatever is present now; True when something opened."""
-        self.misses += 1
-        self._next_try = self.clock() + retry_after(self.misses)
-        seen = port_names()     # (the one road, and it cannot abort: audit R15)
-        if seen.why:
-            self.error = seen.why
+        self._next_try = self.clock() + RECONNECT_S
+        # (the one road; it can't abort on a refusal it sees: audit R15)
+        seen = port_names(fresh=True)
+        # (only the sides this entry names: an out-only bridge doesn't care for the inputs)
+        self.error = (seen.in_why if self.in_match else "") or (seen.out_why if self.out_match else "")
+        if self.error:
             return False
         iname = find_port(seen.inputs, self.in_match) if self.in_match else None
         oname = find_port(seen.outputs, self.out_match) if self.out_match else None
@@ -298,8 +297,6 @@ class Ports:
         self.in_name, self.out_name = iname or "", oname or ""
         self.name = iname or oname
         self.error = ""
-        self.misses = 0
-        self._next_try = self.clock() + RECONNECT_S      # (not the slow pace it was found at)
         return True
 
     def retry(self) -> bool:

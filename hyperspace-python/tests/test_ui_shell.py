@@ -271,7 +271,7 @@ def test_system_page_shows_one_line_per_device(rig, monkeypatch):
     bridge.error = "no such port"
     assert shown()[3] == ("bridge  ·  bridge  ·  error: no such port  ·  16 sources", True)
     rig.panel.devices = devices.DeviceRegistry([])
-    assert shown() == [("no devices — [[devices]] in config.toml", False)]
+    assert shown() == [("no devices — drag one from the player board's tray", False)]
 
 
 def _drawn(monkeypatch) -> list[str]:

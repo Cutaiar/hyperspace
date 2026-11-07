@@ -258,7 +258,7 @@ def _loose_midi(regs, st: dict | None) -> list[Held]:
         return []
     seen = port_names()
     if st is not None:
-        st["midi_why"] = seen.why
+        st["midi_why"] = seen.in_why
     names: list[str] = []
     for d in regs:
         e = getattr(d, "entry", None) or {}

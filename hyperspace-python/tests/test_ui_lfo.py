@@ -109,8 +109,8 @@ def test_the_two_nudge_chips_have_a_popup_each(rig, monkeypatch):
     ui_lfo.page(rig.panel, 1 / 60)
     imgui.end()
     imgui.end_frame()
-    nudges = [p for p in popups if p.startswith("##ctx.tempo.nudge.")]
-    assert len(nudges) == 2 and len(set(nudges)) == 2, popups
+    assert len(popups) == len(set(popups)), sorted(p for p in popups if popups.count(p) > 1)
+    assert len([p for p in popups if p.startswith("##ctx.tempo.nudge.")]) == 2, popups
 
 
 def test_the_lfos_are_offered_as_routing_sources(rig):

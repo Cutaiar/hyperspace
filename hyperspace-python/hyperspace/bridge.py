@@ -183,9 +183,10 @@ def _open_out(name: str, *, virtual: bool = True) -> tuple:
     backend refuses. (Moved here from hands/core.py, plan 27 B3.)"""
     if not name:
         return None, "", False
-    seen = port_names()         # (the one road, and it cannot abort: audit R15)
-    if seen.why:
-        return None, f"out {name!r}: {seen.why}"[:120], False
+    # (the one road; it can't abort on a refusal it sees: audit R15)
+    seen = port_names(fresh=True)
+    if seen.out_why:
+        return None, f"out {name!r}: {seen.out_why}"[:120], False
     try:
         hit = next((n for n in seen.outputs if name.lower() in n.lower()), None)
         if hit:

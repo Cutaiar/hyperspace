@@ -487,7 +487,7 @@ PATCH_MODULES = _mods(
     "segment", "dream", "media")
 # what is set for a performance or an install
 META_MODULES = _mods(
-    "deck", "playlist", "players", "pointer", "app", "devices", "control", "config", "placement",
+    "deck", "playlist", "players", "pointer", "app", "devices", "devicelist", "control", "config", "placement",
     "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
     "osc", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
     "tempo", "seq_page", "replay", "pinch")

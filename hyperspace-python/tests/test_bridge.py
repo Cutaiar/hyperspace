@@ -376,10 +376,10 @@ def test_a_dead_port_drops_both_and_retries_later(monkeypatch):
     assert not p.retry() and not p.on         # due, but nothing there
 
 
-def test_a_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
-    """A missing desk is looked for every RECONNECT_S a few times, then every
-    RECONNECT_SLOW_S; a port that opens puts the count back, so one lost
-    mid-set is looked for quickly again."""
+def test_a_port_that_stays_missing_is_looked_for_at_one_pace(monkeypatch):
+    """Row 791: a look is cheap now (`midiports`' table), so a desk plugged back in late
+    comes back as fast as one just lost: every RECONNECT_S, all night. This pinned a slow
+    pace after five looks while every look made a client; that was never true of a look."""
     from hyperspace import midi
 
     looks: list[float] = []
@@ -400,22 +400,21 @@ def test_a_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
     import itertools
 
     gaps = [round(b - a, 1) for a, b in itertools.pairwise(looks)]
-    fast, slow = gaps[:midi.RECONNECT_FAST], gaps[midi.RECONNECT_FAST:]     # (a 0.1 s poll)
-    assert all(midi.RECONNECT_S <= g <= midi.RECONNECT_S + 0.2 for g in fast), fast
-    assert slow and all(midi.RECONNECT_SLOW_S <= g <= midi.RECONNECT_SLOW_S + 0.2 for g in slow), slow
-    assert len(looks) <= 12                   # it was 31 a minute
-    # plugged in: found at the next look, and the count starts again
+    assert gaps and all(midi.RECONNECT_S <= g <= midi.RECONNECT_S + 0.2 for g in gaps), gaps
+    assert 28 <= len(looks) <= 31
+    # plugged in, a minute late: found at the next look
     names.append("The Desk")
-    clk.t += midi.RECONNECT_SLOW_S
-    assert p.retry() and p.on and p.misses == 0
-    # lost mid-set: looked for at the fast pace again
-    p.inp = None
-    names.clear()
-    n = len(looks)
-    for _ in range(midi.RECONNECT_FAST):
-        clk.t += midi.RECONNECT_S
-        assert not p.retry()
-    assert len(looks) == n + midi.RECONNECT_FAST
+    clk.t += midi.RECONNECT_S
+    assert p.retry() and p.on
+
+
+def test_bridge_is_off_by_default(tmp_path):
+    cfg = config.load(tmp_path / "config.toml")
+    assert cfg["bridge"]["enabled"] is False
+    (tmp_path / "config.toml").write_text('[bridge]\nenabled = true\nin = "Bus 2"\n')
+    cfg = config.load(tmp_path / "config.toml")
+    assert cfg["bridge"]["enabled"] is True and cfg["bridge"]["in"] == "Bus 2"
+    assert cfg["bridge"]["out"] == "IAC"      # defaults fill the rest
 
 
 # ---------------------------------------------------------------- the rule
@@ -429,12 +428,3 @@ def test_core_does_not_import_the_bridge():
               "hyperspace.routing", "hyperspace.render", "hyperspace.config"):
         importlib.import_module(m)
     assert "hyperspace.bridge" not in sys.modules
-
-
-def test_bridge_is_off_by_default(tmp_path):
-    cfg = config.load(tmp_path / "config.toml")
-    assert cfg["bridge"]["enabled"] is False
-    (tmp_path / "config.toml").write_text('[bridge]\nenabled = true\nin = "Bus 2"\n')
-    cfg = config.load(tmp_path / "config.toml")
-    assert cfg["bridge"]["enabled"] is True and cfg["bridge"]["in"] == "Bus 2"
-    assert cfg["bridge"]["out"] == "IAC"      # defaults fill the rest
