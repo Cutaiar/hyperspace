@@ -275,6 +275,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from functools import cache, lru_cache
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 
@@ -2225,6 +2226,16 @@ def _meta_table_attr(name: str) -> property:
                     doc=f"The meta table's `{name}` (`MetaTable`).")
 
 
+class NodeRows(Protocol):
+    """What a table asks of `node_desk.NodeDesk`, which is the meta controller's and above
+    this module."""
+
+    def rows(self, role: str | None = None) -> list[Binding]: ...
+    def serial(self, role: str | None = None) -> int: ...
+    def under(self, b: Binding) -> bool: ...
+    def holding(self) -> frozenset[str]: ...
+
+
 class Bindings:
     """A deck's table: rows of every scheme, indexed for the adapters.
 
@@ -2261,7 +2272,7 @@ class Bindings:
     # mode derives for a desk. The deck's own, never the meta table's: one patch's
     # pointing is no row of the other's. Never in `bindings`, so never saved, no
     # learn's, and no pair asks over one (`Learn`, row 754). None: no rows
-    node_desk: object | None = None
+    node_desk: NodeRows | None = None
 
     # plan 44 D3: the meta table's state (`META_TABLE_ATTRS`) is read and
     # written through this table — one property per name, made from the

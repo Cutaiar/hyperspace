@@ -88,6 +88,13 @@ def freedoms_of(profile) -> list[tuple[str, ...]]:
 
 
 @dataclass
+class Row(Binding):
+    """A derived row: `words`, what the on-screen desk says of it. Never saved."""
+
+    words: str = ""
+
+
+@dataclass
 class _Now:
     """One desk's rows on one deck."""
 
@@ -211,9 +218,9 @@ class NodeDesk:
             source = _address(slot.sources[0], q)
             b = keep.get((source, slot.param))
             if b is None:
-                b = Binding(source, slot.param, "abs", layer="preset")
+                b = Row(source, slot.param, "abs", layer="preset",
+                        words=reg[slot.param].label or slot.param)
                 b.feedback_from(profile)
-                b.words = reg[slot.param].label or slot.param     # the on-screen desk's
             out.append(b)
         return out
 
@@ -253,6 +260,8 @@ class NodeDesk:
 
         def taken(source: str) -> bool:
             probe = Binding(source, "")
+            if probe.kind is None:
+                return False
             if probe.channel is None:
                 return any(x.kind == probe.kind and x.number == probe.number
                            and x.channel is None for x in rows)

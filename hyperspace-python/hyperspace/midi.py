@@ -124,6 +124,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import mido
 
@@ -534,7 +535,7 @@ class MidiIO:
 
     def _node_rows(self) -> list[Binding]:
         """What node mode derives for this desk on the deck it is on (N1a)."""
-        return self.table.node_rows(self._role())
+        return cast(Bindings, self.table).node_rows(self._role())
 
     def _own_rows(self) -> list[Binding]:
         """Every row of this desk's whose knob or fader state this adapter keeps:
@@ -688,7 +689,7 @@ class MidiIO:
         layer = of(self._role()) if of is not None else t.layer_serial
         page = getattr(t, "page_serial", 0) if t.is_primary(self._role()) else 0
         return (layer, t.desk_serial, getattr(t, "redraw_serial", 0), page,
-                t.node_rows_serial(self._role()))
+                cast(Bindings, t).node_rows_serial(self._role()))
 
     def _page_rows(self) -> list[Binding]:
         """The surface page's rows, on the first MIDI role's desk only."""
