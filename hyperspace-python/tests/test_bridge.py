@@ -377,11 +377,9 @@ def test_a_dead_port_drops_both_and_retries_later(monkeypatch):
 
 
 def test_a_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
-    """Audit R15: every look makes a CoreMIDI client, and one the system
-    refuses aborts the process where no `except` reaches. A missing desk is
-    looked for every RECONNECT_S a few times, then every RECONNECT_SLOW_S;
-    a port that opens puts the count back, so one lost mid-set is looked
-    for quickly again."""
+    """A missing desk is looked for every RECONNECT_S a few times, then every
+    RECONNECT_SLOW_S; a port that opens puts the count back, so one lost
+    mid-set is looked for quickly again."""
     from hyperspace import midi
 
     looks: list[float] = []

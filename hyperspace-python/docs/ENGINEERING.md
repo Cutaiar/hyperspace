@@ -3561,8 +3561,9 @@ What only a person at the machine can check is
   paces the loop on two real screens, and whether a non-waiting
   fullscreen output tears, is unknown.
 - **With no desk connected the app keeps looking** — every 2 s five
-  times, then every 10 s. Each look creates a CoreMIDI client; `enabled
-  = false` on the desk's entry (or `[midi] enabled = false`) stops it.
+  times, then every 10 s. A look is 0.05 ms and makes no client
+  (`midiports.port_names`, audit R15, closed); `enabled = false` on the
+  desk's entry (or `[midi] enabled = false`) stops it.
 - **At most one hands node makes the layer.** Since plan 28 a loadable patch's
   `graph` section can wire which output gets which hands node and which
   effects it alone takes (§2, the wire list); an output no wire names
@@ -3588,5 +3589,5 @@ What only a person at the machine can check is
   held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
-- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R14, R15,
+- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R14,
   U9, U10, P6, V8.

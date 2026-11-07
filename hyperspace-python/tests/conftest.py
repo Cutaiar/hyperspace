@@ -265,8 +265,11 @@ def _no_real_midi(monkeypatch):
     open raises, unless the test patches mido itself (a later setattr wins).
     A real scan creates a CoreMIDI client, which reaches the owner's desk
     and, when CoreMIDI refuses one, aborts the process inside rtmidi where
-    no `except` can catch it (the crash of 2026-10-04 22:36)."""
+    no `except` can catch it (the crash of 2026-10-04 22:36). `midiports`
+    asks for no client here, and starts each test with nothing asked."""
     import mido
+
+    from hyperspace import midiports
 
     def closed(name=None, *a, **k):
         raise OSError(f"the tests have no MIDI ports ({name})")
@@ -275,6 +278,8 @@ def _no_real_midi(monkeypatch):
     monkeypatch.setattr(mido, "get_output_names", list)
     monkeypatch.setattr(mido, "open_input", closed)
     monkeypatch.setattr(mido, "open_output", closed)
+    monkeypatch.setattr(midiports, "_create_client", lambda: 0)
+    monkeypatch.setattr(midiports, "_gate", midiports._Gate())
 
 
 @pytest.fixture(autouse=True)

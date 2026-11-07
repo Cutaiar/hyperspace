@@ -92,6 +92,7 @@ import numpy as np
 from .bands import CEIL
 from .config import DEFAULTS
 from .midi import RECONNECT_S, Ports, retry_after
+from .midiports import port_names
 from .params import Kind, Registry
 from .pointer import Through
 
@@ -182,8 +183,11 @@ def _open_out(name: str, *, virtual: bool = True) -> tuple:
     backend refuses. (Moved here from hands/core.py, plan 27 B3.)"""
     if not name:
         return None, "", False
+    seen = port_names()         # (the one road, and it cannot abort: audit R15)
+    if seen.why:
+        return None, f"out {name!r}: {seen.why}"[:120], False
     try:
-        hit = next((n for n in mido.get_output_names() if name.lower() in n.lower()), None)
+        hit = next((n for n in seen.outputs if name.lower() in n.lower()), None)
         if hit:
             return mido.open_output(hit), "", False
         if not virtual:

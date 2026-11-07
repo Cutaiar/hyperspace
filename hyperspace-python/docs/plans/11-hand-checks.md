@@ -8424,6 +8424,14 @@ Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tes
 4. Quit, unplug the left one, launch. *Pass:* "MStar #1" opens on the one still there, with a note that only one is connected and it may be either of a pair; "MStar #2" doesn't open, with a note saying 1 is connected.
 *Fail:* #2 on the left with the arrangement unchanged, step 4 with no note, or a launch that stops.
 
+## DJ. Audit faults closed (SM4)
+Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which also runs a real refusal in a sandbox. Restart first: `midiports.py` is a new module.
+**615. A desk comes and goes.** (the Mac, with the APC40)
+1. Launch with the desk unplugged. *Pass:* no crash, and the SYSTEM page says it isn't there.
+2. Plug it in. *Pass:* it comes up by itself within 10 s, LEDs lit, with no relaunch.
+3. Pull it mid-run, wait a few seconds, plug it back. *Pass:* no crash, and it's back within a few seconds.
+*Fail:* an app that quits, or a desk that needs a relaunch.
+
 ## What no test covers
 
 Only a person can settle these:

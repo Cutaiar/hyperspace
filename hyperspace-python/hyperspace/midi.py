@@ -129,6 +129,7 @@ import mido
 
 from . import apc40, generic, seq_page
 from .learn import Learn
+from .midiports import port_names
 from .params import Kind, Param, Registry, is_meta_id
 from .pointer import Through
 from .routing import (
@@ -156,10 +157,7 @@ from .routing import (
 PROFILES = {"apc40": apc40, "generic": generic}
 RECONNECT_S = 2.0
 RECONNECT_FAST = 5        # looks at RECONNECT_S after a port goes missing, then
-RECONNECT_SLOW_S = 10.0   # this often. Every look makes a CoreMIDI client; one
-#                           the system refuses aborts the process inside rtmidi,
-#                           past any `except` (audit R15), so a desk that is not
-#                           there is not asked after thirty times a minute all night
+RECONNECT_SLOW_S = 10.0   # this often; a port that opens starts the count again
 HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
 REENTER_S = 2.0     # the intro is sent again at most this often (`MidiIO._reenter`)
 
@@ -281,12 +279,12 @@ class Ports:
         """Open whatever is present now; True when something opened."""
         self.misses += 1
         self._next_try = self.clock() + retry_after(self.misses)
-        try:
-            iname = find_port(mido.get_input_names(), self.in_match) if self.in_match else None
-            oname = find_port(mido.get_output_names(), self.out_match) if self.out_match else None
-        except Exception as e:  # noqa: BLE001 — backend missing / broken
-            self.error = f"{type(e).__name__}: {e}"[:120]
+        seen = port_names()     # (the one road, and it cannot abort: audit R15)
+        if seen.why:
+            self.error = seen.why
             return False
+        iname = find_port(seen.inputs, self.in_match) if self.in_match else None
+        oname = find_port(seen.outputs, self.out_match) if self.out_match else None
         if iname is None and oname is None:
             self.inp = self.out = None
             return False
