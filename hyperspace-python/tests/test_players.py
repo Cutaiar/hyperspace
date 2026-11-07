@@ -1749,3 +1749,17 @@ def test_a_deck_s_cmd_z_does_not_reach_a_move(rig):
     _z(rig)
     assert meta.players.get(2).duty == Duty.OFF_AIR
     assert undo.here() is one.undo
+
+
+def test_a_rename_after_its_new_name_opened_leaves_that_device_its_pointer(tmp_path, monkeypatch):
+    monkeypatch.setattr("hyperspace.deck.meta_stack", lambda *a, **k: SimpleNamespace())
+    monkeypatch.setattr("hyperspace.deck.undos.install_meta", lambda u: None)
+    meta = MetaController(SimpleNamespace(name="one", undo=SimpleNamespace()),
+                          SimpleNamespace(name="two", undo=SimpleNamespace()),
+                          Players(tmp_path / FILE))
+    meta.move_player(2, Duty.OFF_AIR)
+    meta.register("foo", 2)
+    held_by_the_device = meta.pointer("foo-2")
+    meta.rename_controller("foo", "foo-2")
+    assert meta.pointer("foo-2") is held_by_the_device
+    assert held_by_the_device.deck is meta.off_air, "and it goes where its player is"

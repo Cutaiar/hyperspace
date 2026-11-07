@@ -2320,10 +2320,13 @@ class DeviceRegistry:
         store = self.__dict__.get("store")
         if store is not None:
             try:
-                if not store.look():
-                    return False
-                for old, new in store.take_renames():
+                changed = store.look()
+                # (asked whether or not the list moved: a launch's rename left no change behind)
+                renames = store.take_renames()
+                for old, new in renames:
                     self.renamed(old, new)
+                if not changed and not renames:
+                    return False
                 entries, problems, _notes = store.checked()
                 if problems:
                     self._note(f"devices: the list not applied — {problems[0]} — the old list stands")

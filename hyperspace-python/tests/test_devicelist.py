@@ -836,6 +836,61 @@ def test_a_rename_takes_who_holds_it_with_it(macs):
     assert players.player_of("foo-bar").number == 1
 
 
+# ---------------------------------------------------------------- the second pass
+
+def _a_rename_waiting_from_last_run(tmp_path):
+    """An adopt kept in the copy with no Drive, and the Drive back with its name taken."""
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    home.mkdir()
+    store = DeviceList(root, home, seed=[])
+    store.adopt(midi_entry("Foo Bar"))
+    store.sync()
+    root.mkdir()
+    lands(root, [midi_entry("foo-bar")])
+    return root, home, DeviceList(root, home, seed=[])
+
+
+def test_a_rename_at_launch_waits_for_a_taker_though_the_list_says_no_change(tmp_path):
+    _, home, store = _a_rename_waiting_from_last_run(tmp_path)
+    assert store.renames == [("foo-bar", "foo-bar-2")]
+    assert not store._dirty
+    players = Players(home / "players.json")
+    players.hold("foo-bar", 2)
+    reg = devices.DeviceRegistry(store.checked()[0], devices.Context(players=players), store=store)
+    reg.watch()
+    assert players.held == {"foo-bar-2": 2}
+    assert not store.renames
+
+
+def test_main_takes_a_launchs_renames_before_the_devices_open():
+    src = inspect.getsource(app.main)
+    assert src.index("Players.load(home") < src.index("device_list.take_renames()") < src.index("_open_devices(cfg")
+
+
+def test_a_hands_entrys_own_out_is_kept_through_the_list(tmp_path):
+    """Second pass, finding 2, disproved: `_daw`'s `wrote_out` only chooses a note, so the
+    DAW sink is there, on the port it asked for, through `devices.json` as through config.toml."""
+    raw = [{"role": "leap", "kind": "hands", "enabled": True, "out": "My DAW"}]
+    entries, problems, _ = config.listed_devices(raw, tmp_path)
+    assert not problems
+    daw = next(e for e in entries if e["role"] == config.DAW_ROLE)
+    assert daw["port"] == "My DAW" and daw["carries"] == "leap" and daw["enabled"]
+    p = tmp_path / "config.toml"
+    p.write_text('[[devices]]\nrole = "leap"\nkind = "hands"\nenabled = true\nout = "My DAW"\n')
+    assert next(e for e in config.devices(config.load(p)) if e["role"] == config.DAW_ROLE) == daw
+
+
+def test_the_daw_sink_follows_on_or_off_on_this_mac(tmp_path):
+    """Found checking that: `_daw` asks whether the hands are on, so this Mac's say comes first."""
+    raw = [{"role": "leap", "kind": "hands", "enabled": False, "out": "My DAW"}]
+    assert not any(e["role"] == config.DAW_ROLE for e in config.listed_devices(raw, tmp_path)[0])
+    on = config.listed_devices(raw, tmp_path, {"leap": True})[0]
+    assert any(e["role"] == config.DAW_ROLE for e in on)
+    raw = [{"role": "leap", "kind": "hands", "enabled": True, "out": "My DAW"}]
+    off = config.listed_devices(raw, tmp_path, {"leap": False})[0]
+    assert not any(e["role"] == config.DAW_ROLE for e in off)
+
+
 # ---------------------------------------------------------------- where it stands
 
 def test_a_root_file_is_safe_in_the_library(tmp_path):

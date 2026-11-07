@@ -1472,6 +1472,9 @@ def main(argv: list[str] | None = None) -> None:
     # the players, on this Mac (plan 55): beside bindings.json, before the devices
     # read who holds what
     players = Players.load(home, cfg.setdefault("notes", []))
+    # (a rename the list's first read made: before the devices open, so they open right)
+    for old_role, new_role in device_list.take_renames():
+        players.rename(old_role, new_role)
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
     # with no list) and the controls; output 1's window is the render window.
     # On a laptop the show machine's windows.json is not read: its spots are the show machine's

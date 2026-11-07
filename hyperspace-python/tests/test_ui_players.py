@@ -1041,3 +1041,26 @@ def test_an_earlier_moves_undo_leaves_an_adopted_controller_with_its_holder(tray
         deck_mod.undos.push_meta = real
     assert calls == ["launch-control-xl to player 2"], "a step of its own, like any move"
     assert "⌘Z" not in _said(r), "it stays on the shared list, so ⌘Z isn't promised"
+
+
+def test_a_tray_that_cannot_look_for_midi_says_why_and_still_finds_pads(tray, monkeypatch):
+    r = tray
+    r.panel.devices.ctx.pads = SimpleNamespace(taken={}, hub=SimpleNamespace(
+        readers={"a": SimpleNamespace(name="Joy-Con (L)", model=models.MODELS["joycon-l"])}, held={}))
+    _lands(r, [{"role": "apc40", "kind": "midi", "enabled": False}])
+
+    def boom():
+        raise RuntimeError("no backend")
+    monkeypatch.setattr(ui_players, "port_names", boom)
+    st = ui_players._state(r.panel)
+    assert [h.name for h in ui_players.loose(r.panel, st)] == ["Joy-Con (L)"]
+    assert "no backend" in st["midi_why"]
+    st["loose_at"] = -1e9
+    r.d.run(r.d.wait(3))            # a frame of the board draws through it
+
+
+def test_a_bad_entry_in_the_walk_doesnt_reach_the_board(tray, monkeypatch):
+    r = tray
+    monkeypatch.setattr(devicelist, "midi_entry", lambda *a, **k: 1 / 0)
+    r.ports = ["Somebody's Box"]
+    assert ui_players.loose(r.panel) == []

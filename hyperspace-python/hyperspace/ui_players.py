@@ -310,7 +310,13 @@ def loose(panel, st: dict | None = None) -> list[Held]:
         return False
     claims = getattr(getattr(regs, "ctx", None), "pads", None)
     hub = getattr(claims, "hub", None)
-    out: list[Held] = _loose_midi(regs, st) if regs is not None else []
+    out: list[Held] = []
+    try:
+        if regs is not None:
+            out += _loose_midi(regs, st)
+    except Exception as e:  # noqa: BLE001 — see the docstring; the pads are still looked for
+        if st is not None:
+            st["midi_why"] = f"MIDI: {type(e).__name__}: {e}"[:120]
     try:
         if hub is not None:
             for path, r in list(hub.readers.items()):

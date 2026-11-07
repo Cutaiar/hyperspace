@@ -793,12 +793,12 @@ def listed_devices(raw: list, base: Path, here: dict | None = None
         for i, e in enumerate(raw):
             got = _device(i + 1, e, scratch, roles, problems, pins)
             if got is not None:
+                # (on or off first: `_daw` asks it of a hands entry)
+                got["enabled"] = here.get(got["role"], got["enabled"]) if here else got["enabled"]
                 entries.append(got)
+        # (`wrote_out` only chooses a note: the sink is made either way)
         entries = _daw(scratch, entries, set())
     _resolve(entries, base)
-    for e in entries:
-        if here and e["role"] in here:
-            e["enabled"] = here[e["role"]]
     return entries, problems, scratch["notes"]
 
 

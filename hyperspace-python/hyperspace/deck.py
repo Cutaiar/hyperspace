@@ -735,7 +735,11 @@ class MetaController:
         if old in self.seats:
             self.seats[new] = self.seats.pop(old)
         if old in self.pointers:
-            self.pointers[new] = self.pointers.pop(old)
+            pointer = self.pointers.pop(old)
+            if new in self.pointers:        # (it opened under its new name first: that one stays)
+                self.pointers[new].deck = pointer.deck
+            else:
+                self.pointers[new] = pointer
 
     def _where_is(self, role: str) -> str:
         return self.presence(role) if self.presence is not None else THERE
