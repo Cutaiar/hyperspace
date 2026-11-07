@@ -44,8 +44,8 @@ the control window) — G, or the pan button on the APC40, takes clicks
 back.
 
 Rig-specific settings (monitor, fullscreen, overlay, passthrough, dim,
-and every output.N.*) never persist in a loadable patch and cannot be modulated; ground and opacity are
-a look and can. The dim (plan 15 WP3, decision 28) is the operator's: it
+and every output.N.*) never persist in a loadable patch. No ``output.*`` param can be
+modulated (row 775); ground and opacity are still saved until the migration moves them. The dim (plan 15 WP3, decision 28) is the operator's: it
 is not a window-system setting — the renderer multiplies the finished
 frame by it (render.Renderer.dim_pass; app.frame hands it over beside
 the ground) — it has no config key, so a launch always starts at full,
@@ -225,7 +225,7 @@ class Output:
 
     def register(self, reg: Registry) -> None:
         g = "output"
-        settings = {"persist": False, "modulatable": False}
+        settings = {"persist": False}
         # index 0 is "follow window" (monitor −1: the screen holding the
         # window, resolved by _target_monitor); the screens follow (audit P3)
         reg.enum("output.monitor", "Screen", lambda: self.monitor + 1,

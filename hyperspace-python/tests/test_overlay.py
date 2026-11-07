@@ -80,9 +80,10 @@ def test_meta_settings_never_persist_or_modulate(rig):
     for pid in ("output.monitor", "output.fullscreen", "output.overlay", "output.passthrough"):
         assert not r[pid].persist, pid
         assert not r[pid].modulatable, pid
-    # ground and opacity are a look: a loadable patch keeps them, a lane may drive them
+    # ground and opacity are still saved (SC2 moves them, with the migration), and as the
+    # meta controller's no lane may drive them (row 775)
     for pid in ("output.bg", "output.alpha"):
-        assert r[pid].persist and r[pid].modulatable, pid
+        assert r[pid].persist and not r[pid].modulatable, pid
     saved = r.snapshot("output")
     assert set(saved) == {"output.bg", "output.alpha"}
 

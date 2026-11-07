@@ -447,7 +447,7 @@ def test_home_loads_what_the_show_starts_on(rig):
     reg, lib, proj = rig.reg, rig.lib, rig.lib.project
     home = reg["preset.home"]
     assert (home.group, home.label, home.modulatable, home.persist) \
-        == ("preset", "Home", True, False)
+        == ("preset", "Home", False, False)
     assert proj.startup == "BIG BLUE WAVE" and home.get() is True      # lit: there is one
     launched = (reg.snapshot(part="patch"),
                 [b.to_json() for b in rig.router.table.routes()],

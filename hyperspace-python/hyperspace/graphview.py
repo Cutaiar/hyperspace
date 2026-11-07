@@ -129,7 +129,7 @@ from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .groupwords import group_title
-from .params import PATCH_GROUPS, Kind, Param, Registry, is_meta_id
+from .params import PATCH_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
     PAIR_SCHEME,
@@ -1612,7 +1612,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             targets.append(pid)
 
     for p in reg:
-        if p.modulatable and not p.alias and not is_meta_id(p.id):       # (register rows 743, 746)
+        if p.modulatable and not p.alias:       # (no meta param is: register rows 743, 746, 775)
             want(p.id)
     for b in (*routes, *setters):
         want(b.target)
