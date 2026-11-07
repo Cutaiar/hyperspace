@@ -8436,6 +8436,10 @@ Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which 
 1. PRESETS page: right-click a bank pad's param, Learn desk, if it's offered. Turn a track knob. *Pass:* it's refused in words, or Learn desk isn't offered, and the knob doesn't load anything.
 *Fail:* a knob that loads presets as it turns.
 
+**617. The nudge chips' menu.** (the Mac)
+1. LFO page: right-click nudge −, then nudge +. *Pass:* each opens one menu, with no item listed twice.
+*Fail:* a doubled menu.
+
 ## What no test covers
 
 Only a person can settle these:

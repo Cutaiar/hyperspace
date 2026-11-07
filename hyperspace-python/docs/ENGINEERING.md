@@ -3589,4 +3589,4 @@ What only a person at the machine can check is
   held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
-- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): U9, U10, P6, V8.
+- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): U10, P6, V8.
