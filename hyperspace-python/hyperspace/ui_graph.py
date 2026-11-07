@@ -1679,13 +1679,15 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     view_file = start_view(panel.graph_start_zoom) if st["editor"] is None else ""
     ed.set_current_editor(editor(panel, view_file))
     keep_corner(st, (size.x, size.y))
-    if through > 0.0:
-        bg = ed.get_style().color_(ed.StyleColor.bg)
-        ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
-    corner = imgui.get_cursor_screen_pos()
-    ed.begin("##graph", size)
-    if view_file:
-        _start_view_read(st["editor"], view_file)
+    try:
+        if through > 0.0:
+            bg = ed.get_style().color_(ed.StyleColor.bg)
+            ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
+        corner = imgui.get_cursor_screen_pos()
+        ed.begin("##graph", size)
+    finally:        # whatever happens, the editor never holds a file a later frame could save into
+        if view_file:
+            _start_view_read(st["editor"], view_file)
     # plan 36 T5: the canvas point at the view's top-left corner, kept for
     # what a new loadable patch lays out where you are looking (`in_view`)
     seen = ed.screen_to_canvas(corner)

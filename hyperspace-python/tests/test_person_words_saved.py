@@ -10,12 +10,13 @@ hover are those ints, and `imgui.ini` holds windows and tables, none named by a 
 
 from __future__ import annotations
 
-import inspect
 import json
 from pathlib import Path
 
+import pytest
+from conftest import seed
 from test_patches import example
-from test_ui_shell import rig  # noqa: F401 — the headless panel fixture
+from test_ui_shell import frame, rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as rgraph
 from hyperspace import graphview, patches, ui_graph
@@ -110,6 +111,52 @@ def test_no_corpus_file_holds_a_cable_id_with_either_prefix():
     assert not held
 
 
-def test_the_node_editor_keeps_no_settings_file():
-    """So no cable or node id lands in a NodeEditor.json beside the app."""
-    assert 'cfg.settings_file = ""' in inspect.getsource(ui_graph)
+@pytest.mark.parametrize("zoom", [1.0, 1.6])
+def test_the_node_editor_keeps_no_settings_file(rig, monkeypatch, tmp_path, zoom):  # noqa: F811
+    """So no cable or node id lands in a NodeEditor.json beside the app. Through
+    real frames with nodes moved, which is what makes the editor want to save:
+    it writes nothing anywhere, it holds no file from its first `begin` on, and
+    the one file a start zoom reads holds a view alone and is gone after."""
+    spare, here = tmp_path / "spare", tmp_path / "here"
+    spare.mkdir()
+    here.mkdir()
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
+    monkeypatch.chdir(here)         # a relative NodeEditor.json would land here
+    read, held = [], []
+
+    def begin(*a, _begin=ui_graph.ed.begin):
+        got = _begin(*a)
+        path = ui_graph.ed.get_config(ui_graph._state(rig.panel)["editor"]).settings_file
+        if path:                    # the start view, as this very `begin` read it
+            read.append(json.loads(Path(path).read_text()))
+        return got
+
+    def end(*a, _end=ui_graph.ed.end):     # what the editor could save into, as it would
+        held.append(ui_graph.ed.get_config(ui_graph._state(rig.panel)["editor"]).settings_file)
+        return _end(*a)
+    monkeypatch.setattr(ui_graph.ed, "begin", begin)
+    monkeypatch.setattr(ui_graph.ed, "end", end)
+
+    rig.panel.graph_start_zoom = zoom
+    seed(rig.lib.home)
+    rig.lib.load("presets", "party-trip")
+    for _ in range(3):
+        frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    view = st["view"]
+    for _ in range(3):              # every drawn node moved: the settings dirty
+        for n in view.nodes:
+            if ui_graph.drawn_node(st, n):
+                st["applied"].pop(n.id, None)
+        st["pan"] = (st["pan"][0] + 40.0, st["pan"][1] + 40.0)
+        frame(rig.panel, "graph")
+    ui_graph.close(rig.panel)       # (the editor's last chance to save)
+
+    assert list(spare.iterdir()) == [] and list(here.iterdir()) == []
+    assert held and set(held) == {""}
+    if zoom == 1.0:
+        assert read == []
+    else:
+        assert read == [{"nodes": {}, "selection": None,
+                         "view": {"scroll": {"x": 0, "y": 0}, "zoom": zoom,
+                                  "visible_rect": {"min": {"x": 0, "y": 0}, "max": {"x": 0, "y": 0}}}}]

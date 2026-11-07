@@ -1030,6 +1030,24 @@ def test_the_page_has_no_scrollbar_and_the_canvas_keeps_its_width(rig, monkeypat
     assert len(set(sizes)) == 1 and sizes[0][2] is False
 
 
+def test_a_begin_that_raises_leaves_the_editor_holding_no_file(rig, monkeypatch, tmp_path):
+    """Or the next frame's editor would save its nodes into that file: it only
+    reads the view on the frame it's made."""
+    spare = tmp_path / "spare"
+    spare.mkdir()
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
+
+    def fails(*_a):
+        raise RuntimeError("no")
+    monkeypatch.setattr(ui_graph.ed, "begin", fails)
+    rig.panel.graph_start_zoom = 1.6
+    with pytest.raises(RuntimeError):
+        frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    assert ed.get_config(st["editor"]).settings_file == ""
+    assert list(spare.iterdir()) == []
+
+
 def test_a_failed_write_leaves_no_file(monkeypatch, tmp_path):
     monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(tmp_path))
 
