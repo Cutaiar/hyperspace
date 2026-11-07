@@ -271,7 +271,6 @@ SIDE_W = 320.0           # the side column's width at first, when the page is wi
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
 GRIP_W = 8.0             # the drag grip on the column's left edge
-UI_FILE = ui_pane.UI_FILE   # <machine>/ui.json: this Mac's panel settings (the side width)
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over

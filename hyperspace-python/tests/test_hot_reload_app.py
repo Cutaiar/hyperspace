@@ -8,6 +8,7 @@ rule on every real class in a hot module, with Python's own check; the `live` ti
 windows take the focus on a Mac, so `--all`, not CI) runs a save through the real app.
 """
 
+import importlib
 import json
 import os
 import subprocess
@@ -78,20 +79,20 @@ def _classes(owner, module: str):
             yield from _classes(c, module)
 
 
-def report() -> None:
+def report(importer=importlib.import_module) -> None:
     """Every class of every hot module against `refusal`, as one line of JSON. Run in a
-    process of its own: it imports all of them, torch and the media adapters included."""
-    import importlib
-
-    hot = {f"{PACKAGE}.{name}" for name in MODULES}
+    process of its own: it imports all of them, torch and the media adapters included.
+    Only a third-party package that isn't there is skipped: any other import error,
+    and one of our own above all, fails here, so no class leaves the rule for it."""
+    names = [f"{PACKAGE}.{name}" for name in MODULES]
+    hot = set(names)
     wrong, unmodelled, skipped, checked = {}, {}, {}, 0
-    # the list's order, a reload's: the panel's modules have import cycles, so
-    # `ui_desk` or `ui_pane` can't be a process's first import (row 812)
-    for short in MODULES:
-        name = f"{PACKAGE}.{short}"
+    for name in names:
         try:
-            mod = importlib.import_module(name)
-        except ImportError as e:
+            mod = importer(name)
+        except ModuleNotFoundError as e:
+            if (e.name or PACKAGE).split(".")[0] == PACKAGE:
+                raise
             skipped[name] = str(e)
             continue
         for cls in dict.fromkeys(_classes(mod, name)):
@@ -131,21 +132,76 @@ def test_every_class_in_a_hot_module_can_be_re_classed_after_a_reload():
     assert got["checked"] > 300, got
 
 
-def test_the_rule_imports_in_the_lists_order(monkeypatch, capsys):
-    """Row 812: it walked a set, so the hash seed chose the first import, and 3 seeds in 24
-    picked a module that can't be first."""
-    import importlib
-
+def test_the_rule_imports_in_the_lists_order(capsys):
+    """Row 812: it walked a set, so the hash seed chose the first import."""
     seen = []
 
     def record(name):
         seen.append(name)
-        raise ImportError("not this time")
+        raise ModuleNotFoundError("not here", name="third_party")
 
-    monkeypatch.setattr(importlib, "import_module", record)
-    report()
+    report(record)
     assert seen == [f"{PACKAGE}.{name}" for name in MODULES]
     assert len(json.loads(capsys.readouterr().out)["skipped"]) == len(MODULES)
+
+
+@pytest.mark.parametrize("error", [
+    ModuleNotFoundError("No module named 'hyperspace.gone'", name="hyperspace.gone"),
+    ImportError("cannot import name 'X' from partially initialized module",
+                name="hyperspace.ui_desk"),
+    ImportError("cannot open shared object file"),
+])
+def test_the_rule_skips_only_a_missing_third_party_package(error):
+    """A cycle in `from .x import Name` form must fail, not leave its classes unread."""
+    def importer(_name):
+        raise error
+
+    with pytest.raises(ImportError):
+        report(importer)
+
+
+FIRST_IMPORT = """
+import importlib, os, sys
+from hyperspace.hotreload import MODULES
+# third-party only, and shared by the forks: it costs a child most of its time
+for heavy in ("numpy", "glfw", "moderngl", "OpenGL.GL", "imgui_bundle", "PIL.Image", "torch"):
+    try:
+        importlib.import_module(heavy)
+    except ImportError:
+        pass
+wrong = {}
+for name in MODULES:
+    r, w = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(r)
+        try:
+            importlib.import_module(f"hyperspace.{name}")
+            said = b""
+        except ModuleNotFoundError as e:
+            said = str(e).encode() if (e.name or "hyperspace").startswith("hyperspace") else b""
+        except BaseException as e:
+            said = f"{type(e).__name__}: {e}".encode()
+        os.write(w, said[:400])
+        os._exit(0)
+    os.close(w)
+    said = os.read(r, 500)
+    os.close(r)
+    _, status = os.waitpid(pid, 0)
+    if said or status:
+        wrong[name] = said.decode() or f"status {status}"
+print(wrong)
+sys.exit(1 if wrong else 0)
+"""
+
+
+def test_any_hot_module_can_be_a_process_s_first_import():
+    """Row 812: an import cycle is fine until a module reads another at import, and then
+    only some orders work, and a tool or a test finds out by chance. One fork each, from
+    a process that has imported only `hotreload`."""
+    out = subprocess.run([sys.executable, "-c", FIRST_IMPORT], capture_output=True, text=True,
+                         check=False, cwd=str(ROOT), timeout=110)
+    assert out.returncode == 0, out.stdout[-3000:] + out.stderr[-1000:]
 
 
 def _hot(source: str) -> tuple[type, set[str]]:

@@ -117,13 +117,13 @@ def test_the_pad_takes_the_top_of_the_desks_column():
     starts under it (`ui_desk.room`'s `pad_h`)."""
     display = tuple(float(v) for v in NARROW_CONTROL)             # 960 × 900
     panel_x = display[0] - 540 - 12
-    E = ui_pad.EDGE
+    E = ui_desk.EDGE
     x, y, w, h = ui_pad.room(display, panel_x)
     assert (x, y) == (E, E) and x + w <= panel_x - E
     assert h <= ui_pad.MAX_H * display[1]
     # the panel hidden: wider, and wide enough for the labels
     _, _, w2, h2 = ui_pad.room(display, None)
-    assert w2 > w and (w2 - 2 * ui_pad.PAD) / gamepad.LAYOUT_W >= ui_pad.LABEL_UNIT
+    assert w2 > w and (w2 - 2 * ui_desk.PAD) / gamepad.LAYOUT_W >= ui_pad.LABEL_UNIT
     # a panel dragged far left: never narrower than MIN_W
     assert ui_pad.room(display, 100.0)[2] == ui_pad.MIN_W
     # the desk under it: its top edge clears the pad and the gap. With the
@@ -139,8 +139,8 @@ def test_the_pad_takes_the_top_of_the_desks_column():
 def test_a_unit_is_never_taller_than_it_is_wide():
     for display in ((960.0, 900.0), (1512.0, 900.0), (2560.0, 1440.0), (1600.0, 400.0)):
         _, _, w, h = ui_pad.room(display, None)
-        sx = (w - 2 * ui_pad.PAD) / gamepad.LAYOUT_W
-        sy = (h - 2 * ui_pad.PAD - ui_pad.HEAD_H) / gamepad.LAYOUT_H
+        sx = (w - 2 * ui_desk.PAD) / gamepad.LAYOUT_W
+        sy = (h - 2 * ui_desk.PAD - ui_desk.HEAD_H) / gamepad.LAYOUT_H
         assert sy <= sx + 1e-6, (display, sx, sy)
 
 
@@ -202,7 +202,7 @@ def test_the_switch_draws_it_and_hides_it(rig, monkeypatch):
     assert panel._pad_h == 0.0
     reg["ui.pad_diagram"].set(True)
     got = _pad_frames(rig, monkeypatch)
-    assert got["rect"] is not None and got["rect"][:2] == (ui_pad.EDGE, ui_pad.EDGE)
+    assert got["rect"] is not None and got["rect"][:2] == (ui_desk.EDGE, ui_desk.EDGE)
     assert panel._pad_h == got["rect"][3]
 
 

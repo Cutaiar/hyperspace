@@ -68,12 +68,6 @@ from .params import dial_id
 from .routing import PAIR_SCHEME, Binding, pair_poles
 
 SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")   # the schemes a pad control's row can have
-# (read at import, so `ui_desk` can't be a process's first import; the app imports `ui` first, row 812)
-EDGE = ui_desk.EDGE                 # from the control window's edges, as the desk sits
-PAD = ui_desk.PAD
-GAP = ui_desk.GAP                   # between this and the desk under it
-HEAD_H = ui_desk.HEAD_H             # the header's line
-GLYPH_PX = ui_desk.GLYPH_PX
 MIN_W = 240.0                       # the window is never narrower…
 MAX_UNIT = 58.0                     # …and a layout unit never wider than this
 MAX_H = 0.42                        # …nor the window taller than this much of the display
@@ -228,15 +222,15 @@ def room(display: tuple[float, float], panel_x: float | None
     desk, which grows up from the foot of the same column, keeps the
     rest)."""
     dw, dh = display
-    right = (dw if panel_x is None else panel_x) - EDGE
-    w = max(MIN_W, min(right - EDGE, MAX_UNIT * gamepad.LAYOUT_W + 2 * PAD))
-    unit = (w - 2 * PAD) / gamepad.LAYOUT_W
-    tall = unit * gamepad.LAYOUT_H + 2 * PAD + HEAD_H
+    right = (dw if panel_x is None else panel_x) - ui_desk.EDGE
+    w = max(MIN_W, min(right - ui_desk.EDGE, MAX_UNIT * gamepad.LAYOUT_W + 2 * ui_desk.PAD))
+    unit = (w - 2 * ui_desk.PAD) / gamepad.LAYOUT_W
+    tall = unit * gamepad.LAYOUT_H + 2 * ui_desk.PAD + ui_desk.HEAD_H
     if tall > MAX_H * dh:       # too tall for its half: the picture shrinks, both ways
-        unit = max(1.0, (MAX_H * dh - 2 * PAD - HEAD_H) / gamepad.LAYOUT_H)
-        w = max(MIN_W, unit * gamepad.LAYOUT_W + 2 * PAD)
-        tall = unit * gamepad.LAYOUT_H + 2 * PAD + HEAD_H
-    return EDGE, EDGE, float(int(w)), float(int(tall))
+        unit = max(1.0, (MAX_H * dh - 2 * ui_desk.PAD - ui_desk.HEAD_H) / gamepad.LAYOUT_H)
+        w = max(MIN_W, unit * gamepad.LAYOUT_W + 2 * ui_desk.PAD)
+        tall = unit * gamepad.LAYOUT_H + 2 * ui_desk.PAD + ui_desk.HEAD_H
+    return ui_desk.EDGE, ui_desk.EDGE, float(int(w)), float(int(tall))
 
 
 def _room(panel) -> tuple[float, float, float, float]:
@@ -248,7 +242,7 @@ def _room(panel) -> tuple[float, float, float, float]:
     if panel.open:
         panel_x = getattr(panel, "_panel_x", None)
         if panel_x is None:
-            panel_x = display[0] - ui.panel_w(display) - EDGE
+            panel_x = display[0] - ui.panel_w(display) - ui_desk.EDGE
     return room(display, panel_x)
 
 
@@ -534,7 +528,7 @@ def diagram(panel) -> None:
              | imgui.WindowFlags_.no_focus_on_appearing | imgui.WindowFlags_.no_nav
              | imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse
              | imgui.WindowFlags_.no_saved_settings)
-    imgui.push_style_var(imgui.StyleVar_.window_padding, _v(PAD, PAD))
+    imgui.push_style_var(imgui.StyleVar_.window_padding, _v(ui_desk.PAD, ui_desk.PAD))
     imgui.begin("##pad", None, flags)
     try:
         _body(panel, _table(panel))
@@ -548,12 +542,12 @@ def inline(panel) -> None:
     for and as tall as the pad's shape needs: the GRAPH page's details for
     the pad node (ui_graph._node_side), whether or not the floating one is up."""
     w = imgui.get_content_region_avail().x
-    h = (w - 2 * PAD) / gamepad.LAYOUT_W * gamepad.LAYOUT_H + 2 * PAD + HEAD_H
+    h = (w - 2 * ui_desk.PAD) / gamepad.LAYOUT_W * gamepad.LAYOUT_H + 2 * ui_desk.PAD + ui_desk.HEAD_H
     table = _table(panel)
     if view_of(panel) == "lanes" and table is not None:   # every lane, readable: as tall as that takes
-        h = max(h, ui_pad_views.lanes_height(w - 2 * PAD, _pad(panel) or getattr(panel, "pad", None),
-                                             _says_of(panel, table)) + 2 * PAD + HEAD_H)
-    imgui.push_style_var(imgui.StyleVar_.window_padding, _v(PAD, PAD))
+        h = max(h, ui_pad_views.lanes_height(w - 2 * ui_desk.PAD, _pad(panel) or getattr(panel, "pad", None),
+                                             _says_of(panel, table)) + 2 * ui_desk.PAD + ui_desk.HEAD_H)
+    imgui.push_style_var(imgui.StyleVar_.window_padding, _v(ui_desk.PAD, ui_desk.PAD))
     if imgui.begin_child("##pad.inline", _v(w, h), imgui.ChildFlags_.borders
                          | imgui.ChildFlags_.always_use_window_padding,
                          imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse):
@@ -600,9 +594,9 @@ def _header(panel, table) -> None:
     if light is not None and _pad(panel).has("light"):
         imgui.same_line()
         p = imgui.get_cursor_screen_pos()
-        side = HEAD_H * 0.55
+        side = ui_desk.HEAD_H * 0.55
         imgui.get_window_draw_list().add_rect_filled(
-            _v(p.x, p.y + (HEAD_H - side) / 2 - 2), _v(p.x + side, p.y + (HEAD_H + side) / 2 - 2),
+            _v(p.x, p.y + (ui_desk.HEAD_H - side) / 2 - 2), _v(p.x + side, p.y + (ui_desk.HEAD_H + side) / 2 - 2),
             ui.u32(imgui.ImVec4(*(c / 255 for c in light), 1.0)), 2.0)
         imgui.dummy(_v(side, 1))
         if imgui.is_item_hovered():
@@ -628,7 +622,7 @@ def _header(panel, table) -> None:
                 ui.tooltip(f"{n} controls with a row in bindings.json. A grey label is the "
                            "app's own hand on a free axis, not a row.")
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
-    imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
+    imgui.dummy(_v(1, ui_desk.HEAD_H - imgui.get_style().item_spacing.y))
 
 
 def totem_word(reg) -> tuple[str, str] | None:
@@ -743,7 +737,7 @@ def poi_window(panel) -> None:
     if not on or not getattr(panel, "poi_dials", True) or "poi.length" not in reg:
         return
     io = imgui.get_io()
-    imgui.set_next_window_pos(_v(io.display_size.x / 2, EDGE), imgui.Cond_.first_use_ever,
+    imgui.set_next_window_pos(_v(io.display_size.x / 2, ui_desk.EDGE), imgui.Cond_.first_use_ever,
                               _v(0.5, 0.0))
     imgui.set_next_window_size(_v(POI_W, 0), imgui.Cond_.first_use_ever)
     opened, shown = imgui.begin("Poi", True, imgui.WindowFlags_.no_focus_on_appearing
@@ -819,7 +813,7 @@ def _body(panel, table) -> None:
     hovered = imgui.is_window_hovered()
     tip = None
     jobs: list[ui_desk._Job] = []
-    imgui.push_font(ui._FONTS["ui"], GLYPH_PX if not big else max(GLYPH_PX, 0.16 * sx))
+    imgui.push_font(ui._FONTS["ui"], ui_desk.GLYPH_PX if not big else max(ui_desk.GLYPH_PX, 0.16 * sx))
     try:
         st = _state(panel)
         st["origin"], st["unit"] = (origin.x, origin.y), (sx, sy)
