@@ -727,6 +727,20 @@ class MetaController:
         for fn in self.on_players:
             fn()
 
+    def rename_controller(self, old: str, new: str) -> None:
+        """The controller `old` is called `new`, as the other Mac took the name first:
+        its holder, its seat and its pointer go with it. `old`, now that Mac's controller,
+        starts where any new one does."""
+        self.players.rename(old, new)
+        if old in self.seats:
+            self.seats[new] = self.seats.pop(old)
+        if old in self.pointers:
+            pointer = self.pointers.pop(old)
+            if new in self.pointers:        # (it opened under its new name first: that one stays)
+                self.pointers[new].deck = pointer.deck
+            else:
+                self.pointers[new] = pointer
+
     def _where_is(self, role: str) -> str:
         return self.presence(role) if self.presence is not None else THERE
 

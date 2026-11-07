@@ -1677,6 +1677,12 @@ as built.
 
 ### The device list
 
+**Since wave 5 CT1 the list lives in `<library>/devices.json`, shared by both Macs,
+and is set from the player board: a new controller waits in the tray until it's
+dragged to a player. On or off is each Mac's, in `<home>/devices.here.json`, by a chip on
+the same board. What follows is the seed, read once per Mac and then not at all; RT1
+retires it. `devicelist.py` has the rules.**
+
 Every input and output is a `[[devices]]` entry (plan 27). Without a
 list, nothing changes: the four device tables above — `[gamepad]`,
 `[midi]`, `[hands]`, `[bridge]`, with their defaults — become the

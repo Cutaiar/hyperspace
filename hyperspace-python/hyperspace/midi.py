@@ -236,8 +236,11 @@ class Slew:
 
 
 def find_port(names: list[str], match: str) -> str | None:
+    """The port `match` names: exactly, else the first it is part of, so an entry for
+    "Launch Control XL" never opens "Launch Control XL 2" when both are there."""
     m = match.lower()
-    return next((n for n in names if m in n.lower()), None)
+    return next((n for n in names if m == n.lower()), None) or next(
+        (n for n in names if m in n.lower()), None)
 
 
 def retry_after(misses: int) -> float:
