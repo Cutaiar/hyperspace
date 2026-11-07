@@ -264,7 +264,7 @@ class VNode:
     # drawn faint with the line "reaches nothing" — never idle
     faint: bool = False
     # plan 37 C1 (P1): how this node's thumbnail is found (`THUMBS`' word:
-    # "picture", "scene", "layer", "window"), None for a node that stays
+    # "picture", "scene", "layer", "window", "mask"), None for a node that stays
     # text (the modulation side, a group, the camera); and the size of the
     # picture its thumbnail was last copied from (the page sets it each
     # frame from `outputs.PreviewTextures.size_of`: C2's hover says it),
@@ -942,19 +942,21 @@ NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
 # that draws it, faint (`THUMB_FAINT`); "layer": a hands node — its hands
 # layer, else the scene it is drawn in; "window": an output — what the
 # window shows (output 1 the page's `outputs.Preview`, any other its
-# presenter's picture: `render.thumb_source`). A kind missing here whose
+# presenter's picture: `render.thumb_source`); "mask": a matte's or a
+# segment's mask, in grey, white where it passes. A kind missing here whose
 # node's output is a picture (a kind added later: plan 39's) is a
 # "picture" too (`thumb_of`); the rest (All outputs, the camera, ground,
 # the modulation side) stay text.
 PICTURE, SCENE_PIC, LAYER_PIC, WINDOW_PIC = "picture", "scene", "layer", "window"
+MASK_PIC = "mask"
 THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
     "lookback": PICTURE, "echo": PICTURE, "dream": PICTURE, "effect": PICTURE,
     "copy": PICTURE, "layer": PICTURE, "guide": PICTURE,
-    # plan 39 at the plan 37 merge: a cut is its picture; a matte (a mask)
-    # and a segment (its own picture is its matte; fg, bg are its pins) are text
-    "cut": PICTURE,
+    # plan 39 at the plan 37 merge: a cut is its picture. SM3 (row 777): a
+    # matte's is its mask, and a segment's its matte (fg, bg are its pins)
+    "cut": PICTURE, "matte": MASK_PIC, "segment": MASK_PIC,
     "shape": SCENE_PIC, "cloud": SCENE_PIC, "hands": LAYER_PIC,
     "output": WINDOW_PIC,
 }
@@ -963,6 +965,13 @@ THUMB_FAINT = frozenset({SCENE_PIC})     # drawn faint (`ui_graph.FAINT_PIC`)
 # (`ui_graph.NODE_W`, 190 × SCALE) at 16:9 — a picture of another aspect
 # is fitted inside it, so the layout never moves with a picture's size
 THUMB_H = float(round(190 * 1.25 * 9 / 16))
+
+
+def mask_words(n: VNode) -> str:
+    """Why mask node `n` makes no mask, in its own words: "subject is not in
+    this build", a worker's error, off, nothing wired. Empty when it has no
+    refusal: a mask nothing asked for is plainly black."""
+    return getattr(n.ref, "refused", "") if n.thumb == MASK_PIC else ""
 
 
 def thumb_of(name: str, ref=None) -> str | None:
@@ -1228,7 +1237,7 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
     if kind in STAND_IN_SAID:                        # plan 39 T5: its body line, in words
         into = {w.port: w.src for w in (spec.all_wires() if spec is not None else ())
                 if w.node == name}
-        r.said = STAND_IN_SAID[kind](name, into)
+        r.said = r.refused = STAND_IN_SAID[kind](name, into)
     return r
 
 
@@ -2838,7 +2847,8 @@ def picture_hover(n: VNode, gpu_ms: float | None = None) -> str:
     median, "gpu 0.42 ms"). A line it has nothing for is left out."""
     lines = [n.label, *summary(n)]
     if n.picture is not None:
-        lines.append(f"{n.picture[0]}×{n.picture[1]} picture")
+        noun = "mask" if n.thumb == MASK_PIC else "picture"
+        lines.append(f"{n.picture[0]}×{n.picture[1]} {noun}")
     if gpu_ms is not None:
         lines.append(f"gpu {gpu_ms:.2f} ms")
     return "\n".join(lines)
@@ -3153,6 +3163,7 @@ class VGroup:
     real: dict[str, str] = field(default_factory=dict)
     rows: dict[str, list[VCable]] = field(default_factory=dict)
     thumb: str | None = None
+    thumb_pin: str | None = None        # `thumb`'s outlet, a segment's own pin (`pin_picture`)
     kept_by_host: list = field(default_factory=list)
 
     @property
@@ -3314,6 +3325,27 @@ def _boundary(view: View, g: VGroup, mem) -> None:
     if pics:
         src = g.real[pics[-1].id]
         g.thumb = view.pins.get(src, ("",))[0] or None
+        g.thumb_pin = pin_picture(view, src)
+
+
+def pin_picture(view: View, pin: str) -> str | None:
+    """The render node that makes the picture on output pin `pin`, when it
+    isn't the pin's canvas node: a segment's `fg` or `bg` (`rout:segment.fg`
+    is `segment.fg`, a node the build makes; the canvas node's own thumbnail
+    is its matte). None for any other pin."""
+    name = pin.removeprefix("rout:")
+    return name if name != pin and rgraph.segment_pin(name) is not None \
+        and rgraph.WIRED_MAKES.get(kind_of(name)) == IMAGE else None
+
+
+def group_picture(view: View, g: VGroup) -> VNode | None:
+    """The node a folded group's thumbnail is of: its last picture outlet's
+    (`thumb`), or for a segment's `fg` or `bg` that pin's own picture, as a
+    node of its own name (`thumb_name` finds it by the id)."""
+    n = view.node(g.thumb) if g.thumb else None
+    if n is None or g.thumb_pin is None:
+        return n
+    return VNode(f"render:{g.thumb_pin}", n.kind, n.label, thumb=PICTURE)
 
 
 def group_words(view: View, g: VGroup) -> list[str]:
