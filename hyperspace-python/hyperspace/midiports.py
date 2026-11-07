@@ -109,7 +109,9 @@ def port_names(clock=time.monotonic) -> PortNames:
         return PortNames([], [], why)
     try:
         # (a port going away mid-look lists as None: seen on the Mac, unplugging)
-        return PortNames([n for n in mido.get_input_names() if n],
-                         [n for n in mido.get_output_names() if n])
+        # (mido builds these two at import, so pyright can't see them)
+        inputs = mido.get_input_names()  # pyright: ignore[reportAttributeAccessIssue]
+        outputs = mido.get_output_names()  # pyright: ignore[reportAttributeAccessIssue]
+        return PortNames([n for n in inputs if n], [n for n in outputs if n])
     except Exception as e:  # noqa: BLE001 — backend missing / broken
         return PortNames([], [], f"{type(e).__name__}: {e}"[:120])

@@ -93,6 +93,10 @@ dev = [
     "pytest-timeout>=2.3",
     # vendor/leapc-cffi/setup.py's own tests import it (tests/test_leapc_build.py)
     "setuptools",
+    # the type ratchet (tools/type_ratchet.py, row 788). Pinned exactly: a new
+    # pyright complains about new things, so moving it is a re-baseline, a
+    # decision of its own. [nodejs]: a wheel's node, so a runner needs no other
+    "pyright[nodejs]==1.1.414",
 ]
 
 [build-system]
@@ -135,6 +139,18 @@ extend-exclude = ["vendor/", "docs/plans/assets/"]
 
 [project.scripts]
 hyperspace = "hyperspace.app:main"
+
+[tool.pyright]
+# The ratchet's settings (tools/type_ratchet.py, ENGINEERING §16): the app only,
+# basic mode, the Mac's view of `sys.platform` on every machine. A missing import
+# stays a complaint, a stale one of our own above all; the tool's OPTIONAL names
+# the packages CI lacks. Moving any of this moves every count, so
+# tests/test_type_ratchet.py pins the whole table.
+include = ["hyperspace"]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+pythonPlatform = "Darwin"
+reportMissingModuleSource = false
 
 [tool.uv]
 default-groups = ["dev", "hands", "dream"]

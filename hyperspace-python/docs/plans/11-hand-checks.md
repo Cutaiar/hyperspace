@@ -8432,6 +8432,18 @@ Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which 
 3. Pull it mid-run, wait a few seconds, plug it back. *Pass:* no crash, and it's back within a few seconds.
 *Fail:* an app that quits, or a desk that needs a relaunch.
 
+**616. A knob won't take the bank.** (the Mac, with the APC40)
+1. PRESETS page: right-click a bank pad's param, Learn desk, if it's offered. Turn a track knob. *Pass:* it's refused in words, or Learn desk isn't offered, and the knob doesn't load anything.
+*Fail:* a knob that loads presets as it turns.
+
+**617. The nudge chips' menu.** (the Mac)
+1. LFO page: right-click nudge −, then nudge +. *Pass:* each opens one menu, with no item listed twice.
+*Fail:* a doubled menu.
+
+**618. The strip in a narrow pane.** (the Mac)
+1. GRAPH: click a node with a strip (view, output) so the side pane shows it, and edit a value so the dot shows. Drag the pane from narrow to wide. *Pass:* ◀ name ● ▶ and save · as… · reset never touch, and the chips drop to their own row when it's narrowest.
+*Fail:* a chip over ▶ or over the name.
+
 ## What no test covers
 
 Only a person can settle these:

@@ -195,9 +195,11 @@ def strip_name_w(avail: float, chips: tuple[str, ...], dirty_: bool,
 
 
 def _strip_beside(chips: tuple[str, ...], dirty_: bool, extra: float = 0.0) -> float:
-    """What a strip's row holds besides its name button."""
+    """What a strip's row holds besides its name button. The chips flush with
+    `same_line(avail - chip_w)`, which counts from the window's edge and the row from
+    the content's, so the row is the window's padding shorter than `avail` (audit U10)."""
     return (2 * imgui.get_frame_height() + 4 + ui.chip_w(*chips) + imgui.get_style().item_spacing.x
-            + (2 * ui.DOT_R + 2 if dirty_ else 0.0) + extra)
+            + (2 * ui.DOT_R + 2 if dirty_ else 0.0) + extra + imgui.get_cursor_start_pos().x)
 
 
 def _guard(panel, fn, *args):

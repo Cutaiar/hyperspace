@@ -242,7 +242,7 @@ changed).
 - **Plan 29**, the devices: wands, drums, a Kinect or other depth sensor
   (the point-cloud node is ready for it), DMX / sACN lights, bulbs, a
   generic on-screen desk.
-- **Known faults**: the open audit findings R14, U9, U10, P6, V8.
+- **Known faults**: the open audit findings P6, V8.
 - **Things nobody has observed:** frame pacing with two screens; a screen
   unplugged mid-run; anything on the APC40, the hand camera, the
   projector or the glass — the registry's devices, the hands through the

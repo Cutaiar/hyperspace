@@ -1,0 +1,378 @@
+{
+  "files": {
+    "hyperspace/analyzer.py": {
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 50,
+      "reportCallIssue": 3
+    },
+    "hyperspace/apc40.py": {
+      "reportGeneralTypeIssues": 1
+    },
+    "hyperspace/app.py": {
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 19,
+      "reportCallIssue": 4,
+      "reportOptionalMemberAccess": 2,
+      "reportOptionalOperand": 1
+    },
+    "hyperspace/bridge.py": {
+      "reportAttributeAccessIssue": 3,
+      "reportReturnType": 1
+    },
+    "hyperspace/deck.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "hyperspace/devices.py": {
+      "reportArgumentType": 8,
+      "reportAssignmentType": 1,
+      "reportAttributeAccessIssue": 6,
+      "reportOptionalMemberAccess": 6,
+      "reportReturnType": 1
+    },
+    "hyperspace/dream.py": {
+      "reportArgumentType": 2
+    },
+    "hyperspace/envelope.py": {
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 1
+    },
+    "hyperspace/field.py": {
+      "reportAssignmentType": 1
+    },
+    "hyperspace/fx.py": {
+      "reportAttributeAccessIssue": 4
+    },
+    "hyperspace/gamepad.py": {
+      "reportArgumentType": 6,
+      "reportGeneralTypeIssues": 1,
+      "reportOptionalIterable": 3,
+      "reportOptionalMemberAccess": 9,
+      "reportReturnType": 1
+    },
+    "hyperspace/geometry.py": {
+      "reportCallIssue": 2,
+      "reportGeneralTypeIssues": 1
+    },
+    "hyperspace/ghost.py": {
+      "reportArgumentType": 5,
+      "reportAttributeAccessIssue": 25,
+      "reportCallIssue": 1,
+      "reportGeneralTypeIssues": 1,
+      "reportOptionalMemberAccess": 16
+    },
+    "hyperspace/graph.py": {
+      "reportArgumentType": 33,
+      "reportAssignmentType": 2,
+      "reportAttributeAccessIssue": 49,
+      "reportCallIssue": 2,
+      "reportGeneralTypeIssues": 3,
+      "reportOptionalIterable": 1,
+      "reportOptionalMemberAccess": 14,
+      "reportOptionalSubscript": 10,
+      "reportReturnType": 8
+    },
+    "hyperspace/graphmigrate.py": {
+      "reportArgumentType": 4,
+      "reportGeneralTypeIssues": 2,
+      "reportOptionalSubscript": 3
+    },
+    "hyperspace/graphview.py": {
+      "reportArgumentType": 62,
+      "reportAttributeAccessIssue": 7,
+      "reportCallIssue": 2,
+      "reportGeneralTypeIssues": 2,
+      "reportOperatorIssue": 3,
+      "reportOptionalIterable": 1,
+      "reportOptionalMemberAccess": 72,
+      "reportOptionalSubscript": 4,
+      "reportReturnType": 1
+    },
+    "hyperspace/hands/core.py": {
+      "reportArgumentType": 6,
+      "reportAttributeAccessIssue": 3,
+      "reportOptionalIterable": 1,
+      "reportOptionalMemberAccess": 1,
+      "reportOptionalSubscript": 6,
+      "reportReturnType": 2
+    },
+    "hyperspace/hands/device.py": {
+      "reportArgumentType": 1,
+      "reportAssignmentType": 1
+    },
+    "hyperspace/hands/room.py": {
+      "reportArgumentType": 1,
+      "reportReturnType": 2
+    },
+    "hyperspace/hands/signal.py": {
+      "reportAttributeAccessIssue": 12
+    },
+    "hyperspace/hotreload.py": {
+      "reportArgumentType": 4,
+      "reportOptionalMemberAccess": 1
+    },
+    "hyperspace/learn.py": {
+      "reportArgumentType": 4,
+      "reportAttributeAccessIssue": 1,
+      "reportReturnType": 1
+    },
+    "hyperspace/library.py": {
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 23,
+      "reportGeneralTypeIssues": 3,
+      "reportIndexIssue": 2,
+      "reportOperatorIssue": 5,
+      "reportOptionalIterable": 2,
+      "reportOptionalMemberAccess": 5,
+      "reportOptionalSubscript": 2,
+      "reportReturnType": 1
+    },
+    "hyperspace/loadable.py": {
+      "reportArgumentType": 1,
+      "reportOptionalMemberAccess": 11,
+      "reportReturnType": 1
+    },
+    "hyperspace/lookback.py": {
+      "reportAttributeAccessIssue": 35,
+      "reportOptionalMemberAccess": 5
+    },
+    "hyperspace/masks.py": {
+      "reportArgumentType": 7,
+      "reportAttributeAccessIssue": 3
+    },
+    "hyperspace/media/camera.py": {
+      "reportArgumentType": 1,
+      "reportOptionalMemberAccess": 1
+    },
+    "hyperspace/media/channels.py": {
+      "reportArgumentType": 3,
+      "reportOptionalMemberAccess": 1
+    },
+    "hyperspace/media/folder.py": {
+      "reportOptionalMemberAccess": 1,
+      "reportOptionalOperand": 2
+    },
+    "hyperspace/media/frame.py": {
+      "reportAttributeAccessIssue": 1,
+      "reportReturnType": 1
+    },
+    "hyperspace/media/live.py": {
+      "reportOptionalMemberAccess": 5
+    },
+    "hyperspace/media/mixer.py": {
+      "reportArgumentType": 4,
+      "reportAttributeAccessIssue": 1,
+      "reportOperatorIssue": 3
+    },
+    "hyperspace/media/ndi.py": {
+      "reportOptionalMemberAccess": 9
+    },
+    "hyperspace/media/publish.py": {
+      "reportOptionalMemberAccess": 1
+    },
+    "hyperspace/media/syphon.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "hyperspace/media_tex.py": {
+      "reportArgumentType": 1
+    },
+    "hyperspace/midi.py": {
+      "reportArgumentType": 5,
+      "reportAttributeAccessIssue": 46,
+      "reportIndexIssue": 1,
+      "reportOptionalCall": 2,
+      "reportReturnType": 1
+    },
+    "hyperspace/motion.py": {
+      "reportArgumentType": 5
+    },
+    "hyperspace/offline.py": {
+      "reportAttributeAccessIssue": 2
+    },
+    "hyperspace/outputs.py": {
+      "reportArgumentType": 7,
+      "reportAttributeAccessIssue": 59,
+      "reportOptionalMemberAccess": 25,
+      "reportOptionalSubscript": 17,
+      "reportReturnType": 1
+    },
+    "hyperspace/overlay.py": {
+      "reportArgumentType": 6,
+      "reportAttributeAccessIssue": 1,
+      "reportOptionalMemberAccess": 14
+    },
+    "hyperspace/pads/gesture.py": {
+      "reportAttributeAccessIssue": 1,
+      "reportReturnType": 1
+    },
+    "hyperspace/pads/models.py": {
+      "reportUnusedExpression": 1
+    },
+    "hyperspace/pads/nintendo.py": {
+      "reportArgumentType": 1
+    },
+    "hyperspace/pads/sony.py": {
+      "reportArgumentType": 1
+    },
+    "hyperspace/palettecompat.py": {
+      "reportOperatorIssue": 3,
+      "reportOptionalIterable": 2,
+      "reportOptionalMemberAccess": 11,
+      "reportOptionalOperand": 2
+    },
+    "hyperspace/params.py": {
+      "reportArgumentType": 7,
+      "reportAttributeAccessIssue": 15,
+      "reportCallIssue": 1,
+      "reportOperatorIssue": 3,
+      "reportOptionalCall": 1,
+      "reportOptionalMemberAccess": 9,
+      "reportOptionalOperand": 8
+    },
+    "hyperspace/patches.py": {
+      "reportArgumentType": 4,
+      "reportOptionalSubscript": 2
+    },
+    "hyperspace/pinch.py": {
+      "reportAttributeAccessIssue": 2
+    },
+    "hyperspace/placement.py": {
+      "reportArgumentType": 1,
+      "reportOptionalSubscript": 2
+    },
+    "hyperspace/players.py": {
+      "reportOptionalMemberAccess": 5
+    },
+    "hyperspace/playlist.py": {
+      "reportArgumentType": 3,
+      "reportOptionalMemberAccess": 16
+    },
+    "hyperspace/poi_guide.py": {
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 9,
+      "reportOptionalMemberAccess": 3
+    },
+    "hyperspace/render.py": {
+      "reportArgumentType": 9,
+      "reportAttributeAccessIssue": 136,
+      "reportGeneralTypeIssues": 1,
+      "reportOptionalMemberAccess": 19,
+      "reportOptionalSubscript": 7,
+      "reportReturnType": 4
+    },
+    "hyperspace/routing.py": {
+      "reportArgumentType": 13,
+      "reportAssignmentType": 1,
+      "reportAttributeAccessIssue": 28,
+      "reportOptionalMemberAccess": 4,
+      "reportOptionalSubscript": 8,
+      "reportReturnType": 3
+    },
+    "hyperspace/segment.py": {
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 2,
+      "reportOptionalCall": 2,
+      "reportOptionalContextManager": 1,
+      "reportOptionalMemberAccess": 17,
+      "reportReturnType": 2
+    },
+    "hyperspace/seq_page.py": {
+      "reportAttributeAccessIssue": 3,
+      "reportOperatorIssue": 2
+    },
+    "hyperspace/totem.py": {
+      "reportReturnType": 1
+    },
+    "hyperspace/ui.py": {
+      "reportArgumentType": 10,
+      "reportAttributeAccessIssue": 63,
+      "reportCallIssue": 1,
+      "reportGeneralTypeIssues": 2,
+      "reportIndexIssue": 23,
+      "reportOperatorIssue": 17,
+      "reportOptionalMemberAccess": 18,
+      "reportOptionalOperand": 1,
+      "reportOptionalSubscript": 1
+    },
+    "hyperspace/ui_bands.py": {
+      "reportArgumentType": 6
+    },
+    "hyperspace/ui_desk.py": {
+      "reportArgumentType": 7,
+      "reportAttributeAccessIssue": 1,
+      "reportCallIssue": 1,
+      "reportGeneralTypeIssues": 1,
+      "reportOptionalMemberAccess": 8,
+      "reportReturnType": 2
+    },
+    "hyperspace/ui_graph.py": {
+      "reportArgumentType": 11,
+      "reportAttributeAccessIssue": 1,
+      "reportOptionalIterable": 1,
+      "reportOptionalMemberAccess": 6,
+      "reportReturnType": 1
+    },
+    "hyperspace/ui_lfo.py": {
+      "reportOptionalMemberAccess": 1
+    },
+    "hyperspace/ui_lookback.py": {
+      "reportCallIssue": 1,
+      "reportOptionalMemberAccess": 1
+    },
+    "hyperspace/ui_media.py": {
+      "reportOptionalMemberAccess": 1
+    },
+    "hyperspace/ui_pad.py": {
+      "reportCallIssue": 1,
+      "reportGeneralTypeIssues": 1,
+      "reportOperatorIssue": 4,
+      "reportOptionalMemberAccess": 1,
+      "reportOptionalSubscript": 5
+    },
+    "hyperspace/ui_pad_lab.py": {
+      "reportArgumentType": 5,
+      "reportGeneralTypeIssues": 1,
+      "reportOptionalMemberAccess": 2,
+      "reportReturnType": 1
+    },
+    "hyperspace/ui_pad_nvg.py": {
+      "reportArgumentType": 2,
+      "reportOptionalMemberAccess": 7
+    },
+    "hyperspace/ui_pad_views.py": {
+      "reportArgumentType": 6,
+      "reportAttributeAccessIssue": 8,
+      "reportCallIssue": 4,
+      "reportGeneralTypeIssues": 1,
+      "reportOptionalMemberAccess": 7
+    },
+    "hyperspace/ui_patterns.py": {
+      "reportOptionalSubscript": 3
+    },
+    "hyperspace/ui_players.py": {
+      "reportArgumentType": 6,
+      "reportCallIssue": 2,
+      "reportOptionalMemberAccess": 14
+    },
+    "hyperspace/ui_routing.py": {
+      "reportArgumentType": 11,
+      "reportAttributeAccessIssue": 3,
+      "reportGeneralTypeIssues": 3,
+      "reportOptionalMemberAccess": 11,
+      "reportOptionalSubscript": 2,
+      "reportReturnType": 1
+    },
+    "hyperspace/ui_seq.py": {
+      "reportOptionalMemberAccess": 1
+    },
+    "hyperspace/undo.py": {
+      "reportArgumentType": 2,
+      "reportOptionalMemberAccess": 5,
+      "reportOptionalSubscript": 1,
+      "reportReturnType": 1
+    },
+    "hyperspace/watchdog.py": {
+      "reportArgumentType": 1
+    }
+  },
+  "pyright": "1.1.414"
+}
