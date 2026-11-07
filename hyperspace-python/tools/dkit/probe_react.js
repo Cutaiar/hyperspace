@@ -137,7 +137,7 @@ const PROPS = [
       // children of body, with no portal wrapper, so the two-level selector
       // caught their headers and footers and missed the two slots that
       // matter - the scrim and the panel.
-      "body > [data-slot], body > [data-radix-popper-content-wrapper] [data-slot], body > div > [data-slot], [data-slot=\"tooltip-content\"] svg, [data-slot=\"select-content\"] [data-slot], [data-slot=\"select-item\"] svg"
+      "body > [data-slot], body > [data-radix-popper-content-wrapper] [data-slot], body > div > [data-slot], [data-slot=\"tooltip-content\"] svg, [data-slot=\"tooltip-content\"] [data-slot=\"kbd\"], [data-slot=\"select-content\"] [data-slot], [data-slot=\"select-item\"] svg"
     )) {
       if (el.closest("[data-probe]")) continue
       portal.push(rd(el, vp))

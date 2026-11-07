@@ -47,6 +47,7 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -107,6 +108,37 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
       </P>
       <P id="slider.disabled.v40">
         <Slider value={[40]} min={0} max={100} disabled />
+      </P>
+
+      {/* ---- Kbd: the registry's own demo shapes. One glyph (min-w-5
+           decides its width), a word (px-1 decides it), a symbol Geist does
+           not carry (the font FALLBACK decides it), and KbdGroup, which is
+           `inline-flex gap-1` around Kbds and a plain "+" span. ---- */}
+      <P id="kbd.letter" w={80}>
+        <Kbd>K</Kbd>
+      </P>
+      <P id="kbd.wide" w={80}>
+        <Kbd>W</Kbd>
+      </P>
+      <P id="kbd.word" w={80}>
+        <Kbd>Ctrl</Kbd>
+      </P>
+      <P id="kbd.cmd" w={80}>
+        <Kbd>⌘</Kbd>
+      </P>
+      <P id="kbd.group" w={160}>
+        <KbdGroup>
+          <Kbd>Ctrl</Kbd>
+          <span>+</span>
+          <Kbd>B</Kbd>
+        </KbdGroup>
+      </P>
+      <P id="kbd.chord" w={160}>
+        <KbdGroup>
+          <Kbd>⌘</Kbd>
+          <Kbd>⇧</Kbd>
+          <Kbd>P</Kbd>
+        </KbdGroup>
       </P>
 
       {/* ---- Checkbox: both states, enabled and disabled ----
@@ -651,6 +683,23 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
           <Tooltip open>
             <TooltipTrigger>trigger</TooltipTrigger>
             <TooltipContent side="top">Cutoff frequency</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </P>
+
+      {/* ---- A Kbd INSIDE a tooltip, which restyles it:
+           in-data-[slot=tooltip-content]:bg-background/20 text-background,
+           and /10 in dark. The registry demo's own composition. Opened on
+           the BOTTOM so it cannot land on the tooltip above. ---- */}
+      <P id="tooltip.kbd">
+        <TooltipProvider>
+          <Tooltip open>
+            <TooltipTrigger>save</TooltipTrigger>
+            <TooltipContent side="bottom">
+              <div className="flex items-center gap-2">
+                Save Changes <Kbd>S</Kbd>
+              </div>
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </P>
