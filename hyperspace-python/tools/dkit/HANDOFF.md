@@ -59,27 +59,33 @@ A reasonable opening message for a new session:
 > `git fetch` first — RETRO row 54, and it is why this sentence is here.
 >
 > Then read `hyperspace-python/tools/dkit/RETRO.md`, `ROADMAP.md` and
-> `HANDOFF.md`. Branch `claude/magical-ritchie-fkh5e0`. Items 1 and 2 of the
-> "Pick up here" list are done and `layer.py` exists; **start at item 3, the
-> modularisation**, and do it in the order 3a → 3b → 3c written there. Run
-> `test_module_surface.py` after every move — it is what lets the split be a
-> move rather than a rewrite of 188 call sites. **Stop before 3d**: the
-> 492-line `combobox()` is a behaviour refactor, not a move, and three RETRO
-> rows describe bugs that live inside it.
+> `HANDOFF.md`. Branch `claude/magical-ritchie-fkh5e0`. Items 1, 2 and 3a-3c
+> of the "Pick up here" list are done. **Decide between 3d and item 4** -
+> 3d (splitting the 492-line `combobox()` by phase) is a behaviour refactor
+> with three RETRO rows living inside it, so it wants a session of its own
+> and the driven keyboard tests run after every step; item 4 (Checkbox
+> first) is new coverage and independent of it.
 >
-> A pure move cannot change a pixel, so finish on the diff and expect "all
-> cells within the bar". Re-run the suite and the diff before trusting any
-> figure in these docs — the last session found three cells failing at 26
-> levels under a line that said 0-2, and a skip is not a pass (row 56).
+> Re-run the suite and the diff before trusting any figure in these docs,
+> and a skip is not a pass (row 56).
 
 ---
 
 ## Where it stands
 
 ```
-815 passed, 51 skipped.   chrome diff: 64 cells, flat 0-2 levels, worst
-corner 0.776 px, "all cells within the bar" in BOTH themes.
+826 passed, 59 skipped, plus the gallery flake below (its tests pass with
+-n0).   chrome diff: 64 cells, flat 0-2 levels, worst corner 0.776 px,
+"all cells within the bar" in BOTH themes.
 ```
+
+Re-measured after 3a-3c, not carried over. The figures moved from 815/51
+only by the nine new modules: each adds two `test_module_surface` cases,
+and of those eighteen, ten pass and eight skip with "no references to the
+kit's own modules". The ImGui gallery capture is **byte-identical** to the
+one taken before the first move, in both themes - a stronger check than
+"within the bar", and the right one for a move. It is deterministic
+run-to-run here, which was checked before it was relied on.
 
 The skips are mostly `test_module_surface.py`, which parametrizes over every
 file in the kit and skips the ones with no cross-module references. That is
@@ -180,6 +186,56 @@ True for a merely nav-focused `invisible_button`**, so every control reading
 **3. Modularisation.** Mostly mechanical, with one part that is not, and
 the two are worth keeping apart — see 3d.
 
+**3a-3c are DONE** — four commits starting `dkit: split box.py`. What
+exists now, every old module a facade over it:
+
+| was | now |
+|---|---|
+| `box.py` (616) | `rect.py`, `flex.py`, `tree.py`; `box.py` re-exports (53) |
+| `interact.py` (1130) | `wheel.py` (144), `uictx.py` (279), primitives left in `interact.py` (762) |
+| `comp_combobox.py` (1703) | `combobox_tokens.py`, `combobox_items.py`, `combobox_select.py`, `combobox_measure.py`; widget left in `comp_combobox.py` (1129) |
+
+How it was checked, so the next move can be checked the same way: every
+line deleted from an old module was confirmed to reappear unchanged among
+the added lines (a 15-line counter over `git diff`; across all four commits
+the only lines not carried over are two imports and one docstring sentence,
+each changed on purpose); `test_module_surface` was compared case by case
+against a worktree of the pre-move commit, not by its totals; and the
+gallery capture was compared by hash.
+
+Three things differ from the plan below, each on purpose:
+
+* **`uictx.py`, not `ui.py`.** Eight places in the kit cite Hyperspace's own
+  `ui.py` by bare name and line number (`ui.py:1311-1357`); a kit module of
+  that name would point each of them at the wrong file.
+* **No source-grep test needed editing.** The table below predicted they
+  would break. They did not, because the facades kept the call sites
+  textually identical: `dashboard.py` still says `I.install_wheel(`, and
+  `scroll_area` still calls `snap_scroll(` unqualified via a from-import.
+  That is the reason to prefer `from wheel import snap_scroll` over
+  `import wheel as W` in a move.
+* **The ledger grew from two entries to nine**, each with its reason beside
+  it in `test_module_surface.py`. The box model's privates (`_Cell`,
+  `_dist`, `_pad_wh`) are NOT among them: nothing outside used them, so the
+  facade does not re-export them. `comp_command` now imports the row model
+  from `combobox_items` rather than from the widget.
+
+One trap, hit twice: collapsing the blank lines a removal leaves behind
+with a blanket `re.sub` also flattened a 4-blank-line run that was already
+in the original file, in both `interact.py` and `comp_combobox.py`. Harmless,
+but not a move; the line counter above did not see it (it skips blanks), and
+checking the original for such runs first did. Both were restored.
+
+**Not done, and still worth doing:** the scroll-track fold-in below. It
+changes `contour.icon_boxes`, which makes it a behaviour change and not a
+move, so it did not belong in these commits.
+
+**Noticed, not verified:** `wheel.snap_scroll` is `float(round(sy))` -
+Python's half-to-EVEN `round`, which is exactly what RETRO row 36 replaced
+with `draw.px` (`floor(v + 0.5)`) for glyph origins. Whether a scroll offset
+ever lands on an exact .5 often enough to show the "lurch two, stay" step
+was not measured; check that before changing it.
+
 ```bash
 wc -l tools/dkit/*.py | sort -rn | head -8
 ```
@@ -222,7 +278,7 @@ Two things it already tells you:
   scanner is scope-aware. If you extend it, keep that; the first version
   reported two dangling references on a module that was fine.
 
-### 3a. `box.py` (616) → three layers. No cycles, so this is the easy one.
+### 3a. **DONE.** `box.py` (616) → three layers. No cycles, so this is the easy one.
 
 Measured with an AST walk of who references whom, not by reading it:
 
@@ -239,7 +295,7 @@ becomes `from rect import *` etc. with an explicit `__all__`.
 xvfb-run -a uv run python -m pytest tools/dkit/test_box.py tools/dkit/test_flex.py tools/dkit/test_nest.py -q -n0
 ```
 
-### 3b. `interact.py` (1130) → pull two pieces out, keep the primitives.
+### 3b. **DONE.** `interact.py` (1130) → pull two pieces out, keep the primitives.
 
 **`wheel.py` first — it is the safest extraction in the kit.** Seven names
 with **zero** references to anything else in the module:
@@ -267,7 +323,7 @@ seam as clean as the first two.
 grep -rn "install_wheel\|snap_scroll\|wheel_px_per_unit" --include=*.py tools/dkit/ | grep -v "^tools/dkit/interact.py"
 ```
 
-### 3c. `comp_combobox.py` (1703) → extract the PURE parts.
+### 3c. **DONE.** `comp_combobox.py` (1703) → extract the PURE parts.
 
 Four groups that are already pure functions with their own tests, and that
 nothing about the widget's lifecycle touches:
@@ -320,6 +376,9 @@ xvfb-run -a uv run python -m pytest tools/dkit/test_combobox_keys.py tools/dkit/
 ```
 
 ### The tests that will break on a pure move, and should
+
+*(Written before 3a-3c. None of them broke - see above for why. The table
+is still right about what each one protects.)*
 
 Five assertions in the suite grep SOURCE TEXT rather than call anything, and
 they will fail on a move that changes nothing about behaviour. They are not
