@@ -33,6 +33,7 @@ import math
 import os
 import time
 from collections.abc import Callable
+from typing import Any
 
 from imgui_bundle import imgui
 
@@ -45,6 +46,7 @@ from . import (
     learn,
     ui_bands,
     ui_desk,
+    ui_displays,
     ui_feel,
     ui_graph,
     ui_lfo,
@@ -753,6 +755,8 @@ class Panel:
     envs = Through("envs")
     seq = Through("seq")
     deck = Through(None)
+
+    displays: Any = None  # set by app.py (displays.Running): a row per display (SC2)
 
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
                  bank=None, registry: Registry | None = None, library=None):
@@ -2158,19 +2162,23 @@ class Panel:
             err = getattr(self.renderer, "dim_error", "")
             if err:
                 imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
+        rows = self.displays
+        if rows is not None:                # which display shows what (SC2)
+            ui_displays.section(self, rows)
         self._output_blocks()
         for want in ui_graph.window_wants(self):   # plan 44 D3: a window the meta controller lacks
             imgui.text_colored(WARN, want)
-        if len(self.reg["output.monitor"].names) > 1:
+        if rows is None and len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
         if "output.render" in self.reg:     # the render cap, on the toggles' row
             size = getattr(getattr(self.renderer, "scene", None), "size", None)
             tip = self.reg["output.render"].tip
             self._combo("output.render", width=96,
                         tip=f"{tip}\nDrawing {size[0]}×{size[1]} now." if size else None)
-            beside(check_w(self.reg["output.fullscreen"].label))
-        self._check("output.fullscreen")
-        beside(check_w(self.reg["output.overlay"].label))
+            beside(check_w(self.reg["output.fullscreen" if rows is None else "output.overlay"].label))
+        if rows is None:                    # (with rows, fullscreen is a display's)
+            self._check("output.fullscreen")
+            beside(check_w(self.reg["output.overlay"].label))
         # decision 21 (a): overlay only when the config asks — shut, the
         # toggle is drawn disabled with the reason, and its three overlay-only
         # settings (click-through, ground, opacity) would do nothing
@@ -2272,6 +2280,9 @@ class Panel:
         slots = getattr(self, "outputs", None) or []
         if not slots:
             return
+        # (a slot nothing shows and nothing's missing from says nothing: SC2 keeps all of
+        # them for the run, and the rows say which display shows what)
+        slots_all, slots = slots, [sl for sl in slots if getattr(sl, "drawn", sl.opened) or sl.missing]
         several = len(slots) > 1
         fx_on, visible, master = self._outputs_now()
         ghost = self.reg.get("ghost.on")
@@ -2304,8 +2315,8 @@ class Panel:
                 else max(imgui.get_content_region_avail().x - ticks - 8, 40))
         labels = {sl.n: fit_text(f"{sl.n}  {sl.name}" if sl.name else f"{sl.n}", room)
                   for sl in slots}
-        col = imgui.get_cursor_pos_x() + 8 + max(imgui.calc_text_size(t).x
-                                                 for t in labels.values())
+        col = imgui.get_cursor_pos_x() + 8 + max((imgui.calc_text_size(t).x
+                                                  for t in labels.values()), default=0.0)
         for sl in slots:
             pre = f"output.{sl.n}"
             name = sl.name or ("output" if several else "")
@@ -2327,14 +2338,17 @@ class Panel:
             self._through_check(frame, sl.n, slots, bus_cuts)
             # the mirror (plan 23 WP1): two ticks at the right of the dim row,
             # or of the "shows:" line when the output has no dim of its own
+            # (with rows, a window's flips are on its display's row)
             flips = [(pid, t) for pid, t in ((f"{pre}.flip_x", "flip X"),
-                                             (f"{pre}.flip_y", "flip Y")) if pid in self.reg]
+                                             (f"{pre}.flip_y", "flip Y")) if pid in self.reg
+                     and (self.displays is None or not sl.opened)]
             st = imgui.get_style()
             fw = sum(imgui.calc_text_size(t).x + imgui.get_frame_height()
                      + st.item_inner_spacing.x + st.item_spacing.x for _, t in flips)
             if narrow and flips:            # the pane: the flips on a row of their own
                 fw = 0.0
-            if f"{pre}.dim" in self.reg:
+            # (one shown, the master dim is its dim, unless it has a launch dim of its own)
+            if f"{pre}.dim" in self.reg and (several or float(sl.switches.dim) < 1.0):
                 self._row(f"{pre}.dim", width=-(fw + 8) if fw else -1, label="dim")
                 for i, (pid, t) in enumerate(flips):
                     if not narrow or i:
@@ -2396,9 +2410,10 @@ class Panel:
                 tooltip(line)
         self._edit_said("output_said")
         if several:
-            w, h = slots[0].size
+            w, h = slots_all[0].size
             size = f" · frame {w}×{h}" if w and h else ""
-            imgui.text_colored(FAINT, fit_text(f"paced by output 1{size} · below: output 1's "
+            pace = next((sl.n for sl in slots_all if sl.opened), 1)
+            imgui.text_colored(FAINT, fit_text(f"paced by output {pace}{size} · below: output 1's "
                                                "window", imgui.get_content_region_avail().x))
         imgui.dummy(imgui.ImVec2(0, 2))
 

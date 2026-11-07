@@ -843,8 +843,8 @@ BUS_NO_EFFECT = ("{wire} is a bus cable: put the node on All outputs' picture, o
 # plan 44 D3 (plan 43 §6 item 3): a window the loadable patch wires or cuts that this
 # meta controller has not open — requested, said, never an error: the loadable patch is a
 # complete look, the meta controller is what is plugged in
-WINDOW_WANTED = ("this preset wires Output {n}, which is not open on this Mac — add a "
-                 "window on OUTPUT to show it")
+WINDOW_WANTED = ("this preset wires Output {n}, which is not open on this Mac — choose a "
+                 "display for it on OUTPUT to show it")
 
 
 def wanted_windows(spec, bus_cuts=None, count: int = 0) -> list[int]:

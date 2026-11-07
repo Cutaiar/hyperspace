@@ -27,6 +27,9 @@ dream.py, too, is imported only when its gate is open.
                             # the render window is always opaque — no transparent
                             # framebuffer, and T / MASTER select / the panel cannot
                             # float it see-through; true for a laptop demo
+                            # monitor, control_monitor, fullscreen and [[output.screens]]'
+                            # screens: a seed, read once per Mac into <library>/displays.json;
+                            # from then on the output section's rows say (displays.py)
     monitor = -1            # which screen the RENDER window opens on, and the one
                             # fullscreen covers: a screen's exact name ("MStar";
                             # "MStar #2" for the second of two, left to right), a
@@ -502,7 +505,8 @@ def screens(cfg: dict) -> list[dict]:
 
 LAPTOP_NOTE = ("laptop: output 1 is a plain window on this screen — no fullscreen, no "
                "overlay at launch, no later outputs; the windows open at their default "
-               "spots and where they are is not remembered")
+               "spots and where they are is not remembered, and the display rows are "
+               "neither read nor written")
 
 
 def laptop(cfg: dict) -> None:

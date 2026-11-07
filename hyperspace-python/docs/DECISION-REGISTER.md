@@ -807,6 +807,10 @@ here; overturn → the change, then the same.
 | 800 | SM5 amends row 740: moving a controller between players, or a player's duty, is one step on the meta stack, and ⌘Z over the board takes it back under the latch (row 753). `players.json` follows; the rows act on the deck the player is back on. A controller unplugged since refuses in words, and the step stays where it is (rec). On the one meta stack the board answers for moves and every other place for the rest (rec) | 623 | answered, the owner's instruction for SM5, 2026-11-06; what a refused step blocks, and the board's own, (rec) — pending the owner |
 | 801 | SM5: row 668's words pass. "Page" meaning a section of the pane leaves what a person reads; the APC40's sequencer page stays, a page of a desk. "Preset" stays for the migration | 623 | answered, the wave 4 prompt's "if wanted"; built, the plan names it |
 | 802 | HR: hot reload failed on every save before `library` on the list, since plan 44 D5a. The deck's views keep their slots, on a cold base; a test saves through the real swap in the real app | 624 | the orchestrator's item, found building SC3a; built, no owner question |
+| 804 | SC2: one row per connected display on the output section, by `placement.labels`: what targets it (the control window, an output, or nothing), fullscreen and flips. A display has one target, a target may go to several displays, the control window goes to one. Written to `<library>/displays.json` (`displays/1`), a new root file both Macs share. Fullscreen remembered (plan 23's last piece). A change of target acts on ⌘R until SC3b, and the panel says so; fullscreen and flips act at once on a window open there | 625 | answered, the owner, 2026-11-06 |
+| 805 | SC2: two Macs converge by the later `at` of each row, with no hold timer and no write when the file says it. A seed's `at` is 0, so the file's row stands. What's shared with `devicelist` is `sharedfile.py`, and the merge stays each file's own. `[output] monitor`, `control_monitor`, `fullscreen` and `[[output.screens]]` seed once per Mac; `--laptop` neither reads nor writes the rows (rec) | 626 | seed and sharing answered, the owner, 2026-11-06; the merge and `--laptop` (rec) — pending the owner |
+| 806 | SC2: a render on several displays is one more `Presenter` per window (`outputs.Also`), nothing drawn again. A window's flips are its own; the first display's are the frame's, and `output.N.flip_x` writes those. Every slot up to `MAX_OUTPUTS` exists and has its `output.N.*` from launch, so N and param ids never move. With no row, output 1 has no window and the frame still draws (rec) | 627 | several displays answered, the owner, 2026-11-06; no fallback window (rec) — pending the owner |
+| 807 | SC2: `windows.json` keeps `/1`, gains `displays`, each window's spot by the label of its display, read first; `render` is still written and is a display's first-launch fallback (rec). Two seeded outputs asking for one display: the first has it and a note says the other has none. A control window seeded on a render's display has no row and floats there (rec) | 628 | (rec) — pending the owner |
 | 789 | TY2: #273's structural audit lands as a record, unedited under a dated header: the headline figures re-measured at `e869a408` by one script in its appendix, old names mapped, and which proposals plan 58 §6 rejected. Plan 58 §3 and §6 decide what's done. Replaces #273. | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
@@ -14398,3 +14402,36 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 - **The driver.** `tools/app_driver.py` wrapped `ui.Panel.draw` on the class, so a reload of `ui` dropped the wrapper and the script stopped with the app still running. The wrapper is now on the panel object, which a re-class leaves in place, and it steps even when a draw raises.
 - **Restart.** Needed once: `hotreload.py` and `hot_slots.py` are cold and the layout changes. No saved format changes.
 - **Judge it.** 624.
+### 804. One row per display
+
+- **The owner, 2026-11-06:** "It needs to be extremely easy for us to just quickly set up the screens for the thing that we're doing. I don't think we need a whole configuration layer called venues." The output tab "shouldn't be a dropdown. Each connected display should get its own row there, and you should be able to choose what targets that display, like the control window or any of our renders." "A display has one target, and a target may go to several displays." "Share the screen memory between Macs."
+- **Built.** `ui_displays.py`, on the output section, in place of the `output.monitor` combo and the `output.fullscreen` tick. The params stay, for the rows that name them. A window's flip ticks move from its block to its row.
+- **`displays.wanted(rows, screens)`** takes the rows and the connected list and gives what should be open, and it opens nothing. It's SC3b's seam.
+- **Layers.** The file is the meta controller's. No loadable patch reaches it, and `output.bg` and `.alpha` stay where they are until the migration.
+- **Judge it.** 625.
+
+### 805. How two Macs share the rows
+
+- **Copied from CT1:** no disk on the frame thread, a launch read bounded at 3 s, a half-synced or newer file never raised or written over, an unmounted Drive falling back on `<home>/displays.last.json` and saying so, a config.toml that didn't read seeding nothing and spending nothing.
+- **Shared with CT1:** `sharedfile.py`, the worker, the whole write and the stat, moved out of `devicelist.py`, which imports them under the names its tests patch. Its merge isn't shared: a list only grows, and a row changes.
+- **Different from CT1, (rec).** An adopt is added once, so CT1 can hold it for ten minutes. A row is chosen again and again, so holding two different choices would make two Macs take turns. Each row carries `at`, and both Macs take the later of each row, which comes out the same in any order. An older copy that Drive lands over ours loses, and is written back over once. An edit is always later than the row it replaces, whatever the Mac's clock says.
+- **The seed.** Once per Mac: where each window would have opened goes on that display's row, with `at` 0. A name that isn't connected is kept by name; an index no display has is not.
+- **`--laptop`, (rec).** No read, no write, no seed. It stays what `config.laptop` always made: one plain output on the primary display, the control window beside it. **Recommendation:** keep it, since a demo on a laptop must not rewrite the show's memory of a display both Macs share.
+- **Judge it.** 626.
+
+### 806. A render on several displays
+
+- **Read first.** SC3a made the frame offscreen, so a further window costs one more present. `Slot` keeps its `win`, `presenter` and `switches` as its first display's, and `Slot.also` holds the rest, each with its own `Presenter`, `overlay.Output` and flips.
+- **Flips per window.** Output 1's frame is baked with its first display's flips, so a further display presents it with what's left to undo. Another output's `Handoff` carries its own, and `Handoff.mix_flip` keeps a crossfade's other picture the right way round. No view, target or publisher changes, so one display per output is byte for byte what it was.
+- **`output.N.flip_x`,** which the desk may name, is the first display's: a tick there and on that row are one. **Recommendation:** leave it.
+- **N never renumbers.** Every slot up to `MAX_OUTPUTS` exists from launch, and `register_switches` declares `output.N.*` for all of them, so SC3b can open one with no param appearing. An output no display shows draws nothing unless the config has it publish, and then it keeps publishing. A wire into one says so (`graphview.WINDOW_WANTED`).
+- **No fallback window, (rec).** A display row of "control window" and none on a render means no render window. The panel says "No display shows an output". **Recommendation:** keep it: a window nobody chose breaks "choose what targets that display". With one display, a row on output 1 has the control window floating over it, so that's the seed.
+- **Judge it.** 627.
+
+### 807. What `windows.json` becomes
+
+- **Why.** `render[k]` is by output place, and a row can now move an output to another display, so the same place can mean a spot on either.
+- **(rec).** `/1` stays. A new key, `displays`, holds each window's windowed spot by its display's label, read first (`placement.spot`). `render` is still written, so an older build reads the file, and a display with no spot of its own looks there once. `place` still decides if a spot is any use on that display.
+- **A clash in a seed, (rec).** Two outputs asking for one display: the first has it, and a note says the other has none. A later output with `monitor = -1` used to cascade onto the primary, and now loses to output 1 there. **Recommendation:** accept that: it's what "a display has one target" says, and the note and the row fix it in one click.
+- **Judge it.** 628.
+

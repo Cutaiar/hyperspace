@@ -98,7 +98,7 @@ def test_publish_only_output_has_no_window(monkeypatch, tmp_path):
     assert sum("nothing to publish" in n for n in cfg["notes"]) == 1
     reg = Registry()
     register_switches(reg, slots)
-    assert "output.2.scene" in reg and "output.3.scene" not in reg
+    assert "output.2.scene" in reg and "output.3.scene" in reg       # every slot's (SC2)
 
 
 class _Off:

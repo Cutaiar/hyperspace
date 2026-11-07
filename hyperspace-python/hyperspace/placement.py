@@ -34,6 +34,12 @@ name of the screen the rect was on, kept for the note; placement is decided
 by geometry alone. The file is written on quit and on restart only (fork
 F5); delete it to forget.
 
+**Since each display's row says what it shows (`displays.py`, SC2),** an output can move
+between displays, so a place in ``render`` says little: a window's spot goes under
+``displays``, by the display's label, ``{"displays": {"TV #2": {"x": ...}}}``, and that's read
+first (`spot`). The file stays ``/1``: ``render`` is still written, an older build reads it,
+and it's where a display with no entry of its own looks once.
+
 No GL, no imgui, and nothing imported from the package: `glfw` is passed
 in, and the home folder is the caller's (app.py takes it from
 `library.home()`, where `config.load` looks).
@@ -121,7 +127,7 @@ def window_zoom(glfw, win) -> float:
     scr = screens(glfw)
     try:
         rect = (*glfw.get_window_pos(win), *glfw.get_window_size(win))
-        on = _centre_screen(rect, scr) or _landing(rect, scr)
+        on = on_screen(rect, scr)
         if on is None:
             return 1.0
         # the monitor's, not the window's: the window's is stale until an event
@@ -150,9 +156,10 @@ def load(home: Path) -> dict:
 
 
 def save(home: Path, control: Rect | None, render: list[Rect | None],
-         scr: list[Screen]) -> None:
+         scr: list[Screen], spots: dict[str, Rect | None] | None = None) -> None:
     """Write the windowed rects. A None (a minimised window) keeps that
-    window's old entry. Atomic — a temp file, then a rename — and a failed
+    window's old entry. `spots`: each window's rect by the label of the display
+    it's on (`spot`). Atomic — a temp file, then a rename — and a failed
     write costs only the memory: it is said on stderr and never raised."""
     home = Path(home)
     old = load(home)
@@ -164,6 +171,14 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
     doc = {"schema": SCHEMA,
            "control": _entry(control, scr) or old.get("control"),
            "render": entries}
+    kept = old.get("displays")
+    kept = dict(kept) if isinstance(kept, dict) else {}
+    for tag, rect in (spots or {}).items():
+        new = _entry(rect, scr)
+        if new is not None:
+            kept[tag] = new
+    if kept:
+        doc["displays"] = kept
     tmp = home / f"{FILE}.{os.getpid()}.tmp"     # its own: two instances may share a home
     try:
         tmp.write_text(json.dumps(doc, indent=1) + "\n")
@@ -175,6 +190,17 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
             tmp.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def spot(seen: dict, tag: str, n: int) -> dict | None:
+    """Where a window on the display labelled `tag` was, showing output `n`, as `load`
+    gave it: its own entry, else that output's old place in ``render``. `place` says
+    whether it's any use there."""
+    own = seen.get("displays")
+    if isinstance(own, dict) and tag in own:
+        return own[tag]
+    old = seen.get("render") or []
+    return old[n - 1] if 0 <= n - 1 < len(old) else None
 
 
 def _entry(rect, scr: list[Screen]) -> dict | None:
@@ -244,6 +270,11 @@ def _centre_screen(rect: Rect, scr: list[Screen]) -> Screen | None:
     return next((s for s in scr if _on(rect, s)), None)
 
 
+def on_screen(rect: Rect, scr: list[Screen]) -> Screen | None:
+    """The screen a rect's centre is over, else the one it lands on."""
+    return _centre_screen(rect, scr) or _landing(rect, scr)
+
+
 def _fit(rect: Rect, scr: list[Screen]) -> Rect | None:
     """A remembered rect as it may open: its size clipped to the screen it
     lands on and never under MIN_SIZE; None when it is not usable (before
@@ -307,6 +338,11 @@ def _along(i: int, scr: list[Screen]) -> tuple:
     area. `glfw.get_monitors()` order can change with the plug order."""
     s = scr[i]
     return (*(s.at or (s.x, s.y)), i)
+
+
+def arranged(scr: list[Screen]) -> list[int]:
+    """The screens' indices left to right across the desk, then top to bottom."""
+    return sorted(range(len(scr)), key=lambda i: _along(i, scr))
 
 
 def _same(family: str, scr: list[Screen]) -> list[int]:

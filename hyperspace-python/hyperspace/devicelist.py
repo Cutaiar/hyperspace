@@ -70,16 +70,18 @@ from __future__ import annotations
 import json
 import os
 import re
-import threading
 import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import apc40, config
+from . import apc40, config, sharedfile
 from .pads.models import Model
 from .players import NAMES
+from .sharedfile import Worker as _Worker
+from .sharedfile import put as _put
+from .sharedfile import stat as _stat
 
 FILE = "devices.json"
 COPY = "devices.last.json"      # in the home, beside players.json
@@ -101,7 +103,8 @@ DEFAULTS: tuple[dict, ...] = (
     {"role": "bridge", "kind": "bridge", "enabled": False},
 )
 
-_OK, _ABSENT, _GONE, _BAD, _SAME = "ok", "absent", "gone", "bad", "same"
+_OK, _ABSENT, _GONE, _BAD, _SAME = (sharedfile.OK, sharedfile.ABSENT, sharedfile.GONE, sharedfile.BAD,
+                                    sharedfile.SAME)
 
 
 def _gone_words(what: str) -> str:
@@ -187,20 +190,6 @@ def _text(raw: list[dict], **more) -> str:
     return json.dumps({"schema": SCHEMA, "devices": raw, **more}, indent=2, default=str) + "\n"
 
 
-def _put(path: Path, text: str, tmp_name: str | None = None) -> None:
-    """Whole, through a temporary file beside it; an OSError if not."""
-    tmp = path.with_name(tmp_name or f"{path.name}.tmp")
-    try:
-        tmp.write_text(text)
-        tmp.replace(path)
-    except OSError:
-        try:
-            tmp.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
-
-
 @dataclass
 class _Waiting:
     """An entry the shared file may not say yet."""
@@ -208,43 +197,6 @@ class _Waiting:
     entry: dict
     until: float | None = None      # None: not written
     adopted: bool = True            # a seed's gives way to the file; an adopt takes a free name
-
-
-class _Worker:
-    """Runs what it's given, in order, on a daemon thread that lasts as long as there is
-    work. A thread stuck on a stalled disk holds up its own queue and nothing else."""
-
-    def __init__(self, name: str):
-        self.name = name
-        self.queue: deque[Callable[[], None]] = deque()
-        self.lock = threading.Lock()
-        self.thread: threading.Thread | None = None
-
-    def give(self, fn: Callable[[], None]) -> None:
-        with self.lock:
-            self.queue.append(fn)
-            if self.thread is None:
-                self.thread = threading.Thread(target=self._run, name=self.name, daemon=True)
-                self.thread.start()
-
-    def _run(self) -> None:
-        while True:
-            with self.lock:
-                if not self.queue:
-                    self.thread = None
-                    return
-                fn = self.queue.popleft()
-            try:
-                fn()
-            except Exception:  # noqa: BLE001, S110 — each job says its own failures
-                pass
-
-    def wait(self, timeout: float | None) -> bool:
-        """True when it has finished everything given, within `timeout`."""
-        thread = self.thread
-        if thread is not None:
-            thread.join(timeout)
-        return self.thread is None or not self.thread.is_alive()
 
 
 # ---------------------------------------------------------------- the worker's half
@@ -272,14 +224,6 @@ class _Seen:
     write_error: str = ""
     moved: list[tuple[str, dict]] = field(default_factory=list)
     differs: list[str] = field(default_factory=list)
-
-
-def _stat(path: Path, root: Path) -> tuple:
-    try:
-        st = path.stat()
-    except OSError:
-        return (_ABSENT if root.is_dir() else _GONE,)
-    return st.st_mtime_ns, st.st_size
 
 
 def _read(path: Path, root: Path) -> tuple[list[dict] | None, str, str]:

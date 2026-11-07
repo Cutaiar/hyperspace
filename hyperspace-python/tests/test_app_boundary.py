@@ -1117,7 +1117,8 @@ def test_both_exits_destroy_every_window_before_terminate(monkeypatch):
     tail = src[src.index("impl.shutdown()"):]
     assert tail.index("_destroy_windows(all_windows())") < tail.index("glfw.terminate()")
     assert "windows=all_windows()" in src
-    assert "return [*(sl.win for sl in slots[1:]), ctrl_win, render_win, root_win]" in src
+    assert ("return [*(a.win for sl in slots for a in sl.also), *(sl.win for sl in slots[1:]),\n"
+            "                ctrl_win, render_win, root_win]") in src
 
 
 # ---- the desk's table and knob smoothing's default (plan 18 WP2, fork 12) ----
@@ -1475,7 +1476,7 @@ def test_only_the_first_output_waits_for_the_screen(monkeypatch):
     assert notes == [f"output: output 3 (third): {slots[2].missing} — not opened"]
     src = inspect.getsource(app.main)
     assert src.index("root_win = _root_window()") < src.index(
-        "_windows(_overlay_allowed(cfg), cfg, None if args.laptop else home, root_win)")
+        "_windows(_overlay_allowed(cfg), cfg, None if args.laptop else home, root_win, want)")
     assert src.index("glfw.make_context_current(root_win)") < src.index(
         "ctx = moderngl.create_context()") < src.index("_open_presenters(slots, root_win, ") < (
         src.index("root.pacer.choose("))
@@ -1809,8 +1810,8 @@ def test_every_output_is_applied_and_polled_for_keys(fake):
     fake.keys.add(("out3", g.KEY_B))
     assert keys.pressed(g.KEY_B)
     src = inspect.getsource(app.main)
-    assert "any(glfw.window_should_close(sl.win) for sl in slots if sl.opened)" in src
-    assert "Keys(render_win, ctrl_win, [sl.win for sl in later])" in src
+    assert "any(glfw.window_should_close(w) for w in _slot_windows(slots))" in src
+    assert "Keys(render_win, ctrl_win, [w for w in _slot_windows(slots) if w is not render_win])" in src
 
 
 def test_a_later_output_is_the_configs_and_never_overlay(monkeypatch):

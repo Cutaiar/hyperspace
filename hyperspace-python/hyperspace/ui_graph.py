@@ -1307,8 +1307,12 @@ def window_wants(panel) -> list[str]:
     if loaded_patch is None:
         return []
     spec = getattr(getattr(loaded_patch, "graph", None), "spec", None)
-    count = len(getattr(panel, "outputs", None) or ())
-    return graphview.window_wanted_lines(spec, getattr(loaded_patch, "bus", None), count)
+    # (one that has a slot and nothing to show it, as an empty slot has no `missing`, wants one)
+    slots = getattr(panel, "outputs", None) or ()
+    have = {sl.n for sl in slots if getattr(sl, "drawn", sl.opened) or sl.missing}
+    bus = getattr(loaded_patch, "bus", None)
+    return [graphview.WINDOW_WANTED.format(n=n) for n in graphview.wanted_windows(spec, bus)
+            if n not in have]
 
 
 def _wants_chip(panel, beside: bool = True) -> None:

@@ -246,6 +246,54 @@ def test_a_flip_a_dim_and_a_later_output_all_come_through(stage):
     assert stage.root.pacer.owner == one.win
 
 
+def _also(stage, n, **kw):
+    """A further display, as `app._open_presenters` makes one."""
+    _hints()
+    win = glfw.create_window(*SIZE, f"also {n}", None, stage.root_win)
+    stage.wins.append(win)
+    glfw.make_context_current(win)
+    glfw.swap_interval(0)
+    also = app.Also(f"TV #{n}", win=win, presenter=app.Presenter(stage.moderngl.create_context()), **kw)
+    glfw.make_context_current(stage.root_win)
+    return also
+
+
+@pytest.mark.parametrize("n", [1, 2])
+def test_a_render_on_two_displays_with_different_flips(stage, n):
+    """SC2. Output 1's picture is baked with its first display's flips, another's comes as
+    a `Handoff`: either way a further display of it shows the same picture, mirrored as
+    its own row says, one more present and nothing drawn again."""
+    rig = _rig(stage)
+    other = None if n == 1 else stage.output(1)
+    slot = stage.output(n, switches=Switches(flip_x=True))
+    plain, mirror = _also(stage, "plain"), _also(stage, "mirror", flip_x=True)
+    same = _also(stage, "same", flip_x=True, flip_y=True)
+    slot.also = [plain, mirror, same]
+    slots = [other, slot] if other else [slot]
+    shots: dict = {"first": [], "plain": [], "mirror": [], "same": []}
+    _read_window(slot, shots["first"])
+    for name, also in (("plain", plain), ("mirror", mirror), ("same", same)):
+        _read_window(also, shots[name])
+    draws = []
+    proxy = _proxy(rig)
+    real = proxy.draw_outputs
+    proxy.draw_outputs = lambda *a: (draws.append(1), real(*a))[1]
+    for _ in range(2):
+        app._draw_render(proxy, stage.ctx, rig.view, slots, stage.root)
+    rig.close()
+    assert len(draws) == 2, "one draw a frame"
+    assert slot.error == plain.error == mirror.error == ""
+    first, flat = shots["first"][-1][..., :3].astype(int), shots["plain"][-1][..., :3].astype(int)
+    mir = shots["mirror"][-1][..., :3].astype(int)
+    assert flat.max() > 8
+    assert np.abs(first - mir).max() <= 2, "the first display's flips, on another"
+    assert np.abs(flat[:, ::-1] - mir).max() <= 2, "the same picture, mirrored"
+    assert np.abs(flat - mir).mean() > 0.5, "and it isn't symmetrical, or this says nothing"
+    assert np.abs(shots["same"][-1][..., :3].astype(int)[::-1] - mir).max() <= 2
+    assert stage.root.pacer.owner == (other or slot).win
+    assert plain.win not in (stage.root.pacer.owner,)
+
+
 def test_the_picture_goes_on_when_every_display_is_gone(stage):
     """The point of SC3a: with output 1's window closed, the frame still draws, on the
     root's context at the last known size, nothing swaps, and a timer paces. A later
