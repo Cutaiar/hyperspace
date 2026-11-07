@@ -53,7 +53,6 @@ it calls.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import importlib.util
 import os
 import shutil
@@ -416,6 +415,14 @@ def _later_rect(slot: Slot, k: int, scr, renders: list,
     return rect, note
 
 
+def _context_hints() -> None:
+    """The one GL context every window asks for."""
+    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+
+
 def _root_window():
     """The window that holds the renderer's context (SC3a, plan 58), hidden,
     never destroyed until the app exits, so no unplugged display can take the
@@ -423,10 +430,7 @@ def _root_window():
     framebuffers' (`outputs.FRAME_SAMPLES`). Every other window shares with it.
     Its swap never waits, so it paces nothing (`pacing.py`), and nothing is ever
     drawn on it."""
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+    _context_hints()
     glfw.window_hint(glfw.SAMPLES, 0)
     glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, False)
     glfw.window_hint(glfw.VISIBLE, False)
@@ -517,10 +521,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     slots[0].monitor = placement.index(oc.get("monitor", -1))
     render_size = render_rect[2:] if render_rect else RENDER_SIZE
     ctrl_size = ctrl_rect[2:] if ctrl_rect else CONTROL_SIZE
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+    _context_hints()
     glfw.window_hint(glfw.SAMPLES, 0)
     # creation-time hints: only when the config asks for overlay does the
     # framebuffer keep alpha so overlay mode can clear to see-through (the
@@ -685,15 +686,23 @@ def _close_publishers(win, slots: list[Slot]) -> None:
 def _gl_flush() -> None:
     """glFlush in the current context: a presenter's context samples the
     renderer's frame textures, and without the flush it sees last frame's
-    (plan 21 §1, measured: 199 of 200 frames late). PyOpenGL checks after the
-    call, so a `GLError` here means the flush ran and found an error someone
-    else left pending (moderngl can leave one): not this frame's
-    failure, now that every frame comes through here (SC3a)."""
+    (plan 21 §1, measured: 199 of 200 frames late). `_say_gl_error` has taken
+    anything pending, so a `GLError` here is the flush's own."""
     from OpenGL import GL
-    from OpenGL.error import GLError
 
-    with contextlib.suppress(GLError):
-        GL.glFlush()
+    GL.glFlush()
+
+
+def _say_gl_error(ctx, watch) -> None:
+    """What the frame left pending in the render context, told to the watch, not
+    raised: moderngl doesn't check, so PyOpenGL's next call would blame the flush
+    for it. GL_OUT_OF_MEMORY is one of these, so it mustn't vanish."""
+    for _ in range(4):                     # a driver may hold several flags
+        err = ctx.error
+        if err == "GL_NO_ERROR":
+            return
+        if watch is not None:
+            watch.gl_error(err)
 
 
 def _bands(audio) -> tuple[float, ...]:
@@ -727,13 +736,18 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
        the others;
     4. glFlush in the root's context;
     5. each window, in its own `try`, the pacing one last: current, `present`
-       (output 1's, its target 1:1), swap (only the pacing one waits). One that
-       raises sets its slot's `error` and tells the watch; the frame goes on;
-    6. the pacing window swapped if the frame did not get that far, whatever
-       happened; the root's context current.
+       (output 1's, its target 1:1), swap (only the pacing one waits). A later
+       output's raising sets its slot's `error` and tells the watch; the frame
+       goes on;
+    6. the root's context current, whatever happened.
 
-    What output 1's view caught is raised after the others were presented,
-    as `Renderer.draw` raises it. `preview` (an `outputs.Preview`), when
+    **A window swaps only what it was just given.** A draw that raises, or a present
+    that does, leaves it on its last frame, as `frame` promises: a swap there would
+    bring up an old back buffer. With nothing swapped the timer paces (`Pacer`).
+
+    What output 1's view caught, and output 1's own present raising, are raised after
+    the others were presented, so they reach `RenderWatch.failed` and the red banner:
+    the operator's one warning that the main picture has stopped. `preview` (an `outputs.Preview`), when
     the GRAPH page asked for it, rides on output 1's view as one more
     publisher — through output 1's own tap, else its own — and is flushed
     for the control window as a presenter's frame is.
@@ -761,7 +775,6 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
     presented = [sl for sl in slots if sl.opened and sl.presenter is not None]
     pacer = root.pacer
     pacer.choose([sl.win for sl in presented], root.win)
-    swapped = False
     # output 1's own size and DPI (a 1080p projector next to a retina laptop)
     if first.opened:
         root.measure(glfw.get_window_size(first.win), glfw.get_framebuffer_size(first.win))
@@ -785,14 +798,14 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
         views = [View(first.switches, (fbw, fbh), target=target,
                       bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh),
                       publish=pubs, tap=tap, samples=FRAME_SAMPLES)]
-        by_slot = {id(first): views[0]}
+        shown = [(first, views[0])] if first in presented else []   # (slot, view): the windows
         pub_size = getattr(renderer, "max_frame", None) or (fbw, fbh)
         for sl in slots[1:]:
             if sl in presented:
                 sl.size = tuple(int(v) for v in glfw.get_framebuffer_size(sl.win))
                 views.append(View(sl.switches, sl.size, presenter=sl.presenter,
                                   publish=sl.publishers, tap=sl.tap))
-                by_slot[id(sl)] = views[-1]
+                shown.append((sl, views[-1]))
             elif sl in offscreen:
                 sl.size = (int(pub_size[0]), int(pub_size[1]))
                 views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
@@ -809,31 +822,35 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
                 target.use()                      # the frame target again, with its viewport
                 ctx.viewport = (0, 0, fbw, fbh)
         renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
+        _say_gl_error(ctx, watch)
         if presented or shown_to_panel or watched or off_preview:
             (flush or _gl_flush)()
-        for sl in sorted(presented, key=lambda sl: sl.win is pacer.owner):
-            v = by_slot[id(sl)]
+        lost = None                     # output 1's present, raised after the others had theirs
+        for sl, v in sorted(shown, key=lambda p: p[0].win is pacer.owner):
             # output 1's picture is already whole on the frame target: flip, hands,
             # mix and dim are in it, so its window only shows it, 1:1
             ho = (Handoff(root.frame.tex, (fbw, fbh), (0, 0, fbw, fbh), bg_alpha=v.bg_alpha)
                   if sl is first else v.handoff)
-            swapped = swapped or sl.win is pacer.owner
+            if ho is None or sl.size[0] <= 0 or sl.size[1] <= 0:
+                continue                # nothing to show: it holds what it shows
             try:
                 glfw.make_context_current(sl.win)
-                if ho is not None and sl.size[0] > 0 and sl.size[1] > 0:
-                    sl.presenter.present(ho, sl.size)
+                sl.presenter.present(ho, sl.size)
                 glfw.swap_buffers(sl.win)
                 sl.error = v.error
+                if sl.win is pacer.owner:
+                    pacer.swapped()
             except Exception as e:  # noqa: BLE001 — one output must not take the frame down
                 sl.error = _err("present", e)
-                if watch is not None:
+                if sl is first:
+                    lost = e
+                elif watch is not None:
                     watch.output_failed(sl.label, e)
         if views[0].exc is not None:
             raise views[0].exc
+        if lost is not None:
+            raise lost
     finally:
-        if pacer.owner is not None and not swapped:
-            glfw.make_context_current(pacer.owner)
-            glfw.swap_buffers(pacer.owner)
         glfw.make_context_current(root.win)
 
 

@@ -16,4 +16,6 @@ for r in $(seq 1 "$rounds"); do
   run --shape occluded --mon 0
   run --shape guarded --mon 0
   run --shape guarded --mon 2
+  run --shape runaway --no-floor --mon 0
+  run --shape runaway --mon 0
 done

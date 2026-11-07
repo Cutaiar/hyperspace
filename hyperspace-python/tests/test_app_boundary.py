@@ -1501,6 +1501,8 @@ class _Ctx:
     """The renderer's moderngl context as `_draw_render` touches it: never its
     window's framebuffer, as nothing is drawn on the root's (SC3a)."""
 
+    error = "GL_NO_ERROR"
+
     def __init__(self, log):
         self.fbo = None
         self.viewport = None
@@ -1597,7 +1599,7 @@ def test_the_rendering_context_is_flushed_before_a_presenter():
         app.glfw = app_glfw
     assert log == ["current root", "bind frame", "draw 3", "flush",
                    "current w2", "present projector", "swap w2",
-                   "current w3", "swap w3",                       # no framebuffer: nothing drawn
+                   # w3 has no framebuffer: nothing drawn, nothing swapped
                    "current w1", "present glass", "swap w1", "current root"]
     views = r.calls[0]
     assert [v.size for v in views] == [(640, 400), (1920, 1080), (0, 0)]
@@ -1641,15 +1643,16 @@ def test_a_raising_presenter_does_not_stop_the_frame():
                              root, watch, flush=lambda: None)
         assert "present projector" in log and "present third" in log
         assert log[-3:] == ["present glass", "swap w1", "current root"]
-        # the whole draw raised: the pacing window is swapped all the same, so the
-        # loop stays paced (its last picture stands), and nothing else is
+        # the whole draw raised: no window is swapped, each holds its last frame (a
+        # swap would bring up an old back buffer), and the timer paces the loop
         log.clear()
+        root.pacer.end_frame()
         r = _Renderer(log)
         r.draw_outputs = lambda *a, **k: (_ for _ in ()).throw(boom)
         with pytest.raises(RuntimeError, match="scene"):
             app._draw_render(r, _Ctx(log), object(), slots, root, watch, flush=lambda: None)
-        assert log[-3:] == ["current w1", "swap w1", "current root"]
-        assert "swap w2" not in log and "present glass" not in log
+        assert not [e for e in log if e.startswith(("swap", "present"))]
+        assert log[-1] == "current root" and not root.pacer._swapped
         # a stranded framebuffer is still the alarm…
         ctx = _Ctx(log)
         ctx.fbo = SimpleNamespace(glo=7)
@@ -1664,6 +1667,80 @@ def test_a_raising_presenter_does_not_stop_the_frame():
         assert warned == []
     finally:
         app.glfw = app_glfw
+
+
+def test_output_1_failing_its_present_reaches_the_red_banner():
+    """The operator's one warning. Output 1's present raising must not be caught as a
+    later output's is: the others still get their picture, then it raises, so `frame`
+    calls `watch.failed`, not `watch.drew`. The window isn't swapped, so it holds its
+    last frame, and nothing marks the pacer as swapped: the timer paces."""
+    from hyperspace.watchdog import RenderWatch
+
+    log: list[str] = []
+    g = _SwapGlfw(log)
+    app_glfw, app.glfw = app.glfw, g
+    try:
+        slots = _rig_slots("glass", "projector",
+                           presenter=lambda sl: _Pres(log, sl.name, boom=sl.n == 1))
+        root = _rig_root(log, slots, g)
+        warned: list = []
+        watch = SimpleNamespace(output_failed=lambda *a: warned.append(a))
+        with pytest.raises(RuntimeError, match="lost the context"):
+            app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, watch,
+                             flush=lambda: None)
+    finally:
+        app.glfw = app_glfw
+    assert "swap w2" in log and "swap w1" not in log       # the other went first, and got its frame
+    assert slots[0].error == "present: RuntimeError: lost the context"
+    assert warned == [] and not root.pacer._swapped
+    # …and through `frame`'s own path, the banner up and no frame counted
+    log2: list[str] = []
+    h = _host(log2)
+    seen = RenderWatch(SimpleNamespace(), info=dict)
+    seen.warn = lambda *a, **k: None
+    seen._once = lambda *a, **k: False
+    h.render_watch = seen
+
+    def draw(dt):
+        raise RuntimeError("lost the context")
+
+    h.draw_render = draw
+    app.frame(h, 0.0, 1 / 60, 60.0)
+    assert seen.frames == 0 and "render window stopped" in seen.error
+
+
+def test_a_pending_gl_error_is_told_not_hidden_and_not_blamed_on_the_flush():
+    """Read before the flush, so PyOpenGL's check can't raise someone else's error as
+    the frame's; out of memory reaches the banner, the rest the log, once each."""
+    from hyperspace.watchdog import RenderWatch
+
+    log: list[str] = []
+    told: list = []
+    errors = iter(["GL_INVALID_VALUE", "GL_OUT_OF_MEMORY", "GL_NO_ERROR"])
+
+    class C(_Ctx):
+        @property
+        def error(self):
+            return next(errors)
+
+    g = _SwapGlfw(log)
+    app_glfw, app.glfw = app.glfw, g
+    try:
+        slots = _rig_slots("glass", presenter=lambda sl: _Pres(log, sl.name))
+        watch = SimpleNamespace(gl_error=lambda e: (told.append(e), log.append("told")))
+        app._draw_render(_Renderer(log), C(log), object(), slots, _rig_root(log, slots, g), watch,
+                         flush=lambda: log.append("flush"))
+    finally:
+        app.glfw = app_glfw
+    assert told == ["GL_INVALID_VALUE", "GL_OUT_OF_MEMORY"]
+    assert log.index("told") < log.index("flush")
+    w = RenderWatch(SimpleNamespace(), info=dict)
+    logged: list = []
+    w._once = lambda key, kind, msg, body="": logged.append(key) or True
+    w.gl_error("GL_INVALID_VALUE")
+    assert w.warnings == [] and logged == ["gl error:GL_INVALID_VALUE"]
+    w.gl_error("GL_OUT_OF_MEMORY")
+    assert w.warnings == ["a render frame left GL_OUT_OF_MEMORY pending"]
 
 
 def test_every_output_is_applied_and_polled_for_keys(fake):

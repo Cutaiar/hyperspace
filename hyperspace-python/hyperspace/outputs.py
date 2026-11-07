@@ -212,7 +212,7 @@ class Slot:
     output.N.* params write them, WP4), and its window — or, for a later
     output whose screen is not connected, `missing`, the reason it was not
     opened (fork F9). `output` is its `overlay.Output`, `presenter` its
-    `Presenter` (outputs after the first), `error` the last present that
+    `Presenter` (every opened output, SC3a), `error` the last present that
     raised ("" once one succeeds), `size` its framebuffer at the last frame.
     The app fills it; the renderer never sees it, only the `View` built
     from it each frame.
@@ -999,8 +999,8 @@ void main() { f_color = vec4(0.0, 0.0, 0.0, u_factor); }
 
 
 class Presenter:
-    """One output after the first (plan 21 WP3): a moderngl handle on that
-    window's context and its own programs and vertex arrays — a share
+    """One output's window, output 1's too (plan 21 WP3, SC3a): a moderngl handle on
+    that window's context and its own programs and vertex arrays — a share
     group shares textures and programs, never framebuffers or vertex
     arrays, so the renderer's cannot draw here (§1 row 1).
 
@@ -1149,5 +1149,7 @@ class Presenter:
         self._ext = {}
 
     def release(self) -> None:
-        """Free the programs and arrays; call with this context current."""
+        """Free the programs and arrays; call with this context current, every
+        output's alike, before its window is destroyed: with the root's current, a
+        release deleted the root's object of the same name (SC3a's spike)."""
         self._drop()

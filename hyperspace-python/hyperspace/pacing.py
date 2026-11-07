@@ -1,5 +1,5 @@
 """What paces the loop (SC3a, plan 58): the swap of the first live display's
-window, a floor under it, and a timer when no display is live.
+window, a floor under it, and a timer when nothing is being swapped.
 
 A swap on a hidden window does not wait (measured: 13,047 fps), so the root
 window that holds the renderer's context cannot pace; a display's window can,
@@ -8,14 +8,20 @@ interval 1), every other does not (interval 0: two waiting swaps a frame halve
 the rate, fork F6), and that window's swap is the frame's last.
 
 A swap that should wait does not always: a locked Mac, a window occluded from
-birth or minimised, a sleeping display. `Floor` always waits to at least the
-fastest connected display's refresh × `FLOOR_MARGIN`, just above the rate a
-waiting swap gives, so it never meets a swap that does wait and bounds one that
-does not (measured, locked: 1,360–1,720 fps without it, 125.9 with it). The
-fastest connected, not the pacing window's own: on macOS a swap on a window on a
-60 Hz display can run at another display's 120 (measured: 119.5 fps on one, 60 Hz
-by `get_video_mode`), and a floor under its own display's 63 would have cut the
-loop in half.
+birth or minimised, a sleeping display. `Floor` bounds that, and must never touch
+a healthy loop, so it trusts nothing about the displays:
+
+- **A fixed cap, `CAP_HZ`, not a display's refresh.** `get_video_mode` doesn't
+  decide what a swap does: a window on a 60 Hz display swaps at 119.5 fps here
+  (row 782), and a VRR panel, a display reporting 0 or a mode change can all say
+  less than the loop really runs at. A floor under the true rate halves the loop.
+- **An average, not a frame's length.** A healthy 120 Hz loop has frames of 1 ms
+  beside frames of 16 (sd 3–5 ms around 8.3). A burst of `BURST` frames passes
+  untouched, and only a loop over the cap for longer than that waits.
+
+With no display connected, no window live, or a frame that swapped nothing (a
+raising draw holds the window on its last frame), nothing waits at all, so the
+rate is `NO_DISPLAY_HZ`.
 
 `choose` runs between frames, so a handover never lands inside one. It never
 touches a window that is not in the list: one going away has already been
@@ -32,48 +38,45 @@ import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
-FLOOR_MARGIN = 1.05        # the floor's rate over the display's refresh
-NO_DISPLAY_HZ = 60.0       # no display live: the timer alone
-UNKNOWN_HZ = 240.0         # no display says its refresh: a bound that can't cap a real one
-REFRESH_EVERY_S = 1.0      # how often the displays' refreshes are looked up (they can change)
-SPIN_S = 0.0015            # the end of a wait is spun: a sleep overshoots by a millisecond or so
+CAP_HZ = 240.0             # a swap that doesn't wait, at most: no display this runs on is faster
+NO_DISPLAY_HZ = 60.0       # nothing is being swapped: the timer alone
+BURST = 8                  # frames that may run ahead of the rate before any of them waits
+LOOK_EVERY_S = 1.0         # how often the displays are counted (they can come and go)
 
 
 class Floor:
-    """The loop's slowest allowed period: `wait` sleeps to just short of the
-    next tick and spins the rest. Each tick is a period after the last, not
-    after now, so a loop slower than the floor falls behind it and never waits;
-    behind by more than a period, it starts again from now, so a stall is never
-    paid back as a burst."""
+    """The loop's average rate, at most: a token per frame, `hz` of them a second,
+    `BURST` at most in hand. A frame with a token never waits, so a loop under the
+    rate is never touched, however uneven; one with none sleeps until there is one.
+    The tokens come by the clock, so a sleep's overshoot is made up and a stall earns
+    no more than a burst."""
 
     def __init__(self, hz: float = NO_DISPLAY_HZ, clock: Callable[[], float] = time.perf_counter,
                  sleep: Callable[[float], None] = time.sleep):
         self.clock, self.sleep = clock, sleep
-        self.period = 1.0 / hz
-        self.next = clock()
+        self.hz = hz
+        self.tokens = float(BURST)
+        self.last = clock()
 
     def rate(self, hz: float) -> None:
-        self.period = 1.0 / hz
+        self.hz = hz
 
     def reset(self) -> None:
-        self.next = self.clock()
+        self.tokens, self.last = float(BURST), self.clock()
 
     def wait(self) -> None:
-        self.next += self.period
         now = self.clock()
-        if self.next < now - self.period:
-            self.next = now
-            return
-        if self.next - now > SPIN_S:
-            self.sleep(self.next - now - SPIN_S)
-        while self.clock() < self.next:
-            pass
+        self.tokens = min(self.tokens + (now - self.last) * self.hz, float(BURST))
+        self.last = now
+        self.tokens -= 1.0
+        if self.tokens < 0.0:
+            self.sleep(-self.tokens / self.hz)
 
 
 class Pacer:
     """Which window waits for its display (`owner`, None with none live) and the
-    floor under it. `choose` each frame, before any window is drawn; `end_frame`
-    once the frame's last swap is done."""
+    floor under it. `choose` each frame, before any window is drawn; `swapped` when
+    `owner` has swapped; `end_frame` once the frame's last swap is done."""
 
     def __init__(self, glfw: Any, clock: Callable[[], float] = time.perf_counter,
                  sleep: Callable[[float], None] = time.sleep):
@@ -81,7 +84,8 @@ class Pacer:
         self.clock = clock
         self.owner: Any = None
         self.floor = Floor(NO_DISPLAY_HZ, clock, sleep)
-        self.refresh = 0.0             # the fastest display, as last looked up; 0: none live
+        self.displays = True           # any connected, as last counted
+        self._swapped = False
         self._looked = -1e9
 
     def choose(self, live: Sequence[Any], current: Any) -> bool:
@@ -100,31 +104,28 @@ class Pacer:
             glfw.swap_interval(1)
         glfw.make_context_current(current)
         self.owner = want
-        self._looked = -1e9
         self.floor.reset()
         return True
 
+    def swapped(self) -> None:
+        """`owner` swapped this frame, so its display may have paced it."""
+        self._swapped = True
+
     def end_frame(self) -> None:
-        """The frame's floor: the fastest display's refresh × `FLOOR_MARGIN`, or
-        `NO_DISPLAY_HZ` with no display live."""
+        """The frame's floor: `CAP_HZ` after a swap with a display connected, else
+        `NO_DISPLAY_HZ`."""
         self._look()
+        paced = self._swapped and self.owner is not None and self.displays
+        self._swapped = False
+        self.floor.rate(CAP_HZ if paced else NO_DISPLAY_HZ)
         self.floor.wait()
 
     def _look(self) -> None:
         now = self.clock()
-        if now - self._looked < REFRESH_EVERY_S:
+        if now - self._looked < LOOK_EVERY_S:
             return
         self._looked = now
-        self.refresh = 0.0 if self.owner is None else self._fastest()
-        self.floor.rate(self.refresh * FLOOR_MARGIN if self.owner is not None else NO_DISPLAY_HZ)
-
-    def _fastest(self) -> float:
-        """The highest refresh of the connected displays; `UNKNOWN_HZ` when the
-        window system won't say, which must not stop a frame."""
-        glfw = self.glfw
         try:
-            hz = max((float(glfw.get_video_mode(m).refresh_rate) for m in glfw.get_monitors()),
-                     default=0.0)
-        except Exception:  # noqa: BLE001 — a display that went between two calls
-            return UNKNOWN_HZ
-        return hz if hz > 0 else UNKNOWN_HZ
+            self.displays = bool(self.glfw.get_monitors())
+        except Exception:  # noqa: BLE001 — a window system that won't say must not stop a frame
+            self.displays = True

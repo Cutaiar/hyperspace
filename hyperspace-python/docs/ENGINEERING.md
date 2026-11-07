@@ -3078,10 +3078,14 @@ the renderer's own framebuffers' (`render.SceneTarget`), and the number comes fr
 `outputs.FRAME_SAMPLES`, since an `Offscreen` would say 0
 (`tests/test_root_frame.py::test_the_frame_keeps_its_msaa_with_no_multisampled_window`).
 `pacing.Pacer`: the first live window in slot order has swap interval 1, the others
-0, and its swap is the frame's last; with none live, a 60 Hz timer. Under any swap a
-**floor**, the fastest connected display's refresh × 1.05, so a swap that doesn't wait
-(a locked Mac, a window occluded from birth, a sleeping display) can't run the loop
-away: locked, the app ran 1,360–1,720 fps before this and runs 126 now. A window closes
+0, and its swap is the frame's last; with none live, no display connected, or nothing
+swapped this frame, a 60 Hz timer. Under any swap a **floor**, a fixed 240 Hz on
+average with a burst of 8 frames free, so a swap that doesn't wait (a locked Mac, a
+window occluded from birth, a sleeping display) can't run the loop away, and a healthy
+loop, however uneven its frames, never waits. It believes no display's refresh (row 782).
+**A window swaps only what it was just given:** a draw or present that raises leaves it
+on its last frame, and output 1's present raising reaches `RenderWatch.failed`, the red
+banner, after the others had their picture. A window closes
 in this order, or a release can reach the wrong context's objects: that window current,
 its presenter released, destroyed, then `Pacer.choose` between frames (SC3b, which adds
 the closing at run time; `tests/test_root_frame.py`'s `close_output`). Creating one
@@ -3589,7 +3593,7 @@ What only a person at the machine can check is
   paces the loop on two real screens, and whether a non-waiting
   fullscreen output tears, is unknown. **A window on a 60 Hz display here
   swaps at 120** (measured on this Mac, row 782: macOS's swap doesn't follow the
-  window's own display), so the floor goes by the fastest display, not the window's.
+  window's own display), so the floor believes no display's refresh.
 - **With no desk connected the app keeps looking** — every 2 s. A look
   makes no client (`midiports`, audit R15, closed) and costs about 0.25 ms
   a pair of ports on the frame thread; `enabled = false` on the desk's

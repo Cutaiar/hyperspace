@@ -270,7 +270,30 @@ def pacing(a) -> None:
         from hyperspace.pacing import Pacer as ShippedPacer
         shipped = ShippedPacer(glfw)
         shipped.choose([lives[0].win], root)
-        timer = SimpleNamespace(wait=shipped.end_frame)
+
+        def _wait():
+            shipped.swapped()
+            shipped.end_frame()
+        timer = SimpleNamespace(wait=_wait)
+    if shape == "runaway":
+        # a swap that can't wait, with the shipped floor: a hidden window at interval 1,
+        # what a locked Mac's swap does, measured on an unlocked one. `--no-floor`: today
+        hid = window((640, 360), visible=False, share=root, title="sc3a hidden")
+        glfw.make_context_current(hid)
+        glfw.swap_interval(1)
+        moderngl.create_context()
+        drain()
+        glfw.make_context_current(root)
+        from hyperspace.pacing import Pacer as ShippedPacer
+        shipped = ShippedPacer(glfw)
+        shipped.choose([hid], root)
+
+        def _spin():
+            glfw.swap_buffers(hid)
+            if not a.no_floor:
+                shipped.swapped()
+                shipped.end_frame()
+        timer = SimpleNamespace(wait=_spin)
     if shape == "two-vsync":
         lives = [Live(root, pos=pos0, interval=1), Live(root, pos=spot(a.mon2), interval=1)]
     if shape == "occluded":
@@ -321,46 +344,17 @@ def pacing(a) -> None:
 
 # ------------------------------------------------------------ 2: handover
 
-class Pacer:
-    """The shape on trial: the first live window waits for its display
-    (interval 1), all others don't, and with none a timer."""
-
-    def __init__(self, hz=60.0):
-        self.owner: Live | None = None
-        self.timer = Timer(hz)
-        self.handovers: list = []
-
-    def choose(self, lives: list[Live], then) -> None:
-        want = lives[0] if lives else None
-        if want is self.owner:
-            return
-        t0 = time.perf_counter()
-        if self.owner is not None and self.owner in lives:
-            glfw.make_context_current(self.owner.win)
-            glfw.swap_interval(0)
-        if want is not None:
-            glfw.make_context_current(want.win)
-            glfw.swap_interval(1)
-        glfw.make_context_current(then)
-        self.owner = want
-        self.timer.next = time.perf_counter()
-        self.handovers.append(round((time.perf_counter() - t0) * 1e3, 3))
-
-    def end_frame(self):
-        if self.owner is None:
-            self.timer.wait()
-
-
 def handover(a) -> None:
     glfw.init()
+    from hyperspace.pacing import Pacer
     root, ctx = root_context()
     work = Work(ctx)
-    pacer = Pacer()
+    pacer = Pacer(glfw)
     win_a = Live(root, pos=spot(a.mon), title="A")
     win_b = Live(root, pos=spot(a.mon2), title="B")
     made = {"A": win_a.made_ms, "B": win_b.made_ms}
     lives = [win_a, win_b]
-    pacer.choose(lives, root)
+    pacer.choose([lv.win for lv in lives], root)
     # the control window, as the app always has one: never paces, always swaps
     control = Live(root, pos=spot(a.mon, 720, 440), title="control") if not a.no_control else None
     events = [(a.phase, "destroy A: B paces"), (2 * a.phase, "destroy B: timer paces"),
@@ -376,8 +370,10 @@ def handover(a) -> None:
         tex = work.draw()
         GL.glFlush()
         # the pacer's swap last: the others never wait, it does
-        for lv in sorted(lives, key=lambda v: v is pacer.owner):
+        for lv in sorted(lives, key=lambda v: v.win is pacer.owner):
             lv.present(tex, work.size)
+            if lv.win is pacer.owner:
+                pacer.swapped()
         if control is not None:
             control.present(tex, work.size)
         glfw.make_context_current(root)
@@ -408,7 +404,7 @@ def handover(a) -> None:
             elif what.startswith("destroy C"):
                 info["close_ms"] = lives[0].close(root)
                 lives = lives[1:]
-            pacer.choose(lives, root)
+            pacer.choose([lv.win for lv in lives], root)
             info["event_ms"] = round((time.perf_counter() - t_ev) * 1e3, 2)
             around.append(info)
             ev += 1
@@ -418,7 +414,7 @@ def handover(a) -> None:
         say(test="handover", phase=name, **stats(d),
             settled_fps=stats(d[len(d) // 2:], skip=0).get("fps"),
             first_five=[round(x * 1e3, 2) for x in d[:5]])
-    say(test="handover", events=around, handover_ms=pacer.handovers, made=made)
+    say(test="handover", events=around, made=made)
     glfw.terminate()
 
 
@@ -1341,7 +1337,8 @@ def main() -> None:
     p = sub.add_parser("pacing")
     p.add_argument("--shape", required=True, choices=[
         "today", "hidden-swap", "hidden-only-swap", "hidden-timer", "hidden-only-timer",
-        "presenter-vsync", "two-vsync", "occluded", "guarded"])
+        "presenter-vsync", "two-vsync", "occluded", "guarded", "runaway"])
+    p.add_argument("--no-floor", action="store_true", help="runaway: without the floor")
     p.add_argument("--secs", type=float, default=20)
     p.add_argument("--mon", type=int, default=0)
     p.add_argument("--mon2", type=int, default=2)

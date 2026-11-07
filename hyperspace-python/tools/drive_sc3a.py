@@ -9,7 +9,9 @@ times over a stretch of each. Run on the build before and the build after, and c
 the timing goes to `<cwd>/sc3a_times.json`, or `SC3A_TIMES`. `SC3A_RGBA=<dir>`: every 40th
 swap of output 1's window, its back buffer with alpha as `.npy`, and the window's
 see-through flags in the times file, for an overlay run (a `--home` whose config says
-`[output] overlay = true`, `on_start = true`).
+`[output] overlay = true`, `on_start = true`). `SC3A_RAISE=<file>`: last, a real raising
+draw for a second: output 1's window as the compositor has it, captured every 6 frames,
+and how many distinct pictures it showed, written to that file.
 """
 
 import json
@@ -64,6 +66,58 @@ def _see_through(win) -> dict:
             "frame_buffer": list(glfw.get_framebuffer_size(win))}
 
 
+def _on_screen(win):
+    """The window as the compositor has it: what a person sees."""
+    import objc
+    import Quartz
+
+    number = int(objc.objc_object(c_void_p=glfw.get_cocoa_window(win)).windowNumber())
+    img = Quartz.CGWindowListCreateImage(Quartz.CGRectNull, Quartz.kCGWindowListOptionIncludingWindow,
+                                         number, Quartz.kCGWindowImageBoundsIgnoreFraming)
+    w, h = Quartz.CGImageGetWidth(img), Quartz.CGImageGetHeight(img)
+    data = bytes(Quartz.CGDataProviderCopyData(Quartz.CGImageGetDataProvider(img)))
+    rows = Quartz.CGImageGetBytesPerRow(img)
+    return np.frombuffer(data, dtype=np.uint8).reshape(h, rows // 4, 4)[:, :w, :3].copy()
+
+
+def _raising(d, panel):
+    win = panel.outputs[0].win
+    panel.library.load("presets", "party-tumble")
+    yield from d.wait(30)
+    good = _on_screen(win)
+    moved = _on_screen(win)
+    real = render.Renderer.draw_outputs
+
+    def boom(self, *a, **k):
+        raise RuntimeError("SC3A_RAISE")
+
+    render.Renderer.draw_outputs = boom
+    yield                                    # the first raising frame
+    yield
+    held = _on_screen(win)
+    seen, times, last = [], [], time.perf_counter()
+    for k in range(120):
+        yield
+        now = time.perf_counter()
+        times.append(now - last)
+        last = now
+        if k % 6 == 0:
+            seen.append(_on_screen(win))
+    render.Renderer.draw_outputs = real
+    yield from d.wait(30)
+    back = _on_screen(win)
+    distinct = len({p.tobytes() for p in seen})
+    with open(os.environ["SC3A_RAISE"], "w") as f:
+        json.dump({"captures": len(seen), "distinct_while_raising": distinct,
+                   "differ_from_first_held": [int((np.abs(p.astype(int) - held.astype(int)).max(axis=2) > 0).sum())
+                                              for p in seen],
+                   "lit": int((held.max(axis=2) > 8).sum()), "shape": held.shape,
+                   "moving_before": int((np.abs(moved.astype(int) - good.astype(int)).max(axis=2) > 0).sum()),
+                   "moving_after": int((np.abs(back.astype(int) - held.astype(int)).max(axis=2) > 0).sum()),
+                   "fps_while_raising": round(len(times) / sum(times), 1),
+                   "banner": getattr(panel.render_watch, "error", "")}, f)
+
+
 def script(d, panel):
     looks = os.environ.get("SC3A_LOOKS", "")
     looks = looks.split(",") if looks else LOOKS
@@ -82,6 +136,8 @@ def script(d, panel):
         out[name] = {"fps": round(1000.0 / float(t.mean()), 1), "p50": round(float(np.median(t)), 3),
                      "p99": round(float(np.percentile(t, 99)), 3), "max": round(float(t.max()), 3),
                      "sd": round(float(t.std()), 3)}
+    if os.environ.get("SC3A_RAISE"):
+        yield from _raising(d, panel)
     out["load"] = os.getloadavg()[0]
     if RGBA:
         out["window"] = _see_through(panel.outputs[0].win)

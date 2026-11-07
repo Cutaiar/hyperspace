@@ -48,11 +48,13 @@ def _pacer(hz=(120, 60)):
     return Pacer(g, clock, clock.sleep), g, clock
 
 
-def _rate(pacer, clock, frames=2000, swap_s=0.0) -> float:
+def _rate(pacer, clock, frames=2000, swap_s=0.0, swapped=True) -> float:
     """fps of a loop whose swap takes `swap_s`."""
     t0 = clock.t
     for _ in range(frames):
         clock.t += swap_s
+        if swapped:
+            pacer.swapped()
         pacer.end_frame()
     return frames / (clock.t - t0)
 
@@ -64,26 +66,39 @@ def test_a_swap_that_does_not_wait_cannot_run_the_loop_away():
     bug SC3a fixes in today's app (1,360–1,720 fps, locked)."""
     pacer, _, clock = _pacer()
     pacer.choose(["w1"], "root")
-    assert 125.0 < _rate(pacer, clock) < 127.0            # 120 × 1.05
+    assert 235.0 < _rate(pacer, clock) < 245.0
 
 
-def test_a_swap_that_waits_never_meets_the_floor():
-    """At the display's rate the floor adds nothing, whatever the rate."""
+def test_a_healthy_loop_never_waits_however_uneven():
+    """The gate's shape, and the review's: a real 120 Hz loop has frames of 1 ms
+    beside frames of 16. None of them may wait, whatever the displays say."""
+    for hz in ((120, 60), (60,), (60, 60), (0,)):
+        pacer, _, clock = _pacer(hz)
+        pacer.choose(["w1"], "root")
+        for k in range(4000):
+            clock.t += (0.001, 0.001, 0.001, 0.030)[k % 4]     # 13 ms on average, bursts of 3
+            pacer.swapped()
+            pacer.end_frame()
+        assert clock.slept == [], hz
+    # a burst up to `BURST`, at once, the same
     pacer, _, clock = _pacer()
     pacer.choose(["w1"], "root")
-    assert 119.0 < _rate(pacer, clock, swap_s=1 / 120) < 120.0
-    assert clock.slept == [] or len(clock.slept) < 5     # the first frames, before it falls behind
+    clock.t += 1.0
+    for _ in range(pacing.BURST - 1):
+        clock.t += 0.0005
+        pacer.swapped()
+        pacer.end_frame()
+    assert clock.slept == []
 
 
-def test_the_floor_is_the_fastest_displays_not_the_pacing_windows():
-    """Measured on a window on a 60 Hz TV beside 120 Hz displays: its swap ran at
-    119.5 fps, and a floor under its own 60 would have halved the loop."""
-    pacer, _, clock = _pacer((60, 120, 60))
-    pacer.choose(["on-the-tv"], "root")
-    assert 119.0 < _rate(pacer, clock, swap_s=1 / 120) < 120.0
-    pacer, _, clock = _pacer((60,))
-    pacer.choose(["w1"], "root")
-    assert 62.0 < _rate(pacer, clock) < 64.0
+def test_the_floor_believes_no_displays_refresh():
+    """Row 782: `get_video_mode` doesn't decide the swap's rate. A 120 fps loop on
+    displays saying 60, 0 or nothing stays at 120, and they aren't even asked."""
+    for hz in ((60,), (0,), (60, 60)):
+        pacer, g, clock = _pacer(hz)
+        g.get_video_mode = None
+        pacer.choose(["on-the-tv"], "root")
+        assert 119.0 < _rate(pacer, clock, swap_s=1 / 120) < 120.5
 
 
 def test_no_display_live_a_timer_at_60():
@@ -93,7 +108,22 @@ def test_no_display_live_a_timer_at_60():
     assert 59.5 < _rate(pacer, clock) < 60.5
 
 
-def test_a_display_that_will_not_say_is_a_bound_that_caps_nothing():
+def test_no_display_connected_with_windows_alive_a_timer_at_60():
+    """Clamshell with the windows still open: nothing can wait, and this is the runaway
+    the floor is for."""
+    pacer, _, clock = _pacer(())
+    pacer.choose(["w1"], "root")
+    assert 59.5 < _rate(pacer, clock) < 60.5
+
+
+def test_a_frame_that_swapped_nothing_is_on_the_timer():
+    """A raising draw holds the window on its last frame: no swap to wait on."""
+    pacer, _, clock = _pacer()
+    pacer.choose(["w1"], "root")
+    assert 59.5 < _rate(pacer, clock, swapped=False) < 60.5
+
+
+def test_a_window_system_that_will_not_say_caps_nothing_real():
     pacer, g, clock = _pacer()
 
     def gone():
@@ -101,25 +131,23 @@ def test_a_display_that_will_not_say_is_a_bound_that_caps_nothing():
 
     g.get_monitors = gone
     pacer.choose(["w1"], "root")
-    assert 240.0 < _rate(pacer, clock) < 260.0
-    pacer, _, clock = _pacer((0,))
-    pacer.choose(["w1"], "root")
-    assert 240.0 < _rate(pacer, clock) < 260.0
+    assert 235.0 < _rate(pacer, clock) < 245.0
 
 
-def test_the_displays_are_looked_up_about_once_a_second():
+def test_the_displays_are_counted_about_once_a_second():
     pacer, g, clock = _pacer()
     calls = []
     real = g.get_monitors
     g.get_monitors = lambda: (calls.append(1), real())[1]
     pacer.choose(["w1"], "root")
-    _rate(pacer, clock, frames=int(3.5 * 126))
+    _rate(pacer, clock, frames=int(3.5 * 240))
     assert 3 <= len(calls) <= 5
-    # one that changes is noticed, without a restart
-    g.hz = (60,)
-    clock.t += pacing.REFRESH_EVERY_S
+    # displays going are noticed, without a restart
+    g.hz = ()
+    clock.t += pacing.LOOK_EVERY_S
+    pacer.swapped()
     pacer.end_frame()
-    assert pacer.refresh == 60.0
+    assert pacer.displays is False
 
 
 def test_a_stall_is_not_paid_back_as_a_burst():
@@ -127,10 +155,23 @@ def test_a_stall_is_not_paid_back_as_a_burst():
     floor = Floor(100.0, clock, clock.sleep)
     floor.wait()
     clock.t += 5.0
-    floor.wait()               # behind by far more than a period: start again from now
+    for _ in range(pacing.BURST):
+        floor.wait()
     t0 = clock.t
-    floor.wait()
-    assert 0.009 < clock.t - t0 < 0.011
+    floor.wait()               # the stall earned `BURST`, no more
+    assert 0.008 < clock.t - t0 < 0.012
+
+
+def test_a_wait_only_sleeps():
+    """No spin: the states the floor bounds are the ones meant to be quiet, and a spin
+    takes the GIL from the threads that have work. The clock is read once a wait."""
+    clock = _Clock()
+    floor = Floor(100.0, clock, clock.sleep)
+    reads: list = []
+    floor.clock = lambda: (reads.append(1), clock())[1]
+    for _ in range(pacing.BURST + 3):
+        floor.wait()
+    assert len(reads) == pacing.BURST + 3 and clock.slept
 
 
 # ---------------------------------------------------------------- the handover
@@ -160,13 +201,13 @@ def test_a_window_already_gone_is_not_touched():
     assert g.log == ["current root"] and pacer.owner is None
 
 
-def test_a_handover_resets_the_floor_and_changes_its_rate():
+def test_a_handover_resets_the_floor_and_the_rate_follows():
     """No debt or credit carried over a handover (`dt` absorbs the change of rate)."""
     pacer, _, clock = _pacer()
     pacer.choose(["a"], "root")
-    assert 125.0 < _rate(pacer, clock) < 127.0
+    assert 235.0 < _rate(pacer, clock) < 245.0
     pacer.choose([], "root")
-    assert pacer.floor.next >= clock.t - 1e-3
+    assert pacer.floor.tokens == float(pacing.BURST)
     assert 59.5 < _rate(pacer, clock) < 60.5
     pacer.choose(["c"], "root")
-    assert 125.0 < _rate(pacer, clock) < 127.0
+    assert 235.0 < _rate(pacer, clock) < 245.0

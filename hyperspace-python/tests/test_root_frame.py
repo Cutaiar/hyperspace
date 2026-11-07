@@ -5,6 +5,7 @@ and a hot reload's hooks in the right context (audit V8)."""
 
 from __future__ import annotations
 
+import gc
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -80,6 +81,8 @@ def stage(gl_window_ok):
     try:
         yield st
     finally:
+        gc.collect()         # this context's objects, while it lives: left for the next
+        #                      test's, their release is that context's GL_INVALID_VALUE
         for w in st.wins:
             glfw.destroy_window(w)
         glfw.destroy_window(st.root_win)
@@ -167,6 +170,29 @@ def test_the_window_shows_the_frame_byte_for_byte_opaque_and_overlay(stage, bg):
     else:
         assert frame[..., 3].min() == 255       # opaque means opaque
     assert frame[..., :3].max() > 8             # a picture, not a blank
+
+
+def test_a_raising_draw_leaves_the_window_on_its_last_frame(stage):
+    """A real raising draw: nothing swapped or presented, the frame target rebound, the
+    root current. The window's front buffer is whatever it last showed: the real app's
+    `tools/drive_sc3a.py` run (`SC3A_RAISE`) sees it on screen."""
+    rig = _rig(stage)
+    slot = stage.output()
+    proxy = _proxy(rig)
+    app._draw_render(proxy, stage.ctx, rig.view, [slot], stage.root)
+    swaps: list = []
+    real = glfw.swap_buffers
+    app.glfw.swap_buffers = lambda w: (swaps.append(w), real(w))[1]
+    try:
+        boom = SimpleNamespace(bg_alpha=1.0, max_frame=None,
+                               draw_outputs=lambda *a: (_ for _ in ()).throw(RuntimeError("boom")))
+        stage.root.pacer.end_frame()
+        with pytest.raises(RuntimeError, match="boom"):
+            app._draw_render(boom, stage.ctx, rig.view, [slot], stage.root)
+    finally:
+        app.glfw.swap_buffers = real
+    rig.close()
+    assert swaps == [] and not stage.root.pacer._swapped
 
 
 def test_a_flip_a_dim_and_a_later_output_all_come_through(stage):
