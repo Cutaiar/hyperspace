@@ -14464,7 +14464,7 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 - **`Output.monitor` and `Slot.monitor`** are indices into a list that just changed, so they follow in the same step: the next `apply` would cover the wrong display.
 - **Output 1's `Output` stays output 1's,** with its params. `swap_window` trades the window and all that goes with it.
 - **The stall watch** reads what's open each time. A display gone isn't a stall; a picture that stopped still is, with no window at all too.
-- **Cost, measured.** A new window: 40.2–50.3 ms in `Hotplug` in five of six, 113 ms in the other, with the Mac under load from other builds, its frame 63.5–79 ms, against 35–38 ms in the spike. A close: 2.0–4.4 ms. The frame covering a removal or an arrival: up to 452 ms, inside GLFW's poll, where the spike saw 76–314 ms; nothing here can shorten it. **All on a locked Mac** (`tools/sc3a_spike.py state`), on a virtual display.
+- **Cost, measured.** A new window: 40.2–50.3 ms in `Hotplug` in four of five, 113 ms in the other, with other builds running on the Mac, its frame 63–79 ms, against 35–38 ms in the spike. A close: 2.0–4.4 ms. The longest frame in each step with a removal or an arrival: 320–513 ms, 834 ms once, as against 304–465 ms in the stretch with nothing plugged straight after a load, so this is loose. Most of it is inside GLFW's poll, where the spike saw 76–314 ms; nothing here can shorten it. **All on a locked Mac** (`tools/sc3a_spike.py state`), on a virtual display.
 - **Leak.** 359 KB a cycle over 200 cycles on real hidden windows, against the spike's ~315 KB for a window and a context. A show won't cycle much.
 - **Judge it.** 629, 632.
 
