@@ -547,12 +547,14 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
     #
     # And it is why centring on `font * 1.3` by hand was wrong even after
     # FramePadding went to zero: that is the size the KIT would have used,
-    # not the size imgui was about to draw at. `get_font_size()` with the
-    # face pushed is the same number for both.
+    # not the size imgui was about to draw at.
+    #
+    # And the line is placed by its BASELINE, not by centring imgui's line
+    # box: `stock_text_y` puts the stock widget's glyphs on the row
+    # `draw.label` (the placeholder) uses, which is Blink's.
     D.push_css_font(ui.faces, "regular", tbl["font"])
     imgui.set_cursor_screen_pos(
-        imgui.ImVec2(x + tbl["pad_x"],
-                     y + (hh - imgui.get_font_size()) / 2.0))
+        imgui.ImVec2(x + tbl["pad_x"], D.stock_text_y(y, tbl["font"], hh, ui.faces)))
     imgui.push_item_width(w - 2.0 * tbl["pad_x"])
     if disabled:
         imgui.begin_disabled()

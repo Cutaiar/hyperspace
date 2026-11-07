@@ -12,7 +12,9 @@ reasoned about and diffed one at a time.
 
 from __future__ import annotations
 
+import functools
 import itertools
+import json
 import math
 from math import floor
 from pathlib import Path
@@ -213,15 +215,58 @@ def card(dl, cell, theme, grad_tex: int | None) -> None:
            rgba("foreground", 0.10, theme=theme), r + 1, 1.0)
 
 
-# (hhea.ascender - hhea.descender) / unitsPerEm, per face. Geist: 1300/1000.
-FONT_SPAN_EM = {"regular": 1.30, "medium": 1.30, "semibold": 1.30}
+# --------------------------------------------------------------------------
+# faces and metrics
+# --------------------------------------------------------------------------
+#
+# What the kit's text is measured against: Chromium laying out Geist
+# Variable. Three things about ImGui's own text path each disagreed with it,
+# measured (RETRO row 61), and each is handled here rather than per
+# component:
+#
+# * ImGui ROUNDS every font size to a whole pixel, and its FreeType loader
+#   sizes a face by ascender - descender (REAL_DIM). Geist's span is 1.30
+#   em, so 12px CSS had to be asked for as 15.6 - which became 16, text 2.6%
+#   large. build_fonts.py now writes a one-em line box into the TTFs, so the
+#   size pushed IS the CSS px and is already whole.
+# * FreeType HINTS by default, and a hinted advance is a whole pixel. So
+#   every face loads with hinting off, and the advances are Geist's own.
+# * ImGui applies no OpenType positioning or substitution; Chromium applies
+#   `kern` and `liga`. Both are frozen at build time into fonts/metrics.json
+#   and applied by `shape`.
+
+_METRICS = json.loads(
+    (Path(__file__).resolve().parent / "fonts" / "metrics.json").read_text())
+
+# Geist's REAL vertical metrics - the TTFs no longer carry them (see above).
+UPEM = float(_METRICS["upem"])
+ASCENT_EM = _METRICS["ascender"] / UPEM            # 1.005
+DESCENT_EM = -_METRICS["descender"] / UPEM         # 0.295
+
+# (ascender - descender) / upem, per face: the height of Geist's glyph box
+# in em. No longer a size multiplier - the faces are loaded so that a push
+# of N px is N px of em - but still the glyph box the underline and the
+# Blink baseline are worked out from.
+FONT_SPAN_EM = {v: ASCENT_EM + DESCENT_EM
+                for v in ("regular", "medium", "semibold")}
 
 
 class Faces(dict):
     """A variant → ImFont map (`load_faces`, `host_faces`) that carries its
     own `span_em`: the ratio above is Geist's, and a host handing the kit
-    its own faces needs its own, or its text renders at the wrong size."""
+    its own faces needs its own, or its text renders at the wrong size.
+
+    `geist` says whether these are the kit's own Geist faces, built with a
+    one-em line box and measured into fonts/metrics.json (RETRO 64). A
+    host's faces are neither: they keep ImGui's own metrics and the span
+    multiplier, the path the kit had before."""
     span_em: dict = FONT_SPAN_EM
+    geist: bool = True
+
+
+def is_geist(faces) -> bool:
+    """Are `faces` the kit's Geist (`load_faces`), not a host's."""
+    return getattr(faces, "geist", True)
 
 
 def span_em(faces, variant: str) -> float:
@@ -252,6 +297,7 @@ def host_faces(io, files: dict, density: float = 1.0, fallback=None) -> Faces:
     would give it."""
     out = Faces()
     out.span_em = {}
+    out.geist = False
     for variant, path in files.items():
         cfg = imgui.ImFontConfig()
         cfg.rasterizer_density = density
@@ -281,6 +327,16 @@ FACE_FILES = [(f"{v}{t}", f"Geist-{w}{t}.ttf")
 # no arrows and no command key, and a missing glyph draws as a box.
 FONTS = Path(__file__).resolve().parent / "fonts"         # the kit's faces
 FALLBACK = FONTS.parent.parent / "fonts" / "DejaVuSans.ttf"  # the panel's (hyperspace/fonts)
+# DejaVu Sans is (1901 + 483) / 2048 em from ascender to descender, and it
+# is NOT rebuilt with a one-em line box, so its loader is asked for that
+# much more to set it at the same em as the Geist it falls back from - as a
+# browser sets a fallback font at the element's font-size.
+FALLBACK_SPAN_EM = (1901 + 483) / 2048
+
+# ImGuiFreeTypeLoaderFlags_NoHinting (imgui_freetype.h). imgui_bundle does
+# not bind the enum. Hinting snaps advances to whole pixels; Chromium's
+# Linux text is laid out on fractional advances (and subpixel-positioned).
+FT_NO_HINTING = 1 << 0
 
 
 def load_faces(io, here=None, density: float = 1.0) -> dict:
@@ -292,13 +348,75 @@ def load_faces(io, here=None, density: float = 1.0) -> dict:
     for key, fn in FACE_FILES:
         cfg = imgui.ImFontConfig()
         cfg.rasterizer_density = density
+        cfg.font_loader_flags = FT_NO_HINTING
         out[key] = io.fonts.add_font_from_file_ttf(str(FONTS / fn), 16.0, cfg)
         if fb.exists():
             m = imgui.ImFontConfig()
             m.merge_mode = True
             m.rasterizer_density = density
+            m.font_loader_flags = FT_NO_HINTING
+            m.extra_size_scale = FALLBACK_SPAN_EM
             io.fonts.add_font_from_file_ttf(str(fb), 16.0, m)
     return out
+
+
+class _Shaper:
+    """One face's `liga` and `kern`, from fonts/metrics.json."""
+
+    def __init__(self, d: dict):
+        self.liga = {}
+        for letters, cp in d["liga"]:          # kept in the font's order
+            self.liga.setdefault(letters[0], []).append((letters, chr(cp)))
+        self.left = {c: i for i, cls in enumerate(d["left"]) for c in cls}
+        self.right = {c: i for i, cls in enumerate(d["right"]) for c in cls}
+        self.m = [dict(zip(row[::2], row[1::2])) for row in d["kern"]]
+        self.adv = {c: v / UPEM for c, v in d["adv"].items()}
+
+    def subst(self, s: str) -> str:
+        if not any(c in self.liga for c in s):
+            return s
+        out, i = [], 0
+        while i < len(s):
+            for letters, lig in self.liga.get(s[i], ()):
+                if s.startswith(letters, i):
+                    out.append(lig)
+                    i += len(letters)
+                    break
+            else:
+                out.append(s[i])
+                i += 1
+        return "".join(out)
+
+    def kern(self, a: str, b: str) -> float:
+        li = self.left.get(a)
+        if li is None:
+            return 0.0
+        rj = self.right.get(b)
+        return 0.0 if rj is None else self.m[li].get(rj, 0) / UPEM
+
+
+_SHAPERS = {key: _Shaper(_METRICS["faces"][fn]) for key, fn in FACE_FILES}
+
+
+@functools.lru_cache(maxsize=4096)
+def shape(s: str, variant: str, tabular: bool = False):
+    """(glyphs, pen) for `s`: the string after Geist's ligatures, and the
+    pen's advance after each glyph in em - its `hmtx` advance plus the
+    kerning to the next - as HarfBuzz gives Chromium. None for a glyph Geist
+    does not carry (it comes from the fallback face, whose advance the
+    loaded font supplies).
+
+    Pure: no ImGui, so it is cached - an immediate-mode UI shapes the same
+    strings every frame. Ligatures first, then kerning between what they
+    leave, as GSUB precedes GPOS."""
+    sh = _SHAPERS.get(face_key(variant, tabular)) or _SHAPERS[variant]
+    g = sh.subst(s)
+    pen = []
+    for i, c in enumerate(g):
+        a = sh.adv.get(c)
+        pen.append(None if a is None else
+                   a + (sh.kern(c, g[i + 1]) if i + 1 < len(g) else 0.0))
+    return g, tuple(pen)
 
 
 def face_key(variant: str, tabular: bool) -> str:
@@ -312,9 +430,21 @@ def face_key(variant: str, tabular: bool) -> str:
 def text_cell(dl, cell, faces, col) -> None:
     """One pinned string, vertically centred in its box like CSS line-height.
 
-    ImGui 1.92 renders any face at any size through push_font(face, size), so
-    the size comes from the spec rather than from a baked atlas entry.
-    """
+    The oracle sets font-variant-numeric: tabular-nums on every text cell,
+    so the kit uses the frozen faces to compare like with like - and sets
+    `line-height` to the cell's height, which is what places its baseline."""
+    if not is_geist(faces):
+        _text_cell_host(dl, cell, faces, col)
+        return
+    label(dl, cell["x"], cell["y"], cell["text"], faces, cell["variant"],
+          float(cell["size"]), col, baseline_box=cell["h"], tabular=True,
+          line_h=float(cell["h"]))
+
+
+def _text_cell_host(dl, cell, faces, col) -> None:
+    """`text_cell` for a host's faces (`host_faces`): ImGui's own metrics,
+    which is what those faces were measured with - the Geist tables in
+    fonts/metrics.json say nothing about another font."""
     # the oracle sets font-variant-numeric: tabular-nums on every text cell,
     # so the kit must use the frozen faces to compare like with like
     face = faces.get(face_key(cell["variant"], True)) or faces.get(cell["variant"])
@@ -354,11 +484,103 @@ def badge(dl, cell, theme, variant_table) -> None:
 def push_css_font(faces, variant: str, css_px: float, tabular: bool = False):
     """Push a face at a size that means what CSS means by it.
 
-    See FONT_SPAN_EM: stb_truetype sizes by ascent-descent, CSS by the em.
-    """
+    The faces are built and loaded so that ImGui's size is the em (see
+    "faces and metrics"), so this is the CSS px itself - no multiplier, and
+    so nothing for ImGui's whole-pixel rounding of sizes to change."""
     key = face_key(variant, tabular)
     face = faces.get(key) or faces.get(variant)
-    imgui.push_font(face, css_px * span_em(faces, variant))
+    imgui.push_font(face, css_px if is_geist(faces) else css_px * span_em(faces, variant))
+
+
+def ascent_descent(css_px: float) -> tuple:
+    """Blink's ascent and descent for Geist at `css_px`: each ROUNDED to a
+    whole pixel on its own (SkScalarRoundToScalar, Linux and Windows)."""
+    return float(px(ASCENT_EM * css_px)), float(px(DESCENT_EM * css_px))
+
+
+def baseline_y(y: float, css_px: float, box_h: float = 0.0,
+               line_h: float = 0.0) -> float:
+    """Where Chromium puts the alphabetic baseline of one line of Geist.
+
+    The line box is `line_h` tall (0: `line-height: normal`, which for
+    Geist is A + D, `ascent_descent`), centred in a box `box_h` tall at y as
+    `items-center` does - or, with no box, its top is y. Two roundings,
+    measured on 252 cells (11-20px, boxes 15-33, line-height normal, 16px
+    and 20px), all of which this reproduces:
+
+    * the line box's offset in the box rounds half UP;
+    * inside the line box, the half-leading above the glyphs is FLOORED -
+      so an odd leading puts the extra pixel below.
+
+    Reading Blink's source had suggested flooring both; the measurement
+    refuted the first. The gallery's text cells (`line-height` = the cell)
+    are where the second shows: 16px in 36 and 30px in 36 each sat 1px low
+    with the leading rounded."""
+    a, d = ascent_descent(css_px)
+    lh = line_h or (a + d)
+    top = px(y + (box_h - lh) / 2.0 if box_h else y)
+    return float(top + floor((lh - (a + d)) / 2.0)) + a
+
+
+def stock_text_y(y: float, css_px: float, box_h: float, faces=None) -> float:
+    """The line top to hand a STOCK ImGui text widget (InputText) so that
+    its glyphs sit on `baseline_y` - the line `draw.label` draws on.
+
+    ImGui puts a line's baseline its face's baked ascent below the line's
+    top, truncating the top to a whole pixel; that ascent comes from the
+    one-em line box build_fonts.py writes, not from Geist's real metrics,
+    so it is read rather than assumed. Call with the face pushed.
+
+    With a host's `faces` (not Geist) it is ImGui's own centring, as before."""
+    if faces is not None and not is_geist(faces):
+        return y + (box_h - imgui.get_font_size()) / 2.0
+    asc = imgui.get_font().get_font_baked(imgui.get_font_size()).ascent
+    return baseline_y(y, css_px, box_h) - asc
+
+
+def _glyph_run(dl, x: float, base: float, glyphs: str, pen, css_px: float,
+               col: int) -> None:
+    """Draw a shaped run with its left edge at x and its baseline at base.
+
+    Not `add_text`. ImGui truncates a text origin to a whole pixel and has
+    no kerning, so a kerned run - which has to restart after every pair -
+    would land on whole pixels, where Chromium positions each glyph at its
+    fractional pen position (measured: the ink follows a quarter-pixel
+    shift of the element). So each glyph is its own quad, at the pen, and
+    the backend's LINEAR sampling of the atlas carries the fraction.
+
+    Each quad is exactly its bitmap. A first version widened every quad by
+    the atlas padding, reasoning that ink sliding past a quad's edge would
+    otherwise be lost; measured, it was worse on both counts - a "W"
+    centred in a Kbd moved 0.18px off Chromium's rather than 0.08, and in a
+    full atlas the widened edge sampled a neighbour's texels, a 13-level
+    speck beside the gallery's `text.mixed`. Vertically the baseline is
+    whole, and glyph tops are whole device pixels from it."""
+    if (col >> 24) & 0xFF == 0:
+        return
+    font = imgui.get_font()
+    baked = font.get_font_baked(css_px)
+    top = base - baked.ascent
+    for c, p in zip(glyphs, pen):
+        g = baked.find_glyph(ord(c))
+        if g.is_visible():
+            dl.prim_reserve(6, 4)
+            dl.prim_rect_uv(imgui.ImVec2(x + g.x0, top + g.y0),
+                            imgui.ImVec2(x + g.x1, top + g.y1),
+                            imgui.ImVec2(g.u0, g.v0),
+                            imgui.ImVec2(g.u1, g.v1), col)
+        x += g.advance_x if p is None else p * css_px
+
+
+def _run_w(glyphs: str, pen, css_px: float) -> float:
+    """A shaped run's advance, with the face pushed. Not `calc_text_size`,
+    which rounds its width UP to a whole pixel."""
+    w = sum(p for p in pen if p is not None) * css_px
+    if None in pen:
+        baked = imgui.get_font().get_font_baked(css_px)
+        w += sum(baked.get_char_advance(ord(c))
+                 for c, p in zip(glyphs, pen) if p is None)
+    return w
 
 
 def fit_text(s, faces, variant, size, max_w, tabular=False) -> str:
@@ -379,10 +601,63 @@ def fit_text(s, faces, variant, size, max_w, tabular=False) -> str:
 
 
 def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
-          baseline_box=0.0, max_w=0.0, tabular=False):
+          baseline_box=0.0, max_w=0.0, tabular=False, line_h=0.0):
     """Draw `s` at (x, y). With baseline_box, centre it vertically in that
-    height the way a CSS line box would; with align/box_w, align horizontally.
-    Returns the advance width."""
+    height the way a CSS line box would (`baseline_y`, `line_h` its
+    line-height, 0 for normal); with align/box_w, align horizontally.
+    Returns the advance width.
+
+    The baseline is a whole pixel; the run's left edge is NOT. Chromium
+    positions glyphs at subpixel x (measured: a "K" moved by .25px moves
+    its ink by .25), and a centred "W" in a Kbd measured 0.26px off it
+    while this rounded tx. The rounding that keeps scrolled text from
+    wobbling is vertical - `baseline_y`, and the snapped scroll offset -
+    and is untouched."""
+    if not is_geist(faces):
+        return _label_host(dl, x, y, s, faces, variant, size, col, align=align,
+                           box_w=box_w, baseline_box=baseline_box, max_w=max_w,
+                           tabular=tabular)
+    if max_w:
+        s = fit_text(s, faces, variant, size, max_w, tabular)
+    glyphs, pen = shape(s, variant, tabular)
+    push_css_font(faces, variant, size, tabular)
+    try:
+        w = _run_w(glyphs, pen, size)
+        tx = x
+        if align == "right":
+            tx = x + box_w - w
+        elif align == "center":
+            tx = x + (box_w - w) / 2.0
+        _glyph_run(dl, tx, baseline_y(y, size, baseline_box, line_h), glyphs, pen,
+                   size, _u32(col))
+        return float(w)
+    finally:
+        imgui.pop_font()
+
+
+def text_w(s, faces, variant, size, tabular=False) -> float:
+    """The advance of `s` as Chromium lays it out: fractional, kerned, with
+    Geist's ligatures. Checked against canvas measureText in test_text.py."""
+    if not is_geist(faces):
+        push_css_font(faces, variant, size, tabular)
+        try:
+            return float(imgui.calc_text_size(s).x)
+        finally:
+            imgui.pop_font()
+    glyphs, pen = shape(s, variant, tabular)
+    push_css_font(faces, variant, size, tabular)
+    try:
+        return float(_run_w(glyphs, pen, size))
+    finally:
+        imgui.pop_font()
+
+
+def _label_host(dl, x, y, s, faces, variant, size, col, *, align="left",
+                box_w=0.0, baseline_box=0.0, max_w=0.0, tabular=False):
+    """`label` for a host's faces (`host_faces`): ImGui's own metrics and
+    centring, as the kit drew all text before RETRO 64 - the Geist tables
+    and baseline rule were measured for Geist and say nothing about another
+    font."""
     if max_w:
         s = fit_text(s, faces, variant, size, max_w, tabular)
     push_css_font(faces, variant, size, tabular)
@@ -396,14 +671,6 @@ def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
         ty = y + (baseline_box - ext.y) / 2.0 if baseline_box else y
         dl.add_text(imgui.ImVec2(px(tx), px(ty)), _u32(col), s)
         return float(ext.x)
-    finally:
-        imgui.pop_font()
-
-
-def text_w(s, faces, variant, size, tabular=False) -> float:
-    push_css_font(faces, variant, size, tabular)
-    try:
-        return float(imgui.calc_text_size(s).x)
     finally:
         imgui.pop_font()
 
@@ -939,12 +1206,9 @@ def kbd(dl, x, y, s, faces, theme, tbl, *, in_tooltip=False,
     The glyphs are centred in the box (`justify-center items-center`);
     measured, a cap glyph's ink sits at y 5..14 of the 20, centroid ~9.6.
     `in_tooltip` is the recipe's `in-data-[slot=tooltip-content]` restyle.
-    `glyphs=False` and `w` are the gallery's chrome pass: the box at the
-    width the SPEC pins - the browser's - with the text not drawn. Pinned
-    rather than intrinsic because the kit's text widths run a few percent
-    wide of Chromium's (whole-pixel glyph advances: "Ctrl" 22 against
-    21.192), which is a property of the font loader, not of this component;
-    `test_kbd.py` checks the width LAW against Chromium's own text widths.
+    `glyphs=False` is the gallery's chrome pass: the box with the text not
+    drawn, at its intrinsic width, which is the kit's text measure through
+    the width law. `w` pins a width instead.
     """
     kw, h = kbd_size(s, faces, tbl, text_w=text_w)
     w = kw if w is None else w

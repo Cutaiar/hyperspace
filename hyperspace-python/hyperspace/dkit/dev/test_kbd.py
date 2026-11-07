@@ -4,7 +4,8 @@ The box is in the pixel diff (`kbd.*` cells, both themes, the tooltip
 restyle included). The diff hides glyphs, so what it cannot see is here:
 
 * the WIDTH law - `max(min-w-5, text + px-1 twice)` - fed with Chromium's
-  own text widths, because the kit's run a few percent wide (see below);
+  own text widths, so it is checked apart from the kit's text measure
+  (which test_text.py checks against the same browser);
 * KbdGroup's spacing, including its separator, which is MONOSPACE because
   KbdGroup is a <kbd> and never resets the UA font;
 * the tooltip panel a Kbd grows and trims;
@@ -33,7 +34,7 @@ TBL = T.kbd_table("light")
 
 # Chromium's widths, Geist Variable 500 at 12px (canvas measureText), and
 # the ⌘ / ⇧ of the fallback font it used here (Inter - see test docstring)
-BROWSER_TEXT = {"K": 7.872, "B": 7.9, "Ctrl": 21.192, "⌘": 12.012,
+BROWSER_TEXT = {"K": 7.872, "B": 8.256, "Ctrl": 21.192, "⌘": 12.012,
                 "⇧": 12.369}
 # the Kbd boxes ?probe measured
 BROWSER_W = {"K": 20.0, "Ctrl": 29.203, "⌘": 20.016, "⇧": 20.375}
@@ -129,17 +130,16 @@ def test_the_glyph_is_centred_across_like_the_browser(theme, s):
         f"{s!r} ink at x {cx:.2f}, Chromium's at {BROWSER_INK[s][0]}")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Kit-wide, not Kbd's: 12px text sits ~0.93px LOWER than Chromium's in "
-    "draw.label (14px agrees to ~0.1). The baked font's metrics are whole "
-    "pixels - its advances are too, see HANDOFF. Strict, so the day the "
-    "font metrics are fixed this goes red and has to be promoted."))
 @pytest.mark.parametrize("s", sorted(BROWSER_INK))
 def test_the_glyph_sits_at_the_browsers_height(s):
+    """Within 0.1px. This was a STRICT xfail at 0.4 while 12px text sat
+    ~0.93px low (RETRO row 61): ImGui set 12px at 16, with a ceil'd ascent
+    of 13 over Blink's rounded 12. Now `draw.baseline_y` - see
+    test_text.py, which pins the rule on 252 measured cells."""
     _gl()
     f, x, y = _render("light", s)
     _cx, cy = _ink_centroid(f, x, y, 20.0, 20.0)
-    assert abs(cy - BROWSER_INK[s][1]) < 0.4, (
+    assert abs(cy - BROWSER_INK[s][1]) < 0.1, (
         f"{s!r} ink at y {cy:.2f}, Chromium's at {BROWSER_INK[s][1]}")
 
 
