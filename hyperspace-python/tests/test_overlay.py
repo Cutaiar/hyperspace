@@ -390,9 +390,9 @@ def test_overlay_refuses_every_road_while_the_config_shuts_it(gated):
 
     r, out = gated.reg, gated.out
     t = next(b for b in routing.Bindings.factory().bindings
-             if b.source == "key:T" and b.target == "overlay.on")
+             if b.source == "key:T" and b.target == "output.overlay")
     master = next(d for d in apc40.DEFAULT_MAP if d["source"] == "note:0:80")
-    assert master["target"] == "overlay.on"
+    assert master["target"] == "output.overlay"
     routing.act(r, t)                                         # T
     routing.act(r, routing.Binding.from_json(master))         # MASTER select
     r["output.overlay"].set(True)                             # the panel's toggle

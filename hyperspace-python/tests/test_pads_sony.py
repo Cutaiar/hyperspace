@@ -68,7 +68,7 @@ def test_usb_and_bluetooth_decode_the_same_payload():
 
 
 def test_every_button_lands_in_the_pads_vocabulary():
-    cases = {(7, 0x10): "X", (7, 0x20): "A", (7, 0x40): "B", (7, 0x80): "Y",
+    cases = {(7, 0x10): "W", (7, 0x20): "S", (7, 0x40): "E", (7, 0x80): "N",
              (8, 0x01): "LB", (8, 0x02): "RB", (8, 0x10): "VIEW", (8, 0x20): "MENU",
              (8, 0x40): "LSTICK", (8, 0x80): "RSTICK", (9, 0x01): "GUIDE", (9, 0x02): "TOUCH",
              (9, 0x04): "SHARE", (9, 0x10): "LFN", (9, 0x20): "RFN", (9, 0x40): "LP",
@@ -113,7 +113,7 @@ def test_bluetooth_simple_and_rejects():
     f = sony.decode(simple)
     assert f.kind == sony.BT_SIMPLE and not f.full
     on = {n for n, i in models.CANON.items() if f.buttons[i]}
-    assert on == {"A", "LB", "TOUCH"} and f.hat == 0      # 0x28: the hat released, the cross
+    assert on == {"S", "LB", "TOUCH"} and f.hat == 0      # 0x28: the hat released, the cross
     assert f.axes[0] == -1.0 and f.axes[3] == 1.0
     # a 0x01 report padded to 78 over Bluetooth is still the simple one (SDL)
     padded = simple + bytes(68)

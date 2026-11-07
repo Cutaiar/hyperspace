@@ -284,6 +284,9 @@ from . import undo as undo_steps
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
 from .motion import CUSTOM, OFF, Follower, Motion
+
+# re-exported: the grammar and the shared sources (plan 44 D2) live there
+from .pads.models import FACE_WORDS, HAT_WORDS, pair_label
 from .params import (
     CHASE_PARAM,
     DEPTH_TAPER,
@@ -304,8 +307,6 @@ from .params import (
     part_of_id,
     retaper_depths,
 )
-
-# re-exported: the grammar and the shared sources (plan 44 D2) live there
 from .routing_sources import (  # noqa: F401
     _NO_LANES,
     BUILTIN_LANES,
@@ -926,7 +927,6 @@ class Binding:
         addr = ":".join(self.parts)
         on = f" on {self.device}" if self.device else ""     # a second pad's (plan 27 B6)
         if s == "hat":
-            from .pads.models import HAT_WORDS
             return f"d-pad {HAT_WORDS.get(addr, addr)}{on}"
         lane = is_continuous(s)
         who = (name if name and lane else row_words(f"{s}:{addr}") if s == PAIR_SCHEME
@@ -1006,13 +1006,10 @@ def row_words(row: Binding | str, names=None) -> str:
     if scheme == modifiers.SCHEME:
         return modifiers.id_of(f"{scheme}:{addr}") or source
     if scheme == "pad":
-        from .pads.models import FACE_WORDS
         return f"pad {FACE_WORDS.get(addr, addr)}"
     if scheme == "hat":
-        from .pads.models import HAT_WORDS
         return f"d-pad {HAT_WORDS.get(addr, addr.lower())}"
     if scheme == PAIR_SCHEME:
-        from .pads.models import pair_label
         pos, _, neg = addr.partition(PAIR_SEP)
         return f"pair {pair_label(None, pos, neg)}"
     if scheme == "axis":
