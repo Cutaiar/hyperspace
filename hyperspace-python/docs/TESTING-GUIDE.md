@@ -7154,7 +7154,8 @@ its default spot, and the terminal and SYSTEM page name the screen it
 was last on. (4) the windows swap (render on screen 0, controls on
 screen 1); with 7, the note "monitor = 7, but 2 screens are connected
 (0–1) — using the last position"; with "left", the app still launches
-with "monitor = 'left' is not a screen index — using the last position".
+with "monitor = 'left' matches no screen (connected: …) — using the last
+position", since a string is a screen's name now (row 771).
 
 **Know:** a screen number that is not there at launch is ignored for the
 whole run — plug in first.

@@ -764,6 +764,9 @@ class _PlaceGlfw(_HintGlfw):
     def get_monitor_workarea(self, m):
         return self.mons[m]
 
+    def get_monitor_pos(self, m):
+        return self.mons[m][:2]
+
     def get_monitor_name(self, m):
         return m.encode()
 
@@ -796,7 +799,7 @@ def _open(monkeypatch, cfg, home, mons=None):
 
 
 @pytest.mark.parametrize(("monitor", "said"), [
-    ("left", "monitor = 'left' is not a screen index"),      # no number at all
+    ("left", "monitor = 'left' matches no screen"),           # a name no screen has
     (7, "monitor = 7, but 2 screens are connected (0–1)"),    # a screen that is not there
     (None, "monitor = None is not a screen index"),
 ])
@@ -826,6 +829,103 @@ def test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note(
         g, render, _ = _open(monkeypatch, cfg, tmp_path)
         assert cfg == {"output": {"monitor": good, "control_monitor": good}}
         assert app._make_output(render, Registry(), cfg).monitor == good
+
+
+class _TwinGlfw(_PlaceGlfw):
+    """A window system whose two screens have one name: the part after | is
+    only this fake's key."""
+
+    def get_monitor_name(self, m):
+        return m.split("|")[0].encode()
+
+
+LAPTOP_ = ("Built-in", (0, 38, 1728, 1041))
+TV_LEFT = ("MStar|a", (1728, 0, 1920, 1080))
+TV_RIGHT = ("MStar|b", (3648, 0, 1920, 1080))
+
+
+def _open_twins(monkeypatch, cfg, tmp_path, *mons):
+    g = _TwinGlfw(dict(mons))
+    monkeypatch.setattr(app, "glfw", g)
+    return g, app._windows(False, cfg, tmp_path)
+
+
+def test_screens_by_name_survive_the_plug_order(monkeypatch, tmp_path, capsys):
+    """Row 771, through `_windows`: named outputs land on their own screens
+    however the window system lists them, where an index would swap them.
+    `Output.monitor` and `Slot.monitor` are indices still (until SC3b): the
+    index the name found on this launch."""
+    from hyperspace import config
+    from hyperspace.params import Registry
+
+    for mons, first, second in (((LAPTOP_, TV_LEFT, TV_RIGHT), 1, 2),
+                                ((LAPTOP_, TV_RIGHT, TV_LEFT), 2, 1)):
+        cfg = {"output": {**config.DEFAULTS["output"], "control_monitor": "Built-in",
+                          "screens": [{**config.SCREEN, "monitor": "MStar #1"},
+                                      {**config.SCREEN, "monitor": "MStar #2"}]}}
+        cfg["output"]["monitor"] = "MStar #1"
+        g, (slots, ctrl) = _open_twins(monkeypatch, cfg, tmp_path, *mons)
+        assert g.pos[slots[0].win] == (1728 + 16, 16)
+        assert g.pos[slots[1].win] == (3648 + 16, 16)
+        assert g.pos[ctrl][0] < 1728                               # on the laptop
+        assert [s.monitor for s in slots] == [first, second]
+        assert cfg["output"]["monitor"] == first and cfg["output"]["control_monitor"] == 0
+        assert app._make_output(slots[0].win, Registry(), cfg).monitor == first
+        assert app._later_output(slots[1]).monitor == second
+        assert "notes" not in cfg
+
+
+def test_output_1_named_only_in_the_list_is_resolved_and_said(monkeypatch, tmp_path, capsys):
+    """`_slots` leaves output 1 to `settle`, which reads `[output] monitor`:
+    `config.load` copies the list's first entry there, so a name given only
+    in `[[output.screens]]` reaches it, from a real file."""
+    from hyperspace import config
+
+    p = tmp_path / "config.toml"
+    p.write_text('[[output.screens]]\nmonitor = "MStar #2"\n')
+    cfg = config.load(p)
+    g, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_RIGHT, TV_LEFT)
+    assert g.pos[slots[0].win] == (3648 + 16, 16) and slots[0].monitor == 1
+    assert "notes" not in cfg
+    # a name no screen has: −1, as output 1 always opens, and said once
+    p.write_text('[[output.screens]]\nmonitor = "nothing"\n')
+    cfg = config.load(p)
+    g, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_LEFT)
+    assert slots[0].opened and slots[0].monitor == -1
+    assert cfg["notes"] == [("config: [output] monitor = 'nothing' matches no screen "
+                             "(connected: Built-in, MStar) — using the last position")]
+
+
+def test_a_later_output_whose_named_screen_is_absent_is_not_opened(monkeypatch, tmp_path, capsys):
+    """Fork F9 holds for a name as for an index; output 1 always opens."""
+    from hyperspace import config
+
+    cfg = {"output": {**config.DEFAULTS["output"], "monitor": "MStar #1",
+                      "screens": [{**config.SCREEN, "monitor": "MStar #1"},
+                                  {**config.SCREEN, "name": "wall", "monitor": "MStar #2"},
+                                  {**config.SCREEN, "monitor": "TV"},
+                                  {**config.SCREEN, "monitor": "MStar", "window": False,
+                                   "syphon": "x"}]}}
+    _, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_LEFT)
+    assert slots[0].opened and slots[0].monitor == 1
+    assert not slots[1].opened and slots[1].missing == 'screen "MStar #2" is not connected'
+    assert not slots[2].opened and slots[2].missing == 'screen "TV" is not connected'
+    assert slots[3].publish_only and not slots[3].missing          # looks for no screen
+    first, wall, tv = cfg["notes"]              # each said once, output 1's too
+    assert first.startswith("config: [output] monitor = 'MStar #1' asks for number 1")
+    assert "only one is connected" in first
+    assert wall == ("config: output 2 (wall): monitor = 'MStar #2' asks for number 2 of 'MStar', "
+                    "and 1 connected (connected: Built-in, MStar) — not opened")
+    assert tv == ("config: output 3: monitor = 'TV' matches no screen "
+                  "(connected: Built-in, MStar) — not opened")
+    assert wall in capsys.readouterr().err
+    # a bare name on two screens opens, and says which
+    cfg = {"output": {**config.DEFAULTS["output"],
+                      "screens": [{**config.SCREEN},
+                                  {**config.SCREEN, "monitor": "MStar"}]}}
+    _, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_RIGHT, TV_LEFT)
+    assert slots[1].opened and slots[1].monitor == 2
+    assert any("is 2 screens (MStar #1, MStar #2)" in n for n in cfg["notes"])
 
 
 def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):

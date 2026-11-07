@@ -1500,8 +1500,8 @@ map = "midi_map.json"   # an old map, read once when bindings.json does not exis
 
 [output]                # output 1 and the control window
 overlay = false         # true allows overlay mode; false: always opaque, T does nothing
-monitor = -1            # screen index for the render window (and fullscreen); -1 = where it was last
-control_monitor = -1    # screen index for the control window; -1 = where it was last
+monitor = -1            # the render window's screen (and fullscreen's): a name ("MStar", "MStar #2") or an index; -1 = where it was last
+control_monitor = -1    # the control window's screen: a name or an index; -1 = where it was last
 fullscreen = false
 on_start = false        # launch straight into overlay (needs overlay = true)
 passthrough = true      # overlay: clicks go to the window underneath
@@ -3061,9 +3061,9 @@ frame's size and paces the loop (its swap waits for its screen; later
 outputs' swaps do not). Later outputs are opaque, never overlay, and
 their screen and fullscreen come only from the config (the OUTPUT page's
 Screen and Fullscreen rows move output 1). A later output whose
-`monitor` names no connected screen **is not opened**, with a note
-("output 2 (projector): monitor = 2, but 2 screens are connected (0–1) —
-not opened"); output 1 always opens. A later output of another shape
+`monitor`, index or name, finds no connected screen **is not opened**,
+with a note ("output 2 (projector): monitor = 2, but 2 screens are
+connected (0–1) — not opened"); output 1 always opens. A later output of another shape
 shows the whole frame letterboxed, the hands registered on it. Each
 later output is drawn from the shared textures in its own context
 (`outputs.Presenter`); a failing present marks that output and the rest
@@ -3115,8 +3115,22 @@ see-through, clicks passing through (G or PAN takes them back);
 `output.bg` and `output.alpha` set the ground and opacity. The
 `overlay.*` ids are aliases of `output.*`.
 
+**A screen by name** (`placement.match`, row 771): `monitor` and
+`control_monitor`, and `monitor` on a `[[output.screens]]` entry, may
+give a screen's exact whole name, case and all: "TV" does not find
+"TV Samsung". Two screens of one name are two screens: "MStar #2" is the
+second of them, counted left to right across the desk by the monitor's
+frame rather than in the window system's order, so a replug can't swap
+them. A Mac's own " (n)" isn't counted, so "DELL #2" works when it lists
+"DELL (1)" and "DELL (2)". "MStar" alone on two is the first, with a note
+naming both; "MStar #1" on a twin alone uses it, with a note every launch
+(row 772). `placement.labels` gives the word for each screen. An index
+still works. A name becomes an index once, at the launch
+(`placement.settle`, `app._slots`): `Output.monitor` and `Slot.monitor`
+stay indices at runtime until SC3b.
+
 **Where windows open** (`placement.py`): a configured `monitor` /
-`control_monitor` index first, then `windows.json` (the last quit's
+`control_monitor` first, then `windows.json` (the last quit's
 rects — always the plain window's, never a fullscreen cover), else the
 render window top-left of the primary screen and the controls flush
 right; two later outputs with no memory open 40 px apart. A remembered
