@@ -353,14 +353,16 @@ class Root:
     `Offscreen` the first view draws into, whichever displays are live;
     `pacer`, a `pacing.Pacer`. `logical` and `size` are the frame's window
     points and framebuffer pixels: output 1's, or the last known while it has
-    no window or says nothing usable. The app fills it; the renderer never
-    sees it."""
+    no window or says nothing usable. `hold_size` (SC3b): output 1's display dropped
+    a moment ago, and may well be back, so another display's size doesn't take over yet.
+    The app fills it; the renderer never sees it."""
 
     win: Any
     frame: Offscreen
     pacer: Any
     logical: tuple[int, int] = (1, 1)
     size: tuple[int, int] = (1, 1)
+    hold_size: bool = False
 
     def measure(self, logical: tuple[int, int], size: tuple[int, int]) -> None:
         """A window's sizes this frame; an empty one keeps the last known."""

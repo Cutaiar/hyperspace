@@ -107,7 +107,7 @@ def script(d, panel):
         yield from d.park()
         yield from d.wait(3)
 
-    # the last row's target: another, then back, each read from the file. Nothing opens or closes
+    # the last row's target: another, then back, each read from the file. It acts at once (SC3b)
     last = len(across) - 1
     label = across[last]
     keep = read_row(find(run.store.current, label))["target"]
@@ -123,8 +123,8 @@ def script(d, panel):
     yield from d.pick(f"display.{last}.target", picks.index(to))
     yield from d.park()
     yield from d.wait(3)
-    say(f"{label}: target {keep!r} -> {to!r};",
-        "windows open", windows, "(no change, it waits:", ui_displays.ON_RESTART.strip(), ")")
+    now_open = len([w for w in (*(sl.win for sl in panel.outputs), *(a.win for sl in panel.outputs for a in sl.also)) if w])
+    say(f"{label}: target {keep!r} -> {to!r};", "windows open", windows, "->", now_open)
     yield from d.wait(25)
     doc, now = on_file()
     assert now == to, (to, doc)

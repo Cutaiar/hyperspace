@@ -123,7 +123,11 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
         self.draw = lambda dt, fps: stepped(self, dt, fps)
         stepped(self, dt, fps)
 
-    swap = glfw.swap_buffers
+    swap, destroy = glfw.swap_buffers, glfw.destroy_window
+
+    def destroyed(window):
+        st["windows"].pop(ctypes.addressof(window.contents), None)    # (a display went: SC3b)
+        destroy(window)
 
     def captured(window):
         st["windows"][ctypes.addressof(window.contents)] = window
@@ -145,11 +149,13 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
 
     ui.Panel.draw = first_draw
     glfw.swap_buffers = captured
+    glfw.destroy_window = destroyed
     sys.argv = sys.argv[:1]         # app.main parses its own flags: these were this tool's
     try:
         app.main()
     finally:
         glfw.swap_buffers = swap
+        glfw.destroy_window = destroy
         if ui.Panel.draw is first_draw:     # the app never drew
             ui.Panel.draw = draw
         (out / "frames.json").write_text(json.dumps(shots, indent=0))

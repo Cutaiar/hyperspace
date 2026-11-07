@@ -1117,8 +1117,9 @@ def test_both_exits_destroy_every_window_before_terminate(monkeypatch):
     tail = src[src.index("impl.shutdown()"):]
     assert tail.index("_destroy_windows(all_windows())") < tail.index("glfw.terminate()")
     assert "windows=all_windows()" in src
-    assert ("return [*(a.win for sl in slots for a in sl.also), *(sl.win for sl in slots[1:]),\n"
-            "                ctrl_win, render_win, root_win]") in src
+    assert ("*(a.win for sl in slots for a in sl.also), *(sl.win for sl in slots[1:]),\n"
+            "                ctrl_win, slots[0].win, root_win]") in src
+    assert "*(plug.windows() if plug is not None else ())," in src, "and those held for a display"
 
 
 # ---- the desk's table and knob smoothing's default (plan 18 WP2, fork 12) ----
