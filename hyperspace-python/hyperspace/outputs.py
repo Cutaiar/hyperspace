@@ -1190,6 +1190,7 @@ class Presenter:
 
     def release(self) -> None:
         """Free the programs and arrays; call with this context current, every
-        output's alike, before its window is destroyed: with the root's current, a
-        release deleted the root's object of the same name (SC3a's spike)."""
+        output's alike, before its window is destroyed: GL's vertex array numbers are
+        per context. (On Apple's driver they aren't, so a wrong order is harmless there:
+        SC3a's spike read its own array's number going as the root's, row 808.)"""
         self._drop()

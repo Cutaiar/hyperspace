@@ -18,7 +18,7 @@ from ui_driver import Driver
 
 from hyperspace import app, config, hotplug, placement, ui_displays
 from hyperspace.displays import CONTROL, DisplayList, Running, row, wanted
-from hyperspace.hotplug import HOLD_S, SETTLE_S, Hotplug
+from hyperspace.hotplug import HOLD_S, LOOK_S, REOPEN_S, SETTLE_S, Hotplug
 from hyperspace.outputs import Offscreen, Root, Slot
 from hyperspace.overlay import GlfwBackend, Output
 from hyperspace.pacing import Pacer
@@ -229,6 +229,8 @@ class Rig:
         self.run = Running(self.store, lambda: self.plug.screens, self.slots)
         self.t = 100.0
         self.wired = 0
+        self.heard = app._slot_windows(self.slots)
+        self.strict = True
         self.notes: list = []
         self.said: list = []
         self.warned: list = []
@@ -245,6 +247,7 @@ class Rig:
 
     def _wired(self):
         self.wired += 1
+        self.heard = app._slot_windows(self.slots)
 
     def tick(self, dt=0.016):
         """A frame's start, and what the frame would touch: every window it holds must be alive."""
@@ -253,9 +256,12 @@ class Rig:
         self.plug.between_frames()
         for w in app._slot_windows(self.slots):
             self.g._w(w)
+        if self.strict:
+            for w in self.heard:
+                self.g._w(w)        # (`Keys.more`, `Mouse.win`: `glfw.get_key` on a dead window ends a show)
+            assert self.g.current == self.ctrl, "what the loop has current here"
         for o in app._outputs_now(self.slots):
             o.apply()
-        assert self.g.current == self.ctrl, "what the loop has current here"
 
     def run_for(self, secs):
         for _ in range(int(secs / 0.05) + 2):
@@ -383,9 +389,10 @@ def test_a_further_display_unplugged_and_its_first_promoted(rig):
     assert sl.win == also and sl.display == "Projector" and sl.also == []
     assert (sl.switches.flip_x, sl.switches.flip_y) == (False, True)
     assert r.main.win == also, "output 1's params have whichever window is its first"
-    assert not r.root.hold_size, "another of its displays has the size"
+    assert r.root.hold_size, "its first is away a moment: the frame keeps its size"
     assert r.root.pacer.owner == also
     r.run_for(HOLD_S)
+    assert not r.root.hold_size, "gone: the next has the size, as SC2 has it"
     assert first not in r.g.windows and sl.win == also
     # it comes back as the further display, and nothing moves that needn't
     r.g.plug(tv)
@@ -689,6 +696,24 @@ def test_a_window_that_wont_open_is_said_and_the_rest_go_on(rig):
     assert r.slots[0].opened and r.slots[0].missing == ""
 
 
+def test_a_window_that_wont_open_is_tried_every_few_seconds_with_no_change(rig):
+    r = rig()
+    tv = r.g.mons[1]
+    r.g.unplug(tv)
+    r.run_for(HOLD_S + 0.1)
+    r.g.fail_create = True
+    tries = []
+    real = r.g.create_window
+    r.g.create_window = lambda *a: (tries.append(1), real(*a))[1]
+    r.g.plug(tv)
+    r.run_for(SETTLE_S + 12.0)
+    assert 2 <= len(tries) <= 4, "not every frame: each one is a hitch"
+    assert len([s for s in r.warned if "could not be created" in s]) == 1, "said once"
+    r.g.fail_create = False
+    r.run_for(REOPEN_S + 0.1)
+    assert r.slots[0].opened and r.slots[0].missing == ""
+
+
 def test_a_context_that_wont_open_closes_its_window(rig):
     r = rig()
     tv = r.g.mons[1]
@@ -747,6 +772,253 @@ def test_the_loop_reads_only_live_windows(rig):
     r.tick()
     assert win not in app._slot_windows(r.slots)
     assert win in r.plug.windows(), "both exits destroy it"
+
+
+# ---- review of #425: an accident at a show doesn't cost the show
+
+
+def _boom(*a, **k):
+    raise RuntimeError("the window system says no")
+
+
+@pytest.mark.parametrize("where", [
+    "glfw.hide_window", "glfw.show_window", "glfw.destroy_window", "glfw.create_window", "glfw.set_window_pos",
+    "glfw.swap_interval", "glfw.set_window_attrib", "glfw.window_hint",
+    "plug._control", "plug._follow", "plug._strays", "plug._after", "plug._publish_follows", "plug._move_control",
+    "pacer.choose", "release",
+])
+def test_a_raise_at_any_step_costs_the_frame_nothing(rig, monkeypatch, where):
+    """Through a whole unplug, hold and return with a step raising throughout: every frame, nothing
+    the frame holds is dead and the loop's context is current; then, with the fault gone, the
+    same job is back by itself."""
+    r = rig()
+    tv = r.g.mons[1]
+    r.run_for(0.5)
+    who, name = where.split(".") if "." in where else ("presenter", where)
+    owner = {"glfw": r.g, "plug": r.plug, "pacer": r.root.pacer}.get(who)
+    if owner is not None:
+        monkeypatch.setattr(owner, name, _boom)
+    else:
+        monkeypatch.setattr(app.Presenter, "release", _boom)
+    r.g.unplug(tv)
+    r.run_for(HOLD_S + 0.5)
+    r.g.plug(tv)
+    r.run_for(SETTLE_S + 0.5)
+    monkeypatch.undo()
+    r.run_for(LOOK_S + SETTLE_S + REOPEN_S + 1.0)
+    assert r.shown() == {"TV": 1, "Projector": 2}, r.notes
+    assert r.main.win == r.slots[0].win and r.root.pacer.owner == r.slots[0].win
+    assert r.g.windows[r.slots[0].win]["shown"] is True
+    assert not r.plug.held, "no hidden window left over"
+
+
+def test_a_failing_step_is_tried_once_a_second_not_every_frame(rig, monkeypatch):
+    r = rig()
+    calls = []
+    monkeypatch.setattr(r.plug, "_control", lambda *a: (calls.append(1), _boom())[1])
+    r.g.unplug(r.g.mons[1])
+    r.run_for(HOLD_S + 0.1)         # the hold has run out, which asks each frame
+    n = len(calls)
+    r.run_for(3.0)
+    assert 1 <= len(calls) - n <= 4, "about one a second"
+
+
+def test_a_wire_that_fails_is_told_again_next_frame(rig):
+    r = rig()
+    r.run_for(0.5)
+    win = r.slots[0].win
+    good, r.plug.wired = r.plug.wired, _boom
+    r.strict = False
+    r.g.unplug(r.g.mons[1])
+    r.run_for(HOLD_S + 0.5)
+    assert win not in r.g.windows and win in r.heard
+    r.plug.wired = good
+    r.tick()
+    assert win not in r.heard
+
+
+def test_a_broken_seen_costs_no_window(rig):
+    r = rig()
+    r.run_for(1.1)
+    win = r.slots[0].win
+    r.plug.seen["displays"] = "not a table"
+    r.g.unplug(r.g.mons[1])
+    r.run_for(HOLD_S + 0.1)
+    assert win not in r.g.windows and not r.plug.held
+
+
+def _pair(rig):
+    rows = {"Built-in": row(CONTROL), "TV": row("output.1", fullscreen=True, flip_x=True),
+            "Projector": row("output.1", flip_y=True)}
+    return rig(mons=[_laptop(), _tv(), _projector()], rows=rows)
+
+
+def test_a_flap_on_a_first_display_leaves_everything_as_it_was(rig):
+    """Output 1 on a big TV and a small monitor, and the TV re-syncs for a second: the first, its
+    flips, `output.fullscreen`, the mouse's window, who paces and the frame's size all come back."""
+    r = _pair(rig)
+    tv = r.g.mons[1]
+    sl = r.slots[0]
+    r.run_for(0.5)
+    first, also = sl.win, sl.also[0].win
+    r.root.size = (3840, 2160)
+    r.g.unplug(tv)
+    r.tick()
+    assert sl.win == also, "the other display's picture goes on"
+    assert r.root.hold_size, "the frame keeps its size, its first being away a moment"
+    assert (sl.switches.flip_x, sl.switches.flip_y) == (False, True)
+    r.run_for(1.0)
+    r.g.plug(tv)
+    r.run_for(SETTLE_S)
+    assert sl.win == first and sl.display == "TV" and [a.win for a in sl.also] == [also]
+    assert (sl.switches.flip_x, sl.switches.flip_y) == (True, False)
+    assert sl.also[0].flip_y is True and sl.also[0].flip_x is False
+    assert r.main.win == first and r.main.fullscreen is True and r.main.mode == "fullscreen"
+    assert sl.also[0].output.win == also and sl.also[0].output.fullscreen is False
+    assert r.root.pacer.owner == first and r.g.intervals[also] == 0 and r.g.intervals[first] == 1
+    assert not r.root.hold_size and first in r.heard
+    r.tick()
+    assert r.g.get_window_pos(first) == tv.rect[:2], "and covers its display"
+
+
+def test_past_the_hold_the_promoted_display_stays_first(rig):
+    r = _pair(rig)
+    tv = r.g.mons[1]
+    sl = r.slots[0]
+    also = sl.also[0].win
+    r.g.unplug(tv)
+    r.run_for(HOLD_S + 0.1)
+    assert sl.win == also and not r.root.hold_size, "its size now, as SC2 has it"
+    r.g.plug(tv)
+    r.run_for(SETTLE_S)
+    assert sl.win == also and [a.display for a in sl.also] == ["TV"]
+
+
+def test_both_of_an_outputs_displays_flapping_come_back_in_order_whichever_returns_first(rig):
+    r = _pair(rig)
+    tv, pr = r.g.mons[1:]
+    sl = r.slots[0]
+    r.run_for(0.5)
+    first, also = sl.win, sl.also[0].win
+    r.g.unplug(tv)
+    r.tick()
+    r.g.unplug(pr)
+    r.tick()
+    assert not sl.opened and r.root.hold_size
+    r.g.plug(pr)
+    r.run_for(SETTLE_S)
+    assert sl.win == also and r.root.hold_size
+    r.g.plug(tv)
+    r.run_for(SETTLE_S)
+    assert sl.win == first and [a.win for a in sl.also] == [also] and not r.root.hold_size
+
+
+def test_the_control_window_falls_back_to_the_display_it_asked_to_float_on(rig, monkeypatch):
+    monkeypatch.setattr(GlfwBackend, "float_over_renders", lambda self, win, on: None)
+    # the leftmost is a render too: a projector in the room
+    r = rig(mons=[_laptop(), _projector(x=1728), _tv(x=3648)],
+            rows={"Built-in": row(CONTROL), "Projector": row("output.2"), "TV": row("output.1", floats_control=True)})
+    laptop, _, tv = r.g.mons
+    r.g.set_window_pos(r.ctrl, 100, 100)
+    r.plug._note_where()
+    r.g.unplug(laptop)
+    r.run_for(HOLD_S + 0.1)
+    assert r.on(r.ctrl, tv) and r.plug.floating
+
+
+def test_only_output_1s_first_display_asks_for_alpha(rig):
+    r = rig(rows={"Built-in": row(CONTROL), "TV": row("output.1"), "Projector": row("output.1")}, overlay=True)
+    tv, pr = r.g.mons[1:]
+    r.g.unplug(tv, pr)
+    r.run_for(HOLD_S + 0.1)
+    assert not r.slots[0].opened
+    r.g.plug(pr)
+    r.run_for(SETTLE_S)
+    assert r.g.windows[r.slots[0].win]["hints"]["TRANSPARENT_FRAMEBUFFER"] is True
+    r.g.plug(tv)
+    r.run_for(SETTLE_S)
+    assert r.g.windows[r.slots[0].also[0].win]["hints"]["TRANSPARENT_FRAMEBUFFER"] is False
+    assert r.g.hints["TRANSPARENT_FRAMEBUFFER"] is False
+
+
+def test_a_change_before_the_callback_goes_in_isnt_missed(rig):
+    r = rig()
+    assert r.plug.changed is True, "a first look"
+    r.g.mons.remove(r.g.mons[2])    # unplugged after `_windows`, before `start`
+    two = r.slots[1].win
+    r.tick()
+    assert not r.slots[1].opened and r.g.windows[two]["shown"] is False
+
+
+def test_a_row_changed_during_the_hold_is_honoured_and_a_desks_change_kept(rig):
+    r = rig(rows={"Built-in": row(CONTROL), "TV": row("output.1"), "Projector": row("output.2")})
+    tv = r.g.mons[1]
+    sl = r.slots[0]
+    win = sl.win
+    r.run_for(0.5)
+    sl.switches.flip_y = True       # a desk's, on the param: no row knows
+    r.g.unplug(tv)
+    r.tick()
+    r.store.set("TV", flip_x=True, fullscreen=True)
+    r.tick()
+    r.g.plug(tv)
+    r.run_for(SETTLE_S)
+    assert sl.win == win, "the same window"
+    assert sl.switches.flip_x is True and r.main.fullscreen is True, "what the panel says"
+    assert sl.switches.flip_y is True, "and what the row never touched stands"
+    r.tick()
+    assert r.main.mode == "fullscreen" and r.g.get_window_pos(win) == tv.rect[:2]
+
+
+def test_a_drop_and_return_within_one_poll_is_put_right(rig):
+    """The list reads the same, and macOS has moved the window onto another display's picture."""
+    r = rig(rows={"Built-in": row(CONTROL), "TV": row("output.1"), "Projector": row("output.2")})
+    laptop, tv, _ = r.g.mons
+    win, two = r.slots[0].win, r.slots[1].win
+    r.g.set_window_pos(r.ctrl, 100, 100)
+    r.g.set_window_pos(win, 1800, 50)
+    r.run_for(1.2)
+    # the control window's display too: it's the same fault
+    r.g.unplug(tv)
+    r.g.plug(tv)
+    r.g.windows[r.ctrl]["pos"] = (5000, 40)
+    r.g.queue = [()]
+    assert r.on(win, laptop)
+    r.tick()
+    assert r.slots[0].win == win, "no window was torn down, as nothing's gone"
+    assert r.on(win, tv) and r.g.get_window_pos(win) == (1800, 50)
+    assert two in r.g.windows and r.slots[1].win == two
+    assert r.g.get_window_pos(r.ctrl) == (100, 100)
+
+
+def test_ones_own_pick_isnt_the_other_macs(rig):
+    r = rig()
+    r.run_for(0.5)
+    r.store.set_target("TV", "output.3", ["Built-in", "TV", "Projector"])
+    assert r.plug.others_chose() == [], "a frame from being acted on, no warning flashes"
+    r.tick()
+    assert r.plug.others_chose() == []
+
+
+def test_a_closed_windows_spot_outlives_a_quit(rig, tmp_path):
+    r = rig()
+    tv = r.g.mons[1]
+    r.g.set_window_pos(r.slots[0].win, 1800, 50)
+    r.run_for(1.2)
+    r.g.unplug(tv)
+    r.tick()
+    assert r.plug.away_spots()["TV"][:2] == (1800, 50), "a quit during the hold"
+    r.run_for(HOLD_S + 0.1)
+    assert r.plug.away_spots()["TV"][:2] == (1800, 50), "and after it"
+    scr = placement.screens(r.g)
+    home = tmp_path / "saved"
+    home.mkdir()
+    placement.save(home, None, [None], scr, {}, r.plug.away_spots())
+    seen = placement.load(home)
+    assert placement.spot(seen, "TV", 1)["x"] == 1800, "though no display here can show it"
+    r.g.plug(tv)
+    r.run_for(SETTLE_S)
+    assert "TV" not in r.plug.away_spots(), "its window has it again"
 
 
 def test_the_stall_watch_with_windows_coming_and_going():
@@ -810,6 +1082,26 @@ def test_labels_with_nothing_held_are_the_arrangements():
     assert placement.labels(scr, held) == placement.labels(scr) == ["TV #2", "Built-in", "TV #1"]
     assert held == {7: "TV #2", 1: "Built-in", 2: "TV"}
     assert placement.differs(scr, held) == []
+
+
+def test_a_number_given_away_isnt_claimed_back():
+    """A goes, C arrives and takes its number, A returns: two connected twins must never claim one
+    number, or a live window changes job by list order, with nobody choosing."""
+    from hyperspace.placement import Screen
+    a, b = Screen("TV", 0, 0, 10, 10, (0, 0), 1), Screen("TV", 10, 0, 10, 10, (10, 0), 2)
+    c = Screen("TV", 20, 0, 10, 10, (20, 0), 3)
+    held: dict = {}
+    assert placement.labels([a, b], held) == ["TV #1", "TV #2"]
+    assert placement.labels([b], held) == ["TV #2"]
+    assert placement.labels([b, c], held) == ["TV #2", "TV #1"], "the lowest free"
+    assert placement.labels([a, b, c], held) == ["TV #3", "TV #2", "TV #1"], "C keeps it, whatever the order"
+    assert placement.labels([c, a, b], held) == ["TV #1", "TV #3", "TV #2"]
+    assert len(set(held.values())) == len(held)
+    # with its number still free, it takes it back
+    held2: dict = {}
+    placement.labels([a, b], held2)
+    placement.labels([b], held2)
+    assert placement.labels([a, b], held2) == ["TV #1", "TV #2"]
 
 
 def test_a_stand_in_with_no_id_goes_by_place():
@@ -934,9 +1226,9 @@ def real(gl_window_ok):
     glfw.terminate()
 
 
-def _real_plug(real, tmp_path, monkeypatch, slots):
+def _real_plug(real, tmp_path, monkeypatch, slots, rows=ROWS):
     (tmp_path / "Drive").mkdir(exist_ok=True)
-    store = DisplayList(tmp_path / "Drive", None, seed=ROWS)
+    store = DisplayList(tmp_path / "Drive", None, seed=rows)
     store.sync()
     run = Running(store, lambda: plug.screens, slots)
     main = Output(None, GlfwBackend(real.g), allowed=False)
@@ -969,6 +1261,78 @@ def _px(fbo):
     return np.frombuffer(fbo.read(viewport=(0, 0, w, h), components=4), dtype=np.uint8).reshape(h, w, 4).copy()
 
 
+def test_a_close_leaves_every_array_of_the_roots(real, tmp_path, monkeypatch):
+    """The close order, on real GL. **This can't catch a wrong order on this Mac,** which was tried:
+    Apple's driver numbers vertex arrays from one table across a share group (a root's are 1-4 and
+    7-10 where a presenter's are 5, 6), so no root array shares a presenter's number, and the
+    spike's `same_name_on_root_alive_after: false` was the presenter's own number going. GL's
+    spec makes names per context, so another driver can have the fault: the order stays, and
+    the stand-in's order test holds it. This holds what's true here: the numbers don't meet, and
+    a close takes none of the root's."""
+    from OpenGL import GL
+
+    monkeypatch.setattr(app, "glfw", real.glfw)
+    slots = [Slot(n) for n in (1, 2, 3, 4)]
+    plug = _real_plug(real, tmp_path, monkeypatch, slots)
+    prog = real.ctx.program(vertex_shader="#version 330\nvoid main(){gl_Position=vec4(0.0);}")
+    keep = [real.ctx.vertex_array(prog, []) for _ in range(4)]
+    plug.between_frames(1000.0)     # (the first look, then the list has held still)
+    plug.between_frames(1000.5)
+    two = slots[1]
+    real.glfw.make_context_current(two.win)
+    two.presenter._build()
+    mine = {two.presenter._vao.glo, two.presenter._dim_vao.glo}
+    real.glfw.make_context_current(real.root_win)
+    keep += [real.ctx.vertex_array(prog, []) for _ in range(4)]
+    names = {v.glo for v in keep}
+    if sys.platform == "darwin":
+        assert not names & mine, "if these ever meet, this test can catch the order: make it"
+    real.g.change([real.laptop, real.tv])
+    plug.between_frames(1001.0)
+    plug.between_frames(1002.0)
+    assert not two.opened and not plug.held
+    real.glfw.make_context_current(real.root_win)
+    assert all(GL.glIsVertexArray(n) for n in names)
+
+
+def test_a_flap_on_a_first_display_holds_the_frame_and_shows_it_on_the_other(real, tmp_path, monkeypatch):
+    """Output 1 on two displays of different shapes: while the first is away the other shows the
+    frame in its own shape, at the size it was, and after, all is as it was."""
+    monkeypatch.setattr(app, "glfw", real.glfw)
+    rows = {"Built-in": row(CONTROL), "TV": row("output.1"), "Projector": row("output.1")}
+    slots = [Slot(n) for n in (1, 2, 3, 4)]
+    plug = _real_plug(real, tmp_path, monkeypatch, slots, rows)
+    plug.hold_s = 100.0
+    rig = _rig_look(real.ctx)
+    plug.between_frames(1000.0)     # (the first look, then the list has held still)
+    plug.between_frames(1000.5)
+    sl = slots[0]
+    first, other = sl.win, sl.also[0].win
+    real.glfw.set_window_size(other, 160, 100)
+    app._draw_render(_proxy(rig), real.ctx, rig.view, slots, real.root)
+    big = tuple(real.root.size)
+    want = _px(real.root.frame.fbo)
+    real.g.change([real.laptop, real.pr])
+    plug.between_frames(1001.0)
+    assert sl.win == other and real.root.hold_size
+    seen = []
+    real_present = sl.presenter.present
+    sl.presenter.present = lambda ho, size, target=None: (seen.append((ho.rect, tuple(size))), real_present(ho, size, target))[1]
+    app._draw_render(_proxy(rig), real.ctx, rig.view, slots, real.root)
+    assert tuple(real.root.size) == big and not sl.error
+    small = tuple(real.glfw.get_framebuffer_size(other))
+    assert seen and seen[0][1] == small and seen[0][0] == app.fit(big, small), "its own shape"
+    assert np.array_equal(_px(real.root.frame.fbo), want)
+    real.g.change([real.laptop, real.tv, real.pr])
+    plug.between_frames(1002.0)
+    plug.between_frames(1003.0)
+    assert sl.win == first and sl.also[0].win == other and not real.root.hold_size
+    app._draw_render(_proxy(rig), real.ctx, rig.view, slots, real.root)
+    assert tuple(real.root.size) == big and np.array_equal(_px(real.root.frame.fbo), want)
+    assert real.root.pacer.owner is first
+    rig.close()
+
+
 def test_a_flap_doesnt_resize_output_1s_frame(real, tmp_path, monkeypatch):
     """Output 1's display dropped: another's size doesn't take over during the hold, so no look's
     buffers resize for a re-sync. Past the hold, as SC2 has it, the first that shows anything's."""
@@ -977,8 +1341,8 @@ def test_a_flap_doesnt_resize_output_1s_frame(real, tmp_path, monkeypatch):
     plug = _real_plug(real, tmp_path, monkeypatch, slots)
     plug.hold_s = 100.0
     rig = _rig_look(real.ctx)
-    plug._settle_at = 1000.0
-    plug.between_frames(1000.0)
+    plug.between_frames(1000.0)     # (the first look, then the list has held still)
+    plug.between_frames(1000.5)
     real.glfw.set_window_size(slots[1].win, 160, 100)
     app._draw_render(_proxy(rig), real.ctx, rig.view, slots, real.root)
     big = tuple(real.root.size)

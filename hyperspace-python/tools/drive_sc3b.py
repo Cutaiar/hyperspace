@@ -53,25 +53,49 @@ def _screen_of(win):
     return str(ns.screen().localizedName()) if ns.screen() is not None else None
 
 
+SLICE = {"poll": 0.0, "plug": 0.0, "swap": 0.0}     # this frame's, in ms
+SLICES: list[dict] = []                             # kept by `times`' entry
+
+
+def _timed(name, fn):
+    def run(*a, **k):
+        t0 = time.perf_counter()
+        try:
+            return fn(*a, **k)
+        finally:
+            SLICE[name] += (time.perf_counter() - t0) * 1000.0
+    return run
+
+
 def _watched(d, panel, until, secs, times, what):
-    """Frames until `until()` holds, each frame's length kept. A stop at `secs`."""
+    """Frames until `until()` holds, each frame's length kept, and whose it was. A stop at `secs`."""
     end = time.perf_counter() + secs
     last = time.perf_counter()
     swaps = panel.outputs[0].presenter.presented if panel.outputs[0].presenter else 0
     while not until():
         if time.perf_counter() > end:
             raise AssertionError(f"{what}: not within {secs} s; {panel.displays.plug.lines()}")
+        for k in SLICE:
+            SLICE[k] = 0.0
         yield
         now = time.perf_counter()
-        times.append((now - last) * 1000.0)
+        times.append((now - last) * 1000.0, )
+        SLICES.append({"at": id(times), "n": len(times) - 1, **SLICE})
         last = now
     return swaps
 
 
 def _stats(times):
     t = np.array(times or [0.0])
-    return {"frames": len(times), "p50": round(float(np.median(t)), 2), "max": round(float(t.max()), 2),
-            "over_50ms": int((t > 50).sum())}
+    out = {"frames": len(times), "p50": round(float(np.median(t)), 2), "max": round(float(t.max()), 2),
+           "over_50ms": int((t > 50).sum())}
+    worst = int(t.argmax())
+    of = next((s for s in SLICES if s["at"] == id(times) and s["n"] == worst), None)
+    if of is not None:
+        # the longest frame: the poll (GLFW and macOS), our step, every swap, and the rest
+        out["longest"] = {k: round(of[k], 1) for k in SLICE}
+        out["longest"]["rest"] = round(float(t.max()) - sum(of[k] for k in SLICE), 1)
+    return out
 
 
 def _tag(run):
@@ -86,6 +110,9 @@ def _all_real(run):
 def script(d, panel):
     run = panel.displays
     plug = run.plug
+    glfw.poll_events = _timed("poll", glfw.poll_events)
+    glfw.swap_buffers = _timed("swap", glfw.swap_buffers)
+    plug.between_frames = _timed("plug", plug.between_frames)
     out = {"monitors_before": [s.name for s in plug.screens], "steps": {}, "locked": _locked()}
     say("monitors before", out["monitors_before"])
     panel.library.load("presets", "party-tumble")
@@ -95,18 +122,17 @@ def script(d, panel):
     two = panel.outputs[1]
     say("output 1 on", one.display, "control on", plug._ctrl_on, "pacing by output 1:", plug.root.pacer.owner is one.win)
     base = []
-    for _ in range(240):
-        t0 = time.perf_counter()
-        yield
-        base.append((time.perf_counter() - t0) * 1000.0)
+    n = [0]
+    yield from _watched(d, panel, lambda: (n.__setitem__(0, n[0] + 1), n[0] > 240)[1], 30.0, base, "a stretch")
     out["steps"]["nothing plugged"] = _stats(base)
+    say("nothing plugged", out["steps"]["nothing plugged"])
 
     # ---- a display arrives, unknown: it waits, with no target
     helper = _helper()
     times = []
     yield from _watched(d, panel, lambda: _tag(run) is not None, 8.0, times, "the display arrives")
     uid_line = _uid(plug)
-    say("arrived", uid_line, "after frames", len(times))
+    say("arrived", uid_line, _stats(times))
     wait_times = []
     t0 = time.perf_counter()
     while time.perf_counter() - t0 < 1.0:
@@ -137,6 +163,7 @@ def script(d, panel):
     hidden_after = time.perf_counter() - t_off
     assert not two.opened and plug.held and not glfw.get_window_attrib(win2, glfw.VISIBLE), "hidden, whole"
     say("gone, hidden, after", round(hidden_after, 3), "s; pacer on output 1:", plug.root.pacer.owner is one.win)
+    say("goes", _stats(times))
     out["steps"]["goes"] = {**_stats(times), "hidden_after_s": round(hidden_after, 3),
                             "window_moved_to": _screen_of(win2)}
     times = []

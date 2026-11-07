@@ -337,7 +337,7 @@ def _restart(audio, adapters, impl, ctrl_win, save=None, windows=()) -> None:
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
 
-def _save_windows(home, render_win, ctrl_win, output, more=(), slots=()) -> None:
+def _save_windows(home, render_win, ctrl_win, output, more=(), slots=(), away=None) -> None:
     """Remember where the windows are, in <home>/windows.json
     (placement.py) — on quit and on restart only. Always the *windowed*
     rect: a fullscreen or overlay render window is remembered by the rect
@@ -346,7 +346,7 @@ def _save_windows(home, render_win, ctrl_win, output, more=(), slots=()) -> None
     (plan 21 WP3), None for one not opened this run — its old entry is
     kept, as a minimised window's is. `slots`: every window's spot again, by
     the display it's on (`placement.spot`, SC2). `render_win` None: output 1 has
-    no display this run."""
+    no display this run. `away`: where windows closed or held were (`Hotplug.away_spots`)."""
     def minimised(win) -> bool:
         return bool(glfw.get_window_attrib(win, glfw.ICONIFIED))
 
@@ -359,7 +359,7 @@ def _save_windows(home, render_win, ctrl_win, output, more=(), slots=()) -> None
     render = [rect_of(output) if render_win is not None else None, *(rect_of(o) for o in more)]
     spots = {sl.display: rect_of(sl.output) for sl in slots if sl.opened and sl.display}
     spots.update({a.display: rect_of(a.output) for sl in slots for a in sl.also})
-    placement.save(home, control, render, placement.screens(glfw), spots)
+    placement.save(home, control, render, placement.screens(glfw), spots, away)
 
 
 def _slots(cfg: dict | None, scr: list | None = None, notes: list | None = None) -> list[Slot]:
@@ -948,7 +948,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
     # output 1's own size and DPI (a 1080p projector next to a retina laptop); with no display
     # on it, the first that shows anything's, each frame: a window goes fullscreen, or is moved
     # (a display that dropped a moment ago may be back: nothing resizes for it yet, SC3b)
-    measured = first if first.opened else None if root.hold_size else next(iter(presented), None)
+    measured = None if root.hold_size else first if first.opened else next(iter(presented), None)
     if measured is not None:
         root.measure(glfw.get_window_size(measured.win), glfw.get_framebuffer_size(measured.win))
     w, h = root.logical
@@ -1018,14 +1018,21 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
         for sl, v in sorted(shown, key=lambda p: p[0].win is pacer.owner):
             # output 1's picture is already whole on the frame target: flip, hands,
             # mix and dim are in it, so its window only shows it, 1:1
-            ho = (Handoff(root.frame.tex, (fbw, fbh), (0, 0, fbw, fbh), bg_alpha=v.bg_alpha)
-                  if sl is first else v.handoff)
+            ho, size = v.handoff, sl.size
+            if sl is first:
+                rect = (0, 0, fbw, fbh)
+                if root.hold_size:
+                    # its first display is away a moment: this one shows the frame in its own shape
+                    wx, wy = glfw.get_framebuffer_size(sl.win)
+                    size = (int(wx), int(wy))
+                    rect = fit((fbw, fbh), size)
+                ho = Handoff(root.frame.tex, (fbw, fbh), rect, bg_alpha=v.bg_alpha)
             sl.error = v.error
-            if v.exc is not None or ho is None or sl.size[0] <= 0 or sl.size[1] <= 0:
+            if v.exc is not None or ho is None or size[0] <= 0 or size[1] <= 0:
                 continue                # a failed or empty picture: it holds what it shows
             try:
                 glfw.make_context_current(sl.win)
-                sl.presenter.present(ho, sl.size)
+                sl.presenter.present(ho, size)
                 glfw.swap_buffers(sl.win)
                 if sl.win is pacer.owner:
                     pacer.swapped()
@@ -2170,7 +2177,8 @@ def main(argv: list[str] | None = None) -> None:
     def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
         if args.laptop:                   # the show machine's spots are kept for it
             return
-        _save_windows(home, slots[0].win, ctrl_win, output, [sl.output for sl in slots[1:]], slots)
+        _save_windows(home, slots[0].win, ctrl_win, output, [sl.output for sl in slots[1:]], slots,
+                      plug.away_spots() if plug is not None else None)
 
     # the flat handles are the deck's (plan 44 D1), so `frame` is unchanged
     host = Host(reg=deck.reg, view=deck.view, control=control, audio=audio, router=deck.router,

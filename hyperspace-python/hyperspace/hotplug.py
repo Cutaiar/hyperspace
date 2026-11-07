@@ -14,14 +14,24 @@ those are indices into a list that just changed. A slot whose first display went
 (`Slot.win` and `switches` are the first display's).
 
 **It comes back within `HOLD_S`** (`[output] unplug_hold_s`): the same window, shown again where
-it was. A TV's HDMI re-sync costs a blank TV and no window. **It doesn't:** the window closes, in
-the only safe order: that window current, `Presenter.release`, destroy, `Pacer.choose`. A release
-with the root's context current deleted the root's vertex array of the same name (the spike).
+it was, and everything as it was: a promoted display steps back, so the slot's first, its flips,
+`output.fullscreen`, the mouse and who paces are all what they were, and output 1's frame keeps
+its size meanwhile (`Root.hold_size`). A TV's HDMI re-sync costs a blank TV and no window. **It doesn't:** the window closes, in
+the one order: that window current, `Presenter.release`, destroy, `Pacer.choose`. GL makes a
+vertex array's number per context, so let go with the root current it can take the root's. (Apple's
+driver numbers them across the share group, so it can't here, as `test_hotplug` shows: the order
+is for what GL says, not for what was measured.)
 **Later,** the job is on its row, by `placement.memory`: a new window, 35–38 ms on the main thread
 on this Mac, which is the hitch a display change costs. Nothing else here takes time.
 
 Arrivals and returns wait `SETTLE_S` for the list to hold still; going hides at once, and closing
 waits `HOLD_S` from its last going, so a display flapping for ever costs no window at all.
+
+**A display dropping and returning within one poll** looks like no change to the list, but macOS
+has moved its windows. So any change looks for a window off its display, and puts it back.
+
+**A step that raises costs the rest nothing.** Each step is guarded, whatever was done is wired
+up in a `finally`, so nothing holds a destroyed window, and it's tried again a second later.
 
 **A display off but still listed,** a projector asleep that keeps its link, is no change here.
 One that drops its link is a display gone, after the hold. A window is never closed for being
@@ -62,7 +72,7 @@ from typing import Any
 import moderngl
 
 from . import placement
-from .displays import Opening, Running, Wanted, opened_of, wanted
+from .displays import Opening, Running, Wanted, find, opened_of, read_row, wanted
 from .outputs import Also, Offscreen, Presenter, Root, Slot
 from .overlay import GlfwBackend, Output
 from .placement import memory
@@ -70,6 +80,7 @@ from .placement import memory
 HOLD_S = 3.0        # a window waits this long for its display: a re-sync is a second or two
 SETTLE_S = 0.25     # the list must hold still this long before a window opens or comes back
 LOOK_S = 1.0        # how often where the windows are is noted, for when they come back
+REOPEN_S = 5.0      # a window that wouldn't open is tried again after this: each try is a hitch
 
 TWINS = ("{} numbered by what each showed this run, not by where it sits. A restart numbers them "
          "left to right, and their jobs can swap.")
@@ -88,6 +99,7 @@ class Held:
     flip_x: bool
     flip_y: bool
     since: float
+    asked: tuple[bool, bool, bool] | None = None    # the row's fullscreen and flips as it went
 
 
 class Hotplug:
@@ -135,6 +147,14 @@ class Hotplug:
         self._ctrl_gone_at: float | None = None
         self._ctrl_left = ""                    # the display it had to leave
         self._ctrl_spots: dict[str, tuple] = {}     # its rect on each display it's been on
+        self._touched = False                   # something changed that holders must hear
+        self._fault = False                     # a step raised this time
+        self._retry_at = float("-inf")
+        self._ranks: dict[int, int] = {}        # id(window) → its place in its slot, oldest first
+        self._next_rank = 0
+        self.gone_spots: dict[str, tuple] = {}  # where closed windows were, for `away_spots`
+        for sl, also in self._open_now():
+            self._ranked(also.win if also is not None else sl.win)
         want = wanted(self.acting, self.screens, run.labels(self.screens))
         self._ctrl_row = memory(want.control.display) if want.control else None
         self._note_where()
@@ -142,6 +162,7 @@ class Hotplug:
     def start(self) -> None:
         """The callback, once. It fires inside `poll_events`: a flag, and nothing else."""
         self.glfw.set_monitor_callback(lambda *_: setattr(self, "changed", True))
+        self.changed = True     # a first look: a change since the windows opened went unheard
 
     # ---- what's there ----
 
@@ -156,6 +177,24 @@ class Hotplug:
         """The windows only this holds: both exits destroy them too."""
         return [g.win for g in self.held]
 
+    def away_spots(self) -> dict[str, tuple]:
+        """Where each window with none open now was, by its display's memory: for windows.json,
+        as a display unplugged at a quit keeps its spot."""
+        out = dict(self.gone_spots)
+        for g in self.held:
+            was = self._rects.get(id(g.win))
+            if was is not None:
+                out[memory(g.display)] = was
+        return out
+
+    def _ranked(self, win) -> int:
+        """`win`'s place among its slot's windows: the order they took their jobs in, whichever
+        has been promoted since."""
+        if id(win) not in self._ranks:
+            self._ranks[id(win)] = self._next_rank
+            self._next_rank += 1
+        return self._ranks[id(win)]
+
     def _live(self) -> list:
         """What may pace, in slot order, as `app._slot_windows`."""
         return [w for sl in self.run.slots if sl.opened and sl.presenter is not None
@@ -167,33 +206,78 @@ class Hotplug:
         """Whatever a change asks, between frames. Costs a flag and two compares when there's none,
         and never raises: the frame goes on, and what failed is said."""
         now = self.clock() if now is None else now
+        ran = now >= self._retry_at
         try:
-            self._step(now)
+            if ran:
+                self._fault = False
+                self._step(now)
         except Exception as e:  # noqa: BLE001 — a window system's hiccup must not stop the show
-            why = f"displays: a change of display failed: {type(e).__name__}: {e}"[:200]
-            if why != self.failed:
-                self.failed = why
-                self.notes.append(why)
-                print(why, file=sys.stderr)
-                if self.warn is not None:
-                    self.warn(why)
-            self._settle_at = now + LOOK_S      # tried again, not every frame
+            self._raised("a change of display", e)
+        finally:
+            if self._touched:
+                self._wire()
+            if ran and self._fault:
+                self._retry_at = now + LOOK_S   # tried again, not every frame
+                if self._settle_at is None:
+                    self._settle_at = self._retry_at
+
+    def _raised(self, what: str, e: Exception) -> None:
+        """Said once, and tried again in a moment."""
+        self._fault = True
+        why = f"displays: {what} failed: {type(e).__name__}: {e}"[:200]
+        if why != self.failed:
+            self.failed = why
+            self.notes.append(why)
+            print(why, file=sys.stderr)
+            if self.warn is not None:
+                self.warn(why)
+
+    def _try(self, what: str, fn: Callable, *args) -> Any:
+        """One step of a change: its raising costs the others nothing."""
+        try:
+            return fn(*args)
+        except Exception as e:  # noqa: BLE001 — as `between_frames`
+            self._raised(what, e)
+            return None
+
+    def _wire(self) -> None:
+        """Every holder of a window hears what's open, whatever happened: the frame must not reach a
+        destroyed window. Each by itself, and a holder that couldn't hear is told again next frame."""
+        self._touched = False
+        self._try("who paces", self.root.pacer.choose, self._live(), self.root.win)
+        self._keep_size()
+        if self.wired is not None:
+            try:
+                self.wired()
+            except Exception as e:  # noqa: BLE001
+                self._raised("pointing the keys and the mouse", e)
+                self._touched = True
+        self._try("the context", self.glfw.make_context_current, self.ctrl_win)  # what the loop has current
+
+    def _keep_size(self) -> None:
+        """A window of output 1's that outranks what it has now was its first a moment ago."""
+        first = self.run.slots[0] if self.run.slots else None
+        rank = self._ranked(first.win) if first is not None and first.opened else float("inf")
+        self.root.hold_size = first is not None and any(
+            g.slot is first and self._ranked(g.win) < rank for g in self.held)
 
     def _step(self, now: float) -> None:
-        acted = self.changed
         if self.changed:
             self.changed = False
-            self._list_moved(now)
+            self._touched = True
+            try:
+                self._list_moved(now)
+            except Exception:
+                self.changed = True     # (the list unread: it's looked at again, not lost)
+                raise
         chose = self.run.store.chosen
         due = self._settle_at is not None and now >= self._settle_at
         if chose or due or self._ran_out(now):
-            acted = True
+            self._touched = True
             self._act(now, chose)
         elif now - self._looked >= LOOK_S:
             self._looked = now
             self._note_where()
-        if acted:
-            self.glfw.make_context_current(self.ctrl_win)   # what the loop has current here
 
     def _ran_out(self, now: float) -> bool:
         if any(now - g.since >= self.hold_s for g in self.held):
@@ -233,7 +317,7 @@ class Hotplug:
         for sl, also in reversed(self._open_now()):     # (a slot's first last: its next takes over)
             where = also.display if also is not None else sl.display
             if memory(where) not in keys:
-                self._hold(sl, also, now)
+                self._try("hiding a window", self._hold, sl, also, now)
         for held in self.held:
             if memory(held.display) in keys:
                 held.since = now        # a flap: its hold starts again from its last going
@@ -243,11 +327,39 @@ class Hotplug:
         elif self._ctrl_gone_at is None:
             self._ctrl_gone_at = now
         self._settle_at = now + SETTLE_S
+        self._try("putting a window back", self._strays, keys)
         self._after(wanted(self.acting, scr, self.run.labels(scr)))
+
+    def _strays(self, keys: dict[str, int]) -> None:
+        """A window off its display, though its display is here: macOS moved it when a display
+        dropped and came back within one poll, which the list can't show."""
+        scr = self.screens
+        for sl, also in self._open_now():
+            holder = also if also is not None else sl
+            out = holder.output
+            i = keys.get(memory(holder.display))
+            if out is None or i is None or out.backend is None:
+                continue
+            on = placement.on_screen(tuple(out.backend.window_rect(out.win)), scr)
+            if on is not None and on == scr[i]:
+                continue
+            was = self._rects.get(id(out.win))
+            spot = dict(zip("xywh", was, strict=True)) if was else placement.spot(self.seen, holder.display, sl.n)
+            out.back_at(self._where("render", self.render_size, i, spot, sl.label))
+        on_key = self._ctrl_on
+        if on_key in keys and self._ctrl_gone_at is None and on_key in self._ctrl_spots:
+            g = self.glfw
+            rect = (*g.get_window_pos(self.ctrl_win), *g.get_window_size(self.ctrl_win))
+            on = placement.on_screen(rect, scr)
+            if on is None or on != scr[keys[on_key]]:
+                self._move_control(on_key, keys)
 
     def _hold(self, sl: Slot, also: Also | None, now: float) -> None:
         """Out of its slot and out of sight, whole."""
+        where = also.display if also is not None else sl.display
+        asked = read_row(find(self.acting, where))
         held = self._take(sl, also, now)
+        held.asked = (asked["fullscreen"], asked["flip_x"], asked["flip_y"])
         self.held.append(held)
         try:
             self.glfw.hide_window(held.win)
@@ -301,11 +413,30 @@ class Hotplug:
             sl.output = out
 
     def _seat(self, sl: Slot, display: str, win, presenter, out, flip_x: bool, flip_y: bool) -> None:
+        self._ranked(win)
         if sl.opened:
             sl.also.append(Also(display, out.monitor, bool(out.fullscreen), win, presenter, out,
                                 flip_x=flip_x, flip_y=flip_y))
         else:
             self._seat_first(sl, display, win, presenter, out, flip_x, flip_y)
+
+    def _in_order(self, sl: Slot) -> None:
+        """A window back from a moment away goes back in its place: a first steps in again, and
+        the display promoted for it steps back, flips, fullscreen and all."""
+        sl.also.sort(key=lambda a: self._ranked(a.win))
+        if not sl.opened or not sl.also or self._ranked(sl.also[0].win) > self._ranked(sl.win):
+            return
+        top = sl.also.pop(0)
+        if sl.n == 1 and sl.output is self.main:
+            out = Output(None, GlfwBackend(self.glfw), allowed=False)
+            self.main.swap_window(out)
+        else:
+            out = sl.output
+        down = Also(sl.display, sl.monitor, bool(out.fullscreen), sl.win, sl.presenter, out,
+                    flip_x=bool(sl.switches.flip_x), flip_y=bool(sl.switches.flip_y))
+        self._seat_first(sl, top.display, top.win, top.presenter, top.output, top.flip_x, top.flip_y)
+        sl.also.append(down)
+        sl.also.sort(key=lambda a: self._ranked(a.win))
 
     # ---- acting on the rows ----
 
@@ -329,8 +460,9 @@ class Hotplug:
             k = memory(g.display)
             if k in keys:
                 if shows.get(k, (0,))[0] == g.slot.n:
-                    self._back(g, shows[k][1])
-                    back.append(g)
+                    self._try("bringing a window back", self._back, g, shows[k][1])
+                    if g not in self.held:
+                        back.append(g)
                 else:
                     self._close(g)
             elif now - g.since >= self.hold_s:
@@ -339,15 +471,20 @@ class Hotplug:
         for sl, also in reversed(self._open_now()):
             where = memory(also.display if also is not None else sl.display)
             if shows.get(where, (0,))[0] != sl.n:
-                self._close(self._take(sl, also, now))
+                self._close(self._take(sl, also, now))      # (`_close` never raises)
         on = {memory(a.display if a is not None else sl.display): sl for sl, a in self._open_now()}
         for key, (n, o) in shows.items():
-            if key not in on and 0 < n <= len(self.run.slots) and self._open(self.run.slots[n - 1], o):
+            if (key not in on and 0 < n <= len(self.run.slots)
+                    and self._try("opening a window", self._open, self.run.slots[n - 1], o)):
                 opened.append(key)
+        self._try("following the list", self._follow)
+        self._try("putting a window back", self._strays, keys)
         self._here = set(keys)
-        self._control(want, keys, now, set(opened))
+        self._try("moving the control window", self._control, want, keys, now, set(opened))
         self._arrived = set()
-        self._after(want)
+        self._try("the slots' words", self._after, want)
+        if self._wont and self._settle_at is None:
+            self._settle_at = now + REOPEN_S
         ms = (self.clock() - t0) * 1000.0
         for g in closed:
             self._tell(f"{g.display} has gone: {g.slot.label} has no window there, and the other pictures go on",
@@ -367,8 +504,8 @@ class Hotplug:
             fn(words)
 
     def _after(self, want: Wanted) -> None:
-        """Whatever's open, every holder of it hears: the slots' words, what they publish
-        through, the panel's `opened`, who paces, the keys and the mouse."""
+        """What follows from what's open: the slots' words, what they publish through, and the
+        panel's `opened`. Who paces, the keys and the mouse are `_wire`'s."""
         for sl in self.run.slots:
             if sl.opened:
                 sl.window, sl.missing = True, ""
@@ -377,16 +514,10 @@ class Hotplug:
                 away = want.away.get(sl.n)
                 sl.missing = (self._wont.get(sl.n, "") or
                               (f"its display is not connected ({', '.join(away)})" if sl.window and away else ""))
-            self._publish_follows(sl)
+            self._try("what an output publishes through", self._publish_follows, sl)
         slots = self.run.slots
-        first = slots[0] if slots else None
-        self.root.hold_size = (first is not None and not first.opened
-                               and any(g.slot is first for g in self.held))
         control = want.control if want.control is not None and memory(want.control.display) == self._ctrl_on else None
         self.run.opened = opened_of(slots, control)
-        self.root.pacer.choose(self._live(), self.root.win)
-        if self.wired is not None:
-            self.wired()
 
     def _publish_follows(self, sl: Slot) -> None:
         """A later output that's published draws to a window's `tap`, or with none its own
@@ -418,7 +549,8 @@ class Hotplug:
         first = not sl.opened
         rect = self._where("render", self.render_size, o.index,
                            placement.spot(self.seen, o.display, sl.n), sl.label)
-        self._hints(transparent=self.overlay and sl.n == 1)
+        # (a first display's only, as a launch: a further one with alpha would show the desktop)
+        self._hints(transparent=self.overlay and first and sl.n == 1)
         title = (f"{self.title} — {o.display}" if not first else self.title if sl.n == 1
                  else f"{self.title} — {sl.name or f'output {sl.n}'}")
         win = g.create_window(int(rect[2]), int(rect[3]), title, None, self.root.win)
@@ -426,8 +558,8 @@ class Hotplug:
         if not win:
             self._refused(sl, f"its window on {o.display} could not be created")
             return False
-        g.set_window_pos(win, int(rect[0]), int(rect[1]))
         try:
+            g.set_window_pos(win, int(rect[0]), int(rect[1]))
             g.make_context_current(win)
             g.swap_interval(0)
             presenter = Presenter(self.make_context())
@@ -439,6 +571,7 @@ class Hotplug:
         out = Output(win, GlfwBackend(g), allowed=False)
         out.monitor, out.fullscreen = o.index, bool(o.fullscreen)
         self._seat(sl, o.display, win, presenter, out, o.flip_x, o.flip_y)
+        self.gone_spots.pop(memory(o.display), None)
         self._wont.pop(sl.n, None)
         g.make_context_current(self.root.win)
         return True
@@ -458,14 +591,17 @@ class Hotplug:
         g.window_hint(g.FOCUS_ON_SHOW, False)
 
     def _refused(self, sl: Slot, why: str) -> None:
+        said = self._wont.get(sl.n) == why
         self._wont[sl.n] = why
+        if said:
+            return
         self.notes.append(f"output: {sl.label}: {why}"[:200])
         if self.warn is not None:
             self.warn(f"{sl.label}: {why}")
 
     def _back(self, g: Held, o: Opening) -> None:
-        """Its display came back in time: the same window, where it was."""
-        self.held.remove(g)
+        """Its display came back in time: the same window, where it was, in its place in its
+        slot. What it had stands, as a desk may have set it, but for what its row has changed since."""
         gl = self.glfw
         gl.make_context_current(g.win)
         gl.swap_interval(0)         # (it may have been pacing as it went: `choose` says who does)
@@ -473,32 +609,47 @@ class Hotplug:
         was = self._rects.get(id(g.win))
         spot = dict(zip("xywh", was, strict=True)) if was else placement.spot(self.seen, o.display, g.slot.n)
         rect = self._where("render", self.render_size, o.index, spot, g.slot.label)
+        if g.asked is not None:
+            if o.fullscreen != g.asked[0]:
+                g.output.fullscreen = bool(o.fullscreen)
+            if o.flip_x != g.asked[1]:
+                g.flip_x = bool(o.flip_x)
+            if o.flip_y != g.asked[2]:
+                g.flip_y = bool(o.flip_y)
         g.output.monitor = o.index
         g.output.back_at(rect)
         gl.set_window_attrib(g.win, gl.FOCUS_ON_SHOW, False)
         gl.show_window(g.win)
+        self.held.remove(g)
         self._seat(g.slot, o.display, g.win, g.presenter, g.output, g.flip_x, g.flip_y)
+        self._in_order(g.slot)
 
     def _close(self, g: Held) -> None:
         """Gone for good, or its row changed. **The order:** that window current, its
-        `Presenter` let go, destroyed, then who paces. With the root's context current a
-        release deletes the root's object of the same name."""
+        `Presenter` let go, destroyed, then who paces (the module's docstring says why). Never raises: a window is out of its
+        slot by now, and whatever fails, it goes and the next window's step is taken."""
         gl = self.glfw
         if g in self.held:
             self.held.remove(g)
+        self._touched = True
         was = self._rects.pop(id(g.win), None)
+        self._ranks.pop(id(g.win), None)
         if was is not None:
-            spots = self.seen.setdefault("displays", {})
-            spots[memory(g.display)] = dict(zip("xywh", was, strict=True))
-        gl.make_context_current(g.win)
-        try:
+            self.gone_spots[memory(g.display)] = tuple(was)
+            if not isinstance(self.seen.get("displays"), dict):
+                self.seen["displays"] = {}
+            self.seen["displays"][memory(g.display)] = dict(zip("xywh", was, strict=True))
+
+        def release() -> None:
+            gl.make_context_current(g.win)
             if g.presenter is not None:
                 g.presenter.release()
                 g.presenter.ctx.release()
-        finally:
-            gl.make_context_current(self.root.win)
-            gl.destroy_window(g.win)
-            self.root.pacer.choose(self._live(), self.root.win)
+
+        self._try("letting a window's objects go", release)
+        self._try("the root's context", gl.make_context_current, self.root.win)
+        self._try("closing a window", gl.destroy_window, g.win)
+        self._try("who paces", self.root.pacer.choose, self._live(), self.root.win)
 
     # ---- the control window ----
 
@@ -517,7 +668,7 @@ class Hotplug:
                 self._ctrl_gone_at = now
             if now - self._ctrl_gone_at >= self.hold_s and keys:
                 floats = memory(want.floats.display) if want.floats else None
-                to = floats if floats in free else free[0] if free else self._across(keys)[0]
+                to = floats if floats in free else free[0] if free else floats or self._across(keys)[0]
                 self._ctrl_left = self._ctrl_left or (on or "")
         elif to is None and on in self._arrived:
             to = on                     # back from a flap: macOS may have moved it
@@ -570,7 +721,13 @@ class Hotplug:
         """(label, target) of each connected display the other Mac has chosen another target for,
         which waits for `take_others`. Read while the output section is drawn."""
         tags = self.run.labels(self.screens)
-        now = wanted(self.run.store.current, self.screens, tags).shown
+        rows = dict(self.run.store.current)
+        for key in self.run.store.chosen:       # this Mac's own, a frame from being acted on
+            if key in self.acting:
+                rows[key] = self.acting[key]
+            else:
+                rows.pop(key, None)
+        now = wanted(rows, self.screens, tags).shown
         was = wanted(self.acting, self.screens, tags).shown
         return [(t, v) for t, v in now.items() if was.get(t, "") != v]
 

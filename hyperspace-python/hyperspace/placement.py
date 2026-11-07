@@ -171,10 +171,12 @@ def load(home: Path) -> dict:
 
 
 def save(home: Path, control: Rect | None, render: list[Rect | None],
-         scr: list[Screen], spots: dict[str, Rect | None] | None = None) -> None:
+         scr: list[Screen], spots: dict[str, Rect | None] | None = None,
+         away: dict[str, tuple] | None = None) -> None:
     """Write the windowed rects. A None (a minimised window) keeps that
     window's old entry. `spots`: each window's rect by the label of the display
-    it's on (`spot`). Atomic — a temp file, then a rename — and a failed
+    it's on (`spot`). `away` (SC3b): where a window was on a display with no window now, by its
+    memory, kept though no display here can show it: `place` says if it's any use later. Atomic — a temp file, then a rename — and a failed
     write costs only the memory: it is said on stderr and never raised."""
     home = Path(home)
     old = load(home)
@@ -188,6 +190,10 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
            "render": entries}
     kept = old.get("displays")
     kept = dict(kept) if isinstance(kept, dict) else {}
+    for key, rect in (away or {}).items():
+        r = _rect(dict(zip("xywh", rect, strict=False)))
+        if r is not None:
+            kept[key] = {"x": r[0], "y": r[1], "w": r[2], "h": r[3], "screen": key}
     for tag, rect in (spots or {}).items():
         new = _entry(rect, scr)
         if new is not None:
@@ -442,8 +448,12 @@ def labels(scr: list[Screen], held: dict[int, str] | None = None) -> list[str]:
                 numbers[i] = next(free)
             if len(same) > 1 or numbers[i] > 1:
                 out[i] = f"{fam} #{numbers[i]}"
-    for i, s in enumerate(scr):
-        held[s.uid] = memory(out[i])
+    now = {s.uid: memory(out[i]) for i, s in enumerate(scr)}
+    # a number taken is no longer held for one that went: back, it takes a free one, so no two
+    # connected displays can ever claim one number and swap jobs by list order
+    for uid in [u for u, key in held.items() if key in now.values() and u not in now]:
+        del held[uid]
+    held.update(now)
     return out
 
 
