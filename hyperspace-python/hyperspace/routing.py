@@ -275,7 +275,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from functools import cache, lru_cache
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Protocol
 
 import numpy as np
 
@@ -311,6 +311,7 @@ from .routing_sources import (  # noqa: F401
     BUILTIN_LANES,
     DECK_SCHEMES,
     MIDI_SCHEMES,
+    MODULATOR_SCHEMES,
     PAIR_SCHEME,
     PAIR_SEP,
     QUALIFIER,
@@ -788,6 +789,13 @@ class Binding:
             return -1
 
     @property
+    def is_modulator_route(self) -> bool:
+        """A performer row from a source no controller feeds: what node mode rests on a
+        param it fills (the owner, row 711), and a mapping that keeps a param from filling
+        only if it is not this. The one rule: `Bindings.node_holds` and `NodeDesk._kept`."""
+        return self.op in MOD_OPS and self.scheme in MODULATOR_SCHEMES
+
+    @property
     def is_sink(self) -> bool:
         """A sink row (plan 27 B3): a param or a lane sent out to a sink
         port — `target` is ``<role>:<channel>``, not a param id."""
@@ -830,6 +838,15 @@ class Binding:
         if None not in (self.channel, other.channel) and self.channel != other.channel:
             return False
         return self.kind == "pitch" or self.number == other.number
+
+    def feedback_from(self, profile) -> None:
+        """Show what `profile` says this control can show (`feedback_for`: its light,
+        its ring, its velocities). `profile` None or a control it has no word on: as is."""
+        fb = (profile.feedback_for(self.kind, self.channel, self.number)
+              if profile is not None else None)
+        if fb:
+            self.feedback, self.ring = fb["feedback"], fb.get("ring", self.ring)
+            self.on, self.off = fb.get("on", self.on), fb.get("off", self.off)
 
     @property
     def control(self) -> tuple[str, int, int] | None:
@@ -2246,6 +2263,16 @@ def _meta_table_attr(name: str) -> property:
                     doc=f"The meta table's `{name}` (`MetaTable`).")
 
 
+class NodeRows(Protocol):
+    """What a table asks of `node_desk.NodeDesk`, which is the meta controller's and above
+    this module."""
+
+    def rows(self, role: str | None = None) -> list[Binding]: ...
+    def serial(self, role: str | None = None) -> int: ...
+    def under(self, b: Binding) -> bool: ...
+    def holding(self) -> frozenset[str]: ...
+
+
 class Bindings:
     """A deck's table: rows of every scheme, indexed for the adapters.
 
@@ -2277,6 +2304,12 @@ class Bindings:
     # they are in memory only — never in `bindings`, never saved, never
     # Learnable. `page_serial` counts the flips (`set_page`): midi.py
     # redraws the whole desk on one. The meta table's (`META_TABLE_ATTRS`)
+
+    # N1a (plan 53, `node_desk.NodeDesk`): the rows this deck's loadable patch's node
+    # mode derives for a desk. The deck's own, never the meta table's: one patch's
+    # pointing is no row of the other's. Never in `bindings`, so never saved, no
+    # learn's, and no pair asks over one (`Learn`, row 754). None: no rows
+    node_desk: NodeRows | None = None
 
     # plan 44 D3: the meta table's state (`META_TABLE_ATTRS`) is read and
     # written through this table — one property per name, made from the
@@ -2705,22 +2738,43 @@ class Bindings:
         (plan 27 B2: the latch is per role) — nothing else (D8: no
         fall-through; a control the up layer does not map does nothing).
         A surface page's rows come first (plan 31 §A): on a page control
-        they are all there is, and a disabled one does nothing."""
+        they are all there is, and a disabled one does nothing. Node mode's
+        rows (N1a) are the patch layer's, ahead of its saved rows on the same
+        control: under SHIFT the global layer is as it was, since a patch has
+        no say there."""
         if self.is_primary(role):
             page = [b for b in self.page_rows if b.matches(kind, channel, number)]
             if page:
                 return [b for b in page if b.enabled]
         rows = [b for b in self.route(kind, channel, number)
                 if b.enabled and self.serves(role, b)]
-        inv = [b for b in rows if b.layer is None]
+        above = self.above_layers(kind, channel, number, role, rows)    # (one scan a message)
+        if above is not None:
+            return above
+        layer = self.layer_of(role)
+        if layer == "preset":
+            node = [b for b in self.node_rows(role) if b.matches(kind, channel, number)]
+            if node:
+                return node
+        return [b for b in rows if b.layer == layer]
+
+    def above_layers(self, kind: str, channel: int, number: int, role: str | None = None,
+                     rows: Iterable[Binding] | None = None) -> list[Binding] | None:
+        """What answers a message ahead of every layer: the enabled invariant rows on its
+        control, none at all on SHIFT or a reserved control, or None when the layers
+        decide. `dispatch`'s rule, which node mode's fill asks too (`NodeDesk`): a control
+        this holds is no degree of freedom, since a row there could never be reached.
+        `rows`: a narrower list to look through than the table's, when the caller has one."""
+        inv = [b for b in (self.bindings if rows is None else rows)
+               if b.layer is None and b.enabled and b.matches(kind, channel, number)
+               and self.serves(role, b)]
         if inv:
             return inv
         if self.is_primary(role) and (
                 (kind == "note" and channel == 0 and number == _SHIFT.number)
                 or any(x.matches(kind, channel, number) for x in _reserved(self.profile))):
             return []                # (their row disabled: still no layer's, `is_invariant`)
-        layer = self.layer_of(role)
-        return [b for b in rows if b.layer == layer]
+        return None
 
     def active(self, role: str | None = None) -> list[Binding]:
         """The MIDI rows of the device of `role` (None: the first MIDI
@@ -2736,7 +2790,11 @@ class Bindings:
         if page:
             under = self._controls(page, shift=False)
             rows = [b for b in rows if not self._on(b, under)]
-        return [*page, *(b for b in rows
+        node = self.node_rows(role) if layer == "preset" else []
+        if node:
+            under = self._controls(node, shift=False)
+            rows = [b for b in rows if b.layer != "preset" or not self._on(b, under)]
+        return [*page, *node, *(b for b in rows
                          if b.layer is None or (b.layer == layer and not self._on(b, index)))]
 
     @property
@@ -2751,6 +2809,34 @@ class Bindings:
         if page is not self.page:
             self.page = page
             self.page_serial = getattr(self, "page_serial", 0) + 1
+
+    def node_rows(self, role: str | None = None) -> list[Binding]:
+        """The rows node mode derives for the desk of `role` on this deck (N1a,
+        `node_desk`), as they stand: the same objects until what they say moves."""
+        nd = self.node_desk
+        return nd.rows(role) if nd is not None else []
+
+    def under_node_mode(self, b: Binding) -> bool:
+        """Is saved row `b` on a control node mode fills now, so it waits (N1a)?"""
+        nd = self.node_desk
+        return nd is not None and nd.under(b)
+
+    def node_held(self) -> frozenset[str]:
+        """The params a desk in node mode holds on this deck (`NodeDesk.holding`)."""
+        nd = self.node_desk
+        return nd.holding() if nd is not None else frozenset()
+
+    def node_holds(self, b: Binding, held: frozenset[str] | None = None) -> bool:
+        """Does node mode hold route `b` off its param now? A modulator's, on a filled
+        param (the owner, row 711). The row is untouched: this is read, never written."""
+        if not b.is_modulator_route:
+            return False
+        return b.target in (self.node_held() if held is None else held)
+
+    def node_rows_serial(self, role: str | None = None) -> int:
+        """How many times those rows have changed: a desk redraws on one."""
+        nd = self.node_desk
+        return nd.serial(role) if nd is not None else 0
 
     def layer_of(self, role: str | None = None) -> str:
         """The layer up on the device of `role`: the first role's is
@@ -3831,8 +3917,9 @@ class Router:
                 *((getattr(m, "id", ""), getattr(m, "kind", ""),
                    tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t)))
         banks = tuple((scheme, tuple(b.ids())) for scheme, b in self._banks().items())
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()    # (node mode, row 711)
         return (id(t), rows, t.macros_serial, subs, mods, banks,
-                getattr(self.reg, "serial", 0))
+                getattr(self.reg, "serial", 0), held)
 
     def build_modgraph(self) -> modgraph.ModGraph:
         """The modulation graph of this table (modgraph.py's nodes and edges):
@@ -3868,8 +3955,10 @@ class Router:
             for inp in getattr(m, "inputs", ()):
                 if inp:                                  # "" is an input not chosen yet
                     g.link(source(inp), _modifier_node(m), "in")
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()
         for b in t.routes():
-            cable, on = (b.source, b.target), b.enabled
+            # (a route node mode holds off is an edge switched off, so it closes no loop)
+            cable, on = (b.source, b.target), b.enabled and not (held and t.node_holds(b, held))
             src = source(b.source)
             gate = source(b.when) if b.when is not None else None
             scale = param(b.scale) if b.scale is not None else None
@@ -3982,8 +4071,9 @@ class Router:
         banks = self._banks()
         reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()
         for b in t.mods():
-            if (b.source, b.target) not in cut:
+            if (b.source, b.target) not in cut and not (held and t.node_holds(b, held)):
                 by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
         # a delay closing a loop runs before its input (`modgraph.ordering`):
         # it emits that input's lane as it stands — last frame's value

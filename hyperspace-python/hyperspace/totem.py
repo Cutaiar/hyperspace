@@ -359,10 +359,12 @@ def quiet_stick(model, reg, role: str, steers: bool = True) -> bool:
     return own_layout(model) and steers and not drives(state_of(reg), role)
 
 
-def keep_turn(state: TotemState, reg) -> None:
+def keep_turn(state: TotemState | None, reg) -> None:
     """The phases back to the totem's angles, after the pad's rows ran: a row that fired
     `camera.reset` (a Joy-Con's stick click) would otherwise show the shape at no
     rotation for a frame, and the totem would put it back on the next."""
+    if state is None:
+        return
     for p, name in enumerate(PLANES):
         _set(reg, f"rot.phase.{name}", state.ang[p])
 
