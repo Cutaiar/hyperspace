@@ -1011,7 +1011,7 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     lib.poll()
     quit_(home)
     assert tree(home, but=quiet) == before
-    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v4"]
     # and a second launch finds the same, bindings.json and its backup too
     after = tree(home, but=quiet[:2])
     again = boot_home(home)
@@ -1064,7 +1064,7 @@ def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home)
     r.reg["preset.save.6"].fire()                          # ⇧F7 into the hole
     assert len(json.loads(show.read_text())["bank"]) == 8 and pr.bank[6] == "PRESET 7"
     # (the one backup in the home is bindings.json's, from the launch: plan 19 WP2)
-    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v4"]
     assert not pr.is_dirty() and pr.bank_error == ""
     assert lib.warning == ""
     # a far slot filled and cleared again: the file is back to eight entries
