@@ -77,7 +77,7 @@ A load is a scene-setter (docs/ARCHITECTURE.md §3): it writes bases and
 replaces rows, never an offset. In order (plan 13 §5):
 
 1. note what the file names that a loadable patch may not: a shared meta param
-   ("`tempo.bpm` is the session's, ignored"), an id nobody has, a
+   ("`tempo.bpm` is the meta controller's, ignored"), an id nobody has, a
    ``routes`` row that is not a performer row or that aims at a param
    that is not modulatable (dropped), a row on a meta param (dropped: the
    hard rule, register row 743; the file is not rewritten, and the next
@@ -1082,7 +1082,7 @@ class LoadedPatch:
                 if pid not in from_show:
                     unknown.append(pid)
             elif part_of(p) == "shared_meta":
-                notes.append(f"{pid} is the session's, ignored")
+                notes.append(f"{pid} is the meta controller's, ignored")
             elif part_of(p) != "patch" or not p.persist:
                 notes.append(f"{pid} is not part of a preset, ignored")
             else:
@@ -1200,7 +1200,7 @@ class LoadedPatch:
                     if pid not in from_show:
                         late.append(pid)
                 elif part_of(p) == "shared_meta":
-                    notes.append(f"{pid} is the session's, ignored")
+                    notes.append(f"{pid} is the meta controller's, ignored")
                 elif part_of(p) != "patch" or not p.persist:
                     notes.append(f"{pid} is not part of a preset, ignored")
                 else:

@@ -1618,10 +1618,10 @@ def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
     if p is None:
         part = part_of_id(pid)
         if part == "shared_meta":
-            return "a session param, never a preset's (plan 13 D9)"
+            return "a meta controller param, never a preset's (plan 13 D9)"
         return None if part == "patch" else "not part of a preset"
     if part_of(p) == "shared_meta":
-        return "a session param, never a preset's (plan 13 D9)"
+        return "a meta controller param, never a preset's (plan 13 D9)"
     if p.alias:
         return "an alias, not part of a preset"
     if part_of(p) != "patch" or not p.persist:
@@ -1668,7 +1668,7 @@ def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[st
             continue
         if not is_macro(b.scale):
             notes.append(f"dropped the scale {b.scale} of {b.source} → {b.target}: a route's "
-                         "scale is a session param (decision register row 18 (a)); a macro "
+                         "scale is a meta controller param (decision register row 18 (a)); a macro "
                          "attenuates a route as its depth subscriber")
             b.scale = None
             continue
@@ -2801,7 +2801,7 @@ class Bindings:
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
                 notes.append(f"dropped {b.source} → {b.target}: that control is "
-                             "invariant, the session's (plan 13 D6)")
+                             "invariant, the meta controller's (plan 13 D6)")
             elif (why := meta_row_refusal(b)) is not None:
                 notes.append(f"dropped {b.source} → {b.target}: {why}")
             else:

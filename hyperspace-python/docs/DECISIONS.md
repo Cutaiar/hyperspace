@@ -598,6 +598,7 @@ nuance). Built so far: D1, D2, D3, D4.
 | Legibility at a distance comes first: rounded frames, pill chips, filled faders, no page scroll at the control size. The master faders are on the AUDIO page. | `ui.py` | owner |
 | The Replace / Keep prompt is drawn on every page, even with the panel collapsed. | `ui_routing.py` | owner |
 | The ROUTING page is one page over the loaded preset: its desk rows and macros, and the session's rows read-only below (its routes and modifiers are the GRAPH page's since plan 28 N7; a pointer line says so). | `ui_routing.page` | owner |
+| **"Session" and "rig" leave what a person reads,** said as what each means; "preset" goes with the migration. A test fails if either returns in a string (rows 778-780). | `tests/test_person_words.py` | owner |
 | **The cheat sheet is off at every launch.** `/` and the APC40's DETAIL toggle it (the pad's MENU did until 2026-10-14). The desk diagram stays on. | `ui.cheatsheet` | owner |
 | The desk's glyphs (K1–K8, D1–D8, S1–S8, SM, X, C, G, B1–B22, ⇧) appear on every ROUTING row and Learn message, with an APC40 diagram of the layer that is up. | `apc40.LAYOUT`, `ui_desk.py` | owner |
 | The on-screen desk takes the room it has, and there is no DESK page. Once a unit is 44 × 32 px, every lit control carries its label. | `ui_desk.room`, `ui_desk.LABEL_UNIT` | row 57 |
@@ -647,6 +648,7 @@ nuance). Built so far: D1, D2, D3, D4.
 | **The test suite cannot hang the Mac** (wave 1 T0, 2026-11-02): a hung test fails by name (pytest-timeout at 120 s: the thread method in xdist workers, the signal method in a serial run; no worker restart); `live` tests take turns across processes on a per-account lock and skip after 60 s; one tier at a time on a shared Mac; a test that opens a real GLFW window asks `gl_window_ok` first. | row 589 |
 | **A new type complaint fails a PR, an old one doesn't** (wave 5 TY1): `tools/type_ratchet.py` against `tools/type_baseline.json`, by file and rule, in the fast tier so CI holds it. Running the tool lowers the baseline; only `--accept` raises it. The import walls glob by stem (`tests/walls.py`), so a split stays behind its wall. | row 788, rec — pending the owner |
 | **A crash costs one test, not the run** (wave 2 I1, 2026-11-03): `--dist load` with up to four worker restarts, in pyproject now and in CI once the owner lands the workflow edit; the live lock alone keeps two live tests apart, taken outside the per-test timeout, a run's own live tests waiting for each other without bound and another run's for 60 s (90 s for a holder that names no run), then a skip that says which; a live test's fixture wider than the test fails that test by name; no test reads a real GLFW joystick. | owner (`--dist load`); rows 605–606 |
+| **A builder's last check may be CI; the wait can't merge** (plan 58 H2, 2026-11-06): `tools/wait_green.py` only waits, and a test holds it to two `gh` reads. The orchestrator's `--all` still decides the render path, the loader and `graphmigrate`; its durations go in the merge or PR body, never a commit that moves the head CI vouched for. | row 770 |
 
 ## Decided not to build
 

@@ -454,7 +454,7 @@ def test_a_whole_loadable_spawned_into_an_empty_frame_is_that_loadable(path):
     spec = p[0]
     whole, refused = patches.lift(*p, everything(p))
     for why in refused:
-        assert any(word in why for word in ("rig's", "camera", "media channel", "subscriber")), why
+        assert any(word in why for word in ("meta controller's", "camera", "media channel", "subscriber")), why
     whole["name"] = path.stem
     assert patches.check(whole) == [], path.stem
     landing = spawn(whole, Host())

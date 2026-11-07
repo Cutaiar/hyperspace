@@ -294,15 +294,28 @@ def _pick_row(panel) -> Binding | None:
     return st.get("mark")
 
 
+def _heading(title: str, note: str) -> None:
+    """A section's micro title and its note: beside it where the room holds both, else
+    under it, wrapped at the pane's edge (`graph.SIDE_MIN` is 240 px)."""
+    room = imgui.get_content_region_avail().x
+    ui._micro(title)
+    gap = imgui.get_style().item_spacing.x
+    if ui._micro_width(title) + gap + imgui.calc_text_size(note).x <= room:
+        imgui.same_line()
+    imgui.push_text_wrap_pos(0.0)
+    imgui.text_disabled(note)
+    imgui.pop_text_wrap_pos()
+
+
 def is_line_of(table, b: Binding, mark: Binding | None, section: str) -> bool:
     """Is the line of row `b`, in `section` ("desk": a patch row or a dark
-    line; "session": an invariant or global row), the picked control's
+    line; "meta": an invariant or global row), the picked control's
     line? Its control must be the picked one, on the layer that is up: a
     desk line while the patch layer is up and the control is not
     invariant; an invariant row always; a global row while SHIFT is on."""
     if mark is None or not b.overlaps(mark):
         return False
-    if section == "session":
+    if section == "meta":
         return b.layer is None or b.layer == table.layer
     return table.layer == "preset" and not table.is_invariant(mark)
 
@@ -1176,7 +1189,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if scale is not False:
         b.scale = scale
     if imgui.is_item_hovered():
-        ui.tooltip("A session param whose live value multiplies the depth — "
+        ui.tooltip("A meta controller param whose live value multiplies the depth — "
                           "master.gain, the drive fader, on the rate routes. Never the "
                           "row's own target, never a performance param: a macro scales "
                           "a route through its depth subscriber.")
@@ -1384,7 +1397,7 @@ def _loadable_line(panel, pr, table) -> None:
     ui._micro(layer, ui.RED if glob else ui.DIM)
     if imgui.is_item_hovered():
         ui.tooltip("The desk's layer — SHIFT latches it (desk.shift). Global: "
-                          "the session's controls, never learned (a learn is refused); "
+                          "the meta controller's controls, never learned (a learn is refused); "
                           "preset: the loaded preset's desk. A preset load drops to it.")
     ui.beside(ui.chip_w(word, "as…"))
     # the preset strip's own save chip,
@@ -2050,12 +2063,10 @@ def meta_rows(panel, router: Router) -> None:
     be seen; never learned or edited here (D5, D6)."""
     table = router.table
     inv, glob = _meta_rows(table)
-    ui._micro("session")
-    imgui.same_line()
-    imgui.text_disabled("the session's — edit bindings.json")
+    _heading("meta controller", "its own rows — edit bindings.json")
     col = _column([control_glyph(table, b) for b in (*inv, *glob)])
     had = bool(inv or glob)
-    inv, glob = ([b for b in rows if _shown(panel, router, ("session", id(b)), control_hay, b)]
+    inv, glob = ([b for b in rows if _shown(panel, router, ("meta", id(b)), control_hay, b)]
                  for rows in (inv, glob))
     if had and not (inv or glob):
         imgui.text_disabled(NO_MATCH)
@@ -2069,7 +2080,7 @@ def meta_rows(panel, router: Router) -> None:
             imgui.same_line(col)
             op = _op_text(b)
             imgui.text_colored(ui.FAINT, b.target + ("" if op in ("abs", "toggle") else f"  {op}"))
-            _mark_line(panel, table, b, "session", y0)
+            _mark_line(panel, table, b, "meta", y0)
 
 
 # ---- the sinks (plan 27 B3) ----
@@ -2088,9 +2099,7 @@ def sinks(panel, router: Router) -> None:
     file now; a new one comes from a param's right-click → Learn sink ▸."""
     table = router.table
     rows = table.sinks(enabled=False)
-    ui._micro("sinks")
-    imgui.same_line()
-    imgui.text_disabled("the session's — out to a sink · right-click a param: Learn sink")
+    _heading("sinks", "the meta controller's — out to a sink · right-click a param: Learn sink")
     if not rows:
         imgui.text_disabled("nothing goes out")
         return
