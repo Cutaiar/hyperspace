@@ -8464,6 +8464,34 @@ Headless: `tests/test_hot_reload_app.py`, which runs the real app with one outpu
 **624. Saves on the rig.** (the Mac, with the second output and the desk)
 1. Launch with the show's outputs and devices. Save `outputs.py`, `render.py`, `ghost.py` and `ui.py` in turn, with no edit needed beyond the save. *Pass:* the SYSTEM section says `hot: <file>` each time, and the picture and the panel keep going, on every output.
 *Fail:* `swap: …` on the SYSTEM section, or an output that stops.
+## DK. Controllers composed in the app (CT1)
+Register rows 796–799, 2026-11-06. Headless: `tests/test_devicelist.py`, `tests/test_players.py`, `tests/test_ui_players.py`, `tools/drive_players.py` on real panel frames with stood-in hardware. Nothing here has met real hardware yet. Restart first: `devicelist.py` is a new module. Both Macs on this build.
+
+**619. A pad nobody lists.** (the Mac, with a pad the list has no free entry for)
+1. Note `devices.json` in the library, then plug the pad in. Open the board (O). *Pass:* it shows under NOBODY HOLDS, drawn as itself, and the file hasn't changed.
+2. Hover it. *Pass:* the tip names the role it would get.
+3. Drag it to player 2. *Pass:* said in words; it's on player 2's token, lit; the file has one new entry, last, and nothing else moved. Rows naming `@p2` move with it, on player 2's deck.
+4. Quit and relaunch. *Pass:* still there, same role, still player 2's, with no drag.
+5. Click it on the board, then its "on this Mac" chip. *Pass:* it goes off here and comes back, and `devices.json` doesn't change.
+*Fail:* adopted by plugging in, a role that changes, or an old row that goes dead.
+
+**620. The APC40 from the tray.** (the Mac, with the APC40)
+1. With the app closed, take the `apc40` entry out of `devices.json`. Launch with the desk plugged in. *Pass:* the board's tray shows it with the desk's picture, and the desk is dark.
+2. Drag it to player 1. *Pass:* LEDs come up with no relaunch; the role is `apc40`; knobs do what they did before.
+*Fail:* a desk that needs a relaunch, or rows that came back under another name.
+
+**621. Both Macs.** (both Macs, on the shared Drive)
+1. Launch on the owner's Mac, then Dillon's. *Pass:* one `devices.json`, holding both Macs' lists; the SYSTEM page says which Mac's `config.toml` differed, if one did.
+2. Adopt a controller on one, with both running. *Pass:* within a sync the other's board lists it, under the same role, on player 1 there; nothing else closes or blinks.
+3. Adopt a different one on each within a few seconds. *Pass:* a minute later both Macs show both, and `devices.json` stops changing.
+*Fail:* an adopt that disappears, or a file that keeps changing by itself.
+
+**622. No Drive.** (the Mac)
+1. Quit Google Drive, or point `[library] path` at a missing folder, and launch. *Pass:* the app starts, controllers work as last seen, and the board and SYSTEM say the library isn't there. No folder appears at that path.
+2. Adopt a controller. *Pass:* it works now, and the words say it's kept on this Mac.
+3. Bring the Drive back, with no restart. *Pass:* within 30 s the warning goes, and the entry is in `devices.json`.
+4. With the projector running, pause Drive syncing, or take the network away, and watch the picture for a minute. *Pass:* no hitch that wasn't there before. (`Library`'s own scan reads this folder on the frame thread and isn't CT1's: a hitch here is worth saying, with that in mind.)
+*Fail:* no launch, a created folder, or a lost adopt.
 
 ## What no test covers
 

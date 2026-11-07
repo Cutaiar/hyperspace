@@ -9,6 +9,7 @@ the poi follow the player. Every player on air is what the app did before.
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 from test_deck import _compare, _walk
@@ -16,7 +17,7 @@ from test_meta_controller import _pointed
 from test_totem import FakePad
 from test_undo import boot
 
-from hyperspace import app, devices, gamepad, graphview, osc, poi, routing, totem, undo
+from hyperspace import app, devicelist, devices, gamepad, graphview, osc, poi, routing, totem, undo
 from hyperspace.deck import KEYS, MOUSE, Deck, MetaController
 from hyperspace.hotreload import MODULES
 from hyperspace.learn import SAVE_PARAM
@@ -1110,6 +1111,135 @@ def test_let_go_lost_is_the_one_door_the_pad_goes_through(rig, monkeypatch):
     assert seen == [rig.one.reg]
 
 
+# ---------------------------------------------------------------- the list both Macs share (CT1)
+
+class Counted(devices.Base):
+    """A controller that says when it is opened and closed."""
+
+    kind = "counted"
+    feeds = ()
+    log: ClassVar[list[str]] = []
+
+    def open(self):
+        self.io = object()
+        Counted.log.append(f"open {self.role}")
+
+    def close(self):
+        self.io = None
+        Counted.log.append(f"close {self.role}")
+
+    @property
+    def status(self):
+        return "connected" if self.io is not None else "lost"
+
+
+@pytest.fixture()
+def listed(tmp_path, monkeypatch):
+    """A real registry over a real list, in a scratch library, on stand-in controllers."""
+    Counted.log = []
+    real = devices.kinds
+    monkeypatch.setattr(devices, "kinds", lambda: {**real(), "gamepad": Counted, "midi": Counted})
+    root, home = tmp_path / "Drive", tmp_path / "home"
+    root.mkdir()
+    home.mkdir()
+    seed = [{"role": "pad", "kind": "gamepad"}, {"role": "apc40", "kind": "midi"}]
+    store = devicelist.DeviceList(root, home, seed=seed)
+    ctx = devices.Context(players=Players(home / FILE))
+    reg = devices.DeviceRegistry(store.checked()[0], ctx, store=store)
+    reg.open_all()
+    Counted.log.clear()
+    return SimpleNamespace(root=root, store=store, reg=reg, players=ctx.players)
+
+
+def _lands(root, raw):
+    (root / devicelist.FILE).write_text(json.dumps({"schema": devicelist.SCHEMA, "devices": raw}))
+
+
+def _watched(r):
+    """A whole cycle of the list's worker, then the registry's look."""
+    r.store.sync()
+    return r.reg.watch()
+
+
+def test_the_registry_watches_the_list_not_config_toml(listed):
+    r = listed
+    _lands(r.root, [*r.store.raw, {"role": "xbox", "kind": "gamepad", "controller": "xbox"}])
+    assert _watched(r)
+    assert [d.role for d in r.reg] == ["pad", "apc40", "xbox"]
+    assert Counted.log == ["open xbox"], "what was there is not touched"
+    assert not _watched(r)
+
+
+def test_a_list_that_will_not_read_closes_nothing(listed):
+    r = listed
+    (r.root / devicelist.FILE).write_text('{"schema": "devices/1", "dev')
+    assert not _watched(r)
+    assert [d.role for d in r.reg] == ["pad", "apc40"] and not Counted.log
+    assert r.reg.get("pad").io is not None
+
+
+def test_the_drive_going_away_closes_nothing(listed):
+    r = listed
+    (r.root / devicelist.FILE).unlink()
+    r.root.rmdir()
+    for _ in range(3):
+        assert not _watched(r)
+    assert [d.role for d in r.reg] == ["pad", "apc40"] and not Counted.log
+    assert "isn't there" in r.store.said
+
+
+def test_a_bad_entry_from_the_other_mac_is_said_and_the_old_list_stands(listed):
+    r = listed
+    _lands(r.root, [*r.store.raw, {"role": "no:colon", "kind": "gamepad"}])
+    assert not _watched(r)
+    assert [d.role for d in r.reg] == ["pad", "apc40"] and not Counted.log
+    assert any("the old list stands" in n for n in r.reg.notes)
+
+
+def test_adopting_opens_only_the_new_one_and_a_change_from_the_other_mac_keeps_it(listed):
+    r = listed
+    role = r.store.adopt({"role": "xbox", "kind": "gamepad", "controller": "xbox"})
+    r.players.hold(role, 2)
+    assert r.reg.relist()
+    r.store.sync()
+    assert Counted.log == ["open xbox"]
+    assert [d.role for d in r.reg] == ["pad", "apc40", "xbox"]
+    # the other Mac's copy, from before the adopt, lands with its own new one
+    _lands(r.root, [{"role": "pad", "kind": "gamepad"}, {"role": "apc40", "kind": "midi"},
+                    {"role": "edge", "kind": "gamepad", "controller": "edge"}])
+    assert _watched(r)
+    assert {d.role for d in r.reg} == {"pad", "apc40", "xbox", "edge"}, "the adopt stands"
+    assert "close xbox" not in Counted.log
+    assert not _watched(r), "and nobody takes turns"
+
+
+def test_the_first_look_for_midi_is_before_any_frame_unless_this_mac_said_no(tmp_path, monkeypatch):
+    looks = []
+    monkeypatch.setattr(app, "port_names", lambda: looks.append(1))
+    cfg = {"devices": [], "notes": []}
+    app._open_devices(cfg, devices.Context(), None)
+    assert looks == [1]
+    app._open_devices({**cfg, "no_midi_look": True}, devices.Context(), None)
+    assert looks == [1]
+
+
+def test_a_rename_moves_the_holder_the_seat_and_the_pointer(tmp_path, monkeypatch):
+    monkeypatch.setattr("hyperspace.deck.meta_stack", lambda *a, **k: SimpleNamespace())
+    monkeypatch.setattr("hyperspace.deck.undos.install_meta", lambda u: None)
+    meta = MetaController(SimpleNamespace(name="one", undo=SimpleNamespace()),
+                          SimpleNamespace(name="two", undo=SimpleNamespace()),
+                          Players(tmp_path / FILE))
+    meta.move_player(2, Duty.OFF_AIR)
+    meta.register("foo", 2)
+    pointer = meta.pointer("foo")
+    meta.rename_controller("foo", "foo-2")
+    assert meta.players.player_of("foo-2").number == 2
+    assert meta.players.player_of("foo").number == 1 and "foo" not in meta.seats
+    assert meta.seats["foo-2"] == 2 and meta.pointer("foo-2") is pointer
+    assert meta.pointer("foo") is not pointer, "the name's the other Mac's controller now"
+    assert json.loads((tmp_path / FILE).read_text())["controllers"] == {"foo-2": 2}
+
+
 # ---- a move on the meta stack (row 740, amended) ----
 
 
@@ -1619,3 +1749,17 @@ def test_a_deck_s_cmd_z_does_not_reach_a_move(rig):
     _z(rig)
     assert meta.players.get(2).duty == Duty.OFF_AIR
     assert undo.here() is one.undo
+
+
+def test_a_rename_after_its_new_name_opened_leaves_that_device_its_pointer(tmp_path, monkeypatch):
+    monkeypatch.setattr("hyperspace.deck.meta_stack", lambda *a, **k: SimpleNamespace())
+    monkeypatch.setattr("hyperspace.deck.undos.install_meta", lambda u: None)
+    meta = MetaController(SimpleNamespace(name="one", undo=SimpleNamespace()),
+                          SimpleNamespace(name="two", undo=SimpleNamespace()),
+                          Players(tmp_path / FILE))
+    meta.move_player(2, Duty.OFF_AIR)
+    meta.register("foo", 2)
+    held_by_the_device = meta.pointer("foo-2")
+    meta.rename_controller("foo", "foo-2")
+    assert meta.pointer("foo-2") is held_by_the_device
+    assert held_by_the_device.deck is meta.off_air, "and it goes where its player is"

@@ -11,8 +11,9 @@ from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
 from hyperspace import deck as deck_mod
-from hyperspace import devices, routing, ui_graph, ui_pane, ui_players, undo
+from hyperspace import devicelist, devices, routing, ui_graph, ui_pane, ui_players, undo
 from hyperspace.deck import MetaController
+from hyperspace.midiports import PortNames
 from hyperspace.pads import models
 from hyperspace.params import Registry
 from hyperspace.players import FILE, Duty, Players
@@ -788,3 +789,278 @@ def test_the_app_hands_the_panel_its_meta_controller():
 
     from hyperspace import app
     assert "panel.meta = meta" in inspect.getsource(app)
+
+
+# ---------------------------------------------------------------- adopting (CT1)
+
+class Opened:
+    """A stand-in's adapter, as a port that opened."""
+
+    on, error, name, last, bindings = True, "", "", "", ()
+
+    def close(self):
+        pass
+
+
+@pytest.fixture()
+def tray(rig, tmp_path, monkeypatch):
+    """The board over a real registry and a real list in a scratch library, with what a
+    Mac would see stood in: a MIDI port, and a pad a hub reads."""
+    r = rig
+    monkeypatch.setattr(devices.MidiDevice, "open", lambda self: setattr(self, "io", Opened()))
+    monkeypatch.setattr(devices.PadDevice, "open", lambda self: setattr(self, "io", Opened()))
+    monkeypatch.setattr(ui_players, "port_names", lambda: PortNames(r.ports, [], r.why))
+    r.ports, r.why = ["Launch Control XL"], ""
+    r.root = tmp_path / "Drive"
+    r.root.mkdir()
+    (tmp_path / "home").mkdir()
+    seed = [{"role": "pad", "kind": "gamepad", "enabled": False}, {"role": "apc40", "kind": "midi", "enabled": False}]
+    r.store = devicelist.DeviceList(r.root, tmp_path / "home", seed=seed)
+    r.store.sync()
+    ctx = devices.Context(players=r.meta.players, notes=[])
+    regs = devices.DeviceRegistry(r.store.checked()[0], ctx, store=r.store)
+    regs.point(r.meta.pointer, r.meta.panel_pointer)
+    r.meta.on_players.append(lambda: regs.apply(regs.entries))
+    r.panel.devices = regs
+    ui_players._state(r.panel)["loose_at"] = -1e9
+    r.d.run(r.d.wait(3))
+    return r
+
+
+def _lands(r, raw):
+    """The other Mac changes the list, and the registry sees it."""
+    (r.root / devicelist.FILE).write_text(json.dumps({"schema": devicelist.SCHEMA, "devices": raw}))
+    r.store.waiting.clear()     # (the seed's hold, long over by then)
+    r.store.sync()
+    assert r.panel.devices.watch()
+
+
+def _on_disk(r):
+    r.store.sync()
+    return {e["role"]: e for e in json.loads((r.root / devicelist.FILE).read_text())["devices"]}
+
+
+def test_a_midi_port_nobody_lists_waits_in_the_tray_and_adopts_nothing_by_itself(tray):
+    r = tray
+    assert [h.role for h in ui_players.loose(r.panel)] == ["Launch Control XL"]
+    r.d.run(r.d.wait(5))
+    assert "players.tray.0" in r.d.rects
+    assert set(_on_disk(r)) == {"pad", "apc40"}, "plugged in, and nothing is written"
+    assert r.panel.devices.get("launch-control-xl") is None
+
+
+def test_dragging_from_the_tray_adopts_it_for_that_player(tray):
+    r, d, meta = tray, tray.d, tray.meta
+    meta.move_player(2, Duty.OFF_AIR)
+    d.run(d.wait(2))
+    _drag(d, "players.tray.0", lambda: _head(d, "players.p2"))
+    role = "launch-control-xl"
+    assert _on_disk(r)[role] == {"role": role, "kind": "midi", "profile": "generic", "port": "Launch Control XL"}
+    assert list(_on_disk(r)) == ["pad", "apc40", role], "at the end: nothing else moves"
+    assert meta.players.player_of(role).number == 2
+    assert meta.pointer(role).deck is meta.off_air
+    assert r.panel.devices.get(role).status == "connected"
+    assert _said(r) == ("Launch Control XL adopted as launch-control-xl: player 2 holds it here, "
+                        "on deck 2. It goes on the list both Macs share.")
+    assert json.loads(r.meta.players.path.read_text())["controllers"] == {role: 2}, "who holds it is this Mac's"
+    assert "controllers" not in json.loads((r.root / devicelist.FILE).read_text())
+    ui_players._state(r.panel)["loose_at"] = -1e9
+    d.run(d.wait(2))
+    assert not ui_players._state(r.panel)["loose"], "and it has left the tray"
+
+
+def test_a_drag_dropped_on_nothing_adopts_nothing(tray):
+    r, d = tray, tray.d
+    _drag(d, "players.tray.0", (1, 1))
+    assert set(_on_disk(r)) == {"pad", "apc40"} and not _said(r)
+
+
+def test_a_tray_item_clicked_then_a_token_adopts_it(tray):
+    r, d, meta = tray, tray.d, tray.meta
+    _click(d, "players.tray.0")
+    assert ui_players._state(r.panel)["sel"][0] == ui_players.SEL_TRAY
+    _click(d, _head(d, "players.p3"))
+    assert meta.players.player_of("launch-control-xl").number == 3
+    assert ui_players._state(r.panel)["sel"] is None
+
+
+def test_a_pad_from_the_tray_is_adopted_by_its_model_and_named_for_rows(tray):
+    r, d, meta = tray, tray.d, tray.meta
+    r.ports = []
+    r.panel.devices.ctx.pads = SimpleNamespace(taken={}, hub=SimpleNamespace(
+        readers={"a": SimpleNamespace(name="Joy-Con (L)", model=models.MODELS["joycon-l"])}, held={}))
+    # (the list's own pad entry, off, would take this one: one that takes only an Edge)
+    _lands(r, [{"role": "pad", "kind": "gamepad", "controller": "edge", "enabled": False},
+               {"role": "apc40", "kind": "midi", "enabled": False}])
+    ui_players._state(r.panel)["loose_at"] = -1e9
+    d.run(d.wait(3))
+    _drag(d, "players.tray.0", lambda: _head(d, "players.p2"))
+    assert _on_disk(r)["joycon-l"]["controller"] == "joycon-l"
+    assert r.panel.devices.get("joycon-l").qualifier == "p2", "player 2's first pad: @p2's rows"
+    assert meta.players.player_of("joycon-l").number == 2
+
+
+def test_a_port_an_entry_names_or_our_own_is_not_loose(tray):
+    r = tray
+    r.ports = ["Akai APC40", "Hyperspace Hands", "My Box", "Launch Control XL"]
+    _lands(r, [*r.store.raw, {"role": "box", "kind": "midi", "profile": "generic", "port": "my box", "enabled": False}])
+    assert [h.role for h in ui_players.loose(r.panel)] == ["Launch Control XL"]
+
+
+def test_an_apc40_with_no_entry_is_drawn_as_itself_and_is_apc40(tray):
+    r, d = tray, tray.d
+    r.ports = ["Akai APC40"]
+    _lands(r, [e for e in r.store.raw if e["kind"] != "midi"])
+    ui_players._state(r.panel)["loose_at"] = -1e9
+    d.run(d.wait(3))
+    assert [(h.glyph, h.entry["role"]) for h in ui_players._state(r.panel)["loose"]] == [("apc40", "apc40")]
+    _drag(d, "players.tray.0", lambda: _head(d, "players.p1"))
+    assert _on_disk(r)["apc40"]["profile"] == "apc40"
+    assert r.panel.devices.midi_roles() == ("apc40",)
+
+
+def test_midi_off_on_this_mac_is_no_look(tray, monkeypatch):
+    r = tray
+    r.store.no_midi_look = True
+    monkeypatch.setattr(ui_players, "port_names", lambda: pytest.fail("looked"))
+    assert not ui_players.loose(r.panel)
+
+
+def test_the_tray_looks_once_a_second_however_often_the_board_is_drawn(tray, monkeypatch):
+    r = tray
+    looks = []
+    monkeypatch.setattr(ui_players, "port_names", lambda: looks.append(1) or PortNames([], [], ""))
+    st = ui_players._state(r.panel)
+    st["loose_at"] = 0.0
+    for t in (0.5, 0.9, 1.1, 1.2, 2.2):
+        ui_players._tray(r.panel, st, now=t)
+    assert len(looks) == 2
+
+
+def test_why_there_is_no_midi_is_said_on_the_board_not_a_crash(tray):
+    r, d = tray, tray.d
+    r.ports, r.why = [], "CoreMIDI refused a client (-10833)"
+    ui_players._state(r.panel)["loose_at"] = -1e9
+    d.run(d.wait(3))
+    assert ui_players._state(r.panel)["midi_why"] == r.why
+
+
+def test_a_board_with_no_list_is_read_only_as_it_was(rig):
+    r, d, meta = rig, rig.d, rig.meta
+    r.panel.devices.ctx.pads = SimpleNamespace(taken={}, hub=SimpleNamespace(
+        readers={"a": SimpleNamespace(name="DualSense", model=models.MODELS["dualsense"])}, held={}))
+    ui_players._state(r.panel)["loose_at"] = -1e9
+    d.run(d.wait(3))
+    _drag(d, "players.tray.0", lambda: _head(d, "players.p2"))
+    assert not meta.players.controllers_of(2) or "dualsense" not in meta.players.controllers_of(2)
+
+
+def test_the_board_says_the_library_is_not_there_and_an_adopt_still_lands_this_run(tray, tmp_path):
+    r, d, meta = tray, tray.d, tray.meta
+    (r.root / devicelist.FILE).unlink()
+    r.root.rmdir()
+    r.store.sync()
+    d.run(d.wait(2))
+    assert "isn't there" in r.store.said
+    _drag(d, "players.tray.0", lambda: _head(d, "players.p2"))
+    assert meta.players.player_of("launch-control-xl").number == 2
+    assert r.panel.devices.get("launch-control-xl").status == "connected"
+    said = _said(r)
+    assert said.endswith(r.store.said) and "isn't there" in said
+    assert ui_players._state(r.panel)["said_warn"]
+    assert not r.root.exists()
+
+
+def test_the_same_cell_clicked_again_is_no_second_seat(tray):
+    """Review 5: a pad has no same-check, as two of a model are two seats. What stops a
+    phantom is the tray: it's gone from there the moment it's adopted."""
+    r, d = tray, tray.d
+    r.ports = []
+    joy = models.MODELS["joycon-l"]
+    held = ui_players.Held(joy.name, "joycon-l", joy.name, "on", devicelist.pad_entry(joy))
+    st = ui_players._state(r.panel)
+    st["loose"], st["loose_at"] = [held], 1e12
+    d.run(d.wait(2))
+    _click(d, "players.tray.0")
+    _click(d, _head(d, "players.p2"))
+    assert held not in st["loose"], "not drawn again, this second or any other"
+    d.run(d.wait(1))
+    assert "players.tray.0" not in {k for k in d.rects if st["loose"]}
+    assert [role for role in _on_disk(r) if role.startswith("joycon")] == ["joycon-l"]
+
+
+def test_two_pads_of_one_model_loose_are_two_seats_one_drag_each(tray):
+    r = tray
+    joy = models.MODELS["joycon-l"]
+    one = ui_players.Held(joy.name, "joycon-l", joy.name, "on", devicelist.pad_entry(joy))
+    st = ui_players._state(r.panel)
+    st["loose"] = [one, one]
+    ui_players.adopt(r.panel, one, 2)
+    assert st["loose"] == [one]
+    ui_players.adopt(r.panel, one, 3)
+    assert [k for k in _on_disk(r) if k.startswith("joycon")] == ["joycon-l", "joycon-l-2"]
+
+
+def test_a_desk_like_another_is_still_loose_and_gets_a_port_of_its_own(tray):
+    r = tray
+    r.ports = ["Akai APC40", "APC40 mkII"]
+    got = ui_players.loose(r.panel)
+    assert [h.role for h in got] == ["APC40 mkII"], "the entry reads the first; the second is free"
+    assert got[0].entry["port"] == "APC40 mkII"
+    ui_players.adopt(r.panel, got[0], 2)
+    assert _on_disk(r)["apc40-2"]["port"] == "APC40 mkII"
+    assert not ui_players.loose(r.panel)
+
+
+def test_the_tray_says_two_desks_of_one_name_show_as_one():
+    assert "show as one" in ui_players.TWINS_TIP
+
+
+def test_the_chip_turns_a_controller_on_or_off_on_this_mac_alone(tray):
+    r, d = tray, tray.d
+    before = (r.root / devicelist.FILE).read_text()
+    assert r.panel.devices.get("pad").status.startswith("off")
+    _click(d, "players.ctl.pad")
+    d.run(d.wait(2))
+    _click(d, "players.here")
+    assert r.store.is_on("pad") and "on, on this Mac only" in _said(r)
+    assert not r.panel.devices.get("pad").status.startswith("off")
+    r.store.sync()
+    assert (r.root / devicelist.FILE).read_text() == before
+    assert json.loads((r.store.base / devicelist.HERE).read_text())["on"] == {"pad": True}
+
+
+def test_an_earlier_moves_undo_leaves_an_adopted_controller_with_its_holder(tray):
+    r, d = tray, tray.d
+    calls = []
+    real = deck_mod.undos.push_meta
+    deck_mod.undos.push_meta = lambda words: (calls.append(words), real(words))
+    try:
+        _drag(d, "players.tray.0", lambda: _head(d, "players.p2"))
+    finally:
+        deck_mod.undos.push_meta = real
+    assert calls == ["launch-control-xl to player 2"], "a step of its own, like any move"
+    assert "⌘Z" not in _said(r), "it stays on the shared list, so ⌘Z isn't promised"
+
+
+def test_a_tray_that_cannot_look_for_midi_says_why_and_still_finds_pads(tray, monkeypatch):
+    r = tray
+    r.panel.devices.ctx.pads = SimpleNamespace(taken={}, hub=SimpleNamespace(
+        readers={"a": SimpleNamespace(name="Joy-Con (L)", model=models.MODELS["joycon-l"])}, held={}))
+    _lands(r, [{"role": "apc40", "kind": "midi", "enabled": False}])
+
+    def boom():
+        raise RuntimeError("no backend")
+    monkeypatch.setattr(ui_players, "port_names", boom)
+    st = ui_players._state(r.panel)
+    assert [h.name for h in ui_players.loose(r.panel, st)] == ["Joy-Con (L)"]
+    assert "no backend" in st["midi_why"]
+    st["loose_at"] = -1e9
+    r.d.run(r.d.wait(3))            # a frame of the board draws through it
+
+
+def test_a_bad_entry_in_the_walk_doesnt_reach_the_board(tray, monkeypatch):
+    r = tray
+    monkeypatch.setattr(devicelist, "midi_entry", lambda *a, **k: 1 / 0)
+    r.ports = ["Somebody's Box"]
+    assert ui_players.loose(r.panel) == []

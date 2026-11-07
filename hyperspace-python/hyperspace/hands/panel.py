@@ -168,7 +168,7 @@ def page(panel, dt: float) -> None:
     io = getattr(panel, "hands", None)
     panel._section("hands", GROUP if settings is not None else None)
     if settings is None:
-        imgui.text_disabled("no hands setup — see [hands] in config.toml")
+        imgui.text_disabled("no hands setup — the SYSTEM page says why")
         return
     _status(io, getattr(panel, "config_notes", None) or ())
     _box(io)
@@ -337,8 +337,8 @@ def _status(io, notes=()) -> None:
         if why:
             imgui.text_colored(ui.WARN, why)
         else:
-            imgui.text_disabled("tracker off — [hands] enabled = true in config.toml; "
-                                "the setup still edits and saves")
+            imgui.text_disabled("tracker off — click it on the player board (O) to turn it on "
+                                "on this Mac; the setup still edits and saves")
         return
     port = io.out_name or "no DAW port"
     imgui.text_disabled(f"{io.status or '—'}  ·  {_ins(io)}  ·  {port}")
