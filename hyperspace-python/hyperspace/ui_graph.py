@@ -271,7 +271,6 @@ SIDE_W = 320.0           # the side column's width at first, when the page is wi
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
 GRIP_W = 8.0             # the drag grip on the column's left edge
-UI_FILE = ui_pane.UI_FILE   # <machine>/ui.json: this Mac's panel settings (the side width)
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
@@ -294,7 +293,7 @@ IDLE_TIP = ("Nothing in, nothing out: not drawn so the canvas stays readable. + 
             "them here to patch one; patched, it is drawn like any node. The picker "
             "(right-click the canvas) still offers every idle macro.")
 BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it — widen "
-              "CONTROLS to give both room (in a window this wide they sit beside by themselves)")
+              "the window to give both room (in a window this wide they sit beside by themselves)")
 # plan 28 N7: a bundle's thickness follows how many cables it holds, capped
 FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "

@@ -85,7 +85,9 @@ def report() -> None:
 
     hot = {f"{PACKAGE}.{name}" for name in MODULES}
     wrong, unmodelled, skipped, checked = {}, {}, {}, 0
-    for name in hot:
+    # sorted: a set's order moves with the hash seed, and the run should not
+    # (a cold import cycle is `test_every_module_imports_alone`'s to catch)
+    for name in sorted(hot):
         try:
             mod = importlib.import_module(name)
         except ImportError as e:
@@ -192,3 +194,34 @@ def test_the_decks_views_hold_their_fields_on_a_cold_base():
     assert issubclass(DeckProject, hot_slots.DeckProjectSlots)
     assert "__slots__" not in vars(DeckLibrary) and "__slots__" not in vars(DeckProject)
     assert refusal(DeckLibrary, {"hyperspace.library"}) is None
+
+
+COLD = """
+import importlib, json, pkgutil, sys
+import hyperspace
+names = sorted(m.name for m in pkgutil.walk_packages(hyperspace.__path__, "hyperspace."))
+bad = {}
+for name in names:
+    for k in [k for k in sys.modules if k == "hyperspace" or k.startswith("hyperspace.")]:
+        del sys.modules[k]
+    try:
+        importlib.import_module(name)
+    except (AttributeError, ImportError) as e:
+        if isinstance(e, AttributeError) or "circular" in str(e) or "partially" in str(e):
+            bad[name] = f"{type(e).__name__}: {e}"
+    except Exception:
+        pass            # an optional dependency's own failure: not a cycle
+print(json.dumps({"n": len(names), "bad": bad}))
+"""
+
+
+def test_every_module_imports_alone():
+    """Each of the package's modules imports first, into a process with none of the
+    package loaded. A cycle the app never takes (it imports `ui` first) still broke
+    the report above whenever a set's order put the module first: `ui_pane` read by
+    `ui_graph`, and `ui_desk` read by `ui_pad`, half made (row 808, ui_diagram.py)."""
+    out = subprocess.run([sys.executable, "-c", COLD], capture_output=True, text=True,
+                         check=False, cwd=str(ROOT), timeout=110)
+    assert out.returncode == 0, out.stderr[-2000:]
+    got = json.loads(out.stdout.strip().splitlines()[-1])
+    assert got["n"] > 100 and not got["bad"], got["bad"]

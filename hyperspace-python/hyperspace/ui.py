@@ -109,7 +109,9 @@ PIN_HOLD = 0.5
 # the panel: GRAPH and its side pane of sections (ui_pane.py), a footer
 MESSAGE_S = 4.0  # how long the footer's message slot shows a line after it changes
 CANCEL_TIP = "click to cancel"  # the footer's armed-learn line: on it where it fits, and on hover
-PANEL_W = 540   # the panel never opens narrower (panel_w)
+PANEL_W = 540   # beside the left column the panel is never narrower (panel_w)
+PANEL_EDGE = 12.0   # the panel's margin from the control window's edges (panel_rect)
+COLUMN_MAX = 0.5    # the desk and pad column never takes more of the window than this (panel_w)
 DESK_ASPECT = 4 / 3   # at launch the desk diagram left of the panel is this wide per unit of height
 LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
@@ -174,17 +176,40 @@ def _add_font(role: str, size: float, tracking: float = 0.0) -> None:
             io.fonts.add_font_from_file_ttf(path, size, m)
 
 
-def panel_w(display: tuple[float, float]) -> float:
-    """The panel's width as it opens in a control window of `display`
-    (w, h): the desk diagram left of it gets a `DESK_ASPECT` slice of the
-    window's height and the panel the rest, so neither is stretched — on
-    the default window (app.CONTROL_SIZE) the two come out the same size.
-    Never under `PANEL_W`: a narrow window keeps the panel whole and the
-    desk takes what is left (ui_desk.room). Once open, the panel is
-    wherever it is dragged; this is only where it starts."""
+def panel_w(display: tuple[float, float], desk: bool = True, pad: bool = False) -> float:
+    """The panel's width beside the left column in a control window of
+    `display` (w, h). The column is as wide as what is up in it wants:
+    the desk diagram a `DESK_ASPECT` slice of the window's height, the pad
+    diagram its own width (`ui_pad.room`, far narrower), the wider of the
+    two when both are up. Never more than `COLUMN_MAX` of the window, so
+    the graph keeps room; the panel never under `PANEL_W` either, and a
+    narrow window keeps the panel whole and the column takes what is left
+    (ui_desk.room). On the default window (app.CONTROL_SIZE) the desk and
+    the panel come out the same size."""
+    from . import ui_pad  # (late: ui_pad imports this module)
     dw, dh = display
-    desk = DESK_ASPECT * (dh - 24)
-    return float(int(max(PANEL_W, dw - 36 - desk)))
+    want = 0.0
+    if desk:
+        want = DESK_ASPECT * (dh - 2 * PANEL_EDGE)
+    if pad:
+        want = max(want, ui_pad.room(display, None)[2])
+    room = dw - 3 * PANEL_EDGE
+    return float(int(max(PANEL_W, room - min(want, COLUMN_MAX * room))))
+
+
+def panel_rect(display: tuple[float, float], desk: bool = False,
+               pad: bool = False) -> tuple[float, float, float, float]:
+    """(x, y, w, h) of CONTROLS in a control window of `display`: pinned,
+    never dragged. With the left column up (the `desk` or the `pad`
+    diagram) it is `panel_w` wide at the right; without, it fills the
+    window. Both `PANEL_EDGE` from the window's edges, and never wider
+    than the window allows: in a window too narrow for `PANEL_W` beside
+    the column, the panel keeps the window and the column is under it
+    (the graph is primary; nothing can drag it back into view)."""
+    dw, dh = display
+    full = dw - 2 * PANEL_EDGE
+    w = min(panel_w(display, desk, pad), full) if desk or pad else full
+    return float(int(dw - w - PANEL_EDGE)), PANEL_EDGE, float(int(w)), dh - 2 * PANEL_EDGE
 
 
 def load_fonts() -> None:
@@ -1971,22 +1996,19 @@ class Panel:
             ui_desk.diagram(self)
         if not self.open:
             return
-        io = imgui.get_io()
-        # at launch: right of the desk when it is up, else the whole window
-        pw = (panel_w((io.display_size.x, io.display_size.y)) if getattr(self, "desk", True)
-              else io.display_size.x - 24)
-        imgui.set_next_window_pos(
-            imgui.ImVec2(io.display_size.x - pw - 12, 12), imgui.Cond_.once
-        )
-        imgui.set_next_window_size(imgui.ImVec2(pw, io.display_size.y - 24),
-                                   imgui.Cond_.once)
-        opened, self.open = imgui.begin("CONTROLS", self.open)
-        # where the panel is: the desk takes the room left of it (ui_desk.room;
-        # drawn before the panel, it reads this next frame)
-        self._panel_x = imgui.get_window_pos().x
-        if not opened:
-            imgui.end()
-            return
+        # pinned, never dragged: the whole window, or right of the left column
+        # while the desk or the pad diagram is up (`panel_left`). H, the
+        # desk's chip and `ui.panel` show and hide it; there is no title bar.
+        # It stays behind the windows over it (cheat sheet, poi, players)
+        # when clicked. The name stays: `replay` and the tests find the page by it.
+        x, y, w, h = self.panel_rect()
+        imgui.set_next_window_pos(imgui.ImVec2(x, y), imgui.Cond_.always)
+        imgui.set_next_window_size(imgui.ImVec2(w, h), imgui.Cond_.always)
+        imgui.begin("CONTROLS", None,
+                    imgui.WindowFlags_.no_decoration | imgui.WindowFlags_.no_move
+                    | imgui.WindowFlags_.no_saved_settings
+                    | imgui.WindowFlags_.no_bring_to_front_on_focus)
+        self._panel_x = x
         self.ghosts = 0
         self.page = max(0, min(self.page, len(PAGE_KEYS) - 1))
         if self.page != getattr(self, "_focus_seen", None):   # set straight, not through ui.page
@@ -2012,6 +2034,19 @@ class Panel:
         imgui.end_child()
         self._footer(fps)
         imgui.end()
+
+    def panel_rect(self) -> tuple[float, float, float, float]:
+        """`panel_rect` for this frame's control window and what is up in
+        the column left of the panel (the desk, the pad diagram)."""
+        io = imgui.get_io()
+        return panel_rect((io.display_size.x, io.display_size.y),
+                          bool(getattr(self, "desk", True)),
+                          bool(getattr(self, "pad_diagram", False)))
+
+    def panel_left(self) -> float | None:
+        """The panel's left edge this frame, None while it is hidden: the
+        desk and the pad take the room left of it (their `room`)."""
+        return self.panel_rect()[0] if self.open else None
 
     def _message(self, now: float | None = None) -> tuple[str, bool]:
         """The footer's one message slot (plan 15 WP1): the newest of the
