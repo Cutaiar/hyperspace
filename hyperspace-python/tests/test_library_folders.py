@@ -47,7 +47,7 @@ def test_a_move_keeps_the_bytes_and_the_bank_and_the_shows_follow(lib_dirs):  # 
     # another show naming it — by its name and by its file key — follows too
     assert _show(lib_dirs, "other")["bank"][:2] == ["party/A", "party/A"]
     assert {t.name for t in lib.trash() if t.group == "installs"} >= {"night", "other"}
-    assert lib.status == "moved A → party/A (2 shows updated)"
+    assert lib.status == "moved A → party/A (2 installs updated)"
     # and back to the top, by the folder-qualified name
     lib.move("party/A", "")
     assert (lib_dirs.loaded_patch / "a.json").read_bytes() == before

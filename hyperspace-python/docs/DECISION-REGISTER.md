@@ -848,6 +848,7 @@ here; overturn → the change, then the same.
 | 842 | `Project` is `Install` in code (`Library.install`, `DeckInstall`), by tokens: every changed file's tree is the same but for the names, checked by comparing each file's AST with the old, node by node. Saved keys are unaffected | — | the orchestrator, 2026-11-07: "do it if it's mechanical and provable" |
 | 843 | `Library()` on a `config.toml` that won't parse opens the library this Mac last knew (`sharedfile.library_root`), never the home in its place; knowing none, it opens nothing and every save is refused in words | 653 | the orchestrator's brief |
 | 844 | The library's scan reads the Drive on the main thread (`Library.poll` → `_scan`, every `period`, every folder's `*.json`). Not done here: it needs the scan on a `sharedfile.Worker`, `poll` taking the last result, and the tests that call `poll(now)` expecting a synchronous answer given a way to wait. An item for the cleanup | — | (rec) — an item, not built |
+| 850 | The panel says install where it meant the show: the show line (INSTALL: PADS, META CONTROLLER) and its tips, the footer's "install: saved …", the undo steps ("install <name>", "new install"), the library's lines ("N installs updated", "in the install list", Home's "this install names no startup patch"). "The show" meaning the night stays ("tuned before the show"), as do the migration tool's words about the old `*.hyp.json` show files, and ids (`show.line`, `ui_loadable.PROJECT`'s listing key) | — | owner — 2026-11-07: "yes, show becomes install" |
 
 "—": no hand check shows it; tests only.
 
@@ -14892,4 +14893,10 @@ PR #426 wrote the row and no section. These are that PR's own words, from its bo
 - **What.** The library's scan reads the Drive on the main thread (`Library.poll` → `_scan`, every `period`, every folder's `*.json`). Not done here: it needs the scan on a `sharedfile.Worker`, `poll` taking the last result, and the tests that call `poll(now)` expecting a synchronous answer given a way to wait. An item for the cleanup.
 - **Answer.** (rec) — an item, not built.
 - **What it would take.** Medium: the walk cache (`_walked`) already keeps per-folder stamps; the scan and the stamp reads move to the worker, as `displays.py` does.
+- **Judge it.** No hand check.
+
+### 850. The panel says install
+
+- **What.** The panel says install where it meant the show: the show line (INSTALL: PADS, META CONTROLLER) and its tips, the footer's "install: saved …", the undo steps ("install <name>", "new install"), the library's lines ("N installs updated", "in the install list", Home's "this install names no startup patch"). "The show" meaning the night stays ("tuned before the show"), as do the migration tool's words about the old `*.hyp.json` show files, and ids (`show.line`, `ui_loadable.PROJECT`'s listing key).
+- **Answer.** owner — 2026-11-07: "yes, show becomes install".
 - **Judge it.** No hand check.

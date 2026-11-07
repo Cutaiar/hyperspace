@@ -481,7 +481,7 @@ def test_home_with_no_starts_on_says_so_and_loads_nothing(rig):
     proj.startup = None
     assert reg["preset.home"].get() is False                           # dark: nothing to go to
     reg["preset.home"].fire()
-    assert lib.warning == "home: this show names no startup patch"
+    assert lib.warning == "home: this install names no startup patch"
     assert lib.current("loadable") == "STROBE CAGE" and lib.is_dirty("loadable")
     assert reg.snapshot(part="patch") == before and proj.active == 2
     proj.startup = "BIG BLUE WAVE"                                     # picked: home goes there,
@@ -934,7 +934,7 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     assert pr.bank[3] is None and pr.active == -1 and show.read_text() == before
     assert "disk full" in pr.bank_error and not pr.is_dirty()
     # the footer says why (plan 19 WP1: a show that cannot be backed up says so here)
-    assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
+    assert lib.warning == (f"saved {name} — the install could not be written: it is in the "
                            "patch list (disk full)")
     reg["preset.save_new"].fire()                            # the disk is back: F4, and no error
     assert pr.bank[3] == lib.current("loadable") and pr.bank_error == ""

@@ -85,11 +85,11 @@ FOLDER_TIP = ("A folder of patches: click to fold or unfold (kept on this Mac). 
               "Drag a patch onto it to move it in. Right-click: a new folder inside, "
               "rename, remove (an empty folder only)")
 # what a show is, in one line under the SHOW label and in its hover
-SHOW_LINE = "show: pads, meta controller"
-SHOW_TIP = ("A show is the room the patches play in: which patch each of the desk's "
+SHOW_LINE = "install: pads, meta controller"
+SHOW_TIP = ("An install is the room the patches play in: which patch each of the desk's "
             "twenty-four pads loads, off air (set on the desk — hold a pad, or SAVE + a pad), the "
             "meta controller (tempo, hands, the analyzer, the outputs) and the analyzer's scene. "
-            "A patch is the look, with the bus cables it cuts on GRAPH; the show is everything "
+            "A patch is the look, with the bus cables it cuts on GRAPH; the install is everything "
             "around it. Open another, save this one, or start a new one here.")
 
 
@@ -500,7 +500,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
         hit = ui.chip(f"{chip}##{chip}.{name}")
         rect(f"{chip}.{name}")
         if imgui.is_item_hovered():
-            ui.tooltip("Give it another name: the file, and every show that names it"
+            ui.tooltip("Give it another name: the file, and every install that names it"
                        if chip == "rename" else
                        "To the trash — restore it from there (the list's foot)")
         if not hit:
@@ -1070,14 +1070,14 @@ def show_line(panel) -> None:
         imgui.text_colored(ui.RED, "●")
         _rect(panel, "show.dot")
         if imgui.is_item_hovered():
-            ui.tooltip("the show differs from its file: the meta controller (tempo, hands, "
+            ui.tooltip("the install differs from its file: the meta controller (tempo, hands, "
                        "the analyzer, output) or its pads")
     _beside(right, SHOW_W)
     imgui.set_next_item_width(SHOW_W)
     if imgui.begin_combo("##shows", "open"):
         listing = names(panel, PROJECT)
         if not listing:
-            imgui.text_disabled("no saved shows")
+            imgui.text_disabled("no saved installs")
         for name in listing:
             picked, _ = imgui.selectable(name, name == proj.stem)
             if picked:
@@ -1086,28 +1086,28 @@ def show_line(panel) -> None:
         imgui.end_combo()
     _rect(panel, "show.menu")
     if imgui.is_item_hovered():
-        ui.tooltip("Open another show from the library")
+        ui.tooltip("Open another install from the library")
     _beside(right, ui.chip_w("save"))
     if ui.chip("save"):
         _guard(panel, proj.save)
         invalidate(panel, PROJECT)
     _rect(panel, "show.save")
     if imgui.is_item_hovered():
-        ui.tooltip("Save the show — the meta controller (tempo, hands, the analyzer, output) "
+        ui.tooltip("Save the install — the meta controller (tempo, hands, the analyzer, output) "
                    "and its pads")
     _beside(right, ui.chip_w("as…"))
     if ui.chip("as…"):
         _begin_naming(panel, PROJECT, proj.name)
     _rect(panel, "show.save_as")
     if imgui.is_item_hovered():
-        ui.tooltip("Save the show under another name")
+        ui.tooltip("Save the install under another name")
     _beside(right, ui.chip_w("new"))
     if ui.chip("new"):
         _guard(panel, proj.new)
         invalidate(panel, LOADABLE)
     _rect(panel, "show.new")
     if imgui.is_item_hovered():
-        ui.tooltip("A new show: fresh state, every pad empty")
+        ui.tooltip("A new install: fresh state, every pad empty")
     imgui.pop_id()
 
 

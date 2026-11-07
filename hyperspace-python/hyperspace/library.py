@@ -257,7 +257,7 @@ UNTITLED = "untitled"
 # the tail of save-as's note on a full bank (`Install.save_new`)
 BANK_FULL = "the bank is full: it is in the patch list"
 # what `Install.home` says when the show names no startup loadable patch (plan 15 WP2)
-HOME_UNSET = "home: this show names no startup patch"
+HOME_UNSET = "home: this install names no startup patch"
 # plan 28 N2: where the GRAPH page's nodes sit, ``{"<node id>": [x, y]}`` —
 # a show's own key for the meta controller's nodes (devices, the analyzer, the LFOs,
 # the outputs), a loadable patch's (loadable.LAYOUT_KEY) for the look's. No key: every
@@ -979,7 +979,7 @@ class Install:
 
     # ---- documents ----
 
-    def _take(self, doc: dict, path: Path | None, where: str = "the show") -> None:
+    def _take(self, doc: dict, path: Path | None, where: str = "the install") -> None:
         if doc.get("schema") == PROJECT_V1:
             raise LibraryError(f"{where} is a schema-1 show, which this build does not read "
                                "(no old-schema support, 2026-10-25)")
@@ -1377,7 +1377,7 @@ class Install:
             self.bank[k] = was
             self.active = -1
             self.bank_error = f"patches: {e}"
-            lib.say(warning=f"saved {name} — the show could not be written: it is in "
+            lib.say(warning=f"saved {name} — the install could not be written: it is in "
                             f"the patch list ({e})")
             # `save_new` saved what it was asked to (the list has it); a
             # save into slot `at` did not land there — False, so the desk
@@ -1524,7 +1524,7 @@ class Install:
         """SM6: the playlist a launch starts by itself, written into the install at once as
         the bank is; None for none. A file that cannot take it leaves it as it was, said."""
         if getattr(self, "path", None) is None:
-            self.lib.say(warning="save the show first: then it can start a playlist at launch")
+            self.lib.say(warning="save the install first: then it can start a playlist at launch")
             return
         was = getattr(self, "plays", None)
         self.plays = name
@@ -1548,11 +1548,11 @@ class Install:
         # the file is read, nothing replaced yet: one step on the meta controller's
         # stack for the show; the startup loadable patch it brings up is a load, a step
         # on its deck's (undo.py, plan 44 D5b)
-        undo.push_meta(f"show {doc.get('name') or install_stem(path.name)}", load=True)
+        undo.push_meta(f"install {doc.get('name') or install_stem(path.name)}", load=True)
         self._take(doc, path, path.name)
         missing = self._apply()
         lib.report(missing, path.name)
-        lib.say(f"show: {self.name}")
+        lib.say(f"install: {self.name}")
         lib.remember(self.stem)
         if startup:
             self.load_startup()
@@ -1569,14 +1569,14 @@ class Install:
         lib = self.lib
         # one step on the meta controller's stack, and one on the deck's: a new
         # show puts every group's fresh values on both (undo.py, plan 44 D5b)
-        undo.push_meta("new show", load=True)
-        undo.push_on(lib.reg, "new show", load=True)
+        undo.push_meta("new install", load=True)
+        undo.push_on(lib.reg, "new install", load=True)
         self._take({"schema": INSTALL_SCHEMA, "name": name}, None)
         self.name = name
         lib._fresh_layouts()                          # the layout the app started with…
         lib.restore(lib._fresh_all())                 # …and every group's fresh values
         self._apply()
-        lib.say(f"show: new {name}")
+        lib.say(f"install: new {name}")
         self.load_startup()
 
     def save(self, name: str | None = None) -> Path:
@@ -1607,7 +1607,7 @@ class Install:
             # disk): the show is still the one it was, under its own name
             self.name, self.path, self.session, self.modules = held
             raise
-        lib.say(f"show: saved {self.name}")
+        lib.say(f"install: saved {self.name}")
         lib.remember(self.stem)
         return self.path
 
@@ -3277,7 +3277,7 @@ class Library:
             return 0, []
         done, left = self._repoint_by(to)
         self.install.follow()
-        self.say(f"{verb} {what} ({done} show{'' if done == 1 else 's'} updated)")
+        self.say(f"{verb} {what} ({done} install{'' if done == 1 else 's'} updated)")
         if left:
             self.say(warning=f"{verb} {what}; not updated: {', '.join(left)}")
         return done, left
@@ -3663,11 +3663,11 @@ class Library:
         if group == LOADABLE and self.warning.startswith(f"{pre}{self._shown(group, name)} is in the trash"):
             self.warning = ""                              # what × said is no longer so
         now = pre + self._shown(group, str(doc["name"]) if renamed else name)
-        what = f"show {now}" if show else now
+        what = f"install {now}" if show else now
         if renamed:
             self.say(f"restored as {what} — {pre}{name} is taken")
         else:
-            self.say(f"restored {what}" + (" — it is in the show list" if show else ""))
+            self.say(f"restored {what}" + (" — it is in the install list" if show else ""))
         if where[3]:
             # the library's old trash is never written (plan 48 review): a
             # restore from it is a copy, and the file stays where it is —
@@ -3824,7 +3824,7 @@ class Library:
                     hit.append(f"{group_word(group)}/{name}")
             if self.install.path in changed:
                 self.install.load(self.install.path, startup=False)
-                hit.append(f"show {self.install.name}")
+                hit.append(f"install {self.install.name}")
             self.error = ""
         except LibraryError as e:                     # a half-saved file: keep running
             self.error = f"library: {e}"

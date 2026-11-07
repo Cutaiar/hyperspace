@@ -2877,7 +2877,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
                # SAVE held and a pad tapped (plan 24 C1): a new loadable patch into
                # that slot, filled or empty; the old loadable patch stays listed
                save_into=bank.save_into,
-               tip="The show's twenty-four pads: the desk's clip rows 1, 4 and 5, the "
+               tip="The install's twenty-four pads: the desk's clip rows 1, 4 and 5, the "
                    "first eight on F1–F8. Each one points at a patch — the whole "
                    "performance: the look, its routes, its LFOs and macros, never the "
                    "tempo, the hands or the analyzer. Hold SAVE (track 8's clip stop) "
@@ -2926,7 +2926,7 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
                   lit=lambda: bool(bank.startup),
-                  tip="Home: load this show's startup patch into the deck off air — "
+                  tip="Home: load this install's startup patch into the deck off air — "
                       "the Home key (fn ← on a laptop) and OVERDUB (B11) on the desk. "
                       "The room does not move. The line at the foot of the window says "
                       "whether ⌘Z takes it back.")

@@ -631,7 +631,7 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
     rig.midi.poll()
     assert sent_notes(rig, n)[-1] == 0
     push(rig, note(n))
-    assert lib.current("loadable") == "TRIP" and lib.warning.startswith("home: this show names no")
+    assert lib.current("loadable") == "TRIP" and lib.warning.startswith("home: this install names no")
     push(rig, note(n, 0))
     assert sent_notes(rig, n)[-1] == 0                              # the echo ends with the press
     proj.startup = "TUMBLE"

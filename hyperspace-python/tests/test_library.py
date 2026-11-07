@@ -1132,7 +1132,7 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
         name = lib.current("loadable")
         assert name in lib.list("loadable") and name not in pr.bank and pr.active == -1
         assert show.read_bytes() == old and not pr.is_dirty()
-        assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
+        assert lib.warning == (f"saved {name} — the install could not be written: it is in the "
                                f"patch list ({why})")
         # a write that keeps the bank at eight needs no backup, and goes through
         pr.put_slot(2, "NIGHT ONE")
@@ -1295,7 +1295,7 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
         assert (shows / f"{s}.json").read_bytes() == show_before[s], s
     assert {p.name for p in _trashed(home, "installs")} == {
         p.name for p in _trashed(home, "installs") if p.name.startswith(("mine.", "party."))}
-    assert lib.status == "renamed NIGHT TWO → SUNRISE (2 shows updated)"
+    assert lib.status == "renamed NIGHT TWO → SUNRISE (2 installs updated)"
     assert "spare (it could not be kept in the trash)" in lib.warning
     assert "old (a hyperspace.project/1 show" in lib.warning and "other" not in lib.warning
     # the open show, through its Install: the name on the slot, clean, the light on it
@@ -1488,7 +1488,7 @@ def test_restore_never_overwrites(owner_home):
     # a show: the copy a rename kept, under the next free name; not opened
     lib.rename("loadable", "NIGHT TWO", "SUNRISE")
     (item,) = [t for t in lib.trash() if t.group == "installs" and t.name == "mine"]
-    assert lib.restore_trash(item) == "mine 2" and lib.status == "restored as show mine 2 — " \
+    assert lib.restore_trash(item) == "mine 2" and lib.status == "restored as install mine 2 — " \
         "mine is taken"
     shown = json.loads((home / "installs" / "mine-2.json").read_text())
     assert shown["name"] == "mine 2" and "NIGHT TWO" in shown["bank"]

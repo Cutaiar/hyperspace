@@ -203,7 +203,7 @@ def test_the_show_line_is_whole_at_the_panes_first_width_and_cut_with_care_at_it
     right, edge = _in_a_pane(ui_graph.SIDE_W, draw)
     assert seen["fit"] == ui_loadable.SHOW_LINE.upper() and right <= edge
     right, edge = _in_a_pane(ui_graph.SIDE_MIN, draw)
-    assert seen["fit"].startswith("SHOW: PADS, META") and right <= edge
+    assert seen["fit"].startswith("INSTALL: PADS, META") and right <= edge
 
 
 SINKS_NOTE = "the meta controller's — out to a sink · right-click a param: Learn sink"
