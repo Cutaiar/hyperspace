@@ -145,6 +145,12 @@ class Handoff:
     blend: str = "over"                        # plan 26 A3: step 3's blend, "over" or "add"
     mix: moderngl.Texture | None = None        # plan 44 D4: step 4½
     mix_k: float = 0.0
+    # SC2: `mix` is mirrored as it was drawn; a further display of this output with
+    # other flips (`Also`) says how far off that is
+    mix_flip: tuple[bool, bool] = (False, False)
+    # SC2: `mix` is that display's shape, and this window may have another: the viewport
+    # that lays the picture in it over this one's `rect`. None: the whole framebuffer
+    mix_viewport: tuple[int, int, int, int] | None = None
 
     @staticmethod
     def name(tex: moderngl.Texture | None) -> int | None:
@@ -204,6 +210,27 @@ class View:
 # ---------------------------------------------------------------- WP3: the list
 
 @dataclass
+class Also:
+    """A further display of one output (SC2, plan 58): a window of its own with a
+    `Presenter` of its own, and flips of its own. The frame is offscreen, so a further
+    window is one more present of the output's picture, and its flips are a `Handoff`'s:
+    nothing is drawn again. `display` is the label of its row (`displays.py`), `monitor` and
+    `fullscreen` where its window goes, `output` its `overlay.Output`, for fullscreen, `size`
+    its framebuffer at the last frame, `error` its last present that raised."""
+
+    display: str
+    monitor: int = -1
+    fullscreen: bool = False
+    win: Any = None
+    presenter: Any = None
+    output: Any = None
+    size: tuple[int, int] = (0, 0)
+    flip_x: bool = False
+    flip_y: bool = False
+    error: str = ""
+
+
+@dataclass
 class Slot:
     """One output the config lists (`[[output.screens]]`, or the one
     `[output]` window when there is no list), for the whole run: its place
@@ -220,7 +247,12 @@ class Slot:
     Plan 32 T9: `syphon` / `ndi` are the names it is published under ("" =
     not), `publishers` the publishers made for them, `window` false for a
     publish-only output — no window ever, drawn into `offscreen`; a
-    published output with a window copies its picture into `tap`."""
+    published output with a window copies its picture into `tap`.
+
+    SC2: `display` is the label of the row its window is on, and `also` the further
+    displays that show this output. `win` and `switches` are its first display's: the
+    flips the frame is drawn with, the size it's drawn at, and what the desk's
+    `output.N.flip_x` writes."""
 
     n: int
     name: str = ""
@@ -239,6 +271,8 @@ class Slot:
     publishers: list = field(default_factory=list)
     offscreen: Any = None
     tap: Any = None
+    display: str = ""
+    also: list[Also] = field(default_factory=list)
 
     @property
     def label(self) -> str:
@@ -1119,8 +1153,10 @@ class Presenter:
             return
         ctx, prog = self.ctx, self._prog
         self._wrap(mix).use(location=0)              # settled before anything is multiplied
-        prog["u_flip"].value = (0, 0)                # it was mirrored when it was drawn
-        prog["u_scaled"].value = int(tuple(mix.size) != tuple(full[2:]))
+        # it was mirrored when it was drawn, for this output's first display
+        prog["u_flip"].value = tuple(int(bool(v)) for v in getattr(ho, "mix_flip", (False, False)))
+        lay = getattr(ho, "mix_viewport", None) or full
+        prog["u_scaled"].value = int(tuple(mix.size) != tuple(lay[2:]))
         prog["u_origin"].value = (0, 0)
         prog["u_k"].value = k
         prog["u_opaque"].value = 0
@@ -1132,7 +1168,9 @@ class Presenter:
         self._dim_vao.render(moderngl.TRIANGLES, vertices=3)
         ctx.blend_func = (moderngl.ONE, moderngl.ONE,
                           moderngl.ZERO if opaque else moderngl.ONE, moderngl.ONE)
+        ctx.viewport = lay
         self._vao.render(moderngl.TRIANGLES, vertices=3)
+        ctx.viewport = full
 
     def on_reload(self) -> None:
         """Hot reload: rebuild at the next `present`, in this context."""

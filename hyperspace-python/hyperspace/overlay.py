@@ -440,7 +440,7 @@ def _cap(s: str) -> str:
 
 
 def register_switches(reg: Registry, slots) -> list[str]:
-    """The per-output switches (plan 21 WP4): for each opened render output
+    """The per-output switches (plan 21 WP4): for each render output
     N (an `outputs.Slot`, numbered by its place in the config's list),
     ``output.N.scene`` (labelled "picture") and ``output.N.hands`` — the
     window's two mutes (plan 35 O, row 374: off, it ignores what is wired
@@ -457,14 +457,13 @@ def register_switches(reg: Registry, slots) -> list[str]:
     — and not modulatable; a launch (and ⌘R) takes them from the config's
     ``[[output.screens]]`` entry, so a switch flipped at the party lasts
     until the restart. They can be learned onto a desk button like any
-    toggle. An output that did not open gets none; a publish-only one
-    (plan 32 T9: drawn, with no window) gets them all. Returns the ids."""
+    toggle. Every slot gets them, whether or not a display shows it (SC2): a display
+    can take an output up while the app runs (SC3b), and params turning up then would
+    move ids and bindings. Returns the ids."""
     settings = {"persist": False, "modulatable": False}
     several = len(slots) > 1
     ids: list[str] = []
     for sl in slots:
-        if not getattr(sl, "drawn", sl.opened):
-            continue
         sw, pre = sl.switches, f"output.{sl.n}"
         who = _cap(sl.name or f"output {sl.n}")
 

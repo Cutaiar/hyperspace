@@ -213,9 +213,8 @@ def test_a_cut_is_the_loadables_undone_with_it_and_held_in_its_dot(tmp_path):
 def test_the_window_a_meta_lacks_is_asked_for():
     from hyperspace import graphview
     spec = G.read_graph({"frame": "wired", "wires": [{"from": "scene", "to": "output.4.image"}]})
-    assert graphview.wanted_windows(spec, G.BusCuts().cutting(G.bus_wire(6, "hands")), 2) == [
-        4, 6]
-    assert graphview.wanted_windows(spec, None, 4) == []
+    assert graphview.wanted_windows(spec, G.BusCuts().cutting(G.bus_wire(6, "hands"))) == [4, 6]
+    assert graphview.wanted_windows(spec) == [4]
     assert "Output 4" in graphview.WINDOW_WANTED.format(n=4)
 
 

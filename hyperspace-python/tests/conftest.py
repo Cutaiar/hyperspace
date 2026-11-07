@@ -267,9 +267,10 @@ def _a_launch_waits_for_its_read(monkeypatch):
     loaded machine can pass, and then says the library isn't answering, as it should (row
     803). Tests are about what that read found, so the ceiling is out of reach; the
     stalled tests of `test_devicelist.py` set their own."""
-    from hyperspace import devicelist
+    from hyperspace import devicelist, displays
 
     monkeypatch.setattr(devicelist, "LAUNCH_S", devicelist.SYNC_S)
+    monkeypatch.setattr(displays, "LAUNCH_S", displays.SYNC_S)
 
 
 @pytest.fixture(autouse=True)

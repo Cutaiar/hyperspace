@@ -8516,6 +8516,18 @@ Headless: `tests/test_hot_reload_app.py`; its real-app test, one output and no d
 1. Launch with the show's outputs and devices. Save `outputs.py`, `render.py`, `ghost.py` and `ui.py` in turn, with no edit needed beyond the save. *Pass:* the SYSTEM section says `hot: <file>` each time, and the picture and the panel keep going, on every output.
 *Fail:* `swap: …` on the SYSTEM section, or an output that stops.
 
+## DN. One row per display (SC2, rows 804–807)
+
+Nothing here opens or closes a window while the app runs: that's SC3b. A change of target takes ⌘R.
+
+**625. Set the screens up.** (the rig, every display plugged in) On the output section, each display has a row with its name. Choose what targets each. ⌘R. Each display shows what its row says, and the control window is on its own. Quit and launch: the same, fullscreen included. Pass: set up in a minute, with no config.toml.
+
+**626. Both Macs.** (both Macs on one library) Choose a target on one Mac, and open the output section on the other within a minute or so of Drive syncing: its row says the same. Choose different targets for one display on both: both settle on the later, and `displays.json` stops changing. Unmount the Drive and launch: the rows come up from this Mac's copy, and the panel says so. `hyperspace --laptop` changes nothing in the file.
+
+**627. One output, two displays, different flips.** (two displays, a Pepper's Ghost glass if it's there) Put one output on two rows, with flip X on one. ⌘R. The two pictures are mirror images, moving together, each filling its own display, and neither drops the frame rate by eye. Tick a flip and it changes at once on that display only. Run a crossfade: both stay right. Then with output 2 in place of output 1.
+
+**628. Two with one name.** (two identical TVs) They read "TV #1" and "TV #2", left to right. Swap their cables and ⌘R: each position keeps its job. Unplug one and ⌘R: the row left is the first's job. A window dragged on a display and left there comes back to that spot.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -8656,6 +8668,7 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- the rows on the rig, both Macs through a real Drive, identical displays and a glass (625–628): SC2's real-app runs used this Mac's three different displays, a scratch library and a stand-in pair;
 - the picture and the pacing on real displays, the overlay over a real window, a locked Mac (607–610): SC3a's real-app runs read the back buffers on one Mac, and one person hasn't watched them;
 - video sound by ear (510–513): the tests read a ramp through the callback by
   hand with no audio device, so the slew's numbers, the linear resampler's

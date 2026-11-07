@@ -1300,15 +1300,19 @@ def panel_wants(panel) -> list:
 
 def window_wants(panel) -> list[str]:
     """Plan 44 D3 (row 623): the windows the loaded patch wires or cuts
-    that this rig has not open (`graphview.window_wanted_lines` over the
-    loadable patches' graph and bus cuts and the panel's outputs), one line each —
+    that this rig has not open (`graphview.wanted_windows` over the
+    loadable patches' graph and bus cuts, less the panel's outputs), one line each —
     what OUTPUT and the GRAPH head say; [] with no loadable patches (a test's panel)."""
     loaded_patch = getattr(getattr(panel, "library", None), "loaded_patch", None)
     if loaded_patch is None:
         return []
     spec = getattr(getattr(loaded_patch, "graph", None), "spec", None)
-    count = len(getattr(panel, "outputs", None) or ())
-    return graphview.window_wanted_lines(spec, getattr(loaded_patch, "bus", None), count)
+    # (one that has a slot and nothing to show it, as an empty slot has no `missing`, wants one)
+    slots = getattr(panel, "outputs", None) or ()
+    have = {sl.n for sl in slots if getattr(sl, "drawn", sl.opened) or sl.missing}
+    bus = getattr(loaded_patch, "bus", None)
+    return [graphview.WINDOW_WANTED.format(n=n) for n in graphview.wanted_windows(spec, bus)
+            if n not in have]
 
 
 def _wants_chip(panel, beside: bool = True) -> None:

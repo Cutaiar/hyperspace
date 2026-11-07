@@ -27,6 +27,9 @@ dream.py, too, is imported only when its gate is open.
                             # the render window is always opaque — no transparent
                             # framebuffer, and T / MASTER select / the panel cannot
                             # float it see-through; true for a laptop demo
+                            # monitor, control_monitor, fullscreen and [[output.screens]]'
+                            # screens: a seed, read once per Mac into <library>/displays.json;
+                            # from then on the output section's rows say (displays.py)
     monitor = -1            # which screen the RENDER window opens on, and the one
                             # fullscreen covers: a screen's exact name ("MStar";
                             # "MStar #2" for the second of two, left to right), a
@@ -332,8 +335,8 @@ SCREEN: dict = {"name": "", "monitor": -1, "fullscreen": False,
 # the keys that publish an output (plan 32 T9): a Syphon server's and an
 # NDI sender's name ("" = not published)
 PUBLISH_KEYS = ("syphon", "ndi")
-ONE_WINDOW = ("output 1 holds the GL context and paces the loop — it always opens a window "
-              "(publish it, or set a later output's window = false)")
+ONE_WINDOW = ("whether output 1 has a window is the display rows' to say, on the output section "
+              "(and --laptop always opens one), so this isn't read: publish it, and leave it no row")
 DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 fork F4)
 # plan 35 M: an entry's `through` (plan 21 WP2's switch) is the loadable patch's
 # wiring now — read, ignored, said once
@@ -502,7 +505,8 @@ def screens(cfg: dict) -> list[dict]:
 
 LAPTOP_NOTE = ("laptop: output 1 is a plain window on this screen — no fullscreen, no "
                "overlay at launch, no later outputs; the windows open at their default "
-               "spots and where they are is not remembered")
+               "spots and where they are is not remembered, and the display rows are "
+               "neither read nor written")
 
 
 def laptop(cfg: dict) -> None:

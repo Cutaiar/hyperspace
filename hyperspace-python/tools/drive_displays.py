@@ -1,0 +1,139 @@
+"""tools/app_driver.py's script for SC2: one row per connected display, on the real app and this
+Mac's real displays, at 320 and 240 px in the pane; a tick and a change of target on whichever
+rows there are, with what they did read back from the scratch library. Each step's words go to
+stderr; a step that doesn't do what it should stops the run.
+
+    uv run python tools/app_driver.py tools/drive_displays.py --out <scratch>/run --every 20 \\
+        --home <scratch>/home
+
+The rows go in `<home>/displays.json`: its library, as the driver's home names no other. It
+never reaches the real library. A home whose `displays.json` you wrote first is a launch from
+those rows: a render on two displays, say. Loads go through `panel.library.load("presets", name)`.
+
+`DISPLAYS_FADE=1`: first, a real crossfade with an output's further display made square, so its
+shape isn't its first display's (party-tumble on both decks, shots at the fade's middle and with
+the fade off). After the watch's limit, what the red banner says. `DISPLAYS_STATE=dark` or `live`:
+the watch's read of each window stood in (a locked Mac reports them all covered): `dark` says the
+first output window is covered and the rest fine, `live` says all are fine.
+"""
+
+import json
+import os
+import sys
+
+import glfw
+
+from hyperspace import app, overlay, placement, ui_displays, ui_graph
+from hyperspace.displays import CONTROL, FILE, NOTHING, find, normal, read_row
+from hyperspace.ui import PAGE_KEYS
+
+
+def say(*words):
+    print("drive_displays:", *words, file=sys.stderr)
+
+
+def fade(d, panel):
+    also = next(a for sl in panel.outputs for a in sl.also)
+    glfw.set_window_size(also.win, 700, 700)
+    if os.environ["DISPLAYS_FADE"] == "stretch":    # the control: the fault this guards against
+        app._mix_viewport = lambda *_a: None
+    yield from d.click("graph.copy", frames=10)     # on air to off air: the same look on both
+    yield from d.park()
+    yield from d.wait(60)
+    say("fade off: shots to here; further window size", glfw.get_framebuffer_size(also.win))
+    panel.reg["output.xfade"].set(0.5)
+    yield from d.wait(60)
+    say("fade at 0.5: shots to here; errors", [also.error, *(sl.error for sl in panel.outputs)],
+        "mix", panel.meta.mix.xfade)
+    panel.reg["output.xfade"].set(0.0)
+    yield from d.wait(10)
+
+
+def banner(panel, words):
+    w = panel.render_watch
+    say(words, "alerts:", w.alerts(), "stalled:", repr(w.stalled),
+        "states:", [(label, st.get("occluded"), st.get("presentable")) for label, st in w._others])
+
+
+def script(d, panel):
+    run = panel.displays
+    assert run is not None, "no rows: was this --laptop?"
+    panel.library.load("presets", "party-tumble")
+    panel.reg["ui.page"].set(PAGE_KEYS.index("output"))
+    yield from d.wait(10)
+    if os.environ.get("DISPLAYS_FADE"):
+        yield from fade(d, panel)
+    state = os.environ.get("DISPLAYS_STATE")
+    if state:
+        dark = next(sl.win for sl in panel.outputs if sl.opened) if state == "dark" else None
+        overlay.GlfwBackend.window_state = lambda self, win: {
+            "visible": True, "iconified": False, "occluded": win == dark, "presentable": win != dark}
+        panel.render_watch.stalled = ""
+    yield from d.wait(420)      # past the watch's limit, on any frame rate
+    banner(panel, "after the watch's limit:")
+    scr = run.screens()
+    tags = placement.labels(scr)
+    across = [tags[i] for i in placement.arranged(scr)]
+    say("connected, across the desk:", across)
+    say("opened:", run.opened)
+    for sl in panel.outputs:
+        say(sl.label, "display", repr(sl.display), "also", [a.display for a in sl.also],
+            "flips", (sl.switches.flip_x, sl.switches.flip_y), "window", bool(sl.win),
+            "missing", repr(sl.missing))
+    for width in (320.0, 240.0):
+        ui_graph._state(panel)["side_w"] = width
+        yield from d.wait(6)
+        for k in range(len(across)):
+            x0, y0, x1, y1 = d.rect(f"display.{k}.target")
+            say(f"at {width:.0f} px: row {k} ({across[k]}) target at x {x0:.0f}-{x1:.0f}, y {y0:.0f}-{y1:.0f}")
+        yield from d.wait(25)            # a capture at this width
+    ui_graph._state(panel)["side_w"] = 320.0
+    yield from d.wait(6)
+
+    # the first render row's ticks, each read back from what's open
+    first = next((k for k, t in enumerate(across) if run.opened.get(t, "").startswith("output.")), None)
+    if first is not None:
+        tag = across[first]
+        sl, also = run.window_on(tag)
+        has = also if also is not None else sl.switches
+        was = has.flip_x
+        yield from d.click(f"display.{first}.flip_x")
+        yield from d.park()
+        yield from d.wait(3)
+        assert has.flip_x is (not was), "the tick reaches the open window at once"
+        say(f"{tag}: flip X {was} -> {has.flip_x}, on the window at once")
+        yield from d.wait(25)
+        yield from d.click(f"display.{first}.flip_x")
+        yield from d.park()
+        yield from d.wait(3)
+
+    # the last row's target: another, then back, each read from the file. Nothing opens or closes
+    last = len(across) - 1
+    label = across[last]
+    keep = read_row(find(run.store.current, label))["target"]
+    to = "output.4" if keep != "output.4" else NOTHING
+    picks = [t for t, _ in ui_displays.choices(panel.outputs)]
+
+    def on_file():
+        run.store.sync()
+        doc = json.loads((run.store.root / FILE).read_text())
+        return doc, read_row(find(normal(doc["displays"]), label))["target"]
+
+    windows = len([w for w in (*(sl.win for sl in panel.outputs), *(a.win for sl in panel.outputs for a in sl.also)) if w])
+    yield from d.pick(f"display.{last}.target", picks.index(to))
+    yield from d.park()
+    yield from d.wait(3)
+    say(f"{label}: target {keep!r} -> {to!r};",
+        "windows open", windows, "(no change, it waits:", ui_displays.ON_RESTART.strip(), ")")
+    yield from d.wait(25)
+    doc, now = on_file()
+    assert now == to, (to, doc)
+    yield from d.pick(f"display.{last}.target", picks.index(keep))
+    yield from d.park()
+    yield from d.wait(3)
+    doc, now = on_file()
+    assert now == keep, (keep, doc)
+    say("the file:", json.dumps(doc["displays"], sort_keys=True))
+    assert sum(e.get("target") == CONTROL for e in doc["displays"].values()) <= 1
+    say("notes:", [n for n in panel.config_notes if n.startswith("displays:")])
+    say("done")

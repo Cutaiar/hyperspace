@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import gc
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -244,6 +245,121 @@ def test_a_flip_a_dim_and_a_later_output_all_come_through(stage):
     # undimmed and unflipped, the second is brighter and not the first's mirror
     assert b.astype(float).mean() > a.astype(float).mean() * 1.5
     assert stage.root.pacer.owner == one.win
+
+
+def _also(stage, n, **kw):
+    """A further display, as `app._open_presenters` makes one."""
+    _hints()
+    win = glfw.create_window(*SIZE, f"also {n}", None, stage.root_win)
+    stage.wins.append(win)
+    glfw.make_context_current(win)
+    glfw.swap_interval(0)
+    also = app.Also(f"TV #{n}", win=win, presenter=app.Presenter(stage.moderngl.create_context()), **kw)
+    glfw.make_context_current(stage.root_win)
+    return also
+
+
+@pytest.mark.parametrize("n", [1, 2])
+def test_a_render_on_two_displays_with_different_flips(stage, n):
+    """SC2. Output 1's picture is baked with its first display's flips, another's comes as
+    a `Handoff`: either way a further display of it shows the same picture, mirrored as
+    its own row says, one more present and nothing drawn again."""
+    rig = _rig(stage)
+    other = None if n == 1 else stage.output(1)
+    slot = stage.output(n, switches=Switches(flip_x=True))
+    plain, mirror = _also(stage, "plain"), _also(stage, "mirror", flip_x=True)
+    same = _also(stage, "same", flip_x=True, flip_y=True)
+    slot.also = [plain, mirror, same]
+    slots = [other, slot] if other else [slot]
+    shots: dict = {"first": [], "plain": [], "mirror": [], "same": []}
+    _read_window(slot, shots["first"])
+    for name, also in (("plain", plain), ("mirror", mirror), ("same", same)):
+        _read_window(also, shots[name])
+    draws = []
+    proxy = _proxy(rig)
+    real = proxy.draw_outputs
+    proxy.draw_outputs = lambda *a: (draws.append(1), real(*a))[1]
+    for _ in range(2):
+        app._draw_render(proxy, stage.ctx, rig.view, slots, stage.root)
+    rig.close()
+    assert len(draws) == 2, "one draw a frame"
+    assert slot.error == plain.error == mirror.error == ""
+    first, flat = shots["first"][-1][..., :3].astype(int), shots["plain"][-1][..., :3].astype(int)
+    mir = shots["mirror"][-1][..., :3].astype(int)
+    assert flat.max() > 8
+    assert np.abs(first - mir).max() <= 2, "the first display's flips, on another"
+    assert np.abs(flat[:, ::-1] - mir).max() <= 2, "the same picture, mirrored"
+    assert np.abs(flat - mir).mean() > 0.5, "and it isn't symmetrical, or this says nothing"
+    assert np.abs(shots["same"][-1][..., :3].astype(int)[::-1] - mir).max() <= 2
+    assert stage.root.pacer.owner == (other or slot).win
+    assert plain.win not in (stage.root.pacer.owner,)
+
+
+def test_with_no_display_on_output_1_the_frame_follows_what_shows_each_frame(stage):
+    """A review finding: measured once at launch, output 2 going fullscreen on a 4K projector
+    drew the frame at the window's first size, with side bars all run."""
+    rig = _rig(stage)
+    one = Slot(1)
+    two = stage.output(2)
+    slots = [one, two]
+    app._draw_render(_proxy(rig), stage.ctx, rig.view, slots, stage.root)
+    fb = glfw.get_framebuffer_size(two.win)
+    assert stage.root.size == tuple(fb)
+    glfw.set_window_size(two.win, SIZE[0] * 2, SIZE[1] * 3)
+    fb = glfw.get_framebuffer_size(two.win)
+    app._draw_render(_proxy(rig), stage.ctx, rig.view, slots, stage.root)
+    rig.close()
+    assert stage.root.size == tuple(fb) and one.size == tuple(fb)
+    assert stage.root.logical == (SIZE[0] * 2, SIZE[1] * 3)
+
+
+def test_a_crossfade_lines_up_on_a_further_display_of_another_shape(stage):
+    """A review finding: the other deck's picture is at the first display's shape, and was
+    stretched over a window of another. Both decks the same picture at k 0.5 add up to that
+    picture, wherever it's laid, if and only if they line up."""
+    moderngl = stage.moderngl
+    w, h = 160, 90
+    ctx = stage.ctx
+    frame = ctx.texture((w, h), 4)
+    px = np.zeros((h, w, 4), dtype=np.uint8)
+    px[..., 3] = 255
+    px[20:40, 30:50, 0] = 255                  # marks to miss
+    px[50:70, 100:140, 1] = 255
+    frame.write(px.tobytes())
+    # the other deck's whole picture, at a first display's 16:10 shape: the frame in its bars
+    mw, mh = 320, 200
+    inner = app.fit((w, h), (mw, mh))
+    mix_tex = ctx.texture((mw, mh), 4)
+    tmp = np.zeros((mh, mw, 4), dtype=np.uint8)
+    tmp[..., 3] = 255
+    big = np.repeat(np.repeat(px, inner[2] // w, axis=1), inner[3] // h, axis=0)
+    tmp[inner[1]:inner[1] + big.shape[0], inner[0]:inner[0] + big.shape[1]] = big
+    mix_tex.write(tmp.tobytes())
+    slot = Slot(2, switches=Switches())
+    view = SimpleNamespace(handoff=app.Handoff(frame, (w, h), (0, 0, 10, 10), mix=mix_tex, mix_k=0.5))
+    also = app.Also("B", size=(200, 200))     # square, not 16:10
+    ho = app._also_handoff(slot, view, also, Slot(1), None, (w, h))
+    plain = app.Handoff(frame, (w, h), ho.rect)
+    _hints()
+    win = glfw.create_window(*also.size, "x", None, stage.root_win)
+    stage.wins.append(win)
+    ctx.finish()
+    glfw.make_context_current(win)
+    pres = app.Presenter(moderngl.create_context())
+
+    def shot(handoff):
+        pres.present(handoff, also.size)
+        raw = pres.ctx.screen.read(viewport=(0, 0, *also.size), components=3)
+        return np.frombuffer(raw, dtype=np.uint8).reshape(also.size[1], also.size[0], 3).astype(int)
+
+    mixed, alone = shot(ho), shot(plain)
+    stretched = shot(replace(ho, mix_viewport=None))
+    glfw.make_context_current(stage.root_win)
+    assert alone.max() > 200
+    near = np.abs(mixed - alone)
+    # (scaled edges differ by a texel; everywhere inside the marks and the ground they agree)
+    assert np.mean(near > 40) < 0.02, np.mean(near > 40)
+    assert np.mean(np.abs(stretched - alone) > 40) > 2 * np.mean(near > 40), "and stretched, it doesn't"
 
 
 def test_the_picture_goes_on_when_every_display_is_gone(stage):
