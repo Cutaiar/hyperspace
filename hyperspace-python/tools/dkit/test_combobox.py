@@ -46,59 +46,6 @@ SOLIDS = items("Dodecahedron", "Great Dodecahedron", "Dual Dodecahedron",
 
 
 # --------------------------------------------------------------------------
-# command_score — the rule cmdk actually uses
-# --------------------------------------------------------------------------
-# (string, query, score) straight out of the shipped cmdk under node.
-GOLDEN_SCORE = [
-    # a prefix runs continuously (1.0 a character), then PENALTY_NOT_COMPLETE
-    # 0.99 for leaving the string unconsumed, and 0.9999 for the one case
-    # mismatch on the capital D
-    ("Dodecahedron", "dod", 0.989901),
-    ("Dodecahedron", "DOD", 0.9898020099),   # two more case mismatches
-    ("Cube", "cube", 0.9999),                # consumed whole: no 0.99
-    ("Dodecahedron", "zz", 0.0),             # no match at all
-    ("Tesseract", "", 0.99),                 # an empty query matches anything
-    ("", "", 1.0),                           # ...and exactly, when both empty
-    ("", "a", 0.0),
-    ("Hyper Cube", "hc", 0.8908218089100001),   # a jump to a WORD boundary
-    ("snub_cube", "sc", 0.792),              # ..._ is a gap, not a space: 0.8
-    ("Dodecahedron", "dh", 0.16744343529970956),   # ...mid-word is 0.17
-    ("Dodecahedron", "dcd", 0.02843691861694967),  # three jumps compound
-]
-
-
-@pytest.mark.parametrize("s,q,score", GOLDEN_SCORE)
-def test_command_score_matches_cmdk(s, q, score):
-    assert C.command_score(s, q) == pytest.approx(score, abs=1e-12)
-
-
-@pytest.mark.skip(reason="the real Combobox is Base UI and filters by "
-                         "CONTAINS - see test_the_match_is_a_substring")
-def test_the_match_is_a_subsequence_not_a_substring():
-    """The finding worth a test of its own: cmdk's filter is fuzzy.
-
-    "dcd" is not anywhere in "Dodecahedron" as a substring; it is there as a
-    subsequence (D-o-**d**-e-**c**-a-h-e-**d**-ron), and cmdk shows the row.
-    """
-    assert "dcd" not in "Dodecahedron".lower()
-    assert C.command_score("Dodecahedron", "dcd") > 0.0
-    # and the ranking is the real one, not alphabetical and not source
-    # order: 0.028437 > 0.028295 > 0.025593 out of cmdk itself
-    assert [i.id for i in C.filter_items(SOLIDS, "dcd")] == \
-        ["dodecahedron", "dual dodecahedron", "great dodecahedron"]
-
-
-def test_keywords_are_appended_to_the_haystack():
-    """cmdk scores `value + " " + keywords.join(" ")`, so a keyword is a
-    second spelling — and a row with none is NOT found by it."""
-    cube = C.Item(id="cube", label="Cube", keywords=("box", "hexahedron"))
-    plain = C.Item(id="other", label="Cube")
-    assert C.command_score("Cube", "box", ("box",)) > 0.0
-    assert C.command_score("Cube", "box") == 0.0
-    assert [i.id for i in C.filter_items([cube, plain], "box")] == ["cube"]
-
-
-# --------------------------------------------------------------------------
 # filter_items
 # --------------------------------------------------------------------------
 
@@ -135,13 +82,6 @@ def test_the_match_is_case_insensitive(q):
         ["dodecahedron", "great dodecahedron", "dual dodecahedron"]
 
 
-def test_case_still_costs_score_even_though_it_does_not_filter():
-    """PENALTY_CASE_MISMATCH is 0.9999 a character: a mismatch ranks lower
-    without ever failing to match."""
-    assert C.command_score("Dodecahedron", "dod") > \
-        C.command_score("Dodecahedron", "DOD") > 0.0
-
-
 def test_ranking_puts_the_prefix_first():
     """The reason the score has to be ported rather than approximated: a
     substring test cannot order these three, and all three contain "dod".
@@ -152,28 +92,6 @@ def test_ranking_puts_the_prefix_first():
     out = [i.id for i in C.filter_items(SOLIDS, "dod")]
     assert out[0] == "dodecahedron"
     assert set(out[1:]) == {"great dodecahedron", "dual dodecahedron"}
-
-
-def test_ties_keep_source_order():
-    """Equal scores are left alone: Python's sort is stable and so is V8's,
-    which is what cmdk relies on."""
-    src = items("Alpha Cell", "Beta Cell", "Gamma Cell")
-    out = [i.id for i in C.filter_items(src, "cell")]
-    assert out == ["alpha cell", "beta cell", "gamma cell"]
-    scores = [C.command_score(i.label, "cell") for i in src]
-    assert len(set(scores)) == 1          # they really are tied
-
-
-def test_a_query_that_matches_every_item_keeps_them_all():
-    """"e" is in all five labels, and — measured out of cmdk — scores
-    0.1683 on every one of them, so nothing is dropped AND nothing moves.
-    A one-letter query that lands mid-word is 0.17 x 0.99 wherever it
-    lands, which is not what "ranked" sounds like it would do."""
-    out = C.filter_items(SOLIDS, "e")
-    assert len(out) == len(SOLIDS)
-    assert [i.id for i in out] == [i.id for i in SOLIDS]
-    scores = [C.command_score(i.label, "e") for i in SOLIDS]
-    assert scores == pytest.approx([0.1683] * len(SOLIDS))
 
 
 @pytest.mark.skip(reason="measured against the OLD Popover+Command recipe, which is not what shadcn ships; superseded by the re-measured tests at the end of this file")
@@ -583,18 +501,25 @@ def test_an_empty_query_keeps_the_authors_order():
     assert [i.label for i in C.filter_items(items, "   ")] == ["Zeta", "Alpha", "Mu"]
 
 
-def test_the_cmdk_scorer_is_kept_but_is_not_this_components_rule():
-    """`rank_items_cmdk` is exact - cross-checked against the shipped JS over
-    hundreds of pairs - and belongs to a Command palette, which is a
-    different component on the roadmap. Keeping it is deliberate; using it
-    here was the mistake."""
-    assert hasattr(C, "rank_items_cmdk")
-    assert C.command_score("Dodecahedron", "dcd") > 0.0
-    items = [C.Item(id="d", label="Dodecahedron")]
-    assert C.filter_items(items, "dcd") == []        # the Combobox rule
-    assert len(C.rank_items_cmdk(items, "dcd")) == 1  # the Command rule
+def test_the_cmdk_scorer_lives_with_the_component_that_wants_it():
+    """It is not the Combobox's rule and it is no longer in the Combobox's
+    file. The port is exact - verified against the shipped JavaScript over
+    382 pairs - and it was answering a question nobody asked, which is
+    RETRO row 3. `comp_command.py` is where the Command palette will find
+    it.
 
-
+    This asserts the split rather than the code: the scorer is gone from
+    here, present there, and the Combobox's own filter is the substring
+    one.
+    """
+    import comp_command
+    assert not hasattr(C, "command_score")
+    assert not hasattr(C, "rank_items_cmdk")
+    assert hasattr(comp_command, "command_score")
+    assert hasattr(comp_command, "rank_items_cmdk")
+    # and the rule this component does use is `contains`, not a subsequence
+    assert C.filter_items(items("Dodecahedron"), "dcd") == []
+    assert len(C.filter_items(items("Dodecahedron"), "dec")) == 1
 def test_the_trigger_is_an_input_not_a_button():
     """The whole shape of the component. Measured 320x32, radius 10, a 1px
     `input` border, transparent in light and `input/30` in dark - which is

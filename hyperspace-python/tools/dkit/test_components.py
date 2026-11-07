@@ -707,67 +707,9 @@ def test_the_select_triggers_border_swaps_to_the_ring(painted, monkeypatch,
         T.rgba(*tbl["ring"], theme=theme))
 
 
-@pytest.mark.parametrize("theme_name", ["light", "dark"])
-def test_the_combobox_trigger_rings_on_keyboard_focus(painted, monkeypatch,
-                                                      theme_name):
-    """The old Popover+Command trigger, whose table entry used to say the
-    ring was "NOT MEASURED, and deliberately NOT drawn".
-
-    It is measured now - `ring/50 0 0 0 3px` under a real keyboard focus on
-    the probe's PopoverTrigger - and the border half is the outline Button's
-    dark anomaly all over again: `ring` in light, still `input` in dark.
-    """
-    import comp_combobox as C
-
-    monkeypatch.setattr(D, "icon", lambda *a, **k: True)
-    monkeypatch.setattr(D, "label", lambda *a, **k: None)
-    theme = THEME[theme_name]
-    tbl = C.combobox_table(theme_name)
-
-    class FakeUi:
-        dl = None
-        faces = {}
-
-        def col(self, name, a=1.0):
-            return T.rgba(name, a, theme=theme)
-    ui = FakeUi()
-    ui.theme = theme
-
-    rest = Painted()
-    ui.dl = rest
-    C._trigger(ui, tbl, 10.0, 10.0, 200.0, 32.0, 10.0, "Pick", "Pick",
-               focus_f=0.0)
-    assert band_of(rest) is None, "an unfocused trigger rang"
-
-    ui.dl = painted
-    C._trigger(ui, tbl, 10.0, 10.0, 200.0, 32.0, 10.0, "Pick", "Pick",
-               focus_f=1.0)
-    band = band_of(painted)
-    assert band, "a keyboard-focused trigger painted no band"
-    assert band[4] == pytest.approx(T.rgba(*tbl["trigger_ring"], theme=theme))
-    border = [s for s in painted.strokes if s[6] == 1.0][0]
-    assert border[4] == pytest.approx(
-        T.rgba(*tbl["trigger_focus_border"], theme=theme))
-    # light swaps the border, dark does not - the Button's measured anomaly
-    swapped = tbl["trigger_focus_border"] != tbl["trigger_border"]
-    assert swapped == (theme_name == "light")
-
-
-# --------------------------------------------------------------------------
-# the scrollbar sits inside the VIEWPORT, not against the root's edge
-# --------------------------------------------------------------------------
 # Measured on ?probe, `scroll.h200.content400`, a 320x200 root with
-# `rounded-lg border`:
-#
-#     root       320 x 200     radius 10   overflow visible
-#     viewport   318 x 198 @ 1,1           <- inset by the 1px border
-#     scrollbar   10 x 198 @ 309,1         <- hangs off the VIEWPORT's edge
-#     thumb        7 x  97 @ 311,2         <- +2 left (border-l + p-px), +1 top
-#
-# The kit hung the bar off the ROOT's edge, so the thumb sat on top of the
-# border and one pixel further out than the browser's at every point - which
-# is what "no gutter" looked like, and why it crossed the rounded corner more
-# than the real one does.
+# `rounded-lg border`: viewport (1,1) 318x198, scrollbar (309,1) 10x198,
+# thumb (311,2) 7 wide.
 BROWSER_SCROLL = {
     "root_w": 320.0, "root_h": 200.0, "border": 1.0,
     "bar_x": 309.0, "bar_y": 1.0, "bar_w": 10.0, "bar_h": 198.0,

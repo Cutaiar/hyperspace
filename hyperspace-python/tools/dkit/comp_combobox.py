@@ -586,132 +586,26 @@ def _is_row(it) -> bool:
 # the filter — pure, no imgui
 # --------------------------------------------------------------------------
 #
-# WHICH RULE cmdk ACTUALLY USES, read out of the shipped package rather than
-# assumed: `cmdk@1.1.1`'s default filter is `commandScore`
-# (node_modules/cmdk/dist/chunk-NZJY6EH4.mjs, re-exported as
-# dist/command-score.mjs), and it is
-#
-#   * a SUBSEQUENCE match, not a substring one — "ec" matches "Dodecahedron"
-#   * CASE-INSENSITIVE: both sides go through
-#     `s.toLowerCase().replace(/[\s-]/g, " ")`, so a hyphen folds to a space
-#     as well
-#   * SCORED in (0, 1]: 0 means no match, and cmdk's gate for showing a row
-#     is literally `filtered.items.get(id) > 0`
-#   * ranked DESCENDING by that score, ties left in source order (V8's sort
-#     is stable, and so is Python's)
-#
-# The score is not a tie-break bolted onto a substring test — it IS the
-# rule, so the algorithm is ported outright below, constant for constant,
-# rather than approximated. It was cross-checked against the shipped JS over
-# 59 (string, query[, keywords]) pairs and agrees to 1e-12 on every one.
-#
-# Why that matters rather than being pedantry: with "dod" over
-# ["Great Dodecahedron", "Dodecahedron", "Dual Dodecahedron"] a substring
-# test cannot say which comes first. commandScore puts the one that STARTS
-# with the query first, because a jump to the head of the string scores 1, a
-# jump to a word boundary 0.9 and a jump into the middle of a word 0.17.
-
-SCORE_CONTINUE_MATCH = 1.0
-SCORE_SPACE_WORD_JUMP = 0.9
-SCORE_NON_SPACE_WORD_JUMP = 0.8
-SCORE_CHARACTER_JUMP = 0.17
-SCORE_TRANSPOSITION = 0.1
-PENALTY_SKIPPED = 0.999
-PENALTY_CASE_MISMATCH = 0.9999
-PENALTY_NOT_COMPLETE = 0.99
-
-# cmdk's IS_GAP_REGEXP / IS_SPACE_REGEXP, as sets. `\s` is JavaScript's,
-# which includes U+00A0 and the unicode separators; the five ASCII ones plus
-# the no-break space cover everything a label here can hold.
-_GAP_CHARS = frozenset("\\/_+.#\"@[({&")
-_SPACE_CHARS = frozenset(" \t\n\r\f\v -")
+# A plain case-insensitive SUBSTRING match, which is what Base UI's Combobox
+# uses. The kit once shipped cmdk's `commandScore` here, because the premise
+# was that a Combobox is Popover + Command; it is not. That port was exact -
+# verified against the shipped JavaScript over 382 pairs - and it was the
+# wrong rule, which is RETRO row 3. It now lives in `comp_command.py`, where
+# it is the right one.
 
 
-def _at(s: str, i: int) -> str:
-    """JavaScript's `String.prototype.charAt`: "" when out of range.
+_SPACE = frozenset(" \t\n\r-")
 
-    Not `s[i]` — a negative index WRAPS in Python, so `s[-1]` would read
-    the last character as if it were the one before the start, and
-    `charAt(-1)` is reached for real at index 0.
+
+def _fold(t: str) -> str:
+    """Lowercase, with whitespace and hyphens folded to a space.
+
+    The Combobox's own, deliberately not shared with `comp_command`'s
+    identical-looking one. They answer to different components: this folds
+    for Base UI's `contains`, that one is a line of cmdk's `formatInput`.
+    If cmdk ever changes its folding, this must not follow it.
     """
-    return s[i] if 0 <= i < len(s) else ""
-
-
-def _count(s: str, chars: frozenset) -> int:
-    """`s.match(/…/g)?.length ?? 0` for a single-character class."""
-    return sum(1 for c in s if c in chars)
-
-
-def _fold(s: str) -> str:
-    """cmdk's `formatInput`: lowercase, with `[\\s-]` folded to a space."""
-    return "".join(" " if c in _SPACE_CHARS else c for c in s.lower())
-
-
-def _score(string, abbr, lower_string, lower_abbr, si, ai, memo):
-    if ai == len(abbr):
-        return (SCORE_CONTINUE_MATCH if si == len(string)
-                else PENALTY_NOT_COMPLETE)
-    key = (si, ai)
-    hit = memo.get(key)
-    if hit is not None:
-        return hit
-
-    ch = lower_abbr[ai]
-    high = 0.0
-    idx = lower_string.find(ch, si)
-    while idx >= 0:
-        s = _score(string, abbr, lower_string, lower_abbr, idx + 1, ai + 1,
-                   memo)
-        # The multipliers apply only when the recursive score already beats
-        # the best so far — that is how the JS is written, `E>S&&(E*=…)`,
-        # and the transposition branch below then compares against the RAW
-        # score. Ported faithfully rather than tidied, because tidying it
-        # changes the numbers.
-        if s > high:
-            if idx == si:
-                s *= SCORE_CONTINUE_MATCH
-            elif _at(string, idx - 1) in _GAP_CHARS:
-                s *= SCORE_NON_SPACE_WORD_JUMP
-                n = _count(string[si:idx - 1], _GAP_CHARS)
-                if n and si > 0:
-                    s *= PENALTY_SKIPPED ** n
-            elif _at(string, idx - 1) in _SPACE_CHARS:
-                s *= SCORE_SPACE_WORD_JUMP
-                n = _count(string[si:idx - 1], _SPACE_CHARS)
-                if n and si > 0:
-                    s *= PENALTY_SKIPPED ** n
-            else:
-                s *= SCORE_CHARACTER_JUMP
-                if si > 0:
-                    s *= PENALTY_SKIPPED ** (idx - si)
-            if _at(string, idx) != _at(abbr, ai):
-                s *= PENALTY_CASE_MISMATCH
-        if ((s < SCORE_TRANSPOSITION
-             and _at(lower_string, idx - 1) == _at(lower_abbr, ai + 1))
-            or (_at(lower_abbr, ai + 1) == _at(lower_abbr, ai)
-                and _at(lower_string, idx - 1) != _at(lower_abbr, ai))):
-            t = _score(string, abbr, lower_string, lower_abbr, idx + 1,
-                       ai + 2, memo)
-            if t * SCORE_TRANSPOSITION > s:
-                s = t * SCORE_TRANSPOSITION
-        if s > high:
-            high = s
-        idx = lower_string.find(ch, idx + 1)
-
-    memo[key] = high
-    return high
-
-
-def command_score(string: str, query: str, keywords=()) -> float:
-    """cmdk's `commandScore(value, search, keywords)`, in Python.
-
-    0 is "no match"; anything above it matches, and bigger is better.
-    Keywords are appended to the haystack with spaces, exactly as cmdk does,
-    so they match as if they were part of the label.
-    """
-    if keywords:
-        string = string + " " + " ".join(k.strip() for k in keywords)
-    return _score(string, query, _fold(string), _fold(query), 0, 0, {})
+    return "".join(" " if c in _SPACE else c for c in t.lower())
 
 
 def filter_items(items, query: str) -> list:
@@ -733,9 +627,8 @@ def filter_items(items, query: str) -> list:
     `contains`, and there is no ranking - rows keep the order they were
     given.
 
-    `rank_items_cmdk` below is the other rule, kept because it is exact and
-    because a Command palette (ROADMAP, Tier 2) is cmdk's shape rather than
-    this one. It is not what a Combobox uses.
+    cmdk's subsequence scoring is the other rule, and it lives in
+    `comp_command.py` now, where the component that wants it is.
     """
     items = list(items)
     if not query or not query.strip():
@@ -765,64 +658,6 @@ def filter_items(items, query: str) -> list:
             keep.append(it)
         i += 1
     return keep
-
-
-def rank_items_cmdk(items, query: str) -> list:
-    """Rank and filter `items` by `query`, the way cmdk does. Pure.
-
-    * An EMPTY (or all-whitespace) query returns the list UNCHANGED — not
-      re-ranked. cmdk's sort returns early on `!search`, so the author's
-      order is the order, and separators survive.
-    * Otherwise a row is kept when `command_score > 0`, and rows come out
-      ordered by that score, descending, with ties in source order.
-    * A `heading()` opens a group: its rows are ranked among themselves and
-      the group moves as a block, groups ordered by their best row's score.
-      A group whose rows all scored 0 disappears, heading and all — cmdk's
-      `filtered.groups` rule.
-    * Separators are dropped while there is a query, because cmdk renders a
-      `CommandSeparator` only when the search box is empty.
-
-    Rows before the first heading form an implicit, unheaded group, which is
-    what `<CommandGroup>` with no `heading` prop is.
-    """
-    items = list(items)
-    if not query or not query.strip():
-        return items
-
-    # (heading_or_None, [rows]) in source order; separators are gone
-    groups: list = [(None, [])]
-    for it in items:
-        kind = _k(it, "kind", "item")
-        if kind == "sep":
-            continue
-        if kind == "label":
-            groups.append((it, []))
-        else:
-            groups[-1][1].append(it)
-
-    ranked = []
-    for head, rows in groups:
-        scored = []
-        for it in rows:
-            s = command_score(_k(it, "label", "") or str(_k(it, "id", "")),
-                              query, tuple(_k(it, "keywords", ())))
-            if s > 0.0:
-                scored.append((s, it))
-        if not scored:
-            continue
-        # `sorted` is stable, so equal scores keep source order — which is
-        # also what V8's sort gives cmdk
-        best = max(s for s, _ in scored)
-        scored.sort(key=lambda p: -p[0])
-        ranked.append((best, head, [it for _, it in scored]))
-    ranked.sort(key=lambda p: -p[0])
-
-    out: list = []
-    for _best, head, rows in ranked:
-        if head is not None:
-            out.append(head)
-        out.extend(rows)
-    return out
 
 
 # --------------------------------------------------------------------------
@@ -973,130 +808,6 @@ def _panel_chrome(ui, dl, x, y, w, h, a, tbl) -> None:
     dl.pop_clip_rect()
 
 
-def _trigger(ui, tbl, x, y, w, h, radius, label, placeholder, *,
-             hot=0.0, open_f=0.0, focus_f=0.0, disabled=False) -> None:
-    """The recipe's trigger: a Button variant="outline".
-
-    `draw.field` draws the box — genuinely shared chrome, measured identical
-    on an Input, a SelectTrigger and this Button: one 1px border inside the
-    box, plus a 3px ring outside it. Only the fill, the font weight and the
-    chevron's inset differ, and those three are what is set here.
-
-    `draw.select_trigger` is NOT reused, although it is the same shape,
-    because it reads its radius out of `tokens.SELECT_SIZES`, hard-codes
-    `muted-foreground` for the chevron and places it at `pad_r` — three
-    values this trigger measures differently. Making those table-driven
-    would let the two share one function; that is a change to draw.py, which
-    this change may not make.
-    """
-    ft = {
-        "bg": ("#00000000", 1.0),      # painted below, after the ring
-        "border": tbl["trigger_border"],
-        "focus_border": tbl["trigger_focus_border"],
-        "ring": tbl["trigger_ring"],
-        "disabled_opacity": 0.5,
-    }
-    # `focus_f` is `:focus-visible`, eased - `interact.Ui.focus_f`, which
-    # gates it on the last input having been the keyboard. A trigger opened
-    # with the POINTER passes 0 and carries no ring, which is what the
-    # browser does; the open state is the FILL, below.
-    D.field(ui.dl, x, y, w, h, ui.theme, ft, focus_f=focus_f,
-            disabled=disabled, radius=radius)
-    # open first, then hover on top of it: in light they are the same
-    # colour so the order cannot show, and in dark `open` is the rest fill
-    # and hover is the only tint — which is what the measurement says.
-    bg = mix(_col(ui, tbl["trigger_bg"]), _col(ui, tbl["trigger_open"]),
-             open_f)
-    D.fill(ui.dl, x, y, w, h,
-           mix(bg, _col(ui, tbl["trigger_hover"]), hot), radius)
-
-    pad, cs = tbl["trigger_pad_x"], tbl["chevron"]
-    # `justify-between`: the icon's right edge is the content box's right
-    # edge, i.e. border 1 + padding in from the trigger's own
-    D.icon(ui.dl, tbl["chevron_icon"], x + w - 1.0 - pad - cs,
-           y + (h - cs) / 2.0, cs, _col(ui, tbl["chevron_ink"]))
-    # measured: a SelectValue sits at x + 1 + padding-left, the border
-    # included — the same place this Button's text box starts
-    D.label(ui.dl, x + 1.0 + pad, y, label or placeholder, ui.faces,
-            tbl["trigger_weight"], tbl["trigger_font"],
-            ui.col("foreground" if label else "muted-foreground"),
-            baseline_box=h,
-            max_w=w - 2.0 * (1.0 + pad) - cs - tbl["trigger_gap"])
-
-
-def _field(ui, key, x, y, w, h, tbl, text, placeholder, *, focus: bool):
-    """DEAD CODE, kept as the old recipe's record. Nothing calls it.
-
-    This is the Popover+Command recipe's separate search box, which the
-    real component does not have - the trigger IS the search box, and
-    `_input_trigger` is what draws it. Kept because the `field_*` entries
-    in the table above are measured values for a `CommandInput` and this
-    is where they were used; delete both together if either goes.
-
-    The search box: a real `imgui.input_text` under the sandwich.
-
-    The stock widget supplies the caret, the selection, the keyboard and the
-    clipboard, none of which is worth rewriting; the sandwich replaces only
-    its frame. `interact.text_input`'s arrangement exactly, with this
-    field's own measured colours and insets — and with NO focus ring,
-    because measured, this field has none.
-    """
-    import interact as I
-
-    cols = I._sandwich_begin(ui, clear_grab=False)
-    # imgui's own Col_.text is WHITE: on the light theme the typed query
-    # would be invisible against the field unless the theme is pushed.
-    imgui.push_style_color(imgui.Col_.text,
-                           imgui.ImVec4(*_col(ui, tbl["field_ink"])))
-    # ImGui draws a blue nav cursor around whatever the keyboard focused,
-    # and `set_keyboard_focus_here` below guarantees that is this field.
-    # Measured, the real one has no focus chrome at all — the InputGroup's
-    # ring selector never matches a `command-input` — so it is cleared
-    # rather than restyled. It showed up at once in a headless drive: a
-    # blue rectangle no shadcn component has, around the one field in the
-    # kit that takes the keyboard without being asked.
-    imgui.push_style_color(imgui.Col_.nav_cursor, imgui.ImVec4(0, 0, 0, 0))
-    tx = x + tbl["field_text_x"]
-    # the CSS line box is 20 in a 32 field, so the glyphs sit 6 down.
-    # `FramePadding` goes to zero rather than being subtracted back out:
-    # the frame here is the kit's own, the stock one is transparent, so
-    # there is no padding for imgui to add - and with it zeroed the cursor
-    # IS the text's top-left on both axes, which the y-only subtraction
-    # never fixed for x.
-    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, 0))
-    # The SAME font `draw.label` draws every other string in the kit with.
-    # Without it the stock widget renders the value in imgui's CURRENT font
-    # at imgui's current size, which is not the Geist face at
-    # `font * FONT_SPAN_EM` - so the value and the placeholder, one line of
-    # one field, had different metrics and did not land on the same rows.
-    # Measured 1 px apart on Mesa at density 1; far wider on a Retina Mac,
-    # where the atlas is rasterised at 2x, which is where it was spotted.
-    D.push_css_font(ui.faces, "regular", tbl["field_font"])
-    imgui.set_cursor_screen_pos(imgui.ImVec2(
-        tx, y + (h - imgui.get_font_size()) / 2.0))
-    imgui.push_item_width(w - tbl["field_text_x"] - tbl["field_text_r"])
-    if focus:
-        # a fresh Popover mounts its Command with the input focused
-        imgui.set_keyboard_focus_here()
-    changed, out = imgui.input_text(f"##{key}", text)
-    imgui.pop_item_width()
-    imgui.pop_font()
-    imgui.pop_style_var()
-    imgui.pop_style_color(2)
-    I._sandwich_end(ui, cols)
-
-    D.box(ui.dl, x, y, w, h, fill_col=_col(ui, tbl["field_bg"]),
-          border_col=_col(ui, tbl["field_border"]),
-          radius=T.RADII[tbl["field_radius"]], border_w=1.0)
-    g = tbl["field_icon"]
-    D.icon(ui.dl, "search", x + tbl["field_icon_x"], y + (h - g) / 2.0, g,
-           _col(ui, tbl["field_icon_ink"]))
-    if not out:
-        D.label(ui.dl, tx, y, placeholder, ui.faces, "regular",
-                tbl["field_font"], _col(ui, tbl["field_placeholder"]),
-                baseline_box=h)
-    ui.dl.channels_merge()
-    return changed, out
 
 
 def _row(ui, it, r, key, tbl, *, selected: bool, checked: bool) -> bool:
