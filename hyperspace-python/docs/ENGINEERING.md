@@ -1982,7 +1982,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   patch groups, the template), in the show's for the meta controller's
   (devices, the analyzer, LFOs, outputs, shared meta groups); an unplaced
   node takes its column by kind (a collapsed node its lines' height).
-  SYSTEM shows `graph page: X ms median (N nodes, M cables)` (1.27 ms on
+  SYSTEM shows `graph draw: X ms median (N nodes, M cables)` (1.27 ms on
   party-trip at 960 × 900, collapsed; 2.66 ms with every node expanded;
   N2's page drew 2.3–2.8 ms).
 - **The editor context** is held on the panel (a hot reload of

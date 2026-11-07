@@ -1711,6 +1711,7 @@ def main(argv: list[str] | None = None) -> None:
     # plan 55: who holds what names a pad's rows, so the list is read again when it
     # changes; a mapping on either deck moves the controller mapped
     meta.on_players.append(lambda: device_reg.apply(device_reg.entries))
+    meta.presence = lambda role: device_reg.presence(role)        # what an undo of a move asks
     device_reg.listeners.append(lambda: meta.reseat())    # the list can change who holds a role
     for on in meta.decks:
         on.learn.mapped = lambda b, on=on: device_reg.mapped(on, b)

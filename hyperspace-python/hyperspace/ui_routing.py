@@ -1241,7 +1241,7 @@ def _feel_chip(router: Router, b: Binding, width: float) -> None:
     if imgui.is_item_hovered():
         src = router.source_feel(b.scheme)
         auto = ("the source's own: " + (src.describe() if src.on else "none")
-                + (" (the pad's, on the settings page)" if b.scheme == "axis" else ""))
+                + (" (the pad's own feel)" if b.scheme == "axis" else ""))
         now = (auto if b.motion is None else
                "still: the reading as it comes" if not b.motion.on else b.motion.describe())
         ui.tooltip("Feel: how the reading travels before it acts\n"
