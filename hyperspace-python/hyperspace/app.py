@@ -2,9 +2,11 @@
 
 The *render* window is pure moderngl output, the thing on the projector or
 TV: no imgui in it, ever. With ``[[output.screens]]`` in config.toml
-(plan 21 WP3) there is one render window per listed output: output 1's
-context renders the frame and paces the loop, each later output's window
-shows it through an `outputs.Presenter` in its own context (`_draw_render`). The *control* window holds every widget — the
+(plan 21 WP3) there is one render window per listed output. A hidden *root*
+window holds the context the frame is rendered on, which no unplugged display can
+take (SC3a, plan 58); every output's window shows the frame through an
+`outputs.Presenter` in its own context (`_draw_render`), and the first live one's
+swap paces the loop (`pacing.py`). The *control* window holds every widget — the
 CONTROLS panel, the cheat sheet, the hot-reload error toast — in its own
 imgui context and GlfwRenderer. Keys are polled, not callback-driven, so
 they work from whichever window is focused (the control window defers to

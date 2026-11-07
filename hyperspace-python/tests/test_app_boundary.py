@@ -1370,6 +1370,40 @@ class _SwapGlfw:
         return self.sizes.get(win, (640, 400))
 
 
+def test_the_root_window_is_hidden_and_shares_with_every_other(monkeypatch):
+    """SC3a: the root holds the context, hidden and single-sampled, and leaves the
+    next window's hints visible; main destroys it last and it paces nothing."""
+    import inspect
+
+    g = _HintGlfw()
+    g.VISIBLE = "VISIBLE"
+    monkeypatch.setattr(app, "glfw", g)
+    assert app._root_window() == "win1"
+    assert g.created[0]["VISIBLE"] is False and g.created[0]["SAMPLES"] == 0
+    assert g.created[0]["TRANSPARENT_FRAMEBUFFER"] is False
+    assert g.hints["VISIBLE"] is True
+    src = inspect.getsource(app.main)
+    assert "(root.pacer, \"pacing\", \"Pacer\")" in src      # a save re-classes the pacer
+    assert "for sl in slots if sl.presenter]" in src          # output 1's presenter too
+    # the floor closes the frame, the control window's swap included
+    assert src.index("glfw.swap_buffers(ctrl_win)") < src.index("root.pacer.end_frame()")
+
+
+def test_a_hot_reload_runs_with_the_render_context_current(fake):
+    """Audit V8: `reloader.poll()` used to run with the control window's context
+    current, so `on_reload`'s vertex arrays and framebuffers were built there. Apple's
+    GL hides it (its share group shares vertex arrays, measured,
+    `tools/sc3a_spike.py v8`); the spec doesn't, and Mesa wouldn't."""
+    import inspect
+
+    log: list[str] = []
+    h = _host(log)
+    h.render_current = lambda: log.append("render context current")
+    app.frame(h, 0.0, 1 / 60, 60.0)
+    assert log.index("render context current") < log.index("reloader.poll")
+    assert "render_current=lambda: glfw.make_context_current(root_win)" in inspect.getsource(app.main)
+
+
 class _Frame:
     """`Root.frame`, as `_draw_render` touches it."""
 

@@ -3057,9 +3057,8 @@ to the mix is V3's.
 **One output** by default: the render window, from `[output] monitor` /
 `fullscreen`. **Several** from `[[output.screens]]` (§5), up to four
 (`outputs.MAX_OUTPUTS`), numbered by their place in the list whether or
-not they opened. Output 1 is made as the single render window always is
-(4× MSAA; transparent only with `[output] overlay = true`), sets the
-frame's size and paces the loop (its swap waits for its screen; later
+not they opened. Output 1 is transparent only with `[output] overlay = true`,
+sets the frame's size and paces the loop (its swap waits for its screen; later
 outputs' swaps do not). Later outputs are opaque, never overlay, and
 their screen and fullscreen come only from the config (the OUTPUT page's
 Screen and Fullscreen rows move output 1). A later output whose
@@ -3070,6 +3069,24 @@ shows the whole frame letterboxed, the hands registered on it. Each
 later output is drawn from the shared textures in its own context
 (`outputs.Presenter`); a failing present marks that output and the rest
 go on.
+
+**The picture depends on no display** (SC3a, rows 781–784). A hidden 64×64 window,
+the *root* (`app._root_window`), holds the renderer's context and is destroyed only
+at exit, last. The frame goes to `outputs.Root.frame`, an `Offscreen` at output 1's
+framebuffer size, or the last known while it has no window; **every** output's window,
+output 1's too, shows it through a `Presenter`. No window has MSAA. The frame's 4× is
+the renderer's own framebuffers' (`render.SceneTarget`), and the number comes from
+`outputs.FRAME_SAMPLES`, since an `Offscreen` would say 0
+(`tests/test_root_frame.py::test_the_frame_keeps_its_msaa_with_no_multisampled_window`).
+`pacing.Pacer`: the first live window in slot order has swap interval 1, the others
+0, and its swap is the frame's last; with none live, a 60 Hz timer. Under any swap a
+**floor**, the fastest connected display's refresh × 1.05, so a swap that doesn't wait
+(a locked Mac, a window occluded from birth, a sleeping display) can't run the loop
+away: locked, the app ran 1,360–1,720 fps before this and runs 126 now. A window closes
+in this order, or a release can reach the wrong context's objects: that window current,
+its presenter released, destroyed, then `Pacer.choose` between frames (SC3b, which adds
+the closing at run time; `tests/test_root_frame.py`'s `close_output`). Creating one
+costs 35–50 ms, once.
 
 **Per-output switches** (`overlay.register_switches`): `output.N.scene`,
 `output.N.hands`, `output.N.through` ("Hands through effects") and, with
@@ -3571,7 +3588,9 @@ What only a person at the machine can check is
 - **Frame pacing with two screens has never been observed by a person.**
   Output 1 waits for its screen and later outputs do not; whether that
   paces the loop on two real screens, and whether a non-waiting
-  fullscreen output tears, is unknown.
+  fullscreen output tears, is unknown. **A window on a 60 Hz display here
+  swaps at 120** (measured on this Mac, row 782: macOS's swap doesn't follow the
+  window's own display), so the floor goes by the fastest display, not the window's.
 - **With no desk connected the app keeps looking** — every 2 s five
   times, then every 10 s. Each look creates a CoreMIDI client; `enabled
   = false` on the desk's entry (or `[midi] enabled = false`) stops it.
@@ -3601,4 +3620,4 @@ What only a person at the machine can check is
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
 - Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R14, R15,
-  U9, U10, P6, V8.
+  U9, U10, P6.

@@ -155,8 +155,8 @@ class Handoff:
 @dataclass
 class View:
     """One output, for one frame. `target` is a framebuffer on the
-    renderer's context (the first output's window, or an offscreen
-    stand-in); `presenter` an output in another window's context (WP3),
+    renderer's context (the first output's `Offscreen`, SC3a); `presenter`
+    an output in another window's context (WP3),
     which `draw_outputs` leaves a `handoff` for. `viewport` is the rect of
     `target` (or of the presenter's framebuffer) to draw (None: (0, 0) and
     `size`).

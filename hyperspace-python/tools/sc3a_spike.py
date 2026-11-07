@@ -361,6 +361,8 @@ def handover(a) -> None:
     made = {"A": win_a.made_ms, "B": win_b.made_ms}
     lives = [win_a, win_b]
     pacer.choose(lives, root)
+    # the control window, as the app always has one: never paces, always swaps
+    control = Live(root, pos=spot(a.mon, 720, 440), title="control") if not a.no_control else None
     events = [(a.phase, "destroy A: B paces"), (2 * a.phase, "destroy B: timer paces"),
               (3 * a.phase, "create C: C paces"), (4 * a.phase, "create D behind C"),
               (5 * a.phase, "destroy C: D paces"), (6 * a.phase, "end")]
@@ -376,6 +378,8 @@ def handover(a) -> None:
         # the pacer's swap last: the others never wait, it does
         for lv in sorted(lives, key=lambda v: v is pacer.owner):
             lv.present(tex, work.size)
+        if control is not None:
+            control.present(tex, work.size)
         glfw.make_context_current(root)
         pacer.end_frame()
         now = time.perf_counter()
@@ -412,6 +416,7 @@ def handover(a) -> None:
     names = ["A+B, A paces", "B paces", "timer", "C paces", "C+D, C paces", "D paces"]
     for name, d in zip(names, phase_dts, strict=False):
         say(test="handover", phase=name, **stats(d),
+            settled_fps=stats(d[len(d) // 2:], skip=0).get("fps"),
             first_five=[round(x * 1e3, 2) for x in d[:5]])
     say(test="handover", events=around, handover_ms=pacer.handovers, made=made)
     glfw.terminate()
@@ -896,9 +901,10 @@ def draw_render(a) -> None:
 
 
 def v8(a) -> None:
-    """Audit V8: a hot reload's hooks run with `current` current, the render context
-    or the control window's (where `frame` used to run them, as `--case control`).
-    What does the next frame, on the render context, then draw?"""
+    """Audit V8: a hot reload's hooks run with `--case` current, the render context
+    (`root`) or the control window's (`control`, where `frame` used to run them). Two
+    rigs at one clock, one reloaded: does the next frame on the render context still
+    match, and whose are the new vertex arrays?"""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import golden_frames as gf
 
@@ -915,36 +921,50 @@ def v8(a) -> None:
     moderngl.create_context()
     drain()
     size = (640, 360)
+
+    def known(glo) -> dict:
+        got = {}
+        for name, win in (("root", root), ("control", control)):
+            glfw.make_context_current(win)
+            got[name] = bool(GL.glIsVertexArray(glo))
+        glfw.make_context_current(root)
+        return got
+
     for slug in a.slugs:
         for hands in ("present", "absent"):
             glfw.make_context_current(root)
             drain()
-            rig = gf.Rig(slug, hands, ctx)
+            reloaded, still = gf.Rig(slug, hands, ctx), gf.Rig(slug, hands, ctx)
             off = Offscreen(ctx)
-            drew = []
-            errors = []
-            for phase in ("before", "after"):
+
+            def draw(rig):
                 for _ in range(2):
                     v = View(Switches(), size, target=off.fit(size), viewport=(0, 0, *size), samples=4)
                     rig.frame([v], size, 1.0)
-                drew.append(_pix(off.fbo, size))
-                errors.append(v.error)
-                if phase == "before":
-                    glfw.make_context_current(root if a.case == "root" else control)
-                    try:
-                        rig.renderer.on_reload()
-                        rig.renderer.ghost.on_reload()
-                        errors.append(f"gl errors {drain()}")
-                    except Exception as e:  # noqa: BLE001 — the answer
-                        errors.append(f"on_reload raised {type(e).__name__}: {e}"[:200])
-                    glfw.make_context_current(root)
-                    drain()
-            say(test="v8", case=a.case, slug=slug, hands=hands, lit_before=int((drew[0][..., :3].max(axis=2) > 8).sum()),
-                lit_after=int((drew[1][..., :3].max(axis=2) > 8).sum()), errors=errors,
-                frame_gl_errors=drain())
-            rig.close()
+                return _pix(off.fbo, size), v.error
+
+            draw(reloaded)
+            draw(still)
+            glfw.make_context_current(root if a.case == "root" else control)
+            said = ""
+            try:
+                reloaded.renderer.on_reload()
+                reloaded.renderer.ghost.on_reload()
+            except Exception as e:  # noqa: BLE001 — the answer
+                said = f"on_reload raised {type(e).__name__}: {e}"[:200]
+            hook_errors = drain()
+            glfw.make_context_current(root)
+            vao = known(reloaded.renderer._lvao.glo)
+            p1, err1 = draw(reloaded)
+            draw_errors = drain()
+            p2, err2 = draw(still)
+            say(test="v8", case=a.case, slug=slug, hands=hands, said=said, hook_errors=hook_errors,
+                new_vao_known_to=vao, draw_errors=draw_errors, view_error=err1,
+                still_error=err2, lit=int((p1[..., :3].max(axis=2) > 8).sum()), **_diff(p2, p1))
+            reloaded.close()
+            still.close()
             off.release()
-            del rig
+            del reloaded, still
             gc.collect()
     glfw.terminate()
 
@@ -1329,6 +1349,7 @@ def main() -> None:
     p.set_defaults(fn=pacing)
     p = sub.add_parser("handover")
     p.add_argument("--phase", type=float, default=6)
+    p.add_argument("--no-control", action="store_true", help="no control window: the spike's shape")
     p.add_argument("--mon", type=int, default=0)
     p.add_argument("--mon2", type=int, default=2)
     p.set_defaults(fn=handover)
