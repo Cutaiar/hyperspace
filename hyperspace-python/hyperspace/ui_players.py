@@ -333,13 +333,19 @@ def give_words(role: str, number: int, deck: int, reopened: bool, address: str |
     return words
 
 
+def _takes_it_back(meta) -> bool:
+    """May the board promise ⌘Z? A move's mouse is on the board, so the stack is the one
+    it reaches, even on a drop's frame, when `undo.here` can't yet say."""
+    return undos.takes_back(meta.undo, here_now=True)
+
+
 def _say(panel, st: dict, words: str) -> None:
     """The line under the lanes and the footer. A move the file did not keep says so,
     in the warning colour, and does not promise it stays (`Players.save`)."""
     error = _meta(panel).players.error
     if error:
         words = f"{words.removesuffix(STAYS).rstrip()} {error}"
-    elif undos.takes_back(_meta(panel).undo, here_now=True):     # (a move's mouse is on the board)
+    elif _takes_it_back(_meta(panel)):
         words = f"{words} ⌘Z takes it back."
     st["said"], st["said_warn"] = words, bool(error)
     lib = getattr(panel, "library", None)

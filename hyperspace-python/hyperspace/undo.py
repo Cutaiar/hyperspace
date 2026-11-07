@@ -250,7 +250,7 @@ class Undo:
     """
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
-    moves = None     # …and this
+    moves: Any = None     # …and this
     latched = False  # …and these: ⌘Z refuses here until a new push (row 753)
     called = "here"  # how the refusal names this stack ("on deck 2"; `MetaController`)
     _opens = False   # the open step began on focus: when it lands it opens the latch
