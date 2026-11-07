@@ -9,7 +9,7 @@
 
 ## Where we are
 
-**Last updated 2026-11-07.** **Waves 0–3 are merged. Most of wave 4 is merged, including the rename; of what's left, some waits on the owner's hand checks and some has no gate. Wave 5 is running beside it, in three tracks.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section, this section is right. **The wave 5 orchestrator updates this section whenever an item changes state** (`wave-5-session-prompt.md`, "Reporting").
+**Last updated 2026-11-06.** **Waves 0–3 are merged. Most of wave 4 is merged, including the rename; of what's left, some waits on the owner's hand checks and some has no gate. Wave 5 is running beside it, in three tracks.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section, this section is right. **The wave 5 orchestrator updates this section whenever an item changes state** (`wave-5-session-prompt.md`, "Reporting").
 
 Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on are unrun, but for 425.
 
@@ -61,11 +61,11 @@ Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on
 | 3 | SC2 a row per display | | After SC3a |
 | 4 | **SC3b** hot-plug. Not done until a real display has been unplugged | | After SC2 |
 | 5 | TY3, then TY4, annotations only: last, after the cleanup, so they annotate what survived | | Not started |
-| Gated | CL2, then CL1 after the owner's dry run; CL3, CL4 | | **Gate:** the owner says the migration ran and both Macs have opened the new library |
+| Gated | CL2, then CL1 after the owner's dry run; CL3, after CT1's defaults; CL4, once `fx/` is deleted | | **Gate:** the owner says the migration ran and both Macs have opened the new library |
 | Gated | RT1 | | The same gate, plus SC3b's real unplug and CT1 |
 | After the migration | SM6 a cart starts by itself; LY2's saved half; SC2's move of `output.bg`, `.alpha` | | Not started |
 
-**Waiting on the owner now:** hand checks 506–509 (group BS, the panel fold: they gate node mode, they don't test it; node mode's own checks 541–545 come in with #396 and #397), the Joy-Con check 520–521 (group BW, written on #365's branch, not yet on `main`), and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup, and so TY3 and TY4. They don't hold up the rest of wave 5. **Also:** the spike's vsync run on an unlocked Mac, about 12 minutes, which SC3a's merge waits on; and the owner's answers on rows 711, 773, 779, 786 and 787, built as recommended meanwhile.
+**Waiting on the owner now:** hand checks 506–509 (group BS, the panel fold: they gate node mode, they don't test it; node mode's own checks 541–545 come in with #396 and #397), the Joy-Con check 520–521 (group BW, written on #365's branch, not yet on `main`), and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup, and so TY3 and TY4. They don't hold up the rest of wave 5. **Also:** the spike's vsync run on an unlocked Mac, about 12 minutes, which SC3a's merge waits on; and the owner's answers on rows 773, 779, 786 and 787, built as recommended meanwhile, and on one choice inside row 711, on #397: a knob's value after a chase commit across a node mode visit.
 
 Nov 2, 2026 · @Robert
 
