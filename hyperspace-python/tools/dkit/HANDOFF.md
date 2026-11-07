@@ -59,7 +59,8 @@ A reasonable opening message for a new session:
 > `git fetch` first — RETRO row 54, and it is why this sentence is here.
 >
 > Then read `hyperspace-python/tools/dkit/RETRO.md`, `ROADMAP.md` and
-> `HANDOFF.md`. Branch `claude/magical-ritchie-fkh5e0`. Items 1, 2, 3a-3c
+> `HANDOFF.md`. Branch `claude/magical-ritchie-fkh5e0` (the font-loader fix
+> is on `claude/elegant-lovelace-3v4owe`, on top of it). Items 1, 2, 3a-3c
 > and the Checkbox are done. **The one that decides it all is item 5** -
 > port one real `ui_pane.py` section onto the kit; nothing imports it yet.
 > 3d (splitting the 492-line `combobox()` by phase) is a behaviour refactor
@@ -73,13 +74,19 @@ A reasonable opening message for a new session:
 ## Where it stands
 
 ```
-864 passed, 61 skipped, 2 xfailed (854 with test_gallery.py deselected
-under xdist, plus its 10 run -n0; the xfails are test_kbd's strict
-text-height pair).   chrome diff: 71 cells, flat 0-2 levels, worst
-corner 0.776 px, "all cells within the bar" in BOTH themes.
+889 passed, 62 skipped, 0 xfailed (879 with test_gallery.py deselected
+under xdist, plus its 10 run -n0).   chrome diff: 71 cells, worst flat
+2 levels, worst corner 0.776 px, "all cells within the bar" in BOTH
+themes - now with the Kbd cells and four Button sizes at INTRINSIC width.
 ```
 
-Measured after the Kbd. Adding the Checkbox and then the Kbd each changed
+Measured after the font-loader fix (RETRO 64-69). It changed ImGui gallery
+pixels in the six `text.*` cells only (the chrome cells carry no glyphs),
+plus the cells now drawn at intrinsic width; every other cell is
+pixel-identical to the capture before it, both themes. The new skip is
+`test_text.py`'s no-from-imports case in `test_module_surface`.
+
+Before that, measured after the Kbd. Adding the Checkbox and then the Kbd each changed
 ZERO ImGui gallery pixels outside their own cells, in both themes, each
 checked against the capture taken before it.
 
@@ -463,15 +470,53 @@ Measured and worth knowing:
   not DejaVu as the kit's; on a Mac it will be Apple's. Symbol keys are not
   in the diff for that reason.
 
-**And the finding that reaches past it - the kit's text metrics.** Glyph
-advances are whole pixels, so every text-derived width runs a few percent
-wide of Chromium's ("Ctrl" 22 vs 21.192, "Save Changes" 82 vs 78.541), and
-`medium` measures identical to `regular`. Separately, 12px text sits ~0.93px
-LOW in `draw.label` while 14px agrees to ~0.1. Every earlier text-sized cell
-pins its width in the spec, which is why it was never seen; RETRO row 61.
-Pinned in `test_kbd.py` as a STRICT xfail, so fixing it turns it red. Look at
-`draw.load_faces` (rasterizer density, `pixel_snap_h`, the 1.92 baked-font
-path) before anything else - it is the most leveraged fix left in the kit.
+**The text-metric finding (RETRO 61) is FIXED** - RETRO rows 64-69 for
+what it was and what fixing it turned up. In short: the loader is
+FreeType (not stb_truetype) and hinted; ImGui 1.92 rounds font sizes, so
+`css x 1.30` drew 12px at 16; its ascent is ceil'd where Blink rounds; and
+ImGui applies no `kern`/`liga`. Read `draw.py`'s "faces and metrics" and
+`build_fonts.py`'s docstring before touching text. Measured now:
+
+| | before | after |
+|---|---|---|
+| text widths vs canvas `measureText`, 156 strings (3 weights, 12-16px, kerned and ligated words) | "Ctrl" 22 vs 21.192, "Save Changes" 82 vs 78.541 | worst **0.016px** |
+| Kbd glyph ink, vertical (12px, `test_kbd`) | 0.93px low | **0.04px** (K), 0.01 (W) |
+| baseline rule, 252 measured cells (11-20px, boxes 15-33, three line-heights) | - | **252 / 252** (`draw.baseline_y`) |
+| gallery text cells, ink vertical offset | 0.9px low at 12, 16 and 30px | within **0.08px**, all six, both themes |
+| gallery text cells, ink extent | -6 to +6 px | 0 to +-1 (body14's height -1/-2 unchanged) |
+
+What changed for callers: `push_css_font` pushes the CSS px itself (ImGui's
+`get_font_size()` is now the CSS px, not x1.30); `draw.label`/`text_w` shape
+and draw glyph by glyph; `draw.label(line_h=)` for a line-height that is
+not `normal`; a STOCK InputText is placed with `draw.stock_text_y`.
+`FONT_SPAN_EM` survives only as Geist's glyph-box height for the Button
+underline. The strict xfail is promoted to a plain test at 0.1px.
+
+Four things left, each written down rather than done:
+
+* **Cost.** `draw.label` now issues a quad per glyph from Python: measured
+  ~22us for a 24-character string against 0.5us for `add_text` - about
+  4ms a frame at 200 labels (28us before `shape` was cached; the glyph
+  loop is what is left). Measure the dashboard's frame before adopting; a per-run cache of
+  quads keyed on the atlas's texture id is the obvious next step.
+* **Horizontal ink centroids** of whole strings still differ by up to 0.7px
+  (`text.mixed`) and by ~0.3px between themes for the same string, while
+  ink EXTENTS match. That is the rasterizer's stroke weighting (unhinted
+  FreeType through a linear-sampled atlas vs Skia), not placement.
+* **Retina, stock widgets only.** At density 2 the baked ascent is a half
+  pixel (ceil of 0.8 x 2 x px, over 2) and ImGui truncates a text origin to
+  a whole one, so an InputText's value can sit half a pixel off its
+  placeholder there. Not measurable on this rig (Mesa, density 1).
+* **`label` assumes `line-height: normal`** unless told otherwise. The
+  measured rule needs the real line-height when the leading inside the
+  line box is odd; every current caller is even (text-xs 16 on 12px,
+  text-sm 20 on 14px), so nothing moved, but a 13px or 15px caller with a
+  Tailwind line-height should pass `line_h`.
+
+The diff now checks the text measure directly: the three Kbd cells and four
+Button sizes (`"intrinsic": true` in `spec.json`, honoured by both
+`Gallery.tsx` and `gallery.py`) draw at their OWN widths on both sides.
+With the old loader those cells fail at 26 levels; now 0-1.
 
 **Checkbox is DONE** (commits ending `dkit: Checkbox`):
 
