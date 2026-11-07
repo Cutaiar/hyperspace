@@ -152,13 +152,14 @@ def _node_ink(away: bool) -> imgui.ImVec4:
     return imgui.ImVec4(*graphview.NODE_MODE_RGB, NODE_FAINT if away else 1.0)
 
 
-def filled_rows(table) -> dict[int, bool]:
-    """The rows node mode fills on the first desk, by `id`, each with whether the desk is
-    on the other `Deck`: asked once a draw, since `_edge` is asked once a control."""
-    rows = table.node_rows()
+def filled_rows(table, role: str | None = None) -> dict[int, bool]:
+    """The rows node mode fills on a controller (`role`; None, the first desk), by `id`, each
+    with whether it is on the other `Deck`: asked once a draw, since `_edge` is asked once a
+    control."""
+    rows = table.node_rows(role)
     if not rows:
         return {}
-    away = bool(table.node_row_away(rows[0]))
+    away = bool(table.node_row_away(rows[0], role))
     return {id(b): away for b in rows}
 
 

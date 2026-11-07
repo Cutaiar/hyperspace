@@ -327,6 +327,14 @@ def glfw_ids(guid: str | None) -> tuple[int | None, int | None]:
     return (vid, pid) if vid else (None, None)
 
 
+def glyph_name(source: str) -> str:
+    """The name `glyph` looks a source up by: a button's or axis's own (``pad:N`` → ``N``),
+    a hat's with `HAT_PREFIX` (``hat:N`` → ``hat.N``), so the D-pad's north never reads as
+    the face's north button (plan 57 §7b)."""
+    scheme, _, rest = source.partition(":")
+    return f"{HAT_PREFIX}{rest}" if scheme.partition("@")[0] == "hat" else rest
+
+
 def glyph(model: Model | None, name: str, default: str) -> str:
     """What `model`'s face calls the canonical control `name`."""
     if model is None:

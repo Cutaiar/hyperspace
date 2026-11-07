@@ -1748,7 +1748,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             p = reg.get(b.target)
             # onto the node pointed at: a copy's knobs live on its original, and the pane
             # says the copy's name, so the copy gets a port of its own for this row
-            dst, at = f"{BASE}:{b.target}", nodes.get(h.node or "")
+            # (a pad's row is a route, so it lands where a route does)
+            dst = f"{MOD if b.op in MOD_OPS else BASE}:{b.target}"
+            at = nodes.get(h.node or "")
             if at is not None and view.pins.get(dst, ("",))[0] != h.node:
                 dst = f"{NODE_PIN}:{h.node}|{b.target}"
                 if dst not in view.pins:
@@ -2017,8 +2019,11 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
     for c in view.cables:
         if c.kind == "render":
             continue
-        if c.kind == NODE_MODE:     # a knob publishes no lane: what it holds is its param
-            at = c.ref          # (a name of its own: testing `c.ref` narrows it for the rest)
+        at = c.ref if c.kind == NODE_MODE else None     # (a name: testing `c.ref` narrows it)
+        # a knob publishes no lane: what it holds is its param. A pad's row reads one, so
+        # its wire follows the stick, and goes dormant with the lane
+        knob = c.kind == NODE_MODE and (at is None or at[1].op not in MOD_OPS)
+        if knob:
             c.live = _norm(reg.get(at[1].target)) if at is not None else c.live
         elif c.addr is not None:
             c.live = reading(router, c.addr, lanes)
@@ -2033,7 +2038,7 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
         hit = view.owner(c.src_port)
         if hit is not None and (hit[0].grey or (hit[1] is not None and not hit[1].up)):
             grey = True                  # a lost device, or a desk layer that is down
-        c.dormant = c.off or grey or (c.kind not in ("sub", NODE_MODE) and c.live is None)
+        c.dormant = c.off or grey or (c.kind != "sub" and not knob and c.live is None)
 
 
 def key(table: Bindings, reg: Registry, router: Router | None, devices,
