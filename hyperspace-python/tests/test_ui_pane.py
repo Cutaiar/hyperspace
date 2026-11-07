@@ -182,7 +182,6 @@ def test_every_section_open_draws_with_no_conflicting_ids(pane, monkeypatch):
     def tall() -> None:                 # a window tall enough for every body unscrolled
         imgui.get_io().display_size = imgui.ImVec2(1600, 4000)
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(1576, 3976))
         r.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
     for _ in range(3):
@@ -349,7 +348,6 @@ def test_the_projector_inset_keeps_clear_of_the_pane(tmp_path, monkeypatch):
         r.panel.desk = False
         imgui.get_io().display_size = imgui.ImVec2(*WIDE)
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(WIDE[0] - 24, WIDE[1] - 24))
         r.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
         (px, py), (_pw, _ph) = st["details_rect"]
@@ -400,7 +398,6 @@ def _tall_driver(r, monkeypatch, size=(1600, 2400)):
     def tall() -> None:
         imgui.get_io().display_size = imgui.ImVec2(*size)
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(size[0] - 24, size[1] - 24))
         r.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
     d = Driver(step=tall)

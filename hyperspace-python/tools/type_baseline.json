@@ -19,9 +19,6 @@
       "reportAttributeAccessIssue": 3,
       "reportReturnType": 1
     },
-    "hyperspace/deck.py": {
-      "reportAttributeAccessIssue": 1
-    },
     "hyperspace/devices.py": {
       "reportArgumentType": 8,
       "reportAssignmentType": 1,
@@ -117,8 +114,8 @@
     },
     "hyperspace/library.py": {
       "reportArgumentType": 3,
-      "reportAttributeAccessIssue": 23,
-      "reportGeneralTypeIssues": 3,
+      "reportAttributeAccessIssue": 22,
+      "reportGeneralTypeIssues": 2,
       "reportIndexIssue": 2,
       "reportOperatorIssue": 5,
       "reportOptionalIterable": 2,
@@ -349,7 +346,7 @@
       "reportOptionalSubscript": 3
     },
     "hyperspace/ui_players.py": {
-      "reportArgumentType": 6,
+      "reportArgumentType": 1,
       "reportCallIssue": 2,
       "reportOptionalMemberAccess": 14
     },

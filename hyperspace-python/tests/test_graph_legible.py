@@ -29,7 +29,7 @@ from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
-from hyperspace import graphview, modifiers, ui, ui_graph, ui_routing
+from hyperspace import graphview, modifiers, ui, ui_graph, ui_pane, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import CEIL
 from hyperspace.graphmigrate import Shows
@@ -345,8 +345,8 @@ def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
                         or chip(label, *a, **k))
     frame(rig.panel, "graph")
     assert "tidy##graph" in chips and "expand all##graph" in chips
-    # the control window's narrow page, nothing selected: the chip (plan 49)
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    # a narrow control window's page, nothing selected: the chip (plan 49)
+    imgui.get_io().display_size = imgui.ImVec2(ui.PANEL_W + 2 * ui.PANEL_EDGE, CONTROL_SIZE[1])
     frame(rig.panel, "graph")
     chips.clear()
     frame(rig.panel, "graph")
@@ -1098,13 +1098,13 @@ def test_the_side_column_width_is_clamped_and_this_macs(tmp_path):
     pos, size = ui_graph.details_rect((10.0, 20.0), (1000.0, 600.0), wide=True, side_w=460.0)
     assert (pos, size) == ((10.0 + 1000.0 - 460.0, 20.0), (460.0, 600.0))
     assert ui_graph.read_side(tmp_path) is None                        # no file
-    (tmp_path / ui_graph.UI_FILE).write_text("{not json")
+    (tmp_path / ui_pane.UI_FILE).write_text("{not json")
     assert ui_graph.read_side(tmp_path) is None                        # a broken one
-    (tmp_path / ui_graph.UI_FILE).write_text('{"graph": {"side_w": "wide"}, "other": 1}')
+    (tmp_path / ui_pane.UI_FILE).write_text('{"graph": {"side_w": "wide"}, "other": 1}')
     assert ui_graph.read_side(tmp_path) is None                        # not a number
     ui_graph.write_side(tmp_path, 460.25)
     assert ui_graph.read_side(tmp_path) == 460.2                       # rounded to a tenth
-    doc = json.loads((tmp_path / ui_graph.UI_FILE).read_text())
+    doc = json.loads((tmp_path / ui_pane.UI_FILE).read_text())
     assert doc["other"] == 1 and doc["graph"]["side_w"] == 460.2       # the rest kept
     ui_graph.write_side(tmp_path / "missing" / "dir", 300.0)           # a failed write: no raise
 
@@ -1116,12 +1116,12 @@ def test_the_side_column_takes_its_width_from_this_mac_and_a_drag(rig):
     moved, resizes it, and letting go writes the width back."""
     st = party(rig)
     io = imgui.get_io()
+    rig.panel.desk = False          # the panel fills the window (the rig's desk would take a column)
 
     def sized(width: float) -> None:                    # a frame with the panel this wide
-        io.display_size = imgui.ImVec2(max(width + 40.0, 820.0), 900.0)
+        io.display_size = imgui.ImVec2(width + 2 * ui.PANEL_EDGE, 900.0)   # CONTROLS fills it
         rig.panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(width, 876.0))
         rig.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
 

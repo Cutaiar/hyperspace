@@ -253,11 +253,14 @@ COLOURS = {
 }
 # a cable of a kind with a colour of its own, whatever it carries (plan 57: the
 # owner's "a special type of cable", not white, as the value cables nearly are)
-KIND_COLOURS = {graphview.NODE_MODE: imgui.ImVec4(0.30, 0.90, 0.55, 1.0)}
+KIND_COLOURS = {graphview.NODE_MODE: imgui.ImVec4(*graphview.NODE_MODE_RGB, 1.0)}
 DORMANT_ALPHA = 0.22
 THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
 WIRE = 3.0               # a render cable, a trigger
 NODE_W = 190.0 * graphview.SCALE    # a node's inner width
+DENSITY_STEP = 0.1                  # `canvas_density`: 1.3 lands exactly
+DENSITY_MAX = 4.0
+DENSITY_SETTLE_S = 0.3              # `held_density`
 PIN = 12.0               # a pin's square: a bigger target for a trackpad (2026-10-26)
 # 2026-10-31 (the show of 2026-10-30: cable targets "way too small" zoomed
 # out): a pin's hit target is never under MIN_PX screen px, however far out
@@ -271,7 +274,6 @@ SIDE_W = 320.0           # the side column's width at first, when the page is wi
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
 GRIP_W = 8.0             # the drag grip on the column's left edge
-UI_FILE = ui_pane.UI_FILE   # <machine>/ui.json: this Mac's panel settings (the side width)
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
@@ -294,7 +296,7 @@ IDLE_TIP = ("Nothing in, nothing out: not drawn so the canvas stays readable. + 
             "them here to patch one; patched, it is drawn like any node. The picker "
             "(right-click the canvas) still offers every idle macro.")
 BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it — widen "
-              "CONTROLS to give both room (in a window this wide they sit beside by themselves)")
+              "the window to give both room (in a window this wide they sit beside by themselves)")
 # plan 28 N7: a bundle's thickness follows how many cables it holds, capped
 FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
@@ -465,6 +467,35 @@ def _start_view_read(ctx, path: str) -> None:
     ed.get_config(ctx).settings_file = ""
     with suppress(OSError):
         os.unlink(path)
+
+
+def canvas_density(base: float, units: float) -> float:
+    """The density to bake the canvas's glyphs at, with `units` canvas units a
+    point: the editor scales vertices, so a word zoomed 1.3× at 1x is a 20 px
+    glyph stretched to 26, and soft. Baked at the size it lands, it's sharp. Up in
+    `DENSITY_STEP`s, so a zoom's sweep bakes a few sizes, not one a frame; never
+    under `base` (zoomed out, as before), never over `DENSITY_MAX`."""
+    wanted = base / max(units, 1e-3)
+    return max(base, min(math.ceil(wanted / DENSITY_STEP - 1e-3) * DENSITY_STEP, DENSITY_MAX))
+
+
+def held_density(st: dict, wanted: float, now: float | None = None) -> float:
+    """The density to draw at: `wanted` at the start, then only once it has held
+    `DENSITY_SETTLE_S`. A new density is a bake and can be a new atlas, up to
+    230 ms measured, on the one thread the render shares: a person's zoom makes
+    one at its end, soft while it moves, not one a step."""
+    now = time.monotonic() if now is None else now
+    held = st.get("density_held")
+    if held is None or held == wanted:
+        st["density_held"], st["density_since"] = wanted, None
+        return wanted
+    since = st.get("density_since")
+    if since is None or since[0] != wanted:
+        st["density_since"] = (wanted, now)
+    elif now - since[1] >= DENSITY_SETTLE_S:
+        st["density_held"], st["density_since"] = wanted, None
+        return wanted
+    return held
 
 
 def keep_corner(st: dict, size: tuple[float, float]) -> None:
@@ -1117,25 +1148,14 @@ def still_held(panel, nid: str, spec) -> bool:
 
 
 def node_params(panel, nid: str) -> list[str]:
-    """The registry ids under canvas node `nid` (`Panel.
-    graph_selected_params`): the ids with `graphview.params_of`'s prefix —
-    a copy's are its original's (`fx.<of>`), as its side-panel header says
-    — the continuous ones first and then the rest, each run in registry
-    order; an alias is left out, as the side panel leaves it. [] for a node
-    with no param (a device's, a lane's). A scan of the registry when
-    asked, never per frame."""
-    reg = panel.reg
+    """The registry ids under canvas node `nid` (`Panel.graph_selected_params`):
+    `graphview.param_ids`, a copy's being its original's, as its side-panel
+    header says."""
     view = _state(panel).get("view")
     n = view.node(nid) if view is not None else None
     name = nid.partition(":")[2] if nid.startswith("render:") else nid
     of = getattr(n.ref, "effect", "") if n is not None and graphview.kind_of(name) == "copy" else ""
-    pre = graphview.params_of(name, of)
-    head = pre + "."
-    # (wave 3 P2: `dream.*` is a look-back's and the dream's, by key; no other
-    # node's prefix starts so)
-    ids = [p.id for p in reg if not p.alias and (p.id == pre or p.id.startswith(head))
-           and (not p.id.startswith("dream.") or patches.dream_owner(p.id) == name)]
-    return sorted(ids, key=lambda pid: reg[pid].kind is not Kind.CONTINUOUS)
+    return graphview.param_ids(panel.reg, nid, of)
 
 
 def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
@@ -1300,15 +1320,19 @@ def panel_wants(panel) -> list:
 
 def window_wants(panel) -> list[str]:
     """Plan 44 D3 (row 623): the windows the loaded patch wires or cuts
-    that this rig has not open (`graphview.window_wanted_lines` over the
-    loadable patches' graph and bus cuts and the panel's outputs), one line each —
+    that this rig has not open (`graphview.wanted_windows` over the
+    loadable patches' graph and bus cuts, less the panel's outputs), one line each —
     what OUTPUT and the GRAPH head say; [] with no loadable patches (a test's panel)."""
     loaded_patch = getattr(getattr(panel, "library", None), "loaded_patch", None)
     if loaded_patch is None:
         return []
     spec = getattr(getattr(loaded_patch, "graph", None), "spec", None)
-    count = len(getattr(panel, "outputs", None) or ())
-    return graphview.window_wanted_lines(spec, getattr(loaded_patch, "bus", None), count)
+    # (one that has a slot and nothing to show it, as an empty slot has no `missing`, wants one)
+    slots = getattr(panel, "outputs", None) or ()
+    have = {sl.n for sl in slots if getattr(sl, "drawn", sl.opened) or sl.missing}
+    bus = getattr(loaded_patch, "bus", None)
+    return [graphview.WINDOW_WANTED.format(n=n) for n in graphview.wanted_windows(spec, bus)
+            if n not in have]
 
 
 def _wants_chip(panel, beside: bool = True) -> None:
@@ -1703,6 +1727,8 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     st["thumbs"], st["preview"], st["gpu_ms"] = picture_sources(panel)
     st["thumb_hover"] = None
     imgui.push_font(None, ui.FONT_BASE * graphview.SCALE)    # the canvas's own text size
+    density = imgui.internal.get_font_rasterizer_density()
+    imgui.internal.set_font_rasterizer_density(held_density(st, canvas_density(density, st["zoom"])))
     _place(panel, st, view)
     lay = st["auto"][1]
     _titles(st, lay)                    # plan 28 N9: behind the nodes
@@ -1769,6 +1795,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     _hover(st, view, panel)
     _moved(panel, st, view)
     _patch_drop(panel, st, view)        # plan 40 T3: let go on a lit cable: splice
+    imgui.internal.set_font_rasterizer_density(density)
     imgui.pop_font()
     ed.end()
     if through > 0.0:
@@ -3685,8 +3712,15 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         b = obj
         ui._micro("bundle")
         imgui.text_wrapped(graphview.bundle_tip(view, b).split("\n")[0])
-        imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''} · "
-                            f"{graphview.EXPAND_TO_EDIT} on the canvas")
+        roles = _node_mode_roles(b)
+        if roles:
+            imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''}")
+            imgui.text_wrapped(graphview.LEAVE_WORDS)
+            for role in roles:
+                _leave_chip(panel, role)
+        else:
+            imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''} · "
+                                f"{graphview.EXPAND_TO_EDIT} on the canvas")
         imgui.separator()
         rows = [c.ref for c in b.cables if c.kind == "route"]
         focus = st.get("focus")
@@ -3701,6 +3735,13 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         return
     if what == "cable":
         c = obj
+        if c.kind == graphview.NODE_MODE:
+            ui._micro(NODE_CHIP)
+            _route_row(panel, router, view, c)
+            imgui.text_wrapped(graphview.LEAVE_WORDS)
+            if c.ref is not None:
+                _leave_chip(panel, c.ref[0])
+            return
         ui._micro(c.kind)
         _route_row(panel, router, view, c)
         return
@@ -3726,6 +3767,7 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     param (`_param_rows`); a node with no param keeps its patched ports'
     readings in words."""
     _open_chip(panel, n)
+    node_mode_block(panel, n)
     if isinstance(n.ref, Effect):
         ui_fx.strip(panel, n.ref.effect)
         return
@@ -3761,6 +3803,89 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
+
+
+def _node_desk(panel):
+    """The panel's deck's `node_desk.NodeDesk`; None in a rig with none."""
+    router = ui_routing.router_of(panel)
+    return getattr(router.table, "node_desk", None) if router is not None else None
+
+
+NODE_CHIP = "node mode"
+OTHER_DECK_TIP = "It is on the other Deck: this brings it here. Its player stays where it is, and moving the player brings it back."
+ASLEEP = "dormant: {role} is on the other Deck"
+RESTING = "{n} modulator route{s} at rest on these, back on leave"
+
+
+def node_mode_words(nd, h, nid: str) -> list[str]:
+    """What the side pane says of desk `h` on node `nid`: its map, in control order,
+    then what stayed and what did not fit (`Fit.too_many`). Nothing is paged."""
+    if h.node != nid:
+        return []
+    fit = h.fit
+    out = [f"{nd.control_word(h.role, b)} → {b.words}" for b in h.rows]
+    if fit.kept:
+        out.append("mapped already: " + ", ".join(fit.kept))
+    said = fit.too_many(nid)
+    if said:
+        out.append(said)
+    deck = getattr(nd, "deck", None)
+    if deck is not None:
+        back = graphview.routes_held(deck.table, deck.reg, deck.router)     # (once a frame)
+        mine = {r.target for r in h.rows}
+        rest = sum(1 for b in deck.table.routes() if b.target in mine
+                   and back.get(id(b)) == graphview.NODE_MODE_HOLDS)
+    else:
+        rest = 0
+    if rest:
+        out.append(RESTING.format(n=rest, s="" if rest == 1 else "s"))
+    if not h.on_here:
+        out.append(ASLEEP.format(role=h.role))
+    return out
+
+
+def _node_chip(panel, nd, h, nid: str, label: str, cid: str, tip: str) -> None:
+    """A chip that enters: grey with the reason when it may not, and a refusal said."""
+    why = nd.refusal(h.role, nid)
+    imgui.begin_disabled(why is not None)
+    hit = ui.chip(f"{label}##{cid}")
+    imgui.end_disabled()
+    if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+        ui.tooltip(why or tip)
+    if hit and why is None:
+        said = nd.enter(h.role, nid)
+        if said:
+            panel.library.say(warning=said)
+
+
+def node_mode_block(panel, n: graphview.VNode) -> None:
+    """Entering node mode (plan 53 N1b): a chip per desk a patch can point, on a
+    selected node it can point at. An edit of the patch on the deck the panel looks
+    at, one undo step; the desk comes here. The map below it, in the cable's colour,
+    wrapped: what did not fit is listed whole, however narrow the pane."""
+    nd = _node_desk(panel)
+    if nd is None or not nd.pointable(n.id):
+        return
+    ink = KIND_COLOURS[graphview.NODE_MODE]
+    for h in nd.held():
+        cid = f"graph.side.node_mode.{h.role}"
+        if h.node != n.id:
+            tip = OTHER_DECK_TIP if not h.on_here else (
+                f"Fill {h.role}'s knobs and faders with this node's params, saved in this "
+                "patch. One undo step.")
+            _node_chip(panel, nd, h, n.id,
+                       f"move {h.role} here" if h.node else f"point {h.role} here", cid, tip)
+            continue
+        if ui.lit_chip(f"{h.role} on this node · leave##{cid}", False, ink):
+            nd.leave(h.role)
+            continue
+        # saved here, its player elsewhere: the operator's "you're on this for a while"
+        if not h.on_here:
+            _node_chip(panel, nd, h, n.id, f"bring {h.role} here", f"{cid}.bring", OTHER_DECK_TIP)
+        imgui.push_style_color(imgui.Col_.text, ink)
+        for line in node_mode_words(nd, h, n.id):
+            imgui.text_wrapped(line)
+        imgui.pop_style_color()
 
 
 def is_pad_node(panel, n: graphview.VNode) -> bool:
@@ -4558,7 +4683,7 @@ def _cold(panel, st: dict, view: graphview.View, n: graphview.VNode,
     e = render_edit(panel) if n.kind in graphview.FRAME_VKINDS and never is None else None
     for c in view.cables:
         if n.kind == "modifier":
-            if c.kind == "render" or not c.addr:
+            if c.kind in ("render", graphview.NODE_MODE) or not c.addr:
                 cold.add(c.id)
         elif c.kind != "render" or never is not None or graphview.onto_refusal(e, c) is not None:
             cold.add(c.id)
@@ -4993,9 +5118,16 @@ def _unknown_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> 
     ed.reject_deleted_item()
 
 
+def _node_mode_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
+    """Delete pressed on a node mode cable: kept, and the head says how to end it."""
+    ed.reject_deleted_item()
+    _note(st, graphview.LEAVE_WORDS)
+
+
 # a delete's handler by the cable's kind ("render" is N4's)
 DELETE = {"route": _value_cut, "setter": _value_cut, "sub": _value_cut,
-          "input": _value_cut, "render": _delete_render_cable}
+          "input": _value_cut, "render": _delete_render_cable,
+          graphview.NODE_MODE: _node_mode_cut}
 
 
 def _value_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
@@ -5043,12 +5175,33 @@ DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
                "channel": _delete_render_node}
 
 
+def _leave(panel, role: str) -> None:
+    nd = _node_desk(panel)
+    if nd is not None:
+        nd.leave(role)
+
+
+def _leave_chip(panel, role: str) -> None:
+    """The side pane's leave, for a selected node mode cable or bundle."""
+    nd = _node_desk(panel)
+    if nd is not None and ui.lit_chip(f"{role}: leave node mode##graph.side.leave.{role}", False,
+                                      KIND_COLOURS[graphview.NODE_MODE]):
+        nd.leave(role)
+
+
+def _node_mode_roles(b: graphview.VBundle) -> list[str]:
+    """The desks a bundle's node mode cables are from: an expanded one has no delete either."""
+    return list(dict.fromkeys(c.ref[0] for c in b.cables
+                              if c.kind == graphview.NODE_MODE and c.ref is not None))
+
+
 def delete_bundle(st: dict, b: graphview.VBundle) -> str:
     """Delete pressed on a bundle (plan 28 N7): kept, and the head says how
     to edit its cables ("expand a node to edit its cables"). Returns the words."""
     ed.reject_deleted_item()
-    _note(st, graphview.EXPAND_TO_EDIT)
-    return graphview.EXPAND_TO_EDIT
+    said = graphview.LEAVE_WORDS if _node_mode_roles(b) else graphview.EXPAND_TO_EDIT
+    _note(st, said)
+    return said
 
 
 def delete_through(st: dict) -> str:
@@ -5210,6 +5363,11 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> No
     in one undo step, a composite or a switch asked its inlet — the
     starters, delete."""
     imgui.text_disabled(cable_tip(view, c).splitlines()[0])
+    if c.kind == graphview.NODE_MODE:           # not a row: leaving the node is what ends it
+        role = c.ref[0] if c.ref is not None else None
+        if role is not None and imgui.menu_item_simple(f"{role}: leave node mode"):
+            _leave(panel, role)
+        return
     if c.kind in ("route", "input") and imgui.begin_menu("insert"):
         for kind in modifiers.KINDS:
             if imgui.menu_item_simple(kind):
@@ -5248,7 +5406,12 @@ def _bundle_menu(panel, st: dict, view: graphview.View, b: graphview.VBundle) ->
     imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''}")
     if imgui.menu_item_simple("expand both ends"):
         st["open"] |= {b.src, b.dst}
-    imgui.menu_item_simple(f"delete: {graphview.EXPAND_TO_EDIT}", enabled=False)
+    roles = _node_mode_roles(b)
+    for role in roles:
+        if imgui.menu_item_simple(f"{role}: leave node mode"):
+            _leave(panel, role)
+    if not roles:
+        imgui.menu_item_simple(f"delete: {graphview.EXPAND_TO_EDIT}", enabled=False)
 
 
 def learn_params(n: graphview.VNode) -> dict[str, list[str]]:

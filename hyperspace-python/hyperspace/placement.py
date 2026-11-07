@@ -34,6 +34,12 @@ name of the screen the rect was on, kept for the note; placement is decided
 by geometry alone. The file is written on quit and on restart only (fork
 F5); delete it to forget.
 
+**Since each display's row says what it shows (`displays.py`, SC2),** an output can move
+between displays, so a place in ``render`` says little: a window's spot goes under
+``displays``, by the display's label, ``{"displays": {"TV #2": {"x": ...}}}``, and that's read
+first (`spot`). The file stays ``/1``: ``render`` is still written, an older build reads it,
+and it's where a display with no entry of its own looks once.
+
 No GL, no imgui, and nothing imported from the package: `glfw` is passed
 in, and the home folder is the caller's (app.py takes it from
 `library.home()`, where `config.load` looks).
@@ -41,12 +47,13 @@ in, and the home folder is the caller's (app.py takes it from
 
 from __future__ import annotations
 
+import ctypes
 import json
 import math
 import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 FILE = "windows.json"
@@ -68,6 +75,20 @@ class Screen:
     w: int
     h: int
     at: tuple[int, int] | None = None     # the monitor's own frame, Dock or no Dock
+    # the window system's id for this display, this boot (`labels`' `held`); 0: it won't say
+    uid: int = field(default=0, compare=False)
+
+
+def _uid(glfw, m) -> int:
+    """A display's id for this boot: on a Mac its CGDirectDisplayID, which Apple says stays the
+    same until a restart, across a replug too; elsewhere GLFW's handle, while it's connected;
+    0 when neither will say."""
+    for read in (lambda: glfw.get_cocoa_monitor(m), lambda: ctypes.addressof(m.contents)):
+        try:
+            return int(read())
+        except Exception:  # noqa: BLE001, S112 — not a Mac, or a stand-in: it won't say
+            continue
+    return 0
 
 
 def screens(glfw) -> list[Screen]:
@@ -90,46 +111,44 @@ def screens(glfw) -> list[Screen]:
             return []      # indices must keep meaning what the config says: all or nothing
         if w <= 0 or h <= 0:
             return []
-        out.append(Screen(name or f"screen {i + 1}", x, y, w, h, (px, py)))
+        out.append(Screen(name or f"screen {i + 1}", x, y, w, h, (px, py), _uid(glfw, m)))
     return out
 
 
 # ---- GRAPH's start zoom (plan 58 SM2) ----
 #
-# Read off the display the control window opens on. The rule takes the
-# display's density and its usable height, never its reported millimetres (a
-# 48-inch panel on the owner's Mac says it is 598 mm wide).
+# Read off the display the control window opens on, by its usable height alone,
+# never its reported millimetres (a 48-inch panel on the owner's Mac says it is
+# 598 mm wide). The show's display is 1080p (the owner, 2026-11-07).
 
-ZOOM_HEIGHT = 1080.0    # a display this many points tall starts at 1:1 ...
-ZOOM_DENSE = 1.3        # ... and a 2x one, whose points are small, this much bigger
+ZOOM_READ = 1.3         # by eye at 1920x1080: words read from a distance, four columns on the canvas
+ZOOM_FULL = 960.0       # a display at least this tall gets ZOOM_READ: 1080p, less a menu bar and a dock
+ZOOM_SMALL = 720.0      # at this height or under, 1:1: 1.3 left under two columns at 1024x768
+ZOOM_HEIGHT = 1080.0    # the height whose square root is 1: only a much taller display passes ZOOM_READ
 ZOOM_MAX = 1.5          # by eye: 1.38 reads well in a 900-point window, 1.89 held two nodes
 
 
-def start_zoom(density: float, height: float) -> float:
-    """GRAPH's first zoom on a display, in screen points per canvas unit: the
-    larger of what a dense panel wants and what the display's height wants,
-    from 1 to `ZOOM_MAX`. The height counts by its square root: a taller
-    screen is seen from further off, but a window on it needn't fill it."""
-    dense = 1.0 + (ZOOM_DENSE - 1.0) * (min(max(density, 1.0), 2.0) - 1.0)
-    return min(max(dense, math.sqrt(max(height, 0.0) / ZOOM_HEIGHT)), ZOOM_MAX)
+def start_zoom(height: float) -> float:
+    """GRAPH's first zoom on a display, in screen points per canvas unit, by its
+    usable height alone: `ZOOM_READ` from `ZOOM_FULL` up, easing to 1 at
+    `ZOOM_SMALL`; above about 1825 points the square root of the height over
+    `ZOOM_HEIGHT`, up to `ZOOM_MAX` (a taller screen is seen from further off,
+    but a window on it needn't fill it)."""
+    room = (height - ZOOM_SMALL) / (ZOOM_FULL - ZOOM_SMALL)
+    read = 1.0 + (ZOOM_READ - 1.0) * min(max(room, 0.0), 1.0)
+    return min(max(read, math.sqrt(max(height, 0.0) / ZOOM_HEIGHT)), ZOOM_MAX)
 
 
 def window_zoom(glfw, win) -> float:
-    """`start_zoom` for the display `win` is on: the one its centre is over,
-    else the one it lands on. 1.0 when the window system won't say: a launch
-    must not die for a zoom."""
-    scr = screens(glfw)
+    """`start_zoom` for the display `win` is on (`on_screen`). `ZOOM_READ` when
+    the window system won't say: the show's display is the likeliest, and a launch
+    must not die for a zoom, nor run its whole length too small to read."""
     try:
         rect = (*glfw.get_window_pos(win), *glfw.get_window_size(win))
-        on = _centre_screen(rect, scr) or _landing(rect, scr)
-        if on is None:
-            return 1.0
-        # the monitor's, not the window's: the window's is stale until an event
-        # is pumped after it was moved, and this runs before any is
-        mon = glfw.get_monitors()[scr.index(on)]
-        return start_zoom(float(glfw.get_monitor_content_scale(mon)[0]), on.h)
+        on = on_screen(rect, screens(glfw))
+        return start_zoom(on.h) if on is not None else ZOOM_READ
     except Exception:  # noqa: BLE001 — as above
-        return 1.0
+        return ZOOM_READ
 
 
 # ---- the file ----
@@ -150,9 +169,12 @@ def load(home: Path) -> dict:
 
 
 def save(home: Path, control: Rect | None, render: list[Rect | None],
-         scr: list[Screen]) -> None:
+         scr: list[Screen], spots: dict[str, Rect | None] | None = None,
+         away: dict[str, tuple] | None = None) -> None:
     """Write the windowed rects. A None (a minimised window) keeps that
-    window's old entry. Atomic — a temp file, then a rename — and a failed
+    window's old entry. `spots`: each window's rect by the label of the display
+    it's on (`spot`). `away` (SC3b): where a window was on a display with no window now, by its
+    memory, kept though no display here can show it: `place` says if it's any use later. Atomic — a temp file, then a rename — and a failed
     write costs only the memory: it is said on stderr and never raised."""
     home = Path(home)
     old = load(home)
@@ -164,6 +186,18 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
     doc = {"schema": SCHEMA,
            "control": _entry(control, scr) or old.get("control"),
            "render": entries}
+    kept = old.get("displays")
+    kept = dict(kept) if isinstance(kept, dict) else {}
+    for key, rect in (away or {}).items():
+        r = _rect(dict(zip("xywh", rect, strict=False)))
+        if r is not None:
+            kept[key] = {"x": r[0], "y": r[1], "w": r[2], "h": r[3], "screen": key}
+    for tag, rect in (spots or {}).items():
+        new = _entry(rect, scr)
+        if new is not None:
+            kept[memory(tag)] = new
+    if kept:
+        doc["displays"] = kept
     tmp = home / f"{FILE}.{os.getpid()}.tmp"     # its own: two instances may share a home
     try:
         tmp.write_text(json.dumps(doc, indent=1) + "\n")
@@ -175,6 +209,17 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
             tmp.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def spot(seen: dict, tag: str, n: int) -> dict | None:
+    """Where a window on the display labelled `tag` was, showing output `n`, as `load`
+    gave it: its own entry, else that output's old place in ``render``. `place` says
+    whether it's any use there."""
+    own = seen.get("displays")
+    if isinstance(own, dict) and memory(tag) in own:
+        return own[memory(tag)]
+    old = seen.get("render") or []
+    return old[n - 1] if 0 <= n - 1 < len(old) else None
 
 
 def _entry(rect, scr: list[Screen]) -> dict | None:
@@ -244,6 +289,11 @@ def _centre_screen(rect: Rect, scr: list[Screen]) -> Screen | None:
     return next((s for s in scr if _on(rect, s)), None)
 
 
+def on_screen(rect: Rect, scr: list[Screen]) -> Screen | None:
+    """The screen a rect's centre is over, else the one it lands on."""
+    return _centre_screen(rect, scr) or _landing(rect, scr)
+
+
 def _fit(rect: Rect, scr: list[Screen]) -> Rect | None:
     """A remembered rect as it may open: its size clipped to the screen it
     lands on and never under MIN_SIZE; None when it is not usable (before
@@ -309,6 +359,11 @@ def _along(i: int, scr: list[Screen]) -> tuple:
     return (*(s.at or (s.x, s.y)), i)
 
 
+def arranged(scr: list[Screen]) -> list[int]:
+    """The screens' indices left to right across the desk, then top to bottom."""
+    return sorted(range(len(scr)), key=lambda i: _along(i, scr))
+
+
 def _same(family: str, scr: list[Screen]) -> list[int]:
     """The indices of this family's screens, in the order an ordinal counts."""
     return sorted((i for i, s in enumerate(scr) if _family(s.name) == family),
@@ -348,10 +403,26 @@ def match(asked: str, scr: list[Screen]) -> int:
     return same[0] if same else -1
 
 
-def labels(scr: list[Screen]) -> list[str]:
+def memory(label: str) -> str:
+    """What a display's memory goes under, for a label `labels` gave: a lone display and the
+    first of a pair are one, so "TV" carries on as "TV #1" when a second is plugged in, and
+    back. "DELL (2)" alone is its family's first too: that number can follow the plug order."""
+    base, hash_, n = label.rpartition(" #")
+    return (_family(base) if hash_ and n == "1" else label if hash_ else _family(label))
+
+
+def labels(scr: list[Screen], held: dict[int, str] | None = None) -> list[str]:
     """What to write in the config for each screen, in `scr`'s order: its
     name when that is enough, and otherwise its family and ordinal. `match`
-    finds each screen by its own label, always."""
+    finds each screen by its own label, always.
+
+    **`held` (SC3b), a running app's:** each display's `memory` by its `Screen.uid`, kept and
+    updated here. A display keeps its number for the run, wherever a twin plugs in or whichever
+    goes: across the desk says nothing of which is which once one comes or goes, and the window
+    stays on the display it's on. So the one that goes leaves its number free, and one that
+    comes takes its old number if the id says it's the same, else the lowest free. With
+    nothing in `held`, the first call, these are the labels by arrangement. A restart goes back to
+    those, so numbers kept this way can swap then: `differs` says when, for the panel."""
     out = []
     for i, s in enumerate(scr):
         fam = _family(s.name)
@@ -360,7 +431,44 @@ def labels(scr: list[Screen]) -> list[str]:
             out.append(f"{fam} #{same.index(i) + 1}")
         else:
             out.append(s.name if match(s.name, scr) == i else f"{fam} #1")
+    if held is None or not all(s.uid for s in scr):
+        return out
+    for fam in {_family(s.name) for s in scr}:
+        same = _same(fam, scr)
+        numbers: dict[int, int] = {}            # index in `scr` → its number in the family
+        for i in same:
+            n = _number(held.get(scr[i].uid), fam)
+            if n is not None and n not in numbers.values():
+                numbers[i] = n
+        free = (n for n in range(1, 2 * len(same) + len(held) + 2) if n not in numbers.values())
+        for i in same:
+            if i not in numbers:
+                numbers[i] = next(free)
+            if len(same) > 1 or numbers[i] > 1:
+                out[i] = f"{fam} #{numbers[i]}"
+    now = {s.uid: memory(out[i]) for i, s in enumerate(scr)}
+    # a number taken is no longer held for one that went: back, it takes a free one, so no two
+    # connected displays can ever claim one number and swap jobs by list order
+    for uid in [u for u, key in held.items() if key in now.values() and u not in now]:
+        del held[uid]
+    held.update(now)
     return out
+
+
+def _number(key: str | None, fam: str) -> int | None:
+    """Which of family `fam` the memory `key` is; None when it's no memory of that family."""
+    if key is None:
+        return None
+    n = _ordinal(key)
+    if n is not None and n[0] == fam:
+        return n[1]
+    return 1 if key == fam else None
+
+
+def differs(scr: list[Screen], held: dict[int, str]) -> list[str]:
+    """The labels `held` kept that a restart would give another display, across the desk."""
+    now, plain = labels(scr, dict(held)), labels(scr)
+    return [now[i] for i in arranged(scr) if memory(now[i]) != memory(plain[i])]
 
 
 def resolve(asked: str, scr: list[Screen]) -> tuple[int, str]:

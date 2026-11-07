@@ -757,10 +757,7 @@ def test_every_road_asks_one_predicate(rig, monkeypatch):
 
 
 def test_a_layout_holds_its_controls():
-    """Fails at #365's merge until `models.control_free` reads `Model.layout`: the
-    one line the PR body names. Skipped until the field exists."""
-    if "layout" not in models.Model.__dataclass_fields__:
-        pytest.skip("no Model.layout on this base (#365)")
+    """`models.control_free` reads `Model.layout`: a control the layout holds is no pole."""
     joy = MODELS["joycon-l"]
     assert not models.control_free(joy, "LP") and not models.control_free(joy, "RP")
     assert ("RP", "LP") not in models.natural_pairs(joy)

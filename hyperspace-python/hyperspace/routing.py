@@ -275,6 +275,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
 from functools import cache, lru_cache
 from pathlib import Path
+from typing import NamedTuple, Protocol
 
 import numpy as np
 
@@ -310,6 +311,7 @@ from .routing_sources import (  # noqa: F401
     BUILTIN_LANES,
     DECK_SCHEMES,
     MIDI_SCHEMES,
+    MODULATOR_SCHEMES,
     PAIR_SCHEME,
     PAIR_SEP,
     QUALIFIER,
@@ -787,6 +789,13 @@ class Binding:
             return -1
 
     @property
+    def is_modulator_route(self) -> bool:
+        """A performer row from a source no controller feeds: what node mode rests on a
+        param it fills (the owner, row 711), and a mapping that keeps a param from filling
+        only if it is not this. The one rule: `Bindings.node_holds` and `NodeDesk._kept`."""
+        return self.op in MOD_OPS and self.scheme in MODULATOR_SCHEMES
+
+    @property
     def is_sink(self) -> bool:
         """A sink row (plan 27 B3): a param or a lane sent out to a sink
         port — `target` is ``<role>:<channel>``, not a param id."""
@@ -829,6 +838,15 @@ class Binding:
         if None not in (self.channel, other.channel) and self.channel != other.channel:
             return False
         return self.kind == "pitch" or self.number == other.number
+
+    def feedback_from(self, profile) -> None:
+        """Show what `profile` says this control can show (`feedback_for`: its light,
+        its ring, its velocities). `profile` None or a control it has no word on: as is."""
+        fb = (profile.feedback_for(self.kind, self.channel, self.number)
+              if profile is not None else None)
+        if fb:
+            self.feedback, self.ring = fb["feedback"], fb.get("ring", self.ring)
+            self.on, self.off = fb.get("on", self.on), fb.get("off", self.off)
 
     @property
     def control(self) -> tuple[str, int, int] | None:
@@ -1004,6 +1022,36 @@ def _macro_n(mid: str) -> int:
 
 
 # ------------------------------------------------------------------- ops
+
+class PadLayout(NamedTuple):
+    """A pad model's own controls as rows (`models.Model.layout`): `rows`
+    stand in for every table row on `sources`. Empty for a pad with none: its
+    table as ever."""
+
+    rows: tuple[Binding, ...] = ()
+    sources: frozenset[str] = frozenset()
+
+    def hides(self, b: Binding) -> bool:
+        """Is this table row not heard by this pad?"""
+        return b.bare in self.sources
+
+
+NO_LAYOUT = PadLayout()
+
+
+@cache
+def _layout(spec: tuple, role: str) -> PadLayout:
+    head = f"pad{QUALIFIER}{role}" if role else "pad"
+    return PadLayout(tuple(Binding(f"{head}:{c}", t, op, v) for c, t, op, v in spec),
+                     frozenset(f"pad:{c}" for c, _, _, _ in spec))
+
+
+def layout_of(model, role: str = "") -> PadLayout:
+    """`model`'s `PadLayout`, its rows under the qualifier `role` ("" the
+    primary pad's bare rows). Asked every frame, so kept by the rows themselves."""
+    spec = getattr(model, "layout", ())
+    return _layout(spec, role) if spec else NO_LAYOUT
+
 
 def act(reg: Registry, b: Binding) -> None:
     """A discrete row fires: keys, pad buttons and MIDI buttons share this.
@@ -2215,6 +2263,17 @@ def _meta_table_attr(name: str) -> property:
                     doc=f"The meta table's `{name}` (`MetaTable`).")
 
 
+class NodeRows(Protocol):
+    """What a table asks of `node_desk.NodeDesk`, which is the meta controller's and above
+    this module."""
+
+    def rows(self, role: str | None = None) -> list[Binding]: ...
+    def serial(self, role: str | None = None) -> int: ...
+    def under(self, b: Binding) -> bool: ...
+    def holding(self) -> frozenset[str]: ...
+    def away(self, b: Binding) -> bool | None: ...
+
+
 class Bindings:
     """A deck's table: rows of every scheme, indexed for the adapters.
 
@@ -2246,6 +2305,12 @@ class Bindings:
     # they are in memory only — never in `bindings`, never saved, never
     # Learnable. `page_serial` counts the flips (`set_page`): midi.py
     # redraws the whole desk on one. The meta table's (`META_TABLE_ATTRS`)
+
+    # N1a (plan 53, `node_desk.NodeDesk`): the rows this deck's loadable patch's node
+    # mode derives for a desk. The deck's own, never the meta table's: one patch's
+    # pointing is no row of the other's. Never in `bindings`, so never saved, no
+    # learn's, and no pair asks over one (`Learn`, row 754). None: no rows
+    node_desk: NodeRows | None = None
 
     # plan 44 D3: the meta table's state (`META_TABLE_ATTRS`) is read and
     # written through this table — one property per name, made from the
@@ -2674,22 +2739,43 @@ class Bindings:
         (plan 27 B2: the latch is per role) — nothing else (D8: no
         fall-through; a control the up layer does not map does nothing).
         A surface page's rows come first (plan 31 §A): on a page control
-        they are all there is, and a disabled one does nothing."""
+        they are all there is, and a disabled one does nothing. Node mode's
+        rows (N1a) are the patch layer's, ahead of its saved rows on the same
+        control: under SHIFT the global layer is as it was, since a patch has
+        no say there."""
         if self.is_primary(role):
             page = [b for b in self.page_rows if b.matches(kind, channel, number)]
             if page:
                 return [b for b in page if b.enabled]
         rows = [b for b in self.route(kind, channel, number)
                 if b.enabled and self.serves(role, b)]
-        inv = [b for b in rows if b.layer is None]
+        above = self.above_layers(kind, channel, number, role, rows)    # (one scan a message)
+        if above is not None:
+            return above
+        layer = self.layer_of(role)
+        if layer == "preset":
+            node = [b for b in self.node_rows(role) if b.matches(kind, channel, number)]
+            if node:
+                return node
+        return [b for b in rows if b.layer == layer]
+
+    def above_layers(self, kind: str, channel: int, number: int, role: str | None = None,
+                     rows: Iterable[Binding] | None = None) -> list[Binding] | None:
+        """What answers a message ahead of every layer: the enabled invariant rows on its
+        control, none at all on SHIFT or a reserved control, or None when the layers
+        decide. `dispatch`'s rule, which node mode's fill asks too (`NodeDesk`): a control
+        this holds is no degree of freedom, since a row there could never be reached.
+        `rows`: a narrower list to look through than the table's, when the caller has one."""
+        inv = [b for b in (self.bindings if rows is None else rows)
+               if b.layer is None and b.enabled and b.matches(kind, channel, number)
+               and self.serves(role, b)]
         if inv:
             return inv
         if self.is_primary(role) and (
                 (kind == "note" and channel == 0 and number == _SHIFT.number)
                 or any(x.matches(kind, channel, number) for x in _reserved(self.profile))):
             return []                # (their row disabled: still no layer's, `is_invariant`)
-        layer = self.layer_of(role)
-        return [b for b in rows if b.layer == layer]
+        return None
 
     def active(self, role: str | None = None) -> list[Binding]:
         """The MIDI rows of the device of `role` (None: the first MIDI
@@ -2705,7 +2791,11 @@ class Bindings:
         if page:
             under = self._controls(page, shift=False)
             rows = [b for b in rows if not self._on(b, under)]
-        return [*page, *(b for b in rows
+        node = self.node_rows(role) if layer == "preset" else []
+        if node:
+            under = self._controls(node, shift=False)
+            rows = [b for b in rows if b.layer != "preset" or not self._on(b, under)]
+        return [*page, *node, *(b for b in rows
                          if b.layer is None or (b.layer == layer and not self._on(b, index)))]
 
     @property
@@ -2720,6 +2810,40 @@ class Bindings:
         if page is not self.page:
             self.page = page
             self.page_serial = getattr(self, "page_serial", 0) + 1
+
+    def node_rows(self, role: str | None = None) -> list[Binding]:
+        """The rows node mode derives for the desk of `role` on this deck (N1a,
+        `node_desk`), as they stand: the same objects until what they say moves."""
+        nd = self.node_desk
+        return nd.rows(role) if nd is not None else []
+
+    def under_node_mode(self, b: Binding) -> bool:
+        """Is saved row `b` on a control node mode fills now, so it waits (N1a)?"""
+        nd = self.node_desk
+        return nd is not None and nd.under(b)
+
+    def node_row_away(self, b: Binding) -> bool | None:
+        """`b` as the on-screen desk asks: None when node mode did not derive it, else
+        whether the first desk is on the other `Deck` (`NodeDesk.away`)."""
+        nd = self.node_desk
+        return nd.away(b) if nd is not None else None
+
+    def node_held(self) -> frozenset[str]:
+        """The params a desk in node mode holds on this deck (`NodeDesk.holding`)."""
+        nd = self.node_desk
+        return nd.holding() if nd is not None else frozenset()
+
+    def node_holds(self, b: Binding, held: frozenset[str] | None = None) -> bool:
+        """Does node mode hold route `b` off its param now? A modulator's, on a filled
+        param (the owner, row 711). The row is untouched: this is read, never written."""
+        if not b.is_modulator_route:
+            return False
+        return b.target in (self.node_held() if held is None else held)
+
+    def node_rows_serial(self, role: str | None = None) -> int:
+        """How many times those rows have changed: a desk redraws on one."""
+        nd = self.node_desk
+        return nd.serial(role) if nd is not None else 0
 
     def layer_of(self, role: str | None = None) -> str:
         """The layer up on the device of `role`: the first role's is
@@ -3426,7 +3550,7 @@ class Router:
                     act(self.reg, b)
 
     def pad(self, pad, now: float | None = None, *, buttons: bool = True,
-            role: str = "", skip=frozenset()) -> None:
+            role: str = "", skip=frozenset(), quiet=frozenset()) -> None:
         """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
         the `axis` lanes (None while no pad is on, so their routes let go),
         then its pad / hat rows — unless `buttons` is False (the frame's
@@ -3449,7 +3573,14 @@ class Router:
         before the skip does not fire when the skip ends mid-press. A
         `momentary` row's press is let go by a skip of its own button, by
         its row going, or by the pad going away (`pad_lost`), whose release
-        would never come (plan 52)."""
+        would never come (plan 52).
+
+        A pad model with a layout of its own (`layout_of`: a Joy-Con's, the
+        Edge's hold-to-save) hears those rows in place of the table's on the
+        same controls.
+
+        `quiet`: the `axis` lanes that read NaN this frame, so their routes
+        let go (a Joy-Con's stick while the totem is off: it orbits then)."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3458,7 +3589,10 @@ class Router:
         if not pad.on:
             self.pad_lost(role)
             return
-        self.sources.feed(axis, pad.lanes())
+        lanes = pad.lanes()
+        if quiet:
+            lanes = [math.nan if i in quiet else v for i, v in enumerate(lanes)]
+        self.sources.feed(axis, lanes)
         # plan 56: each published pair's lane (nothing published, nothing fed)
         pairs = qualified(PAIR_SCHEME, role)
         pair_names = self.sources.names.get(pairs)
@@ -3476,15 +3610,20 @@ class Router:
                 if b.op == "step" and b.enabled and (
                         b.device == role or (not role and own and b.device == own)):
                     self._pair_step(pad, b, skip)
-        rows = self.table.of("pad", "hat")
+        layout = layout_of(getattr(pad, "model", None), role)
+        table_rows = self.table.of("pad", "hat")
+        n_table = len(table_rows)
+        rows = (*table_rows, *layout.rows)
         if down_now:                         # a row gone or off under a held button
             for key in down_now - {(b.source, b.target) for b in rows if b.enabled}:
                 self._let_go_pad(down_now, key)
-        for b in rows:
+        for i, b in enumerate(rows):
             code = self._code(b)
             if code is None or not b.enabled or not (
                     b.device == role or (not role and own and b.device == own)):
                 continue
+            if i < n_table and layout.hides(b):
+                continue                         # not this pad's: nor are its timer or press
             if skip and b.bare in skip:
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)
@@ -3785,10 +3924,11 @@ class Router:
                 *((getattr(m, "id", ""), getattr(m, "kind", ""),
                    tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t)))
         banks = tuple((scheme, tuple(b.ids())) for scheme, b in self._banks().items())
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()    # (node mode, row 711)
         return (id(t), rows, t.macros_serial, subs, mods, banks,
-                getattr(self.reg, "serial", 0))
+                getattr(self.reg, "serial", 0), held)
 
-    def build_modgraph(self) -> modgraph.ModGraph:
+    def build_modgraph(self, held: frozenset[str] | None = None) -> modgraph.ModGraph:
         """The modulation graph of this table (modgraph.py's nodes and edges):
         every bank voice (when the router steps the bank: each LFO, by id)
         and modifier first, in their
@@ -3799,7 +3939,8 @@ class Router:
         subscribers as `base` edges; each voice's knob params (and the
         bank-wide ones, ``lfo.trigger``) and each modifier's own params, where the patch
         holds them, into their node. A switched-off row's edges are drawn
-        disabled. No loop is cut here (`modgraph` does that)."""
+        disabled. No loop is cut here (`modgraph` does that). `held`: the params node mode
+        holds, by default as they stand now (row 711)."""
         g = modgraph.ModGraph()
         t = self.table
         for scheme, bank in self._banks().items():
@@ -3822,8 +3963,11 @@ class Router:
             for inp in getattr(m, "inputs", ()):
                 if inp:                                  # "" is an input not chosen yet
                     g.link(source(inp), _modifier_node(m), "in")
+        if held is None:
+            held = t.node_held() if hasattr(t, "node_held") else frozenset()
         for b in t.routes():
-            cable, on = (b.source, b.target), b.enabled
+            # (a route node mode holds off is an edge switched off, so it closes no loop)
+            cable, on = (b.source, b.target), b.enabled and not (held and t.node_holds(b, held))
             src = source(b.source)
             gate = source(b.when) if b.when is not None else None
             scale = param(b.scale) if b.scale is not None else None
@@ -3884,23 +4028,35 @@ class Router:
         self.modgraph                                # noqa: B018 — current
         return self.__dict__["_modgraph_cut"]
 
-    def _forget_lost_rows(self, by_target: dict[str, list]) -> None:
+    @property
+    def modgraph_stays_cut(self) -> set[tuple[str, str]]:
+        """The cables a loop keeps off with no desk holding anything: what `modgraph_cut`
+        is once node mode lets go. A route it holds is an edge off, so it closes no loop
+        now and the live cut does not name it, and "back on leave" would be untrue of one
+        this names (row 711)."""
+        self.modgraph                                # noqa: B018 — current
+        return self.__dict__["_modgraph_stays_cut"]
+
+    def _forget_lost_rows(self, by_target: dict[str, list], resting: Iterable[Binding] = ()) -> None:
         """A param none of whose rows is left has lost the source its base
-        chase ledger was about (plan 52): a row made later rides in full."""
+        chase ledger was about (plan 52): a row made later rides in full. A route node
+        mode holds off (`resting`) is not lost: it comes back with the offset the base
+        holds, as a source's flicker does."""
         had = self.__dict__.get("_row_sources", {})
         now = {t: {b.source for b, _ in rows} for t, rows in by_target.items()}
+        for b in resting:
+            now.setdefault(b.target, set()).add(b.source)
         self.reg.forget_commits(t for t, was in had.items() if not was & now.get(t, set()))
         self._row_sources = now
 
-    def _rebuild_modgraph(self, key: tuple) -> None:
-        g = self.build_modgraph()
-        t = self.table
+    def _break_loops(self, g: modgraph.ModGraph, mod_ids: dict[str, str]
+                     ) -> tuple[set[tuple[str, str]], set[tuple[str, str]], list[str]]:
+        """Every loop of `g` that passes through no delay, broken in place: the cables kept
+        off, the modifier inputs kept off, and a note for each."""
         rank: dict[tuple[str, str], int] = {}
-        for k, b in enumerate(t.bindings):
+        for k, b in enumerate(self.table.bindings):
             if b.op in MOD_OPS:
                 rank[(b.source, b.target)] = k
-        mods = _modifiers_of(t)
-        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in mods}
         mod_rank = {node: modifiers.number(mid) or 0 for node, mid in mod_ids.items()}
         cut: set[tuple[str, str]] = set()
         cut_in: set[tuple[str, str]] = set()     # (input address, modifier node) kept off
@@ -3932,13 +4088,32 @@ class Router:
             who = mod_ids.get(last.dst, last.dst)
             notes.append(f"loop: {said} needs a delay — {who}'s input {last.src} "
                          f"is off until it has one")
+        return cut, cut_in, notes
+
+    def _rebuild_modgraph(self, key: tuple) -> None:
+        t = self.table
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()
+        g = self.build_modgraph(held)
+        mods = _modifiers_of(t)
+        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in mods}
+        cut, cut_in, notes = self._break_loops(g, mod_ids)
+        stays_cut = cut | cut_in
+        if held:                # asked again as if every desk had let go (`modgraph_stays_cut`)
+            a, b, _ = self._break_loops(self.build_modgraph(frozenset()), mod_ids)
+            stays_cut = a | b
         # the evaluation plan: per node in order, what `modulate` does there
         banks = self._banks()
         reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
+        resting: list[Binding] = []
         for b in t.mods():
-            if (b.source, b.target) not in cut:
-                by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
+            if (b.source, b.target) in cut:
+                continue
+            if held and t.node_holds(b, held):
+                if (b.source, b.target) not in stays_cut:
+                    resting.append(b)
+                continue
+            by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
         # a delay closing a loop runs before its input (`modgraph.ordering`):
         # it emits that input's lane as it stands — last frame's value
         live = [e for e in g.edges if e.enabled and e.port == "in"]
@@ -3946,7 +4121,7 @@ class Router:
         early = {e.dst for e in live if id(e) not in ordered}
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
-        self._forget_lost_rows(by_target)
+        self._forget_lost_rows(by_target, resting)
         for node in modgraph.order(g):
             if node.kind in banks:
                 i = int(node.id.split(":")[1])
@@ -3963,6 +4138,7 @@ class Router:
         d = self.__dict__
         d["_modgraph"], d["_plan"], d["_modgraph_seen"] = g, plan, key
         d["_modgraph_notes"], d["_modgraph_cut"] = notes, cut | cut_in
+        d["_modgraph_stays_cut"] = stays_cut
 
     # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
 

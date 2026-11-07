@@ -1,5 +1,5 @@
 """The device registry (plan 27): every input or output the meta controller has,
-listed in ``config.toml`` as ``[[devices]]``, opened behind its own entry,
+listed in the library's ``devices.json`` (`devicelist`), opened behind its own entry,
 polled in order each frame, and closed in one list.
 
 A *device* is anything that satisfies the `Device` protocol below:
@@ -69,10 +69,10 @@ hardware is not there reports `lost` and **reconnects itself** on its own
 schedule — today's adapters do (`midi.Ports.retry`, the pad's GLFW poll
 and USB rescan, the hands' Leap thread and DAW port), and a B2 / B4
 device must too; the registry never closes or reopens a `lost` device
-(a `Ports` of its own inside `poll` is the pattern). The registry watches `config.toml`'s
-mtime every `WATCH_FRAMES` frames and re-reads only the device list,
-closing what left and opening what arrived; a bad edit is a note and the
-old list stands.
+(a `Ports` of its own inside `poll` is the pattern). The registry asks the list
+(`devicelist.DeviceList`, whose worker does the disk) every `WATCH_FRAMES` frames
+whether it changed, closing what left and opening what arrived; a bad list is a note
+and the old one stands.
 
 **Sinks** (plan 27 B3). A sink takes values *out* of the app: a device's
 `sinks` are its sink ports (a `Port` whose `scheme` is the device's role and
@@ -110,8 +110,8 @@ from .players import THERE, UNLISTED, UNPLUGGED
 RETRY_S = 2.0
 RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
+WATCH_FRAMES = 30        # the device list's mtime is looked at this often (as the shaders are)
 REOPEN_S = 3.0           # a device reopened while connected: longer than one `RETRY_S` to find it
-WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
 # fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
 # not a device
@@ -866,7 +866,7 @@ class PadDevice(Base):
         """The pad's rows, then the sticks' camera job — on the registry
         of the deck it is on (`Base.reg`), else the router's. The camera
         job is one pad's on each deck (plan 27 B6, decision 24: defaults
-        author no look; plan 55, `_steers`): another's unrouted axes do nothing."""
+        author no look; plan 55, `steers`): another's unrouted axes do nothing."""
         self._router = router       # `close` lets go through it: no later frame will
         io = self.io
         if io is None:
@@ -878,25 +878,33 @@ class PadDevice(Base):
         if was is not None and was is not router:
             was.pad_left(q)
         self._acted_on = router
-        from . import gamepad
+        from . import gamepad, totem
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
         reg = self.reg if self.reg is not None else getattr(router, "reg", None)
         skip = self._totem(io, reg)
+        model = getattr(io, "model", None)
+        quiet = self.quiet_stick(model, reg, router)
+        if quiet:
+            skip = {**skip, "quiet": quiet}
         if q:
             router.pad(io, buttons=not self._taken, role=q, **skip)
         else:
             router.pad(io, buttons=not self._taken, **skip)
+        state = totem.state_of(reg)
+        if totem.drives(state, self.role):
+            totem.keep_turn(state, reg)
         if io.on:
             axis = f"axis@{q}" if q else "axis"
             routed = (claimed(axis) or ()) if claimed is not None else ()
             self._dialed = gamepad.dialed(routed)
-            if reg is not None and self._steers(router):
-                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed,
+            if reg is not None and self.steers(router):
+                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0),
+                              routed={*(set(routed) - quiet), *self._no_camera_job(model, reg)},
                               scheme=axis)
 
-    def _steers(self, router) -> bool:
+    def steers(self, router) -> bool:
         """Is the camera job this pad's: the first pad listed on the deck it is on
         (plan 55)? So with every player on air it is the first pad's, as ever, and
         a player off air alone, or the only pad given to player 2, keeps a stick
@@ -947,19 +955,40 @@ class PadDevice(Base):
         if state is not None and state.on:
             totem.step(state, io, reg, dt, self.role)
             if totem.drives(state, self.role):
-                skip |= totem.SKIP
+                skip |= totem.skip_of(io)
         return {"skip": skip} if skip else {}
+
+    def quiet_stick(self, model, reg, router=None) -> frozenset[int]:
+        """The lanes a route lets go of, `totem.quiet_stick`: a Joy-Con's stick while it
+        orbits. `router`, the deck it acts on (None: the last one, for the pad window)."""
+        from . import gamepad, totem
+        router = router if router is not None else self.__dict__.get("_acted_on")
+        steers = router is None or self.steers(router)
+        return gamepad.left_stick_lanes() if totem.quiet_stick(model, reg, self.role, steers) else frozenset()
+
+    def _no_camera_job(self, model, reg) -> tuple[int, ...]:
+        """The axes a pad with a layout of its own (a Joy-Con) keeps off the
+        sticks' camera job (`gamepad.steer`), free for a learned route: its
+        triggers always, and its stick while the totem reads this pad, whose
+        gyro has the rotation."""
+        from . import gamepad, totem
+        if not totem.own_layout(model):
+            return ()
+        free = (gamepad.AX_LT, gamepad.AX_RT)
+        if totem.reads_stick(model, reg, self.role):
+            free += (gamepad.AX_LX, gamepad.AX_LY)
+        return free
 
     def _totem_skip(self, reg, io) -> frozenset:
         """The buttons the totem and the poi hold off this pad this frame —
         as they will be once `act` has run their take-over (Learn runs
         first): none while each reads another pad, or is off."""
-        from . import poi, totem
+        from . import poi, routing, totem
         state = totem.state_of(reg)
-        skip = totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
+        skip = totem.skip_of(io) if totem.will_drive(state, io, self.role) else frozenset()
         if poi.will_drive(poi.state_of(reg), io, self.role):
             skip |= poi.SKIP
-        return skip
+        return skip | routing.layout_of(getattr(io, "model", None)).sources
 
     def _feed_extras(self, sources, io, q: str) -> None:
         """The ``touch`` and ``motion`` lanes (plan 42): their names,
@@ -1720,7 +1749,9 @@ class DeviceRegistry:
     own entry (`open_all`), polled in order each frame, closed in one
     list (reverse order). `entries` are checked entries (config.devices);
     `devices` may be given ready-made (tests, the frame-order stubs).
-    `path` is the config.toml to watch, `clock` the retry clock
+    `store` is the list both Macs share (`devicelist.DeviceList`), which it
+    watches and `relist`s from; `path`, with no store, a config.toml to
+    watch instead (RT1 retires that road). `clock` is the retry clock
     (monotonic, as midi.Ports'). `listeners` are called after any open
     or close, so the host can re-point what holds an adapter (the panel,
     the ghost renderer).
@@ -1737,12 +1768,21 @@ class DeviceRegistry:
         """The status-change hook (plan 40 T4): a no-op until the app sets
         an instance's own (`rig.said = …`, app.py)."""
 
+    def renamed(self, old: str, new: str) -> None:
+        """A controller adopted here is `new`: the file gave `old` to the other Mac's. A
+        hook the app sets to the meta controller's (`rename_controller`), so who holds it
+        follows; with none, the players'."""
+        players = getattr(self.ctx, "players", None)
+        if players is not None:
+            players.rename(old, new)
+
     def __init__(self, entries: list[dict] | None = None, ctx: Context | None = None, *,
                  devices: list | None = None, path: Path | None = None,
-                 clock=time.monotonic, notes: list[str] | None = None):
+                 clock=time.monotonic, notes: list[str] | None = None, store=None):
         self.ctx = ctx if ctx is not None else Context()
         self.notes = notes if notes is not None else self.ctx.notes
         self.path = Path(path) if path is not None else None
+        self.store = store
         self.clock = clock
         self.entries: list[dict] = [dict(e) for e in (entries or [])]
         if getattr(self.ctx, "devices", None) is None:
@@ -1918,7 +1958,7 @@ class DeviceRegistry:
         its role — **once per role**, marked done in `bindings.json` itself
         (`Bindings.sinks_seeded`, never by consuming the owner's config
         key): a role in that list is never seeded again, so deleting every
-        row of it on ROUTING, or saving config.toml mid-session, brings
+        row of it on ROUTING, or the list changing mid-run, brings
         nothing back. A file that already holds sink rows on a role counts
         as seeded for it (the mark is added). Written with one note; from
         then on the rows say and the key is not read."""
@@ -2092,6 +2132,9 @@ class DeviceRegistry:
         close list for a quit and a restart (the pad included)."""
         for d in reversed(self.devices):
             self._close(d)
+        store = self.__dict__.get("store")
+        if store is not None:
+            store.close()
 
     # ---- the frame ----
 
@@ -2274,7 +2317,7 @@ class DeviceRegistry:
                 on = p.deck.reg if p is not None else reg
                 self._guard(d, lambda d=d, on=on: d.send(on, analyzer))
 
-    # ---- config.toml, watched ----
+    # ---- the list, watched ----
 
     def _stat(self) -> float | None:
         if self.path is None:
@@ -2284,10 +2327,43 @@ class DeviceRegistry:
         except OSError:
             return None
 
+    def relist(self) -> bool:
+        """The list as the store has it, applied (an adopt, here on this Mac: an entry
+        that won't check is left out, and the rest stand). True when anything changed."""
+        store = self.__dict__.get("store")
+        if store is None:
+            return False
+        for old, new in store.take_renames():
+            self.renamed(old, new)
+        entries, problems, _notes = store.checked()
+        for why in problems:
+            self._note(why)
+        return self.apply(entries)
+
     def watch(self) -> bool:
-        """Re-read the `[[devices]]` list when config.toml's mtime moved;
-        True when the list changed. A file that will not parse, or a list
-        with a bad entry, is a note and the old list stands."""
+        """Re-read the list when its file moved; True when the list changed. A file
+        that will not parse, or a list with a bad entry, is a note and the old list
+        stands, with every device still running. The store's list when there is one
+        (`DeviceList.look`: the other Mac's change lands here, and no local adopt is
+        lost to it); else `path`'s `[[devices]]`."""
+        store = self.__dict__.get("store")
+        if store is not None:
+            try:
+                changed = store.look()
+                # (asked whether or not the list moved: a launch's rename left no change behind)
+                renames = store.take_renames()
+                for old, new in renames:
+                    self.renamed(old, new)
+                if not changed and not renames:
+                    return False
+                entries, problems, _notes = store.checked()
+                if problems:
+                    self._note(f"devices: the list not applied — {problems[0]} — the old list stands")
+                    return False
+                return self.apply(entries)
+            except Exception as e:  # noqa: BLE001 — what's in a shared file never stops a frame
+                self._note(_err("devices: the list not applied, and the old one stands", e))
+                return False
         if self.path is None:
             return False
         mtime = self._stat()

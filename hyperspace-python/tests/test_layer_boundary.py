@@ -487,15 +487,15 @@ PATCH_MODULES = _mods(
     "segment", "dream", "media")
 # what is set for a performance or an install
 META_MODULES = _mods(
-    "deck", "playlist", "players", "pointer", "app", "devices", "control", "config", "placement",
+    "deck", "playlist", "players", "pointer", "app", "devices", "devicelist", "sharedfile", "displays", "hotplug", "control", "config", "placement",
     "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
     "osc", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
-    "tempo", "seq_page", "replay", "pinch")
+    "tempo", "seq_page", "node_desk", "replay", "pinch", "pacing")
 # one module holding both layers' classes, which an import cannot tell apart. The list is the
 # finding, not a licence: splitting them is the structure audit's (draft #273), and until then
 # `META_NAMES` below stands guard over what a patch module takes from them
 BOTH_LAYERS = _mods("params", "routing", "routing_sources", "library", "undo", "learn",
-                    "outputs", "groupwords")
+                    "outputs", "groupwords", "hot_slots")
 # above both: the panel and the headless tools, which may read either
 ABOVE = _mods("ui", "graphview", "headless", "offline")
 

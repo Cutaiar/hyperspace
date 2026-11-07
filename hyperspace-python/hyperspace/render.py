@@ -1801,6 +1801,8 @@ class Renderer:
                 guide.shown = False
             return
         try:
+            if hasattr(state, "box"):    # the limit the poi holds the hand and the shape to
+                state.box = poi.box_for(*size, s.eye_fov, s.eye_distance)
             if guide is None:
                 from .poi_guide import PoiGuide
                 guide = self.poi_guide = PoiGuide(self.ctx)

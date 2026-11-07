@@ -141,6 +141,7 @@ from . import undo
 from .graph import BusCuts
 from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
 from .groupwords import group_word
+from .hot_slots import DeckLibrarySlots, DeckProjectSlots
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -3680,7 +3681,7 @@ class Library:
 
 # ------------------------------------------------- one deck's view (plan 44 D5a)
 
-class DeckProject(Project):
+class DeckProject(DeckProjectSlots, Project):
     """The one show as one deck sees it: every field is the show's (it shares
     the show's `__dict__`), but `lib` is that deck's `DeckLibrary`, so a bank
     verb this object does (a pad on that deck's table) loads, saves and lights
@@ -3694,9 +3695,11 @@ class DeckProject(Project):
     `preset.*`: `routing.meta_refusal` refuses a patch's row on one at every door. A
     person's save does not change the picture, so it stays on its own deck, as does the panel's load,
     which is the plain `Project`'s and the intentional one. `meta` None (no second
-    deck): a load lands on this deck."""
+    deck): a load lands on this deck. Its own two fields can't be in the shared `__dict__`,
+    so they are slots, held on a cold base: `DeckProjectSlots` says why."""
 
-    __slots__ = ("lib", "meta")
+    lib: DeckLibrary
+    meta: Any
 
     def __init__(self, lib: DeckLibrary):        # never `Project.__init__`: nothing is new
         self.__dict__ = lib.base.project.__dict__
@@ -3763,15 +3766,18 @@ class DeckProject(Project):
         return done
 
 
-class DeckLibrary(Library):
+class DeckLibrary(DeckLibrarySlots, Library):
     """The library as one deck sees it: every file, hook and meta controller label is
     the one library's (it shares its `__dict__`), but `presets` and `reg` are
     this deck's, always, with nothing to remember to say. `LoadedPatch.lib` is one,
     so its load, save, new and marks cannot reach another deck, whichever the
     panel is on; the plain `Library` is the panel's view of the same state
-    (`Library.pointer`). The loadable patches kind's and load hooks are this deck's too."""
+    (`Library.pointer`). The loadable patches kind's and load hooks are this deck's too.
+    Its own three fields are slots on a cold base, as `DeckProject`'s are."""
 
-    __slots__ = ("_project", "base", "own")
+    _project: DeckProject
+    base: Library
+    own: Any
 
     def __init__(self, base: Library, loaded_patch=None):   # never `Library.__init__`: nothing is new
         self.__dict__ = base.__dict__

@@ -158,6 +158,13 @@ class Players:
             self.held[role] = number
             self.save()
 
+    def rename(self, old: str, new: str) -> None:
+        """The controller `old` is called `new` from now on (`devicelist`, a name the
+        other Mac took first): who holds it, remembered, and `old` is nobody's."""
+        if old in self.held:
+            self.held[new] = self.held.pop(old)
+            self.save()
+
     def put(self, doc: dict) -> None:
         """Back to `to_json`'s `doc`, remembered: an undo's (row 740).
         `MetaController.put_players` also moves the pointers: call that."""

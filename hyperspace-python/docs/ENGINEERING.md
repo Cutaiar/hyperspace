@@ -1509,6 +1509,7 @@ on_start = false        # launch straight into overlay (needs overlay = true)
 passthrough = true      # overlay: clicks go to the window underneath
 bg = 0.0                # overlay: ground, 0 see-through … 1 black
 alpha = 1.0             # overlay: whole-window opacity
+unplug_hold_s = 3.0     # how long a window waits for its display to come back (hotplug.py)
 
 [[output.screens]]      # optional; one table per render output, at most 4 (§14)
 name = "glass"
@@ -1676,6 +1677,12 @@ as built.
   media opacity.
 
 ### The device list
+
+**Since wave 5 CT1 the list lives in `<library>/devices.json`, shared by both Macs,
+and is set from the player board: a new controller waits in the tray until it's
+dragged to a player. On or off is each Mac's, in `<home>/devices.here.json`, by a chip on
+the same board. What follows is the seed, read once per Mac and then not at all; RT1
+retires it. `devicelist.py` has the rules.**
 
 Every input and output is a `[[devices]]` entry (plan 27). Without a
 list, nothing changes: the four device tables above — `[gamepad]`,
@@ -3053,12 +3060,13 @@ to the mix is V3's.
 
 ## 14. Outputs
 
+**A display can come and go with no restart** (`hotplug.py`, rows 813–816): which display shows what is its row's (`displays.py`), and what's below about the config is its seed. A row's target acts at once. A display gone has its window hidden at once and closed after `[output] unplug_hold_s`, and its job comes back with it.
+
 **One output** by default: the render window, from `[output] monitor` /
 `fullscreen`. **Several** from `[[output.screens]]` (§5), up to four
 (`outputs.MAX_OUTPUTS`), numbered by their place in the list whether or
-not they opened. Output 1 is made as the single render window always is
-(4× MSAA; transparent only with `[output] overlay = true`), sets the
-frame's size and paces the loop (its swap waits for its screen; later
+not they opened. Output 1 is transparent only with `[output] overlay = true`,
+sets the frame's size and paces the loop (its swap waits for its screen; later
 outputs' swaps do not). Later outputs are opaque, never overlay, and
 their screen and fullscreen come only from the config (the OUTPUT page's
 Screen and Fullscreen rows move output 1). A later output whose
@@ -3069,6 +3077,28 @@ shows the whole frame letterboxed, the hands registered on it. Each
 later output is drawn from the shared textures in its own context
 (`outputs.Presenter`); a failing present marks that output and the rest
 go on.
+
+**The picture depends on no display** (SC3a, rows 781–784). A hidden 64×64 window,
+the *root* (`app._root_window`), holds the renderer's context and is destroyed only
+at exit, last. The frame goes to `outputs.Root.frame`, an `Offscreen` at output 1's
+framebuffer size, or the last known while it has no window; **every** output's window,
+output 1's too, shows it through a `Presenter`. No window has MSAA. The frame's 4× is
+the renderer's own framebuffers' (`render.SceneTarget`), and the number comes from
+`outputs.FRAME_SAMPLES`, since an `Offscreen` would say 0
+(`tests/test_root_frame.py::test_the_frame_keeps_its_msaa_with_no_multisampled_window`).
+`pacing.Pacer`: the first live window in slot order has swap interval 1, the others
+0, and its swap is the frame's last; with none live, no display connected, or nothing
+swapped this frame, a 60 Hz timer. Under any swap a **floor**, a fixed 240 Hz on
+average with a burst of 8 frames free, so a swap that doesn't wait (a locked Mac, a
+window occluded from birth, a sleeping display) can't run the loop away, and a healthy
+loop, however uneven its frames, never waits. It believes no display's refresh (row 782).
+**A window swaps only a whole picture it was just given:** a draw or present that raises,
+or a view that caught a draw's error, leaves it on its last frame, and output 1's present raising reaches `RenderWatch.failed`, the red
+banner, after the others had their picture. A window closes
+in this order, or a release can reach the wrong context's objects: that window current,
+its presenter released, destroyed, then `Pacer.choose` between frames (SC3b, which adds
+the closing at run time; `tests/test_root_frame.py`'s `close_output`). Creating one
+costs 35–50 ms, once.
 
 **Per-output switches** (`overlay.register_switches`): `output.N.scene`,
 `output.N.hands`, `output.N.through` ("Hands through effects") and, with
@@ -3161,6 +3191,18 @@ Cmd+R, not a save. A reload of `media/mixer.py` keeps the
 media sound playing: the live mixer is re-classed by `MediaState` and
 the stream's callback reaches the new code through the class; adding
 the module itself needed a restart.
+
+A hot class adds nothing to the layout over another hot class: it declares no
+`__slots__` over one, and it isn't slotless over one that declares slots, because it
+would gain a `__dict__` (`__slots__ = ()` is fine). Python refuses to re-class such an
+object once the base has reloaded (`object layout differs`). `DeckLibrary` and
+`DeckProject` share another object's `__dict__` and must keep their own fields
+out of it, so they take slots from a base in cold `hot_slots.py`. A refusal strands
+nothing: every other target is re-classed and its hook runs, `error` names each
+class refused with its count, and the next save tries again. `tests/test_hot_reload_app.py`
+holds the rule on every real class in a hot module, and runs a save through the
+real swap in the real app; `tools/drive_hot_reload.py` is how to see one, and
+`tools/app_driver.py` keeps stepping across a reload (row 802).
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded patch, what happened — and every
@@ -3270,6 +3312,10 @@ on this figure, and conftest's tier tables are re-measured from the same list.
   passed", the run ended, one test lost after the fifth crash). So a
   run that crashed still shows a count to compare with a clean run's,
   and a recurring hang ends it rather than stalling it.
+- **What opens the real app's windows is `live`** (row 802): they take the focus on a
+  Mac on every run, so it's for `--all`, which CI doesn't run. Its fast-tier
+  guard has to stand alone, as `test_every_class_in_a_hot_module_can_be_re_classed_after_a_reload`
+  does for `test_a_save_reaches_every_live_object_of_the_real_app`.
 - **Live tests take turns, across workers and across processes.**
   `--dist load` hands a test to any worker, so nothing in xdist keeps
   two `live` tests of one run apart (the old `xdist_group("live")` only
@@ -3478,6 +3524,16 @@ conflicts were these files, not code.
 - **What it can't see.** Two PRs that edit one prose line keep both versions, so read
   the merged preamble of a doc you edited. Each side's added lines stay in one block,
   but a line both ends share, usually the blank between them, is kept once.
+- **What a section can lose.** `tests/test_doc_numbers.py` also fails on a heading with
+  nothing under it, two "Judge it." lines under one heading, a row with no section or a
+  section with no row, a table row's cell count, and a check outside a lettered group.
+  **Row 819's audit, 2026-11-07: keep the union with this test.** In 86 merges where both
+  sides appended, siblings at one tail cost blank lines and no text. The one loss, 770's
+  and 771's, was #411's review commit deleting from its own section to the file's end; the
+  union then hid that from a merge that would have stopped on it. So edit your section up
+  to the next heading, never to the end of the file, and read a tail's `-` lines in your
+  diff: a removed line you didn't write is the warning. Per-row section files would end
+  this, at 800 files and a conflict for every open PR: only if a merge itself loses text.
 - **Order.** Rows land in merge order. `uv run python tools/sort_register.py` puts the
   register back; it changes no text.
 - **A branch from before `.gitattributes`.** `git merge` reads the attribute from the
@@ -3570,7 +3626,9 @@ What only a person at the machine can check is
 - **Frame pacing with two screens has never been observed by a person.**
   Output 1 waits for its screen and later outputs do not; whether that
   paces the loop on two real screens, and whether a non-waiting
-  fullscreen output tears, is unknown.
+  fullscreen output tears, is unknown. **A window on a 60 Hz display here
+  swaps at 120** (measured on this Mac, row 782: macOS's swap doesn't follow the
+  window's own display), so the floor believes no display's refresh.
 - **With no desk connected the app keeps looking** — every 2 s. A look
   makes no client (`midiports`, audit R15, closed) and costs about 0.25 ms
   a pair of ports on the frame thread; `enabled = false` on the desk's
@@ -3600,4 +3658,4 @@ What only a person at the machine can check is
   held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
-- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): P6, V8.
+- **A display coming and going** (`hotplug.py`, audit P6) has only met a virtual display on a locked Mac: hand check 629 is a real cable.

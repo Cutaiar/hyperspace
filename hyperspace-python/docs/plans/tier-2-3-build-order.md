@@ -9,7 +9,7 @@
 
 ## Where we are
 
-**Last updated 2026-11-06.** **Waves 0–3 are merged. Most of wave 4 is merged, including the rename; of what's left, some waits on the owner's hand checks and some has no gate. Wave 5 is running beside it, in three tracks.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section, this section is right. **The wave 5 orchestrator updates this section whenever an item changes state** (`wave-5-session-prompt.md`, "Reporting").
+**Last updated 2026-11-07.** **Waves 0–3 are merged. Most of wave 4 is merged, including the rename; of what's left, some waits on the owner's hand checks and some has no gate. Wave 5 is running beside it, in three tracks.** The sections below are the original plan of 2026-11-02, kept as written; where they disagree with this section, this section is right. **The wave 5 orchestrator updates this section whenever an item changes state** (`wave-5-session-prompt.md`, "Reporting").
 
 Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on are unrun, but for 425.
 
@@ -35,8 +35,8 @@ Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on
 | #365 Joy-Con v0 | Another session's. **Waits on the owner's check 520–521, which needs the Joy-Con charged** (its PR: flat until the charger arrives). It also **conflicts with `main`** (register, `devices.py`, `routing.py`, `ui_pad.py`), which must be resolved before it lands |
 | N2a + N2b node mode on pads; then NSEW | Not started; after #365 |
 | WORDS: "session" and "rig" leave the panel | Merged #407. "Preset" becomes "patch" in the panel with the migration |
-| Row 740, a player's moves on the meta stack (amends row 740, which says ⌘Z over the board takes nothing back) | In build, as SM5 |
-| The PC words pass, row 668, "if wanted" | Optional; in SM5 if anything real is left |
+| Row 740, a player's moves on the meta stack | Merged, #417 |
+| The PC words pass, row 668 | Its small remainder merged, #417 |
 | **The one migration:** `/11`, `loadable/`, shows into install files, trash deleted (`57-format-lane.md` §7, §7a) | Not written; after NSEW. The owner runs it, with Hyperspace quit on both Macs. Then both Macs update and launch once (`58-wave-5.md` §2a), which is the cleanup's gate. It should also carry the `overlay.*` aliases on the `bindings/4` road (plan 58 §9) |
 
 **Wave 5: live table.** Numbers: rows from 770, checks from 600, groups from DA.
@@ -52,20 +52,24 @@ Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on
 | 1 | SM2 graph zoom | #411 | Merged. Row 787 asks about the show's display and resizing |
 | 1 | SM3 matte thumbnails | #405 | Merged |
 | 1 | TY1 type ratchet | #412 | Merged; baseline 1,554. An optional CI step is a patch in its body, for the owner |
-| 1 | TY2 audit as the record | #413 | Reviewed; merging. It replaces #273 |
-| 2 | **SC3a** the picture stops depending on one display, alone on the render loop | | Spike: GO (`origin/wave5/sc3a-spike`). In build. **Its merge waits on the owner's gate:** the spike's vsync handover run on an unlocked Mac |
-| 3 | SM4 audit faults: R14, R15, U9 open; R13 gone, U10 likely moot; V8 moved to SC3a | | In build; R15 first, as CT1 needs it |
-| 3 | LY3 the toggle says it | | In build |
-| 3 | SM5 row 740, and row 668 if wanted | | In build |
-| 3 | CT1 controllers set up in the app | | After SM4's R15 |
-| 3 | SC2 a row per display | | After SC3a |
-| 4 | **SC3b** hot-plug. Not done until a real display has been unplugged | | After SC2 |
+| 1 | TY2 audit as the record | #413 | Merged; #273 closed |
+| 2 | **SC3a** the picture stops depending on one display | #420 | Merged. Windows byte-identical to the old build, pacing within noise, on this Mac. Row 782 asks about 240 fps while locked. Checks 607-610 |
+| 3 | SM4 audit faults: R15, U9, U10 fixed; R14 moot; V8 closed in SC3a | #414 | Merged |
+| 3 | LY3 the toggle says it | #416 | Merged |
+| 3 | SM5 row 740, and row 668's remainder | #417 | Merged. Row 800 asks about what ⌘Z reaches |
+| 3 | CT1 controllers set up in the app | #418 | Merged. Rows 796-799 ask. Not met real hardware or a real Drive |
+| 3 | HR hot reload, broken since #370 (not in the plan) | #421 | Merged |
+| 3 | A test of CT1's flaking on `main`; a quit saves its own files (row 803) | #423 | Merged |
+| 3 | HR's rule's import order, flaking on `main` (row 812) | #427 | Merged |
+| 3 | SC2 a row per display | #424 | Merged. Pictures byte-identical to `main`. Rows 804-807 |
+| 4 | **SC3b** hot-plug | #425 | Merged. **Not done: no real cable has been unplugged.** On merged `main` it passed end to end with a private virtual display on a locked Mac: only the app's half. Hand check 629 goes first; RT1 waits on it. Rows 813-816 ask |
+| New | **Library's reads off the frame thread:** `Library` and its scan read the Drive on the main thread (`library.py:1944`, `:3649`), so a stalled Drive can hang launch or freeze frames; and `Library()` opens the home on a `config.toml` that won't parse (`app.py`, `sharedfile.library_root` is the fix). Found by CT1 and SC2; not in plan 58 | | Not started; after the migration, which owns `library.py` until then |
 | 5 | TY3, then TY4, annotations only: last, after the cleanup, so they annotate what survived | | Not started |
 | Gated | CL2, then CL1 after the owner's dry run; CL3, after CT1's defaults; CL4, once `fx/` is deleted | | **Gate:** the owner says the migration ran and both Macs have opened the new library |
 | Gated | RT1 | | The same gate, plus SC3b's real unplug and CT1 |
 | After the migration | SM6 a cart starts by itself; LY2's saved half; SC2's move of `output.bg`, `.alpha` | | Not started |
 
-**Waiting on the owner now:** hand checks 506–509 (group BS, the panel fold: they gate node mode, they don't test it; node mode's own checks 541–545 come in with #396 and #397), the Joy-Con check 520–521 (group BW, written on #365's branch, not yet on `main`), and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup, and so TY3 and TY4. They don't hold up the rest of wave 5. **Also:** the spike's vsync run on an unlocked Mac, about 12 minutes, which SC3a's merge waits on; and the owner's answers on rows 773, 779, 786 and 787, built as recommended meanwhile, and on one choice inside row 711, on #397: a knob's value after a chase commit across a node mode visit.
+**Waiting on the owner now:** hand checks 506–509 (group BS, the panel fold: they gate node mode, they don't test it; node mode's own checks 541–545 come in with #396 and #397), the Joy-Con check 520–521 (group BW, written on #365's branch, not yet on `main`), and the per-face render check (the last box under "Decisions that gate a wave"). The first two hold up the end of wave 4, then the migration, then the cleanup, and so TY3 and TY4. They don't hold up the rest of wave 5. **Also:** the real unplug, hand check 629. And the owner's answers on rows 773, 782, 786, 787, 796-799, 805-807 and 813-816, built as recommended meanwhile; the parts of rows 779 and 800 still marked; and one choice inside row 711, on #397: a knob's value after a chase commit across a node mode visit. **#419, Dillon's, also says row 802,** which HR took: it must renumber before it lands. **Everything left in Track W5 waits on the migration:** TY3 and TY4, after the cleanup; SM6, LY2's saved half, SC2's move of `output.bg` and `.alpha`, and the library's reads. The owner runs the migration, with Dylan's Mac.
 
 Nov 2, 2026 · @Robert
 

@@ -319,7 +319,8 @@ class RenderWatch:
         self.error = ""
 
     def failed(self, exc: BaseException, now: float) -> None:
-        """`renderer.draw` raised: the render window holds its last frame."""
+        """The draw raised, or output 1's present did: the render window holds
+        its last frame."""
         try:
             msg = f"{type(exc).__name__}: {exc}"
             self.error = f"render window stopped — {msg}"[:200]
@@ -337,12 +338,25 @@ class RenderWatch:
             pass
 
     def stranded(self, glo: int) -> None:
-        """A render frame started with framebuffer `glo` bound, not the window."""
+        """A render frame started with framebuffer `glo` bound, not the frame
+        target (`outputs.Root.frame`, SC3a)."""
         try:
             last = self.last_error or "none"
             self.warn(f"render target stranded: framebuffer {glo} was still bound at the "
                       f"start of a render frame (last render error: {last})",
                       kind="stranded target", key=f"glo:{glo}")
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    def gl_error(self, err: str) -> None:
+        """A render frame left GL error `err` pending: in the log, once per message;
+        running out of memory is on the banner too, as the picture is about to go."""
+        try:
+            msg = f"a render frame left {err} pending"
+            if "OUT_OF_MEMORY" in err:
+                self.warn(msg, kind="gl error", key=err)
+            else:
+                self._once(f"gl error:{err}", "gl error", msg)
         except Exception:  # noqa: BLE001, S110
             pass
 
@@ -369,9 +383,10 @@ class RenderWatch:
             pass
 
     def output_failed(self, label: str, exc: BaseException) -> None:
-        """A render output after the first raised in its present (plan 21
-        WP3): the frame went on; a warning naming it, once per message,
-        with the traceback in the log."""
+        """A later render output raised in its present (plan 21 WP3): the
+        frame went on; a warning naming it, once per message, with the
+        traceback in the log. Output 1's goes to `failed` instead, as the red
+        banner is the operator's one warning that the main picture stopped."""
         try:
             msg = f"{label}: its picture failed — {type(exc).__name__}: {exc}"[:240]
             tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
@@ -384,6 +399,8 @@ class RenderWatch:
         output's own answer); each one dark for `limit` while another
         presents is a warning naming it, with its window state."""
         others = self._others
+        for label in set(self._dark) - {label for label, _ in others}:
+            del self._dark[label]       # its window has closed: back later, it starts afresh (SC3b)
         if len(others) < 2:
             return first
         live = [bool(st.get("presentable", True)) for _, st in others]
