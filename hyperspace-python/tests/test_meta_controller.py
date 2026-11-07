@@ -22,7 +22,6 @@ from hyperspace import (
     bridge,
     devices,
     lfo,
-    library,
     loadable,
     poi,
     seq_page,
@@ -30,6 +29,7 @@ from hyperspace import (
     undo,
 )
 from hyperspace.deck import KEYS, MOUSE, Deck, MetaController
+from hyperspace.hot_slots import DeckLibrarySlots, DeckProjectSlots
 from hyperspace.hotreload import MODULES
 from hyperspace.library import LOADABLE
 from hyperspace.pointer import Pointer, Through
@@ -426,8 +426,10 @@ def test_nothing_of_a_deck_s_view_is_a_second_copy(rig):
     assert one.loaded_patch.lib.loaded_patch is one.loaded_patch
     lib.status = "said"
     assert view.status == "said"
-    new_view = type("DeckLibrary", (library.Library,), {"__slots__": library.DeckLibrary.__slots__})
-    new_bank = type("DeckProject", (library.Project,), {"__slots__": library.DeckProject.__slots__})
+    # as a reload makes them: new classes over new bases (row 802: this test kept the old
+    # bases, so it passed while the real swap refused; test_hot_reload_app.py runs that one)
+    new_view = type("DeckLibrary", (DeckLibrarySlots, type("Library", (), {})), {})
+    new_bank = type("DeckProject", (DeckProjectSlots, type("Project", (), {})), {})
     bank = view.project
     view.__class__ = new_view
     bank.__class__ = new_bank

@@ -8486,6 +8486,14 @@ Register rows 796–799, 2026-11-06. Headless: `tests/test_devicelist.py`, `test
 4. With the projector running, pause Drive syncing, or take the network away, and watch the picture for a minute. *Pass:* no hitch that wasn't there before. (`Library`'s own scan reads this folder on the frame thread and isn't CT1's: a hitch here is worth saying, with that in mind.)
 *Fail:* no launch, a created folder, or a lost adopt.
 
+## DM. A save lands in the running app (HR, row 802)
+
+Headless: `tests/test_hot_reload_app.py`; its real-app test, one output and no devices, is in `--all`. Restart first: `hotreload.py` and `hot_slots.py` are cold.
+
+**624. Saves on the rig.** (the Mac, with the second output and the desk)
+1. Launch with the show's outputs and devices. Save `outputs.py`, `render.py`, `ghost.py` and `ui.py` in turn, with no edit needed beyond the save. *Pass:* the SYSTEM section says `hot: <file>` each time, and the picture and the panel keep going, on every output.
+*Fail:* `swap: …` on the SYSTEM section, or an output that stops.
+
 ## What no test covers
 
 Only a person can settle these:

@@ -594,6 +594,7 @@ nuance). Built so far: D1, D2, D3, D4.
 | Camera moves are undo steps. | `undo.watched` | row 39 |
 | A drag that pauses for longer than the settle time becomes two steps. | `undo.SETTLE_S` | row 43 |
 | A player's move is one step on the meta controller's undo stack (amends row 740). `players.json` follows an undo; a controller unplugged since refuses in words and stays on the stack. On that stack the board takes only moves, and everywhere else takes everything but. | `deck.MetaPlayers`, `MetaController.put_players` | row 800 |
+| A hot class adds nothing to the layout over another hot class; slots it needs there stand on cold `hot_slots.py`. A target that refuses strands no other. The real-app test is `live`; a rule over every real class holds it on CI. | `hot_slots.py`, `hotreload.HotReloader.poll`, `tests/test_hot_reload_app.py` | row 802 |
 
 ## UI
 
