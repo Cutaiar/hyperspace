@@ -960,11 +960,24 @@ class PadDevice(Base):
 
     def quiet_stick(self, model, reg, router=None) -> frozenset[int]:
         """The lanes a route lets go of, `totem.quiet_stick`: a Joy-Con's stick while it
-        orbits. `router`, the deck it acts on (None: the last one, for the pad window)."""
+        orbits, less the axes node mode holds, which the view leaves (`Router.claimed`), or
+        the claim would be dead with the view orbiting under it. `router`, the deck it acts
+        on (None: the last one, for the pad window)."""
         from . import gamepad, totem
         router = router if router is not None else self.__dict__.get("_acted_on")
         steers = router is None or self.steers(router)
-        return gamepad.left_stick_lanes() if totem.quiet_stick(model, reg, self.role, steers) else frozenset()
+        if not totem.quiet_stick(model, reg, self.role, steers):
+            return frozenset()
+        return gamepad.left_stick_lanes() - self._node_lanes(router)
+
+    def _node_lanes(self, router) -> frozenset[int]:
+        """The `axis` lanes node mode fills on this pad on `router`'s deck."""
+        from . import gamepad
+        rows = getattr(getattr(router, "table", None), "node_rows", None)
+        if rows is None:
+            return frozenset()
+        return frozenset(gamepad.LANES.index(b.parts[0]) for b in rows(self.role)
+                         if b.scheme == "axis")
 
     def _no_camera_job(self, model, reg) -> tuple[int, ...]:
         """The axes a pad with a layout of its own (a Joy-Con) keeps off the

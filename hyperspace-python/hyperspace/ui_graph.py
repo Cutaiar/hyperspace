@@ -3779,6 +3779,7 @@ def _node_desk(panel):
 NODE_CHIP = "node mode"
 OTHER_DECK_TIP = "It is on the other Deck: this brings it here. Its player stays where it is, and moving the player brings it back."
 ASLEEP = "dormant: {role} is on the other Deck"
+FILLS = {"gamepad": "sticks, triggers and free button pairs"}   # what a chip fills, by kind
 RESTING = "{n} modulator route{s} at rest on these, back on leave"
 
 
@@ -3824,9 +3825,9 @@ def _node_chip(panel, nd, h, nid: str, label: str, cid: str, tip: str) -> None:
 
 
 def node_mode_block(panel, n: graphview.VNode) -> None:
-    """Entering node mode (plan 53 N1b): a chip per desk a patch can point, on a
+    """Entering node mode (plan 53 N1b, N2): a chip per controller a patch can point, on a
     selected node it can point at. An edit of the patch on the deck the panel looks
-    at, one undo step; the desk comes here. The map below it, in the cable's colour,
+    at, one undo step; the controller comes here. The map below it, in the cable's colour,
     wrapped: what did not fit is listed whole, however narrow the pane."""
     nd = _node_desk(panel)
     if nd is None or not nd.pointable(n.id):
@@ -3836,8 +3837,8 @@ def node_mode_block(panel, n: graphview.VNode) -> None:
         cid = f"graph.side.node_mode.{h.role}"
         if h.node != n.id:
             tip = OTHER_DECK_TIP if not h.on_here else (
-                f"Fill {h.role}'s knobs and faders with this node's params, saved in this "
-                "patch. One undo step.")
+                f"Fill {h.role}'s {FILLS.get(h.kind, 'knobs and faders')} with this node's "
+                "params, saved in this patch. One undo step.")
             _node_chip(panel, nd, h, n.id,
                        f"move {h.role} here" if h.node else f"point {h.role} here", cid, tip)
             continue

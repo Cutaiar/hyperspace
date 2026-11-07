@@ -2263,6 +2263,12 @@ def _meta_table_attr(name: str) -> property:
                     doc=f"The meta table's `{name}` (`MetaTable`).")
 
 
+def _node_routes(table) -> Iterable[Binding]:
+    """`Bindings.node_routes`, of a table that has it: a `Router` may be handed a shim."""
+    fn = getattr(table, "node_routes", None)
+    return fn() if fn is not None else ()
+
+
 class NodeRows(Protocol):
     """What a table asks of `node_desk.NodeDesk`, which is the meta controller's and above
     this module."""
@@ -2271,7 +2277,8 @@ class NodeRows(Protocol):
     def serial(self, role: str | None = None) -> int: ...
     def under(self, b: Binding) -> bool: ...
     def holding(self) -> frozenset[str]: ...
-    def away(self, b: Binding) -> bool | None: ...
+    def away(self, b: Binding, role: str | None = None) -> bool | None: ...
+    def routed(self) -> list[Binding]: ...
 
 
 class Bindings:
@@ -2822,11 +2829,19 @@ class Bindings:
         nd = self.node_desk
         return nd is not None and nd.under(b)
 
-    def node_row_away(self, b: Binding) -> bool | None:
-        """`b` as the on-screen desk asks: None when node mode did not derive it, else
-        whether the first desk is on the other `Deck` (`NodeDesk.away`)."""
+    def node_row_away(self, b: Binding, role: str | None = None) -> bool | None:
+        """`b` as a picture of a controller asks (`role`; None, the first desk): None when
+        node mode did not derive it, else whether that controller is on the other `Deck`
+        (`NodeDesk.away`)."""
         nd = self.node_desk
-        return nd.away(b) if nd is not None else None
+        return nd.away(b, role) if nd is not None else None
+
+    def node_routes(self) -> list[Binding]:
+        """The rows node mode runs as routes on this deck (N2, `NodeDesk.routed`): each pad's
+        here. Never in `bindings`, so not in `mods`, `routes`, the file or the undo; `Router`
+        joins them where it reads those."""
+        nd = self.node_desk
+        return nd.routed() if nd is not None else []
 
     def node_held(self) -> frozenset[str]:
         """The params a desk in node mode holds on this deck (`NodeDesk.holding`)."""
@@ -3714,10 +3729,11 @@ class Router:
 
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
-        one is off its default camera job (gamepad.steer). A named address
-        resolves through what the scheme's device has published."""
-        return {i for b in self.table.mods() for s, i in [self.lane(b.source)]
-                if s == scheme and i >= 0}
+        one is off its default camera job (gamepad.steer), and so is one node
+        mode fills (N2). A named address resolves through what the scheme's
+        device has published."""
+        return {i for b in (*self.table.mods(), *_node_routes(self.table))
+                for s, i in [self.lane(b.source)] if s == scheme and i >= 0}
 
     def _code(self, b: Binding) -> int | None:
         """The key / button / hat constant a source names; None if there is none."""
@@ -3925,8 +3941,9 @@ class Router:
                    tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t)))
         banks = tuple((scheme, tuple(b.ids())) for scheme, b in self._banks().items())
         held = t.node_held() if hasattr(t, "node_held") else frozenset()    # (node mode, row 711)
+        node = tuple((id(b), b.source, b.target) for b in _node_routes(t))  # (a pad's, N2)
         return (id(t), rows, t.macros_serial, subs, mods, banks,
-                getattr(self.reg, "serial", 0), held)
+                getattr(self.reg, "serial", 0), held, node)
 
     def build_modgraph(self, held: frozenset[str] | None = None) -> modgraph.ModGraph:
         """The modulation graph of this table (modgraph.py's nodes and edges):
@@ -3965,7 +3982,7 @@ class Router:
                     g.link(source(inp), _modifier_node(m), "in")
         if held is None:
             held = t.node_held() if hasattr(t, "node_held") else frozenset()
-        for b in t.routes():
+        for b in (*t.routes(), *_node_routes(t)):
             # (a route node mode holds off is an edge switched off, so it closes no loop)
             cable, on = (b.source, b.target), b.enabled and not (held and t.node_holds(b, held))
             src = source(b.source)
@@ -4106,7 +4123,7 @@ class Router:
         reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
         resting: list[Binding] = []
-        for b in t.mods():
+        for b in (*t.mods(), *_node_routes(t)):
             if (b.source, b.target) in cut:
                 continue
             if held and t.node_holds(b, held):

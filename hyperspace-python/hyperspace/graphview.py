@@ -1748,7 +1748,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             p = reg.get(b.target)
             # onto the node pointed at: a copy's knobs live on its original, and the pane
             # says the copy's name, so the copy gets a port of its own for this row
-            dst, at = f"{BASE}:{b.target}", nodes.get(h.node or "")
+            # (a pad's row is a route, so it lands where a route does)
+            dst = f"{MOD if b.op in MOD_OPS else BASE}:{b.target}"
+            at = nodes.get(h.node or "")
             if at is not None and view.pins.get(dst, ("",))[0] != h.node:
                 dst = f"{NODE_PIN}:{h.node}|{b.target}"
                 if dst not in view.pins:

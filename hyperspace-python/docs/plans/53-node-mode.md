@@ -22,6 +22,9 @@
 > - **Built as N1a and N1b (2026-11-06), rows 710–714, checks 541–545, group CE:** no
 >   `node_page.py`, no `Bindings.overlay`, no latch row. See `node_desk.py`'s docstring, which
 >   says what §2 became. SEND B stays FINE (row 609); SEND C and ◀ ▶ stay free.
+> - **Built as N2 (2026-11-07), rows 820–823, checks 635–638, group DR:** on `NodeDesk`, with no
+>   page keys, no latch and no factory row: §3's are gone with paging. Nor is the totem's refusal
+>   built (row 822). Where §3 says "page", read "what the patch points at".
 
 Read at origin/main ff58ee2 (2026-11-04), with #361 and #364 read from `gh pr` metadata and diff. Paths are under `hyperspace-python/hyperspace/` unless they start with `docs/` or `tests/`. No plan doc existed; this is its outline, to be numbered when it lands (53 is next).
 Tags: **[V]** read in the code. **[I]** inferred, not run. **[Rec]** my recommendation.
