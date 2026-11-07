@@ -3169,10 +3169,31 @@ show: a log that will not open is kept as an error and the loop goes on.
 ## 16. Testing
 
 ```bash
-uv run pytest -q          # the fast tier, in parallel (~17 s)
-uv run pytest --all -q    # every tier: golden, slow, live (~55 s)
+uv run pytest -q          # the fast tier, in parallel: 6,753 tests
+uv run pytest --all -q    # every tier: golden, slow, live: 6,976 tests
 uv run ruff check .
 ```
+
+**What a run costs,** measured. Counts are from `--collect-only`, 2026-11-06: 223 tests
+sit outside the fast tier (`golden` 144, `slow` 44, `live` 36; one test is in two tiers).
+
+| Run | Result | Wall time | Where and when |
+|---|---|---|---|
+| Fast tier, `fast-tier.sh -rs --durations=10` (`-n 4`) | `6750 passed, 3 skipped` | 133 s | "Apple M3 Max", a machine shared with other runs, 2026-11-06 |
+| Fast tier in CI (the `Fast tier` step) | green | 3 min 52 s, 4 min 1 s | `ubuntu-24.04`, the last two finished runs on `main`, 2026-11-06 |
+| `--all`, `fast-tier.sh --all -rs --durations=60` (`-n 4`) | not yet timed | not yet timed | the orchestrator's next run fills this row |
+
+`fast-tier.sh` is `~/.claude/handoffs/wave4/fast-tier.sh`: `pytest -q -n 4` behind two
+machine-wide slots. A bare `uv run pytest -q` (`-n auto`, sixteen workers) has not been
+timed at this size, because a shared Mac doesn't run one. (The ~17 s and ~55 s this section
+gave until 2026-11-06 were `-n auto` on a suite of about 3,940 tests.)
+
+**The `--all` that the orchestrator runs records its durations.** It adds
+`--durations=60` to its command, then puts two things in the repo with the PR it was run
+for: a row in the table above (date, head, the summary line verbatim, wall time) and the
+list of slowest tests, under Testing in that PR's body. So the latest cost is here and the
+detail is one click from the row. Plan 58 §6's "cheaper goldens" waits on this figure, and
+conftest's tier tables are re-measured from the same list.
 
 - Tiers: `golden`, `slow` and `live` are markers `tests/conftest.py`
   applies by name (see "Running the automated tests" in
@@ -3181,10 +3202,20 @@ uv run ruff check .
 - **One tier at a time on a shared Mac** (row 589). Every xdist worker
   that imports torch holds about 1 GB, and `-n auto` is sixteen of them
   on the M3 Max: two or three `--all` runs from parallel sessions took
-  the machine to 140 GB on 2026-11-01. A meta controller that is not the one
+  the machine to 140 GB on 2026-11-01. A Claude Code session that is not the one
   merging runs the fast tier with a few workers (`-n 4`), one run at a
   time, and leaves `--all`, the goldens and `tests/test_media_live.py`
   to whoever merges.
+- **A builder's last check may be CI rather than a machine slot** (row 770). Push, then
+  `uv run python tools/wait_green.py <pr> <head>`, which waits for that head's CI and exits
+  0 only if it is green: 2 a run failed, 3 the PR's head has moved on, 4 no run appeared in
+  10 minutes, 5 still running after 30, 1 bad arguments. It only waits and it merges
+  nothing, with two `gh` reads and no other way out (`tests/test_wait_green.py`). `main`
+  has no required checks, so `gh pr merge --auto` merges at once: whoever merges waits
+  first, and then merges by hand. CI is ruff and the fast tier on Linux, so it sees no
+  golden, no `slow` or `live` test and no Mac GL. A PR that touches the render path, the
+  loader or `graphmigrate` still gets the orchestrator's `--all`, and a builder reports
+  "CI green at <head>" as that, not as a run of the fast tier.
 - **A hung test fails by name.** pyproject's addopts carry
   `--dist load --timeout=120 --max-worker-restart=4` and its ini key
   `timeout_method = "thread"`. **Workers use the thread method, a
@@ -3198,7 +3229,7 @@ uv run ruff check .
   no summary, so there the signal method fails the test and goes on
   (a `sleep(130)` under `-n0 --timeout=5`: "1 failed, 2 passed"; with
   `--timeout-method=thread` named, the process ended with no summary).
-  The slowest fast-tier test takes about 6 s, far under the limit.
+  The slowest fast-tier test takes about 7 s (7.28 s, 2026-11-06), far under the limit.
 - **The restart cap, measured** (2026-11-02, `-n 2`, one test that
   `os._exit`s and forty quick ones; "default" is xdist's own cap,
   `-n` × 4):
@@ -3257,7 +3288,7 @@ uv run ruff check .
   the other (without the run's id the second skipped), and with a test
   that waits 2 s for its turn under `--timeout=1` and passes. A live
   test may not use a fixture wider than the test (module, class,
-  package or meta controller scoped, bar pytest's own deviceless ones): it
+  package or session scoped, bar pytest's own deviceless ones): it
   would be set up before the lock, outside it, so `pytest_runtest_setup`
   fails that test by name before any fixture is set up (after its skip
   marks: a skipped one is a skip, not an error), without taking the
@@ -3265,7 +3296,7 @@ uv run ruff check .
   and a deselected test is never looked at); none does today. The file is
   per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
   cannot be opened or locked is a skip with the reason, never an error.
-  The folder is `tempfile.gettempdir()`, so a meta controller whose `TMPDIR`
+  The folder is `tempfile.gettempdir()`, so a Claude Code session whose `TMPDIR`
   differs (a sandbox that sets its own) gets a different lock file and
   does not take turns with the others.
 - **Why `glfwInit()` hangs on the Mac, and the recovery.** A sample of
@@ -3318,10 +3349,13 @@ uv run ruff check .
   (row 606). The source is fixed too: a test that calls `glfw.init()`
   calls `glfw.terminate()` when it is done (that test does now); the
   guard stays as the belt.
-- One test is skipped:
+- The fast tier skips three tests on the Mac (2026-11-06, `-rs`):
   `tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost`,
   because no real hand tape has been recorded into
-  `tests/fixtures/hands/` (`tools/hands_tape.py record` on the rig).
+  `tests/fixtures/hands/` (`tools/hands_tape.py record` on the rig);
+  one in `tests/test_paired_axes.py` ("no Model.layout on this base (#365)");
+  and the face shaders' reference-compiler test where `glslangValidator`
+  is not installed.
 - The parity net: `tests/golden/` traces recorded from the retired HTML
   app (`tools/record_golden.py`, which needs Playwright's Chromium) hold
   geometry exact and the audio chain's behaviour; `tests/legacy_chain.py`
@@ -3351,7 +3385,7 @@ uv run ruff check .
   system font, so a fit test measures the same on the Mac and in CI and
   holds every line whole everywhere. A fit test that breaks is fixed in
   the layout, not loosened.
-- The golden frames: `tests/test_golden_frames.py` compares 596
+- The golden frames: `tests/test_golden_frames.py` compares 789
   full-resolution frames — every corpus loadable patch in every output state,
   hands absent and present, the other wirings, the fixture loadable patches and a
   recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only
@@ -3451,9 +3485,7 @@ hung test fails alone and names itself instead of stalling its worker;
 a crashed worker's queue goes to its replacement, up to four, then the
 run ends — row 605) — the same values pyproject's addopts carry, with
 the thread method, so the explicit flags are redundant but consistent.
-(Until the owner lands that workflow edit, CI still says
-`--max-worker-restart=0`, which wins over addopts.) The fast tier takes about two minutes on
-four cores.
+The fast tier takes about four minutes on four cores (the table at the top of §16).
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK
   to build `leapc-cffi` against, and Linux torch wheels pull gigabytes
@@ -3470,7 +3502,7 @@ four cores.
 
   A Claude Code cloud session makes the same machine at start
   (`.claude/hooks/session-start.sh`): the libraries, the sync, a display
-  on `:99`, and `UV_NO_GROUP` kept for the meta controller.
+  on `:99`, and `UV_NO_GROUP` kept for the session.
 
 - **Linux, not macOS.** A `macos-15` job was tried (2026-10-29): its GL
   is "Apple Software Renderer" (no GPU in the runner's VM), it has no
@@ -3542,5 +3574,5 @@ What only a person at the machine can check is
   held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
-- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R13, R14,
-  R15, U9, U10, P6, V8.
+- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R14, R15,
+  U9, U10, P6, V8.

@@ -775,6 +775,7 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 770 | Plan 58 H2: `tools/wait_green.py` ports `wait-green.sh` with its exit codes and only waits; a builder's last check may be CI; the orchestrator's `--all` records its durations in `ENGINEERING.md` §16's table and the PR's Testing; §16's counts and times are measured | — | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -14034,3 +14035,22 @@ still wins, as does a sink row.
 - **A person joining a controller's step.** `_opens` was decided only when a step began, so a typed commit landing inside a controller's settle time neither moved focus nor opened the latch, and ⌘Z refused right after typing. A change seen with the hand up now counts on a step already open (`Undo._observe`); a held step (`keep_open`) still opens nothing. The same goes for the mouse, so row 753's known limit, a mouse held anywhere, now also takes a controller's step already open.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
+
+### 770. Test truth, and a wait that can't merge
+
+- **The numbers.** `ENGINEERING.md` §16 said ~17 s and ~55 s, from a suite of about 3,940 tests. It now gives what was
+  measured: 6,753 fast tier and 6,976 in all by `--collect-only`, `6750 passed, 3 skipped` in 133 s through `fast-tier.sh`, and
+  about four minutes in CI's step. `--all` is left "not yet timed" rather than guessed: the brief keeps it with the
+  orchestrator. §16's 596 golden frames are 789, one skip is three, and the CI note about a workflow edit that has since
+  landed is gone. SEM's sweep had turned "session" into "meta controller" four times in §16, where it meant a Claude Code
+  session or pytest's scope: put back. The faults list loses R13, which the audit no longer lists (gone in the docs prune, f673a37).
+- **Where `--all`'s durations go.** A row in §16's table and the slowest list in the PR's Testing section. The doc holds the
+  latest cost and the PR holds the detail, so no durations file grows in the repo.
+- **`tools/wait_green.py`,** a copy of `~/.claude/handoffs/wave4/wait-green.sh`, which stays where it is. Same polls, same
+  caps, same codes 0, 2, 3, 4, 5. It differs in four places, each failing closed:
+  - **Runs that vanish.** The script read an empty list after runs appeared as nothing pending, then nothing bad: exit 0. Here it keeps polling, to 5.
+  - **A failed `gh` at the last read** was a 2. There is no last read now: the conclusions come from the read that saw every run finished.
+  - **An empty head** is a prefix of every commit, so the script would pass any head. Here it is a usage error.
+  - **Usage errors are 1**, since argparse's own 2 would say "red". A `gh` call has a 60 s bound, and its folder is the worktree the tool sits in, not a fixed path.
+- **It can't merge, by test.** `tests/test_wait_green.py` reads the tool's AST: no string holds a write verb, the `_gh` calls name `pr view` and `run list` in literals, one `subprocess.run` with no shell, stdlib imports only. A stub `gh` on PATH logs every call on every road, and each is one of the two reads.
+- **CI as the last check.** A builder may stop at CI rather than wait for a machine slot. CI has no goldens, no `slow` or `live` test and no Mac GL, so the orchestrator's `--all` rule for the render path, the loader and `graphmigrate` stands.
