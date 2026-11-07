@@ -400,15 +400,34 @@ SCROLL = {
     # notch (one unit) then moves 10 px where a browser moves ~100, so
     # `notch_px` scales a unit-sized jump back up - a flick that arrives as
     # one big delta is still one gesture, not a hundred notches.
-    # SLOWEST SENSIBLE, as asked, and deliberately not a guess dressed up:
-    # 1 px per unit of raw wheel. If GLFW hands over a tenth of the finger's
-    # travel, as I have claimed from memory and never checked, this is a
-    # tenth of browser speed and wants dialling UP. `--wheel-probe` prints
-    # the raw deltas on a machine with a trackpad, and `DKIT_SCROLL_PX`
-    # changes this without an edit, so it can be found by feel and then
-    # written down here with a measurement beside it.
-    "px_per_unit": 1.0,
+    # 10 px per unit of raw wheel, and this one is measured rather than
+    # chosen. `dashboard.py --wheel-probe` on a MacBook trackpad:
+    #
+    #   raw    -0.2 -0.4 -0.4 -0.6 -0.1 -0.5 ... -1.5 -0.9 -1.0 -0.2 ...
+    #
+    # EVERY delta is a multiple of 0.1. That quantum is the whole proof:
+    # AppKit's `scrollingDeltaY` is an integer count of points and GLFW
+    # multiplies it by 0.1, which is the factor I had claimed from memory
+    # for two commits without being able to check it. So one unit is TEN
+    # POINTS of finger travel, and 1:1 with a browser - which applies
+    # trackpad deltas unscaled and unsmoothed - is 10 px per unit.
+    #
+    # It also fixes the skipping. At 1 px per unit a 0.1 delta scrolls a
+    # tenth of a pixel; glyphs snap to whole pixels, so lines cross a
+    # boundary at different moments and the text shears as it moves. At 10
+    # every step is exact - 0.1 x 10 = 1 px - and since every delta is a
+    # multiple of 0.1, every scroll step lands on a whole pixel. No other
+    # value has that property.
+    #
+    # The same probe answered the inertia question: the tail of a flick
+    # reads 1.2, 1.0, 0.8, 0.6, 0.5, 0.3, 0.3, 0.1, 0.1 at 17 ms intervals.
+    # That decay is AppKit's momentum phase arriving through GLFW
+    # untouched, so inertial scrolling needs nothing built - only this
+    # factor, which was scaling it wrong along with everything else.
+    "px_per_unit": 10.0,
     # A notched wheel, which only ever sends whole units: a browser gives
-    # one of those about 120 px a tick.
+    # one of those about 120 px a tick. Note the probe shows a TRACKPAD
+    # emitting exact 1.0 deltas too (six of them in one run), which is why
+    # the precise-device flag is sticky rather than per event.
     "notch_px": 120.0,
 }

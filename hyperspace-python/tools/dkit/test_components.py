@@ -888,3 +888,53 @@ def test_the_scroll_rate_can_be_dialled_without_an_edit():
             os.environ.pop("DKIT_SCROLL_PX", None)
         else:
             os.environ["DKIT_SCROLL_PX"] = old
+
+
+# --------------------------------------------------------------------------
+# the scroll factor, from a real trackpad
+# --------------------------------------------------------------------------
+# `dashboard.py --wheel-probe` on a MacBook trackpad. Every delta in the run
+# was a multiple of 0.1, which is what pins the factor: AppKit's
+# `scrollingDeltaY` is an integer count of points, GLFW multiplies by 0.1,
+# so one unit is ten points of finger travel.
+TRACKPAD_RUN = [-0.2, -0.4, -0.4, -0.6, -0.1, -0.5, -0.1, -0.5, -0.7, -0.2,
+                -1.5, -0.9, -1.0, -0.2, -1.0, -0.1, -0.9, -0.8, -0.4, -0.6,
+                1.1, 1.2, 1.0, 1.2, 0.4, 0.7, 1.0, 0.3, 0.8, 0.9, 0.2, 0.1]
+
+
+def test_every_trackpad_delta_is_a_multiple_of_a_tenth():
+    """The measurement the scroll factor rests on. If this ever stops being
+    true, the 10 in `px_per_unit` has lost its justification."""
+    for d in TRACKPAD_RUN:
+        assert abs(d * 10.0 - round(d * 10.0)) < 1e-9, d
+
+
+def test_one_unit_is_ten_points_of_finger_so_the_rate_is_ten():
+    """A browser applies trackpad deltas 1:1 and unsmoothed, so matching it
+    is `px_per_unit` = points-per-unit = 10."""
+    assert T.SCROLL["px_per_unit"] == 10.0
+
+
+def test_every_scroll_step_lands_on_a_whole_pixel():
+    """Why 10 and not some value either side of it.
+
+    Glyphs snap to whole pixels. At 1 px per unit a 0.1 delta scrolls a
+    tenth of a pixel, lines cross a boundary at different moments, and the
+    text shears as it moves - which is what "slowest sensible" looked like
+    in practice. At 10 every delta in a real run is an exact whole number
+    of pixels, because every delta is a multiple of 0.1.
+    """
+    k = T.SCROLL["px_per_unit"]
+    for d in TRACKPAD_RUN:
+        px = d * k
+        assert abs(px - round(px)) < 1e-9, (
+            f"a raw delta of {d} scrolls {px} px, which is not a whole "
+            f"pixel - the text will shear")
+
+
+def test_a_trackpad_also_sends_whole_units_so_the_flag_must_be_sticky():
+    """Six exact 1.0 deltas in one trackpad run. Deciding "notch or
+    trackpad" per event would have switched rate mid-gesture on every one
+    of them, which is the cliff this already cost one round to remove."""
+    assert any(abs(d - round(d)) < 1e-9 for d in TRACKPAD_RUN)
+    assert any(abs(d - round(d)) > 1e-9 for d in TRACKPAD_RUN)

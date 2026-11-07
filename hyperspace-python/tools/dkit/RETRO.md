@@ -2,7 +2,7 @@
 
 Every row is a real defect. Most were found by a person looking at the
 running app, which is the part worth fixing: the kit has a pixel diff, a
-browser oracle and 700 tests, and none of them saw these.
+browser oracle and 706 tests, and none of them saw these.
 
 The right-hand column is the point of the table. "Be more careful" is not a
 mechanism; each entry is a thing that can be done or checked.
@@ -55,6 +55,9 @@ mechanism; each entry is a thing that can be done or checked.
 | 29 | The field's padding was a dead hit area: a press in the left 10px or right of the text box did nothing at all | `FramePadding` IS the field's padding, so the frame is the whole input box | **An ImGui InputText's hit area is its FRAME**, and zeroing `FramePadding` to control where the glyphs land silently shrinks it to the text box. **Drive every edge of a control, not its middle** — a click at `x+2` is a thing a person does and no test had ever tried one. |
 | 30 | The list never scrolled to follow its keyboard highlight, so arrowing past the ninth of sixteen rows moved something nobody could see | Minimum scroll on a keyboard move only; the wheel and a parked pointer leave it alone | **Drive a list that is longer than its clamp.** Every test and every specimen used six rows in a 252px box, where no scroll is ever needed, so the behaviour had no way to be wrong. The Gallery's sixteen-item cell existed and nothing drove its keyboard. |
 | 31 | The `xfail` that recorded the clipped ring could not have passed OR failed honestly — with `RING_PAD` at 0 its band scan was `max()` of an empty range | Rewritten to compare the open ring against the closed one, both measured | **An `xfail` is still a test and still needs to be run against the fixed code before it is believed.** `strict=False` hides the difference between "fails for the reason stated" and "raises before it reaches the assertion". |
+
+| 32 | Scrolling was 9x too fast, then 10x too slow, and the text sheared as it moved | One unit is ten points of finger travel, so `px_per_unit` is 10 — which also makes every step land on a whole pixel | **When a knob does nothing, check it is connected before turning it.** I changed the constant twice and wrote two commit messages about feel, while the function was reading a value that is zero at that point in the frame. The user running the probe and seeing NO OUTPUT found it in one line. |
+| 33 | The GLFW scale factor sat unverified through three commits | `--wheel-probe` printed the raw deltas; every one was a multiple of 0.1, which proves the 0.1 I had been asserting from memory | **Build the instrument before the third guess.** The probe took twenty minutes and ended the argument permanently; it belonged before the first constant, not after the second. It answered inertia for free — the decaying tail of a flick is right there in the output. |
 
 ## The habits these reduce to
 
