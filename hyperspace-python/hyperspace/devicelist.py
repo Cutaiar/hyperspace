@@ -32,7 +32,8 @@ From then on the file is not read for the list, and a note says so. RT1 retires 
 no `[[devices]]`, the old tables are the seed (`DEFAULTS` is that seed for a file that says
 nothing, and what CL3 needs when `config._translate` goes). **A config.toml that didn't
 read seeds nothing and spends nothing:** the read waits for a launch that can do it, and
-the board says so.
+the board says so. With no list yet, nothing is made, as that would be the defaults: an adopt
+waits in this Mac's copy, which marks its own list as only those.
 
 **On or off is each Mac's.** One Mac may have no Leap, so `enabled` in the file is only
 what a Mac that has never said goes by. `<home>/devices.here.json` holds what this Mac
@@ -331,8 +332,8 @@ def _cycle(path: Path, root: Path, job: _Job, tmp_name: str) -> _Seen:
         doc, state, why = _read(path, root)
         if doc is None and state != _ABSENT:
             return _Seen(state, why=why, stat=_stat(path, root))
-        if state == _ABSENT and not job.may_make and not job.waiting:
-            return _Seen(state, stat=stat)
+        if state == _ABSENT and not job.may_make:
+            return _Seen(state, stat=stat)      # (nor for an adopt: it would bring the defaults)
         merged, moved, differs = _union(doc if doc is not None else job.fallback, job.waiting)
         seen = _Seen(state, merged=merged, moved=moved, differs=differs)
         if merged == doc:
@@ -392,6 +393,8 @@ class DeviceList:
         self._delay = RETRY_S
         self._may_make = not hold_seed
         self._told: set[str] = set()
+        self._copy_was_held = False
+        self._held_list = False         # this run's list is only the defaults: not to be kept as one
         self._open([dict(e) for e in seed], listed, said_here or {}, hold_seed)
 
     @classmethod
@@ -443,6 +446,7 @@ class DeviceList:
         doc = self._read_local(self.copy)
         if doc is None:
             return None
+        self._copy_was_held = doc.get("held") is True
         raw = doc.get("devices")
         if doc.get("schema") != SCHEMA or not isinstance(raw, list):
             self._note(f"devices: {COPY} is not a list: not used")
@@ -464,11 +468,16 @@ class DeviceList:
         self._from = "this Mac's last list" if last is not None else "this Mac's config.toml"
         for e, adopted in last[1] if last is not None else ():
             self.waiting[str(e["role"])] = _Waiting(e, adopted=adopted)
-        self.raw = [dict(e) for e in (last[0] if last is not None else seed)]
+        # a copy from a launch that read neither config.toml nor a list is only defaults
+        usable = last is not None and not self._copy_was_held
+        self.raw = [dict(e) for e in (last[0] if usable and last is not None else seed)]
+        self._held_list = hold and not usable
+        self.raw += [dict(w.entry) for role, w in self.waiting.items()
+                     if not any(str(e.get("role", "")) == role for e in self.raw)]
         if hold:
             # no seed to read: a later launch reads it, so nothing here counts as that
             self.held = ("config.toml didn't read, so the controllers it lists weren't either: "
-                         "fix it and relaunch.")
+                         "fix it and relaunch. With no list yet, a new one is kept on this Mac until then.")
             self._note(f"devices: {self.held}")
             self.here = here or {}
         elif here is None and self.has_home:
@@ -525,6 +534,7 @@ class DeviceList:
             self._next, self._delay = now + LOOK_S, RETRY_S
             if self._said:
                 self._said = ""
+            self._keep_copy()
             return
         self._unread = r.state == _BAD
         if r.merged is None:
@@ -540,7 +550,11 @@ class DeviceList:
             self.waiting.pop(old, None)
             self.waiting[new] = _Waiting(made)
             self.renames.append((old, new))
+            if old in self.here:            # what this Mac said was of this controller
+                self.here[new] = self.here.pop(old)
+                self._save_here()
             self._note(f"devices: the other Mac named another controller {old}: this one is {new}")
+        self._held_list = False
         merged = [dict(e) for e in r.merged]
         have = {str(e.get("role", "")) for e in merged}
         merged += [dict(w.entry) for role, w in self.waiting.items() if role not in have]   # since
@@ -576,7 +590,8 @@ class DeviceList:
             return
         unwritten = [{"entry": w.entry, "adopted": w.adopted}
                      for w in self.waiting.values() if w.until is None]
-        text = _text(self.raw, unwritten=unwritten)
+        more = {"held": True} if self._held_list else {}
+        text = _text(self.raw, unwritten=unwritten, **more)
         if text == self._copy_text:
             return
         self._copy_text = text

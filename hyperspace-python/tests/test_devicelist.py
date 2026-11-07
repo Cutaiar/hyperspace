@@ -557,15 +557,53 @@ def test_a_config_that_did_not_read_starts_on_the_list_there_is(macs):
     assert store.raw == LIST and [e["role"] for e in config.devices(cfg)] == roles(LIST)
 
 
-def test_an_adopt_with_a_config_that_did_not_read_still_lands(macs):
-    root, home, _ = macs
+def _broken(root, home):
+    """A launch whose config.toml didn't read, though the library's path is known."""
     cfg = toml(home, "[library")
     cfg["library"]["path"] = str(root)
-    store = opened(cfg, home)
+    return opened(cfg, home)
+
+
+def test_an_adopt_with_a_config_that_did_not_read_makes_no_file_of_defaults(macs):
+    root, home, _ = macs
+    store = _broken(root, home)
+    assert store.adopt(XBOX) == "xbox"
+    store.sync()
+    assert not (root / FILE).exists(), "third pass: it would bring pad and apc40 for both Macs"
+    assert "xbox" in roles(store.raw) and "didn't read" in store.said, "it stands for this run"
+    # the typo fixed: this Mac's own list, and the adopt
+    opened(toml(home, LISTED.format(root=root)), home)
+    assert roles(on_disk(root)) == ["pad", "launch", "xbox"]
+    assert (home / HERE).exists()
+
+
+def test_an_adopt_survives_two_launches_that_did_not_read(macs):
+    root, home, _ = macs
+    _broken(root, home).adopt(XBOX)
+    store = _broken(root, home)
+    store.sync()
+    assert "xbox" in roles(store.raw) and "pad" in roles(store.raw)
+    assert not (root / FILE).exists()
+    opened(toml(home, LISTED.format(root=root)), home)
+    assert roles(on_disk(root)) == ["pad", "launch", "xbox"]
+
+
+def test_an_old_tables_seed_is_not_lost_to_a_broken_launchs_copy(macs):
+    root, home, _ = macs
+    _broken(root, home).sync()
+    text = f'[library]\npath = "{root}"\n[midi]\nprofile = "generic"\nport = "Box"\n'
+    opened(toml(home, text), home)
+    assert "generic" in roles(on_disk(root))
+
+
+def test_an_adopt_with_a_config_that_did_not_read_lands_in_a_list_that_is_there(macs):
+    root, home, _ = macs
+    lands(root, LIST)
+    store = _broken(root, home)
     store.adopt(XBOX)
     store.sync()
-    assert "xbox" in roles(on_disk(root))
-    assert "didn't read" in store.said, "and the seed still waits"
+    assert roles(on_disk(root)) == [*roles(LIST), "xbox"], "no defaults to bring: it's the file's list"
+    assert "didn't read" in store.said
 
 
 # ---------------------------------------------------------------- a seed across a restart (review 3)
@@ -834,6 +872,25 @@ def test_a_rename_takes_who_holds_it_with_it(macs):
     assert reg.watch()
     assert players.held == {"foo-bar-2": 2}, "foo-bar is now the other Mac's controller"
     assert players.player_of("foo-bar").number == 1
+
+
+def test_a_rename_takes_this_macs_on_or_off_with_it(macs):
+    """Third pass: off belongs to the controller that was switched off, not to the name."""
+    root, one, two = macs
+    a = DeviceList(root, one, seed=[])
+    b = DeviceList(root, two, seed=[])
+    before = (root / FILE).read_text()
+    a.adopt(midi_entry("Foo Bar"))
+    a.set_here("foo-bar", False)
+    a.sync()
+    (root / FILE).write_text(before)
+    b.adopt(midi_entry("foo-bar"))
+    b.sync()
+    a.sync()
+    assert a.here == {"foo-bar-2": False}
+    assert json.loads((one / HERE).read_text())["on"] == {"foo-bar-2": False}
+    entries = {e["role"]: e["enabled"] for e in a.checked()[0]}
+    assert entries == {"foo-bar": True, "foo-bar-2": False}
 
 
 # ---------------------------------------------------------------- the second pass
