@@ -789,6 +789,13 @@ class Binding:
             return -1
 
     @property
+    def is_modulator_route(self) -> bool:
+        """A performer row from a source no controller feeds: what node mode rests on a
+        param it fills (the owner, row 711), and a mapping that keeps a param from filling
+        only if it is not this. The one rule: `Bindings.node_holds` and `NodeDesk._kept`."""
+        return self.op in MOD_OPS and self.scheme in MODULATOR_SCHEMES
+
+    @property
     def is_sink(self) -> bool:
         """A sink row (plan 27 B3): a param or a lane sent out to a sink
         port — `target` is ``<role>:<channel>``, not a param id."""
@@ -2799,7 +2806,7 @@ class Bindings:
     def node_holds(self, b: Binding, held: frozenset[str] | None = None) -> bool:
         """Does node mode hold route `b` off its param now? A modulator's, on a filled
         param (the owner, row 711). The row is untouched: this is read, never written."""
-        if b.op not in MOD_OPS or base_scheme(b.scheme) not in MODULATOR_SCHEMES:
+        if not b.is_modulator_route:
             return False
         return b.target in (self.node_held() if held is None else held)
 
