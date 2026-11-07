@@ -147,3 +147,107 @@ def test_rim_darkens_the_tube_evenly(ctx, fxdir):
 def test_flat_leaves_the_copies_as_they_are(ctx, fxdir):
     light, _ = straight_tube_light(ctx, fxdir, "flat")
     assert np.allclose(light, 1.0, atol=0.002)
+
+
+# ---------------------------------------------------------------- exact, and every path found
+
+FIELDS = {"grass": 0, "noodles": 1, "curls": 2}
+BUSY = {"pos": 0.8, "scale": 4.0, "brush": 0.2, "blades": 2.0, "profile": 6.0}
+
+
+def ramp(w=320, h=200) -> np.ndarray:
+    """A picture whose colour says where it was read from, so a paste from the
+    wrong place shows and a boundary pixel's step does not swamp it."""
+    y, x = np.mgrid[0:h, 0:w]
+    a = np.stack([(x + 0.5) / w, (y + 0.5) / h, np.full((h, w), 0.5), np.ones((h, w))], axis=2)
+    return a.astype(np.float32)
+
+
+# the slow, sure way: walk the arc from its far end, testing every step
+MARCHED_ARC_HIT = """float arc_hit(vec2 p, vec2 o, vec2 dir, float k, float lo, float hi, float r) {
+    if (hi < lo) return -1.0;
+    for (int n = 0; n <= 800; n++) {
+        float t = mix(hi, lo, float(n) / 800.0);
+        if (distance(p, arc_point(o, dir, k, t)) <= r) return t;
+    }
+    return -1.0;
+}
+float arc_hit_exact("""
+
+
+@pytest.mark.parametrize("field", FIELDS)
+def test_the_solved_paste_is_the_one_marching_finds(ctx, fxdir, field):
+    (fxdir / f"{NAME}.glsl").write_text(patched(("float arc_hit(", MARCHED_ARC_HIT)))
+    settings = dict(BUSY, mode=float(FIELDS[field]))
+    solved = run(ctx, ramp(), **settings)
+    marched = run(ctx, ramp(), fxdir, **settings)
+    close = (np.abs(np.asarray(solved, np.float32) - np.asarray(marched, np.float32)) < 0.01).all(axis=2)
+    assert close.mean() > 0.999, f"{(~close).sum()} pixels pasted from elsewhere"
+
+
+MARCHED_FOOT = """float best_foot = lo, least = 1e9;
+            for (int n = 0; n <= 200; n++) {
+                float t = mix(lo, hi, float(n) / 200.0);
+                float d = distance(p, arc_point(o, dir, k, t));
+                if (d < least) { least = d; best_foot = t; }
+            }
+            foot = best_foot;
+            vec2 at[3];"""
+
+
+@pytest.mark.parametrize("field", FIELDS)
+def test_the_solved_nearest_point_is_the_one_marching_finds(ctx, fxdir, field):
+    (fxdir / f"{NAME}.glsl").write_text(patched(("vec2 at[3];", MARCHED_FOOT)))
+    grey = np.ones((200, 320, 4), np.float32) * [0.5, 0.5, 0.5, 1.0]
+    settings = dict(BUSY, mode=float(FIELDS[field]), profile=1.0, depth=0.6)
+    solved = run(ctx, grey, **settings)
+    marched = run(ctx, grey, fxdir, **settings)
+    close = np.abs(np.asarray(solved, np.float32) - np.asarray(marched, np.float32))[..., 0] < 0.02
+    assert close.mean() > 0.995, f"{(~close).sum()} pixels lit from elsewhere"
+
+
+NO_CULLING = (
+    ("int reach = min(int(ceil(most + r + 0.5 + stray)), REACH);", "int reach = REACH + 1;"),
+    ("if (far > most + r) continue;", ""),
+    ("if (far > head + rr) continue;", ""),
+    ("if (length(p - o) <= hi + r) {", "{"),
+)
+
+
+@pytest.mark.parametrize("settings", [
+    {},
+    {"pos": 1.0, "length": 1.5, "brush": 0.5, "jitter": 1.0, "scale": 3.0},
+    {"pos": 1.0, "length": 1.5, "brush": 0.5, "jitter": 1.0, "scale": 3.0, "mode": 2.0, "blades": 5.0},
+    {"pos": 0.3, "stagger": 1.0, "trail": 0.2, "mode": 1.0, "blades": 3.0, "profile": 2.0},
+], ids=["defaults", "reach", "curls", "stagger"])
+def test_no_path_is_culled_that_a_pixel_shows(ctx, fxdir, settings):
+    """The cell search and its early rejections only ever save time."""
+    (fxdir / f"{NAME}.glsl").write_text(patched(*NO_CULLING))
+    assert np.array_equal(run(ctx, ramp(), **settings), run(ctx, ramp(), fxdir, **settings))
+
+
+# ---------------------------------------------------------------- knobs that ride LFOs
+
+
+@pytest.mark.parametrize("key,lo,hi", [("pos", 0.0, 0.6), ("density", 0.1, 0.7)])
+def test_a_small_step_of_a_knob_moves_a_little(ctx, key, lo, hi):
+    """Scrubbing Position or thinning Density slides the picture and never
+    pops: at this scale one whole tube appearing at once is over 10 % of the
+    frame, and the sweep passes several roots' thresholds."""
+    st = FxState()
+    st.values[NAME].update(scale=2.0, brush=0.3, pos=1.0, profile=6.0)
+    chain = FxChain(ctx, st)
+    picture = ramp(160, 100)
+    (src, _), _ = chain.pool((160, 100))
+    src.write(picture.astype(np.float16).tobytes())
+    out = ctx.texture((160, 100), 4, dtype="f2")
+    fbo = ctx.framebuffer(color_attachments=[out])
+    last = None
+    for x in np.linspace(lo, hi, 121):
+        st.values[NAME][key] = float(x)
+        chain.run_one(NAME, src, fbo, 0.0, opaque=0)
+        now = np.frombuffer(out.read(), dtype=np.float16).reshape(100, 160, 4).astype(np.float32)
+        if last is not None:
+            jumped = (np.abs(now - last) > 0.02).any(axis=2).mean()
+            assert jumped < 0.05, f"{key} {x:.3f}: {jumped:.1%} of the frame jumped"
+        last = now

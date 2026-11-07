@@ -22,9 +22,11 @@
 // the points of a circle within r of the pixel are one interval of angle
 // about the nearest — never marched. Where no paste lands the frame shows
 // through, and a root's own disc at s 0 is the frame itself, so at
-// Position 0 the effect is a copy of its input.
-// Profile shades each paste by where in its stamp the pixel lies, so the
-// last pastes along a tube's sides draw its cross-section.
+// Position 0 the effect is a copy of its input, byte for byte.
+// Profile shades what the paste shows. Behind the head a pixel always lies at
+// the edge of its furthest paste, wherever it is across the tube, so rim
+// (that paste's edge) is one even shade with the head's disc lit, and the
+// relief profiles read how far the pixel is from the path itself instead.
 uniform float u_pos;     // @param 0 1 0.5 "Position" How far along its path each stamp has been dragged: 0 at the root, 1 at the tip. The knob to scrub, or ride with an LFO.
 uniform int   u_mode;    // @param choice [grass|noodles|curls] 0 "Field" The paths: blades of grass from above, each curling over toward its tip; noodles wiggling from end to end; or curls winding in like a fern's fiddlehead.
 uniform float u_scale;   // @param 1 24 5 log "Scale" Roots across the frame's height.
@@ -38,13 +40,25 @@ uniform int   u_blades;  // @param 1 5 1 "Blades" Paths from each root, fanned a
 uniform float u_trail;   // @param 0 1 1 "Trail" How much of the drag stays pasted behind the head: 1 the whole extrusion back to the root, 0 only the stamp where it is now.
 uniform float u_stagger; // @param 0 1 0 "Stagger" Starts each path late by its own amount, so they set off one by one; at 1 Position reaches every tip.
 uniform float u_flow;    // @param 0 4 0.3 "Flow" How fast the paths sway and wiggle; a step changes the speed, never where the paths are.
-uniform int   u_profile; // @param choice [rim|round|bevel|ridge|groove|fluted|flat] 0 "Profile" The tube's cross-section: rim darkens each paste toward its edge; round, bevel (a flat top, chamfered), ridge (a peaked roof), groove (a gutter) and fluted (ribs along it) light it as relief from the upper left; flat leaves the copies as they are.
+uniform int   u_profile; // @param choice [rim|round|bevel|ridge|groove|fluted|flat] 0 "Profile" How the tube is shaded: rim darkens each paste toward its edge, which leaves the tube one even shade and its head a lit disc; or a cross-section: round, bevel (a flat top, chamfered), ridge (a peaked roof), groove (a gutter) and fluted (ribs along it) light it as relief from the upper left; flat leaves the copies as they are.
 uniform float u_depth;   // @param 0 1 0.35 "Depth" How strongly the profile shows: the rim's darkening, or the relief's light and shadow.
 
 const int SEGS = 4;
 const int REACH = 3;          // the cell search's widest half width: Length + Brush + a root's reach into its neighbour ≤ 3 cells
 const float PHI = 1.6180340;
 const float STRAIGHT = 0.02;  // a curvature (per cell) under this is a straight segment
+
+// FS_TAIL's: the pixel under this one, read 1:1. A displaced read goes through
+// src, which filters; one that has not moved must come back exactly
+vec4 here();
+
+// the point at arc length t along an arc from o heading dir, curvature k
+vec2 arc_point(vec2 o, vec2 dir, float k, float t) {
+    if (abs(k) < STRAIGHT) return o + t * dir;
+    float a = k * t;
+    vec2 d = vec2(cos(a) * dir.x - sin(a) * dir.y, sin(a) * dir.x + cos(a) * dir.y);
+    return o + (vec2(-dir.y, dir.x) - vec2(-d.y, d.x)) / k;
+}
 
 // one arc: from o heading dir, curvature k. The largest arc length t in
 // [lo, hi] at which the disc of radius r about the arc's point covers p, or −1
@@ -100,6 +114,15 @@ float seg_turn(int i, float seed, float sway) {
     return side * (0.4 + 0.7 * fi) * (0.85 + 0.15 * sway);
 }
 
+// from one segment's start to the next's, a turn of the heading th
+void next_segment(inout vec2 o, inout vec2 dir, inout float th, float turn, float k, float len) {
+    th += turn;
+    vec2 next = vec2(cos(th), sin(th));
+    o = abs(k) < STRAIGHT ? o + len * dir
+      : o + (vec2(-dir.y, dir.x) - vec2(-next.y, next.x)) / k;
+    dir = next;
+}
+
 // the furthest paste along one path that covers p: its arc length, or −1,
 // and its stamp's centre in c
 float path_hit(vec2 p, vec2 root, float th, float seed, float s0, float s1, float r,
@@ -121,27 +144,49 @@ float path_hit(vec2 p, vec2 root, float th, float seed, float s0, float s1, floa
             float t = arc_hit(p, o, dir, k, max(s0 - start, 0.0), hi, r);
             if (t >= 0.0) { best = start + t; bo = o; bdir = dir; bk = k; bt = t; }   // later segments lie further along
         }
-        // on to the segment's end
-        th += turn;
-        vec2 next = vec2(cos(th), sin(th));
-        o = abs(k) < STRAIGHT ? o + len * dir
-          : o + (vec2(-dir.y, dir.x) - vec2(-next.y, next.x)) / k;
-        dir = next;
+        next_segment(o, dir, th, turn, k, len);
     }
-    if (best >= 0.0) {
-        if (abs(bk) < STRAIGHT) {
-            c = bo + bt * bdir;
-        } else {
-            float a = bk * bt;
-            vec2 d = vec2(cos(a) * bdir.x - sin(a) * bdir.y, sin(a) * bdir.x + cos(a) * bdir.y);
-            c = bo + (vec2(-bdir.y, bdir.x) - vec2(-d.y, d.x)) / bk;
-        }
-    }
+    if (best >= 0.0) c = arc_point(bo, bdir, bk, bt);
     return best;
 }
 
-// the profile's light on a paste, x its point from the stamp's centre in
-// brushes (|x| ≤ 1): rim darkens toward the edge; the others are a height
+// the point of one path nearest p between arc lengths s0 and s1. Per arc:
+// the foot of p on its line or circle when that lies on the arc, else an end
+vec2 path_nearest(vec2 p, vec2 root, float th, float seed, float s0, float s1) {
+    float len = u_length / float(SEGS);
+    float sway = sin(u_flow_t + seed * TAU);
+    vec2 o = root, dir = vec2(cos(th), sin(th));
+    vec2 near = p;
+    float nearest = 1e9;
+    for (int i = 0; i < SEGS; i++) {
+        float start = float(i) * len;
+        if (start > s1) break;
+        float turn = seg_turn(i, seed, sway);
+        float k = turn / len;
+        float lo = max(s0 - start, 0.0), hi = min(s1 - start, len);
+        if (hi >= lo) {
+            float foot = dot(p - o, dir);
+            if (abs(k) >= STRAIGHT) {
+                vec2 q = p - (o + vec2(-dir.y, dir.x) / k);
+                vec2 qo = -vec2(-dir.y, dir.x) * sign(k);
+                foot = sign(k) * atan(qo.x * q.y - qo.y * q.x, dot(qo, q)) / abs(k);
+            }
+            vec2 at[3];
+            at[0] = arc_point(o, dir, k, clamp(foot, lo, hi));
+            at[1] = arc_point(o, dir, k, lo);
+            at[2] = arc_point(o, dir, k, hi);
+            for (int n = 0; n < 3; n++) {
+                float d = dot(p - at[n], p - at[n]);
+                if (d < nearest) { nearest = d; near = at[n]; }
+            }
+        }
+        next_segment(o, dir, th, turn, k, len);
+    }
+    return near;
+}
+
+// the profile's light, x the pixel from a point of the paste in brushes
+// (|x| ≤ 1): rim darkens toward the edge; the others are a height
 // across the tube, h(|x|), lit from the upper left as grow lights its
 // relief — a flat top lights to 1 — so only the slope h′ shows
 float profile(vec2 x, float depth) {
@@ -173,6 +218,7 @@ vec4 effect(vec2 uv) {
     float best = -1.0;
     vec2 from = p, to = p;      // the stamp's root and where it was pasted
     float br = r;               // that path's brush
+    float bth = 0.0, bseed = 0.0, btail = 0.0;   // and the rest of that path
     for (int j = -reach; j <= reach; j++)
     for (int i = -reach; i <= reach; i++) {
         vec2 cell = c0 + vec2(i, j);
@@ -186,24 +232,30 @@ vec4 effect(vec2 uv) {
         float seed = hash21(cell + 3.0);
         for (int b = 0; b < 5; b++) {
             if (b >= u_blades) break;
-            float bseed = fract(seed + float(b) * PHI);
+            float blade_seed = fract(seed + float(b) * PHI);
             float th = seed * TAU + float(b) * TAU / float(u_blades)
-                     + 0.6 * (fract(bseed * 3.7) - 0.5) / float(u_blades);
-            float delay = u_stagger * 0.6 * fract(bseed * PHI * 5.0);
+                     + 0.6 * (fract(blade_seed * 3.7) - 0.5) / float(u_blades);
+            float delay = u_stagger * 0.6 * fract(blade_seed * PHI * 5.0);
             float head = u_length * clamp((u_pos - delay) / (1.0 - delay), 0.0, 1.0);
             if (far > head + rr) continue;                 // a path's arc length bounds its reach
             float tail = max(head - u_trail * u_length, 0.0);
             vec2 c;
-            float s = path_hit(p, root, th, bseed, tail, head, rr, c);
-            if (s > best) { best = s; from = root; to = c; br = rr; }
+            float s = path_hit(p, root, th, blade_seed, tail, head, rr, c);
+            if (s > best) { best = s; from = root; to = c; br = rr; bth = th; bseed = blade_seed; btail = tail; }
         }
     }
-    if (best < 0.0) return src(uv);
+    // nothing covers it, or only a paste that has not moved
+    if (best <= 0.0) return here();
     vec2 aspect = vec2(u_res.y / u_res.x, 1.0);
     vec4 col = src(uv + (from - to) / u_scale * aspect);
     // the profile, faded in over the first brush of travel so Position 0
     // stays the frame
     vec2 across = (p - to) / br;           // from the stamp's centre, 1 at its edge
+    // relief is across the tube: from the path, on this strand of it. A strand
+    // lying over an earlier turn of its own path keeps its own cross-section,
+    // so look no further back than two brushes
+    if (u_profile >= 1 && u_profile <= 5)
+        across = (p - path_nearest(p, from, bth, bseed, max(btail, best - 2.0 * br), best)) / br;
     col.rgb *= profile(across, u_depth * min(1.0, best / br));
     return col;
 }
