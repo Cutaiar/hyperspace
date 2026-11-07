@@ -8697,6 +8697,7 @@ Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_gui
 
 Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the app at a 1920x1080 window, but at 1x only on a taller display and on a real 1080p display only at 2x.
 **634. The show's display.** (the display you'll run the show on, at 1080p)
+*Since 639 (GRAPH opens with every node in view, Dillon's choice of 2026-11-07), 1.3 is the most the opening fit zooms in, not the zoom it always opens at: in steps 1 and 2, a patch too wide for 1.3 opens zoomed out, centred left of the pane. Check the words at 1.3 on a small patch, and ⌘-scroll to 1.3 on a big one.*
 1. Open the control window on it, launch, and load a patch. *Pass:* the node words read from where you'll stand, and the first column is at the canvas's top-left.
 2. Count the columns beside the pane. *Pass:* enough to work without panning all the time; about four. Say if you want it tighter or looser: the number is `placement.ZOOM_READ`.
 3. Look at a node's words up close, at a 1x display if you have one. *Pass:* sharp enough not to bother you. They're softer than the head's words above the canvas at any zoom but 1:1; say if it bothers you.
