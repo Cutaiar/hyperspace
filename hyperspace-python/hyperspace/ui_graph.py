@@ -366,7 +366,7 @@ TINT_TIP = ("Lit: each picture cable's red leans by the colour of the picture it
             "carries — toward orange for yellow-green pictures, toward rose for "
             "blue-violet ones; red, cyan and grey pictures leave it red — read from its "
             "maker's thumbnail once a second. Off: plain red. A view setting: not saved "
-            "with the patch or the show")
+            "with the patch or the install")
 TINT_SPAN = 20.0 / 360.0
 TINT_FULL = 0.25
 

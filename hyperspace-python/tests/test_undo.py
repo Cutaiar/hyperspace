@@ -477,10 +477,10 @@ def test_a_show_load_and_its_startup_loadable_are_one_step_each(rig):
     pr.load("house")
     settle(rig)
     meta = rig.meta_undo
-    assert [s.label for s in meta.stack][1:] == ["show house"]
+    assert [s.label for s in meta.stack][1:] == ["install house"]
     assert labels(rig) == [f"load {pr.startup}"]
     assert pr.name == "house" and lib.current(LOADABLE) != "TUMBLE"
-    assert meta.undo() and meta.status == "undid show house"
+    assert meta.undo() and meta.status == "undid install house"
     assert rig.undo.undo()                             # …and the loadable patch it started on
     meta_values = reg.snapshot(part="shared_meta")
     assert (pr.name, list(pr.bank), pr.startup, pr.path) == party[:4]
@@ -494,8 +494,8 @@ def test_a_show_load_and_its_startup_loadable_are_one_step_each(rig):
     rig.undo.undo()
     pr.new("fresh")
     settle(rig)
-    assert labels(rig)[-1] == "new show" and pr.name == "fresh"
-    assert meta.stack[-1].label == "new show"
+    assert labels(rig)[-1] == "new install" and pr.name == "fresh"
+    assert meta.stack[-1].label == "new install"
     meta.undo()
     rig.undo.undo()
     assert pr.name == "party" and lib.current(LOADABLE) == "TUMBLE"

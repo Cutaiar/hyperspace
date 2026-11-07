@@ -2172,7 +2172,7 @@ class Panel:
             flush_right(imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
-                tooltip("the open show — the patches section")
+                tooltip("the open install — the patches section")
 
     # ---- pages ----
 
@@ -2831,7 +2831,7 @@ class Panel:
                 tooltip(
                     "this machine's own files: config.toml, bindings.json, windows.json, "
                     "hands.json, last_show, logs" if text.startswith("machine:") else
-                    "patches and shows as JSON ([library] path, else $HYPERSPACE_HOME); "
+                    "patches and installs as JSON ([library] path, else $HYPERSPACE_HOME); "
                     "edit a file and the app follows")
 
     def gpu_lines(self) -> list[str]:

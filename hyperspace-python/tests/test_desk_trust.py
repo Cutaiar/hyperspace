@@ -321,7 +321,7 @@ def test_a_failed_save_into_a_filled_slot_leaves_the_slot_and_blinks_nothing(rig
     n, ch = pad(2)
     at(1.0, save_down(), note(n, channel=ch))
     assert pr.bank[2] == "FIELD" and "TRIP 2" in lib.list("loadable")
-    assert "the show could not be written" in lib.warning
+    assert "the install could not be written" in lib.warning
     # (review of PR #175) the slot does not hold the new preset: no blink,
     # and the log says it did not land, not "saved into slot 3"
     assert apc40.GREEN_BLINK not in leds(rig, n, ch, mark)

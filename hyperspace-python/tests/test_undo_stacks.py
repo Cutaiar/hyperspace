@@ -264,7 +264,7 @@ def test_the_shows_mark_is_on_the_meta_stack(rig):
     assert pr.bank not in one.marks.take()[0]          # a deck's mark holds no bank
     pr.load("house")
     go(rig)
-    assert [s.label for s in rig.meta.undo.stack] == ["show house"]
+    assert [s.label for s in rig.meta.undo.stack] == ["install house"]
     assert [s.label for s in one.undo.stack] == [f"load {pr.startup}"]
     assert rig.two.undo.stack == []
     look = bases(one)
@@ -573,7 +573,7 @@ def test_a_decks_step_across_a_show_change_that_changes_nothing_of_it_drops(rig)
     go(rig)
     assert pr.name == "second"
     assert [s.label for s in one.undo.stack] == []     # nothing of the deck moved
-    assert [s.label for s in rig.meta.undo.stack] == ["new show"]
+    assert [s.label for s in rig.meta.undo.stack] == ["new install"]
     assert one.undo.undo() is False
 
 

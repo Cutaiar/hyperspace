@@ -748,7 +748,7 @@ def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
     reg["master.gain"].set(reg["master.gain"].value + 1.0)
     assert proj.is_dirty()
     _click(panel, st["rects"]["show.save"])
-    assert not proj.is_dirty() and lib.status == "show: saved party"
+    assert not proj.is_dirty() and lib.status == "install: saved party"
     assert json.loads(show.read_text())["tuning"]["master.gain"] == reg["master.gain"].value
     _click(panel, st["rects"]["show.save_as"])
     assert st["naming"] == ui_loadable.PROJECT and st["buf"] == "party"
@@ -876,7 +876,7 @@ def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
         clock[0] += ui.MESSAGE_S + 1
         assert panel._message() == ("", False)
         proj.save("MINE")
-        assert panel._message() == ("show: saved MINE", False)
+        assert panel._message() == ("install: saved MINE", False)
 
 
 def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch):  # noqa: F811
