@@ -1277,8 +1277,8 @@ placements, `palette-hands`, `palette-glass`, `acid-scene`, and plan
 recorded cloud listed in a scratch config (`cloud/…`). A golden is the
 SHA-256 of the full-resolution RGBA frame, with a quarter-size PNG per
 distinct picture and the route each state reached (a wired output's
-route reads `none`, with a `"wired"` key naming its source): **596
-goldens, 140 distinct pictures** (556 before plan 30, which recorded 24
+route reads `none`, with a `"wired"` key naming its source): **789
+goldens, 195 distinct pictures** on 2026-11-06 (556 before plan 30, which recorded 24
 for its fixtures, and plan 28's N4 16 for its own; neither moved one
 recorded before it), recorded on `GL_RENDERER` "Apple
 M3 Max" (GL_VERSION "4.1 Metal - 90.5"). `tests/test_golden_frames.py`
@@ -1286,7 +1286,7 @@ compares every hash exactly there and skips with a note on any other
 renderer. The tool:
 
 ```bash
-uv run python tools/golden_frames.py                          # diff; "all 596 frames match their goldens (…)"
+uv run python tools/golden_frames.py                          # diff; "all <n> frames match their goldens (…)"
 uv run python tools/golden_frames.py --only party-trip,legacy6 # those presets only
 uv run python tools/golden_frames.py --record                 # re-record every golden
 uv run python tools/golden_frames.py --only hands-lines --record   # re-record those, keep the rest
@@ -3169,19 +3169,12 @@ show: a log that will not open is kept as an error and the loop goes on.
 ## 16. Testing
 
 ```bash
-uv run pytest -q          # the fast tier, in parallel: 6,753 tests
-uv run pytest --all -q    # every tier: golden, slow, live: 6,976 tests
+uv run pytest -q          # the fast tier, in parallel
+uv run pytest --all -q    # every tier: golden, slow, live
 uv run ruff check .
 ```
 
-**What a run costs,** measured. Counts are from `--collect-only`, 2026-11-06: 223 tests
-sit outside the fast tier (`golden` 144, `slow` 44, `live` 36; one test is in two tiers).
-
-| Run | Result | Wall time | Where and when |
-|---|---|---|---|
-| Fast tier, `fast-tier.sh -rs --durations=10` (`-n 4`) | `6750 passed, 3 skipped` | 133 s | "Apple M3 Max", a machine shared with other runs, 2026-11-06 |
-| Fast tier in CI (the `Fast tier` step) | green | 3 min 52 s, 4 min 1 s | `ubuntu-24.04`, the last two finished runs on `main`, 2026-11-06 |
-| `--all`, `fast-tier.sh --all -rs --durations=60` (`-n 4`) | not yet timed | not yet timed | the orchestrator's next run fills this row |
+**Last measured, 2026-11-06, at 8977705 (one line, changed only by the orchestrator, so parallel PRs don't conflict here):** `--collect-only` 6,753 fast tier and 6,976 with `--all` (`golden` 144, `slow` 44, `live` 36; one test is in two tiers); `fast-tier.sh -rs --durations=10`, `6750 passed, 3 skipped` in 133 s on a shared "Apple M3 Max"; CI's `Fast tier` step on `ubuntu-24.04`, about four minutes; `--all` not yet timed.
 
 `fast-tier.sh` is `~/.claude/handoffs/wave4/fast-tier.sh`: `pytest -q -n 4` behind two
 machine-wide slots. A bare `uv run pytest -q` (`-n auto`, sixteen workers) has not been
@@ -3189,11 +3182,11 @@ timed at this size, because a shared Mac doesn't run one. (The ~17 s and ~55 s t
 gave until 2026-11-06 were `-n auto` on a suite of about 3,940 tests.)
 
 **The `--all` that the orchestrator runs records its durations.** It adds
-`--durations=60` to its command, then puts two things in the repo with the PR it was run
-for: a row in the table above (date, head, the summary line verbatim, wall time) and the
-list of slowest tests, under Testing in that PR's body. So the latest cost is here and the
-detail is one click from the row. Plan 58 §6's "cheaper goldens" waits on this figure, and
-conftest's tier tables are re-measured from the same list.
+`--durations=60` to `fast-tier.sh --all -rs`, and its summary line, wall time and slowest
+list go in the merge body or the PR body, **never in a commit on the PR**: a commit moves
+the head that CI just vouched for. The orchestrator updates the line above, with the date
+and head, in the next docs commit that lands anyway. Plan 58 §6's "cheaper goldens" waits
+on this figure, and conftest's tier tables are re-measured from the same list.
 
 - Tiers: `golden`, `slow` and `live` are markers `tests/conftest.py`
   applies by name (see "Running the automated tests" in
@@ -3207,15 +3200,20 @@ conftest's tier tables are re-measured from the same list.
   time, and leaves `--all`, the goldens and `tests/test_media_live.py`
   to whoever merges.
 - **A builder's last check may be CI rather than a machine slot** (row 770). Push, then
-  `uv run python tools/wait_green.py <pr> <head>`, which waits for that head's CI and exits
-  0 only if it is green: 2 a run failed, 3 the PR's head has moved on, 4 no run appeared in
-  10 minutes, 5 still running after 30, 1 bad arguments. It only waits and it merges
-  nothing, with two `gh` reads and no other way out (`tests/test_wait_green.py`). `main`
-  has no required checks, so `gh pr merge --auto` merges at once: whoever merges waits
-  first, and then merges by hand. CI is ruff and the fast tier on Linux, so it sees no
-  golden, no `slow` or `live` test and no Mac GL. A PR that touches the render path, the
-  loader or `graphmigrate` still gets the orchestrator's `--all`, and a builder reports
-  "CI green at <head>" as that, not as a run of the fast tier.
+  `python3 tools/wait_green.py <pr> <head>`, plain `python3` because it is standard library
+  only and `uv run`'s own failure codes would read as its codes. It waits for that head's
+  newest `tests` run and exits 0 only if that run finished with success. 2: it finished
+  any other way, skipped included. 3: the PR's head isn't the one given or moved during the
+  wait; it is read again on every poll, since a push cancels the old head's run
+  (`cancel-in-progress`). 4: no run appeared in 10 minutes. 5: still going 30 minutes after
+  it appeared. 6: `gh` gave no answer, at the first read or for 5 minutes in a row, with
+  `gh`'s own stderr shown. 1: bad arguments, a head under 7 characters, or `--help`. It
+  only waits and it merges nothing, with two `gh` reads and no other way out
+  (`tests/test_wait_green.py`). `main` has no required checks, so `gh pr merge --auto`
+  merges at once: whoever merges waits first, and then merges by hand. CI is ruff and the
+  fast tier on Linux, so it sees no golden, no `slow` or `live` test and no Mac GL. A PR
+  that touches the render path, the loader or `graphmigrate` still gets the orchestrator's
+  `--all`, and a builder reports "CI green at <head>" as that, not as a run of the fast tier.
 - **A hung test fails by name.** pyproject's addopts carry
   `--dist load --timeout=120 --max-worker-restart=4` and its ini key
   `timeout_method = "thread"`. **Workers use the thread method, a
@@ -3386,7 +3384,7 @@ conftest's tier tables are re-measured from the same list.
   holds every line whole everywhere. A fit test that breaks is fixed in
   the layout, not loosened.
 - The golden frames: `tests/test_golden_frames.py` compares 789
-  full-resolution frames — every corpus loadable patch in every output state,
+  (2026-11-06) full-resolution frames — every corpus loadable patch in every output state,
   hands absent and present, the other wirings, the fixture loadable patches and a
   recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only
   (anywhere else it skips with a note). `tools/golden_frames.py` diffs
@@ -3485,7 +3483,7 @@ hung test fails alone and names itself instead of stalling its worker;
 a crashed worker's queue goes to its replacement, up to four, then the
 run ends — row 605) — the same values pyproject's addopts carry, with
 the thread method, so the explicit flags are redundant but consistent.
-The fast tier takes about four minutes on four cores (the table at the top of §16).
+The fast tier takes about four minutes on four cores (§16's last-measured line).
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK
   to build `leapc-cffi` against, and Linux torch wheels pull gigabytes

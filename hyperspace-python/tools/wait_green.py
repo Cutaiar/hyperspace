@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """Wait for one PR head's CI, and say whether it is green. It merges nothing.
 
-    uv run python tools/wait_green.py <pr> <expected-head>
+    python3 tools/wait_green.py <pr> <expected-head>
 
-The port of the wave-4 `wait-green.sh`, with its exit codes:
+Standard library only, so plain `python3`: `uv run` would sync a project first,
+and uv's own failure codes would read as the codes below.
 
-    0  every run on that head finished, each a success or skipped
-    1  the arguments are wrong (no PR, or an empty head)
-    2  a run on that head finished any other way; each run is listed
-    3  the PR's head is not the expected one (a prefix will do)
-    4  no CI run appeared for that head in 10 minutes
-    5  CI was still running after 30 minutes
+    0  the newest run of the `tests` workflow on that head finished with success
+    1  the arguments are wrong (no PR, or a head under 7 characters); also `--help`
+    2  that run finished any other way, skipped and cancelled included
+    3  the PR's head is not the expected one, or moved during the wait
+    4  no `tests` run appeared for that head in 10 minutes
+    5  that run was still going 30 minutes after it appeared
+    6  `gh` gave no answer: at the first read, or for 5 minutes in a row. Its
+       own stderr comes through, so a login or a rate limit says so
 
-Every doubt lands on a code that is not 0: a `gh` that fails, hangs or
-answers nonsense reads as no answer, so a poll goes round again and the
-head check fails. `main` has no required checks, so `gh pr merge --auto`
-merges at once (plan 58): whoever merges runs this first and merges by
-hand after it. Hence nothing here but two reads, and
-`tests/test_wait_green.py` holds it to that.
+The head is read again after every read of the runs, so no verdict outlives a
+push: `tests.yml` has `cancel-in-progress`, and a push cancels the run on the
+old head, which is a moved head (3), not a red one (2). The waits are a monotonic
+clock's, so a slow `gh` can't stretch them, and they can run over by one poll.
+
+`main` has no required checks, so `gh pr merge --auto` merges at once (plan 58):
+whoever merges runs this first and merges by hand after it. Hence nothing here
+but two reads, and `tests/test_wait_green.py` holds it to that. The only exit 0 is
+a green head, so there is no `--help` exit 0: it prints the help and exits 1.
 """
 
 from __future__ import annotations
@@ -34,20 +40,23 @@ from pathlib import Path
 # worktree the tool sits in, wherever it was called from
 REPO = Path(__file__).resolve().parents[2]
 
-APPEAR_TRIES, APPEAR_WAIT_S = 60, 10    # 10 minutes for a run to appear
-FINISH_TRIES, FINISH_WAIT_S = 90, 20    # 30 minutes for them to finish
-GH_TIMEOUT_S = 60                       # a hung `gh` is one poll with no answer
-PASSING = {"success", "skipped"}
+WORKFLOW = "tests"      # `name:` in .github/workflows/tests.yml; a test holds the two together
+APPEAR_S, APPEAR_POLL_S = 10 * 60, 10   # for a run to appear
+FINISH_S, FINISH_POLL_S = 30 * 60, 20   # for it to finish, from when it appeared
+SILENT_S = 5 * 60                       # no answer from `gh` for this long is the end of the wait
+GH_TIMEOUT_S = 60                       # a hung `gh` is one read with no answer
+MIN_HEAD = 7                            # a shorter prefix checks next to nothing
 
-GREEN, USAGE, RED, WRONG_HEAD, NO_RUN, STILL_RUNNING = 0, 1, 2, 3, 4, 5
+GREEN, USAGE, RED, WRONG_HEAD, NO_RUN, STILL_RUNNING, NO_ANSWER = 0, 1, 2, 3, 4, 5, 6
 
 
 def _gh(*args: str) -> dict | list | None:
-    """`gh <args>`'s JSON, or None for no answer of any kind."""
+    """`gh <args>`'s JSON, or None for no answer of any kind. Its stderr stays on ours."""
     try:
-        done = subprocess.run(("gh", *args), cwd=REPO, capture_output=True,
+        done = subprocess.run(("gh", *args), cwd=REPO, stdout=subprocess.PIPE,
                               text=True, timeout=GH_TIMEOUT_S, check=False)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"gh: {e}", file=sys.stderr)
         return None
     if done.returncode != 0:
         return None
@@ -57,67 +66,90 @@ def _gh(*args: str) -> dict | list | None:
         return None
 
 
-def pr_head(pr: str) -> str:
-    """The PR's head commit, or "" for no answer."""
+def pr_head(pr: str) -> str | None:
+    """The PR's head commit, or None for no answer."""
     doc = _gh("pr", "view", pr, "--json", "headRefOid")
     head = doc.get("headRefOid") if isinstance(doc, dict) else None
-    return head if isinstance(head, str) else ""
+    return head if head and isinstance(head, str) else None
 
 
 def runs_on(head: str) -> list[dict] | None:
-    """The CI runs on a commit, or None for no answer."""
-    doc = _gh("run", "list", "--commit", head, "--json", "name,status,conclusion,url")
+    """Every workflow's runs on a commit, or None for no answer."""
+    doc = _gh("run", "list", "--commit", head, "--json",
+              "workflowName,databaseId,attempt,status,conclusion,url")
     if isinstance(doc, list) and all(isinstance(r, dict) for r in doc):
         return doc
     return None
 
 
-def wait(pr: str, want: str, sleep: Callable[[float], None] = time.sleep) -> int:
+def newest(runs: list[dict]) -> dict | None:
+    """The run that speaks for this head: `tests`, newest attempt. An older one was superseded."""
+    ours = [r for r in runs if r.get("workflowName") == WORKFLOW]
+    return max(ours, key=lambda r: (r.get("databaseId") or 0, r.get("attempt") or 0), default=None)
+
+
+def wait(pr: str, want: str, sleep: Callable[[float], None] = time.sleep,
+         clock: Callable[[], float] = time.monotonic) -> int:
     """Wait, print what happened, and give the exit code."""
     head = pr_head(pr)
-    if not head or not head.startswith(want):
+    if head is None:
+        print(f"gh did not answer about PR {pr}")
+        return NO_ANSWER
+    if not head.startswith(want):
         print(f"head {head} is not {want}")
         return WRONG_HEAD
-    for _ in range(APPEAR_TRIES):
-        if runs_on(head):
-            break
-        sleep(APPEAR_WAIT_S)
-    else:
-        print(f"no CI run appeared for {head}")
-        return NO_RUN
-    for _ in range(FINISH_TRIES):
-        # the conclusions come from the read that saw them all finished. An
-        # empty list here is not "all finished": runs that vanish are no green
+    appear_by = clock() + APPEAR_S
+    finish_by = None
+    answered = clock()
+    while True:
         runs = runs_on(head)
-        if runs and all(r.get("status") == "completed" for r in runs):
-            break
-        sleep(FINISH_WAIT_S)
-    else:
-        print(f"CI still running after 30 min on {head}")
-        return STILL_RUNNING
-    if any(r.get("conclusion") not in PASSING for r in runs):
-        print(f"CI NOT green on {head}")
-        for r in runs:
-            print(r.get("name"), r.get("conclusion"), r.get("url"))
-        return RED
-    print(f"CI green on {head}")
-    return GREEN
+        now_head = pr_head(pr)      # after the runs, so a verdict is never older than its head
+        if now_head is not None and now_head != head:
+            print(f"head moved from {head} to {now_head}")
+            return WRONG_HEAD
+        if runs is None or now_head is None:
+            if clock() - answered >= SILENT_S:
+                print(f"gh stopped answering about {head}")
+                return NO_ANSWER
+        else:
+            answered = clock()
+            run = newest(runs)
+            if run is not None:
+                if finish_by is None:
+                    finish_by = clock() + FINISH_S
+                if run.get("status") == "completed":
+                    if run.get("conclusion") == "success":
+                        print(f"CI green on {head}")
+                        return GREEN
+                    print(f"CI NOT green on {head}")
+                    print(run.get("workflowName"), run.get("conclusion"), run.get("url"))
+                    return RED
+        left = (appear_by if finish_by is None else finish_by) - clock()
+        if left <= 0:
+            if finish_by is None:
+                print(f"no CI run appeared for {head}")
+                return NO_RUN
+            print(f"CI still running after 30 min on {head}")
+            return STILL_RUNNING
+        sleep(min(APPEAR_POLL_S if finish_by is None else FINISH_POLL_S, left))
 
 
 class _Args(argparse.ArgumentParser):
     def error(self, message: str):
         # argparse's own 2 would read as "CI is red"
-        self.exit(USAGE, f"{self.prog}: {message}\n")
+        self.exit(USAGE, f"{self.format_help()}\n{self.prog}: {message}\n")
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = _Args(description="Wait for a PR head's CI; exit 0 only if it is green. Merges nothing.")
+    # no add_help: `--help` falls to `error`, which prints it, and the code stays off 0
+    ap = _Args(add_help=False, description="Wait for a PR head's CI; exit 0 only if it is green. "
+                                           "Merges nothing. Codes: see the tool's docstring.")
     ap.add_argument("pr", help="the PR's number")
-    ap.add_argument("head", help="the head commit you expect, or a prefix of it")
+    ap.add_argument("head", help=f"the head commit you expect, or {MIN_HEAD}+ characters of it")
     args = ap.parse_args(argv)
-    if not args.pr or not args.head:
-        # "" is a prefix of every commit: it would wave any head through
-        ap.error("the PR and the head may not be empty")
+    if not args.pr or len(args.head) < MIN_HEAD:
+        # "" is a prefix of every commit, and "a" of a sixteenth of them
+        ap.error(f"give a PR, and at least {MIN_HEAD} characters of the head")
     return wait(args.pr, args.head)
 
 
