@@ -1283,7 +1283,7 @@ class Mouse:
         self.drag = {"btn": None, "x": 0.0, "y": 0.0}
         self._wheel = 0.0
         if win is not None:         # (no display shows output 1: nothing to orbit from, SC2)
-            glfw.set_scroll_callback(win, self._on_scroll)
+            self._listen(win)
 
     def aim(self, win) -> None:
         """Output 1's window now (SC3b: its display came or went); a drag under way ends."""
@@ -1292,7 +1292,12 @@ class Mouse:
         self.win = win
         self.drag = {"btn": None, "x": 0.0, "y": 0.0}
         if win is not None:
-            glfw.set_scroll_callback(win, self._on_scroll)
+            self._listen(win)
+
+    def _listen(self, win) -> None:
+        """The wheel over `win`, while it's output 1's. A window that stops being one may be alive
+        as a further display, and one may be destroyed, so it's filtered, never cleared."""
+        glfw.set_scroll_callback(win, lambda w, dx, dy: self._on_scroll(w, dx, dy) if self.win is win else None)
 
     def use(self, reg: Registry, view: ViewState) -> None:
         """The camera params it writes and the view it reads: `reg`'s."""

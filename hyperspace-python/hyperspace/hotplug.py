@@ -477,6 +477,10 @@ class Hotplug:
             if (key not in on and 0 < n <= len(self.run.slots)
                     and self._try("opening a window", self._open, self.run.slots[n - 1], o)):
                 opened.append(key)
+        # what's refused is only worth saying or retrying while a row still wants that window
+        on_now = {memory(a.display if a is not None else sl.display) for sl, a in self._open_now()}
+        short = {n for key, (n, _) in shows.items() if key not in on_now}
+        self._wont = {n: why for n, why in self._wont.items() if n in short}
         self._try("following the list", self._follow)
         self._try("putting a window back", self._strays, keys)
         self._here = set(keys)

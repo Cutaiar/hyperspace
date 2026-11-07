@@ -696,6 +696,56 @@ def test_a_window_that_wont_open_is_said_and_the_rest_go_on(rig):
     assert r.slots[0].opened and r.slots[0].missing == ""
 
 
+@pytest.mark.parametrize("how", ["its display goes", "its row changes"])
+def test_a_refused_window_no_row_wants_is_forgotten(rig, how):
+    """Its words don't stay on the slot, and nothing is re-armed for the rest of the run."""
+    r = rig()
+    tv = r.g.mons[1]
+    r.g.unplug(tv)
+    r.run_for(HOLD_S + 0.1)
+    r.g.fail_create = True
+    r.g.plug(tv)
+    r.run_for(SETTLE_S)
+    assert "could not be created" in r.slots[0].missing and r.plug._wont
+    if how == "its display goes":
+        r.g.unplug(tv)
+        r.run_for(SETTLE_S)
+        assert r.slots[0].missing == "its display is not connected (TV)"
+    else:
+        r.store.set_target("TV", "", ["Built-in", "TV", "Projector"])
+        r.tick()
+        assert r.slots[0].missing == ""
+    assert not r.plug._wont and r.plug._settle_at is None
+    tries = []
+    real = r.g.create_window
+    r.g.create_window = lambda *a: (tries.append(1), real(*a))[1]
+    r.run_for(REOPEN_S * 2 + 1.0)
+    assert tries == [] and r.plug._settle_at is None
+
+
+def test_the_wheel_over_a_window_thats_no_longer_output_1s_moves_nothing(monkeypatch):
+    """A return demotes the promoted window: alive, a further display, its callback still set."""
+    calls: dict = {}
+    monkeypatch.setattr(app, "glfw", SimpleNamespace(set_scroll_callback=lambda w, fn: calls.__setitem__(w, fn)))
+    reg = dict.fromkeys(("camera.yaw", "camera.pitch", "camera.zoom", "camera.pan.x", "camera.pan.y"))
+    m = app.Mouse("first", reg, SimpleNamespace())
+    calls["first"]("first", 0.0, 1.0)
+    assert m._wheel == 1.0
+    m.aim("promoted")
+    calls["first"]("first", 0.0, 1.0)
+    assert m._wheel == 1.0, "not output 1's now"
+    calls["promoted"]("promoted", 0.0, 1.0)
+    assert m._wheel == 2.0
+    m.aim("first")
+    calls["promoted"]("promoted", 0.0, 1.0)
+    assert m._wheel == 2.0, "demoted: it's a further display"
+    calls["first"]("first", 0.0, 1.0)
+    assert m._wheel == 3.0
+    m.aim(None)
+    calls["first"]("first", 0.0, 1.0)
+    assert m._wheel == 3.0
+
+
 def test_a_window_that_wont_open_is_tried_every_few_seconds_with_no_change(rig):
     r = rig()
     tv = r.g.mons[1]
