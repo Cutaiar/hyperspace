@@ -25,6 +25,8 @@ and a projector. It is one Python process in `hyperspace-python/`.
     rows are the owner's own answers before a build (plan 40's 501–510
     among them).
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
+  - [`AUDIT-STRUCTURE-2026-10.md`](AUDIT-STRUCTURE-2026-10.md): the code's shape on 2026-10-27,
+    re-measured 2026-11-06. A record: plan 58 §6 decides what's done.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,

@@ -76,6 +76,7 @@ live render error is a red banner at the bottom of the control window.
   [`DECISION-REGISTER.md`](docs/DECISION-REGISTER.md) the reasons,
   [`TESTING-GUIDE.md`](docs/TESTING-GUIDE.md) what a person still has to
   check, [`AUDIT-2026-09.md`](docs/AUDIT-2026-09.md) the open findings,
+  [`AUDIT-STRUCTURE-2026-10.md`](docs/AUDIT-STRUCTURE-2026-10.md) a dated record of the code's shape,
   and [`plans/`](docs/plans/) short records of what each recent plan built
   and the numbered hand checks.
 

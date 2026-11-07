@@ -658,6 +658,7 @@ nuance). Built so far: D1, D2, D3, D4.
 | **A strip's budget counts the window's padding** (audit U10, row 794, 2026-11-06): the chips' `same_line` counts from the window's edge. | `tests/test_ui_loadable.py::test_a_module_strip_does_not_overlap` |
 | **Two chips on one param have a popup each** (audit U9, row 793, 2026-11-06). | `tests/test_ui_lfo.py::test_the_two_nudge_chips_have_a_popup_each` |
 | **A knob can't land on the bank** (audit R14, closed as moot, row 792, 2026-11-06): the general rule of row 746 covers it, so the bank needs no rule of its own. | `tests/test_learn.py::test_no_absolute_knob_can_be_learned_onto_the_bank` |
+| **An audit lands as a record, its body unedited** (plan 58 TY2, 2026-11-06): `AUDIT-STRUCTURE-2026-10.md` keeps its figures and old words under a dated header that re-measures the headlines at one pinned commit, maps the names and gives every proposal a verdict, with what plan 58 §6 rejected. The plan decides; the record doesn't. | row 789, rec — pending the owner |
 
 ## Decided not to build
 
