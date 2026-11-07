@@ -12,7 +12,7 @@ stays (f and q both change, `drag_edge`); a left-drag box on the map
 sets the selected band's f/q from its frequency extent (`fit_box`, the
 time extent is ignored); a plain click selects the narrowest band under
 it. Every write goes through the registry (band.{i}.f / .q), so it is
-what the session saves and what MIDI can learn; no lane may ride it (row 775).
+what the meta controller saves and what MIDI can learn; no lane may ride it (row 775).
 
 Cost: the history is 240 × 256 and implot's heat map is a quad per cell,
 which was 3 ms and 246 k vertices a frame headless — too much for a 320
