@@ -499,3 +499,11 @@ def test_start_at_launch_on_an_unsaved_show_writes_nothing(tmp_path):
     lib.project.path = None
     lib.project.play_at_launch("cart")
     assert not (tmp_path / "installs").exists() or not any((tmp_path / "installs").iterdir())
+
+
+def test_a_linked_folder_counts_the_same_in_the_backup(tool, tmp_path):
+    lib = _old_library(tmp_path / "lib")
+    outside = tmp_path / "drive" / "clips"
+    _put(outside / "a.mov", "x")
+    (lib / "media" / "clips").symlink_to(outside, target_is_directory=True)
+    assert _run(tool, lib, "--apply") == 0
