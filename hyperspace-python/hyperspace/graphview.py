@@ -307,14 +307,16 @@ class VCable:
 
 
 def node_mode_cable(player: int, src: str, dst: str, control: str, param: str,
-                    *, dormant: bool = False, live: float | None = None) -> VCable:
+                    *, dormant: bool = False, live: float | None = None,
+                    addr: str | None = None, ref: Any = None) -> VCable:
     """One node mode cable (plan 57: a kind of its own, in `ui_graph.KIND_COLOURS`,
     labelled): a row the loadable patch's node mode derives (`nodemode.fill`), from pin
     `src` to pin `dst`. `dormant`: the player is on the other `Deck`, so the cable
-    is drawn and does nothing. N1b puts these in the view."""
+    is drawn and does nothing. `build` puts these in the view, `ref` (the desk's role,
+    the row), and nothing deletes one: leaving the node does."""
     said = f"node mode: player {player}, {control} → {param}"
-    return VCable(f"node:{src}>{dst}", src, dst, VALUE, live=live, kind=NODE_MODE,
-                  dormant=dormant, off=dormant,
+    return VCable(f"node:{src}>{dst}", src, dst, VALUE, ref=ref, live=live, kind=NODE_MODE,
+                  dormant=dormant, off=dormant, addr=addr,
                   label=f"{said}, on the other Deck" if dormant else said)
 
 
@@ -1635,7 +1637,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for p in reg:
         if p.modulatable and not p.alias:       # (no meta param is: register rows 743, 746, 775)
             want(p.id)
-    for b in (*routes, *setters):
+    # N1b: what the loadable patch's node mode derives, drawn whether or not it acts here
+    node_desk = getattr(table, "node_desk", None)
+    held = node_desk.held() if node_desk is not None else ()
+    for b in (*routes, *setters, *(r for h in held for r in h.rows)):
         want(b.target)
     for mid, m in macros.items():
         if m.subs or m.label:
@@ -1705,13 +1710,15 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         ids[base] = k + 1
         return base if k == 0 else f"{base}#{k + 1}"
 
+    route_rest = routes_held(table, reg, router)
     for b in routes:
         src = source_pin(b.source)
         dst = f"{MOD}:{b.target}"
         p = reg.get(b.target)
         off = (not b.enabled or p is None or not p.modulatable
-               or (b.source, b.target) in cut)
-        depth, said = route_said(b, table, reg, (b.source, b.target) in cut)
+               or (b.source, b.target) in cut or id(b) in route_rest)
+        depth, said = route_said(b, table, reg, (b.source, b.target) in cut,
+                                 route_rest.get(id(b), ""))
         view.cables.append(VCable(cable_id(f"route:{b.source}>{b.target}"), src, dst,
                                   pin_type.get(src, VALUE), ref=b, kind="route", off=off,
                                   depth=depth, label=said, addr=b.source))
@@ -1725,12 +1732,34 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         p = reg.get(b.target)
         typ = TRIGGER if (b.op in TRIGGER_OPS or pin_type.get(src) == TRIGGER) else VALUE
         layer = f"  {b.layer} layer" if b.layer else ""
+        # a saved row under a control node mode fills does nothing until it leaves (N1b)
+        under = node_desk is not None and node_desk.under(b)
         view.cables.append(VCable(cable_id(f"set:{b.source}>{b.target}"), src, dst, typ,
                                   ref=b, kind="setter",
-                                  off=not b.enabled or p is None or shadowed,
+                                  off=not b.enabled or p is None or shadowed or under,
                                   label=f"{b.op}{layer}" + ("  (under an invariant control)"
-                                                            if shadowed else ""),
+                                                            if shadowed else "")
+                                  + (UNDER_NODE_MODE if under else ""),
                                   addr=b.source, inside=inside))
+    for h in held:
+        word = node_desk.control_word if node_desk is not None else None
+        for b in h.rows:
+            src = row_pin(b)[0]
+            p = reg.get(b.target)
+            # onto the node pointed at: a copy's knobs live on its original, and the pane
+            # says the copy's name, so the copy gets a port of its own for this row
+            dst, at = f"{BASE}:{b.target}", nodes.get(h.node or "")
+            if at is not None and view.pins.get(dst, ("",))[0] != h.node:
+                dst = f"{NODE_PIN}:{h.node}|{b.target}"
+                if dst not in view.pins:
+                    add_port(at, VPort(f"node:{h.node}|{b.target}",
+                                       (p.label if p is not None else "") or b.target, IN, VALUE,
+                                       group=_sub_group(b.target, p), pins=(dst,),
+                                       param=b.target, live=_norm(p)))
+            view.cables.append(node_mode_cable(
+                h.player, src, dst, word(h.role, b) if word is not None else b.source,
+                (p.label if p is not None else "") or b.target, dormant=not h.on_here,
+                live=_norm(p), addr=b.source, ref=(h.role, b)))
     keyed = {(b.source, b.target) for b in routes}
     for mid, m in sorted(macros.items(), key=lambda kv: _macro_n(kv[0])):
         src = f"bus:{mid}"
@@ -1875,10 +1904,31 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     return view
 
 
-def route_said(b, table, reg: Registry, cut: bool = False) -> tuple[float, str]:
+def routes_held(table, reg: Registry, router: Router | None) -> dict[int, str]:
+    """The routes node mode holds off now, by `id`, each with what is true of it after a
+    leave: `NODE_MODE_HOLDS` of a route that comes back (the owner, row 711), `LOOP_OFF` of
+    one a loop will cut, and nothing of one that was off already (switched off, or on a param
+    no route can move). `Bindings.node_held` is asked once: this is per frame, not per route."""
+    held = table.node_held() if getattr(table, "node_desk", None) is not None else None
+    if not held:
+        return {}
+    stays = getattr(router, "modgraph_stays_cut", ()) if router is not None else ()
+    out: dict[int, str] = {}
+    for b in table.routes():
+        if table.node_holds(b, held):
+            p = reg.get(b.target)
+            if not b.enabled or p is None or not p.modulatable:
+                out[id(b)] = ""
+            else:
+                out[id(b)] = LOOP_OFF if (b.source, b.target) in stays else NODE_MODE_HOLDS
+    return out
+
+
+def route_said(b, table, reg: Registry, cut: bool = False, held: str = "") -> tuple[float, str]:
     """A route's effective depth — `value × scale × Π depth subscribers`,
     the arithmetic `Router.modulate` runs — and the words its hover says:
-    the depth, the op, what scales it, its gate, a loop's cut."""
+    the depth, the op, what scales it, its gate, a loop's cut, and `held`:
+    what `routes_held` says of it."""
     subs = list(table.depth_subs(b)) if hasattr(table, "depth_subs") else []
     depth = float(b.value)
     said = [f"depth {b.value:+.2f}", b.op]
@@ -1892,7 +1942,9 @@ def route_said(b, table, reg: Registry, cut: bool = False) -> tuple[float, str]:
     if b.when is not None:
         said.append(f"while {b.when}")
     if cut:
-        said.append("off: a loop needs a delay")
+        said.append(LOOP_OFF)
+    if held:
+        said.append(held)
     return depth, "  ".join(said)
 
 
@@ -1945,6 +1997,7 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
     table = getattr(router, "table", None) if router is not None else None
     cut = set(getattr(router, "modgraph_cut", ()) or ()) if router is not None else set()
     layer_of = getattr(table, "layer_of", None)
+    route_rest = routes_held(table, reg, router) if table is not None else {}
     for n in view.nodes:
         if n.layer and layer_of is not None:      # plan 28 N5: the latch, read each frame
             up = layer_of(n.role or None)
@@ -1964,19 +2017,23 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
     for c in view.cables:
         if c.kind == "render":
             continue
-        if c.addr is not None:
+        if c.kind == NODE_MODE:     # a knob publishes no lane: what it holds is its param
+            at = c.ref          # (a name of its own: testing `c.ref` narrows it for the rest)
+            c.live = _norm(reg.get(at[1].target)) if at is not None else c.live
+        elif c.addr is not None:
             c.live = reading(router, c.addr, lanes)
         elif c.kind == "sub":
             c.live = _norm(reg.get(c.ref[0]))
             c.label = sub_said(c.ref[1])
         if c.kind == "route" and table is not None:
             b = c.ref
-            c.depth, c.label = route_said(b, table, reg, (b.source, b.target) in cut)
+            c.depth, c.label = route_said(b, table, reg, (b.source, b.target) in cut,
+                                          route_rest.get(id(b), ""))
         grey = False
         hit = view.owner(c.src_port)
         if hit is not None and (hit[0].grey or (hit[1] is not None and not hit[1].up)):
             grey = True                  # a lost device, or a desk layer that is down
-        c.dormant = c.off or grey or (c.kind != "sub" and c.live is None)
+        c.dormant = c.off or grey or (c.kind not in ("sub", NODE_MODE) and c.live is None)
 
 
 def key(table: Bindings, reg: Registry, router: Router | None, devices,
@@ -1989,6 +2046,7 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
     a new view only when this moves."""
     rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when)
                  for b in table.bindings)          # not `value`: `refresh` follows a depth
+    node_desk = getattr(table, "node_desk", None)
     subs = tuple((mid, len(m.subs), m.label) for mid, m in
                  (getattr(table, "macros", {}) or {}).items())
     devs: tuple = ()
@@ -2006,7 +2064,8 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
             devs, id(render_graph), id(spec), len(labels.get("lane") or ()),
             tuple(labels.get("lfo") or ()), tuple(labels.get("env") or ()),
             frozenset(getattr(router, "modgraph_cut", ()) or ()) if router is not None else (),
-            effect_switches(reg), seq_key(reg), channel_bins(reg))
+            effect_switches(reg), seq_key(reg), channel_bins(reg),
+            node_desk.key() if node_desk is not None else ())
 
 
 def seq_key(reg: Registry) -> tuple:
@@ -2341,6 +2400,14 @@ def idle_id(area: str) -> str:
 SHADER_ROW = 4         # the effects' chain wraps into rows of this many columns (Z rows)
 THROUGH = "through"    # a display-only wire over a run of hidden (off) effects
 NODE_MODE = "node_mode"    # a controller's control on a node's param (plan 57, `nodemode`)
+NODE_PIN = "node"          # the pin such a cable lands on when its param's port is another node's
+UNDER_NODE_MODE = "  (under node mode)"
+NODE_MODE_HOLDS = "off: node mode holds this param, back on leave"
+LOOP_OFF = "off: a loop needs a delay"
+# its colour, read by the canvas and the on-screen desk (not in `ui`: `ui_graph` is made
+# while `ui` is being imported, and reads this at its top)
+NODE_MODE_RGB = (0.30, 0.90, 0.55)
+LEAVE_WORDS = "a node mode cable is no row: leave the node to end it (right-click, or the side pane)"
 
 
 def throughs(view: View, shown: Callable[[VNode], bool]) -> list[VCable]:
@@ -2940,7 +3007,7 @@ def wiring(view: View, collapsed: Callable[[str], bool],
     one wire to its typed pin, a value cable bundled per (node, pin) when
     its other end is collapsed, so each row keeps its own wire."""
     singles: list[tuple[VCable, str, str]] = []
-    pairs: dict[tuple[str, str, str, str], VBundle] = {}
+    pairs: dict[tuple[str, str, str, str, bool], VBundle] = {}
     for c in (*view.cables, *extra):
         if drawn is not None and not drawn(c):
             continue
@@ -2963,10 +3030,13 @@ def wiring(view: View, collapsed: Callable[[str], bool],
         if c.kind in ("render", THROUGH) or c.type in RENDER_TYPES:
             singles.append((c, src, dst))
         elif shut_s or shut_d:
-            k = (s, d, a, z)
+            # N1b: node mode's rows have a bundle of their own, or a mixed one on a
+            # collapsed node reads white (`ui_graph._bundle_colour`)
+            own = c.kind == NODE_MODE
+            k = (s, d, a, z, own)
             b = pairs.get(k)
             if b is None:
-                bid = f"bundle:{a or s}>{z or d}"
+                bid = f"bundle:{a or s}>{z or d}" + ("|node" if own else "")
                 b = pairs[k] = VBundle(bid, s, d, out_pin=a, in_pin=z)
             b.cables.append(c)
         else:
@@ -3299,7 +3369,13 @@ def _boundary(view: View, g: VGroup, mem) -> None:
                                         c.src_port), None)
             continue
         side = None
-        if c.kind in ("route", "setter") and isinstance(c.ref, Binding):
+        if c.kind == NODE_MODE:
+            # by where it lands, not whose param it is: a copy's knobs are its original's,
+            # and the cable lands on the copy (`NODE_PIN`)
+            hit = view.owner(c.dst_port)
+            if c.ref is not None and hit is not None and any(n is hit[0] for n in g.members):
+                side = patches.CONTROL
+        elif c.kind in ("route", "setter") and isinstance(c.ref, Binding):
             b = c.ref
             if patches.touches(mem, b.source, b.target):
                 side = patches.side(mem, b.source, b.target)
@@ -3324,9 +3400,11 @@ def _boundary(view: View, g: VGroup, mem) -> None:
         else:                       # a control row, or a host lane / macro onto a member
             hit = view.owner(c.dst_port)
             param = hit[1].param if hit is not None and hit[1] is not None else None
-            key = f"param:{param}" if param else c.dst_port
+            # (a `NODE_PIN` stands for itself: it is a copy's, the param's stub its original's)
+            own = c.dst_port.startswith(f"{NODE_PIN}:")
+            key = f"param:{param}" if param and not own else c.dst_port
             name = (hit[1].name if hit is not None and hit[1] is not None else c.dst_port)
-            real = f"{MOD}:{param}" if param else c.dst_port
+            real = f"{MOD}:{param}" if param and not own else c.dst_port
             g.ends[c.id] = (None, pin_for(rows, key, IN, name, c.type, real, param))
     g.ports = [*ins.values(), *outs.values(), *lanes.values(), *rows.values()]
     g.inside = frozenset(inside)
