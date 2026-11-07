@@ -702,7 +702,8 @@ def test_a_library_in_the_home_is_still_found_with_no_copy(tmp_path):
 
 def test_the_device_list_finds_the_library_the_same_way(tmp_path):
     """Finding 3 in CT1: a copy ignored, and an adopt lost."""
-    from test_devicelist import LISTED, XBOX, on_disk as devices_on_disk, roles, toml
+    from test_devicelist import LISTED, XBOX, roles, toml
+    from test_devicelist import on_disk as devices_on_disk
 
     from hyperspace import devicelist
 
@@ -889,7 +890,7 @@ def test_a_control_window_seeded_onto_a_renders_display_stays_there(monkeypatch)
     on the primary."""
     rows_ = displays.seed_rows(_cfg(monitor=1, control_monitor=1), [LAPTOP, TV_LEFT], {}, [])
     assert rows_ == {"TV": row("output.1", floats_control=True)}
-    g, slots, ctrl, cfg, want = _launch(monkeypatch, {"Projector": row("output.1", floats_control=True)})
+    g, _slots, ctrl, cfg, want = _launch(monkeypatch, {"Projector": row("output.1", floats_control=True)})
     assert want.control is None and want.floats.display == "Projector"
     assert g.pos[ctrl][0] >= 1728 and cfg["output"]["control_monitor"] == 1
     # a row that has it wins, and with neither it's where it was
