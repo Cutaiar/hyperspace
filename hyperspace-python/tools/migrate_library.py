@@ -682,7 +682,7 @@ def backup(library: Path, home: Path) -> Path:
 def _file_count(root: Path, ignore) -> int:
     """Files under `root` as `shutil.copytree` walks it with `ignore` (links not followed)."""
     n = 0
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=True):  # as copytree
         left = ignore(dirpath, dirnames + filenames)
         dirnames[:] = [d for d in dirnames if d not in left]
         n += sum(1 for f in filenames if f not in left)
@@ -906,6 +906,7 @@ def main(argv: list[str] | None = None, *, picture=None, running=app_running) ->
             troubles = [(f"shows and .bak-v2-* files left as they are: {len(skipped)} "
                         "patch(es) not written still read them; --force or fix those, "
                         "then run again")]
+            troubles += delete([p for p in tidy_plan(library) if ".bak-v2-" not in p.name])
         else:
             # the shows, last of the file rewrites: `install_plan` again, over what is
             # written now
