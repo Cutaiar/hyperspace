@@ -144,8 +144,7 @@ class Control:
 
     def _land(self, strip: dict) -> None:
         """A scene's strip values onto the bands: through the registry when
-        the library has one (a base write — a performed knob keeps its
-        offset and is_dirty reads clean straight away), else onto the
+        the library has one (is_dirty reads clean straight away), else onto the
         analyzer's Params (the headless tests, no library)."""
         lib = self.library
         if lib is not None and lib.reg is not None:

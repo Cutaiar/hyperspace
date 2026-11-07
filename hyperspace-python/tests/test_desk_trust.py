@@ -428,7 +428,7 @@ def test_an_older_loadables_toggle_rows_drop_quietly_and_an_owners_row_with_a_no
     lib.loaded_patch.load("OLD DESK")
     assert lib.current("presets") == "OLD DESK"
     assert lib.loaded_patch.desk_notes == [
-        ("dropped note:7:52 → camera.reset: that control is invariant, the session's "
+        ("dropped note:7:52 → camera.reset: that control is invariant, the meta controller's "
          "(plan 13 D6)")]
     assert [b.source for b in t.desk()] == ["cc:0:48", "cc:0:55", "note:0:86"]
     for (pid, n), want in zip(TOGGLES, (True, False, True, False)):

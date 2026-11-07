@@ -56,7 +56,7 @@ Knob smoothing (plan 18 WP2): desk.slew, off and at 80 ms (the app's default). 6
    2 frames into a turn to the end and a fade to black: pan 1379 px, dim 0.655; gliding: ['camera.pan.x', 'output.dim']
    load TRIP: pan is 0 px (the preset's)
    next frame: pan 0 px, dim 0.483; gliding: ['output.dim']
-   20 frames on: pan 0 px (the load's value stands), dim 0.000 (the session's: it arrived), the crossfader still caught: True
+   20 frames on: pan 0 px (the load's value stands), dim 0.000 (the meta controller's: it arrived), the crossfader still caught: True
 
 5. One turn is one undo step at 80 ms
    after the 2 s turn: 1 step on the stack, still open (label '')

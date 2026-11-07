@@ -5,36 +5,23 @@ the Audio source row). The same cheap AST check that keeps the hands
 package and the LFOs liftable (test_hands_boundary.py, test_lfo_boundary.py).
 """
 
-import ast
-from pathlib import Path
-
 import pytest
+from walls import family, imports, inside, module_of, shown
 
-PKG = Path(__file__).resolve().parents[1] / "hyperspace"
-STACK = ("audio.py", "analysis.py", "analyzer.py", "bands.py", "offline.py")
+FILES = [f for stem in ("audio", "analysis", "analyzer", "bands", "offline") for f in family(stem)]
 # the stack may reach only itself, the taper maths and the followers (motion.py)
-ALLOWED = {"audio", "analysis", "analyzer", "bands", "tapers", "motion"}
+ALLOWED = {module_of(f)[0] for f in FILES} | {"tapers", "motion"}
 
 
-def _imports(path: Path):
-    """(module, level) for every import in the file."""
-    out = []
-    for n in ast.walk(ast.parse(path.read_text())):
-        if isinstance(n, ast.ImportFrom):
-            out.append((n.module or "", n.level))
-        elif isinstance(n, ast.Import):
-            out += [(a.name, 0) for a in n.names]
-    return out
-
-
-@pytest.mark.parametrize("name", STACK)
-def test_the_audio_stack_imports_nothing_above_it(name):
-    for mod, level in _imports(PKG / name):
+@pytest.mark.parametrize("path", FILES, ids=shown)
+def test_the_audio_stack_imports_nothing_above_it(path):
+    for mod, level in imports(path):
         if level:
-            assert level == 1 and mod.split(".")[0] in ALLOWED, \
-                f"{name} reaches up the stack: {'.' * level}{mod}"
+            where = inside(path, mod, level)
+            assert where and where[0] in ALLOWED, \
+                f"{shown(path)} reaches up the stack: {'.' * level}{mod}"
         else:
-            assert not mod.startswith("hyperspace"), f"{name} imports {mod}"
+            assert not mod.startswith("hyperspace"), f"{shown(path)} imports {mod}"
 
 
 def test_the_chain_runs_with_no_host_at_all():

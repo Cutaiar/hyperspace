@@ -662,13 +662,15 @@ adds a second acid: the effect `acid.2` in `FxState`
 params in the loadable patch's `values`), its own clock and place in the chain,
 on the acid file's one compiled program. `{"kind": "hands", "instance":
 2}` adds a second hands node `ghost.2`: its own `Ghost`
-(`Renderer.ghost_of`) over its own state, its own shared meta params
-`ghost.2.on/alpha/mirror/guide/tethers/style` (`ghost.2.on` starts off),
+(`Renderer.ghost_of`) over its own state, its own patch params
+`ghost.2.on/alpha/guide/tethers/style` (`ghost.2.on` starts off; the state
+follows the room's one `ghost.mirror`, LY1),
 its layer `hands.2` and its lone readout `readout.2`. Every `into:
 "scene"` node is in the scene; the `into: "layer"` node (else the first)
 makes the one layer, laid on the outputs without the hands in their
-scene. A show holds `ghost.<n>.*` back until a loadable patch's graph declares
-the node, then seeds it. `draw: "lines"` draws a style's meshes as their
+scene. An old show's `ghost.<n>.*` ids are held back and kept by a save; its look
+still lands (`old_look`). Only `ghost.<n>.mirror` is read by nothing, and the show
+says so at open if it differs from `ghost.mirror` (row 773). `draw: "lines"` draws a style's meshes as their
 triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
 solid.
 
@@ -1277,8 +1279,8 @@ placements, `palette-hands`, `palette-glass`, `acid-scene`, and plan
 recorded cloud listed in a scratch config (`cloud/…`). A golden is the
 SHA-256 of the full-resolution RGBA frame, with a quarter-size PNG per
 distinct picture and the route each state reached (a wired output's
-route reads `none`, with a `"wired"` key naming its source): **596
-goldens, 140 distinct pictures** (556 before plan 30, which recorded 24
+route reads `none`, with a `"wired"` key naming its source): **789
+goldens, 195 distinct pictures** on 2026-11-06 (556 before plan 30, which recorded 24
 for its fixtures, and plan 28's N4 16 for its own; neither moved one
 recorded before it), recorded on `GL_RENDERER` "Apple
 M3 Max" (GL_VERSION "4.1 Metal - 90.5"). `tests/test_golden_frames.py`
@@ -1286,7 +1288,7 @@ compares every hash exactly there and skips with a note on any other
 renderer. The tool:
 
 ```bash
-uv run python tools/golden_frames.py                          # diff; "all 596 frames match their goldens (…)"
+uv run python tools/golden_frames.py                          # diff; "all <n> frames match their goldens (…)"
 uv run python tools/golden_frames.py --only party-trip,legacy6 # those presets only
 uv run python tools/golden_frames.py --record                 # re-record every golden
 uv run python tools/golden_frames.py --only hands-lines --record   # re-record those, keep the rest
@@ -1500,8 +1502,8 @@ map = "midi_map.json"   # an old map, read once when bindings.json does not exis
 
 [output]                # output 1 and the control window
 overlay = false         # true allows overlay mode; false: always opaque, T does nothing
-monitor = -1            # screen index for the render window (and fullscreen); -1 = where it was last
-control_monitor = -1    # screen index for the control window; -1 = where it was last
+monitor = -1            # the render window's screen (and fullscreen's): a name ("MStar", "MStar #2") or an index; -1 = where it was last
+control_monitor = -1    # the control window's screen: a name or an index; -1 = where it was last
 fullscreen = false
 on_start = false        # launch straight into overlay (needs overlay = true)
 passthrough = true      # overlay: clicks go to the window underneath
@@ -1675,6 +1677,12 @@ as built.
 
 ### The device list
 
+**Since wave 5 CT1 the list lives in `<library>/devices.json`, shared by both Macs,
+and is set from the player board: a new controller waits in the tray until it's
+dragged to a player. On or off is each Mac's, in `<home>/devices.here.json`, by a chip on
+the same board. What follows is the seed, read once per Mac and then not at all; RT1
+retires it. `devicelist.py` has the rules.**
+
 Every input and output is a `[[devices]]` entry (plan 27). Without a
 list, nothing changes: the four device tables above — `[gamepad]`,
 `[midi]`, `[hands]`, `[bridge]`, with their defaults — become the
@@ -1810,7 +1818,7 @@ the panel at 540 and the desk takes what is left.
 | CAMERA | Zoom (0.005–200×, log, so 1× sits at the knob's noon — far enough out to frame a field of thousands), yaw, pitch, pan, reset. |
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
 | FX | The effect stack (§2). |
-| AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
+| AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3; while on, a line under it says off air reacts, row 790) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | Under its head, ANALYZER TUNING: the analyzer's scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
 | ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the meta controller's MIDI rows read-only, the sinks, and a filter (§9). |
 | GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
@@ -1980,7 +1988,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   patch groups, the template), in the show's for the meta controller's
   (devices, the analyzer, LFOs, outputs, shared meta groups); an unplaced
   node takes its column by kind (a collapsed node its lines' height).
-  SYSTEM shows `graph page: X ms median (N nodes, M cables)` (1.27 ms on
+  SYSTEM shows `graph draw: X ms median (N nodes, M cables)` (1.27 ms on
   party-trip at 960 × 900, collapsed; 2.66 ms with every node expanded;
   N2's page drew 2.3–2.8 ms).
 - **The editor context** is held on the panel (a hot reload of
@@ -2423,10 +2431,9 @@ else stands and the glide stops; a loadable patch load ends every glide but a
 shared meta param's; off, an unplug or a quit lands every value at once. The
 setting is saved with the show, never with a loadable patch, and is on no knob.
 
-**Reconnect.** With no desk connected the app looks for it every 2 s
-five times, then every 10 s (`midi.RECONNECT_S`, `RECONNECT_FAST`,
-`RECONNECT_SLOW_S`); a desk that vanishes is looked for at the fast pace
-again. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
+**Reconnect.** With no desk connected the app looks for it every 2 s,
+all night (`midi.RECONNECT_S`, row 791), so a desk back from any absence
+is found as fast. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
 comes, it gets its power-up and every light. `enabled = false` on its
 entry (or `[midi] enabled = false` in the old form) stops all of it.
 
@@ -3061,9 +3068,9 @@ frame's size and paces the loop (its swap waits for its screen; later
 outputs' swaps do not). Later outputs are opaque, never overlay, and
 their screen and fullscreen come only from the config (the OUTPUT page's
 Screen and Fullscreen rows move output 1). A later output whose
-`monitor` names no connected screen **is not opened**, with a note
-("output 2 (projector): monitor = 2, but 2 screens are connected (0–1) —
-not opened"); output 1 always opens. A later output of another shape
+`monitor`, index or name, finds no connected screen **is not opened**,
+with a note ("output 2 (projector): monitor = 2, but 2 screens are
+connected (0–1) — not opened"); output 1 always opens. A later output of another shape
 shows the whole frame letterboxed, the hands registered on it. Each
 later output is drawn from the shared textures in its own context
 (`outputs.Presenter`); a failing present marks that output and the rest
@@ -3115,8 +3122,22 @@ see-through, clicks passing through (G or PAN takes them back);
 `output.bg` and `output.alpha` set the ground and opacity. The
 `overlay.*` ids are aliases of `output.*`.
 
+**A screen by name** (`placement.match`, row 771): `monitor` and
+`control_monitor`, and `monitor` on a `[[output.screens]]` entry, may
+give a screen's exact whole name, case and all: "TV" does not find
+"TV Samsung". Two screens of one name are two screens: "MStar #2" is the
+second of them, counted left to right across the desk by the monitor's
+frame rather than in the window system's order, so a replug can't swap
+them. A Mac's own " (n)" isn't counted, so "DELL #2" works when it lists
+"DELL (1)" and "DELL (2)". "MStar" alone on two is the first, with a note
+naming both; "MStar #1" on a twin alone uses it, with a note every launch
+(row 772). `placement.labels` gives the word for each screen. An index
+still works. A name becomes an index once, at the launch
+(`placement.settle`, `app._slots`): `Output.monitor` and `Slot.monitor`
+stay indices at runtime until SC3b.
+
 **Where windows open** (`placement.py`): a configured `monitor` /
-`control_monitor` index first, then `windows.json` (the last quit's
+`control_monitor` first, then `windows.json` (the last quit's
 rects — always the plain window's, never a fullscreen cover), else the
 render window top-left of the primary screen and the controls flush
 right; two later outputs with no memory open 40 px apart. A remembered
@@ -3169,10 +3190,24 @@ show: a log that will not open is kept as an error and the loop goes on.
 ## 16. Testing
 
 ```bash
-uv run pytest -q          # the fast tier, in parallel (~17 s)
-uv run pytest --all -q    # every tier: golden, slow, live (~55 s)
+uv run pytest -q          # the fast tier, in parallel
+uv run pytest --all -q    # every tier: golden, slow, live
 uv run ruff check .
 ```
+
+**Last measured, 2026-11-06, at 8977705 (one line, changed only by the orchestrator, so parallel PRs don't conflict here):** `--collect-only` 6,753 fast tier and 6,976 with `--all` (`golden` 144, `slow` 44, `live` 36; one test is in two tiers); `fast-tier.sh -rs --durations=10`, `6750 passed, 3 skipped` in 133 s on a shared "Apple M3 Max"; CI's `Fast tier` step on `ubuntu-24.04`, about four minutes; `--all` not yet timed.
+
+`fast-tier.sh` is `~/.claude/handoffs/wave4/fast-tier.sh`: `pytest -q -n 4` behind two
+machine-wide slots. A bare `uv run pytest -q` (`-n auto`, sixteen workers) has not been
+timed at this size, because a shared Mac doesn't run one. (The ~17 s and ~55 s this section
+gave until 2026-11-06 were `-n auto` on a suite of about 3,940 tests.)
+
+**The `--all` that the orchestrator runs records its durations.** It adds
+`--durations=60` to `fast-tier.sh --all -rs`, and its summary line, wall time and slowest
+list go in the merge body or the PR body, **never in a commit on the PR**: a commit moves
+the head that CI just vouched for. The orchestrator updates the line above, with the date
+and head, in the next docs commit that lands anyway. Plan 58 §6's "cheaper goldens" waits
+on this figure, and conftest's tier tables are re-measured from the same list.
 
 - Tiers: `golden`, `slow` and `live` are markers `tests/conftest.py`
   applies by name (see "Running the automated tests" in
@@ -3181,10 +3216,25 @@ uv run ruff check .
 - **One tier at a time on a shared Mac** (row 589). Every xdist worker
   that imports torch holds about 1 GB, and `-n auto` is sixteen of them
   on the M3 Max: two or three `--all` runs from parallel sessions took
-  the machine to 140 GB on 2026-11-01. A meta controller that is not the one
+  the machine to 140 GB on 2026-11-01. A Claude Code session that is not the one
   merging runs the fast tier with a few workers (`-n 4`), one run at a
   time, and leaves `--all`, the goldens and `tests/test_media_live.py`
   to whoever merges.
+- **A builder's last check may be CI rather than a machine slot** (row 770). Push, then
+  `python3 tools/wait_green.py <pr> <head>`, plain `python3` because it is standard library
+  only and `uv run`'s own failure codes would read as its codes. It waits for that head's
+  newest `tests` run and exits 0 only if that run finished with success. 2: it finished
+  any other way, skipped included. 3: the PR's head isn't the one given or moved during the
+  wait; it is read again on every poll, since a push cancels the old head's run
+  (`cancel-in-progress`). 4: no run appeared in 10 minutes. 5: still going 30 minutes after
+  it appeared. 6: `gh` gave no answer, at the first read or for 5 minutes in a row, with
+  `gh`'s own stderr shown. 1: bad arguments, a head under 7 characters, or `--help`. It
+  only waits and it merges nothing, with two `gh` reads and no other way out
+  (`tests/test_wait_green.py`). `main` has no required checks, so `gh pr merge --auto`
+  merges at once: whoever merges waits first, and then merges by hand. CI is ruff and the
+  fast tier on Linux, so it sees no golden, no `slow` or `live` test and no Mac GL. A PR
+  that touches the render path, the loader or `graphmigrate` still gets the orchestrator's
+  `--all`, and a builder reports "CI green at <head>" as that, not as a run of the fast tier.
 - **A hung test fails by name.** pyproject's addopts carry
   `--dist load --timeout=120 --max-worker-restart=4` and its ini key
   `timeout_method = "thread"`. **Workers use the thread method, a
@@ -3198,7 +3248,7 @@ uv run ruff check .
   no summary, so there the signal method fails the test and goes on
   (a `sleep(130)` under `-n0 --timeout=5`: "1 failed, 2 passed"; with
   `--timeout-method=thread` named, the process ended with no summary).
-  The slowest fast-tier test takes about 6 s, far under the limit.
+  The slowest fast-tier test takes about 7 s (7.28 s, 2026-11-06), far under the limit.
 - **The restart cap, measured** (2026-11-02, `-n 2`, one test that
   `os._exit`s and forty quick ones; "default" is xdist's own cap,
   `-n` × 4):
@@ -3257,7 +3307,7 @@ uv run ruff check .
   the other (without the run's id the second skipped), and with a test
   that waits 2 s for its turn under `--timeout=1` and passes. A live
   test may not use a fixture wider than the test (module, class,
-  package or meta controller scoped, bar pytest's own deviceless ones): it
+  package or session scoped, bar pytest's own deviceless ones): it
   would be set up before the lock, outside it, so `pytest_runtest_setup`
   fails that test by name before any fixture is set up (after its skip
   marks: a skipped one is a skip, not an error), without taking the
@@ -3265,7 +3315,7 @@ uv run ruff check .
   and a deselected test is never looked at); none does today. The file is
   per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
   cannot be opened or locked is a skip with the reason, never an error.
-  The folder is `tempfile.gettempdir()`, so a meta controller whose `TMPDIR`
+  The folder is `tempfile.gettempdir()`, so a Claude Code session whose `TMPDIR`
   differs (a sandbox that sets its own) gets a different lock file and
   does not take turns with the others.
 - **Why `glfwInit()` hangs on the Mac, and the recovery.** A sample of
@@ -3318,10 +3368,13 @@ uv run ruff check .
   (row 606). The source is fixed too: a test that calls `glfw.init()`
   calls `glfw.terminate()` when it is done (that test does now); the
   guard stays as the belt.
-- One test is skipped:
+- The fast tier skips three tests on the Mac (2026-11-06, `-rs`):
   `tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost`,
   because no real hand tape has been recorded into
-  `tests/fixtures/hands/` (`tools/hands_tape.py record` on the rig).
+  `tests/fixtures/hands/` (`tools/hands_tape.py record` on the rig);
+  one in `tests/test_paired_axes.py` ("no Model.layout on this base (#365)");
+  and the face shaders' reference-compiler test where `glslangValidator`
+  is not installed.
 - The parity net: `tests/golden/` traces recorded from the retired HTML
   app (`tools/record_golden.py`, which needs Playwright's Chromium) hold
   geometry exact and the audio chain's behaviour; `tests/legacy_chain.py`
@@ -3351,8 +3404,8 @@ uv run ruff check .
   system font, so a fit test measures the same on the Mac and in CI and
   holds every line whole everywhere. A fit test that breaks is fixed in
   the layout, not loosened.
-- The golden frames: `tests/test_golden_frames.py` compares 596
-  full-resolution frames — every corpus loadable patch in every output state,
+- The golden frames: `tests/test_golden_frames.py` compares 789
+  (2026-11-06) full-resolution frames — every corpus loadable patch in every output state,
   hands absent and present, the other wirings, the fixture loadable patches and a
   recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only
   (anywhere else it skips with a note). `tools/golden_frames.py` diffs
@@ -3451,9 +3504,7 @@ hung test fails alone and names itself instead of stalling its worker;
 a crashed worker's queue goes to its replacement, up to four, then the
 run ends — row 605) — the same values pyproject's addopts carry, with
 the thread method, so the explicit flags are redundant but consistent.
-(Until the owner lands that workflow edit, CI still says
-`--max-worker-restart=0`, which wins over addopts.) The fast tier takes about two minutes on
-four cores.
+The fast tier takes about four minutes on four cores (§16's last-measured line).
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK
   to build `leapc-cffi` against, and Linux torch wheels pull gigabytes
@@ -3470,7 +3521,7 @@ four cores.
 
   A Claude Code cloud session makes the same machine at start
   (`.claude/hooks/session-start.sh`): the libraries, the sync, a display
-  on `:99`, and `UV_NO_GROUP` kept for the meta controller.
+  on `:99`, and `UV_NO_GROUP` kept for the session.
 
 - **Linux, not macOS.** A `macos-15` job was tried (2026-10-29): its GL
   is "Apple Software Renderer" (no GPU in the runner's VM), it has no
@@ -3495,6 +3546,18 @@ four cores.
   process) and the kernel killed it. Per test, a worker peaks near 1 GB.
   `test_golden_frames.py` and `test_graph_frame.py` keep their own
   module-scoped context for their module-scoped rigs.
+- **The type ratchet** (row 788). A new pyright complaint fails, an old
+  one doesn't: `tools/type_ratchet.py` counts them against
+  `tools/type_baseline.json` by file and rule, under `[tool.pyright]`
+  (pyright pinned exactly in the dev group). It holds in the fast tier,
+  `tests/test_type_ratchet.py::test_no_new_complaint_in_the_app`, so CI
+  holds it with no step of its own. It takes 12 to 22 s of one worker on
+  the Mac (13.38 s in a full `-n 4` fast tier of 137.78 s), about 3 s of
+  that tier's wall time by division, not measured apart.
+  `uv run python tools/type_ratchet.py` lowers the baseline where errors
+  went (commit it), on a full sync only; `--check` writes nothing;
+  `--accept` takes a split that leaves every rule's total level;
+  `--raise-baseline` is the one way up, and the PR says why. Pyright reads the source and opens no GL.
 - **Making it blocking** is a setting on `main`, not a file: Settings →
   Rules → Rulesets → New branch ruleset, target `main`, "Require status
   checks to pass", add `tests` (or Settings → Branches → a protection
@@ -3514,9 +3577,10 @@ What only a person at the machine can check is
   Output 1 waits for its screen and later outputs do not; whether that
   paces the loop on two real screens, and whether a non-waiting
   fullscreen output tears, is unknown.
-- **With no desk connected the app keeps looking** — every 2 s five
-  times, then every 10 s. Each look creates a CoreMIDI client; `enabled
-  = false` on the desk's entry (or `[midi] enabled = false`) stops it.
+- **With no desk connected the app keeps looking** — every 2 s. A look
+  makes no client (`midiports`, audit R15, closed) and costs about 0.25 ms
+  a pair of ports on the frame thread; `enabled = false` on the desk's
+  entry (or `[midi] enabled = false`) stops it.
 - **At most one hands node makes the layer.** Since plan 28 a loadable patch's
   `graph` section can wire which output gets which hands node and which
   effects it alone takes (§2, the wire list); an output no wire names
@@ -3542,5 +3606,4 @@ What only a person at the machine can check is
   held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
-- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R13, R14,
-  R15, U9, U10, P6, V8.
+- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): P6, V8.

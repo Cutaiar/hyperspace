@@ -93,6 +93,7 @@ from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
 from .deck import KEYS, MOUSE, Deck, DeckHooksMade, Fade, MetaController, Mix, register_xfade
+from .devicelist import DeviceList
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 from .hotreload import HotReloader
 from .learn import Learn
@@ -105,6 +106,7 @@ from .media.channels import Channels, MediaState
 from .media.folder import MediaFolder
 from .media.panel import GRAPH as PANEL_GRAPH
 from .media.panel import PanelSource
+from .midiports import port_names
 from .outputs import (
     CanvasTap,
     Offscreen,
@@ -250,6 +252,13 @@ class MediaIO:
         self.off_air: list = []       # the channels of the decks but the first (plan 44 D4)
         self.heard: Callable[[], Any] | None = None   # the channels on air; None: `state`
 
+    def seat(self, meta) -> None:
+        """The meta controller's two `Deck`s: `state` is the first's channels and the other's
+        are polled beside it, and the mixer plays whichever `Deck` is on air, as it moves."""
+        self.off_air[:] = [c for c in (d.loaded_patch.media for d in meta.decks)
+                           if c is not self.state]
+        self.heard = lambda: meta.on_air.loaded_patch.media
+
     def poll(self, dt: float, now: float) -> None:
         # each source read once a frame from here on, whichever deck asks
         # (plan 44 §8: both renderers handed the same `MediaFrame`)
@@ -337,20 +346,34 @@ def _save_windows(home, render_win, ctrl_win, output, more=()) -> None:
     placement.save(home, control, render, placement.screens(glfw))
 
 
-def _slots(cfg: dict | None) -> list[Slot]:
+def _slots(cfg: dict | None, scr: list | None = None, notes: list | None = None) -> list[Slot]:
     """The render outputs the config lists (config.screens: one with no
-    list), numbered from 1, with their launch switches; no window yet."""
+    list), numbered from 1, with their launch switches; no window yet.
+    A later output's monitor given by name is an index from here on, by
+    `scr` (row 771), and one no screen has is `missing`, as an index no
+    screen has is (fork F9), said in `notes`. Output 1's is
+    `placement.settle`'s, since it always opens."""
     from . import config
 
     out = []
     for k, e in enumerate(config.screens(cfg or {})):
         sw = Switches(scene=bool(e["scene"]), hands=bool(e["hands"]), dim=float(e["dim"]),
                       flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
+        window = bool(e.get("window", True)) or k == 0
+        name, monitor, said = placement.named(e["monitor"]), e["monitor"], ""
+        if k and scr and name and window:
+            monitor, said = placement.resolve(name, scr)
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
-                        monitor=placement.index(e["monitor"]),
+                        monitor=placement.index(monitor),
                         fullscreen=bool(e["fullscreen"]),
-                        window=bool(e.get("window", True)) or k == 0,
+                        window=window,
                         syphon=str(e.get("syphon", "") or ""), ndi=str(e.get("ndi", "") or "")))
+        if said:
+            if monitor < 0:
+                out[-1].missing = f'screen "{name}" is not connected'
+            if notes is not None:
+                tail = " — not opened" if monitor < 0 else ""
+                notes.append(f"config: {out[-1].label}: monitor = {name!r} {said}{tail}")
     return out
 
 
@@ -410,7 +433,9 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     scr = placement.screens(glfw)
     oc = (cfg or {}).get("output", {})
     oc = oc if isinstance(oc, dict) else {}
-    slots = _slots(cfg)
+    # a name in the config is an index from here on, said once (row 771)
+    said = placement.settle(oc, scr) if scr else []
+    slots = _slots(cfg, scr, said)
     render_rect = ctrl_rect = None
     later_rects: list = [None] * len(slots)
     notes: list[str] = []
@@ -432,7 +457,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             notes += [n1, n2]
             taken = [tuple(render_rect[:2])]
             for k, slot in enumerate(slots[1:], start=1):
-                if slot.publish_only:
+                if slot.publish_only or slot.missing:
                     continue
                 later_rects[k], n = _later_rect(slot, k, scr, renders, taken)
                 notes.append(n)
@@ -448,7 +473,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
                 if not slot.missing:
                     r = placement.default_rect("render", RENDER_SIZE, scr[0])
                     later_rects[k] = (r[0] + CASCADE * k, r[1] + CASCADE * k, r[2], r[3])
-    for note in filter(None, [*notes, *idle]):
+    for note in filter(None, [*said, *notes, *idle]):
         print(note, file=sys.stderr)
         if cfg is not None:
             cfg.setdefault("notes", []).append(note)
@@ -534,9 +559,10 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     out = Output(win, GlfwBackend(glfw), allowed=_overlay_allowed(cfg))
     out.register(reg)
     # a screen index, or −1: `_windows` has already put −1 in place of an
-    # index no connected screen has (and placement said so), `config.load`
-    # in place of anything that is not a number — and a cfg that came by
-    # neither road must not stop the launch here either (plan 16 WP7)
+    # index no connected screen has and made a name its index (and placement
+    # said so; an index at runtime until SC3b, row 771), `config.load` put −1
+    # in place of anything neither a number nor a name — and a cfg that came
+    # by neither road must not stop the launch here either (plan 16 WP7)
     out.monitor = placement.index(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
     out.render = render_index(oc.get("render", RENDER_DEFAULT))
@@ -793,7 +819,7 @@ def _hand_settings(reg: Registry, cfg: dict):
 
 
 def _open_devices(cfg: dict, ctx: devices.Context, home: Path | None,
-                  clock=time.monotonic) -> devices.DeviceRegistry:
+                  clock=time.monotonic, store: DeviceList | None = None) -> devices.DeviceRegistry:
     """The device registry (devices.py, plan 27 B1) over the config's
     `[[devices]]` list — the old `[midi]` / `[gamepad]` / `[hands]` /
     `[bridge]` tables translated when there is none — every device opened
@@ -801,12 +827,16 @@ def _open_devices(cfg: dict, ctx: devices.Context, home: Path | None,
     `[hands] tape` that is missing) is said on stderr and in
     `cfg["notes"]`, which the SYSTEM page lists and the HANDS page shows
     in place of "tracker off" (plan 21 WP5 R10), and is tried again on
-    the Ports schedule. The registry watches `<home>/config.toml` for
-    edits to the list."""
-    path = (home / config.FILE) if home is not None else None
+    the Ports schedule. With a `store` (`devicelist.DeviceList`, `main`'s) the
+    registry watches that for the other Mac's changes, and the tray can adopt;
+    with none, `<home>/config.toml` for edits to the list. The first look for
+    MIDI ports is made here, before any frame, as it takes up to a second."""
+    path = (home / config.FILE) if home is not None and store is None else None
     reg = devices.DeviceRegistry(config.devices(cfg), ctx, path=path, clock=clock,
-                                 notes=cfg.setdefault("notes", []))
+                                 notes=cfg.setdefault("notes", []), store=store)
     reg.open_all()
+    if not cfg.get("no_midi_look"):
+        port_names()
     return reg
 
 
@@ -1423,7 +1453,7 @@ def _args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--laptop", "--single", action="store_true",
                    help="one screen, no projector: the render output is a plain window "
                         "(no fullscreen, no overlay, no later outputs) and the controls "
-                        "come to the front; the rig's remembered window spots are "
+                        "come to the front; this Mac's remembered window spots are "
                         "neither used nor overwritten")
     return p.parse_args(argv)
 
@@ -1436,9 +1466,15 @@ def main(argv: list[str] | None = None) -> None:
     if args.laptop:
         config.laptop(cfg)
     home = library_home()                 # the folder config.load has just ensured
+    # the controllers both Macs share, from the library's configured path: before anything
+    # reads `cfg`'s device tables, and whether or not that folder is mounted
+    device_list = DeviceList.open(cfg, home)
     # the players, on this Mac (plan 55): beside bindings.json, before the devices
     # read who holds what
     players = Players.load(home, cfg.setdefault("notes", []))
+    # (a rename the list's first read made: before the devices open, so they open right)
+    for old_role, new_role in device_list.take_renames():
+        players.rename(old_role, new_role)
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
     # with no list) and the controls; output 1's window is the render window.
     # On a laptop the show machine's windows.json is not read: its spots are the show machine's
@@ -1567,6 +1603,7 @@ def main(argv: list[str] | None = None) -> None:
             raise RuntimeError("Deck.build: the panel hook needs the outputs hook's Output")
         panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
         panels.append(panel)
+        panel.graph_start_zoom = placement.window_zoom(glfw, ctrl_win)   # plan 58 SM2
         panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
         panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
         panel.output = output
@@ -1593,7 +1630,7 @@ def main(argv: list[str] | None = None) -> None:
                                                  audio=audio, hand_settings=hand_settings,
                                                  notes=cfg.setdefault("notes", []), home=home,
                                                  players=players),
-                            home)
+                            home, store=device_list)
 
         def point_at_devices() -> None:
             panel.midi = device_reg.adapter("midi")         # the first desk listed: the APC40's page
@@ -1662,7 +1699,6 @@ def main(argv: list[str] | None = None) -> None:
     channels2 = Channels(sources=media.state.sources)
     renderer2.media = channels2
     rendering.append(renderer2)
-    media.off_air.append(channels2)
     deck2 = Deck.beside(deck, renderer=renderer2, media=channels2)
     renderer2.ghost.router = deck2.router       # the guide lights what its table routes
     deck2.learn.devices = device_reg                   # what can be armed, on either deck's Learn
@@ -1671,7 +1707,7 @@ def main(argv: list[str] | None = None) -> None:
     # deck 1 and moved by nothing yet. Each handle reads through its own from here
     meta = MetaController(deck, deck2, players, mix=mix)
     fade = Fade(deck, deck2, mix, ctx, dream=dream_io, pointer=meta.on_air_pointer)
-    media.heard = lambda: meta.on_air.loaded_patch.media
+    media.seat(meta)
     fade.said = lambda text: library.say(warning=text)    # a warm draw's failure, at once
     panel.fade = fade                  # the SYSTEM page's second GPU block
     panel.pointer = library.pointer = meta.panel_pointer
@@ -1687,6 +1723,8 @@ def main(argv: list[str] | None = None) -> None:
     # plan 55: who holds what names a pad's rows, so the list is read again when it
     # changes; a mapping on either deck moves the controller mapped
     meta.on_players.append(lambda: device_reg.apply(device_reg.entries))
+    device_reg.renamed = meta.rename_controller
+    meta.presence = lambda role: device_reg.presence(role)        # what an undo of a move asks
     device_reg.listeners.append(lambda: meta.reseat())    # the list can change who holds a role
     for on in meta.decks:
         on.learn.mapped = lambda b, on=on: device_reg.mapped(on, b)

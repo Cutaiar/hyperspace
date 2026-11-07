@@ -474,6 +474,13 @@ def chip_w(*labels: str) -> float:
     return w + s.item_spacing.x * max(len(labels) - 1, 0)
 
 
+def flush_right(w: float) -> None:
+    """On this row, go to where `w` px end at the content's right edge. `same_line`
+    counts from the window's edge, so `same_line(avail - w)` alone stops the window's
+    padding short and overruns a row budgeted to `avail` (audit U10)."""
+    imgui.same_line(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x - w)
+
+
 def button_w(*labels: str) -> float:
     """chip_w for full-size buttons (frame padding from the style)."""
     s = imgui.get_style()
@@ -535,7 +542,7 @@ def device_lines(registry) -> list[str]:
 def wanted_lines(registry, table) -> list[str]:
     """Plan 40 T4: the SYSTEM page's lines under the device lines, one per
     device role the loaded patch's rows want and the meta controller lacks — "wanted
-    by the preset: leap — not in this rig; 3 rows wait" (`devices.wants`,
+    by the preset: leap — not set up on this Mac; 3 rows wait" (`devices.wants`,
     `devices.wanted_lines`); none without a registry or a table."""
     if registry is None or table is None:
         return []
@@ -648,7 +655,7 @@ CHEATSHEET = [
     ("Cmd+Z", "undo, after a change here · ⇧ redo (or Ctrl+Z)"),
     ("Home", "home preset, off air (fn ←)"),
     ("Cmd+R", "restart process"),
-    ("Cmd+[ ]", "panel page back · forward"),
+    ("Cmd+[ ]", "panel section back · forward"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
@@ -687,6 +694,10 @@ CHEATSHEET = [
 # (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
 # output; audio holds the master faders and nothing of a loadable patch (row 692)
 META_SECTIONS = ("output", "audio", "analyzer", "hands")
+
+# The analyzer is one for both looks, so what it hears of the video on air reaches the
+# look off air's routes. The owner accepts this (2026-11-06, row 790) and wants it said.
+VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
              "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
@@ -799,6 +810,7 @@ class Panel:
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
+        self.graph_start_zoom = 1.0  # set by app.py: GRAPH's first zoom, off the display (plan 58 SM2)
         self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
         self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
@@ -886,19 +898,20 @@ class Panel:
                    "to the top of the pane, and folds again when the focus moves on unless "
                    "you unfolded it yourself. graph lets go of the focus.")
 
-    def in_meta_section(self) -> bool | None:
+    def in_meta_section(self) -> bool | str | None:
         """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
         panel's deck's. **What is under the mouse decides:** a param undo watches
         says by its own layer, wherever it is drawn (a mixed section: hands with
         `ghost.*`, SYSTEM with `desk.slew`, a fixture node in the selection); else the
-        section under it (`ui_pane.where`); else the deck. None over the player
-        screen and the playlist's section: no stack, since a move or an edit there is on
-        none of them (`undo.here`)."""
+        section under it (`ui_pane.where`); else the deck. Over the player screen, its
+        own window too, `undo.BOARD`: the meta stack, for a player's moves alone (row
+        800). None over the playlist's section: no stack, since an edit there is on none
+        of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "patch"
         if ui_players.over(self):
-            return None
+            return undo.BOARD
         section = ui_pane.where(self)
         if section == "playlist":    # a list's edits are files, on no stack (row 709)
             return None
@@ -1782,7 +1795,7 @@ class Panel:
             if _micro_width(note) > room:
                 note = fit_micro(note, room, 24.0)
         if note:
-            imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
+            flush_right(_micro_width(note) + 4)
             _micro(note, FAINT)
         lib = self.library
         if group is not None and lib is not None and lib.reg is not None:
@@ -1974,8 +1987,13 @@ class Panel:
         self.page = max(0, min(self.page, len(PAGE_KEYS) - 1))
         if self.page != getattr(self, "_focus_seen", None):   # set straight, not through ui.page
             self.go_page(self.page)
-        foot = imgui.get_frame_height_with_spacing()
-        if imgui.begin_child("##page", imgui.ImVec2(0, -foot)):
+        # the footer's line and its separator: short by the separator, CONTROLS
+        # overflowed by a few points and wore a scrollbar from its second frame.
+        # The page fills itself and never scrolls (the pane does): its first
+        # frame's content would give it a scrollbar, and the canvas a narrower
+        # second frame, which the editor answers by moving the view.
+        foot = imgui.get_frame_height_with_spacing() + imgui.get_style().item_spacing.y + 1.0
+        if imgui.begin_child("##page", imgui.ImVec2(0, -foot), 0, imgui.WindowFlags_.no_scrollbar):
             # a desk control is picked and can be mapped (plan 17 WP4): the
             # canvas and the sections are drawn disabled — dimmed, no widget
             # takes a click — and the click on a param is `_ctx_pick`'s. Never
@@ -2112,7 +2130,7 @@ class Panel:
         if lib is not None and lib.reg is not None:
             proj = lib.project
             text = f"{proj.name}{' ●' if proj.is_dirty() else ''}"
-            imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(text).x)
+            flush_right(imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
                 tooltip("the open show — the presets section")
@@ -2326,7 +2344,7 @@ class Panel:
             sw = sl.switches
             why = []
             if sw.hands and ghost is not None and not ghost.value:
-                why.append("hands: ghost hands are off (HANDS page)")
+                why.append("hands: ghost hands are off (HANDS section)")
             elif sw.hands and getattr(self, "hands", None) is None:
                 why.append("hands: no tracker")
             if through_layer(wiring, sl.n, bus_cuts) is not None and not fx_on:
@@ -2613,7 +2631,12 @@ class Panel:
             words = "Stop video sound" if mix_on else "Listen to video sound"
             beside(button_w(words))
             self._button("audio.mix", words)
-        beside(button_w("Load track"))
+            if mix_on:      # true only then; the hover says it before the press (row 790)
+                imgui.push_text_wrap_pos(0.0)
+                imgui.text_colored(DIM, VIDEO_SOUND_REACHES)
+                imgui.pop_text_wrap_pos()
+        else:
+            beside(button_w("Load track"))
         if imgui.button("Load track"):
             self._file_dialog = self.open_file_dialog(
                 "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
@@ -2644,7 +2667,9 @@ class Panel:
                 if getattr(mx, "failed", False):        # the mixer's error is the source's
                     imgui.text_colored(WARN, f"video sound silent — {mx.state}")
                 elif not getattr(mx, "playing", 0):
-                    imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
+                    imgui.push_text_wrap_pos(0.0)   # (longer than the pane's narrow widths)
+                    imgui.text_disabled("silent until an on-air channel's sound is on (MEDIA)")
+                    imgui.pop_text_wrap_pos()
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 
@@ -3115,7 +3140,7 @@ class Panel:
             else:
                 imgui.text_disabled(line)
         if not len(regs):
-            imgui.text_disabled("no devices — [[devices]] in config.toml")
+            imgui.text_disabled("no devices — drag one from the player board's tray")
         for line in devices.wanted_lines(ui_graph.panel_wants(self)):
             imgui.text_colored(WARN, line)          # plan 40 T4: what the loadable patch waits for
 

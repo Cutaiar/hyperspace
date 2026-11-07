@@ -1355,7 +1355,7 @@ def test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced(monkeypatch, c
 
 
 def test_a_daw_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
-    """The hands' out port keeps midi.Ports' pace (audit R15): RECONNECT_S
+    """The hands' out port keeps midi.Ports' pace: RECONNECT_S
     for RECONNECT_FAST looks, then RECONNECT_SLOW_S, and from the start
     again once it has opened."""
     from hyperspace import bridge, midi

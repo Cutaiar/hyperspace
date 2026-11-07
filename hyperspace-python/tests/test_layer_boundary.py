@@ -487,8 +487,8 @@ PATCH_MODULES = _mods(
     "segment", "dream", "media")
 # what is set for a performance or an install
 META_MODULES = _mods(
-    "deck", "playlist", "players", "pointer", "app", "devices", "control", "config", "placement",
-    "hotreload", "watchdog", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
+    "deck", "playlist", "players", "pointer", "app", "devices", "devicelist", "control", "config", "placement",
+    "hotreload", "watchdog", "midiports", "midi", "apc40", "generic", "gamepad", "pads", "hands", "bridge",
     "osc", "totem", "poi", "poi_guide", "overlay", "audio", "analysis", "analyzer", "bands",
     "tempo", "seq_page", "replay", "pinch")
 # one module holding both layers' classes, which an import cannot tell apart. The list is the
@@ -527,7 +527,6 @@ SURFACE_NAMES = {
 # …and the handles at run time. (`Project.session` goes with the shows, in plan 57 §5.)
 META_ATTRS = {"meta", "decks", "meta_stack", "push_meta", "players", "session", "meta_reg", "meta_table"}
 SURFACE_ATTRS = {
-    ("loadable", "project.session"): "seeds a landing group's params from the open show",
     ("dream", "w.meta"): "not ours: a model file's download record",
     ("segment", "w.meta"): "not ours: a model file's download record",
 }

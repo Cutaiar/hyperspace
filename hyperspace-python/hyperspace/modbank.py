@@ -149,8 +149,9 @@ class Bank:
         if len(self._voices) >= self.MAX:
             return f"{self.MAX} {self.LABEL}s is the most"
         if self.next_id() > MAX_ID:
-            return (f"{self.LABEL} ids are used up: {MAX_ID} is the highest, and a "
-                    "removed one is not reused this session")
+            return (f"{self.LABEL} ids are used up: {MAX_ID} is the highest. A removed id "
+                    "is not reused while the app runs; after a restart, ids count on from "
+                    "the highest still in use")
         return None
 
     def add(self, n: int | None = None) -> int:

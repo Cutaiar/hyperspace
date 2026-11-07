@@ -442,7 +442,7 @@ def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
     frame(panel)
     assert ui_routing.POINTER in texts
     assert "ROUTES" not in texts and "MODIFIERS" not in texts and not rows and not strips
-    assert {"DESK  ·  PRESET LAYER", "MACROS", "SESSION", "SINKS"} <= set(texts)
+    assert {"DESK  ·  PRESET LAYER", "MACROS", "META CONTROLLER", "SINKS"} <= set(texts)
     assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
     # the functions stay
     assert ui_routing._sources(panel, router) and ui_routing._targets(panel)
@@ -676,7 +676,7 @@ def test_the_page_draws_in_every_state(rig):
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert ui_graph.timing_line(rig.panel).startswith("graph page: ")
+    assert ui_graph.timing_line(rig.panel).startswith("graph draw: ")
     assert view is not None
     frame(rig.panel, "system")
 
