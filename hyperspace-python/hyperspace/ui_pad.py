@@ -68,6 +68,7 @@ from .params import dial_id
 from .routing import PAIR_SCHEME, Binding, pair_poles
 
 SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")   # the schemes a pad control's row can have
+# (read at import, so `ui_desk` can't be a process's first import; the app imports `ui` first, row 812)
 EDGE = ui_desk.EDGE                 # from the control window's edges, as the desk sits
 PAD = ui_desk.PAD
 GAP = ui_desk.GAP                   # between this and the desk under it

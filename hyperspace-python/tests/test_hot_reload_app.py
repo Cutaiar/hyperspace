@@ -85,13 +85,16 @@ def report() -> None:
 
     hot = {f"{PACKAGE}.{name}" for name in MODULES}
     wrong, unmodelled, skipped, checked = {}, {}, {}, 0
-    for name in hot:
+    # the list's order, a reload's: the panel's modules have import cycles, so
+    # `ui_desk` or `ui_pane` can't be a process's first import (row 812)
+    for short in MODULES:
+        name = f"{PACKAGE}.{short}"
         try:
             mod = importlib.import_module(name)
         except ImportError as e:
             skipped[name] = str(e)
             continue
-        for cls in set(_classes(mod, name)):
+        for cls in dict.fromkeys(_classes(mod, name)):
             if issubclass(cls, Enum) or typing.is_typeddict(cls):
                 continue            # kept across a reload; a dict at runtime
             where = f"{name}.{cls.__qualname__}"
@@ -126,6 +129,23 @@ def test_every_class_in_a_hot_module_can_be_re_classed_after_a_reload():
     assert not got["unmodelled"], got["unmodelled"]
     assert not {f"{PACKAGE}.{name}" for name in CORE} & set(got["skipped"]), got["skipped"]
     assert got["checked"] > 300, got
+
+
+def test_the_rule_imports_in_the_lists_order(monkeypatch, capsys):
+    """Row 812: it walked a set, so the hash seed chose the first import, and 3 seeds in 24
+    picked a module that can't be first."""
+    import importlib
+
+    seen = []
+
+    def record(name):
+        seen.append(name)
+        raise ImportError("not this time")
+
+    monkeypatch.setattr(importlib, "import_module", record)
+    report()
+    assert seen == [f"{PACKAGE}.{name}" for name in MODULES]
+    assert len(json.loads(capsys.readouterr().out)["skipped"]) == len(MODULES)
 
 
 def _hot(source: str) -> tuple[type, set[str]]:
