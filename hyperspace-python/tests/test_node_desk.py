@@ -387,6 +387,17 @@ def test_enter_is_an_edit_of_the_patch_looked_at_and_brings_the_desk(rig):
     assert rig.meta.pointer(DESK).deck is rig.one
 
 
+def test_entering_where_it_is_already_saved_brings_the_desk_and_edits_nothing(rig):
+    """The operator's attach: the patch already says this node, its player is elsewhere."""
+    node, _ = pick_node(rig.two)
+    patch = rig.two.loaded_patch
+    patch.point_node_mode(1, "midi", node)
+    steps = len(rig.two.undo.stack)
+    assert not rig.nd2.on_here(DESK)
+    assert rig.nd2.enter(DESK, node) is None
+    assert rig.nd2.on_here(DESK) and len(rig.two.undo.stack) == steps
+
+
 def test_two_patches_point_the_desk_each_on_its_own_deck(rig):
     node, params = pick_node(rig.one)
     rig.one.loaded_patch.point_node_mode(1, "midi", node)
@@ -966,3 +977,111 @@ def test_node_mode_never_takes_a_clip_pad_master_the_crossfader_or_a_meta_contro
     # …and the SHIFT layer's own controls, node mode or not
     rig.push(note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
     assert not any(any(x is b for x in rig.nd1.rows()) for b in t.active(DESK))
+
+
+# ---------------------------------------------------------------- a chase commit across a visit
+# (row 711's "as long as they come back", plan 52's ledger)
+
+
+def _at(deck, level: float) -> None:
+    """One pass with the analyzer's lanes at `level` of their range."""
+    lanes = np.zeros(32)
+    lanes[:] = level * CEIL
+    deck.router.modulate(SimpleNamespace(lanes=lanes), 1 / 60, 100.0)
+    deck.reg.apply()
+
+
+def _settle(deck, level: float = 1.0, frames: int = 8) -> None:
+    for _ in range(frames):
+        _at(deck, level)
+
+
+def _committed(rig):
+    """A route on a param with its offset chased into the base, the verb let go."""
+    node, pid, route = _modulated(rig)
+    deck = rig.one
+    _settle(deck)
+    assert deck.reg.base_chase(True)
+    _settle(deck)
+    assert not deck.reg.base_chase(False)
+    _settle(deck)
+    p = deck.reg[pid]
+    assert p._trim and p.norm == pytest.approx(p.eff_norm)
+    return node, p, route
+
+
+def test_a_chase_commit_comes_through_a_visit_with_nothing_turned(rig):
+    """The look the verb left is where it stands after: a visit is no row lost."""
+    node, p, route = _committed(rig)
+    deck = rig.one
+    shown, trim = p.eff_norm, p._trim
+    assert rig.nd1.enter(DESK, node) is None
+    _settle(deck)
+    assert deck.table.node_holds(route)
+    assert p.eff_norm == pytest.approx(shown)           # the base holds what it showed
+    rig.nd1.leave(DESK)
+    _settle(deck)
+    assert p._trim == pytest.approx(trim)
+    assert p.eff_norm == pytest.approx(shown), "the route came back and rides what it committed"
+    _settle(deck, 0.0, 40)                              # on its way home: the look holds
+    assert p.eff_norm == pytest.approx(shown)
+    assert p._trim == 0.0
+    _settle(deck, 1.0, 40)                              # home: it rides the new base in full
+    assert p.eff_norm > shown
+
+
+def test_a_chase_held_into_a_visit_keeps_its_ledger_too(rig):
+    node, pid, _route = _modulated(rig)
+    deck, p = rig.one, rig.one.reg[pid]
+    _settle(deck)
+    deck.reg.base_chase(True)
+    _settle(deck)
+    shown = p.eff_norm
+    rig.nd1.enter(DESK, node)
+    _settle(deck)
+    assert p.eff_norm == pytest.approx(shown)
+    deck.reg.base_chase(False)
+    rig.nd1.leave(DESK)
+    _settle(deck)
+    assert p.eff_norm == pytest.approx(shown)
+
+
+def test_a_knob_turned_in_a_visit_stays_where_it_was_left(rig):
+    """What a knob did to a base with a commit in it, on leave as under any route."""
+    node, p, _route = _committed(rig)
+    deck = rig.one
+    rig.nd1.enter(DESK, node)
+    _settle(deck)
+    p.set_norm(0.4)
+    _settle(deck)
+    assert p.eff_norm == pytest.approx(0.4)
+    rig.nd1.leave(DESK)
+    _settle(deck)
+    assert p.eff_norm == pytest.approx(0.4), "no jump on leave"
+
+
+def test_a_route_deleted_in_a_visit_is_a_row_lost(rig):
+    """Plan 52: a param none of whose rows is left forgets its ledger, visit or no visit."""
+    node, p, route = _committed(rig)
+    deck = rig.one
+    rig.nd1.enter(DESK, node)
+    _settle(deck)
+    assert p._trim
+    deck.table.remove(route)
+    _settle(deck)
+    assert p._trim == 0.0
+
+
+def test_with_nothing_committed_a_visit_is_the_route_off_and_back(rig):
+    """The ruling's step, both ways: the base on entering, the ride again on leave."""
+    node, pid, _route = _modulated(rig)
+    deck, p = rig.one, rig.one.reg[pid]
+    _settle(deck)
+    rides, base = p.eff_norm, p.norm
+    assert rides != pytest.approx(base)
+    rig.nd1.enter(DESK, node)
+    _settle(deck)
+    assert p.eff_norm == pytest.approx(base)
+    rig.nd1.leave(DESK)
+    _settle(deck)
+    assert p.eff_norm == pytest.approx(rides)

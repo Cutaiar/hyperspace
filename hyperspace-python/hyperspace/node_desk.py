@@ -121,6 +121,7 @@ class NodeDesk:
         self.devices = devices      # `DeviceRegistry`
         self.meta = meta            # `MetaController`: who holds what, and where it is
         self._now: dict[str, _Now] = {}
+        self._asked: tuple[tuple, dict] = ((), {})    # `_cached`
 
     # ---- who ----
 
@@ -147,6 +148,36 @@ class NodeDesk:
         return profile_of(self.devices, role)
 
     # ---- the rows ----
+
+    def _cached(self, what: str, make):
+        """`make()` once until the registry's list or the section moves: both answers
+        below scan (`graphview.param_ids`, `LoadedPatch._pointable`), and the panel
+        asks them each frame a node is selected."""
+        deck = self.deck
+        key = (getattr(deck.reg, "serial", 0), id(getattr(deck.graph, "spec", None)),
+               getattr(deck.table, "modifiers_serial", 0))
+        if self._asked[0] != key:
+            self._asked = (key, {})
+        got = self._asked[1]
+        if what not in got:
+            got[what] = make()
+        return got[what]
+
+    def params_of(self, node: str) -> list[str]:
+        """The registry ids under `node`, kept (`LoadedPatch.node_params`)."""
+        return self._cached(f"params:{node}", lambda: self.deck.loaded_patch.node_params(node))
+
+    def pointable(self, node: str) -> bool:
+        """May this patch point at `node` (`LoadedPatch.pointable`)? Kept."""
+        return self._cached(f"can:{node}", lambda: self.deck.loaded_patch.pointable(node))
+
+    def away(self, b: Binding) -> bool | None:
+        """Row `b` as the on-screen desk asks (the first desk's): None when node mode did
+        not derive it, else whether the desk is on the other `Deck`, so it acts there."""
+        role = self._role(None)
+        if not role or not any(x is b for x in self.rows(role)):
+            return None
+        return not self.on_here(role)
 
     def _free(self, role: str, wanted: set[str], freedoms) -> list[tuple[str, ...]]:
         """The freedoms a row here would really be reached on, by `dispatch`'s own rule:
@@ -191,7 +222,7 @@ class NodeDesk:
         fit, rows = nodemode.Fit(), []
         if node is not None:
             freedoms = freedoms_of(self._profile(role))
-            params = nodemode.fillable(deck.reg, deck.loaded_patch.node_params(node))
+            params = nodemode.fillable(deck.reg, self.params_of(node))
             wanted = set(params)
             fit = nodemode.fill(params, self._free(role, wanted, freedoms), self._kept(wanted))
             rows = self._rows_of(role, fit, now.rows)
@@ -277,9 +308,7 @@ class NodeDesk:
             return NOT_FIRST.format(role=role, player=self.player_of(role))
         if not freedoms_of(self._profile(role)):
             return NO_SHAPE.format(role=role)
-        patch = self.deck.loaded_patch
-        return nodemode.enter_refusal(self.deck.reg, node,
-                                      patch.node_params(node) if node else ())
+        return nodemode.enter_refusal(self.deck.reg, node, self.params_of(node) if node else ())
 
     def enter(self, role: str, node: str | None) -> str | None:
         """Desk `role` on `node` of this deck's patch: one undo step of it, the dot lit,
@@ -295,10 +324,16 @@ class NodeDesk:
         """Desk `role` off its node here, an edit too. It stays on this `Deck`."""
         self.deck.loaded_patch.leave_node_mode(self.player_of(role), KIND)
 
+    def control_word(self, role: str, b: Binding) -> str:
+        """What a person calls row `b`'s control: "K3"."""
+        glyph = getattr(self._profile(role), "glyph", None)
+        return (glyph(b.bare) if glyph is not None else None) or b.describe()
+
     def key(self) -> tuple[Any, ...]:
         """What a drawing of these rows is made of, for `graphview.key`."""
-        return tuple((h.role, h.player, h.node, h.on_here,
-                      tuple((b.source, b.target) for b in h.rows)) for h in self.held())
+        return (self.holding(), *((h.role, h.player, h.node, h.on_here,
+                                   tuple((b.source, b.target) for b in h.rows))
+                                  for h in self.held()))
 
 
 def install(meta, devices) -> None:
