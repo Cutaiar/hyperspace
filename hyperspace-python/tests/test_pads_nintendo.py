@@ -113,7 +113,7 @@ def test_the_l_joycons_buttons_land_by_position():
     for byte, bit, name in nintendo._L_BUTTONS:
         f = nintendo.decode(full_report(**{f"b{byte}": bit}), "l")
         held[name] = [NAMES[i] for i, v in enumerate(f.buttons) if v]
-    assert held["A"] == ["A"] and held["Y"] == ["Y"]            # ↓ and ↑
+    assert held["S"] == ["S"] and held["N"] == ["N"]            # ↓ and ↑
     assert held["LP"] == ["LP"] and held["RP"] == ["RP"]        # SL and SR, the back pair
     assert held["VIEW"] == ["VIEW"] and held["SHARE"] == ["SHARE"] and held["LSTICK"] == ["LSTICK"]
     zl = nintendo.decode(full_report(b5=0x80), "l")
@@ -133,21 +133,21 @@ def test_the_r_joycons_stick_is_the_left_stick_and_the_pro_has_the_whole_face():
 
 def test_both_sides_read_the_face_by_position():
     """Held the same way, the (L)'s ↓ and the (R)'s B are the bottom button:
-    both ``pad:A``; the (R)'s own letters stay as its glyphs."""
+    both ``pad:S``; the (R)'s own letters stay as its glyphs."""
     def one(kind, **bits):
         f = nintendo.decode(full_report(**bits), kind)
         return [NAMES[i] for i, v in enumerate(f.buttons) if v]
-    assert one("l", b5=0x01) == ["A"] and one("r", b3=0x04) == ["A"]      # ↓ and B: the bottom
-    assert one("l", b5=0x04) == ["B"] and one("r", b3=0x08) == ["B"]      # → and A: the right
-    assert one("l", b5=0x08) == ["X"] and one("r", b3=0x01) == ["X"]      # ← and Y: the left
-    assert one("l", b5=0x02) == ["Y"] and one("r", b3=0x02) == ["Y"]      # ↑ and X: the top
+    assert one("l", b5=0x01) == ["S"] and one("r", b3=0x04) == ["S"]      # ↓ and B: the bottom
+    assert one("l", b5=0x04) == ["E"] and one("r", b3=0x08) == ["E"]      # → and A: the right
+    assert one("l", b5=0x08) == ["W"] and one("r", b3=0x01) == ["W"]      # ← and Y: the left
+    assert one("l", b5=0x02) == ["N"] and one("r", b3=0x02) == ["N"]      # ↑ and X: the top
     r = models.MODELS["joycon-r"]
-    assert (models.glyph(r, "A", "A"), models.glyph(r, "B", "B"),
-            models.glyph(r, "X", "X"), models.glyph(r, "Y", "Y")) == ("B", "A", "Y", "X")
+    assert (models.glyph(r, "S", "S"), models.glyph(r, "E", "E"),
+            models.glyph(r, "W", "W"), models.glyph(r, "N", "N")) == ("B", "A", "Y", "X")
     # the simple report before the mode is set: the same by position; the
     # (R)'s stick click is byte 2's 0x08 (0x04 is the left stick's)
     simple = nintendo.decode(bytes([0x3F, 0x04, 0x08, 0x08]), "r")
-    assert [NAMES[i] for i, v in enumerate(simple.buttons) if v] == ["A", "LSTICK"]
+    assert [NAMES[i] for i, v in enumerate(simple.buttons) if v] == ["S", "LSTICK"]
     assert not nintendo.decode(bytes([0x3F, 0x00, 0x04, 0x08]), "r").buttons[models.CANON["LSTICK"]]
     assert nintendo.decode(bytes([0x3F, 0x00, 0x04, 0x08]), "l").buttons[models.CANON["LSTICK"]]
 
@@ -230,7 +230,7 @@ def test_the_newest_of_the_three_sensor_samples_is_read_and_the_battery_scales()
     assert nintendo.decode(full_report(battery=0x4E), "l").battery == 5
     assert nintendo.decode(spi_reply(0x6020, b"\x00"), "l") is None    # a reply is no frame
     simple = nintendo.decode(bytes([0x3F, 0x02, 0x00, 0x08]), "l")
-    assert simple is not None and not simple.full and simple.buttons[models.CANON["A"]] == 1
+    assert simple is not None and not simple.full and simple.buttons[models.CANON["S"]] == 1
 
 
 # ---- calibration ----
@@ -445,11 +445,11 @@ def test_a_joycon_tape_reads_back_with_the_last_frame_standing_over_a_reply(tmp_
     now = [0.05]
     tape = hid.TapePad(tmp_path / "jc.jsonl", clock=lambda: now[0])
     assert tape.model.id == "joycon-l" and tape.nintendo and tape.kind == "l"
-    assert tape.latest().buttons[models.CANON["A"]] == 1
+    assert tape.latest().buttons[models.CANON["S"]] == 1
     now[0] = 0.15
-    assert tape.latest().buttons[models.CANON["A"]] == 1           # the reply: the frame stands
+    assert tape.latest().buttons[models.CANON["S"]] == 1           # the reply: the frame stands
     now[0] = 0.25
-    assert tape.latest().buttons[models.CANON["A"]] == 0
+    assert tape.latest().buttons[models.CANON["S"]] == 0
 
 
 # ---- the pad and its device ----
@@ -472,7 +472,7 @@ def test_the_pad_reads_a_joycon_as_one_stick_and_its_motion_through_its_own_axes
     pad.poll(dt=0.016)
     assert pad.on and pad.source == "hid" and pad.model.id == "joycon-l"
     assert pad.down(gp.Y) and pad.has("motion") and not pad.has("touch")
-    assert set(pad.buttons_named) == {"A", "B", "X", "Y", "LB", "VIEW", "SHARE", "LSTICK", "LP", "RP"}
+    assert set(pad.buttons_named) == {"S", "E", "W", "N", "LB", "VIEW", "SHARE", "LSTICK", "LP", "RP"}
     assert pad.touch_lanes() is None
     lanes = dict(zip(gesture.MOTION_LANES, pad.motion_lanes(), strict=True))
     assert abs(lanes["roll"] - 0.5) < 0.02 and abs(lanes["pitch"] - 0.5) < 0.02
@@ -499,7 +499,7 @@ def test_the_pad_device_shows_a_joycons_ports_and_its_two_outputs_only():
     names = {(p.scheme, p.name) for p in dev.sources}
     assert ("axis", "LX") in names and ("axis", "LT") in names
     assert ("axis", "RX") not in names and ("axis", "RT") not in names
-    assert ("pad", "A") in names and ("pad", "LP") in names and ("pad", "MENU") not in names
+    assert ("pad", "S") in names and ("pad", "LP") in names and ("pad", "MENU") not in names
     assert not any(s == "hat" for s, _ in names)
     assert ("motion", "shake") in names and not any(s == "touch" for s, _ in names)
     sinks = {p.name for p in dev.sinks}
@@ -513,10 +513,10 @@ def test_the_on_screen_layout_draws_only_what_a_joycon_has():
     layout = gp.layout_for(models.MODELS["joycon-l"])
     sources = {c.source for c in layout}
     assert "axis:LX" in sources and "axis:RX" not in sources
-    assert "pad:A" in sources and "pad:RSTICK" not in sources and "hat:UP" not in sources
+    assert "pad:S" in sources and "pad:RSTICK" not in sources and "hat:N" not in sources
     assert "pad:LP" in sources and "motion:roll" in sources and "pad:TOUCH" not in sources
     glyphs = {c.source: c.glyph for c in layout}
-    assert glyphs["pad:A"] == "↓" and glyphs["pad:LP"] == "SL" and glyphs["axis:LT"] == "ZL"
+    assert glyphs["pad:S"] == "↓" and glyphs["pad:LP"] == "SL" and glyphs["axis:LT"] == "ZL"
     assert len(gp.layout_for(models.MODELS["procon"])) > len(layout)
     assert models.MODELS["edge"].has_control("RX") and not models.MODELS["joycon-r"].has_control("LB")
 
@@ -541,7 +541,7 @@ def test_the_reading_carries_a_joycons_calibration_and_sensors():
     assert r.stick_raw == (2100, 2050) and r.stick_centre == (2100, 2050) and r.centre_from == "rest"
     (_gx, _gy, _gz), (ax, ay, az) = r.sensors
     assert abs(ay - 1.0) < 0.02 and abs(ax) < 0.02 and abs(az) < 0.02    # up out of the face
-    assert not r.has_control("RX") and r.has_control("LX") and not r.has_control("UP")
+    assert not r.has_control("RX") and r.has_control("LX") and not r.has_control("hat.N")
     groups = dict(ui_pad_views._lane_rows(r))
     assert [s for s, *_ in groups["sticks"]] == ["axis:LX", "axis:LY"]
     assert [s for s, *_ in groups["triggers"]] == ["axis:LT"] and "d-pad" not in groups
@@ -576,15 +576,15 @@ def test_the_lab_draws_a_joycon_as_itself():
             assert 0 <= x and x + w <= ui_pad_lab.DESIGN_W, (view, source)
             assert 0 <= y and y + h <= ui_pad_lab.DESIGN_H, (view, source)
         got = {h[4] for h in hits}
-        assert {"pad:A", "pad:B", "pad:X", "pad:Y", "pad:LSTICK", "axis:LX", "axis:LY",
+        assert {"pad:S", "pad:E", "pad:W", "pad:N", "pad:LSTICK", "axis:LX", "axis:LY",
                 "axis:LT", "pad:LB", "pad:LP", "pad:RP", "pad:VIEW", "pad:SHARE",
                 "motion:roll"} <= got, (view, got)
-        assert not got & {"pad:RSTICK", "axis:RX", "axis:RT", "pad:RB", "hat:UP", "pad:TOUCH",
+        assert not got & {"pad:RSTICK", "axis:RX", "axis:RT", "pad:RB", "hat:N", "pad:TOUCH",
                           "pad:MENU", "pad:GUIDE"}, (view, got)
     st = {}
     for _ in range(ui_pad_lab.TRAIL + 5):
         _drawn("cockpit", pad, st)
-    assert [k for k, _t in st["events"]] == ["pad:A", "pad:LP"]
+    assert sorted(k for k, _t in st["events"]) == ["pad:LP", "pad:S"]
     # Faithful's six-axis scope: a trace per axis, kept on the panel, capped
     scope = {}
     for _ in range(ui_pad_lab.SCOPE_N + 7):
@@ -604,7 +604,7 @@ def test_the_lab_draws_a_joycon_as_itself():
     pad.poll(dt=0.016)
     for view in ("faithful", "cockpit"):
         got = {h[4] for h in _drawn(view, pad)}
-        assert {"pad:A", "axis:RT", "pad:RB", "pad:MENU", "pad:GUIDE", "pad:LSTICK",
+        assert {"pad:S", "axis:RT", "pad:RB", "pad:MENU", "pad:GUIDE", "pad:LSTICK",
                 "axis:LX"} <= got, (view, got)
         assert not got & {"axis:LT", "pad:LB", "pad:VIEW", "pad:SHARE", "pad:RSTICK"}, (view, got)
 

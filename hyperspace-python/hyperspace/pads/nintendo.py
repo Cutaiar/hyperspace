@@ -115,7 +115,7 @@ def axis_map_for(kind: str) -> AxisMap:
 # (report byte, bit) → canonical button, per kind of pad. Byte 3 is the
 # right half, 4 the middle, 5 the left half (bluetooth_hid_notes.md §0x30)
 _L_BUTTONS = (
-    (5, 0x01, "A"), (5, 0x02, "Y"), (5, 0x04, "B"), (5, 0x08, "X"),      # ↓ ↑ → ←
+    (5, 0x01, "S"), (5, 0x02, "N"), (5, 0x04, "E"), (5, 0x08, "W"),      # ↓ ↑ → ←
     (5, 0x10, "RP"), (5, 0x20, "LP"), (5, 0x40, "LB"),                   # SR SL L
     (4, 0x01, "VIEW"), (4, 0x20, "SHARE"), (4, 0x08, "LSTICK"),          # − capture L3
 )
@@ -123,12 +123,12 @@ _L_BUTTONS = (
 # (``A``), its A at the right (``B``), its Y at the left (``X``), its X at
 # the top (``Y``) — the rows keep the position's name, the glyph its letter
 _R_BUTTONS = (
-    (3, 0x01, "X"), (3, 0x02, "Y"), (3, 0x04, "A"), (3, 0x08, "B"),      # Y X B A on the face
+    (3, 0x01, "W"), (3, 0x02, "N"), (3, 0x04, "S"), (3, 0x08, "E"),      # Y X B A on the face
     (3, 0x10, "RP"), (3, 0x20, "LP"), (3, 0x40, "RB"),                   # SR SL R
     (4, 0x02, "MENU"), (4, 0x10, "GUIDE"), (4, 0x04, "LSTICK"),          # + HOME R3 (the one stick)
 )
 _PRO_BUTTONS = (
-    (3, 0x01, "Y"), (3, 0x02, "X"), (3, 0x04, "B"), (3, 0x08, "A"), (3, 0x40, "RB"),
+    (3, 0x01, "N"), (3, 0x02, "W"), (3, 0x04, "E"), (3, 0x08, "S"), (3, 0x40, "RB"),
     (5, 0x40, "LB"),
     (4, 0x01, "VIEW"), (4, 0x02, "MENU"), (4, 0x04, "RSTICK"), (4, 0x08, "LSTICK"),
     (4, 0x10, "GUIDE"), (4, 0x20, "SHARE"),
@@ -140,13 +140,13 @@ _PRO_TRIGGERS = ((5, 0x80, 4), (3, 0x80, 5))
 _PRO_HAT = ((0x02, 1), (0x04, 2), (0x01, 4), (0x08, 8))
 # the simple report's byte 1 (before the mode is set): the (L)'s arrows /
 # the (R)'s face, SL, SR; byte 2: − / +, the stick's click, HOME, capture
-_SIMPLE_L = ((1, 0x01, "X"), (1, 0x02, "A"), (1, 0x04, "Y"), (1, 0x08, "B"),
+_SIMPLE_L = ((1, 0x01, "W"), (1, 0x02, "S"), (1, 0x04, "N"), (1, 0x08, "E"),
              (1, 0x10, "LP"), (1, 0x20, "RP"), (2, 0x01, "VIEW"), (2, 0x04, "LSTICK"),
              (2, 0x20, "SHARE"), (2, 0x40, "LB"))
 # (the (R)'s simple report names its A, X, B, Y in that bit order; by position
 # they are the right, top, bottom and left buttons; its stick's click is bit
 # 0x08 of byte 2, the left stick's 0x04)
-_SIMPLE_R = ((1, 0x01, "B"), (1, 0x02, "Y"), (1, 0x04, "A"), (1, 0x08, "X"),
+_SIMPLE_R = ((1, 0x01, "E"), (1, 0x02, "N"), (1, 0x04, "S"), (1, 0x08, "W"),
              (1, 0x10, "LP"), (1, 0x20, "RP"), (2, 0x01, "MENU"), (2, 0x08, "LSTICK"),
              (2, 0x10, "GUIDE"), (2, 0x40, "RB"))
 

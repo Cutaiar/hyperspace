@@ -272,7 +272,7 @@ def test_system_names_each_gpu_block_by_its_deck_whichever_the_panel_is_on():
 # ---------------------------------------------------------------- what is true now
 
 def test_the_sheet_has_no_pad_b_on_the_list_and_says_where_a_pad_loads():
-    """`pad:B` went to `view.points` (factory rows), and no pad row walks the list."""
+    """`pad:E` went to `view.points` (factory rows), and no pad row walks the list."""
     words = dict(ui.CHEATSHEET)
     assert "pad's B" not in words["APC40 QUANT"] and "off air" in words["APC40 QUANT"]
     assert "off air" in words["APC40 clip pads"]

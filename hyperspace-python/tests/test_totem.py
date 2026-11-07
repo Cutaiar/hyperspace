@@ -30,7 +30,7 @@ class FakePad:
     def __init__(self):
         self.on = True
         self.motion = gesture.Motion()
-        self.buttons_named = {"A": gamepad.A, "B": gamepad.B, "X": gamepad.X, "Y": gamepad.Y}
+        self.buttons_named = {"S": gamepad.A, "E": gamepad.B, "W": gamepad.X, "N": gamepad.Y}
         self.held: set[int] = set()
         self.was: set[int] = set()
         self.hat = self.prev_hat = 0
@@ -129,7 +129,7 @@ def test_off_by_default_and_never_saved():
             assert not p.persist and not p.modulatable, p.id
     pad = FakePad()
     reg["rot.phase.XY"].set(0.7)
-    run(reg, state, pad, 30, gyro=(0.0, 0.0, 200.0), hold=("A",))
+    run(reg, state, pad, 30, gyro=(0.0, 0.0, 200.0), hold=("S",))
     assert phase(reg, "XY") == pytest.approx(0.7)
     assert state.driving is None
 
@@ -140,13 +140,13 @@ def test_the_buttons_latch_on_the_press():
     pad = FakePad()
     run(reg, state, pad, 2)
     assert state.driving == "" and totem.readout(state) == "YZ · XZ · XY"
-    run(reg, state, pad, 10, hold=("B",))             # held: one flip, not ten
+    run(reg, state, pad, 10, hold=("E",))             # held: one flip, not ten
     assert state.w == [False, False, True] and reg["totem.w.z"].value is True
     run(reg, state, pad, 2)
-    run(reg, state, pad, 1, hold=("X", "Y"))
+    run(reg, state, pad, 1, hold=("W", "N"))
     assert totem.readout(state) == "XW · YW · ZW"
     run(reg, state, pad, 1)
-    run(reg, state, pad, 1, hold=("B",))
+    run(reg, state, pad, 1, hold=("E",))
     assert totem.readout(state) == "XW · YW · XY"
 
 
@@ -163,7 +163,7 @@ def test_a_constant_turn_integrates_and_a_flip_carries_on_in_w():
         assert phase(reg, other) == pytest.approx(0.0, abs=1e-9)
     xy = phase(reg, "XY")
     # B mid-stream: the turn goes on in ZW from its own 0, XY stays put
-    run(reg, state, pad, 1, gyro=(0.0, 0.0, dps), hold=("B",))
+    run(reg, state, pad, 1, gyro=(0.0, 0.0, dps), hold=("E",))
     run(reg, state, pad, 29, gyro=(0.0, 0.0, dps))
     assert phase(reg, "XY") == pytest.approx(xy, abs=1e-9)
     assert phase(reg, "ZW") == pytest.approx(math.radians(gesture._banded(dps)) * 0.5,
@@ -229,7 +229,7 @@ def test_reset_zeroes_the_pose_and_re_references_where_the_pad_is():
     reg["camera.yaw"].set(0.4)
     view.body = np.eye(4)
     assert reg["camera.pan.x"].value > 0.5 and abs(phase(reg, "YZ")) > 0.3
-    run(reg, state, pad, 1, accel=(-s, c, 0.0), hold=("A",))
+    run(reg, state, pad, 1, accel=(-s, c, 0.0), hold=("S",))
     for n in totem.PLANES:
         assert phase(reg, n) == pytest.approx(0.0, abs=1e-9), n
     for pid in ("camera.pan.x", "camera.pan.y", "camera.yaw", "camera.pitch"):
@@ -283,13 +283,13 @@ def test_a_router_skips_the_rows_it_is_told_to():
     view = ViewState()
     chain = Analyzer(Analyser())
     reg = build_registry(view, Control(chain), SimpleNamespace(chain=chain), None)
-    table = Bindings([Binding("pad:A", "view.faces", "toggle"),
+    table = Bindings([Binding("pad:S", "view.faces", "toggle"),
                       Binding("pad:LB", "view.lines", "toggle")])
     router = Router(reg, table)
     pad = FakePad()
     pad.buttons_named["LB"] = gamepad.LB
     faces, lines = reg["view.faces"].value, reg["view.lines"].value
-    pad.frame(hold=("A", "LB"))
+    pad.frame(hold=("S", "LB"))
     router.pad(pad, skip=totem.SKIP)
     assert reg["view.faces"].value == faces            # A: the totem's
     assert reg["view.lines"].value != lines            # LB: its row as ever
@@ -512,7 +512,7 @@ def test_learn_ignores_the_totems_buttons_while_it_reads_that_pad():
     reg["totem.on"].set(True)
     dev.io.frame()
     dev.act(router)                                     # the totem takes this pad
-    for b in ("A", "X", "Y", "B"):
+    for b in ("S", "W", "N", "E"):
         dev.io.frame()
         dev.io.frame(hold=(b,))
         learn = ArmedLearn()
@@ -527,29 +527,29 @@ def test_learn_ignores_the_totems_buttons_while_it_reads_that_pad():
     assert dev.learn(learn) is True and learn.got == ["pad:LB"]   # not the totem's: learns
     reg["totem.on"].set(False)
     dev.io.frame()
-    dev.io.frame(hold=("A",))
+    dev.io.frame(hold=("S",))
     learn = ArmedLearn()
-    assert dev.learn(learn) is True and learn.got == ["pad:A"]    # off: A learns again
+    assert dev.learn(learn) is True and learn.got == ["pad:S"]    # off: A learns again
 
 
 def test_a_hold_begun_before_the_skip_does_not_fire_when_the_skip_ends():
     from hyperspace.routing import HOLD_S, Binding, Bindings, Router
     reg, _, _ = rig()
-    router = Router(reg, Bindings([Binding("pad:A", "camera.reset", "hold")]))
+    router = Router(reg, Bindings([Binding("pad:S", "camera.reset", "hold")]))
     reg["camera.yaw"].set(0.4)
     pad = FakePad()
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     router.pad(pad, now=0.0)                            # the press: timing starts
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     router.pad(pad, now=0.1, skip=totem.SKIP)           # the totem takes the pad mid-press
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     router.pad(pad, now=HOLD_S + 1.0)                   # …and lets go, A still down
     assert reg["camera.yaw"].value == pytest.approx(0.4)
     pad.frame()
     router.pad(pad, now=HOLD_S + 1.1)                   # a fresh press holds as ever
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     router.pad(pad, now=HOLD_S + 1.2)
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     router.pad(pad, now=2 * HOLD_S + 1.3)
     assert reg["camera.yaw"].value == pytest.approx(0.0)
 
@@ -774,13 +774,13 @@ def test_learn_on_the_frame_the_totem_takes_the_pad_lands_none_of_its_buttons():
     dev = device(reg)
     assert state.driving is None                            # no `act` yet: not taken
     dev.io.frame()
-    dev.io.frame(hold=("A",))
+    dev.io.frame(hold=("S",))
     learn = ArmedLearn()
     assert dev.learn(learn) is False and learn.got == []    # it will be, this frame
     dead = device(reg, "p2")
     dead.io.on = False                                      # a pad with no sensors live
     dead.io.frame()
-    dead.io.frame(hold=("A",))
+    dead.io.frame(hold=("S",))
     learn = ArmedLearn()
     assert totem.will_drive(state, dead.io, "p2") is False
 

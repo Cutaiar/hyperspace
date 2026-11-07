@@ -297,8 +297,8 @@ JOYCON_PRESSES = {
           ("SL (on the rail)", "LP"), ("SR (on the rail)", "RP"), ("L (the shoulder)", "LB"),
           ("ZL (the trigger)", "axis:LT"), ("− (minus)", "VIEW"), ("the capture button", "SHARE"),
           ("the stick in (click)", "LSTICK")),
-    # the (R)'s face by position: its B is the bottom button (pad:A), its A the
-    # right one (pad:B), its Y the left (pad:X), its X the top (pad:Y)
+    # the (R)'s face by position: its B is the bottom button (pad:S), its A the
+    # right one (pad:E), its Y the left (pad:W), its X the top (pad:N)
     "r": (("B (the bottom button)", "A"), ("A (the right button)", "B"),
           ("Y (the left button)", "X"), ("X (the top button)", "Y"),
           ("SL (on the rail)", "LP"), ("SR (on the rail)", "RP"), ("R (the shoulder)", "RB"),
@@ -307,7 +307,7 @@ JOYCON_PRESSES = {
     "pro": (("A", "A"), ("B", "B"), ("X", "X"), ("Y", "Y"), ("L", "LB"), ("R", "RB"),
             ("ZL", "axis:LT"), ("ZR", "axis:RT"), ("−", "VIEW"), ("+", "MENU"),
             ("HOME", "GUIDE"), ("capture", "SHARE"), ("the left stick in", "LSTICK"),
-            ("the right stick in", "RSTICK"), ("D-pad up", "hat:UP")),
+            ("the right stick in", "RSTICK"), ("D-pad up", "hat:N")),
 }
 
 

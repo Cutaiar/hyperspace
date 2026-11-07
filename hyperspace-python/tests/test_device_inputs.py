@@ -420,9 +420,9 @@ def test_the_pad_runs_on_the_registry_rows_axes_and_its_camera_job(build):
     faces = r.reg["view.faces"].value
     r.learn.arm("view.points", "pad")
     pad.frame()
-    pad.frame(held={gp.A})                                   # pad:A is view.faces's
+    pad.frame(held={gp.A})                                   # pad:S is view.faces's
     frame(r)
-    assert any(b.source == "pad:A" and b.target == "view.points" for b in r.table.bindings)
+    assert any(b.source == "pad:S" and b.target == "view.points" for b in r.table.bindings)
     assert r.reg["view.faces"].value == faces                # the learning press only learned
     pad.source = None
     frame(r)
@@ -530,7 +530,7 @@ def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build)
         frame(r)
         assert not lib.is_dirty("loadable"), name
     one, two = r.devices.get("pad").io, r.devices.get("p2").io
-    faces = r.reg["view.faces"].value                    # pad:A's
+    faces = r.reg["view.faces"].value                    # pad:S's
     one.frame()
     two.frame()
     frame(r)

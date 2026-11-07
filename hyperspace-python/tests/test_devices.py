@@ -99,11 +99,11 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
     assert isinstance(off, devices.OffDevice) and off.status == "off" and off.kind == "midi"
     odd = devices.make({"role": "r", "kind": "wand", "enabled": True})
     assert isinstance(odd, devices.UnknownDevice) and odd.status == "error: unknown kind 'wand'"
-    assert devices.Port("x", "X") == devices.Port("x", "X", "value", 0.0, False, False, "", "", "")
+    assert devices.Port("x", "W") == devices.Port("x", "W", "value", 0.0, False, False, "", "", "")
     # a port knows its scheme, so a row's source — a cable (plan 28) — is one property
     assert devices.Port("LX", "left stick X", scheme="axis").address == "axis:LX"
     assert devices.Port("0:48", "track knob 1", scheme="cc").address == "cc:0:48"
-    assert devices.Port("x", "X").address == "x"                       # (no scheme: bare)
+    assert devices.Port("x", "W").address == "x"                       # (no scheme: bare)
     assert off.schemes == ("cc", "note", "pitch") and off.feeds == ()   # off, still its kind's
 
 
@@ -184,8 +184,8 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     assert two.rows == ("pad@p2", "hat@p2")
     assert [p.address for p in one.sources][:2] == ["axis:LX", "axis:LY"]
     assert [p.address for p in two.sources][:2] == ["axis@p2:LX", "axis@p2:LY"]
-    assert "pad@p2:A" in [p.address for p in two.sources]
-    assert "hat@p2:UP" in [p.address for p in two.sources]
+    assert "pad@p2:S" in [p.address for p in two.sources]
+    assert "hat@p2:N" in [p.address for p in two.sources]
     assert reg.schemes() == ("axis", "pair", "pad", "hat", "touch", "motion",
                              "axis@p2", "pair@p2", "pad@p2", "hat@p2", "touch@p2", "motion@p2")
     assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "pair", "touch",
@@ -582,7 +582,7 @@ def test_the_pad_shim_polls_learns_and_delivers_rows_as_the_frame_did(monkeypatc
     assert d.status == "connected" and d.last == "glfw"
     assert [p.name for p in d.sources][:6] == list(gamepad.AXES)
     assert [p.address for p in d.sources][:6] == [f"axis:{n}" for n in gamepad.AXES]
-    assert "pad:A" in [p.address for p in d.sources] and "hat:UP" in [p.address for p in d.sources]
+    assert "pad:S" in [p.address for p in d.sources] and "hat:N" in [p.address for p in d.sources]
     assert [p.kind for p in d.sources].count("trigger") == len(gamepad.BUTTONS) + len(gamepad.HATS)
     assert {p.name: p.rest for p in d.sources if p.group == "sticks"} == {
         "LX": 0.5, "LY": 0.5, "RX": 0.5, "RY": 0.5}

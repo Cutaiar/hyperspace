@@ -78,9 +78,9 @@ from typing import Any
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
 
 GROUP = "poi"
-RESET_BUTTON = "A"
+RESET_BUTTON = "S"
 HAT_DOWN = 4                      # GLFW's hat bit (gamepad.HAT_DOWN; a test holds them equal)
-SKIP = frozenset({f"pad:{RESET_BUTTON}", "hat:DOWN"})
+SKIP = frozenset({f"pad:{RESET_BUTTON}", "hat:S"})
 
 G_MPS2 = 9.81
 UNITS_PER_M = 2.5                 # a 1-unit string is a real poi's 40 cm: the same period

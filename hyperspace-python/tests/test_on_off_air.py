@@ -1006,7 +1006,7 @@ def test_a_loadable_cannot_carry_a_row_on_a_library_verb_by_any_door(verb):
     assert meta_refusal(verb) is not None
     # (the meta controller's own rows pass: invariant, global layer, a key, a pad)
     for row in (Binding("note:0:61", verb, "toggle"), Binding("note:0:62", verb, "toggle", layer="global"),
-                Binding("key:F9", verb, "fire"), Binding("pad:A", verb, "fire")):
+                Binding("key:F9", verb, "fire"), Binding("pad:S", verb, "fire")):
         assert is_meta_row(row) and meta_row_refusal(row) is None
 
 

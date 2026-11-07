@@ -49,7 +49,7 @@ class Stick(FakePad):
         gamepad.publish(router, scheme)
 
     def press(self, *buttons):
-        self.was, self.held = self.held, {getattr(gamepad, b) for b in buttons}
+        self.was, self.held = self.held, {gamepad.ALL_BUTTONS.get(b, getattr(gamepad, b, None)) for b in buttons}
 
 
 class Hands(devices.Base):
@@ -229,14 +229,14 @@ def test_at_p2_is_player_2_even_with_a_primary_spelled_p2(rig):
 def test_a_pair_step_on_at_p2_fires_from_player_2_s_pad_only(rig):
     _swapped(rig)
     p = rig.one.reg["view.bright"]
-    rig.one.table.add(Binding("pair@p2:A/B", "view.bright", "step", 1.0))
+    rig.one.table.add(Binding("pair@p2:S/E", "view.bright", "step", 1.0))
     rig.frame()
     was = p.value
-    rig.pad2.press("A")                          # role `p2`: player 1's, the bare pad
+    rig.pad2.press("S")                          # role `p2`: player 1's, the bare pad
     rig.frame()
     assert p.value == was
     rig.pad2.press()
-    rig.pad1.press("A")                          # role `pad`: player 2's
+    rig.pad1.press("S")                          # role `pad`: player 2's
     rig.frame()
     assert p.value != was
 
@@ -800,7 +800,7 @@ def test_each_learn_road_says_what_it_made(rig):
 def test_controller_of_finds_a_row_s_device(rig):
     one = rig.one
     of = rig.devs.controller_of
-    assert of(one.table, Binding("pad@p2:A", "view.lines", "toggle")).role == "p2"
+    assert of(one.table, Binding("pad@p2:S", "view.lines", "toggle")).role == "p2"
     assert of(one.table, Binding("axis:LX", PX, "push", 1.0)).role == "pad"
     assert of(one.table, Binding(GRAB, PX, "push", 1.0)).role == "hands"
     assert of(one.table, Binding("lfo:0", PX, "push", 1.0)) is None

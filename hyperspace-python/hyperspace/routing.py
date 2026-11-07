@@ -321,6 +321,7 @@ from .routing_sources import (  # noqa: F401
     Sources,
     base_scheme,
     is_continuous,
+    nsew,
     pair_address,
     pair_lanes,
     pair_poles,
@@ -328,10 +329,11 @@ from .routing_sources import (  # noqa: F401
     qualified,
 )
 
-SCHEMA = "hyperspace.bindings/3"
+SCHEMA = "hyperspace.bindings/4"
+SCHEMA_V3 = "hyperspace.bindings/3"
 SCHEMA_V1 = "hyperspace.bindings/1"
 SCHEMA_V2 = "hyperspace.bindings/2"
-SCHEMA_VERSIONS = (1, 2, 3)        # what a load reads (the library's routing kind too)
+SCHEMA_VERSIONS = (1, 2, 3, 4)      # what a load reads (the library's routing kind too)
 FILE = "bindings.json"
 LEGACY_MIDI_FILE = Path("midi_map.json")
 # the factory meta table as a file (`write_factory`): what a fresh
@@ -468,7 +470,7 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"note:0:{apc40.N_TAP}", "theme.next", "toggle", 1.0): ("tempo.tap", "toggle", 1.0),
     (f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1.0): ("tempo.nudge", "step", 1.0),
     (f"note:0:{apc40.N_NUDGE_M}", "view.shape", "step", -1.0): ("tempo.nudge", "step", -1.0),
-    (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.xfade", "abs", 1.0),
+    (f"cc:0:{apc40.CC_XFADE}", "output.bg", "abs", 1.0): ("output.xfade", "abs", 1.0),
     # plan 44 D5d (the owner, 2026-11-04, overturning row 559): the crossfader is
     # the decks', the MASTER fader the dim, and `master.gain` is the panel's. One
     # pass applies one key, so the old row above goes straight there too
@@ -599,28 +601,38 @@ THEME_TO_BANK = {
 PAD_LAYOUTS: dict[str, dict[tuple[str, str, str, float], tuple[str, str, float] | None]] = {
     "2026-10-14": {
         ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
-        ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
-        ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
+        ("pad:S", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
+        ("pad:N", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
         ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
     },
     "2026-10-29": {
-        ("pad:X", "view.points", "toggle", 1.0): ("view.screen_strokes", "toggle", 1.0),
-        ("pad:X", "preset.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
-        ("pad:B", "preset.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-        ("pad:B", "theme.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-        ("pad:B", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-        ("pad:X", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+        ("pad:W", "view.points", "toggle", 1.0): ("view.screen_strokes", "toggle", 1.0),
+        ("pad:W", "preset.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+        ("pad:E", "preset.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:E", "theme.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:E", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:W", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
     },
     "2026-11-04": {
         ("pad:VIEW", "tempo.tap", "fire", 1.0): (CHASE_PARAM, "momentary", 1.0),
         ("pad:VIEW", "ui.panel", "toggle", 1.0): (CHASE_PARAM, "momentary", 1.0),
         ("pad:MENU", "preset.save_new", "hold", 1.0): None,
-        ("hat:LEFT", "preset.list.prev", "hold", 1.0): None,
-        ("hat:RIGHT", "preset.list.next", "hold", 1.0): None,
-        ("hat:LEFT", "view.speed", "step", -4.0): None,
-        ("hat:RIGHT", "view.speed", "step", 4.0): None,
+        ("hat:W", "preset.list.prev", "hold", 1.0): None,
+        ("hat:E", "preset.list.next", "hold", 1.0): None,
+        ("hat:W", "view.speed", "step", -4.0): None,
+        ("hat:E", "view.speed", "step", 4.0): None,
     },
 }
+# plan 57 (row 723): which of those a file has seen, its `pad_layout` key. A layout moves a
+# file that hasn't seen it, once, so a row written by hand later that happens to be a twin of an
+# old one stays. No key: a file from before, which has seen none of them
+PAD_LAYOUT_KEY = "pad_layout"
+PAD_LAYOUT_NEWEST = max(PAD_LAYOUTS)
+# plan 58 §9 item 6: the pre-split ids the factory rows named. `bindings/4` holds the real ones;
+# the alias params (overlay.py) stay for an old patch's route until CL3
+OVERLAY_ALIASES = {"overlay.on": "output.overlay", "overlay.passthrough": "output.passthrough",
+                   "overlay.bg": "output.bg", "overlay.alpha": "output.alpha",
+                   "overlay.monitor": "output.monitor"}
 # row → (the layout that moved it, what it became)
 PAD_REMAP = {key: (when, hit) for when, rows in PAD_LAYOUTS.items() for key, hit in rows.items()}
 # No pad row is added to an existing file: a row that was never there may be
@@ -914,9 +926,11 @@ class Binding:
         addr = ":".join(self.parts)
         on = f" on {self.device}" if self.device else ""     # a second pad's (plan 27 B6)
         if s == "hat":
-            return f"d-pad {addr}{on}"
+            from .pads.models import HAT_WORDS
+            return f"d-pad {HAT_WORDS.get(addr, addr)}{on}"
         lane = is_continuous(s)
-        who = (name if name and lane else f"{s} {addr}") + on
+        who = (name if name and lane else row_words(f"{s}:{addr}") if s == PAIR_SCHEME
+               else f"{s} {addr}") + on
         if s == PAIR_SCHEME and self.op == "step":
             return f"{who} steps ±{abs(self.value):.3g}"
         if lane and self.op in MOD_OPS:
@@ -957,8 +971,8 @@ def row_words(row: Binding | str, names=None) -> str:
     through to the row's own words —
 
       ``hand:right.y`` → "right hand y"    ``hands:gap`` → "hands gap"
-      ``lane:0`` → "analyzer 1"            ``pad:A`` → "pad A"
-      ``hat:UP`` → "d-pad up"              ``axis@p2:LX`` → "axis LX"
+      ``lane:0`` → "analyzer 1"            ``pad:S`` → "pad south"
+      ``hat:N`` → "d-pad up"              ``axis@p2:LX`` → "axis LX"
       ``cc:0:48`` → "CC 48 ch1"            ``pitch:*`` → "pitch bend any ch"
       ``lfo:0`` → "LFO 1"                  ``mod:3`` → "mod.3"
       ``osc1:/fader/1`` → "/fader/1"       anything else → the source
@@ -992,11 +1006,15 @@ def row_words(row: Binding | str, names=None) -> str:
     if scheme == modifiers.SCHEME:
         return modifiers.id_of(f"{scheme}:{addr}") or source
     if scheme == "pad":
-        return f"pad {addr}"
+        from .pads.models import FACE_WORDS
+        return f"pad {FACE_WORDS.get(addr, addr)}"
     if scheme == "hat":
-        return f"d-pad {addr.lower()}"
+        from .pads.models import HAT_WORDS
+        return f"d-pad {HAT_WORDS.get(addr, addr.lower())}"
     if scheme == PAIR_SCHEME:
-        return f"pair {addr.replace(PAIR_SEP, ' / ')}"
+        from .pads.models import pair_label
+        pos, _, neg = addr.partition(PAIR_SEP)
+        return f"pair {pair_label(None, pos, neg)}"
     if scheme == "axis":
         return f"axis {addr}"
     if scheme == "key":
@@ -1202,7 +1220,7 @@ def keymap() -> list[Binding]:
         ("COMMA", "view.speed", "step", -4), ("PERIOD", "view.speed", "step", 4),
         ("M", "audio.mic", "toggle"), ("K", "audio.play", "toggle"),
         ("0", "audio.restart", "fire"),
-        ("T", "overlay.on", "toggle"), ("G", "overlay.passthrough", "toggle"),
+        ("T", "output.overlay", "toggle"), ("G", "output.passthrough", "toggle"),
         ("B", "tempo.tap", "fire"), ("SHIFT+B", "lfo.trigger", "fire"),
         *[(str(p + 1), f"view.plane.{n}", "toggle") for p, n in enumerate(PLANES)],
         *LOOP_KEY_ROWS,
@@ -1219,12 +1237,12 @@ def padmap() -> list[Binding]:
     or saves, and ← / → and START are free: the owner, 2026-11-04 (register
     rows 723–724). The owner's layout: PAD_LAYOUTS moves an older file's."""
     rows = [
-        ("pad:A", "view.faces", "toggle"), ("pad:B", "view.points", "toggle"),
-        ("pad:X", "view.screen_strokes", "toggle"), ("pad:Y", "view.lines", "toggle"),
+        ("pad:S", "view.faces", "toggle"), ("pad:E", "view.points", "toggle"),
+        ("pad:W", "view.screen_strokes", "toggle"), ("pad:N", "view.lines", "toggle"),
         ("pad:VIEW", CHASE_PARAM, "momentary"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
-        ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
+        ("hat:N", "view.bright", "step", 3), ("hat:S", "view.bright", "step", -3),
     ]
     return [Binding(src, pid, op, *arg) for src, pid, op, *arg in rows]
 
@@ -1428,7 +1446,20 @@ def backup(path: Path, schema: str) -> Path | None:
 OLD_DIAL = "desk.pad.dial."
 
 
-def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
+def old_words(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
+    """A file before `bindings/4` in today's words (plan 57): the sources (`nsew`) and the
+    `overlay.*` aliases' targets. Returns (rows, a note per row that moved)."""
+    out, notes = [], []
+    for b in rows:
+        source, target = nsew(b.source), OVERLAY_ALIASES.get(b.target, b.target)
+        if (source, target) != (b.source, b.target):
+            notes.append(f"renamed {b.source} → {b.target} to {source} → {target} (plan 57)")
+            b = replace(b, source=source, target=target)
+        out.append(b)
+    return out, notes
+
+
+def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = ""
                   ) -> tuple[list[Binding], list[str]]:
     """The factory rows plan 09 WP4 and plan 15 WP3 moved, on a table of
     any schema: the old APC40 factory rows swapped for the new (APC_REMAP —
@@ -1444,7 +1475,7 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
     old factory rows (and B / X's bank rows) moved to the layout of
     2026-10-14, the loadable patch walk to the d-pad held (2026-10-29), and off the
     pad with BACK's tap tempo the base chase now (2026-11-04)
-    (PAD_LAYOUTS); the track faders' eight invariant audio rows
+    (PAD_LAYOUTS, those newer than `seen`, the file's `pad_layout`); the track faders' eight invariant audio rows
     moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2); any row on the
     dial's old ids moved to `pad.dial.*` (OLD_DIAL, row 730).
     Idempotent: a second pass finds every old row gone
@@ -1489,7 +1520,7 @@ def remap_factory(rows: Iterable[Binding], profile: str = "apc40"
             notes.append(f"moved {b.source} → {b.target} to the SHIFT layer (the APC40 "
                          "map of plan 24: the track faders are the presets')")
             b = replace(b, layer="global")
-        elif key in PAD_REMAP:
+        elif key in PAD_REMAP and PAD_REMAP[key][0] > seen:
             when, hit = PAD_REMAP[key]
             if hit is None:
                 notes.append(f"removed {b.source} → {b.target} (the pad layout of "
@@ -2043,6 +2074,8 @@ def dumps_doc(d: dict) -> str:
     rows = ",\n".join("  " + json.dumps(b) for b in d["bindings"])
     text = f'{{\n "schema": {json.dumps(d["schema"])},\n'
     text += f' "profile": {json.dumps(d["profile"])},\n'
+    if d.get(PAD_LAYOUT_KEY):            # plan 57 (row 723): the pad layouts it has seen
+        text += f' {json.dumps(PAD_LAYOUT_KEY)}: {json.dumps(d[PAD_LAYOUT_KEY])},\n'
     if d.get("sinks_seeded"):            # plan 27 B3: the sinks' `send` lists translated
         text += f' "sinks_seeded": {json.dumps(d["sinks_seeded"])},\n'
     text += f' "bindings": [\n{rows}\n ]'
@@ -2143,8 +2176,8 @@ class MetaTable:
     # every other scheme's primary device (plan 27 B6; the registry sets
     # it, `DeviceRegistry.primaries`): scheme → the role of the first
     # enabled device of its kind in list order, whose rows are unqualified
-    # (``pad:A`` is the first pad's; a second pad's carry its role,
-    # ``pad@p2:A``). Empty — a bare table — names no role
+    # (``pad:S`` is the first pad's; a second pad's carry its role,
+    # ``pad@p2:S``). Empty — a bare table — names no role
     primaries: dict[str, str] = {}  # noqa: RUF012 — never mutated: replaced whole
     # the schemes delivered as rows, never read as lanes (`_check`): the
     # table's own kinds, and any a device of this rig adds (`Router.use`)
@@ -2161,7 +2194,7 @@ class MetaTable:
         self.carried: Carried | None = None
         self.error = ""
         self.migrated = False
-        self.read_at = "3"
+        self.read_at = "4"
         self.changed = False
         self.sinks_seeded: list[str] = []
         self.layer = "preset"
@@ -2222,7 +2255,7 @@ class MetaTable:
         those are a deck's (plan 13 §2.2). `rows`: a table's whole list, of
         which the meta controller's are written (default: `rows`)."""
         rows = self.rows if rows is None else rows
-        d = {"schema": SCHEMA, "profile": self.profile,
+        d = {"schema": SCHEMA, "profile": self.profile, PAD_LAYOUT_KEY: PAD_LAYOUT_NEWEST,
              "bindings": [b.to_json() for b in rows if is_meta_row(b)]}
         seeded = getattr(self, "sinks_seeded", None)
         if seeded:
@@ -2455,7 +2488,8 @@ class Bindings:
                 t = cls.factory(profile, path)
                 t.error = f"bindings: {e}"
                 return t
-            t.bindings, remapped = remap_factory(t.bindings, t.profile)
+            t.bindings, remapped = remap_factory(t.bindings, t.profile,
+                                                 str(data.get(PAD_LAYOUT_KEY) or ""))
             t.notes += remapped
             carried = Carried(
                 routes=[b.to_json() for b in [*t.routes(), *(b for b, _ in t.dropped)]],
@@ -2515,7 +2549,7 @@ class Bindings:
         changed = len(self.notes) - dropped
         tail = ", ".join(f"{n} rows {what}" for n, what in ((dropped, "dropped"),
                                                               (changed, "changed")) if n)
-        verb = "migrated" if self.migrated or self.read_at != "3" else "updated"
+        verb = "migrated" if self.migrated or self.read_at != "4" else "updated"
         what = f"migrated {path} to {SCHEMA}" if verb == "migrated" else f"updated {path}"
         if not written:
             what = (f"{path} not rewritten — no backup could be made; the changes above "
@@ -2547,7 +2581,7 @@ class Bindings:
         param's dropped); either sets `changed`, noted, so `load` writes
         the file back once (or leaves it to the migration, `load`)."""
         schema = data.get("schema")
-        if schema not in (SCHEMA, SCHEMA_V2, SCHEMA_V1, None):
+        if schema not in (SCHEMA, SCHEMA_V3, SCHEMA_V2, SCHEMA_V1, None):
             raise ValueError(f"unknown schema {schema!r}")
         # wave 0 T1: a file without the `units` marker has its rows' depths
         # onto the effects' retapered params — a button's `set` norm, a
@@ -2564,10 +2598,14 @@ class Bindings:
             notes += v1_notes
         profile = data.get("profile", "apc40")
         changed = bool(retapered)
-        if desk and schema != SCHEMA and any(b.is_midi for b in rows):
+        if desk and schema not in (SCHEMA, SCHEMA_V3) and any(b.is_midi for b in rows):
             rows, sorted_notes = sort_layers(rows, profile)
             notes += sorted_notes
             changed = bool(sorted_notes)
+        if schema != SCHEMA:       # plan 57: `bindings/4`, this Mac's file at its next launch
+            rows, renamed = old_words(rows)
+            notes += renamed
+            changed = True
         macros = macros_of(data.get("macros"))
         moved = migrate_scales(rows, macros)
         notes += moved
@@ -3564,9 +3602,9 @@ class Router:
         `role` is the pad's qualifier (plan 27 B6): "" for the primary pad
         — the unqualified rows and the `axis` lanes, as ever — or a second
         pad's role, whose lanes are ``axis@<role>`` and whose rows are
-        those qualified with it (``pad@p2:A``); each pad hears only its own.
+        those qualified with it (``pad@p2:S``); each pad hears only its own.
 
-        `skip`: the rows' sources, unqualified (``pad:A``, ``hat:DOWN``),
+        `skip`: the rows' sources, unqualified (``pad:S``, ``hat:S``),
         that do not fire this frame — the buttons the totem holds while it
         reads this pad (totem.SKIP, the plan 47 experiment). A skipped
         `hold` row forgets a press it was timing, so a press that began
@@ -3603,7 +3641,7 @@ class Router:
         now = time.monotonic() if now is None else now
         # each pad hears its own rows: a second pad those qualified with its
         # role; the primary the bare ones and — as a desk's `serves` — any
-        # qualified with the primary's own role (``pad@pad:A``)
+        # qualified with the primary's own role (``pad@pad:S``)
         own = role or getattr(self.table, "primaries", {}).get("pad", "")
         if buttons:
             for b in self.table.of(PAIR_SCHEME):

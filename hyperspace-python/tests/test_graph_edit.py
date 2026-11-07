@@ -2061,7 +2061,7 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
                         lambda pid, *a, **k: (picked.append(pid), combo(pid, *a, **k))[1])
     said, disabled = [], imgui.text_disabled
     monkeypatch.setattr(imgui, "text_disabled", lambda s: (said.append(s), disabled(s))[1])
-    port = graphview.VPort("pad:A", "A", "out", patched=True)
+    port = graphview.VPort("pad:S", "A", "out", patched=True)
     nodes = (("edge", SimpleNamespace(kind="gamepad", io=pad), [1]),
              ("pad", SimpleNamespace(kind="gamepad", io=pad), [1]),
              ("xbox", SimpleNamespace(kind="gamepad", io=other), []),

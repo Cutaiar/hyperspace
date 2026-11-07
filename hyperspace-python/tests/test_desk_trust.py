@@ -137,7 +137,7 @@ def test_nothing_can_latch_save(rig, tmp_path):
     assert not m.learner.learn_control(f"note:0:{apc40.N_SCENE[4]}", apc40)
     assert m.learner.refused and m.learner.last == SAVE_REFUSAL
     m.learner.arm(SAVE_PARAM, "pad")
-    assert not m.learner.learn_pad_button("pad:A")
+    assert not m.learner.learn_pad_button("pad:S")
     assert m.learner.last == SAVE_REFUSAL
     m.learner.arm(None)
     assert [b.to_json() for b in t.bindings] == rows

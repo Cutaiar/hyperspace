@@ -221,7 +221,7 @@ like the rename above. The SYSTEM page shows both.
                             # the next joystick no other pad entry reads. Several pads:
                             # one gamepad entry each; the first is the primary (the
                             # unqualified rows, the sticks' camera job), another's rows
-                            # carry its role (pad@p2:A, axis@p2:LX) — Learn pad writes them
+                            # carry its role (pad@p2:S, axis@p2:LX) — Learn pad writes them
     dial_left = "petal"     # how each stick reads as a dial (gamepad.dial) in a loadable
     dial_right = "blend"    # patch that names none: "petal", hard sectors, or "blend",
                             # neighbours crossfade (its own `pad.dial.*` wins). Read at launch,
