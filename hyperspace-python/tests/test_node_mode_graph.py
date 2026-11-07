@@ -8,11 +8,24 @@ from types import SimpleNamespace
 
 import pytest
 from imgui_bundle import imgui
+from test_graph_json import Stub
+from test_midi import FakeIn, FakeOut
 from test_node_desk import K1, K2, pick_node
 from test_node_desk import rig as desk_rig  # noqa: F401 — the fixture, under its name
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import apc40, graphview, nodemode, routing, ui, ui_desk, ui_graph
+from hyperspace import (
+    apc40,
+    devices,
+    graphview,
+    nodemode,
+    routing,
+    ui,
+    ui_desk,
+    ui_graph,
+    ui_routing,
+)
+from hyperspace.midi import MidiIO
 from hyperspace.routing import Binding
 
 NM = graphview.NODE_MODE
@@ -358,3 +371,303 @@ def test_the_chip_says_point_move_bring_and_leave(panel_rig, monkeypatch):
         chips = []
         _block(p, _nd(**h), monkeypatch, chips)
         assert chips == want
+
+
+# ---------------------------------------------------------------- review at e17cb81c
+
+
+def _header_words(panel, table, monkeypatch) -> tuple[list[str], list[str]]:
+    """`ui_desk._header` drawn, wide: what it says, and what it says in the micro face."""
+    said, micro = [], []
+    real, real_micro = imgui.text_colored, ui._micro
+    monkeypatch.setattr(imgui, "text_colored", lambda c, s: (said.append(s), real(c, s))[1])
+    monkeypatch.setattr(ui, "_micro", lambda s, *a: (micro.append(s), real_micro(s, *a))[1])
+    imgui.new_frame()
+    imgui.set_next_window_size(imgui.ImVec2(1600, 80))
+    imgui.begin("probe")
+    try:
+        ui_desk._header(panel, table)
+    finally:
+        imgui.end()
+        imgui.end_frame()
+    return said, micro
+
+
+@pytest.mark.parametrize("node_away", [False, True])
+def test_the_head_keeps_the_decks_clause_with_node_mode_up(panel_rig, monkeypatch, node_away):
+    """The node mode block is no reason for "deck 1 · True", or to lose what the desk plays."""
+    panel = panel_rig.panel
+    table = ui_routing.router_of(panel).table
+    row = Binding(f"cc:0:{K1}", "view.bright", "abs", layer="preset")
+    monkeypatch.setattr(table, "node_rows", lambda role=None: [row])
+    monkeypatch.setattr(table, "node_row_away", lambda b: node_away)
+    monkeypatch.setattr(ui_desk, "_deck_words",
+                        lambda p, t: ("deck 1 · on air", "the desk plays deck 2", True))
+    said, micro = _header_words(panel, table, monkeypatch)
+    assert "deck 1 · on air · the desk plays deck 2" in said
+    assert not any("True" in s or "False" in s for s in said)
+    assert ("node · 1 · other deck" if node_away else "node · 1") in micro
+
+
+def _second_desk(rig, node) -> None:
+    """A second desk, player 2's, pointed at `node` of deck 1."""
+    t = rig.one.table
+    io2 = MidiIO(rig.one.reg, t, inp=FakeIn(), out=FakeOut(), learner=rig.one.learn, role="launch")
+    second = devices.MidiDevice("launch", {"profile": "apc40"},
+                                devices.Context(reg=rig.one.reg, table=t), io=io2)
+    rig.devs.devices.append(second)
+    t.midi_roles = (rig.desk.role, "launch")
+    rig.meta.players.hold("launch", 2)
+    second.point(rig.meta.pointer("launch"), rig.meta.panel_pointer)
+    assert rig.nd1.enter("launch", node) is None
+
+
+def test_the_pane_counts_this_desks_routes_that_come_back(rig):
+    node, params = pick_node(rig.one)
+    patch = rig.one.loaded_patch
+    other = next(n for n in sorted(patch._pointable())
+                 if n != node and rig.nd1.refusal(rig.desk.role, n) is None
+                 and not set(patch.node_params(n)) & set(params)
+                 and not any(b.target in patch.node_params(n) for b in rig.one.table.bindings))
+    theirs = nodemode.fillable(rig.one.reg, patch.node_params(other))[0]
+    off = Binding("lane:1", params[1], "push", 0.5)
+    off.enabled = False
+    rig.one.table.set_routes([*rig.one.table.routes(), Binding("lane:0", params[0], "push", 0.5),
+                              off, Binding("lane:0", theirs, "push", 0.5)])
+    _second_desk(rig, other)
+    rig.nd1.enter(rig.desk.role, node)
+    assert theirs in rig.one.table.node_held()      # held, by the other desk, on the other node
+    h = next(x for x in rig.nd1.held() if x.role == rig.desk.role)
+    assert ui_graph.RESTING.format(n=1, s="") in ui_graph.node_mode_words(rig.nd1, h, node)
+
+
+def _route_cable(rig, route):
+    view = view_of(rig.one, rig.devs)
+    return next(c for c in view.cables if c.kind == "route" and c.ref is route)
+
+
+def test_a_switched_off_route_is_promised_nothing(rig):
+    node, params = pick_node(rig.one)
+    route = Binding("lane:0", params[0], "push", 0.5)
+    route.enabled = False
+    rig.one.table.set_routes([*rig.one.table.routes(), route])
+    rig.nd1.enter(rig.desk.role, node)
+    assert rig.one.table.node_holds(route)
+    c = _route_cable(rig, route)
+    assert c.off and graphview.NODE_MODE_HOLDS not in c.label
+
+
+def test_a_route_a_loop_will_cut_is_promised_nothing(rig):
+    """A loop closed by the route node mode holds is open while it is held, so the live cut
+    does not name it. It says what it will be, read with no desk holding, and refresh agrees."""
+    route = Binding("lfo:0", "lfo.1.rate", "push", 0.5)     # the voice's output onto its own knob
+    router, t = rig.one.router, rig.one.table
+    t.set_routes([*t.routes(), route])
+    key = (route.source, route.target)
+    assert key in router.modgraph_cut and key in router.modgraph_stays_cut
+    assert rig.nd1.enter(rig.desk.role, "lfo.1") is None
+    assert t.node_holds(route)
+    assert key not in router.modgraph_cut and key in router.modgraph_stays_cut
+    view = view_of(rig.one, rig.devs)
+    c = next(x for x in view.cables if x.kind == "route" and x.ref is route)
+    for _ in range(2):
+        assert c.off and graphview.NODE_MODE_HOLDS not in c.label
+        assert "a loop needs a delay" in c.label
+        graphview.refresh(view, rig.one.reg, router, None)
+    h = next(x for x in rig.nd1.held() if x.role == rig.desk.role)
+    assert not any("at rest" in w for w in ui_graph.node_mode_words(rig.nd1, h, "lfo.1"))
+    rig.nd1.leave(rig.desk.role)
+    assert key in router.modgraph_cut                       # …as it said
+    assert key in router.modgraph_stays_cut
+
+
+def test_with_nothing_held_what_stays_cut_is_what_is_cut(rig):
+    t, router = rig.one.table, rig.one.router
+    t.set_routes([*t.routes(), Binding("lfo:0", "lfo.1.rate", "push", 0.5)])
+    assert router.modgraph_stays_cut == router.modgraph_cut != set()
+
+
+def test_a_frame_reads_who_holds_what_the_same_however_many_routes(rig, monkeypatch):
+    """`refresh` is each frame's: `holding` scans the desks, so it is asked once, not per route."""
+    node, params = pick_node(rig.one)
+    t = rig.one.table
+    rig.nd1.enter(rig.desk.role, node)
+    calls = []
+    real = rig.nd1.holding
+    monkeypatch.setattr(rig.nd1, "holding", lambda: (calls.append(1), real())[1])
+
+    def asked() -> int:
+        view = view_of(rig.one, rig.devs)
+        calls.clear()
+        graphview.refresh(view, rig.one.reg, rig.one.router, None)
+        return len(calls)
+    few = asked()
+    t.set_routes([*t.routes(), *(Binding(f"lane:{k}", params[0], "push", 0.1) for k in range(1, 20))])
+    assert asked() == few
+    h = next(x for x in rig.nd1.held() if x.role == rig.desk.role)
+    calls.clear()
+    ui_graph.node_mode_words(rig.nd1, h, node)
+    assert len(calls) <= 2      # `routes_held`'s, and the router's own `_modgraph_key`
+
+
+def test_the_desk_asks_once_a_draw_not_once_a_control(panel_rig, monkeypatch):
+    panel = panel_rig.panel
+    table = ui_routing.router_of(panel).table
+    row = next(iter(ui_desk.lit(table).values()))
+    asked = []
+    monkeypatch.setattr(table, "node_rows", lambda role=None: (asked.append("rows"), [row])[1])
+    monkeypatch.setattr(table, "node_row_away", lambda b: (asked.append("away"), True)[1])
+    edges = []
+    real = ui_desk._edge
+    monkeypatch.setattr(ui_desk, "_edge", lambda f, b, on: (edges.append((b, f.get(id(b)))),
+                                                            real(f, b, on))[1])
+    imgui.new_frame()
+    imgui.set_next_window_size(imgui.ImVec2(1200, 800))
+    imgui.begin("probe")
+    try:
+        ui_desk._body(panel, table)
+    finally:
+        imgui.end()
+        imgui.end_frame()
+    assert len(edges) == len(apc40.LAYOUT)
+    assert [away for b, away in edges if b is row] and all(
+        away is True for b, away in edges if b is row)
+    assert all(away is None for b, away in edges if b is not row)
+    # the head's and the draw's, and the map's as it is first made (`lit_cached`)
+    assert asked.count("away") <= 2 and asked.count("rows") <= 3
+
+
+# …a real copy, made as the picker makes one
+
+
+def _real_copy(rig) -> tuple[str, str, object]:
+    """An effect and a copy of it in deck 1's section, by the picker's own verb."""
+    gs = rig.one.loaded_patch.graph
+    gs.attach(Stub())
+    e = graphview.Edit(graph=gs, push=lambda _label: None)
+    assert e.add_node("effect", "acid") is None
+    original = f"render:{e.added}"
+    assert e.add_node("copy", e.added) is None
+    return original, f"render:{e.added}", gs.spec
+
+
+def _grouped(rig, spec, members: list[str]):
+    view = graphview.build(rig.one.table, rig.one.reg, rig.one.router, rig.devs, None, spec)
+    graphview.attach_groups(view, [{"id": "g1", "name": "g", "nodes": members, "open": False}],
+                            rig.one.table)
+    return view, view.groups[0]
+
+
+def test_a_real_copys_cables_land_on_the_copy(rig):
+    original, copy, spec = _real_copy(rig)
+    assert rig.nd1.enter(rig.desk.role, copy) is None
+    rows = rig.nd1.rows()
+    assert rows and all(b.target.startswith("fx.acid") for b in rows)
+    view = graphview.build(rig.one.table, rig.one.reg, rig.one.router, rig.devs, None, spec)
+    got = cables(view)
+    assert len(got) == len(rows) and {view.owner(c.dst_port)[0].id for c in got} == {copy}
+    assert all(c.dst_port.startswith(f"{graphview.NODE_PIN}:{copy}|") for c in got)
+    assert original != copy
+
+
+def test_a_group_holding_only_the_copy_gives_its_cables_a_pin(rig):
+    """The params are the original's, whom the group does not hold: where it lands decides."""
+    _original, copy, spec = _real_copy(rig)
+    rig.nd1.enter(rig.desk.role, copy)
+    view, g = _grouped(rig, spec, [copy])
+    got = cables(view)
+    assert got and all(c.id in g.ends and g.ends[c.id][1] for c in got)
+    pin = g.ends[got[0].id][1]
+    # the pin stands for where the cable lands, which takes no drag, not the original's param
+    assert graphview.real_pin(view, pin) == got[0].dst_port
+    assert view.owner(graphview.real_pin(view, pin))[0].id == copy
+
+
+def test_a_group_holding_only_the_original_leaves_the_copys_cables_alone(rig):
+    """No dangling port: nothing of this group is on the end of them."""
+    original, copy, spec = _real_copy(rig)
+    rig.nd1.enter(rig.desk.role, copy)
+    view, g = _grouped(rig, spec, [original])
+    got = cables(view)
+    assert got and not any(c.id in g.ends or c.id in g.inside for c in got)
+    assert not any(p.param in {c.ref[1].target for c in got} for p in g.ports)
+
+
+def test_a_group_holding_both_keeps_the_two_desks_pins_apart(rig):
+    """Two desks, one on the original and one on its copy: one param, two ends."""
+    original, copy, spec = _real_copy(rig)
+    rig.nd1.enter(rig.desk.role, original)
+    _second_desk(rig, copy)
+    view, g = _grouped(rig, spec, [original, copy])
+    got = cables(view)
+    to_copy = [c for c in got if c.dst_port.startswith(f"{graphview.NODE_PIN}:")]
+    to_original = [c for c in got if c not in to_copy]
+    assert to_copy and to_original
+    assert {g.ends[c.id][1] for c in to_copy}.isdisjoint(g.ends[c.id][1] for c in to_original)
+
+
+# …the side pane's words
+
+
+def _pane(panel, view, sel, monkeypatch, nd, press=None) -> list[str]:
+    """`ui_graph._side` drawn in a real frame: everything it says, as it is shown."""
+    said = []
+    with monkeypatch.context() as m:
+        m.setattr(ui_graph, "_node_desk", lambda _p: nd)
+        real_micro, real_wrapped, real_dis = ui._micro, imgui.text_wrapped, imgui.text_disabled
+        m.setattr(ui, "_micro", lambda s, *a: (said.append(s.upper()), real_micro(s, *a))[1])
+        m.setattr(imgui, "text_wrapped", lambda s: (said.append(s), real_wrapped(s))[1])
+        m.setattr(imgui, "text_disabled", lambda s: (said.append(s), real_dis(s))[1])
+
+        def chip(label, lit, color=None, size=None):
+            said.append(label.split("##")[0])
+            return press is not None and label.startswith(press)
+        m.setattr(ui, "lit_chip", chip)
+        ui_graph._state(panel)["view"] = view
+        imgui.new_frame()
+        imgui.begin("t")
+        try:
+            ui_graph._side(panel, {}, view, sel)
+        finally:
+            imgui.end()
+            imgui.end_frame()
+    return said
+
+
+def test_a_selected_bundle_says_leave_and_offers_it(rig, panel_rig, monkeypatch):
+    node, _ = pick_node(rig.one)
+    rig.nd1.enter(rig.desk.role, node)
+    view = view_of(rig.one, rig.devs)
+    _, bundles = graphview.wiring(view, lambda _nid: True)
+    mine = next(b for b in bundles if b.id.endswith("|node"))
+    said = _pane(panel_rig.panel, view, ("bundle", mine), monkeypatch, rig.nd1)
+    assert graphview.LEAVE_WORDS in said
+    assert not any(graphview.EXPAND_TO_EDIT in s for s in said)
+    assert f"{rig.desk.role}: leave node mode" in said
+    assert rig.nd1.rows()
+    _pane(panel_rig.panel, view, ("bundle", mine), monkeypatch, rig.nd1,
+          press=f"{rig.desk.role}: leave")
+    assert not rig.nd1.rows()
+
+
+def test_a_saved_bundle_in_the_pane_still_says_expand(rig, panel_rig, monkeypatch):
+    view = view_of(rig.one, rig.devs)
+    _, bundles = graphview.wiring(view, lambda _nid: True)
+    other = next(b for b in bundles if not ui_graph._node_mode_roles(b))
+    said = _pane(panel_rig.panel, view, ("bundle", other), monkeypatch, rig.nd1)
+    assert any(graphview.EXPAND_TO_EDIT in s for s in said)
+    assert graphview.LEAVE_WORDS not in said
+
+
+def test_a_selected_cable_says_node_mode_in_words_and_offers_leave(rig, panel_rig, monkeypatch):
+    node, _ = pick_node(rig.one)
+    rig.nd1.enter(rig.desk.role, node)
+    view = view_of(rig.one, rig.devs)
+    c = cables(view)[0]
+    said = _pane(panel_rig.panel, view, ("cable", c), monkeypatch, rig.nd1)
+    assert "NODE MODE" in said and "NODE_MODE" not in said
+    assert graphview.LEAVE_WORDS in said
+    assert f"{rig.desk.role}: leave node mode" in said
+    _pane(panel_rig.panel, view, ("cable", c), monkeypatch, rig.nd1,
+          press=f"{rig.desk.role}: leave")
+    assert not rig.nd1.rows()

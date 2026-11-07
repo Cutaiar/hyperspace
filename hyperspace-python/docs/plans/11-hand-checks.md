@@ -8087,7 +8087,9 @@ LED lit; when let go the value does not jump, and the next detent is one detent.
 With 541's node pointed. *Pass:* a green bundle from the apc40 to the node, apart from white ones
 (hover says each row: "K1 → …"; expand both ends and each is its own green cable). Green is
 easy to tell from white, amber, blue and violet. Its K1 cable thickens as the param rises. A saved
-row on K1 goes faint and says "(under node mode)". Right-click: leave; ⌫ does nothing. Say if a
+row on K1 goes faint and says "(under node mode)". Right-click: leave; ⌫ keeps the cable and the
+head says "a node mode cable is no row: leave the node to end it". Selected, its side pane says the
+same and has a leave chip. Say if a
 white bundle lying under the green one between the same two nodes reads badly (row 713).
 Then a real copy, since no corpus patch holds one: on a throwaway copy of a preset with an effect,
 add a copy of that effect, select the copy, and press **point apc40 here**. *Pass:* expand it: the

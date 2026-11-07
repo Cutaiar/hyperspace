@@ -3864,7 +3864,7 @@ class Router:
         return (id(t), rows, t.macros_serial, subs, mods, banks,
                 getattr(self.reg, "serial", 0), held)
 
-    def build_modgraph(self) -> modgraph.ModGraph:
+    def build_modgraph(self, held: frozenset[str] | None = None) -> modgraph.ModGraph:
         """The modulation graph of this table (modgraph.py's nodes and edges):
         every bank voice (when the router steps the bank: each LFO, by id)
         and modifier first, in their
@@ -3875,7 +3875,8 @@ class Router:
         subscribers as `base` edges; each voice's knob params (and the
         bank-wide ones, ``lfo.trigger``) and each modifier's own params, where the patch
         holds them, into their node. A switched-off row's edges are drawn
-        disabled. No loop is cut here (`modgraph` does that)."""
+        disabled. No loop is cut here (`modgraph` does that). `held`: the params node mode
+        holds, by default as they stand now (row 711)."""
         g = modgraph.ModGraph()
         t = self.table
         for scheme, bank in self._banks().items():
@@ -3898,7 +3899,8 @@ class Router:
             for inp in getattr(m, "inputs", ()):
                 if inp:                                  # "" is an input not chosen yet
                     g.link(source(inp), _modifier_node(m), "in")
-        held = t.node_held() if hasattr(t, "node_held") else frozenset()
+        if held is None:
+            held = t.node_held() if hasattr(t, "node_held") else frozenset()
         for b in t.routes():
             # (a route node mode holds off is an edge switched off, so it closes no loop)
             cable, on = (b.source, b.target), b.enabled and not (held and t.node_holds(b, held))
@@ -3962,23 +3964,35 @@ class Router:
         self.modgraph                                # noqa: B018 — current
         return self.__dict__["_modgraph_cut"]
 
-    def _forget_lost_rows(self, by_target: dict[str, list]) -> None:
+    @property
+    def modgraph_stays_cut(self) -> set[tuple[str, str]]:
+        """The cables a loop keeps off with no desk holding anything: what `modgraph_cut`
+        is once node mode lets go. A route it holds is an edge off, so it closes no loop
+        now and the live cut does not name it, and "back on leave" would be untrue of one
+        this names (row 711)."""
+        self.modgraph                                # noqa: B018 — current
+        return self.__dict__["_modgraph_stays_cut"]
+
+    def _forget_lost_rows(self, by_target: dict[str, list], resting: Iterable[Binding] = ()) -> None:
         """A param none of whose rows is left has lost the source its base
-        chase ledger was about (plan 52): a row made later rides in full."""
+        chase ledger was about (plan 52): a row made later rides in full. A route node
+        mode holds off (`resting`) is not lost: it comes back with the offset the base
+        holds, as a source's flicker does."""
         had = self.__dict__.get("_row_sources", {})
         now = {t: {b.source for b, _ in rows} for t, rows in by_target.items()}
+        for b in resting:
+            now.setdefault(b.target, set()).add(b.source)
         self.reg.forget_commits(t for t, was in had.items() if not was & now.get(t, set()))
         self._row_sources = now
 
-    def _rebuild_modgraph(self, key: tuple) -> None:
-        g = self.build_modgraph()
-        t = self.table
+    def _break_loops(self, g: modgraph.ModGraph, mod_ids: dict[str, str]
+                     ) -> tuple[set[tuple[str, str]], set[tuple[str, str]], list[str]]:
+        """Every loop of `g` that passes through no delay, broken in place: the cables kept
+        off, the modifier inputs kept off, and a note for each."""
         rank: dict[tuple[str, str], int] = {}
-        for k, b in enumerate(t.bindings):
+        for k, b in enumerate(self.table.bindings):
             if b.op in MOD_OPS:
                 rank[(b.source, b.target)] = k
-        mods = _modifiers_of(t)
-        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in mods}
         mod_rank = {node: modifiers.number(mid) or 0 for node, mid in mod_ids.items()}
         cut: set[tuple[str, str]] = set()
         cut_in: set[tuple[str, str]] = set()     # (input address, modifier node) kept off
@@ -4010,14 +4024,32 @@ class Router:
             who = mod_ids.get(last.dst, last.dst)
             notes.append(f"loop: {said} needs a delay — {who}'s input {last.src} "
                          f"is off until it has one")
+        return cut, cut_in, notes
+
+    def _rebuild_modgraph(self, key: tuple) -> None:
+        t = self.table
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()
+        g = self.build_modgraph(held)
+        mods = _modifiers_of(t)
+        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in mods}
+        cut, cut_in, notes = self._break_loops(g, mod_ids)
+        stays_cut = cut | cut_in
+        if held:                # asked again as if every desk had let go (`modgraph_stays_cut`)
+            a, b, _ = self._break_loops(self.build_modgraph(frozenset()), mod_ids)
+            stays_cut = a | b
         # the evaluation plan: per node in order, what `modulate` does there
         banks = self._banks()
         reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
-        held = t.node_held() if hasattr(t, "node_held") else frozenset()
+        resting: list[Binding] = []
         for b in t.mods():
-            if (b.source, b.target) not in cut and not (held and t.node_holds(b, held)):
-                by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
+            if (b.source, b.target) in cut:
+                continue
+            if held and t.node_holds(b, held):
+                if (b.source, b.target) not in stays_cut:
+                    resting.append(b)
+                continue
+            by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
         # a delay closing a loop runs before its input (`modgraph.ordering`):
         # it emits that input's lane as it stands — last frame's value
         live = [e for e in g.edges if e.enabled and e.port == "in"]
@@ -4025,7 +4057,7 @@ class Router:
         early = {e.dst for e in live if id(e) not in ordered}
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
-        self._forget_lost_rows(by_target)
+        self._forget_lost_rows(by_target, resting)
         for node in modgraph.order(g):
             if node.kind in banks:
                 i = int(node.id.split(":")[1])
@@ -4042,6 +4074,7 @@ class Router:
         d = self.__dict__
         d["_modgraph"], d["_plan"], d["_modgraph_seen"] = g, plan, key
         d["_modgraph_notes"], d["_modgraph_cut"] = notes, cut | cut_in
+        d["_modgraph_stays_cut"] = stays_cut
 
     # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
 

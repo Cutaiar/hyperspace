@@ -13222,7 +13222,15 @@ disengage node mode." A branch to keep them is future work, "not important enoug
   (`NodeDesk.holding`), the modulators' routes on it are out of `Router`'s plan and their edges off:
   the knob is the param. The route stays in the table, the file and ROUTING. So a leave, an undo, a
   re-point and a load are the route back, by the same road, and a save holds what it held. The
-  cable says so ("off: node mode holds this param"), and the side pane counts them.
+  cable says so ("off: node mode holds this param, back on leave"), and the side pane counts this
+  desk's. **Only of a route that returns** (`graphview.routes_held`): a switched-off one is promised
+  nothing, and one a loop will cut says so. A held route's edge is off, so it closes no loop and the
+  live cut does not name it; `Router.modgraph_stays_cut` reads the loops with no desk holding.
+- **A base chase across a visit.** A rested route is no row lost: `_forget_lost_rows` keeps the
+  param's ledger (plan 52), so a look the verb left stands where it stood after a leave, as through a
+  source's flicker, instead of jumping by the route's offset. A knob turned in the visit stays where
+  it was left, and the route rides again once it has been home. A route deleted in the visit is a row
+  lost, and the ledger goes.
 - **What does not rest.** A param past the desk's freedoms (`Fit.over`), which no knob holds. A pad's
   or a hand's route, kept. **Nothing on another `Deck`,** so no patch reaches another. A pointing whose
   desk is on the other `Deck`, or not plugged in: nothing holds the param, so the modulators run.
@@ -13345,7 +13353,8 @@ point: **point apc40 here**, **move apc40 here** when it is on another node, **a
 desk is on the other `Deck`. Each acts on the patch of the deck the panel looks at. A node nothing
 can fill greys the chip, and hovering says why (`nodemode.enter_refusal`). Below it, the map in the
 same colour: "K1 → Pattern scale", then what stayed, then `Fit.too_many`'s list. A cable's right-click
-offers leave, and ⌫ refuses (`ui_graph.DELETE` has no such kind). The on-screen desk draws the filled
+offers leave, and ⌫ keeps the cable and says how to end it (`ui_graph._node_mode_cut`, its entry in
+`ui_graph.DELETE`, printing `graphview.LEAVE_WORDS`). The on-screen desk draws the filled
 controls with an outline in that colour and says "node · 7" in its head, and `Learn` is free on them.
 
 **Judge it.** 543, 545.

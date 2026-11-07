@@ -3556,8 +3556,15 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         b = obj
         ui._micro("bundle")
         imgui.text_wrapped(graphview.bundle_tip(view, b).split("\n")[0])
-        imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''} · "
-                            f"{graphview.EXPAND_TO_EDIT} on the canvas")
+        roles = _node_mode_roles(b)
+        if roles:
+            imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''}")
+            imgui.text_wrapped(graphview.LEAVE_WORDS)
+            for role in roles:
+                _leave_chip(panel, role)
+        else:
+            imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''} · "
+                                f"{graphview.EXPAND_TO_EDIT} on the canvas")
         imgui.separator()
         rows = [c.ref for c in b.cables if c.kind == "route"]
         focus = st.get("focus")
@@ -3572,6 +3579,13 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         return
     if what == "cable":
         c = obj
+        if c.kind == graphview.NODE_MODE:
+            ui._micro(NODE_CHIP)
+            _route_row(panel, router, view, c)
+            imgui.text_wrapped(graphview.LEAVE_WORDS)
+            if c.ref is not None:
+                _leave_chip(panel, c.ref[0])
+            return
         ui._micro(c.kind)
         _route_row(panel, router, view, c)
         return
@@ -3657,8 +3671,14 @@ def node_mode_words(nd, h, nid: str) -> list[str]:
     said = fit.too_many(nid)
     if said:
         out.append(said)
-    t = getattr(getattr(nd, "deck", None), "table", None)
-    rest = sum(1 for b in t.routes() if t.node_holds(b)) if t is not None else 0
+    deck = getattr(nd, "deck", None)
+    if deck is not None:
+        back = graphview.routes_held(deck.table, deck.reg, deck.router)     # (once a frame)
+        mine = {r.target for r in h.rows}
+        rest = sum(1 for b in deck.table.routes() if b.target in mine
+                   and back.get(id(b)) == graphview.NODE_MODE_HOLDS)
+    else:
+        rest = 0
     if rest:
         out.append(RESTING.format(n=rest, s="" if rest == 1 else "s"))
     if not h.on_here:
@@ -4995,6 +5015,14 @@ DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
                "lfo": _voice_node_cut, "env": _voice_node_cut,
                "render": _delete_render_node, "output": _delete_render_node,
                "channel": _delete_render_node}
+
+
+def _leave_chip(panel, role: str) -> None:
+    """The side pane's leave, for a selected node mode cable or bundle."""
+    nd = _node_desk(panel)
+    if nd is not None and ui.lit_chip(f"{role}: leave node mode##graph.side.leave.{role}", False,
+                                      KIND_COLOURS[graphview.NODE_MODE]):
+        nd.leave(role)
 
 
 def _node_mode_roles(b: graphview.VBundle) -> list[str]:
