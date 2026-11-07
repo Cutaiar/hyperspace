@@ -129,7 +129,7 @@ from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .groupwords import group_title
-from .params import PATCH_GROUPS, Kind, Param, Registry, is_meta_id
+from .params import PATCH_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
     PAIR_SCHEME,
@@ -167,7 +167,7 @@ CABLE_KINDS = ("route", "setter", "sub", "input", "render", "lane")
 IN, OUT = "in", "out"
 BASE, MOD, DEPTH = "base", "mod", "depth"
 # which layout map a node's position is saved in
-PATCH_SECTION, META_SECTION = "preset", "session"
+PATCH_SECTION, META_SECTION = "preset", "meta"
 
 ANALYZER = "analyzer"
 CAMERA = "camera"            # the shared camera's node: `render:camera` (plan 35 V2: was `eye`)
@@ -678,7 +678,8 @@ DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "cli
 # — `SCHEME_ROLE`, devices.py's since plan 40 T4 (imported above)
 # schemes that are no device's: the keyboard, the built-in lanes, the modifiers
 NO_DEVICE = ("key", "lane", "lfo", "env", SEQ, modmod.SCHEME)
-PLACEHOLDER_STATUS = "not in this rig: its cables wait for it"
+PLACEHOLDER_STATUS = ("not set up on this Mac: its cables wait for it. "
+                      "[[devices]] in config.toml lists it")
 
 
 def desk_group(group: str, label: str, invariant: bool = False) -> str:
@@ -819,30 +820,30 @@ HOVERS: dict[str, str] = {
     "echo": "The k-th newest look-back frame.",
     "dream": "Its picture, dreamed: laid over what it takes in, with knobs of its own.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
-    rgraph.ALL_OUTPUTS: ("The rig's bus: a window shows it by a cable from here, unless the "
+    rgraph.ALL_OUTPUTS: ("The meta controller's bus: a window shows it by a cable from here, unless the "
                          "preset cuts that cable or wires that port itself."),
     # R13: `ground`, a source with no render node, drawn so its wires can be seen and deleted
     rgraph.GROUND: ("A window's background where nothing is drawn — the clear colour, or "
                     "see-through in overlay: wired into an output's port, that port shows it."),
 }
 # the words a delete or an add says (plan 35 G)
-OUTPUT_UNWIRED = "{label} is a window of this rig: its wires are gone, it shows its ground"
+OUTPUT_UNWIRED = "{label} is one of the meta controller's windows: its wires are gone, it shows its ground"
 ALL_UNWIRED = ("All outputs stays (every window reads it): its wires are gone, so the "
                "windows show their own wires, else their ground")
 # plan 36 T1 (W1, D1): the meta controller's bus cables from All outputs into each
 # window (`graph.BusCuts`) — which of them stand is the loadable patch's since
 # plan 44 D3 (`loadable.LoadedPatch.bus`, saved under `bus`), in words
-BUS_SAID = ("the rig's cable: All outputs' {port} on {label} — cut it and {label} shows "
+BUS_SAID = ("the bus cable: All outputs' {port} on {label} — cut it and {label} shows "
             "nothing there with this preset (a preset saves its cuts)")
 BUS_IDLE = "nothing is wired into All outputs' {port}"
 BUS_SAME_PORT = "All outputs' {port} goes into a window's {port} (output.1.{port} …)"
 BUS_NO_SHOW = "no preset is loaded: a preset holds which cables from All outputs stand"
-BUS_NO_EFFECT = ("{wire} is the rig's cable: put the node on All outputs' picture, or "
+BUS_NO_EFFECT = ("{wire} is a bus cable: put the node on All outputs' picture, or "
                  "wire the window a picture of its own")
 # plan 44 D3 (plan 43 §6 item 3): a window the loadable patch wires or cuts that this
 # meta controller has not open — requested, said, never an error: the loadable patch is a
 # complete look, the meta controller is what is plugged in
-WINDOW_WANTED = ("this preset wires Output {n}, which this rig has not open — add a "
+WINDOW_WANTED = ("this preset wires Output {n}, which is not open on this Mac — add a "
                  "window on OUTPUT to show it")
 
 
@@ -868,7 +869,7 @@ def window_wanted_lines(spec, bus_cuts=None, count: int = 0) -> list[str]:
     (beside the output blocks) and the GRAPH head both say, the same words."""
     return [WINDOW_WANTED.format(n=n) for n in wanted_windows(spec, bus_cuts, count)]
 # plan 36 T2 (W2): a listed cloud's wire into the scene, the meta controller's too
-CLOUD_SAID = ("the rig's cable: this cloud drawn in the scene — cut it and the scene "
+CLOUD_SAID = ("this cloud's wire into the scene — cut it and the scene "
               "draws no cloud with this preset (a preset saves its cuts)")
 CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
 CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
@@ -1611,7 +1612,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             targets.append(pid)
 
     for p in reg:
-        if p.modulatable and not p.alias and not is_meta_id(p.id):       # (register rows 743, 746)
+        if p.modulatable and not p.alias:       # (no meta param is: register rows 743, 746, 775)
             want(p.id)
     for b in (*routes, *setters):
         want(b.target)
@@ -1805,7 +1806,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if not standing.has(w) or src not in view.pins or dst not in view.pins:
             continue
         idle = "scene" in gone
-        view.cables.append(VCable(cable_id(f"rig:{w.src}>{w.node}/{w.port}"), src, dst,
+        view.cables.append(VCable(cable_id(f"cloud:{w.src}>{w.node}/{w.port}"), src, dst,
                                   GEOMETRY, ref=w, kind="render", dormant=idle,
                                   label=CLOUD_IDLE if idle else CLOUD_SAID))
 
@@ -2789,7 +2790,7 @@ def summary(n: VNode) -> list[str]:
         if n.layer:
             lines.append(f"{n.layer} layer · {'up' if n.up else 'down'}")
         if n.placeholder:
-            lines.append("not in this rig")
+            lines.append("not set up on this Mac")
         elif n.grey:
             lines.append(n.status.rpartition(" · ")[2] or "not connected")
     elif n.kind in BANK_SCHEMES:
@@ -3599,12 +3600,13 @@ ALREADY = "already patched"
 SELF_LOOP = "a modifier cannot read itself (a loop)"
 MACRO_NO_LANE = "a macro is no lane: it cannot feed a modifier"
 NO_LANE = "{what} is no lane: it cannot feed a modifier"
-KEY_ROWS = "keys are the session's rows: map them on ROUTING"
+KEY_ROWS = "keys are the meta controller's rows: map them on ROUTING"
 MOD_ONLY_ROUTE = "a modifier goes onto a route or a modifier's input"
 ROUTE_END = "a route's end moves to another param's mod"
-META_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
-SHIFT_NODE = "{addr} on the SHIFT node is the session's (bindings.json): map it on ROUTING"
-NOT_REMOVABLE = "{label}: the rig's, not the preset's (nothing to delete)"
+META_ROW = "{what} is the meta controller's (bindings.json): edit it on ROUTING"
+SHIFT_NODE = ("{addr} on the SHIFT node is the meta controller's (bindings.json): "
+              "map it on ROUTING")
+NOT_REMOVABLE = "{label}: the meta controller's, not the preset's (nothing to delete)"
 # plan 43 C2: the camera is the loadable patch's, and every look has exactly one
 CAMERA_KEPT = "{label}: the look's one camera, always there (nothing to delete)"
 NO_SUCH_MOD = "no modifier {kind}"
@@ -3621,7 +3623,7 @@ def bank_refusal(bank, scheme: str) -> str | None:
     if why is not None and len(bank) >= bank.MAX:
         return BANK_FULL.format(k=len(bank), what=BANK_WORDS[scheme][1])
     return why
-NO_BANK = "no {what} bank on this rig"
+NO_BANK = "no {what} bank on this deck"
 LANE_NO_DELETE = ("a lane always fires an envelope: drag its pin onto another "
                   "envelope's fire to rebind it")
 LANE_BOUND = "lane {lane} fires env {env} already"
@@ -3979,10 +3981,8 @@ class Edit:
             if port is not None and port.layer == GLOBAL_LAYER:
                 return SHIFT_NODE.format(addr=addr)
             why = learnmod.blocked(self.table, addr)
-            if why == "invariant":
-                return f"{addr} is invariant (the session's)"
-            if why == "global":
-                return f"{addr} is on the global layer: latch SHIFT off to map into the preset"
+            if why is not None:
+                return learnmod.blocked_words(addr, why)
             # register row 743: what is left would land in the patch layer
             return meta_refusal(p.id)
         return None
@@ -5684,7 +5684,8 @@ def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
     bus_cuts = _bus_cuts(edit)
     if not bus_cuts.has(w):
         return NO_SUCH_WIRE.format(wire=str(w))
-    return _land(edit, _doc(edit), f"cut {w}", f"cut the rig's cable {w}", bus_cuts=bus_cuts.cutting(w))
+    what = "the cloud's wire" if rgraph.is_cloud_wire(w) else "the bus cable"
+    return _land(edit, _doc(edit), f"cut {w}", f"cut {what} {w}", bus_cuts=bus_cuts.cutting(w))
 
 
 def _new_instance(spec, file: str) -> int:

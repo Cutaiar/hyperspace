@@ -254,7 +254,7 @@ def load_mid_glide() -> None:
     frames(r, 20)
     xfade = next(b for b in r.table.midi() if b.target == "output.dim")
     say(f"   20 frames on: pan {pan.base:.2f} units (the load's value stands), dim "
-        f"{dim.base:.3f} (the session's: it arrived), the crossfader still caught: "
+        f"{dim.base:.3f} (the meta controller's: it arrived), the crossfader still caught: "
         f"{xfade.caught}")
     assert pan.base == loaded and dim.base == 0.0 and xfade.caught
     say()

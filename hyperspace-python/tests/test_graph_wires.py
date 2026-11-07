@@ -142,7 +142,7 @@ def test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_
     assert g.nodes["output.1"].inputs["hands"] is None       # the scene holds hands 1
     assert g.nodes["output.3"].inputs["hands"] is g.nodes["hands.2.layer"]   # its state
     # a wire on a node the built graph lacks is dormant, in words (plan 35
-    # T4: an output this rig has not open, in the wired frame's names)
+    # T4: an output this Mac has not open, in the wired frame's names)
     g = G.build_graph(_views(S()), wired_wiring(G.read_graph(
         {"wires": _wires(("hands", "output.3.hands"))}).wiring()))
     assert g.dormant == {"hands.layer → output.3.hands":

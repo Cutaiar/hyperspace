@@ -296,7 +296,7 @@ class Param:
     touched: Callable[[float], bool] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a loadable patch or a project's session (part_of)
-    modulatable: bool = True     # a lane may drive it
+    modulatable: bool = True     # a lane may drive it; never on a meta param (`__post_init__`)
     alias: bool = False          # a view onto another param (band.sel.*)
     # modulation state — runtime only
     _base: float | None = field(default=None, repr=False)   # norm; None = not modulated
@@ -328,6 +328,12 @@ class Param:
         # a group never change, and `snapshot(part=)` asks every frame the
         # dirty dot is drawn
         self._part = None if self.group is None else part_of_id(self.id, self.group)
+        # register row 775: no route lands on a meta param (row 743), so the flag says so,
+        # whatever the declaration said or left out. By the part and by the id, which is
+        # what the doors judge (`is_meta_id`), so the two can't disagree. Its desk rows,
+        # keys and pad buttons set it (`routing.act`, `Router.dispatch`) and never ask this
+        if self._part in META_PARTS or is_meta_id(self.id):
+            self.modulatable = False
 
     # ---- generic value access ----
 
@@ -933,7 +939,7 @@ class Registry:
         if self.meta_reg is meta_reg:
             return
         if self.meta_reg is not None:
-            raise ValueError("a deck's registry follows one session")
+            raise ValueError("a deck's registry follows one meta registry")
         self.meta_reg = meta_reg
         meta_reg._follow(self)
         for p in list(meta_reg):
@@ -1050,8 +1056,8 @@ class Registry:
 
     def lands(self, p: Param) -> bool:
         """Does this deck land `p`? All its own, and the meta controller's only when
-        it is the meta controller's lead (`apply`). Plan 44 D4: a row of a deck that
-        does not land its target is dormant (`Router.modulate`)."""
+        it is the meta controller's lead. What a macro's base subscriber asks
+        (`Router.follow_macros`) and the line under a row (`ui_routing`)."""
         meta_reg = self.meta_reg
         return (meta_reg is None or meta_reg is self or meta_reg.on_air_reg is self
                 or not self._owned_by_meta(p))
@@ -1064,27 +1070,17 @@ class Registry:
         `Param.apply` skips. Closes the mark: an `apply` with no pass
         before it lands everything, as before.
 
-        Plan 44 D3 (review of #351): a shared meta param is one `Param` in
-        every deck, and an apply consumes its frame's offsets — so only the
-        meta controller's **lead** deck (`MetaRegistry.on_air_reg`, the first that
-        follows it) lands the meta controller's params; every other deck's apply
-        leaves them alone, never releasing what another deck holds. Plan 44
-        D4 (row 625): only the lead's rows act on a shared meta param
-        (`Router.modulate`: another deck's are dormant), so its offsets land
-        in the frame of its pass, and `app.frame` runs the lead first, so
-        another deck reads this frame's meta controller values."""
+        A shared meta param is one `Param` in every deck, and no route moves
+        one (row 775), so it has no offset for any deck to land, and
+        `app.frame` running the lead first is what has another deck read this
+        frame's meta controller values."""
         # over a copy: a modulated trigger may add or remove params
         # (a band layout change) while we are still walking the table.
         # `nonfinite`: the params that dropped a NaN / inf this frame (the
         # stall log names each once, app.py) — those the pass landed too
         mark, self.landed = self.landed, None
-        meta_reg = self.meta_reg
-        follower = (meta_reg is not None and meta_reg is not self
-                    and meta_reg.on_air_reg is not self)
         bad: list[str] = []
         for p in list(self._p.values()):
-            if follower and self._owned_by_meta(p):
-                continue
             if p._base is not None:
                 p.apply(mark)
             if p._bad:
@@ -1344,7 +1340,7 @@ class MetaRegistry(Registry):
     def on_air_reg(self, deck: Registry | None) -> None:
         import weakref
         if deck is not None and deck.meta_reg is not self:
-            raise ValueError("the lead is a deck that follows this session")
+            raise ValueError("the lead is a deck that follows this meta registry")
         self.__dict__["_lead"] = weakref.ref(deck) if deck is not None else None
 
     def apply(self) -> None:
@@ -1360,7 +1356,7 @@ class MetaRegistry(Registry):
     def add(self, p: Param) -> Param:
         part = part_of(p)
         if part == "patch":
-            raise ValueError(f"{p.id} is a performance param: a deck's, never the session's")
+            raise ValueError(f"{p.id} is a performance param: a deck's, never the meta controller's")
         if part == PER_DECK_META:
             raise ValueError(f"{p.id} closes over one deck: each deck's own, never shared")
         decks = self.decks
@@ -2313,8 +2309,8 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     # with ⇧ to redo), on the stack `undo.here` names; none installed: nothing
     r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
               tip="Take back the last gesture or the last load, learn or delete on the "
-                  "deck the panel is on; with the mouse on a rig setting, or in the output, "
-                  "audio, analyzer or hands section, the last rig change (Cmd+Z or Ctrl+Z). "
+                  "deck the panel is on; with the mouse on a meta controller setting, or in the output, "
+                  "audio, analyzer or hands section, the last meta controller change (Cmd+Z or Ctrl+Z). "
                   "After you come to a deck or a meta section it takes nothing back until "
                   "you change something there; after that it goes all the way down.")
     r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,

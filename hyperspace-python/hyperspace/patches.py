@@ -173,8 +173,8 @@ MACROS = 8                     # macro.1 … macro.8, the meta controller's eigh
 ONE_OWNER = ("hand", "axis")
 
 # the refusals' words (P1: name the thing and why)
-WINDOW_WORDS = "{name} is the rig's window; left out — a patch's picture leaves by a port"
-FIXTURE_WORDS = "{name} is the rig's; left out"
+WINDOW_WORDS = "{name} is the meta controller's window; left out — a patch's picture leaves by a port"
+FIXTURE_WORDS = "{name} is the meta controller's; left out"
 CAMERA_WORDS = "{name} is the look's one camera, never a patch's; left out"   # plan 43 C2
 CHANNEL_WORDS = ("{name} is a media channel, this Mac's files; left out — a patch reads one "
                  "through a port")
@@ -183,7 +183,7 @@ NOT_HELD_WORDS = "{name} is no node a patch holds; left out"
 TAKEN_WORDS = ("{name} not spawned: this preset already has {nodes}, and a frame holds one "
                "of each — delete it here first; nothing landed")
 SECOND_DREAM_WORDS = "{name} is a second dream, which no wire may touch (one live dream); left out"
-SEQ_WORDS = "the sequencer is the rig's; left out"
+SEQ_WORDS = "the sequencer is the look's one, never a patch's; left out"
 LANE_ENV_WORDS = ("{name} is a sequencer lane's envelope; left out (a patch's envelope "
                   "spawns as {first} or more)")
 NO_NODE_WORDS = "{name}: no such node; left out"
@@ -1042,7 +1042,7 @@ def check(doc: Any) -> list[str]:
 # knob, a hand, a band) onto a member; from the host onto a member (a host
 # lane, a host macro, a picture into a member's port); from a member out
 # to the host
-INSIDE, CONTROL, INTO, OUT = "inside", "rig", "into", "out"
+INSIDE, CONTROL, INTO, OUT = "inside", "control", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
 # the meta controller's own render kinds, always there — its windows (an output, All
 # outputs), its media channels (this Mac's files) and its clouds — which no
