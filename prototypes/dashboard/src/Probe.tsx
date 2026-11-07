@@ -30,6 +30,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  SidebarProvider, Sidebar, SidebarContent, SidebarMenu, SidebarMenuItem,
+  SidebarMenuButton,
+} from "@/components/ui/sidebar"
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
@@ -215,6 +221,46 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
           <Button size={z as never}>{z.startsWith("icon") ? "✕" : "Button"}</Button>
         </P>
       ))}
+      {/* ---- The four controls interact.py draws with NO focus ring. The
+           point of measuring rather than porting Button's: a TabsTrigger
+           carries an OUTLINE as well as a ring, and a SidebarMenuButton's
+           ring is 2px in `sidebar-ring` with no border change at all. A
+           TableRow is here to answer whether it is focusable in the first
+           place - a <tr> is not a control. ---- */}
+      <P id="tabs.list" w={420}>
+        <Tabs defaultValue="a">
+          <TabsList>
+            <TabsTrigger value="a" data-probe-tab>Overview</TabsTrigger>
+            <TabsTrigger value="b">Bands</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </P>
+      <P id="sidebar.menubutton" w={300}>
+        <SidebarProvider>
+          <Sidebar collapsible="none">
+            <SidebarContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton data-probe-sidebtn>Catalog</SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton isActive>Bands</SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarContent>
+          </Sidebar>
+        </SidebarProvider>
+      </P>
+      <P id="table.row" w={420}>
+        <Table>
+          <TableBody>
+            <TableRow data-probe-row>
+              <TableCell>Tesseract</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </P>
+
       <P id="button.disabled" w={420}>
         <Button disabled>Button</Button>
       </P>

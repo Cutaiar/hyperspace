@@ -28,6 +28,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import comp_button as CB  # noqa: E402
+import interact as I      # noqa: E402
+import menu as M          # noqa: E402
 import comp_combobox as CC  # noqa: E402
 import draw as D          # noqa: E402
 from ease import Anim     # noqa: E402
@@ -38,7 +40,6 @@ SPEC = json.loads((HERE / "spec.json").read_text())
 
 
 def _menu_items():
-    import menu as M
     return [M.heading("Node"),
             M.Item(id="open", label="Open", shortcut="K"),
             M.Item(id="dup", label="Duplicate"),
@@ -106,128 +107,131 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
         GL.glClearColor(bg[0], bg[1], bg[2], 1.0)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT)
         dl = imgui.get_background_draw_list()
-        for cell in SPEC["cells"]:
-            if cell["kind"] == "badge":
-                D.badge(dl, cell, theme, badges)
-            elif cell["kind"] == "card":
-                D.card(dl, cell, theme, grad_tex)
-            elif cell["kind"] == "slider":
-                D.slider(dl, cell["x"], cell["y"], cell["w"], cell["h"],
-                         cell["fracs"], theme, sliders)
-            elif cell["kind"] == "switch":
-                D.switch(dl, cell["x"], cell["y"], 1.0 if cell["on"] else 0.0,
-                         theme, switches, size=cell["variant"])
-            elif cell["kind"] == "input":
-                D.field(dl, cell["x"], cell["y"], cell["w"], cell["h"],
-                        theme, inputs,
-                        invalid=cell["variant"] == "invalid",
-                        disabled=cell["variant"] == "disabled")
-            elif cell["kind"] == "select":
-                D.select_trigger(dl, cell["x"], cell["y"], cell["w"],
-                                 cell["h"], theme, selects,
-                                 size=cell["variant"])
-            elif cell["kind"] == "tooltip":
-                # The oracle pins the TRIGGER at the cell's bottom centre and
-                # lets Radix place the panel, so the arrow is centred there.
-                D.tooltip_panel(dl, cell["x"], cell["y"], cell["w"],
-                                cell["h"], theme, tips,
-                                arrow_at=cell["x"] + cell["w"] / 2.0)
-            elif cell["kind"] == "scroll":
-                # the box, then the overlay thumb at a pinned scroll
-                D.box(dl, cell["x"], cell["y"], cell["w"], cell["h"],
-                      # Tailwind's bare `border` is border-border, NOT
-                      # input. They are the same #e5e5e5 in light and differ
-                      # in dark (10% vs 15% white), so this only showed up
-                      # on the dark pass - 510 pixels of it.
-                      border_col=T.rgba("border", theme=theme),
-                      radius=T.RADII["lg"], border_w=1.0)
-                vp = cell["h"] - 2.0
-                # The ROOT rect, not the viewport. `scroll_bar` insets by the
-                # region's own border itself - that is what its `border`
-                # argument is for, and interact.scroll_area passes the root
-                # the same way - so handing it the already-inset viewport
-                # counted the border TWICE: the track came out at (y+2, 114)
-                # where the browser's is (y+1, 116), putting the thumb 1px
-                # left, 1px down at frac 0, and 0.59px short at frac 1.
-                #
-                # `viewport_h` stays cell.h - 2, which IS the browser's
-                # clientHeight - the ratio that sizes the thumb is the
-                # viewport's, while the track it slides in is the bar's.
-                D.scroll_bar(dl, cell["x"], cell["y"], cell["w"], cell["h"],
-                             vp, float(cell["content"]),
-                             cell["frac"] * (cell["content"] - vp), theme)
-            elif cell["kind"] == "menu":
-                # The chrome that menu.popup draws, without the popup - the
-                # one component the kit shipped with NO cell here, which is
-                # how six wrong row metrics survived in it.
-                import menu as M
-                import interact as I
-                mui = I.Ui(dl, faces, theme, Anim(), theme_name=theme_name)
-                M.panel_chrome(mui, dl, cell["x"], cell["y"],
-                               cell["w"], cell["h"])
-                M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
-                       cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
-                       "gallery.menu", chrome_only=True)
-            elif cell["kind"] == "combobox":
-                # The CLOSED trigger, which in this component IS the input.
-                # field_chrome rather than _input_trigger: the latter submits
-                # a real imgui.input_text, and a widget outside any window
-                # makes ImGui auto-create its "Debug" window over the canvas.
-                #
-                # The open PANEL is not a cell: its chrome is literally
-                # menu.panel_chrome now, so `menu.panel` and
-                # `contextmenu.panel` already measure it. What is still
-                # outside the diff is the panel's ROWS - see HANDOFF.
-                mui = __import__("interact").Ui(dl, faces, theme, Anim(),
-                                                theme_name=theme_name)
-                CC.field_chrome(mui, cell["x"], cell["y"], cell["w"],
-                                cell["h"], combos, text=False,
-                                disabled=cell["variant"] == "disabled")
-            elif cell["kind"] == "contextmenu":
-                # Identical chrome to the `menu` cell by design: a
-                # ContextMenu routes its panel through menu.popup, and since
-                # menu.py's six row metrics were corrected the only thing
-                # comp_context_menu still overrides is min_w (144, min-w-36
-                # against the DropdownMenu's min-w-32). The cell is here to
-                # hold the REAL ContextMenu component to that, rather than
-                # inferring it from the DropdownMenu's cell passing.
-                import menu as M
-                import interact as I
-                mui = I.Ui(dl, faces, theme, Anim(), theme_name=theme_name)
-                M.panel_chrome(mui, dl, cell["x"], cell["y"],
-                               cell["w"], cell["h"])
-                M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
-                       cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
-                       "gallery.ctxmenu", chrome_only=True)
-            elif cell["kind"] == "button":
-                # label "" is the chrome pass: the oracle paints its text
-                # transparent, so the kit must draw none. Everything being
-                # measured here - the size-dependent radius, the padding-box
-                # fill, the disabled double-dim - is independent of it.
-                CB.button(dl, cell["x"], cell["y"], cell["w"], cell["h"],
-                          "", faces, theme, buttons,
-                          variant=cell["variant"], size=cell["size"],
-                          disabled=cell.get("disabled", False))
-            elif cell["kind"] == "buttongroup":
-                # The members are tiled from the PINNED widths rather than
-                # from button_group_place's intrinsic ones, for the same
-                # reason the spec pins them: an intrinsic width is a text
-                # measurement. The joins are the thing under test.
-                ori = cell["orientation"]
-                rects, cx, cy = [], cell["x"], cell["y"]
-                for m in cell["members"]:
-                    if ori == "horizontal":
-                        rects.append((cx, cell["y"], float(m), cell["h"]))
-                        cx += m
-                    else:
-                        rects.append((cell["x"], cy, cell["w"], float(m)))
-                        cy += m
-                for r, j in zip(rects, CB.button_group(rects, ori)):
-                    CB.button(dl, r[0], r[1], r[2], r[3], "", faces, theme,
-                              buttons, variant=cell["variant"],
-                              size="default", join=j)
-            elif cell["kind"] == "text":
-                D.text_cell(dl, cell, faces, ink)
+        # ONE Ui for the frame, inside `interact.chrome()`. The audit that
+        # found this missing was looking for ImGui's blue nav cursor and its
+        # pale text selection, neither of which has a shadcn counterpart.
+        # Neither can actually appear here today - the gallery submits no
+        # widgets, and the green diff is the proof at 0 background pixels -
+        # and `_sandwich_begin` clears nav_cursor per component anyway. It is
+        # held for the whole frame regardless, so a cell that one day DOES
+        # submit a widget cannot reintroduce either, and so the harness sets
+        # the style up the same way dashboard.py does.
+        mui = I.Ui(dl, faces, theme, Anim(), theme_name=theme_name)
+        with I.chrome(mui):
+            for cell in SPEC["cells"]:
+                if cell["kind"] == "badge":
+                    D.badge(dl, cell, theme, badges)
+                elif cell["kind"] == "card":
+                    D.card(dl, cell, theme, grad_tex)
+                elif cell["kind"] == "slider":
+                    D.slider(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                             cell["fracs"], theme, sliders)
+                elif cell["kind"] == "switch":
+                    D.switch(dl, cell["x"], cell["y"], 1.0 if cell["on"] else 0.0,
+                             theme, switches, size=cell["variant"])
+                elif cell["kind"] == "input":
+                    D.field(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                            theme, inputs,
+                            invalid=cell["variant"] == "invalid",
+                            disabled=cell["variant"] == "disabled")
+                elif cell["kind"] == "select":
+                    D.select_trigger(dl, cell["x"], cell["y"], cell["w"],
+                                     cell["h"], theme, selects,
+                                     size=cell["variant"])
+                elif cell["kind"] == "tooltip":
+                    # The oracle pins the TRIGGER at the cell's bottom centre and
+                    # lets Radix place the panel, so the arrow is centred there.
+                    D.tooltip_panel(dl, cell["x"], cell["y"], cell["w"],
+                                    cell["h"], theme, tips,
+                                    arrow_at=cell["x"] + cell["w"] / 2.0)
+                elif cell["kind"] == "scroll":
+                    # the box, then the overlay thumb at a pinned scroll
+                    D.box(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                          # Tailwind's bare `border` is border-border, NOT
+                          # input. They are the same #e5e5e5 in light and differ
+                          # in dark (10% vs 15% white), so this only showed up
+                          # on the dark pass - 510 pixels of it.
+                          border_col=T.rgba("border", theme=theme),
+                          radius=T.RADII["lg"], border_w=1.0)
+                    vp = cell["h"] - 2.0
+                    # The ROOT rect, not the viewport. `scroll_bar` insets by the
+                    # region's own border itself - that is what its `border`
+                    # argument is for, and interact.scroll_area passes the root
+                    # the same way - so handing it the already-inset viewport
+                    # counted the border TWICE: the track came out at (y+2, 114)
+                    # where the browser's is (y+1, 116), putting the thumb 1px
+                    # left, 1px down at frac 0, and 0.59px short at frac 1.
+                    #
+                    # `viewport_h` stays cell.h - 2, which IS the browser's
+                    # clientHeight - the ratio that sizes the thumb is the
+                    # viewport's, while the track it slides in is the bar's.
+                    D.scroll_bar(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                                 vp, float(cell["content"]),
+                                 cell["frac"] * (cell["content"] - vp), theme)
+                elif cell["kind"] == "menu":
+                    # The chrome that menu.popup draws, without the popup - the
+                    # one component the kit shipped with NO cell here, which is
+                    # how six wrong row metrics survived in it.
+                    M.panel_chrome(mui, dl, cell["x"], cell["y"],
+                                   cell["w"], cell["h"])
+                    M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
+                           cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
+                           "gallery.menu", chrome_only=True)
+                elif cell["kind"] == "combobox":
+                    # The CLOSED trigger, which in this component IS the input.
+                    # field_chrome rather than _input_trigger: the latter submits
+                    # a real imgui.input_text, and a widget outside any window
+                    # makes ImGui auto-create its "Debug" window over the canvas.
+                    #
+                    # The open PANEL is not a cell: its chrome is literally
+                    # menu.panel_chrome now, so `menu.panel` and
+                    # `contextmenu.panel` already measure it. What is still
+                    # outside the diff is the panel's ROWS - see HANDOFF.
+                    CC.field_chrome(mui, cell["x"], cell["y"], cell["w"],
+                                    cell["h"], combos, text=False,
+                                    disabled=cell["variant"] == "disabled")
+                elif cell["kind"] == "contextmenu":
+                    # Identical chrome to the `menu` cell by design: a
+                    # ContextMenu routes its panel through menu.popup, and since
+                    # menu.py's six row metrics were corrected the only thing
+                    # comp_context_menu still overrides is min_w (144, min-w-36
+                    # against the DropdownMenu's min-w-32). The cell is here to
+                    # hold the REAL ContextMenu component to that, rather than
+                    # inferring it from the DropdownMenu's cell passing.
+                    M.panel_chrome(mui, dl, cell["x"], cell["y"],
+                                   cell["w"], cell["h"])
+                    M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
+                           cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
+                           "gallery.ctxmenu", chrome_only=True)
+                elif cell["kind"] == "button":
+                    # label "" is the chrome pass: the oracle paints its text
+                    # transparent, so the kit must draw none. Everything being
+                    # measured here - the size-dependent radius, the padding-box
+                    # fill, the disabled double-dim - is independent of it.
+                    CB.button(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                              "", faces, theme, buttons,
+                              variant=cell["variant"], size=cell["size"],
+                              disabled=cell.get("disabled", False))
+                elif cell["kind"] == "buttongroup":
+                    # The members are tiled from the PINNED widths rather than
+                    # from button_group_place's intrinsic ones, for the same
+                    # reason the spec pins them: an intrinsic width is a text
+                    # measurement. The joins are the thing under test.
+                    ori = cell["orientation"]
+                    rects, cx, cy = [], cell["x"], cell["y"]
+                    for m in cell["members"]:
+                        if ori == "horizontal":
+                            rects.append((cx, cell["y"], float(m), cell["h"]))
+                            cx += m
+                        else:
+                            rects.append((cell["x"], cy, cell["w"], float(m)))
+                            cy += m
+                    for r, j in zip(rects, CB.button_group(rects, ori)):
+                        CB.button(dl, r[0], r[1], r[2], r[3], "", faces, theme,
+                                  buttons, variant=cell["variant"],
+                                  size="default", join=j)
+                elif cell["kind"] == "text":
+                    D.text_cell(dl, cell, faces, ink)
         imgui.render()
         impl.render(imgui.get_draw_data())
         GL.glFinish()

@@ -168,6 +168,10 @@ const PROPS = [
         borderTopColor: cs.borderTopColor, borderTopWidth: cs.borderTopWidth,
         boxShadow: cs.boxShadow, transform: cs.transform,
         borderTopLeftRadius: cs.borderTopLeftRadius,
+        // a TabsTrigger carries `focus-visible:outline-1 outline-ring` as
+        // well as the ring, which no other control in the kit has
+        outlineWidth: cs.outlineWidth, outlineColor: cs.outlineColor,
+        outlineStyle: cs.outlineStyle,
       }
     })
   }
@@ -206,6 +210,39 @@ const PROPS = [
   await p.waitForTimeout(350)
   await grab("switch.track.off.hover", '[data-probe="switch.default.off"] [data-slot="switch"]')
   await p.mouse.move(0, 0)
+
+  // The four controls interact.py rings with nothing. Focused with a real
+  // keyboard focus, because `:focus-visible` is the thing being measured and
+  // a forced class would measure a guess about what the class resolves to.
+  //
+  // `.focus()` from script counts as keyboard focus for :focus-visible on a
+  // button in Chromium, which is what makes this measurable at all; a
+  // pointer click would deliberately NOT match, and that difference is the
+  // whole model the kit implements.
+  for (const [label, sel] of [
+    ["tabs.trigger", "[data-probe-tab]"],
+    ["sidebar.button", "[data-probe-sidebtn]"],
+    ["table.row", "[data-probe-row]"],
+  ]) {
+    await grab(label + ".rest", sel)
+    const el = p.locator(sel).first()
+    if (await el.count()) {
+      await el.evaluate((e) => e.focus())
+      await p.waitForTimeout(350)
+      await grab(label + ".focus", sel)
+      // what the browser thinks has focus, which answers whether the element
+      // is focusable AT ALL - a <tr> is not a control and takes no focus, so
+      // giving it a ring would be inventing an affordance
+      states[label + ".focus"] = states[label + ".focus"] || {}
+      states[label + ".focus"].is_focused = await el.evaluate(
+        (e) => document.activeElement === e)
+      states[label + ".focus"].tabindex = await el.evaluate(
+        (e) => e.getAttribute("tabindex"))
+      states[label + ".focus"].tag = await el.evaluate(
+        (e) => e.tagName.toLowerCase())
+      await el.evaluate((e) => e.blur())
+    }
+  }
 
   await grab("select.trigger.rest", '[data-probe="select.closed"] [data-slot="select-trigger"]')
   await p.hover('[data-probe="select.closed"] [data-slot="select-trigger"]')

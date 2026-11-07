@@ -202,6 +202,61 @@ SELECTION = (0.0, 65 / 255.0, 198 / 255.0, 0.8)
 
 RING_W = 3.0
 
+# --------------------------------------------------------------------------
+# Focus rings for interact.py's own primitives
+# --------------------------------------------------------------------------
+#
+# MEASURED per control on `?probe`, not ported from Button, and the reason to
+# measure the second and third is that all three differ. HANDOFF said this
+# was "applying a settled model"; it is not one model.
+#
+#   Button            ring/50 at 3px, border -> ring
+#   TabsTrigger       the same, PLUS a 1px solid outline at full `ring`
+#   SidebarMenuButton ring at 2px, FULL opacity, and no border change at all
+#   TableRow          not focusable at all - a <tr>, no tabindex,
+#                     document.activeElement never becomes it
+TABS_FOCUS = {
+    "ring": ("ring", 0.5),              # focus-visible:ring-[3px] ring-ring/50
+    "ring_w": RING_W,
+    "focus_border": ("ring", 1.0),      # focus-visible:border-ring
+    # `focus-visible:outline-1 outline-ring` - a 1px SOLID outline in
+    # full-strength `ring`, immediately outside the border box, so it covers
+    # the ring band's innermost pixel. Measured outlineStyle `solid`,
+    # outlineWidth 1px, outlineColor oklch(0.708 0 0) in light and
+    # oklch(0.556 0 0) in dark, which is `ring` at 1.0 in both. No other
+    # control in the kit has an outline as well as a ring.
+    "outline": ("ring", 1.0),
+    "outline_w": 1.0,
+}
+TABS_FOCUS_DARK = {
+    # `dark:border-input` sorts AFTER `focus-visible:border-ring` in
+    # Tailwind's output and wins - exactly the precedence comp_button records
+    # for the dark outline Button. Measured oklch(1 0 0 / 0.15), and `input`
+    # in dark IS #ffffff26 = white at 0.149.
+    "focus_border": ("input", 1.0),
+}
+SIDEBAR_FOCUS = {
+    # `focus-visible:ring-2` with `ring-sidebar-ring`. TWO pixels, at FULL
+    # opacity - measured oklch(0.708 0 0) light and oklch(0.556 0 0) dark,
+    # with no alpha - where every other ring in the kit is 3px at /50.
+    #
+    # `sidebar-ring` is not a separate token here because it measured
+    # IDENTICAL to `ring` in both themes. That is a measurement, not an
+    # assumption: if a future palette splits them this is the line to change.
+    "ring": ("ring", 1.0),
+    "ring_w": 2.0,
+    # and no focus_border: the measured borderTopColor is unchanged by focus
+    # (oklch(0.922 0 0) light, oklch(1 0 0 / 0.1) dark - the plain `border`).
+}
+
+
+def tabs_focus(theme_name: str) -> dict:
+    """TABS_FOCUS resolved for one theme, like `badge_table`."""
+    t = dict(TABS_FOCUS)
+    if theme_name == "dark":
+        t.update(TABS_FOCUS_DARK)
+    return t
+
 SLIDER = {
     "track_h": 4.0,          # Track is `h-1`
     "thumb": 12.0,           # Thumb is `size-3`

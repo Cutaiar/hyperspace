@@ -1348,3 +1348,181 @@ def test_the_inputs_value_sits_on_the_placeholders_line(DB):
     assert abs(above - below) <= 1, (
         f"the line is {above} from the top and {below} from the bottom of a "
         f"{h:.0f}px field")
+
+
+# --------------------------------------------------------------------------
+# the four controls that had no focus ring at all
+# --------------------------------------------------------------------------
+#
+# RETRO row 21: `invisible_button` could not take keyboard focus in ImGui
+# 1.92.9, so the Button's ring - the "reference implementation" - had never
+# painted once. Porting it would have shipped four more rings that cannot
+# appear and four tests that cannot fail. So each of these is DRIVEN: a real
+# Tab, a real dwell past the 9-frame transition, and pixels.
+
+
+def _col_mean(frame, x, y, h):
+    """One column of pixels, as a mean level."""
+    return float(frame[int(y):int(y) + int(h), int(x), :].mean())
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_the_tabs_trigger_rings_from_the_keyboard(DB, theme_name):
+    """Measured on the real TabsTrigger: `ring/50` at 3px, `border-ring`, AND
+    a 1px solid outline at full `ring`. The band is what is checked here; the
+    colours are held by test_components against tokens.TABS_FOCUS.
+
+    Compared against the REST frame rather than the page ground, because a
+    trigger's ring band falls inside the TabsList's own `muted` fill - there
+    is no page showing there to compare with.
+    """
+    import interact as I
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    ITEMS = ["Overview", "Bands"]
+
+    def paint(ui):
+        I.tabs(ui, "tab", PROBE_X, PROBE_Y, 36.0, ITEMS, 0)
+
+    rest = one_widget(theme_name, paint, DWELL, script=[FAR] * DWELL)
+    kb = one_widget(theme_name, paint, DWELL, script=[FAR] * DWELL,
+                    keys=[(2, imgui.Key.tab)])
+    # the first trigger sits at pad=3 inside the list
+    tx, ty, th = PROBE_X + 3.0, PROBE_Y + 3.0, 30.0
+    b_rest = left_band(rest[-1], tx, ty, th)
+    b_kb = left_band(kb[-1], tx, ty, th)
+    assert abs(b_kb - b_rest) > 8.0, (
+        f"no focus ring on a keyboard-focused tabs trigger: band {b_kb:.1f} "
+        f"against {b_rest:.1f} at rest")
+    # and for the whole dwell, not just the frame the key landed on
+    late = [abs(left_band(f, tx, ty, th) - b_rest) for f in kb[12:]]
+    assert min(late) > 8.0, f"the ring flickered: {min(late):.1f}..{max(late):.1f}"
+
+
+def test_a_clicked_tabs_trigger_does_not_ring(DB):
+    """`:focus-visible`, not `:focus` - the gate that made the Button's ring
+    walk along behind the pointer before it was added."""
+    import interact as I
+
+    _gl_or_skip()
+    ITEMS = ["Overview", "Bands"]
+
+    def paint(ui):
+        I.tabs(ui, "tab", PROBE_X, PROBE_Y, 36.0, ITEMS, 0)
+
+    tx, ty, th = PROBE_X + 3.0, PROBE_Y + 3.0, 30.0
+    rest = one_widget("light", paint, DWELL, script=[FAR] * DWELL)
+    on = (tx + 30.0, ty + th / 2)
+    script = [on] * 6 + [(*on, True)] * 2 + [(*on, False)] * DWELL
+    clicked = one_widget("light", paint, len(script), script=script)
+    b_rest = left_band(rest[-1], tx, ty, th)
+    b_click = left_band(clicked[-1], tx, ty, th)
+    assert abs(b_click - b_rest) < 3.0, (
+        f"a CLICKED tabs trigger rang: band {b_click:.1f} against "
+        f"{b_rest:.1f} at rest")
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_the_sidebar_items_ring_is_two_pixels_not_three(DB, theme_name):
+    """The measured difference from Button, and the reason HANDOFF's "apply
+    the settled model" was wrong: a SidebarMenuButton rings `ring-2` at FULL
+    opacity where Button rings 3px at /50.
+
+    So the assertion is column-wise: the two columns outside the box carry
+    ink and the THIRD does not. Porting Button's 3px ring passes a "does it
+    ring" test and fails this one.
+    """
+    import interact as I
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    W, H = 180.0, 32.0
+
+    def paint(ui):
+        I.sidebar_item(ui, "nav", PROBE_X, PROBE_Y, W, H, "Catalog")
+
+    ground = ground_of(theme_name)
+    kb = one_widget(theme_name, paint, DWELL, script=[FAR] * DWELL,
+                    keys=[(2, imgui.Key.tab)])
+    rest = one_widget(theme_name, paint, DWELL, script=[FAR] * DWELL)
+    f = kb[-1]
+    c1 = abs(_col_mean(f, PROBE_X - 1, PROBE_Y, H) - ground)
+    c2 = abs(_col_mean(f, PROBE_X - 2, PROBE_Y, H) - ground)
+    c3 = abs(_col_mean(f, PROBE_X - 3, PROBE_Y, H) - ground)
+    r3 = abs(_col_mean(rest[-1], PROBE_X - 3, PROBE_Y, H) - ground)
+    assert c1 > 10.0 and c2 > 10.0, (
+        f"the sidebar item's 2px ring did not paint: columns "
+        f"{c1:.1f}, {c2:.1f} against the page")
+    assert c3 < max(3.0, r3 + 1.0), (
+        f"a THIRD ring column painted ({c3:.1f}): this is `ring-2`, not "
+        f"Button's `ring-[3px]`")
+
+
+def test_a_clicked_sidebar_item_does_not_ring(DB):
+    import interact as I
+
+    _gl_or_skip()
+    W, H = 180.0, 32.0
+
+    def paint(ui):
+        I.sidebar_item(ui, "nav", PROBE_X, PROBE_Y, W, H, "Catalog")
+
+    ground = ground_of("light")
+    on = (PROBE_X + W / 2, PROBE_Y + H / 2)
+    script = [on] * 6 + [(*on, True)] * 2 + [(*on, False)] * DWELL
+    clicked = one_widget("light", paint, len(script), script=script)
+    ink = abs(_col_mean(clicked[-1], PROBE_X - 1, PROBE_Y, H) - ground)
+    assert ink < 3.0, f"a CLICKED sidebar item rang: {ink:.1f}"
+
+
+@pytest.mark.parametrize("theme_name", ["light", "dark"])
+def test_the_kebab_rings_from_the_keyboard(DB, theme_name):
+    """`row_action` is a ghost icon Button, so its ring is Button's - read
+    from comp_button's table rather than restated. Driven because a ring
+    nobody has seen paint is a ring that does not."""
+    import interact as I
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    S = 28.0
+
+    def paint(ui):
+        I.row_action(ui, "kebab", PROBE_X, PROBE_Y, S,
+                     "ellipsis-vertical", 1.0)
+
+    ground = ground_of(theme_name)
+    rest = one_widget(theme_name, paint, DWELL, script=[FAR] * DWELL)
+    kb = one_widget(theme_name, paint, DWELL, script=[FAR] * DWELL,
+                    keys=[(2, imgui.Key.tab)])
+    i_rest = ring_ink(left_band(rest[-1], PROBE_X, PROBE_Y, S), ground)
+    i_kb = ring_ink(left_band(kb[-1], PROBE_X, PROBE_Y, S), ground)
+    assert i_rest < 1.0, f"an untouched kebab painted outside its box: {i_rest:.1f}"
+    assert i_kb > 8.0, (
+        f"no focus ring on a keyboard-focused kebab: {i_kb:.1f} against "
+        f"{i_rest:.1f} at rest")
+    late = [ring_ink(left_band(f, PROBE_X, PROBE_Y, S), ground)
+            for f in kb[12:]]
+    assert min(late) > 8.0, f"the ring flickered: {min(late):.1f}..{max(late):.1f}"
+
+
+def test_a_faded_kebab_does_not_ring_at_full_strength(DB):
+    """`row_action`'s chrome alpha has to reach the ring too: a kebab that
+    has faded out must not be ringed at full strength by a stray focus."""
+    import interact as I
+    from imgui_bundle import imgui
+
+    _gl_or_skip()
+    S = 28.0
+
+    def paint(ui):
+        I.row_action(ui, "kebab", PROBE_X, PROBE_Y, S,
+                     "ellipsis-vertical", 0.0)
+
+    ground = ground_of("light")
+    kb = one_widget("light", paint, DWELL, script=[FAR] * DWELL,
+                    keys=[(2, imgui.Key.tab)])
+    ink = ring_ink(left_band(kb[-1], PROBE_X, PROBE_Y, S), ground)
+    assert ink < 1.0, (
+        f"an invisible kebab rang at {ink:.1f}: the chrome alpha has to gate "
+        "the ring as well as the fill")

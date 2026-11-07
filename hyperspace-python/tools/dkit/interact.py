@@ -152,14 +152,34 @@ class Ui:
         # `set_keyboard_focus_here`, which is the one case that proves it is
         # the item and not the input. `ImGuiButtonFlags_EnableNav` (1.91) is
         # the supported way back in, and with it focus lands on the frame the
-        # window is navigated. The alternative - a real `imgui.button` with
-        # its three colours pushed transparent - would also take focus, but
-        # it reports `is_item_hovered` True while merely nav-focused, which
-        # would light every hover tint in the kit off the keyboard.
+        # window is navigated.
         clicked = imgui.invisible_button(
             f"##{key}", imgui.ImVec2(w, h),
             imgui.ButtonFlags_.enable_nav if nav else 0)
-        hovered = imgui.is_item_hovered()
+        # AND the pointer is actually inside the rect, which is not
+        # redundant. This comment used to say that a real `imgui.button`
+        # "reports is_item_hovered True while merely nav-focused" and that
+        # `invisible_button` + `enable_nav` was the way to avoid it. It is
+        # not: measured in 1.92.9 with the pointer parked at (5, 5) and a
+        # 28x28 button at (80, 60), `is_item_hovered()` turns True on the
+        # frame after a Tab reaches it and stays True.
+        #
+        # Every control that reads `State.hot` was therefore lighting its
+        # HOVER tint off the keyboard - the sidebar item, the tabs trigger,
+        # the table row, the kebab, and `comp_button.ui_button` too. It is
+        # RETRO row 37 one level up: there the menus' highlight turned out to
+        # be ImGui's nav leaking through `is_item_hovered`, and the lesson
+        # was to ask what paints a thing before believing it is yours. The
+        # same call was still being believed here.
+        #
+        # Narrowing it cannot lose a real hover: ImGui's own answer still
+        # decides occlusion and overlap, and this only removes the case where
+        # the pointer is somewhere else entirely. A drag that leaves a held
+        # control correctly goes un-hovered while `held` stays, which is the
+        # behaviour comp_button.button documents for `hot` versus `down`.
+        mp = imgui.get_io().mouse_pos
+        hovered = (imgui.is_item_hovered()
+                   and x <= mp.x < x + w and y <= mp.y < y + h)
         held = imgui.is_item_active()
         # read here or not at all: `is_item_focused` answers for the LAST
         # submitted item, so a caller that asks two draw calls later gets
@@ -220,27 +240,12 @@ class Ui:
 # interactive primitives
 # --------------------------------------------------------------------------
 
-def button(ui: Ui, key, x, y, w, h, s, *, variant="outline") -> State:
-    st = ui.hit(key, x, y, w, h)
-    r = T.RADII["md"]
-    # shadcn hovers `bg-primary/90`, `bg-accent`; press is the same colour a
-    # touch further along, which is what `down` adds on top of `hot`.
-    f = min(1.0, st.hot + st.down * 0.35)
-    if variant == "default":
-        base = ui.col("primary")
-        hov = mix(base, ui.col("background"), 0.10)
-        D.box(ui.dl, x, y, w, h, fill_col=mix(base, hov, f), radius=r)
-        ink = "primary-foreground"
-    else:
-        rest = ui.col("transparent")
-        hov = ui.col("accent")
-        D.box(ui.dl, x, y, w, h, fill_col=mix(rest, hov, f),
-              border_col=ui.col("border") if variant == "outline" else None,
-              radius=r)
-        ink = "foreground"
-    D.label(ui.dl, x, y, s, ui.faces, "medium", 14, ui.col(ink),
-            align="center", box_w=w, baseline_box=h)
-    return st
+# `button` used to live here: a stub predating comp_button, with its own
+# radius (md, where a real Button at `default` is lg), its own ad-hoc hover
+# mix and no focus ring. It had no callers anywhere in the tree and no test,
+# so it is deleted rather than given a ring - the audit's list named it as
+# one of six controls to fix, and the fix for a second, worse Button is to
+# not have one. `comp_button.ui_button` is the Button.
 
 
 def sidebar_item(ui: Ui, key, x, y, w, h, s, *, active=False, icon=None) -> State:
@@ -248,6 +253,16 @@ def sidebar_item(ui: Ui, key, x, y, w, h, s, *, active=False, icon=None) -> Stat
     rest = ui.col("accent") if active else ui.col("transparent")
     hov = ui.col("accent")
     f = min(1.0, st.hot + st.down * 0.4)
+    # `focus-visible:ring-2` in `sidebar-ring`, at FULL opacity and with no
+    # border change - measured, and not Button's 3px ring/50. See
+    # tokens.SIDEBAR_FOCUS. Drawn BEFORE the fill, so the band is behind the
+    # item rather than over its edge.
+    ff = ui.focus_f(key, st.focused)
+    if ff > 0.01:
+        sf = T.SIDEBAR_FOCUS
+        D.ring(ui.dl, x, y, w, h,
+               ui.col(sf["ring"][0], sf["ring"][1] * ff),
+               T.RADII["md"], sf["ring_w"])
     D.fill(ui.dl, x, y, w, h, mix(rest, hov, f), T.RADII["md"])
     ink = mix(ui.col("muted-foreground"), ui.col("foreground"),
               1.0 if active else f)
@@ -269,6 +284,18 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0) -> tuple:
         st = ui.hit(f"{key}.{i}", cx, y + pad, w, ih)
         if st.clicked:
             hit_idx = i
+        # A TabsTrigger carries Button's band AND a 1px solid outline at full
+        # `ring`, which covers the band's innermost pixel - measured, and the
+        # one control in the kit with both. See tokens.TABS_FOCUS.
+        ff = ui.focus_f(f"{key}.{i}", st.focused)
+        if ff > 0.01:
+            tf = T.tabs_focus(ui.theme_name)
+            D.ring(ui.dl, cx, y + pad, w, ih,
+                   ui.col(tf["ring"][0], tf["ring"][1] * ff),
+                   T.RADII["md"], tf["ring_w"])
+            D.ring(ui.dl, cx, y + pad, w, ih,
+                   ui.col(tf["outline"][0], tf["outline"][1] * ff),
+                   T.RADII["md"], tf["outline_w"])
         sel = ui.anim.to(f"{key}:sel{i}", 1.0 if i == active else 0.0)
         if sel > 0.01:
             D.shadow(ui.dl, cx, y + pad, w, ih, (0, 0, 0, 0.10 * sel),
@@ -276,6 +303,16 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0) -> tuple:
             D.fill(ui.dl, cx, y + pad, w, ih,
                    mix(ui.col("transparent"), ui.col("card"), sel),
                    T.RADII["md"])
+        if ff > 0.01:
+            # `focus-visible:border-ring` - over the fill, because the real
+            # one is a border on the trigger and the fill is inside it. In
+            # DARK it stays `input`: `dark:border-input` sorts after it in
+            # Tailwind's output and wins, the same way it does on the outline
+            # Button.
+            tf = T.tabs_focus(ui.theme_name)
+            D.border(ui.dl, cx, y + pad, w, ih,
+                     ui.col(tf["focus_border"][0],
+                            tf["focus_border"][1] * ff), T.RADII["md"], 1.0)
         ink = mix(ui.col("muted-foreground"), ui.col("foreground"),
                   max(sel, st.hot * 0.7))
         D.label(ui.dl, cx, y + pad, s, ui.faces, "medium", 14, ink,
@@ -285,12 +322,45 @@ def tabs(ui: Ui, key, x, y, h, items, active, *, pad=3.0) -> tuple:
 
 
 def row(ui: Ui, key, x, y, w, h) -> State:
-    """A table row: hover tints the whole band, as shadcn's `hover:bg-muted/50`."""
+    """A table row: hover tints the whole band, as shadcn's `hover:bg-muted/50`.
+
+    NO focus ring, and that is the measured answer rather than an omission.
+    The audit listed this among six controls "missing" one; `?probe` carries
+    `table.row` for it, and a real TableRow is a `<tr>` with no tabindex that
+    `document.activeElement` never becomes, in either theme. Giving it a ring
+    would invent an affordance the component does not have - and it is the
+    row's CONTENTS that take focus in the browser.
+    """
     st = ui.hit(key, x, y, w, h, allow_overlap=True)
     if st.hot > 0.01:
         D.fill(ui.dl, x, y, w, h, mix(ui.col("transparent"),
                                       ui.col("muted", 0.5), st.hot))
     return st
+
+
+def _ghost_ring(ui: Ui, key, x, y, size, focused, a: float = 1.0) -> None:
+    """The focus ring for a ghost icon button, from comp_button's own table.
+
+    `icon_button` and `row_action` ARE shadcn Buttons - `variant="ghost"
+    size="icon"` - so their ring is Button's, already measured: a 3px
+    `ring/50` band outside the box and the transparent border swapped to
+    `ring`. Read from `comp_button.button_table` rather than restated, so
+    there is one answer and not a third and fourth copy of it.
+
+    `a` is the control's own chrome alpha: a kebab that has faded out must
+    not ring at full strength.
+    """
+    import comp_button as CB
+    ff = ui.focus_f(key, focused)
+    if ff <= 0.01 or a <= 0.001:
+        return
+    v = CB.button_table(ui.theme_name)["ghost"]
+    r = T.RADII["md"]
+    D.ring(ui.dl, x, y, size, size,
+           ui.col(v["ring"][0], v["ring"][1] * ff * a), r, T.RING_W)
+    D.border(ui.dl, x, y, size, size,
+             ui.col(v["focus_border"][0], v["focus_border"][1] * ff * a),
+             r, 1.0)
 
 
 def icon_button(ui: Ui, key, x, y, size, icon, *, glyph=16,
@@ -306,6 +376,7 @@ def icon_button(ui: Ui, key, x, y, size, icon, *, glyph=16,
     if alpha <= 0.001:
         return st
     f = min(1.0, st.hot + st.down * 0.4)
+    _ghost_ring(ui, key, x, y, size, st.focused, alpha)
     D.fill(ui.dl, x, y, size, size,
            mix(ui.col("transparent"), ui.col("accent", alpha), f),
            T.RADII["md"])
@@ -333,6 +404,13 @@ def row_action(ui: Ui, key, x, y, size, icon, row_hot: float, *,
     vis = max(row_hot, st.hot, 1.0 if pinned else 0.0)
     if vis > 0.001:
         f = min(1.0, st.hot + st.down * 0.4)
+        # Gated on `vis` with everything else, so the ring never appears
+        # alone on a control that is not drawn. Whether a KEYBOARD focus
+        # should reveal a hover-only action is a separate question and an
+        # unmeasured one - shadcn's SidebarMenuAction is hidden by
+        # `opacity-0 group-hover:opacity-100` and nothing on ?probe says what
+        # a focus does to it - so it is left as it is rather than guessed.
+        _ghost_ring(ui, key, x, y, size, st.focused, vis)
         D.fill(ui.dl, x, y, size, size,
                mix(ui.col("transparent"), ui.col("accent", vis), f),
                T.RADII["md"])

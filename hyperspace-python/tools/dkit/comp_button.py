@@ -792,8 +792,13 @@ def ui_button(ui, key, x, y, w, h, label, *, variant="default",
     # `:focus-visible`, not `:focus`: a control reached with the POINTER
     # gets no ring. Without this the ring stuck to whichever button was
     # clicked last and walked along behind the pointer.
-    focused = (imgui.is_item_focused() and ui.focus_visible and not disabled)
-    focus_f = ui.anim.to(f"{key}:focus", 1.0 if focused else 0.0)
+    #
+    # Through `ui.focus_f`, which is these three lines - the focus_visible
+    # gate, the disabled gate and the 150ms ease - and whose own docstring
+    # names this function as the place they were written out. One definition,
+    # so the five other controls that need a ring cannot each grow a slightly
+    # different one.
+    focus_f = ui.focus_f(key, imgui.is_item_focused(), disabled=disabled)
     # `disabled:pointer-events-none`: no hover and no press, so the eased
     # values are driven to 0 rather than read off the widget
     hot = 0.0 if disabled else st.hot
