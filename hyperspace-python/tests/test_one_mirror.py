@@ -183,7 +183,7 @@ def test_a_patch_file_naming_the_old_id_is_ignored_with_a_note_not_unknown(two):
         two.rig.lib.warning = ""
         two.a.loaded_patch.load_doc(doc, None)
         notes = two.a.loaded_patch.notes
-        assert "ghost.2.mirror is the session's, ignored" in notes
+        assert "ghost.2.mirror is the meta controller's, ignored" in notes
         assert not [n for n in notes if "unknown" in n] and "unknown" not in two.rig.lib.warning
         assert "ghost.2.mirror" not in two.a.reg
 

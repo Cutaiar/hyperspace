@@ -1170,7 +1170,7 @@ class LoadedPatch:
                 p = reg.get(pid)
                 if p is None and part_of_id(pid) == "shared_meta":
                     # (`ghost.<n>.mirror`, no param since LY1, in an old file)
-                    notes.append(f"{pid} is the session's, ignored")
+                    notes.append(f"{pid} is the meta controller's, ignored")
                 elif p is None:
                     if pid not in from_show:
                         late.append(pid)
