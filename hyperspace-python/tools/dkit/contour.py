@@ -76,6 +76,10 @@ KIND = {
     # nothing at rest, so their radial march finds no step and reports NaN,
     # which does not fail - while the strict flat metric still holds them to
     # painting nothing on both sides, which is the real assertion there.
+    # A ContextMenu panel is a menu panel: same radius, same 1px ring 1px
+    # outside, same shadow-md. Only its min-width differs, and the cell pins
+    # the width anyway.
+    "contextmenu": {"radius": 10.0, "outset": 6, "ring": True},
     "button": {"radius": 10.0, "outset": 0, "ring": False},
     # A group's cell is the whole group. Its four OUTER corners are all
     # rounded at 10 (the first member owns two, the last the other two) and
@@ -156,7 +160,9 @@ def icon_boxes(cell):
 # box's own edge are the one place draw.shadow's stacked rects cannot follow
 # Chromium's triple box blur - see draw.shadow. Reported by diff.py as its
 # own number rather than silently tolerated.
-SOFT_SHADOW = {"menu": 2}
+# A ContextMenu panel carries the same shadow-md - measured on ?probe as
+# the identical two-layer box-shadow - so it has the same two rows.
+SOFT_SHADOW = {"menu": 2, "contextmenu": 2}
 
 
 def soft_shadow_band(cell):

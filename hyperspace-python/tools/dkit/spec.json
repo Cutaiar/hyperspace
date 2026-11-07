@@ -2,7 +2,7 @@
   "_comment": "The shared gallery spec. Both the React oracle and the ImGui kit read this file and draw the SAME rects, so a diff measures chrome, never text metrics. Rects are CSS/content-box pixels at device-pixel-ratio 1, origin top-left.",
   "canvas": {
     "w": 760,
-    "h": 1594,
+    "h": 1655,
     "bg": "#ffffff"
   },
   "cells": [
@@ -692,6 +692,15 @@
         32
       ],
       "orientation": "vertical"
+    },
+    {
+      "id": "contextmenu.panel",
+      "kind": "contextmenu",
+      "variant": "default",
+      "x": 180,
+      "y": 1490,
+      "w": 144,
+      "h": 125
     }
   ]
 }

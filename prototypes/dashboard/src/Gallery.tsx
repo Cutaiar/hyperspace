@@ -10,6 +10,10 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel,
+  ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { Card } from "@/components/ui/card"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -223,6 +227,14 @@ export default function Gallery({
               <DropdownMenuContent
                 align="start"
                 sideOffset={4}
+                // The ContextMenu cell is opened with a real right-click, and
+                // this panel is a DismissableLayer with modal={false}: an
+                // outside pointerdown closed it, so the menu cell rendered
+                // nothing and the diff reported 34 levels over 1364 px with
+                // NaN corners. The gallery is a static contact sheet - no
+                // cell here should ever be dismissed by another cell's setup.
+                onInteractOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
                 // every descendant, not just the content: the destructive
                 // item and the shortcut carry colours of their OWN
                 // (`text-destructive`, `text-muted-foreground`) and ignore
@@ -278,6 +290,49 @@ export default function Gallery({
                 </Button>
               ))}
             </ButtonGroup>
+          ) : c.kind === "contextmenu" ? (
+            // Radix's ContextMenu has no `open` or `defaultOpen` - it is
+            // driven by a real contextmenu gesture and nothing else - so the
+            // trigger is a 0x0 point at the cell's top-left and
+            // capture_react.js right-clicks it. The panel then lands wherever
+            // RADIX puts it relative to that pointer, and the spec cell's
+            // rect is set to the measured result rather than to an offset
+            // copied out of the Python.
+            <ContextMenu modal={false}>
+              {/* Pinned by Radix's own measured offset, the same way the
+                  tooltip cell pins its trigger by the arrow allowance. A
+                  ContextMenu's panel goes at the POINTER + (2, 0): measured
+                  on ?probe, where a contextmenu event at client (0, 0) put
+                  the content at (2, 0). So the trigger's top-left - which is
+                  where capture_react.js right-clicks - sits 2px LEFT of the
+                  cell, and the panel lands exactly on the cell rect.
+
+                  20x20 rather than 0x0 because a real right-click needs a
+                  hit area; only its top-left corner is ever clicked. */}
+              <ContextMenuTrigger
+                data-ctx-anchor
+                style={{
+                  position: "absolute", left: -2, top: 0,
+                  width: 20, height: 20, padding: 0, border: 0,
+                }}
+              />
+              <ContextMenuContent
+                // same reasoning as the menu cell: the destructive item and
+                // the shortcut carry colours of their own and ignore an
+                // inherited transparent
+                className="[&_*]:text-transparent!"
+                style={{ width: c.w, animation: "none", opacity: 1,
+                         color: "transparent" }}
+              >
+                <ContextMenuLabel>Node</ContextMenuLabel>
+                <ContextMenuItem>
+                  Open<ContextMenuShortcut>K</ContextMenuShortcut>
+                </ContextMenuItem>
+                <ContextMenuItem>Duplicate</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem variant="destructive">Delete</ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ) : c.kind === "card" ? (
             <Card
               className={

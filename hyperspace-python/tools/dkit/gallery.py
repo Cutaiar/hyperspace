@@ -155,6 +155,22 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
                        cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
                        "gallery.menu", chrome_only=True)
+            elif cell["kind"] == "contextmenu":
+                # Identical chrome to the `menu` cell by design: a
+                # ContextMenu routes its panel through menu.popup, and since
+                # menu.py's six row metrics were corrected the only thing
+                # comp_context_menu still overrides is min_w (144, min-w-36
+                # against the DropdownMenu's min-w-32). The cell is here to
+                # hold the REAL ContextMenu component to that, rather than
+                # inferring it from the DropdownMenu's cell passing.
+                import menu as M
+                import interact as I
+                mui = I.Ui(dl, faces, theme, Anim(), theme_name=theme_name)
+                M.panel_chrome(mui, dl, cell["x"], cell["y"],
+                               cell["w"], cell["h"])
+                M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
+                       cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
+                       "gallery.ctxmenu", chrome_only=True)
             elif cell["kind"] == "button":
                 # label "" is the chrome pass: the oracle paints its text
                 # transparent, so the kit must draw none. Everything being
