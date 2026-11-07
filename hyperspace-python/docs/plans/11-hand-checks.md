@@ -8413,7 +8413,7 @@ Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a f
 ## DH. GRAPH's start zoom (plan 58 SM2, row 787)
 Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
 **612. It reads where it opens.** (each display you'll run the control window on)
-1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the numbers are `placement.ZOOM_DENSE` and `ZOOM_HEIGHT`.
+1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the number is `placement.ZOOM_READ`.
 *Fail:* a start as small as before, or a view opening away from the first column.
 **613. Your zoom stays, and layouts don't move.** (the rig)
 1. ⌘+scroll to a zoom of your own and note what's in the canvas's top-left. Load another patch, then resize the control window taller and shorter. *Pass:* your zoom stands through both, and the same node stays in the top-left. This is new: a resize used to zoom the canvas.
@@ -8447,7 +8447,7 @@ Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's ta
 **611. The probe, live, then its own tape.** (a Joy-Con paired, the app closed: hidapi opens the pad exclusively)
 1. From `hyperspace-python/`: `uv run python tools/poi_probe.py --record /tmp/poi.jsonl`. *Pass:* the pad's name, then about ten lines a second; `calibration written to /tmp/poi.jsonl.findings.json`.
 2. Lay the pad on the table for ten seconds. *Pass:* `turn` near 0, `still` climbing, `v 0.00`.
-3. Type `hold` and Enter, then pick it up and hold it as you'd hold a poi handle for ten seconds, without walking. Read `wrist`, `pan` and `wall`. *Report, not pass or fail:* whether the hand runs to `wall hand` as the owner's tape does (row 786).
+3. Type `hold` and Enter, then pick it up and hold it as you'd hold a poi handle for ten seconds, without walking. Read `wrist`, `pan` and `wall`. *Report, not pass or fail:* whether the hand runs to a wall (`wall x`, `y` or `z`), as the owner's tape does (rows 786, 817).
 4. Press A. *Pass:* `wrist` back to 0, `pan` near its start.
 5. Ctrl-C, then `uv run python tools/poi_probe.py --replay /tmp/poi.jsonl`. *Pass:* `tape written`, then a table with a `hold` row.
 *Fail:* a traceback at any step, or a line that never comes.
@@ -8632,6 +8632,25 @@ Fails: a stick at rest that moves the look; a param that stays where the stick l
 3. Point the pad and the desk at different nodes. Passes: a chip for each in the side pane, and each leaves on its own.
 
 Fails: a control doing something its label doesn't say.
+## DP. The poi at a real pad (row 817)
+Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_guide.py`, and `tests/test_poi_real.py` on the owner's tape. **No one has felt this at a real pad.** The tests hold one Joy-Con tape's numbers, and that's a pad the app's poi no longer reads; how it feels on the pad you use is yours.
+**633. Swing it.** (a DualSense or an Edge, not a Joy-Con: the app's poi reads no Nintendo pad, row 686. In the app, `poi.on`, the output you'd show on)
+1. Turn the poi on. Hold the pad as you'd hold a poi handle for ten seconds, without walking. *Pass:* the shape's centre never leaves the screen, and its size stays within half to double.
+2. Hold the pad dead still after a move. *Pass:* the shape stops moving within about a second, and then doesn't creep.
+3. Press A. *Pass:* the shape goes back under the handle.
+4. Carry the pad about half a metre to one side in a second or so, then hold it. *Pass:* the shape follows and stays there, with no pull back. *Fail:* it hardly moves: the carry is being read as still. A much slower carry can come back short, and the tests show it: say how slow matters.
+5. Swing it round hard for ten seconds. *Pass:* the shape swings and stays on the screen.
+6. Resize the first output to another shape. *Pass:* the limit follows that frame. A second output of another shape has no limit of its own: the limit is the frame's, not each output's. *Report:* if it clips there.
+*Report, not pass or fail:* how often the hand ends up stuck at an edge until A, and whether that's acceptable for a show. If it isn't, the choices are less hand push (`poi.hand`), or to take position off this pad too, as row 686 did for the Joy-Con.
+## DQ. GRAPH at 1080p (row 818)
+Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the app at a 1920x1080 window, but at 1x only on a taller display and on a real 1080p display only at 2x.
+**634. The show's display.** (the display you'll run the show on, at 1080p)
+1. Open the control window on it, launch, and load a patch. *Pass:* the node words read from where you'll stand, and the first column is at the canvas's top-left.
+2. Count the columns beside the pane. *Pass:* enough to work without panning all the time; about four. Say if you want it tighter or looser: the number is `placement.ZOOM_READ`.
+3. Look at a node's words up close, at a 1x display if you have one. *Pass:* sharp enough not to bother you. They're softer than the head's words above the canvas at any zoom but 1:1; say if it bothers you.
+4. ⌘-scroll to a new zoom during a look with the output up. *Pass:* no visible stutter on the output when you stop, about a third of a second later.
+5. Resize the window. *Pass:* the zoom doesn't change.
+*Fail:* a start as small as before, words too soft to read, a stutter you can see, or a zoom that follows the resize.
 
 ## What no test covers
 

@@ -22,7 +22,7 @@ between the accel through the attitude and straight up — this is what
 leaks gravity into the hand), the push left after gravity (lin, g), how
 long the pad has read still, the hand's speed and place, the weight, the
 pan and zoom the shape would get, and the walls it is held at: `hand` at
-`poi.HAND_LIMIT` world units from home, `pan` at the pan's reach. Type a word and Enter to put a note in the tape ("carry right",
+the screen's box: x, y, z as the hand or the shape touch it. Type a word and Enter to put a note in the tape ("carry right",
 "swing") — a bare Enter notes "mark"; A on the pad resets, as in the app;
 Ctrl-C ends it. The calibration the reader found goes beside the tape
 (``<tape>.findings.json``: the flash records, as the probe's --check
@@ -55,7 +55,7 @@ from pathlib import Path
 
 from hyperspace import gamepad, poi
 from hyperspace.pads import gesture, hid, models, nintendo
-from hyperspace.params import PAN_RANGE, build_patch
+from hyperspace.params import build_patch
 from hyperspace.view import ViewState
 
 FRAME_S = 1 / 60          # the longest a replay goes between frames
@@ -113,10 +113,13 @@ class Rig:
         up = poi._apply(st.att, accel)
         a = poi._norm(accel)
         err = math.degrees(math.acos(max(-1.0, min(1.0, up[1] / a)))) if a > 1e-6 else float("nan")
-        lin = poi._norm(poi._sub(up, [0.0, 1.0, 0.0]))
-        walls = " ".join(name for name, held in (
-            ("hand", poi._norm(st.wrist) >= poi.HAND_LIMIT - 1e-9),
-            ("pan", max(abs(v) for v in self.view.pan) >= PAN_RANGE - 1e-9)) if held)
+        lin = poi._norm(poi._sub(up, [0.0, st.g_mag, 0.0]))
+        lo, hi = poi.box_limits(st)
+        off = st.offset()
+        shape = (abs(self.view.pan[0]) >= st.box[0] - 1e-9, abs(self.view.pan[1]) >= st.box[1] - 1e-9,
+                 st.depth and abs(off[2]) >= st.box[2] - 1e-9)
+        walls = "".join(ax for i, ax in enumerate("xyz") if shape[i]
+                        or st.wrist[i] <= lo[i] + 1e-9 or st.wrist[i] >= hi[i] - 1e-9)
         return {"a": a, "rate": poi._norm(list(m.gyro)), "err": err, "lin": lin,
                 "still": st.still, "speed": poi._norm(st.wrist_v), "wrist": list(st.wrist),
                 "ball": list(st.ball), "pan": list(self.view.pan), "zoom": self.view.zoom,
@@ -307,9 +310,9 @@ def replay(tape: Path, findings: Path | None, dials: dict, series: tuple[float, 
               f"{med(s['err']):5.1f}/{worst(s['err']):5.1f}  {med(s['lin']):6.3f}/{worst(s['lin']):6.3f}  "
               f"{s['travel'][-1]:6.2f}/{worst(s['travel']):6.2f}  {worst(s['speed']):5.2f}  "
               f"{worst(s['pan']):7.2f}  {100 * s['walls'] / s['n']:5.0f}%")
-    print(f"\nthe walls: the hand at {poi.HAND_LIMIT:.1f} world units from home, the pan at "
-          f"±{PAN_RANGE:.1f}; a 16:9 output through the default eye shows about ±3 across, "
-          "±1.7 down")
+    hx, hy, hz = poi.DEFAULT_BOX
+    print(f"\nthe box: ±{hx:.2f} across, ±{hy:.2f} down, ±{hz:.1f} deep, an octave of zoom each way "
+          "(a 16:9 output through the default eye; the app's is the real output's)")
     return list(rows.values())
 
 
