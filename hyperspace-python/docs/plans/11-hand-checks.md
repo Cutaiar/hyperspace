@@ -7928,6 +7928,14 @@ you wanted the orbit on the projector (row 684). (3) No camera jump on the way d
 (4) The camera holds through the pass with no sweep. Say if it holds so often near
 vertical that the 20° zone wants to be smaller (row 685).
 
+## BW. The Joy-Con's version 0 (rows 686–687)
+
+Landed unproved at the owner's word, 2026-11-07: checked on tapes and a stand-in pad, not yet on a live one. A charged Joy-Con; an Edge for the last line of 521.
+
+**520. Gyro.** With the totem on, turn the pad about each axis: the shape turns with it. Tip it and fling it: the shape's position does not move. Set it on the desk for 30 seconds: the shape holds still. Walk across the room and back: the shape keeps following, with no jump when the signal recovers.
+
+**521. The layout and shake.** In both modes SL and SR step the shape, the stick's click resets the view (with the totem on, the rotation stays the gyro's), L (R on the right Joy-Con) holds the base chase and lets go on release; ZL does nothing until learned. Capture (HOME on the R) switches the totem; − (+ on the R) resets it: hold the pad in any pose, press it, the shape squares up and turns from there. With the totem off the stick orbits; on, it does nothing until learned. Learn a param onto it: the param follows the stick only with the totem on, and with it off the stick orbits and the param lets go. ← → ↑ throw the turn into W with the totem on; ↓ is its row in both modes. The pad window names all of this. Learn a shake onto a param and shake or thrust the pad: the row fires, and the tilt ring pulses. On a DualSense Edge, hold Options: one save, and a brush saves nothing.
+
 ## BX. The meta controller's pointers (plan 44 D5a)
 
 Register rows 688–690, 2026-11-04. **Nothing should look or feel different:** every

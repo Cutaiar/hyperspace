@@ -2963,14 +2963,20 @@ class Panel:
 
     PAD_FEEL_W = 220.0   # the sticks' feel plots (ui_feel), px at most, beside its knobs
 
+    def _pad_raw_lanes(self):
+        """The lanes as the pad reads them: its own, since the shared feed is what routes
+        hear, and a quiet stick reads NaN there while it orbits (`Router.pad`)."""
+        pad = self.pad
+        return pad.lanes() if pad is not None and pad.on else self.router.feeds.get("axis")
+
     def _pad_feel_plot(self, feel, width: float, height: float) -> None:
         """The sticks' feel, its shape over the feel working live: every
-        axis lane sampled each frame — as the pad reads it (`router.feeds`)
+        axis lane sampled each frame — as the pad reads it (`_pad_raw_lanes`)
         and after the feel (`Router.felt_lanes`, the camera job's
         followers) — and the one that moved most lately drawn, named in its
         corner."""
         router = self.router
-        raws = router.feeds.get("axis")
+        raws = self._pad_raw_lanes()
         felts = router.felt_lanes("axis")
         n = max(len(raws) if raws is not None else 0, len(felts or ()))
         traces = [ui_feel.sample(self, ("pad", i),
