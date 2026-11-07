@@ -262,6 +262,17 @@ def _library_home(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _a_launch_waits_for_its_read(monkeypatch):
+    """A launch waits `devicelist.LAUNCH_S` for the first read of the shared list, which a
+    loaded machine can pass, and then says the library isn't answering, as it should (row
+    803). Tests are about what that read found, so the ceiling is out of reach; the
+    stalled tests of `test_devicelist.py` set their own."""
+    from hyperspace import devicelist
+
+    monkeypatch.setattr(devicelist, "LAUNCH_S", devicelist.SYNC_S)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_midi(monkeypatch):
     """No test reaches the machine's MIDI: the port lists are empty and an
     open raises, unless the test patches mido itself (a later setattr wins).
