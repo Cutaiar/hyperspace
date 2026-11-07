@@ -18,9 +18,10 @@ Nothing here is imported by the app — it lives in `tools/` on purpose.
 ## The bar
 
 **Chrome matches within ~1px; glyph rasterization may differ.** Two text
-rasterizers never agree (ImGui's stb_truetype applies no OpenType features and
-snaps glyphs to integer positions; browsers use subpixel advances), so text is
-out of scope and the diff runs with it hidden. The box is the thing.
+rasterizers never agree on the ink itself, so the diff runs with text hidden
+and the box is the thing. Text METRICS are another matter: since RETRO row
+61 the kit's advances, kerning, ligatures and baselines are Chromium's to
+within a few hundredths of a pixel, checked in `test_text.py`.
 
 ## How it works
 
@@ -87,35 +88,44 @@ the two rasterizers differing, not geometry to be fixed.
 
 ### Text (advisory)
 
-Geist ships only as a variable woff2, which stb_truetype can read neither of,
-so `fonts/` holds six faces cut from that exact file by `build_fonts.py`:
-wght 400/500/600, each with and without tabular figures frozen in. With
-those, ink extents land within a few px on a 110-170px string:
+Geist ships only as a variable woff2, which ImGui's loader can read neither
+of, so `fonts/` holds six faces cut from that exact file by `build_fonts.py`:
+wght 400/500/600, each with and without tabular figures frozen in. Ink
+extents against the oracle, both themes, before and after the font loader
+was fixed (RETRO row 61):
 
 ```
-text.body14    113x11  vs  113x10   (exact)
-text.title30   144x29  vs  146x29
-text.num14     138x12  vs  132x12   <- advance rounding, not tnum
+                 before        after
+text.num14       -6 px          0
+text.small12     +6 / +5       +1 / -1
+text.title30     +2             0
+text.mixed       +2             0
 ```
 
-Two findings worth carrying forward:
+What it took, each measured - read `draw.py`'s "faces and metrics":
 
-* **ImGui's font size is not a CSS px.** stb_truetype scales so that
-  `ascent - descent` equals the requested size; CSS maps the em square to
-  `font-size`. Geist is upem 1000 with ascent 1005 / descent -295, so its span
-  is 1.30em and ImGui renders 14px CSS text at 77% unless asked for 14 x 1.30.
-  The ratio is a property of the font, so the kit keeps it per face
-  (`draw.FONT_SPAN_EM`).
-* **No OpenType features at runtime** — so `tnum` is frozen into the cmap at
-  build time instead (`build_fonts.py`), producing a parallel `-tnum` face.
-  Proportional Geist digits are 384-663 units wide; frozen they are all 600.
-  A live readout cycling 1.36 / 0.50 / 2.08 **jitters by 9px** proportional
-  and is **stable at 23px** tabular. That is the reason to do it — not width
-  parity with the browser, which it does not buy.
-* **ImGui rounds every glyph advance to a whole pixel** (9.0, 5.0, 8.0 at
-  14px; still 66.0, 38.0 at 100px). Browsers use fractional advances, so a
-  long string drifts by a few px either way. This is the irreducible text
-  difference, and it is why `text.num14` sits -6px against the oracle.
+* **ImGui's loader is FreeType, not stb_truetype**, in imgui_bundle 1.92.
+  It sizes a face by `ascent - descent` (REAL_DIM) where CSS maps the em,
+  and Geist's span is 1.30em. The old answer was to push `css x 1.30` - but
+  **ImGui 1.92 rounds every font size to a whole pixel**, so 12px became
+  15.6 and then 16: text 2.6% large. `build_fonts.py` now writes a
+  one-em line box (800 / -200) into the TTFs, so the kit pushes the CSS px
+  itself. Geist's real 1005 / -295 live in `fonts/metrics.json`.
+* **FreeType hints by default, and a hinted advance is a whole pixel**
+  ("K" 8 against 7.872). The faces load with `NoHinting`.
+* **No OpenType features at runtime.** `tnum` is frozen into a parallel
+  `-tnum` face at build time; `kern` and `liga` are frozen into
+  `fonts/metrics.json` (every pair checked against HarfBuzz, 50,586 per
+  face, zero mismatches) and applied by `draw.shape`. Ligatures matter to
+  width: Geist's `tt` and `ff` are 0.05em narrower than their letters. The
+  advances come from `hmtx` too - FreeType's are in 1/64ths of a pixel.
+* **Glyphs are placed one quad each, at fractional x.** `add_text`
+  truncates its origin and cannot kern; Chromium positions glyphs at
+  subpixel x. The baseline stays a whole pixel (`draw.baseline_y`, measured
+  on 252 cells - see its docstring for the two roundings).
+* Tabular figures: proportional Geist digits are 384-663 units wide; frozen
+  they are all 600. A live readout cycling 1.36 / 0.50 / 2.08 **jitters by
+  9px** proportional and is **stable at 23px** tabular.
 
 ## Measuring a component before building it
 

@@ -130,11 +130,10 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                     D.switch(dl, cell["x"], cell["y"], 1.0 if cell["on"] else 0.0,
                              theme, switches, size=cell["variant"])
                 elif cell["kind"] == "kbd":
-                    # The width is the SPEC's - the browser's intrinsic one -
-                    # as a Button's is: the kit's text widths run a few
-                    # percent wide of Chromium's (see draw.kbd), so drawing
-                    # at the kit's own width would measure the font loader,
-                    # not the Kbd. test_kbd.py checks the width law.
+                    # INTRINSIC width, the kit's own - as the oracle's is. So
+                    # this cell checks the width law AND the text measure it
+                    # is fed by, end to end. It was pinned to the spec while
+                    # the kit's text ran a few percent wide (RETRO row 61).
                     # The tooltip variant sits on a tooltip-coloured ground,
                     # which is what its `in-data-[slot=tooltip-content]`
                     # restyle is drawn against.
@@ -144,8 +143,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                                cell["w"] + 12, cell["h"] + 12,
                                T.rgba("foreground", theme=theme))
                     D.kbd(dl, cell["x"], cell["y"], cell["text"], faces,
-                          theme, kbds, in_tooltip=tip, glyphs=False,
-                          w=cell["w"])
+                          theme, kbds, in_tooltip=tip, glyphs=False)
                 elif cell["kind"] == "checkbox":
                     # the canvas colour is the backdrop a disabled checked
                     # box folds its group opacity against - see draw.checkbox
@@ -233,7 +231,13 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                     # transparent, so the kit must draw none. Everything being
                     # measured here - the size-dependent radius, the padding-box
                     # fill, the disabled double-dim - is independent of it.
-                    CB.button(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                    # An `intrinsic` cell is drawn at the kit's OWN width -
+                    # `button_size`, from the label's measured text - where
+                    # the oracle lays out its own; the spec's w is only the
+                    # browser's, for the diff's region.
+                    bw = (CB.button_size(cell["size"], cell["text"], faces)[0]
+                          if cell.get("intrinsic") else cell["w"])
+                    CB.button(dl, cell["x"], cell["y"], bw, cell["h"],
                               "", faces, theme, buttons,
                               variant=cell["variant"], size=cell["size"],
                               disabled=cell.get("disabled", False))
