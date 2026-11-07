@@ -133,3 +133,17 @@ And the corollary, which is cheap: **a figure in a handoff document is a
 claim with a date on it.** Re-run the diff and the suite before building on
 either. HANDOFF said 733 passed and 0-2 levels; the suite was 734 with a
 flake and three cells were failing at 26.
+
+## Mine, from preparing item 3 — and one from the first five minutes
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 54 | **I told the user that `RETRO.md`, `HANDOFF.md`, `refresh_shadcn.sh` and the `?probe` route did not exist, with a table and a `git log --all` to back it up.** All four existed. The branch had thirty-eight commits I could not see | `git fetch` | **`git log --all` does not mean "all commits that exist".** It means all refs this clone has, and a cloud session's remote-tracking refs are frozen at the moment the container cloned. A container that starts mid-task is a stale clone by definition. **Fetch before concluding anything is absent** — the cost is two seconds and the failure mode is a confident, evidenced, wrong report. Worse than guessing, because it came with proof. The user's "did you pull" was the whole fix. |
+| 55 | My module-surface scanner reported two dangling references (`draw.lay_out`, `draw.HEADER_H`) on a module that was fine: `test_components.py` has `import draw as D` at the top and `D = _dashboard()` inside a test, so those attributes belong to the dashboard | Made the scanner scope-aware | **Fifth time a probe of mine has reported a defect that is not there** (rows 35, 51, and the tick-mark and the empty-region reads before them). The pattern is now unmistakable enough to be a habit rather than a note: **when a new instrument fires, check the thing it accuses before changing it.** Both of these took one `sed -n` to dismiss. |
+| 56 | Then the fixed scanner went quiet on seven files — and the **pass count did not drop, the SKIP count rose**, because a function-local `import menu as M` was being treated as shadowing the identical module-level alias | Track local imports as aliases, not as shadows | **A skip is not a pass, and a suite that reports them together will hide a broken instrument.** `27 passed, 13 skipped` and `20 passed, 20 skipped` both read as green. The only reason this was caught is that the two numbers were compared across a change; nothing in the output flagged it. If a check can skip, print WHY it skipped, or assert how many cases it actually ran — which is what `test_the_check_actually_finds_references` now does. |
+
+### The one rule from this batch
+
+**Fetch, then look.** Row 54 is the cheapest mistake in this file to avoid and
+the most expensive to make, because the output of a stale clone is
+indistinguishable from the truth and arrives with evidence attached.

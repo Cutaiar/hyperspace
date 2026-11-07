@@ -184,7 +184,7 @@ A reasonable opening message:
    Done — all four are in the diff, and doing it found two bugs in the
    Combobox trigger plus a hole in the harness that had been hiding every
    icon's position and colour from every metric. See `HANDOFF.md` item 1 and
-   `RETRO.md` rows 42-53. What is left of it is the Combobox panel's ROWS.
+   `RETRO.md` rows 42-56. What is left of it is the Combobox panel's ROWS.
 5. **A variant resolver**, before a ninth ad-hoc table is written.
 6. **Collapsible / Accordion** — 17 folding sections in `ui_pane.SECTIONS`.
 
