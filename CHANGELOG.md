@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-05
+## v1.3 — 2026-11-06
 
 ### Panel
 
@@ -12,6 +12,16 @@
 - Shift-drag fine control now reaches a route's depth, rest and feel knobs, a macro's from / to and GRAPH's backdrop too; those sliders draw filled with their value, like a param's (#375)
 - The side pane fits at its narrowest, 240 px: the analyzer section, its meter tags and the patch buttons no longer run into each other (#375)
 - ⌘Z takes back the last edit of the preset you're on, or, with the mouse over a rig-tuning section (the analyzer, hands …), that section's last edit, so a ⌘Z mid-set never undoes a tuning tweak from an hour ago; undoing a whole show load is now two ⌘Zs (#373)
+- After you move to another deck or section, ⌘Z takes nothing back until you make a change there ("nothing to undo here yet: make a change on deck 2 first"), so a stray ⌘Z can't undo something from ten minutes ago; hovering alone no longer changes what ⌘Z reaches (#386)
+- A cursor left in a text field (a find box, a name) no longer counts as working the panel, so a controller move while it sits there can't steal ⌘Z's target (#398)
+
+### Decks
+
+- HOLD, TAKE and DROP are gone: there are two decks, one on air and one off air; the APC40's crossfader fades between them (`output.xfade`) and MASTER dims the room (`output.dim`); GRAPH's head shows which deck you're looking at (click it for the other), **copy** on air to off air, the crossfade slider and a timed fade (#380)
+- F1–F8, Home, next / prev and the preset list, from keys or pads, always load into the off-air deck, and are refused in words while the fader is between its ends or a timed fade runs; the panel's own load still lands on the deck it shows (#380)
+- You can always tell the decks apart: the deck off air is framed in red with an ON AIR inset; the loaded look's strip ("deck 2 · off air"), the desk diagram's header ("the desk plays deck 1"), ROUTING's desk section, the window title and SYSTEM's GPU line all say which is which (#380, #393)
+- Playlists for installs: a new playlist section in the side pane plays a list of looks, each for its own dwell in seconds, fading between them — choose or make a list, play / stop, back / on, fade seconds, add a look; lists live in `<library>/playlists/` (#392, #400)
+- A fade between decks or a window resize no longer leaks about 16 MB each, which would have ended a long-running install within days (#400)
 
 ### Players
 
@@ -31,6 +41,7 @@
 
 - Base chase: while `deck.chase` is held, the performer's motion goes into the base, so on release the look stays where you left it; one undo step per hold (#356)
 - A preset can no longer route onto a meta param (rig tuning such as `master.gain`): Learn, ROUTING and GRAPH don't offer one, a saved row drops at load with a note, and `tools/meta_routes.py` lists what a library would lose (#371)
+- `deck.chase`, `totem.*` and `poi.*` join the preset keys as controls no preset can route to; your own key, pad and desk rows on them still work (#388)
 
 ### Gamepad
 
@@ -38,6 +49,8 @@
 - Paired axes: two buttons of one pad (`pair:UP/DOWN`, `pair:A/UP`) act as one two-way lane, through **Learn pair** / **Learn pair (spring)** on the param menu or a **pairs** port group on GRAPH's pad node (#372)
 - Experiment: the Joy-Con as a poi's handle — the shape is the weight on a spring string and swings and flies out as you swing the pad; switch it on with "poi off" in the pad window's header or `[poi]`, tune it in its own **Poi** window, with a handle / string / weight guide over the output (#336, #338, #339)
 - A sleeping Joy-Con wakes without a restart, the pad window follows a controller connected after launch, and a hard swing no longer loses the pad's attitude (#338, #339)
+- Making a pair over a button that is already mapped now asks first: **Keep both**, **Let the pair take over** or **Cancel** (#387)
+- The dial readings (petal / blend) are saved in the preset (`pad.dial.left` / `.right`) and picked in the pad node's details on GRAPH instead of SYSTEM; a pad reads the deck it drives, a dialed stick shows its eight sectors, and `dial_left` / `dial_right` in `config.toml` now only set what a preset naming no reading gets (#395)
 
 ### Desk
 
@@ -64,9 +77,13 @@
 - Decks: the router's shared `Sources` (`routing_sources.py`) split from its per-deck evaluator, the rig's `SessionRegistry` beside each deck's `Registry`, and deck 2 drawn offscreen with `output.xfade` as the one mix pass — deck 2 runs empty until D5, so leave the fade at 0 (#346, #351, #359)
 - Tests run `--dist load --max-worker-restart=4` locally and in CI, so a crash costs one test; the live lock keeps live tests apart within a run; `tools/sort_register.py` sorts the register (#347, #363)
 - The golden tool frees its rig on its own GL context, so a stray free no longer fails a later test with `GL_INVALID_OPERATION` (#366)
-- Decks D5: `deck.MetaController` with a `Pointer` per holder (`pointer.py`) and `docs/GLOSSARY.md`; three undo stacks, one per `Deck` and `MetaController.undo`, with `library.MetaMarks`; `MetaController.follow_fader` (on air by the crossfader's side), timed fades via `output.xfade_s` and `copy_on_air` — not yet called from `app.main`, so deck 1 stays on air until D5d (#370, #373, #378)
+- Decks D5: `deck.MetaController` with a `Pointer` per holder (`pointer.py`) and `docs/GLOSSARY.md`; three undo stacks, one per `Deck` and `MetaController.undo`, with `library.MetaMarks`; `MetaController.follow_fader` (on air by the crossfader's side), timed fades via `output.xfade_s` and `copy_on_air` — live in the app since D5d (#370, #373, #378, #380)
 - `players.py` (`Players`, `Player`, `Duty`), and `Router.feeds` keeps a row quiet while its controller's pointer is on the other deck (#376)
 - Node mode's saved form: an optional `node_mode` key on presets (`nodemode.py`, `Presets.node_mode`), no schema bump and no caller yet; `docs/plans/57-format-lane.md` lays out the format lane (#377)
+- D5d: `hold.py` is deleted (`output.hold` / `.take` / `.drop`, `Deck.hold`, `Undo.checkpoint`), `meta.tick` runs first in `app.frame`, and `apc40.META_CONTROLS` reserves the meta controls on the first desk; `tools/drive_decks.py` drives the verbs in the real app (#380)
+- The two layers made mechanical: `params.PER_DECK_META`, a third `part_of`, with `is_meta_id` / `is_session_id` / `is_per_deck_meta_id`, and `tests/test_layer_boundary.py` puts every param in one layer and every module on one side of the wall (#388); identifiers renamed to the signed glossary (`MetaRegistry`, `MetaTable`, preset → patch), with saved ids, files and panel words unchanged (#389)
+- `playlist.py` (`Playlist`, `Entry`, `Playing.tick`), ticked last by `MetaController.tick`; `MetaController.crossfade(to, seconds=None)`; `tools/drive_playlist.py` (#392, #400)
+- `.gitattributes` merges the four doc tails by union and `tests/test_doc_numbers.py` catches a number taken twice (#391); tests leave no `undo._hand` / `_loading` behind and a stuck undo stack fails fast (#394)
 
 ## v1.2 — 2026-11-02
 
