@@ -73,14 +73,15 @@ A reasonable opening message for a new session:
 ## Where it stands
 
 ```
-852 passed, 60 skipped (842 with test_gallery.py deselected under xdist,
-plus its 10 run -n0).   chrome diff: 68 cells, flat 0-2 levels, worst
+864 passed, 61 skipped, 2 xfailed (854 with test_gallery.py deselected
+under xdist, plus its 10 run -n0; the xfails are test_kbd's strict
+text-height pair).   chrome diff: 71 cells, flat 0-2 levels, worst
 corner 0.776 px, "all cells within the bar" in BOTH themes.
 ```
 
-Measured after the Checkbox. Adding it changed ZERO ImGui gallery pixels
-outside its own four cells, in both themes, checked against the capture
-taken at the start of the session.
+Measured after the Kbd. Adding the Checkbox and then the Kbd each changed
+ZERO ImGui gallery pixels outside their own cells, in both themes, each
+checked against the capture taken before it.
 
 Re-measured after 3a-3c, not carried over. The figures moved from 815/51
 only by the nine new modules: each adds two `test_module_surface` cases,
@@ -120,7 +121,8 @@ someone else's work. Run it serially before believing it.
 | scroll (rate, momentum, whole pixels, monotone rounding) | done — see the decision record in `interact.py` |
 | `comp_command.py` (cmdk scorer, verified, no UI yet) | parked for the Command palette |
 | **Checkbox** (+ Label) | done, in the pixel diff, driven - see below |
-| Toast, Kbd, Breadcrumb, Collapsible, Resizable | **not started** |
+| **Kbd**, KbdGroup, Kbd-in-Tooltip | done, in the pixel diff - see below |
+| Toast, Breadcrumb, Collapsible, Resizable | **not started** |
 | `layer.py` (scrim, panels, focus trap, z-order) | done, measured, 20 tests |
 | Dialog, Sheet on top of it | **not started — but no longer blocked** |
 | variant resolver (cva) | not started, eight ad-hoc tables |
@@ -446,8 +448,32 @@ The diff should still say **"all cells within the bar"** with a worst
 flat-region delta of 2 levels. A pure move cannot change a pixel, so if it
 does, something was not a move.
 
-**4. Then coverage**: Dialog, Sheet, Toast, Kbd, Breadcrumb. **Checkbox is
-DONE** (commits ending `dkit: Checkbox`):
+**4. Then coverage**: Dialog, Sheet, Toast, Breadcrumb.
+
+**Kbd is DONE**: `draw.kbd`, `draw.kbd_group`, and `interact.tooltip(kbd=)`
+(the Cutoff tooltip's Shift hint on the dashboard; a Gallery section). Three
+cells in the diff at 0-1 levels; `test_kbd.py`, each mechanism reverted once.
+Measured and worth knowing:
+
+* a tooltip holding a Kbd trims its RIGHT padding to 6
+  (`has-data-[slot=kbd]:pr-1.5`) and grows to 32 tall;
+* a KbdGroup's separator text is **monospace** - the group is a <kbd> and
+  never resets the UA font - so it advances 0.6em a character;
+* `?probe`'s ⌘ and ⇧ come from **Inter**, the container's system fallback,
+  not DejaVu as the kit's; on a Mac it will be Apple's. Symbol keys are not
+  in the diff for that reason.
+
+**And the finding that reaches past it - the kit's text metrics.** Glyph
+advances are whole pixels, so every text-derived width runs a few percent
+wide of Chromium's ("Ctrl" 22 vs 21.192, "Save Changes" 82 vs 78.541), and
+`medium` measures identical to `regular`. Separately, 12px text sits ~0.93px
+LOW in `draw.label` while 14px agrees to ~0.1. Every earlier text-sized cell
+pins its width in the spec, which is why it was never seen; RETRO row 61.
+Pinned in `test_kbd.py` as a STRICT xfail, so fixing it turns it red. Look at
+`draw.load_faces` (rasterizer density, `pixel_snap_h`, the 1.92 baked-font
+path) before anything else - it is the most leveraged fix left in the kit.
+
+**Checkbox is DONE** (commits ending `dkit: Checkbox`):
 
 * measured on `?probe` (`checkbox.*` blocks, both themes): 16px,
   `rounded-[4px]`, no hover chrome, keyboard-only ring that also swaps a

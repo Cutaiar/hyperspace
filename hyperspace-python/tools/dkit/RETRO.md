@@ -165,3 +165,19 @@ What the measuring found was in the component NEXT to it. Measuring the
 second of two similar components is how the first one's bugs surface (row
 38 said the same of menus); it is worth doing even when the second one is
 "the cheap one".
+
+## Mine, from building the Kbd
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 61 | **The kit's text is not Chromium's text, by measurement.** Glyph advances come out of the baked font as WHOLE pixels ("Ctrl" 22 against 21.192, "Save Changes" 82 against 78.541, `medium` and `regular` identical where Chromium's differ), and 12px text sits ~0.93px LOWER than Chromium's while 14px agrees to ~0.1 | Not fixed - it is the font loader, kit-wide. The Kbd cells pin their width as Button's do; the width LAW is tested against Chromium's own text widths; the 12px height is a STRICT xfail in `test_kbd.py` | Found because the Kbd is the first component whose box size comes from its text AND whose cells were drawn at intrinsic width - the diff failed two cells on the right edge. Every earlier text-sized component pinned its width in the spec, which is exactly why this had never been measured. **A pinned dimension is a dimension nobody is checking.** |
+| 62 | `kbd.word` failed the dark diff at 6 levels: a 29.203 wide box drawn at its fraction | `draw.snap`, as `draw.switch` already did | The README's finding - Chromium lays out on fractions and SNAPS what it paints - applied to every fractional box, and draw.kbd was written without it. Caught in the first diff, which is the point of a diff; the habit is to reach for `snap` whenever a size is not a whole number. |
+| 63 | I inferred the KbdGroup "+" was 9.61 wide by SUBTRACTION and assumed it was Geist at the parent's 16px (8.93) | Measured the span: **monospace**. KbdGroup renders a <kbd>, the UA gives <kbd> `font-family: monospace`, and the group never resets it | A number derived by subtraction carries every assumption of the subtraction. **Measure the element, not the gap between two others.** The 0.68px discrepancy was the clue and would have been easy to call rounding. |
+
+### What this batch says
+
+The component was trivial and came out at 0-1 levels. What it surfaced was
+one level down again - the text measurement every component shares - and it
+surfaced only because the gallery cell was allowed to size itself. That is
+worth doing deliberately: one cell per text-sized component drawn at its
+OWN width, not the spec's, is a cheap standing check on the font loader.

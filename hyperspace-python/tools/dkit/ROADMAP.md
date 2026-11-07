@@ -178,7 +178,7 @@ A reasonable opening message:
    primitives; Sheet is Dialog with a side.
 2. **Toast** — the first thing in the kit with a lifetime longer than a
    frame and no widget to hang its state on.
-3. **Kbd**, **Breadcrumb**, ~~**Checkbox**~~ (done — see `HANDOFF.md` item 4) — small, and Checkbox is 47 toggle
+3. ~~**Kbd**~~, **Breadcrumb**, ~~**Checkbox**~~ (Kbd and Checkbox done — see `HANDOFF.md` item 4) — small, and Checkbox is 47 toggle
    params.
 4. ~~**Gallery cells for Button, ButtonGroup, ContextMenu and Combobox.**~~
    Done — all four are in the diff, and doing it found two bugs in the
