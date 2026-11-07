@@ -284,13 +284,16 @@ def replay(tape: Path, findings: Path | None, dials: dict, series: tuple[float, 
     def med(v):
         v = sorted(x for x in v if math.isfinite(x))
         return v[len(v) // 2] if v else float("nan")
+
+    def worst(v):                       # (max alone keeps a NaN that comes first: a zero reading's)
+        return max((x for x in v if math.isfinite(x)), default=float("nan"))
     print(f"\n{'window':16} {'secs':>5} {'still':>5}  {'err° med/max':>13}  {'lin g med/max':>14}  "
           f"{'travel end/max':>15}  {'v max':>5}  {'pan max':>7}  {'walled':>6}")
     for s in rows.values():
         print(f"{s['note'][:16]:16} {s['t1'] - s['t0']:5.1f} {100 * s['still'] / s['n']:4.0f}%  "
-              f"{med(s['err']):5.1f}/{max(s['err']):5.1f}  {med(s['lin']):6.3f}/{max(s['lin']):6.3f}  "
-              f"{s['travel'][-1]:6.2f}/{max(s['travel']):6.2f}  {max(s['speed']):5.2f}  "
-              f"{max(s['pan']):7.2f}  {100 * s['walls'] / s['n']:5.0f}%")
+              f"{med(s['err']):5.1f}/{worst(s['err']):5.1f}  {med(s['lin']):6.3f}/{worst(s['lin']):6.3f}  "
+              f"{s['travel'][-1]:6.2f}/{worst(s['travel']):6.2f}  {worst(s['speed']):5.2f}  "
+              f"{worst(s['pan']):7.2f}  {100 * s['walls'] / s['n']:5.0f}%")
     print(f"\nthe walls: the hand at {poi.HAND_LIMIT:.1f} world units from home, the pan at "
           f"±{PAN_RANGE:.1f}; a 16:9 output through the default eye shows about ±3 across, "
           "±1.7 down")

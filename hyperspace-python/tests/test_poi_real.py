@@ -231,6 +231,36 @@ def test_the_d_pad_down_resets_on_its_edge_only():
     assert rig.state.wrist[0] == pytest.approx(1.0)
 
 
+def test_a_zero_reading_first_leaves_the_table_its_worst_numbers(monkeypatch, capsys):
+    """A zero accel has no attitude error (NaN). Whichever frame it falls on,
+    the worst of a window is the worst of its readings; the other columns
+    stay finite through it."""
+    tool = _tool()
+    zero, level = Reader(accel=(0.0, 0.0, 0.0)), Reader(accel=(0.0, 1.0, 0.0))
+    rig = tool.Rig()
+    nums = []
+    for reader in (zero, level, level, level):
+        rig.frame(reader, 1 / 60)
+        nums.append(rig.numbers())
+    assert math.isnan(nums[0]["err"]) and math.isfinite(nums[1]["err"])
+    for n in nums:
+        assert all(math.isfinite(n[k]) for k in ("lin", "speed", "zoom"))
+        assert all(math.isfinite(v) for v in (*n["wrist"], *n["pan"]))
+    for order in (nums, nums[::-1]):
+        monkeypatch.setattr(tool, "frames", lambda *_a, order=order: (
+            (0, "w", i / 60, rig, n) for i, n in enumerate(order)))
+        tool.replay(TAPE, None, {}, None, 0.0)
+        row = next(ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("w "))
+        assert "nan" not in row
+
+    def undefined(*_a):
+        yield 0, "w", 0.0, rig, nums[0]
+    monkeypatch.setattr(tool, "frames", undefined)
+    tool.replay(TAPE, None, {}, None, 0.0)                  # no reading at all: said, not raised
+    row = next(ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("w "))
+    assert "nan/  nan" in row
+
+
 # ---- the tool on other tapes
 
 def test_an_edge_tape_reads_through_its_own_codec(capsys):
