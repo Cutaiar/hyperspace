@@ -4,49 +4,57 @@
 what's done about it (wave 5, TY2, row 789).
 
 - **Measured:** 2026-10-27, at `7506f54`: scripts over `hyperspace/`, pyright 1.1.405, and nine reviews.
-- **Re-measured:** 2026-11-06, at `d485ebb7` (`main`): the headline figures only, by the one script in the
-  appendix. Pyright's number comes from TY1 (#412).
-- **Not re-measured:** everything else. The scorecard, the seams in §3, the split tables in §4 and the counts in §5
+- **Re-measured:** once, on 2026-11-06, at `e869a408`: the headline figures only, by the one script in the appendix,
+  and pyright by the line beside it. `main` has moved on since; nothing here tracks it.
+- **Not re-measured:** everything else. The record's scorecard, its §3 seams, its §4 split tables and its §5 counts
   weren't re-checked, and any of them may have moved.
 - **Unedited:** everything under "The record" below reads as it did: its figures, its line numbers and its old
   words. Where a figure there disagrees with this header, this header is the newer one.
+- **`7506f54` isn't on `main`.** It's only on `origin/plan-37-specs`, and the recipe would go with that branch. Its
+  nearest ancestor on `main` is `f2351a0e`, 2026-10-27. `hyperspace/` has no diff between the two, and the script
+  gives the same first column on both, so rerun that column at `f2351a0e`.
 
-## Today's figures
+## The figures
 
-| | Audit's commit, `7506f54`, 2026-10-27 | Plan 58 §3, `34caf3c` | **`main`, `d485ebb7`, 2026-11-06** |
+| | Audit's commit, `7506f54`, 2026-10-27 | Plan 58 §3, `34caf3c` | **`e869a408`, 2026-11-06** |
 | --- | --- | --- | --- |
-| `hyperspace/` files / lines | 91 / 70,082 | 120 / 98,522 | **121 / 99,758** |
-| `graph`, `graphview`, `ui_graph` lines | 6,276, 4,776, 2,791 | 7,322, 6,929, 5,156 | **7,322, 6,937, 5,199** |
-| Files over 2,000 lines | 9 | 12 | **12** |
-| `getattr`/`hasattr` calls per 1,000 lines | 13.7 | 15.7 | **15.4** |
+| `hyperspace/` files / lines | 91 / 70,082 | 120 / 98,522 | **121 / 99,769** |
+| `graph`, `graphview`, `ui_graph` lines | 6,276, 4,776, 2,791 | 7,322, 6,929, 5,156 | **7,322, 6,938, 5,201** |
+| `getattr`/`hasattr` calls per 1,000 lines | 13.7 | 15.7 | **15.3** |
 | Functions fully annotated | 67.2% | 64.7% | **64.9%** |
 | Modules in the one import cycle | 14 | 18 | **19** |
-| Pyright basic complaints | 933 | 1,511 | **1,550** |
+| Pyright basic complaints | 933 | 1,511 | **1,548** |
+| Files over 2,000 lines (this PR's own row: plan 58 §3 has none, so the middle figure is this script's, at that commit) | 9 | 12 | **12** |
 
 The script gives every row of plan 58 §3's two columns but pyright's, exactly, so those rows compare across the table.
-Those three files are the three largest today. At the audit's commit `routing` was third and `ui_graph` sixth.
+At the audit's commit `routing` was third by size and `ui_graph` sixth; at `e869a408` those three files are the three
+largest.
 
-The ten largest today: `graph` 7,322, `graphview` 6,937, `ui_graph` 5,199, `routing` 4,335, `library` 3,798,
-`render` 3,727, `ui` 3,167, `params` 2,927, `devices` 2,606, `geometry` 2,282. The cycle is still the `ui` ↔ `ui_*`
+The ten largest at `e869a408`: `graph` 7,322, `graphview` 6,938, `ui_graph` 5,201, `routing` 4,332, `library` 3,798,
+`render` 3,727, `ui` 3,167, `params` 2,923, `devices` 2,606, `geometry` 2,282. The cycle is still the `ui` ↔ `ui_*`
 star plus `hands.panel`; the members new since the audit are `ui_feel`, `ui_pad_views`, `ui_pane`, `ui_players` and
 `ui_playlist`, and `ui_presets` is now `ui_loadable`.
 
 **The pyright row doesn't compare like with like.** Only the size of the gap should be read from it.
 - 933 is pyright 1.1.405, with no project settings.
 - 1,511 is plan 58's reading at `34caf3c`. It doesn't record the version or the settings.
-- 1,550 is TY1's baseline (`tools/type_baseline.json` on `origin/wave5/ty1`, still open as #412): pyright 1.1.414 with
-  TY1's `[tool.pyright]`, 1,549 errors and 1 warning in 75 of 121 files, read at SC1 (`2ac32e8d`). Pyright wasn't run
-  again for this file: `hyperspace/` has no diff from SC1 to `d485ebb7`, so the number holds there.
+- 1,548 is pyright 1.1.414 with TY1's `[tool.pyright]` (row 788, #412), run over `e869a408`'s `hyperspace/` by the line
+  in the appendix: 1,547 errors and 1 warning in 75 of 121 files. The same run over SC1 (`2ac32e8d`) gives 1,550, which
+  is the sum of TY1's baseline (`tools/type_baseline.json`, row 788, #412) as read at SC1, so the run matches the
+  ratchet's count. `hyperspace/` does differ from SC1 to `e869a408`, and the run has two fewer there.
+- **To pin, once #412 merges:** the baseline above is `b2d70bc7`, #412's head at this writing, on a branch that is being
+  refreshed. This line then names #412's merge commit, to read as
+  `git show <sha>:hyperspace-python/tools/type_baseline.json`.
 
-| Rule | Audit | TY1's baseline |
+| Rule | Audit | `e869a408` |
 | --- | --- | --- |
-| `reportAttributeAccessIssue` | 419 | 626 |
+| `reportAttributeAccessIssue` | 419 | 624 |
 | `reportOptionalMemberAccess` | 184 | 365 |
 | `reportArgumentType` | 172 | 293 |
 | `reportOptionalSubscript` | 43 | 73 |
 | All others | 115 | 193 |
 
-By file, today: `render` 175, `graphview` 153, `ui` 136, `graph` 122, `outputs` 105, `midi` 57, `routing` 57,
+By file, at `e869a408`: `render` 175, `graphview` 153, `ui` 136, `graph` 122, `outputs` 105, `midi` 57, `routing` 57,
 `analyzer` 56, `ghost` 48, `library` 46.
 
 **Where the record's own figures differ from the first column.** The same commit gives different numbers because
@@ -54,19 +62,20 @@ they count different things. Each was reproduced by the script, except the 7:
 
 | The record says | The first column says | Why |
 | --- | --- | --- |
-| 884 `getattr`/`hasattr` | 962, so 13.7 per 1,000 | 884 counts lines holding one, 962 counts calls. Today: 1,404 lines, 1,534 calls |
-| 69% annotated | 67.2% | 69% excuses an `__init__` from a return annotation (2,544 of 3,672); 67.2% doesn't (2,468). Excused, today: 66.9% |
+| 884 `getattr`/`hasattr` | 962, so 13.7 per 1,000 | 884 counts lines holding one, 962 counts calls. At `e869a408`: 1,401 lines, 1,531 calls |
+| 69% annotated | 67.2% | 69% excuses an `__init__` from a return annotation (2,544 of 3,672); 67.2% doesn't (2,468). Excused, at `e869a408`: 66.9% |
 | "1" import cycle | 14 modules | The same cycle: one cycle, with 14 members |
-| 7 `Protocol` classes | 5 | The script finds 5 at `7506f54`, and 5 today. The record names six: those five, and "one in `gamepad`", which is USB's `bInterfaceProtocol`. It doesn't name a seventh |
+| 7 `Protocol` classes | 5 | The script finds 5 at `7506f54`, and 5 at `e869a408`. The record names six: those five, and "one in `gamepad`", which is USB's `bInterfaceProtocol`. It doesn't name a seventh |
 
-Also still true at `d485ebb7`, by the script: no `Literal` and no `TypedDict`. There is one `StrEnum` now
+Also at `e869a408`, by the script: no `Literal` and no `TypedDict`, as in the record. There is one `StrEnum` now
 (`players.Duty`), and `@dataclass` went from 100 to 149.
 
 ## Old names
 
-The rename (SEM, row 756) and the format work came after this audit. The body keeps the words of its date.
+The rename (SEM, row 756), the words (rows 778, 779) and the format work came after this audit. The body keeps the
+words of its date. Names are as of `e869a408`.
 
-| The record says | Today | Note |
+| The record says | At `e869a408` | Note |
 | --- | --- | --- |
 | `preset.py` | `loadable.py` | |
 | `Presets` | `LoadedPatch` | |
@@ -76,38 +85,65 @@ The rename (SEM, row 756) and the format work came after this audit. The body ke
 | `rig_source` | `bus_source` | |
 | `preset_only` | `patch_only` | |
 | `PAGES` | `PAGE_KEYS` | Keys only: the rail is gone, and `ui.page` is the focus section (`3106db9b`) |
-| session, rig, as ideas | the meta controller (`deck.MetaController`) | The body uses neither word, bar the names above; older PRs do ([GLOSSARY](GLOSSARY.md)) |
 | "a preset", in prose | a loadable patch | The saved words stay until the format lane moves them: `preset.*` ids, `hyperspace.preset/…`, `presets/` (row 756) |
 | `compact_desk`, `expand_desk`, `merge_modifiers`, `template_rows` | Gone | D3's presets /10 and shows /3 (`160ed30b`) |
-| `migrate_home` | Gone | Plan 41's one-tier library (`55ea07fe`) |
+| `effects_on`, `migrate_home` | Gone | Plan 41's one-tier library (`55ea07fe`) |
 | `save_refusal` | Gone | Base chase B1 (#356) |
 
-Its proposed names, such as `PresetLoader`, `preset_factory` and `preset_doc`, were never built, so they have no
-new name.
+The body doesn't use "session" or "rig" as words, bar `RigWires` and `rig_source` above, but older PRs do, and they
+don't map as one:
+
+| Older word | Became | Row |
+| --- | --- | --- |
+| session | the meta controller (`deck.MetaController`) | 756, 778 |
+| rig: `RigWires` | a patch's bus cuts, `BusCuts`; in words, the bus cable | 756, 779 |
+| rig: `RIG_KINDS` | fixtures, `FIXTURE_KINDS` | 756 |
+| rig: `patches.RIG` | a control row's side | 756 |
+| rig: a device no `[[devices]]` entry lists | the device registry; in words, "not set up on this Mac" | 779 |
+
+A show's `session` and `rig` keys, and `library.RIG`, stay until the migration (rows 756, 778).
+
+The record's proposed names, such as `PresetLoader`, `preset_factory` and `preset_doc`, were never built, so they have
+no new name.
 
 ## What became of its proposals
 
-**Rejected by plan 58 §6:**
+Every proposal in the record's §6, in its order, and the §3 and §5 ones its phases don't list. "Neither" means neither
+rejected nor scheduled: plan 58 doesn't name it, and nothing here says it's wanted or not.
 
-| Proposal | Why |
-| --- | --- |
-| §4's splits, and its §6's **phase 3**, the zero-GL splits | The conflict data says big files aren't the problem: of 31 replayed conflicts, 23 are in documentation only and code conflicts are rare (plan 58 §3). And 73 `monkeypatch.setattr(module, …)` uses across 26 test files can silently miss after a façade split [I] |
-| Its §6's **phase 5**, the deep splits | The same reasons |
-| §5's target shape and its §6's **phase 4**: `PageContext`, `ui_widgets.py`, page by page | The owner: `dkit` is orthogonal, "we don't need to worry about that", so no UI preparation in this wave |
-| Phase 1, step 1's second half: delete `render.py`'s reload guards, or collapse them into one `_ensure()` | They guard hot reload, so removing them isn't neutral. The record counts 44 of one kind; §6 counts 95 `getattr(self…` |
-
-Plan 58 §8 also assumes, unless the owner objects, no trial split of `graph.py`.
-
-**Taken up, in part:**
-
-| Proposal | Where | What differs |
+| Proposal | Verdict | Why, or where |
 | --- | --- | --- |
-| Phase 0 | TY1 (#412, row 788) | The ratchet and the globbed walls as proposed. The size cap comes with TY3, at the sizes after stage 4, not at the record's N = 7,000: `graph` is already 7,322 |
-| Phase 1, declarations | TY3 | Annotations only, on `Renderer`, `Registry`, `Analyzer`, `Panel` and `Bindings`, with the AST identical once annotation lines are stripped. Its "about 500 fewer" isn't re-derived. `BandLanes`, a required `Edit.table` and the page-state dataclasses change the AST, so they don't fit [I] |
-| Phase 2, in part | TY4 | The `RenderHost` Protocol for `Frame.r`, and `Device` used as a type. "No renames", so without the public names the record wanted for the twelve privates |
-
-**Neither rejected nor scheduled:** the rest of phase 2 and of §3's "should be" column: `FrameInputs`, `RouterHost`,
-`DeviceProfile`, `StrEnum`s, `schema.py`, moving MIDI's runtime state off `Binding`. Plan 58 doesn't name them.
+| **Phase 0:** pyright with a baseline | Taken | TY1 (row 788, #412) |
+| Phase 0: import walls globbed | Taken | TY1 (row 788, #412) |
+| Phase 0: a per-file size cap | Taken, changed | With TY3, at the sizes after stage 4, not at the record's N = 7,000: `graph` is 7,322 at `e869a408` |
+| **Phase 1,** step 1: annotations on `Renderer` | Taken | TY3: annotations only, the AST identical once annotation lines are stripped. Its "about 500 fewer" isn't re-derived |
+| Step 1: delete `render.py`'s reload guards, or one `_ensure()` | **Rejected, plan 58 §6** | They guard hot reload, so removing them isn't neutral. The record counts 44 of one kind; plan 58 §6 counts 95 `getattr(self…` at `34caf3c`, and the file has 96 such lines at `e869a408` |
+| Step 2: declare the attributes on `Registry` | Taken | TY3 |
+| Step 3: `Analyzer`'s attributes | Taken | TY3 |
+| Step 3: a `BandLanes` dataclass | Neither | It changes the AST, so it doesn't fit TY3 [I] |
+| Step 4: `Panel`'s `envs`, `seq` and 18 handles | Taken | TY3 |
+| Step 5: declarations on `Bindings` | Taken | TY3 |
+| Step 5: declarations on `Router` and `Learn` | Neither | TY3 doesn't name them |
+| Step 6: `graphview.Edit`'s `table`, `reg`, `router` required | Neither | It changes the AST [I] |
+| Step 6: `type_of` and `is_render` as module functions | Neither | It changes the AST [I] |
+| Step 7: `GraphPageState`, a dataclass per `_x_state` | Neither | It changes the AST [I] |
+| **Phase 2:** `RenderHost` for `Frame.r` | Taken | TY4 |
+| Phase 2: public names for the twelve privates | Neither | TY4 says "no renames" |
+| Phase 2: `Device` used as a type | Taken | TY4 |
+| Phase 2: `Resolver` and `Publisher` used as types | Neither | |
+| Phase 2: `FrameInputs` | Neither | |
+| Phase 2: `RouterHost`, `LearnHost` | Neither | |
+| Phase 2: `DeviceProfile` | Neither | |
+| Phase 2: `ViewLike`, `AudioLike` | Neither | |
+| Phase 2: `StrEnum`s for ops, schemes, node kinds, device status | Neither | |
+| Phase 2: `schema.py` | Neither | |
+| Phase 2: `TypedDict`s in `graphmigrate` | Neither | |
+| Phase 2: one `CHANNELS`, a `MediaView` Protocol | Neither | |
+| Phase 2: MIDI's runtime state off `Binding` | Neither | |
+| **Phase 3,** the zero-GL splits, and the record's §4 tables for them, `legacy.py` and `hands/ranges.py` among them | **Rejected, plan 58 §6** | The conflict data says big files aren't the problem: of 31 replayed conflicts, 23 are in documentation only and code conflicts are rare (plan 58 §3). And 73 `monkeypatch.setattr(module, …)` uses across 26 test files can silently miss after a façade split [I]. Plan 58 §8 also assumes, unless the owner objects, no trial split of `graph.py` |
+| **Phase 4,** and the record's §5 target shape: `ui_widgets.py`, `PageContext`, `PanelDeps`, `page(ctx, dt)`, commands carrying their undo, `ui_graph`'s edit logic moved | **Rejected, plan 58 §6** | The owner: `dkit` is orthogonal, "we don't need to worry about that", so no UI preparation in this wave |
+| **Phase 5,** the deep splits, and the rest of the record's §4 tables; per-subsystem `to_doc`/`from_doc` | **Rejected, plan 58 §6** | As phase 3 |
+| §3 seams no phase lists: `CloudSource`/`CloudFrame`, a leaf `limits.py`, Protocols for `graphview`'s inputs, `PresetLoader` | Neither | |
 
 ---
 
@@ -660,7 +696,13 @@ knowing every section.
 
 # Appendix: the re-measure script
 
-Added 2026-11-06. It isn't part of the record. It gives the "Today's figures" table above, bar the pyright row, on any commit, and is kept here so the table can be checked; the ratchet (`tools/type_ratchet.py`, TY1) is what holds the pyright count.
+Added 2026-11-06. It isn't part of the record. It gives "The figures" above, bar the pyright row, on any commit, and is kept here so the table can be checked. The pyright row is this, from a full `uv sync`, with TY1's `pyproject.toml` (row 788, #412) copied beside the extracted `hyperspace/`:
+
+```
+uvx --from 'pyright[nodejs]==1.1.414' pyright -p <dir>/hyperspace-python --pythonpath .venv/bin/python --outputjson
+```
+
+The ratchet (`tools/type_ratchet.py`, row 788, #412) is what holds that count.
 
 ```python
 """The structural audit's headline figures, over one checkout of `hyperspace/`.

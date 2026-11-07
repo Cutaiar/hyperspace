@@ -5,9 +5,10 @@ who may write a parameter, and which test holds each boundary.
 How to run, tune and change things is in [`ENGINEERING.md`](ENGINEERING.md);
 the reasons behind the calls are in [`DECISIONS.md`](DECISIONS.md) and
 [`DECISION-REGISTER.md`](DECISION-REGISTER.md); what is known to be wrong
-is in [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the shape of the code (types, contracts,
-where the big files split, how far the UI is from decoupled) is in
-[`AUDIT-STRUCTURE-2026-10.md`](AUDIT-STRUCTURE-2026-10.md), a record.
+is in [`AUDIT-2026-09.md`](AUDIT-2026-09.md). The shape of the code as of 2026-10-27 (types,
+contracts, where the big files could split, how far the UI is from decoupled) is recorded in
+[`AUDIT-STRUCTURE-2026-10.md`](AUDIT-STRUCTURE-2026-10.md), re-measured 2026-11-06. It's a record, not
+a plan: [plan 58](plans/58-wave-5.md) §6 rejects its splits and its UI phases, and its header says why.
 
 Two questions this file answers on its own:
 
