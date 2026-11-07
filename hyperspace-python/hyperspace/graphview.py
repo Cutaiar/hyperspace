@@ -823,7 +823,7 @@ HOVERS: dict[str, str] = {
     "dream": "Its picture, dreamed: laid over what it takes in, with knobs of its own.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
     rgraph.ALL_OUTPUTS: ("The meta controller's bus: a window shows it by a cable from here, unless the "
-                         "preset cuts that cable or wires that port itself."),
+                         "patch cuts that cable or wires that port itself."),
     # R13: `ground`, a source with no render node, drawn so its wires can be seen and deleted
     rgraph.GROUND: ("A window's background where nothing is drawn — the clear colour, or "
                     "see-through in overlay: wired into an output's port, that port shows it."),
@@ -836,16 +836,16 @@ ALL_UNWIRED = ("All outputs stays (every window reads it): its wires are gone, s
 # window (`graph.BusCuts`) — which of them stand is the loadable patch's since
 # plan 44 D3 (`loadable.LoadedPatch.bus`, saved under `bus`), in words
 BUS_SAID = ("the bus cable: All outputs' {port} on {label} — cut it and {label} shows "
-            "nothing there with this preset (a preset saves its cuts)")
+            "nothing there with this patch (a patch saves its cuts)")
 BUS_IDLE = "nothing is wired into All outputs' {port}"
 BUS_SAME_PORT = "All outputs' {port} goes into a window's {port} (output.1.{port} …)"
-BUS_NO_SHOW = "no preset is loaded: a preset holds which cables from All outputs stand"
+BUS_NO_SHOW = "no patch is loaded: a patch holds which cables from All outputs stand"
 BUS_NO_EFFECT = ("{wire} is a bus cable: put the node on All outputs' picture, or "
                  "wire the window a picture of its own")
 # plan 44 D3 (plan 43 §6 item 3): a window the loadable patch wires or cuts that this
 # meta controller has not open — requested, said, never an error: the loadable patch is a
 # complete look, the meta controller is what is plugged in
-WINDOW_WANTED = ("this preset wires Output {n}, which is not open on this Mac — choose a "
+WINDOW_WANTED = ("this patch wires Output {n}, which is not open on this Mac — choose a "
                  "display for it on OUTPUT to show it")
 
 
@@ -867,7 +867,7 @@ def wanted_windows(spec, bus_cuts=None) -> list[int]:
 
 # plan 36 T2 (W2): a listed cloud's wire into the scene, the meta controller's too
 CLOUD_SAID = ("this cloud's wire into the scene — cut it and the scene "
-              "draws no cloud with this preset (a preset saves its cuts)")
+              "draws no cloud with this patch (a patch saves its cuts)")
 CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
 CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
 # plan 36 T5 (W5): the picker's starters ▸ — each a pre-wired group, one
@@ -3141,7 +3141,7 @@ def land_choices(view: View, edit, fixed: str, nid: str
 GROUP_IN, GROUP_OUT = "gin", "gout"      # a group node's boundary pins
 NOTHING_TO_GROUP = "nothing to group"
 NO_GROUP = "no group {gid}"
-NO_LOADABLE_GROUPS = "no preset is loaded: nothing to group"
+NO_LOADABLE_GROUPS = "no patch is loaded: nothing to group"
 GROUP_NEEDS_NAME = "a group needs a name"
 GROUP_MOVED = "{node} left {other} for this group"
 GROUPED = "grouped {n} node{s} as {name}"
@@ -3152,21 +3152,21 @@ GROUP_NO_DELETE = ("{name} is a group: Ungroup it from its menu (its nodes stay)
                    "and delete its nodes")
 # plan 40 T3: a patch spawned, spliced, wired as saved; a group saved as one
 PATCH_SIDE, LOADABLE_SIDE = "patch", "preset"     # a conflict's two answers (the sheet's, D3)
-NO_LOADABLE_SPAWN = "no preset is loaded: nothing to spawn into"
-SPAWN_STALE = "the preset changed while the sheet was up: spawn {name} again"
+NO_LOADABLE_SPAWN = "no patch is loaded: nothing to spawn into"
+SPAWN_STALE = "the loadable patch changed while the sheet was up: spawn {name} again"
 # (wave 3 P2) what replacing the host's dream costs it, in words
 LOSES_WIRES = "its wires: {wires}"
 LOSES_VALUES = "{n} setting{s}: {names}"
 LOSES_GROUP = "its place in {name}"
 LOSES_MACRO = "{mid}'s hold on {names}: a macro sets its params' values, so it lets go"
 ROWS_STAY = "{n} row{s} on its params stay, and drive the patch's {node}"
-REPLACED_SAID = "replaced this preset's {node}: {lost}"
+REPLACED_SAID = "replaced this loadable patch's {node}: {lost}"
 NOTHING_LOST = "nothing but its name"
 SPLICE_REPLACED = ("{name} not spliced: that cable is the {node} it would replace, which goes "
                    "with its wires; spawn it, then wire it")
-SPAWNED = "spawned {name}: {n} node{s}, its pins open — nothing wired to the preset"
+SPAWNED = "spawned {name}: {n} node{s}, its pins open — nothing wired to the loadable patch"
 SPLICED = "spliced {name} into {s} → {d}"
-KEPT_SAID = "{n} row{s} kept by the preset"
+KEPT_SAID = "{n} row{s} kept by the loadable patch"
 WIRED_AS_SAVED = "wired as saved: {wires}"
 PORT_TAKEN = "{port} is taken"
 NO_HOST_NODE = "no node {name}"
@@ -3184,7 +3184,7 @@ TAKE_OVER_WIRES = "It wires: {wires}"
 TAKE_OVER_REFUSED = "Still refused: {why}"
 CUT_SAID = "cut {cuts}"
 TAKE_OVER_UNDO = "wire {name} as saved, replacing {cuts}"
-TAKE_OVER_STALE = ("the preset changed under that chip: nothing cut — read {name}'s chip "
+TAKE_OVER_STALE = ("the loadable patch changed under that chip: nothing cut — read {name}'s chip "
                    "again")
 SAVED_PATCH = "saved {name} as a patch"
 UPDATED_PATCH = "updated patch {name}"
@@ -3480,10 +3480,10 @@ def kept_words(row: Any) -> str:
     if isinstance(row, Mapping):
         said = row.get("words")
         if isinstance(said, str) and said:
-            return f"{said} kept by the preset"
+            return f"{said} kept by the loadable patch"
         src = row.get("source") or row.get("control_or_source") or "?"
-        return f"{row_words(str(src))} kept by the preset"
-    return f"{row} kept by the preset"
+        return f"{row_words(str(src))} kept by the loadable patch"
+    return f"{row} kept by the loadable patch"
 
 
 # ---- plan 40 T3: a spawn's open pins, a patch's boundary in words ----
@@ -3728,7 +3728,7 @@ ROUTE_END = "a route's end moves to another param's mod"
 META_ROW = "{what} is the meta controller's (bindings.json): edit it on ROUTING"
 SHIFT_NODE = ("{addr} on the SHIFT node is the meta controller's (bindings.json): "
               "map it on ROUTING")
-NOT_REMOVABLE = "{label}: the meta controller's, not the preset's (nothing to delete)"
+NOT_REMOVABLE = "{label}: the meta controller's, not the patch's (nothing to delete)"
 # plan 43 C2: the camera is the loadable patch's, and every look has exactly one
 CAMERA_KEPT = "{label}: the look's one camera, always there (nothing to delete)"
 NO_SUCH_MOD = "no modifier {kind}"
@@ -5578,7 +5578,7 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
         return BUS_NO_SHOW
     gs = edit.graph
     if gs is None:
-        return "no preset is loaded"
+        return "no patch is loaded"
     files = gs.files() if hasattr(gs, "files") else None
     _with_frame(doc)
     # a frame node's bare entry is only what keeps it unwired (`_keep_declared`):
@@ -6763,7 +6763,7 @@ def render_drop(edit: Edit, node: str) -> str | None:
     gone = _take_out(doc, names)
     doc["wires"] += [x for x in joined if x not in doc["wires"]]
     if doc == before:
-        return f"{label} is not in the preset's graph"
+        return f"{label} is not in the patch's graph"
     _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])
                          if n not in names])
     also = ("" if not mine else ", and its copy" if len(mine) == 1
@@ -7036,7 +7036,7 @@ def set_through(edit: Edit, n: int, on: bool) -> str | None:
     its own."""
     spec = _spec(edit)
     if spec is None:
-        return "no preset is loaded"
+        return "no patch is loaded"
     label = label_of(f"output.{n}", getattr(edit, "slots", ()))
     bus_cuts = _bus_cuts(edit)
     if is_through(spec, n, bus_cuts) == on:

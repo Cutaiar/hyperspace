@@ -212,7 +212,7 @@ def test_a_pose_in_values_is_no_pose(tmp_path):
     doc["values"]["rot.phase.XY"] = 1.0
     rig.view.ang = [0.1] * 6
     rig.loaded_patch.load_doc(doc)
-    assert "rot.phase.XY is not part of a preset, ignored" in rig.loaded_patch.notes
+    assert "rot.phase.XY is not part of a patch, ignored" in rig.loaded_patch.notes
     assert rig.view.ang == [0.1] * 6
 
 

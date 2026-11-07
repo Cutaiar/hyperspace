@@ -310,7 +310,7 @@ ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them
 # plan 36 T6 (D4): the **preset only** chip starts lit, for every loadable patch
 # (a constant so the tests' autouse fixture can start them on the full canvas)
 PATCH_ONLY = True
-PATCH_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
+PATCH_ONLY_TIP = ("Lit: only the patch's own nodes, what is wired to them and the windows "
                    "they reach. Controllers, modulation and macros are left off the canvas "
                    "(nothing is changed, only not drawn). Click to show everything.")
 # 2026-10-26: output 1's picture behind the canvas, fixed to the canvas (not
@@ -366,7 +366,7 @@ TINT_TIP = ("Lit: each picture cable's red leans by the colour of the picture it
             "carries — toward orange for yellow-green pictures, toward rose for "
             "blue-violet ones; red, cyan and grey pictures leave it red — read from its "
             "maker's thumbnail once a second. Off: plain red. A view setting: not saved "
-            "with the preset or the show")
+            "with the patch or the show")
 TINT_SPAN = 20.0 / 360.0
 TINT_FULL = 0.25
 
@@ -1270,7 +1270,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(TIDY_TIP)
     imgui.same_line()
-    if ui.lit_chip("preset only##graph", st["patch_only"]):
+    if ui.lit_chip("patch only##graph", st["patch_only"]):
         st["patch_only"] = not st["patch_only"]
     if imgui.is_item_hovered():
         ui.tooltip(PATCH_ONLY_TIP)
@@ -1350,7 +1350,7 @@ def _wants_chip(panel, beside: bool = True) -> None:
         imgui.same_line()
     ui.chip(f"{text}##wants")
     if imgui.is_item_hovered():
-        ui.tooltip("\n".join(["the preset's rows that wait for a device:",
+        ui.tooltip("\n".join(["the patch's rows that wait for a device:",
                               *devices.want_lines(ws)]))
 
 
@@ -2629,14 +2629,14 @@ DROP_COLOUR = imgui.ImVec4(1.0, 0.86, 0.35, 1.0)    # the cable a dragged patch 
 DROP_WIRE = 6.0
 SPOT_ALPHA = 0.15       # every other cable while a hot node is dragged (refused, its own)
 PATCHES_TIP = ("The patches: a click spawns one at the canvas's centre, its pins open — "
-               "nothing wired to this preset. Drag one onto a picture cable to splice it in")
+               "nothing wired to this loadable patch. Drag one onto a picture cable to splice it in")
 NO_PATCHES = "no patches yet — a group's menu: save as patch…"
-WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this preset has that "
+WIRE_AS_SAVED_TIP = ("Wire each open pin as the patch was saved, where this loadable patch has that "
                      "node and the port is free — the rest said, nothing else touched")
 SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows and the cables "
                   "across its edge — the patch's file, nothing else written")
-SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
-SHEET_REPLACES = "this preset already has {nodes}: the sheet asks to replace it"
+SHEET_UP = "{n} control{s} the loadable patch already uses: the sheet asks which keeps each"
+SHEET_REPLACES = "this loadable patch already has {nodes}: the sheet asks to replace it"
 SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
 NO_LIBRARY = "no library: nothing to spawn"
 WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the meta controller lacks (`devices.want_words`')

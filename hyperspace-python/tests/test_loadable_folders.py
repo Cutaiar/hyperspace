@@ -382,7 +382,7 @@ def test_a_save_into_a_folder_not_there_never_writes_over_a_flat_file(lib_dirs):
     r = make(lib_dirs)
     flat = (lib_dirs.loaded_patch / "nope-trip.json").read_text()
     assert not r.lib.delete(LOADABLE, "nope/TRIP")
-    with pytest.raises(LibraryError, match="no preset"):
+    with pytest.raises(LibraryError, match="no patch"):
         r.lib.rename(LOADABLE, "nope/TRIP", "X")
     path = r.loaded_patch.save_as("nope/TRIP")
     assert path == lib_dirs.loaded_patch / "nope" / "trip.json"
@@ -477,9 +477,9 @@ def test_a_save_says_a_files_own_slash_went(lib_dirs):
     r = make(lib_dirs)
     r.loaded_patch.load("AC - DC")
     r.lib.overwrite(LOADABLE)
-    assert r.lib.status == "loadable: saved AC - DC (was AC/DC)"
+    assert r.lib.status == "patch: saved AC - DC (was AC/DC)"
     r.lib.overwrite(LOADABLE)
-    assert r.lib.status == "loadable: saved AC - DC"
+    assert r.lib.status == "patch: saved AC - DC"
 
 
 # ---------------------------------------------------------------- review, third pass
@@ -549,5 +549,5 @@ def test_two_files_of_one_spelling_are_never_picked_by_sort_order(lib_dirs):
     assert r.lib.path_of(LOADABLE, "trip-2") == lib_dirs.loaded_patch / "trip-2.json"
     assert r.lib.path_of(LOADABLE, "trip_2", loose=True) == lib_dirs.loaded_patch / "trip_2.json"
     assert r.lib.path_of(LOADABLE, "Trip! 2", loose=True) is None
-    assert "two presets answer to that name" in r.lib.warning
+    assert "two patches answer to that name" in r.lib.warning
     assert "trip-2.json" in r.lib.warning and "trip_2.json" in r.lib.warning

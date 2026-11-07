@@ -63,11 +63,11 @@ def test_a_move_into_a_nested_folder_and_its_refusals(lib_dirs):  # noqa: F811
     assert lib.move("party/deep/B", "Party/Deep") == lib_dirs.loaded_patch / "party/deep/b.json"
     with pytest.raises(LibraryError, match="no folder"):
         lib.move("A", "nowhere")
-    with pytest.raises(LibraryError, match="no preset"):
+    with pytest.raises(LibraryError, match="no patch"):
         lib.move("ZZZ", "party")
     _put(lib_dirs.loaded_patch / "party" / "deep" / "a.json", "A")
     lib._sync()
-    with pytest.raises(LibraryError, match="already has a preset by that name"):
+    with pytest.raises(LibraryError, match="already has a patch by that name"):
         lib.move("A", "party/deep")
     assert (lib_dirs.loaded_patch / "a.json").is_file()              # nothing moved
 

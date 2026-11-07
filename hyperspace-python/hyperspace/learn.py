@@ -181,7 +181,7 @@ def blocked_words(name: str, why: str, verb: str = "map") -> str:
     if why == "invariant":
         return f"{name} is invariant (the meta controller's)"
     return (f"{name} is on the global layer (the meta controller's) — latch SHIFT off to "
-            f"{verb} into the preset")
+            f"{verb} into the patch")
 
 
 def _table_name(table: Bindings) -> str:
@@ -901,7 +901,7 @@ class Learn:
             (glyph(x.bare) if glyph is not None else None) or named(x)
             for x in gone if not x.overlaps(b)))
         under = table.under_node_mode(b)
-        self.said(f"learned {pid} ← {named(b)} (into the preset)"
+        self.said(f"learned {pid} ← {named(b)} (into the patch)"
                   + (f"; {', '.join(let_go)} let go" if let_go else "")
                   + ("; under node mode until that desk leaves its node" if under else ""))
         return True
@@ -1197,7 +1197,7 @@ class Learn:
             undo.push(f"learn {p.id}")               # one undo step (undo.py, plan 15)
             cur.when = when                          # the same axis again: no move
             self._mapped(cur)
-            self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
+            self.said(f"learned {p.id} ← {cur.describe()} (into the patch)")
             return
 
         def land() -> None:
@@ -1254,7 +1254,7 @@ class Learn:
         table.replace_owner(b)
         self._mapped(b)
         frm = ", ".join(dict.fromkeys(x.target for x in gone if x.target != b.target))
-        self.said(f"learned {b.target} ← {b.describe()} (into the preset"
+        self.said(f"learned {b.target} ← {b.describe()} (into the patch"
                   + (f"; moved from {frm})" if frm else ")"))
 
     # ---- unbind ----

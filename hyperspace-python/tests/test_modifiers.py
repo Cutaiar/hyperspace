@@ -493,7 +493,7 @@ def test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph(
     texts.clear()
     ids.clear()
     frame(panel)
-    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
+    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PATCH LAYER")
     assert "ROUTES" not in texts and "MODIFIERS" not in texts
     texts.clear()
     ids.clear()

@@ -278,7 +278,7 @@ class Output:
                        tip="Dims the whole finished picture — the scene, the effects "
                            "and the ghost hands alike: 0 black, 1 full. The APC40's "
                            "MASTER fader. Never saved; a launch starts "
-                           "at full and a preset load never moves it.", **settings)
+                           "at full and a patch load never moves it.", **settings)
         # the pre-split ids: views onto the params above, never saved or
         # driven. The factory table and apc40.py bind these (overlay.on /
         # .passthrough), so they are what the rows name
@@ -513,7 +513,7 @@ def register_switches(reg: Registry, slots) -> list[str]:
         reg.toggle(f"{pre}.scene", label("picture"), *flag("scene"), group="output",
                    tip=f"The picture wired into this window{whose} (GRAPH, OUTPUT). Off: "
                        "this window ignores the picture wired into it and shows its "
-                       "ground, the hands over. A mute, not the preset: a meta controller setting, "
+                       "ground, the hands over. A mute, not the patch: a meta controller setting, "
                        "the config's launch value comes back at a restart.", **settings)
         reg.toggle(f"{pre}.hands", label("hands"), *flag("hands"), group="output",
                    tip=f"The hands and the guide wired into this window{whose}. Off: "

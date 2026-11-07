@@ -255,7 +255,7 @@ GROUP = LOADABLE                   # the library folder, and the strip's group
 # plan 35 T7 (row 387): the new loadable patch — what the strip's `new` chip starts,
 # named until it is saved, and what it says
 UNTITLED_PATCH = "untitled"
-NEW_SAID = "new preset: default values, shape → scene → All outputs — a shape on every window"
+NEW_SAID = "new patch: default values, shape → scene → All outputs — a shape on every window"
 # plan 36 T3 (W3): a `/7` with no graph section, or an empty one — the strip says so
 NO_GRAPH_SAID = "no graph: nothing is wired — black until something is wired to an output"
 # … and one whose section is not a wired frame (no `"frame": "wired"`)
@@ -568,9 +568,9 @@ LAYOUT_KEY = "layout"
 # spawned from), never re-read; a group's position is its members'
 GROUPS_KEY = graphmigrate.GROUPS_KEY
 GROUP_NAME = "group {n}"
-GROUP_GONE = "group {name}: {node} is not in the preset — left out"
+GROUP_GONE = "group {name}: {node} is not in the patch — left out"
 GROUP_REFUSED = "group {name}: {why}"
-GROUP_EMPTY = "group {name}: nothing of it is in the preset — left out"
+GROUP_EMPTY = "group {name}: nothing of it is in the patch — left out"
 GROUP_TWICE = "group {name}: {node} is in group {other} already — left out"
 GROUP_BAD = "groups: an entry that is not a group, ignored"
 # the patch groups with no module presets: a macro's meaning is its
@@ -924,7 +924,7 @@ class LoadedPatch:
         meta controller's params stay. One undo step, named `untitled`, dirty and
         `unsaved` (R17) until it is saved."""
         lib, reg = self.lib, self.reg
-        undo.push_on(self.reg, "new preset", load=True)    # the load below joins this step
+        undo.push_on(self.reg, "new patch", load=True)    # the load below joins this step
         values = {k: v for k, v in lib._fresh_all().items()
                   if k in reg and reg[k].group in PATCH_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
@@ -1060,7 +1060,7 @@ class LoadedPatch:
             elif part_of(p) == "shared_meta":
                 notes.append(f"{pid} is the meta controller's, ignored")
             elif part_of(p) != "patch" or not p.persist:
-                notes.append(f"{pid} is not part of a preset, ignored")
+                notes.append(f"{pid} is not part of a patch, ignored")
             else:
                 values[pid] = v
         for pid, v in bmp_alpha.items():      # the file's own new id wins
@@ -1110,7 +1110,7 @@ class LoadedPatch:
             if isinstance(d, dict) and isinstance(d.get("id"), str):
                 mod_docs.append(d)
             else:
-                notes.append("dropped a modifier entry in the preset: not an object with an id")
+                notes.append("dropped a modifier entry in the patch: not an object with an id")
         mods: list[Modifier] = []
         for d in mod_docs:
             try:
@@ -1141,7 +1141,7 @@ class LoadedPatch:
         # the file parsed, nothing landed yet: one undo step for the whole
         # load, by whichever road it came (undo.py, plan 15 WP1) — with
         # what is loaded now, so undoing it puts the earlier name back too
-        undo.push_on(self.reg, f"load {doc.get('name') or (path.stem if path else 'preset')}",
+        undo.push_on(self.reg, f"load {doc.get('name') or (path.stem if path else 'patch')}",
                      load=True)
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
@@ -1181,7 +1181,7 @@ class LoadedPatch:
                 elif part_of(p) == "shared_meta":
                     notes.append(f"{pid} is the meta controller's, ignored")
                 elif part_of(p) != "patch" or not p.persist:
-                    notes.append(f"{pid} is not part of a preset, ignored")
+                    notes.append(f"{pid} is not part of a patch, ignored")
                 else:
                     values[pid] = v
             if late:
@@ -1296,7 +1296,7 @@ class LoadedPatch:
         # 7. the notes, for the panel
         self.notes = notes
         self.migrated = migrated            # plan 36 T3: the one-way migration's word
-        self._warn(str(doc.get("name") or (path.stem if path else "preset")))
+        self._warn(str(doc.get("name") or (path.stem if path else "patch")))
         return unknown
 
     def point_node_mode(self, player: int, controller: str, node: str) -> str | None:
@@ -1603,9 +1603,9 @@ class LoadedPatch:
         until it is saved."""
         if self.notes:
             more = f" (+{len(self.notes) - 1} more)" if len(self.notes) > 1 else ""
-            self.lib.say(warning=f"preset {name}: {self.notes[0]}{more}")
+            self.lib.say(warning=f"patch {name}: {self.notes[0]}{more}")
         elif getattr(self, "migrated", ""):
-            self.lib.say(warning=f"preset {name}: {self.migrated}")
+            self.lib.say(warning=f"patch {name}: {self.migrated}")
 
     def _landed(self, name: str | None) -> None:
         """The library's load hook: the bank lights the slot that names
@@ -1620,7 +1620,7 @@ class LoadedPatch:
             except Exception as e:  # noqa: BLE001 — a listener must not fail a load
                 # the library's warning line, never `note` (the loadable patch's own,
                 # saved back into the file)
-                self.lib.say(warning=f"preset listener: {type(e).__name__}: {e}"[:160])
+                self.lib.say(warning=f"patch listener: {type(e).__name__}: {e}"[:160])
 
 
 

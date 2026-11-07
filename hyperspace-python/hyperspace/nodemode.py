@@ -55,12 +55,12 @@ KEY = "node_mode"
 
 BAD_ENTRY = "node mode: an entry that is not a player, a controller and a node, ignored"
 TWICE = "node mode: player {player}'s {controller} points twice, kept {node}"
-NODE_GONE = "node mode: {node} is not in the preset, left out"
+NODE_GONE = "node mode: {node} is not in the patch, left out"
 
 NO_NODE = "select a node first"
 NO_PARAMS = "{node} has no params to point at"
 NO_FILLABLE = "{node} has no param a controller can fill"
-ONLY_META = "{node}'s params are the meta controller's: no row of a preset moves them"
+ONLY_META = "{node}'s params are the meta controller's: no row of a patch moves them"
 TOO_MANY = "{node} has too many params for this controller: {params}"
 
 

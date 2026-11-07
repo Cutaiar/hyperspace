@@ -1735,7 +1735,7 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
 # what a load says of a file naming a desk template (retired, plan 44 D3;
 # `loadable.TEMPLATE_RETIRED` is this)
 TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired (plan 44 D3) — "
-                    "this preset's own desk rows only")
+                    "this patch's own desk rows only")
 
 
 @dataclass(frozen=True)

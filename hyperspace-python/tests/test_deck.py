@@ -188,13 +188,13 @@ def _compare(old: list[dict], new: list[dict], *, exact: bool) -> None:
     for i, (a, b) in enumerate(zip(old, new, strict=True)):
         for key in ("table", "routes", "desk", "macros", "modifiers", "lfos", "envs",
                     "labels"):
-            assert a[key] == b[key], f"preset {i}: {key} differs"
+            assert a[key] == b[key], f"patch {i}: {key} differs"
         if exact:
-            assert a["snapshot"] == b["snapshot"], f"preset {i}: snapshot differs"
+            assert a["snapshot"] == b["snapshot"], f"patch {i}: snapshot differs"
         else:
             assert a["snapshot"].keys() == b["snapshot"].keys()
             for g in a["snapshot"]:
-                assert _alike(a["snapshot"][g], b["snapshot"][g]), f"preset {i}: {g} differs"
+                assert _alike(a["snapshot"][g], b["snapshot"][g]), f"patch {i}: {g} differs"
         assert len(a["states"]) == len(b["states"])
         assert all(_same_state(x, y) for x, y in zip(a["states"], b["states"], strict=True)), i
 

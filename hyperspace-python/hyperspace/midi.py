@@ -145,6 +145,7 @@ from .routing import (
     bindings_path,
     fine_gives_way,
     is_shared_meta_id,
+    layer_word,
     led_lit,
     led_shade,
     let_go_lost,
@@ -819,7 +820,7 @@ class MidiIO:
         if pressed:
             what = ("; ".join(did) if did
                     else "nothing (its row is off)" if rows
-                    else f"nothing (no row on the {layer} layer)")
+                    else f"nothing (no row on the {layer_word(layer)} layer)")
             self._log_press(source, what, layer)
         if timed and pressed:
             self._hold_state()[0][(ch, number)] = (self._now(), timed)

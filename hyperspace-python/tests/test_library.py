@@ -321,7 +321,7 @@ def test_delete_and_rename(rig, tmp_path):
     lib = rig.lib
     lib.save_as("camera", "Wide")
     assert lib.list("camera") == ["Wide"] and lib.current("camera") == "Wide"
-    with pytest.raises(LibraryError, match="only a preset can be renamed"):
+    with pytest.raises(LibraryError, match="only a loadable patch can be renamed"):
         lib.rename("camera", "Wide", "Tall")
     assert library.RENAMABLE == ("loadable", "patches")
     assert not lib.delete("band", "Percussive")             # no such loadable patch
@@ -534,7 +534,7 @@ def test_bad_files_are_reported_not_fatal(rig, tmp_path):
         lib.load("view", "F")
     with pytest.raises(LibraryError, match="a patch of the camera group, not a patch of the view"):
         lib.load("view", "O")
-    with pytest.raises(LibraryError, match="no preset"):
+    with pytest.raises(LibraryError, match="no patch"):
         lib.load("view", "nope")
 
 
@@ -851,8 +851,8 @@ def test_next_name_counts_on_from_a_trailing_number():
     assert nn("TRIP  7", set()) == "TRIP 8"                    # any whitespace before it is
     assert nn("ACID (2)", set()) == "ACID (2) 2"
     for none in (None, "", "   "):
-        assert nn(none, set()) == "PRESET 1"
-    assert nn(None, {"preset-1", "preset-2"}) == "PRESET 3"
+        assert nn(none, set()) == "PATCH 1"
+    assert nn(None, {"patch-1", "patch-2"}) == "PATCH 3"
     # `taken` is slugs: a name that differs only in case or punctuation is taken
     assert nn("Trip", {slug("TRIP 2")}) == "Trip 3"
     assert nn("TRIP", {"trip-2"}) != nn("TRIP", set())
@@ -1011,7 +1011,7 @@ def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     lib.poll()
     quit_(home)
     assert tree(home, but=quiet) == before
-    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v4"]
     # and a second launch finds the same, bindings.json and its backup too
     after = tree(home, but=quiet[:2])
     again = boot_home(home)
@@ -1062,9 +1062,9 @@ def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home)
     doc = json.loads(show.read_text())
     assert len(doc["bank"]) == 8 and doc["bank"][3] == "NIGHT THREE" and doc["bank"][6] is None
     r.reg["preset.save.6"].fire()                          # ⇧F7 into the hole
-    assert len(json.loads(show.read_text())["bank"]) == 8 and pr.bank[6] == "PRESET 7"
+    assert len(json.loads(show.read_text())["bank"]) == 8 and pr.bank[6] == "PATCH 7"
     # (the one backup in the home is bindings.json's, from the launch: plan 19 WP2)
-    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v4"]
     assert not pr.is_dirty() and pr.bank_error == ""
     assert lib.warning == ""
     # a far slot filled and cleared again: the file is back to eight entries
@@ -1119,21 +1119,21 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
         why = "party.json: not written — no backup of the eight-slot file could be made"
         pr.put_slot(9, "WAKE")                             # the slot menu
         assert pr.bank[9] is None and show.read_bytes() == old
-        assert pr.bank_error == f"presets: {why}"
+        assert pr.bank_error == f"patches: {why}"
         assert lib.warning == f"slot 10: not changed — {why}"
         assert lib.said["warning"] == said.get("warning", 0) + 1     # the footer shows it
         assert not pr.is_dirty()
         pr.save_slot(12)                                   # ⇧click on a far slot
         assert pr.bank[12] is None and show.read_bytes() == old
-        assert lib.current("loadable") == "PRESET 13" and pr.active == -1   # in no slot: none lit
-        assert "PRESET 13" in lib.list("loadable")          # the loadable patch is saved, and listed
-        assert lib.warning == f"saved PRESET 13 — slot 13 not changed — {why}"
+        assert lib.current("loadable") == "PATCH 13" and pr.active == -1   # in no slot: none lit
+        assert "PATCH 13" in lib.list("loadable")          # the loadable patch is saved, and listed
+        assert lib.warning == f"saved PATCH 13 — slot 13 not changed — {why}"
         assert r.reg["preset.save_new"].fire() is True     # the desk's save-as: F1–F8 are full
         name = lib.current("loadable")
         assert name in lib.list("loadable") and name not in pr.bank and pr.active == -1
         assert show.read_bytes() == old and not pr.is_dirty()
         assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
-                               f"preset list ({why})")
+                               f"patch list ({why})")
         # a write that keeps the bank at eight needs no backup, and goes through
         pr.put_slot(2, "NIGHT ONE")
         assert pr.bank[2] == "NIGHT ONE" and json.loads(show.read_text())["bank"][2] == "NIGHT ONE"
@@ -1328,7 +1328,7 @@ def test_rename_refuses_a_taken_name(owner_home):
                           ("NIGHT TWO", "night  one!", "taken"),
                           ("NIGHT TWO", "TRIP", "taken"),
                           ("NIGHT TWO", "party-trip", "taken"),
-                          ("GONE", "X", "no preset")):
+                          ("GONE", "X", "no patch")):
         with pytest.raises(LibraryError, match=why):
             lib.rename("loadable", old, new)
         assert tree(home) == before, (old, new)
@@ -1390,13 +1390,13 @@ def test_a_deleted_loadable_says_which_slots_still_name_it(owner_home):
     lib, pr = r.lib, r.lib.project
     show = (home / "installs" / "mine.json").read_bytes()
     assert lib.delete("loadable", "NIGHT ONE")                 # F1 and the startup loadable patch
-    assert lib.warning == ("NIGHT ONE is in the trash — F1 and the startup preset still name it; "
+    assert lib.warning == ("NIGHT ONE is in the trash — F1 and the startup patch still name it; "
                            "restore it from the trash, or clear the slot")
     assert pr.bank[0] == "NIGHT ONE" and pr.startup == "NIGHT ONE"
     assert (home / "installs" / "mine.json").read_bytes() == show
     pr.load("party", startup=False)                          # a show that names it nowhere
     assert lib.delete("loadable", "NIGHT THREE")
-    assert lib.status == "NIGHT THREE is in the trash — the PRESETS section's trash can restore it"
+    assert lib.status == "NIGHT THREE is in the trash — the PATCHES section's trash can restore it"
 
 
 def test_the_watcher_never_resurrects_or_reloads(owner_home):

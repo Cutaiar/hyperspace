@@ -680,7 +680,7 @@ CHEATSHEET = [
     ("F1–F8", "load off air · ⇧ saves"),
     ("B", "tap tempo · ⇧B LFO trigger"),
     ("Cmd+Z", "undo, after a change here · ⇧ redo (or Ctrl+Z)"),
-    ("Home", "home preset, off air (fn ←)"),
+    ("Home", "home patch, off air (fn ←)"),
     ("Cmd+R", "restart process"),
     ("Cmd+[ ]", "panel section back · forward"),
     ("H / ?", "panel / this sheet"),
@@ -688,7 +688,7 @@ CHEATSHEET = [
     ("G", "overlay: clicks through / back"),
     ("Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
-    ("pad A Y · B X", "faces · lines · points · screen strokes"),
+    ("pad S N · E W", "faces · lines · points · screen strokes"),
     ("pad BACK", "held: the base chase keeps what the sources moved"),
     ("LB / RB", "previous / next shape"),
     ("d-pad ↑ / ↓", "brightness"),
@@ -701,7 +701,7 @@ CHEATSHEET = [
     # the APC40 rows whose labels alone do not say it (2026-10-16)
     ("APC40 G7 G9 G10", "analyzer band (⇧ D knobs follow) · next transfer · reset"),
     ("APC40 clip pads", "load off air · hold an empty one: save"),
-    ("APC40 QUANT", "next bank preset, off air"),
+    ("APC40 QUANT", "next bank patch, off air"),
     ("APC40 STOP ALL", "reset the analyzer · again within 8 s: undo"),
     ("APC40 MASTER PAN", "overlay · click-through (if config allows)"),
 ]
@@ -2172,7 +2172,7 @@ class Panel:
             flush_right(imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
-                tooltip("the open show — the presets section")
+                tooltip("the open show — the patches section")
 
     # ---- pages ----
 
@@ -2520,7 +2520,7 @@ class Panel:
         imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
             tooltip(why or "the hands bent by the effects on this output (written "
-                              "into the preset's graph: a composite before the effects)")
+                              "into the patch's graph: a composite before the effects)")
         if changed:
             self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
 
@@ -2831,7 +2831,7 @@ class Panel:
                 tooltip(
                     "this machine's own files: config.toml, bindings.json, windows.json, "
                     "hands.json, last_show, logs" if text.startswith("machine:") else
-                    "presets and shows as JSON ([library] path, else $HYPERSPACE_HOME); "
+                    "patches and shows as JSON ([library] path, else $HYPERSPACE_HOME); "
                     "edit a file and the app follows")
 
     def gpu_lines(self) -> list[str]:

@@ -481,7 +481,7 @@ def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     rows[0].motion = None                             # off here: the arithmetic is under test
     assert app.table.owner("view.inst_amp") is rows[0]
     assert app.learn.last == ("learned view.inst_amp ← hand right.pitch pushes +0.25 "
-                              "(into the preset)")
+                              "(into the patch)")
     # the hand pushes about the base — in floats, off its 100 detents —
     # through the Router like every route; the base is what the panel set
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=app.learn, router=app.router)

@@ -78,7 +78,7 @@ IDLE = {
     "mix 0": ("its mix is at 0", None, None, None),       # its fader is the next row
 }
 # one line at the page's width (plan 20 WP2: it wrapped to two by 2 px)
-RESET_NOTE = "a preset load resets these: save a preset to keep them"
+RESET_NOTE = "a patch load resets these: save a patch to keep them"
 
 
 def groups(spec) -> list[tuple[str, list[str]]]:

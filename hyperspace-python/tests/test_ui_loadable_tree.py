@@ -148,7 +148,7 @@ def test_the_no_loadables_hint_shows_while_only_empty_folders_are_there(rig):  #
         _page(panel)
     finally:
         imgui.text_disabled = real
-    assert "no presets — new, then save as… makes one" in got
+    assert "no patches — new, then save as… makes one" in got
     assert ("ambient", True) in ui_loadable._state(panel)["page"]["folders"]
 
 

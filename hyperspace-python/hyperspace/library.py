@@ -255,9 +255,9 @@ PROJECTS = "projects"
 LAST_SHOW = "last_show"             # <home>/last_show: read once, into LAST_INSTALL
 UNTITLED = "untitled"
 # the tail of save-as's note on a full bank (`Project.save_new`)
-BANK_FULL = "the bank is full: it is in the preset list"
+BANK_FULL = "the bank is full: it is in the patch list"
 # what `Project.home` says when the show names no startup loadable patch (plan 15 WP2)
-HOME_UNSET = "home: this show names no startup preset"
+HOME_UNSET = "home: this show names no startup patch"
 # plan 28 N2: where the GRAPH page's nodes sit, ``{"<node id>": [x, y]}`` —
 # a show's own key for the meta controller's nodes (devices, the analyzer, the LFOs,
 # the outputs), a loadable patch's (loadable.LAYOUT_KEY) for the look's. No key: every
@@ -449,7 +449,7 @@ def path_slug(name: str) -> str:
     folder, _, leaf = name.rpartition("/")
     parts = [s.strip() for s in folder.split("/")] if "/" in name else []
     if any(not s or s.startswith(".") for s in parts):
-        raise LibraryError(f"{name}: not a preset name — a folder may not be empty, "
+        raise LibraryError(f"{name}: not a patch name — a folder may not be empty, "
                            "hidden or '..'")
     return "/".join([*parts, slug(leaf)])
 
@@ -503,7 +503,7 @@ def next_name(base: str | None, taken: set[str], *, key=None) -> str:
     key = key or slug
     base = (base or "").strip()
     if not base:
-        stem, n = "PRESET", 1
+        stem, n = "PATCH", 1
     else:
         m = re.fullmatch(r"(.*\S)\s+(\d+)", base, re.DOTALL)
         stem, n = (m.group(1), int(m.group(2)) + 1) if m else (base, 2)
@@ -1239,7 +1239,7 @@ class Project:
                 f" (or ⇧{key})" if k < F_KEYS else "") + " to save the live state into it")
             return None
         if loaded_patch is None or lib.path_of(LOADABLE, name, loose=True) is None:
-            lib.say(warning=f"{key}: no preset {name!r}")
+            lib.say(warning=f"{key}: no patch {name!r}")
             return None
         try:
             loaded_patch.load(name)
@@ -1260,14 +1260,14 @@ class Project:
         if not 0 <= k < len(self.bank) or self.lib.reg is None:
             return
         if loaded_patch is None:
-            self.bank_error = "presets: no preset loader"
+            self.bank_error = "patches: no patch loader"
             return
         was = self.bank[k]
         name = was or self._fresh_name(k)
         try:
             loaded_patch.save_as(name)
         except LibraryError as e:                     # a full disk must not stop the show
-            self.bank_error = f"presets: {e}"
+            self.bank_error = f"patches: {e}"
             return
         self.bank[k] = name
         self.active = k
@@ -1284,7 +1284,7 @@ class Project:
         """``PRESET <k+1>``, made unique against every loadable patch there is."""
         taken = ({slug(n) for n in self.lib.list(LOADABLE)}
                  | {slug(n) for n in self.bank if n})
-        base = name = f"PRESET {k + 1}"
+        base = name = f"PATCH {k + 1}"
         n = 1
         while slug(name) in taken:
             n += 1
@@ -1345,7 +1345,7 @@ class Project:
         if lib.reg is None:
             return False
         if loaded_patch is None:
-            self.bank_error = "presets: no preset loader"
+            self.bank_error = "patches: no patch loader"
             return False
         # stems as slugs: on a filesystem that folds case, `Trip-2.json`
         # is the file a save of "TRIP 2" would write over. Plan 48 row 587:
@@ -1359,7 +1359,7 @@ class Project:
         try:
             loaded_patch.save_as(name)
         except (LibraryError, OSError) as e:          # a full disk must not stop the show
-            self.bank_error = f"presets: {e}"
+            self.bank_error = f"patches: {e}"
             return False
         self.bank_error = ""
         k = self.next_empty() if at is None else at
@@ -1376,15 +1376,15 @@ class Project:
             # it: the bank stays as the show's file has it, and it is said
             self.bank[k] = was
             self.active = -1
-            self.bank_error = f"presets: {e}"
+            self.bank_error = f"patches: {e}"
             lib.say(warning=f"saved {name} — the show could not be written: it is in "
-                            f"the preset list ({e})")
+                            f"the patch list ({e})")
             # `save_new` saved what it was asked to (the list has it); a
             # save into slot `at` did not land there — False, so the desk
             # blinks nothing over a slot that still names the old loadable patch
             return at is None
         self._room()
-        kept = f" ({was} is still in the preset list)" if was is not None else ""
+        kept = f" ({was} is still in the patch list)" if was is not None else ""
         lib.say(f"saved {name} → {slot_key(k)}{kept}")
         return True
 
@@ -1395,7 +1395,7 @@ class Project:
         if not 0 <= k < len(self.bank):
             return
         if self.lib.path_of(LOADABLE, name, loose=True) is None:
-            self.lib.say(warning=f"{slot_key(k)}: no preset {name!r}")
+            self.lib.say(warning=f"{slot_key(k)}: no patch {name!r}")
             return
         self._set_slot(k, name, f"{slot_key(k)}: {name}")
 
@@ -1404,7 +1404,7 @@ class Project:
         stays in the list."""
         if 0 <= k < len(self.bank) and self.bank[k] is not None:
             self._set_slot(k, None, f"{slot_key(k)}: cleared — {self.bank[k]} is still in "
-                                    "the preset list")
+                                    "the patch list")
 
     def _set_slot(self, k: int, name: str | None, said: str) -> None:
         """One slot's pointer, written into the show now; `active` follows
@@ -1427,7 +1427,7 @@ class Project:
     def _refused(self, what: str, e: Exception) -> None:
         """A bank change the show's file could not take: the reason under
         the bank (`bank_error`) and on the footer (`Library.say`)."""
-        self.bank_error = f"presets: {e}"
+        self.bank_error = f"patches: {e}"
         self.lib.say(warning=f"{what} — {e}")
 
     def _room(self) -> None:
@@ -1476,7 +1476,7 @@ class Project:
         if loaded_patch is None or not name:
             return None
         if lib.path_of(LOADABLE, name, loose=True) is None:
-            lib.say(warning=f"startup: no preset {name!r}")
+            lib.say(warning=f"startup: no patch {name!r}")
             return None
         try:
             loaded_patch.load(name)
@@ -2507,7 +2507,7 @@ class Library:
             if len(found) == 1:
                 return found[0]
             if found and say is not None:
-                say(f"{name}: two presets answer to that name — "
+                say(f"{name}: two patches answer to that name — "
                     f"{found[0].name} and {found[1].name}; rename one")
             return None
 
@@ -2552,13 +2552,13 @@ class Library:
                                     and self._resolve(LOADABLE, n, snap, loose=True) == target))
         out = [slot_key(k) for k, n in enumerate(pr.bank) if names(n)]
         if names(pr.startup):
-            out.append("the startup preset")
+            out.append("the startup patch")
         return out
 
     def read(self, group: str, name: str) -> dict:
         path = self.path_of(group, name, loose=True)
         if path is None:
-            raise LibraryError(f"{group_word(group)}: no preset {name!r}")
+            raise LibraryError(f"{group_word(group)}: no patch {name!r}")
         doc = copy.deepcopy(self._doc(path))
         kind = self._kinds.get(group)
         if kind is not None:                       # its own format: checked, not lifted
@@ -2583,7 +2583,7 @@ class Library:
                 and patchdoc.GROUP_KEY not in doc):
             doc[patchdoc.GROUP_KEY] = group
         if patchdoc.GROUP_KEY not in doc:
-            what = ("a whole preset" if patchdoc.shape_of(doc) == patchdoc.LOADABLE_SHAPE
+            what = ("a whole loadable patch" if patchdoc.shape_of(doc) == patchdoc.LOADABLE_SHAPE
                     else "a canvas patch" if str(doc.get("schema", "")).startswith(
                         f"{patchdoc.KIND}/") else f"schema {doc.get('schema')!r}")
             raise LibraryError(NOT_GROUP_WORDS.format(file=path.name, what=what,
@@ -2937,7 +2937,7 @@ class Library:
             # on disk (review: `Party/NEW` into an existing `party/`)
             folder, leaf = self.folder_of(group, name)
             if not leaf.strip():                        # "party/", "party/   "
-                raise LibraryError("a preset needs a name")
+                raise LibraryError("a patch needs a name")
             if path is not None:
                 raw = self._name_of(path)
                 if raw != harmless(raw):
@@ -3032,7 +3032,7 @@ class Library:
                                  f"name{'s' if len(still) == 1 else ''} it; restore it from "
                                  "the trash, or clear the slot")
             else:
-                self.say(f"{shown} is in the trash — the PRESETS section's trash can restore it")
+                self.say(f"{shown} is in the trash — the PATCHES section's trash can restore it")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:
@@ -3075,12 +3075,12 @@ class Library:
         # plan 40 T1: a patch renames the same way, less step 5 (no show
         # names a patch; a group's provenance slug is the loadable patch's to keep)
         if group not in RENAMABLE:
-            raise LibraryError(f"{group_word(group)}: only a preset can be renamed (or a patch)")
+            raise LibraryError(f"{group_word(group)}: only a loadable patch can be renamed (or a patch)")
         snap = self._lookup(group)                 # one look for the whole rename
         idx, files = snap[0], snap[1]
         path = self._resolve(group, old, snap, loose=False)
         if path is None:
-            raise LibraryError(f"no preset {old!r}")
+            raise LibraryError(f"no patch {old!r}")
         new = (new or "").strip()
         # plan 48 row 584: a rename keeps the folder — `new` is the leaf
         # (the folder may be spelled in front of it, as the list spells it);
@@ -3091,7 +3091,7 @@ class Library:
             raise LibraryError(f"{new}: a rename keeps the folder — a name has no '/' "
                                "(the row's right-click: move to ▸)")
         if not leaf:
-            raise LibraryError("a preset needs a name")
+            raise LibraryError("a patch needs a name")
         new = pre + leaf
         stem = path.name[:-5]
         if new == old:
@@ -3292,7 +3292,7 @@ class Library:
             raise LibraryError("a folder's name may not hold a control character")
         if name.lower().endswith(".json"):
             raise LibraryError(f"{name}: a folder's name may not end in '.json' "
-                               "(it would read as a preset)")
+                               "(it would read as a patch)")
         if "/" in name:
             raise LibraryError(f"{name}: a folder's name has no '/' — make it inside "
                                "the folder it belongs in")
@@ -3307,7 +3307,7 @@ class Library:
         folder = (folder or "").strip().strip("/")
         on_disk = self._folder_on_disk(folder)
         if on_disk is None:
-            raise LibraryError(f"no folder {folder!r} under presets/")
+            raise LibraryError(f"no folder {folder!r} under loadable/")
         return on_disk
 
     def move(self, name: str, folder: str) -> Path:
@@ -3326,7 +3326,7 @@ class Library:
         snap = self._lookup(LOADABLE)
         path = self._resolve(LOADABLE, name, snap, loose=False)
         if path is None:
-            raise LibraryError(f"no preset {name!r}")
+            raise LibraryError(f"no patch {name!r}")
         folder = self._existing_folder(folder)
         if fold_folder(self._prefix(LOADABLE, path)[:-1]) == fold_folder(folder):
             return path
@@ -3338,7 +3338,7 @@ class Library:
         taken = ({self._fold(LOADABLE, s) for s, p in files.items() if p != path}
                  | {self._fold(LOADABLE, n) for n, p in idx.items() if p != path})
         if self._fold(LOADABLE, new) in taken or dst.exists():
-            raise LibraryError(f"{leaf}: {folder or 'the top level'} already has a preset "
+            raise LibraryError(f"{leaf}: {folder or 'the top level'} already has a patch "
                                "by that name — rename one first")
         _move_file(path, dst)
         self._sync(path, dst)
@@ -3898,7 +3898,7 @@ class DeckProject(DeckProjectSlots, Project):
             Project.cycle(where, step)        # (its `load_slot` says what loaded)
 
     def walk(self, step: int = 1) -> str | None:
-        where = self._landing("the preset list")
+        where = self._landing("the patch list")
         if where is None:
             return None
         name = Project.walk(where, step)

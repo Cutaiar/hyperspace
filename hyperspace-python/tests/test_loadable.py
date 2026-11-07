@@ -234,7 +234,7 @@ def test_meta_ids_in_a_loadable_are_noted_and_ignored(rig):
     assert "1 unknown id(s): nebula.glow" in notes
     assert "dropped key:X → view.faces (toggle): not a performer row" in notes
     assert any(n.startswith("dropped hand:8 → view.bright") for n in notes)
-    assert rig.lib.warning.startswith("preset NOISY: ")
+    assert rig.lib.warning.startswith("patch NOISY: ")
     assert rig.view.shape == 6 and [b.source for b in rig.router.table.routes()] == ["hand:7"]
 
 
@@ -355,7 +355,7 @@ def test_a_slot_names_a_loadable_file(rig):
     reg["preset.load.5"].fire()
     assert lib.warning.startswith("F6: an empty slot")
     reg["preset.load.3"].fire()
-    assert lib.warning == "F4: no preset 'NOPE'"
+    assert lib.warning == "F4: no patch 'NOPE'"
     assert reg.snapshot() == snap and [b.to_json() for b in rig.router.table.routes()] == routes
     assert pr.active == 1 and lib.current("loadable") == "EMBER ORBIT"
 
@@ -399,12 +399,12 @@ def test_shift_f_saves_the_live_state_as_the_slots_loadable(rig):
     assert doc["schema"] == "hyperspace.install/1"   # (plan 44 D3)
     assert doc["bank"] == pr.bank[:F_KEYS] == bank_doc(pr.bank)     # eight in the file
     # an empty slot: a new name, made unique against what is there
-    put(home, "PRESET 8")
+    put(home, "PATCH 8")
     pr.bank[6] = pr.bank[7] = None
     reg["preset.save.6"].fire()
     reg["preset.save.7"].fire()
-    assert pr.bank[6] == "PRESET 7" and pr.bank[7] == "PRESET 8 (2)"
-    assert (home / "loadable" / "preset-7.json").is_file()
+    assert pr.bank[6] == "PATCH 7" and pr.bank[7] == "PATCH 8 (2)"
+    assert (home / "loadable" / "patch-7.json").is_file()
     assert (json.loads((home / "installs" / "house.json").read_text())["bank"]
             == bank_doc(pr.bank))
     assert not pr.is_dirty() and pr.bank_error == ""
@@ -431,7 +431,7 @@ def test_the_startup_loadable_loads_on_launch(tmp_path):
     doc["startup"] = "GONE"
     (tmp_path / "installs" / "house.json").write_text(json.dumps(doc))
     r2 = boot(tmp_path)
-    assert r2.lib.warning == "startup: no preset 'GONE'"
+    assert r2.lib.warning == "startup: no patch 'GONE'"
     assert r2.lib.current("loadable") is None and r2.lib.project.active == -1
     r2.reg["preset.load.2"].fire()                          # and the bank still works
     assert r2.lib.current("loadable") == "STROBE CAGE"
@@ -469,7 +469,7 @@ def test_home_loads_what_the_show_starts_on(rig):
     # a "starts on" whose file is gone says so, as a launch does, and loads nothing
     proj.startup = "GONE"
     home.fire()
-    assert lib.warning == "startup: no preset 'GONE'"
+    assert lib.warning == "startup: no patch 'GONE'"
     assert lib.current("loadable") == "STROBE CAGE"
 
 
@@ -481,7 +481,7 @@ def test_home_with_no_starts_on_says_so_and_loads_nothing(rig):
     proj.startup = None
     assert reg["preset.home"].get() is False                           # dark: nothing to go to
     reg["preset.home"].fire()
-    assert lib.warning == "home: this show names no startup preset"
+    assert lib.warning == "home: this show names no startup patch"
     assert lib.current("loadable") == "STROBE CAGE" and lib.is_dirty("loadable")
     assert reg.snapshot(part="patch") == before and proj.active == 2
     proj.startup = "BIG BLUE WAVE"                                     # picked: home goes there,
@@ -768,8 +768,8 @@ def test_a_load_tells_the_listeners_its_name(rig):
     name = rig.lib.list("loadable")[0]
     assert rig.loaded_patch.load(name) == []
     assert heard == [rig.lib.current("loadable")]
-    assert rig.lib.warning.startswith("preset listener: ZeroDivisionError")
-    assert not rig.loaded_patch.note.startswith("preset listener")   # the loadable patch's own note
+    assert rig.lib.warning.startswith("patch listener: ZeroDivisionError")
+    assert not rig.loaded_patch.note.startswith("patch listener")   # the loadable patch's own note
 
 
 # ------------------------------------------- plan 15 WP4: save-as from the desk
@@ -846,9 +846,9 @@ def test_save_new_never_overwrites(tmp_path):
     # no loadable patch loaded at all: PRESET 1, then PRESET 2
     lib._landed("loadable", None, None)
     reg["preset.save_new"].fire()
-    assert lib.current("loadable") == "PRESET 1"
+    assert lib.current("loadable") == "PATCH 1"
     reg["preset.save_new"].fire()
-    assert lib.current("loadable") == "PRESET 2"
+    assert lib.current("loadable") == "PATCH 2"
 
 
 def test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_loadable(tmp_path):
@@ -899,14 +899,14 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     assert pr.next_empty() is None
     shows = sorted(p.name for p in (home / "installs").iterdir())
     reg["preset.save_new"].fire()
-    assert lib.warning == "saved TRIP 2 — the bank is full: it is in the preset list"
+    assert lib.warning == "saved TRIP 2 — the bank is full: it is in the patch list"
     assert pr.bank == bank and sorted(p.name for p in (home / "installs").iterdir()) == shows
     assert "TRIP 2" in lib.list("loadable") and lib.current("loadable") == "TRIP 2"
     assert pr.active == -1 and reg["preset.select"].value == -1
     assert not lib.is_dirty("loadable") and not pr.is_dirty()
     said = dict(lib.said)
     reg["preset.save_new"].fire()
-    assert lib.warning == "saved TRIP 3 — the bank is full: it is in the preset list"
+    assert lib.warning == "saved TRIP 3 — the bank is full: it is in the patch list"
     assert lib.said["warning"] == said["warning"] + 1
     # room made: the next save lands in it, and the old warning goes
     pr.clear_slot(2)
@@ -935,7 +935,7 @@ def test_save_new_on_a_full_bank_saves_to_the_list_and_says_so(tmp_path):
     assert "disk full" in pr.bank_error and not pr.is_dirty()
     # the footer says why (plan 19 WP1: a show that cannot be backed up says so here)
     assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
-                           "preset list (disk full)")
+                           "patch list (disk full)")
     reg["preset.save_new"].fire()                            # the disk is back: F4, and no error
     assert pr.bank[3] == lib.current("loadable") and pr.bank_error == ""
 
@@ -982,7 +982,7 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     assert pr.bank[5] is None and json.loads(show.read_text())["bank"][5] is None
     assert json.loads(show.read_text())["bank"] == bank_doc(pr.bank)
     assert not pr.is_dirty()                                # written
-    assert lib.status == "F6: cleared — ACID is still in the preset list"
+    assert lib.status == "F6: cleared — ACID is still in the patch list"
     assert "ACID" in lib.list("loadable")
     pr.put_slot(5, "MINE")
     assert pr.bank[5] == "MINE" and json.loads(show.read_text())["bank"][5] == "MINE"
@@ -1011,7 +1011,7 @@ def test_put_and_clear_slot_write_the_show_and_delete_no_file(tmp_path):
     # a name with no file, a slot that is not there, an empty slot: nothing changes
     before, bank = show.read_text(), list(pr.bank)
     pr.put_slot(1, "NOPE")
-    assert lib.warning == "F2: no preset 'NOPE'" and pr.bank == bank
+    assert lib.warning == "F2: no patch 'NOPE'" and pr.bank == bank
     pr.put_slot(len(pr.bank), "WAKE")
     pr.clear_slot(-1)
     pr.clear_slot(5)
@@ -1094,7 +1094,7 @@ def test_save_new_lands_past_the_f_keys_and_a_full_bank_says_so(tmp_path):
     assert all(reg["preset.select"].has(k) for k in range(SLOTS))
     bank = list(pr.bank)
     assert reg["preset.save_new"].fire() is True
-    assert lib.warning == "saved TRIP 17 — the bank is full: it is in the preset list"
+    assert lib.warning == "saved TRIP 17 — the bank is full: it is in the patch list"
     assert pr.bank == bank and "TRIP 17" in lib.list("loadable") and pr.active == -1
     assert not list(home.rglob("*.bak-*")) and not pr.is_dirty()
 
@@ -1205,7 +1205,7 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
             "invariant, the meta controller's (plan 13 D6)")
     assert lib.current("loadable") == "NIGHT TWO"
     assert loaded_patch.desk_notes == [said] and loaded_patch.notes == [said]
-    assert lib.warning == f"preset NIGHT TWO: {said}"       # one note: no "(+15 more)"
+    assert lib.warning == f"patch NIGHT TWO: {said}"       # one note: no "(+15 more)"
     assert _on_bank_rows(table.desk()) == []
     knob = loadable.device_knob(*OWNER_KNOB)
     assert [(b.source, b.target) for b in table.desk() if b.source == knob.source] \
@@ -1326,7 +1326,7 @@ def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
     assert table.owner("view.inst_amp").source == "hand:right.y"
     notes = rig.loaded_patch.notes
     assert ("dropped hand:right.x → ghost.mirror: ghost.mirror is the meta controller's, "
-            "tuned before the show; no preset row may drive it") in notes     # (row 743)
+            "tuned before the show; no patch row may drive it") in notes     # (row 743)
     assert "dropped hand:left.roll → ghost.guide: not modulatable" in notes
     assert "dropped lfo:0 → ghost.tethers: not modulatable" in notes
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
@@ -1453,7 +1453,7 @@ def test_a_new_loadable_undoes_in_one_step(rig):
         before = rig.reg.snapshot(part="patch")
         loaded = rig.lib.current("loadable")
         rig.loaded_patch.new()
-        assert u.stack[-1].label == "new preset"
+        assert u.stack[-1].label == "new patch"
         assert u.undo()
     finally:
         undo.install(None)

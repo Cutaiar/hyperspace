@@ -389,7 +389,7 @@ class Wiring:
 # outputs, nothing wired, black. There is no other fallback.
 EMPTY = Wiring(wired=True)
 UNWIRED_WIRING = ("an unwired Wiring is the words before the wired frame (plan 35): an old "
-                  "preset's — wire it by the one-way migration (graphmigrate.wired_wiring)")
+                  "patch's — wire it by the one-way migration (graphmigrate.wired_wiring)")
 
 
 # ---------------------------------------------------------------- the loadable patch's graph

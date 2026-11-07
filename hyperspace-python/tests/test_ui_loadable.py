@@ -31,7 +31,7 @@ from hyperspace.ui import PAGE_KEYS
 
 ACID_WASH = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
 # what the page must never say (the owner, 2026-10-28): whole words, lower case
-BANNED = r"\b(starts on|f[1-8]|hidden|factory|slots?|project|startup|module presets?)\b"
+BANNED = r"\b(starts on|f[1-8]|hidden|factory|slots?|project|startup|module patches?)\b"
 
 
 def _overlap(a, b) -> bool:
@@ -165,7 +165,7 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     _click(panel, page["rects"]["×.DIAL"])
     assert not (tmp_path / "loadable" / "dial.json").exists()
     assert [t.name for t in lib.trash()] == ["DIAL"] and "DIAL" not in lib.list("loadable")
-    assert lib.status == "DIAL is in the trash — the PRESETS section's trash can restore it"
+    assert lib.status == "DIAL is in the trash — the PATCHES section's trash can restore it"
     page_frame(panel)
     page = st["page"]
     assert "DIAL" not in [n for n, _ in page["rows"]] and len(page["rows"]) == 24
@@ -360,7 +360,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
                 "strip.loadable.as", "show.name"):
         assert rects[key][1] == clean[key][1] and rects[key][3] == clean[key][3], key
     _click(panel, rects["strip.loadable.save"])
-    assert not lib.is_dirty("loadable") and lib.status == "loadable: saved BIG BLUE WAVE"
+    assert not lib.is_dirty("loadable") and lib.status == "patch: saved BIG BLUE WAVE"
     assert [t.name for t in lib.trash()] == ["BIG BLUE WAVE"]      # the old text, kept
     page_frame(panel)
     assert "strip.loadable.dot" not in st["rects"]
@@ -368,7 +368,7 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
     # nothing loaded: "save", disabled, and the hover says what as… does
     lib.reland("loadable", (None, None, None))
     assert ui_loadable.save_label(lib, "loadable") == "save"
-    assert ui_loadable.save_tip(lib, "loadable").startswith("No preset loaded")
+    assert ui_loadable.save_tip(lib, "loadable").startswith("No patch loaded")
 
 
 def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa: F811
@@ -528,7 +528,7 @@ def test_the_routing_head_draws_save_and_as_over_the_loadables(rig):  # noqa: F8
     page_frame(panel)
     assert st["save"]["head"] == ("save", True) and "head.dot" in st["rects"]
     _click(panel, st["rects"]["head.save"])
-    assert not lib.is_dirty("loadable") and lib.status == "loadable: saved BIG BLUE WAVE"
+    assert not lib.is_dirty("loadable") and lib.status == "patch: saved BIG BLUE WAVE"
     page_frame(panel)
     assert st["save"]["head"] == ("save", False) and "head.dot" not in st["rects"]
     ui_loadable._begin_naming(panel, ui_routing.NAMING, "Mine")
@@ -550,7 +550,7 @@ def _trash_view(panel):
 
 def test_old_trash_rows_say_so_and_nothing_to_empty_draws_no_chip(rig, monkeypatch):  # noqa: F811
     """Plan 48 review: a row from the library's old trash carries
-    "loadable · library" in itself; when only such rows are listed there is
+    "patch · library" in itself; when only such rows are listed there is
     nothing "empty" would remove, so no chip to arm."""
     from hyperspace.library import Trashed
     panel, lib = rig.panel, rig.lib
@@ -561,7 +561,7 @@ def test_old_trash_rows_say_so_and_nothing_to_empty_draws_no_chip(rig, monkeypat
     ui_loadable.invalidate(panel, "loadable")
     _st, view = _trash_view(panel)
     assert view["rows"] == [("loadable", "GONE", "Oct 1 12:00")]
-    assert view["tags"] == ["loadable · library"] and view["old"] == 1
+    assert view["tags"] == ["patch · library"] and view["old"] == 1
     assert view["empty"] is None and "empty" not in view["rects"]
 
 
@@ -815,7 +815,7 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     assert panel._message() == ("", False)
     proj.clear_slot(5)
     said = lib.status
-    assert said == "F6: cleared — ACID is still in the preset list"
+    assert said == "F6: cleared — ACID is still in the patch list"
     assert panel._message() == (said, False)
     clock[0] += ui.MESSAGE_S + 1
     assert panel._message() == ("", False)                    # …and it goes
@@ -825,7 +825,7 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     # a warning said again shows again, and an old warning is not dragged
     # back by a later status
     clock[0] += ui.MESSAGE_S + 1
-    lib.say(warning="saved TRIP 9 — the bank is full: it is in the preset list")
+    lib.say(warning="saved TRIP 9 — the bank is full: it is in the patch list")
     assert panel._message() == (lib.warning, True)
     clock[0] += ui.MESSAGE_S + 1
     lib.say(warning=lib.warning)
@@ -871,7 +871,7 @@ def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
         clock[0] += ui.MESSAGE_S + 1
         assert panel._message() == ("", False)
         reg["preset.load.3"].fire()
-        assert panel._message() == ("F4: no preset 'GONE'", True)
+        assert panel._message() == ("F4: no patch 'GONE'", True)
     for _ in range(2):                                        # a status as well
         clock[0] += ui.MESSAGE_S + 1
         assert panel._message() == ("", False)

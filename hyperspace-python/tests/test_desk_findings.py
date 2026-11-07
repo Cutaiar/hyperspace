@@ -140,7 +140,8 @@ def test_the_owners_file_holds_the_factory_meta_rows_and_nothing_else():
     own = json.loads(OWNER.read_text())["bindings"]
     # (the file as a load moves it: plan 44 D5d's crossfader and MASTER)
     own = [b.to_json() | {"op": b.op, "value": b.value, "layer": b.layer}
-           for b in routing.remap_factory(routing.Binding.from_json(r) for r in own)[0]]
+           for b in routing.remap_factory(routing.old_words(
+               [routing.Binding.from_json(r) for r in own])[0])[0]]
 
     def key(r):
         return (r["source"], r["target"], r.get("op"), float(r.get("value", 1.0)),
@@ -251,12 +252,12 @@ def test_the_diagram_says_what_the_band_rows_and_the_corner_do(rig):
     fn = reg["band.0.fn"]
     assert text(reg, Binding("note:0:49", "band.0.fn", "toggle")) == \
         f"{fn.label}: {fn.text()} · next"
-    assert text(reg, Binding("note:0:80", "overlay.on", "toggle")) == "Overlay (if config allows)"
-    assert text(reg, Binding("note:0:87", "overlay.passthrough", "toggle")) == \
+    assert text(reg, Binding("note:0:80", "output.overlay", "toggle")) == "Overlay (if config allows)"
+    assert text(reg, Binding("note:0:87", "output.passthrough", "toggle")) == \
         "Click-through (overlay)"
     assert text(reg, Binding("note:0:81", "scene.reset_all", "toggle")) == \
         "Reset analyzer (again: undo)"
-    assert text(reg, Binding("note:0:63", "preset.next", "toggle")) == "Next bank preset"
+    assert text(reg, Binding("note:0:63", "preset.next", "toggle")) == "Next bank patch"
 
 
 def test_a_revealing_press_is_finished_so_the_next_press_is_no_second_sign(tmp_path):

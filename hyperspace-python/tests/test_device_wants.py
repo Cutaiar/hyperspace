@@ -175,8 +175,8 @@ def test_the_chip_and_the_system_lines():
     ws = devices.wants(t, rig_of(DESK))
     assert devices.missing_chip(ws) == "2 devices missing"
     assert ui.wanted_lines(rig_of(DESK), t) == [
-        "wanted by the preset: leap — not set up on this Mac; 3 rows wait",
-        "wanted by the preset: apc40 — lost; 1 control wait"]
+        "wanted by the patch: leap — not set up on this Mac; 3 rows wait",
+        "wanted by the patch: apc40 — lost; 1 control wait"]
     assert devices.missing_chip(devices.wants(table_of(HAND_ROWS[0]), rig_of(DESK))) == \
         "1 device missing"
     # nothing when all are there, nothing when the loadable patch wants nothing
@@ -216,8 +216,8 @@ def test_the_chip_draws_on_the_graph_head_the_loadable_strip_and_system(shell_ri
     ui_frame(p, "loadable")
     assert "2 devices missing##wants" in seen
     ui_frame(p, "system")
-    assert "wanted by the preset: leap — not set up on this Mac; 1 row wait" in texts
-    assert any(t.startswith("wanted by the preset: apc40 — lost; ") for t in texts)
+    assert "wanted by the patch: leap — not set up on this Mac; 1 row wait" in texts
+    assert any(t.startswith("wanted by the patch: apc40 — lost; ") for t in texts)
 
 
 def test_the_wants_are_asked_once_a_frame_for_every_place_that_shows_them(shell_rig,  # noqa: F811

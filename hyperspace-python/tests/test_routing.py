@@ -1722,7 +1722,7 @@ def test_a_theme_row_in_an_old_bindings_file_is_remapped_to_the_loadable_bank(tm
     assert [b.target for b in t.bindings if b.source == f"note:2:{apc40.N_CLIP[0]}"] \
         == ["preset.select"]
     assert not any(b.target.startswith("theme.") for b in t.bindings)
-    assert "remapped key:F3: theme.load.2 → preset.load.2 (the preset bank of plan 13)" in err
+    assert "remapped key:F3: theme.load.2 → preset.load.2 (the patch bank of plan 13)" in err
     n = len(t.notes)
     # F-keys, clip row, QUANT, pad B (straight onto the newest layout's
     # points, PAD_REMAP), the user's — and clip rows 4 and 5,

@@ -49,9 +49,9 @@ class StandInMeta:
 
         def load(name):
             if name in self.gone:
-                raise LibraryError(f"loadable: no preset {name!r}")
+                raise LibraryError(f"patch: no patch {name!r}")
             if name in self.broken:
-                raise LibraryError(f"{name}.json is not a preset")
+                raise LibraryError(f"{name}.json is not a patch")
             deck.loads.append(name)
 
         deck.loaded_patch = NS(load=load)
@@ -323,7 +323,7 @@ def test_a_missing_patch_is_skipped_and_said_and_the_next_plays():
     p.play()
     p.tick(0.0)
     assert meta.off_air.loads == ["b"]
-    assert any("skipped gone: loadable: no preset 'gone'" in w for w in lib.warnings)
+    assert any("skipped gone: patch: no patch 'gone'" in w for w in lib.warnings)
     p.tick(0.0)
     assert p.at == 1 and p.on
 

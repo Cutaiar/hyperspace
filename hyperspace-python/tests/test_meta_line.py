@@ -251,7 +251,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     assert tool.main(["--library", str(lib)], picture=same_picture) == 0
     out = capsys.readouterr().out
     assert {p: p.read_bytes() for p in lib.rglob("*") if p.is_file()} == tree
-    assert "1 bus cut(s) into every preset: output.all.image → output.2.image" in out
+    assert "1 bus cut(s) into every loadable patch: output.all.image → output.2.image" in out
     assert "would rewrite 2 as /11, leave 1 untouched (already /11)" in out
     assert "show rig.hyp.json → installs/rig.json" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0

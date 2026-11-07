@@ -183,7 +183,7 @@ CHANNEL_WORDS = ("{name} is a media channel, this Mac's files; left out — a pa
                  "through a port")
 NOT_HELD_WORDS = "{name} is no node a patch holds; left out"
 # (a spawn, wave 3 P1) the single-instance nodes the host already has
-TAKEN_WORDS = ("{name} not spawned: this preset already has {nodes}, and a frame holds one "
+TAKEN_WORDS = ("{name} not spawned: this loadable patch already has {nodes}, and a frame holds one "
                "of each — delete it here first; nothing landed")
 SECOND_DREAM_WORDS = "{name} is a second dream, which no wire may touch (one live dream); left out"
 SEQ_WORDS = "the sequencer is the look's one, never a patch's; left out"
@@ -193,7 +193,7 @@ NO_NODE_WORDS = "{name}: no such node; left out"
 COPY_WORDS = "{name} draws {of} again: take {of} with it; left out"
 # (at a save only: a file an older build saved with a layer alone still reads)
 LAYER_WORDS = "{name} draws {of}: take {of} with it; left out"
-HOST_MACRO_WORDS = ("{mid} is not in the patch: its subscriber on {pid} stays the preset's "
+HOST_MACRO_WORDS = ("{mid} is not in the patch: its subscriber on {pid} stays the loadable patch's "
                     "(take {mid} with it)")
 NO_MACRO_NOTE = "{mid}: no free macro — its subscribers not spawned"
 NO_VOICE_NOTE = "{vid}: {why} — not spawned, nor its routes"
