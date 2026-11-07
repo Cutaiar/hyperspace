@@ -974,3 +974,40 @@ def test_scroll_area_snaps_the_offset_it_hands_its_caller():
     src = inspect.getsource(I.scroll_area)
     assert "snap_scroll(imgui.get_scroll_y())" in src, (
         "scroll_area is not snapping the offset it yields")
+
+
+def test_pixel_rounding_is_monotone_not_bankers():
+    """Why text wobbled while scrolling even after the offset was snapped.
+
+    Python's `round()` rounds half to EVEN, and this kit puts coordinates
+    on half pixels constantly - anything centred in a box of odd height
+    lands on one. Step such a value down by 1 and banker's rounding gives
+    126, 124, 124, 122, 122: a two-pixel lurch, then nothing, then a
+    two-pixel lurch. Measured off a screen recording of a steady scroll,
+    the page moved 0, -2, 0, -2 logical pixels a frame with -1/-3 pairs,
+    which is that signature.
+
+    `floor(v + 0.5)` steps by exactly 1 every time. It is also what the
+    browser does - ties go up, not to even.
+    """
+    import draw as D
+    for base in (120.5, 77.5, 1003.5, 0.5):
+        seq = [D.px(base - i) for i in range(8)]
+        steps = {seq[i] - seq[i - 1] for i in range(1, len(seq))}
+        assert steps == {-1}, f"from {base}: {seq} steps {sorted(steps)}"
+        bankers = [round(base - i) for i in range(8)]
+        assert {bankers[i] - bankers[i - 1] for i in range(1, 8)} != {-1}, (
+            "round() has stopped being banker's - this test is now vacuous")
+
+
+def test_every_coordinate_the_kit_rounds_goes_through_px():
+    """The wiring. A monotone helper nobody calls fixes nothing, which is
+    how the wheel fix came to be a no-op."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent / "draw.py").read_text()
+    body = src[src.index("def px("):]
+    body = body[body.index("\n\n\n"):]          # everything after px itself
+    import re
+    offenders = [m.group(0) for m in re.finditer(r"round\([a-z_]+\)", body)]
+    assert not offenders, (
+        f"draw.py still rounds a coordinate with round(): {offenders}")

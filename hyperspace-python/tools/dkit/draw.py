@@ -13,6 +13,7 @@ reasoned about and diffed one at a time.
 from __future__ import annotations
 
 import math
+from math import floor
 
 from imgui_bundle import imgui
 
@@ -62,6 +63,23 @@ def border(dl, x, y, w, h, col, radius=0.0, width=1.0) -> None:
     )
 
 
+def px(v: float) -> int:
+    """Round a COORDINATE to a whole pixel, monotonically.
+
+    Not `round()`. Python's built-in rounds half to EVEN, and this kit puts
+    things on half pixels constantly - anything centred in a box of odd
+    height lands on one. Step such a value down by 1 and banker's rounding
+    gives 126, 124, 124, 122, 122: a two-pixel lurch, then nothing, then a
+    two-pixel lurch. While the page scrolls, every line doing that at its
+    own phase is the wobble.
+
+    `floor(v + 0.5)` steps by exactly 1 every time, which is what makes a
+    scrolled page move as one piece. It is also what the browser does: ties
+    go up, not to even.
+    """
+    return floor(v + 0.5)
+
+
 def snap(x, y, w, h):
     """Round a rect's edges to whole pixels, the way Chromium paints one.
 
@@ -91,8 +109,8 @@ def snap(x, y, w, h):
     Round, not floor: 808.390625 -> 808 and 807.6 -> 808, which is what
     matching edge positions rather than extents requires.
     """
-    x0, y0 = round(x), round(y)
-    return float(x0), float(y0), float(round(x + w) - x0), float(round(y + h) - y0)
+    x0, y0 = px(x), px(y)
+    return float(x0), float(y0), float(px(x + w) - x0), float(px(y + h) - y0)
 
 
 def box(dl, x, y, w, h, *, fill_col=None, border_col=None, radius=0.0,
@@ -321,7 +339,7 @@ def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
         elif align == "center":
             tx = x + (box_w - ext.x) / 2.0
         ty = y + (baseline_box - ext.y) / 2.0 if baseline_box else y
-        dl.add_text(imgui.ImVec2(round(tx), round(ty)), _u32(col), s)
+        dl.add_text(imgui.ImVec2(px(tx), px(ty)), _u32(col), s)
         return float(ext.x)
     finally:
         imgui.pop_font()

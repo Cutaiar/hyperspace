@@ -2,7 +2,7 @@
 
 Every row is a real defect. Most were found by a person looking at the
 running app, which is the part worth fixing: the kit has a pixel diff, a
-browser oracle and 708 tests, and none of them saw these.
+browser oracle and 710 tests, and none of them saw these.
 
 The right-hand column is the point of the table. "Be more careful" is not a
 mechanism; each entry is a thing that can be done or checked.
@@ -61,6 +61,8 @@ mechanism; each entry is a thing that can be done or checked.
 
 | 34 | Text snapped up and back down on a slow trackpad scroll — and Hyperspace, scrolling far faster, never did | The scroll OFFSET is snapped to a whole pixel, so every line keeps its fractional part and the page moves together | **A thing that works elsewhere in the same codebase is a free control experiment.** `draw.label` rounds a glyph origin and `ui.py` does not — that one difference named the cause in a minute, after I had spent the session assuming anything scroll-shaped was the scroll rate. Ask what the working case does differently before theorising. |
 | 35 | My instrument for the above said "7 jumps back up" on correct code | Measure the frame-to-frame SHIFT by alignment, not "which row is brightest" | **Third time this session a bad probe reported a defect that was not there** (a tick mark read as a scrollbar, pixels sampled where nothing paints, now this). A probe needs its own sanity check: run it against a case you know is good, and if it reports a fault there, fix the probe first. |
+
+| 36 | Text still wobbled after the scroll offset was snapped | Python's `round()` is half-to-EVEN; a coordinate on a .5 boundary steps 126, 124, 124, 122, 122 — lurch two, stay, lurch two. `draw.px` is `floor(v + 0.5)` | **A rounding function is part of the animation.** I snapped the offset and declared it fixed without asking whether the rounding itself was monotone. The signature is unmistakable once looked for: a steady drag measured 0, -2, 0, -2 a frame with -1/-3 pairs, straight off a screen recording the user sent. |
 
 ## The habits these reduce to
 
