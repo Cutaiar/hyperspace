@@ -142,8 +142,19 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                       border_col=T.rgba("border", theme=theme),
                       radius=T.RADII["lg"], border_w=1.0)
                 vp = cell["h"] - 2.0
-                D.scroll_bar(dl, cell["x"] + 1.0, cell["y"] + 1.0,
-                             cell["w"] - 2.0, vp, vp, float(cell["content"]),
+                # The ROOT rect, not the viewport. `scroll_bar` insets by the
+                # region's own border itself - that is what its `border`
+                # argument is for, and interact.scroll_area passes the root
+                # the same way - so handing it the already-inset viewport
+                # counted the border TWICE: the track came out at (y+2, 114)
+                # where the browser's is (y+1, 116), putting the thumb 1px
+                # left, 1px down at frac 0, and 0.59px short at frac 1.
+                #
+                # `viewport_h` stays cell.h - 2, which IS the browser's
+                # clientHeight - the ratio that sizes the thumb is the
+                # viewport's, while the track it slides in is the bar's.
+                D.scroll_bar(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                             vp, float(cell["content"]),
                              cell["frac"] * (cell["content"] - vp), theme)
             elif cell["kind"] == "menu":
                 # The chrome that menu.popup draws, without the popup - the

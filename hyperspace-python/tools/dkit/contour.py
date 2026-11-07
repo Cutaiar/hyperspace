@@ -222,9 +222,14 @@ def icon_ink(img, box):
       * is it in the right place    centroid, to a fraction of a pixel
       * is it the right colour      mass, which scales with the ink's alpha
 
-    `bg` is the box's modal level rather than a token: a 16x16 box around a
-    2px stroke is mostly field, so the mode IS the fill, and taking it from
-    the image makes this work in both themes without being told which.
+    `bg` is the median of the box's PERIMETER rather than a token, so this
+    works in both themes without being told which. Not the modal level of
+    the whole box, which was the first attempt and is degenerate on a small
+    box: a scroll thumb's end cap fills most of its own box, so the mode was
+    the THUMB and "ink" came out as the background around it - reported as a
+    2.36px centroid shift between two images that are pixel-identical there.
+    A box's perimeter is background for every shape here: field around a
+    chevron, page and track around a cap.
 
     Returns (mass, cx, cy) with the centroid relative to the box's origin,
     or (0.0, nan, nan) for a box with no ink.
@@ -236,8 +241,10 @@ def icon_ink(img, box):
     if sub.size == 0:
         return 0.0, float("nan"), float("nan")
     v = sub.max(axis=2).astype(float) if sub.ndim == 3 else sub.astype(float)
-    vals, counts = np.unique(np.round(v).astype(int), return_counts=True)
-    bg = float(vals[int(np.argmax(counts))])
+    if min(v.shape) < 3:
+        return 0.0, float("nan"), float("nan")
+    ring = np.concatenate([v[0, :], v[-1, :], v[1:-1, 0], v[1:-1, -1]])
+    bg = float(np.median(ring))
     ink = np.abs(v - bg)
     mass = float(ink.sum())
     if mass <= 0.0:
