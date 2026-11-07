@@ -938,3 +938,39 @@ def test_a_trackpad_also_sends_whole_units_so_the_flag_must_be_sticky():
     of them, which is the cliff this already cost one round to remove."""
     assert any(abs(d - round(d)) < 1e-9 for d in TRACKPAD_RUN)
     assert any(abs(d - round(d)) > 1e-9 for d in TRACKPAD_RUN)
+
+
+def test_a_scroll_offset_is_snapped_to_a_whole_pixel():
+    """Why text snapped up and back down on a slow trackpad scroll.
+
+    `draw.label` rounds a glyph run's origin - `add_text(round(tx),
+    round(ty))` - which is what keeps type crisp at rest. With a FRACTIONAL
+    scroll offset each line has a different fractional y, so as the offset
+    drifts they cross .5 at different moments and jump a pixel one at a
+    time. Hyperspace's own panel never did it with far faster scrolling,
+    because `ui.py` passes raw floats to `add_text`; that comparison is
+    what identified the rounding as the cause rather than the scroll rate.
+    """
+    import interact as I
+    for raw in (0.0, 0.4, 0.5, 1.6, 12.49, 12.5, 203.333, -0.4):
+        snapped = I.snap_scroll(raw)
+        assert snapped == round(raw)
+        assert float(snapped).is_integer(), raw
+
+
+def test_scroll_area_snaps_the_offset_it_hands_its_caller():
+    """The wiring, not just the helper.
+
+    The offset is fractional in the first place because ImGui's own step is
+    `ImFloor(ImMin(5 * font_size, inner_height * 0.67))` - floored, and
+    clamped by the window's height - while the scale factor is computed
+    from `5 * font_size` alone, so a short region moves a slightly
+    different number of pixels than the factor asks for and the remainder
+    lands in the offset. A pure helper nobody calls fixes nothing, which is
+    exactly how the wheel fix came to be a no-op.
+    """
+    import inspect
+    import interact as I
+    src = inspect.getsource(I.scroll_area)
+    assert "snap_scroll(imgui.get_scroll_y())" in src, (
+        "scroll_area is not snapping the offset it yields")

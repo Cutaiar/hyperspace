@@ -2,7 +2,7 @@
 
 Every row is a real defect. Most were found by a person looking at the
 running app, which is the part worth fixing: the kit has a pixel diff, a
-browser oracle and 706 tests, and none of them saw these.
+browser oracle and 708 tests, and none of them saw these.
 
 The right-hand column is the point of the table. "Be more careful" is not a
 mechanism; each entry is a thing that can be done or checked.
@@ -58,6 +58,9 @@ mechanism; each entry is a thing that can be done or checked.
 
 | 32 | Scrolling was 9x too fast, then 10x too slow, and the text sheared as it moved | One unit is ten points of finger travel, so `px_per_unit` is 10 — which also makes every step land on a whole pixel | **When a knob does nothing, check it is connected before turning it.** I changed the constant twice and wrote two commit messages about feel, while the function was reading a value that is zero at that point in the frame. The user running the probe and seeing NO OUTPUT found it in one line. |
 | 33 | The GLFW scale factor sat unverified through three commits | `--wheel-probe` printed the raw deltas; every one was a multiple of 0.1, which proves the 0.1 I had been asserting from memory | **Build the instrument before the third guess.** The probe took twenty minutes and ended the argument permanently; it belonged before the first constant, not after the second. It answered inertia for free — the decaying tail of a flick is right there in the output. |
+
+| 34 | Text snapped up and back down on a slow trackpad scroll — and Hyperspace, scrolling far faster, never did | The scroll OFFSET is snapped to a whole pixel, so every line keeps its fractional part and the page moves together | **A thing that works elsewhere in the same codebase is a free control experiment.** `draw.label` rounds a glyph origin and `ui.py` does not — that one difference named the cause in a minute, after I had spent the session assuming anything scroll-shaped was the scroll rate. Ask what the working case does differently before theorising. |
+| 35 | My instrument for the above said "7 jumps back up" on correct code | Measure the frame-to-frame SHIFT by alignment, not "which row is brightest" | **Third time this session a bad probe reported a defect that was not there** (a tick mark read as a scrollbar, pixels sampled where nothing paints, now this). A probe needs its own sanity check: run it against a case you know is good, and if it reports a fault there, fix the probe first. |
 
 ## The habits these reduce to
 

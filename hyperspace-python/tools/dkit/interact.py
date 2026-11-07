@@ -445,6 +445,33 @@ def wheel_px_per_unit() -> float:
     return T.SCROLL["px_per_unit"] if _PRECISE["seen"] else T.SCROLL["notch_px"]
 
 
+def snap_scroll(sy: float) -> float:
+    """A scroll offset, snapped to a whole pixel.
+
+    `draw.label` rounds a glyph run's origin, because at rest that is what
+    keeps type crisp. With a FRACTIONAL offset every line has a different
+    fractional y, so as the offset drifts each line crosses .5 at its own
+    moment and jumps a whole pixel on its own - the page appears to snap up
+    and back down while you scroll slowly. Hyperspace's own panel never did
+    this with far faster scrolling, because `ui.py` passes raw floats to
+    `add_text` and never rounds; that comparison is what identified the
+    rounding as the cause rather than the scroll rate.
+
+    Snapping the OFFSET keeps every line's fractional part constant, so the
+    page moves together in whole pixels and the type stays crisp. It is the
+    rule this project already measured in the browser: Chromium lays out on
+    fractions and snaps what it PAINTS to whole device pixels.
+
+    The offset is fractional in the first place because ImGui's own step is
+    `ImFloor(ImMin(5 * font_size, inner_height * 0.67))` - floored, and
+    clamped by the window's height - while the scale factor is computed
+    from `5 * font_size` alone, so a short region moves a slightly
+    different number of pixels than the factor asks for and the remainder
+    lands in the offset.
+    """
+    return float(round(sy))
+
+
 def note_wheel_step() -> None:
     """Cache ImGui's px-per-unit. Call once per frame, INSIDE the frame."""
     _WHEEL["step"] = 5.0 * max(imgui.get_font_size(), 1.0)
@@ -926,7 +953,30 @@ def scroll_area(ui: Ui, key, x, y, w, h, content_h, *, radius=0.0,
     # count never changed.
     imgui.set_cursor_pos(imgui.ImVec2(0.0, 0.0))
     imgui.dummy(imgui.ImVec2(0.0, max(content_h, 0.0)))
-    sy = imgui.get_scroll_y()
+    # SNAPPED TO A WHOLE PIXEL, and this is the fix for text that jitters
+    # while you scroll slowly.
+    #
+    # `draw.label` rounds a glyph run's origin - `add_text(round(tx),
+    # round(ty))` - because at rest that is what keeps type crisp. With a
+    # FRACTIONAL scroll offset every line has a different fractional y, so
+    # as the offset drifts each line crosses .5 at its own moment and jumps
+    # a whole pixel on its own. The page appears to snap up and back down.
+    # Hyperspace's own panel never did this with far faster scrolling,
+    # because `ui.py` passes raw floats to `add_text` and never rounds.
+    #
+    # Rounding the OFFSET instead keeps every line's fractional part
+    # constant, so the whole page moves together in whole pixels and the
+    # type stays crisp. It is also the rule this project already measured
+    # in the browser: Chromium lays out on fractions and snaps what it
+    # PAINTS to whole device pixels.
+    #
+    # The offset is fractional in the first place because ImGui's own step
+    # is `ImFloor(ImMin(5 * font_size, inner_height * 0.67))` - floored,
+    # and clamped by the window's height - while the scale factor is
+    # computed from `5 * font_size` alone. A short region therefore moves a
+    # slightly different number of pixels than the factor asks for, and the
+    # remainder lands in the offset.
+    sy = snap_scroll(imgui.get_scroll_y())
     import box as B
     # The content has to go into the CHILD's draw list, which is what gets
     # clipped to the child's rect. Drawing it into the parent's list instead

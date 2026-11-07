@@ -1000,20 +1000,30 @@ def _loop(win, impl, ui, state, series, bgc, prev) -> None:
         # Render()" if the process tears down with a frame half open - a
         # traceback about the wrong thing, on the way out. The frame is
         # closed first and the loop returns normally.
+        # Ctrl+C can land anywhere, including INSIDE `new_frame()`. The
+        # first version of this answered it with a bare `imgui.render()` in
+        # the handler, which asserts "Forgot to call NewFrame()" when the
+        # interrupt arrived before the frame was open - trading one wrong
+        # traceback for another. `open_frame` says whether there is a frame
+        # to abandon, and `end_frame` is the call that abandons one.
+        open_frame = False
         try:
             imgui.new_frame()
+            open_frame = True
             I.note_wheel_step()
             GL.glViewport(0, 0, fw, fh)
             _draw(ui, rects, lw, lh, series, state, bgc)
             imgui.render()
-        except KeyboardInterrupt:
-            imgui.render()
-            return
-        try:
+            open_frame = False
             impl.render(imgui.get_draw_data())
             ui.frame_done(dt)
             glfw.swap_buffers(win)
         except KeyboardInterrupt:
+            if open_frame:
+                try:
+                    imgui.end_frame()
+                except Exception:
+                    pass
             return
 
 
