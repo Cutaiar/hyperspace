@@ -731,28 +731,79 @@ PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "au
              "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
 
 
+View = tuple[int, "str | None"]     # (a PAGE_KEYS index, the node selected in the selection view)
+SETTLE_NOTES = 10    # frames a step waits for its view to land before taking what landed
+
+
+def view_of(panel) -> View:
+    """What the side pane shows, as the history keeps it: `Panel.page`, and
+    in the selection's view (GRAPH's slot) the node selected there
+    (`Panel.graph_selected`; None for nothing, a cable, a group or several).
+    A section's view is its slot alone: a node selected while it is up is
+    no step of its own."""
+    page = getattr(panel, "page", 0)
+    graph = PAGE_KEYS.index("graph")
+    return (page, getattr(panel, "graph_selected", None) if page == graph else None)
+
+
+def go_view(panel, view: View) -> None:
+    """Bring `view` back (⌘[ / ⌘]): the slot straight on `Panel.page`, and
+    in the selection's view its node selected again and centred on the
+    canvas (`ui_graph.select_id`), or nothing selected (Esc's request) —
+    only where the canvas's selection differs."""
+    page, nid = view
+    panel.page = page
+    if page != PAGE_KEYS.index("graph") or getattr(panel, "graph_selected", None) == nid:
+        return
+    if nid is not None:
+        ui_graph.select_id(panel, nid)
+    else:
+        ui_graph._state(panel)["deselect"] = True
+
+
 class PageHistory:
-    """The pane's views, back and forward as a browser's are (⌘[ / ⌘]).
+    """The side pane's views, back and forward as a browser's are (⌘[ /
+    ⌘]): each a `View`, so the selection's view keeps which node it showed.
     `note` records the view now — a chip, a key row, a pad, a click on the
-    canvas, a step here — dropping
-    the forward run when it is a new visit; `step(-1)` / `step(1)` returns
-    the index to go to, or None at either end."""
+    canvas, a selection, a step here — dropping the forward run when it is a
+    new visit; `step(-1)` / `step(1)` returns the view to go to (`go_view`),
+    or None at either end. After a step, notes wait up to `SETTLE_NOTES`
+    frames for that view's selection to land (it lands a frame or two
+    later); one that never does (its node deleted since) takes the step's
+    place in the list, so the forward run is kept. A note on another slot
+    is a new visit at once."""
 
-    def __init__(self, page: int):
-        self.visited, self.at = [page], 0
+    def __init__(self, view):
+        self.visited, self.at = [self._view(view)], 0
+        self.landing: View | None = None
+        self.wait = 0
 
-    def note(self, page: int) -> None:
-        if page == self.visited[self.at]:
+    @staticmethod
+    def _view(view) -> View:
+        return view if isinstance(view, tuple) else (int(view), None)   # (a bare slot)
+
+    def note(self, view) -> None:
+        view = self._view(view)
+        landing, self.landing = self.landing, None
+        if landing is not None and view[0] == landing[0]:   # (another slot: a new visit)
+            if view != landing and self.wait > 0:
+                self.wait -= 1
+                self.landing = landing          # its selection not landed yet
+                return
+            self.visited[self.at] = view        # as it landed
+            return
+        if view == self.visited[self.at]:
             return
         del self.visited[self.at + 1:]
-        self.visited.append(page)
+        self.visited.append(view)
         self.at = len(self.visited) - 1
 
-    def step(self, by: int) -> int | None:
+    def step(self, by: int) -> View | None:
         i = self.at + by
         if not 0 <= i < len(self.visited):
             return None
         self.at = i
+        self.landing, self.wait = self.visited[i], SETTLE_NOTES
         return self.visited[i]
 
 

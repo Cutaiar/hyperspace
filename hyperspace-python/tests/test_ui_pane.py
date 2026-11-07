@@ -208,42 +208,78 @@ def test_open_on_shows_the_nodes_section_and_its_back_chip_returns(pane):
 
 
 def test_cmd_brackets_walk_back_and_forth_through_every_view(pane):
-    """⌘[ / ⌘] (`ui.PageHistory`, noted each frame by app.frame) through
-    views brought up every way: a chip, a menu row, a node's open on …,
-    its ← chip — each one `ui.page`, so each one a step."""
+    """⌘[ / ⌘] (`ui.PageHistory`, noted each frame by app.frame as
+    `ui.view_of`, stepped by `ui.go_view`) through views brought up every
+    way — a chip, a menu row, a node's open on …, its ← chip — and through
+    the nodes the selection view showed, each one selected again."""
     r, d = pane
-    hist = r.panel.history = ui.PageHistory(r.panel.page)     # the selection, as at launch
+    p = r.panel
+    hist = p.history = ui.PageHistory(ui.view_of(p))       # the selection, as at launch
 
-    def note():
-        yield
-        hist.note(r.panel.page)
+    def note(frames=1):
+        for _ in range(frames):
+            yield
+            hist.note(ui.view_of(p))
 
-    view = ui_graph.view_of(r.panel)
-    node, home = next((n, ui_graph.home_page(n)) for n in view.nodes
-                      if ui_graph.home_page(n) is not None and ui_graph.home_page(n)[0] != "lfo")
-    walk = []
+    def step(by):
+        view = hist.step(by)
+        assert view is not None
+        ui.go_view(p, view)
+        d.run(note(4))
+        assert ui.view_of(p) == view
+        return ui_pane.showing(p), p.graph_selected
+
+    view = ui_graph.view_of(p)
+    picked = [n for n in view.nodes if n.kind != "modifier" and ui_graph.home_page(n) is not None
+              and ui_graph.drawn_node(_st(r), n)]       # (one the canvas can select)
+    a, b = picked[0], next(n for n in picked[1:] if n.id != picked[0].id)
+    home = ui_graph.home_page(b)[0]
     d.run(_click_view(d, "loadable"), note())
-    walk.append("loadable")
     d.run(_click_view(d, "lfo"), note())
-    walk.append("lfo")
-    r.panel.select_graph_node(node.id)
-    d.run(d.click("pane.selection"), d.park(), d.wait(2), note())
-    walk.append("selection")
-    d.run(d.click("graph.side.open"), d.park(), d.wait(1), note())
-    walk.append(home[0])
-    d.run(d.click("pane.back"), d.park(), d.wait(1), note())
-    walk.append("selection")
-    back = []
-    while (page := hist.step(-1)) is not None:
-        r.panel.page = page
-        d.run(d.wait(1))
-        back.append(ui_pane.showing(r.panel))
-        assert _st(r)["pane_drawn"] == [back[-1]]
-    assert back == list(reversed(["selection", *walk[:-1]]))
-    page = hist.step(1)
-    r.panel.page = page
-    d.run(d.wait(1))
-    assert ui_pane.showing(r.panel) == "loadable"
+    p.select_graph_node(a.id)                          # by code, in a section: no step
+    d.run(note(3))
+    d.run(d.click("pane.selection"), d.park(), note(2))
+    p.select_graph_node(b.id)                          # in the selection's view: a step
+    d.run(note(3))
+    d.run(d.click("graph.side.open"), d.park(), note(2))
+    d.run(d.click("pane.back"), d.park(), note(2))
+    assert len(hist.visited) == 7
+    assert step(-1) == (home, b.id)
+    assert step(-1) == ("selection", b.id)
+    assert step(-1) == ("selection", a.id)             # A selected and centred again
+    assert step(-1)[0] == "lfo"
+    assert step(-1)[0] == "loadable"
+    assert step(-1) == ("selection", None)             # launch: nothing selected
+    assert hist.step(-1) is None
+    assert step(1)[0] == "loadable"
+    assert step(1)[0] == "lfo"
+    assert step(1) == ("selection", a.id)
+
+
+def test_a_step_waits_for_its_selection_and_keeps_the_forward_run():
+    """The history alone: a step to a node's view waits for the node to be
+    selected; one whose node never comes (deleted since) takes what landed
+    in its place, and the forward run is kept; another slot noted while it
+    waits is a new visit at once."""
+    g = PAGE_KEYS.index("graph")
+    h = ui.PageHistory((g, None))
+    for v in ((g, "a"), (g, "b"), (3, None)):
+        h.note(v)
+    assert h.step(-1) == (g, "b")
+    h.note((3, None))                                  # (the page set, not the node: another slot)
+    assert h.visited[-1] == (3, None) and h.at == 3
+    h = ui.PageHistory((g, None))
+    for v in ((g, "a"), (g, "b"), (3, None)):
+        h.note(v)
+    h.step(-1)
+    assert h.step(-1) == (g, "a")
+    for _ in range(ui.SETTLE_NOTES):
+        h.note((g, "b"))                               # "a" not landed yet: nothing moves
+    assert h.visited == [(g, None), (g, "a"), (g, "b"), (3, None)]
+    h.note((g, "b"))                                   # never came: what landed, in its place
+    assert h.visited == [(g, None), (g, "b"), (g, "b"), (3, None)] and h.at == 1
+    assert h.step(1) == (g, "b") and h.step(1) == (3, None)
+    assert ui.PageHistory(4).visited == [(4, None)]    # a bare slot, as before
 
 
 def test_the_view_writes_nothing_and_an_old_fold_file_is_left_alone(pane):

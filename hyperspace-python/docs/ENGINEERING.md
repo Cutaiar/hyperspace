@@ -1806,7 +1806,7 @@ the selection and the six sections no node leads to, then a **sections**
 chip whose menu holds the other eleven — and a chip shows a red dirty dot
 where its group has moved off its loaded patch. `ui.page` is the view, by
 index into `ui.PAGE_KEYS` (GRAPH's slot the selection), so ⌘[ / ⌘] step
-back and forward through every view; a section scrolls in its own body
+back and forward through every view, the selection's with the node it showed; a section scrolls in its own body
 (2372 × 900 is the control size, `app.CONTROL_SIZE`).
 The window is two 4:3 panes: the panel opens at `ui.panel_w`, leaving
 the desk diagram left of it a 4:3 slice of the height and the panel

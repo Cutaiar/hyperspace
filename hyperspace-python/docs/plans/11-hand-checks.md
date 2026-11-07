@@ -8711,7 +8711,7 @@ Headless: `tests/test_ui_pane.py` (every view by the mouse, a canvas click, open
 
 **630. A node and its section.** Click a node on the canvas while patches is up: the selection shows it. Click **open on …**: its section, at full height, with **← <node>** at its top; click it: the node again. Select a node from OUTPUT's open on GRAPH: the section you were in stays. *Fail:* a click on the bare canvas that changes the view.
 
-**631. ⌘[ and ⌘].** After 629 and 630, press ⌘[ again and again, then ⌘]. *Pass:* back through every view in the order seen, forward again, each scrolled where you left it.
+**631. ⌘[ and ⌘].** After 629 and 630, press ⌘[ again and again, then ⌘]. *Pass:* back through every view in the order seen, forward again, each scrolled where you left it. Select node A, then node B (the selection up): ⌘[ selects A again and centres it on the canvas, ⌘] B. Delete A, then ⌘[ to where it was: the pane shows what is selected, and ⌘] still goes forward.
 
 **632. The narrow band.** (the desk up, the panel narrow) The band shows the chips and the selection; a section grows it to all but a strip of canvas; **selection** shrinks it back. No chip passes the band's edge, a long playlist name included.
 
