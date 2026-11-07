@@ -156,7 +156,7 @@ def screens_note(home: Path) -> None:
         say(f"     before: {before}")
         cfg = config.load(path)
         oc = cfg["output"]
-        notes = list(cfg.get("notes", []))
+        notes = [*cfg.get("notes", []), *placement.settle(oc, two)]  # as app._windows does
         for kind, key, size in (("render", "monitor", (1280, 820)),
                                 ("control", "control_monitor", (960, 900))):
             rect, note = placement.place(kind, size, two, oc[key], None)
