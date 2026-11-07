@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -21,7 +22,7 @@ from hyperspace.deck import Deck
 from hyperspace.ghost import GhostState
 from hyperspace.ghost import register as declare_ghost
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.library import PROJECT_SUFFIX, PROJECTS, mirrors_apart
+from hyperspace.library import LOADABLE, PROJECT_SUFFIX, PROJECTS, mirrors_apart
 from hyperspace.outputs import Switches as S
 from hyperspace.params import Registry, is_shared_meta_id
 from hyperspace.routing import is_meta_row
@@ -274,3 +275,59 @@ def test_where_the_glass_also_shows_the_picture_flip_x_is_not_a_second_mirror(ct
     new = _hands_only(ctx, GhostState(on=True), S(), S(flip_x=True))
     differ = (old[1][..., :3] != new[1][..., :3]).any(axis=2)
     assert differ.mean() > 0.05                      # the picture flipped with it
+
+
+# ---- row 774's keep is no road the app takes: review of #408, second pass
+
+def _shared_drops(caught) -> list[str]:
+    """`Registry.remove`'s warnings among `caught`. Recorded, not raised as errors:
+    a landing's own `except` could swallow an error and pass the test."""
+    return [str(w.message) for w in caught if "is shared: a deck's registry" in str(w.message)]
+
+
+@pytest.mark.parametrize("deck", ["a", "b"])
+def test_deleting_a_band_by_the_apps_verb_leaves_it_on_neither_deck(two, deck):
+    """`build_bands` closes over the `MetaRegistry` (`build_meta`), so `band.remove`
+    drops through it, not through the deck's registry that row 774 keeps from."""
+    reg, chain = two.decks[deck].reg, two.rig.chain
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        reg["band.add"].fire()
+        last = chain.n - 1
+        gone = [p.id for p in two.meta if p.id.startswith(f"band.{last}.")]
+        assert gone and all(pid in two.a.reg and pid in two.b.reg for pid in gone)
+        two.rig.control.selb = last
+        reg["band.remove"].fire()
+    assert _shared_drops(caught) == []
+    assert chain.n == last
+    for pid in gone:
+        assert pid not in two.meta and pid not in two.a.reg and pid not in two.b.reg
+    for pid in (p.id for p in two.meta if p.id.startswith("band.")):
+        assert two.a.reg[pid] is two.meta[pid] is two.b.reg[pid]
+
+
+def test_no_normal_load_raises_the_shared_drop_warning(two):
+    """Every corpus patch on both decks, a graph that takes and drops an extra
+    hands node, every show opened, a new show: `Registry.remove` never meets a
+    shared param on the app's own roads."""
+    lib = two.rig.lib
+    names = sorted(lib.list(LOADABLE))
+    shows = lib.project.list()
+    assert names and shows
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        for name in names:
+            doc = json.loads(Path(lib.path_of(LOADABLE, name)).read_text())
+            two.a.loaded_patch.load_doc(doc, None)
+            two.b.loaded_patch.load_doc(doc, None)
+            two.land(two.a, "Glass", TWO_HANDS)
+            two.land(two.b, "Glass", TWO_HANDS)
+        two.land(two.a, "Plain", ONE_HAND)
+        two.land(two.b, "Plain", ONE_HAND)
+        for show in shows:
+            lib.project.load(show)
+        lib.project.new()
+        assert _shared_drops(caught) == []
+        two.a.reg.remove("ghost.mirror")              # (the recorder does see one)
+    said = _shared_drops(caught)
+    assert len(said) == 1 and said[0].startswith("ghost.mirror is shared")
