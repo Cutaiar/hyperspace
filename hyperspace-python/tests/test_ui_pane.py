@@ -19,7 +19,7 @@ WIDE = (1600, 900)      # a page wider than ui_graph.WIDE: the pane beside the c
 
 # a control each section draws, by the id its page draws it under
 SECTION_IDS = {
-    "presets": "new##new",           # the preset strip's new chip (ui_loadable.strip)
+    "loadable": "new##new",           # the preset strip's new chip (ui_loadable.strip)
     "lookback": "dream.on",
     "faces": "view.faces",
     "analyzer": "scene.select",
@@ -53,14 +53,14 @@ def test_the_pane_is_on_with_nothing_selected_and_says_so(pane, monkeypatch):
     st = _st(r)
     assert r.panel.graph_selected is None
     assert st["details_rect"] is not None            # the pane, with nothing selected
-    assert {"pane.selection", "pane.presets", "pane.lookback", "pane.faces",
+    assert {"pane.selection", "pane.loadable", "pane.lookback", "pane.faces",
             "pane.analyzer"} <= set(d.rects)
     said: list[str] = []
     real = imgui.text_wrapped
     monkeypatch.setattr(imgui, "text_wrapped", lambda s, *a: (said.append(s), real(s, *a)))
     d.run(d.wait(1))
     assert ui_pane.NOTHING in said
-    assert st["pane_drawn"] == ["selection", "presets"]      # the defaults (rec)
+    assert st["pane_drawn"] == ["selection", "loadable"]      # the defaults (rec)
 
 
 @pytest.mark.parametrize("key", sorted(SECTION_IDS))
@@ -68,15 +68,15 @@ def test_each_section_opens_by_a_click_and_its_controls_are_found_by_id(pane, ke
     r, d = pane
     st = _st(r)
     pid = SECTION_IDS[key]
-    if key == "presets":                             # open by default: fold it first
-        d.run(d.click("pane.presets"), d.park())
-        assert "presets" not in st["pane_drawn"]
+    if key == "loadable":                             # open by default: fold it first
+        d.run(d.click("pane.loadable"), d.park())
+        assert "loadable" not in st["pane_drawn"]
     else:
         assert "pane." + key in d.rects and key not in st["pane_drawn"]
         with pytest.raises(KeyError):
             d.rect(pid)
-    if key != "presets":
-        d.run(d.click("pane.presets"), d.park())     # room for the one under test
+    if key != "loadable":
+        d.run(d.click("pane.loadable"), d.park())     # room for the one under test
     d.run(d.click("pane." + key), d.park(), d.wait(1))
     assert key in st["pane_drawn"]
     assert _inside(d.rect(pid), st["details_rect"])   # drawn in the pane, under its page's id
@@ -130,13 +130,13 @@ def test_the_fold_state_round_trips_through_this_macs_ui_json(pane):
     r, d = pane
     st = _st(r)
     machine = r.lib.machine
-    d.run(d.click("pane.analyzer"), d.park(), d.click("pane.presets"), d.park())
+    d.run(d.click("pane.analyzer"), d.park(), d.click("pane.loadable"), d.park())
     assert not (machine / ui_pane.UI_FILE).exists()      # not yet: a click is written later
     assert ui_pane.flush(st, force=True)
     doc = json.loads((machine / ui_pane.UI_FILE).read_text())
-    assert doc["pane"]["open"]["analyzer"] is True and doc["pane"]["open"]["presets"] is False
+    assert doc["pane"]["open"]["analyzer"] is True and doc["pane"]["open"]["loadable"] is False
     assert ui_pane.read_open(machine) == dict(ui_pane.DEFAULT_OPEN, analyzer=True,
-                                              presets=False)
+                                              loadable=False)
     # a fresh page state (a relaunch) reads it back
     st.pop("pane_open")
     d.run(d.wait(2))
@@ -206,7 +206,7 @@ def test_the_pages_still_draw_their_bodies(pane):
     """The rail and the pages are untouched: each page whose body a
     section shares still draws it, at full height."""
     r, _d = pane
-    for key in ("presets", "lookback", "faces", "analyzer"):
+    for key in ("loadable", "lookback", "faces", "analyzer"):
         frame(r.panel, key)
         frame(r.panel, key)
         assert PAGE_KEYS[r.panel.page] == key
@@ -307,11 +307,11 @@ def test_the_narrow_band_opens_selection_alone_and_one_section_takes_it_all(
         rows = sorted({round(rc[1]) for rc in heads})
         assert 1 < len(rows) <= 3
         assert [round(rc[1]) for rc in heads] == sorted(round(rc[1]) for rc in heads)
-        d.run(d.click("pane.selection"), d.park(), d.click("pane.presets"), d.park())
-        assert st["pane_drawn"] == ["presets"]
+        d.run(d.click("pane.selection"), d.park(), d.click("pane.loadable"), d.park())
+        assert st["pane_drawn"] == ["loadable"]
         assert ui_pane.opened(st, "open") == ui_pane.DEFAULT_OPEN    # beside: untouched
         ui_pane.flush(st, force=True)
-        assert ui_pane.read_open(r.lib.machine, "below")["presets"] is True
+        assert ui_pane.read_open(r.lib.machine, "below")["loadable"] is True
 
 
 def test_the_strip_budgets_the_devices_missing_chip(tmp_path):
@@ -484,7 +484,7 @@ def test_ui_page_on_fx_focuses_the_fx_section_and_every_slot_keeps_its_index(pan
     st = _st(r)
     assert PAGE_KEYS == [
         "output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-        "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
+        "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
     fx = PAGE_KEYS.index("fx")
     assert "fx" not in st["pane_drawn"]
     r.reg["ui.page"].set(fx)
@@ -522,7 +522,7 @@ def test_focus_unfolds_only_while_it_holds_and_never_touches_the_fold(pane):
     assert ui_pane.opened(st) == before and not st.get("pane_dirty")
     r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
     d.run(d.wait(2))
-    assert ui_pane.focused(r.panel) is None and st["pane_drawn"] == ["selection", "presets"]
+    assert ui_pane.focused(r.panel) is None and st["pane_drawn"] == ["selection", "loadable"]
 
 
 def test_a_click_on_the_focused_header_lets_go_and_on_another_leaves_it(pane):
@@ -626,9 +626,9 @@ def test_every_section_draws_without_a_router(tmp_path, monkeypatch):
 def test_the_system_page_says_what_each_open_section_costs(pane, monkeypatch):
     r, _d = pane
     st = _st(r)
-    assert set(st["pane_ms"]) >= {"selection", "presets"}
+    assert set(st["pane_ms"]) >= {"selection", "loadable"}
     line = ui_pane.timing_line(r.panel)
-    assert line.startswith("side pane: ") and "presets" in line and line.endswith(" ms")
+    assert line.startswith("side pane: ") and "loadable" in line and line.endswith(" ms")
     from types import SimpleNamespace
     assert ui_pane.timing_line(SimpleNamespace()) == ""         # GRAPH never drew
     said: list[str] = []
@@ -704,8 +704,8 @@ def test_focus_lands_on_a_fold_from_before_stage_2(tmp_path, monkeypatch):
     and a page state from before a hot reload may hold only those; landing
     on FX still unfolds and draws the fx section."""
     with build_rig(tmp_path) as r:
-        old = {k: k in ("selection", "presets") for k in
-               ("selection", "presets", "lookback", "faces", "analyzer")}
+        old = {k: k in ("selection", "loadable") for k in
+               ("selection", "loadable", "lookback", "faces", "analyzer")}
         (r.lib.machine / ui_pane.UI_FILE).write_text(json.dumps({"pane": {"open": old}}))
         r.panel.desk = False
         imgui.get_io().display_size = imgui.ImVec2(*WIDE)
@@ -902,7 +902,7 @@ def test_save_as_patch_and_update_patch_keep_inside_the_narrowest_pane(tmp_path,
     """#364's 19 px: the two chips one row where they fit, and two where not."""
     with build_rig(tmp_path) as r:
         r.panel.desk = False
-        r.lib.load("presets", "party-noita")
+        r.lib.load("loadable", "party-noita")
         r.lib.loaded_patch.groups = []
         frame(r.panel, "graph")
         entry = ui_graph.group_nodes(r.panel, ["render:warp", "render:doublevision"])

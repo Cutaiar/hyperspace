@@ -217,7 +217,7 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
     for slug in PLACED:
         doc = _fixture(slug)
         assert G.read_graph(doc["graph"]).to_json() == doc["graph"]
-        dst = rig.home / "presets" / f"{slug}.json"
+        dst = rig.home / "loadable" / f"{slug}.json"
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_text((FIXTURES / f"{slug}.json").read_text())
         missing = rig.lib.load(LOADABLE, slug)
@@ -240,7 +240,7 @@ def test_no_corpus_loadable_places_an_effect_and_the_default_graph_is_identical(
     outputs' copies too, plan 35 T4), no placed node, the readout split as
     before, the pool two — and a wiring whose placements were all refused
     builds the same graph."""
-    for path in sorted((CORPUS / "presets").glob("*.json")):          # (plan 36 T3: /7)
+    for path in sorted((CORPUS / "loadable").glob("*.json")):          # (plan 36 T3: /7)
         nodes = json.loads(path.read_text())["graph"]["nodes"]
         assert not any(k in e for e in nodes for k in G.PLACE_KEYS), path.name
     for path in sorted(SOURCES.glob("*.json")):                          # (their sources)

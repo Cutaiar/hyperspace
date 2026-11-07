@@ -156,7 +156,7 @@ def _walk(r) -> list[dict]:
     """Every corpus loadable patch in turn: load it, 120 frames with one fixed lane
     vector, `view.bright` turned and settled into a step, `undo.undo()`."""
     names = sorted(r.lib.list(LOADABLE))
-    files = sorted((CORPUS / "presets").glob("*.json"))
+    files = sorted((CORPUS / "loadable").glob("*.json"))
     assert len(names) == len(files) > 0
     out = []
     for i, name in enumerate(names):

@@ -5,7 +5,7 @@ times over a stretch of each. Run on the build before and the build after, and c
     uv run python tools/app_driver.py tools/drive_sc3a.py --out <scratch>/run --every 3
 
 `--every` large is a timing run: no capture to slow the loop. Loads go through
-`panel.library.load("presets", name)`. `SC3A_LOOKS` names the looks (comma-separated);
+`panel.library.load("loadable", name)`. `SC3A_LOOKS` names the looks (comma-separated);
 the timing goes to `<cwd>/sc3a_times.json`, or `SC3A_TIMES`. `SC3A_RGBA=<dir>`: every 40th
 swap of output 1's window, its back buffer with alpha as `.npy`, and the window's
 see-through flags in the times file, for an overlay run (a `--home` whose config says
@@ -82,7 +82,7 @@ def _on_screen(win):
 
 def _raising(d, panel):
     win = panel.outputs[0].win
-    panel.library.load("presets", "party-tumble")
+    panel.library.load("loadable", "party-tumble")
     yield from d.wait(30)
     good = _on_screen(win)
     moved = _on_screen(win)
@@ -131,7 +131,7 @@ def script(d, panel):
     looks = looks.split(",") if looks else LOOKS
     out = {}
     for name in looks:
-        panel.library.load("presets", name)
+        panel.library.load("loadable", name)
         yield from d.wait(FRAMES)
         times = []
         last = time.perf_counter()

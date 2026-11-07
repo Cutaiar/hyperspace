@@ -605,17 +605,17 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
     assert sent_notes(rig, n)[-1] == 1                              # lit: there is a home
     # the patch layer
     push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
-    assert lib.current("presets") == "TRIP" and t.layer == "preset"
+    assert lib.current("loadable") == "TRIP" and t.layer == "preset"
     push(rig, note(n), note(n, 0))
-    assert lib.current("presets") == "TUMBLE" and proj.active == 0
+    assert lib.current("loadable") == "TUMBLE" and proj.active == 0
     assert sent_notes(rig, n)[-1] == 1                              # still lit after the release
     # the global layer: the same press, and the load drops the layer
     push(rig, note(apc40.N_CLIP[0], channel=6), note(apc40.N_CLIP[0], 0, channel=6))
-    assert lib.current("presets") == "MANDALA"
+    assert lib.current("loadable") == "MANDALA"
     shift(rig)
     assert t.layer == "global" and len(t.route("note", 0, n)) == 1
     push(rig, note(n), note(n, 0))
-    assert lib.current("presets") == "TUMBLE" and t.layer == "preset"
+    assert lib.current("loadable") == "TUMBLE" and t.layer == "preset"
     assert sent_notes(rig, SHIFT)[-1] == 0
     # no loadable patch may map it: a desk row on OVERDUB is dropped with a note
     notes = t.set_desk([{"source": f"note:0:{n}", "target": "view.points", "op": "toggle",
@@ -629,7 +629,7 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
     rig.midi.poll()
     assert sent_notes(rig, n)[-1] == 0
     push(rig, note(n))
-    assert lib.current("presets") == "TRIP" and lib.warning.startswith("home: this show names no")
+    assert lib.current("loadable") == "TRIP" and lib.warning.startswith("home: this show names no")
     push(rig, note(n, 0))
     assert sent_notes(rig, n)[-1] == 0                              # the echo ends with the press
     proj.startup = "TUMBLE"
@@ -736,7 +736,7 @@ def test_a_loadable_load_stops_a_glide_on_a_patch_param_and_not_on_the_dim(tmp_p
                     cc(apc40.CC_XFADE, 0)]
     frames(r, 3)
     assert set(slews) == {p.id, "output.xfade"}
-    assert r.lib.current("presets") == "TUMBLE"
+    assert r.lib.current("loadable") == "TUMBLE"
     r.loaded_patch.load("TRIP")                          # mid-glide
     loaded, dim_mid = p.base, dim.norm
     frames(r)
@@ -778,7 +778,7 @@ def test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers(rig):
     assert apc40.BANK_PADS[:8] == [(apc40.N_CLIP[0], k) for k in range(8)]
     assert apc40.BANK_PADS[8:16] == [(apc40.N_CLIP[3], k) for k in range(8)]
     assert apc40.BANK_PADS[16:] == [(apc40.N_CLIP[4], k) for k in range(8)]
-    names = [n for n in lib.list("presets")][:16]
+    names = [n for n in lib.list("loadable")][:16]
     assert len(set(names)) == 16
     for k, name in zip(range(8, 24), names):
         pr.put_slot(k, name)
@@ -791,19 +791,19 @@ def test_rows_four_and_five_load_slots_nine_to_twenty_four_on_both_layers(rig):
             (b,) = t.dispatch("note", ch, n)                   # one row, whichever layer is up
             assert (b.target, b.op, b.value, b.layer) == ("preset.select", "set", float(k), None)
             push(rig, note(n, channel=ch), note(n, 0, channel=ch))
-            assert (pr.active, lib.current("presets")) == (k, name), (k, under_shift)
+            assert (pr.active, lib.current("loadable")) == (k, name), (k, under_shift)
             assert t.layer == "preset"                         # a load drops the layer (D4)
             assert apc40.glyph(b.source) == f"G{4 + (k - 8) // 8}·{(k - 8) % 8 + 1}"
     # an empty slot: dark, and a press says so and loads nothing
     pr.clear_slot(11)
-    was = lib.current("presets")
+    was = lib.current("loadable")
     for under_shift in (False, True):
         if under_shift:
             shift(rig)
         n, ch = _far(11)
         push(rig, note(n, channel=ch), note(n, 0, channel=ch))
         assert lib.warning == "slot 12: an empty slot — hold its pad to save the live state into it"
-        assert lib.current("presets") == was
+        assert lib.current("loadable") == was
         assert sent_notes(rig, n, ch)[-1] == 0
         lib.warning = ""
     # shape selection left these rows for the cue knob (relative, every shape)
@@ -835,7 +835,7 @@ def test_the_bank_pads_are_invariant(rig):
     rows = [(b.to_json(), b.layer) for b in t.midi() if b.layer != "preset"]
     m.learner.arm("view.depth4", "desk")
     push(rig, note(n, channel=ch), note(n, 0, channel=ch))
-    assert lib.current("presets") == pr.bank[8] == "TRACER"
+    assert lib.current("loadable") == pr.bank[8] == "TRACER"
     assert m.learner.learning == "view.depth4" and not m.learner.refused
     for k, said in ((8, "G4·1 (clip 4·1)"), (15, "G4·8 (clip 4·8)"), (16, "G5·1 (clip 5·1)"),
                     (23, "G5·8 (clip 5·8)")):
@@ -859,7 +859,7 @@ def test_the_bank_pads_are_invariant(rig):
                      "meta controller's (plan 13 D6)" for _k, (n, ch) in want]
     assert [(b.to_json(), b.layer) for b in t.midi() if b.layer != "preset"] == rows
     # no corpus loadable patch's desk names a pad of rows 4 or 5
-    for name in lib.list("presets"):
-        desk = lib.read("presets", name).get("desk") or []
+    for name in lib.list("loadable"):
+        desk = lib.read("loadable", name).get("desk") or []
         assert not [d for d in desk if d["source"].startswith("note:")
                     and int(d["source"].rsplit(":", 1)[1]) in apc40.N_CLIP[3:]], name

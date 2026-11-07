@@ -213,7 +213,7 @@ def test_a_picture_put_back_saves_the_untouched_frame(tmp_path):
     from test_plan31_wiring import make_app
 
     app = make_app(seed(tmp_path))
-    app.lib.load("presets", "TRIP")
+    app.lib.load("loadable", "TRIP")
     gs = app.loaded_patch.graph
     untouched = app.loaded_patch.document("TRIP")
     assert untouched["schema"] == M.SAVE_SCHEMA

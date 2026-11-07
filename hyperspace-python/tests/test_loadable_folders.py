@@ -1,5 +1,5 @@
 """Plan 48: loadable patch folders, stage 1 — the library lists loadable patches every
-folder down under ``presets/``, a loadable patch's name is folder-qualified
+folder down under ``loadable/``, a loadable patch's name is folder-qualified
 (``party/B``), the bank points at a loadable patch by that name (a bare name is a
 top-level file, so every older show reads as it did), a save writes back
 where the loadable patch came from and a two-handed save lands beside it, and the
@@ -61,11 +61,11 @@ def lib_dirs(tmp_path):
     _put(p / "party" / "b (Dan's conflicted copy).json", "B")
     _put(p / "party" / "deep" / "c.json", "C")
     _put(p / ".cache" / "x.json", "X")
-    (root / "projects").mkdir(parents=True)
+    (root / "installs").mkdir(parents=True)
     show = {"schema": PROJECT_SCHEMA, "name": "night", "startup": "A",
             "bank": ["A", "party/B", None, None, None, None, None, None]}
-    (root / "projects" / "night.hyp.json").write_text(json.dumps(show))
-    (machine / "last_show").write_text("night\n")
+    (root / "installs" / "night.json").write_text(json.dumps(show))
+    (machine / "last_install").write_text("night\n")
     return SimpleNamespace(root=root, machine=machine, loaded_patch=p)
 
 
@@ -160,7 +160,7 @@ def test_rename_keeps_the_folder_and_repoints_the_show(lib_dirs):
     assert dst == lib_dirs.loaded_patch / "party" / "bee.json"
     assert json.loads(dst.read_text())["name"] == "BEE"
     assert pr.bank[1] == "party/BEE" and pr.bank[0] == "A"
-    shown = json.loads((lib_dirs.root / "projects" / "night.hyp.json").read_text())
+    shown = json.loads((lib_dirs.root / "installs" / "night.json").read_text())
     assert shown["bank"][1] == "party/BEE"
     # the folder may be spelled, as the list spells it; a move is refused
     assert r.lib.rename(LOADABLE, "party/BEE", "party/BUZZ").name == "buzz.json"
@@ -234,9 +234,9 @@ def test_the_two_handed_save_lands_beside_the_loaded_loadable(lib_dirs):
 def test_the_trash_is_this_macs_and_restore_returns_to_the_folder(lib_dirs):
     r = make(lib_dirs)
     lib = r.lib
-    library_before = set(tree(lib_dirs.root)) - {"presets/party/deep/c.json"}
+    library_before = set(tree(lib_dirs.root)) - {"loadable/party/deep/c.json"}
     assert lib.delete(LOADABLE, "party/deep/C")
-    kept = list((lib_dirs.machine / "trash" / "presets" / "party" / "deep").glob("c.*.json"))
+    kept = list((lib_dirs.machine / "trash" / "loadable" / "party" / "deep").glob("c.*.json"))
     assert len(kept) == 1
     assert not (lib_dirs.root / "trash").exists()            # nothing under the library
     assert set(tree(lib_dirs.root)) == library_before
@@ -252,7 +252,7 @@ def test_the_trash_is_this_macs_and_restore_returns_to_the_folder(lib_dirs):
     path.write_text(path.read_text() + "\n")       # its text is not what a save writes
     lib._sync(path)
     lib.overwrite(LOADABLE)
-    assert list((lib_dirs.machine / "trash" / "presets" / "party").glob("b.*.json"))
+    assert list((lib_dirs.machine / "trash" / "loadable" / "party").glob("b.*.json"))
     assert not (lib_dirs.root / "trash").exists()
 
 
@@ -269,7 +269,7 @@ def test_a_restore_into_a_taken_name_takes_the_next_in_its_folder(lib_dirs):
 def test_empty_removes_only_this_macs_trash_and_lists_the_old_one(lib_dirs):
     r = make(lib_dirs)
     lib = r.lib
-    old = lib_dirs.root / "trash" / "presets" / "gone.20261001-120000.json"
+    old = lib_dirs.root / "trash" / "loadable" / "gone.20261001-120000.json"
     old.parent.mkdir(parents=True)
     old.write_text(json.dumps({"name": "GONE"}))
     lib.delete(LOADABLE, "party/B")
@@ -278,7 +278,7 @@ def test_empty_removes_only_this_macs_trash_and_lists_the_old_one(lib_dirs):
     assert listed[1].name == "GONE"
     assert lib.empty_trash() == 1
     assert old.is_file()                                     # the library's own: left
-    assert not (lib_dirs.machine / "trash" / "presets" / "party").exists()
+    assert not (lib_dirs.machine / "trash" / "loadable" / "party").exists()
     # the old one restores as a copy: the shared folder's trash is never written
     before = old.read_bytes()
     assert lib.restore_trash(lib.trash()[0]) == "GONE"
@@ -369,14 +369,14 @@ def test_one_folder_is_one_library_and_trash(tmp_path):
     lib = Library(tmp_path, period=0.0)
     assert lib._old_trash() is None and lib._trash_dir() == tmp_path / "trash"
     assert library.to_trash(tmp_path / LOADABLE / "party" / "b.json", tmp_path,
-                            "presets/party").parent == tmp_path / "trash" / "presets" / "party"
+                            "loadable/party").parent == tmp_path / "trash" / "loadable" / "party"
 
 
 # ---------------------------------------------------------------- review, second pass
 
 def test_a_save_into_a_folder_not_there_never_writes_over_a_flat_file(lib_dirs):
     """Second pass 1: as… "nope/TRIP" with no `nope/` but a top-level
-    `nope-trip.json` makes `presets/nope/trip.json`; NOPE TRIP is left
+    `nope-trip.json` makes `loadable/nope/trip.json`; NOPE TRIP is left
     alone, and a delete or rename of the folder name finds nothing."""
     _put(lib_dirs.loaded_patch / "nope-trip.json", "NOPE TRIP")
     r = make(lib_dirs)
@@ -417,7 +417,7 @@ def test_a_rename_repoints_a_slot_that_named_it_by_an_old_spelling(lib_dirs):
     assert r.lib.still_named("AC - DC") == ["F3"]
     r.lib.rename(LOADABLE, "AC - DC", "THUNDER")
     assert pr.bank[2] == "THUNDER"
-    shown = json.loads((lib_dirs.root / "projects" / "night.hyp.json").read_text())
+    shown = json.loads((lib_dirs.root / "installs" / "night.json").read_text())
     assert shown["bank"][2] == "THUNDER"
 
 
@@ -428,7 +428,7 @@ def test_a_restore_into_a_folder_spelled_otherwise_takes_the_next_name(lib_dirs)
     r = make(lib_dirs)
     lib = r.lib
     lib.delete(LOADABLE, "party/B")
-    trash = lib_dirs.machine / "trash" / "presets"
+    trash = lib_dirs.machine / "trash" / "loadable"
     (kept,) = (trash / "party").glob("b.*.json")
     (trash / "Party-tmp").mkdir()
     kept.rename(trash / "Party-tmp" / kept.name)
@@ -477,9 +477,9 @@ def test_a_save_says_a_files_own_slash_went(lib_dirs):
     r = make(lib_dirs)
     r.loaded_patch.load("AC - DC")
     r.lib.overwrite(LOADABLE)
-    assert r.lib.status == "presets: saved AC - DC (was AC/DC)"
+    assert r.lib.status == "loadable: saved AC - DC (was AC/DC)"
     r.lib.overwrite(LOADABLE)
-    assert r.lib.status == "presets: saved AC - DC"
+    assert r.lib.status == "loadable: saved AC - DC"
 
 
 # ---------------------------------------------------------------- review, third pass

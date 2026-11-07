@@ -98,7 +98,7 @@ def _shipped_midi_rows() -> list[str]:
     srcs += [b.source for b in routing.factory_desk("apc40")]
     meta_file = json.loads(routing.FACTORY_FILE.read_text())
     srcs += [r["source"] for r in meta_file["bindings"]]
-    for f in sorted((CORPUS / "presets").glob("*.json")):
+    for f in sorted((CORPUS / "loadable").glob("*.json")):
         srcs += [r["source"] for r in json.loads(f.read_text()).get("desk") or []]
     return [s for s in srcs if s.startswith(("cc:", "note:"))]
 
@@ -119,7 +119,7 @@ def _glyphs(rows) -> set[str]:
 
 def test_the_diagram_lights_the_loaded_loadables_desk_and_the_invariant_controls(rig):
     lib, table, panel = rig.lib, rig.router.table, rig.panel
-    lib.load("presets", "TRIP")
+    lib.load("loadable", "TRIP")
     assert table.layer == "preset" and table.desk()
     inv = _glyphs(table.invariant_rows())
     assert "⇧" in inv and "SM" in inv
@@ -259,7 +259,7 @@ def test_the_routing_rows_print_the_glyph(rig, monkeypatch):
     monkeypatch.setattr(imgui, "text", lambda s: (texts.append(s), real_text(s))[1])
     monkeypatch.setattr(imgui, "text_colored",
                         lambda c, s: (texts.append(s), real_col(c, s))[1])
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     frame(rig.panel, "routing")
     frame(rig.panel)
     desk = rig.router.table.desk()
@@ -357,7 +357,7 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
     scroll range. On both layers."""
     panel, table, reg = rig.panel, rig.router.table, rig.reg
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     reg["ui.panel"].set(False)
     glyphs = {c.glyph for c in apc40.LAYOUT}
     for layer in ("preset", "global"):
@@ -413,7 +413,7 @@ def test_the_small_desk_draws_glyphs_only(rig, monkeypatch):
     room left of the panel, never over it."""
     panel = rig.panel
     imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     got = _desk_frames(rig, monkeypatch)
     st = ui_desk._state(panel)
     assert st["labels"] == [] and st["unit"][0] < ui_desk.LABEL_UNIT
@@ -567,7 +567,7 @@ def test_a_click_picks_and_a_second_click_lets_go(rig, monkeypatch):
     panel, table = rig.panel, rig.router.table
     imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     pushes = _pushes(monkeypatch)
     rows = [b.to_json() for b in table.bindings]
     d3, d4 = _control("D3"), _control("D4")

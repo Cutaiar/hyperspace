@@ -34,7 +34,7 @@ TEMPLATED = FIXTURES / "presets" / "templated.json"
 
 
 def put_fixtures(home: Path) -> None:
-    for src, group in ((TEMPLATED, "presets"), (TEMPLATE, "desk")):
+    for src, group in ((TEMPLATED, "loadable"), (TEMPLATE, "desk")):
         (home / group).mkdir(parents=True, exist_ok=True)
         shutil.copy(src, home / group / src.name)
 
@@ -72,12 +72,12 @@ def test_an_old_templated_loadable_loads_its_own_rows_and_saves_without_the_key(
     assert [r["source"] for r in desk] == ["cc:*:17", "cc:0:50"]
     assert {r["target"] for r in desk} == {"dream.mix", "view.pattern_mix"}
     doc = rig.loaded_patch.document("TEMPLATED")
-    assert doc["schema"] == "hyperspace.preset/10"
+    assert doc["schema"] == "hyperspace.loadable/11"
     assert "desk_template" not in doc and "modules" not in doc
     path = rig.loaded_patch.save_as("TEMPLATED")
     first = path.read_bytes()
     rig.loaded_patch.load("TEMPLATED")
-    assert rig.loaded_patch.notes == [] and not rig.lib.is_dirty("presets")
+    assert rig.loaded_patch.notes == [] and not rig.lib.is_dirty("loadable")
     assert rig.loaded_patch.save_as("TEMPLATED").read_bytes() == first      # a fixed point
     # the template file is never read, never written
     assert (rig.home / "desk" / TEMPLATE.name).read_bytes() == TEMPLATE.read_bytes()
@@ -98,12 +98,12 @@ def test_the_tool_rewrites_a_templated_loadable_on_a_scratch_copy(tmp_path, monk
     monkeypatch.setenv("HYPERSPACE_HOME", str(home))
     code = tool.main(["--library", str(lib), "--apply"], picture=lambda p, **kw: ([], []))
     assert code == 0
-    doc = json.loads((lib / "presets" / TEMPLATED.name).read_text())
-    assert doc["schema"] == tool.NEWEST == "hyperspace.preset/10"
+    doc = json.loads((lib / "loadable" / TEMPLATED.name).read_text())
+    assert doc["schema"] == tool.NEWEST == "hyperspace.loadable/11"
     assert "desk_template" not in doc and "modules" not in doc
     backups = list(home.glob("library-backup-*"))
     assert len(backups) == 1
-    assert json.loads((backups[0] / "presets" / TEMPLATED.name).read_text()) == json.loads(
+    assert json.loads((backups[0] / "loadable" / TEMPLATED.name).read_text()) == json.loads(
         TEMPLATED.read_text())
     assert (lib / "desk" / TEMPLATE.name).read_bytes() == TEMPLATE.read_bytes()
 

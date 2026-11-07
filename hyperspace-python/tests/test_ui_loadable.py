@@ -44,7 +44,7 @@ def _rects(panel):
 
 def _page(panel, n: int = 2):
     """The PRESETS page drawn `n` frames; the page's state."""
-    page_frame(panel, "presets")
+    page_frame(panel, "loadable")
     for _ in range(n - 1):
         page_frame(panel)
     return ui_loadable._state(panel)
@@ -84,19 +84,19 @@ def test_the_page_is_strip_list_patches_show_top_to_bottom(rig):  # noqa: F811
     panel = rig.panel
     st = _page(panel)
     rects, page = st["rects"], st["page"]
-    assert {"strip.presets.name", "strip.presets.next", "strip.presets.new",
-            "strip.presets.save", "strip.presets.as"} <= set(rects)
+    assert {"strip.loadable.name", "strip.loadable.next", "strip.loadable.new",
+            "strip.loadable.save", "strip.loadable.as"} <= set(rects)
     assert {"show.line", "show.name", "show.menu", "show.save", "show.save_as",
             "show.new"} <= set(rects)
-    assert not [k for k in rects if k.startswith(("preset.", "starts_on", "strip.presets.reset"))]
+    assert not [k for k in rects if k.startswith(("preset.", "starts_on", "strip.loadable.reset"))]
     assert "bank_labels" not in st and "slot_menu" not in st and "dangling" not in st
-    new, save, as_ = (rects[f"strip.presets.{k}"] for k in ("new", "save", "as"))
+    new, save, as_ = (rects[f"strip.loadable.{k}"] for k in ("new", "save", "as"))
     assert new[2] <= save[0] < save[2] <= as_[0]                 # new · save · as…, in a row
     rows = page["rects"]["rows"]
-    assert rects["strip.presets.name"][3] <= rows[1]            # the strip over the list
+    assert rects["strip.loadable.name"][3] <= rows[1]            # the strip over the list
     assert rows[3] <= rects["show.line"][1]                      # the show line under it
     assert rects["show.line"][3] <= rects["show.name"][1]        # then the show's own row
-    assert page["group"] == "presets"
+    assert page["group"] == "loadable"
 
 
 def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # noqa: F811
@@ -106,15 +106,15 @@ def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # no
     got = _labels(monkeypatch)
     _page(panel)
     assert "—##name" in got["button"]
-    lib.load("presets", "TRIP")
+    lib.load("loadable", "TRIP")
     got["button"].clear()
     page_frame(panel)
     assert "TRIP##name" in got["button"]
     st = ui_loadable._state(panel)
-    _click(panel, st["rects"]["strip.presets.name"])
+    _click(panel, st["rects"]["strip.loadable.name"])
     page_frame(panel)
     assert "list" not in st                                       # no popup list opened
-    assert lib.current("presets") == "TRIP"
+    assert lib.current("loadable") == "TRIP"
 
 
 def test_the_list_is_every_loadable_by_name_with_rename_and_cross(rig):  # noqa: F811
@@ -125,7 +125,7 @@ def test_the_list_is_every_loadable_by_name_with_rename_and_cross(rig):  # noqa:
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     st = _page(panel)
     page = st["page"]
-    listing = lib.list("presets")
+    listing = lib.list("loadable")
     assert len(listing) == 25 and listing == sorted(listing, key=str.lower)
     assert {"TUMBLE", "BIG BLUE WAVE", "legacy6", "seq-demo", "DIAL"} <= set(listing)
     assert page["rows"] == [(name, ("rename", "×")) for name in listing]
@@ -143,16 +143,16 @@ def test_a_click_on_a_row_loads_it_and_the_loaded_row_is_selected(rig, monkeypat
     panel, lib = rig.panel, rig.lib
     got = _labels(monkeypatch)
     st = _page(panel)
-    assert lib.current("presets") is None
+    assert lib.current("loadable") is None
     assert not [label for label, on in got["selectable"] if on]
     _click(panel, st["page"]["rects"]["row.FIELD"])
-    assert lib.current("presets") == "FIELD" and not lib.is_dirty("presets")
-    assert rig.view.shape == lib.read("presets", "FIELD")["values"]["view.shape"]
+    assert lib.current("loadable") == "FIELD" and not lib.is_dirty("loadable")
+    assert rig.view.shape == lib.read("loadable", "FIELD")["values"]["view.shape"]
     got["selectable"].clear()
     page_frame(panel)
     assert [label for label, on in got["selectable"] if on] == ["FIELD##pick"]
     _click(panel, st["page"]["rects"]["row.ACID"])
-    assert lib.current("presets") == "ACID"
+    assert lib.current("loadable") == "ACID"
 
 
 def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # noqa: F811
@@ -163,8 +163,8 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     st = _page(panel)
     page = st["page"]
     _click(panel, page["rects"]["×.DIAL"])
-    assert not (tmp_path / "presets" / "dial.json").exists()
-    assert [t.name for t in lib.trash()] == ["DIAL"] and "DIAL" not in lib.list("presets")
+    assert not (tmp_path / "loadable" / "dial.json").exists()
+    assert [t.name for t in lib.trash()] == ["DIAL"] and "DIAL" not in lib.list("loadable")
     assert lib.status == "DIAL is in the trash — the PRESETS section's trash can restore it"
     page_frame(panel)
     page = st["page"]
@@ -172,22 +172,22 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     assert page["foot"] == ["trash (1) ▸"] and "trash" in page["rects"]
     _click(panel, page["rects"]["×.ACID"])                       # F6's loadable patch
     assert lib.warning.startswith("ACID is in the trash — F6 still names it")
-    assert lib.project.bank[5] == "ACID" and "ACID" not in lib.list("presets")
+    assert lib.project.bank[5] == "ACID" and "ACID" not in lib.list("loadable")
     page_frame(panel)
     assert st["page"]["foot"] == ["trash (2) ▸"]
 
 
 def test_a_folder_loadable_sits_under_its_header_and_renames_in_its_folder(rig):  # noqa: F811
     """Plan 48 row 588, under stage 2's tree (row 636): a loadable patch in
-    ``presets/party/`` is listed as ``party/DIAL`` and drawn under the
+    ``loadable/party/`` is listed as ``party/DIAL`` and drawn under the
     ``party`` header by its leaf, its chips clear of it; `rename` seeds
     the field with the leaf alone, and the file stays in its folder.
     (The window tall enough that the folder, after every top-level
     loadable patch, is in view.)"""
     panel, lib = rig.panel, rig.lib
     imgui.get_io().display_size = imgui.ImVec2(CONTROL_SIZE[0], 2400)
-    src = lib.path_of("presets", "DIAL")
-    folder = lib.home / "presets" / "party"
+    src = lib.path_of("loadable", "DIAL")
+    folder = lib.home / "loadable" / "party"
     folder.mkdir()
     src.rename(folder / "dial.json")
     st = _page(panel)
@@ -203,9 +203,9 @@ def test_a_folder_loadable_sits_under_its_header_and_renames_in_its_folder(rig):
     _click(panel, ren)
     page_frame(panel)
     assert st["naming"] == "rename:party/DIAL" and st["buf"] == "DIAL"
-    lib.rename("presets", "party/DIAL", st["buf"] + " TWO")
+    lib.rename("loadable", "party/DIAL", st["buf"] + " TWO")
     st["naming"] = None
-    assert (folder / "dial-two.json").is_file() and "party/DIAL TWO" in lib.list("presets")
+    assert (folder / "dial-two.json").is_file() and "party/DIAL TWO" in lib.list("loadable")
 
 
 def test_rename_turns_the_row_into_the_field_and_enter_renames(rig, tmp_path):  # noqa: F811
@@ -213,7 +213,7 @@ def test_rename_turns_the_row_into_the_field_and_enter_renames(rig, tmp_path):  
     name; Enter renames the file (the name inside it too) and the list
     re-lists under the new name. A taken name is refused on the footer."""
     panel, lib = rig.panel, rig.lib
-    lib.load("presets", "DIAL")
+    lib.load("loadable", "DIAL")
     st = _page(panel)
     _click(panel, st["page"]["rects"]["rename.DIAL"])
     page_frame(panel)
@@ -228,17 +228,17 @@ def test_rename_turns_the_row_into_the_field_and_enter_renames(rig, tmp_path):  
     page_frame(panel)
     page_frame(panel)
     assert st["naming"] is None
-    assert lib.current("presets") == "DIAL TWO"
-    assert (tmp_path / "presets" / "dial-two.json").is_file()
-    assert not (tmp_path / "presets" / "dial.json").exists()
-    assert json.loads((tmp_path / "presets" / "dial-two.json").read_text())["name"] == "DIAL TWO"
+    assert lib.current("loadable") == "DIAL TWO"
+    assert (tmp_path / "loadable" / "dial-two.json").is_file()
+    assert not (tmp_path / "loadable" / "dial.json").exists()
+    assert json.loads((tmp_path / "loadable" / "dial-two.json").read_text())["name"] == "DIAL TWO"
     assert lib.status.startswith("renamed DIAL → DIAL TWO")
     names = [n for n, _ in st["page"]["rows"]]
-    assert "DIAL TWO" in names and "DIAL" not in names and names == lib.list("presets")
+    assert "DIAL TWO" in names and "DIAL" not in names and names == lib.list("loadable")
     # a refused rename shows on the warning line (the footer), nothing moves
     ui_loadable._rename(panel, "DIAL TWO", "TRIP")
     assert lib.warning.startswith("library: TRIP: that name is taken")
-    assert lib.list("presets").count("TRIP") == 1 and "DIAL TWO" in lib.list("presets")
+    assert lib.list("loadable").count("TRIP") == 1 and "DIAL TWO" in lib.list("loadable")
 
 
 def test_the_trash_foot_shows_only_while_the_trash_holds_something_and_restores(
@@ -249,19 +249,19 @@ def test_the_trash_foot_shows_only_while_the_trash_holds_something_and_restores(
     panel, lib = rig.panel, rig.lib
     st = _page(panel)
     assert st["page"]["foot"] == [] and "trash" not in st["page"]["rects"]
-    assert lib.delete("presets", "DIAL")
-    ui_loadable.invalidate(panel, "presets")
+    assert lib.delete("loadable", "DIAL")
+    ui_loadable.invalidate(panel, "loadable")
     page_frame(panel)
     page_frame(panel)
     assert st["page"]["foot"] == ["trash (1) ▸"]
     _click(panel, st["page"]["rects"]["trash"])
     page_frame(panel)
     view = st["trash_view"]
-    assert [(g, n) for g, n, _when in view["rows"]] == [("presets", "DIAL")]
+    assert [(g, n) for g, n, _when in view["rows"]] == [("loadable", "DIAL")]
     assert view["empty"] == "empty trash…"
     _click(panel, view["rects"]["restore.0"])
-    assert lib.status == "restored DIAL" and "DIAL" in lib.list("presets")
-    assert (tmp_path / "presets" / "dial.json").is_file() and lib.trash() == []
+    assert lib.status == "restored DIAL" and "DIAL" in lib.list("loadable")
+    assert (tmp_path / "loadable" / "dial.json").is_file() and lib.trash() == []
     page_frame(panel)
     page_frame(panel)
     assert st["page"]["foot"] == [] and "trash" not in st["page"]["rects"]
@@ -273,9 +273,9 @@ def test_the_list_fills_the_page_and_never_pushes_the_show_line_off(rig, monkeyp
     MIN_ROWS rows, scrolling inside itself past that — so the show line
     sits under it on a short window and a tall one."""
     panel, lib = rig.panel, rig.lib
-    lib.load("presets", "TRIP")
+    lib.load("loadable", "TRIP")
     lib.warning = ""        # (the rig has no envelopes: the `/7`'s env ids are unknown here)
-    assert len(lib.list("presets")) == 25
+    assert len(lib.list("loadable")) == 25
     for size in ((820, 820), CONTROL_SIZE):
         imgui.get_io().display_size = imgui.ImVec2(*size)
         st = _page(panel, 3)
@@ -309,7 +309,7 @@ def _dirty(r):
     view's) is dirty."""
     reg = r.reg
     reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
-    assert r.lib.is_dirty("presets")
+    assert r.lib.is_dirty("loadable")
 
 
 def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
@@ -318,14 +318,14 @@ def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
     show. An edit brings the loadable patch's back; a meta controller move the show's."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     for name in ("TRIP", "WAKE", "BIG BLUE WAVE"):
-        lib.load("presets", name)
+        lib.load("loadable", name)
         groups = [g for _k, _t, grp, _b in ui_pane.SECTIONS for g in grp]
         lit = [g for g in groups if ui_loadable.dirty(panel, g)]
         assert lit == [], f"{name}: dirty dots on {lit}"
         assert not lib.project.is_dirty(), "the show is not unsaved"
-    page_frame(panel, "presets")
+    page_frame(panel, "loadable")
     reg["view.bright"].set_value(reg["view.bright"].value + 1.0)   # an edit: the dot comes back
-    assert ui_loadable.dirty(panel, "view") and ui_loadable.dirty(panel, "presets")
+    assert ui_loadable.dirty(panel, "view") and ui_loadable.dirty(panel, "loadable")
     assert not lib.project.is_dirty()                     # a performance move: the loadable patch's
     reg["master.gain"].set(reg["master.gain"].value + 1.0)  # a meta controller move: the show's
     assert ui_loadable.dirty(panel, "master") and lib.project.is_dirty()
@@ -338,37 +338,37 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noq
     only word it has. The row does not grow. Saved: the dot goes and the
     chip is quiet again."""
     panel, lib = rig.panel, rig.lib
-    lib.load("presets", "BIG BLUE WAVE")
+    lib.load("loadable", "BIG BLUE WAVE")
     st = _page(panel)
     clean = dict(st["rects"])
-    assert "strip.presets.dot" not in clean
-    assert st["save"]["strip.presets"] == ("save", False)
-    assert ui_loadable.save_label(lib, "presets") == "save"
-    assert ui_loadable.save_tip(lib, "presets") == (
+    assert "strip.loadable.dot" not in clean
+    assert st["save"]["strip.loadable"] == ("save", False)
+    assert ui_loadable.save_label(lib, "loadable") == "save"
+    assert ui_loadable.save_tip(lib, "loadable") == (
         "Write the settings over BIG BLUE WAVE (the old file goes to the trash)")
     _dirty(rig)
     page_frame(panel)
     page_frame(panel)
     rects = st["rects"]
-    x0, y0, x1, y1 = rects["strip.presets.dot"]
+    x0, y0, x1, y1 = rects["strip.loadable.dot"]
     assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R == 12
-    name = rects["strip.presets.name"]
+    name = rects["strip.loadable.name"]
     assert abs((y0 + y1) / 2 - (name[1] + name[3]) / 2) < 0.5     # on the name's middle
-    assert name[2] <= x0 and x1 <= rects["strip.presets.next"][0]  # between the name and ▶
-    assert st["save"]["strip.presets"] == ("save", True)          # lit while dirty
-    for key in ("strip.presets.name", "strip.presets.new", "strip.presets.save",
-                "strip.presets.as", "show.name"):
+    assert name[2] <= x0 and x1 <= rects["strip.loadable.next"][0]  # between the name and ▶
+    assert st["save"]["strip.loadable"] == ("save", True)          # lit while dirty
+    for key in ("strip.loadable.name", "strip.loadable.new", "strip.loadable.save",
+                "strip.loadable.as", "show.name"):
         assert rects[key][1] == clean[key][1] and rects[key][3] == clean[key][3], key
-    _click(panel, rects["strip.presets.save"])
-    assert not lib.is_dirty("presets") and lib.status == "presets: saved BIG BLUE WAVE"
+    _click(panel, rects["strip.loadable.save"])
+    assert not lib.is_dirty("loadable") and lib.status == "loadable: saved BIG BLUE WAVE"
     assert [t.name for t in lib.trash()] == ["BIG BLUE WAVE"]      # the old text, kept
     page_frame(panel)
-    assert "strip.presets.dot" not in st["rects"]
-    assert st["save"]["strip.presets"] == ("save", False)
+    assert "strip.loadable.dot" not in st["rects"]
+    assert st["save"]["strip.loadable"] == ("save", False)
     # nothing loaded: "save", disabled, and the hover says what as… does
-    lib.reland("presets", (None, None, None))
-    assert ui_loadable.save_label(lib, "presets") == "save"
-    assert ui_loadable.save_tip(lib, "presets").startswith("No preset loaded")
+    lib.reland("loadable", (None, None, None))
+    assert ui_loadable.save_label(lib, "loadable") == "save"
+    assert ui_loadable.save_tip(lib, "loadable").startswith("No preset loaded")
 
 
 def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa: F811
@@ -378,18 +378,18 @@ def test_save_writes_over_the_loaded_loadables_own_file(rig, tmp_path):  # noqa:
     stems the build shipped, as the owner's migrated library may): a save
     must not leave a second TRIP beside it."""
     panel, lib = rig.panel, rig.lib
-    lib.load("presets", "TRIP")
-    path = lib.path_of("presets", "TRIP")
-    assert path == tmp_path / "presets" / "party-trip.json"
+    lib.load("loadable", "TRIP")
+    path = lib.path_of("loadable", "TRIP")
+    assert path == tmp_path / "loadable" / "party-trip.json"
     was = path.read_bytes()
     _dirty(rig)
     st = _page(panel)
-    _click(panel, st["rects"]["strip.presets.save"])
-    assert not lib.is_dirty("presets") and lib.current("presets") == "TRIP"
-    assert lib.path_of("presets", "TRIP") == path and path.read_bytes() != was
+    _click(panel, st["rects"]["strip.loadable.save"])
+    assert not lib.is_dirty("loadable") and lib.current("loadable") == "TRIP"
+    assert lib.path_of("loadable", "TRIP") == path and path.read_bytes() != was
     assert [t.name for t in lib.trash()] == ["TRIP"]
-    assert lib.list("presets").count("TRIP") == 1 and len(lib.list("presets")) == 25
-    assert sorted(p.name for p in (tmp_path / "presets").glob("*trip*")) == ["party-trip.json"]
+    assert lib.list("loadable").count("TRIP") == 1 and len(lib.list("loadable")) == 25
+    assert sorted(p.name for p in (tmp_path / "loadable").glob("*trip*")) == ["party-trip.json"]
 
 
 def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  # noqa: F811
@@ -398,25 +398,25 @@ def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):
     size, the longest name loaded and dirty, the strip's items — ◀ name ●
     ▶ · new · save · as… — clear one another and the page's edge."""
     panel, lib = rig.panel, rig.lib
-    assert lib.default_name("presets") is None                 # what reset would load: none
+    assert lib.default_name("loadable") is None                 # what reset would load: none
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-    longest = max(lib.list("presets"), key=lambda n: (len(n), n))
-    lib.load("presets", longest)
+    longest = max(lib.list("loadable"), key=lambda n: (len(n), n))
+    lib.load("loadable", longest)
     lib.warning = ""        # (the rig has no envelopes: the `/7`'s env ids are unknown here)
     _dirty(rig)
     st = _page(panel, 3)
     rects = st["rects"]
-    assert "strip.presets.reset" not in rects
-    assert st["save"]["strip.presets"] == ("save", True)
+    assert "strip.loadable.reset" not in rects
+    assert st["save"]["strip.loadable"] == ("save", True)
     page_right = st["page"]["rects"]["rows"][2]
-    items = {k: r for k, r in rects.items() if k.startswith("strip.presets.")}
-    assert set(items) == {f"strip.presets.{k}" for k in ("name", "dot", "next", "new", "save", "as")}
+    items = {k: r for k, r in rects.items() if k.startswith("strip.loadable.")}
+    assert set(items) == {f"strip.loadable.{k}" for k in ("name", "dot", "next", "new", "save", "as")}
     keys = sorted(items)
     for i, a in enumerate(keys):
         assert items[a][2] <= page_right + 1, a
         for b in keys[i + 1:]:
             assert not _overlap(items[a], items[b]), (a, b)
-    assert not any(k.startswith("strip.") and not k.startswith("strip.presets.") for k in rects)
+    assert not any(k.startswith("strip.") and not k.startswith("strip.loadable.") for k in rects)
 
 
 @pytest.mark.parametrize("width", [258.0, 340.0, 600.0])
@@ -465,18 +465,18 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
     called = []
     monkeypatch.setattr(lib.loaded_patch, "new", lambda at: called.append(1) or [loadable.NEW_SAID])
     rects = _page(panel)["rects"]
-    assert "strip.presets.new" in rects and "strip.presets.save" in rects
-    assert rects["strip.presets.new"][2] <= rects["strip.presets.save"][0]
+    assert "strip.loadable.new" in rects and "strip.loadable.save" in rects
+    assert rects["strip.loadable.new"][2] <= rects["strip.loadable.save"][0]
     assert [k for k in rects if k.endswith(".new") and k.startswith("strip.")] == [
-        "strip.presets.new"]
-    _click(panel, rects["strip.presets.new"])
+        "strip.loadable.new"]
+    _click(panel, rects["strip.loadable.new"])
     assert called == [1]
     monkeypatch.undo()
     lib.loaded_patch.new()
-    assert lib.current("presets") == loadable.UNTITLED_PATCH
+    assert lib.current("loadable") == loadable.UNTITLED_PATCH
     page_frame(panel)
-    _click(panel, _rects(panel)["strip.presets.save"])
-    assert ui_loadable._state(panel)["naming"] == "presets"
+    _click(panel, _rects(panel)["strip.loadable.save"])
+    assert ui_loadable._state(panel)["naming"] == "loadable"
 
 
 def test_new_then_save_never_writes_over_a_loadable_named_untitled(rig):  # noqa: F811
@@ -491,16 +491,16 @@ def test_new_then_save_never_writes_over_a_loadable_named_untitled(rig):  # noqa
     was = path.read_bytes()
     assert not lib.loaded_patch.unsaved
     lib.loaded_patch.new()
-    assert lib.loaded_patch.unsaved and lib.path_of("presets", loadable.UNTITLED_PATCH) == path
+    assert lib.loaded_patch.unsaved and lib.path_of("loadable", loadable.UNTITLED_PATCH) == path
     _page(panel)
-    _click(panel, _rects(panel)["strip.presets.save"])
+    _click(panel, _rects(panel)["strip.loadable.save"])
     st = ui_loadable._state(panel)
-    assert st["naming"] == "presets" and st["buf"] == ""
+    assert st["naming"] == "loadable" and st["buf"] == ""
     assert path.read_bytes() == was
     st["naming"] = None
     page_frame(panel)
-    _click(panel, _rects(panel)["strip.presets.as"])
-    assert st["naming"] == "presets" and st["buf"] == ""
+    _click(panel, _rects(panel)["strip.loadable.as"])
+    assert st["naming"] == "loadable" and st["buf"] == ""
     st["naming"] = None
     lib.loaded_patch.save_as("blank")
     assert not lib.loaded_patch.unsaved
@@ -517,7 +517,7 @@ def test_the_routing_head_draws_save_and_as_over_the_loadables(rig):  # noqa: F8
     from hyperspace import ui_routing
 
     panel, lib = rig.panel, rig.lib
-    lib.load("presets", "BIG BLUE WAVE")
+    lib.load("loadable", "BIG BLUE WAVE")
     page_frame(panel, "routing")
     page_frame(panel)
     st = ui_loadable._state(panel)
@@ -528,7 +528,7 @@ def test_the_routing_head_draws_save_and_as_over_the_loadables(rig):  # noqa: F8
     page_frame(panel)
     assert st["save"]["head"] == ("save", True) and "head.dot" in st["rects"]
     _click(panel, st["rects"]["head.save"])
-    assert not lib.is_dirty("presets") and lib.status == "presets: saved BIG BLUE WAVE"
+    assert not lib.is_dirty("loadable") and lib.status == "loadable: saved BIG BLUE WAVE"
     page_frame(panel)
     assert st["save"]["head"] == ("save", False) and "head.dot" not in st["rects"]
     ui_loadable._begin_naming(panel, ui_routing.NAMING, "Mine")
@@ -536,7 +536,7 @@ def test_the_routing_head_draws_save_and_as_over_the_loadables(rig):  # noqa: F8
     ui_routing._save_as(panel, "Mine")
     st["naming"] = None
     page_frame(panel)
-    assert lib.current("presets") == "Mine" and (lib.home / "presets" / "mine.json").is_file()
+    assert lib.current("loadable") == "Mine" and (lib.home / "loadable" / "mine.json").is_file()
 
 
 # ------------------------------------------------------------ the trash (plan 19 WP4)
@@ -550,18 +550,18 @@ def _trash_view(panel):
 
 def test_old_trash_rows_say_so_and_nothing_to_empty_draws_no_chip(rig, monkeypatch):  # noqa: F811
     """Plan 48 review: a row from the library's old trash carries
-    "presets · library" in itself; when only such rows are listed there is
+    "loadable · library" in itself; when only such rows are listed there is
     nothing "empty" would remove, so no chip to arm."""
     from hyperspace.library import Trashed
     panel, lib = rig.panel, rig.lib
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-    old = Trashed(lib.home / "trash" / "presets" / "gone.20261001-120000.json", "presets",
+    old = Trashed(lib.home / "trash" / "loadable" / "gone.20261001-120000.json", "loadable",
                   "GONE", "Oct 1 12:00", "", True)
     monkeypatch.setattr(lib, "trash", lambda: [old])
-    ui_loadable.invalidate(panel, "presets")
+    ui_loadable.invalidate(panel, "loadable")
     _st, view = _trash_view(panel)
-    assert view["rows"] == [("presets", "GONE", "Oct 1 12:00")]
-    assert view["tags"] == ["presets · library"] and view["old"] == 1
+    assert view["rows"] == [("loadable", "GONE", "Oct 1 12:00")]
+    assert view["tags"] == ["loadable · library"] and view["old"] == 1
     assert view["empty"] is None and "empty" not in view["rects"]
 
 
@@ -576,10 +576,10 @@ def test_empty_asks_once_and_disarms(rig, tmp_path):  # noqa: F811
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
 
     def fill():
-        lib.load("presets", "TRIP")
-        lib.save_as("presets", "A MINE")
-        lib.delete("presets", "A MINE")
-        ui_loadable.invalidate(panel, "presets")
+        lib.load("loadable", "TRIP")
+        lib.save_as("loadable", "A MINE")
+        lib.delete("loadable", "A MINE")
+        ui_loadable.invalidate(panel, "loadable")
 
     fill()
     st, view = _trash_view(panel)
@@ -664,7 +664,7 @@ def test_the_patches_fold_lists_patches_with_rename_and_cross_and_no_pick(
     monkeypatch.setattr(lib, "load", lambda *a, **k: loads.append(a))
     monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
         (True, True) if label == "my wash##pick" else real_selectable(label, *a, **k)))
-    page_frame(panel, "presets")
+    page_frame(panel, "loadable")
     drawn = ui_loadable._state(panel)["patches"]
     assert drawn["group"] == PATCHES and drawn["foot"] == []
     assert drawn["rows"] == [("acid wash", ("rename", "×")), ("my wash", ("rename", "×"))]
@@ -720,7 +720,7 @@ def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa:
     panel, lib = rig.panel, rig.lib
     assert lib.project.list() == ["house", "party"]
     st = _page(panel)
-    assert lib.project.name == "party" and lib.current("presets") is None
+    assert lib.project.name == "party" and lib.current("loadable") is None
     seen: list[str] = []
     real = imgui.selectable
     monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
@@ -733,7 +733,7 @@ def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa:
         (True, True) if label == "house" else real(label, *a, **k)))
     page_frame(panel)
     assert lib.project.name == "house" and lib.project.stem == "house"
-    assert lib.current("presets") == "BIG BLUE WAVE"             # the house show's startup
+    assert lib.current("loadable") == "BIG BLUE WAVE"             # the house show's startup
     assert lib.project.bank[0] == "BIG BLUE WAVE" and not lib.project.is_dirty()
 
 
@@ -743,23 +743,23 @@ def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
     `untitled` show with every pad empty and nothing to start on."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
     proj = lib.project
-    show = tmp_path / "projects" / "party.hyp.json"
+    show = tmp_path / "installs" / "party.json"
     st = _page(panel)
     reg["master.gain"].set(reg["master.gain"].value + 1.0)
     assert proj.is_dirty()
     _click(panel, st["rects"]["show.save"])
     assert not proj.is_dirty() and lib.status == "show: saved party"
-    assert json.loads(show.read_text())["session"]["master.gain"] == reg["master.gain"].value
+    assert json.loads(show.read_text())["tuning"]["master.gain"] == reg["master.gain"].value
     _click(panel, st["rects"]["show.save_as"])
     assert st["naming"] == ui_loadable.PROJECT and st["buf"] == "party"
     page_frame(panel)                                              # the field stands in for the row
     ui_loadable._project_save_as(panel, "FRIDAY")
     st["naming"] = None
     page_frame(panel)
-    assert proj.name == "FRIDAY" and proj.path == tmp_path / "projects" / "friday.hyp.json"
+    assert proj.name == "FRIDAY" and proj.path == tmp_path / "installs" / "friday.json"
     assert proj.path.is_file() and not proj.is_dirty()
     assert ui_loadable.names(panel, ui_loadable.PROJECT) == ["friday", "house", "party"]
-    assert (tmp_path / "last_show").read_text() == "friday\n"
+    assert (tmp_path / "last_install").read_text() == "friday\n"
     _click(panel, st["rects"]["show.new"])
     assert proj.name == "untitled" and proj.path is None and proj.is_dirty()
     assert proj.bank == [None] * 24 and proj.startup is None
@@ -777,9 +777,9 @@ def test_nothing_on_the_page_says_starts_on_f_keys_hidden_or_factory(rig, monkey
     a patch in its fold and the show line drawn. The page says show and
     loadable patch, never project or startup."""
     panel, lib = rig.panel, rig.lib
-    lib.load("presets", "TRIP")
-    lib.delete("presets", "DIAL")
-    ui_loadable.invalidate(panel, "presets")
+    lib.load("loadable", "TRIP")
+    lib.delete("loadable", "DIAL")
+    ui_loadable.invalidate(panel, "loadable")
     (lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
     (lib.home / PATCHES / "acid-wash.json").write_text(ACID_WASH.read_text())
     _open_patches(monkeypatch)

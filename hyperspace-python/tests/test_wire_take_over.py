@@ -406,7 +406,7 @@ def test_a_press_after_a_reload_of_the_same_loadable_refuses(rig):  # noqa: F811
     trip(rig)
     spawned(rig)
     plan = edit(rig).take_over_of(GID)
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     assert ui_graph.take_over(rig.panel, plan) is not None
     assert HUECYCLE in wires(rig)
 
@@ -484,7 +484,7 @@ def test_a_load_taking_the_group_under_a_held_chip_says_so_at_the_release(driven
     r, d, st = driven
     d.run(d.move(CHIP), d.press(True), d.wait(2))
     assert st.get("take_over_asked") is not None
-    r.lib.load("presets", "party-noita")
+    r.lib.load("loadable", "party-noita")
     d.run(d.wait(2))
     assert CHIP not in d.rects
     wired = wires(r)

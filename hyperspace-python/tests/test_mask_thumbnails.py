@@ -352,9 +352,9 @@ def test_a_hot_reload_makes_the_mask_pass_again(ctx):
 
 def _segment_page(rig, groups=()):
     """The saved `segment-motion` on the GRAPH page, drawn twice."""
-    (Path(rig.lib.home) / "presets").mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURE, Path(rig.lib.home) / "presets" / FIXTURE.name)
-    rig.lib.load("presets", FIXTURE.stem)
+    (Path(rig.lib.home) / "loadable").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURE, Path(rig.lib.home) / "loadable" / FIXTURE.name)
+    rig.lib.load("loadable", FIXTURE.stem)
     rig.lib.loaded_patch.groups = [dict(g) for g in groups]
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")

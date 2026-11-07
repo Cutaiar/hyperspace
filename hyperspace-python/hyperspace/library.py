@@ -17,7 +17,15 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   code (hyperspace/scenes/band/, control.py) — a band
                   loadable patch in the library is the user's own, and a strip
                   load tells the scene combo through ``on_load``.
-  project         the show — ``{"schema": "hyperspace.project/3",
+  install file    the meta controller's file, one per install (plan 57 §5):
+                  ``installs/<name>.json``, ``{"schema": "hyperspace.install/1",
+                  "name", "note", "startup", "bank", "plays", "tuning", "modules",
+                  "layout"}``. ``tuning`` is what the show below called ``session``;
+                  ``plays`` is the playlist a launch starts (SM6). A library not
+                  yet moved by tools/migrate_library.py opens as it is and saves
+                  in its old folders, newest schema (`loadable_dir`, `installs_dir`,
+                  `not_moved`); the reader of its old files goes in CL1.
+  project         the show, the file before it — ``{"schema": "hyperspace.project/3",
                   "name", "note", "startup": <loadable patch name>, "bank": [8–24
                   × <loadable patch name> | null], "session": <meta controller snapshot>,
                   "modules": {group: name | {"name", "values", …}}}``, in
@@ -71,13 +79,13 @@ the app starts on a blank loadable patch in an unsaved show.
 
   $HYPERSPACE_HOME/<group>/<slug>.json       module presets (default ~/Hyperspace,
                                  or the [library] path, plan 25)
-  $HYPERSPACE_HOME/presets/[<folder>/…/]<slug>.json
+  $HYPERSPACE_HOME/loadable/[<folder>/…/]<slug>.json
                                  loadable patches, in folders if the owner made
                                  any (plan 48): listed every folder down,
                                  less hidden ones, by folder-qualified name
                                  (``party/TRIP``; ``_index``, `path_slug`)
   $HYPERSPACE_HOME/patches/<slug>.json       patches (plan 40)
-  $HYPERSPACE_HOME/projects/<slug>.hyp.json  shows
+  $HYPERSPACE_HOME/installs/<slug>.json      install files
   $HYPERSPACE_HOME/config.toml, bindings.json (a midi_map.json is only
                                  migrated in and read once, routing.py)
   $HYPERSPACE_HOME/bindings/      the old routing presets: made loadable patches
@@ -99,9 +107,9 @@ the app starts on a blank loadable patch in an unsaved show.
 table path go through it). On the first run the working-directory ``config.toml``
 and ``midi_map.json`` are copied in — originals are left alone.
 
-Which show opens (decision 22, plan 14 WP3): the one opened last, its
-name in ``<home>/last_show`` (one line, written by every load and save
-as). None, or one that is gone or will not read (the reason in `error`),
+Which install opens (decision 22, plan 14 WP3): the one opened last, its
+name in ``<home>/last_install`` (one line, written by every load and save
+as; a ``last_show`` is read until then). None, or one that is gone or will not read (the reason in `error`),
 and the app starts on an unsaved show called ``untitled`` with an empty
 bank (``_open_default``).
 
@@ -139,7 +147,7 @@ from typing import Any
 from . import patches as patchdoc
 from . import undo
 from .graph import BusCuts
-from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
+from .graphmigrate import CAMERA_NODES, EYE_IDS, OLD_KIND, is_look_id, renamed_layout, retired
 from .groupwords import group_word
 from .hot_slots import DeckLibrarySlots, DeckProjectSlots
 from .palettecompat import palette_slice
@@ -182,7 +190,10 @@ EYE_BACKUP = "2-eye"
 # hands' and clouds' looks from its `session`, each loadable patch's since `/10` —
 # <file>.bak-v2-look
 LOOK_BACKUP = "2-look"
-LOADABLE = "presets"       # the loadable patches' group, a document kind (loadable.py)
+LOADABLE = "loadable"       # the loadable patches' group and folder, a document kind (loadable.py)
+# plan 57 (FQ4): the folder they sat in until the one migration. A library not yet
+# moved is read and saved there (`loadable_dir`); goes in CL1
+OLD_LOADABLE = "presets"
 # (plan 24 C3's desk templates, `<root>/desk/`, are retired — plan 44 D3,
 # the owner, 2026-11-03: neither library held one)
 # <root>/patches/<slug>.json (plan 40 P1): the patches — a group of nodes
@@ -227,13 +238,21 @@ _TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 
-LOADABLE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (loadable.py)
-PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: the meta controller, the pads, startup
+LOADABLE_SCHEMA = "hyperspace.preset/2" # the first rung of a loadable patch's ladder (loadable.py)
+# plan 57 §5 (FQ5): one install file per install, the tuning with the bank beside it.
+# `<library>/installs/<name>.json`; shows (below) are read until CL1 and never written
+INSTALL_SCHEMA = "hyperspace.install/1"
+INSTALLS = "installs"
+INSTALL_SUFFIX = ".json"
+TUNING = "tuning"                   # an install file's key for the meta controller's values
+PLAYS = "plays"                     # SM6: the playlist a launch starts by itself
+LAST_INSTALL = "last_install"       # <home>/last_install: the install opened last
+PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: a show, the file before the install file
 PROJECT_V2 = "hyperspace.project/2"        # read as its /3 (`show_without_look`), once
 PROJECT_V1 = "hyperspace.project/1"        # refused: no old-schema support (2026-10-25)
 PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
-LAST_SHOW = "last_show"             # <home>/last_show: the show opened last
+LAST_SHOW = "last_show"             # <home>/last_show: read once, into LAST_INSTALL
 UNTITLED = "untitled"
 # the tail of save-as's note on a full bank (`Project.save_new`)
 BANK_FULL = "the bank is full: it is in the preset list"
@@ -300,6 +319,57 @@ class LibraryError(Exception):
     pass
 
 
+# what a Mac on this build says of a library the migration has not reached (plan 57 §7a,
+# plan 58 §2a): it opens and saves where it is, and the tool finishes the move
+NOT_MOVED_WORDS = ("this library still has files in {where}: it opens, and saves stay where "
+                   "they are. Quit on both Macs, then run tools/migrate_library.py --apply")
+NEWER_WORDS = ("{file} was saved by a newer build ({schema}): on this Mac run git pull and "
+               "uv sync, then restart. The file is untouched")
+
+
+def loadable_dir(root: Path) -> Path:
+    """The loadable patches' folder under `root`: `loadable/`, or `presets/` while a library
+    not yet moved has only that (plan 57). A fresh library is `loadable/`."""
+    new, old = root / LOADABLE, root / OLD_LOADABLE
+    return old if not new.is_dir() and old.is_dir() else new
+
+
+def installs_dir(root: Path) -> Path:
+    """Where a new install file goes under `root`: `installs/`, or `projects/` while a
+    library not yet moved has only that."""
+    new, old = root / INSTALLS, root / PROJECTS
+    return old if not new.is_dir() and old.is_dir() else new
+
+
+def install_stem(file_name: str) -> str:
+    """An install file's or an old show's name less its suffix."""
+    return file_name.removesuffix(PROJECT_SUFFIX).removesuffix(INSTALL_SUFFIX)
+
+
+def install_files(root: Path) -> list[Path]:
+    """Every install file under `root`, a show not yet moved among them: `installs/*.json`
+    then `projects/*.hyp.json`. A stem in both is the install file's."""
+    out: dict[str, Path] = {}
+    for folder, suffix in ((root / PROJECTS, PROJECT_SUFFIX), (root / INSTALLS, INSTALL_SUFFIX)):
+        for p in sorted(folder.glob(f"*{suffix}")):
+            if not p.name.startswith("."):
+                out[install_stem(p.name)] = p
+    return [out[k] for k in sorted(out)]
+
+
+def not_moved(root: Path) -> list[str]:
+    """The old folders under `root` that still hold a file of the kinds the migration moves:
+    what `NOT_MOVED_WORDS` names. Launch only: this reads the folders."""
+    found = []
+    for name, pattern in ((OLD_LOADABLE, "**/*.json"), (PROJECTS, f"*{PROJECT_SUFFIX}")):
+        try:
+            if any(not p.name.startswith(".") for p in (root / name).glob(pattern)):
+                found.append(f"{name}/")
+        except OSError:
+            continue
+    return found
+
+
 # library roots that were named but not there at launch (plan 25 D5): no
 # write may land under one — `_write_text` and `to_trash` refuse it, so a
 # writer that forgot to ask `Library.writable` still creates nothing
@@ -334,9 +404,9 @@ def ensure_home(root: Path | None = None, cwd: Path | None = None) -> Path:
     once per home per process: config.load and Library() both ask, and
     the first-run migration should not scan the working directory twice."""
     root = home() if root is None else root
-    if root in _ensured and (root / PROJECTS).is_dir():
+    if root in _ensured and installs_dir(root).is_dir():
         return root
-    (root / PROJECTS).mkdir(parents=True, exist_ok=True)
+    installs_dir(root).mkdir(parents=True, exist_ok=True)
     for msg in migrate(root, cwd):
         print(msg, file=sys.stderr)
     _ensured.add(root)
@@ -574,6 +644,28 @@ def show_without_look(doc: dict) -> dict | None:
     return out
 
 
+def install_doc(show: dict) -> dict:
+    """A show's document (any rung this build reads) as its install file (plan 57 §5): the
+    tuning (`without_unsaved`), `modules`, the bank, `startup` and `layout`. What a `/2` held
+    of the look and the eye are the loadable patches' by now, so they stay behind. An install
+    file is itself. Pure: tools/migrate_library.py's step."""
+    if show.get("schema") == INSTALL_SCHEMA:
+        return dict(show)
+    from .routing import renamed_session
+    doc = show_without_look(show) or show
+    doc = show_without_eye(doc) or doc
+    out: dict[str, Any] = {"schema": INSTALL_SCHEMA, "name": doc.get("name") or ""}
+    if doc.get("note"):
+        out["note"] = doc["note"]
+    session: Any = doc.get("session")
+    out.update({"startup": doc.get("startup"), "bank": list(doc.get("bank") or []),
+                TUNING: without_unsaved(renamed_session(dict(session or {}))),
+                "modules": dict(doc.get("modules") or {})})
+    if doc.get(LAYOUT):
+        out[LAYOUT] = doc[LAYOUT]
+    return out
+
+
 def _write_json(path: Path, doc: dict) -> None:
     _write_text(path, _json_text(doc))
 
@@ -675,7 +767,7 @@ class Trashed:
     """A file in the trash, as its view lists it (plan 19 WP4)."""
 
     path: Path          # <machine>/trash/presets/party/trip-3.20261004-011203.json
-    group: str          # its group's folder: "presets", "fx", "projects", …
+    group: str          # its group's folder: "loadable", "installs", …
     name: str           # the name inside the file, else its stem; folder-qualified
                         # for a loadable patch from a folder ("party/TRIP", plan 48)
     when: str           # "Oct 4 01:12", from the stamp in the file name ("" if none)
@@ -787,7 +879,7 @@ def group_folder(group: str, kinds=()) -> str:
     patches, the shows and any document kind (`kinds`) in their own
     ``<group>``; every other group's — a module group's patches of one
     group — in ``patches/<group>``."""
-    if group in (LOADABLE, PATCHES, PROJECTS) or group in kinds:
+    if group in (LOADABLE, PATCHES, INSTALLS) or group in kinds:
         return group
     return f"{PATCHES}/{group}"
 
@@ -862,6 +954,7 @@ class Project:
         self.modules: dict[str, Any] = {}     # shared meta groups' module labels
         self.bank: list[str | None] = [None] * SLOTS
         self.startup: str | None = None
+        self.plays: str | None = None         # SM6: the playlist a launch starts by itself
         self.active = -1          # the slot last loaded, -1 until one is
         self.bank_error = ""
         self._saved: tuple = ([None] * SLOTS, None)   # bank and startup as on disk
@@ -890,21 +983,25 @@ class Project:
         if doc.get("schema") == PROJECT_V1:
             raise LibraryError(f"{where} is a schema-1 show, which this build does not read "
                                "(no old-schema support, 2026-10-25)")
+        if str(doc.get("schema") or "").startswith(f"{INSTALL_SCHEMA.rpartition('/')[0]}/"):
+            if doc["schema"] != INSTALL_SCHEMA:
+                raise LibraryError(NEWER_WORDS.format(file=where, schema=doc["schema"]))
+            doc = {**doc, "session": doc.get(TUNING)}
         # plan 44 D3: what a /2 show held of the look, before the version
         # step drops it (`show_without_look`) — else what its first write on
         # this build kept beside it (`kept_look`)
         self.old_look, self.old_cuts = show_look(doc)
         if path is not None and not self.old_look and not self.old_cuts.cut:
             self.old_look, self.old_cuts = kept_look(path)
-        doc = migrate_doc(doc, "hyperspace.project")
-        self.name = str(doc.get("name") or (path.name[: -len(PROJECT_SUFFIX)] if path
-                                            else UNTITLED))
+        if doc.get("schema") != INSTALL_SCHEMA:
+            doc = migrate_doc(doc, "hyperspace.project")
+        self.name = str(doc.get("name") or (install_stem(path.name) if path else UNTITLED))
         self.note = str(doc.get("note") or "")
         self.path = path
         # the file's own name, which a launch finds the show by (`stem`)
-        self._stem = where[: -len(PROJECT_SUFFIX)] if where.endswith(PROJECT_SUFFIX) else None
+        self._stem = install_stem(where) if where.endswith(INSTALL_SUFFIX) else None
         from .routing import renamed_session  # the stick spring's old ids, as today's
-        self.session = renamed_session(dict(doc.get("session") or {}))
+        self.session = without_unsaved(renamed_session(dict(doc.get("session") or {})))
         # plan 43 C2: the eye is the loadable patch's — an old show's is read out of
         # its session (as the spring's old ids are read as today's), held for
         # the loadable patches before `/9` (`old_eye`), and never landed or written
@@ -915,6 +1012,7 @@ class Project:
                 for s in list(doc.get("bank") or [])[:SLOTS]]
         self.bank = bank + [None] * (SLOTS - len(bank))
         self.startup = str(doc["startup"]) if doc.get("startup") else None
+        self.plays = str(doc[PLAYS]) if doc.get(PLAYS) else None
         self.active = -1
         self._saved = (list(self.bank), self.startup)
         self.layout, _ = read_layout(doc.get(LAYOUT))
@@ -940,15 +1038,17 @@ class Project:
         and `path_for` finds again, whatever `name` the file carries inside
         (review of PR #75: a copied or hand-edited file's name can differ)."""
         if self.path is not None:
-            return self.path.name[: -len(PROJECT_SUFFIX)]
+            return install_stem(self.path.name)
         return getattr(self, "_stem", None) or slug(self.name)
 
     def to_doc(self) -> dict:
-        doc: dict[str, Any] = {"schema": PROJECT_SCHEMA, "name": self.name}
+        doc: dict[str, Any] = {"schema": INSTALL_SCHEMA, "name": self.name}
         if self.note:
             doc["note"] = self.note
-        doc.update(startup=self.startup, bank=bank_doc(self.bank), session=self.session,
-                   modules=self.modules)
+        doc.update(startup=self.startup, bank=bank_doc(self.bank))
+        if getattr(self, "plays", None):
+            doc[PLAYS] = self.plays
+        doc.update({TUNING: self.session, "modules": self.modules})
         layout = getattr(self, "layout", None)
         if layout:                       # plan 28 N2; a show with none writes none
             doc[LAYOUT] = {k: list(layout[k]) for k in sorted(layout)}
@@ -971,12 +1071,15 @@ class Project:
                 # plan 43 C2: what an old show kept of the camera, for its loadable patches
                 dict(getattr(self, "old_eye", {})), getattr(self, "camera_at", None),
                 # plan 44 D3: and of the look
-                dict(getattr(self, "old_look", {})), getattr(self, "old_cuts", BusCuts()))
+                dict(getattr(self, "old_look", {})), getattr(self, "old_cuts", BusCuts()),
+                # SM6: the playlist a launch starts
+                getattr(self, "plays", None))
 
     # the mark's fixed head, and where its later parts start
     MARK_LAYOUT = 9          # the GRAPH page's layout, and as on disk (plan 28 N2)
     MARK_EYE = 11            # an old show's eye and camera position (plan 43 C2)
     MARK_LOOK = 13           # an old show's look and bus cuts (plan 44 D3)
+    MARK_PLAYS = 15          # the playlist a launch starts (SM6)
 
     def remark(self, mark: tuple) -> None:
         """Put back what `mark()` returned: the show's own fields, nothing
@@ -991,6 +1094,8 @@ class Project:
             self.old_eye, self.camera_at = dict(mark[self.MARK_EYE]), mark[self.MARK_EYE + 1]
         if len(mark) > self.MARK_LOOK:     # plan 44 D3: and its look, for its loadable patches
             self.old_look, self.old_cuts = dict(mark[self.MARK_LOOK]), mark[self.MARK_LOOK + 1]
+        if len(mark) > self.MARK_PLAYS:    # SM6
+            self.plays = mark[self.MARK_PLAYS]
         self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
@@ -1401,13 +1506,30 @@ class Project:
     # ---- API ----
 
     def list(self) -> list[str]:
-        """Every show by file stem."""
-        names = {p.name[: -len(PROJECT_SUFFIX)]
-                 for p in (self.lib.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")}
-        return sorted(names)
+        """Every install by file stem, a show not yet moved among them."""
+        return sorted(install_stem(p.name) for p in install_files(self.lib.home))
 
     def path_for(self, name: str) -> Path:
-        return self.lib.home / PROJECTS / f"{slug(name)}{PROJECT_SUFFIX}"
+        """The file an install of this name is in: the install file there is, else a show
+        not yet moved, else where a new one goes (`installs_dir`)."""
+        home, stem = self.lib.home, slug(name)
+        new, old = home / INSTALLS / f"{stem}{INSTALL_SUFFIX}", home / PROJECTS / f"{stem}{PROJECT_SUFFIX}"
+        if new.is_file() or not old.is_file():
+            if installs_dir(home).name == PROJECTS and not new.is_file():
+                return old
+            return new
+        return old
+
+    def play_at_launch(self, name: str | None) -> None:
+        """SM6: the playlist a launch starts by itself, written into the install at once as
+        the bank is; None for none. A file that cannot take it leaves it as it was, said."""
+        was = getattr(self, "plays", None)
+        self.plays = name
+        try:
+            self.write()
+        except (LibraryError, OSError) as e:
+            self.plays = was
+            self.lib.say(warning=f"the install could not be written: {e}")
 
     def load(self, name: str | Path, *, startup: bool = True) -> list[str]:
         """Open a show by name or path; returns unknown ids. Its startup
@@ -1415,7 +1537,7 @@ class Project:
         re-reading an edited project). A schema-1 file is refused
         (`_take`)."""
         lib = self.lib
-        if isinstance(name, Path) or str(name).endswith(PROJECT_SUFFIX):
+        if isinstance(name, Path) or str(name).endswith(INSTALL_SUFFIX):
             path = Path(name)
         else:
             path = self.path_for(name)
@@ -1423,7 +1545,7 @@ class Project:
         # the file is read, nothing replaced yet: one step on the meta controller's
         # stack for the show; the startup loadable patch it brings up is a load, a step
         # on its deck's (undo.py, plan 44 D5b)
-        undo.push_meta(f"show {doc.get('name') or path.name[: -len(PROJECT_SUFFIX)]}", load=True)
+        undo.push_meta(f"show {doc.get('name') or install_stem(path.name)}", load=True)
         self._take(doc, path, path.name)
         missing = self._apply()
         lib.report(missing, path.name)
@@ -1431,7 +1553,7 @@ class Project:
         lib.remember(self.stem)
         if startup:
             self.load_startup()
-        apart = mirrors_apart(self.session)
+        apart = mirrors_apart(doc.get("session") or {})
         if apart:
             lib.say(warning=f"{path.name}: {', '.join(apart)} differs from the Mirror, and "
                             "there is one Mirror now: those hands follow it. To flip one "
@@ -1446,7 +1568,7 @@ class Project:
         # show puts every group's fresh values on both (undo.py, plan 44 D5b)
         undo.push_meta("new show", load=True)
         undo.push_on(lib.reg, "new show", load=True)
-        self._take({"schema": PROJECT_SCHEMA, "name": name}, None)
+        self._take({"schema": INSTALL_SCHEMA, "name": name}, None)
         self.name = name
         lib._fresh_layouts()                          # the layout the app started with…
         lib.restore(lib._fresh_all())                 # …and every group's fresh values
@@ -1561,12 +1683,21 @@ class Project:
 
     def _held_back(self) -> dict:
         """The ids of node instances an old show holds and the registry lacks
-        now (`ghost.2.*`, plan 26 A4; `ghost.2.mirror` always, no param since
-        LY1): kept by a save and never counted as an edit. The old reader goes
-        in CL1."""
+        now (`ghost.2.*`, plan 26 A4): kept by a save and never counted as an
+        edit. `ghost.2.mirror` no longer gets this far (`without_unsaved`). The
+        old reader goes in CL1."""
         reg = self.lib.reg
         return {pid: v for pid, v in (self.session or {}).items()
                 if is_instance_id(pid) and (reg is None or pid not in reg)}
+
+
+def without_unsaved(session: dict) -> dict:
+    """A file's meta controller values less what a save stopped writing with the one
+    migration (plan 58 §9): `tempo.nudge` (a nudge doesn't come back at launch; a tapped BPM
+    does, plan 58 §8) and `ghost.<n>.mirror` (no param since LY1)."""
+    return {pid: v for pid, v in session.items()
+            if pid != "tempo.nudge"
+            and not (pid.startswith("ghost.") and pid.endswith(".mirror") and is_instance_id(pid))}
 
 
 def mirrors_apart(session: dict) -> list[str]:
@@ -1909,7 +2040,7 @@ class Library:
             _missing.add(self.home)
         else:
             _missing.discard(self.home)
-            (self.home / PROJECTS).mkdir(parents=True, exist_ok=True)
+            installs_dir(self.home).mkdir(parents=True, exist_ok=True)
         self.period = period
         self.reg = None            # (`reg`, below: the panel's deck's, once pointed)
         self.status = ""
@@ -1940,6 +2071,9 @@ class Library:
             text = missing_text(self.missing)
             print(f"library: {text}", file=sys.stderr)
             self.say(warning=text)
+        # plan 57 §7a: said on the SYSTEM page, and on the footer at launch (app.py)
+        where = not_moved(self.home) if self.missing is None else []
+        self.not_moved = NOT_MOVED_WORDS.format(where=" and ".join(where)) if where else ""
         self._open_default()
         self._mtimes = self._scan()
 
@@ -2059,13 +2193,17 @@ class Library:
         self._load_hooks[group] = hook
 
     def last_show(self) -> str | None:
-        """The show opened last (`<machine>/last_show`), or None — a machine
-        file: two machines sharing a library each open their own last show."""
-        try:
-            name = (self._machine() / LAST_SHOW).read_text().strip()
-        except OSError:
-            return None
-        return name or None
+        """The install opened last (`<machine>/last_install`), else what the file before it
+        said (`last_show`), or None — a machine file: two machines sharing a library each
+        open their own."""
+        for file in (LAST_INSTALL, LAST_SHOW):
+            try:
+                name = (self._machine() / file).read_text().strip()
+            except OSError:
+                continue
+            if name:
+                return name
+        return None
 
     def remember(self, name: str) -> None:
         """Note `name` — a show's file name less ``.hyp.json``
@@ -2074,9 +2212,9 @@ class Library:
         if name == self.last_show():
             return
         try:
-            (self._machine() / LAST_SHOW).write_text(f"{name}\n")
+            (self._machine() / LAST_INSTALL).write_text(f"{name}\n")
         except OSError as e:
-            print(f"library: {LAST_SHOW} not written ({e})", file=sys.stderr)
+            print(f"library: {LAST_INSTALL} not written ({e})", file=sys.stderr)
 
     def _machine(self) -> Path:
         return self.__dict__.get("machine") or self.home   # (one from before a hot reload)
@@ -2097,7 +2235,7 @@ class Library:
                     return
                 except LibraryError as e:
                     self.error = f"library: {e}"
-        self.project._take({"schema": PROJECT_SCHEMA, "name": UNTITLED}, None)
+        self.project._take({"schema": INSTALL_SCHEMA, "name": UNTITLED}, None)
 
     # ---- the tree ----
 
@@ -2119,7 +2257,8 @@ class Library:
         for root in self._roots():
             if root.is_dir():
                 out.update(d.name for d in root.iterdir()
-                           if d.is_dir() and d.name not in (PROJECTS, TRASH, *LEGACY_DIRS)
+                           if d.is_dir() and d.name not in (PROJECTS, INSTALLS, OLD_LOADABLE,
+                                                            TRASH, *LEGACY_DIRS)
                            and not d.name.startswith("."))
                 # plan 50: a group whose patches of one group have a folder
                 if (root / PATCHES).is_dir():
@@ -2132,7 +2271,7 @@ class Library:
         kind's — the loadable patches, the patches — in ``<root>/<group>/``; every
         other group's, its patches of one group (what module presets
         were), in ``<root>/patches/<group>/`` (`group_folder`, the one table)."""
-        return root / group_folder(group, self._kinds)
+        return loadable_dir(root) if group == LOADABLE else root / group_folder(group, self._kinds)
 
     def _files(self, group: str) -> dict[str, Path]:
         """file key → path, every file of the group's folder (`group_dir`):
@@ -2187,7 +2326,7 @@ class Library:
         (`_resolve` refuses to pick)."""
         out: dict[str | None, list[Path]] = {}
         for root in self._roots():
-            d = root / LOADABLE
+            d = loadable_dir(root)
             if not d.is_dir():
                 continue
             hit = self._walked(d)
@@ -2210,7 +2349,7 @@ class Library:
         if want == "":
             return ""
         for root in self._roots():
-            d = root / LOADABLE
+            d = loadable_dir(root)
             if d.is_dir():
                 for f in self._tree(d)[1]:
                     if fold_folder(f) == want:
@@ -2335,8 +2474,8 @@ class Library:
             return idx, files, {}, set()
         folders: set[str | None] = set()
         for root in self._roots():
-            if (root / LOADABLE).is_dir():
-                hit = self._walked(root / LOADABLE)
+            if loadable_dir(root).is_dir():
+                hit = self._walked(loadable_dir(root))
                 if "folded" not in hit:                 # kept with the walk, as byfold
                     hit["folded"] = {fold_folder(f) for f in hit["folders"]}
                 folders |= hit["folded"]
@@ -2425,6 +2564,11 @@ class Library:
         if kind is not None:                       # its own format: checked, not lifted
             schema = str(doc.get("schema") or "")
             k, _, v = schema.rpartition("/")
+            # (plan 57: a loadable patch's ladder holds the old kind's rungs until CL1)
+            if group == LOADABLE and k == OLD_KIND and v.isdigit() and int(v) < 11:
+                k = kind.schema
+            if k == kind.schema and v.isdigit() and int(v) > max(kind.versions):
+                raise LibraryError(NEWER_WORDS.format(file=path.name, schema=schema))
             if k != kind.schema or not v.isdigit() or int(v) not in kind.versions:
                 raise LibraryError(f"{path.name}: schema {schema!r} is not a {kind.schema}")
             return doc
@@ -3010,8 +3154,8 @@ class Library:
             return to(n) if hit(n) else n
 
         pr, done, left = self.project, 0, []
-        for show in sorted((self.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")):
-            label = show.name[: -len(PROJECT_SUFFIX)]
+        for show in install_files(self.home):
+            label = install_stem(show.name)
             if pr.path is not None and show == pr.path:
                 if not (any(hit(n) for n in pr.bank) or hit(pr.startup)):
                     continue
@@ -3037,7 +3181,7 @@ class Library:
             bank = doc.get("bank") if isinstance(doc.get("bank"), list) else []
             if not (any(hit(n) for n in bank) or hit(doc.get("startup"))):
                 continue
-            if doc.get("schema") != PROJECT_SCHEMA:
+            if doc.get("schema") not in (INSTALL_SCHEMA, PROJECT_SCHEMA):
                 left.append(f"{label} (a {doc.get('schema')} show: plan 13's migration owns it)")
                 continue
             if self._to_trash(show) is None:
@@ -3067,7 +3211,7 @@ class Library:
         ones; sorted case folded."""
         out: set[str] = set()
         for root in self._roots():
-            d = root / LOADABLE
+            d = loadable_dir(root)
             if d.is_dir():
                 out.update(self._tree(d)[1])
         return sorted(out, key=str.lower)
@@ -3188,7 +3332,7 @@ class Library:
             return path
         leaf = self._leaf(LOADABLE, path)
         new = f"{folder}/{leaf}" if folder else leaf
-        base = self.home / LOADABLE
+        base = loadable_dir(self.home)
         dst = (base / folder if folder else base) / path.name
         idx, files = snap[0], snap[1]
         taken = ({self._fold(LOADABLE, s) for s, p in files.items() if p != path}
@@ -3214,7 +3358,7 @@ class Library:
         if self._folder_on_disk(full) is not None:
             raise LibraryError(f"{full}: that folder is already there")
         try:
-            (self.home / LOADABLE / full).mkdir(parents=True, exist_ok=False)
+            (loadable_dir(self.home) / full).mkdir(parents=True, exist_ok=False)
         except FileExistsError as e:
             raise LibraryError(f"{full}: that name is taken (by a file)") from e
         except (OSError, ValueError) as e:
@@ -3240,7 +3384,8 @@ class Library:
         full = f"{parent}/{name}" if parent else name
         if full == folder:
             return folder
-        src, dst = self.home / LOADABLE / folder, self.home / LOADABLE / full
+        base = loadable_dir(self.home)
+        src, dst = base / folder, base / full
         # review of #349: taken unless `dst` is this very folder (a change of
         # case on a disk that folds case) — asked of the disk, not of a fold:
         # on a case-sensitive volume `Party` beside `party` is another folder
@@ -3283,7 +3428,7 @@ class Library:
             return []
         try:
             got = sorted((p.name + "/" if p.is_dir() else p.name)
-                         for p in (self.home / LOADABLE / on_disk).iterdir()
+                         for p in (loadable_dir(self.home) / on_disk).iterdir()
                          if p.name != ".DS_Store")
         except OSError as e:
             return [f"(unreadable: {e})"]
@@ -3300,7 +3445,7 @@ class Library:
         if not (folder or "").strip().strip("/"):
             raise LibraryError("the top level is not a folder to remove")
         folder = self._existing_folder(folder)
-        d = self.home / LOADABLE / folder
+        d = loadable_dir(self.home) / folder
         held = self.held(folder)
         if held:
             raise LibraryError(f"{folder}: not empty — it holds {_and(held)}; move or "
@@ -3410,18 +3555,21 @@ class Library:
                     stem = m["stem"]
                     if stem.endswith(PROJECT_SUFFIX[:-5]) and group.name == PROJECTS:
                         stem = stem[: -len(PROJECT_SUFFIX[:-5])]
+                    # (plan 57: what was trashed under the old folder names is the same group)
+                    shown_group = {OLD_LOADABLE: LOADABLE, PROJECTS: INSTALLS}.get(
+                        group.name, group.name)
                     name = stem
                     if path.is_file() and self._under(path, roots) is not None:
                         try:
-                            name = self._shown(group.name,
+                            name = self._shown(shown_group,
                                                str(_read_json(path).get("name") or stem))
                         except LibraryError:
                             pass
                     folder = path.parent.relative_to(group).as_posix()
                     folder = "" if folder == "." else folder
-                    if folder and group.name == LOADABLE:
+                    if folder and shown_group == LOADABLE:
                         name = f"{folder}/{name}"
-                    out.append(Trashed(path, group.name, name,
+                    out.append(Trashed(path, shown_group, name,
                                        _when(m["stamp"]) if m else "", folder, old))
         return sorted(out, key=lambda t: (not t.old, _order(t.path), t.path.name),
                       reverse=True)
@@ -3446,14 +3594,15 @@ class Library:
         # the group and the folder it came from are where it lies in the
         # trash (plan 48: ``trash/presets/party/`` → ``presets/party/``)
         _root, group, sub, _old = where
+        group = {OLD_LOADABLE: LOADABLE, PROJECTS: INSTALLS}.get(group, group)
         if sub and group == LOADABLE:
             # review of #334: the folder as it is on disk now (APFS folds
             # case), so what is taken there is read from the right place
             sub = self._folder_on_disk(sub) or sub
         filename = f"{m['stem']}{m['suffix']}"
-        show = group == PROJECTS
-        suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
-        stem = filename.removesuffix(suffix)
+        show = group == INSTALLS
+        stem = install_stem(filename) if show else filename.removesuffix(".json")
+        suffix = ".json"
         # plan 50: ``trash/patches/<group>/`` is a patch of one group — it
         # goes back among that group's (`group_dir`)
         if group == PATCHES and sub and "/" not in sub:
@@ -3461,8 +3610,11 @@ class Library:
         # only the loadable patches have folders (plan 48): a file a non-preset group
         # kept deeper goes back where that group lists it
         sub = sub if group == LOADABLE else ""
-        folder = self.group_dir(self.home, group) / sub if sub else self.group_dir(self.home,
-                                                                                  group)
+        folder = (installs_dir(self.home) if show else
+                  self.group_dir(self.home, group) / sub if sub else
+                  self.group_dir(self.home, group))
+        if show and folder.name == PROJECTS:     # (a library not yet moved)
+            suffix = PROJECT_SUFFIX
         pre = f"{sub}/" if sub and group == LOADABLE else ""
         data = path.read_bytes()
         try:
@@ -3472,8 +3624,8 @@ class Library:
             doc = None
         name = str((doc or {}).get("name") or stem)
         if show:
-            stems = {p.name[: -len(PROJECT_SUFFIX)] for root in self._roots()
-                     for p in (root / PROJECTS).glob(f"*{PROJECT_SUFFIX}")}
+            stems = {install_stem(p.name) for root in self._roots()
+                     for p in install_files(root)}
             names = {slug(s) for s in stems}
         else:
             # what is taken in the folder it goes back to
@@ -3620,7 +3772,7 @@ class Library:
                 if d.is_dir() and not d.name.startswith("."):
                     # the loadable patches every folder down (plan 48), as `_files` lists them
                     # (plan 50: and the patches of one group, a folder down)
-                    for f in (self._tree(d)[0] if d.name == LOADABLE else
+                    for f in (self._tree(d)[0] if d.name in (LOADABLE, OLD_LOADABLE) else
                               [*d.glob("*.json"), *d.glob("*/*.json")] if d.name == PATCHES
                               else d.glob("*.json")):
                         try:

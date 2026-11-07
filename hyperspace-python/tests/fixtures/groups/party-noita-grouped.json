@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/10",
+ "schema": "hyperspace.loadable/11",
  "name": "NOITA",
  "note": "party-noita: Noita's trip on the 16-cell \u2014 warp, trip colour and fractals at \"heavily tripping\", the right hand's height the next stage, and the drunk double vision on its roll",
  "graph": {"frame": "wired",

@@ -96,7 +96,7 @@ def test_every_route_is_one_cable_and_every_cable_one_route(rig):
     cable whose `ref` is that row, into its target's `mod` stub, and no
     route cable stands for anything else."""
     for name in ("party-trip", "lfo-breathe", "hands-fx", "legacy6"):
-        rig.lib.load("presets", name)
+        rig.lib.load("loadable", name)
         rows = rig.router.table.routes()
         rows[-1].enabled = False                        # a dormant row is a cable too
         view = build(rig)
@@ -121,7 +121,7 @@ def test_macro_subs_are_cables_into_base_or_depth(rig):
     one cable from that output — a base subscriber into the param's `base`
     stub, a depth subscriber into the `depth` stub of the param its route
     lands on (lfo-breathe has both)."""
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     table = rig.router.table
     view = build(rig)
     subs = [c for c in view.cables if c.kind == "sub"]
@@ -223,7 +223,7 @@ def test_device_nodes_come_from_the_registry_with_their_port_groups(rig):
     ))
     pad = FakeDevice("pad", "gamepad", ("axis",), (), connected=False)
     reg = devices.DeviceRegistry(devices=[hands, pad])
-    rig.lib.load("presets", "hands-fx")
+    rig.lib.load("loadable", "hands-fx")
     rig.router.table.add(rig.router.table.routes()[0].__class__(
         "axis:LX", "camera.zoom", "push", 0.3))
     view = build(rig, devs=reg)
@@ -304,7 +304,7 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
     assert M.renamed_layout(old) == new
     assert M.renamed_layout(new) == new           # (new ids: untouched — `render:hands` too)
     lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.project
-    lib.load("presets", "party-trip")
+    lib.load("loadable", "party-trip")
     doc = loaded_patch.document("party-trip")
     doc[LAYOUT_KEY] = old
     loaded_patch.load_doc(doc)
@@ -327,25 +327,25 @@ def test_layout_round_trips_through_the_loadable_and_the_show(rig):
     entry keeps the good ones and says so."""
     from hyperspace.loadable import LAYOUT_KEY
     lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.project
-    lib.load("presets", "party-trip")
+    lib.load("loadable", "party-trip")
     # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
     # values, which this rig — the panel's, built without them — lacks)
     said = [n for n in loaded_patch.notes if not n.endswith("…") or "env." not in n]
-    assert loaded_patch.layout == {} and said == [] and not lib.is_dirty("presets")
+    assert loaded_patch.layout == {} and said == [] and not lib.is_dirty("loadable")
     assert LAYOUT_KEY not in loaded_patch.document("party-trip")
     loaded_patch.layout["render:shape"] = [520, 40]
     loaded_patch.layout["mod.1"] = [260, 300]
-    assert lib.is_dirty("presets")                  # a node moved is an edit
-    lib.save_as("presets", "trip-laid")
-    doc = lib.read("presets", "trip-laid")
+    assert lib.is_dirty("loadable")                  # a node moved is an edit
+    lib.save_as("loadable", "trip-laid")
+    doc = lib.read("loadable", "trip-laid")
     assert doc[LAYOUT_KEY] == {"mod.1": [260, 300], "render:shape": [520, 40]}
-    lib.load("presets", "party-trip")
+    lib.load("loadable", "party-trip")
     assert loaded_patch.layout == {}
-    lib.load("presets", "trip-laid")
+    lib.load("loadable", "trip-laid")
     assert loaded_patch.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     # one entry a line in the file
-    text = (lib.path_of("presets", "trip-laid")).read_text()
+    text = (lib.path_of("loadable", "trip-laid")).read_text()
     assert '  "render:shape": [520, 40]' in text
     # a bad entry: dropped, said
     doc[LAYOUT_KEY]["oops"] = ["x", 1]
@@ -372,7 +372,7 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     right (plan 28 N9: controllers → audio → modulation → plan 35 G's media
     → scene → look-back → effects → outputs; the render nodes by their
     depth within theirs); a placed node keeps its own and takes no room."""
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
     # (plan 36 T4: the look-back drawn, as the old words with it on)
     g = G.build_graph(views(Switches()), wired_wiring(stacked(("acid",)), "trail"),
@@ -510,11 +510,11 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     node and an LFO (plan 31 G1) into the loaded patch's layout (dirtying
     it), the analyzer into the show's — once the mouse lets go; a node left
     alone is written nowhere."""
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
     assert rig.lib.loaded_patch.layout == {} and rig.lib.project.layout == {}
-    assert not rig.lib.is_dirty("presets")
+    assert not rig.lib.is_dirty("loadable")
 
     def move():
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:render:camera")), imgui.ImVec2(700, 50))
@@ -525,7 +525,7 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     # N9: lfo.2 is idle, not drawn
     assert rig.lib.loaded_patch.layout == {"render:camera": [700, 50], "lfo.1": [30, 640]}
     assert rig.lib.project.layout == {"analyzer": [40, 20]}
-    assert rig.lib.is_dirty("presets")
+    assert rig.lib.is_dirty("loadable")
     # tidy forgets them both
     st["tidy"] = True
     frame(rig.panel, "graph")
@@ -594,7 +594,7 @@ def test_a_route_depth_follows_its_macro_and_its_slider_without_a_rebuild(rig):
     """The hover's depth (`value × scale × Π depth subscribers`) is
     `refresh`'s: a depth-subscribing macro turned, or the row's depth
     dragged, moves it with the same view (no rebuild per frame)."""
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     table = rig.router.table
     mid, s = next((mid, s) for mid, m in table.macros.items() for s in m.subs
                   if s.depth is not None)

@@ -194,8 +194,8 @@ def show(tmp_path, tape_path):
     """The fixture loadable patch in a scratch library (never the owner's), loaded
     the way a pad or the strip loads a loadable patch, the hand on the tape."""
     home = tmp_path / "home"
-    (home / "presets").mkdir(parents=True)
-    shutil.copyfile(FIXTURE, home / "presets" / FIXTURE.name)
+    (home / "loadable").mkdir(parents=True)
+    shutil.copyfile(FIXTURE, home / "loadable" / FIXTURE.name)
     app = boot_home(home)
     assert app.loaded_patch.load(FIXTURE.stem) == []
     assert app.loaded_patch.notes == [] and app.router.table.dropped == []

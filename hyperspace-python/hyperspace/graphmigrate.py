@@ -85,8 +85,15 @@ NINE = 9
 # `modules` labels and no `desk_template`. What every save writes; `/9`
 # and older are read through `ten`, the open show's look filled in
 LOOK_SCHEMA = "hyperspace.preset/10"
+# plan 57 (FQ4, the one migration): the word moves. `/11` is `/10` under the kind
+# `hyperspace.loadable`, the old kind's ladder read through (`eleven`), in
+# `<library>/loadable/`. A load reads both kinds until CL1; a save writes this alone.
+OLD_KIND = "hyperspace.preset"
+LOADABLE_KIND = "hyperspace.loadable"
+ELEVEN_SCHEMA = f"{LOADABLE_KIND}/11"
+ELEVEN = 11
 TEN = 10
-SAVE_SCHEMA = LOOK_SCHEMA
+SAVE_SCHEMA = ELEVEN_SCHEMA
 BUS_KEY = "bus"
 # the keys `/10` retired: the module labels (row 540, the owner, 2026-11-03)
 # and the desk templates (plan 24 C3: neither library held one)
@@ -1746,6 +1753,11 @@ class Forward:
     from_show: frozenset[str] = frozenset()
 
 
+def eleven(doc: dict) -> dict:
+    """A `/10` as its `/11` (plan 57 §7): the kind's new word. A copy."""
+    return {**doc, "schema": ELEVEN_SCHEMA}
+
+
 def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any = None,
             look: dict | None = None, cuts: Any = None) -> Forward:
     """The one ladder for a whole loadable patch (plan 50; the steps a load runs,
@@ -1754,7 +1766,7 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     place the open show held (`nine`), before `/10` the look made whole
     (`ten`: the show's hands' and clouds' looks and its bus cuts, the
     module labels and the desk template's name dropped — the template
-    said). A fragment's ladder is `patches.forward`; the two are the one
+    said), before `/11` the kind's new word (`eleven`). A fragment's ladder is `patches.forward`; the two are the one
     reader of the one shape (`patches.shape_of` says which a file is)."""
     notes: list[str] = []
     migrate_notes: list[str] = []
@@ -1764,7 +1776,7 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     if version is None or version < SEVEN:
         old = str(doc.get("schema"))
         doc, migrate_notes = seven(doc, specs)
-        migrated = MIGRATED_NOTE.format(old=old, new=LOOK_SCHEMA)
+        migrated = MIGRATED_NOTE.format(old=old, new=ELEVEN_SCHEMA)
     if version is None or version < NINE:
         doc = nine(doc, eye, camera_at)
     if version is None or version < TEN:
@@ -1775,4 +1787,6 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
         doc = ten(doc, look, cuts)
         from_show = set(dict(doc.get("values") or {})) - had \
             if isinstance(doc.get("values"), dict) else set()
+    if version is None or version < ELEVEN:
+        doc = eleven(doc)
     return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))

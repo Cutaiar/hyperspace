@@ -434,8 +434,8 @@ def test_unbind_removes_only_loadable_layer_rows_and_writes_no_file(rig):
     invariant fader, a global-layer knob) is refused with the reason in
     the learn line, as Learn refuses, and its row stays."""
     m, lib = rig.midi, rig.loaded_patch.lib
-    lib.load("presets", "BIG BLUE WAVE")
-    assert not lib.is_dirty("presets")
+    lib.load("loadable", "BIG BLUE WAVE")
+    assert not lib.is_dirty("loadable")
     path = m.table.path
     before = path.read_bytes() if path.exists() else None
     meta_rows = [b.to_json() for b in m.table.bindings if b.layer != "preset"]
@@ -445,10 +445,10 @@ def test_unbind_removes_only_loadable_layer_rows_and_writes_no_file(rig):
     assert not [b for b in m.table.bindings if b.target == "view.bright" and b.is_midi]
     assert not m.learner.refused and "unbound view.bright" in m.learner.last
     assert (path.read_bytes() if path.exists() else None) == before
-    assert lib.is_dirty("presets")
+    assert lib.is_dirty("loadable")
     assert [b.to_json() for b in m.table.bindings if b.layer != "preset"] == meta_rows
     push(rig, cc(0x30, 10))                                       # nothing listens now
-    assert rig.view.bright == pytest.approx(lib.read("presets", "BIG BLUE WAVE")["values"]
+    assert rig.view.bright == pytest.approx(lib.read("loadable", "BIG BLUE WAVE")["values"]
                                             .get("view.bright", 1.0))
     # the meta controller's rows: refused, kept
     for pid, why in (("output.xfade", "invariant"), ("band.0.post", "global layer"),
@@ -711,20 +711,20 @@ def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
         == [(f"note:{k}:{STOP}", "preset.save_new", None) for k in BAR]
     pr.clear_slot(5)
     push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
-    assert lib.current("presets") == "TRIP"
+    assert lib.current("loadable") == "TRIP"
     at(0.0, note(STOP, channel=2))
     at(0.3)
     at(0.59)
-    assert fires == [] and lib.current("presets") == "TRIP"
+    assert fires == [] and lib.current("loadable") == "TRIP"
     at(0.6)                                                  # still held: it fires now
     assert fires == [0.6]
-    assert lib.current("presets") == "TRIP 2" and pr.bank[5] == "TRIP 2"
+    assert lib.current("loadable") == "TRIP 2" and pr.bank[5] == "TRIP 2"
     at(1.0)
     at(2.0)                                                  # still down: nothing more
     assert fires == [0.6]
     at(2.5, note(STOP, 0, channel=2))                        # the release does nothing
     at(5.0)
-    assert fires == [0.6] and lib.current("presets") == "TRIP 2"
+    assert fires == [0.6] and lib.current("loadable") == "TRIP 2"
     # a key or pad row with the op does nothing (`routing.act` ignores it)
     from hyperspace import routing
     routing.act(rig.reg, Binding("key:F9", "preset.save_new", "hold"))
@@ -739,12 +739,12 @@ def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
 def test_a_tap_fires_nothing(rig):
     at, fires = bar_rig(rig)
     lib = rig.loaded_patch.lib
-    was, bank = lib.current("presets"), list(rig.loaded_patch.bank)
+    was, bank = lib.current("loadable"), list(rig.loaded_patch.bank)
     at(0.0, note(STOP, channel=3))
     at(0.3, note(STOP, 0, channel=3))                        # released at 0.3 s
     at(0.6)
     at(2.0)
-    assert fires == [] and lib.current("presets") == was and rig.loaded_patch.bank == bank
+    assert fires == [] and lib.current("loadable") == was and rig.loaded_patch.bank == bank
     # a tap in one poll, and taps one after the other, likewise
     at(3.0, note(STOP, channel=3), note(STOP, 0, channel=3))
     at(3.5, note(STOP, channel=3))
@@ -1319,7 +1319,7 @@ def test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty(rig, monkeypatch
     # a press on row 4's first pad loads slot 9: green there, amber elsewhere
     n, ch = apc40.BANK_PADS[8]
     push(rig, note(n, channel=ch), note(n, 0, channel=ch))
-    assert pr.active == 8 and pr.lib.current("presets") == "TRACER"
+    assert pr.active == 8 and pr.lib.current("loadable") == "TRACER"
     assert [routing.led_level(row[k], p) for k in (0, 8, 9)] == [1, 2, 0]
     assert [led(k) for k in range(24)] == [apc40.YELLOW] * 8 + [apc40.GREEN] + [0] * 15
     # a load from row 1 moves the green; slot 9 falls back to amber
@@ -1459,30 +1459,30 @@ def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
     assert [b.target for b in rig.midi.table.route("note", 5, pad)] == ["preset.select"]
     push(rig, note(pad, channel=4), note(pad, 0, channel=4))                # TRIP
     pr.clear_slot(5)
-    assert lib.current("presets") == "TRIP" and pr.bank[5] is None
+    assert lib.current("loadable") == "TRIP" and pr.bank[5] is None
     # a tap on the empty pad: says so, saves nothing
     at(0.0, note(pad, channel=5))
     at(0.3, note(pad, 0, channel=5))
     at(1.0)
-    assert pr.bank[5] is None and lib.current("presets") == "TRIP"
+    assert pr.bank[5] is None and lib.current("loadable") == "TRIP"
     # held: at HOLD_S, while still down, the save lands in slot 6 (index 5)
     mark = len(rig.out.sent)
     at(2.0, note(pad, channel=5))
     at(2.0 + midi.HOLD_S - 0.01)
     assert pr.bank[5] is None
     at(2.0 + midi.HOLD_S)
-    assert pr.bank[5] == "TRIP 2" and lib.current("presets") == "TRIP 2" and pr.active == 5
+    assert pr.bank[5] == "TRIP 2" and lib.current("loadable") == "TRIP 2" and pr.active == 5
     assert apc40.GREEN_BLINK in leds(rig, pad, 5, mark)                     # the new pad blinks
     at(4.0)                                                                 # still down: once
     at(4.5, note(pad, 0, channel=5))
     assert [n for n in pr.bank if n == "TRIP 2"] == ["TRIP 2"]
     # a filled pad held: the press loads it, the hold writes nothing
-    files = sorted(x.name for x in (lib.home / "presets").glob("*.json"))
+    files = sorted(x.name for x in (lib.home / "loadable").glob("*.json"))
     at(6.0, note(pad, channel=4))
     at(7.0)
     at(7.1, note(pad, 0, channel=4))
-    assert lib.current("presets") == "TRIP" and pr.bank[4] == "TRIP"
-    assert sorted(x.name for x in (lib.home / "presets").glob("*.json")) == files
+    assert lib.current("loadable") == "TRIP" and pr.bank[4] == "TRIP"
+    assert sorted(x.name for x in (lib.home / "loadable").glob("*.json")) == files
 
 
 def test_two_empty_pads_held_together_each_save_into_their_own_slot(rig):

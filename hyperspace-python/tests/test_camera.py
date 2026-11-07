@@ -309,15 +309,15 @@ def test_a_loadable_2_pan_in_px_is_read_in_world_units(tmp_path):
     is the file's (a fraction of the range), and the loadable patch is clean."""
     rig = boot(tmp_path)
     lib = rig.lib
-    (lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURES / "pan-px.json", lib.home / "presets" / "pan-px.json")
+    (lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES / "pan-px.json", lib.home / "loadable" / "pan-px.json")
     lib.loaded_patch.load("PAN PX")
     assert rig.reg["camera.pan.x"].value == pytest.approx(0.5)
     assert rig.reg["camera.pan.y"].value == pytest.approx(-0.25)
     assert rig.view.pan == pytest.approx([0.5, -0.25])
     (b,) = rig.router.table.routes()
     assert (b.target, b.value) == ("camera.pan.x", 0.1)
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     assert rig.loaded_patch.notes == []                     # silent: nothing to say
 
 
@@ -327,14 +327,14 @@ def test_a_saved_loadable_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_
     rig.reg["camera.pan.y"].set(-0.75)
     path = rig.loaded_patch.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/10"     # (row 394); a key marks the units
+    assert doc["schema"] == "hyperspace.loadable/11"     # (row 394); a key marks the units
     assert doc[loadable.UNITS_KEY] == loadable.UNITS       # (…and the depths' taper, wave 0 T1)
     assert doc[loadable.UNITS_KEY]["camera.pan"] == "world"
     assert doc["values"]["camera.pan.x"] == 2.5
     rig.reg["camera.pan.x"].set(0.0)
     rig.lib.loaded_patch.load("WORLD PAN")
     assert rig.view.pan == pytest.approx([2.5, -0.75])
-    assert not rig.lib.is_dirty("presets")
+    assert not rig.lib.is_dirty("loadable")
 
 
 def test_pan_world_leaves_a_marked_or_panless_document_alone():
@@ -356,12 +356,12 @@ def test_every_corpus_pan_lands_inside_the_new_range():
     """The corpus files keep their px as the build shipped them; each
     converts to a pan well inside ±PAN_RANGE (party-mandala's 190 px is
     0.59 of a radius)."""
-    for path in sorted((CORPUS / "presets").glob("*.json")):
+    for path in sorted((CORPUS / "loadable").glob("*.json")):
         doc, _ = loadable.pan_world(json.loads(path.read_text()))
         for pid in loadable.PAN_IDS:
             v = doc.get("values", {}).get(pid, 0.0)
             assert abs(v) < PAN_RANGE / 4, (path.name, pid, v)
-    mandala, _ = loadable.pan_world(json.loads((CORPUS / "presets" / "party-mandala.json")
+    mandala, _ = loadable.pan_world(json.loads((CORPUS / "loadable" / "party-mandala.json")
                                              .read_text()))
     assert mandala["values"]["camera.pan.x"] == pytest.approx(190.0 / 324.0)
 
@@ -511,8 +511,8 @@ def test_an_old_camera_default_fills_a_loadable_at_its_converted_pan(tmp_path):
     for pid in ("camera.pan.x", "camera.pan.y"):
         del doc["values"][pid]
     doc["name"] = "NO PAN"
-    (rig.lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    (rig.lib.home / "presets" / "no-pan.json").write_text(json.dumps(doc))
+    (rig.lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    (rig.lib.home / "loadable" / "no-pan.json").write_text(json.dumps(doc))
     rig.lib.loaded_patch.load("NO PAN")
     assert rig.view.pan == pytest.approx([0.0, 0.0])
 
@@ -540,7 +540,7 @@ def test_a_hand_edited_units_that_is_no_object_is_no_marker(tmp_path):
     rig = boot(tmp_path)
     doc = json.loads((FIXTURES / "pan-px.json").read_text())
     doc.update(name="ODD UNITS", units="world")
-    (rig.lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    (rig.lib.home / "presets" / "odd-units.json").write_text(json.dumps(doc))
+    (rig.lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    (rig.lib.home / "loadable" / "odd-units.json").write_text(json.dumps(doc))
     rig.lib.loaded_patch.load("ODD UNITS")
     assert rig.view.pan == pytest.approx([0.5, -0.25])

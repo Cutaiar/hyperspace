@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/1",
+ "schema": "hyperspace.patch/2",
  "group": "band",
  "name": "Strobe Cage",
  "layout": {

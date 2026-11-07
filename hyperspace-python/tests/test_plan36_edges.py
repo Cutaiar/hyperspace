@@ -291,7 +291,7 @@ def test_the_clouds_wire_is_cut_and_joined_on_graph(tmp_path):
               "cloud", "scene.geometry")
     # (plan 44 D3: the cut is the loadable patch's, its dot the loadable patch's)
     assert e.unwire(c) is None and app.loaded_patch.bus.cut == {G.cloud_wire(0)}
-    assert app.loaded_patch.graph.spec.to_json() == before and app.lib.is_dirty("presets")
+    assert app.loaded_patch.graph.spec.to_json() == before and app.lib.is_dirty("loadable")
     assert e.wire("rout:cloud", "rin:scene/geometry") is None
     assert app.loaded_patch.bus.cut == frozenset() and len(pushed) == 2
     assert e.wire("rout:cloud", "rin:lookback/image") == graphview.CLOUD_INTO_SCENE.format(

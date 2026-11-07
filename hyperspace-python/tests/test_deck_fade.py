@@ -726,7 +726,7 @@ def test_a_presenter_mixes_as_the_pass_does(ctx):
 
 
 def _corpus_docs() -> list[Path]:
-    return sorted((Path(__file__).parent / "corpus" / "presets").glob("*.json"))
+    return sorted((Path(__file__).parent / "corpus" / "loadable").glob("*.json"))
 
 
 @pytest.mark.empty_frame
@@ -765,7 +765,7 @@ def test_deck_2_at_xfade_1_is_deck_1_on_the_same_loadable_byte_for_byte(ctx, tmp
 
 
 def _corpus_dir() -> Path:
-    return Path(__file__).parent / "corpus" / "presets"
+    return Path(__file__).parent / "corpus" / "loadable"
 
 
 def _gl_rig(ctx, home, renderer_cls):

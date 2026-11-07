@@ -16,7 +16,7 @@ from hyperspace import library
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
-from hyperspace.library import LAST_SHOW, LOADABLE, Library, LibraryError
+from hyperspace.library import LAST_INSTALL, LOADABLE, Library, LibraryError
 from hyperspace.loadable import LoadedPatch
 from hyperspace.params import build_registry
 from hyperspace.routing import Bindings, Router
@@ -45,7 +45,7 @@ def test_no_machine_is_todays_library(tmp_path):
     lib = Library(tmp_path, period=0.0)
     assert lib.machine == lib.home == tmp_path and lib.missing is None
     lib.remember("party")
-    assert (tmp_path / LAST_SHOW).read_text() == "party\n"
+    assert (tmp_path / LAST_INSTALL).read_text() == "party\n"
 
 
 def test_a_save_lands_in_the_library_and_last_show_in_the_machine_home(tmp_path):
@@ -61,10 +61,10 @@ def test_a_save_lands_in_the_library_and_last_show_in_the_machine_home(tmp_path)
     path = rig.loaded_patch.save_as("HI FREK")
     assert path == lib_root / LOADABLE / "hi-frek.json" and path.is_file()
     rig.lib.project.save("mine")
-    assert (lib_root / "projects" / "mine.hyp.json").is_file()
-    assert sorted(set(files(a)) - set(before)) == [LAST_SHOW]
-    assert (a / LAST_SHOW).read_text() == "mine\n"
-    assert not (lib_root / LAST_SHOW).exists()
+    assert (lib_root / "installs" / "mine.json").is_file()
+    assert sorted(set(files(a)) - set(before)) == [LAST_INSTALL]
+    assert (a / LAST_INSTALL).read_text() == "mine\n"
+    assert not (lib_root / LAST_INSTALL).exists()
 
     # the folder goes away (a cloud drive unmounted): relaunch
     for p in sorted(lib_root.rglob("*"), reverse=True):
@@ -123,7 +123,7 @@ def test_every_write_into_a_missing_library_is_refused(gone):
                  lambda: lib.empty_trash(),
                  lambda: lib.project.save("mine"),
                  lambda: lib.project.write(),
-                 lambda: library._write_json(gone.root / "presets" / "x.json", {})):
+                 lambda: library._write_json(gone.root / "loadable" / "x.json", {})):
         with pytest.raises(LibraryError, match="shared library not found at"):
             call()
     assert library.to_trash(CORPUS / LOADABLE / "party-trip.json", gone.root) is None
@@ -143,7 +143,7 @@ def test_a_library_given_alone_is_created_as_today(tmp_path):
     """Only a library named beside a different machine home is 'missing':
     `Library(path)` alone makes its folder, as every existing test expects."""
     lib = Library(tmp_path / "new", period=0.0)
-    assert lib.missing is None and (tmp_path / "new" / "projects").is_dir()
+    assert lib.missing is None and (tmp_path / "new" / "installs").is_dir()
 
 
 def test_the_system_page_says_where_the_library_is(tmp_path, gone):
@@ -165,7 +165,7 @@ def test_the_system_page_says_where_the_library_is(tmp_path, gone):
 # ---------------------------------------------------------------- atomic writes
 
 def test_a_write_is_atomic_and_leaves_no_temp_file(tmp_path, monkeypatch):
-    path = tmp_path / "presets" / "a.json"
+    path = tmp_path / "loadable" / "a.json"
     library._write_text(path, "one\n")
     library._write_text(path, "two\n")
     assert path.read_text() == "two\n"
@@ -189,11 +189,11 @@ def test_the_temp_file_is_never_a_loadable(tmp_path, monkeypatch):
 
     def spy(src, dst):
         seen.append(src)
-        assert list((tmp_path / "presets").glob("*.json")) == []
+        assert list((tmp_path / "loadable").glob("*.json")) == []
         real(src, dst)
 
     monkeypatch.setattr(library.os, "replace", spy)
-    library._write_text(tmp_path / "presets" / "a.json", "{}\n")
+    library._write_text(tmp_path / "loadable" / "a.json", "{}\n")
     assert seen[0].name.startswith(".a.json.") and seen[0].suffix == ".tmp"
 
 

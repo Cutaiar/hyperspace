@@ -213,7 +213,7 @@ def test_the_chip_draws_on_the_graph_head_the_loadable_strip_and_system(shell_ri
     ui_frame(p, "graph")
     assert "2 devices missing##wants" in seen
     seen.clear()
-    ui_frame(p, "presets")
+    ui_frame(p, "loadable")
     assert "2 devices missing##wants" in seen
     ui_frame(p, "system")
     assert "wanted by the preset: leap — not set up on this Mac; 1 row wait" in texts

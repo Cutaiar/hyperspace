@@ -49,7 +49,7 @@ class StandInMeta:
 
         def load(name):
             if name in self.gone:
-                raise LibraryError(f"presets: no preset {name!r}")
+                raise LibraryError(f"loadable: no preset {name!r}")
             if name in self.broken:
                 raise LibraryError(f"{name}.json is not a preset")
             deck.loads.append(name)
@@ -154,9 +154,10 @@ def test_a_file_of_another_kind_or_a_newer_build_is_refused(tmp_path):
         {"schema": "hyperspace.playlist/2", "name": "newer", "entries": []}))
     (folder / "preset.json").write_text(json.dumps(
         {"schema": "hyperspace.preset/2", "name": "preset", "entries": []}))
-    for name in ("newer", "preset"):
-        with pytest.raises(LibraryError, match="is not a hyperspace.playlist"):
-            playlist.read(lib, name)
+    with pytest.raises(LibraryError, match="git pull and uv sync"):
+        playlist.read(lib, "newer")
+    with pytest.raises(LibraryError, match="is not a hyperspace.playlist"):
+        playlist.read(lib, "preset")
 
 
 @pytest.mark.parametrize(("row", "words"), [
@@ -322,7 +323,7 @@ def test_a_missing_patch_is_skipped_and_said_and_the_next_plays():
     p.play()
     p.tick(0.0)
     assert meta.off_air.loads == ["b"]
-    assert any("skipped gone: presets: no preset 'gone'" in w for w in lib.warnings)
+    assert any("skipped gone: loadable: no preset 'gone'" in w for w in lib.warnings)
     p.tick(0.0)
     assert p.at == 1 and p.on
 

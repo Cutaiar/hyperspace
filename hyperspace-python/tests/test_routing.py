@@ -93,15 +93,15 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
 
 
 def corpus_doc(stem: str) -> dict:
-    """A loadable patch of the corpus (tests/corpus/presets: the files the build
+    """A loadable patch of the corpus (tests/corpus/loadable: the files the build
     shipped until the library went one-tier, 2026-10-28), as its /7 file
     reads — test data the app never sees."""
-    return json.loads((CORPUS / "presets" / f"{stem}.json").read_text())
+    return json.loads((CORPUS / "loadable" / f"{stem}.json").read_text())
 
 
 def corpus_stems() -> list[str]:
     """Every corpus loadable patch by file stem (`legacy6`, `party-trip`, …)."""
-    return sorted(f.stem for f in (CORPUS / "presets").glob("*.json"))
+    return sorted(f.stem for f in (CORPUS / "loadable").glob("*.json"))
 
 
 def legacy6(router: Router) -> list[str]:
@@ -531,7 +531,7 @@ def test_factory_files_match_the_code():
     table — `python -m hyperspace.routing` regenerates it — at the current
     schema, the meta controller's controls only. It lives outside library/ (plan 13
     WP5: no group's loadable patch), and the routing loadable patches that were beside it are
-    loadable patches now (library/presets/, tests/test_loadable.py)."""
+    loadable patches now (library/loadable/, tests/test_loadable.py)."""
     f = routing.FACTORY_FILE
     assert f.parent.name == "hyperspace" and "library" not in f.parts
     doc = json.loads(f.read_text())
@@ -928,7 +928,7 @@ def test_the_legacy6_loadable_replaces_routes_and_lands_bases(tmp_path):
     assert router.table.dropped == []
     # the table's rows are the file's copies: editing one edits no loadable patch
     router.table.mods()[0].value = 99
-    assert r.lib.read("presets", "legacy6")["routes"][0]["value"] == BANDS[0].dir * ROT_DEPTH
+    assert r.lib.read("loadable", "legacy6")["routes"][0]["value"] == BANDS[0].dir * ROT_DEPTH
 
 
 def test_midi_view_shares_the_table(tmp_path):
@@ -1187,7 +1187,7 @@ def test_a_loadable_load_lists_what_it_dropped(tmp_path):
     second until the next edit."""
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, house())
-    d = tmp_path / "presets"
+    d = tmp_path / "loadable"
     d.mkdir()
     (d / "twice.json").write_text(json.dumps({
         "schema": loadable.SCHEMA, "name": "twice", "values": {}, "routes": [
@@ -2039,7 +2039,7 @@ def test_router_describe_uses_the_adapters_names():
 
 # ------------------------------- plan 19 WP2: an existing bindings.json, on a copy
 
-QUIET = ("bindings.json", "last_show", "windows.json")    # (the first also names its backups)
+QUIET = ("bindings.json", "last_install", "windows.json")    # (the first also names its backups)
 
 
 def _bank_rows(table) -> dict[str, list]:
@@ -2154,11 +2154,11 @@ def test_a_row_the_owner_put_on_a_bank_pad_is_left_alone(owner_home, capsys):
     t.set_layer("preset")
     pr.put_slot(routing.F_KEYS + 3, "WAKE")
     pr.load_slot(routing.F_KEYS + 3)
-    assert r.lib.current("presets") == "WAKE" and pr.active == routing.F_KEYS + 3
+    assert r.lib.current("loadable") == "WAKE" and pr.active == routing.F_KEYS + 3
     # the owner's pad is invariant, so an old loadable patch's shape row on it goes
     # quietly like the other fifteen
     pr.load_slot(0)
-    assert r.lib.current("presets") == "NIGHT ONE" and r.loaded_patch.desk_notes == []
+    assert r.lib.current("loadable") == "NIGHT ONE" and r.loaded_patch.desk_notes == []
     # and a second launch leaves the owner's row and adds nothing
     capsys.readouterr()
     again = boot_home(home).router.table
@@ -2209,7 +2209,7 @@ def test_a_remap_whose_backup_fails_writes_nothing(owner_home, capsys, monkeypat
         n, ch = apc40.BANK_PADS[12]
         (b,) = t.dispatch("note", ch, n)
         routing.act(r.reg, b)
-        assert r.lib.current("presets") == "WAKE"
+        assert r.lib.current("loadable") == "WAKE"
         r.lib.project.bank[12] = None
         # a later write of the table: the copy is tried again, and nothing is written
         t.write()

@@ -69,12 +69,12 @@ def test_send_a_does_nothing_until_the_sequencer_is_there(rig):
 def test_a_pad_toggles_a_step_and_loads_no_loadable(rig, seq):
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     tap(rig, CLIP[0], channel=1)                               # off the page: slot 2 loads
-    before, active = lib.current("presets"), pr.active
+    before, active = lib.current("loadable"), pr.active
     enter(rig)
     mark = len(rig.out.sent)
     tap(rig, CLIP[0], channel=4)
     assert seq.lanes[0].steps[4] == 1.0
-    assert (lib.current("presets"), pr.active) == (before, active)
+    assert (lib.current("loadable"), pr.active) == (before, active)
     assert notes(rig, mark) == [(4, CLIP[0], apc40.GREEN)]     # only that pad changed
     tap(rig, CLIP[4], channel=0)                               # row 5 is a lane, not slots 17–24
     assert seq.lanes[4].steps[0] == 1.0 and pr.active == active
@@ -83,7 +83,7 @@ def test_a_pad_toggles_a_step_and_loads_no_loadable(rig, seq):
     # a loadable patch load (QUANT) leaves the page up; the pattern is the loadable patch's
     # (decision 8), so the grid redraws to whatever the loaded one holds
     tap(rig, apc40.N_QUANT)
-    assert lib.current("presets") != before
+    assert lib.current("loadable") != before
     assert seq_page.page_of(rig.midi.table) is not None
     lit = apc40.GREEN if seq.lanes[4].steps[0] else 0
     assert state(rig)[(0, CLIP[4])] == lit
@@ -163,7 +163,7 @@ def test_leaving_restores_the_bank_the_toggles_and_save(rig, seq):
     assert rig.reg[routing.SAVE_PARAM].value
     push(rig, note(STOP, 0, channel=7))
     tap(rig, CLIP[0], channel=0)                               # and the bank loads
-    assert lib.current("presets") == rig.loaded_patch.bank[0]
+    assert lib.current("loadable") == rig.loaded_patch.bank[0]
 
 
 def test_the_render_toggle_comes_back_on_leaving(rig, seq):

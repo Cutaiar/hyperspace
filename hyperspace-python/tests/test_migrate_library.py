@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "tests" / "corpus" / "presets"          # the shipped loadable patches, as test data
+CORPUS = ROOT / "tests" / "corpus" / "loadable"          # the shipped loadable patches, as test data
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"   # the corpus's /2s
 
@@ -88,11 +88,11 @@ def test_a_dry_run_writes_nothing(tmp_path, capsys):
     assert _tree(lib) == before
     assert not home.exists() or not list(home.glob("library-backup-*"))
     assert "dry run, nothing is written" in out
-    assert "trip-night.json" in out and "2 → 10" in out
-    assert "glimmer-bug.json" in out and "5 → 10" in out
-    assert "already /10, untouched" in out
+    assert "trip-night.json" in out and "2 → 11" in out
+    assert "glimmer-bug.json" in out and "5 → 11" in out
+    assert "already /11, untouched" in out
     assert "broken: does not load" in out
-    assert "would rewrite 2 as /10, leave 1 untouched (already /10), skip 1" in out
+    assert "would rewrite 2 as /11, leave 1 untouched (already /11), skip 1" in out
 
 
 def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, capsys):
@@ -107,22 +107,22 @@ def test_apply_backs_up_migrates_and_leaves_seven_and_the_rest_alone(tmp_path, c
     assert _tree(backups[0]).keys() == before.keys()
     assert all(_tree(backups[0])[k][0] == before[k][0] for k in before)
     after = _tree(lib)
-    assert after.keys() == before.keys()              # no file added, none renamed
+    # the folder moved; the trash and the retired group's folder went, deleted not converted
+    assert after.keys() == {k.replace("presets/", "loadable/") for k in before
+                            if not k.startswith(("trash/", "fx/"))}
     for name in ("trip-night.json", "glimmer-bug.json"):
-        doc = json.loads(after[f"presets/{name}"][0])
-        assert doc["schema"] == "hyperspace.preset/10", name
+        doc = json.loads(after[f"loadable/{name}"][0])
+        assert doc["schema"] == "hyperspace.loadable/11", name
         assert doc["name"] == json.loads(before[f"presets/{name}"][0])["name"]
-    for name in ("presets/acid-scene.json", "presets/broken.json",
-                 "fx/wobbly.json", "trash/presets/old.json",
-                 "presets/trip-night.json.bak-20261001"):
-        assert after[name] == before[name], name      # bytes and mtime: never written
-    assert "rewrote 2 as /10, left 1 untouched (already /10), skipped 1" in out
-    assert not [p for p in (lib / "presets").iterdir() if p.name.endswith(".tmp")]
+    for name in ("acid-scene.json", "broken.json", "trip-night.json.bak-20261001"):
+        assert after[f"loadable/{name}"][0] == before[f"presets/{name}"][0], name
+    assert "rewrote 2 as /11, left 1 untouched (already /11), skipped 1" in out
+    assert not [p for p in (lib / "loadable").iterdir() if p.name.endswith(".tmp")]
     # and once more: everything is /10 now, so nothing to do but the refusal
     again = _tree(lib)
     assert _tool().main(["--library", str(lib)], picture=same_picture) == 1
     assert _tree(lib) == again
-    assert "would rewrite 0 as /10, leave 3 untouched" in capsys.readouterr().out
+    assert "would rewrite 0 as /11, leave 3 untouched" in capsys.readouterr().out
 
 
 def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
@@ -141,9 +141,9 @@ def test_to_writes_each_seven_elsewhere_and_never_the_library(tmp_path, capsys):
     assert sorted(p.name for p in out_dir.iterdir()) == [
         "acid-scene.json", "glimmer-bug.json", "trip-night.json"]
     for p in out_dir.iterdir():
-        assert json.loads(p.read_text())["schema"] == "hyperspace.preset/10", p.name
+        assert json.loads(p.read_text())["schema"] == "hyperspace.loadable/11", p.name
     assert (out_dir / "acid-scene.json").read_bytes() == before["presets/acid-scene.json"][0]
-    assert "wrote 3 as /10 into" in capsys.readouterr().out
+    assert "wrote 3 as /11 into" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         _tool().main(["--library", str(lib), "--to", str(out_dir), "--apply"])
 
@@ -159,14 +159,14 @@ def test_a_loadable_whose_picture_moves_is_not_written_unless_forced(tmp_path, c
     before = _tree(lib)
     assert _tool().main(["--library", str(lib), "--apply"], picture=moved) == 1
     out = capsys.readouterr().out
-    assert _tree(lib)["presets/glimmer-bug.json"] == before["presets/glimmer-bug.json"]
+    assert _tree(lib)["loadable/glimmer-bug.json"][0] == before["presets/glimmer-bug.json"][0]
     assert "glimmer-bug: round-trip picture differs (8 of 8 outputs)" in out
-    assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.preset/10"
+    assert json.loads((lib / "loadable" / "trip-night.json").read_text())["schema"] == \
+        "hyperspace.loadable/11"
     assert _tool().main(["--library", str(lib), "--apply", "--force", "glimmer-bug"],
                         picture=moved) == 0
-    assert json.loads((lib / "presets" / "glimmer-bug.json").read_text())["schema"] == \
-        "hyperspace.preset/10"
+    assert json.loads((lib / "loadable" / "glimmer-bug.json").read_text())["schema"] == \
+        "hyperspace.loadable/11"
 
 
 def test_an_old_file_whose_section_is_not_read_is_never_written(tmp_path, capsys):
@@ -183,10 +183,10 @@ def test_an_old_file_whose_section_is_not_read_is_never_written(tmp_path, capsys
     assert _tool().main(["--library", str(lib), "--apply", "--force", "odd"],
                         picture=same_picture) == 1
     out = capsys.readouterr().out
-    assert _tree(lib)["presets/odd.json"] == before["presets/odd.json"]
+    assert _tree(lib)["loadable/odd.json"][0] == before["presets/odd.json"][0]
     assert "odd: its graph section was not read by this build" in out
-    assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.preset/10"
+    assert json.loads((lib / "loadable" / "trip-night.json").read_text())["schema"] == \
+        "hyperspace.loadable/11"
 
 
 def test_a_file_that_raises_runtime_error_is_skipped_alone(tmp_path, capsys, monkeypatch):
@@ -206,10 +206,10 @@ def test_a_file_that_raises_runtime_error_is_skipped_alone(tmp_path, capsys, mon
     before = _tree(lib)
     assert _tool().main(["--library", str(lib), "--apply"], picture=same_picture) == 1
     out = capsys.readouterr().out
-    assert _tree(lib)["presets/glimmer-bug.json"] == before["presets/glimmer-bug.json"]
+    assert _tree(lib)["loadable/glimmer-bug.json"][0] == before["presets/glimmer-bug.json"][0]
     assert "glimmer-bug: does not load: wired_section: the frame did not settle" in out
-    assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
-        "hyperspace.preset/10"
+    assert json.loads((lib / "loadable" / "trip-night.json").read_text())["schema"] == \
+        "hyperspace.loadable/11"
 
 
 def test_the_library_defaults_to_the_configs(tmp_path, capsys):
@@ -239,8 +239,8 @@ def test_the_real_picture_check_passes_an_old_loadable(tmp_path, capsys):
     out = capsys.readouterr().out
     assert out.count("round-trip picture: same") == 3
     for name in ("trip-night", "glimmer-bug", "acid-scene"):
-        assert json.loads((lib / "presets" / f"{name}.json").read_text())["schema"] == \
-            "hyperspace.preset/10"
+        assert json.loads((lib / "loadable" / f"{name}.json").read_text())["schema"] == \
+            "hyperspace.loadable/11"
 
 
 def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
@@ -260,13 +260,14 @@ def test_a_folder_made_after_the_last_run_is_migrated_too(tmp_path, capsys):
     out_dir = tmp_path / "out"
     _tool().main(["--library", str(lib), "--to", str(out_dir)], picture=same_picture)
     assert json.loads((out_dir / "party" / "deep" / "bug.json").read_text())["schema"] \
-        == "hyperspace.preset/10"
+        == "hyperspace.loadable/11"
     capsys.readouterr()
     hidden = (loadable_dir / ".cache" / "x.json").read_bytes()
     assert _tool().main(["--library", str(lib), "--apply"], picture=same_picture) == 1
     out = capsys.readouterr().out
     assert "party/night.json" in out and "party/deep/bug.json" in out
+    loadable_dir = lib / "loadable"
     for rel in ("party/night.json", "party/deep/bug.json"):
-        assert json.loads((loadable_dir / rel).read_text())["schema"] == "hyperspace.preset/10", rel
+        assert json.loads((loadable_dir / rel).read_text())["schema"] == "hyperspace.loadable/11", rel
     assert (loadable_dir / ".cache" / "x.json").read_bytes() == hidden
-    assert "rewrote 4 as /10" in out
+    assert "rewrote 4 as /11" in out

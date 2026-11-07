@@ -338,7 +338,7 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
 
     from hyperspace import learn
 
-    doc = json.loads((CORPUS / "presets" / "party-tracer.json").read_text())
+    doc = json.loads((CORPUS / "loadable" / "party-tracer.json").read_text())
     values = doc["values"]
     assert values["dream.on"] is False
     drawn = learn.drawn_of(G.read_graph(doc["graph"]))

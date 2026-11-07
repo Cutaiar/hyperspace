@@ -354,7 +354,7 @@ def test_shift_f_keys_save_by_the_real_road(rig):
     project = rig.one.loaded_patch.lib.project
     _bank(rig, "party-wake", "party-tumble")
     rig.one.loaded_patch.load("party-wake")
-    path = rig.lib.path_of("presets", project.bank[0])
+    path = rig.lib.path_of("loadable", project.bank[0])
     was = json.loads(path.read_text())["values"]["view.bright"]
     rig.one.reg["view.bright"].set(was + 0.25)
     rig.r.router.keys(NS(pressed=lambda code: code == glfw.KEY_F1, shift=lambda: True))

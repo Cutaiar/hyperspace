@@ -273,8 +273,8 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
     assert src["schema"] == "hyperspace.preset/7"
     spec, saved = None, None
     for home in (tmp_path / "a", tmp_path / "b"):
-        (home / "presets").mkdir(parents=True, exist_ok=True)
-        (home / "presets" / FIXTURE.name).write_text(saved or FIXTURE.read_text())
+        (home / "loadable").mkdir(parents=True, exist_ok=True)
+        (home / "loadable" / FIXTURE.name).write_text(saved or FIXTURE.read_text())
         r = boot(home)
         r.loaded_patch.load("mask-as-picture")
         got = r.loaded_patch.graph.spec
@@ -288,7 +288,7 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
         spec = got
         saved = r.loaded_patch.save_as("mask-as-picture").read_text()
         doc = json.loads(saved)
-        assert doc["schema"] == "hyperspace.preset/10"
+        assert doc["schema"] == "hyperspace.loadable/11"
         assert {"kind": "matte"} in doc["graph"]["nodes"]
         assert doc["values"]["matte.key"] == pytest.approx(0.95)
 

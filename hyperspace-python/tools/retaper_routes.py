@@ -77,7 +77,7 @@ then copies the whole library folder to ``~/Hyperspace/library-backup-
 <stamp>/`` (the machine's home, never inside the library;
 `migrate_library.backup`), keeps ``bindings.json`` beside itself as the
 app does before it rewrites it (`routing.backup`, ``bindings.json.bak-v3``),
-says where, and writes. The test corpus (``tests/corpus/presets``) was
+says where, and writes. The test corpus (``tests/corpus/loadable``) was
 rewritten with this tool in the PR that brought the tapers, so the goldens
 draw the migrated depths; it is never touched again by a run on a library.
 """

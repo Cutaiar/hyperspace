@@ -35,7 +35,7 @@ The migration map (`docs/plans/assets/37-faces/migration-map.md`) is
 generated, never hand-edited: what each mode draws and its ranked nearest
 neighbours are data here (`DRAWS`, `NEAREST`); which loadable patches use each mode
 — with the faces wire drawn, with the faces off, or carried unwired — is
-read off every corpus loadable patch (`tests/corpus/presets`) and every fixture as
+read off every corpus loadable patch (`tests/corpus/loadable`) and every fixture as
 the real loader lands them (`usage`). `--check` regenerates it and fails when the file differs
 (tests/test_faces_map.py runs it), so the map cannot rot silently.
 
@@ -78,7 +78,7 @@ from hyperspace.routing import PATTERN_DEPTH
 
 OUT = ROOT / "docs" / "plans" / "assets" / "37-faces"
 MAP = OUT / "migration-map.md"
-CORPUS = gf.CORPUS                                  # tests/corpus/presets
+CORPUS = gf.CORPUS                                  # tests/corpus/loadable
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 
 FRAMES = 3                    # frames drawn before the read: past the first
@@ -300,7 +300,7 @@ def usage() -> list[Use]:
     golden rig's headless `Loader`, every fixture copied in), read for its
     landed mode, faces switch and wires."""
     loader = gf.Loader()
-    own = Path(loader._home.name) / "presets"
+    own = Path(loader._home.name) / "loadable"
     for folder in (CORPUS, FIXTURES):                  # every one, not just the goldens'
         for f in sorted(folder.glob("*.json")):
             (own / f.name).write_text(f.read_text())

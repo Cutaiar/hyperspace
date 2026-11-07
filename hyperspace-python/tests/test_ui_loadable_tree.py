@@ -25,17 +25,17 @@ def _folders(lib, layout: dict[str, list[str]]) -> None:
     """Move corpus loadable patches into folders: {"party": ["DIAL", "FIELD"], …};
     an empty list makes an empty folder."""
     for folder, names in layout.items():
-        d = lib.home / "presets" / folder
+        d = lib.home / "loadable" / folder
         d.mkdir(parents=True, exist_ok=True)
         for n in names:
-            src = lib.path_of("presets", n)
+            src = lib.path_of("loadable", n)
             src.rename(d / src.name)
     lib._sync()
 
 
 def _page(panel, n: int = 2):
     imgui.get_io().display_size = imgui.ImVec2(*TALL)
-    frame(panel, "presets")
+    frame(panel, "loadable")
     for _ in range(n - 1):
         frame(panel)
     return ui_loadable._state(panel)
@@ -65,7 +65,7 @@ def test_the_tree_is_the_top_level_then_each_folder_nested(rig):  # noqa: F811
     page = st["page"]
     assert page["folders"] == [("ambient", True), ("party", True), ("party/deep", True)]
     names = [n for n, _ in page["rows"]]
-    top = [n for n in lib.list("presets") if "/" not in n]
+    top = [n for n in lib.list("loadable") if "/" not in n]
     assert names == [*top, "party/DIAL", "party/FIELD", "party/deep/TUMBLE"]
     r = page["rects"]
     assert r["folder.party"][3] <= r["row.party/DIAL"][1]
@@ -80,9 +80,9 @@ def test_the_tree_is_the_top_level_then_each_folder_nested(rig):  # noqa: F811
 def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     panel, lib = rig.panel, rig.lib
     ui_json = lib._machine() / "ui.json"
-    ui_json.write_text(json.dumps({"pane": {"open": {"presets": False}}, "graph": {"side": 300}}))
+    ui_json.write_text(json.dumps({"pane": {"open": {"loadable": False}}, "graph": {"side": 300}}))
     _folders(lib, {"party": ["DIAL"], "party/deep": ["TUMBLE"]})
-    lib.load("presets", "party/DIAL")
+    lib.load("loadable", "party/DIAL")
     st = _page(panel)
     _click(panel, st["page"]["rects"]["folder.party"])
     frame(panel)
@@ -90,12 +90,12 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     assert page["folders"] == [("party", False)]                    # its folders go with it
     assert not [n for n, _ in page["rows"] if n.startswith("party/")]
     # written WRITE_AFTER_S after the click, as the pane's folds are (review of #349)
-    assert "presets" not in json.loads(ui_json.read_text())
+    assert "loadable" not in json.loads(ui_json.read_text())
     assert ui_loadable.flush_folds(panel, now=time.monotonic() + ui_pane.WRITE_AFTER_S + 0.1)
     assert not ui_loadable.flush_folds(panel, force=True)            # nothing left to write
     doc = json.loads(ui_json.read_text())
-    assert doc["presets"] == {"folded": ["party"]}
-    assert doc["pane"] == {"open": {"presets": False}} and doc["graph"] == {"side": 300}
+    assert doc["loadable"] == {"folded": ["party"]}
+    assert doc["pane"] == {"open": {"loadable": False}} and doc["graph"] == {"side": 300}
     # a fresh panel state reads it back: still folded, the loaded patch said
     st.pop("folded")
     labels = []
@@ -111,12 +111,12 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     frame(panel)
     assert ("party", True) in st["page"]["folders"]
     ui_loadable.flush_folds(panel, force=True)
-    assert json.loads(ui_json.read_text())["presets"] == {"folded": []}
+    assert json.loads(ui_json.read_text())["loadable"] == {"folded": []}
     # a fold clicked just before quitting is written by the panel's close
     _click(panel, st["page"]["rects"]["folder.party"])
-    assert json.loads(ui_json.read_text())["presets"] == {"folded": []}   # not yet
+    assert json.loads(ui_json.read_text())["loadable"] == {"folded": []}   # not yet
     panel.close()
-    assert json.loads(ui_json.read_text())["presets"] == {"folded": ["party"]}
+    assert json.loads(ui_json.read_text())["loadable"] == {"folded": ["party"]}
     assert not ui_loadable.flush_folds(panel, force=True)              # nothing left
 
 
@@ -125,7 +125,7 @@ def test_a_fold_read_before_the_machine_is_known_is_read_again(rig):  # noqa: F8
     library yet) is not the file — once the machine is known it is read,
     a fold clicked meanwhile laid over it, and the write keeps both."""
     panel, lib = rig.panel, rig.lib
-    (lib._machine() / "ui.json").write_text(json.dumps({"presets": {"folded": ["party"]}}))
+    (lib._machine() / "ui.json").write_text(json.dumps({"loadable": {"folded": ["party"]}}))
     panel.library = None
     assert ui_loadable.folded(panel) == set()
     ui_loadable.set_folded(panel, "ambient", True)
@@ -133,12 +133,12 @@ def test_a_fold_read_before_the_machine_is_known_is_read_again(rig):  # noqa: F8
     assert ui_loadable.folded(panel) == {"party", "ambient"}
     ui_loadable.flush_folds(panel, force=True)
     doc = json.loads((lib._machine() / "ui.json").read_text())
-    assert doc["presets"] == {"folded": ["ambient", "party"]}
+    assert doc["loadable"] == {"folded": ["ambient", "party"]}
 
 
 def test_the_no_loadables_hint_shows_while_only_empty_folders_are_there(rig):  # noqa: F811
     panel, lib = rig.panel, rig.lib
-    for p in list((lib.home / "presets").glob("*.json")):
+    for p in list((lib.home / "loadable").glob("*.json")):
         p.unlink()
     _folders(lib, {"ambient": []})
     got = []
@@ -158,12 +158,12 @@ def test_remove_is_off_for_a_folder_holding_a_hidden_file_and_says_what(rig):  #
     refused."""
     panel, lib = rig.panel, rig.lib
     _folders(lib, {"keep": []})
-    (lib.home / "presets" / "keep" / ".notes").write_text("yours")
+    (lib.home / "loadable" / "keep" / ".notes").write_text("yours")
     st = _page(panel)
     _click(panel, st["page"]["rects"]["folder.keep"], button=1)
     assert st["menu_for"] == "keep" and st["menu_held"] == [".notes"]
     _click(panel, st["menu"]["remove"])
-    assert "keep" in lib.folders() and (lib.home / "presets" / "keep" / ".notes").is_file()
+    assert "keep" in lib.folders() and (lib.home / "loadable" / "keep" / ".notes").is_file()
 
 
 def test_move_to_on_a_rows_menu_moves_the_file_and_the_bank_follows(rig):  # noqa: F811
@@ -171,9 +171,9 @@ def test_move_to_on_a_rows_menu_moves_the_file_and_the_bank_follows(rig):  # noq
     _folders(lib, {"party": []})
     pr = lib.project
     assert pr.bank[5] == "ACID"
-    src = lib.path_of("presets", "ACID")
+    src = lib.path_of("loadable", "ACID")
     before = src.read_bytes()
-    lib.load("presets", "ACID")
+    lib.load("loadable", "ACID")
     st = _page(panel)
     _click(panel, st["page"]["rects"]["row.ACID"], button=1)       # the right-click
     menu = st["menu"]
@@ -181,9 +181,9 @@ def test_move_to_on_a_rows_menu_moves_the_file_and_the_bank_follows(rig):  # noq
     _hover(panel, menu["move to"])                                   # the submenu opens
     assert {"to.party"} <= set(st["menu"]) and "to." not in st["menu"]   # not where it is
     _click(panel, st["menu"]["to.party"])
-    dst = lib.home / "presets" / "party" / src.name
+    dst = lib.home / "loadable" / "party" / src.name
     assert dst.read_bytes() == before and not src.exists()
-    assert pr.bank[5] == "party/ACID" and lib.current("presets") == "party/ACID"
+    assert pr.bank[5] == "party/ACID" and lib.current("loadable") == "party/ACID"
     show = json.loads(pr.path.read_text())
     assert show["bank"][5] == "party/ACID"
     frame(panel)
@@ -195,7 +195,7 @@ def test_move_to_on_a_rows_menu_moves_the_file_and_the_bank_follows(rig):  # noq
 def test_a_row_dragged_onto_a_header_moves_into_that_folder(rig):  # noqa: F811
     panel, lib = rig.panel, rig.lib
     _folders(lib, {"party": []})
-    src = lib.path_of("presets", "DIAL")
+    src = lib.path_of("loadable", "DIAL")
     before = src.read_bytes()
     st = _page(panel)
     row, head = st["page"]["rects"]["row.DIAL"], st["page"]["rects"]["folder.party"]
@@ -207,8 +207,8 @@ def test_a_row_dragged_onto_a_header_moves_into_that_folder(rig):  # noqa: F811
         _mouse(panel, x0 + (x1 - x0) * k / 8, y0 + (y1 - y0) * k / 8)
     _mouse(panel, x1, y1, 0, False)
     frame(panel)
-    assert (lib.home / "presets" / "party" / src.name).read_bytes() == before
-    assert "party/DIAL" in lib.list("presets") and lib.current("presets") is None  # not loaded
+    assert (lib.home / "loadable" / "party" / src.name).read_bytes() == before
+    assert "party/DIAL" in lib.list("loadable") and lib.current("loadable") is None  # not loaded
 
 
 def test_a_folder_renamed_from_its_menu_and_the_bank_follows(rig):  # noqa: F811
@@ -224,8 +224,8 @@ def test_a_folder_renamed_from_its_menu_and_the_bank_follows(rig):  # noqa: F811
     assert st["naming"] == "folder:party" and st["buf"] == "party"
     _type(panel, "crowd")
     assert st["naming"] is None
-    assert (lib.home / "presets" / "crowd").is_dir()
-    assert not (lib.home / "presets" / "party").exists()
+    assert (lib.home / "loadable" / "crowd").is_dir()
+    assert not (lib.home / "loadable" / "party").exists()
     assert pr.bank[5] == "crowd/ACID"
     assert ("crowd", True) in st["page"]["folders"]
 
@@ -249,7 +249,7 @@ def test_new_folder_at_the_foot_and_inside_and_remove_only_when_empty(rig):  # n
     _click(panel, st["page"]["rects"]["folder.ambient"], button=1)
     _click(panel, st["menu"]["remove"])
     assert lib.folders() == ["ambient", "ambient/slow"]
-    _click(panel, st["rects"]["strip.presets.name"])              # a click away closes it
+    _click(panel, st["rects"]["strip.loadable.name"])              # a click away closes it
     _click(panel, st["page"]["rects"]["folder.ambient/slow"], button=1)
     assert st["menu_for"] == "ambient/slow"
     _click(panel, st["menu"]["remove"])

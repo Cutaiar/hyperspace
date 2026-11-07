@@ -17,12 +17,12 @@ from hyperspace.library import LOADABLE, PROJECT_SCHEMA, LibraryError
 
 
 def _show(d, name="night"):
-    return json.loads((d.root / "projects" / f"{name}.hyp.json").read_text())
+    return json.loads((d.root / "installs" / f"{name}.json").read_text())
 
 
 def _second_show(d, bank):
     doc = {"schema": PROJECT_SCHEMA, "name": "other", "startup": None, "bank": bank}
-    (d.root / "projects" / "other.hyp.json").write_text(json.dumps(doc))
+    (d.root / "installs" / "other.json").write_text(json.dumps(doc))
 
 
 def test_folders_lists_every_folder_down_empty_ones_too_never_hidden(lib_dirs):  # noqa: F811
@@ -46,7 +46,7 @@ def test_a_move_keeps_the_bytes_and_the_bank_and_the_shows_follow(lib_dirs):  # 
     assert _show(lib_dirs)["bank"][0] == "party/A" and _show(lib_dirs)["startup"] == "party/A"
     # another show naming it — by its name and by its file key — follows too
     assert _show(lib_dirs, "other")["bank"][:2] == ["party/A", "party/A"]
-    assert {t.name for t in lib.trash() if t.group == "projects"} >= {"night", "other"}
+    assert {t.name for t in lib.trash() if t.group == "installs"} >= {"night", "other"}
     assert lib.status == "moved A → party/A (2 shows updated)"
     # and back to the top, by the folder-qualified name
     lib.move("party/A", "")

@@ -42,8 +42,8 @@ from hyperspace.graphmigrate import Shows
 from hyperspace.outputs import Switches
 from hyperspace.routing import Binding
 
-# the corpus: the loadable patches the build once shipped (tests/corpus/presets, one tier)
-CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
+# the corpus: the loadable patches the build once shipped (tests/corpus/loadable, one tier)
+CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "loadable").glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 # (plan 33 T6: the `/5` fixtures — T4's and T5's proofs, a channel's own
 # shaders into the faces, the backdrop, a switch — are laid out with the rest)
@@ -69,7 +69,7 @@ def load(rig, name, graph=None):
     party(rig)
     if graph is not None:
         rig.panel.renderer = NS(_graph=graph)
-    rig.lib.load("presets", name)
+    rig.lib.load("loadable", name)
     # (plan 35 T5: the canvas is the loadable patch's wired frame — party-trip's is
     # the render graph's own frame, landed again after the load)
     section = getattr(rig.panel.renderer._graph, "section", None)
@@ -101,11 +101,11 @@ def load_fixture(rig, fixture):
     """Graph fixture `fixture` loaded as the loadable patch (its spec the view's),
     on its own render graph (`real_graph`): the page's state after two frames."""
     party(rig)
-    dst = rig.lib.home / "presets" / f"{fixture}.json"
+    dst = rig.lib.home / "loadable" / f"{fixture}.json"
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text((FIXTURES / f"{fixture}.json").read_text())
     rig.panel.renderer = NS(_graph=real_graph(fixture))
-    rig.lib.load("presets", fixture)
+    rig.lib.load("loadable", fixture)
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     return ui_graph._state(rig.panel)
@@ -762,7 +762,7 @@ def test_a_blank_loadable_draws_only_the_outputs(rig, monkeypatch):
 
     def landed(section, filled=()):
         put(rig.lib.home, "Blank", schema="hyperspace.preset/6", graph=section)
-        rig.lib.load("presets", "Blank")
+        rig.lib.load("loadable", "Blank")
         for c, ch in chans.items():          # (every bin empty but `filled`'s)
             ch.bin = [None] * len(ch.bin)
             if c in filled:
@@ -1105,7 +1105,7 @@ def test_a_loadable_landing_without_the_node_lets_it_go(rig):
     assert panel.graph_selected == "render:pattern"
     frame(panel, "view")
     assert panel.graph_selected == "render:pattern"       # off the page: as it was
-    rig.lib.load("presets", "party-trip")                 # the same frame again: kept
+    rig.lib.load("loadable", "party-trip")                 # the same frame again: kept
     frame(panel, "view")
     assert panel.graph_selected == "render:pattern"
     at = panel.graph_selected_at

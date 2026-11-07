@@ -79,7 +79,8 @@ TRASH_KEY = "\0trash"     # the listings cache: the trash
 # plan 48 stage 2: the tree
 FOLDERS_KEY = "\0folders" # the listings cache: the loadable patches' folders
 LOADABLE_DRAG = "PRESET"    # a row's drag payload (the name kept in `_state`'s preset_drag)
-UI_KEY = "presets"        # <machine>/ui.json: {"presets": {"folded": [folder, …]}}
+OLD_UI_KEY = "presets"    # (read once: this Mac's folds from before the one migration)
+UI_KEY = "loadable"       # <machine>/ui.json: {"loadable": {"folded": [folder, …]}}
 FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). "
               "Drag a preset onto it to move it in. Right-click: a new folder inside, "
               "rename, remove (an empty folder only)")
@@ -853,7 +854,8 @@ def folded(panel) -> set[str]:
         held = None
         if machine is not None:
             from . import ui_pane  # (late: ui_pane imports this module)
-            sec = ui_pane.read_doc(machine).get(UI_KEY)
+            doc = ui_pane.read_doc(machine)
+            sec = doc.get(UI_KEY, doc.get(OLD_UI_KEY))
             held = sec.get("folded") if isinstance(sec, dict) else None
         got = {f for f in held if isinstance(f, str)} if isinstance(held, list) else set()
         for f, shut in (st.get("fold_clicks") or {}).items():
