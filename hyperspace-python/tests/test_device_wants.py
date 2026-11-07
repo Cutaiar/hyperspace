@@ -56,8 +56,8 @@ def test_row_words_say_a_control_as_a_person_does():
     assert w(Binding("hand:left.pinch.index", "x", "position")) == "left hand pinch index"
     assert w("hands:gap") == "hands gap"
     assert w("lane:0") == "analyzer 1"
-    assert w("pad:A") == "pad A" and w("pad@p2:A") == "pad A"
-    assert w("hat:UP") == "d-pad up"
+    assert w("pad:S") == "pad south" and w("pad@p2:S") == "pad south"
+    assert w("hat:N") == "d-pad up"
     assert w("axis@p2:LX") == "axis LX"
     assert w("cc:0:48") == "CC 48 ch1" and w("note:*:53") == "note 53 any ch"
     assert w("pitch:2") == "pitch bend ch3"
@@ -131,7 +131,7 @@ def test_only_the_loadables_rows_count_and_never_a_builtin_scheme():
     t = table_of(Binding("cc:0:48", "view.bright", "abs", layer="preset"),
                  Binding("cc:0:49", "view.bright", "abs", layer="global"),
                  Binding("cc:0:50", "view.bright", "abs"),
-                 Binding("pad:A", "view.faces", "toggle"),
+                 Binding("pad:S", "view.faces", "toggle"),
                  Binding("key:B", "view.faces", "toggle"),
                  Binding("lane:0", "view.zoom", "push", 0.5),
                  Binding("lfo:0", "view.zoom", "push", 0.5),
@@ -175,8 +175,8 @@ def test_the_chip_and_the_system_lines():
     ws = devices.wants(t, rig_of(DESK))
     assert devices.missing_chip(ws) == "2 devices missing"
     assert ui.wanted_lines(rig_of(DESK), t) == [
-        "wanted by the preset: leap — not set up on this Mac; 3 rows wait",
-        "wanted by the preset: apc40 — lost; 1 control wait"]
+        "wanted by the patch: leap — not set up on this Mac; 3 rows wait",
+        "wanted by the patch: apc40 — lost; 1 control wait"]
     assert devices.missing_chip(devices.wants(table_of(HAND_ROWS[0]), rig_of(DESK))) == \
         "1 device missing"
     # nothing when all are there, nothing when the loadable patch wants nothing
@@ -213,11 +213,11 @@ def test_the_chip_draws_on_the_graph_head_the_loadable_strip_and_system(shell_ri
     ui_frame(p, "graph")
     assert "2 devices missing##wants" in seen
     seen.clear()
-    ui_frame(p, "presets")
+    ui_frame(p, "loadable")
     assert "2 devices missing##wants" in seen
     ui_frame(p, "system")
-    assert "wanted by the preset: leap — not set up on this Mac; 1 row wait" in texts
-    assert any(t.startswith("wanted by the preset: apc40 — lost; ") for t in texts)
+    assert "wanted by the patch: leap — not set up on this Mac; 1 row wait" in texts
+    assert any(t.startswith("wanted by the patch: apc40 — lost; ") for t in texts)
 
 
 def test_the_wants_are_asked_once_a_frame_for_every_place_that_shows_them(shell_rig,  # noqa: F811

@@ -6,7 +6,7 @@ air, and it stays until someone moves the player: `deck.MetaController` turns
 a duty into a `Deck` and moves the pointers of what the player holds.
 
 **A patch names a player, never a device.** A row's qualifier is the player's:
-bare (``pad:A``, ``axis:LX``) is player 1, ``axis@p2:LX`` is player 2, with no
+bare (``pad:S``, ``axis:LX``) is player 1, ``axis@p2:LX`` is player 2, with no
 file change (plan 27's roles were the seam). A player's first controller of a
 repeatable kind publishes under that name (`devices.qualifiers_of`); a second
 of the same kind keeps its role as its address, so no two feed one lane. A

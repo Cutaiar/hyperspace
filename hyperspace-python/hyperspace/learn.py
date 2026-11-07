@@ -181,7 +181,7 @@ def blocked_words(name: str, why: str, verb: str = "map") -> str:
     if why == "invariant":
         return f"{name} is invariant (the meta controller's)"
     return (f"{name} is on the global layer (the meta controller's) — latch SHIFT off to "
-            f"{verb} into the preset")
+            f"{verb} into the patch")
 
 
 def _table_name(table: Bindings) -> str:
@@ -484,7 +484,7 @@ def row_for(source: str, p: Param, when: str | None = None, *,
 
 def _steps_on(x: Binding, b: Binding, bare: tuple[str, ...]) -> bool:
     """Is `x` a pair's `step` row (plan 56) of `b`'s pad with a pole among
-    `bare` (``hat:UP``)? A row on that button, then, in a button learn's eyes."""
+    `bare` (``hat:N``)? A row on that button, then, in a button learn's eyes."""
     if x.scheme != PAIR_SCHEME or x.op != "step" or x.device != b.device:
         return False
     poles = pair_poles(":".join(x.parts))
@@ -814,11 +814,11 @@ class Learn:
             return Binding(source, "").is_midi
         if want in PAIR_WANTS:               # a pole, or the pair a port names (plan 56)
             return base_scheme(source.partition(":")[0]) in ("pad", "hat", PAIR_SCHEME)
-        if want == "pad":                    # any pad's: ``pad@p2:A`` too (plan 27 B6)
+        if want == "pad":                    # any pad's: ``pad@p2:S`` too (plan 27 B6)
             return base_scheme(source.partition(":")[0]) in PAD_SCHEMES
         if ":" not in want:
             # a role: a source under that scheme (an OSC role's), or one
-            # qualified with it (``pad@p2:A`` completes "p2", plan 27 B6)
+            # qualified with it (``pad@p2:S`` completes "p2", plan 27 B6)
             return (source.partition(":")[0] == want
                     or Binding(source, "").device == want)
         return source.startswith(f"{want}.")
@@ -901,7 +901,7 @@ class Learn:
             (glyph(x.bare) if glyph is not None else None) or named(x)
             for x in gone if not x.overlaps(b)))
         under = table.under_node_mode(b)
-        self.said(f"learned {pid} ← {named(b)} (into the preset)"
+        self.said(f"learned {pid} ← {named(b)} (into the patch)"
                   + (f"; {', '.join(let_go)} let go" if let_go else "")
                   + ("; under node mode until that desk leaves its node" if under else ""))
         return True
@@ -940,7 +940,7 @@ class Learn:
     # ---- a gamepad button completes it ----
 
     def learn_pad_button(self, source: str) -> bool:
-        """A gamepad button or D-pad direction (``pad:A``, ``hat:UP``)
+        """A gamepad button or D-pad direction (``pad:S``, ``hat:N``)
         completes the armed learn: a button row like a desk note's — a
         trigger fires, a toggle or an enum toggles (the enum steps to its
         next choice), and a fader steps one detent: down for the D-pad's
@@ -970,7 +970,7 @@ class Learn:
         if p.kind is Kind.TRIGGER:
             op, value = "fire", 0.0
         elif p.kind is Kind.CONTINUOUS:
-            down = Binding(source, pid).bare in ("hat:DOWN", "hat:LEFT")   # any pad's
+            down = Binding(source, pid).bare in ("hat:S", "hat:W")   # any pad's
             op, value = "step", (-1.0 if down else 1.0)
         elif pid in HELD_ONLY:
             op, value = "momentary", 0.0
@@ -999,8 +999,9 @@ class Learn:
         learn waits; the second, another control of the same pad, is the −
         pole, and the pair lands (`learn_pair`). A press of the first again
         is nothing. True: the press was the learn's, whatever it did."""
+        from .pads.models import pole_name
         b = Binding(source, "")
-        name = ":".join(b.parts)
+        name = pole_name(source)
         first = self.__dict__.get("pair_first")
         if first is None:
             self.pair_first = source
@@ -1012,10 +1013,10 @@ class Learn:
         if was.device != b.device:
             self.refuse("a pair is two controls of one pad: press the − pole on the same pad")
             return True
-        return self.learn_pair(pair_address(":".join(was.parts), name, b.device))
+        return self.learn_pair(pair_address(pole_name(first), name, b.device))
 
     def learn_pair(self, source: str) -> bool:
-        """The pair `source` (``pair:UP/DOWN``) completes the armed learn, by
+        """The pair `source` (``pair:hat.N/hat.S``) completes the armed learn, by
         the want's model. "pair": a `step` row at one detent each way, the
         meta controller's like any pad button row: `bindings.json` is written, and a
         step on the meta stack. Rows on either pole ask first (row 754). "pair (spring)": a
@@ -1196,7 +1197,7 @@ class Learn:
             undo.push(f"learn {p.id}")               # one undo step (undo.py, plan 15)
             cur.when = when                          # the same axis again: no move
             self._mapped(cur)
-            self.said(f"learned {p.id} ← {cur.describe()} (into the preset)")
+            self.said(f"learned {p.id} ← {cur.describe()} (into the patch)")
             return
 
         def land() -> None:
@@ -1253,7 +1254,7 @@ class Learn:
         table.replace_owner(b)
         self._mapped(b)
         frm = ", ".join(dict.fromkeys(x.target for x in gone if x.target != b.target))
-        self.said(f"learned {b.target} ← {b.describe()} (into the preset"
+        self.said(f"learned {b.target} ← {b.describe()} (into the patch"
                   + (f"; moved from {frm})" if frm else ")"))
 
     # ---- unbind ----

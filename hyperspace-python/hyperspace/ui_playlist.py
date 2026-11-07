@@ -90,6 +90,12 @@ def _transport(panel, p) -> None:
         panel._button(pid, label, small=True)
     if "output.xfade_s" in panel.reg:
         panel._slider("output.xfade_s")
+    install = panel.library.install
+    at_launch = bool(p.key) and getattr(install, "plays", None) == p.key
+    if imgui.checkbox("start this list at launch##playlist.at_launch", at_launch)[0] and p.key:
+        install.play_at_launch(None if at_launch else p.key)
+    if imgui.is_item_hovered():
+        ui.tooltip("A cart: when the app opens, this list plays by itself. Kept in the install file.")
 
 
 def _entries(panel, p) -> None:

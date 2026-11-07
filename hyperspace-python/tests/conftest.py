@@ -386,14 +386,14 @@ def leave_no_undo() -> None:
 
 
 def opened_last(home, show: str = "house"):
-    """A home whose last opened show is `show` (library.LAST_SHOW) — what
+    """A home whose last opened show is `show` (library.LAST_INSTALL) — what
     the tests written against the house moods, the default show until plan
     14 WP3 made the party show the one a fresh home opened, stand on."""
     from pathlib import Path
 
     home = Path(home)
     home.mkdir(parents=True, exist_ok=True)
-    (home / "last_show").write_text(f"{show}\n")
+    (home / "last_install").write_text(f"{show}\n")
     return home
 
 
@@ -403,7 +403,7 @@ CORPUS = Path(__file__).resolve().parent / "corpus"
 # the groups the corpus holds: the twenty-five loadable patches, the three dream
 # patches of one group (plan 50: what the module presets were, under
 # patches/dream/), and the two shows (party, house) whose banks name them
-CORPUS_GROUPS = ("presets", "dream", "projects")
+CORPUS_GROUPS = ("loadable", "dream", "installs")
 # (each laid out as a library lays it out: `library.group_folder`, the one table)
 
 
@@ -411,7 +411,7 @@ def seed(home, *groups: str, last_show: str | None = "party"):
     """Copy the corpus into `home` — every file of each group in `groups`
     (all of CORPUS_GROUPS by default), never over a file already there —
     and, unless `last_show` is None, name the show a launch opens
-    (`library.LAST_SHOW`) when nothing names one yet. Returns `home`.
+    (`library.LAST_INSTALL`) when nothing names one yet. Returns `home`.
 
     The library has one tier since 2026-10-28: nothing ships with the app,
     a fresh home is empty and opens an unsaved show. The tests written
@@ -431,8 +431,8 @@ def seed(home, *groups: str, last_show: str | None = "party"):
         for f in sorted(src.glob("*.json")):
             if not (dst / f.name).exists():
                 shutil.copyfile(f, dst / f.name)
-    mark = home / "last_show"
-    if last_show and "projects" in (groups or CORPUS_GROUPS) and not mark.exists():
+    mark = home / "last_install"
+    if last_show and "installs" in (groups or CORPUS_GROUPS) and not mark.exists():
         mark.write_text(f"{last_show}\n")
     return home
 
@@ -488,7 +488,7 @@ def boot_home(home, *, corpus: bool = True):
     control = Control(chain)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
@@ -502,7 +502,7 @@ def boot_home(home, *, corpus: bool = True):
     lib.attach(reg)
     router = routing.Router(reg, table)
     loaded_patch = loadable.LoadedPatch(lib, reg, router)
-    lib.project.load_startup()
+    lib.install.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
                            router=router, loaded_patch=loaded_patch, clock=clock, home=home)
 
@@ -573,14 +573,14 @@ def owner_home(tmp_path):
 def build_owner_home(home):
     """Make `home` (a folder that does not exist yet) a home shaped like
     the owner's after a night on the build from before plan 19, by running
-    the writers (`LoadedPatch.save_as`, `Project.save`, `Bindings.write`,
+    the writers (`LoadedPatch.save_as`, `Install.save`, `Bindings.write`,
     `placement.save`, `to_trash`), not by hand-written JSON, so it tracks
     the formats (tools/bank_demo.py builds its home here too):
 
-    - ``projects/mine.hyp.json`` and ``projects/party.hyp.json`` (a user
+    - ``projects/mine.json`` and ``projects/party.json`` (a user
       copy of the party show), each with an **eight-name** bank; ``mine``
       names the three loadable patches below and is the show opened last;
-    - ``presets/``: NIGHT ONE, NIGHT TWO, NIGHT THREE (`OWNER_LOADABLES`),
+    - ``loadable/``: NIGHT ONE, NIGHT TWO, NIGHT THREE (`OWNER_LOADABLES`),
       each with a `desk` holding the sixteen shape pads of clip rows 4–5
       (`old_shape_pads`); NIGHT TWO has one of those pads re-aimed
       (`OWNER_PAD`) and a learned device knob (`OWNER_KNOB`);
@@ -588,7 +588,7 @@ def build_owner_home(home):
       on clip rows 4 and 5 (`_without_bank_pads`) — one meta row changed
       (`OWNER_ROW`);
     - ``last_show``, ``windows.json``, a ``stall.log``, a file under
-      ``weights/`` and one file already in ``trash/presets/``.
+      ``weights/`` and one file already in ``trash/loadable/``.
 
     Returns `home`. Never run on a real home: it is built from nothing."""
     import json
@@ -601,7 +601,7 @@ def build_owner_home(home):
     if home.exists():
         raise FileExistsError(f"{home}: an owner-like home is built in a new folder")
     r = boot_home(home)                             # a fresh home: the factory party show
-    reg, pr, table = r.reg, r.lib.project, r.router.table
+    reg, pr, table = r.reg, r.lib.install, r.router.table
     one, two, three = OWNER_LOADABLES
     # NIGHT ONE: TUMBLE, dimmer
     reg["view.bright"].set(reg["view.bright"].value * 0.8)
@@ -643,7 +643,7 @@ def build_owner_home(home):
     (home / "weights" / "model.safetensors").write_bytes(bytes(range(256)) * 4)
     assert library.to_trash(folder / f"{library.slug(one)}.json", home) is not None
     for show in OWNER_SHOWS:
-        doc = json.loads((home / "projects" / f"{show}.hyp.json").read_text())
+        doc = json.loads((home / "installs" / f"{show}.json").read_text())
         assert len(doc["bank"]) == library.F_KEYS, show
     return home
 

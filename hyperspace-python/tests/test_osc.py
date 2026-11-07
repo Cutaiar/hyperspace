@@ -50,8 +50,8 @@ def _show(tmp_path, devices_toml: str = PHONE, *, loadable: bool = True):
     from the config's entries alone, handed to the router and the Learn as
     app.main does, opened, the fixture loadable patch loaded."""
     home = tmp_path / "home"
-    (home / "presets").mkdir(parents=True)
-    shutil.copyfile(FIXTURE, home / "presets" / FIXTURE.name)
+    (home / "loadable").mkdir(parents=True)
+    shutil.copyfile(FIXTURE, home / "loadable" / FIXTURE.name)
     (home / "config.toml").write_text(devices_toml)
     cfg = config.load(home / "config.toml")
     app = boot_home(home)

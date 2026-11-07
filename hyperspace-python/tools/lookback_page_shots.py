@@ -112,7 +112,7 @@ def boot(renderer=None) -> SimpleNamespace:
     view = ViewState()
     lib = Library(demo.HOME, period=0.0)
     kw = {} if renderer is None else {"dream": renderer.lookback.state, "fx": renderer.fx.state}
-    reg = build_registry(view, control, audio, lib.project, **kw)
+    reg = build_registry(view, control, audio, lib.install, **kw)
     lib.attach(reg)
     return SimpleNamespace(chain=chain, control=control, audio=audio, view=view, lib=lib, reg=reg)
 
@@ -206,7 +206,7 @@ def shots(name: str, speed: bool = False, closed: bool = False) -> None:
     renderer.dreamer.source = StandIn(reg)
     scene_tex = ctx.texture(RENDER_SIZE, 4)
     scene_fbo = ctx.framebuffer(color_attachments=[scene_tex])
-    panel = Panel(r.control, r.audio, view, renderer=renderer, bank=r.lib.project,
+    panel = Panel(r.control, r.audio, view, renderer=renderer, bank=r.lib.install,
                   registry=reg, library=r.lib)
     reg["ui.page"].set(PAGE_KEYS.index("lookback"))
     clock = [0.0]

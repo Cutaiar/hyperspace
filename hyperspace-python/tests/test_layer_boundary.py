@@ -329,11 +329,11 @@ def test_the_graph_offers_no_port_on_one(rig):
     Binding("note:0:62", "preset.save.0", "hold", layer=SHIFT_UP),
     Binding("key:F9", "preset.load.0", "fire"),
     Binding("key:SHIFT+F9", "preset.save.0", "fire"),
-    Binding("pad:A", "preset.next", "fire"),
+    Binding("pad:S", "preset.next", "fire"),
     Binding("pad@edge:MENU", "preset.save_new", "hold"),
     Binding("pad:VIEW", "deck.chase", "momentary"),
-    Binding("pad:X", "totem.on", "toggle"),
-    Binding("hat:UP", "poi.on", "toggle"),
+    Binding("pad:W", "totem.on", "toggle"),
+    Binding("hat:N", "poi.on", "toggle"),
     Binding("key:T", "totem.reset", "fire"),
 ])
 def test_the_meta_rows_road_stays_open(row):
@@ -351,10 +351,10 @@ def test_every_factory_row_on_the_class_is_the_meta_controllers():
 def test_shift_f_keys_save_by_the_real_road(rig):
     import glfw
 
-    project = rig.one.loaded_patch.lib.project
+    project = rig.one.loaded_patch.lib.install
     _bank(rig, "party-wake", "party-tumble")
     rig.one.loaded_patch.load("party-wake")
-    path = rig.lib.path_of("presets", project.bank[0])
+    path = rig.lib.path_of("loadable", project.bank[0])
     was = json.loads(path.read_text())["values"]["view.bright"]
     rig.one.reg["view.bright"].set(was + 0.25)
     rig.r.router.keys(NS(pressed=lambda code: code == glfw.KEY_F1, shift=lambda: True))
@@ -368,12 +368,12 @@ def test_a_pad_learn_on_a_load_still_lands_and_loads_off_air(rig):
     assert ui_routing.pad_target(d.reg["preset.load.1"])
     theirs = _state(d)
     d.learn.arm("preset.load.1", "pad")
-    assert d.learn.learn_pad_button("pad:A")
-    row = next(b for b in d.table.bindings if b.source == "pad:A")
+    assert d.learn.learn_pad_button("pad:S")
+    row = next(b for b in d.table.bindings if b.source == "pad:S")
     assert row.target == "preset.load.1" and is_meta_row(row)
     assert any(b is row for b in rig.two.table.bindings)
     doc = json.loads(d.table.path.read_text())
-    assert any(r["source"] == "pad:A" and r["target"] == "preset.load.1" for r in doc["bindings"])
+    assert any(r["source"] == "pad:S" and r["target"] == "preset.load.1" for r in doc["bindings"])
     pad = ScriptedPad()
     pad.frame(held={gamepad.A})
     d.router.pad(pad, now=1.0)
@@ -417,7 +417,7 @@ def test_a_bare_arm_still_waits_for_a_pad_button(rig):
     d.learn.arm("preset.next")
     assert not d.learn.learn_control(BUTTON, apc40)
     assert d.learn.learning == "preset.next"
-    assert d.learn.learn_pad_button("pad:A")
+    assert d.learn.learn_pad_button("pad:S")
 
 
 def test_the_tuned_meta_params_refuse_without_the_road_words(rig):
@@ -515,7 +515,7 @@ SURFACE = {
 }
 # The meta controller's names inside `BOTH_LAYERS`, and who may import them
 META_NAMES = ("SHARED_META_", "PER_DECK_", "META_", "MetaRegistry", "MetaTable", "MetaMarks",
-              "DeckProject", "is_shared_meta_", "is_meta_", "is_per_deck_", "meta_", "push_meta",
+              "DeckInstall", "is_shared_meta_", "is_meta_", "is_per_deck_", "meta_", "push_meta",
               "install_meta")
 SURFACE_NAMES = {
     "loadable": {"SHARED_META_GROUPS": "which groups a file's values may not hold",
@@ -524,7 +524,7 @@ SURFACE_NAMES = {
     "patches": {"meta_refusal": "a patch file naming a meta param is refused (row 744)"},
     "nodemode": {"meta_refusal": "a node's meta params fill no degree of freedom"},
 }
-# …and the handles at run time. (`Project.session` goes with the shows, in plan 57 §5.)
+# …and the handles at run time. (`Install.session` goes with the shows, in plan 57 §5.)
 META_ATTRS = {"meta", "decks", "meta_stack", "push_meta", "players", "session", "meta_reg", "meta_table"}
 SURFACE_ATTRS = {
     ("dream", "w.meta"): "not ours: a model file's download record",

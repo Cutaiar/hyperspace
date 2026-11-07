@@ -584,10 +584,10 @@ class PadDevice(Base):
     All in the scene-setter slot.
 
     Several at once (plan 27 B6): the kind is `repeatable`. The first
-    enabled pad entry is the primary — its rows unqualified (``pad:A``,
+    enabled pad entry is the primary — its rows unqualified (``pad:S``,
     ``axis:LX``, every row before B6), the factory pad rows its, the
     sticks' camera job its alone; each later pad publishes under its
-    role (``pad@p2:A``, ``axis@p2:LX``) and starts with no rows. Each
+    role (``pad@p2:S``, ``axis@p2:LX``) and starts with no rows. Each
     reads its own controller (`gamepad.Pad.attach` on the registry's
     shared `Context.pads`): the next free GLFW joystick in list order, or
     the entry's ``joystick = n``; the one libusb reader is lent, not
@@ -749,8 +749,8 @@ class PadDevice(Base):
                          or (n in ("LFN", "RFN") and model.has("fn"))) and has(n)}
         buttons = [Port(n, n, kind="trigger", group="buttons", scheme=sc("pad"))
                    for n in named]
-        hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme=sc("hat"))
-                for n in g.HATS if has(n)]
+        hats = [Port(n, f"D-pad {models.HAT_WORDS[n]}", kind="trigger", group="d-pad", scheme=sc("hat"))
+                for n in g.HATS if has(f"{models.HAT_PREFIX}{n}")]
         extra: list[Port] = []
         from .pads import gesture as ge
         if model is not None and model.has("touch"):
@@ -958,13 +958,27 @@ class PadDevice(Base):
                 skip |= totem.skip_of(io)
         return {"skip": skip} if skip else {}
 
-    def quiet_stick(self, model, reg, router=None) -> frozenset[int]:
+    def quiet_stick(self, model, reg, router=None, drawn=None) -> frozenset[int]:
         """The lanes a route lets go of, `totem.quiet_stick`: a Joy-Con's stick while it
-        orbits. `router`, the deck it acts on (None: the last one, for the pad window)."""
+        orbits, less the axes node mode holds, which the view leaves (`Router.claimed`), or
+        the claim would be dead with the view orbiting under it. `router`, the deck it acts
+        on (None: the last one, for the pad window). `drawn`, the deck whose rows are being
+        asked about, when that is another (the window's panel may be looking elsewhere)."""
         from . import gamepad, totem
         router = router if router is not None else self.__dict__.get("_acted_on")
         steers = router is None or self.steers(router)
-        return gamepad.left_stick_lanes() if totem.quiet_stick(model, reg, self.role, steers) else frozenset()
+        if not totem.quiet_stick(model, reg, self.role, steers):
+            return frozenset()
+        return gamepad.left_stick_lanes() - self._node_lanes(drawn if drawn is not None else router)
+
+    def _node_lanes(self, router) -> frozenset[int]:
+        """The `axis` lanes node mode fills on this pad on `router`'s deck."""
+        from . import gamepad
+        rows = getattr(getattr(router, "table", None), "node_rows", None)
+        if rows is None:
+            return frozenset()
+        return frozenset(gamepad.LANES.index(b.parts[0]) for b in rows(self.role)
+                         if b.scheme == "axis")
 
     def _no_camera_job(self, model, reg) -> tuple[int, ...]:
         """The axes a pad with a layout of its own (a Joy-Con) keeps off the
@@ -2186,6 +2200,18 @@ class DeviceRegistry:
             self._holders = got
         return got
 
+    def pad_model(self, pad):
+        """What a pad's node mode fills as (`node_desk`): the model it reads, or its entry
+        names, else the last it read, kept by role. `PadDevice.model` is None (an Xbox's
+        face) for a `controller = any` pad asleep, and a nap must not move a map: nor may a
+        frame that reads no model while it wakes. Nothing to go on yet, before a pad has ever
+        been read: None."""
+        seen = self.__dict__.setdefault("_pad_models", {})
+        model = pad.model
+        if model is not None:
+            seen[pad.role] = model
+        return seen.get(pad.role)
+
     def first_pad_on(self, router):
         """The first listed pad pointed at `router`'s deck, or None."""
         return next((d for d in self.devices if isinstance(d, PadDevice)
@@ -2668,7 +2694,7 @@ def wanted_lines(ws) -> list[str]:
     rig; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
     wait". Nothing for a connected role, nothing when the loadable patch wants
     nothing."""
-    return [f"wanted by the preset: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"
+    return [f"wanted by the patch: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"
             for w in ws if w.lacking]
 
 

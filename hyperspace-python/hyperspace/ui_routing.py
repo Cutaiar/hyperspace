@@ -558,15 +558,15 @@ def answer(panel, replace_it: bool) -> None:
 # is up the hands learn nothing (`Learn.hold`, kept in step every frame).
 
 SHEET_W = 560.0
-SHEET_TIP = ("Each row: which keeps this control — the patch's row, or the one the preset "
-             "has. A row the preset keeps is not added; the group says so")
+SHEET_TIP = ("Each row: which keeps this control — the patch's row, or the one the loadable "
+             "patch has. A row the loadable patch keeps is not added; the group says so")
 # (wave 3 P2, row 661) a node the frame holds one of: no two-way row, since
 # without it the patch is not the patch it was saved as (row 658): the answer
 # that keeps the loadable patch's is Cancel, and the press that takes the patch's is Spawn
-REPLACE_ROW = "{name}: the patch's replaces this preset's"
-REPLACE_LOSES = "this preset's {name} loses"
+REPLACE_ROW = "{name}: the patch's replaces this loadable patch's"
+REPLACE_LOSES = "this loadable patch's {name} loses"
 REPLACE_KEEPS = "what stays"
-REPLACE_TIP = ("A frame holds one. Spawn takes out this preset's and lands the patch's, one "
+REPLACE_TIP = ("A frame holds one. Spawn takes out this loadable patch's and lands the patch's, one "
                "undo step; Cancel lands nothing and keeps it")
 REPLACE_GO = "Replace and spawn##sheet"
 
@@ -655,7 +655,7 @@ def sheet_wants(panel, landing, choices=None) -> list[str]:
 def sheet_title(panel, landing) -> str:
     """"spawn acid wash into party-trip"."""
     lib = getattr(panel, "library", None)
-    into = (lib.current(LOADABLE) if lib is not None else None) or "this preset"
+    into = (lib.current(LOADABLE) if lib is not None else None) or "this patch"
     return f"spawn {landing.group.get('name') or 'patch'} into {into}"
 
 
@@ -707,7 +707,7 @@ def _control_rows(panel, landing, choices) -> None:
     """The sheet's two-way rows: a row per conflict, **keep all existing**
     and **take all**."""
     imgui.text_disabled(f"{len(landing.conflicts)} control"
-                        f"{'' if len(landing.conflicts) == 1 else 's'} the preset already "
+                        f"{'' if len(landing.conflicts) == 1 else 's'} the loadable patch already "
                         "uses: which keeps each?")
     if imgui.is_item_hovered():
         ui.tooltip(SHEET_TIP)
@@ -719,13 +719,13 @@ def _control_rows(panel, landing, choices) -> None:
         if ui.lit_chip(f"the patch: {mine}##sheet.{k}.patch", choices.get(k) != "preset"):
             choose(panel, k, "patch")
         imgui.same_line()
-        if ui.lit_chip(f"the preset: {theirs}##sheet.{k}.preset", choices.get(k) == "preset"):
+        if ui.lit_chip(f"the loadable patch: {theirs}##sheet.{k}.preset", choices.get(k) == "preset"):
             choose(panel, k, "preset")
     imgui.spacing()
     if ui.chip("keep all existing##sheet"):
         keep_all(panel, "preset")
     if imgui.is_item_hovered():
-        ui.tooltip("Every row to the preset: the patch's rows on those controls are not added")
+        ui.tooltip("Every row to the loadable patch: the patch's rows on those controls are not added")
     imgui.same_line()
     if ui.chip("take all##sheet"):
         keep_all(panel, "patch")
@@ -1378,13 +1378,13 @@ def head(panel, router: Router) -> None:
 def _loadable_line(panel, pr, table) -> None:
     lib = panel.library
     cur = pr.current if pr is not None else None
-    ui._micro("preset")
+    ui._micro("patch")
     imgui.same_line()
-    imgui.text(cur or ("—" if pr is not None else "no preset library"))
+    imgui.text(cur or ("—" if pr is not None else "no patch library"))
     if imgui.is_item_hovered():
-        ui.tooltip("The loaded preset: its routes, its desk and its macros are "
+        ui.tooltip("The loaded patch: its routes, its desk and its macros are "
                           "this section. A learn or an edit here changes it — the dot — "
-                          "and writes nothing until save" if cur else "no preset loaded")
+                          "and writes nothing until save" if cur else "no patch loaded")
     edited = pr is not None and cur is not None and ui_loadable.dirty(panel, LOADABLE)
     rects = ui_loadable._state(panel)["rects"]
     rects.pop("head.dot", None)
@@ -1392,7 +1392,7 @@ def _loadable_line(panel, pr, table) -> None:
         imgui.same_line(0, 4)
         rects["head.dot"] = ui.dirty_dot("edited since it loaded — save writes it")
     glob = table.layer == "global"
-    layer = f"desk layer: {'global' if glob else 'preset'}"
+    layer = f"desk layer: {'global' if glob else 'patch'}"
     word = ui_loadable.save_label(lib, LOADABLE) if lib is not None else "save"
     sp = imgui.get_style().item_spacing.x
     # flush right; in a narrow pane on a row of its own (plan 49 stage 3)
@@ -1404,7 +1404,7 @@ def _loadable_line(panel, pr, table) -> None:
     if imgui.is_item_hovered():
         ui.tooltip("The desk's layer — SHIFT latches it (desk.shift). Global: "
                           "the meta controller's controls, never learned (a learn is refused); "
-                          "preset: the loaded preset's desk. A preset load drops to it.")
+                          "patch: the loaded patch's desk. A patch load drops to it.")
     ui.beside(ui.chip_w(word, "as…"))
     # the preset strip's own save chip,
     # lit while there is something to save (plan 19 WP5)
@@ -1421,7 +1421,7 @@ def _loadable_line(panel, pr, table) -> None:
         ui_loadable._begin_naming(panel, NAMING, cur or "")
     imgui.end_disabled()
     if imgui.is_item_hovered():
-        ui.tooltip("Save the live state as a new user preset")
+        ui.tooltip("Save the live state as a new user patch")
 
 
 def _learn_line(panel) -> None:
@@ -1586,10 +1586,10 @@ def desk(panel, router: Router) -> None:
     elsewhere = desk_elsewhere(panel, table)
     if elsewhere is not None:
         imgui.text_colored(ui.RED, ui.fit_text(elsewhere, imgui.get_content_region_avail().x))
-    ui._micro("desk  ·  preset layer")
+    ui._micro("desk  ·  patch layer")
     if imgui.is_item_hovered():
-        ui.tooltip("The loaded preset's own controls on the APC40 (SHIFT off). "
-                          "A control the preset leaves unmapped is dark and does nothing.")
+        ui.tooltip("The loaded patch's own controls on the APC40 (SHIFT off). "
+                          "A control the patch leaves unmapped is dark and does nothing.")
     imgui.same_line()
     # (the click is the on-screen desk's, once it has one: plan 17 WP4's
     # `ui_desk.click`.) The longest wording that fits beside the title; the
@@ -1633,7 +1633,7 @@ def desk(panel, router: Router) -> None:
             dead = b
         imgui.pop_style_color()
         if imgui.is_item_hovered():
-            ui.tooltip("Take this control out of the preset — it goes dark")
+            ui.tooltip("Take this control out of the patch — it goes dark")
         imgui.pop_id()
         _mark_line(panel, table, b, "desk", y0)
     if dead is not None:
@@ -1652,7 +1652,7 @@ def desk(panel, router: Router) -> None:
     if not drawn and (rows or dark):
         imgui.text_disabled(NO_MATCH)
     elif not rows:
-        imgui.text_disabled("an empty desk — every preset control is dark")
+        imgui.text_disabled("an empty desk — every patch control is dark")
 
 
 # ---- the macros ----

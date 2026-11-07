@@ -43,7 +43,7 @@ class ScriptedPad(gp.Pad):
 def rig(tmp_path):
     chain = Analyzer(Analyser())
     lib = Library(tmp_path)
-    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), lib.project)
+    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), lib.install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     return NS(reg=reg, table=table, router=Router(reg, table))
 

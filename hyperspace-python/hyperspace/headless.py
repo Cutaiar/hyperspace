@@ -50,7 +50,7 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     control = Control(chain)
     lib = Library(home, period=0.0) if machine == home else Library(
         home, machine=machine, period=0.0)
-    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState())
     control.library = lib
     clock = tempo.Clock(now=lambda: 0.0)
@@ -104,7 +104,7 @@ def show_seed(doc: dict | None, eye: dict | None = None,
     / `cuts` stand in where `doc` kept none (a `.bak-v2-eye` or
     `.bak-v2-look` copy's, `library.kept_eye` / `kept_look`). Written as a
     `/2` show, so the app reads it as the old show it stands for
-    (`Project.old_eye`, `old_look`, `old_cuts`). None when there is
+    (`Install.old_eye`, `old_look`, `old_cuts`). None when there is
     nothing: an old loadable patch takes the build's defaults."""
     from .graphmigrate import CAMERA_NODE
     from .library import PROJECT_V2, RIG, show_eye, show_look

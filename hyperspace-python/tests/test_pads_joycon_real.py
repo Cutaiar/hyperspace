@@ -68,11 +68,14 @@ def held(name: str, cal) -> set[str]:
     return out
 
 
+FACE = {"A": "S", "B": "E", "X": "W", "Y": "N"}
+
+
 def test_every_button_lands_where_the_vocabulary_says():
     cal = calibration()
     assert held("still", cal) == set()
     for step in ("A", "Y", "B", "X", "LP", "RP", "LB", "axis:LT", "VIEW", "SHARE", "LSTICK"):
-        assert held(step, cal) == {step}, step
+        assert held(step, cal) == {FACE.get(step, step)}, step     # (the tape's words, NSEW's names)
 
 
 def test_the_stick_reaches_each_way_and_rests_at_centre():

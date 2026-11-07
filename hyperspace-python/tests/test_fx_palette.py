@@ -136,7 +136,7 @@ def _registry(home):
     chain = Analyzer(Analyser())
     st = FxState()
     lib = Library(home, period=0.0)
-    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.install,
                          fx=st)
     lib.attach(reg)
     return reg, st, lib

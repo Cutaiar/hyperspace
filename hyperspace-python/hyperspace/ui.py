@@ -680,7 +680,7 @@ CHEATSHEET = [
     ("F1–F8", "load off air · ⇧ saves"),
     ("B", "tap tempo · ⇧B LFO trigger"),
     ("Cmd+Z", "undo, after a change here · ⇧ redo (or Ctrl+Z)"),
-    ("Home", "home preset, off air (fn ←)"),
+    ("Home", "home patch, off air (fn ←)"),
     ("Cmd+R", "restart process"),
     ("Cmd+[ ]", "panel section back · forward"),
     ("H / ?", "panel / this sheet"),
@@ -688,7 +688,7 @@ CHEATSHEET = [
     ("G", "overlay: clicks through / back"),
     ("Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
-    ("pad A Y · B X", "faces · lines · points · screen strokes"),
+    ("pad S N · E W", "faces · lines · points · screen strokes"),
     ("pad BACK", "held: the base chase keeps what the sources moved"),
     ("LB / RB", "previous / next shape"),
     ("d-pad ↑ / ↓", "brightness"),
@@ -701,7 +701,7 @@ CHEATSHEET = [
     # the APC40 rows whose labels alone do not say it (2026-10-16)
     ("APC40 G7 G9 G10", "analyzer band (⇧ D knobs follow) · next transfer · reset"),
     ("APC40 clip pads", "load off air · hold an empty one: save"),
-    ("APC40 QUANT", "next bank preset, off air"),
+    ("APC40 QUANT", "next bank patch, off air"),
     ("APC40 STOP ALL", "reset the analyzer · again within 8 s: undo"),
     ("APC40 MASTER PAN", "overlay · click-through (if config allows)"),
 ]
@@ -727,7 +727,7 @@ META_SECTIONS = ("output", "audio", "analyzer", "hands")
 VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-             "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
+             "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
 
 
 class PageHistory:
@@ -808,9 +808,9 @@ class Panel:
         self.graph_selected: str | None = None
         self.graph_selected_at: int = 0
         self.library = library      # library.Library, or None: no strips, no project row
-        # the F1–F8 loadable patch bank is the open project's (library.Project)
+        # the F1–F8 loadable patch bank is the open project's (library.Install)
         self.bank = bank if bank is not None else (
-            library.project if library is not None else None
+            library.install if library is not None else None
         )
         self.reg = registry if registry is not None else build_registry(
             view, control, audio, self.bank
@@ -1286,7 +1286,7 @@ class Panel:
         `Router.describe`), or "" with no router attached or no owner (a
         source the table doesn't name, a test holding the param by hand)."""
         r = self.router
-        b = r.table.owner(p.id) if r is not None else None
+        b = r.performer_of(p.id) if r is not None else None
         return "" if b is None else f"performed by {r.describe(b)}"
 
     def _mod_text(self, p: Param) -> str:
@@ -2097,7 +2097,7 @@ class Panel:
         gap = imgui.get_style().item_spacing.x
         lib = self.library
         if lib is not None and lib.reg is not None:
-            room -= imgui.calc_text_size(f"{lib.project.name} ●").x + 2 * gap
+            room -= imgui.calc_text_size(f"{lib.install.name} ●").x + 2 * gap
         dim = self.reg.get("output.dim")
         if dim is not None and dim.value < 1.0:
             room -= imgui.calc_text_size(f"·  dim {dim.text()}").x + gap
@@ -2167,12 +2167,12 @@ class Panel:
             imgui.text_colored(WARN, black)
         lib = self.library
         if lib is not None and lib.reg is not None:
-            proj = lib.project
+            proj = lib.install
             text = f"{proj.name}{' ●' if proj.is_dirty() else ''}"
             flush_right(imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
-                tooltip("the open show — the presets section")
+                tooltip("the open install — the patches section")
 
     # ---- pages ----
 
@@ -2520,7 +2520,7 @@ class Panel:
         imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
             tooltip(why or "the hands bent by the effects on this output (written "
-                              "into the preset's graph: a composite before the effects)")
+                              "into the patch's graph: a composite before the effects)")
         if changed:
             self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
 
@@ -2787,7 +2787,7 @@ class Panel:
         """The Ultraleap hands: live view and setup (hands/panel.py)."""
         ui_hands.page(self, dt)
 
-    def _page_presets(self, dt: float) -> None:
+    def _page_loadable(self, dt: float) -> None:
         """The PRESETS page, 2026-10-28, top to bottom
         (ui_loadable.page): the preset strip — ◀ name ● ▶ · new · save ·
         as… — then every loadable patch as a list that fills the room it has, its
@@ -2795,7 +2795,7 @@ class Panel:
         library's notes. GRAPH's side pane draws it as its loadable patches section
         (ui_pane.py, plan 49)."""
         if self.library is None:
-            self._section("presets")
+            self._section("loadable")
             imgui.text_disabled("no library attached")
             return
         ui_loadable.page(self)
@@ -2814,6 +2814,9 @@ class Panel:
                       "(restart once it is there)"), True)]
         else:
             lines = [(f"library: {root}", False)]
+            said = getattr(lib, "not_moved", "")
+            if said:
+                lines.append((said, True))
         if machine != root:
             lines.append((f"machine: {machine}", False))
         return lines
@@ -2828,7 +2831,7 @@ class Panel:
                 tooltip(
                     "this machine's own files: config.toml, bindings.json, windows.json, "
                     "hands.json, last_show, logs" if text.startswith("machine:") else
-                    "presets and shows as JSON ([library] path, else $HYPERSPACE_HOME); "
+                    "patches and installs as JSON ([library] path, else $HYPERSPACE_HOME); "
                     "edit a file and the app follows")
 
     def gpu_lines(self) -> list[str]:

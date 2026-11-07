@@ -3,7 +3,7 @@
 it reaches, rendered offscreen, hashed byte for byte.
 
 Each corpus loadable patch (`CORPUS_LOADABLES`: the twenty-five files under
-`tests/corpus/presets/`, the loadable patches the build shipped until 2026-10-28 —
+`tests/corpus/loadable/`, the loadable patches the build shipped until 2026-10-28 —
 test data now, read by nothing in the app) is copied into a throwaway
 library home and loaded through the real `LoadedPatch` over a `Router`, with two synthetic hands
 (`tests/fake_hands.py`: the left open, the right a fist, test_ghost's
@@ -156,7 +156,7 @@ CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 # until the library went one-tier, kept as test data — the goldens' main
 # subjects, in the order the manifest has always listed them (the house
 # moods, plan 12's party loadable patches, plan 14's, then the routing-era ones)
-CORPUS = ROOT / "tests" / "corpus" / "presets"
+CORPUS = ROOT / "tests" / "corpus" / "loadable"
 CORPUS_LOADABLES: tuple[str, ...] = (
     "big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo", "plasma-heart",
     "spiral-silk", "strobe-cage", "woven-lattice",
@@ -423,7 +423,7 @@ class Rig:
         elif source is None and slug in CORPUS_LOADABLES:
             source = CORPUS / f"{slug}.json"
         if source is not None:               # a loadable patch copied into the scratch library
-            own = Path(self._home.name) / "presets"
+            own = Path(self._home.name) / "loadable"
             own.mkdir(parents=True, exist_ok=True)
             (own / f"{slug}.json").write_bytes(Path(source).read_bytes())
         if library is not None:
@@ -716,7 +716,7 @@ def source_doc(loaded_patch, slug: str) -> dict:
     src = FACTORY_SOURCES / f"{slug}.json"
     if slug in CORPUS_LOADABLES and src.is_file():
         return json.loads(src.read_text())
-    return loaded_patch.lib.read("presets", slug)
+    return loaded_patch.lib.read("loadable", slug)
 
 
 def plan33_section(loaded_patch, slug: str) -> tuple[dict, set[str]]:
@@ -1201,7 +1201,7 @@ class Loader:
     def __init__(self):
         self._home = tempfile.TemporaryDirectory(prefix="hyperspace-signatures-")
         home = Path(self._home.name)
-        own = home / "presets"
+        own = home / "loadable"
         own.mkdir(parents=True, exist_ok=True)
         for slug in CORPUS_LOADABLES:
             (own / f"{slug}.json").write_text((CORPUS / f"{slug}.json").read_text())

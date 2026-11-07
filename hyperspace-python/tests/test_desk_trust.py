@@ -68,12 +68,12 @@ def save_up():
 
 
 # the loadable patch files the seed put there (the corpus): not the owner's saves
-SEEDED = {p.name for p in (CORPUS / "presets").glob("*.json")}
+SEEDED = {p.name for p in (CORPUS / "loadable").glob("*.json")}
 
 
 def user_files(lib) -> dict[str, bytes]:
     """The loadable patches saved since the seed: {file name: bytes}."""
-    folder = lib.home / "presets"
+    folder = lib.home / "loadable"
     return {p.name: p.read_bytes() for p in folder.glob("*.json")
             if p.name not in SEEDED} if folder.is_dir() else {}
 
@@ -101,7 +101,7 @@ def test_the_save_button_is_track_eights_clip_stop_invariant_and_lit_while_held(
         assert t.route("note", k, STOP) == []
     save = rig.reg[SAVE_PARAM]
     assert not save.persist and not save.modulatable
-    files, bank, cur = user_files(lib), list(pr.bank), lib.current("presets")
+    files, bank, cur = user_files(lib), list(pr.bank), lib.current("loadable")
     for under_shift in (False, True):
         if under_shift:
             shift(rig)
@@ -109,7 +109,7 @@ def test_the_save_button_is_track_eights_clip_stop_invariant_and_lit_while_held(
         assert save.value is True and leds(rig, STOP, SAVE_CH)[-1] == 1
         push(rig, save_up())
         assert save.value is False and leds(rig, STOP, SAVE_CH)[-1] == 0
-    assert user_files(lib) == files and pr.bank == bank and lib.current("presets") == cur
+    assert user_files(lib) == files and pr.bank == bank and lib.current("loadable") == cur
 
 
 def test_a_reconnect_lets_go_of_a_save_whose_release_was_lost(rig):
@@ -120,7 +120,7 @@ def test_a_reconnect_lets_go_of_a_save_whose_release_was_lost(rig):
     rig.midi._enter()
     assert rig.reg[SAVE_PARAM].value is False
     push(rig, *tap(0))
-    assert rig.loaded_patch.lib.current("presets") == "TUMBLE"
+    assert rig.loaded_patch.lib.current("loadable") == "TUMBLE"
 
 
 def test_nothing_can_latch_save(rig, tmp_path):
@@ -137,7 +137,7 @@ def test_nothing_can_latch_save(rig, tmp_path):
     assert not m.learner.learn_control(f"note:0:{apc40.N_SCENE[4]}", apc40)
     assert m.learner.refused and m.learner.last == SAVE_REFUSAL
     m.learner.arm(SAVE_PARAM, "pad")
-    assert not m.learner.learn_pad_button("pad:A")
+    assert not m.learner.learn_pad_button("pad:S")
     assert m.learner.last == SAVE_REFUSAL
     m.learner.arm(None)
     assert [b.to_json() for b in t.bindings] == rows
@@ -199,12 +199,12 @@ def test_save_held_and_an_empty_pad_tapped_saves_into_that_slot(rig):
     at = clocked(rig)
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))                                                  # TRIP, on F5
-    assert lib.current("presets") == "TRIP" and pr.bank[12] is None
+    assert lib.current("loadable") == "TRIP" and pr.bank[12] is None
     at(1.0, save_down())
     mark = len(rig.out.sent)
     n, ch = pad(12)
     at(1.1, note(n, channel=ch))
-    assert pr.bank[12] == "TRIP 2" and lib.current("presets") == "TRIP 2" and pr.active == 12
+    assert pr.bank[12] == "TRIP 2" and lib.current("loadable") == "TRIP 2" and pr.active == 12
     assert leds(rig, n, ch, mark) == [apc40.GREEN_BLINK]              # blinks at once
     at(1.2, note(n, 0, channel=ch), save_up())
     at(1.1 + midi.BLINK_S)
@@ -232,16 +232,16 @@ def test_save_held_and_a_filled_pad_tapped_saves_a_new_loadable_and_keeps_the_ol
     mark = len(rig.out.sent)
     n, ch = pad(10)
     at(5.1, note(n, channel=ch), note(n, 0, channel=ch))
-    assert pr.bank[10] == "TRIP 3" and lib.current("presets") == "TRIP 3" and pr.active == 10
+    assert pr.bank[10] == "TRIP 3" and lib.current("loadable") == "TRIP 3" and pr.active == 10
     assert apc40.GREEN_BLINK in leds(rig, n, ch, mark)
     assert user_files(lib)["trip-2.json"] == old["trip-2.json"]       # untouched
-    assert "TRIP 2" in lib.list("presets") and "TRIP 2" not in pr.bank   # listed, unpadded
+    assert "TRIP 2" in lib.list("loadable") and "TRIP 2" not in pr.bank   # listed, unpadded
     assert trash(lib) == gone
-    assert lib.status == "saved TRIP 3 → slot 11 (TRIP 2 is still in the preset list)"
-    fac = lib.path_of("presets", "FIELD")
+    assert lib.status == "saved TRIP 3 → slot 11 (TRIP 2 is still in the patch list)"
+    fac = lib.path_of("loadable", "FIELD")
     before = fac.read_bytes()
     at(5.5, *tap(2), save_up())
-    assert pr.bank[2] == "TRIP 4" and "FIELD" in lib.list("presets") and fac.read_bytes() == before
+    assert pr.bank[2] == "TRIP 4" and "FIELD" in lib.list("loadable") and fac.read_bytes() == before
     assert "FIELD" not in pr.bank and trash(lib) == gone
     # the show on disk says so
     show = json.loads(pr.path.read_text())
@@ -270,13 +270,13 @@ def test_the_two_handed_save_works_ten_times_in_a_row(rig):
         n, ch = pad(k)
         at(clock + 0.1, note(n, channel=ch))
         new = f"TRIP {i + 2}"
-        assert pr.bank[k] == new and lib.current("presets") == new and pr.active == k, i
+        assert pr.bank[k] == new and lib.current("loadable") == new and pr.active == k, i
         assert leds(rig, n, ch, mark)[0] == apc40.GREEN_BLINK, i
         now = user_files(lib)
         assert set(now) == {*before, f"trip-{i + 2}.json"}, i
         assert all(now[f] == before[f] for f in before), i            # nothing overwritten
         if filled is not None:
-            assert filled in lib.list("presets"), i                    # the old one listed
+            assert filled in lib.list("loadable"), i                    # the old one listed
         at(clock + 0.2, note(n, 0, channel=ch), save_up())
         assert t.layer == layer, i                                    # a save is not a load
         clock += 3.0
@@ -292,7 +292,7 @@ def test_a_save_tap_does_not_load_or_start_a_hold(rig):
     lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     at(0.0, *tap(4))
     loads = []
-    pr.lib.on_load("presets", loads.append)       # (a save lands the new loadable patch too)
+    pr.lib.on_load("loadable", loads.append)       # (a save lands the new loadable patch too)
     at(1.0, save_down())
     for k in (1, 15):                             # a filled pad (FACES), an empty one
         n, ch = pad(k)
@@ -320,8 +320,8 @@ def test_a_failed_save_into_a_filled_slot_leaves_the_slot_and_blinks_nothing(rig
     mark = len(rig.out.sent)
     n, ch = pad(2)
     at(1.0, save_down(), note(n, channel=ch))
-    assert pr.bank[2] == "FIELD" and "TRIP 2" in lib.list("presets")
-    assert "the show could not be written" in lib.warning
+    assert pr.bank[2] == "FIELD" and "TRIP 2" in lib.list("loadable")
+    assert "the install could not be written" in lib.warning
     # (review of PR #175) the slot does not hold the new preset: no blink,
     # and the log says it did not land, not "saved into slot 3"
     assert apc40.GREEN_BLINK not in leds(rig, n, ch, mark)
@@ -359,12 +359,12 @@ def test_the_hold_on_an_empty_pad_still_saves_and_a_filled_one_only_loads(rig):
     at(3.0, note(n, channel=ch))
     at(3.0 + midi.HOLD_S)
     at(3.0 + 2 * midi.HOLD_S, note(n, 0, channel=ch))
-    assert lib.current("presets") == "FACES" and pr.bank[1] == "FACES"
+    assert lib.current("loadable") == "FACES" and pr.bank[1] == "FACES"
     assert user_files(lib) == files
 
 
 def test_save_into_and_save_empty_on_the_project(rig):
-    """`Project.save_into` grew the filled case; `save_empty` is #158's
+    """`Install.save_into` grew the filled case; `save_empty` is #158's
     hold (empty only). Neither overwrites a file."""
     pr = rig.loaded_patch
     pr.load_slot(4)
@@ -423,10 +423,10 @@ def test_an_older_loadables_toggle_rows_drop_quietly_and_an_owners_row_with_a_no
     on the SAVE button with the usual note. Loaded through a scratch
     library from tests/fixtures/desk-trust/."""
     lib, t = rig.loaded_patch.lib, rig.midi.table
-    (lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURES / "old-desk.json", lib.home / "presets" / "old-desk.json")
+    (lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES / "old-desk.json", lib.home / "loadable" / "old-desk.json")
     lib.loaded_patch.load("OLD DESK")
-    assert lib.current("presets") == "OLD DESK"
+    assert lib.current("loadable") == "OLD DESK"
     assert lib.loaded_patch.desk_notes == [
         ("dropped note:7:52 → camera.reset: that control is invariant, the meta controller's "
          "(plan 13 D6)")]
@@ -437,7 +437,7 @@ def test_an_older_loadables_toggle_rows_drop_quietly_and_an_owners_row_with_a_no
         assert b.layer is None
     rig.midi.poll()
     assert [leds(rig, n)[-1] for _p, n in TOGGLES] == [1, 0, 1, 0]
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
 
 
 def test_a_meta_file_gains_the_toggles_and_the_save_once(tmp_path):
@@ -545,11 +545,11 @@ def test_the_desk_log_keeps_the_last_twenty_presses(rig):
     at(0.0, *tap(4))
     e = log.events[-1]
     assert (e.control, e.layer) == ("G1·5 (clip 1·5)", "both")
-    assert e.what == "Preset → TRIP"
+    assert e.what == "Patch → TRIP"
     at(0.5, note(apc40.N_SCENE[0]))                                   # points, invariant
     assert log.events[-1].what == "Points → on" and log.events[-1].layer == "both"
     at(0.6, note(apc40.N_ACTIVATOR, channel=6))                       # nothing maps it
-    assert log.events[-1].what == "nothing (no row on the preset layer)"
+    assert log.events[-1].what == "nothing (no row on the patch layer)"
     assert log.events[-1].layer == "preset"
     shift(rig)
     assert (log.events[-1].what, log.events[-1].layer) == ("Shift → on", "both")
@@ -569,7 +569,7 @@ def test_the_desk_log_keeps_the_last_twenty_presses(rig):
     at(3.0 + midi.HOLD_S)
     at(3.5 + midi.HOLD_S, note(n, 0, channel=ch))
     assert log.events[-1].what == "held: nothing saved (a filled pad only loads)"
-    assert log.events[-2].what == "Preset → FACES"
+    assert log.events[-2].what == "Patch → FACES"
     for i in range(30):
         at(4.0 + i, note(apc40.N_TAP), note(apc40.N_TAP, 0))
     assert len(log) == 20 and len(log.lines()) == 20
@@ -580,11 +580,11 @@ def test_the_desk_log_keeps_the_last_twenty_presses(rig):
 
 def test_the_desk_log_lines_have_a_time_a_control_what_and_a_layer():
     log = midi.DeskLog(size=3, wall=lambda: "21:04:13")
-    log.add("G1·3 (clip 1·3)", "Preset → FIELD", "both")
+    log.add("G1·3 (clip 1·3)", "Patch → FIELD", "both")
     log.add("D1 (device knob 1)", "nothing (no row on the global layer)", "global")
     assert log.lines() == [
         "21:04:13  D1 (device knob 1)  nothing (no row on the global layer)  [global]",
-        "21:04:13  G1·3 (clip 1·3)  Preset → FIELD  [both]"]
+        "21:04:13  G1·3 (clip 1·3)  Patch → FIELD  [both]"]
     for k in range(5):
         log.add(f"c{k}", "x", "preset")
     assert [e.control for e in log.events] == ["c2", "c3", "c4"]
@@ -601,4 +601,4 @@ def test_the_system_page_helper_reads_the_log(rig, missing):
         assert ui.desk_log_lines(None) == []
     push(rig, *tap(0))
     lines = ui.desk_log_lines(rig.midi)
-    assert len(lines) == 1 and "Preset → TUMBLE" in lines[0]
+    assert len(lines) == 1 and "Patch → TUMBLE" in lines[0]

@@ -9,7 +9,7 @@
 Plan 24 C3 (decision 19). Each loadable patch is loaded the way the app loads it —
 a headless registry, router and `LoadedPatch` over a **scratch** library home
 made for the run, never the owner's, holding the test corpus
-(`tests/corpus/presets`, the loadable patches the build shipped until 2026-10-28,
+(`tests/corpus/loadable`, the loadable patches the build shipped until 2026-10-28,
 and `tests/corpus/patches/dream`, the dream module presets they may name) — and
 each control of the APC40's
 patch layer (`layer_controls`) gets one of three words:
@@ -55,7 +55,7 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
-from hyperspace.library import LOADABLE, Library, group_folder
+from hyperspace.library import LOADABLE, Library, group_folder, loadable_dir
 from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.params import build_registry
@@ -139,7 +139,7 @@ def boot(home: Path) -> SimpleNamespace:
     control = Control(chain)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState())
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
@@ -196,7 +196,7 @@ def coverage(home: Path, library: Path | None = None) -> tuple[list[apc40.Contro
         _copy_in(CORPUS / group_folder(group), home / group_folder(group))
     if library is not None:
         for group in (LOADABLE,):        # (plan 44 D3: desk templates are retired)
-            _copy_in(library / group, home / group)
+            _copy_in(loadable_dir(library), home / group)
     rig = boot(home)
     controls = layer_controls(rig.table)
     names = rig.lib.list(LOADABLE)
@@ -214,7 +214,7 @@ def _copy_in(src: Path, dst: Path) -> None:
 # ---------------------------------------------------------------- the text
 
 def report(controls: list[apc40.Control], rows: list[Row],
-           source: str = "only the corpus presets (tests/corpus/presets)") -> str:
+           source: str = "only the corpus presets (tests/corpus/loadable)") -> str:
     """The report as Markdown — the same text for the same loadable patches, every run."""
     n = len(controls)
     out = [

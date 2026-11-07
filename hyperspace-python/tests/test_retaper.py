@@ -32,7 +32,7 @@ from hyperspace.params import (
 from hyperspace.routing import Binding
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "tests" / "corpus" / "presets"
+CORPUS = ROOT / "tests" / "corpus" / "loadable"
 # a patch fixture from before wave 0 T1 (no `units` marker): a push onto
 # `fx.wobble.amount` and one onto `fx.acid.speed`, left as it was on purpose
 OLD_PATCH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
@@ -254,7 +254,7 @@ def test_only_rows_onto_retapered_params_move_and_a_macros_base_sub_moves_as_a_p
              {"source": "hand:left.x", "target": "fx.warp.amount", "op": "push", "value": "x"},
              {"source": "hand:left.x", "target": "fx.nope.amount", "op": "push", "value": 0.5}]
     doc = {"values": {"fx.warp.amount": 0.2, "fx.warp.speed": 0.25},
-           "routes": [*other, {"source": "pad:A", "target": "fx.warp.amount", "op": "set",
+           "routes": [*other, {"source": "pad:S", "target": "fx.warp.amount", "op": "set",
                                "value": 0.5}],
            "desk": [{"source": "cc:0:48", "target": "fx.warp.speed", "op": "abs"},
                     {"source": "note:0:53", "target": "fx.warp.speed", "op": "set",
@@ -432,7 +432,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     from hyperspace import patches, routing
     t = _tool()
     home, library = tmp_path / "home", tmp_path / "library"
-    for folder in ("presets", "patches", "desk"):
+    for folder in ("loadable", "patches", "desk"):
         (library / folder).mkdir(parents=True)
     home.mkdir()
     monkeypatch.setenv("HYPERSPACE_HOME", str(home))
@@ -445,10 +445,10 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
             del row["value"]                      # a push of 1.0, omitted
         if row["target"] == "fx.fractals.amount":
             row["value"] = "lots"                 # a hand-edited row: left, said
-    (library / "presets" / "party-noita.json").write_text(loadable.dumps(src))
+    (library / "loadable" / "party-noita.json").write_text(loadable.dumps(src))
     done = json.loads((CORPUS / "party-trip.json").read_text())
-    (library / "presets" / "party-trip.json").write_text(loadable.dumps(done))
-    (library / "presets" / ".party-noita.json.tmp").write_text("{}")
+    (library / "loadable" / "party-trip.json").write_text(loadable.dumps(done))
+    (library / "loadable" / ".party-noita.json.tmp").write_text("{}")
     old_patch = json.loads(OLD_PATCH.read_text())
     (library / "patches" / "wash.json").write_text(json.dumps(old_patch, indent=1) + "\n")
     new_patch, _ = patches.lift(None, routing.Bindings([]), {}, None, [])
@@ -464,7 +464,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     (home / "bindings.json").write_text(routing.dumps_doc(table))
 
     assert t.main(["--library", str(library)]) == 0
-    assert json.loads((library / "presets" / "party-noita.json").read_text()) == src
+    assert json.loads((library / "loadable" / "party-noita.json").read_text()) == src
     assert json.loads((library / "patches" / "wash.json").read_text()) == old_patch
     assert json.loads((home / "bindings.json").read_text()) == table
     assert not list(home.glob("library-backup-*")) and not list(home.glob("bindings.json.bak-*"))
@@ -472,8 +472,8 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     assert t.main(["--library", str(library), "--write", "--rows"]) == 0
     backups = list(home.glob("library-backup-*"))
     assert len(backups) == 1
-    assert json.loads((backups[0] / "presets" / "party-noita.json").read_text()) == src
-    text = (library / "presets" / "party-noita.json").read_text()
+    assert json.loads((backups[0] / "loadable" / "party-noita.json").read_text()) == src
+    text = (library / "loadable" / "party-noita.json").read_text()
     out = json.loads(text)
     assert text == loadable.dumps(out)                    # as the app writes it
     assert out["units"][DEPTH_UNIT] == DEPTH_TAPER
@@ -486,8 +486,8 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     for k in src:
         if k not in ("routes", "units"):
             assert out[k] == src[k]
-    assert (library / "presets" / "party-trip.json").read_text() == loadable.dumps(done)
-    assert (library / "presets" / ".party-noita.json.tmp").read_text() == "{}"
+    assert (library / "loadable" / "party-trip.json").read_text() == loadable.dumps(done)
+    assert (library / "loadable" / ".party-noita.json.tmp").read_text() == "{}"
     # the old patch: its push moved, the marker in; the fresh one: the same bytes
     ptext = (library / "patches" / "wash.json").read_text()
     pout = json.loads(ptext)
@@ -499,7 +499,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     dout = json.loads((library / "desk" / "d.json").read_text())
     assert dout["desk"][0]["value"] != 0.75 and dout["units"] == {DEPTH_UNIT: DEPTH_TAPER}
     # the meta table: kept beside itself, its set row moved, as the app writes it
-    assert len(list(home.glob("bindings.json.bak-v3*"))) == 1
+    assert len(list(home.glob("bindings.json.bak-v4*"))) == 1
     btext = (home / "bindings.json").read_text()
     bout = json.loads(btext)
     assert btext == routing.dumps_doc(bout) and bout["units"] == {DEPTH_UNIT: DEPTH_TAPER}

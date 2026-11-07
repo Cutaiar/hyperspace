@@ -1,4 +1,5 @@
-"""The owner, 2026-11-06: "Session and rig need to go away." (register rows 778-780.)
+"""The owner, 2026-11-06: "Session and rig need to go away." (register rows 778-780.) And
+"Presets need to go away": with the one migration, the panel says patches (plan 57, row 840).
 
 Neither word may return in a string a person reads. Every string literal in `hyperspace/`
 is scanned, docstrings excluded: an f-string's pieces are read one by one, and comments
@@ -34,7 +35,7 @@ SAVED_SHOW_KEY = "a key of a saved show file; goes with the one migration"
 # count and no line numbers: others move lines, and a new use has to come through here.
 LEFT: dict[tuple[str, str], tuple[int, str]] = {
     ("headless.py", "session"): (1, SAVED_SHOW_KEY),
-    ("library.py", "session"): (8, SAVED_SHOW_KEY),
+    ("library.py", "session"): (11, SAVED_SHOW_KEY),
     ("library.py", "rig"): (1, SAVED_SHOW_KEY),
 }
 
@@ -123,8 +124,8 @@ def test_right_rigid_and_origin_are_no_rig():
 def test_a_show_is_not_said_to_hold_the_bus_cables():
     """They are the loaded patch's since plan 44 D3 (`LoadedPatch.bus`), as `BUS_SAID` says."""
     assert "bus" not in ui_loadable.SHOW_LINE
-    assert "preset is the look, with the bus cables" in ui_loadable.SHOW_TIP
-    assert "(a preset saves its cuts)" in graphview.BUS_SAID
+    assert "patch is the look, with the bus cables" in ui_loadable.SHOW_TIP
+    assert "(a patch saves its cuts)" in graphview.BUS_SAID
 
 
 def test_a_clouds_wire_is_no_bus_cable(monkeypatch):
@@ -168,7 +169,7 @@ def test_the_banks_refusal_says_what_truly_frees_an_id():
 def test_every_door_says_a_blocked_control_in_one_set_of_words():
     assert learn.blocked_words("K1", "invariant") == "K1 is invariant (the meta controller's)"
     assert learn.blocked_words("K1", "global", verb="learn").endswith(
-        "(the meta controller's) — latch SHIFT off to learn into the preset")
+        "(the meta controller's) — latch SHIFT off to learn into the patch")
     assert learn._table_name(NS(path=None)) == "the meta controller"
     assert learn._table_name(NS(path=Path("bindings.json"))) == "bindings.json"
 
@@ -202,7 +203,7 @@ def test_the_show_line_is_whole_at_the_panes_first_width_and_cut_with_care_at_it
     right, edge = _in_a_pane(ui_graph.SIDE_W, draw)
     assert seen["fit"] == ui_loadable.SHOW_LINE.upper() and right <= edge
     right, edge = _in_a_pane(ui_graph.SIDE_MIN, draw)
-    assert seen["fit"].startswith("SHOW: PADS, META") and right <= edge
+    assert seen["fit"].startswith("INSTALL: PADS, META") and right <= edge
 
 
 SINKS_NOTE = "the meta controller's — out to a sink · right-click a param: Learn sink"
@@ -214,3 +215,43 @@ def test_routings_headings_stay_inside_the_pane(rig):  # noqa: F811
                             ("sinks", SINKS_NOTE)):
             right, edge = _in_a_pane(width, lambda t=title, n=note: ui_routing._heading(t, n))
             assert right <= edge, (title, width)
+
+
+# ---------------------------------------------------------------- "preset" (row 840)
+
+PRESET = re.compile(r"(?<![._/#\w])presets?(?![/_\w]|\.\w)", re.IGNORECASE)
+# an id: all lowercase id characters (`preset.select`, the desk layer `preset`, a group): saved
+# names, which FQ4 left as they are. Anything else that stays is listed, and why
+ID = re.compile(r"[a-z_.0-9{}]*")
+PRESET_LEFT: dict[tuple[str, str], tuple[int, str]] = {
+    ("ui_loadable.py", "PRESET"): (1, "an imgui drag payload's type: never drawn"),
+}
+
+
+def _presets() -> Counter:
+    return Counter(
+        (path.relative_to(ROOT).as_posix(), text)
+        for path in sorted(ROOT.rglob("*.py"))
+        for text in said_by(path.read_text(encoding="utf-8"))
+        if PRESET.search(text) and not ID.fullmatch(text)
+    )
+
+
+def test_preset_leaves_every_string_a_person_reads():
+    want = Counter({key: n for key, (n, _why) in PRESET_LEFT.items()})
+    extra = _presets() - want
+    assert not extra, ("say these as what they mean, using docs/GLOSSARY.md (a patch, a loadable "
+                       f"patch where a spawned patch is in the same breath): {sorted(extra.items())}")
+
+
+def test_what_preset_left_is_still_there():
+    want = Counter({key: n for key, (n, _why) in PRESET_LEFT.items()})
+    assert not want - _presets()
+
+
+def test_the_words_a_person_meets_first_say_patch():
+    from hyperspace import groupwords, ui_pane
+    assert groupwords.group_word("loadable") == "patch"
+    assert {k: title for k, title, *_ in ui_pane.SECTIONS}["loadable"] == "patches"
+    from hyperspace.routing import layer_word
+    assert layer_word("preset") == "patch" and layer_word("global") == "global"

@@ -31,13 +31,13 @@ from test_loadable import boot
 
 from hyperspace import graph as G
 from hyperspace import graphmigrate, loadable
-from hyperspace.library import LOOK_BACKUP, PROJECT_SUFFIX, PROJECT_V2, PROJECTS
+from hyperspace.library import LOOK_BACKUP, PROJECT_V2
 from hyperspace.media.channels import Channels, MediaSources, MediaState, NoResolver
 from hyperspace.routing import Binding, Bindings, MetaTable
 from hyperspace.routing_sources import Sources
 
 ROOT = Path(__file__).resolve().parents[1]
-CORPUS = ROOT / "tests" / "corpus" / "presets"
+CORPUS = ROOT / "tests" / "corpus" / "loadable"
 CUT = G.bus_wire(2, "image")
 LOOK = {"ghost.alpha": 0.25, "ghost.style": 2, "cloud.size": 3.5}
 
@@ -124,7 +124,7 @@ def test_a_media_state_from_before_the_split_finds_its_sources():
 
 
 def _old_show(home: Path, **extra) -> Path:
-    path = home / PROJECTS / f"rig{PROJECT_SUFFIX}"
+    path = home / "projects" / "rig.hyp.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     doc = {"schema": PROJECT_V2, "name": "rig", "bank": [None] * 8,
            "session": {"tempo.bpm": 128.0, "ghost.mirror": True, **LOOK},
@@ -142,7 +142,7 @@ def _old_loadable(home: Path, name: str = "OLD", folder: str = "") -> Path:
     doc["values"] = {k: v for k, v in doc["values"].items()
                      if not k.startswith(("ghost.", "cloud."))}
     doc["modules"] = {"dream": "wake"}
-    path = home / "presets" / folder / f"{name.lower()}.json"
+    path = home / "loadable" / folder / f"{name.lower()}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(loadable.dumps(doc))
     return path
@@ -154,7 +154,7 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     before = show.read_bytes()
     _old_loadable(home)
     rig = boot(home, show="rig")
-    pr, reg, pre = rig.lib.project, rig.reg, rig.loaded_patch
+    pr, reg, pre = rig.lib.install, rig.reg, rig.loaded_patch
     # the show: its look and cuts read out, its mirror the room's
     assert pr.old_look == LOOK and pr.old_cuts.cut == {CUT}
     assert reg["ghost.mirror"].value is True and reg["tempo.bpm"].value == 128.0
@@ -165,17 +165,17 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     assert reg["ghost.style"].value == 2
     assert pre.bus.cut == {CUT} and G.bus_cuts_of(pre).cut == {CUT}
     assert rig.lib.current("dream") is None                   # no module label
-    assert not rig.lib.is_dirty("presets")
+    assert not rig.lib.is_dirty("loadable")
     doc = pre.document("OLD")
-    assert doc["schema"] == "hyperspace.preset/10" and "modules" not in doc
+    assert doc["schema"] == "hyperspace.loadable/11" and "modules" not in doc
     assert doc[loadable.BUS_KEY] == {"cut": [CUT.to_json()]}
     assert doc["values"]["ghost.alpha"] == 0.25 and "ghost.mirror" not in doc["values"]
     # the show saved: /3, the meta controller, kept as /2 beside it
     path = pr.save()
     saved = json.loads(path.read_text())
-    assert saved["schema"] == "hyperspace.project/3" and "rig" not in saved
-    assert saved["session"]["ghost.mirror"] is True and saved["session"]["tempo.bpm"] == 128.0
-    assert not any(k in saved["session"] for k in LOOK)
+    assert saved["schema"] == "hyperspace.install/1" and "rig" not in saved
+    assert saved["tuning"]["ghost.mirror"] is True and saved["tuning"]["tempo.bpm"] == 128.0
+    assert not any(k in saved["tuning"] for k in LOOK)
     assert (path.parent / f"{path.name}.bak-v{LOOK_BACKUP}").read_bytes() == before
     # a /10 preset: its own look and no cut — a load moves the hands' look
     pre.load("DIAL")
@@ -183,7 +183,7 @@ def test_an_old_loadable_opened_with_an_old_show_takes_its_look_and_cuts_end_to_
     assert reg["ghost.mirror"].value is True                  # the room's stays
     # a fresh launch on the /3 show: the old look still from its backup
     again = boot(home, show="rig")
-    assert again.lib.project.old_look == LOOK and again.lib.project.old_cuts.cut == {CUT}
+    assert again.lib.install.old_look == LOOK and again.lib.install.old_cuts.cut == {CUT}
     again.loaded_patch.load("OLD")
     assert again.reg["ghost.alpha"].value == 0.25 and again.loaded_patch.bus.cut == {CUT}
 
@@ -195,15 +195,15 @@ def test_a_cut_is_the_loadables_undone_with_it_and_held_in_its_dot(tmp_path):
 
     rig = undo_boot(tmp_path / "home")
     pre = rig.loaded_patch
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     settle(rig)
-    assert not rig.lib.is_dirty("presets")
+    assert not rig.lib.is_dirty("loadable")
     pre.bus = pre.bus.cutting(CUT)
-    assert rig.lib.is_dirty("presets")
+    assert rig.lib.is_dirty("loadable")
     path = pre.save_as("cut trip")
     assert json.loads(path.read_text())["bus"] == {"cut": [CUT.to_json()]}
     settle(rig)
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     settle(rig)
     assert pre.bus == G.BusCuts()
     assert rig.undo.undo()
@@ -242,7 +242,7 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     show = _old_show(lib)
     _old_loadable(lib, "OLD")
     _old_loadable(lib, "DEEP", folder="party")
-    shutil.copyfile(CORPUS / "legacy6.json", lib / "presets" / "legacy6.json")   # a /10
+    shutil.copyfile(CORPUS / "legacy6.json", lib / "loadable" / "legacy6.json")   # a /10
     home = tmp_path / "machine"
     home.mkdir()
     monkeypatch.setenv("HYPERSPACE_HOME", str(home))
@@ -251,40 +251,42 @@ def test_the_tool_writes_the_shows_look_and_cuts_into_every_loadable_every_folde
     assert tool.main(["--library", str(lib)], picture=same_picture) == 0
     out = capsys.readouterr().out
     assert {p: p.read_bytes() for p in lib.rglob("*") if p.is_file()} == tree
-    assert "1 bus cut(s) into every preset: output.all.image → output.2.image" in out
-    assert "would rewrite 2 as /10, leave 1 untouched (already /10)" in out
-    assert "shows to rewrite as /3: 1 — rig.hyp.json" in out
+    assert "1 bus cut(s) into every loadable patch: output.all.image → output.2.image" in out
+    assert "would rewrite 2 as /11, leave 1 untouched (already /11)" in out
+    assert "show rig.hyp.json → installs/rig.json" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
     out = capsys.readouterr().out
     backups = list(home.glob("library-backup-*"))
     assert len(backups) == 1
-    for rel in ("presets/old.json", "presets/party/deep.json"):
+    for rel in ("loadable/old.json", "loadable/party/deep.json"):
         doc = json.loads((lib / rel).read_text())
-        assert doc["schema"] == "hyperspace.preset/10", rel
+        assert doc["schema"] == "hyperspace.loadable/11", rel
         assert doc["bus"] == {"cut": [CUT.to_json()]}, rel
         assert {k: doc["values"][k] for k in LOOK} == LOOK, rel
         assert "modules" not in doc and "ghost.mirror" not in doc["values"], rel
         assert json.loads((backups[0] / rel).read_text())["schema"] == graphmigrate.EYE_SCHEMA
-    assert (lib / "presets" / "legacy6.json").read_bytes() == (CORPUS / "legacy6.json").read_bytes()
-    doc = json.loads(show.read_text())
-    assert doc["schema"] == "hyperspace.project/3" and "rig" not in doc
-    assert doc["session"] == {"tempo.bpm": 128.0, "ghost.mirror": True}
-    assert (show.parent / f"{show.name}.bak-v{LOOK_BACKUP}").is_file()
-    assert "rewrote 2 as /10" in out and "rewrote 1 show(s) as /3" in out
+    assert (lib / "loadable" / "legacy6.json").read_bytes() == (CORPUS / "legacy6.json").read_bytes()
+    assert not show.exists()
+    doc = json.loads((lib / "installs" / "rig.json").read_text())
+    assert doc["schema"] == "hyperspace.install/1" and "rig" not in doc
+    assert doc["tuning"] == {"tempo.bpm": 128.0, "ghost.mirror": True}
+    assert "rewrote 2 as /11" in out and "wrote 1 install file(s)" in out
     assert tool.main(["--library", str(lib), "--apply"], picture=same_picture) == 0
-    assert "rewrote 0 as /10, left 3 untouched (already /10)" in capsys.readouterr().out
+    assert "nothing to do" in capsys.readouterr().out
 
 
 def test_a_newer_file_is_refused_as_an_older_build_refuses_a_ten(tmp_path):
-    """The two-Macs rule, as this build sees it: a `/11` and a `/4` show are
-    refused, as a build from before refuses a `/10` and a `/3`."""
-    from hyperspace.library import Library, LibraryError, Project, migrate_doc
-    assert loadable.VERSIONS[-1] == 10
+    """The two-Macs rule, as this build sees it: a `/12`, a `/4` show and an install `/2` are
+    refused, as a build from before refuses an `/11`; the words say what to do."""
+    from hyperspace.library import Install, Library, LibraryError, migrate_doc
+    assert loadable.VERSIONS[-1] == 11
     with pytest.raises(LibraryError, match="newer than this build"):
         migrate_doc({"schema": "hyperspace.project/4"}, "hyperspace.project")
     lib = Library(tmp_path)
     with pytest.raises(LibraryError):
-        Project(lib)._take({"schema": "hyperspace.project/4", "name": "x"}, None)
+        Install(lib)._take({"schema": "hyperspace.project/4", "name": "x"}, None)
+    with pytest.raises(LibraryError, match="git pull and uv sync"):
+        Install(lib)._take({"schema": "hyperspace.install/2", "name": "x"}, None)
 
 
 # ---------------------------------------------------------------- review of #351

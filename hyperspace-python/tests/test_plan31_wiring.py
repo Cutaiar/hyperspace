@@ -481,7 +481,7 @@ def test_nan_never_reaches_a_param_from_an_idle_bank():
 # ---- plan 31 P: the envelopes and the sequencer in the loadable patch (row 394: /6) ----
 
 # (plan 43 C2: V6 is the save schema, named for the row it pinned)
-V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/10"
+V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.loadable/11"
 
 
 def _new_ids(doc) -> list[str]:
@@ -569,7 +569,7 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     from hyperspace import loadable
     from hyperspace.library import LibraryError
 
-    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10)   # (… plan 40 T2: /8; plan 43 C2: /9)
+    assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)   # (… plan 40 T2: /8; plan 43 C2: /9)
     app.reg["view.bright"].set(1.5)
     doc = {k: v for k, v in app.loaded_patch.document("p").items() if k != "graph"}
     doc["values"] = {k: v for k, v in doc["values"].items()
@@ -582,14 +582,14 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     app.reg["seq.3.3"].set(True)
     app.loaded_patch.save_as("pattern")
     lib = app.lib
-    assert lib.read("presets", "pattern")["schema"] == V6
+    assert lib.read("loadable", "pattern")["schema"] == V6
     kinds = lib._kinds
-    kinds["presets"] = replace(kinds["presets"], versions=(2,))     # the older build
+    kinds["loadable"] = replace(kinds["loadable"], versions=(2,))     # the older build
     try:
-        with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-            lib.read("presets", "pattern")
+        with pytest.raises(LibraryError, match="git pull and uv sync"):
+            lib.read("loadable", "pattern")
     finally:
-        kinds["presets"] = replace(kinds["presets"], versions=loadable.VERSIONS)
+        kinds["loadable"] = replace(kinds["loadable"], versions=loadable.VERSIONS)
 
 
 # ---- plan 31 P: the corpus's seq-demo ----
@@ -607,7 +607,7 @@ def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
 
     from conftest import CORPUS
 
-    doc = json.loads((CORPUS / "presets" / "seq-demo.json").read_text())
+    doc = json.loads((CORPUS / "loadable" / "seq-demo.json").read_text())
     on = {(ln, s) for ln in range(1, 6) for s in range(1, 9)
           if doc["values"].get(f"seq.{ln}.{s}")}
     assert on == {(1, 1), (1, 5), (2, 3), (2, 7), *((3, s) for s in range(1, 9))}

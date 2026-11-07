@@ -85,7 +85,7 @@ def test_the_loadable_layer_is_the_three_strips_and_the_maps_loadable_controls(t
 
 def test_every_corpus_loadables_numbers_are_in_the_report(tool, tmp_path):
     """The numbers the PR body and the decisions file quote: every corpus
-    loadable patch (`tests/corpus/presets`, the loadable patches the build shipped) is a
+    loadable patch (`tests/corpus/loadable`, the loadable patches the build shipped) is a
     row; the faders are dark on every one (no loadable patch has fader rows in this
     run); none meets the bar yet."""
     controls, rows = tool.coverage(tmp_path)
@@ -235,7 +235,7 @@ def test_a_picked_control_is_offered_this_loadables_params_and_a_click_maps_it(r
     panel, table = rig.panel, rig.router.table
     imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     pushes = _pushes(monkeypatch)
     calls = []
     real = lrn.map_picked
@@ -307,7 +307,7 @@ def test_the_offer_reads_routes_and_macros_as_routed(rig):
     """A route's target and a macro's base subscriber are "routed"."""
     panel, table = rig.panel, rig.router.table
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     lrn.pick(_control("D6").source)
     used, _ = ui_desk.offer(panel, table)
     assert ("camera.pan.x", ROUTED) not in used

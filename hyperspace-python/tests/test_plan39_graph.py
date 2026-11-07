@@ -261,13 +261,13 @@ def test_each_entry_round_trips_through_a_seven_save_with_its_values(tmp_path):
     rig.reg["segment.2.feather"].set(6.0)
     saved = rig.loaded_patch.save_as("t5-round").read_text()
     doc = json.loads(saved)
-    assert doc["schema"] == "hyperspace.preset/10"
+    assert doc["schema"] == "hyperspace.loadable/11"
     nodes = doc["graph"]["nodes"]
     assert {"kind": "matte"} in nodes and {"kind": "cut"} in nodes
     assert {"kind": "segment"} in nodes and {"kind": "segment", "instance": 2} in nodes
     home = tmp_path / "b"
-    (home / "presets").mkdir(parents=True)
-    (home / "presets" / "t5-round.json").write_text(saved)
+    (home / "loadable").mkdir(parents=True)
+    (home / "loadable" / "t5-round.json").write_text(saved)
     r = boot(home)
     r.loaded_patch.load("t5-round")
     got = r.loaded_patch.graph.spec

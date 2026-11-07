@@ -22,7 +22,7 @@ from hyperspace.deck import Deck
 from hyperspace.ghost import GhostState
 from hyperspace.ghost import register as declare_ghost
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.library import LOADABLE, PROJECT_SUFFIX, PROJECTS, mirrors_apart
+from hyperspace.library import INSTALL_SUFFIX, INSTALLS, LOADABLE, mirrors_apart
 from hyperspace.outputs import Switches as S
 from hyperspace.params import Registry, is_shared_meta_id
 from hyperspace.routing import is_meta_row
@@ -148,22 +148,22 @@ def test_a_show_that_holds_the_old_id_still_opens_clean_and_keeps_it(tmp_path):
     home = tmp_path / "home"
     rig = boot(home)
     put(home, "Glass", graph=TWO_HANDS)
-    show = home / PROJECTS / f"old{PROJECT_SUFFIX}"
+    show = home / INSTALLS / f"old{INSTALL_SUFFIX}"
     show.parent.mkdir(parents=True, exist_ok=True)
     show.write_text(json.dumps({"schema": "hyperspace.project/3", "name": "old", "startup": "Glass",
                                 "bank": ["Glass"], "modules": {},
                                 "session": {"ghost.mirror": False, "ghost.2.mirror": True}}))
     rig.lib.warning = ""
-    assert rig.lib.project.load("old") == []
-    assert "unknown" not in rig.lib.warning and not rig.lib.project.is_dirty()
+    assert rig.lib.install.load("old") == []
+    assert "unknown" not in rig.lib.warning and not rig.lib.install.is_dirty()
     assert "ghost.2.mirror differs from the Mirror" in rig.lib.warning
     state = rig.deck.graph.states["ghost.2"]
     assert "ghost.2.mirror" not in rig.reg and state.mirror is False
     rig.reg["ghost.mirror"].set(True)
     assert state.mirror is True
     rig.reg["ghost.mirror"].set(False)
-    rig.lib.project.save()
-    assert json.loads(show.read_text())["session"]["ghost.2.mirror"] is True
+    rig.lib.install.save()
+    assert "ghost.2.mirror" not in json.loads(show.read_text())["tuning"]    # (plan 58 §9: no more)
 
 
 def test_only_a_mirror_that_differs_is_said():
@@ -312,7 +312,7 @@ def test_no_normal_load_raises_the_shared_drop_warning(two):
     shared param on the app's own roads."""
     lib = two.rig.lib
     names = sorted(lib.list(LOADABLE))
-    shows = lib.project.list()
+    shows = lib.install.list()
     assert names and shows
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -325,8 +325,8 @@ def test_no_normal_load_raises_the_shared_drop_warning(two):
         two.land(two.a, "Plain", ONE_HAND)
         two.land(two.b, "Plain", ONE_HAND)
         for show in shows:
-            lib.project.load(show)
-        lib.project.new()
+            lib.install.load(show)
+        lib.install.new()
         assert _shared_drops(caught) == []
         two.a.reg.remove("ghost.mirror")              # (the recorder does see one)
     said = _shared_drops(caught)

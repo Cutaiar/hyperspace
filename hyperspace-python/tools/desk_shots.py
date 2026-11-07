@@ -49,7 +49,7 @@ def centre(rect) -> tuple[float, float]:
 
 def boot() -> Hidden:
     h = Hidden("desk shots")
-    h.r.lib.load("presets", LOOK)
+    h.r.lib.load("loadable", LOOK)
     h.page("view")
     h.draw(6)
     return h

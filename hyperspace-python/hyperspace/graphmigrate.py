@@ -54,6 +54,7 @@ from typing import Any
 
 from . import graph as G
 from .outputs import MAX_OUTPUTS
+from .routing_sources import nsew
 
 FREE_SCHEMA = "hyperspace.preset/5"
 # plan 35 (row 385): `/6` is `/5` with the wired frame in the new ids;
@@ -85,8 +86,15 @@ NINE = 9
 # `modules` labels and no `desk_template`. What every save writes; `/9`
 # and older are read through `ten`, the open show's look filled in
 LOOK_SCHEMA = "hyperspace.preset/10"
+# plan 57 (FQ4, the one migration): the word moves. `/11` is `/10` under the kind
+# `hyperspace.loadable`, the old kind's ladder read through (`eleven`), in
+# `<library>/loadable/`. A load reads both kinds until CL1; a save writes this alone.
+OLD_KIND = "hyperspace.preset"
+LOADABLE_KIND = "hyperspace.loadable"
+ELEVEN_SCHEMA = f"{LOADABLE_KIND}/11"
+ELEVEN = 11
 TEN = 10
-SAVE_SCHEMA = LOOK_SCHEMA
+SAVE_SCHEMA = ELEVEN_SCHEMA
 BUS_KEY = "bus"
 # the keys `/10` retired: the module labels (row 540, the owner, 2026-11-03)
 # and the desk templates (plan 24 C3: neither library held one)
@@ -1267,7 +1275,7 @@ def nine(doc: dict, eye: dict | None = None, camera_at: Any = None) -> dict:
     """An older loadable patch (before `/9`) as its `/9` reads it — pure, one way,
     on load (`LoadedPatch.load_doc`) and so in tools/migrate_library.py's
     resave: the eye written into `values` from `eye` (the open show's
-    `session`, read out of an old show by `library.Project`; an id it lacks
+    `session`, read out of an old show by `library.Install`; an id it lacks
     is left out, and the load fills it from the build's default), and the
     camera node's GRAPH position from `camera_at` (the old show's layout
     entry, ``render:camera``) into the loadable patch's `layout` where the file
@@ -1302,7 +1310,7 @@ def ten(doc: dict, look: dict | None = None, cuts: Any = None) -> dict:
     pure, one way, on load (`LoadedPatch.load_doc`, after `nine`) and so in
     tools/migrate_library.py's resave: the hands' and the clouds' looks
     written into `values` from `look` (what the open show's `session` held,
-    `library.Project.old_look`: an id the file already names stays, an id
+    `library.Install.old_look`: an id the file already names stays, an id
     neither names takes the build's default at the load), the bus cuts into
     `bus` from `cuts` (the open show's `rig`, a `graph.BusCuts`; a file
     that names its own keeps them), and the retired keys (`TEN_RETIRED`:
@@ -1727,7 +1735,7 @@ def through_wires(spec: G.GraphSpec, n: int, bus_cuts: G.BusCuts | None = None) 
 # what a load says of a file naming a desk template (retired, plan 44 D3;
 # `loadable.TEMPLATE_RETIRED` is this)
 TEMPLATE_RETIRED = ("desk template {name!r}: desk templates are retired (plan 44 D3) — "
-                    "this preset's own desk rows only")
+                    "this patch's own desk rows only")
 
 
 @dataclass(frozen=True)
@@ -1746,6 +1754,19 @@ class Forward:
     from_show: frozenset[str] = frozenset()
 
 
+def eleven(doc: dict) -> dict:
+    """A `/10` as its `/11` (plan 57 §7): the kind's new word, and a pair route's poles in
+    north, south, east and west (a load drops a `pad:` or `hat:` route, so only a pair's names
+    a pole). A copy."""
+    out = {**doc, "schema": ELEVEN_SCHEMA}
+    routes = doc.get("routes")
+    if isinstance(routes, list):
+        out["routes"] = [{**r, "source": nsew(r["source"])}
+                         if isinstance(r, dict) and isinstance(r.get("source"), str) else r
+                         for r in routes]
+    return out
+
+
 def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any = None,
             look: dict | None = None, cuts: Any = None) -> Forward:
     """The one ladder for a whole loadable patch (plan 50; the steps a load runs,
@@ -1754,7 +1775,7 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     place the open show held (`nine`), before `/10` the look made whole
     (`ten`: the show's hands' and clouds' looks and its bus cuts, the
     module labels and the desk template's name dropped — the template
-    said). A fragment's ladder is `patches.forward`; the two are the one
+    said), before `/11` the kind's new word (`eleven`). A fragment's ladder is `patches.forward`; the two are the one
     reader of the one shape (`patches.shape_of` says which a file is)."""
     notes: list[str] = []
     migrate_notes: list[str] = []
@@ -1764,7 +1785,7 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
     if version is None or version < SEVEN:
         old = str(doc.get("schema"))
         doc, migrate_notes = seven(doc, specs)
-        migrated = MIGRATED_NOTE.format(old=old, new=LOOK_SCHEMA)
+        migrated = MIGRATED_NOTE.format(old=old, new=ELEVEN_SCHEMA)
     if version is None or version < NINE:
         doc = nine(doc, eye, camera_at)
     if version is None or version < TEN:
@@ -1775,4 +1796,6 @@ def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any 
         doc = ten(doc, look, cuts)
         from_show = set(dict(doc.get("values") or {})) - had \
             if isinstance(doc.get("values"), dict) else set()
+    if version is None or version < ELEVEN:
+        doc = eleven(doc)
     return Forward(doc, tuple(notes), tuple(migrate_notes), migrated, frozenset(from_show))

@@ -804,7 +804,7 @@ def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
     for b in [b for b in rig.table.bindings if b.target == CHASE_PARAM]:
         rig.table.remove(b)                    # BACK's factory row: this stub is one button
     rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_pad_button("pad:Y")
+    assert rig.learn.learn_pad_button("pad:N")
     row = [b for b in rig.table.bindings if b.target == CHASE_PARAM]
     assert [b.op for b in row] == ["momentary"]
     pad = Pad()
@@ -822,7 +822,7 @@ def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
     rig.router.pad(pad, now=0.3)
     assert rig.reg.chasing
     pad.was_down = True
-    rig.router.pad(pad, now=0.4, skip=frozenset({"pad:Y"}))
+    rig.router.pad(pad, now=0.4, skip=frozenset({"pad:N"}))
     assert not rig.reg.chasing
     # a release as ever
     pad.was_down = False

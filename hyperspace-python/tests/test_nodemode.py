@@ -12,7 +12,7 @@ from hyperspace.library import LibraryError, Marks
 from hyperspace.nodemode import NodeMode, Slot, fill
 from hyperspace.pads import models
 
-CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
+CORPUS_LOADABLES = sorted(p.stem for p in (CORPUS / "loadable").glob("*.json"))
 ENTRY = {"player": 2, "controller": "gamepad", "node": "macro.1"}
 
 
@@ -116,7 +116,7 @@ def test_a_new_loadable_points_at_nothing(app):
 
 def test_the_migration_road_keeps_the_key_as_a_fixed_point(tmp_path):
     src = tmp_path / "with.json"
-    doc = json.loads((CORPUS / "presets" / f"{CORPUS_LOADABLES[0]}.json").read_text())
+    doc = json.loads((CORPUS / "loadable" / f"{CORPUS_LOADABLES[0]}.json").read_text())
     doc["node_mode"] = [ENTRY]
     src.write_text(loadable.dumps(doc))
     once, notes, _ = headless.resave(src, tmp_path / "a")
@@ -271,13 +271,13 @@ def test_a_node_that_does_not_fit_lists_what_is_over_and_does_not_page():
 
 
 def test_a_pair_is_one_degree_of_freedom_and_a_row_on_it_takes_both_poles():
-    pair = ("hat:UP", "hat:DOWN")
+    pair = ("hat:N", "hat:S")
     assert fill(["a", "b"], [pair, ("axis:LX",)]).slots[0] == Slot(pair, "a")
-    assert nodemode.own_sources("pair:UP/DOWN") == pair
-    assert nodemode.own_sources("pair@p2:UP/DOWN") == ()
-    got = fill(["a", "b"], [pair, ("axis:LX",)], rows=[("pair:UP/DOWN", "a")])
+    assert nodemode.own_sources("pair:hat.N/hat.S") == pair
+    assert nodemode.own_sources("pair@p2:hat.N/hat.S") == ()
+    got = fill(["a", "b"], [pair, ("axis:LX",)], rows=[("pair:hat.N/hat.S", "a")])
     assert got.slots == (Slot(("axis:LX",), "b"),)
-    got = fill(["a"], [pair, ("axis:LX",)], rows=[("hat:UP", "a")])
+    got = fill(["a"], [pair, ("axis:LX",)], rows=[("hat:N", "a")])
     assert got.kept == ("a",) and not got.slots
 
 
@@ -288,7 +288,7 @@ def test_a_row_elsewhere_takes_its_freedom_so_one_stick_never_moves_two_things()
 
 def test_a_pair_no_pad_can_have_takes_no_freedom():
     assert nodemode.own_sources("pair:UP/NOPE") == ()
-    pair = ("hat:UP", "hat:DOWN")
+    pair = ("hat:N", "hat:S")
     assert fill(["a"], [pair], rows=[("pair:UP/NOPE", "x")]).slots == (Slot(pair, "a"),)
 
 

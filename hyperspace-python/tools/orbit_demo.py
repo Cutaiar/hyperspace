@@ -2,7 +2,7 @@
 """Plan 18 WP4 — `hands-orbit`, two hands on the camera, shown headless.
 
 SYNTHETIC HANDS and OFFSCREEN RENDERS: no tracker and no window. The
-corpus loadable patch (`tests/corpus/presets/hands-orbit.json`) is loaded through
+corpus loadable patch (`tests/corpus/loadable/hands-orbit.json`) is loaded through
 the real `LoadedPatch` over a `Router` on a throwaway library home
 (`tools/loadable_shots.py`'s construction, so nothing touches ~/Hyperspace),
 and two fake hands are driven through the

@@ -382,7 +382,7 @@ def test_the_scene_combo_and_the_strip_follow_each_other(tmp_path):
     layout carries them."""
     reg, control, audio, lib = wired(tmp_path)
     assert reg["scene.select"].names == list(SCENES)
-    assert lib.list("band") == [], "nothing ships: the strip lists the user's presets"
+    assert lib.list("band") == [], "nothing ships: the strip lists the user's patches"
     put_band(tmp_path, "Kick & Sizzle", scene("Kick & Sizzle"))
     put_band(tmp_path, "Balanced", scene("Balanced"))
     control.select_scene(SCENES.index("Kick & Sizzle"))

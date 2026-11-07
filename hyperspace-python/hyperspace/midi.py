@@ -145,6 +145,7 @@ from .routing import (
     bindings_path,
     fine_gives_way,
     is_shared_meta_id,
+    layer_word,
     led_lit,
     led_shade,
     let_go_lost,
@@ -819,7 +820,7 @@ class MidiIO:
         if pressed:
             what = ("; ".join(did) if did
                     else "nothing (its row is off)" if rows
-                    else f"nothing (no row on the {layer} layer)")
+                    else f"nothing (no row on the {layer_word(layer)} layer)")
             self._log_press(source, what, layer)
         if timed and pressed:
             self._hold_state()[0][(ch, number)] = (self._now(), timed)
@@ -857,7 +858,7 @@ class MidiIO:
         row whose param saves into its choice (`Param.save_into`: a bank
         pad) saves the live state into that slot — an empty slot as #158's
         hold does, a filled one as a **new** loadable patch the slot then points
-        at (`library.Project.save_into`: nothing is overwritten or
+        at (`library.Install.save_into`: nothing is overwritten or
         trashed) — instead of loading it, and starts no hold. The pad
         blinks for BLINK_S when the save worked. SAVE and the pads are
         invariant, so this is the same under SHIFT. True when the press was

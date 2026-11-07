@@ -29,11 +29,11 @@ FONT_K = 1.3                # the lab's type scale for these two views
 # the lab's palette (index.html `COL`)
 COL = {"body": "#1a1f2c", "bodyLine": "#3a4357", "idle": "#262d3c", "idleLine": "#465068",
        "text": "#d9dfea", "dim": "#7d879b", "faint": "#3d4556", "hot": "#ffd166",
-       "back": "#ff9f43", "fn": "#c084fc", "A": "#7aa8ff", "B": "#ff5a6a", "X": "#ff7ad9",
-       "Y": "#40e0a0", "accent": "#6cb6ff", "ok": "#4ade80", "ground": "#0d0f14",
+       "back": "#ff9f43", "fn": "#c084fc", "S": "#7aa8ff", "E": "#ff5a6a", "W": "#ff7ad9",
+       "N": "#40e0a0", "accent": "#6cb6ff", "ok": "#4ade80", "ground": "#0d0f14",
        "cockpit": "#0a0c11", "well": "#10141c"}
-XBOX_INK = {"A": "#5fd35f", "B": "#ff5a5a", "X": "#4f8dff", "Y": "#ffd23f"}
-HAT_GLYPH = {"UP": "▲", "DOWN": "▼", "LEFT": "◀", "RIGHT": "▶"}
+XBOX_INK = {"S": "#5fd35f", "E": "#ff5a5a", "W": "#4f8dff", "N": "#ffd23f"}
+HAT_GLYPH = {"N": "▲", "S": "▼", "W": "◀", "E": "▶"}
 PULSE_S = 0.26              # a one-frame trigger (tap, shake) shows this long
 TRAIL = 26                  # the cockpit's stick trails, frames
 TICKER_S = 2.2
@@ -171,7 +171,7 @@ def _pulse(st: dict, key: str, on: bool, now: float, hold: float = PULSE_S) -> b
 
 _SONY_WORDS = {"VIEW": "Create", "MENU": "Options", "GUIDE": "PS", "SHARE": "mic",
                "CREATE": "Create", "OPTIONS": "Options", "MIC": "mic"}
-_XBOX_WORDS = {"VIEW": "View", "MENU": "Menu", "GUIDE": "Xbox", "SHARE": "Share",
+_XBOX_WORDS = {"S": "A", "E": "B", "W": "X", "N": "Y", "VIEW": "View", "MENU": "Menu", "GUIDE": "Xbox", "SHARE": "Share",
                "LSTICK": "LS", "RSTICK": "RS"}
 
 
@@ -289,7 +289,7 @@ def _fingers(p: Pen, t, x0, y0, w, h, rad, numbered: bool) -> list:
         p.stroke("accent", 2, a=0.6)
     for k, px, py in pts:
         p.circle(px, py, rad)
-        p.fill("X" if k else "accent", (0.85 if k else 0.9) if numbered else 1.0)
+        p.fill("W" if k else "accent", (0.85 if k else 0.9) if numbered else 1.0)
         if numbered:
             p.text(str(k + 1), px, py, size=10, color="#000", weight=700)
     return pts
@@ -338,8 +338,8 @@ def _stick(p: Pen, r, n: str, cx, cy, xa, ya) -> None:
 
 
 def _dpad(p: Pen, r, cx, cy) -> None:
-    for d, (dx, dy) in (("UP", (0, -40)), ("DOWN", (0, 40)), ("LEFT", (-40, 0)),
-                        ("RIGHT", (40, 0))):
+    for d, (dx, dy) in (("N", (0, -40)), ("S", (0, 40)), ("W", (-40, 0)),
+                        ("E", (40, 0))):
         x, y, on = cx + dx, cy + dy, _hat(r, d)
         p.rr(x - 19, y - 19, 38, 38, 7)
         p.fill("hot" if on else "idle")
@@ -429,7 +429,7 @@ def faithful(p: Pen, r, st: dict) -> None:
     else:
         _faithful_xbox(p, r)
     # the face buttons, each in its own ink
-    for n, (x, y) in (("Y", (765, 198)), ("B", (817, 250)), ("A", (765, 302)), ("X", (713, 250))):
+    for n, (x, y) in (("N", (765, 198)), ("E", (817, 250)), ("S", (765, 302)), ("W", (713, 250))):
         on, ink = _pressed(r, n), _ink(r, n)
         p.circle(x, y, 23)
         p.fill(ink if on else "idle")
@@ -682,12 +682,12 @@ def cockpit(p: Pen, r, st: dict) -> None:
         p.text(_glyph(r, n), x, 467, size=11, color="#000" if on else "dim", weight=600)
         p.hit(x - 28, 456, 56, 22, f"pad:{n}")
     # the D-pad and the face
-    _cluster(p, r, 245, 500, [("hat:UP", "▲", 0, -1, None), ("hat:RIGHT", "▶", 1, 0, None),
-                              ("hat:DOWN", "▼", 0, 1, None), ("hat:LEFT", "◀", -1, 0, None)],
+    _cluster(p, r, 245, 500, [("hat:N", "▲", 0, -1, None), ("hat:E", "▶", 1, 0, None),
+                              ("hat:S", "▼", 0, 1, None), ("hat:W", "◀", -1, 0, None)],
              COL["hot"])
     _cluster(p, r, 755, 500, [(f"pad:{n}", _glyph(r, n), dx, dy, _ink(r, n))
-                              for n, dx, dy in (("Y", 0, -1), ("B", 1, 0), ("A", 0, 1),
-                                                ("X", -1, 0))], COL["hot"])
+                              for n, dx, dy in (("N", 0, -1), ("E", 1, 0), ("S", 0, 1),
+                                                ("W", -1, 0))], COL["hot"])
     # the back and Fn tabs, loud (an Edge; dim on a DualSense); the rumble meters
     if r.sony:
         for n, x, lbl in (("LP", 22, "BACK L"), ("RP", 918, "BACK R")):
@@ -820,7 +820,7 @@ def _faithful_joycon(p: Pen, r, st: dict, now: float, players, r_low, r_high) ->
         _pill(p, r, "MENU", 426, 96, 26, 8, word_y=118)
         face_cy = 235
         _stick(p, r, "LSTICK", 500, 420, "LX", "LY")
-    for n, (dx, dy) in (("Y", (0, -48)), ("X", (-48, 0)), ("B", (48, 0)), ("A", (0, 48))):
+    for n, (dx, dy) in (("N", (0, -48)), ("W", (-48, 0)), ("E", (48, 0)), ("S", (0, 48))):
         x, y = 500 + dx, face_cy + dy
         on = _pressed(r, n)
         p.circle(x, y, 23)
@@ -927,8 +927,8 @@ def _cockpit_joycon(p: Pen, r, st: dict, now: float, players, r_low, r_high) -> 
         p.text(_glyph(r, n), x, 467, size=11, color="#000" if on else "dim", weight=600)
         p.hit(x - 28, 456, 56, 22, f"pad:{n}")
     _cluster(p, r, 755, 500, [(f"pad:{n}", _glyph(r, n), dx, dy, ink)
-                              for n, dx, dy in (("Y", 0, -1), ("B", 1, 0), ("A", 0, 1),
-                                                ("X", -1, 0))], COL["hot"])
+                              for n, dx, dy in (("N", 0, -1), ("E", 1, 0), ("S", 0, 1),
+                                                ("W", -1, 0))], COL["hot"])
     for n, x in (("LP", 22), ("RP", 918)):
         on = _pressed(r, n)
         p.rr(x, 170, 60, 110, 14)

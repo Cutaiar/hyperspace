@@ -672,7 +672,7 @@ def _preset_rig(ctx, tmp_path):
     r = Renderer(ctx)
     seed(tmp_path)                   # (the corpus: the loadable patches the build once shipped)
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
                          dream=r.lookback.state, fx=r.fx.state)
     control.library = lib
     clock = tempo.Clock(now=lambda: 0.0)
@@ -701,8 +701,8 @@ def _final_alpha(ctx, b, bg_alpha, w=240, h=160, frames=4):
 
 
 def _corpus_loadables():
-    """The loadable patches the build once shipped (tests/corpus/presets), by slug."""
-    return sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
+    """The loadable patches the build once shipped (tests/corpus/loadable), by slug."""
+    return sorted(p.stem for p in (CORPUS / "loadable").glob("*.json"))
 
 
 # every effect on at its own blend, then every one forced to multiply
@@ -719,10 +719,10 @@ def test_every_corpus_loadable_renders_opaque_in_window_mode(ctx, tmp_path, name
     the FX chain and the look-back composite."""
     b = _preset_rig(ctx, tmp_path)
     first = _corpus_loadables()[0] if name in STRESS else name
-    path = b.lib.path_of("presets", first)
+    path = b.lib.path_of("loadable", first)
     assert path is not None, first
     b.loaded_patch.load(json.loads(path.read_text())["name"])
-    assert b.lib.current("presets") is not None
+    assert b.lib.current("loadable") is not None
     if name in STRESS:
         # (plan 36 T3: every effect file exists for the stress, as before a
         # graph landed — `FxState.hold(None)`)
@@ -1022,10 +1022,10 @@ def test_lookback_page_draws_headless(tmp_path):
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
         d = DreamState()
-        reg = build_registry(view, control, audio, lib.project, dream=d)
+        reg = build_registry(view, control, audio, lib.install, dream=d)
         lib.attach(reg)
         # no renderer: the thumbnail row says so instead of drawing textures
-        panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+        panel = Panel(control, audio, view, bank=lib.install, registry=reg, library=lib)
         reg["ui.page"].set(PAGE_KEYS.index("lookback"))
         for on in (False, True):
             d.on = on
@@ -1141,9 +1141,9 @@ class LookbackPage:
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
         self.dream = DreamState()
-        self.reg = build_registry(view, control, audio, lib.project, dream=self.dream)
+        self.reg = build_registry(view, control, audio, lib.install, dream=self.dream)
         lib.attach(self.reg)
-        self.panel = ui.Panel(control, audio, view, bank=lib.project, registry=self.reg,
+        self.panel = ui.Panel(control, audio, view, bank=lib.install, registry=self.reg,
                               library=lib)
         self.events: list[tuple[str, str]] = []     # ("title" | "label" | "widget" | "popup", text)
         self.rects: dict[str, tuple[float, float, float, float]] = {}

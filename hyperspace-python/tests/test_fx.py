@@ -584,14 +584,14 @@ class PageRig:
             self.st = FxState()
             lib = Library(tmp_path, period=0.0)
             view = ViewState()
-            self.reg = build_registry(view, control, audio, lib.project, fx=self.st)
+            self.reg = build_registry(view, control, audio, lib.install, fx=self.st)
             lib.attach(self.reg)
-            self.panel = Panel(control, audio, view, bank=lib.project, registry=self.reg,
+            self.panel = Panel(control, audio, view, bank=lib.install, registry=self.reg,
                                library=lib)
         else:
             self.st, self.reg = r.fx, r.reg
             r.audio.__dict__.update(mode="", error="", label="", sr=48000.0)
-            self.panel = Panel(r.control, r.audio, r.view, bank=r.lib.project, registry=r.reg,
+            self.panel = Panel(r.control, r.audio, r.view, bank=r.lib.install, registry=r.reg,
                                library=r.lib)
         self.panel.renderer = SimpleNamespace(fx=SimpleNamespace(state=self.st,
                                                                  error=lambda n: ""))
@@ -1599,7 +1599,7 @@ def test_an_old_loadable_saves_no_retired_id(tmp_path):
            "media": {"channels": {"b": ["shared:x.png"]}}}
     assert app.loaded_patch.load_doc(doc) == []
     out = app.loaded_patch.document("old")
-    assert out["schema"] == "hyperspace.preset/10"
+    assert out["schema"] == "hyperspace.loadable/11"
     assert not [k for k in out["values"] if M.retired(k)]
     run = G.run_back(G.read_graph(out["graph"]), "output.all.image")
     assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
@@ -1617,7 +1617,7 @@ def test_an_old_loadable_saves_no_retired_id(tmp_path):
     sec = {**sec, "wires": [*keep[:at], *rerun, *keep[at:]]}
     app.loaded_patch.graph.land(G.read_graph(sec), sec)
     out = app.loaded_patch.document("old")
-    assert out["schema"] == "hyperspace.preset/10"
+    assert out["schema"] == "hyperspace.loadable/11"
     assert G.run_back(G.read_graph(out["graph"]), "output.all.image") == (
         "acid", "warp")
     assert not [k for k in out["values"] if M.retired(k)]

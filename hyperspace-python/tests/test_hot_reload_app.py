@@ -1,6 +1,6 @@
 """A hot reload through the real swap, over the real app's long-lived objects (HR, row 802).
 
-Plan 44 D5a gave `DeckLibrary` and `DeckProject` slots over a hot base, and from that day
+Plan 44 D5a gave `DeckLibrary` and `DeckInstall` slots over a hot base, and from that day
 no save before `library` on the list completed: `swap: TypeError: __class__ assignment:
 'DeckLibrary' object layout differs from 'DeckLibrary'`. Nothing failed, because no reload
 test assigned a `__class__` on a class whose base had reloaded. The fast tier holds the
@@ -221,11 +221,11 @@ def test_the_rule_sees_what_it_should(source, refused):
 
 def test_the_decks_views_hold_their_fields_on_a_cold_base():
     from hyperspace import hot_slots
-    from hyperspace.library import DeckLibrary, DeckProject
+    from hyperspace.library import DeckInstall, DeckLibrary
 
     assert issubclass(DeckLibrary, hot_slots.DeckLibrarySlots)
-    assert issubclass(DeckProject, hot_slots.DeckProjectSlots)
-    assert "__slots__" not in vars(DeckLibrary) and "__slots__" not in vars(DeckProject)
+    assert issubclass(DeckInstall, hot_slots.DeckInstallSlots)
+    assert "__slots__" not in vars(DeckLibrary) and "__slots__" not in vars(DeckInstall)
     assert refusal(DeckLibrary, {"hyperspace.library"}) is None
 
 

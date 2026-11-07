@@ -211,7 +211,7 @@ def test_a_hand_carried_a_metre_stays_there_and_a_resets_it_home():
     assert pan(reg)[0] == pytest.approx(there + state.ball[0] - state.wrist[0], abs=1e-6)
     carry(reg, state, pad, -0.4)                                   # back a way: it follows
     assert state.wrist[0] == pytest.approx(there - 0.4 * poi.UNITS_PER_M, rel=0.1)
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     poi.step(state, pad, reg, DT)
     assert math.hypot(*state.wrist) < 1e-2
 
@@ -510,7 +510,7 @@ def test_no_pull_home_the_hand_at_the_wall_stays_until_a():
     there = list(state.wrist)
     run(reg, state, pad, 300)
     assert state.wrist == pytest.approx(there, abs=1e-6)
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     poi.step(state, pad, reg, DT)
     assert math.hypot(*state.wrist) < 1e-2
 
@@ -619,7 +619,7 @@ def test_a_resets_the_weight_to_hang_still_and_the_wrist_home():
     on(reg, state, pad)
     circle(reg, state, pad, 2.0)
     assert reach(state) > 0.3 and math.hypot(*state.ball_v) > 0.1
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     poi.step(state, pad, reg, DT)
     assert math.hypot(*state.wrist) < 0.01                  # home (this frame's push after)
     tip = state.tip()                                        # hanging under the tip
@@ -685,7 +685,7 @@ def test_a_reset_that_fires_both_leaves_the_pan_at_the_poi_hanging_from_zero():
     for _ in range(30):
         dev.io.frame()
         dev.act(router)
-    dev.io.frame(hold=("A",))
+    dev.io.frame(hold=("S",))
     dev.act(router)                                    # the totem's reset zeroes the pan
     for _ in range(30):
         dev.io.frame()

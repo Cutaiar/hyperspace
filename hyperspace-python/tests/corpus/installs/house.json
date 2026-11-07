@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.project/3",
+ "schema": "hyperspace.install/1",
  "name": "house",
  "note": "The eight house moods on F1-F8 (library/presets/). Until plan 14 WP3 this was the factory `default` show; the party show opens now (decision 22).",
  "startup": "BIG BLUE WAVE",
@@ -13,6 +13,6 @@
   "HEX ENGINE",
   "INVERSE HALO"
  ],
- "session": {},
+ "tuning": {},
  "modules": {}
 }

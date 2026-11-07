@@ -69,7 +69,7 @@ from . import undo as undos
 from .fx import FxState
 from .ghost import GhostState
 from .learn import Learn
-from .library import DeckProject, Marks, MetaMarks
+from .library import DeckInstall, Marks, MetaMarks
 from .loadable import LoadedPatch
 from .lookback import DreamState
 from .outputs import Offscreen, View, preview_size
@@ -217,7 +217,7 @@ class Deck:
         library = library.base           # (a deck's own view, `Deck.beside`: the one library)
         on_deck = library.on_deck()      # this deck's bank and loadable patches (plan 44 D5a)
         s = ViewState()
-        reg = build_registry(s, control, audio, on_deck.project,
+        reg = build_registry(s, control, audio, on_deck.install,
                              dream=dream if dream is not None else DreamState(),
                              fx=fx if fx is not None else FxState(),
                              ghost=ghost if ghost is not None else GhostState(),
@@ -291,7 +291,7 @@ class Deck:
         # the project's startup loadable patch (D11), once, now that everything it lands
         # on exists; a missing one is said on the panel and the app runs on
         if startup:
-            library.project.load_startup()
+            library.install.load_startup()
         if warm:
             # every shape's faces, triangles and UVs built now, off the frame, the
             # startup loadable patch's shape first, so the first switch to a big one
@@ -378,7 +378,7 @@ class Deck:
             (self.router, "routing", "Router"),
             (self.loaded_patch, "loadable", "LoadedPatch"),
             # plan 44 D5a: its view of the library (getattr: a stand-in deck has none)
-            *([(on, "library", "DeckLibrary"), (on.project, "library", "DeckProject")]
+            *([(on, "library", "DeckLibrary"), (on.install, "library", "DeckInstall")]
               if (on := getattr(self.loaded_patch, "lib", None)) is not None else []),
             (self.loaded_patch.graph, "loadable", "GraphSection"),      # plan 26 A4
             (self.learn, "learn", "Learn"),
@@ -556,7 +556,7 @@ class MetaController:
     `mix` is the crossfader (`output.xfade`, `output.xfade_s`): `tick` runs a
     timed `crossfade` and follows the fader, and `parked` is the one list of decks
     off air, what `Host.off_air` reads. `row_load` is where a bank verb from a row
-    lands (each deck's `DeckProject` asks it), and `bars_load` why it may not now."""
+    lands (each deck's `DeckInstall` asks it), and `bars_load` why it may not now."""
 
     # (class-level: read by a meta controller from before a hot reload)
     timed: TimedFade | None = None
@@ -569,8 +569,8 @@ class MetaController:
                  mix: Mix | None = None):
         self.decks = (first, second)
         for deck in self.decks:
-            project = getattr(getattr(getattr(deck, "loaded_patch", None), "lib", None), "project", None)
-            if isinstance(project, DeckProject):     # (a stand-in deck has none)
+            project = getattr(getattr(getattr(deck, "loaded_patch", None), "lib", None), "install", None)
+            if isinstance(project, DeckInstall):     # (a stand-in deck has none)
                 project.meta = self
         reg = getattr(first, "reg", None)
         fader = reg.get("output.xfade") if reg is not None else None
@@ -622,12 +622,12 @@ class MetaController:
                     "are on air. Let it reach one end first")
         return None
 
-    def off_air_project(self) -> DeckProject | None:
+    def off_air_project(self) -> DeckInstall | None:
         """The deck off air's bank view (a stand-in deck has none)."""
-        project = getattr(getattr(getattr(self.off_air, "loaded_patch", None), "lib", None), "project", None)
-        return project if isinstance(project, DeckProject) else None
+        project = getattr(getattr(getattr(self.off_air, "loaded_patch", None), "lib", None), "install", None)
+        return project if isinstance(project, DeckInstall) else None
 
-    def row_load(self) -> tuple[DeckProject | None, str | None]:
+    def row_load(self) -> tuple[DeckInstall | None, str | None]:
         """Where a bank verb from a row lands, and why it may not: (where, None) or
         (None, why). The owner, 2026-11-06, row 700: a press always loads into the deck
         off air, whichever deck its player or the keys are on, and never touches the room.

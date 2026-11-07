@@ -10,8 +10,8 @@ restart.
 from __future__ import annotations
 
 
-class DeckProjectSlots:
-    """`library.DeckProject`'s own fields. The view shares its show's `__dict__`, so
+class DeckInstallSlots:
+    """`library.DeckInstall`'s own fields. The view shares its show's `__dict__`, so
     nothing of its own can live there."""
 
     __slots__ = ("lib", "meta")

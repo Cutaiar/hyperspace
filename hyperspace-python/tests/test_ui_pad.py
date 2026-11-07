@@ -92,7 +92,7 @@ def test_no_two_layout_entries_overlap():
 def test_glyphs_are_unique_and_short():
     gs = [c.glyph for c in gamepad.LAYOUT]
     assert len(set(gs)) == len(gs) and max(map(len, gs)) <= 5
-    assert {"A", "B", "X", "Y", "LB", "RB", "LS", "RS"} <= set(gs)
+    assert {"A", "B", "X", "Y", "LB", "RB", "LS", "RS"} <= set(gs)     # the Xbox face's letters
     assert {"↑", "↓", "←", "→"} <= set(gs) and set(gamepad.AXES) <= set(gs)
 
 
@@ -119,10 +119,10 @@ def test_every_factory_pad_row_lands_on_a_control(rig):
 
 def test_a_disabled_row_does_not_light(rig):
     table = rig.router.table
-    row = next(b for b in table.bindings if b.source == "pad:A")
-    assert "pad:A" in ui_pad.rows(table)
+    row = next(b for b in table.bindings if b.source == "pad:S")
+    assert "pad:S" in ui_pad.rows(table)
     row.enabled = False
-    assert "pad:A" not in ui_pad.rows(table)
+    assert "pad:S" not in ui_pad.rows(table)
 
 
 def test_a_free_axis_says_what_the_app_does_with_it(rig):
@@ -319,14 +319,14 @@ class _FakePad:
 
 def test_the_live_pad_shows_through_the_picture(rig):
     panel = rig.panel
-    a = next(c for c in gamepad.LAYOUT if c.source == "pad:A")
-    up = next(c for c in gamepad.LAYOUT if c.source == "hat:UP")
+    a = next(c for c in gamepad.LAYOUT if c.source == "pad:S")
+    up = next(c for c in gamepad.LAYOUT if c.source == "hat:N")
     ls = next(c for c in gamepad.LAYOUT if c.source == "pad:LSTICK")
     assert not ui_pad.held(None, a)                      # no pad: nothing is held
     assert ui_pad._stick(None, ls) == (0.0, 0.0)
-    panel.pad = _FakePad(down=("A",), hat=gamepad.HAT_UP, lanes=[1.0, 1.0, 0.5, 0.5, 0.0, 0.7])
+    panel.pad = _FakePad(down=("S",), hat=gamepad.HAT_UP, lanes=[1.0, 1.0, 0.5, 0.5, 0.0, 0.7])
     assert ui_pad.held(panel.pad, a) and ui_pad.held(panel.pad, up)
-    assert not ui_pad.held(panel.pad, next(c for c in gamepad.LAYOUT if c.source == "pad:B"))
+    assert not ui_pad.held(panel.pad, next(c for c in gamepad.LAYOUT if c.source == "pad:E"))
     assert ui_pad.lane(panel.pad, "RT") == 0.7
     assert ui_pad._stick(panel.pad, ls) == (1.0, -1.0)   # right and up, y down on screen
 
@@ -351,7 +351,7 @@ def test_it_draws_with_a_pad_on_it(rig, monkeypatch):
     reg["ui.pad_diagram"].set(True)
     reg["ui.panel"].set(False)
     before = _pad_frames(rig, monkeypatch)["texts"]
-    rig.panel.pad = _FakePad(down=("A", "LB", "LSTICK"), hat=gamepad.HAT_LEFT,
+    rig.panel.pad = _FakePad(down=("S", "LB", "LSTICK"), hat=gamepad.HAT_LEFT,
                              lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0])
     assert _pad_frames(rig, monkeypatch)["texts"] == before
 
@@ -364,7 +364,7 @@ def test_the_edge_draws_its_own_face_and_its_extras_without_overlap():
     assert gamepad.layout_for(None) is gamepad.LAYOUT
     assert gamepad.layout_for(models.MODELS["xbox"]) == gamepad.LAYOUT
     glyphs = {c.source: c.glyph for c in edge}
-    assert glyphs["pad:A"] == "✕" and glyphs["pad:Y"] == "△" and glyphs["axis:LT"] == "L2"
+    assert glyphs["pad:S"] == "✕" and glyphs["pad:N"] == "△" and glyphs["axis:LT"] == "L2"
     assert {"pad:TOUCH", "motion:roll", "pad:LP", "pad:RP", "pad:LFN", "pad:RFN"} <= set(glyphs)
     assert len(set(glyphs.values())) == len(glyphs)
     for i, a in enumerate(edge):
@@ -380,7 +380,7 @@ def test_touch_and_motion_rows_light_the_touchpad_and_the_tilt():
     edge = gamepad.layout_for(gamepad.models.MODELS["edge"])
     assert gamepad.control_in(edge, "touch:pinch").kind == "touchpad"
     assert gamepad.control_in(edge, "motion:shake").kind == "tilt"
-    assert gamepad.control_in(edge, "pad:A").glyph == "✕"
+    assert gamepad.control_in(edge, "pad:S").glyph == "✕"
     from types import SimpleNamespace as NS
     table = NS(of=lambda *s: [Binding("touch:x", "fx.zoomblur.cx", "position"),
                               Binding("motion:roll", "rot.phase.XY", "push", 0.25)])
@@ -422,7 +422,7 @@ def test_every_view_draws_every_pad_and_never_scrolls(rig, monkeypatch):
     reg = rig.reg
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     reg["ui.pad_diagram"].set(True)
-    pads = {"none": None, "xbox": _FakePad(down=("A",), lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0]),
+    pads = {"none": None, "xbox": _FakePad(down=("S",), lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0]),
             "edge": _edge_pad()}
     for panel_on in (False, True):
         reg["ui.panel"].set(panel_on)
@@ -480,9 +480,9 @@ def test_a_reading_of_no_pad_and_of_a_pad_without_extras():
     from hyperspace import ui_pad_views
     r = ui_pad_views.read(None)
     assert not r.on and r.touch is None and r.axes["LX"] == 0.5
-    fake = _FakePad(down=("B",), hat=gamepad.HAT_UP)
+    fake = _FakePad(down=("E",), hat=gamepad.HAT_UP)
     r = ui_pad_views.read(fake)
-    assert r.on and r.down == {"B"} and r.hat == gamepad.HAT_UP and r.motion is None
+    assert r.on and r.down == {"E"} and r.hat == gamepad.HAT_UP and r.motion is None
     assert not r.has("touch") and r.effects is None
 
 
@@ -502,7 +502,7 @@ def test_the_lab_drawings_place_every_control_inside_the_design_space():
     design space; an Edge shows its back and Fn buttons and touchpad, an
     Xbox pad and no pad only what they have."""
     from hyperspace import ui_pad_lab
-    pads = {"none": None, "xbox": _FakePad(down=("A",), lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0]),
+    pads = {"none": None, "xbox": _FakePad(down=("S",), lanes=[0.9, 0.1, 0.5, 0.5, 1.0, 0.0]),
             "edge": _edge_pad()}
     for view in ui_pad_lab.VIEWS:
         for name, pad in pads.items():
@@ -511,7 +511,7 @@ def test_the_lab_drawings_place_every_control_inside_the_design_space():
                 assert 0 <= x and x + w <= ui_pad_lab.DESIGN_W, (view, name, source)
                 assert 0 <= y and y + h <= ui_pad_lab.DESIGN_H, (view, name, source)
             got = {h[4] for h in hits}
-            assert {"pad:A", "pad:B", "pad:X", "pad:Y", "pad:LSTICK", "pad:RSTICK", "hat:UP",
+            assert {"pad:S", "pad:E", "pad:W", "pad:N", "pad:LSTICK", "pad:RSTICK", "hat:N",
                     "axis:LT", "axis:RT", "pad:LB", "pad:RB", "pad:GUIDE"} <= got, (view, name)
             extras = {"pad:LP", "pad:RP", "pad:LFN", "pad:RFN", "pad:TOUCH"}
             if name == "edge":
@@ -525,11 +525,11 @@ def test_the_cockpit_keeps_a_trail_and_a_ticker_on_the_panel():
     a stick trail per side, capped, and a press on the ticker once."""
     from hyperspace import ui_pad_lab
     st = {}
-    pad = _FakePad(down=("A",))
+    pad = _FakePad(down=("S",))
     for _ in range(ui_pad_lab.TRAIL + 10):
         _drawn("cockpit", pad, st)
     assert {len(t) for t in st["trails"].values()} == {ui_pad_lab.TRAIL}
-    assert [k for k, _t in st["events"]] == ["pad:A"]
+    assert [k for k, _t in st["events"]] == ["pad:S"]
 
 
 def test_the_horizon_is_cut_to_its_ring():
@@ -604,7 +604,7 @@ def test_the_nanovg_pen_draws_every_call_the_drawings_make():
     from hyperspace import ui_pad_lab, ui_pad_nvg, ui_pad_views
     assert set(ui_pad_lab.DRAW_CALLS) <= set(vars(ui_pad_nvg.NvgPen))
     from imgui_bundle import nanovg as real
-    pads = {"none": None, "xbox": _FakePad(down=("A",)), "edge": _edge_pad()}
+    pads = {"none": None, "xbox": _FakePad(down=("S",)), "edge": _edge_pad()}
     used: set[str] = set()
     for view in ui_pad_lab.VIEWS:
         for name, pad in pads.items():
@@ -697,7 +697,7 @@ def test_lanes_stay_readable_in_graphs_side_panel(rig, monkeypatch):
     rig.panel.pad = _edge_pad()
     rig.reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("lanes"))
     texts = _side_frame(rig.panel, monkeypatch, ui_graph.SIDE_MIN)
-    for name in ("axis:LX", "axis:RT", "hat:UP", "pad:A", "touch:pinch", "motion:roll"):
+    for name in ("axis:LX", "axis:RT", "hat:N", "pad:S", "touch:pinch", "motion:roll"):
         assert name in texts, (name, [t for t in texts if t.endswith("…")][:8])
 
 
@@ -773,10 +773,10 @@ def test_a_sticks_hover_names_both_its_axes_and_its_click():
                            lambda s: ("", None))
     for src in ("pad:LSTICK", "axis:LX", "axis:LY"):
         ctx.hit(10, 10, 50, 50, src)
-    ctx.hit(60, 60, 90, 90, "pad:A")
+    ctx.hit(60, 60, 90, 90, "pad:S")
     tip = ui_pad_views.tip_at(ctx, 20, 20)
     assert all(gamepad.control_name(s) in tip for s in ("pad:LSTICK", "axis:LX", "axis:LY"))
-    assert gamepad.control_name("pad:A") not in tip
+    assert gamepad.control_name("pad:S") not in tip
 
 
 def _fake_nvg(log: list):
@@ -831,15 +831,15 @@ def test_the_room_maps_the_drawings_hits_onto_the_screen(rig, monkeypatch):
     surf = ui_pad_nvg.surface_of(rig.panel)
     surf.vg, surf.nvg = object(), _fake_nvg([])
     monkeypatch.setitem(ui_pad_lab.VIEWS, "faithful",
-                        lambda pen, r, st: (pen.hit(0, 0, 1000, 620, "pad:A"),
-                                            pen.hit(500, 310, 10, 10, "pad:B")))
+                        lambda pen, r, st: (pen.hit(0, 0, 1000, 620, "pad:S"),
+                                            pen.hit(500, 310, 10, 10, "pad:E")))
     reg["ui.pad_view"].set(ui_pad_views.VIEWS.index("faithful"))
     c = _pad_frames(rig, monkeypatch)["ctx"]
     s = min(c.w / 1000, c.h / 620)
     ox, oy = c.x + (c.w - 1000 * s) / 2, c.y + (c.h - 620 * s) / 2
     at = {h[4]: h[:4] for h in c.hits}
-    assert at["pad:A"] == pytest.approx((ox, oy, ox + 1000 * s, oy + 620 * s))
-    assert at["pad:B"] == pytest.approx((ox + 500 * s, oy + 310 * s, ox + 510 * s, oy + 320 * s))
+    assert at["pad:S"] == pytest.approx((ox, oy, ox + 1000 * s, oy + 620 * s))
+    assert at["pad:E"] == pytest.approx((ox + 500 * s, oy + 310 * s, ox + 510 * s, oy + 320 * s))
     surf.vg = None                                  # the rig's panel closes without a NanoVG
 
 

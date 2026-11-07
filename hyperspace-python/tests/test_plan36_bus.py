@@ -34,7 +34,7 @@ def _party(tmp_path):
     """The headless app on the factory `party-trip`, and a GRAPH edit on it
     holding the loadable patches (their bus cuts, plan 44 D3), its undo steps counted."""
     app = make_app(tmp_path)
-    app.lib.load("presets", "party-trip")
+    app.lib.load("loadable", "party-trip")
     pushed: list[str] = []
     e = graphview.Edit(graph=app.loaded_patch.graph, push=pushed.append)
     e.loaded_patch = app.loaded_patch
@@ -113,13 +113,13 @@ def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_p
     loadable patch's file (`bus`) and read back by its load; a drag from All
     outputs' pin joins it again."""
     app, e, pushed = _party(tmp_path)
-    show, pre = app.lib.project, app.loaded_patch
+    show, pre = app.lib.install, app.loaded_patch
     show_dirty = show.is_dirty()
     section = app.loaded_patch.graph.spec.to_json()
     _, view = _build(app)
     cable, = _into(view, "output.1", "hands")
     assert e.unwire(cable) is None and pushed == ["cut output.all.hands → output.1.hands"]
-    assert pre.bus.cut == {G.bus_wire(1, "hands")} and app.lib.is_dirty("presets")
+    assert pre.bus.cut == {G.bus_wire(1, "hands")} and app.lib.is_dirty("loadable")
     assert show.is_dirty() == show_dirty                          # the show is not touched
     assert app.loaded_patch.graph.spec.to_json() == section
     g, view = _build(app)
@@ -133,14 +133,14 @@ def test_cutting_a_bus_cable_persists_in_the_loadable_and_empties_the_port(tmp_p
     doc = json.loads(path.read_text())
     assert doc["bus"] == {"cut": [{"from": "output.all.hands", "to": "output.1.hands"}]}
     assert "rig" not in json.loads(show.save("bus show").read_text())
-    assert not app.lib.is_dirty("presets")
-    app.lib.load("presets", "party-trip")                        # another preset: no cut
+    assert not app.lib.is_dirty("loadable")
+    app.lib.load("loadable", "party-trip")                        # another preset: no cut
     assert pre.bus == G.BusCuts()
-    app.lib.load("presets", "bus test")
-    assert pre.bus.cut == {G.bus_wire(1, "hands")} and not app.lib.is_dirty("presets")
+    app.lib.load("loadable", "bus test")
+    assert pre.bus.cut == {G.bus_wire(1, "hands")} and not app.lib.is_dirty("loadable")
     # joined again by a drag from the bus's pin: the loadable patch dirty
     assert e.wire("rout:output.all.hands", "rin:output.1/hands") is None
-    assert pre.bus == G.BusCuts() and app.lib.is_dirty("presets")
+    assert pre.bus == G.BusCuts() and app.lib.is_dirty("loadable")
     # a port's name alone: whatever is wired into it — here the bus cable
     assert e.unwire("output.2.guide") is None
     assert pre.bus.cut == {G.bus_wire(2, "guide")}

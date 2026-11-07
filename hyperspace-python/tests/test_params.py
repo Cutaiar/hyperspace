@@ -35,7 +35,7 @@ def make(tmp_path):
     view = ViewState()
     seed(tmp_path)                  # the corpus: the shipped loadable patches, the party and house shows
     lib = Library(tmp_path)
-    project = lib.project
+    project = lib.install
     reg = build_registry(view, control, audio, project)
     lib.attach(reg)
     return reg, view, control, audio, project
@@ -351,7 +351,7 @@ def test_loadable_bank_params(rig):
     view.shape = 12
     reg["preset.save.5"].fire()
     assert bank.bank[5] == "SPIRAL SILK"
-    assert bank.lib.read("presets", "SPIRAL SILK")["values"]["view.shape"] == 12
+    assert bank.lib.read("loadable", "SPIRAL SILK")["values"]["view.shape"] == 12
     assert not reg["preset.save.5"].modulatable and not reg["preset.select"].persist
 
 
@@ -472,7 +472,7 @@ def _full_registry(tmp_path):
 def test_every_persisted_group_is_patch_or_meta(tmp_path):
     """Plan 13 §4 / exit criterion 1: every persisted param is in exactly
     one part, the two tuples are disjoint, and each persisted id's first
-    segment is its group (Project._is_session splits an unattached file by it)."""
+    segment is its group (Install._is_session splits an unattached file by it)."""
     reg = _full_registry(tmp_path)
     assert not set(PATCH_GROUPS) & set(SHARED_META_GROUPS)
     persisted = [p for p in reg if p.persist]
@@ -682,7 +682,7 @@ def test_inst_layout_is_declared(tmp_path):
     assert r.view.inst_layout == 0 and r.undo.stack == []
 
     # a loadable patch that does not name it loads it as GRID: every corpus loadable patch
-    names = r.lib.list("presets")
+    names = r.lib.list("loadable")
     assert len(names) >= 5
     for name in names:
         lay.set(2)
@@ -696,7 +696,7 @@ def test_inst_layout_is_declared(tmp_path):
     sources = CORPUS.parent / "fixtures" / "factory-sources" / "presets"
     for f in sources.glob("*.json"):
         assert "inst_layout" not in f.read_text(), f.name
-    for f in (CORPUS / "presets").glob("*.json"):
+    for f in (CORPUS / "loadable").glob("*.json"):
         assert json.loads(f.read_text())["values"].get("view.inst_layout", 0) == 0, f.name
 
 

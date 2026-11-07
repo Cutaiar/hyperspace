@@ -96,6 +96,7 @@ from . import modifiers as modmod
 from .groupwords import group_word
 from .lookback import is_lookback_key
 from .routing import Binding, Macro, base_scheme, is_continuous, is_macro, meta_refusal
+from .routing_sources import nsew
 
 KIND = "hyperspace.patch"
 # plan 50: `/2` is `/1` plus the optional `group` key (a patch of one param
@@ -107,6 +108,9 @@ READS = (1, 2)
 # a module preset as it was before plan 50 — `hyperspace.preset/1` with a
 # `group` — read through `forward` as a `/2`, never written
 MODULE_KIND, MODULE_VERSION = "hyperspace.preset", 1
+# plan 57 (FQ4): a whole loadable patch's kind since `/11` (`graphmigrate.LOADABLE_KIND`, restated:
+# tests/test_format_lane.py holds them equal)
+LOADABLE_KIND = "hyperspace.loadable"
 # plan 50: the key that makes a patch one param group's, its value the
 # registry group (``"dream"``). Such a patch holds `values` — and, for a
 # group that lays out its own params (the analyzer's bands, `Library.extra`),
@@ -180,7 +184,7 @@ CHANNEL_WORDS = ("{name} is a media channel, this Mac's files; left out — a pa
                  "through a port")
 NOT_HELD_WORDS = "{name} is no node a patch holds; left out"
 # (a spawn, wave 3 P1) the single-instance nodes the host already has
-TAKEN_WORDS = ("{name} not spawned: this preset already has {nodes}, and a frame holds one "
+TAKEN_WORDS = ("{name} not spawned: this loadable patch already has {nodes}, and a frame holds one "
                "of each — delete it here first; nothing landed")
 SECOND_DREAM_WORDS = "{name} is a second dream, which no wire may touch (one live dream); left out"
 SEQ_WORDS = "the sequencer is the look's one, never a patch's; left out"
@@ -190,7 +194,7 @@ NO_NODE_WORDS = "{name}: no such node; left out"
 COPY_WORDS = "{name} draws {of} again: take {of} with it; left out"
 # (at a save only: a file an older build saved with a layer alone still reads)
 LAYER_WORDS = "{name} draws {of}: take {of} with it; left out"
-HOST_MACRO_WORDS = ("{mid} is not in the patch: its subscriber on {pid} stays the preset's "
+HOST_MACRO_WORDS = ("{mid} is not in the patch: its subscriber on {pid} stays the loadable patch's "
                     "(take {mid} with it)")
 NO_MACRO_NOTE = "{mid}: no free macro — its subscribers not spawned"
 NO_VOICE_NOTE = "{vid}: {why} — not spawned, nor its routes"
@@ -284,7 +288,8 @@ def shape_of(doc: Mapping) -> str:
     still a group patch's key, and `check` refuses it in one line,
     `GROUP_EMPTY_WORDS`)."""
     kind, version = _schema(doc)
-    if kind == MODULE_KIND and version is not None and version > MODULE_VERSION:
+    if kind == LOADABLE_KIND or (
+            kind == MODULE_KIND and version is not None and version > MODULE_VERSION):
         return LOADABLE_SHAPE
     if GROUP_KEY in doc:
         return GROUP_SHAPE
@@ -828,7 +833,10 @@ def read(doc: Mapping) -> Patch:
                          key=lambda e: (entry_name(e) or "", str(e))))
     m = _members_of({**doc, "nodes": nodes})
     wires = _in_order(dict(w) for w in doc.get("wires") or () if isinstance(w, Mapping))
-    routes = tuple(dict(r) for r in doc.get("routes") or () if isinstance(r, Mapping))
+    # (review of #435: a patch saved before bindings/4 says its pad sources in the old
+    # words; `nsew` is idempotent, so every read takes them into today's)
+    routes = tuple({**r, "source": nsew(r["source"])} if isinstance(r.get("source"), str)
+                   else dict(r) for r in doc.get("routes") or () if isinstance(r, Mapping))
     desk = tuple(dict(r) for r in doc.get("desk") or () if isinstance(r, Mapping))
     mods = tuple(sorted((_entry(x) for x in doc.get("modifiers") or () if isinstance(x, Mapping)),
                         key=lambda x: modmod.number(x.get("id")) or 0))

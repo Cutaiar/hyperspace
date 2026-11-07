@@ -60,7 +60,7 @@ def files(root: Path) -> list[Path]:
     for folder in sorted(p for p in root.iterdir() if p.is_dir()):
         if folder.name in SKIP_DIRS or folder.name.startswith("."):
             continue
-        found = _walk(folder) if folder.name == "presets" else sorted(folder.glob("*.json"))
+        found = _walk(folder) if folder.name in ("loadable", "presets") else sorted(folder.glob("*.json"))
         for f in found:
             if f.name.startswith(".") or ".bak-" in f.name or not f.is_file():
                 continue

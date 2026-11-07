@@ -121,7 +121,7 @@ def test_one_press_replaces_the_hosts_dream_as_one_undo_step(rig):  # noqa: F811
         assert "render:dream" in group["nodes"]
         assert {p["id"] for p in graphview.open_ports(spec, group)} >= {"in"}
         head = ui_graph._state(rig.panel)["said"]
-        assert "replaced this preset's dream: its wires: lookback → dream.image" in head
+        assert "replaced this loadable patch's dream: its wires: lookback → dream.image" in head
         assert files(rig.lib.home) == home                        # nothing written
         # its result drawn: the canvas holds the patch's dream, with its knobs
         frame(rig.panel, "graph")
@@ -218,7 +218,7 @@ def test_the_sheet_is_stale_when_another_loadable_loads_under_it(rig):  # noqa: 
     slug = dreamy(rig)
     landing, choices = sheet_up(rig, slug)
     assert landing.asked
-    rig.lib.load("presets", "party-wake")
+    rig.lib.load("loadable", "party-wake")
     before = state(rig)
     e = ui_graph.group_edit(rig.panel)
     name = landing.group["name"]
@@ -267,7 +267,7 @@ def test_the_head_says_both_when_a_replace_and_controls_are_asked(rig):  # noqa:
     assert landing.conflicts
     said = ui_graph._state(rig.panel)["said"]
     assert ui_graph.SHEET_REPLACES.format(nodes="dream") in said
-    assert "the preset already uses" in said
+    assert "the loadable patch already uses" in said
 
 
 def test_the_drag_does_not_light_the_replaced_dreams_own_cable(rig, monkeypatch):  # noqa: F811
@@ -485,7 +485,7 @@ def test_the_panes_sections_are_the_same_split():
 def test_a_saved_loadable_is_unmoved_by_who_draws_its_params(rig, name):  # noqa: F811
     """Behaviour-neutral: the section and every `dream.*` value read back as
     the file has them, the row ids as they were."""
-    path = CORPUS / "presets" / f"{name}.json"
+    path = CORPUS / "loadable" / f"{name}.json"
     file = json.loads(path.read_text())
     on_graph(rig, name)
     for k, v in file.get("values", {}).items():

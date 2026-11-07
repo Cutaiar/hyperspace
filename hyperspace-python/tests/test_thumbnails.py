@@ -45,7 +45,7 @@ class Clock:
 def party(rig):
     """`test_graph_legible.party` over the corpus: party-trip is test data
     since 2026-10-28, seeded into the rig's home first (never over a file)."""
-    seed(rig.lib.home, "presets")
+    seed(rig.lib.home, "loadable")
     return _party(rig)
 
 

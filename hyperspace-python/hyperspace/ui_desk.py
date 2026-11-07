@@ -85,7 +85,7 @@ from . import apc40, graphview, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .groupwords import group_part, group_word
 from .params import PATCH_GROUPS, Kind
-from .routing import FINE_PARAM, Binding, fine_gives_way, led_shade
+from .routing import FINE_PARAM, Binding, fine_gives_way, layer_word, led_shade
 from .ui_diagram import EDGE, GAP, GLYPH_PX, HEAD_H, PAD  # shared with the pad (ui_diagram.py)
 
 MIN_W = 300.0              # the window is never narrower, px
@@ -152,13 +152,14 @@ def _node_ink(away: bool) -> imgui.ImVec4:
     return imgui.ImVec4(*graphview.NODE_MODE_RGB, NODE_FAINT if away else 1.0)
 
 
-def filled_rows(table) -> dict[int, bool]:
-    """The rows node mode fills on the first desk, by `id`, each with whether the desk is
-    on the other `Deck`: asked once a draw, since `_edge` is asked once a control."""
-    rows = table.node_rows()
+def filled_rows(table, role: str | None = None) -> dict[int, bool]:
+    """The rows node mode fills on a controller (`role`; None, the first desk), by `id`, each
+    with whether it is on the other `Deck`: asked once a draw, since `_edge` is asked once a
+    control."""
+    rows = table.node_rows(role)
     if not rows:
         return {}
-    away = bool(table.node_row_away(rows[0]))
+    away = bool(table.node_row_away(rows[0], role))
     return {id(b): away for b in rows}
 
 
@@ -357,7 +358,7 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
                 "to let go"), True
     b = lit_cached(panel, table).get(c.glyph)
     does = ((text(panel.reg, b) or "an empty slot") if b is not None
-            else f"unmapped on the {table.layer} layer")
+            else f"unmapped on the {layer_word(table.layer)} layer")
     return f"{why}: {does}", False
 
 
@@ -386,7 +387,7 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     lib = getattr(panel, "library", None)
     key = (getattr(getattr(panel, "learn", None), "control", None), _key(table),
            getattr(table, "macros_serial", 0),
-           lib.current("presets") if lib is not None else None)
+           lib.current("loadable") if lib is not None else None)
     hit = st.get("offer")
     if hit is not None and hit[0] == key:
         return hit[1]
@@ -435,7 +436,7 @@ def _offer_all(panel, used, rest) -> None:
     menu per group."""
     if not imgui.begin_popup("##offer_all"):
         return
-    ui._micro("this preset", ui.DIM)
+    ui._micro("this patch", ui.DIM)
     if not used:
         imgui.text_disabled("nothing it moves, routes or switches on")
     for pid, why in used:
@@ -488,7 +489,7 @@ def _offer(panel, table, origin, unit) -> None:
         _offer_all(panel, used, rest)
         room_ = imgui.get_content_region_avail().x
         if not used:
-            imgui.text_disabled(ui.fit_text("nothing of this preset's", room_))
+            imgui.text_disabled(ui.fit_text("nothing of this patch's", room_))
         for pid, why in used:
             _offer_item(panel, pid, why, room_)
     finally:
@@ -522,7 +523,7 @@ def _offer_chip(panel) -> None:
     if hit:
         imgui.open_popup("##offer_all")
     if imgui.is_item_hovered():
-        ui.tooltip("Every param: this preset's first, then the rest by group")
+        ui.tooltip("Every param: this patch's first, then the rest by group")
 
 
 def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
@@ -652,10 +653,10 @@ def _room(panel) -> tuple[float, float, float, float]:
 # STOP ALL resets the analyzer to the selected scene and a second press within
 # 8 s undoes it; QUANT walks the bank, not the preset list
 DESK_WORDS = {
-    "overlay.on": "Overlay (if config allows)",
-    "overlay.passthrough": "Click-through (overlay)",
+    "output.overlay": "Overlay (if config allows)",
+    "output.passthrough": "Click-through (overlay)",
     "scene.reset_all": "Reset analyzer (again: undo)",
-    "preset.next": "Next bank preset",
+    "preset.next": "Next bank patch",
     FINE_PARAM: "Fine (hold)",
 }
 # an enum `set` row whose choice's name alone does not say what the
@@ -791,7 +792,7 @@ def _layer_word(table, b: Binding) -> str:
         return "sequencer page"
     if b.layer is None:
         return "invariant"
-    return f"{b.layer} layer"
+    return f"{layer_word(b.layer)} layer"
 
 
 def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
@@ -799,7 +800,7 @@ def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     preset layer", then Akai's name. Without a registry (or when the text
     is the id) the param's words are left out."""
     if b is None:
-        return f"{c.glyph} · unmapped — dark on the {table.layer} layer\n{c.name}"
+        return f"{c.glyph} · unmapped — dark on the {layer_word(table.layer)} layer\n{c.name}"
     says = text(reg, b) if reg is not None else b.target
     if reg is not None and empty(reg, b):
         says = f"slot {round(b.value) + 1}: empty"
@@ -837,7 +838,7 @@ def fit_deck(deck: str, away: str, beside: str, room: float, width=None) -> str:
 def _loadable_name(panel) -> str:
     pr = ui_routing._loaded_patch(panel)
     cur = getattr(pr, "current", None) if pr is not None else None
-    return cur or "no preset"
+    return cur or "no patch"
 
 
 def _led(panel, b: Binding) -> tuple[float, float, float] | None:
@@ -1151,7 +1152,7 @@ def _header(panel, table) -> None:
     if c is not None:
         line, can = pick_line(panel, table, c)
         line = f"{line} · {math.ceil(left(panel))} s"
-        words = (ui._micro_width("apc40") + ui._micro_width(f"{table.layer} layer  ·  shift")
+        words = (ui._micro_width("apc40") + ui._micro_width(f"{layer_word(table.layer)} layer  ·  shift")
                  + imgui.calc_text_size(f"{_loadable_name(panel)}").x + 40)
         alone = imgui.calc_text_size(line).x > end - start.x - words
     if alone:
@@ -1178,7 +1179,7 @@ def _header(panel, table) -> None:
     else:
         glob = table.layer == "global"
         imgui.same_line()
-        ui._micro(f"{table.layer} layer" + ("  ·  shift" if glob else ""),
+        ui._micro(f"{layer_word(table.layer)} layer" + ("  ·  shift" if glob else ""),
                   ui.RED if glob else ui.DIM)
         if imgui.is_item_hovered():
             ui.tooltip("The layer that is up — SHIFT (⇧) latches it. Lit controls do "

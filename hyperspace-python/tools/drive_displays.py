@@ -8,7 +8,7 @@ stderr; a step that doesn't do what it should stops the run.
 
 The rows go in `<home>/displays.json`: its library, as the driver's home names no other. It
 never reaches the real library. A home whose `displays.json` you wrote first is a launch from
-those rows: a render on two displays, say. Loads go through `panel.library.load("presets", name)`.
+those rows: a render on two displays, say. Loads go through `panel.library.load("loadable", name)`.
 
 `DISPLAYS_FADE=1`: first, a real crossfade with an output's further display made square, so its
 shape isn't its first display's (party-tumble on both decks, shots at the fade's middle and with
@@ -58,7 +58,7 @@ def banner(panel, words):
 def script(d, panel):
     run = panel.displays
     assert run is not None, "no rows: was this --laptop?"
-    panel.library.load("presets", "party-tumble")
+    panel.library.load("loadable", "party-tumble")
     panel.reg["ui.page"].set(PAGE_KEYS.index("output"))
     yield from d.wait(10)
     if os.environ.get("DISPLAYS_FADE"):

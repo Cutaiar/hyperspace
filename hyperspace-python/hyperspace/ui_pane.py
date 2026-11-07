@@ -7,7 +7,7 @@ of sections, each a header that folds and unfolds by a click:
 - **selection** — the selected thing's details (`ui_graph._side`), or, with
   nothing selected, a line in words saying so;
 - every other section (`SECTIONS`) — the body that was a page, drawn by the
-  page's own function (`Panel._page_presets`, `ui_fx.page`, …), so a
+  page's own function (`Panel._page_loadable`, `ui_fx.page`, …), so a
   section is one row there.
 
 **The focus** (stage 3). `ui.page` no longer switches a page: what a key
@@ -110,7 +110,7 @@ def _wrapped(key: str) -> Callable:
 # rows, then the room and the meta controller
 SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("selection", "selection", (), None),
-    ("presets", "presets", ("presets",), _paged("presets")),
+    ("loadable", "patches", ("loadable",), _paged("loadable")),
     ("view", "view", ("view",), _paged("view")),
     ("fx", "fx", ("fx",), _fx),
     ("lookback", "lookback", ("dream",), _paged("lookback")),
@@ -132,7 +132,7 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
 KEYS = tuple(k for k, *_ in SECTIONS)
 # beside the canvas: selection and loadable patches open at first (stage 1); every
 # section stages 2 and 3 added folded (rec: a fresh Mac's pane reads as it did)
-DEFAULT_OPEN = {k: k in ("selection", "presets") for k in KEYS}
+DEFAULT_OPEN = {k: k in ("selection", "loadable") for k in KEYS}
 DEFAULT_BELOW = {k: k == "selection" for k in KEYS}     # the narrow page's band
 LAYOUTS = {"open": DEFAULT_OPEN, "below": DEFAULT_BELOW}   # ui.json's pane.<layout>
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)

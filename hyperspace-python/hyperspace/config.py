@@ -221,7 +221,7 @@ like the rename above. The SYSTEM page shows both.
                             # the next joystick no other pad entry reads. Several pads:
                             # one gamepad entry each; the first is the primary (the
                             # unqualified rows, the sticks' camera job), another's rows
-                            # carry its role (pad@p2:A, axis@p2:LX) — Learn pad writes them
+                            # carry its role (pad@p2:S, axis@p2:LX) — Learn pad writes them
     dial_left = "petal"     # how each stick reads as a dial (gamepad.dial) in a loadable
     dial_right = "blend"    # patch that names none: "petal", hard sectors, or "blend",
                             # neighbours crossfade (its own `pad.dial.*` wins). Read at launch,
@@ -341,7 +341,7 @@ DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 for
 # plan 35 M: an entry's `through` (plan 21 WP2's switch) is the loadable patch's
 # wiring now — read, ignored, said once
 THROUGH_IS_WIRING = ("config: [[output.screens]] output {n}: through is wiring now (plan 35) — "
-                     "OUTPUT's 'hands through the effects' writes it into the preset")
+                     "OUTPUT's 'hands through the effects' writes it into the patch")
 
 # `[[devices]]` (plan 27 B1): the old per-adapter tables, in today's poll
 # order, each with the kind and the role its entry gets (None: the MIDI
@@ -940,7 +940,7 @@ def load(path: Path | None = None) -> dict:
     # an absolute path. A leftover `git` key (the old git switch, removed) is said once
     if "git" in cfg["library"]:
         cfg["library"].pop("git")
-        note = ("config: [library] git is gone (plan 25) — presets are shared "
+        note = ("config: [library] git is gone (plan 25) — patches are shared "
                 "through [library] path; remove the line")
         _note(cfg, note)
         print(note, file=sys.stderr)

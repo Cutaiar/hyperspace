@@ -122,7 +122,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
 # plan 36 T3: the corpus loadable patches' sources (the corpus files are their `/7`)
 LIBRARY = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
-SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
+SOURCES = {"loadable": ROOT / "tests" / "fixtures" / "presets",
            "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32",
            # R15 (final review): a /4 whose GRAPH layout is in the canvas's
            # old ids (render:media.a, render:hands …), as the owner's are
@@ -187,7 +187,7 @@ def test_every_schema_is_among_the_sources():
 def _six(raw: bytes, name: str) -> dict:
     """A save's document, checked for the newest schema in today's words."""
     doc = json.loads(raw)
-    assert doc["schema"] == "hyperspace.preset/10", name
+    assert doc["schema"] == "hyperspace.loadable/11", name
     graph = doc.get("graph")
     assert isinstance(graph, dict) and graph.get(G.FRAME_KEY) == G.WIRED_FRAME, name
     from hyperspace import graphmigrate as M
@@ -212,7 +212,7 @@ def test_every_old_loadable_saves_as_six_and_is_a_fixed_point(tmp_path):
         again = tmp_path / f"{k}-six" / path.name
         again.parent.mkdir(parents=True)
         again.write_bytes(first)
-        assert saved_bytes(tmp_path / f"{k}b", "presets", again) == first, name
+        assert saved_bytes(tmp_path / f"{k}b", "loadable", again) == first, name
 
 
 def test_the_driven_channel_sources_keep_their_switches_through_six(tmp_path):
@@ -228,10 +228,10 @@ def test_the_driven_channel_sources_keep_their_switches_through_six(tmp_path):
 def _five_rig(tmp_path, name):
     from test_plan31_wiring import make_app
 
-    (tmp_path / "presets").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(SOURCES["presets"] / f"{name}.json", tmp_path / "presets" / f"{name}.json")
+    (tmp_path / "loadable").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(SOURCES["loadable"] / f"{name}.json", tmp_path / "loadable" / f"{name}.json")
     app = make_app(tmp_path)
-    app.lib.load("presets", name)
+    app.lib.load("loadable", name)
     return app
 
 
@@ -246,7 +246,7 @@ def test_a_moved_node_in_an_old_layout_saves_in_todays_ids(tmp_path):
     pr.layout["render:channel.a"] = [10, 20]
     pr.layout["render:hands.2"] = [30, 40]
     doc = pr.document("glimmer-bug")
-    assert doc["schema"] == "hyperspace.preset/10"
+    assert doc["schema"] == "hyperspace.loadable/11"
     lay = doc["layout"]
     assert lay["render:channel.a"] == [10, 20] and lay["render:hands.2"] == [30, 40]
     assert not [k for k in lay if k.startswith(("render:media.", "render:ghost"))]
@@ -279,7 +279,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
         edited = {**wired, "wires": wires}
         gs.land(G.read_graph(edited), copy.deepcopy(edited))
         doc = app.loaded_patch.document("branch-two-sizes")
-        assert doc["schema"] == "hyperspace.preset/10", name
+        assert doc["schema"] == "hyperspace.loadable/11", name
         assert doc["graph"] == G.read_graph(edited).to_json(), name
         assert "backdrop.history" not in doc["values"], name
 
@@ -290,9 +290,9 @@ def test_an_untouched_corpus_loadable_saves_as_its_load(tmp_path):
     from test_plan31_wiring import make_app
 
     app = make_app(tmp_path)
-    app.lib.load("presets", "party-trip")
+    app.lib.load("loadable", "party-trip")
     doc = app.loaded_patch.document("party-trip")
-    assert doc["schema"] == "hyperspace.preset/10"
+    assert doc["schema"] == "hyperspace.loadable/11"
     assert doc["graph"] == app.loaded_patch.graph.free_doc()
 
 
@@ -349,7 +349,7 @@ def test_the_missing_effects_wires_survive_a_save(tmp_path):
     assert app.loaded_patch.load_doc(doc) == [] and app.loaded_patch.notes == []
     assert main_run(app.loaded_patch.graph.spec) == ("foo", "acid")
     out = app.loaded_patch.document("t")
-    assert out["schema"] == "hyperspace.preset/10"
+    assert out["schema"] == "hyperspace.loadable/11"
     assert main_run(G.read_graph(out["graph"])) == ("foo", "acid")
 
 
@@ -379,7 +379,7 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
                 assert {"from": f"channel.{c}", "to": f"{sw}.in{i}"} in free["wires"]
             assert not [w for w in free["wires"] if w["to"] == end and w["from"] != sw]
         doc = app.loaded_patch.document(name)
-        assert doc["schema"] == "hyperspace.preset/10", name          # (row 394)
+        assert doc["schema"] == "hyperspace.loadable/11", name          # (row 394)
         assert [n for n in doc["graph"]["nodes"] if n["kind"] == "switch"] == [
             {"kind": "switch", **({"instance": 2} if sw == "switch.2" else {})}
             for sw, *_ in switches]
@@ -397,7 +397,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
     from test_plan31_wiring import make_app
 
     app = make_app(tmp_path)
-    app.lib.load("presets", "party-acid")
+    app.lib.load("loadable", "party-acid")
     gs = app.loaded_patch.graph
     run = main_run(gs.spec)
     # (plan 36 T3: an effect in no run exists only where the section names
@@ -408,7 +408,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path)
     app.reg[f"fx.{off}.on"].set(True)
     assert main_run(gs.spec) == run
     doc = app.loaded_patch.document("after")
-    assert doc["schema"] == "hyperspace.preset/10" and main_run(G.read_graph(doc["graph"])) == run
+    assert doc["schema"] == "hyperspace.loadable/11" and main_run(G.read_graph(doc["graph"])) == run
 
 
 def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):
@@ -422,7 +422,7 @@ def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):
     r = Renderer(ctx, fx=app.reg.fx_state)
     app.loaded_patch.graph.attach(r)
     if slug is not None:
-        app.lib.load("presets", slug)
+        app.lib.load("loadable", slug)
     if doc is not None:
         assert app.loaded_patch.load_doc(doc) == []
     return app, r
@@ -561,7 +561,7 @@ def test_a_wired_effect_whose_file_goes_reads_through_and_returns(ctx, tmp_path)
 # nothing". In a section with a `frame` run a wire is a wire: nothing comes
 # out of glimmer, so it reaches nothing and is not drawn — all three agree.
 
-GLIMMER = SOURCES["presets"] / "glimmer-bug.json"
+GLIMMER = SOURCES["loadable"] / "glimmer-bug.json"
 
 
 def _glimmer_section(swap: bool = False) -> dict:

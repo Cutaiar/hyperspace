@@ -17,7 +17,15 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   code (hyperspace/scenes/band/, control.py) — a band
                   loadable patch in the library is the user's own, and a strip
                   load tells the scene combo through ``on_load``.
-  project         the show — ``{"schema": "hyperspace.project/3",
+  install file    the meta controller's file, one per install (plan 57 §5):
+                  ``installs/<name>.json``, ``{"schema": "hyperspace.install/1",
+                  "name", "note", "startup", "bank", "plays", "tuning", "modules",
+                  "layout"}``. ``tuning`` is what the show below called ``session``;
+                  ``plays`` is the playlist a launch starts (SM6). A library not
+                  yet moved by tools/migrate_library.py opens as it is and saves
+                  in its old folders, newest schema (`loadable_dir`, `installs_dir`,
+                  `not_moved`); the reader of its old files goes in CL1.
+  project         the show, the file before it — ``{"schema": "hyperspace.project/3",
                   "name", "note", "startup": <loadable patch name>, "bank": [8–24
                   × <loadable patch name> | null], "session": <meta controller snapshot>,
                   "modules": {group: name | {"name", "values", …}}}``, in
@@ -28,16 +36,16 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   layout). The **bank** is twenty-four pointers to loadable patch
                   files (``SLOTS``; loadable.py) — the desk's pads: the
                   APC40's clip rows 1, 4 and 5 load one each
-                  (``Project.load_slot``), F1–F8 the first eight
+                  (``Install.load_slot``), F1–F8 the first eight
                   (``F_KEYS``), ⇧F1–F8 save the live state *as* it
                   (``save_slot``); ``startup`` is the loadable patch Home brings
-                  up (``Project.home``) and a launch opens with, kept in
+                  up (``Install.home``) and a launch opens with, kept in
                   the file, set by nothing on the panel since 2026-10-28.
                   The file holds the bank only as far as its last filled
                   slot, never fewer than eight entries (``bank_doc``, plan
                   19 WP1), and the first write that makes a file's bank
                   longer keeps the eight-slot file beside it first
-                  (``<file>.bak-v2-bank8``, ``Project.write``). A module
+                  (``<file>.bak-v2-bank8``, ``Install.write``). A module
                   the project names by a loadable patch that carries a ``layout``
                   gets that layout back on load, the same road a strip
                   load takes. A schema-1 project is refused (no old-schema
@@ -48,7 +56,7 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   ``cloud.*``) are each loadable patch's now. A ``/2`` show is
                   read as its ``/3`` (`show_without_look`): what it held
                   of the look is handed to every loadable patch before ``/10``
-                  a load reads while it is open (``Project.old_look``,
+                  a load reads while it is open (``Install.old_look``,
                   ``old_cuts``), and its first write keeps the ``/2``
                   beside it (``<file>.bak-v2-look``).
 
@@ -71,13 +79,13 @@ the app starts on a blank loadable patch in an unsaved show.
 
   $HYPERSPACE_HOME/<group>/<slug>.json       module presets (default ~/Hyperspace,
                                  or the [library] path, plan 25)
-  $HYPERSPACE_HOME/presets/[<folder>/…/]<slug>.json
+  $HYPERSPACE_HOME/loadable/[<folder>/…/]<slug>.json
                                  loadable patches, in folders if the owner made
                                  any (plan 48): listed every folder down,
                                  less hidden ones, by folder-qualified name
                                  (``party/TRIP``; ``_index``, `path_slug`)
   $HYPERSPACE_HOME/patches/<slug>.json       patches (plan 40)
-  $HYPERSPACE_HOME/projects/<slug>.hyp.json  shows
+  $HYPERSPACE_HOME/installs/<slug>.json      install files
   $HYPERSPACE_HOME/config.toml, bindings.json (a midi_map.json is only
                                  migrated in and read once, routing.py)
   $HYPERSPACE_HOME/bindings/      the old routing presets: made loadable patches
@@ -99,9 +107,9 @@ the app starts on a blank loadable patch in an unsaved show.
 table path go through it). On the first run the working-directory ``config.toml``
 and ``midi_map.json`` are copied in — originals are left alone.
 
-Which show opens (decision 22, plan 14 WP3): the one opened last, its
-name in ``<home>/last_show`` (one line, written by every load and save
-as). None, or one that is gone or will not read (the reason in `error`),
+Which install opens (decision 22, plan 14 WP3): the one opened last, its
+name in ``<home>/last_install`` (one line, written by every load and save
+as; a ``last_show`` is read until then). None, or one that is gone or will not read (the reason in `error`),
 and the app starts on an unsaved show called ``untitled`` with an empty
 bank (``_open_default``).
 
@@ -139,9 +147,9 @@ from typing import Any
 from . import patches as patchdoc
 from . import undo
 from .graph import BusCuts
-from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
+from .graphmigrate import CAMERA_NODES, EYE_IDS, OLD_KIND, is_look_id, renamed_layout, retired
 from .groupwords import group_word
-from .hot_slots import DeckLibrarySlots, DeckProjectSlots
+from .hot_slots import DeckInstallSlots, DeckLibrarySlots
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -163,26 +171,29 @@ SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
 # never shorter. It is imported from params, where the F-keys' load / save
 # triggers are declared (params may not import library); `library.F_KEYS`
 # is the name the rest of the app reads.
-# BANK8_BACKUP: the copy `Project.write` makes before the first write that
+# BANK8_BACKUP: the copy `Install.write` makes before the first write that
 # puts more than F_KEYS entries in a show file, <file>.bak-v2-bank8
 # (routing.backup's schema argument)
 BANK8_BACKUP = "2-bank8"
-# SPRING_BACKUP: the copy `Project.write` makes before the first write that
+# SPRING_BACKUP: the copy `Install.write` makes before the first write that
 # drops a show's stick spring as it was stored before 2026-10-29
 # (`desk.pad.hz` / `.damp`, read as today's knobs by routing.renamed_session),
 # <file>.bak-v2-spring
 SPRING_BACKUP = "2-spring"
-# EYE_BACKUP (plan 43 C2): the copy `Project.write` makes before the first
+# EYE_BACKUP (plan 43 C2): the copy `Install.write` makes before the first
 # write that drops a show's eye — `eye.fov` / `eye.distance` in its
-# `session`, which the loadable patches hold since `/9` (`Project.old_eye`) —
+# `session`, which the loadable patches hold since `/9` (`Install.old_eye`) —
 # <file>.bak-v2-eye
 EYE_BACKUP = "2-eye"
-# LOOK_BACKUP (plan 44 D3): the copy `Project.write` makes before the first
+# LOOK_BACKUP (plan 44 D3): the copy `Install.write` makes before the first
 # write of a `/2` show as `/3` — which drops its bus cuts (`rig`) and the
 # hands' and clouds' looks from its `session`, each loadable patch's since `/10` —
 # <file>.bak-v2-look
 LOOK_BACKUP = "2-look"
-LOADABLE = "presets"       # the loadable patches' group, a document kind (loadable.py)
+LOADABLE = "loadable"       # the loadable patches' group and folder, a document kind (loadable.py)
+# plan 57 (FQ4): the folder they sat in until the one migration. A library not yet
+# moved is read and saved there (`loadable_dir`); goes in CL1
+OLD_LOADABLE = "presets"
 # (plan 24 C3's desk templates, `<root>/desk/`, are retired — plan 44 D3,
 # the owner, 2026-11-03: neither library held one)
 # <root>/patches/<slug>.json (plan 40 P1): the patches — a group of nodes
@@ -227,18 +238,26 @@ _TRASHED = re.compile(r"(?P<stem>.+)\.(?P<stamp>\d{8}-\d{6})(?:-(?P<n>\d+))?(?P<
 HOME_ENV = "HYPERSPACE_HOME"
 DEFAULT_HOME = Path("~/Hyperspace")
 
-LOADABLE_SCHEMA = "hyperspace.preset/2" # a preset: the performance (loadable.py)
-PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: the meta controller, the pads, startup
+LOADABLE_SCHEMA = "hyperspace.preset/2" # the first rung of a loadable patch's ladder (loadable.py)
+# plan 57 §5 (FQ5): one install file per install, the tuning with the bank beside it.
+# `<library>/installs/<name>.json`; shows (below) are read until CL1 and never written
+INSTALL_SCHEMA = "hyperspace.install/1"
+INSTALLS = "installs"
+INSTALL_SUFFIX = ".json"
+TUNING = "tuning"                   # an install file's key for the meta controller's values
+PLAYS = "plays"                     # SM6: the playlist a launch starts by itself
+LAST_INSTALL = "last_install"       # <home>/last_install: the install opened last
+PROJECT_SCHEMA = "hyperspace.project/3"   # plan 44 D3: a show, the file before the install file
 PROJECT_V2 = "hyperspace.project/2"        # read as its /3 (`show_without_look`), once
 PROJECT_V1 = "hyperspace.project/1"        # refused: no old-schema support (2026-10-25)
 PROJECT_SUFFIX = ".hyp.json"
 PROJECTS = "projects"
-LAST_SHOW = "last_show"             # <home>/last_show: the show opened last
+LAST_SHOW = "last_show"             # <home>/last_show: read once, into LAST_INSTALL
 UNTITLED = "untitled"
-# the tail of save-as's note on a full bank (`Project.save_new`)
-BANK_FULL = "the bank is full: it is in the preset list"
-# what `Project.home` says when the show names no startup loadable patch (plan 15 WP2)
-HOME_UNSET = "home: this show names no startup preset"
+# the tail of save-as's note on a full bank (`Install.save_new`)
+BANK_FULL = "the bank is full: it is in the patch list"
+# what `Install.home` says when the show names no startup loadable patch (plan 15 WP2)
+HOME_UNSET = "home: this install names no startup patch"
 # plan 28 N2: where the GRAPH page's nodes sit, ``{"<node id>": [x, y]}`` —
 # a show's own key for the meta controller's nodes (devices, the analyzer, the LFOs,
 # the outputs), a loadable patch's (loadable.LAYOUT_KEY) for the look's. No key: every
@@ -300,6 +319,57 @@ class LibraryError(Exception):
     pass
 
 
+# what a Mac on this build says of a library the migration has not reached (plan 57 §7a,
+# plan 58 §2a): it opens and saves where it is, and the tool finishes the move
+NOT_MOVED_WORDS = ("this library still has files in {where}: it opens, and saves stay where "
+                   "they are. Quit on both Macs, then run tools/migrate_library.py --apply")
+NEWER_WORDS = ("{file} was saved by a newer build ({schema}): on this Mac run git pull and "
+               "uv sync, then restart. The file is untouched")
+
+
+def loadable_dir(root: Path) -> Path:
+    """The loadable patches' folder under `root`: `loadable/`, or `presets/` while a library
+    not yet moved has only that (plan 57). A fresh library is `loadable/`."""
+    new, old = root / LOADABLE, root / OLD_LOADABLE
+    return old if not new.is_dir() and old.is_dir() else new
+
+
+def installs_dir(root: Path) -> Path:
+    """Where a new install file goes under `root`: `installs/`, or `projects/` while a
+    library not yet moved has only that."""
+    new, old = root / INSTALLS, root / PROJECTS
+    return old if not new.is_dir() and old.is_dir() else new
+
+
+def install_stem(file_name: str) -> str:
+    """An install file's or an old show's name less its suffix."""
+    return file_name.removesuffix(PROJECT_SUFFIX).removesuffix(INSTALL_SUFFIX)
+
+
+def install_files(root: Path) -> list[Path]:
+    """Every install file under `root`, a show not yet moved among them: `installs/*.json`
+    then `projects/*.hyp.json`. A stem in both is the install file's."""
+    out: dict[str, Path] = {}
+    for folder, suffix in ((root / PROJECTS, PROJECT_SUFFIX), (root / INSTALLS, INSTALL_SUFFIX)):
+        for p in sorted(folder.glob(f"*{suffix}")):
+            if not p.name.startswith("."):
+                out[install_stem(p.name)] = p
+    return [out[k] for k in sorted(out)]
+
+
+def not_moved(root: Path) -> list[str]:
+    """The old folders under `root` that still hold a file of the kinds the migration moves:
+    what `NOT_MOVED_WORDS` names. Launch only: this reads the folders."""
+    found = []
+    for name, pattern in ((OLD_LOADABLE, "**/*.json"), (PROJECTS, f"*{PROJECT_SUFFIX}")):
+        try:
+            if any(not p.name.startswith(".") for p in (root / name).glob(pattern)):
+                found.append(f"{name}/")
+        except OSError:
+            continue
+    return found
+
+
 # library roots that were named but not there at launch (plan 25 D5): no
 # write may land under one — `_write_text` and `to_trash` refuse it, so a
 # writer that forgot to ask `Library.writable` still creates nothing
@@ -334,9 +404,9 @@ def ensure_home(root: Path | None = None, cwd: Path | None = None) -> Path:
     once per home per process: config.load and Library() both ask, and
     the first-run migration should not scan the working directory twice."""
     root = home() if root is None else root
-    if root in _ensured and (root / PROJECTS).is_dir():
+    if root in _ensured and installs_dir(root).is_dir():
         return root
-    (root / PROJECTS).mkdir(parents=True, exist_ok=True)
+    installs_dir(root).mkdir(parents=True, exist_ok=True)
     for msg in migrate(root, cwd):
         print(msg, file=sys.stderr)
     _ensured.add(root)
@@ -379,7 +449,7 @@ def path_slug(name: str) -> str:
     folder, _, leaf = name.rpartition("/")
     parts = [s.strip() for s in folder.split("/")] if "/" in name else []
     if any(not s or s.startswith(".") for s in parts):
-        raise LibraryError(f"{name}: not a preset name — a folder may not be empty, "
+        raise LibraryError(f"{name}: not a patch name — a folder may not be empty, "
                            "hidden or '..'")
     return "/".join([*parts, slug(leaf)])
 
@@ -433,7 +503,7 @@ def next_name(base: str | None, taken: set[str], *, key=None) -> str:
     key = key or slug
     base = (base or "").strip()
     if not base:
-        stem, n = "PRESET", 1
+        stem, n = "PATCH", 1
     else:
         m = re.fullmatch(r"(.*\S)\s+(\d+)", base, re.DOTALL)
         stem, n = (m.group(1), int(m.group(2)) + 1) if m else (base, 2)
@@ -507,7 +577,7 @@ def _json_text(doc: dict) -> str:
 
 
 def show_text(doc: dict) -> str:
-    """A show (or any library document) as `Project.write` spells it."""
+    """A show (or any library document) as `Install.write` spells it."""
     return _json_text(doc)
 
 
@@ -515,7 +585,7 @@ def show_without_eye(doc: dict) -> dict | None:
     """A show file's document without what plan 43 C2 made the loadable patches' —
     the eye in its `session` (`EYE_IDS`) and the camera node's position in
     its `layout` (``render:camera``, or the old canvas id ``render:eye``) —
-    as `Project.write` would write it; None when it holds neither (nothing
+    as `Install.write` would write it; None when it holds neither (nothing
     to rewrite). Pure: tools/migrate_library.py's step over the shows."""
     session = doc.get("session")
     layout = doc.get(LAYOUT)
@@ -547,7 +617,7 @@ def show_look(doc: Any) -> tuple[dict[str, Any], BusCuts]:
     """What a `/2` show held of the look (plan 44 D3): the hands' and the
     clouds' values in its `session` (`_look_ids`) and its bus cuts (`rig`,
     `graph.BusCuts`) — ({}, no cut) for neither, and for any `/3`. The one
-    reader: `Project._take`, `kept_look`, `headless.show_seed` and the
+    reader: `Install._take`, `kept_look`, `headless.show_seed` and the
     migration tool all ask it."""
     if not isinstance(doc, dict) or doc.get("schema") not in (PROJECT_V2, None):
         return {}, BusCuts()
@@ -571,6 +641,28 @@ def show_without_look(doc: dict) -> dict | None:
     if isinstance(session, dict):
         drop = set(_look_ids(session))
         out["session"] = {k: v for k, v in session.items() if k not in drop}
+    return out
+
+
+def install_doc(show: dict) -> dict:
+    """A show's document (any rung this build reads) as its install file (plan 57 §5): the
+    tuning (`without_unsaved`), `modules`, the bank, `startup` and `layout`. What a `/2` held
+    of the look and the eye are the loadable patches' by now, so they stay behind. An install
+    file is itself. Pure: tools/migrate_library.py's step."""
+    if show.get("schema") == INSTALL_SCHEMA:
+        return dict(show)
+    from .routing import renamed_session
+    doc = show_without_look(show) or show
+    doc = show_without_eye(doc) or doc
+    out: dict[str, Any] = {"schema": INSTALL_SCHEMA, "name": doc.get("name") or ""}
+    if doc.get("note"):
+        out["note"] = doc["note"]
+    session: Any = doc.get("session")
+    out.update({"startup": doc.get("startup"), "bank": list(doc.get("bank") or []),
+                TUNING: without_unsaved(renamed_session(dict(session or {}))),
+                "modules": dict(doc.get("modules") or {})})
+    if doc.get(LAYOUT):
+        out[LAYOUT] = doc[LAYOUT]
     return out
 
 
@@ -675,7 +767,7 @@ class Trashed:
     """A file in the trash, as its view lists it (plan 19 WP4)."""
 
     path: Path          # <machine>/trash/presets/party/trip-3.20261004-011203.json
-    group: str          # its group's folder: "presets", "fx", "projects", …
+    group: str          # its group's folder: "loadable", "installs", …
     name: str           # the name inside the file, else its stem; folder-qualified
                         # for a loadable patch from a folder ("party/TRIP", plan 48)
     when: str           # "Oct 4 01:12", from the stamp in the file name ("" if none)
@@ -705,11 +797,11 @@ def _order(path: Path) -> tuple[str, int]:
 # a module preset's and a patch's `patches.forward` — review fix 8)
 MIGRATIONS: dict[tuple[str, int], Any] = {
     # plan 44 D3: a /2 show less what each loadable patch holds now (read out first:
-    # `Project._take`, `show_look`)
+    # `Install._take`, `show_look`)
     ("hyperspace.project", 2): lambda doc: show_without_look(doc) or dict(doc),
 }
 # no project 1 → 2 step: a schema-1 show (an inline theme bank) is refused
-# (`Project._take`) — no old-schema support since 2026-10-25
+# (`Install._take`) — no old-schema support since 2026-10-25
 CURRENT = {"hyperspace.project": 3}
 
 
@@ -787,7 +879,7 @@ def group_folder(group: str, kinds=()) -> str:
     patches, the shows and any document kind (`kinds`) in their own
     ``<group>``; every other group's — a module group's patches of one
     group — in ``patches/<group>``."""
-    if group in (LOADABLE, PATCHES, PROJECTS) or group in kinds:
+    if group in (LOADABLE, PATCHES, INSTALLS) or group in kinds:
         return group
     return f"{PATCHES}/{group}"
 
@@ -829,7 +921,7 @@ def _module_values(group: str, doc: dict) -> dict[str, Any]:
 
 # ---------------------------------------------------------------- project
 
-class Project:
+class Install:
     """The open show — the meta controller (plan 13 §2.2): its file (None until
     saved), the meta controller values, the shared meta groups' module labels, and the
     loadable patch bank, the desk's pads.
@@ -862,6 +954,7 @@ class Project:
         self.modules: dict[str, Any] = {}     # shared meta groups' module labels
         self.bank: list[str | None] = [None] * SLOTS
         self.startup: str | None = None
+        self.plays: str | None = None         # SM6: the playlist a launch starts by itself
         self.active = -1          # the slot last loaded, -1 until one is
         self.bank_error = ""
         self._saved: tuple = ([None] * SLOTS, None)   # bank and startup as on disk
@@ -886,25 +979,29 @@ class Project:
 
     # ---- documents ----
 
-    def _take(self, doc: dict, path: Path | None, where: str = "project") -> None:
+    def _take(self, doc: dict, path: Path | None, where: str = "the install") -> None:
         if doc.get("schema") == PROJECT_V1:
             raise LibraryError(f"{where} is a schema-1 show, which this build does not read "
                                "(no old-schema support, 2026-10-25)")
+        if str(doc.get("schema") or "").startswith(f"{INSTALL_SCHEMA.rpartition('/')[0]}/"):
+            if doc["schema"] != INSTALL_SCHEMA:
+                raise LibraryError(NEWER_WORDS.format(file=where, schema=doc["schema"]))
+            doc = {**doc, "session": doc.get(TUNING)}
         # plan 44 D3: what a /2 show held of the look, before the version
         # step drops it (`show_without_look`) — else what its first write on
         # this build kept beside it (`kept_look`)
         self.old_look, self.old_cuts = show_look(doc)
         if path is not None and not self.old_look and not self.old_cuts.cut:
             self.old_look, self.old_cuts = kept_look(path)
-        doc = migrate_doc(doc, "hyperspace.project")
-        self.name = str(doc.get("name") or (path.name[: -len(PROJECT_SUFFIX)] if path
-                                            else UNTITLED))
+        if doc.get("schema") != INSTALL_SCHEMA:
+            doc = migrate_doc(doc, "hyperspace.project")
+        self.name = str(doc.get("name") or (install_stem(path.name) if path else UNTITLED))
         self.note = str(doc.get("note") or "")
         self.path = path
         # the file's own name, which a launch finds the show by (`stem`)
-        self._stem = where[: -len(PROJECT_SUFFIX)] if where.endswith(PROJECT_SUFFIX) else None
+        self._stem = install_stem(where) if where.endswith(INSTALL_SUFFIX) else None
         from .routing import renamed_session  # the stick spring's old ids, as today's
-        self.session = renamed_session(dict(doc.get("session") or {}))
+        self.session = without_unsaved(renamed_session(dict(doc.get("session") or {})))
         # plan 43 C2: the eye is the loadable patch's — an old show's is read out of
         # its session (as the spring's old ids are read as today's), held for
         # the loadable patches before `/9` (`old_eye`), and never landed or written
@@ -915,6 +1012,7 @@ class Project:
                 for s in list(doc.get("bank") or [])[:SLOTS]]
         self.bank = bank + [None] * (SLOTS - len(bank))
         self.startup = str(doc["startup"]) if doc.get("startup") else None
+        self.plays = str(doc[PLAYS]) if doc.get(PLAYS) else None
         self.active = -1
         self._saved = (list(self.bank), self.startup)
         self.layout, _ = read_layout(doc.get(LAYOUT))
@@ -940,15 +1038,17 @@ class Project:
         and `path_for` finds again, whatever `name` the file carries inside
         (review of PR #75: a copied or hand-edited file's name can differ)."""
         if self.path is not None:
-            return self.path.name[: -len(PROJECT_SUFFIX)]
+            return install_stem(self.path.name)
         return getattr(self, "_stem", None) or slug(self.name)
 
     def to_doc(self) -> dict:
-        doc: dict[str, Any] = {"schema": PROJECT_SCHEMA, "name": self.name}
+        doc: dict[str, Any] = {"schema": INSTALL_SCHEMA, "name": self.name}
         if self.note:
             doc["note"] = self.note
-        doc.update(startup=self.startup, bank=bank_doc(self.bank), session=self.session,
-                   modules=self.modules)
+        doc.update(startup=self.startup, bank=bank_doc(self.bank))
+        if getattr(self, "plays", None):
+            doc[PLAYS] = self.plays
+        doc.update({TUNING: self.session, "modules": self.modules})
         layout = getattr(self, "layout", None)
         if layout:                       # plan 28 N2; a show with none writes none
             doc[LAYOUT] = {k: list(layout[k]) for k in sorted(layout)}
@@ -971,12 +1071,15 @@ class Project:
                 # plan 43 C2: what an old show kept of the camera, for its loadable patches
                 dict(getattr(self, "old_eye", {})), getattr(self, "camera_at", None),
                 # plan 44 D3: and of the look
-                dict(getattr(self, "old_look", {})), getattr(self, "old_cuts", BusCuts()))
+                dict(getattr(self, "old_look", {})), getattr(self, "old_cuts", BusCuts()),
+                # SM6: the playlist a launch starts
+                getattr(self, "plays", None))
 
     # the mark's fixed head, and where its later parts start
     MARK_LAYOUT = 9          # the GRAPH page's layout, and as on disk (plan 28 N2)
     MARK_EYE = 11            # an old show's eye and camera position (plan 43 C2)
     MARK_LOOK = 13           # an old show's look and bus cuts (plan 44 D3)
+    MARK_PLAYS = 15          # the playlist a launch starts (SM6)
 
     def remark(self, mark: tuple) -> None:
         """Put back what `mark()` returned: the show's own fields, nothing
@@ -991,6 +1094,8 @@ class Project:
             self.old_eye, self.camera_at = dict(mark[self.MARK_EYE]), mark[self.MARK_EYE + 1]
         if len(mark) > self.MARK_LOOK:     # plan 44 D3: and its look, for its loadable patches
             self.old_look, self.old_cuts = dict(mark[self.MARK_LOOK]), mark[self.MARK_LOOK + 1]
+        if len(mark) > self.MARK_PLAYS:    # SM6
+            self.plays = mark[self.MARK_PLAYS]
         self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
@@ -1115,7 +1220,7 @@ class Project:
 
     @property
     def lit(self) -> int:
-        """The slot a bank pad shows lit: `active`. `DeckProject`'s is the deck
+        """The slot a bank pad shows lit: `active`. `DeckInstall`'s is the deck
         off air's, the deck a press would load."""
         return self.active
 
@@ -1134,7 +1239,7 @@ class Project:
                 f" (or ⇧{key})" if k < F_KEYS else "") + " to save the live state into it")
             return None
         if loaded_patch is None or lib.path_of(LOADABLE, name, loose=True) is None:
-            lib.say(warning=f"{key}: no preset {name!r}")
+            lib.say(warning=f"{key}: no patch {name!r}")
             return None
         try:
             loaded_patch.load(name)
@@ -1155,14 +1260,14 @@ class Project:
         if not 0 <= k < len(self.bank) or self.lib.reg is None:
             return
         if loaded_patch is None:
-            self.bank_error = "presets: no preset loader"
+            self.bank_error = "patches: no patch loader"
             return
         was = self.bank[k]
         name = was or self._fresh_name(k)
         try:
             loaded_patch.save_as(name)
         except LibraryError as e:                     # a full disk must not stop the show
-            self.bank_error = f"presets: {e}"
+            self.bank_error = f"patches: {e}"
             return
         self.bank[k] = name
         self.active = k
@@ -1179,7 +1284,7 @@ class Project:
         """``PRESET <k+1>``, made unique against every loadable patch there is."""
         taken = ({slug(n) for n in self.lib.list(LOADABLE)}
                  | {slug(n) for n in self.bank if n})
-        base = name = f"PRESET {k + 1}"
+        base = name = f"PATCH {k + 1}"
         n = 1
         while slug(name) in taken:
             n += 1
@@ -1240,7 +1345,7 @@ class Project:
         if lib.reg is None:
             return False
         if loaded_patch is None:
-            self.bank_error = "presets: no preset loader"
+            self.bank_error = "patches: no patch loader"
             return False
         # stems as slugs: on a filesystem that folds case, `Trip-2.json`
         # is the file a save of "TRIP 2" would write over. Plan 48 row 587:
@@ -1254,7 +1359,7 @@ class Project:
         try:
             loaded_patch.save_as(name)
         except (LibraryError, OSError) as e:          # a full disk must not stop the show
-            self.bank_error = f"presets: {e}"
+            self.bank_error = f"patches: {e}"
             return False
         self.bank_error = ""
         k = self.next_empty() if at is None else at
@@ -1271,15 +1376,15 @@ class Project:
             # it: the bank stays as the show's file has it, and it is said
             self.bank[k] = was
             self.active = -1
-            self.bank_error = f"presets: {e}"
-            lib.say(warning=f"saved {name} — the show could not be written: it is in "
-                            f"the preset list ({e})")
+            self.bank_error = f"patches: {e}"
+            lib.say(warning=f"saved {name} — the install could not be written: it is in "
+                            f"the patch list ({e})")
             # `save_new` saved what it was asked to (the list has it); a
             # save into slot `at` did not land there — False, so the desk
             # blinks nothing over a slot that still names the old loadable patch
             return at is None
         self._room()
-        kept = f" ({was} is still in the preset list)" if was is not None else ""
+        kept = f" ({was} is still in the patch list)" if was is not None else ""
         lib.say(f"saved {name} → {slot_key(k)}{kept}")
         return True
 
@@ -1290,7 +1395,7 @@ class Project:
         if not 0 <= k < len(self.bank):
             return
         if self.lib.path_of(LOADABLE, name, loose=True) is None:
-            self.lib.say(warning=f"{slot_key(k)}: no preset {name!r}")
+            self.lib.say(warning=f"{slot_key(k)}: no patch {name!r}")
             return
         self._set_slot(k, name, f"{slot_key(k)}: {name}")
 
@@ -1299,7 +1404,7 @@ class Project:
         stays in the list."""
         if 0 <= k < len(self.bank) and self.bank[k] is not None:
             self._set_slot(k, None, f"{slot_key(k)}: cleared — {self.bank[k]} is still in "
-                                    "the preset list")
+                                    "the patch list")
 
     def _set_slot(self, k: int, name: str | None, said: str) -> None:
         """One slot's pointer, written into the show now; `active` follows
@@ -1322,7 +1427,7 @@ class Project:
     def _refused(self, what: str, e: Exception) -> None:
         """A bank change the show's file could not take: the reason under
         the bank (`bank_error`) and on the footer (`Library.say`)."""
-        self.bank_error = f"presets: {e}"
+        self.bank_error = f"patches: {e}"
         self.lib.say(warning=f"{what} — {e}")
 
     def _room(self) -> None:
@@ -1371,7 +1476,7 @@ class Project:
         if loaded_patch is None or not name:
             return None
         if lib.path_of(LOADABLE, name, loose=True) is None:
-            lib.say(warning=f"startup: no preset {name!r}")
+            lib.say(warning=f"startup: no patch {name!r}")
             return None
         try:
             loaded_patch.load(name)
@@ -1401,13 +1506,33 @@ class Project:
     # ---- API ----
 
     def list(self) -> list[str]:
-        """Every show by file stem."""
-        names = {p.name[: -len(PROJECT_SUFFIX)]
-                 for p in (self.lib.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")}
-        return sorted(names)
+        """Every install by file stem, a show not yet moved among them."""
+        return sorted(install_stem(p.name) for p in install_files(self.lib.home))
 
     def path_for(self, name: str) -> Path:
-        return self.lib.home / PROJECTS / f"{slug(name)}{PROJECT_SUFFIX}"
+        """The file an install of this name is in: the install file there is, else a show
+        not yet moved, else where a new one goes (`installs_dir`)."""
+        home, stem = self.lib.home, slug(name)
+        new, old = home / INSTALLS / f"{stem}{INSTALL_SUFFIX}", home / PROJECTS / f"{stem}{PROJECT_SUFFIX}"
+        if new.is_file() or not old.is_file():
+            if installs_dir(home).name == PROJECTS and not new.is_file():
+                return old
+            return new
+        return old
+
+    def play_at_launch(self, name: str | None) -> None:
+        """SM6: the playlist a launch starts by itself, written into the install at once as
+        the bank is; None for none. A file that cannot take it leaves it as it was, said."""
+        if getattr(self, "path", None) is None:
+            self.lib.say(warning="save the install first: then it can start a playlist at launch")
+            return
+        was = getattr(self, "plays", None)
+        self.plays = name
+        try:
+            self.write()
+        except (LibraryError, OSError) as e:
+            self.plays = was
+            self.lib.say(warning=f"the install could not be written: {e}")
 
     def load(self, name: str | Path, *, startup: bool = True) -> list[str]:
         """Open a show by name or path; returns unknown ids. Its startup
@@ -1415,7 +1540,7 @@ class Project:
         re-reading an edited project). A schema-1 file is refused
         (`_take`)."""
         lib = self.lib
-        if isinstance(name, Path) or str(name).endswith(PROJECT_SUFFIX):
+        if isinstance(name, Path) or str(name).endswith(INSTALL_SUFFIX):
             path = Path(name)
         else:
             path = self.path_for(name)
@@ -1423,15 +1548,15 @@ class Project:
         # the file is read, nothing replaced yet: one step on the meta controller's
         # stack for the show; the startup loadable patch it brings up is a load, a step
         # on its deck's (undo.py, plan 44 D5b)
-        undo.push_meta(f"show {doc.get('name') or path.name[: -len(PROJECT_SUFFIX)]}", load=True)
+        undo.push_meta(f"install {doc.get('name') or install_stem(path.name)}", load=True)
         self._take(doc, path, path.name)
         missing = self._apply()
         lib.report(missing, path.name)
-        lib.say(f"show: {self.name}")
+        lib.say(f"install: {self.name}")
         lib.remember(self.stem)
         if startup:
             self.load_startup()
-        apart = mirrors_apart(self.session)
+        apart = mirrors_apart(doc.get("session") or {})
         if apart:
             lib.say(warning=f"{path.name}: {', '.join(apart)} differs from the Mirror, and "
                             "there is one Mirror now: those hands follow it. To flip one "
@@ -1444,14 +1569,14 @@ class Project:
         lib = self.lib
         # one step on the meta controller's stack, and one on the deck's: a new
         # show puts every group's fresh values on both (undo.py, plan 44 D5b)
-        undo.push_meta("new show", load=True)
-        undo.push_on(lib.reg, "new show", load=True)
-        self._take({"schema": PROJECT_SCHEMA, "name": name}, None)
+        undo.push_meta("new install", load=True)
+        undo.push_on(lib.reg, "new install", load=True)
+        self._take({"schema": INSTALL_SCHEMA, "name": name}, None)
         self.name = name
         lib._fresh_layouts()                          # the layout the app started with…
         lib.restore(lib._fresh_all())                 # …and every group's fresh values
         self._apply()
-        lib.say(f"show: new {name}")
+        lib.say(f"install: new {name}")
         self.load_startup()
 
     def save(self, name: str | None = None) -> Path:
@@ -1482,7 +1607,7 @@ class Project:
             # disk): the show is still the one it was, under its own name
             self.name, self.path, self.session, self.modules = held
             raise
-        lib.say(f"show: saved {self.name}")
+        lib.say(f"install: saved {self.name}")
         lib.remember(self.stem)
         return self.path
 
@@ -1561,18 +1686,27 @@ class Project:
 
     def _held_back(self) -> dict:
         """The ids of node instances an old show holds and the registry lacks
-        now (`ghost.2.*`, plan 26 A4; `ghost.2.mirror` always, no param since
-        LY1): kept by a save and never counted as an edit. The old reader goes
-        in CL1."""
+        now (`ghost.2.*`, plan 26 A4): kept by a save and never counted as an
+        edit. `ghost.2.mirror` no longer gets this far (`without_unsaved`). The
+        old reader goes in CL1."""
         reg = self.lib.reg
         return {pid: v for pid, v in (self.session or {}).items()
                 if is_instance_id(pid) and (reg is None or pid not in reg)}
 
 
+def without_unsaved(session: dict) -> dict:
+    """A file's meta controller values less what a save stopped writing with the one
+    migration (plan 58 §9): `tempo.nudge` (a nudge doesn't come back at launch; a tapped BPM
+    does, plan 58 §8) and `ghost.<n>.mirror` (no param since LY1)."""
+    return {pid: v for pid, v in session.items()
+            if pid != "tempo.nudge"
+            and not (pid.startswith("ghost.") and pid.endswith(".mirror") and is_instance_id(pid))}
+
+
 def mirrors_apart(session: dict) -> list[str]:
     """The `ghost.<n>.mirror` ids an old show holds at another value than its
     `ghost.mirror`. No param since LY1, so nothing reads them and the picture
-    changes: what `Project.load` says (REVIEW: a removed id reads an old file as
+    changes: what `Install.load` says (REVIEW: a removed id reads an old file as
     it was, or reports it). Goes with the old reader, in CL1."""
     room = bool(session.get("ghost.mirror", False))
     return [pid for pid, v in session.items()
@@ -1584,7 +1718,7 @@ def show_eye(doc: Any) -> tuple[dict[str, Any], list[float] | None]:
     """What a show document kept of the camera (plan 43 C2): the eye in its
     `session` (`EYE_IDS`) and the camera node's GRAPH position in its
     `layout` (either id, `CAMERA_NODES`) — ({}, None) for neither. The one
-    reader of a show's camera: `Project._take`, `kept_eye`,
+    reader of a show's camera: `Install._take`, `kept_eye`,
     `headless.show_seed` and the migration tool all ask it."""
     if not isinstance(doc, dict):
         return {}, None
@@ -1605,7 +1739,7 @@ def kept_eye(path: Path) -> tuple[dict[str, Any], list[float] | None]:
     """The eye (and the camera's GRAPH position) a show's ``.bak-v2-eye``
     copy kept — the oldest copy that holds an eye (`show_eye`) — or ({},
     None): what an old show's `session` held before its first write on
-    this build dropped it (plan 43 C2, `Project.write`). Remembered per
+    this build dropped it (plan 43 C2, `Install.write`). Remembered per
     show file and its folder's state (a new backup changes the folder), so
     a show from this build — which has no such copy — costs a stat."""
     try:
@@ -1748,7 +1882,7 @@ class Marks(_Landings):
         """Which show this is, and the GRAPH page's positions of its fixture nodes
         (plan 28 N2): a tidy on a deck moves them, and undoing it puts them back
         while the show is the same one."""
-        pr = self.lib.project
+        pr = self.lib.install
         return (pr.ident(), copy.deepcopy(getattr(pr, "layout", {})))
 
     def take(self) -> tuple:
@@ -1803,7 +1937,7 @@ class Marks(_Landings):
         panel, and the bank's lit slot. While the show is the same one its GRAPH
         page positions go back too (the undo of a tidy; they are not in its file
         until it is saved). The rest of the show is `MetaMarks`'."""
-        lib, pr = self.lib, self.lib.project
+        lib, pr = self.lib, self.lib.install
         (show, landed, note, _graph, layout, bins, groups, group_high, bus) = mark[:9]
         # (plan 57: a step from before a hot reload has no node mode)
         mode = mark[9] if len(mark) > 9 else None
@@ -1841,7 +1975,7 @@ class MetaMarks(_Landings):
         """(the show's mark, {group: landed}, {group: its `extra` hook's dict —
         the band layout})."""
         lib = self.lib
-        return (lib.project.mark(), self.lands(),
+        return (lib.install.mark(), self.lands(),
                 {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()})
 
     def before(self, mark: tuple) -> None:
@@ -1859,14 +1993,14 @@ class MetaMarks(_Landings):
 
     def put(self, mark: tuple) -> None:
         """Last in a restore: the shared meta groups' names, references and re-apply
-        roads as they were. The show's own fields go back (`Project.remark`) only
+        roads as they were. The show's own fields go back (`Install.remark`) only
         when the show itself differs — the undo of a show load. Otherwise the bank
         and startup are left as they are: they are in the show's file the moment
         they change, and reverting them in memory would make the show's dirty dot
         lie. `last_show` is never rewritten."""
-        pr = self.lib.project
+        pr = self.lib.install
         show, landed, _extras = mark
-        if Project.ident_of(show) != pr.ident():
+        if Install.ident_of(show) != pr.ident():
             pr.remark(show)
         self._reland(landed)
         pr.follow()
@@ -1909,7 +2043,7 @@ class Library:
             _missing.add(self.home)
         else:
             _missing.discard(self.home)
-            (self.home / PROJECTS).mkdir(parents=True, exist_ok=True)
+            installs_dir(self.home).mkdir(parents=True, exist_ok=True)
         self.period = period
         self.reg = None            # (`reg`, below: the panel's deck's, once pointed)
         self.status = ""
@@ -1935,11 +2069,14 @@ class Library:
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
         self.loaded_patch = None        # loadable.LoadedPatch, set by its constructor (`presets`, below)
-        self.project = Project(self)
+        self.install = Install(self)
         if self.missing is not None:
             text = missing_text(self.missing)
             print(f"library: {text}", file=sys.stderr)
             self.say(warning=text)
+        # plan 57 §7a: said on the SYSTEM page, and on the footer at launch (app.py)
+        where = not_moved(self.home) if self.missing is None else []
+        self.not_moved = NOT_MOVED_WORDS.format(where=" and ".join(where)) if where else ""
         self._open_default()
         self._mtimes = self._scan()
 
@@ -1986,11 +2123,11 @@ class Library:
         self.reg = reg
         self._fresh = reg.snapshot()
         # what a group's `extra` hook says now — the analyzer's layout as the
-        # app started — is the fresh layout `Project.new` goes back to
+        # app started — is the fresh layout `Install.new` goes back to
         self._fresh_extra = {g: hook() for g, hook in self._extra_hooks.items()}
         self._defaults.clear()
-        missing = self.project._apply()
-        self.report(missing, self.project.name)
+        missing = self.install._apply()
+        self.report(missing, self.install.name)
         return missing
 
     def _fresh_layouts(self) -> None:
@@ -2059,24 +2196,28 @@ class Library:
         self._load_hooks[group] = hook
 
     def last_show(self) -> str | None:
-        """The show opened last (`<machine>/last_show`), or None — a machine
-        file: two machines sharing a library each open their own last show."""
-        try:
-            name = (self._machine() / LAST_SHOW).read_text().strip()
-        except OSError:
-            return None
-        return name or None
+        """The install opened last (`<machine>/last_install`), else what the file before it
+        said (`last_show`), or None — a machine file: two machines sharing a library each
+        open their own."""
+        for file in (LAST_INSTALL, LAST_SHOW):
+            try:
+                name = (self._machine() / file).read_text().strip()
+            except OSError:
+                continue
+            if name:
+                return name
+        return None
 
     def remember(self, name: str) -> None:
         """Note `name` — a show's file name less ``.hyp.json``
-        (`Project.stem`) — as the show a launch opens (decision 22); a
+        (`Install.stem`) — as the show a launch opens (decision 22); a
         write that fails costs only the memory."""
         if name == self.last_show():
             return
         try:
-            (self._machine() / LAST_SHOW).write_text(f"{name}\n")
+            (self._machine() / LAST_INSTALL).write_text(f"{name}\n")
         except OSError as e:
-            print(f"library: {LAST_SHOW} not written ({e})", file=sys.stderr)
+            print(f"library: {LAST_INSTALL} not written ({e})", file=sys.stderr)
 
     def _machine(self) -> Path:
         return self.__dict__.get("machine") or self.home   # (one from before a hot reload)
@@ -2090,14 +2231,14 @@ class Library:
         library."""
         name = self.last_show()
         if name:
-            user = self.project.path_for(name)
+            user = self.install.path_for(name)
             if user.is_file():
                 try:
-                    self.project._take(_read_json(user), user, user.name)
+                    self.install._take(_read_json(user), user, user.name)
                     return
                 except LibraryError as e:
                     self.error = f"library: {e}"
-        self.project._take({"schema": PROJECT_SCHEMA, "name": UNTITLED}, None)
+        self.install._take({"schema": INSTALL_SCHEMA, "name": UNTITLED}, None)
 
     # ---- the tree ----
 
@@ -2119,7 +2260,8 @@ class Library:
         for root in self._roots():
             if root.is_dir():
                 out.update(d.name for d in root.iterdir()
-                           if d.is_dir() and d.name not in (PROJECTS, TRASH, *LEGACY_DIRS)
+                           if d.is_dir() and d.name not in (PROJECTS, INSTALLS, OLD_LOADABLE,
+                                                            TRASH, *LEGACY_DIRS)
                            and not d.name.startswith("."))
                 # plan 50: a group whose patches of one group have a folder
                 if (root / PATCHES).is_dir():
@@ -2132,7 +2274,7 @@ class Library:
         kind's — the loadable patches, the patches — in ``<root>/<group>/``; every
         other group's, its patches of one group (what module presets
         were), in ``<root>/patches/<group>/`` (`group_folder`, the one table)."""
-        return root / group_folder(group, self._kinds)
+        return loadable_dir(root) if group == LOADABLE else root / group_folder(group, self._kinds)
 
     def _files(self, group: str) -> dict[str, Path]:
         """file key → path, every file of the group's folder (`group_dir`):
@@ -2187,7 +2329,7 @@ class Library:
         (`_resolve` refuses to pick)."""
         out: dict[str | None, list[Path]] = {}
         for root in self._roots():
-            d = root / LOADABLE
+            d = loadable_dir(root)
             if not d.is_dir():
                 continue
             hit = self._walked(d)
@@ -2210,7 +2352,7 @@ class Library:
         if want == "":
             return ""
         for root in self._roots():
-            d = root / LOADABLE
+            d = loadable_dir(root)
             if d.is_dir():
                 for f in self._tree(d)[1]:
                     if fold_folder(f) == want:
@@ -2335,8 +2477,8 @@ class Library:
             return idx, files, {}, set()
         folders: set[str | None] = set()
         for root in self._roots():
-            if (root / LOADABLE).is_dir():
-                hit = self._walked(root / LOADABLE)
+            if loadable_dir(root).is_dir():
+                hit = self._walked(loadable_dir(root))
                 if "folded" not in hit:                 # kept with the walk, as byfold
                     hit["folded"] = {fold_folder(f) for f in hit["folders"]}
                 folders |= hit["folded"]
@@ -2368,7 +2510,7 @@ class Library:
             if len(found) == 1:
                 return found[0]
             if found and say is not None:
-                say(f"{name}: two presets answer to that name — "
+                say(f"{name}: two patches answer to that name — "
                     f"{found[0].name} and {found[1].name}; rename one")
             return None
 
@@ -2403,7 +2545,7 @@ class Library:
         """What in the open show still names the loadable patch `name` (or, given,
         the file at `path`): its slots (``F6``, ``slot 12``) and its
         ``startup``."""
-        pr, key = self.project, self._fold(LOADABLE, name)
+        pr, key = self.install, self._fold(LOADABLE, name)
         snap = self._lookup(LOADABLE)                   # one look for every slot
         target = path or self._resolve(LOADABLE, name, snap, loose=True)
 
@@ -2413,18 +2555,23 @@ class Library:
                                     and self._resolve(LOADABLE, n, snap, loose=True) == target))
         out = [slot_key(k) for k, n in enumerate(pr.bank) if names(n)]
         if names(pr.startup):
-            out.append("the startup preset")
+            out.append("the startup patch")
         return out
 
     def read(self, group: str, name: str) -> dict:
         path = self.path_of(group, name, loose=True)
         if path is None:
-            raise LibraryError(f"{group_word(group)}: no preset {name!r}")
+            raise LibraryError(f"{group_word(group)}: no patch {name!r}")
         doc = copy.deepcopy(self._doc(path))
         kind = self._kinds.get(group)
         if kind is not None:                       # its own format: checked, not lifted
             schema = str(doc.get("schema") or "")
             k, _, v = schema.rpartition("/")
+            # (plan 57: a loadable patch's ladder holds the old kind's rungs until CL1)
+            if group == LOADABLE and k == OLD_KIND and v.isdigit() and int(v) < 11:
+                k = kind.schema
+            if k == kind.schema and v.isdigit() and int(v) > max(kind.versions):
+                raise LibraryError(NEWER_WORDS.format(file=path.name, schema=schema))
             if k != kind.schema or not v.isdigit() or int(v) not in kind.versions:
                 raise LibraryError(f"{path.name}: schema {schema!r} is not a {kind.schema}")
             return doc
@@ -2439,7 +2586,7 @@ class Library:
                 and patchdoc.GROUP_KEY not in doc):
             doc[patchdoc.GROUP_KEY] = group
         if patchdoc.GROUP_KEY not in doc:
-            what = ("a whole preset" if patchdoc.shape_of(doc) == patchdoc.LOADABLE_SHAPE
+            what = ("a whole loadable patch" if patchdoc.shape_of(doc) == patchdoc.LOADABLE_SHAPE
                     else "a canvas patch" if str(doc.get("schema", "")).startswith(
                         f"{patchdoc.KIND}/") else f"schema {doc.get('schema')!r}")
             raise LibraryError(NOT_GROUP_WORDS.format(file=path.name, what=what,
@@ -2734,7 +2881,7 @@ class Library:
         """Apply `doc` as the group's current loadable patch `name` that no file
         holds (plan 35 T7's `LoadedPatch.new`): the one road in (`_apply_doc`,
         no path), then nothing to be clean against — dirty until it is saved,
-        the Project's own rule for a show never saved. Returns the unknown
+        the Install's own rule for a show never saved. Returns the unknown
         ids."""
         missing = self._apply_doc(group, name, doc)
         self._landed(group, name, ())
@@ -2793,7 +2940,7 @@ class Library:
             # on disk (review: `Party/NEW` into an existing `party/`)
             folder, leaf = self.folder_of(group, name)
             if not leaf.strip():                        # "party/", "party/   "
-                raise LibraryError("a preset needs a name")
+                raise LibraryError("a patch needs a name")
             if path is not None:
                 raw = self._name_of(path)
                 if raw != harmless(raw):
@@ -2888,7 +3035,7 @@ class Library:
                                  f"name{'s' if len(still) == 1 else ''} it; restore it from "
                                  "the trash, or clear the slot")
             else:
-                self.say(f"{shown} is in the trash — the PRESETS section's trash can restore it")
+                self.say(f"{shown} is in the trash — the PATCHES section's trash can restore it")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:
@@ -2921,22 +3068,22 @@ class Library:
         5. every ``hyperspace.project/2`` show in ``<home>/projects`` whose
            bank or startup names the old loadable patch is copied to the trash,
            then written with the new name — the open show through its
-           `Project` (its dot and the bank's light stay right). A show whose
+           `Install` (its dot and the bank's light stay right). A show whose
            copy or write fails is left as it is; a schema-1 show is left
            alone; both are named in the warning. *Stopped mid-way: the
            shows done name the new name and their old files are in the
            trash; the rest name the old one*;
-        6. `Project.follow()`; the status says how many shows changed."""
+        6. `Install.follow()`; the status says how many shows changed."""
         self.writable()
         # plan 40 T1: a patch renames the same way, less step 5 (no show
         # names a patch; a group's provenance slug is the loadable patch's to keep)
         if group not in RENAMABLE:
-            raise LibraryError(f"{group_word(group)}: only a preset can be renamed (or a patch)")
+            raise LibraryError(f"{group_word(group)}: only a loadable patch can be renamed (or a patch)")
         snap = self._lookup(group)                 # one look for the whole rename
         idx, files = snap[0], snap[1]
         path = self._resolve(group, old, snap, loose=False)
         if path is None:
-            raise LibraryError(f"no preset {old!r}")
+            raise LibraryError(f"no patch {old!r}")
         new = (new or "").strip()
         # plan 48 row 584: a rename keeps the folder — `new` is the leaf
         # (the folder may be spelled in front of it, as the list spells it);
@@ -2947,7 +3094,7 @@ class Library:
             raise LibraryError(f"{new}: a rename keeps the folder — a name has no '/' "
                                "(the row's right-click: move to ▸)")
         if not leaf:
-            raise LibraryError("a preset needs a name")
+            raise LibraryError("a patch needs a name")
         new = pre + leaf
         stem = path.name[:-5]
         if new == old:
@@ -3000,7 +3147,7 @@ class Library:
         stage 2, many loadable patches at once): `to(n)` is the name a slot or the
         startup naming `n` takes now, None to leave it. Every user show with
         a hit is copied to the trash once, then written; the open show
-        through its `Project` (its dot and the bank's light stay right).
+        through its `Install` (its dot and the bank's light stay right).
         Returns (shows written, shows left as they were with why)."""
 
         def hit(n) -> bool:
@@ -3009,9 +3156,9 @@ class Library:
         def moved(n):
             return to(n) if hit(n) else n
 
-        pr, done, left = self.project, 0, []
-        for show in sorted((self.home / PROJECTS).glob(f"*{PROJECT_SUFFIX}")):
-            label = show.name[: -len(PROJECT_SUFFIX)]
+        pr, done, left = self.install, 0, []
+        for show in install_files(self.home):
+            label = install_stem(show.name)
             if pr.path is not None and show == pr.path:
                 if not (any(hit(n) for n in pr.bank) or hit(pr.startup)):
                     continue
@@ -3037,7 +3184,7 @@ class Library:
             bank = doc.get("bank") if isinstance(doc.get("bank"), list) else []
             if not (any(hit(n) for n in bank) or hit(doc.get("startup"))):
                 continue
-            if doc.get("schema") != PROJECT_SCHEMA:
+            if doc.get("schema") not in (INSTALL_SCHEMA, PROJECT_SCHEMA):
                 left.append(f"{label} (a {doc.get('schema')} show: plan 13's migration owns it)")
                 continue
             if self._to_trash(show) is None:
@@ -3067,7 +3214,7 @@ class Library:
         ones; sorted case folded."""
         out: set[str] = set()
         for root in self._roots():
-            d = root / LOADABLE
+            d = loadable_dir(root)
             if d.is_dir():
                 out.update(self._tree(d)[1])
         return sorted(out, key=str.lower)
@@ -3099,7 +3246,7 @@ class Library:
         told); then, for the loadable patches, every show's slots and startup
         (`_repoint_by`: a slot naming a file by any spelling that found it
         before — its name, its file key, a loose read, review of #334) and
-        `Project.follow()`. The status says how many shows (a patch: none
+        `Install.follow()`. The status says how many shows (a patch: none
         names one)."""
         byfold: dict[str, str] = {}
         for p, now in moves.items():
@@ -3129,8 +3276,8 @@ class Library:
             self.say(f"{verb} {what}")
             return 0, []
         done, left = self._repoint_by(to)
-        self.project.follow()
-        self.say(f"{verb} {what} ({done} show{'' if done == 1 else 's'} updated)")
+        self.install.follow()
+        self.say(f"{verb} {what} ({done} install{'' if done == 1 else 's'} updated)")
         if left:
             self.say(warning=f"{verb} {what}; not updated: {', '.join(left)}")
         return done, left
@@ -3148,7 +3295,7 @@ class Library:
             raise LibraryError("a folder's name may not hold a control character")
         if name.lower().endswith(".json"):
             raise LibraryError(f"{name}: a folder's name may not end in '.json' "
-                               "(it would read as a preset)")
+                               "(it would read as a patch)")
         if "/" in name:
             raise LibraryError(f"{name}: a folder's name has no '/' — make it inside "
                                "the folder it belongs in")
@@ -3163,7 +3310,7 @@ class Library:
         folder = (folder or "").strip().strip("/")
         on_disk = self._folder_on_disk(folder)
         if on_disk is None:
-            raise LibraryError(f"no folder {folder!r} under presets/")
+            raise LibraryError(f"no folder {folder!r} under loadable/")
         return on_disk
 
     def move(self, name: str, folder: str) -> Path:
@@ -3182,19 +3329,19 @@ class Library:
         snap = self._lookup(LOADABLE)
         path = self._resolve(LOADABLE, name, snap, loose=False)
         if path is None:
-            raise LibraryError(f"no preset {name!r}")
+            raise LibraryError(f"no patch {name!r}")
         folder = self._existing_folder(folder)
         if fold_folder(self._prefix(LOADABLE, path)[:-1]) == fold_folder(folder):
             return path
         leaf = self._leaf(LOADABLE, path)
         new = f"{folder}/{leaf}" if folder else leaf
-        base = self.home / LOADABLE
+        base = loadable_dir(self.home)
         dst = (base / folder if folder else base) / path.name
         idx, files = snap[0], snap[1]
         taken = ({self._fold(LOADABLE, s) for s, p in files.items() if p != path}
                  | {self._fold(LOADABLE, n) for n, p in idx.items() if p != path})
         if self._fold(LOADABLE, new) in taken or dst.exists():
-            raise LibraryError(f"{leaf}: {folder or 'the top level'} already has a preset "
+            raise LibraryError(f"{leaf}: {folder or 'the top level'} already has a patch "
                                "by that name — rename one first")
         _move_file(path, dst)
         self._sync(path, dst)
@@ -3214,7 +3361,7 @@ class Library:
         if self._folder_on_disk(full) is not None:
             raise LibraryError(f"{full}: that folder is already there")
         try:
-            (self.home / LOADABLE / full).mkdir(parents=True, exist_ok=False)
+            (loadable_dir(self.home) / full).mkdir(parents=True, exist_ok=False)
         except FileExistsError as e:
             raise LibraryError(f"{full}: that name is taken (by a file)") from e
         except (OSError, ValueError) as e:
@@ -3240,7 +3387,8 @@ class Library:
         full = f"{parent}/{name}" if parent else name
         if full == folder:
             return folder
-        src, dst = self.home / LOADABLE / folder, self.home / LOADABLE / full
+        base = loadable_dir(self.home)
+        src, dst = base / folder, base / full
         # review of #349: taken unless `dst` is this very folder (a change of
         # case on a disk that folds case) — asked of the disk, not of a fold:
         # on a case-sensitive volume `Party` beside `party` is another folder
@@ -3283,7 +3431,7 @@ class Library:
             return []
         try:
             got = sorted((p.name + "/" if p.is_dir() else p.name)
-                         for p in (self.home / LOADABLE / on_disk).iterdir()
+                         for p in (loadable_dir(self.home) / on_disk).iterdir()
                          if p.name != ".DS_Store")
         except OSError as e:
             return [f"(unreadable: {e})"]
@@ -3300,7 +3448,7 @@ class Library:
         if not (folder or "").strip().strip("/"):
             raise LibraryError("the top level is not a folder to remove")
         folder = self._existing_folder(folder)
-        d = self.home / LOADABLE / folder
+        d = loadable_dir(self.home) / folder
         held = self.held(folder)
         if held:
             raise LibraryError(f"{folder}: not empty — it holds {_and(held)}; move or "
@@ -3410,18 +3558,21 @@ class Library:
                     stem = m["stem"]
                     if stem.endswith(PROJECT_SUFFIX[:-5]) and group.name == PROJECTS:
                         stem = stem[: -len(PROJECT_SUFFIX[:-5])]
+                    # (plan 57: what was trashed under the old folder names is the same group)
+                    shown_group = {OLD_LOADABLE: LOADABLE, PROJECTS: INSTALLS}.get(
+                        group.name, group.name)
                     name = stem
                     if path.is_file() and self._under(path, roots) is not None:
                         try:
-                            name = self._shown(group.name,
+                            name = self._shown(shown_group,
                                                str(_read_json(path).get("name") or stem))
                         except LibraryError:
                             pass
                     folder = path.parent.relative_to(group).as_posix()
                     folder = "" if folder == "." else folder
-                    if folder and group.name == LOADABLE:
+                    if folder and shown_group == LOADABLE:
                         name = f"{folder}/{name}"
-                    out.append(Trashed(path, group.name, name,
+                    out.append(Trashed(path, shown_group, name,
                                        _when(m["stamp"]) if m else "", folder, old))
         return sorted(out, key=lambda t: (not t.old, _order(t.path), t.path.name),
                       reverse=True)
@@ -3446,14 +3597,15 @@ class Library:
         # the group and the folder it came from are where it lies in the
         # trash (plan 48: ``trash/presets/party/`` → ``presets/party/``)
         _root, group, sub, _old = where
+        group = {OLD_LOADABLE: LOADABLE, PROJECTS: INSTALLS}.get(group, group)
         if sub and group == LOADABLE:
             # review of #334: the folder as it is on disk now (APFS folds
             # case), so what is taken there is read from the right place
             sub = self._folder_on_disk(sub) or sub
         filename = f"{m['stem']}{m['suffix']}"
-        show = group == PROJECTS
-        suffix = PROJECT_SUFFIX if show and filename.endswith(PROJECT_SUFFIX) else ".json"
-        stem = filename.removesuffix(suffix)
+        show = group == INSTALLS
+        stem = install_stem(filename) if show else filename.removesuffix(".json")
+        suffix = ".json"
         # plan 50: ``trash/patches/<group>/`` is a patch of one group — it
         # goes back among that group's (`group_dir`)
         if group == PATCHES and sub and "/" not in sub:
@@ -3461,8 +3613,11 @@ class Library:
         # only the loadable patches have folders (plan 48): a file a non-preset group
         # kept deeper goes back where that group lists it
         sub = sub if group == LOADABLE else ""
-        folder = self.group_dir(self.home, group) / sub if sub else self.group_dir(self.home,
-                                                                                  group)
+        folder = (installs_dir(self.home) if show else
+                  self.group_dir(self.home, group) / sub if sub else
+                  self.group_dir(self.home, group))
+        if show and folder.name == PROJECTS:     # (a library not yet moved)
+            suffix = PROJECT_SUFFIX
         pre = f"{sub}/" if sub and group == LOADABLE else ""
         data = path.read_bytes()
         try:
@@ -3472,8 +3627,8 @@ class Library:
             doc = None
         name = str((doc or {}).get("name") or stem)
         if show:
-            stems = {p.name[: -len(PROJECT_SUFFIX)] for root in self._roots()
-                     for p in (root / PROJECTS).glob(f"*{PROJECT_SUFFIX}")}
+            stems = {install_stem(p.name) for root in self._roots()
+                     for p in install_files(root)}
             names = {slug(s) for s in stems}
         else:
             # what is taken in the folder it goes back to
@@ -3508,11 +3663,11 @@ class Library:
         if group == LOADABLE and self.warning.startswith(f"{pre}{self._shown(group, name)} is in the trash"):
             self.warning = ""                              # what × said is no longer so
         now = pre + self._shown(group, str(doc["name"]) if renamed else name)
-        what = f"show {now}" if show else now
+        what = f"install {now}" if show else now
         if renamed:
             self.say(f"restored as {what} — {pre}{name} is taken")
         else:
-            self.say(f"restored {what}" + (" — it is in the show list" if show else ""))
+            self.say(f"restored {what}" + (" — it is in the install list" if show else ""))
         if where[3]:
             # the library's old trash is never written (plan 48 review): a
             # restore from it is a copy, and the file stays where it is —
@@ -3620,7 +3775,7 @@ class Library:
                 if d.is_dir() and not d.name.startswith("."):
                     # the loadable patches every folder down (plan 48), as `_files` lists them
                     # (plan 50: and the patches of one group, a folder down)
-                    for f in (self._tree(d)[0] if d.name == LOADABLE else
+                    for f in (self._tree(d)[0] if d.name in (LOADABLE, OLD_LOADABLE) else
                               [*d.glob("*.json"), *d.glob("*/*.json")] if d.name == PATCHES
                               else d.glob("*.json")):
                         try:
@@ -3667,9 +3822,9 @@ class Library:
                     else:
                         self.load(group, name)
                     hit.append(f"{group_word(group)}/{name}")
-            if self.project.path in changed:
-                self.project.load(self.project.path, startup=False)
-                hit.append(f"project {self.project.name}")
+            if self.install.path in changed:
+                self.install.load(self.install.path, startup=False)
+                hit.append(f"install {self.install.name}")
             self.error = ""
         except LibraryError as e:                     # a half-saved file: keep running
             self.error = f"library: {e}"
@@ -3681,7 +3836,7 @@ class Library:
 
 # ------------------------------------------------- one deck's view (plan 44 D5a)
 
-class DeckProject(DeckProjectSlots, Project):
+class DeckInstall(DeckInstallSlots, Install):
     """The one show as one deck sees it: every field is the show's (it shares
     the show's `__dict__`), but `lib` is that deck's `DeckLibrary`, so a bank
     verb this object does (a pad on that deck's table) loads, saves and lights
@@ -3694,19 +3849,19 @@ class DeckProject(DeckProjectSlots, Project):
     `MetaController`) says where (`row_load`), or why not. No patch can press any
     `preset.*`: `routing.meta_refusal` refuses a patch's row on one at every door. A
     person's save does not change the picture, so it stays on its own deck, as does the panel's load,
-    which is the plain `Project`'s and the intentional one. `meta` None (no second
+    which is the plain `Install`'s and the intentional one. `meta` None (no second
     deck): a load lands on this deck. Its own two fields can't be in the shared `__dict__`,
-    so they are slots, held on a cold base: `DeckProjectSlots` says why."""
+    so they are slots, held on a cold base: `DeckInstallSlots` says why."""
 
     lib: DeckLibrary
     meta: Any
 
-    def __init__(self, lib: DeckLibrary):        # never `Project.__init__`: nothing is new
-        self.__dict__ = lib.base.project.__dict__
+    def __init__(self, lib: DeckLibrary):        # never `Install.__init__`: nothing is new
+        self.__dict__ = lib.base.install.__dict__
         self.lib = lib
         self.meta = None
 
-    def _landing(self, what: str) -> Project | None:
+    def _landing(self, what: str) -> Install | None:
         """The view a row's load lands on; None when it may not, and that is said."""
         if self.meta is None:
             return self
@@ -3718,7 +3873,7 @@ class DeckProject(DeckProjectSlots, Project):
             return None
         return where
 
-    def _say_loaded(self, where: Project) -> None:
+    def _say_loaded(self, where: Install) -> None:
         name = getattr(where._loader(), "current", None)    # the look's own name
         if self.meta is not None and name:
             where.lib.say(status=self.meta.loaded_words(name))
@@ -3731,11 +3886,11 @@ class DeckProject(DeckProjectSlots, Project):
 
     def load_slot(self, k: int) -> bool | None:
         if not (0 <= k < len(self.bank) and self.bank[k] is not None):
-            return Project.load_slot(self, k)   # loads nothing: it says how to fill it
+            return Install.load_slot(self, k)   # loads nothing: it says how to fill it
         where = self._landing(slot_key(k))
         if where is None:
             return None
-        done = Project.load_slot(where, k)
+        done = Install.load_slot(where, k)
         if done:
             self._say_loaded(where)
         return done
@@ -3743,24 +3898,24 @@ class DeckProject(DeckProjectSlots, Project):
     def cycle(self, step: int = 1) -> None:
         where = self._landing("the pads")
         if where is not None:
-            Project.cycle(where, step)        # (its `load_slot` says what loaded)
+            Install.cycle(where, step)        # (its `load_slot` says what loaded)
 
     def walk(self, step: int = 1) -> str | None:
-        where = self._landing("the preset list")
+        where = self._landing("the patch list")
         if where is None:
             return None
-        name = Project.walk(where, step)
+        name = Install.walk(where, step)
         if name:
             self._say_loaded(where)
         return name
 
     def home(self) -> bool | None:
         if not self.startup:
-            return Project.home(self)           # loads nothing: it says so
+            return Install.home(self)           # loads nothing: it says so
         where = self._landing("home")
         if where is None:
             return None
-        done = Project.home(where)
+        done = Install.home(where)
         if done:
             self._say_loaded(where)
         return done
@@ -3773,16 +3928,16 @@ class DeckLibrary(DeckLibrarySlots, Library):
     so its load, save, new and marks cannot reach another deck, whichever the
     panel is on; the plain `Library` is the panel's view of the same state
     (`Library.pointer`). The loadable patches kind's and load hooks are this deck's too.
-    Its own three fields are slots on a cold base, as `DeckProject`'s are."""
+    Its own three fields are slots on a cold base, as `DeckInstall`'s are."""
 
-    _project: DeckProject
+    _project: DeckInstall
     base: Library
     own: Any
 
     def __init__(self, base: Library, loaded_patch=None):   # never `Library.__init__`: nothing is new
         self.__dict__ = base.__dict__
         self.base, self.own = base, loaded_patch
-        self._project = DeckProject(self)
+        self._project = DeckInstall(self)
 
     def on_deck(self, loaded_patch=None) -> DeckLibrary:
         """This view, for its first `LoadedPatch` (`Deck.build` makes it before them,
@@ -3803,7 +3958,7 @@ class DeckLibrary(DeckLibrarySlots, Library):
         return self.own.reg if self.own is not None else self.base.reg
 
     @property
-    def project(self) -> DeckProject:
+    def install(self) -> DeckInstall:
         return self._project
 
     @property

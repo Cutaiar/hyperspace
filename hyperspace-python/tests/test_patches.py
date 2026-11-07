@@ -36,7 +36,7 @@ from hyperspace.routing import Binding, Bindings
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "patches"
 ACID_WASH = FIXTURES / "acid-wash.json"
 # the loadable patches the build once shipped (tests/corpus: test data, never read by the app)
-LOADABLE = Path(__file__).resolve().parent / "corpus" / "presets"
+LOADABLE = Path(__file__).resolve().parent / "corpus" / "loadable"
 
 
 def example() -> dict:
@@ -710,7 +710,7 @@ def test_save_patch_then_read_patch_is_the_same_dict(lib):
     assert lib.read_patch("Noita Core") == doc
     assert lib.read_patch("noita-core") == doc
     assert lib.status == "patches: saved Noita Core"
-    assert not (lib.home / "presets").exists()          # nothing else written
+    assert not (lib.home / "loadable").exists()          # nothing else written
     # saved again with another note: the old text goes to the trash first
     lib.save_patch({**doc, "note": "changed"})
     assert [t.group for t in lib.trash()] == [PATCHES]
@@ -729,7 +729,7 @@ def test_a_bad_patch_is_a_library_error(lib):
     (lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
     (lib.home / PATCHES / "old.json").write_text(json.dumps(
         {**doc, "name": "old", "schema": "hyperspace.patch/3"}))
-    with pytest.raises(LibraryError, match="is not a hyperspace.patch"):
+    with pytest.raises(LibraryError, match="git pull and uv sync"):
         lib.read_patch("old")
     (lib.home / PATCHES / "bad.json").write_text(json.dumps(
         {**doc, "name": "bad", "nodes": [*doc["nodes"], {"kind": "camera"}]}))
@@ -761,3 +761,10 @@ def test_patches_list_rename_and_delete_as_loadables_do(lib):
     assert {t.name for t in lib.trash()} == {"Blue Wash", "Deep Wash"}
     assert not lib.delete(PATCHES, "Deep Wash")                 # gone: nothing to delete
     assert lib.delete(PATCHES, "acid wash") and lib.list(PATCHES) == []
+
+
+def test_a_patch_saved_in_the_old_pad_words_reads_in_todays():
+    """Review of #435: a pair route saved before bindings/4 must not go silently dead."""
+    p = read({"nodes": [], "routes": [{"source": "pair:UP/DOWN", "target": "view.zoom"},
+                                      {"source": "pad:A", "target": "deck.chase"}]})
+    assert [r["source"] for r in p.routes] == ["pair:hat.N/hat.S", "pad:S"]

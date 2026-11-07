@@ -327,7 +327,7 @@ def test_a_loadable_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
     w = next(w for w in spec.wires if w.dst != "delay.image" and w.src != "delay")
     assert e.unwire(f"rout:{w.src}", f"rin:{w.node}/{w.port}") is None
     assert calls == []
-    rig.lib.load("presets", "delay-trails")
+    rig.lib.load("loadable", "delay-trails")
     assert calls == [1]
 
 

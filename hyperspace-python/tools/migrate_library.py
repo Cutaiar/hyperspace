@@ -1,125 +1,50 @@
 #!/usr/bin/env python3
-"""Rewrite a library's loadable patches as the newest schema, once (row 394).
+"""The one migration (plan 57 §7, §7a): a library to `/11`, its shows to install files.
 
     uv run python tools/migrate_library.py [--library PATH] [--show NAME] [--apply]
                                            [--force NAME …]
     uv run python tools/migrate_library.py --library PATH --to FOLDER [--force NAME …]
 
-The owner's decision of 2026-10-25: both Macs always run the newest build,
-so every loadable patch in the library is moved to the newest schema and old
-schemas stop circulating. Since plan 44 D3 (rows 611–625) that is
-``hyperspace.preset/10`` — plan 36 T3's graph that says everything (every
-edge a wire, ``/7``), the GRAPH page's groups (``/8``), the one orbit
-camera (``/9``, plan 43 C2: the eye in every loadable patch's ``values``) and the
-look made whole (``/10``: the hands' and clouds' looks — ``ghost.*`` but
-``ghost.mirror``, ``cloud.*`` — in ``values`` and the bus cuts in
-``bus``, where until now the open show held them; no ``modules`` labels,
-no ``desk_template``) — and every show to ``hyperspace.project/3`` (the
-rig, the pads and ``startup``). A load reads an older file
-through the one-way migration (`graphmigrate.seven`, then `nine`, then
-`ten`), so a library not yet at ``/9`` takes the ``/9`` step first in the
-same pass: one run, one backup. Each loadable patch in ``<library>/presets/``,
-every folder down as the library lists them (plan 48; not ``trash/``,
-not a hidden folder, not a backup, not a dot-file) is loaded and saved untouched
-by the app itself (`hyperspace.headless.resave`: the registry, library,
-router and loadable patches the tests save through) in a scratch library — the
-library's module presets beside it, and **the rig's
-show open** (below) — and three checks are made:
+**The default is a dry run: nothing is written anywhere but a scratch folder.** ``--apply``
+refuses to run while Hyperspace is open on this Mac (it says if it can't tell, and it can
+never see the other Mac: quit there first), then, in this order, because of what reads what:
 
-- it loads (a file this build refuses is left as it is);
-- the ``/10`` is a fixed point: loaded and saved untouched again it is the
-  same bytes;
-- its save round-trips the picture: the original file and its ``/10`` are
-  each drawn on the golden-frame rig (tools/golden_frames.py `picture`:
-  offscreen, the clock pinned, hands present, eight windows on the rig as
-  it ships, `SHIPPED`: each shows its own wires, else All outputs' by its
-  bus cables), the same show open, and every output's hash must match.
-  Both are drawn by *this* build — the original through the same one-way
-  migration a load runs — so "round-trip picture: same" proves the
-  written ``/10`` draws what this build draws of the old file with the
-  rig's show open (the eye included), never that it draws what an older
-  build drew. That parity is the migration's tests and the eye: a loadable patch
-  with a look-back or a dream is eyeballed live on the old and new build
-  (hand check 366, party-wake).
+1. **One backup** of the whole library, ``<home>/library-backup-<stamp>/``, never inside it.
+2. **The trash is deleted, not converted** (the owner, 2026-11-06): ``<library>/trash`` and
+   ``presets-backup-*``.
+3. **The retaper,** a no-op after the first (`retaper_plan`), and module presets and
+   ``patch/1`` files into the one format (`group_plan`).
+4. **Every loadable patch to** ``hyperspace.loadable/11`` by `hyperspace.headless.resave`, in
+   place, with three checks: it loads; it is a fixed point (loaded and saved untouched again,
+   the same bytes); and the same picture: the old file and its ``/11`` are each drawn on the
+   golden-frame rig, the rig's show open, and every output's hash must match. Both are drawn
+   by this build, so that proves the written ``/11`` draws what this build draws of the old
+   file, never what an older build drew. **Shows still exist here:** an old file takes the
+   eye, looks and cuts of **the rig's show** (``--show NAME``, else this Mac's last show, else
+   the library's one show). A file that fails a check is not written and stays readable; it
+   is listed at the end, and ``--force NAME`` writes it despite a picture or fixed-point
+   difference (never one that doesn't load, or an old file whose section "was not read").
+5. **Each show to** ``installs/<stem>.json`` (`library.install_doc`), last of the file
+   rewrites, and it opens in the new reader before its show goes. Each show becomes an
+   install; merging by machine would guess. ``startup`` that names no file is cleared and
+   said (``mine``'s ``MIGRATED``); bank slots that point at nothing are reported and left.
+6. **Tidy:** ``fx/``, ``.bak-v2-*`` and folders with nothing in them (a Drive ``Icon`` and
+   ``.DS_Store`` count as nothing) are deleted.
+7. **The folder move, last of all:** ``presets/`` to ``loadable/``, a rename, so a failure
+   before it leaves today's paths.
 
-**The rig's show** (plan 43 C2, plan 44 D3): an old loadable patch drew through
-the eye, the hands' and clouds' looks and the bus cuts the open show held,
-so its ``/10`` takes that show's — the eye and the looks from its
-``session``, the camera node's GRAPH position from its ``layout``, the
-cuts from its ``rig`` — exactly as the app hands them to an old loadable patch's
-load (`library.Project.old_eye`, `old_look`, `old_cuts`): **the show's
-cuts are written into every loadable patch the library holds** (as the ``/9``
-step wrote the show's eye into every loadable patch), since each loadable patch now says
-for itself which cables stand.
-The show is ``--show NAME`` (a file stem under ``<library>/projects/``),
-else this Mac's last show (``<home>/last_show``), else the library's one
-show; none (or a show that holds no eye, nor a ``.bak-v2-eye`` copy of
-itself that does) is the build's default eye, and the tool says which.
-Every show in ``<library>/projects/`` that is ``/2`` or holds the eye or
-the camera's position is then rewritten as ``/3`` without them
-(`library.show_without_eye`, `show_without_look`), ``<file>.bak-v2-look``
-kept beside a ``/2`` and ``<file>.bak-v2-eye`` beside a ``/3`` that still
-held the eye (the app's own backups, `library.LOOK_BACKUP`, `EYE_BACKUP`).
+A second run does nothing, and makes no backup. A run after an old build saved into the old
+folders takes those files as well. Each Mac's ``bindings.json`` moves at its own next launch,
+by the road it already has; ``last_show`` is read into ``last_install`` the same way.
 
-**The retaper first** (wave 0 T1, tools/retaper_routes.py): one bump moves
-everything, so ``--apply`` measures every document of the library still
-without the taper marker (``units["fx.depth"] == "taper"``) along the
-effect tapers before anything else — the patches and this Mac's ``bindings.json`` (kept as ``bindings.json.bak-v3``) as
-retaper_routes.py writes them. A loadable patch is retapered by its own resave
-(its load measures an unmarked file's depths, its save writes the marker),
-so every ``/10`` is along the tapers. The dry run says what it would
-retaper.
+``--to FOLDER`` writes each loadable patch that passed into FOLDER under its own file name:
+the library is read, never written, and no backup is made. The test corpus was made so, with
+``$HYPERSPACE_HOME`` pointed at a scratch folder.
 
-**One format** (plan 50): every module preset — ``<library>/<group>/*.json``,
-``hyperspace.preset/1``, one group's values — is written as a patch of
-that group, ``<library>/patches/<group>/<file>`` (``hyperspace.patch/2``
-with a ``group`` key, `patches.forward`), its old file removed (the backup
-holds it); every ``patch/1`` under ``<library>/patches/`` is written as
-its ``/2`` in place. A retired group's files (``fx/``) and a file that
-does not read are left as they are, said. ``--to`` moves none. The dry run
-lists them.
-
-An old file (before ``/7``) whose load says its section was "not read"
-(the build refused it: black) is **not written**, whatever ``--force``
-says: its ``/10`` would carry the old words with the migration lost for
-good. A file whose load or save raises (a frame that does not settle
-included) is skipped alone; the run goes on. No pose is written: an old
-file had none and keeps spinning (`headless.resave` takes it back out).
-
-The default is a **dry run**: for each loadable patch its file, its name, old schema
-→ new, the notes its load made and the checks' results; the show and the
-eye it hands on; the shows and the documents it would rewrite. Nothing is
-written anywhere but a scratch folder.
-
-``--apply`` first copies the whole library folder to a local backup,
-``~/Hyperspace/library-backup-<YYYYMMDD-HHMMSS>/`` (the machine's home,
-``$HYPERSPACE_HOME`` if set — never inside the library), and says where;
-then retapers, then computes and rewrites each loadable patch that passed (against
-the retapered module presets; a dry run computes against a retapered scratch
-copy, so it says what --apply writes), in place and
-atomically (a dot-named temp file renamed over it), under its own file
-name, then the shows. A file whose bytes the save would not change
-(already ``/10`` and a fixed point) is left untouched. A loadable patch that failed
-a check is **not written** and is listed at the end — unless ``--force
-NAME`` (its file stem; repeatable) names it, which writes it despite a
-picture or fixed-point difference (a file that does not load has nothing
-to write). No name changes. **Run it between shows, with both Macs on this
-build**: a Mac on an older build refuses a ``/10`` and a ``/3`` show.
-
-``--to FOLDER`` (plan 36 T3) writes each loadable patch that passed into FOLDER
-under its own file name instead — the library is read, never written, so
-no backup is made, nothing in the library is retapered and no show is
-rewritten (the loadable patches are computed against a retapered scratch copy). The test
-corpus was made so: ``--library <a copy holding tests/corpus/presets>
---to tests/corpus/presets`` (with ``$HYPERSPACE_HOME`` pointed at a
-scratch folder; no show, so the build's default eye — what the goldens
-draw with).
-
-The library is ``--library``, else the config's ``[library] path`` (the
-machine home's config.toml), else the machine home. Exit status: 0 when
-every loadable patch is (or would be) migrated or already was, 1 when any was (or
-would be) skipped, 2 when the library is not there or ``--show`` names no
-show.
+The library is ``--library``, else the config's ``[library] path``, else the machine home.
+Exit status: 0 when every file is (or would be) migrated or already was, 1 when any was (or
+would be) skipped or left, 2 when there is no library, ``--show`` names no show, or the app is
+open on this Mac.
 """
 
 from __future__ import annotations
@@ -127,7 +52,9 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -138,12 +65,19 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-LOADABLE = "presets"
+LOADABLE = "loadable"
+OLD_LOADABLE = "presets"
 PROJECTS = "projects"
+INSTALLS = "installs"
 SHOW_SUFFIX = ".hyp.json"
 BACKUP_PREFIX = "library-backup-"
-NEWEST = "hyperspace.preset/10"           # plan 44 D3 (rows 611–625)
-SHOW_NEWEST = "hyperspace.project/3"
+NEWEST = "hyperspace.loadable/11"         # plan 57 (FQ4)
+OLD_BACKUPS = "presets-backup-"           # a hand-made copy, deleted with the trash (§7a)
+TRASH = "trash"
+NOTHING_FILES = ("Icon\r", "Icon", ".DS_Store")   # what makes no folder worth keeping
+# (OLD_LOADABLE too: a folder the owner made under presets/ and left empty moves with it)
+KEPT_FOLDERS = {"media", "media-cache", "weights", "trash", LOADABLE, OLD_LOADABLE, INSTALLS,
+                "patches"}
 # what a load note says of a graph section the build refused (loadable.py:
 # `GraphSection.read`, `UNWIRED_SAID`)
 NOT_READ = "not read — black"
@@ -159,7 +93,7 @@ class Result:
     new: str = ""                   # the schema it saves as
     notes: list[str] = field(default_factory=list)
     error: str = ""                 # it does not load (nothing to write)
-    fixed: bool = False             # the /10 re-saves as itself
+    fixed: bool = False             # the /11 re-saves as itself
     picture: str = ""               # the round trip: "same", "differs (k of n outputs)", or why not drawn
     unchanged: bool = False         # the save is the file's own bytes
     data: bytes = b""               # what a write puts there
@@ -177,28 +111,57 @@ def machine_home() -> Path:
 
 
 def configured_library(home: Path) -> Path:
-    """The config's ``[library] path`` (home/config.toml), else `home`."""
+    """The config's ``[library] path`` (home/config.toml), else `home`. A config.toml that
+    won't parse raises LookupError: the run never falls back to the home then (row 843)."""
     from hyperspace import config
     cfg_path = home / config.FILE
     if cfg_path.is_file():
-        lp = config.load(cfg_path).get("library", {}).get("path", "")
+        cfg = config.load(cfg_path)
+        if cfg.get("error"):
+            raise LookupError(f"{cfg_path} does not read ({cfg['error']}): fix it, or give "
+                              "--library FOLDER")
+        lp = cfg.get("library", {}).get("path", "")
         if lp:
             return Path(lp)
     return home
 
 
 def loadable_files(library: Path) -> list[Path]:
-    """The library's presets: ``presets/`` every folder down, as the library
-    lists them (`library._walk`, plan 48 stage 2: hidden folders skipped,
-    never through a link) — a dot-file (a write's temp file), a backup
-    (``.bak-``) and anything in ``trash/`` left out."""
+    """The library's loadable patches: ``loadable/`` and ``presets/`` every folder down, as
+    the library lists them (`library._walk`, plan 48 stage 2: hidden folders skipped, never
+    through a link): a dot-file (a write's temp file), a backup (``.bak-``) and anything in
+    ``trash/`` left out."""
     from hyperspace.library import _walk
 
-    folder = library / LOADABLE
-    if not folder.is_dir():
-        return []
-    return [p for p in _walk(folder)
-            if p.is_file() and not p.name.startswith(".") and ".bak-" not in p.name]
+    out: list[Path] = []
+    for name in (LOADABLE, OLD_LOADABLE):
+        folder = library / name
+        if folder.is_dir():
+            out += [p for p in _walk(folder)
+                    if p.is_file() and not p.name.startswith(".") and ".bak-" not in p.name]
+    return out
+
+
+def under_folder(library: Path, path: Path) -> str:
+    """`path` under whichever of the two folders holds it (``party/trip.json``)."""
+    for name in (LOADABLE, OLD_LOADABLE):
+        if path.is_relative_to(library / name):
+            return path.relative_to(library / name).as_posix()
+    return path.name
+
+
+def app_running() -> tuple[bool | None, str]:
+    """Is Hyperspace open on this Mac? (True, False, or None when it can't tell), in words.
+    The other Mac is never seen: that one is a person's to quit."""
+    try:
+        out = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True,
+                             timeout=10, check=True).stdout
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"can't tell whether Hyperspace is open on this Mac ({e}): make sure it isn't"
+    for row in out.splitlines():
+        if "bin/hyperspace" in row or "-m hyperspace" in row or "hyperspace.app" in row:
+            return True, f"Hyperspace is open on this Mac: {row.strip()[:100]}"
+    return False, "Hyperspace is not open on this Mac (the other Mac can't be seen from here)"
 
 
 def show_files(library: Path) -> list[Path]:
@@ -230,6 +193,7 @@ def rig_show(library: Path, home: Path, name: str | None = None
     LookupError for a `name` the library has no show of."""
     from hyperspace import headless
     from hyperspace.library import (
+        LAST_INSTALL,
         LAST_SHOW,
         kept_eye,
         kept_look,
@@ -243,10 +207,12 @@ def rig_show(library: Path, home: Path, name: str | None = None
             raise LookupError(f"no show {name!r} under {library / PROJECTS}")
         path, how = shows[name], "--show"
     else:
-        try:
-            last = (home / LAST_SHOW).read_text().strip()
-        except OSError:
-            last = ""
+        last = ""
+        for file in (LAST_INSTALL, LAST_SHOW):
+            try:
+                last = last or (home / file).read_text().strip()
+            except OSError:
+                pass
         if last in shows:
             path, how = shows[last], "this Mac's last show"
         elif len(shows) == 1:
@@ -254,7 +220,7 @@ def rig_show(library: Path, home: Path, name: str | None = None
         else:
             why = "no show in the library" if not shows else (
                 f"{len(shows)} shows and none is this Mac's last: name one with --show")
-            return None, None, (f"show: none ({why}) — every preset takes the build's "
+            return None, None, (f"show: none ({why}) — every loadable patch takes the build's "
                                 "default eye, hands' and clouds' looks, and no bus cut")
     doc = _read(path)
     eye, _at = show_eye(doc)
@@ -270,7 +236,7 @@ def rig_show(library: Path, home: Path, name: str | None = None
     said = (", ".join(f"{k} {v:.4g}" for k, v in sorted(session.items())) if session
             else "no eye nor look (the build's defaults)")
     cut = (seed or {}).get("rig", {}).get("cut", [])
-    said += (f"; {len(cut)} bus cut(s) into every preset: "
+    said += (f"; {len(cut)} bus cut(s) into every loadable patch: "
              + ", ".join(f"{c['from']} → {c['to']}" for c in cut) if cut else "; no bus cut")
     return path, seed, f"show: {path.name[: -len(SHOW_SUFFIX)]} ({how}) — {said}"
 
@@ -301,7 +267,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
     res.data, res.notes, res.name = data, notes, name
     version = graphmigrate.schema_version(json.loads(original))
     if (version is None or version < graphmigrate.SEVEN) and any(NOT_READ in n for n in notes):
-        res.error = ("its graph section was not read by this build (black) — writing its /10 "
+        res.error = ("its graph section was not read by this build (black) — writing its /11 "
                      "would lose the migration for good")
         return res
     res.new = str(json.loads(data).get("schema"))
@@ -314,7 +280,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None,
         res.fixed = again == data
     except (LibraryError, ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
         res.fixed = False
-        res.notes = [*res.notes, f"its /10 does not load: {e}"]
+        res.notes = [*res.notes, f"its /11 does not load: {e}"]
     if picture is None:
         picture = _golden_picture()
     try:
@@ -437,42 +403,181 @@ def retapered_copy(library: Path, todo, dest: Path) -> Path:
     return dest
 
 
-def show_plan(library: Path) -> list[tuple[Path, bytes]]:
-    """Every show in the library that is ``/2`` (plan 44 D3) or holds the eye
-    or the camera's GRAPH position (plan 43 C2), with its bytes as ``/3``
-    without them (`library.show_without_eye`, `show_without_look`)."""
-    from hyperspace.library import show_text, show_without_eye, show_without_look
-    out = []
-    for path in show_files(library):
-        doc = _read(path)
-        if doc is None:
-            continue
-        new = show_without_eye(doc) or doc
-        new = show_without_look(new) or new
-        if new is not doc:
-            out.append((path, show_text(new).encode()))
+@dataclass
+class InstallMove:
+    """One show on its way to an install file."""
+
+    src: Path
+    dest: Path
+    data: bytes
+    said: list[str] = field(default_factory=list)
+
+
+def install_plan(library: Path) -> tuple[list[InstallMove], list[str]]:
+    """Every show (and an install file a Mac saved into ``projects/``) as its
+    ``installs/<stem>.json`` (`library.install_doc`), each read back through the new reader;
+    ``startup`` naming no file cleared, bank slots naming nothing reported. Returns (the
+    moves, words for what is left: a file that won't read, a place already holding others)."""
+    from hyperspace.library import (
+        LOADABLE as GROUP,
+    )
+    from hyperspace.library import (
+        Library,
+        LibraryError,
+        _json_text,
+        install_doc,
+        install_stem,
+    )
+
+    todo: list[InstallMove] = []
+    left: list[str] = []
+    shows = show_files(library)
+    if not shows:
+        return todo, left
+    with tempfile.TemporaryDirectory(prefix="hyperspace-names-") as machine:
+        names = Library(library, machine=Path(machine), period=0.0)
+        for path in shows:
+            doc = _read(path)
+            if doc is None:
+                left.append(f"{path.name}: does not read — left as it is")
+                continue
+            try:
+                new = install_doc(doc)
+            except (LibraryError, ValueError, TypeError) as e:
+                left.append(f"{path.name}: {e} — left as it is")
+                continue
+            said: list[str] = []
+            start = new.get("startup")
+            if start and names.path_of(GROUP, start, loose=True) is None:
+                said.append(f"its startup {start!r} names no file: cleared")
+                new["startup"] = None
+            empty = [str(k + 1) for k, n in enumerate(new.get("bank") or [])
+                     if n and names.path_of(GROUP, n, loose=True) is None]
+            if empty:
+                said.append(f"bank slots naming nothing, left as they are: {', '.join(empty)}")
+            if not new.get("tuning"):
+                said.append("it holds no tuning: opening it changes none")
+            stem = install_stem(path.name)
+            dest = library / INSTALLS / f"{stem}.json"
+            data = _json_text(new).encode()
+            if dest.exists() and dest.read_bytes() != data:
+                left.append(f"{path.name}: installs/{dest.name} holds another file — left as it is")
+                continue
+            # it opens in the new reader, before its show goes
+            try:
+                names.install._take(json.loads(data), dest, dest.name)
+            except (LibraryError, ValueError, TypeError) as e:
+                left.append(f"{path.name}: its install file does not open ({e}) — left as it is")
+                continue
+            todo.append(InstallMove(path, dest, data, said))
+    return todo, left
+
+
+def install_write(todo: list[InstallMove]) -> list[str]:
+    """Write `install_plan`'s files, each show removed only after (the backup holds it)."""
+    said = []
+    for m in todo:
+        try:
+            m.dest.parent.mkdir(parents=True, exist_ok=True)
+            write(m.dest, m.data)
+            m.src.unlink()
+        except OSError as e:
+            said.append(f"{m.src.name}: not moved — {e}")
+    return said
+
+
+def _nothing_in(folder: Path) -> bool:
+    """Does `folder` hold nothing a person put there, every folder down?"""
+    try:
+        return all((p.name in NOTHING_FILES) or (p.is_dir() and not p.is_symlink() and _nothing_in(p))
+                   for p in folder.iterdir())
+    except OSError:
+        return False
+
+
+def is_home(library: Path, home: Path) -> bool:
+    """The library is this Mac's home: its `trash/` and its ``.bak-`` files are the Mac's."""
+    try:
+        return library.resolve() == home.resolve()
+    except OSError:
+        return False
+
+
+def trash_plan(library: Path, home: Path) -> list[Path]:
+    """What goes first, after the backup (the owner, 2026-11-06): the library's trash and the
+    hand-made ``presets-backup-*``; deleted, never converted. A library that is the Mac's own
+    home keeps its trash: that one is the Mac's."""
+    if not library.is_dir():
+        return []
+    return [d for d in sorted(library.iterdir()) if d.is_dir() and not d.is_symlink()
+            and ((d.name == TRASH and not is_home(library, home))
+                 or d.name.startswith(OLD_BACKUPS))]
+
+
+def tidy_plan(library: Path) -> list[Path]:
+    """What the run deletes at the end (§7a): the retired ``fx/`` folder and every
+    ``.bak-v2-*`` the shows and loadable patches kept. Empty folders: `empty_folders`."""
+    out = [library / "fx"] if (library / "fx").is_dir() else []
+    for name in (PROJECTS, INSTALLS, OLD_LOADABLE, LOADABLE, "patches"):
+        if (library / name).is_dir():
+            out += [p for p in sorted((library / name).rglob("*.bak-v2-*")) if p.is_file()]
     return out
 
 
-def show_write(todo) -> list[str]:
-    """Write `show_plan`'s shows, each kept first (`routing.backup`, the
-    app's own) as ``<file>.bak-v2-look`` when it was ``/2``, else
-    ``<file>.bak-v2-eye``; no backup, no write."""
-    from hyperspace import routing
-    from hyperspace.library import EYE_BACKUP, LOOK_BACKUP, PROJECT_V2
+def empty_folders(library: Path) -> list[Path]:
+    """Folders with nothing in them, the deepest first; those of `KEPT_FOLDERS` are kept."""
+    out = []
+    for d in sorted((p for p in library.rglob("*") if p.is_dir() and not p.is_symlink()),
+                    key=lambda p: len(p.parts), reverse=True):
+        if not (set(d.relative_to(library).parts) & KEPT_FOLDERS) and _nothing_in(d):
+            out.append(d)
+    return out
+
+
+def delete(todo: list[Path]) -> list[str]:
+    """Delete each file or folder; what can't go is said."""
     said = []
-    for path, data in todo:
-        tag = LOOK_BACKUP if (_read(path) or {}).get("schema") == PROJECT_V2 else EYE_BACKUP
-        if routing.backup(path, tag) is None:
-            said.append(f"{path.name}: not rewritten — no backup could be made")
+    for path in todo:
+        try:
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        except OSError as e:
+            said.append(f"{path.name}: not deleted — {e}")
+    return said
+
+
+def folder_move(library: Path) -> list[str]:
+    """``presets/`` to ``loadable/``: a rename when there's no ``loadable/``. When there is,
+    an old build saved into the old folder: file by file, never over one, what can't move
+    said and left."""
+    old, new = library / OLD_LOADABLE, library / LOADABLE
+    if not old.is_dir():
+        return []
+    if not new.exists():
+        old.rename(new)
+        return []
+    said = []
+    for path in loadable_files(library):
+        if not path.is_relative_to(old):
             continue
-        write(path, data)
+        dest = new / path.relative_to(old)
+        if dest.exists():
+            said.append(f"presets/{path.relative_to(old)}: loadable/ holds a file of that name "
+                        "— left as it is")
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        path.rename(dest)
+    if not said and _nothing_in(old):
+        shutil.rmtree(old)
     return said
 
 
 # plan 50: the folders in a library root that hold no module presets — the
 # document kinds', the shows', the trash, the old routing loadable patches
-NOT_MODULES = (LOADABLE, PROJECTS, "patches", "playlists", "trash", "bindings")
+NOT_MODULES = (LOADABLE, OLD_LOADABLE, PROJECTS, INSTALLS, "patches", "playlists", "trash",
+               "bindings", "media", "venues", "Docs")
 
 
 def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]]:
@@ -495,7 +600,7 @@ def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]
 
     files = _retaper_tool().json_files          # (review fix 4: the one file list)
     for folder in sorted(d for d in library.iterdir() if d.is_dir()):
-        if folder.name in NOT_MODULES or folder.name.startswith((".", BACKUP_PREFIX)):
+        if folder.name in NOT_MODULES or folder.name.startswith((".", BACKUP_PREFIX, OLD_BACKUPS)):
             continue
         for path in files(folder):
             doc = _read(path)
@@ -503,7 +608,7 @@ def group_plan(library: Path) -> tuple[list[tuple[Path, Path, bytes]], list[str]
                 said.append(f"{folder.name}/{path.name}: not a module preset — left as it is")
                 continue
             if folder.name in RETIRED_MODULES:
-                said.append(f"{folder.name}/{path.name}: a retired group's — left as it is")
+                said.append(f"{folder.name}/{path.name}: a retired group's — deleted")
                 continue
             doc.setdefault(patches.GROUP_KEY, folder.name)
             try:
@@ -565,8 +670,23 @@ def backup(library: Path, home: Path) -> Path:
         dest = home / f"{BACKUP_PREFIX}{stamp}-{k}"
         k += 1
     home.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(library, dest, ignore=shutil.ignore_patterns(f"{BACKUP_PREFIX}*"))
+    ignore = shutil.ignore_patterns(f"{BACKUP_PREFIX}*")
+    shutil.copytree(library, dest, ignore=ignore)
+    want, got = _file_count(library, ignore), _file_count(dest, ignore)
+    if want != got:
+        raise OSError(f"the backup at {dest} holds {got} files, the library {want}: "
+                      "nothing was changed")
     return dest
+
+
+def _file_count(root: Path, ignore) -> int:
+    """Files under `root` as `shutil.copytree` walks it with `ignore` (links not followed)."""
+    n = 0
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=True):  # as copytree
+        left = ignore(dirpath, dirnames + filenames)
+        dirnames[:] = [d for d in dirnames if d not in left]
+        n += sum(1 for f in filenames if f not in left)
+    return n
 
 
 def write(path: Path, data: bytes) -> None:
@@ -615,10 +735,10 @@ def line(r: Result) -> str:
     head = f"{r.file:40s} {r.name!r:36s} {r.old.rpartition('/')[2] or '?':>2} → "
     if r.error:
         return f"{r.file:40s} {'':36s} {r.old.rpartition('/')[2]:>2} → --  SKIP: {r.error}"
-    state = ("already /10, untouched" if r.unchanged and r.ok else
+    state = ("already /11, untouched" if r.unchanged and r.ok else
              "ok" if r.ok else "SKIP")
     why = [] if r.ok else [w for w in (
-        "" if r.fixed else "its /10 is not a fixed point",
+        "" if r.fixed else "its /11 is not a fixed point",
         "" if r.picture == "same" else f"round-trip picture {r.picture}") if w]
     out = f"{head}{r.new.rpartition('/')[2]}  round-trip picture: {r.picture}  fixed point: " \
           f"{'yes' if r.fixed else 'NO'}  {state}" + (f" ({'; '.join(why)})" if why else "")
@@ -627,60 +747,81 @@ def line(r: Result) -> str:
     return out
 
 
-def main(argv: list[str] | None = None, *, picture=None) -> int:
+def main(argv: list[str] | None = None, *, picture=None, running=app_running) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--library", type=Path, default=None,
                     help="the library folder (default: the config's [library] path, "
                          "else the machine home)")
     ap.add_argument("--show", default=None, metavar="NAME",
-                    help="the show whose eye, looks and bus cuts the presets take (its file "
-                         "stem; default: "
-                         "this Mac's last show, else the library's only show)")
+                    help="the show whose eye, looks and bus cuts an old file takes (its file "
+                         "stem; default: this Mac's last show, else the library's only show)")
     ap.add_argument("--apply", action="store_true",
-                    help="back the library up, retaper, then rewrite every preset that "
-                         "passed as /10 and every show as /3")
+                    help="back the library up, then write: without it, nothing is written")
     ap.add_argument("--force", action="append", default=[], metavar="NAME",
-                    help="write this preset despite a picture or fixed-point difference: "
-                         "its path under presets/ less .json (party/trip), or its file "
-                         "stem alone when no other folder has a preset of that stem; "
-                         "repeatable")
+                    help="write this loadable patch despite a picture or fixed-point difference: "
+                         "its path under the folder less .json (party/trip), or its file "
+                         "stem alone when no other folder has one of that stem; repeatable")
+    ap.add_argument("--closed", action="store_true",
+                    help="with --apply, when this Mac can't tell whether Hyperspace is open: "
+                         "you've checked that it isn't")
     ap.add_argument("--to", type=Path, default=None, metavar="FOLDER",
-                    help="write each preset that passed into FOLDER (the library is "
+                    help="write each loadable patch that passed into FOLDER (the library is "
                          "only read; no backup)")
     a = ap.parse_args(argv)
     if a.to is not None and a.apply:
         ap.error("--to writes elsewhere; --apply rewrites the library: one of the two")
     home = machine_home()
-    library = (a.library if a.library is not None else configured_library(home)).expanduser()
-    library = library.resolve()
-    if not (library / LOADABLE).is_dir():
-        print(f"no presets folder at {library / LOADABLE}", file=sys.stderr)
+    try:
+        library = (a.library if a.library is not None
+                   else configured_library(home)).expanduser()
+    except LookupError as e:
+        print(str(e), file=sys.stderr)
         return 2
+    library = library.resolve()
+    if not (library / LOADABLE).is_dir() and not (library / OLD_LOADABLE).is_dir():
+        print(f"no loadable patches at {library / LOADABLE} or {library / OLD_LOADABLE}",
+              file=sys.stderr)
+        return 2
+    is_open, words = running()
+    print(words)
+    if a.apply and is_open:
+        print("not run: quit Hyperspace on both Macs first", file=sys.stderr)
+        return 2
+    if a.apply and is_open is None and not a.closed:
+        print("not run: check that Hyperspace is closed on both Macs, then add --closed",
+              file=sys.stderr)
+        return 2
+    if a.apply:
+        print("the other Mac can't be seen from here: it must be closed too, and stay closed "
+              "until this finishes")
     try:
         _show, seed, said = rig_show(library, home, a.show)
     except LookupError as e:
         print(str(e), file=sys.stderr)
         return 2
     files = loadable_files(library)
-    print(f"library: {library}  ({len(files)} presets)"
+    print(f"library: {library}  ({len(files)} loadable patches)"
           + ("" if a.apply else f"  — written to {a.to}" if a.to is not None
              else "  — dry run, nothing is written"))
     print(said)
     print("(round-trip picture: the old file as this build loads it, the show open, vs its "
-          "/10 — not parity with an older build; eyeball dream presets live, hand check 366)")
-    # (review 5: every loadable patch's /10 is computed against the module presets as the
-    # retaper leaves them — with --apply the library is backed up and
-    # retapered first; a dry run and --to read a retapered scratch copy, so
-    # they report what --apply writes. --to writes only loadable patches.)
+          "/11 — not parity with an older build; eyeball dream patches live, hand check 366)")
+    # (review 5: every /11 is computed against the module presets as the retaper leaves
+    # them; a dry run and --to read a retapered scratch copy, so they report what --apply writes)
     retapers = retaper_plan(library, home)
-    shows = show_plan(library) if a.to is None else []
+    installs, stayed = install_plan(library) if a.to is None else ([], [])
+    trash = trash_plan(library, home) if a.to is None else []
+    tidy = tidy_plan(library) if a.to is None else []
+    empties = empty_folders(library) if a.to is None else []
     if retapers:
         print(f"retaper first: {len(retapers)} document(s) without the taper marker — "
               + ", ".join(f"{c.kind} {p.name}" for p, c in retapers))
-    if shows:
-        print(f"shows to rewrite as /3: {len(shows)} — "
-              + ", ".join(p.name for p, _ in shows) + " (each kept as .bak-v2-look or "
-              ".bak-v2-eye)")
+    for m in installs:
+        print(f"show {m.src.name} → installs/{m.dest.name}")
+        for words in m.said:
+            print(f"  {words}")
+    for words in stayed:
+        print(f"  {words}")
     # plan 50: the module presets and the /1 patches into the one shape
     moves, left = group_plan(library) if a.to is None else ([], [])
     if moves:
@@ -690,25 +831,49 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
                   for s, d, _ in moves))
     for words in left:
         print(f"  {words}")
+    for path in (*trash, *tidy):
+        print(f"delete: {path.relative_to(library)}" + ("/" if path.is_dir() else ""))
+    for path in empties:
+        print(f"delete, nothing in it: {path.relative_to(library)}/")
+    old_folder = a.to is None and (library / OLD_LOADABLE).is_dir()
+    if old_folder:
+        print(f"move: {OLD_LOADABLE}/ → {LOADABLE}/, last of all")
     if a.apply:
-        where = backup(library, home)
+        stale = any((_read(p) or {}).get("schema") != NEWEST for p in files)
+        if not (stale or retapers or installs or moves or trash or tidy or empties or old_folder
+                or stayed):
+            print("nothing to do: this library is already moved")
+            return 0
+        try:
+            where = backup(library, home)
+        except OSError as e:
+            print(f"not run: the backup failed ({e})", file=sys.stderr)
+            return 2
         print(f"backup: {where}")
+        for problem in delete(trash):
+            print(problem)
         for problem in retaper_write(retapers):
             print(problem)
         if retapers:
             print(f"retapered {len(retapers)} document(s) along the effect tapers")
-        if a.to is None:                        # (--to moves none, as above)
-            moves, _ = group_plan(library)      # (over what the retaper wrote)
+        moves, _ = group_plan(library)          # (over what the retaper wrote)
+        for problem in group_write(moves):
+            print(problem)
+        if moves:
+            print(f"wrote {len(moves)} patch(es) as {_patch_schema()}")
     forced = set(a.force)
     results: list[Result] = []
+    paths: dict[str, Path] = {}
     with tempfile.TemporaryDirectory(prefix="hyperspace-migrate-") as scratch:
         # (review 2.7: a copy only when a document the loads read is retapered)
         read_from = (retapered_copy(library, retapers, Path(scratch) / "retapered")
                      if not a.apply and shared_retapers(library, retapers) else library)
         for k, path in enumerate(files):
+            file = under_folder(library, path)
             r = check(path, read_from, Path(scratch) / str(k), picture=picture, show=seed,
-                      file=path.relative_to(library / LOADABLE).as_posix())
+                      file=file)
             results.append(r)
+            paths[file] = path
             print(line(r), flush=True)
     counts: dict[str, int] = {}
     for r in results:
@@ -716,47 +881,63 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     print("\nby schema found: " + ", ".join(f"{s}: {n}" for s, n in sorted(counts.items())))
     stems = stem_counts(results)
     for name in ambiguous_forces(results, forced, stems):
-        print(f"--force {name}: {stems[name]} presets have that name in different folders — "
-              "give the folder path (party/{name}); none forced by it".replace("{name}", name))
+        print(f"--force {name}: {stems[name]} patches have that name in different folders — "
+              f"give the folder path (party/{name}); none forced by it")
     writes = [r for r in results if not r.error and (not r.unchanged or a.to is not None)
               and (r.ok or _forced(r, forced, stems))]
     skipped = [r for r in results if not r.ok
                and (r.error or not _forced(r, forced, stems))]
     untouched = [r for r in results if r.ok and r.unchanged]
+    troubles = list(stayed)
     if a.to is not None:
         a.to.mkdir(parents=True, exist_ok=True)
         for r in writes:
             (a.to / r.file).parent.mkdir(parents=True, exist_ok=True)
             write(a.to / r.file, r.data)
-        print(f"wrote {len(writes)} as /10 into {a.to}, skipped {len(skipped)}")
+        print(f"wrote {len(writes)} as /11 into {a.to}, skipped {len(skipped)}")
     elif a.apply:
         for r in writes:
-            write(library / LOADABLE / r.file, r.data)
-        print(f"rewrote {len(writes)} as /10, left {len(untouched)} untouched (already /10), "
+            write(paths[r.file], r.data)
+        print(f"rewrote {len(writes)} as /11, left {len(untouched)} untouched (already /11), "
               f"skipped {len(skipped)}")
-        for problem in show_write(shows):
-            print(problem)
-        if shows:
-            print(f"rewrote {len(shows)} show(s) as /3")
-        for problem in group_write(moves):
-            print(problem)
-        if moves:
-            print(f"wrote {len(moves)} patch(es) as {_patch_schema()}")
+        if skipped:
+            # (review of #434: an old patch not written still takes the show's eye, looks
+            # and bus cuts at load, from the show and its .bak-v2-* files: both stay)
+            troubles = [(f"shows and .bak-v2-* files left as they are: {len(skipped)} "
+                        "patch(es) not written still read them; --force or fix those, "
+                        "then run again")]
+            troubles += delete([p for p in tidy_plan(library) if ".bak-v2-" not in p.name])
+        else:
+            # the shows, last of the file rewrites: `install_plan` again, over what is
+            # written now
+            installs, stayed = install_plan(library)
+            troubles = list(stayed)
+            troubles += install_write(installs)
+            print(f"wrote {len(installs)} install file(s)")
+            troubles += delete(tidy_plan(library))
+        troubles += delete(empty_folders(library))
+        troubles += folder_move(library)
+        for words in troubles:
+            print(words)
     else:
-        print(f"would rewrite {len(writes)} as /10, leave {len(untouched)} untouched "
-              f"(already /10), skip {len(skipped)}"
+        print(f"would rewrite {len(writes)} as /11, leave {len(untouched)} untouched "
+              f"(already /11), skip {len(skipped)}"
               + (f"; retaper {len(retapers)} first" if retapers else "")
-              + (f"; rewrite {len(shows)} show(s) as /3" if shows else "")
+              + f"; write {len(installs)} install file(s); delete {len(trash) + len(tidy)} and "
+                f"{len(empties)} empty folder(s)"
               + (f"; write {len(moves)} patch(es) as {_patch_schema()}" if moves else ""))
+        if skipped:
+            print("with any patch skipped, --apply leaves the shows and the .bak-v2-* files "
+                  "as they are")
     if skipped:
         print("\nnot written" + (" (rerun with --force NAME to write one anyway)"
                                  if any(not r.error for r in skipped) else "") + ":")
         for r in skipped:
             why = r.error or "; ".join(w for w in (
-                "" if r.fixed else "its /10 is not a fixed point",
+                "" if r.fixed else "its /11 is not a fixed point",
                 "" if r.picture == "same" else f"round-trip picture {r.picture}") if w)
             print(f"  {r.file.removesuffix('.json')}: {why}")
-    return 1 if skipped else 0
+    return 1 if skipped or troubles else 0
 
 
 if __name__ == "__main__":

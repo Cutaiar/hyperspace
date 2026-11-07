@@ -417,6 +417,17 @@ PLAY_TIP = ("Play the playlist: each look loads off air, then the crossfader run
             "an install: it does not wait for anyone's edits, and it writes over the deck off air.")
 
 
+def at_launch(playing: Playing, install) -> bool:
+    """SM6 (the owner, 2026-11-06): a cart starts by itself after launch: the one key in the
+    install file names the list (`Install.plays`). A list that is gone or empty says so and
+    nothing plays. True when it started."""
+    name = getattr(install, "plays", None)
+    if not name or not playing.select(name):
+        return False
+    playing.play()
+    return playing.on
+
+
 def register(reg, playing: Playing) -> list[str]:
     """`playlist.play`, `.next`, `.prev`: the meta controller's (`params.SHARED_META_GROUPS`),
     an operator's verbs. Declared once, on both decks, from lambdas so a hot reload lands."""

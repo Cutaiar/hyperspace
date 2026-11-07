@@ -8647,6 +8647,39 @@ Fails: an app that needs a restart; a picture that stops; a window sitting on th
 
 **632. Every display out.** (a Mac mini or a closed laptop on external displays, or as many as you can pull; audio on so you can hear it's alive) Pull every display. Nothing can show you anything: wait 10 s, keep the desk moving, and plug them back in any order, one at a time. Passes: the sound never stopped, each display takes up its job as it arrives, the control window returns, and the desk's changes have landed. `<home>/stall.log` has no "render stall" while the picture was drawing with no window.
 
+## DR. Node mode on a pad (N2, rows 820–823)
+
+Nothing here has run on a real pad. The tests and `tools/drive_node_mode_pad.py` use a stand-in on the real router and the real panel.
+
+**635. A pad on a node.** (any pad on, a patch with a node of many params; GRAPH open) Select the node, and click "point pad here" in the side pane.
+1. Passes: the dot lights, one ⌘Z takes it back, and the map lists LX, LY, RX, RY, LT, RT, each with a param. Green cables run from the pad's node to this one.
+2. With the sticks at rest, nothing in the picture moves.
+3. Push each stick and trigger. Passes: its param moves, a stick either way from where it sat, a trigger up only. Let go. Passes: the look is back where it was.
+4. Say whether the depth is right: a stick all the way moves a param half its range. It is one number (row 820).
+5. Save, load another patch, load this one. Passes: the pad is back on the node.
+
+Fails: a stick at rest that moves the look; a param that stays where the stick left it; a dot that doesn't light.
+
+**636. The view and the sticks.** (as 635)
+1. Point at a node with only one or two params. Passes: those axes leave the camera job and move the param; every other axis still does what it did (the left stick orbits, the right stick zooms, the triggers ride depth).
+2. Leave by the chip. Passes: the stick orbits again, at once.
+3. *A Joy-Con,* totem off: its stick orbits. Point it at a node. Passes: the stick moves the param, and the view doesn't orbit under it. Leave: it orbits. With the totem on: the stick is the row's, and the gyro still turns the shape, and with a node of one param only LX is the row's.
+4. *No button stops working.* While pointed: every button that did something still does the same, on a 360, an Edge and a Joy-Con. SL/SR, the stick click, − and capture on a Joy-Con; hold-to-save on the Edge. There is no key to enter or leave.
+5. Hold BACK (a Joy-Con's L or R), push a stick, let go of BACK, then the stick. Passes: the look stays. Leave. Passes: nothing jumps.
+
+**637. What fills.** (an Edge or a DualSense; a node of many params)
+1. On the factory rows: the six axes, then D-pad left/right as one, the one pair with no row. Press → and ←: the param moves each way and comes back.
+2. Learn a row onto RT, then point. Passes: RT keeps its row, and the rest fill. Learn onto an axis the node holds: the row lands there and the map moves off it.
+3. *Beside a desk:* point the APC40 at the same node, then the pad. Passes: the pad's map starts past the knobs' and the knobs don't change.
+4. *An LFO:* with an LFO routed to a param the stick holds. Passes: the LFO stops moving it while pointed and comes back on leave, and the route's cable says so. Say how the step on entering feels in a room.
+5. *Two players:* put a second pad on player 2, and point both. Passes: each has its own map; neither moves the other's params. Move player 2 to the other `Deck`. Passes: its cables go faint, and its stick moves nothing on this one.
+
+**638. Drawn.** (the pad diagram on, from the system section)
+1. Passes: each filled control is outlined in the node cables' green and says its param, and the header says "node · n". Its hover says it's node mode and where to leave.
+2. Move the pad to the other `Deck`. Passes: the outlines go faint, and the header says "other deck".
+3. Point the pad and the desk at different nodes. Passes: a chip for each in the side pane, and each leaves on its own.
+
+Fails: a control doing something its label doesn't say.
 ## DP. The poi at a real pad (row 817)
 Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_guide.py`, and `tests/test_poi_real.py` on the owner's tape. **No one has felt this at a real pad.** The tests hold one Joy-Con tape's numbers, and that's a pad the app's poi no longer reads; how it feels on the pad you use is yours.
 **633. Swing it.** (a DualSense or an Edge, not a Joy-Con: the app's poi reads no Nintendo pad, row 686. In the app, `poi.on`, the output you'd show on)
@@ -8667,6 +8700,54 @@ Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the a
 4. ⌘-scroll to a new zoom during a look with the output up. *Pass:* no visible stutter on the output when you stop, about a third of a second later.
 5. Resize the window. *Pass:* the zoom doesn't change.
 *Fail:* a start as small as before, words too soft to read, a stutter you can see, or a zoom that follows the resize.
+
+## DS. The one migration (rows 830–835, 839)
+
+Register rows 830–835, 2026-11-07. Proved on a copy of the Drive (counts in row 832). On both Macs, after the run.
+**645. Every file opens at `/11`.** (this Mac, then Dylan's)
+1. After the run, launch. *Pass:* no "this library still has files in presets/" on the footer or the SYSTEM page.
+2. Open PATCHES and load five patches, two from folders. *Pass:* each loads, looks as it did last night.
+3. Open each install on the install line. *Pass:* each opens; the analyzer scene is the one it was (Balanced, Kick & Sizzle on huuu).
+4. In Finder, the library holds `loadable/` and `installs/`, and no `presets/`, `projects/`, `trash/` or `fx/`.
+*Fail:* a patch that won't load, a look that changed, a missing install, or an old folder back.
+**646. What a save writes.** (one install)
+1. Nudge the tempo, then save the install. Quit and launch. *Pass:* the BPM is back, the nudge is not.
+2. Open `installs/<name>.json` in a text editor. *Pass:* `"schema": "hyperspace.install/1"`, a `tuning` key, no `session`, no `tempo.nudge`.
+*Fail:* a nudge that comes back, or a `session` key.
+
+## DT. NSEW on the pads (rows 836–838)
+
+Register rows 836–838, 2026-11-07. Headless: `tests/test_format_lane.py`, `tests/test_paired_axes.py`. Nothing tried on a pad.
+**647. This Mac's `bindings.json` moves once.** (each Mac, its first launch)
+1. Launch once. *Pass:* SYSTEM says `bindings.json migrated … kept as bindings.json.bak-v3`.
+2. Press the face buttons and the D-pad. *Pass:* faces, points, lines, screen strokes, and brightness, as before.
+3. Press T and G on the keyboard. *Pass:* overlay and click-through, as before.
+*Fail:* a button that does nothing, or a second backup at the next launch.
+**648. A pair on the D-pad.** (the Xbox pad)
+1. Right-click a param, Learn pair, press ↑ then ↓. *Pass:* the row reads "pair D-pad up / down".
+2. Learn pair on the face, Y then A. *Pass:* "pair Y / A".
+*Fail:* a pair that takes the face for the D-pad or the other way round.
+**649. The pad window says it by position.** (Joy-Con and DualSense)
+1. Open the pad window. *Pass:* each pad draws its own letters (✕ ○ □ △, the Joy-Con's arrows); a hover names "south button" and so on.
+*Fail:* an Xbox letter on a pad that has its own.
+
+## DU. The panel says patch (rows 840–843)
+
+Register rows 840–843, 2026-11-07. Headless: `tests/test_person_words.py`.
+**650. No preset anywhere a person reads.** (the panel, all sections)
+1. Walk the pane, the desk diagram, ROUTING, the footer after a save. *Pass:* "patch" or "loadable patch", never "preset".
+*Fail:* any "preset" on the panel.
+**651. The conflict sheet reads plainly.** (spawn a patch onto a loadable patch that uses one of its controls)
+1. Spawn. *Pass:* the sheet says "the patch's" for the spawned one and "the loadable patch's" for the open one.
+*Fail:* a line where both are "the patch".
+**652. A cart starts by itself.** (a playlist)
+1. Tick "start this list at launch", quit, launch. *Pass:* the list plays without a press.
+2. Untick, relaunch. *Pass:* it doesn't.
+*Fail:* a cart that doesn't start, or starts when unticked.
+**653. A config.toml that won't read.** (this Mac: a copy of `config.toml` kept first)
+1. Put a stray `[` in `config.toml`, launch. *Pass:* the library is the Drive's as before (or, never launched here, nothing listed and saves refused in words).
+2. Put the file back.
+*Fail:* patches saved into `~/Hyperspace` instead of the Drive.
 
 ## What no test covers
 
@@ -8809,6 +8890,7 @@ Only a person can settle these:
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
 - **a real cable, a real TV and a real projector coming and going (629–632): SC3b's real-app runs used a private virtual display, on a locked Mac, and its id changed every time, so a real display keeping its number across a replug is unproven;**
+- node mode on a real pad (635–638): the tests and `tools/drive_node_mode_pad.py` use a stand-in, so how the sticks feel, whether the depth is right, and a real Joy-Con's stick are for a person;
 - the rows on the rig, both Macs through a real Drive, identical displays and a glass (625–628): SC2's real-app runs used this Mac's three different displays, a scratch library and a stand-in pair;
 - the picture and the pacing on real displays, the overlay over a real window, a locked Mac (607–610): SC3a's real-app runs read the back buffers on one Mac, and one person hasn't watched them;
 - video sound by ear (510–513): the tests read a ramp through the callback by

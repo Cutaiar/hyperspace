@@ -113,7 +113,7 @@ def script(d, panel):
     plug.between_frames = _timed("plug", plug.between_frames)
     out = {"monitors_before": [s.name for s in plug.screens], "steps": {}, "locked": _locked()}
     say("monitors before", out["monitors_before"])
-    panel.library.load("presets", "party-tumble")
+    panel.library.load("loadable", "party-tumble")
     panel.reg["ui.page"].set(PAGE_KEYS.index("output"))     # (the section's words, in the captures)
     yield from d.wait(20)
     one = panel.outputs[0]

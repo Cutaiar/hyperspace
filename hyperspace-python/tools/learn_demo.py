@@ -59,7 +59,7 @@ def panel_over(r) -> Panel:
     io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
     apply_style()
     load_fonts()
-    panel = Panel(r.control, r.audio, r.view, bank=r.lib.project, registry=r.reg, library=r.lib)
+    panel = Panel(r.control, r.audio, r.view, bank=r.lib.install, registry=r.reg, library=r.lib)
     panel.clock, panel.lfos, panel.router, panel.learn = r.clock, r.lfos, r.router, r.learn
     panel.hands, panel.hand_settings, panel.output = r.hands_io, r.settings, r.output
     panel.midi, panel.undo = r.midi, r.undo

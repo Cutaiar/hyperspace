@@ -140,7 +140,7 @@ def boot() -> SimpleNamespace:
     view = ViewState()
     seed(HOME)
     lib = Library(HOME, period=0.0)
-    reg = build_registry(view, control, audio, lib.project, dream=DreamState(), fx=FxState(),
+    reg = build_registry(view, control, audio, lib.install, dream=DreamState(), fx=FxState(),
                          ghost=GhostState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
@@ -161,7 +161,7 @@ def boot() -> SimpleNamespace:
     midi = MidiIO(reg, router.table, inp=ports, out=ports, learner=learn)
     tracker = Tracker(lambda: r.t)
     hands_io = hands.HandsIO(settings, {"out": ""}, source=tracker, clock=lambda: r.t)
-    lib.project.load_startup()
+    lib.install.load_startup()
     u = undo.Undo(reg, router.table, marks=Marks(lib),
                   tag=lambda: tuple(s.name for s in chain.spec),
                   on_restore=router.sync_macros)
@@ -222,7 +222,7 @@ def main() -> None:
     watched = [p for p in reg if undo.watched(p)]
     say("Hyperspace — undo and the trash, headless (tools/undo_demo.py; plan 15 WP1)")
     say(f"home: {HOME}  (a temp folder made by this script)")
-    say(f"show: {lib.project.name}   preset: {lib.current(LOADABLE)}   "
+    say(f"show: {lib.install.name}   preset: {lib.current(LOADABLE)}   "
         f"registry: {len(reg)} params, {len(watched)} watched   "
         f"table: {len(r.router.table.routes())} routes, {len(r.router.table.desk())} desk rows")
     frames(r, 30)

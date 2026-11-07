@@ -77,7 +77,7 @@ def test_the_apc40_is_two_nodes_and_each_row_hangs_off_its_layers_node(rig):
     layer its row is on. Each port is lit while its layer is up — the
     table's latch, which SHIFT flips (`desk.shift`) — and a cable from a
     layer that is down is dormant."""
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     table = rig.router.table
     devs = rig_devices(rig)
     view = build(rig, devs)
@@ -130,7 +130,7 @@ def test_invariant_controls_are_ports_on_the_first_node_only(rig):
     controls of the table's layer-None rows) are ports on *apc40* only,
     in its ``invariant`` group, listed first; *apc40 (SHIFT)* carries every
     other control of the layout, in the desk's groups."""
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     table = rig.router.table
     devs = rig_devices(rig)
     desk = devs.get("apc40")
@@ -160,7 +160,7 @@ def test_a_drag_from_the_shift_node_into_base_is_refused_whatever_the_latch(rig)
     from an *apc40 (SHIFT)* port onto a param's `base` stub is refused in
     words — the hover's `refusal` and the drop's `connect` agree — with
     SHIFT latched or not, and the table is unchanged."""
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     table = rig.router.table
     view = build(rig, rig_devices(rig))
     shift = view.node("device:apc40/global")
@@ -189,7 +189,7 @@ def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig)
     """A global-layer row on an invariant control (D6: it never acts) is
     drawn off from that control's port on *apc40*: the SHIFT node gains no
     invariant control."""
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     table = rig.router.table
     row = Binding(SHIFT, "view.bright", "toggle", layer="global")
     table.bindings.append(row)
@@ -206,7 +206,7 @@ def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig)
 
 def test_a_corpus_loadable_draws_no_template_node(rig):
     """Every corpus loadable patch has a plain desk section: no template node."""
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     assert not hasattr(ui_graph, "template_of") and not hasattr(graphview, "TEMPLATE")
     view = build(rig, rig_devices(rig))
     assert not [n for n in view.nodes if n.kind == "template"]
@@ -223,7 +223,7 @@ def test_a_missing_role_is_a_grey_placeholder_with_dormant_cables(rig):
     When a device of that role is listed, the cable leaves it instead
     (the same node id, so it takes the placeholder's place)."""
     table = rig.router.table
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     free = [p.id for p in rig.reg if ui_routing.route_target(p) and not p.alias
             and table.owner(p.id) is None][:2]
     table.add(Binding("axis@p2:LX", free[0], "push", 0.3))

@@ -1136,7 +1136,7 @@ def _launch(home):
     chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(home, period=0.0)
-    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project)
+    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.install)
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     clock = tempo.Clock(now=lambda: 0.0)
@@ -1151,8 +1151,8 @@ def _launch(home):
     lib.attach(reg)
     router = Router(reg, table)
     LoadedPatch(lib, reg, router)
-    lib.project.load_startup()
-    return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.project)
+    lib.install.load_startup()
+    return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.install)
 
 
 def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tmp_path):
@@ -1204,9 +1204,9 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     assert r.table.slew == 0.08
 
     # a show saved before the param existed: no key, 80 ms, clean
-    path = home / "projects" / "mine.hyp.json"
+    path = home / "installs" / "mine.json"
     doc = json.loads(path.read_text())
-    assert doc["session"].pop("desk.slew") == 0.2
+    assert doc["tuning"].pop("desk.slew") == 0.2
     path.write_text(json.dumps(doc))
     r = _launch(home)
     assert r.show.name == "mine" and r.table.slew == 0.08

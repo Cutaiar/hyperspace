@@ -98,7 +98,7 @@ def _shipped_midi_rows() -> list[str]:
     srcs += [b.source for b in routing.factory_desk("apc40")]
     meta_file = json.loads(routing.FACTORY_FILE.read_text())
     srcs += [r["source"] for r in meta_file["bindings"]]
-    for f in sorted((CORPUS / "presets").glob("*.json")):
+    for f in sorted((CORPUS / "loadable").glob("*.json")):
         srcs += [r["source"] for r in json.loads(f.read_text()).get("desk") or []]
     return [s for s in srcs if s.startswith(("cc:", "note:"))]
 
@@ -119,7 +119,7 @@ def _glyphs(rows) -> set[str]:
 
 def test_the_diagram_lights_the_loaded_loadables_desk_and_the_invariant_controls(rig):
     lib, table, panel = rig.lib, rig.router.table, rig.panel
-    lib.load("presets", "TRIP")
+    lib.load("loadable", "TRIP")
     assert table.layer == "preset" and table.desk()
     inv = _glyphs(table.invariant_rows())
     assert "⇧" in inv and "SM" in inv
@@ -160,7 +160,7 @@ def test_the_hover_names_glyph_param_layer_and_akais_name(rig):
     table = rig.router.table
     c = next(c for c in apc40.LAYOUT if c.glyph == "K1")
     b = ui_desk.lit(table)["K1"]
-    assert ui_desk.label(table, c, b) == f"K1 · {b.target} · preset layer\ntrack knob 1"
+    assert ui_desk.label(table, c, b) == f"K1 · {b.target} · patch layer\ntrack knob 1"
     dark = next(c for c in apc40.LAYOUT if c.glyph == "B7")        # device ◀: no row
     assert "B7" not in ui_desk.lit(table)
     assert "unmapped — dark" in ui_desk.label(table, dark, None)
@@ -259,7 +259,7 @@ def test_the_routing_rows_print_the_glyph(rig, monkeypatch):
     monkeypatch.setattr(imgui, "text", lambda s: (texts.append(s), real_text(s))[1])
     monkeypatch.setattr(imgui, "text_colored",
                         lambda c, s: (texts.append(s), real_col(c, s))[1])
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     frame(rig.panel, "routing")
     frame(rig.panel)
     desk = rig.router.table.desk()
@@ -357,7 +357,7 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
     scroll range. On both layers."""
     panel, table, reg = rig.panel, rig.router.table, rig.reg
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     reg["ui.panel"].set(False)
     glyphs = {c.glyph for c in apc40.LAYOUT}
     for layer in ("preset", "global"):
@@ -413,7 +413,7 @@ def test_the_small_desk_draws_glyphs_only(rig, monkeypatch):
     room left of the panel, never over it."""
     panel = rig.panel
     imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     got = _desk_frames(rig, monkeypatch)
     st = ui_desk._state(panel)
     assert st["labels"] == [] and st["unit"][0] < ui_desk.LABEL_UNIT
@@ -444,7 +444,7 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("note:4:53", "preset.select", "set", 4.0)) == bank[4]
     # a bank pad of rows 4–5 (plan 19 WP2): a filled slot its loadable patch's name,
     # an empty one nothing at all — not "SLOT 10"
-    assert rig.lib.project.bank[8] and rig.lib.project.bank[9] is None
+    assert rig.lib.install.bank[8] and rig.lib.install.bank[9] is None
     assert text(reg, Binding("note:0:56", "preset.select", "set", 8.0)) == bank[8]
     assert text(reg, Binding("note:1:56", "preset.select", "set", 9.0)) == ""
     assert text(reg, Binding("note:0:94", "view.bright", "step", 3.0)) == "Brightness +3"
@@ -465,7 +465,7 @@ def test_a_controls_text(rig):
     c = next(c for c in apc40.LAYOUT if c.glyph == "D3")
     b = Binding("cc:*:18", "fx.kaleido.segments", "abs", layer="preset")
     assert ui_desk.label(rig.router.table, c, b, reg) == (
-        f"D3 · fx.kaleido.segments · {reg['fx.kaleido.segments'].label} · preset layer\n"
+        f"D3 · fx.kaleido.segments · {reg['fx.kaleido.segments'].label} · patch layer\n"
         "device knob 3")
     # wrap, measured in the current font
     imgui.new_frame()
@@ -476,7 +476,7 @@ def test_a_controls_text(rig):
     assert wrap("Hue", wide, 2) == ["Hue"] and wrap("", wide, 2) == []
     one = wrap("Kaleidoscope segments", wide, 1)
     assert len(one) == 1 and one[0].endswith("…") and w(one[0]) <= wide
-    three = wrap("Save as a new preset", w("Save as") + 2, 2)
+    three = wrap("Save as a new patch", w("Save as") + 2, 2)
     assert three[0] == "Save as" and three[1].endswith("…") and w(three[1]) <= w("Save as") + 2
     narrow = wrap("Kaleidoscope segments", w("Kaleid"), 2)
     assert len(narrow) == 2 and all(w(r) <= w("Kaleid") for r in narrow)
@@ -497,7 +497,7 @@ def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
     the pick line still say what the pad is: an empty slot."""
     from hyperspace.learn import Learn
 
-    panel, table, reg, pr = rig.panel, rig.router.table, rig.reg, rig.lib.project
+    panel, table, reg, pr = rig.panel, rig.router.table, rig.reg, rig.lib.install
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     pr.put_slot(11, "WAKE")                                  # G4·4: filled
     pr.load_slot(4)                                          # TRIP on F5: loaded
@@ -567,7 +567,7 @@ def test_a_click_picks_and_a_second_click_lets_go(rig, monkeypatch):
     panel, table = rig.panel, rig.router.table
     imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     pushes = _pushes(monkeypatch)
     rows = [b.to_json() for b in table.bindings]
     d3, d4 = _control("D3"), _control("D4")
@@ -634,7 +634,7 @@ def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
     (row,) = [b for b in table.desk() if b.target == "view.depth4" and b.kind == "cc"]
     assert (row.source, row.op, row.layer, row.feedback) == (d5.source, "abs", "preset", "ring")
     assert lrn.learning is None and lrn.control is None
-    assert lrn.last.startswith("learned view.depth4 ← D5 (device knob 5) (into the preset)")
+    assert lrn.last.startswith("learned view.depth4 ← D5 (device knob 5) (into the patch)")
     assert pushes == ["learn view.depth4"]
     assert ui_desk.lit_cached(panel, table)["D5"] is row      # the desk shows it at once
     # a hand learn: the desk's click is not what it waits for
