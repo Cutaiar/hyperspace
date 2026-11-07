@@ -50,12 +50,9 @@ from typing import Any
 from . import nodemode
 from .devices import MidiDevice
 from .routing import Binding
-from .routing_sources import MODULATOR_SCHEMES, qualified
+from .routing_sources import qualified
 
 KIND = "midi"                  # what a saved entry's `controller` says of a desk
-# the schemes that are no controller's: a route from one is no mapping, so its param fills,
-# and rests while it does (the owner, 2026-11-06, row 711)
-MODULATORS = MODULATOR_SCHEMES
 
 NOT_FIRST = "{role} is player {player}'s second desk: a patch points at a player's first"
 NO_SHAPE = "{role} has no known knobs or faders to fill"
@@ -180,7 +177,7 @@ class NodeDesk:
         out. With no source, since `_free` has settled which freedoms are taken (a pad's
         row takes no knob, and a SHIFT layer row takes no patch-layer control)."""
         return [("", b.target) for b in self.deck.table.bindings
-                if b.enabled and not b.is_sink and b.scheme not in MODULATORS
+                if b.enabled and not b.is_sink and not b.is_modulator_route
                 and b.target in wanted]
 
     def _follow(self, role: str) -> _Now:

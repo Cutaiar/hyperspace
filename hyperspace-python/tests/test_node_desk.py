@@ -615,8 +615,62 @@ def test_enter_goes_through_the_meta_controllers_door(rig):
 
 def test_a_new_built_in_lane_counts_as_a_modulator_by_import():
     from hyperspace.routing_sources import BUILTIN_LANES, DECK_SCHEMES
-    assert node_desk.MODULATORS == set(BUILTIN_LANES) | DECK_SCHEMES
+    for scheme in {*BUILTIN_LANES, *DECK_SCHEMES}:
+        assert Binding(f"{scheme}:0", "x", "push").is_modulator_route
     assert node_desk.freedoms_of(generic) == []
+
+
+def _on_first_param(rig, source, op):
+    """A row on the first param of a node, the desk pointed there: the row, and the param."""
+    node, params = pick_node(rig.one)
+    b = Binding(source, params[0], op, 0.5)
+    rig.one.table.bindings.append(b)        # (past the referee: a file's, or another build's)
+    rig.one.table.rows_serial += 1
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    return b, params[0]
+
+
+def test_a_qualified_modulator_route_rests_as_a_plain_one_does(rig):
+    """The owner, row 711: a qualified LFO counts. Filled, and held off, one rule for both."""
+    b, pid = _on_first_param(rig, "lfo@launch:0", "push")
+    assert b.is_modulator_route and b.scheme == "lfo"
+    assert pid in {r.target for r in rig.nd1.rows()}
+    assert pid not in rig.nd1._follow(DESK).fit.kept
+    assert rig.one.table.node_holds(b)
+
+
+@pytest.mark.parametrize("op", ["abs", "toggle", "step"])
+def test_a_modulators_row_that_no_plan_can_rest_keeps_its_param(rig, op):
+    """Not a performer op, so `node_holds` can't hold it off: filling too would be two writers."""
+    b, pid = _on_first_param(rig, "lfo:0", op)
+    assert not b.is_modulator_route
+    assert pid in rig.nd1._follow(DESK).fit.kept
+    assert pid not in {r.target for r in rig.nd1.rows()}
+    assert not rig.one.table.node_holds(b)
+
+
+def test_what_fills_and_what_is_held_off_are_one_rule_over_every_shape(rig):
+    """No row both lets its param fill and goes on running."""
+    node, params = pick_node(rig.one, 6)
+    pid = params[0]
+    make = rig.one.table.bindings
+    rig.one.loaded_patch.point_node_mode(1, "midi", node)
+    for source in ("lfo:0", "lfo@launch:0", "lane:0", "env:0", "seq:0", "mod:0", "axis:LX",
+                   "axis@p2:LX", f"cc:0:{K2}"):
+        for op in ("push", "position", "turn", "abs", "toggle"):
+            b = Binding(source, pid, op, 0.5)
+            make.append(b)
+            rig.one.table.rows_serial += 1
+            filled = pid in {r.target for r in rig.nd1.rows()}
+            assert filled == rig.one.table.node_holds(b), (source, op)
+            make.remove(b)
+            rig.one.table.rows_serial += 1
+
+
+def test_the_referee_refuses_a_lanes_row_with_no_performer_op(rig):
+    """Why that shape needs a table edited past it to exist: `Bindings.refusal`."""
+    for op in ("abs", "toggle", "step"):
+        assert "is not an op" in rig.one.table.refusal(Binding("lfo:0", "view.bright", op))
 
 
 def test_a_row_takes_the_profiles_whole_feedback_as_a_learn_does(rig):
