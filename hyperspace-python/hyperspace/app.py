@@ -337,20 +337,34 @@ def _save_windows(home, render_win, ctrl_win, output, more=()) -> None:
     placement.save(home, control, render, placement.screens(glfw))
 
 
-def _slots(cfg: dict | None) -> list[Slot]:
+def _slots(cfg: dict | None, scr: list | None = None, notes: list | None = None) -> list[Slot]:
     """The render outputs the config lists (config.screens: one with no
-    list), numbered from 1, with their launch switches; no window yet."""
+    list), numbered from 1, with their launch switches; no window yet.
+    A later output's monitor given by name is an index from here on, by
+    `scr` (row 771), and one no screen has is `missing`, as an index no
+    screen has is (fork F9), said in `notes`. Output 1's is
+    `placement.settle`'s, since it always opens."""
     from . import config
 
     out = []
     for k, e in enumerate(config.screens(cfg or {})):
         sw = Switches(scene=bool(e["scene"]), hands=bool(e["hands"]), dim=float(e["dim"]),
                       flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
+        window = bool(e.get("window", True)) or k == 0
+        name, monitor, said = placement.named(e["monitor"]), e["monitor"], ""
+        if k and scr and name and window:
+            monitor, said = placement.resolve(name, scr)
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
-                        monitor=placement.index(e["monitor"]),
+                        monitor=placement.index(monitor),
                         fullscreen=bool(e["fullscreen"]),
-                        window=bool(e.get("window", True)) or k == 0,
+                        window=window,
                         syphon=str(e.get("syphon", "") or ""), ndi=str(e.get("ndi", "") or "")))
+        if said:
+            if monitor < 0:
+                out[-1].missing = f'screen "{name}" is not connected'
+            if notes is not None:
+                tail = " — not opened" if monitor < 0 else ""
+                notes.append(f"config: {out[-1].label}: monitor = {name!r} {said}{tail}")
     return out
 
 
@@ -410,7 +424,9 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     scr = placement.screens(glfw)
     oc = (cfg or {}).get("output", {})
     oc = oc if isinstance(oc, dict) else {}
-    slots = _slots(cfg)
+    # a name in the config is an index from here on, said once (row 771)
+    said = placement.settle(oc, scr) if scr else []
+    slots = _slots(cfg, scr, said)
     render_rect = ctrl_rect = None
     later_rects: list = [None] * len(slots)
     notes: list[str] = []
@@ -432,7 +448,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             notes += [n1, n2]
             taken = [tuple(render_rect[:2])]
             for k, slot in enumerate(slots[1:], start=1):
-                if slot.publish_only:
+                if slot.publish_only or slot.missing:
                     continue
                 later_rects[k], n = _later_rect(slot, k, scr, renders, taken)
                 notes.append(n)
@@ -448,7 +464,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
                 if not slot.missing:
                     r = placement.default_rect("render", RENDER_SIZE, scr[0])
                     later_rects[k] = (r[0] + CASCADE * k, r[1] + CASCADE * k, r[2], r[3])
-    for note in filter(None, [*notes, *idle]):
+    for note in filter(None, [*said, *notes, *idle]):
         print(note, file=sys.stderr)
         if cfg is not None:
             cfg.setdefault("notes", []).append(note)
@@ -534,9 +550,10 @@ def _make_output(win, reg: Registry, cfg: dict) -> Output:
     out = Output(win, GlfwBackend(glfw), allowed=_overlay_allowed(cfg))
     out.register(reg)
     # a screen index, or −1: `_windows` has already put −1 in place of an
-    # index no connected screen has (and placement said so), `config.load`
-    # in place of anything that is not a number — and a cfg that came by
-    # neither road must not stop the launch here either (plan 16 WP7)
+    # index no connected screen has and made a name its index (and placement
+    # said so; an index at runtime until SC3b, row 771), `config.load` put −1
+    # in place of anything neither a number nor a name — and a cfg that came
+    # by neither road must not stop the launch here either (plan 16 WP7)
     out.monitor = placement.index(oc.get("monitor", -1))
     out.fullscreen = bool(oc.get("fullscreen", False))
     out.render = render_index(oc.get("render", RENDER_DEFAULT))

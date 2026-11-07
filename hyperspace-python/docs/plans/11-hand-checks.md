@@ -821,7 +821,8 @@ not connected — opening on "<laptop>"'. Restore `fullscreen`.
 swap regardless of file. `monitor = 7`: SYSTEM and terminal: "config: [output] monitor = 7, but 2 screens are connected
 (0–1) — using the last position"; last position used. `monitor = "left"`:
 launches, with "config: [output] monitor = 'left'
-is not a screen index — using the last position". Remove both keys.
+matches no screen (connected: …) — using the last position" (row 771: a
+string is a screen's name). Remove both keys.
 (f) Delete `windows.json`, launch: render top-left, controls flush
 right, primary screen, full size (overlap on small screens). (g) ⌘R with
 a window moved: it stays. An index not connected **at launch** is
@@ -829,7 +830,7 @@ ignored for the run: plug projector in first. *Fail:* off-screen or
 misplaced → `placement.place` / `usable`; wrong screen for index →
 `placement.screens` (GLFW's order); fullscreen size saved →
 `Output.windowed_rect`; no file after Esc → `app._save_windows`; no
-launch with `"left"` → `placement.read` / `config.load`. Window out of
+launch with `"left"` → `placement.settle` / `config.load`. Window out of
 reach: delete `windows.json`.
 
 **62. Instances to zero.**
@@ -8355,10 +8356,26 @@ Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans 
 1. Load a patch whose rows want a controller that isn't plugged in. On GRAPH, read its placeholder node, and PRESETS' line. *Pass:* "not set up on this Mac"; the node's side pane names `[[devices]]` in config.toml. A controller plugged in but not listed says the same, which is the point.
 2. On GRAPH, hover a cable from All outputs into a window. *Pass:* it starts "the bus cable", and hovering All outputs says "The meta controller's bus". Cut it, then read the line GRAPH says it on. *Pass:* "cut the bus cable". Then cut a cloud's wire into the scene, if a cloud is wired: *Pass:* its hover says "this cloud's wire into the scene", and the line "cut the cloud's wire".
 *Fail:* "rig" anywhere.
+## DA. Screens by name (wave 5 SC1)
+Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tests/test_app_boundary.py`, on stand-in screens. Only a real replug shows what macOS does. A name is read at the launch; a replug while the app runs is SC3b's, not this.
+**600. Outputs stay put across a replug.** (the rig, with two outputs on HDMI)
+1. In the OUTPUT page's Screen list, read the exact names of the screens. In `config.toml` give each `[[output.screens]]` its `monitor` by name, and `[output] control_monitor` too. Launch. *Pass:* each window opens on the screen named, no note in SYSTEM.
+2. Quit. Unplug both HDMI cables, plug them back in the other order, launch. *Pass:* the same pictures on the same screens. An index in the same place would have swapped them.
+3. Set one output's `monitor` to the name cut short (`"MSta"`, or lower case). Launch. *Pass:* that output doesn't open (or output 1 opens at its last spot), and the note lists the screens connected.
+4. Put an index back on one output and launch. *Pass:* it works as it always did.
+*Fail:* a swap in step 2, a window on a screen that matched only part of the name, or a launch that stops.
+
+**601. Two identical screens.** (two displays of one model, if the rig has them; otherwise say skipped)
+1. Launch with one `monitor` given as the bare name. *Pass:* it opens on the left of the two, and the note names both, such as "MStar #1, MStar #2". If the Mac lists them as "DELL (1)" and "DELL (2)", the words are still "DELL #1" and "DELL #2": note in row 772 what it listed.
+2. Set the two outputs to `"MStar #1"` and `"MStar #2"`. Launch. *Pass:* #1 on the left one, #2 on the right.
+3. Quit, swap the two cables, launch. *Pass:* the same again. **Say what you saw either way:** if macOS moved them, two identical screens can't be told apart without a serial, and row 772 needs the owner's word.
+4. Quit, unplug the left one, launch. *Pass:* "MStar #1" opens on the one still there, with a note that only one is connected and it may be either of a pair; "MStar #2" doesn't open, with a note saying 1 is connected.
+*Fail:* #2 on the left with the arrangement unchanged, step 4 with no note, or a launch that stops.
 
 ## What no test covers
 
 Only a person can settle these:
+- what macOS does to screens across a real replug, and to two of one model (600, 601): the tests list stand-in screens in either order;
 - the dream's look (9) and the default hand feel (16);
 - a spawned dream patch's picture with a worker running (497): the tests read
   the section and the values, no worker;
