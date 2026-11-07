@@ -176,6 +176,19 @@ def centred_target(p: Param) -> bool:
             and p.hi > 0 and p.lo == -p.hi)
 
 
+def blocked_words(name: str, why: str, verb: str = "map") -> str:
+    """`blocked`'s answer, in the one set of words a person reads for it."""
+    if why == "invariant":
+        return f"{name} is invariant (the meta controller's)"
+    return (f"{name} is on the global layer (the meta controller's) — latch SHIFT off to "
+            f"{verb} into the preset")
+
+
+def _table_name(table: Bindings) -> str:
+    """Where a meta row lands, as a note says it: the table's file, when it has one."""
+    return getattr(table.path, "name", "the meta controller")
+
+
 def blocked(table: Bindings, source: str) -> str | None:
     """Why no desk row can be learned onto the control `source` names, as
     the table stands: ``"invariant"`` — the meta controller's on both layers (D6)
@@ -854,11 +867,10 @@ class Learn:
             return (name(x.bare) if name is not None else None) or x.describe()
         why = blocked(table, source)
         if why == "invariant":
-            self.refuse(f"{named(b)} is invariant (the meta controller's) — not learned")
+            self.refuse(f"{blocked_words(named(b), why)} — not learned")
             return False
         if why == "global":
-            self.refuse(f"{named(b)} is on the global layer (the meta controller's) "
-                        "— latch SHIFT off to learn into the preset")
+            self.refuse(blocked_words(named(b), why, verb="learn"))
             return False
         why = meta_refusal(pid)          # (only now: a row on these two is the meta controller's)
         if why is not None:
@@ -977,7 +989,7 @@ class Learn:
         self._mapped(b)
         let_go = ", ".join(dict.fromkeys(x.target for x in gone if x.target != pid))
         keeps = "".join(f"; {x.target} keeps {x.describe()}" for x in kept)
-        self.said(f"learned {pid} ← {b.describe()} (into {getattr(table.path, 'name', 'the meta controller')})"
+        self.said(f"learned {pid} ← {b.describe()} (into {_table_name(table)})"
                   + (f"; {let_go} let go" if let_go else "") + keeps)
         return True
 
@@ -1038,7 +1050,7 @@ class Learn:
             self._land_step(b)
             table.write()
             self.said(f"learned {pid} ← {b.describe()} "
-                      f"(into {getattr(table.path, 'name', 'the meta controller')}); {META_UNDO}")
+                      f"(into {_table_name(table)}); {META_UNDO}")
         self._ask_pair(propose_row(table, b, land, lambda: self._land_step(b)))
         return True
 
@@ -1104,7 +1116,7 @@ class Learn:
         table.add(b)
         table.write()
         was = ", ".join(dict.fromkeys(x.source for x in gone if x.source != b.source))
-        self.said(f"sent {pid} → {port} (into {getattr(table.path, 'name', 'the meta controller')})"
+        self.said(f"sent {pid} → {port} (into {_table_name(table)})"
                   + (f"; {was} let go" if was else ""))
         return b
 

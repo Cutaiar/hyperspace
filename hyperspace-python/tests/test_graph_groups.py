@@ -1196,7 +1196,7 @@ def test_a_spawn_with_no_conflict_lands_at_once(rig):
     st = ui_graph._state(rig.panel)
     assert st["said"].startswith("spawned acid wash: 4 nodes, its pins open")
     # P4: no sheet asked, so the spawn says what its rows wait for (this rig lists no leap)
-    assert st["said"].endswith("; waits for leap (not on this Mac): right hand y")
+    assert st["said"].endswith("; waits for leap (not set up on this Mac): right hand y")
 
 
 def test_a_landing_refused_after_its_dry_run_leaves_no_undo_step(rig, monkeypatch):
@@ -1264,7 +1264,7 @@ def test_a_row_the_sheet_kept_for_the_loadable_waits_for_nothing(rig):
     trip(rig)
     spawned(rig, keep=True)
     said = ui_graph._state(rig.panel)["said"]
-    assert said.endswith("; waits for leap (not on this Mac): right hand y")
+    assert said.endswith("; waits for leap (not set up on this Mac): right hand y")
     assert "apc40" not in said
 
 

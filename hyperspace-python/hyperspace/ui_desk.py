@@ -216,12 +216,7 @@ def mappable(table, c: apc40.Control) -> str | None:
     if on_page(table, c):                       # (learn.blocked says "invariant" too)
         return f"{name}: {PAGE_OWNS}"
     why = learn.blocked(table, c.source)        # the rule `learn_control` refuses by
-    if why == "invariant":
-        return f"{name} is invariant (the meta controller's)"
-    if why == "global":
-        return (f"{name} is on the global layer (the meta controller's) — latch SHIFT off to map "
-                "into the preset")
-    return None
+    return None if why is None else learn.blocked_words(name, why)
 
 
 def picked(panel) -> apc40.Control | None:

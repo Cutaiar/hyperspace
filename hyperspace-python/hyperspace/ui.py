@@ -535,7 +535,7 @@ def device_lines(registry) -> list[str]:
 def wanted_lines(registry, table) -> list[str]:
     """Plan 40 T4: the SYSTEM page's lines under the device lines, one per
     device role the loaded patch's rows want and the meta controller lacks — "wanted
-    by the preset: leap — not on this Mac; 3 rows wait" (`devices.wants`,
+    by the preset: leap — not set up on this Mac; 3 rows wait" (`devices.wants`,
     `devices.wanted_lines`); none without a registry or a table."""
     if registry is None or table is None:
         return []

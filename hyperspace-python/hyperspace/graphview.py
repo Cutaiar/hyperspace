@@ -167,7 +167,7 @@ CABLE_KINDS = ("route", "setter", "sub", "input", "render", "lane")
 IN, OUT = "in", "out"
 BASE, MOD, DEPTH = "base", "mod", "depth"
 # which layout map a node's position is saved in
-PATCH_SECTION, META_SECTION = "preset", "session"
+PATCH_SECTION, META_SECTION = "preset", "meta"
 
 ANALYZER = "analyzer"
 CAMERA = "camera"            # the shared camera's node: `render:camera` (plan 35 V2: was `eye`)
@@ -678,7 +678,8 @@ DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "cli
 # — `SCHEME_ROLE`, devices.py's since plan 40 T4 (imported above)
 # schemes that are no device's: the keyboard, the built-in lanes, the modifiers
 NO_DEVICE = ("key", "lane", "lfo", "env", SEQ, modmod.SCHEME)
-PLACEHOLDER_STATUS = "not on this Mac: its cables wait for it"
+PLACEHOLDER_STATUS = ("not set up on this Mac: its cables wait for it. "
+                      "[[devices]] in config.toml lists it")
 
 
 def desk_group(group: str, label: str, invariant: bool = False) -> str:
@@ -868,7 +869,7 @@ def window_wanted_lines(spec, bus_cuts=None, count: int = 0) -> list[str]:
     (beside the output blocks) and the GRAPH head both say, the same words."""
     return [WINDOW_WANTED.format(n=n) for n in wanted_windows(spec, bus_cuts, count)]
 # plan 36 T2 (W2): a listed cloud's wire into the scene, the meta controller's too
-CLOUD_SAID = ("the bus cable: this cloud drawn in the scene — cut it and the scene "
+CLOUD_SAID = ("this cloud's wire into the scene — cut it and the scene "
               "draws no cloud with this preset (a preset saves its cuts)")
 CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
 CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
@@ -1805,7 +1806,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if not standing.has(w) or src not in view.pins or dst not in view.pins:
             continue
         idle = "scene" in gone
-        view.cables.append(VCable(cable_id(f"rig:{w.src}>{w.node}/{w.port}"), src, dst,
+        view.cables.append(VCable(cable_id(f"cloud:{w.src}>{w.node}/{w.port}"), src, dst,
                                   GEOMETRY, ref=w, kind="render", dormant=idle,
                                   label=CLOUD_IDLE if idle else CLOUD_SAID))
 
@@ -2789,7 +2790,7 @@ def summary(n: VNode) -> list[str]:
         if n.layer:
             lines.append(f"{n.layer} layer · {'up' if n.up else 'down'}")
         if n.placeholder:
-            lines.append("not on this Mac")
+            lines.append("not set up on this Mac")
         elif n.grey:
             lines.append(n.status.rpartition(" · ")[2] or "not connected")
     elif n.kind in BANK_SCHEMES:
@@ -3980,10 +3981,8 @@ class Edit:
             if port is not None and port.layer == GLOBAL_LAYER:
                 return SHIFT_NODE.format(addr=addr)
             why = learnmod.blocked(self.table, addr)
-            if why == "invariant":
-                return f"{addr} is invariant (the meta controller's)"
-            if why == "global":
-                return f"{addr} is on the global layer: latch SHIFT off to map into the preset"
+            if why is not None:
+                return learnmod.blocked_words(addr, why)
             # register row 743: what is left would land in the patch layer
             return meta_refusal(p.id)
         return None
@@ -5685,7 +5684,8 @@ def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
     bus_cuts = _bus_cuts(edit)
     if not bus_cuts.has(w):
         return NO_SUCH_WIRE.format(wire=str(w))
-    return _land(edit, _doc(edit), f"cut {w}", f"cut the bus cable {w}", bus_cuts=bus_cuts.cutting(w))
+    what = "the cloud's wire" if rgraph.is_cloud_wire(w) else "the bus cable"
+    return _land(edit, _doc(edit), f"cut {w}", f"cut {what} {w}", bus_cuts=bus_cuts.cutting(w))
 
 
 def _new_instance(spec, file: str) -> int:

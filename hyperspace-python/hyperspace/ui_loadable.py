@@ -84,11 +84,11 @@ FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). 
               "Drag a preset onto it to move it in. Right-click: a new folder inside, "
               "rename, remove (an empty folder only)")
 # what a show is, in one line under the SHOW label and in its hover
-SHOW_LINE = "show  ·  the desk's pads, meta controller, bus cables"
+SHOW_LINE = "show: pads, meta controller"
 SHOW_TIP = ("A show is the room the presets play in: which preset each of the desk's "
             "twenty-four pads loads, off air (set on the desk — hold a pad, or SAVE + a pad), the "
-            "meta controller (tempo, hands, the analyzer, the outputs), the analyzer's scene, and the "
-            "bus cables cut on GRAPH. A preset is the look; the show is everything "
+            "meta controller (tempo, hands, the analyzer, the outputs) and the analyzer's scene. "
+            "A preset is the look, with the bus cables it cuts on GRAPH; the show is everything "
             "around it. Open another, save this one, or start a new one here.")
 
 
@@ -1051,7 +1051,7 @@ def show_line(panel) -> None:
     # the line's right edge: a chip that would pass it starts a new row
     # (GRAPH's side pane, plan 49; every page has the room for one row)
     right = imgui.get_cursor_screen_pos().x + imgui.get_content_region_avail().x
-    ui._micro(SHOW_LINE)
+    ui._micro(ui.fit_micro(SHOW_LINE, right - imgui.get_cursor_screen_pos().x))
     _rect(panel, "show.line")
     if imgui.is_item_hovered():
         ui.tooltip(SHOW_TIP)
@@ -1069,7 +1069,7 @@ def show_line(panel) -> None:
         _rect(panel, "show.dot")
         if imgui.is_item_hovered():
             ui.tooltip("the show differs from its file: the meta controller (tempo, hands, "
-                       "the analyzer, output), its pads or its wires")
+                       "the analyzer, output) or its pads")
     _beside(right, SHOW_W)
     imgui.set_next_item_width(SHOW_W)
     if imgui.begin_combo("##shows", "open"):
@@ -1091,8 +1091,8 @@ def show_line(panel) -> None:
         invalidate(panel, PROJECT)
     _rect(panel, "show.save")
     if imgui.is_item_hovered():
-        ui.tooltip("Save the show — the meta controller (tempo, hands, the analyzer, output), "
-                   "its pads and its wires")
+        ui.tooltip("Save the show — the meta controller (tempo, hands, the analyzer, output) "
+                   "and its pads")
     _beside(right, ui.chip_w("as…"))
     if ui.chip("as…"):
         _begin_naming(panel, PROJECT, proj.name)

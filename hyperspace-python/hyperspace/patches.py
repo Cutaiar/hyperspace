@@ -1042,7 +1042,7 @@ def check(doc: Any) -> list[str]:
 # knob, a hand, a band) onto a member; from the host onto a member (a host
 # lane, a host macro, a picture into a member's port); from a member out
 # to the host
-INSIDE, CONTROL, INTO, OUT = "inside", "rig", "into", "out"
+INSIDE, CONTROL, INTO, OUT = "inside", "control", "into", "out"
 NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
 # the meta controller's own render kinds, always there — its windows (an output, All
 # outputs), its media channels (this Mac's files) and its clouds — which no

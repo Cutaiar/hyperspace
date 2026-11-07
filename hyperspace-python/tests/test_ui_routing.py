@@ -352,7 +352,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
                                                                "view.bright")
     assert ui_routing.sheet_title(panel, landing) == "spawn acid wash into TRIP"   # (its name)
     assert ui_routing.sheet_wants(panel, landing) == [
-        "apc40 (not on this Mac): K1", "leap (not on this Mac): right hand y"]
+        "apc40 (not set up on this Mac): K1", "leap (not set up on this Mac): right hand y"]
     frame(panel)
     st = ui_routing._state(panel)
     assert st["modal"] and st["sheet"]
@@ -1219,7 +1219,7 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     ui_routing.goto(panel, s3.source)
     draw(2)
     (b, section, *_), = got["lines"]
-    assert (b.source, b.layer, section) == (s3.source, None, "session") and _seen(got)
+    assert (b.source, b.layer, section) == (s3.source, None, "meta") and _seen(got)
     assert got["child"][0] > at and got["page"] == (0, 0)
     # a dark loadable patch control: its "unmapped — dark" line
     dark = ui_routing.unmapped(table)[0]
@@ -1235,7 +1235,7 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     ui_routing.goto(panel, "cc:*:18")
     draw(2)
     (b, section, *_), = got["lines"]
-    assert (b.layer, section) == ("global", "session") and _seen(got)
+    assert (b.layer, section) == ("global", "meta") and _seen(got)
     k6 = control("K6")
     assert k6.glyph not in ui_desk.lit(table)
     at = got["child"][0]
