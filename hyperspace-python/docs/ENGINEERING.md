@@ -662,13 +662,15 @@ adds a second acid: the effect `acid.2` in `FxState`
 params in the loadable patch's `values`), its own clock and place in the chain,
 on the acid file's one compiled program. `{"kind": "hands", "instance":
 2}` adds a second hands node `ghost.2`: its own `Ghost`
-(`Renderer.ghost_of`) over its own state, its own shared meta params
-`ghost.2.on/alpha/mirror/guide/tethers/style` (`ghost.2.on` starts off),
+(`Renderer.ghost_of`) over its own state, its own patch params
+`ghost.2.on/alpha/guide/tethers/style` (`ghost.2.on` starts off; the state
+follows the room's one `ghost.mirror`, LY1),
 its layer `hands.2` and its lone readout `readout.2`. Every `into:
 "scene"` node is in the scene; the `into: "layer"` node (else the first)
 makes the one layer, laid on the outputs without the hands in their
-scene. A show holds `ghost.<n>.*` back until a loadable patch's graph declares
-the node, then seeds it. `draw: "lines"` draws a style's meshes as their
+scene. An old show's `ghost.<n>.*` ids are held back and kept by a save; its look
+still lands (`old_look`). Only `ghost.<n>.mirror` is read by nothing, and the show
+says so at open if it differs from `ghost.mirror` (row 773). `draw: "lines"` draws a style's meshes as their
 triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
 solid.
 

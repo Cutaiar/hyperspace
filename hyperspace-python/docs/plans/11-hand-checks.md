@@ -3007,20 +3007,23 @@ two chips, "Acid" and "Acid 2", each with its own strip and twist
 the first.
 
 **213. Two hands nodes: one in the scene, one over the glass.** (copy, glass and projector)
-Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_session_params_and_state,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`.
-The rig of 206; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
+Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`, `tests/test_one_mirror.py`.
+*Changed by LY1 (row 773, pending the owner): `ghost.2.mirror` is gone. The glass's own flip is its **Flip X** on the OUTPUT page, which flips everything in that window.*
+The rig of 206, the glass with **scene** off; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
 desk) switch **Ghost 2 hands** (`ghost.2.on`) on — off by default, like
-every new switch — and set `ghost.2.mirror` on and `ghost.2.style` to
-CAGE. Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
+every new switch — set `ghost.2.style` to CAGE, and tick the glass's Flip X.
+Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
 load TWO-HANDS.
-*Pass:* the projector shows solid hands inside the shape; the glass shows
-mirrored cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
+*Pass:* the projector shows solid hands inside the shape, not flipped; the glass shows
+flipped cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
 `readout` with times; TRIP takes the glass back to the first node's
-layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the mirror and the
-cage back; after the relaunch they are still there and the show is
-clean. *Fail:* the same hands on both outputs; the glass mirrored on the
-projector too; a stale `hands.2` line; the cage lost after the relaunch
-(the show's held-back `ghost.2.*`).
+layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the cage back; after the
+relaunch they are still there, the flip kept, and the show is
+clean. **Judge:** the hands are in the same place as the old mirror put them, but
+lit from the other side (the light is fixed in the hands' space, so a window flip
+flips it too), and a guide's labels read backwards. *Fail:* the same hands on both
+outputs; the projector flipped too; a stale `hands.2` line; the cage lost after the
+relaunch.
 
 **214. Hands as lines.** (copy)
 Headless: `tests/test_graph_json.py::test_hands_as_lines_draw_their_edges`, goldens `hands-lines|present|*`.
@@ -8354,6 +8357,15 @@ Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's ta
 4. Press A. *Pass:* `wrist` back to 0, `pan` near its start.
 5. Ctrl-C, then `uv run python tools/poi_probe.py --replay /tmp/poi.jsonl`. *Pass:* `tape written`, then a table with a `hold` row.
 *Fail:* a traceback at any step, or a line that never comes.
+## DB. One mirror (LY1)
+Register rows 773, 774, 2026-11-06. Headless: `tests/test_one_mirror.py`, on two real `Deck`s, both ways.
+**602. One mirror, two decks.** (the rig, with the hands tracker)
+1. Make a patch with a second hands node (GRAPH, add a hands node, its on-switch on) and load it on both decks. Hold your hands up. *Pass:* both hands nodes draw, on each deck as you crossfade.
+2. HANDS page, more ▸, tick Mirror. *Pass:* every hands node flips, on both decks. There's no second mirror to tick anywhere.
+3. With the crossfader on deck 1, load a patch with no second hands node onto deck 2, off air. *Pass:* deck 1's picture doesn't change, and its second hands node still flips when you tick Mirror off and on.
+4. Crossfade to deck 2, load the same one-hands patch onto deck 1, then crossfade back and forth. *Pass:* no error, the mirror still reaches deck 2's hands.
+5. Save the show, quit, open again. *Pass:* no "unknown" line, the show isn't marked changed, Mirror as you left it.
+*Fail:* a hands node that stops following Mirror, or a picture that moves on the deck you didn't load.
 ## DC. The flag says what is true (LY2)
 Register rows 775–776, 2026-11-06. Headless: `tests/test_meta_rule.py`, on the real table, MIDI adapter and router. Restart first: a hot reload leaves a param's old flag until a restart.
 **603. The meta controller still plays.** (the rig, with the APC40)
