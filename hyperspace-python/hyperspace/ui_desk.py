@@ -81,7 +81,7 @@ from dataclasses import dataclass, replace
 
 from imgui_bundle import imgui
 
-from . import apc40, learn, ui, ui_pane, ui_routing
+from . import apc40, graphview, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .groupwords import group_part, group_word
 from .params import PATCH_GROUPS, Kind
@@ -145,6 +145,28 @@ def _key(table) -> tuple:
 
 
 PAGE_OWNS = "the sequencer page owns this"
+NODE_FAINT = 0.3        # a filled control while the desk is on the other `Deck` (row 712)
+
+
+def _node_ink(away: bool) -> imgui.ImVec4:
+    return imgui.ImVec4(*graphview.NODE_MODE_RGB, NODE_FAINT if away else 1.0)
+
+
+def filled_rows(table) -> dict[int, bool]:
+    """The rows node mode fills on the first desk, by `id`, each with whether the desk is
+    on the other `Deck`: asked once a draw, since `_edge` is asked once a control."""
+    rows = table.node_rows()
+    if not rows:
+        return {}
+    away = bool(table.node_row_away(rows[0]))
+    return {id(b): away for b in rows}
+
+
+def _edge(filled: dict[int, bool], b: Binding | None, on: bool) -> int:
+    """A control's outline: a row node mode fills (`filled_rows`) is in its cable's
+    colour, faint when the desk is on the other `Deck`, as the cable is."""
+    away = filled.get(id(b)) if b is not None else None
+    return ui.u32(ui.DIM if on else ui.LINE) if away is None else ui.u32(_node_ink(away))
 
 
 def on_page(table, c: apc40.Control) -> bool:
@@ -895,10 +917,10 @@ def _ring(dl, cx: float, cy: float, r: float, v: float | None) -> None:
 
 
 def _draw(panel, dl, table, c: apc40.Control, b: Binding | None,
-          x0: float, y0: float, x1: float, y1: float) -> None:
+          x0: float, y0: float, x1: float, y1: float, filled: dict[int, bool]) -> None:
     """One control at the small size: its glyph on its face."""
     on = b is not None and not empty(panel.reg, b)     # an empty bank slot's pad is dark
-    edge = ui.u32(ui.DIM if on else ui.LINE)
+    edge = _edge(filled, b, on)
     ink = ui.u32(ui.TEXT if on else ui.FAINT)
     w, h = x1 - x0, y1 - y0
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -955,15 +977,16 @@ class _Job:
 
 
 def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
-              x0: float, y0: float, x1: float, y1: float, lh: float, says: str) -> _Job | None:
+              x0: float, y0: float, x1: float, y1: float, lh: float, says: str,
+              filled: dict[int, bool]) -> _Job | None:
     """One control at the labelled size: its face, its glyph small in the
     top-left corner, and — returned, for the label pass, which draws in
     the labels' type — the room its label has. `lh` is a label line's
     height. A dark control gets no label (D8), and an empty bank slot's
     pad is drawn as one (`empty`)."""
     on = b is not None and not empty(panel.reg, b)
-    edge = ui.u32(ui.DIM if on else ui.LINE)
-    small = ui.u32(ui.DIM if on else ui.FAINT)          # the glyph: small and dim
+    edge = _edge(filled, b, on)
+    small =ui.u32(ui.DIM if on else ui.FAINT)          # the glyph: small and dim
     # whose row it is: the up layer's in the bright ink, an invariant one grey
     ink = ui.u32(ui.TEXT if on and b.layer is not None else ui.DIM)
     w, h = x1 - x0, y1 - y0
@@ -1168,6 +1191,17 @@ def _header(panel, table) -> None:
                 ui.tooltip("The sequencer page is up — SEND A lets it go. The clip "
                                   "grid is the lanes' steps, scene 1–5 the lanes, clip stop "
                                   "k the length.")
+        filled = table.node_rows()
+        if filled and not glob:             # node mode (plan 53 N1b): saved, and said here
+            imgui.same_line()
+            node_away = bool(table.node_row_away(filled[0]))
+            ui._micro(f"node · {len(filled)}" + (" · other deck" if node_away else ""),
+                      _node_ink(node_away))
+            if imgui.is_item_hovered():
+                ui.tooltip("This patch points the desk at a node: the controls outlined in "
+                           "its colour are that node's. Under SHIFT the global layer is as ever."
+                           + (" The desk is on the other Deck now, so turning them moves "
+                              "that Deck's rows, not these." if node_away else ""))
         imgui.same_line()
         if deck:        # with the panel hidden this is all that says which deck this is
             room_ = end - imgui.get_cursor_pos_x()
@@ -1193,6 +1227,7 @@ def _body(panel, table) -> None:
     if table is None:
         return
     shown = lit_cached(panel, table)
+    filled = filled_rows(table)
     origin = imgui.get_cursor_screen_pos()
     avail = imgui.get_content_region_avail()
     sx = avail.x / apc40.LAYOUT_W
@@ -1216,11 +1251,11 @@ def _body(panel, table) -> None:
             b = shown.get(c.glyph)
             if big:
                 job = _draw_big(panel, dl, table, c, b, x0, y0, x1, y1, lh,
-                                says.get(c.glyph, ""))
+                                says.get(c.glyph, ""), filled)
                 if job is not None:
                     jobs.append((c, job))
             else:
-                _draw(panel, dl, table, c, b, x0, y0, x1, y1)
+                _draw(panel, dl, table, c, b, x0, y0, x1, y1, filled)
             if hovered and x0 <= mouse.x < x1 and y0 <= mouse.y < y1:
                 tip, hit = _hover(panel, table, c, b), (c, b)
             if c.source == source:
