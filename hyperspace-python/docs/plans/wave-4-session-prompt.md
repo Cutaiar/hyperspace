@@ -242,6 +242,12 @@ stay, and load only into the off-air `Deck`. If they should go too, it is a one-
   ask (PC2: "you should have to explicitly consent to either keeping both mappings on that control or the option to remove
   the existing mapping and let the pair take over that axis"). Row 754, check 580, group CS. **UL and PC2 land before SEM.**
 
+**Eleventh round, 2026-11-06.**
+- **The panel says patches.** "Session and rig need to go away. Presets need to go away." Preset's word changes with the migration.
+- **Node mode:** "we need to have LFOs and audio routes be allowed to be overwritten for node mode, as long as they come back when you disengage node mode". This reverses row 711's rec. SHIFT and knobs first as recommended.
+- **Row 730:** saves carry the readings. **Playlist:** ⌘Z may reach its look; a cart starts by itself (plan 58 SM6); dwell is fade start to fade start.
+- **Wave 5 starts now,** beside the end of this wave; only its cleanup waits for the migration. See `wave-5-session-prompt.md`.
+
 ## Joy-Con version 0 (#365), from another session, 2026-11-04
 
 The Joy-Con integration was scaled back to a workable control surface for an upcoming
