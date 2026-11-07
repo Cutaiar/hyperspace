@@ -8432,6 +8432,10 @@ Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which 
 3. Pull it mid-run, wait a few seconds, plug it back. *Pass:* no crash, and it's back within a few seconds.
 *Fail:* an app that quits, or a desk that needs a relaunch.
 
+**616. A knob won't take the bank.** (the Mac, with the APC40)
+1. PRESETS page: right-click a bank pad's param, Learn desk, if it's offered. Turn a track knob. *Pass:* it's refused in words, or Learn desk isn't offered, and the knob doesn't load anything.
+*Fail:* a knob that loads presets as it turns.
+
 ## What no test covers
 
 Only a person can settle these:
