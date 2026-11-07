@@ -65,7 +65,6 @@ class Ui:
     theme: dict
     anim: Anim
     grad_tex: int | None = None
-    scale: float = 1.0
     theme_name: str = "light"
     _seen: set = field(default_factory=set)
 

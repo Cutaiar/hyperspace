@@ -69,7 +69,7 @@ will keep running into:
 | **focus ring + tab order** | `focus-visible:ring-[3px]` | mostly: `Ui.focus_visible` tracks keyboard-vs-mouse and every control rings correctly, but nothing orders a tab sequence |
 | **variant resolver** (cva) | variants are ad-hoc dicts (`tokens.BADGE`, now `SWITCH`, `INPUT`, `SELECT` too); each component invents its own | yes, and getting worse |
 | **transform transitions** | shadcn menus `zoom-in-95`; the ease store does colour only | no — the Switch's thumb slides by hand off an eased scalar |
-| **density / scale** | `Ui.scale` exists and is unused; the side pane is 240–320px | the demo pins its control column to 280 by hand |
+| ~~**density / scale**~~ | **not a thing we need, and `Ui.scale` is deleted.** Three things were conflated here. DPI is already handled - `_boot` rasterises the atlas at the display's density and ImGui draws in logical points. shadcn's own density mechanism is SIZE VARIANTS, measured per size (a `sm` Select is 28 tall with radius 8, not a scaled 32/10), and the kit has those for Button, Select and Switch. A global zoom multiplier would make the pixel diff meaningless, because there is no oracle for "shadcn at 125%". | the real gap is `sm` on **Input and Combobox**, and the 240px pane is a LAYOUT problem that intrinsic sizing and flex already answer |
 
 The **variant resolver** is now the one that will bite hardest — there are
 eight ad-hoc tables, and `comp_button` alone added three. **Text wrapping**
