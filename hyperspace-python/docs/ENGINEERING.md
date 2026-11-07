@@ -3168,15 +3168,17 @@ media sound playing: the live mixer is re-classed by `MediaState` and
 the stream's callback reaches the new code through the class; adding
 the module itself needed a restart.
 
-A class in a hot module adds no `__slots__` over another hot class. Python
-refuses to re-class such an object once the base has reloaded (`object layout
-differs`), and the swap stops there, so no save completes. `DeckLibrary` and
+A hot class adds nothing to the layout over another hot class: it declares no
+`__slots__` over one, and it isn't slotless over one that declares slots, because it
+would gain a `__dict__` (`__slots__ = ()` is fine). Python refuses to re-class such an
+object once the base has reloaded (`object layout differs`). `DeckLibrary` and
 `DeckProject` share another object's `__dict__` and must keep their own fields
-out of it, so they take slots from a base in `hotreload.py`, which no reload
-re-executes. `tests/test_hot_reload_app.py` holds the rule by name over every
-class, and runs a save through the real swap in the real app. That test and
-`tools/drive_hot_reload.py` are how to see a reload working: `tools/app_driver.py`
-follows a reload, so a script keeps stepping after one (row 802).
+out of it, so they take slots from a base in cold `hot_slots.py`. A refusal strands
+nothing: every other target is re-classed and its hook runs, `error` names each
+class refused with its count, and the next save tries again. `tests/test_hot_reload_app.py`
+holds the rule on every real class in a hot module, and runs a save through the
+real swap in the real app; `tools/drive_hot_reload.py` is how to see one, and
+`tools/app_driver.py` keeps stepping across a reload (row 802).
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded patch, what happened — and every
@@ -3286,6 +3288,10 @@ on this figure, and conftest's tier tables are re-measured from the same list.
   passed", the run ended, one test lost after the fifth crash). So a
   run that crashed still shows a count to compare with a clean run's,
   and a recurring hang ends it rather than stalling it.
+- **What opens the real app's windows is `live`** (row 802): they take the focus on a
+  Mac on every run, so it's for `--all`, which CI doesn't run. Its fast-tier
+  guard has to stand alone, as `test_every_class_in_a_hot_module_can_be_re_classed_after_a_reload`
+  does for `test_a_save_reaches_every_live_object_of_the_real_app`.
 - **Live tests take turns, across workers and across processes.**
   `--dist load` hands a test to any worker, so nothing in xdist keeps
   two `live` tests of one run apart (the old `xdist_group("live")` only

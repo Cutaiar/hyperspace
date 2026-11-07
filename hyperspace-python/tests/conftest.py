@@ -29,6 +29,8 @@ _LIVE_FILES = {"test_media_live.py", "test_media_publish.py"}
 _SLOW_FILES = {"test_dream.py"}
 # single tests, "file::function" (any parametrisation)
 _LIVE_TESTS = {
+    # the real app's windows take the focus on a Mac; its rule stays in the fast tier
+    "test_hot_reload_app.py::test_a_save_reaches_every_live_object_of_the_real_app",
     "test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass",
     "test_media_core.py::test_bad_file_is_an_error",      # polls; fails under load
     # plan 39 T4: the real segment backends, once each on a synthetic frame

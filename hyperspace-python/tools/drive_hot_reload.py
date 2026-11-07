@@ -1,6 +1,7 @@
-"""tools/app_driver.py script: a hot reload in the real app (HR, row 802). Touches
-files the way a save does and says what the reloader said, then checks every live
-object it holds is on the class its module now has, and that a hook landed.
+"""tools/app_driver.py script: a hot reload in the real app (HR, row 802). Marks modules
+saved, as `tests/test_one_mirror.py` does, so no file in the tree is touched and an app
+running from this checkout reloads nothing. Then says what the reloader said, checks every
+live object it holds is on the class its module now has, and that a hook landed.
 
     uv run python tools/app_driver.py tools/drive_hot_reload.py --out <scratch>/run --every 1000
 
@@ -12,16 +13,10 @@ exits 1 and says why. The last line on stdout is `reloaded: <modules>` when all 
 
 import os
 import sys
-from pathlib import Path
 
-import hyperspace
 from hyperspace.hotreload import MODULES
 
 TOUCH = ("outputs", "render", "ghost", "ui")
-
-
-def _file(name: str) -> Path:
-    return Path(hyperspace.__file__).parent / f"{name.replace('.', '/')}.py"
 
 
 def stale(reloader) -> list[str]:
@@ -40,9 +35,10 @@ def script(d, panel):
     renderer = panel.meta.decks[0].renderer
     yield from d.wait(5)
     for name in names:
+        assert name in reloader.modules, f"{name} is not on the list"
         lines = renderer._lines                     # what `Renderer.on_reload` makes again
         reloader.status, reloader.error = "", ""
-        os.utime(_file(name))                       # saved, as far as the reloader can tell
+        reloader._mtimes[name] = 0.0                # as if the module had just been saved
         for _ in range(4000):                       # (a frame; the poll's period is 0.5 s)
             if reloader.status.startswith("hot:") or reloader.error:
                 break

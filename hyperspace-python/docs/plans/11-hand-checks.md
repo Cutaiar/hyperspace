@@ -8457,13 +8457,6 @@ Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which 
 1. GRAPH: click a node with a strip (view, output) so the side pane shows it, and edit a value so the dot shows. Drag the pane from narrow to wide. *Pass:* ◀ name ● ▶ and save · as… · reset never touch, and the chips drop to their own row when it's narrowest.
 *Fail:* a chip over ▶ or over the name.
 
-## DM. A save lands in the running app (HR, row 802)
-
-Headless: `tests/test_hot_reload_app.py`, which runs the real app with one output and no devices. Restart first: `hotreload.py` is cold.
-
-**624. Saves on the rig.** (the Mac, with the second output and the desk)
-1. Launch with the show's outputs and devices. Save `outputs.py`, `render.py`, `ghost.py` and `ui.py` in turn, with no edit needed beyond the save. *Pass:* the SYSTEM section says `hot: <file>` each time, and the picture and the panel keep going, on every output.
-*Fail:* `swap: …` on the SYSTEM section, or an output that stops.
 ## DK. Controllers composed in the app (CT1)
 Register rows 796–799, 2026-11-06. Headless: `tests/test_devicelist.py`, `tests/test_players.py`, `tests/test_ui_players.py`, `tools/drive_players.py` on real panel frames with stood-in hardware. Nothing here has met real hardware yet. Restart first: `devicelist.py` is a new module. Both Macs on this build.
 
@@ -8492,6 +8485,14 @@ Register rows 796–799, 2026-11-06. Headless: `tests/test_devicelist.py`, `test
 3. Bring the Drive back, with no restart. *Pass:* within 30 s the warning goes, and the entry is in `devices.json`.
 4. With the projector running, pause Drive syncing, or take the network away, and watch the picture for a minute. *Pass:* no hitch that wasn't there before. (`Library`'s own scan reads this folder on the frame thread and isn't CT1's: a hitch here is worth saying, with that in mind.)
 *Fail:* no launch, a created folder, or a lost adopt.
+
+## DM. A save lands in the running app (HR, row 802)
+
+Headless: `tests/test_hot_reload_app.py`; its real-app test, one output and no devices, is in `--all`. Restart first: `hotreload.py` and `hot_slots.py` are cold.
+
+**624. Saves on the rig.** (the Mac, with the second output and the desk)
+1. Launch with the show's outputs and devices. Save `outputs.py`, `render.py`, `ghost.py` and `ui.py` in turn, with no edit needed beyond the save. *Pass:* the SYSTEM section says `hot: <file>` each time, and the picture and the panel keep going, on every output.
+*Fail:* `swap: …` on the SYSTEM section, or an output that stops.
 
 ## What no test covers
 

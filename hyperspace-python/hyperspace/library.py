@@ -141,7 +141,7 @@ from . import undo
 from .graph import BusCuts
 from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
 from .groupwords import group_word
-from .hotreload import DeckLibrarySlots, DeckProjectSlots
+from .hot_slots import DeckLibrarySlots, DeckProjectSlots
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
