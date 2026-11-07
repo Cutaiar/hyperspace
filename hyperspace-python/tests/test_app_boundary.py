@@ -892,8 +892,8 @@ def test_output_1_named_only_in_the_list_is_resolved_and_said(monkeypatch, tmp_p
     cfg = config.load(p)
     g, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_LEFT)
     assert slots[0].opened and slots[0].monitor == -1
-    assert cfg["notes"] == ["config: [output] monitor = 'nothing' matches no screen "
-                            "(connected: Built-in, MStar) — using the last position"]
+    assert cfg["notes"] == [("config: [output] monitor = 'nothing' matches no screen "
+                             "(connected: Built-in, MStar) — using the last position")]
 
 
 def test_a_later_output_whose_named_screen_is_absent_is_not_opened(monkeypatch, tmp_path, capsys):
