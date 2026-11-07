@@ -3007,20 +3007,23 @@ two chips, "Acid" and "Acid 2", each with its own strip and twist
 the first.
 
 **213. Two hands nodes: one in the scene, one over the glass.** (copy, glass and projector)
-Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_session_params_and_state,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`.
-The rig of 206; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
+Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`, `tests/test_one_mirror.py`.
+*Changed by LY1 (row 773, pending the owner): `ghost.2.mirror` is gone. The glass's own flip is its **Flip X** on the OUTPUT page, which flips everything in that window.*
+The rig of 206, the glass with **scene** off; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
 desk) switch **Ghost 2 hands** (`ghost.2.on`) on — off by default, like
-every new switch — and set `ghost.2.mirror` on and `ghost.2.style` to
-CAGE. Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
+every new switch — set `ghost.2.style` to CAGE, and tick the glass's Flip X.
+Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
 load TWO-HANDS.
-*Pass:* the projector shows solid hands inside the shape; the glass shows
-mirrored cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
+*Pass:* the projector shows solid hands inside the shape, not flipped; the glass shows
+flipped cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
 `readout` with times; TRIP takes the glass back to the first node's
-layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the mirror and the
-cage back; after the relaunch they are still there and the show is
-clean. *Fail:* the same hands on both outputs; the glass mirrored on the
-projector too; a stale `hands.2` line; the cage lost after the relaunch
-(the show's held-back `ghost.2.*`).
+layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the cage back; after the
+relaunch they are still there, the flip kept, and the show is
+clean. **Judge:** the hands are in the same place as the old mirror put them, but
+lit from the other side (the light is fixed in the hands' space, so a window flip
+flips it too), and a guide's labels read backwards. *Fail:* the same hands on both
+outputs; the projector flipped too; a stale `hands.2` line; the cage lost after the
+relaunch.
 
 **214. Hands as lines.** (copy)
 Headless: `tests/test_graph_json.py::test_hands_as_lines_draw_their_edges`, goldens `hands-lines|present|*`.
@@ -8345,6 +8348,46 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
+## DH. GRAPH's start zoom (plan 58 SM2, row 787)
+Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
+**612. It reads where it opens.** (each display you'll run the control window on)
+1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the numbers are `placement.ZOOM_DENSE` and `ZOOM_HEIGHT`.
+*Fail:* a start as small as before, or a view opening away from the first column.
+**613. Your zoom stays, and layouts don't move.** (the rig)
+1. ⌘+scroll to a zoom of your own and note what's in the canvas's top-left. Load another patch, then resize the control window taller and shorter. *Pass:* your zoom stands through both, and the same node stays in the top-left. This is new: a resize used to zoom the canvas.
+2. Open a patch you laid out by hand before this build. *Pass:* every node is where you put it relative to its neighbours.
+3. After a run, look in the temp folder for `hyperspace-graph-view-*`. *Pass:* none.
+*Fail:* a zoom that changes by itself, or a node moved.
+## DG. The poi probe on a real Joy-Con (wave 5 SM1, row 786)
+Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's tape through the tool, the live loop on a stand-in for the reader. Only a person can run a real pad through it.
+**611. The probe, live, then its own tape.** (a Joy-Con paired, the app closed: hidapi opens the pad exclusively)
+1. From `hyperspace-python/`: `uv run python tools/poi_probe.py --record /tmp/poi.jsonl`. *Pass:* the pad's name, then about ten lines a second; `calibration written to /tmp/poi.jsonl.findings.json`.
+2. Lay the pad on the table for ten seconds. *Pass:* `turn` near 0, `still` climbing, `v 0.00`.
+3. Type `hold` and Enter, then pick it up and hold it as you'd hold a poi handle for ten seconds, without walking. Read `wrist`, `pan` and `wall`. *Report, not pass or fail:* whether the hand runs to `wall hand` as the owner's tape does (row 786).
+4. Press A. *Pass:* `wrist` back to 0, `pan` near its start.
+5. Ctrl-C, then `uv run python tools/poi_probe.py --replay /tmp/poi.jsonl`. *Pass:* `tape written`, then a table with a `hold` row.
+*Fail:* a traceback at any step, or a line that never comes.
+## DD. Matte and segment thumbnails (SM3)
+Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real GL with a fake worker; the real app seen in motion mode only. Person mode's orientation on real Vision is yours.
+**604. A mask on the node.** (either Mac, a camera or a clip with a person in it)
+1. Wire a channel into a `matte` and the matte into a `cut`. *Pass:* the matte's node shows grey, white where it passes, not red, and turning `matte.key` changes it live.
+2. Wire the same channel into a `segment`, mode person, and `segment.fg` into an output. *Pass:* the segment's node shows the person in white on black, the right way up, lined up with the channel's picture.
+3. Mode motion, then back to person. *Pass:* the right way up in both.
+4. Hover each node's picture. *Pass:* the hover ends "… mask" with its size, and gives the node's own words.
+5. Lit `pictures · tint cables`. *Pass:* the matte's cable stays plain purple; a cable out of `segment.fg` leans toward the foreground's colour. Fold the segment into a group with `fg` going out: the group shows the foreground, not the white-on-black.
+6. Pan both nodes off the canvas and watch the SYSTEM page's thumbnail line for a second. *Pass:* their count drops, and FPS doesn't change noticeably with them on or off screen.
+7. Set the segment's mode to subject, then turn `segment.on` off. *Pass:* the box is black and says why in words readable at a distance, a different line for each.
+8. Open a saved patch of yours whose matte or segment you had placed by hand. *Pass:* no node has moved; if the taller node now covers another, drag it or press tidy, and say how many patches did this.
+*Fail:* a red box, an upside-down person, or a frame-rate dip that follows the nodes on screen.
+## DB. One mirror (LY1)
+Register rows 773, 774, 2026-11-06. Headless: `tests/test_one_mirror.py`, on two real `Deck`s, both ways.
+**602. One mirror, two decks.** (the rig, with the hands tracker)
+1. Make a patch with a second hands node (GRAPH, add a hands node, its on-switch on) and load it on both decks. Hold your hands up. *Pass:* both hands nodes draw, on each deck as you crossfade.
+2. HANDS page, more ▸, tick Mirror. *Pass:* every hands node flips, on both decks. There's no second mirror to tick anywhere.
+3. With the crossfader on deck 1, load a patch with no second hands node onto deck 2, off air. *Pass:* deck 1's picture doesn't change, and its second hands node still flips when you tick Mirror off and on.
+4. Crossfade to deck 2, load the same one-hands patch onto deck 1, then crossfade back and forth. *Pass:* no error, the mirror still reaches deck 2's hands.
+5. Save the show, quit, open again. *Pass:* no "unknown" line, the show isn't marked changed, Mirror as you left it.
+*Fail:* a hands node that stops following Mirror, or a picture that moves on the deck you didn't load.
 ## DC. The flag says what is true (LY2)
 Register rows 775–776, 2026-11-06. Headless: `tests/test_meta_rule.py`, on the real table, MIDI adapter and router. Restart first: a hot reload leaves a param's old flag until a restart.
 **603. The meta controller still plays.** (the rig, with the APC40)

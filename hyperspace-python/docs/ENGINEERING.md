@@ -662,13 +662,15 @@ adds a second acid: the effect `acid.2` in `FxState`
 params in the loadable patch's `values`), its own clock and place in the chain,
 on the acid file's one compiled program. `{"kind": "hands", "instance":
 2}` adds a second hands node `ghost.2`: its own `Ghost`
-(`Renderer.ghost_of`) over its own state, its own shared meta params
-`ghost.2.on/alpha/mirror/guide/tethers/style` (`ghost.2.on` starts off),
+(`Renderer.ghost_of`) over its own state, its own patch params
+`ghost.2.on/alpha/guide/tethers/style` (`ghost.2.on` starts off; the state
+follows the room's one `ghost.mirror`, LY1),
 its layer `hands.2` and its lone readout `readout.2`. Every `into:
 "scene"` node is in the scene; the `into: "layer"` node (else the first)
 makes the one layer, laid on the outputs without the hands in their
-scene. A show holds `ghost.<n>.*` back until a loadable patch's graph declares
-the node, then seeds it. `draw: "lines"` draws a style's meshes as their
+scene. An old show's `ghost.<n>.*` ids are held back and kept by a save; its look
+still lands (`old_look`). Only `ghost.<n>.mirror` is read by nothing, and the show
+says so at open if it differs from `ghost.mirror` (row 773). `draw: "lines"` draws a style's meshes as their
 triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
 solid.
 
@@ -3539,6 +3541,18 @@ The fast tier takes about four minutes on four cores (§16's last-measured line)
   process) and the kernel killed it. Per test, a worker peaks near 1 GB.
   `test_golden_frames.py` and `test_graph_frame.py` keep their own
   module-scoped context for their module-scoped rigs.
+- **The type ratchet** (row 788). A new pyright complaint fails, an old
+  one doesn't: `tools/type_ratchet.py` counts them against
+  `tools/type_baseline.json` by file and rule, under `[tool.pyright]`
+  (pyright pinned exactly in the dev group). It holds in the fast tier,
+  `tests/test_type_ratchet.py::test_no_new_complaint_in_the_app`, so CI
+  holds it with no step of its own. It takes 12 to 22 s of one worker on
+  the Mac (13.38 s in a full `-n 4` fast tier of 137.78 s), about 3 s of
+  that tier's wall time by division, not measured apart.
+  `uv run python tools/type_ratchet.py` lowers the baseline where errors
+  went (commit it), on a full sync only; `--check` writes nothing;
+  `--accept` takes a split that leaves every rule's total level;
+  `--raise-baseline` is the one way up, and the PR says why. Pyright reads the source and opens no GL.
 - **Making it blocking** is a setting on `main`, not a file: Settings →
   Rules → Rulesets → New branch ruleset, target `main`, "Require status
   checks to pass", add `tests` (or Settings → Branches → a protection

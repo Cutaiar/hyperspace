@@ -135,9 +135,10 @@ def test_snapshot_saves_the_base_not_the_modulated_value(rig):
 def test_remove_and_remove_prefix(rig):
     reg = rig[0]
     n = len(reg)
-    assert reg.remove("band.5.atk").id == "band.5.atk"
+    meta = reg.meta_reg                 # (a shared param is the meta controller's to drop: LY1)
+    assert meta.remove("band.5.atk").id == "band.5.atk"
     assert "band.5.atk" not in reg and reg.get("band.5.atk") is None
-    gone = reg.remove_prefix("band.5.")
+    gone = meta.remove_prefix("band.5.")
     assert gone and all(p.id.startswith("band.5.") for p in gone)
     assert len(reg) == n - 1 - len(gone)
     assert reg.remove("nope") is None

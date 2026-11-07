@@ -799,6 +799,7 @@ class Panel:
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
+        self.graph_start_zoom = 1.0  # set by app.py: GRAPH's first zoom, off the display (plan 58 SM2)
         self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
         self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
@@ -1974,8 +1975,13 @@ class Panel:
         self.page = max(0, min(self.page, len(PAGE_KEYS) - 1))
         if self.page != getattr(self, "_focus_seen", None):   # set straight, not through ui.page
             self.go_page(self.page)
-        foot = imgui.get_frame_height_with_spacing()
-        if imgui.begin_child("##page", imgui.ImVec2(0, -foot)):
+        # the footer's line and its separator: short by the separator, CONTROLS
+        # overflowed by a few points and wore a scrollbar from its second frame.
+        # The page fills itself and never scrolls (the pane does): its first
+        # frame's content would give it a scrollbar, and the canvas a narrower
+        # second frame, which the editor answers by moving the view.
+        foot = imgui.get_frame_height_with_spacing() + imgui.get_style().item_spacing.y + 1.0
+        if imgui.begin_child("##page", imgui.ImVec2(0, -foot), 0, imgui.WindowFlags_.no_scrollbar):
             # a desk control is picked and can be mapped (plan 17 WP4): the
             # canvas and the sections are drawn disabled — dimmed, no widget
             # takes a click — and the click on a param is `_ctx_pick`'s. Never

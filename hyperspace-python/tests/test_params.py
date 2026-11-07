@@ -552,7 +552,9 @@ def test_two_decks_hold_the_meta_params_by_reference():
     assert a.real(a["band.sel.f"]) is meta_reg.real(meta_reg["band.sel.f"])
     # a band removed leaves every deck
     gone = next(p.id for p in meta_reg if p.id.startswith("band.0."))
-    a.remove(gone)
+    with pytest.warns(UserWarning, match="is shared"):
+        assert a.remove(gone) is None and gone in a and gone in meta_reg  # (not a deck's: LY1)
+    meta_reg.remove(gone)
     assert gone not in meta_reg and gone not in a and gone not in b
     # the meta controller never takes a deck's param
     with pytest.raises(ValueError):
