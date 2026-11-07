@@ -1772,6 +1772,15 @@ class DeviceRegistry:
         """The device of `role`, or None."""
         return next((d for d in self.devices if d.role == role), None)
 
+    def unplugged(self, role: str) -> bool:
+        """Is the controller `role` gone from this Mac: not listed, or listed and
+        lost? One switched off is not: it is off, and there (row 740)."""
+        d = self.get(role)
+        if d is None:
+            return True
+        word = self._word(d)
+        return word is not None and not word.startswith(("connected", OFF))
+
     def first(self, kind: str):
         """The first listed device of `kind` (off or not), or None."""
         return next((d for d in self.devices if d.kind == kind), None)

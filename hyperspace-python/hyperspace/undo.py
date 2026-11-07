@@ -43,10 +43,11 @@ the meta controller's output settings are all `persist=False`.
 `Deck`, scoped to its loadable patch (`only`: `deck.in_patch`), and one for the meta
 controller over `MetaRegistry` and `MetaTable` (`install_meta`,
 `deck.meta_stack`). The second watches the meta params, whose tuning is done before a performance and
-not during one, and the meta controller's rows of the table (keys, pad,
-invariant and global-layer MIDI rows, sinks). Those rows live in `bindings.json`
-the moment they change, so their restore (`MetaTable.set_rows`) writes that
-file: the one write a restore makes.
+not during one, the meta controller's rows of the table (keys, pad,
+invariant and global-layer MIDI rows, sinks) and who holds what (`moves`:
+`deck.MetaPlayers`, row 740). Those rows live in `bindings.json` and the players in
+`players.json` the moment they change, so their restores (`MetaTable.set_rows`,
+`MetaController.put_players`) write those files: the two writes a restore makes.
 
 **⌘Z goes by where you are** (`here`): the panel's `Deck`, except with the mouse
 in a meta section or on a meta param (`where`), which takes the meta stack. Never the newest of all stacks: a
@@ -201,6 +202,7 @@ class State:
     # (the base chase's ledger, plan 52), so a base goes back with its own
     trims: Any = None
     rows: tuple = ()          # the meta controller's rows (`deck.MetaRows`, plan 44 D5b)
+    moves: Any = None         # who holds what and who is where (`Undo.moves`, row 740)
 
 
 @dataclass
@@ -240,17 +242,23 @@ class Undo:
     bases, so a voice's params exist before their values land. `only`
     (optional) narrows `watched` to the params this stack is for: a `Deck`'s
     takes those of its loadable patch (plan 44 D5b). A `table` with `rows` and
-    `set_rows(rows)` (`deck.MetaRows`) has those watched too.
+    `set_rows(rows)` (`deck.MetaRows`) has those watched too. `moves` (optional:
+    `deck.MetaPlayers`, row 740) is one more part of what a step holds: `doc()` to
+    compare and hold, `put(doc)` to restore it, `refuses(doc)` the words why it may
+    not go back now (else None, and the step stays where it is, as under the
+    latch), and `trouble()` what went wrong in the last `put`, for the status.
     """
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
+    moves = None     # …and this
     latched = False  # …and these: ⌘Z refuses here until a new push (row 753)
     called = "here"  # how the refusal names this stack ("on deck 2"; `MetaController`)
     _opens = False   # the open step began on focus: when it lands it opens the latch
 
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
-                 on_restore=None, banks=None, only=None, called=None):
+                 on_restore=None, banks=None, only=None, called=None, moves=None):
         self.reg, self.table = reg, table
+        self.moves = moves
         if called is not None:
             self.called = called
         try:
@@ -324,7 +332,7 @@ class Undo:
         return getattr(self.table, "rows", ())
 
     def _fingerprint(self) -> tuple:
-        """(ids, bases, routes, desk, macros, tag, modifiers, banks, rows) as of now — the cheap
+        """(ids, bases, routes, desk, macros, tag, modifiers, banks, rows, moves) as of now — the cheap
         read `tick` makes every frame. The patch layer is read as the
         table's rows whose `layer` is "preset" (what `table.desk()`
         returns, without asking every row whether it is a MIDI row)."""
@@ -333,14 +341,17 @@ class Undo:
         return (self._ids, tuple([p.base for p in ps]), _rows(table.routes()),
                 _rows([b for b in table.bindings if b.layer == "preset"]),
                 _macros(table), self._tag(), self._mods(), self._bank_ids(),
-                _rows(self._table_rows()))
+                _rows(self._table_rows()), self._moves_doc())
+
+    def _moves_doc(self):
+        return self.moves.doc() if self.moves is not None else None
 
     @staticmethod
     def _same_fp(a: tuple, b: tuple) -> bool:
         """Equal, or equal but for float pairs within the tolerance."""
         if a == b:
             return True
-        if a[0] != b[0] or a[2:6] != b[2:6] or a[8] != b[8] or not alike(a[6:8], b[6:8]):
+        if a[0] != b[0] or a[2:6] != b[2:6] or a[8:] != b[8:] or not alike(a[6:8], b[6:8]):
             return False
         return all(x is y or _same(x, y) for x, y in zip(a[1], b[1], strict=True))
 
@@ -357,7 +368,8 @@ class Undo:
                      self.marks.take() if marks and self.marks is not None else None,
                      modifiers=self._mods(), banks=self._bank_ids(),
                      trims={p.id: t for p in self._params() if (t := p._trim)},
-                     rows=tuple(replace(b) for b in self._table_rows()))
+                     rows=tuple(replace(b) for b in self._table_rows()),
+                     moves=self._moves_doc())
 
     def _read_lands(self):
         lands = getattr(self.marks, "lands", None)
@@ -554,11 +566,18 @@ class Undo:
                        and not self._marks_equal(step.before.marks))
             if not (ids or parts or left or relabel):
                 continue                      # nothing to put back: dropped
+            why = self.moves.refuses(step.before.moves) if "players" in parts else None
+            if why:                           # as the latch's refusal: no history moves
+                src.append(step)
+                self._say(f"not {'undone' if verb == 'undid' else 'redone'}: {why}")
+                return False
             dst.append(Step(step.label, now, load=step.load, action=step.action,
                             lands=self._read_lands()))
             del dst[:-LIMIT]
             left = self._restore(step.before, load=step.load, lands=step.lands)
-            self._say(f"{verb} {step.label}" + (f" ({LEFT})" if left else ""))
+            trouble = self.moves.trouble() if "players" in parts else ""
+            self._say(f"{verb} {step.label}" + (f" ({LEFT})" if left else "")
+                      + (f". {trouble}" if trouble else ""))
             self._fp = self._fingerprint()
             self._settled = self._take()
             self._lands = self._read_lands()
@@ -608,6 +627,9 @@ class Undo:
                                          ("rows", _rows(then.rows), _rows(now.rows))) if a != b]
         if not alike(then.modifiers or [], now.modifiers or []):
             parts.append("modifiers")
+        # (`getattr`: a state from before a hot reload has no such field)
+        if getattr(then, "moves", None) is not None and then.moves != now.moves:
+            parts.append("players")
         if then.banks is not None and now.banks is not None:
             banks = self._banks()
             parts += [getattr(banks.get(scheme), "KEY", "") or scheme
@@ -659,6 +681,10 @@ class Undo:
             #     own call, which writes `bindings.json`, where they live
             if _rows(self._table_rows()) != _rows(state.rows):
                 table.set_rows(self._rows_for(state.rows, self._table_rows()))
+            # 4⅓. who holds what and who is where (row 740), through the meta
+            #     controller, which writes `players.json`, where they live
+            if getattr(state, "moves", None) is not None and self._moves_doc() != state.moves:
+                self.moves.put(state.moves)
             # 4½. the modifiers and their params (plan 28 N1)
             if state.modifiers is not None and not alike(self._mods(), state.modifiers):
                 table.set_modifiers(state.modifiers, reg)
@@ -807,13 +833,13 @@ def where(inside_meta) -> None:
     _where = inside_meta
 
 
-NOTHING_HERE = "nothing to undo here: a player's move and a playlist's edit are on no stack"
+NOTHING_HERE = "nothing to undo here: a playlist's edit is on no stack"
 
 
 def here() -> Undo | None:
     """The stack ⌘Z acts on: the meta controller's inside a meta section, else
     that of the panel's `Deck` (the owner, 2026-11-04). Never the newest of them.
-    None where `where` says None: there, nothing is taken back (the player screen);
+    None where `where` says None: there, nothing is taken back (a playlist's section);
     and with no stack installed. `_on_no_stack` tells the two apart."""
     inside = _inside()
     if inside is None:
@@ -835,7 +861,7 @@ def _inside() -> bool | None:
 
 def _on_no_stack() -> None:
     """⌘Z found no stack. Said only where `where` said so: no stack installed says
-    nothing, as before, and has no player to drag back."""
+    nothing, as before, and has no list to name."""
     if _inside() is None:
         _meta._say(NOTHING_HERE)
 
@@ -903,10 +929,12 @@ def _load_closed(u: Undo, *, landed: bool) -> None:
             _shut(_installed)
 
 
-def takes_back(u: Undo) -> bool:
+def takes_back(u: Undo, *, here_now: bool = False) -> bool:
     """Would ⌘Z here take back the step just begun on `u`? For words which promise it:
-    only a step that opens the latch and will not close empty."""
-    return here() is u and u is _focused and u._will_open()
+    only a step that opens the latch and will not close empty. `here_now`: the caller
+    knows ⌘Z reaches `u` from where the mouse is, and `here` cannot say yet (a drop's
+    frame, with the item still live: nothing reads as hovered until it ends)."""
+    return (here_now or here() is u) and u is _focused and u._will_open()
 
 
 def _refused(at: Undo, verb: str) -> bool:

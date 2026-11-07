@@ -2318,7 +2318,7 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
               tip="Take back the last gesture or the last load, learn or delete on the "
                   "deck the panel is on; with the mouse on a meta controller setting, or in the output, "
-                  "audio, analyzer or hands section, the last meta controller change (Cmd+Z or Ctrl+Z). "
+                  "audio, analyzer, hands or players section, the last meta controller change (Cmd+Z or Ctrl+Z). "
                   "After you come to a deck or a meta section it takes nothing back until "
                   "you change something there; after that it goes all the way down.")
     r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,

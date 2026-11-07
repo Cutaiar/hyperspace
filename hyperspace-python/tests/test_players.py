@@ -1108,3 +1108,252 @@ def test_let_go_lost_is_the_one_door_the_pad_goes_through(rig, monkeypatch):
     rig.meta.move_player(2, Duty.OFF_AIR)
     rig.frame()
     assert seen == [rig.one.reg]
+
+
+# ---- a move on the meta stack (row 740, amended) ----
+
+
+def _here_meta(rig):
+    undo.where(lambda: True)
+    rig.tick = lambda n=30: _settle(rig, n)
+
+
+def _settle(rig, n):
+    """Past the settle time: each stack ticked, and the meta controller's own tick."""
+    for _ in range(n):
+        rig.now += DT
+        for stack in rig.meta.stacks:
+            stack.tick(rig.now)
+        rig.meta.tick(rig.now, DT)
+
+
+def _z(rig):
+    rig.one.reg["edit.undo"].fire()
+
+
+def _shift_z(rig):
+    rig.one.reg["edit.redo"].fire()
+
+
+def _by_hand(rig, move, *args):
+    """The board's road: the person's own move, past the settle time."""
+    undo.by_hand(True)
+    move(*args)
+    undo.by_hand(False)
+    rig.tick()
+
+
+def test_a_duty_move_is_one_step_and_the_file_follows(rig, tmp_path):
+    _here_meta(rig)
+    meta, path = rig.meta, tmp_path / FILE
+    meta.players.path = path
+    steps = len(meta.undo.stack)
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    assert [s.label for s in meta.undo.stack[steps:]] == ["player 2 to off air"]
+    assert json.loads(path.read_text())["duties"] == {"2": "off_air"}
+    assert meta.pointer("p2").deck is rig.two
+    _z(rig)
+    assert meta.players.get(2).duty == Duty.ON_AIR and meta.pointer("p2").deck is rig.one
+    assert json.loads(path.read_text())["duties"] == {}, "the saved file follows the undo"
+    assert meta.undo.status == "undid player 2 to off air"
+    rig.tick()
+    _shift_z(rig)
+    assert meta.players.get(2).duty == Duty.OFF_AIR and meta.pointer("p2").deck is rig.two
+    assert json.loads(path.read_text())["duties"] == {"2": "off_air"}
+
+
+def test_moving_nobody_makes_no_step(rig):
+    _here_meta(rig)
+    rig.meta.players.hold("p2", 2)
+    rig.tick()
+    steps = len(rig.meta.undo.stack)
+    rig.meta.move_player(2, Duty.ON_AIR)
+    rig.meta.register("p2", 2)
+    rig.tick()
+    assert len(rig.meta.undo.stack) == steps
+
+
+def test_two_moves_are_two_steps_each_taken_back_in_turn(rig):
+    _here_meta(rig)
+    meta = rig.meta
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    _by_hand(rig, meta.register, "hands", 2)
+    assert [s.label for s in meta.undo.stack[-2:]] == ["player 2 to off air", "hands to player 2"]
+    assert meta.pointer("hands").deck is rig.two
+    _z(rig)
+    assert meta.players.player_of("hands").number == 1 and meta.players.get(2).duty == Duty.OFF_AIR
+    assert meta.pointer("hands").deck is rig.one
+    rig.tick()
+    _z(rig)
+    assert meta.players.get(2).duty == Duty.ON_AIR
+
+
+def test_after_an_undo_a_player_s_rows_act_only_on_the_deck_it_is_back_on(rig):
+    """A hardware row's result follows: the pad's rows land where the undo put it."""
+    _here_meta(rig)
+    meta, one, two = rig.meta, rig.one, rig.two
+    _two_patches(rig)
+    rest_one, rest_two = _pans(one), _pans(two)
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    rig.pad1.x, rig.pad2.x = 0.5, 0.0
+    rig.frame()
+    assert two.reg[PX].value < rest_two[0] and one.reg[PY].value == rest_one[1]
+    _z(rig)
+    rig.frame()
+    assert one.reg[PY].value != rest_one[1], "player 2's row on deck 1 is live again"
+    assert two.reg[PX].value == rest_two[0], "player 2's row on deck 2 has gone quiet"
+    assert one.reg[PX].value == rest_one[0], "player 1, who was not moved, is as it was"
+
+
+def test_an_undo_mid_press_lets_go_on_the_deck_left(rig):
+    """The same road as the move (`routing.let_go_lost`): nothing stuck on either deck."""
+    _here_meta(rig)
+    meta, one, two = rig.meta, rig.one, rig.two
+    row = "pad@p2:VIEW"
+    one.table.add(Binding(row, "view.lines", "momentary", layer="preset"))
+    two.table.add(Binding(row, "view.lines", "momentary", layer="preset"))
+    one_was = one.reg["view.lines"].value
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    rig.pad2.press("VIEW")
+    rig.frame()
+    was = two.reg["view.lines"]
+    assert was.value is True and was.__dict__["_pressed_by"] == {row}
+    _z(rig)
+    rig.pad2.was = rig.pad2.held                # still down, the press already seen
+    rig.frame()
+    assert two.reg["view.lines"].value is False and not was.__dict__["_pressed_by"]
+    assert one.reg["view.lines"].value == one_was
+
+
+def test_a_duty_goes_back_as_a_duty_after_the_crossfader_moved(rig):
+    """What is saved is the duty; on air may be the other deck by now."""
+    _here_meta(rig)
+    meta, one, two = rig.meta, rig.one, rig.two
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    meta.on_air_pointer.deck = two
+    meta.place_players()
+    assert meta.pointer("p2").deck is one
+    _z(rig)
+    assert meta.players.get(2).duty == Duty.ON_AIR and meta.pointer("p2").deck is two
+
+
+def test_an_undo_leaves_a_controller_mapped_elsewhere_alone(rig):
+    """Only what the step moved goes anywhere: `reseat`'s rule, not `place_players`'."""
+    _here_meta(rig)
+    meta, two = rig.meta, rig.two
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    meta.point("pad", two)            # mapped there, player 1 still on air
+    _z(rig)
+    assert meta.pointer("pad").deck is two
+
+
+def test_a_given_controller_goes_back_and_the_list_reads_it_again_from_the_tick(rig, monkeypatch):
+    """A pad's rows name its player: the undo changes its address, as giving did, and not
+    inside the press that fired it (a row may be the ⌘Z, in the pad's own `act`)."""
+    monkeypatch.setattr(devices.PadDevice, "open", lambda self: None)
+    _here_meta(rig)
+    meta, pads = rig.meta, [_pad("pad"), _pad("second")]
+    ctx = devices.Context(reg=rig.one.reg, table=rig.one.table, players=meta.players)
+    devs = devices.DeviceRegistry(pads, ctx)
+    meta.players.tell(("pad", "second"), ("pad",))
+    meta.on_players.append(lambda: devs.apply(devs.entries))
+    assert devs.get("second").qualifier == "second"
+    _by_hand(rig, meta.register, "second", 2)
+    assert devs.get("second").qualifier == "p2"
+    was = devs.get("second")
+    _z(rig)
+    assert meta.players.player_of("second").number == 1
+    assert devs.get("second") is was, "not closed inside the press"
+    assert meta.relist
+    rig.tick(1)
+    assert devs.get("second").qualifier == "second" and not meta.relist
+
+
+def test_a_controller_unplugged_since_is_not_brought_back(rig, tmp_path):
+    """Refused in words, and no history moves: back in, the same press takes it back."""
+    _here_meta(rig)
+    meta, path = rig.meta, tmp_path / FILE
+    meta.players.path = path
+    gone = set()
+    meta.unplugged = gone.__contains__
+    _by_hand(rig, meta.register, "hands", 2)
+    saved, steps = path.read_text(), list(meta.undo.stack)
+    gone.add("hands")
+    _z(rig)
+    assert meta.players.player_of("hands").number == 2 and path.read_text() == saved
+    assert meta.undo.stack == steps and not meta.undo.redos
+    assert meta.undo.status == ("not undone: hands unplugged since that move. Plug it back in "
+                                "and try again")
+    assert not meta.relist
+    gone.clear()
+    rig.tick()
+    _z(rig)
+    assert meta.players.player_of("hands").number == 1
+    rig.tick()
+    gone.add("hands")
+    _shift_z(rig)
+    assert meta.players.player_of("hands").number == 1
+    assert meta.undo.status.startswith("not redone: hands unplugged")
+
+
+def test_a_controller_given_while_it_was_gone_goes_back_as_it_came(rig):
+    """Not "unplugged since": nothing to bring back, and the board lets it be dragged."""
+    _here_meta(rig)
+    meta = rig.meta
+    meta.unplugged = {"hands"}.__contains__
+    _by_hand(rig, meta.register, "hands", 2)
+    _z(rig)
+    assert meta.players.player_of("hands").number == 1
+
+
+def test_a_duty_goes_back_with_what_the_player_holds_unplugged(rig):
+    """A duty moves no controller's holder: there is nothing to bring back."""
+    _here_meta(rig)
+    meta = rig.meta
+    _by_hand(rig, meta.register, "hands", 2)
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    meta.unplugged = {"hands"}.__contains__
+    _z(rig)
+    assert meta.players.get(2).duty == Duty.ON_AIR
+
+
+def test_the_registry_says_what_is_unplugged():
+    class Said(devices.Base):
+        def __init__(self, role, status):
+            super().__init__(role)
+            self.said, self.io = status, object()
+
+        @property
+        def status(self):
+            return self.said
+
+    devs = devices.DeviceRegistry(devices=[Said("a", "connected"), Said("b", "lost"),
+                                           Said("c", "off")])
+    assert not devs.unplugged("a") and devs.unplugged("b") and not devs.unplugged("c")
+    assert devs.unplugged("never listed")
+
+
+def test_a_write_that_fails_is_said_by_the_undo(rig, tmp_path):
+    _here_meta(rig)
+    meta = rig.meta
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    meta.players.path = tmp_path / "no" / "such" / FILE
+    _z(rig)
+    assert meta.players.get(2).duty == Duty.ON_AIR, "it stands for this run"
+    assert "not remembered after this run" in meta.undo.status
+
+
+def test_main_tells_the_meta_controller_what_is_unplugged():
+    src = Path(app.__file__).read_text()
+    assert "meta.unplugged = lambda role: device_reg.unplugged(role)" in src
+
+
+def test_a_deck_s_cmd_z_does_not_reach_a_move(rig):
+    """Pressing it never crosses over (plan 44 D5b)."""
+    meta, one = rig.meta, rig.one
+    undo.where(lambda: False)
+    rig.tick = lambda n=30: _settle(rig, n)
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    _z(rig)
+    assert meta.players.get(2).duty == Duty.OFF_AIR
+    assert undo.here() is one.undo

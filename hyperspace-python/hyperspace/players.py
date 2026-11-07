@@ -156,6 +156,15 @@ class Players:
             self.held[role] = number
             self.save()
 
+    def put(self, doc: dict) -> None:
+        """Back to `to_json`'s `doc`, remembered: an undo's (row 740).
+        `MetaController.put_players` also moves the pointers: call that."""
+        duties = doc["duties"]
+        for p in self:
+            p.duty = Duty(duties.get(str(p.number), Duty.ON_AIR))
+        self.held = dict(doc["controllers"])
+        self.save()
+
     # ---- the file ----
 
     def to_json(self) -> dict:

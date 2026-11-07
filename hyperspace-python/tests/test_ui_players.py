@@ -2,6 +2,7 @@
 through the real panel and the real `MetaController`. Its decks stand in: what a
 pointer's move does to a row is `test_players.py`'s; here, that the board moved it."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,7 @@ from hyperspace import deck as deck_mod
 from hyperspace import devices, routing, ui_graph, ui_pane, ui_players, undo
 from hyperspace.deck import MetaController
 from hyperspace.pads import models
+from hyperspace.params import Registry
 from hyperspace.players import FILE, Duty, Players
 from hyperspace.ui import PAGE_KEYS
 
@@ -33,7 +35,7 @@ class Fake(devices.Base):
 
 def _with_meta(r, tmp_path, monkeypatch, roles=("pad", "p2", "apc40", "leap")):
     """The real meta controller over stand-in decks, and a list of controllers."""
-    monkeypatch.setattr(deck_mod, "meta_stack", lambda first: SimpleNamespace())
+    monkeypatch.setattr(deck_mod, "meta_stack", lambda first, moves=None: SimpleNamespace())
     monkeypatch.setattr(deck_mod.undos, "install_meta", lambda u: None)
     meta = MetaController(SimpleNamespace(name="one", undo=SimpleNamespace()),
                           SimpleNamespace(name="two", undo=SimpleNamespace()),
@@ -569,8 +571,8 @@ def test_an_entry_that_is_off_still_draws_as_itself():
     assert ui_players._state_of(apc) == "off"
 
 
-def test_no_stack_installed_says_nothing_of_a_player(monkeypatch):
-    """Two ways to no stack: only the player screen's speaks of players."""
+def test_no_stack_installed_says_nothing_of_where_no_stack_answers(monkeypatch):
+    """Two ways to no stack: only the playlist's section speaks."""
     said = []
     monkeypatch.setattr(undo, "_meta", SimpleNamespace(_say=said.append))
     monkeypatch.setattr(undo, "_installed", None)
@@ -585,31 +587,127 @@ def test_no_stack_installed_says_nothing_of_a_player(monkeypatch):
     assert said == [undo.NOTHING_HERE]
 
 
-def test_undo_over_the_board_takes_nothing_back_and_says_so(rig, monkeypatch):
-    """A move is on no stack: over the board neither a deck's edit nor a meta setting
-    goes back in its place."""
-    r, d = rig, rig.d
-    said, touched = [], []
-    meta_stack = SimpleNamespace(_say=said.append, undo=lambda: touched.append("meta"))
-    deck_stack = SimpleNamespace(undo=lambda: touched.append("deck"), latched=False,
-                                 _opens=False, _fingerprint=lambda: None,
-                                 _observe=lambda fp: None)
-    monkeypatch.setattr(undo, "_meta", meta_stack)
-    monkeypatch.setattr(undo, "_installed", deck_stack)
-    monkeypatch.setattr(undo, "_focused", deck_stack)     # (the latch has its own file)
+def _real_stack(r, monkeypatch):
+    """The board's moves on a real meta stack: the fixture's decks stand in, so the
+    stack is over nothing else. `tick` is its frames, and the meta controller's."""
+    meta = r.meta
+    stack = undo.Undo(Registry(), deck_mod.MetaRows(SimpleNamespace(rows=[])),
+                      moves=deck_mod.MetaPlayers(meta), called="on the meta controller")
+    meta.undo = stack
+    meta.unplugged = r.panel.devices.unplugged
+    deck = undo.Undo(Registry(), deck_mod.MetaRows(SimpleNamespace(rows=[])), called="on deck 1")
+    monkeypatch.setattr(undo, "_meta", stack)
+    monkeypatch.setattr(undo, "_installed", deck)
+    monkeypatch.setattr(undo, "_focused", deck)
     monkeypatch.setattr(undo, "_where", r.panel.in_meta_section)
-    d.run(d.move(_corner(d, "players.lane.on_air")), d.wait(2))
-    assert ui_players.over(r.panel) and r.panel.in_meta_section() is None
+    clock = [0.0]
+
+    def tick(n=30):
+        for _ in range(n):
+            clock[0] += 1 / 60
+            stack.tick(clock[0])
+            deck.tick(clock[0])
+            meta.tick(clock[0], 1 / 60)
+        r.d.run(r.d.wait(2))
+    r.tick = tick
+    return stack
+
+
+def _over(d, key="players.lane.on_air"):
+    d.run(d.move(_corner(d, key)), d.wait(2))
+
+
+def _drop(d, grip, to):
+    """As `_drag`, with the mouse left where it dropped: over the board."""
+    d.run(d.move(grip), d.wait(1), d.press(True), d.wait(1))
+    d.run(d.move(to(), frames=6), d.wait(1), d.press(False), d.wait(1))
+
+
+def test_cmd_z_over_the_board_is_the_meta_stack_s_and_the_latch_holds(rig, monkeypatch):
+    """Row 740, amended, under row 753: coming to it takes nothing back until a move."""
+    r, d, meta = rig, rig.d, rig.meta
+    stack = _real_stack(r, monkeypatch)
+    _over(d)
+    assert ui_players.over(r.panel) and r.panel.in_meta_section() is True
+    assert undo.here() is stack
     undo.undo()
+    assert stack.status == "nothing to undo here yet: make a change on the meta controller first"
+    _drop(d, _head(d, "players.p2"), lambda: _corner(d, "players.lane.off_air"))
+    assert meta.players.get(2).duty == Duty.OFF_AIR
+    assert not stack.latched or stack._will_open()
+
+
+def test_cmd_z_over_the_board_takes_a_duty_back(rig, monkeypatch, tmp_path):
+    r, d, meta = rig, rig.d, rig.meta
+    stack = _real_stack(r, monkeypatch)
+    _drop(d, _head(d, "players.p2"), lambda: _corner(d, "players.lane.off_air"))
+    assert meta.players.get(2).duty == Duty.OFF_AIR
+    assert _said(r) == ("Player 2 off air: p2 now on deck 2; rows on deck 1 go quiet. "
+                        "Stays until moved. ⌘Z takes it back.")
+    r.tick()
+    assert [s.label for s in stack.stack] == ["player 2 to off air"]
+    _over(d)
+    undo.undo()
+    r.tick()
+    assert meta.players.get(2).duty == Duty.ON_AIR
+    assert meta.pointer("p2").deck is meta.on_air
+    assert json.loads((tmp_path / FILE).read_text())["duties"] == {}
+    assert _said(r) == "undid player 2 to off air", "the line under the lanes follows"
     undo.redo()
-    assert not touched and said == [undo.NOTHING_HERE, undo.NOTHING_HERE]
-    d.run(d.park(), d.wait(2))
+    r.tick()
+    assert meta.players.get(2).duty == Duty.OFF_AIR and _said(r) == "redid player 2 to off air"
+
+
+def test_cmd_z_over_the_large_board_takes_a_controller_back(rig, monkeypatch):
+    r, d, meta = rig, rig.d, rig.meta
+    stack = _real_stack(r, monkeypatch)
+    told = []
+    meta.on_players.append(lambda: told.append(1))
+    ui_players._state(r.panel)["large"] = True
+    d.run(d.wait(3))
+    _drop(d, "players.big.ctl.leap", lambda: _head(d, "players.big.p2"))
+    assert meta.players.player_of("leap").number == 2 and told == [1]
+    assert _said(r) == "leap to player 2, on deck 1. ⌘Z takes it back."
+    r.tick()
+    _over(d, "players.big.lane.on_air")
+    assert undo.here() is stack
     undo.undo()
-    assert touched == ["deck"], "off the board, as ever"
-    r.panel.__dict__[ui_players.STATE]["large"] = True
-    d.run(d.wait(2))
-    d.run(d.move(_corner(d, "players.big.lane.on_air")), d.wait(2))
-    assert ui_players.over(r.panel) and r.panel.in_meta_section() is None
+    assert meta.players.player_of("leap").number == 1 and told == [1], "the list waits for the tick"
+    r.tick()
+    assert told == [1, 1] and _said(r) == "undid leap to player 2"
+
+
+def test_a_controller_unplugged_since_stays_and_the_board_says_why(rig, monkeypatch):
+    r, d, meta = rig, rig.d, rig.meta
+    stack = _real_stack(r, monkeypatch)
+    _drop(d, "players.ctl.leap", lambda: _head(d, "players.p2"))
+    r.tick()
+    r.panel.devices.get("leap").said = "lost"
+    _over(d)
+    undo.undo()
+    r.tick()
+    assert meta.players.player_of("leap").number == 2 and len(stack.stack) == 1
+    assert _said(r) == ("not undone: leap unplugged since that move. Plug it back in and "
+                        "try again")
+    r.panel.devices.get("leap").said = "connected"
+    undo.undo()
+    assert meta.players.player_of("leap").number == 1
+
+
+def test_no_promise_of_cmd_z_when_it_would_not_answer(rig):
+    """The rig's stand-in stack: not the one ⌘Z reaches, so the words do not say it."""
+    r, d = rig, rig.d
+    _drop(d, _head(d, "players.p2"), lambda: _corner(d, "players.lane.off_air"))
+    assert "⌘Z" not in _said(r)
+
+
+def test_off_the_board_a_deck_s_section_keeps_its_own_stack(rig, monkeypatch):
+    r, d = rig, rig.d
+    stack = _real_stack(r, monkeypatch)
+    _over(d)
+    assert undo.here() is stack
+    d.run(d.park(), d.wait(2))
+    assert not ui_players.over(r.panel) and undo.here() is undo._installed
 
 
 def test_it_opens_with_the_panel_folded(rig):

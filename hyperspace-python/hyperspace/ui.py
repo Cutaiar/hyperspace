@@ -892,14 +892,15 @@ class Panel:
         panel's deck's. **What is under the mouse decides:** a param undo watches
         says by its own layer, wherever it is drawn (a mixed section: hands with
         `ghost.*`, SYSTEM with `desk.slew`, a fixture node in the selection); else the
-        section under it (`ui_pane.where`); else the deck. None over the player
-        screen and the playlist's section: no stack, since a move or an edit there is on
-        none of them (`undo.here`)."""
+        section under it (`ui_pane.where`); else the deck. Over the player screen, its
+        own window too, the meta stack: a player's move is on it (row 740). None over
+        the playlist's section: no stack, since an edit there is on none of them
+        (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "patch"
         if ui_players.over(self):
-            return None
+            return True
         section = ui_pane.where(self)
         if section == "playlist":    # a list's edits are files, on no stack (row 709)
             return None

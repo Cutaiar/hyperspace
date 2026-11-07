@@ -435,12 +435,32 @@ class MetaRows:
         return {}
 
 
-def meta_stack(first: Deck) -> undos.Undo:
+class MetaPlayers:
+    """Who holds what and who is where, as `undo.Undo` reads it (`Undo.moves`, row
+    740): one part of what the meta stack holds, restored through the meta controller."""
+
+    def __init__(self, meta: MetaController):
+        self.meta = meta
+
+    def doc(self) -> dict:
+        return self.meta.players.to_json()
+
+    def put(self, doc: dict) -> None:
+        self.meta.put_players(doc)
+
+    def refuses(self, doc: dict) -> str | None:
+        return self.meta.refuses_players(doc)
+
+    def trouble(self) -> str:
+        return self.meta.players.error
+
+
+def meta_stack(first: Deck, moves: MetaPlayers | None = None) -> undos.Undo:
     """The meta controller's undo stack (plan 44 D5b): an `Undo` over the
     `MetaRegistry` and the `MetaTable` every deck holds by reference, what
-    is loaded through the library's `MetaMarks`. `first` is whichever deck has
-    the band hooks; the stack is no deck's."""
-    return undos.Undo(first.meta_reg, MetaRows(first.meta_table),
+    is loaded through the library's `MetaMarks`, and with `moves` who holds what
+    (row 740). `first` is whichever deck has the band hooks; the stack is no deck's."""
+    return undos.Undo(first.meta_reg, MetaRows(first.meta_table), moves=moves,
                       called="on the meta controller",
                       marks=MetaMarks(first.loaded_patch.lib.base), tag=first.band_shape)
 
@@ -506,7 +526,8 @@ class MetaController:
 
     `undo` is its own stack (`meta_stack`, plan 44 D5b), beside one on each deck:
     `stacks` are the three, all ticked each frame. A stack stays with its `Deck`
-    whatever points at it.
+    whatever points at it. A player's move is one step on `undo` (row 740), and
+    its undo goes the same road back (`put_players`).
 
     `players` (plan 55) say where the controllers go: a controller's pointer
     starts on the deck its player's duty says (`deck_for`), `move_player` moves
@@ -525,6 +546,9 @@ class MetaController:
     # (class-level: read by a meta controller from before a hot reload)
     timed: TimedFade | None = None
     playing: Any = None               # the playlist being played (`playlist.Playing`)
+    # role → is it unplugged now (`DeviceRegistry.unplugged`, app.main); None: never
+    unplugged: Callable[[str], bool] | None = None
+    relist = False                    # an undo changed who holds what: `tick` tells `on_players`
 
     def __init__(self, first: Deck, second: Deck, players: Players | None = None,
                  mix: Mix | None = None):
@@ -547,7 +571,8 @@ class MetaController:
         self.panel_pointer = Pointer(first)
         self.pointers: dict[str, Pointer] = {}
         self.on_panel: list[Callable[[Deck], Any]] = []   # told after the panel moves
-        self.undo = meta_stack(first)
+        self.moved_unplugged: set[str] = set()   # given while unplugged: not "unplugged since"
+        self.undo = meta_stack(first, MetaPlayers(self))
         undos.install_meta(self.undo)
         undos.on_air(first.undo)
 
@@ -647,7 +672,10 @@ class MetaController:
         it. It stays until someone moves it. Each controller lets go of the deck
         it left at its next `act` (`Router.pad_left`, `MidiIO._follow_pointer`,
         `routing.let_go_lost`); a row on it there goes dormant in that deck's
-        next pass."""
+        next pass. One step on the meta stack (row 740)."""
+        duty = Duty(duty)
+        if self.players.get(number).duty != duty:
+            undos.push_meta(f"player {number} to {duty.value.replace('_', ' ')}")
         self.players.move(number, duty)
         self._place(number)
 
@@ -675,12 +703,56 @@ class MetaController:
 
     def register(self, role: str, number: int) -> None:
         """Player `number` holds the controller `role` from now on, remembered;
-        the controller goes to that player's deck."""
+        the controller goes to that player's deck. One step on the meta stack (row 740)."""
+        self.players.get(number)
+        if self.players.player_of(role).number != number:
+            undos.push_meta(f"{role} to player {number}")
+            (self.moved_unplugged.add if self._is_unplugged(role)
+             else self.moved_unplugged.discard)(role)
         self.players.hold(role, number)
         self.point(role, self.deck_of_player(number))
         self.seats[role] = number
         for fn in self.on_players:
             fn()
+
+    def _is_unplugged(self, role: str) -> bool:
+        return self.unplugged is not None and self.unplugged(role)
+
+    def refuses_players(self, doc: dict) -> str | None:
+        """Why who holds what may not go back to `doc` now (row 740): a controller it
+        moves, unplugged since that move. Going back would reopen it under another
+        name, a device nobody has. One given while it was already unplugged goes
+        back as it came, and a duty moves no controller's holder, so neither refuses."""
+        then, now = doc["controllers"], self.players.held
+        gone = [r for r in sorted({*then, *now})
+                if then.get(r) != now.get(r) and r not in self.moved_unplugged
+                and self._is_unplugged(r)]
+        if not gone:
+            return None
+        it = "it" if len(gone) == 1 else "them"
+        return (f"{', '.join(gone)} unplugged since that move. Plug {it} back in and "
+                "try again")
+
+    def put_players(self, doc: dict) -> None:
+        """An undo of a move (row 740): who holds what and who is where as `doc` says,
+        remembered. What moved goes where its player's duty now says, as `move_player`
+        and `register` send it; a controller nobody moved stays, mapped elsewhere or not.
+        The device list is read again from `tick`, never here: the ⌘Z may be a row
+        firing inside a device's own `act`, and that list closes and opens devices."""
+        players = self.players
+        holders = {r: players.player_of(r).number for r in self.pointers if r not in (KEYS, MOUSE)}
+        duties = {p.number: p.duty for p in players}
+        held = dict(players.held)
+        players.put(doc)
+        for p in players:
+            if p.duty != duties[p.number]:
+                self._place(p.number)
+        for role, was in holders.items():
+            number = players.player_of(role).number
+            if number != was:
+                self.pointers[role].deck, self.seats[role] = self.deck_of_player(number), number
+        if players.held != held:
+            self.relist = True
 
     def _ours(self, deck: Deck) -> Deck:
         if not any(deck is d for d in self.decks):
@@ -768,9 +840,14 @@ class MetaController:
         return True
 
     def tick(self, now: float, dt: float) -> None:
-        """Once a frame: a timed fade's step, through `output.xfade`'s `Param`, then
-        on air by the fader, then the playlist, which sees the frame's deck on air. `dt`
-        dates a fade asked for since the last frame."""
+        """Once a frame: an undo's change of who holds what told, a timed fade's step,
+        through `output.xfade`'s `Param`, then on air by the fader, then the playlist,
+        which sees the frame's deck on air. `dt` dates a fade asked for since the last
+        frame."""
+        if self.relist:
+            self.relist = False
+            for fn in self.on_players:
+                fn()
         run = self.timed
         if run is not None:
             if self.mix.xfade != run.wrote:
@@ -826,6 +903,7 @@ class MetaController:
                 (self.undo, "undo", "Undo"),
                 (self.undo.marks, "library", "MetaMarks"),
                 (self.undo.table, "deck", "MetaRows"),
+                *([(self.undo.moves, "deck", "MetaPlayers")] if self.undo.moves is not None else []),
                 *([(self.playing, "playlist", "Playing")] if self.playing is not None else []),
                 (self.on_air_pointer, "pointer", "Pointer"),
                 (self.panel_pointer, "pointer", "Pointer"),

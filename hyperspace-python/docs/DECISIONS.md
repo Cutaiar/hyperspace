@@ -593,6 +593,7 @@ nuance). Built so far: D1, D2, D3, D4.
 | A tap, a nudge or a typed BPM is not an undo step: the `tempo` group is not watched. | `undo.EXCLUDED_GROUPS` | row 36 |
 | Camera moves are undo steps. | `undo.watched` | row 39 |
 | A drag that pauses for longer than the settle time becomes two steps. | `undo.SETTLE_S` | row 43 |
+| A player's move is one step on the meta controller's undo stack (amends row 740). `players.json` follows an undo; a controller unplugged since refuses in words and stays on the stack. | `deck.MetaPlayers`, `MetaController.put_players` | row 800 |
 
 ## UI
 
