@@ -12,7 +12,7 @@ import inspect
 import itertools
 import json
 import sys
-import time
+import threading
 from pathlib import Path
 
 import pytest
@@ -48,6 +48,9 @@ class Clock:
 
     def __call__(self):
         return self.t
+
+
+WAIT_S = devicelist.SYNC_S       # how long a test waits on a worker's own signal: a ceiling, never a pace
 
 
 @pytest.fixture()
@@ -460,10 +463,10 @@ def test_a_write_that_fails_is_said_kept_and_tried_again(macs, monkeypatch):
     store = DeviceList(root, home, seed=LIST)
     real = devicelist._put
 
-    def refused(path, text, tmp=None):
+    def refused(path, text, tmp=None, **more):
         if path.name == FILE:
             raise OSError("read-only")
-        real(path, text, tmp)
+        real(path, text, tmp, **more)
     monkeypatch.setattr(devicelist, "_put", refused)
     assert store.adopt(XBOX) == "xbox"
     store.sync()
@@ -579,7 +582,9 @@ def test_an_adopt_with_a_config_that_did_not_read_makes_no_file_of_defaults(macs
 
 def test_an_adopt_survives_two_launches_that_did_not_read(macs):
     root, home, _ = macs
-    _broken(root, home).adopt(XBOX)
+    first = _broken(root, home)
+    first.adopt(XBOX)
+    first.sync()        # (that launch's own file down, as a quit leaves it: `test_a_quit_waits…`)
     store = _broken(root, home)
     store.sync()
     assert "xbox" in roles(store.raw) and "pad" in roles(store.raw)
@@ -743,26 +748,81 @@ def test_a_second_mac_on_the_old_tables_adds_what_it_said_and_no_defaults(macs):
 # ---------------------------------------------------------------- a slow disk (review 8)
 
 class Stalled:
-    """The shared folder as a File Provider having a bad day: every touch of it blocks
-    until `free` is set. This Mac's own folder answers at once."""
+    """The shared folder as a File Provider having a bad day: every touch of it blocks its
+    worker until `free` is set. This Mac's own folder answers at once. **The frame's thread
+    doesn't block here, it fails by name:** a touch of the disk, a wait on a worker or a
+    `_put`, from the thread that built this while `watching`. A stopwatch would only say how
+    busy the machine was."""
 
-    def __init__(self, monkeypatch, root):
-        import threading
+    PATH_CALLS = ("stat", "read_bytes", "read_text", "write_text", "write_bytes", "replace",
+                  "unlink", "is_dir", "exists", "open")
+
+    def __init__(self, monkeypatch, *folders):
         self.free = threading.Event()
+        self.touched = threading.Event()
         self.touches = 0
-        real_stat, real_read = devicelist._stat, devicelist._read
+        self.frame = threading.current_thread()
+        self.watching = False
+        self.on_frame: list[str] = []
+        self.folders = tuple(str(f) for f in folders)
+        real_stat, real_read, real_put, real_wait = (devicelist._stat, devicelist._read, devicelist._put,
+                                                     devicelist._Worker.wait)
+
+        def stalled(what):
+            self.frame_may_not(what)
+            self.touches += 1
+            self.touched.set()
+            self.free.wait(WAIT_S)
 
         def stat(path, r):
-            self.touches += 1
-            self.free.wait(30)
+            stalled("_stat")
             return real_stat(path, r)
 
         def read(path, r):
-            self.touches += 1
-            self.free.wait(30)
+            stalled("_read")
             return real_read(path, r)
+
+        def put(path, *a, **k):
+            self.frame_may_not("_put")
+            return real_put(path, *a, **k)
+
+        def wait(worker, timeout):
+            self.frame_may_not("_Worker.wait")
+            return real_wait(worker, timeout)
         monkeypatch.setattr(devicelist, "_stat", stat)
         monkeypatch.setattr(devicelist, "_read", read)
+        monkeypatch.setattr(devicelist, "_put", put)
+        monkeypatch.setattr(devicelist._Worker, "wait", wait)
+        for name in self.PATH_CALLS:
+            monkeypatch.setattr(Path, name, self._watched(getattr(Path, name), name))
+
+    def _watched(self, real, name):
+        def call(path, *a, **k):
+            if str(path).startswith(self.folders):
+                self.frame_may_not(f"Path.{name}")
+            return real(path, *a, **k)
+        return call
+
+    def frame_may_not(self, what: str) -> None:
+        if self.watching and threading.current_thread() is self.frame:
+            self.on_frame.append(what)
+            raise AssertionError(f"{what} on the frame's thread")
+
+
+def _frames(store, clock, disk) -> None:
+    """All a frame or the panel asks of the list, with the library stalled."""
+    disk.watching = True
+    try:
+        for _ in range(200):
+            clock.t += 0.5
+            store.look()
+            store.role_for(XBOX)
+        assert store.adopt(XBOX) == "xbox"
+        store.set_here("xbox", True)
+        store.look()
+        assert store.checked()[0][-1]["role"] != ""
+    finally:
+        disk.watching = False
 
 
 def test_a_stalled_drive_never_touches_the_frame_thread(macs, monkeypatch):
@@ -770,27 +830,15 @@ def test_a_stalled_drive_never_touches_the_frame_thread(macs, monkeypatch):
     lands(root, LIST)
     monkeypatch.setattr(devicelist, "LAUNCH_S", 0.05)
     clock = Clock()
-    disk = Stalled(monkeypatch, root)
-    t0 = time.perf_counter()
+    disk = Stalled(monkeypatch, root, home)
     store = DeviceList(root, home, seed=LIST, clock=clock)
-    assert time.perf_counter() - t0 < 1.0, "the launch is bounded"
-    assert "isn't answering" in store.said
-    worst = 0.0
-    for _ in range(200):
-        clock.t += 0.5
-        t0 = time.perf_counter()
-        store.look()
-        store.role_for(XBOX)
-        worst = max(worst, time.perf_counter() - t0)
-    t0 = time.perf_counter()
-    assert store.adopt(XBOX) == "xbox"
-    assert store.checked()[0][-1]["role"] != ""
-    worst = max(worst, time.perf_counter() - t0)
-    print(f"worst frame-thread call with a stalled library: {worst * 1000:.3f} ms")
-    assert worst < 0.02
+    assert "isn't answering" in store.said, "the launch went on, with its first read still out"
+    assert disk.touched.wait(WAIT_S)
+    _frames(store, clock, disk)
+    assert disk.on_frame == []
     assert disk.touches == 1, "one cycle out at a time, however long it takes"
     assert roles(store.raw)[-1] == "xbox", "the adopt stands"
-    store._local.wait(5)
+    assert store._local.wait(WAIT_S)
     assert "xbox" in (home / COPY).read_text(), "and this Mac's own file isn't held up"
     disk.free.set()
     store.sync()
@@ -798,11 +846,48 @@ def test_a_stalled_drive_never_touches_the_frame_thread(macs, monkeypatch):
     assert store.said == ""
 
 
+def _wait_on_the_worker(store):
+    store._shared.wait(WAIT_S)
+
+
+def _write_the_file(store):
+    devicelist._put(store.path, "{}")
+
+
+def _stat_the_file(store):
+    store.path.stat()
+
+
+def _read_the_copy(store):
+    store.copy.read_text()
+
+
+@pytest.mark.parametrize("regression", [_wait_on_the_worker, _write_the_file, _stat_the_file, _read_the_copy])
+def test_the_stalled_test_would_catch_a_frame_that_blocks(macs, monkeypatch, regression):
+    """Each is what `look` might grow, a bounded wait included, and each fails by name."""
+    root, home, _ = macs
+    lands(root, LIST)
+    monkeypatch.setattr(devicelist, "LAUNCH_S", 0.05)
+    clock = Clock()
+    disk = Stalled(monkeypatch, root, home)
+    store = DeviceList(root, home, seed=LIST, clock=clock)
+    real = DeviceList.look
+
+    def look(self):
+        regression(self)
+        return real(self)
+    monkeypatch.setattr(DeviceList, "look", look)
+    with pytest.raises(AssertionError, match="on the frame's thread"):
+        _frames(store, clock, disk)
+    assert disk.on_frame
+    disk.free.set()
+
+
 def test_a_launch_that_gave_up_takes_the_file_when_it_answers(macs, monkeypatch):
     root, home, _ = macs
     lands(root, [*LIST, EDGE])
     monkeypatch.setattr(devicelist, "LAUNCH_S", 0.05)
-    disk = Stalled(monkeypatch, root)
+    disk = Stalled(monkeypatch, root, home)
     store = DeviceList(root, home, seed=LIST)
     assert store.raw == LIST
     reg = devices.DeviceRegistry(store.checked()[0], devices.Context(), store=store)
@@ -821,11 +906,11 @@ def test_what_fails_is_tried_less_and_less_often(tmp_path):
     given = []
     real = store._give
     store._give = lambda: (given.append(clock.t), real())
-    store._shared.wait(5)
+    assert store._shared.wait(WAIT_S)
     for _ in range(600):
         clock.t += 0.5
         store.look()
-        store._shared.wait(5)
+        assert store._shared.wait(WAIT_S)
     gaps = [b - a for a, b in itertools.pairwise(given)]
     assert len(given) < 25, "five minutes unmounted: not 600 tries"
     assert gaps[-1] <= devicelist.RETRY_MAX_S + 1 and gaps[-1] > gaps[0]
@@ -848,7 +933,7 @@ def test_a_quiet_list_costs_one_stat_a_look_on_the_worker(macs, monkeypatch):
     for _ in range(50):
         clock.t += devicelist.LOOK_S
         store.look()
-        store._shared.wait(5)
+        assert store._shared.wait(WAIT_S)
     assert not reads
 
 
@@ -948,6 +1033,119 @@ def test_the_daw_sink_follows_on_or_off_on_this_mac(tmp_path):
     assert not any(e["role"] == config.DAW_ROLE for e in off)
 
 
+# ---------------------------------------------------------------- a quit (row 803)
+
+class BusyHome:
+    """This Mac's folder too busy for the worker: its writes wait at `gate`. The quit's own
+    doesn't, as it's on the thread that built this."""
+
+    def __init__(self, monkeypatch):
+        self.gate = threading.Event()
+        self.reached = threading.Event()
+        frame, real = threading.current_thread(), devicelist._put
+
+        def put(path, *a, **k):
+            if threading.current_thread() is not frame:
+                self.reached.set()
+                self.gate.wait(WAIT_S)
+            return real(path, *a, **k)
+        monkeypatch.setattr(devicelist, "_put", put)
+
+
+@pytest.mark.parametrize("bound", [devicelist.CLOSE_S, 0.0])
+def test_a_quit_saves_an_adopt_itself_though_the_home_is_busy(macs, monkeypatch, bound):
+    """A config.toml that didn't read and no list: the adopt lives only in the copy. The
+    worker's write is stuck, and `close` doesn't lean on it, however short its bound."""
+    root, home, _ = macs
+    monkeypatch.setattr(devicelist, "CLOSE_S", bound)
+    store = _broken(root, home)
+    busy = BusyHome(monkeypatch)
+    store.adopt(XBOX)
+    assert busy.reached.wait(WAIT_S)
+    store.close()
+    assert not busy.gate.is_set()
+    assert "xbox" in (home / COPY).read_text(), "written by the quit itself"
+    busy.gate.set()
+    assert store._local.wait(WAIT_S)
+    assert "xbox" in (home / COPY).read_text(), "and the stuck write doesn't land over it"
+    assert "xbox" in roles(_broken(root, home).raw), "so the next launch has it"
+    opened(toml(home, LISTED.format(root=root)), home)
+    assert roles(on_disk(root)) == ["pad", "launch", "xbox"]
+
+
+def test_a_quit_says_when_it_could_not_save(macs, monkeypatch, capsys):
+    root, home, _ = macs
+    store = _broken(root, home)
+    store.adopt(XBOX)
+    assert store._local.wait(WAIT_S)
+    real = devicelist._put
+
+    def refused(path, text, tmp=None, **more):
+        if path.name == COPY:
+            raise OSError("disk full")
+        real(path, text, tmp, **more)
+    monkeypatch.setattr(devicelist, "_put", refused)
+    store.close()
+    assert "not saved at quit (disk full)" in capsys.readouterr().err
+    assert any("not saved at quit" in n for n in store.notes)
+
+
+def test_a_quit_with_the_library_in_the_home_writes_the_file(tmp_path, monkeypatch):
+    """No copy to hold it, so what's unwritten goes to the file itself."""
+    store = DeviceList(tmp_path, tmp_path, seed=LIST)
+    busy = BusyHome(monkeypatch)
+    store.adopt(XBOX)
+    assert busy.reached.wait(WAIT_S)
+    store.close()
+    assert "xbox" in roles(on_disk(tmp_path))
+    busy.gate.set()
+
+
+def test_on_or_off_at_a_quit_is_saved_too(macs):
+    root, home, _ = macs
+    store = opened(toml(home, f'[library]\npath = "{root}"\n'), home)
+    store.set_here("leap", True)
+    store.close()
+    assert json.loads((home / HERE).read_text())["on"]["leap"] is True
+
+
+def test_on_or_off_with_a_config_that_did_not_read_spends_no_read(macs):
+    """The file is the mark of that read, so the chip stands for the run alone."""
+    root, home, _ = macs
+    store = _broken(root, home)
+    store.set_here("leap", True)
+    assert store.is_on("leap")
+    store.close()
+    assert not (home / HERE).exists()
+    opened(toml(home, LISTED.format(root=root)), home)
+    assert roles(on_disk(root)) == ["pad", "launch"], "config.toml's list is read after all"
+
+
+def test_a_sync_that_runs_out_says_so(macs, monkeypatch):
+    root, home, _ = macs
+    monkeypatch.setattr(devicelist, "LAUNCH_S", 0.05)
+    disk = Stalled(monkeypatch, root, home)
+    store = DeviceList(root, home, seed=LIST)
+    with pytest.raises(TimeoutError, match="library"):
+        store.sync(timeout=0.05)
+    disk.free.set()
+
+
+def test_time_is_only_a_ceiling_here():
+    """Row 803: a stopwatch's verdict is the machine's load. This file doesn't import `time`, a
+    wait is on a signal with `WAIT_S` over it, and a clock is a `Clock` of its own."""
+    tree = ast.parse(Path(__file__).read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert not any(a.name.split(".")[0] == "time" for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            assert node.module != "time"
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            assert node.func.attr != "sleep"
+            if node.func.attr == "wait" and node.args:
+                assert not isinstance(node.args[0], ast.Constant), f"line {node.lineno}: a wait by the clock"
+
+
 # ---------------------------------------------------------------- where it stands
 
 def test_a_root_file_is_safe_in_the_library(tmp_path):
@@ -956,7 +1154,7 @@ def test_a_root_file_is_safe_in_the_library(tmp_path):
     home.mkdir()
     lib = Library(root, machine=home)
     groups = lib.groups()
-    DeviceList(root, home, seed=LIST)
+    DeviceList(root, home, seed=LIST).sync()
     (root / f"{FILE}.123.tmp").write_text("half")
     assert lib.groups() == groups
     spec = importlib.util.spec_from_file_location("migrate_library_ct1", TOOLS / "migrate_library.py")
@@ -973,8 +1171,8 @@ def test_a_root_file_is_safe_in_the_library(tmp_path):
 
 def test_this_macs_own_files_stay_in_its_home(macs):
     root, home, _ = macs
-    DeviceList(root, home, seed=LIST)
     DeviceList(root, home, seed=LIST).sync()
+    DeviceList(root, home, seed=LIST).sync()        # (a relaunch adds nothing)
     assert sorted(p.name for p in home.iterdir()) == sorted([COPY, HERE])
     assert sorted(p.name for p in root.iterdir()) == [FILE]
 
