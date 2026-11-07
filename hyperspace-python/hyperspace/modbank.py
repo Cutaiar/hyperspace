@@ -150,7 +150,7 @@ class Bank:
             return f"{self.MAX} {self.LABEL}s is the most"
         if self.next_id() > MAX_ID:
             return (f"{self.LABEL} ids are used up: {MAX_ID} is the highest, and a "
-                    "removed one is not reused this session")
+                    "removed one is not reused until a restart")
         return None
 
     def add(self, n: int | None = None) -> int:

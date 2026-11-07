@@ -8344,6 +8344,18 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
+## DE. "Session" and "rig" are gone (rows 778-780)
+Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans every string; the existing tests pin the words. No picture was taken of the longer lines.
+**605. The panel's longer words fit.** (any Mac, no devices needed)
+1. PRESETS, SHOW: read the line under the SHOW label, and hover it. *Pass:* "the meta controller, the bus cables" whole, or cut in the way the panel always cuts; nothing sits over the buttons beside it.
+2. ROUTING: find the "meta controller" heading over the invariant rows, and "its own rows — edit bindings.json" beside it. *Pass:* it reads as one line on your window's width.
+3. With the APC40 connected, Learn desk on MASTER. *Pass:* the refusal says "invariant (the meta controller's)", and the line fits where it lands.
+*Fail:* "session" anywhere; a line cut so it can't be read.
+**606. A missing controller, and a bus cable.**
+1. Load a patch whose rows want a controller that isn't plugged in. On GRAPH, read its placeholder node, and PRESETS' line. *Pass:* "not on this Mac".
+2. On GRAPH, hover a cable from All outputs into a window. *Pass:* it starts "the bus cable", and hovering All outputs says "The meta controller's bus". Cut it, then read ⌘Z's line. *Pass:* "cut the bus cable".
+*Fail:* "rig" anywhere.
+
 ## What no test covers
 
 Only a person can settle these:

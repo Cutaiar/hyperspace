@@ -200,11 +200,11 @@ def test_a_loadable_load_never_touches_a_meta_param(rig):
     before = reg.snapshot(part="shared_meta")
     assert before["desk.slew"] == 0.12
     rig.loaded_patch.load("FAST")
-    assert slew.value == 0.12 and "desk.slew is the session's, ignored" in rig.loaded_patch.notes
+    assert slew.value == 0.12 and "desk.slew is the meta controller's, ignored" in rig.loaded_patch.notes
     assert rig.view.shape == 5
     assert rig.clock.bpm == 100.0 and rig.chain.gain == 2.0 and rig.chain.params[0].atk == 0.3
     assert control.scene == scene and reg.snapshot(part="shared_meta") == before
-    assert out.dim == 0.4 and "output.dim is the session's, ignored" in rig.loaded_patch.notes
+    assert out.dim == 0.4 and "output.dim is the meta controller's, ignored" in rig.loaded_patch.notes
     rig.loaded_patch.load("TRIP")                          # the party loadable patch, too
     assert rig.clock.bpm == 100.0 and reg.snapshot(part="shared_meta") == before
     assert out.dim == 0.4
@@ -229,8 +229,8 @@ def test_meta_ids_in_a_loadable_are_noted_and_ignored(rig):
                 {"source": "hand:8", "target": "view.bright", "op": "push", "value": 0.4}])
     assert rig.loaded_patch.load("NOISY") == ["nebula.glow"]
     notes = rig.loaded_patch.notes
-    assert "tempo.bpm is the session's, ignored" in notes
-    assert "scene.select is the session's, ignored" in notes
+    assert "tempo.bpm is the meta controller's, ignored" in notes
+    assert "scene.select is the meta controller's, ignored" in notes
     assert "1 unknown id(s): nebula.glow" in notes
     assert "dropped key:X → view.faces (toggle): not a performer row" in notes
     assert any(n.startswith("dropped hand:8 → view.bright") for n in notes)
@@ -1202,7 +1202,7 @@ def test_an_old_loadable_loads_without_its_shape_pads_and_its_file_is_untouched(
     # NIGHT TWO: fifteen quiet, the owner's re-aimed pad with its note, the knob kept
     pr.load_slot(1)
     said = (f"dropped {OWNER_PAD['source']} → {OWNER_PAD['target']}: that control is "
-            "invariant, the session's (plan 13 D6)")
+            "invariant, the meta controller's (plan 13 D6)")
     assert lib.current("presets") == "NIGHT TWO"
     assert loaded_patch.desk_notes == [said] and loaded_patch.notes == [said]
     assert lib.warning == f"preset NIGHT TWO: {said}"       # one note: no "(+15 more)"

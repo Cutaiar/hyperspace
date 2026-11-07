@@ -2689,7 +2689,7 @@ def land_spawn(panel, landing, choices, splice=None) -> str | None:
     """Land `landing` with the sheet's `choices` (`Edit.spawn` / `Edit.splice`:
     one undo step through the doors); its words on the head. Returns the
     refusal, or None. What its rows wait for is said after the landing
-    (plan 40 P4: "…; waits for leap (not in this rig): right hand y") —
+    (plan 40 P4: "…; waits for leap (not on this Mac): right hand y") —
     with no conflict there was no sheet to say it before the press."""
     e = group_edit(panel)
     if e is None:

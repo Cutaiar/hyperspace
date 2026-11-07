@@ -84,10 +84,10 @@ FOLDER_TIP = ("A folder of presets: click to fold or unfold (kept on this Mac). 
               "Drag a preset onto it to move it in. Right-click: a new folder inside, "
               "rename, remove (an empty folder only)")
 # what a show is, in one line under the SHOW label and in its hover
-SHOW_LINE = "show  ·  the desk's pads, the session, the rig's wires"
+SHOW_LINE = "show  ·  the desk's pads, the meta controller, the bus cables"
 SHOW_TIP = ("A show is the room the presets play in: which preset each of the desk's "
             "twenty-four pads loads, off air (set on the desk — hold a pad, or SAVE + a pad), the "
-            "session (tempo, hands, the analyzer, the outputs), the analyzer's scene, and the "
+            "meta controller (tempo, hands, the analyzer, the outputs), the analyzer's scene, and the "
             "bus cables cut on GRAPH. A preset is the look; the show is everything "
             "around it. Open another, save this one, or start a new one here.")
 
@@ -1068,7 +1068,7 @@ def show_line(panel) -> None:
         imgui.text_colored(ui.RED, "●")
         _rect(panel, "show.dot")
         if imgui.is_item_hovered():
-            ui.tooltip("the show differs from its file: the session (tempo, hands, "
+            ui.tooltip("the show differs from its file: the meta controller (tempo, hands, "
                        "the analyzer, output), its pads or its wires")
     _beside(right, SHOW_W)
     imgui.set_next_item_width(SHOW_W)
@@ -1091,7 +1091,7 @@ def show_line(panel) -> None:
         invalidate(panel, PROJECT)
     _rect(panel, "show.save")
     if imgui.is_item_hovered():
-        ui.tooltip("Save the show — the session (tempo, hands, the analyzer, output), "
+        ui.tooltip("Save the show — the meta controller (tempo, hands, the analyzer, output), "
                    "its pads and its wires")
     _beside(right, ui.chip_w("as…"))
     if ui.chip("as…"):

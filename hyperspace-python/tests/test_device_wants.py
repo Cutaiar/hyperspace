@@ -4,7 +4,7 @@ arrival (spec P4).
 - **`devices.wants(table, registry)`**: one `Want(role, state, scheme,
   rows)` per device role the loadable patch's performer routes, patch-layer desk
   rows and modifier inputs name — ``connected``, ``lost``, ``off`` or
-  ``missing`` (not in this rig) — with its rows in words
+  ``missing`` (not on this Mac) — with its rows in words
   (`routing.row_words`); never a built-in scheme. Over a bare registry and
   a `[[devices]]` list, headless.
 - **`wants_for` / `want_words`**: what a group node's status line says
@@ -160,7 +160,7 @@ def test_wants_for_keeps_the_rows_that_land_on_the_ids_and_want_words_say_them()
     assert ws == [Want("apc40", "lost", "cc", ("K1", "K2")),
                   Want("leap", "missing", "hand", ("right hand y", "right hand roll"))]
     assert devices.want_words(ws) == ("waits for apc40 (lost): K1, K2 · "
-                                      "leap (not in this rig): right hand y, right hand roll")
+                                      "leap (not on this Mac): right hand y, right hand roll")
     assert devices.wants_for(t, rig, ["mod.1"]) == []
     assert devices.want_words([Want("apc40", "connected", "cc", ("K1",))]) == ""
     # a long list is cut, the rest counted
@@ -175,7 +175,7 @@ def test_the_chip_and_the_system_lines():
     ws = devices.wants(t, rig_of(DESK))
     assert devices.missing_chip(ws) == "2 devices missing"
     assert ui.wanted_lines(rig_of(DESK), t) == [
-        "wanted by the preset: leap — not in this rig; 3 rows wait",
+        "wanted by the preset: leap — not on this Mac; 3 rows wait",
         "wanted by the preset: apc40 — lost; 1 control wait"]
     assert devices.missing_chip(devices.wants(table_of(HAND_ROWS[0]), rig_of(DESK))) == \
         "1 device missing"
@@ -216,7 +216,7 @@ def test_the_chip_draws_on_the_graph_head_the_loadable_strip_and_system(shell_ri
     ui_frame(p, "presets")
     assert "2 devices missing##wants" in seen
     ui_frame(p, "system")
-    assert "wanted by the preset: leap — not in this rig; 1 row wait" in texts
+    assert "wanted by the preset: leap — not on this Mac; 1 row wait" in texts
     assert any(t.startswith("wanted by the preset: apc40 — lost; ") for t in texts)
 
 
@@ -434,7 +434,7 @@ def test_a_window_the_meta_lacks_is_said_on_output_and_the_graph_head(shell_rig,
                         lambda col, text: texts.append(text) or real_colored(col, text))
     ui_frame(p, "graph")
     ui_frame(p, "output")
-    assert not any("which this rig has not open" in t for t in texts)
+    assert not any("which is not open on this Mac" in t for t in texts)
     pre = p.library.loaded_patch
     spec = G.read_graph({"frame": "wired", "wires": [{"from": "scene", "to": "output.6.image"}]})
     pre.graph.land(spec, spec.to_json())

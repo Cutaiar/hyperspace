@@ -352,7 +352,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
                                                                "view.bright")
     assert ui_routing.sheet_title(panel, landing) == "spawn acid wash into TRIP"   # (its name)
     assert ui_routing.sheet_wants(panel, landing) == [
-        "apc40 (not in this rig): K1", "leap (not in this rig): right hand y"]
+        "apc40 (not on this Mac): K1", "leap (not on this Mac): right hand y"]
     frame(panel)
     st = ui_routing._state(panel)
     assert st["modal"] and st["sheet"]
@@ -561,13 +561,13 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
                 "macro.2": {"subs": [{"base": "view.depth4", "from": 1.0, "to": 0.0}]}})
     lib.load("presets", "SHOW")
     panel.learn = Learn(reg, table)
-    panel.learn.refuse("MASTER fader is invariant (the session's) — not learned")
+    panel.learn.refuse("MASTER fader is invariant (the meta controller's) — not learned")
     texts, previews = _drawn(monkeypatch)
     frame(panel, "routing")
     frame(panel)
     # the head
     assert "SHOW" in texts and "DESK LAYER: PRESET" in texts and "●" not in texts
-    assert "learn: MASTER fader is invariant (the session's) — not learned" in texts
+    assert "learn: MASTER fader is invariant (the meta controller's) — not learned" in texts
     assert any(t.startswith("desk: dropped cc:0:14 → view.bright") and "invariant" in t
                for t in texts)
     assert "bindings" not in lib.kinds                         # no routing-preset strip
@@ -590,7 +590,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
     assert texts.count("shared") >= 2
     assert ui_routing.shared_bases(table) == {"view.depth4": ["macro.1", "macro.2"]}
     # the meta controller, read-only
-    assert "the session's — edit bindings.json" in texts
+    assert "its own rows — edit bindings.json" in texts
     assert {"S1", "band.0.post", "⇧", "desk.shift", "band.sel.trim"} <= set(texts)
     assert not lib.is_dirty("presets")
     # an edit on the page: a subscriber's `to` dragged
@@ -923,7 +923,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
     # the macros: the one that subscribes a kaleidoscope param, drawn whole
     assert knobs == ["macro.3"]
     # the titles stay; the meta controller has no such row and says so, once
-    assert {"DESK  ·  PRESET LAYER", "MACROS", "SESSION"} <= set(texts)
+    assert {"DESK  ·  PRESET LAYER", "MACROS", "META CONTROLLER"} <= set(texts)
     assert "ROUTES" not in texts and "MODIFIERS" not in texts
     assert texts.count(ui_routing.NO_MATCH) == 1
     assert "invariant · both layers" not in texts

@@ -775,6 +775,9 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 778 | "Session" leaves every string a person reads: each says "the meta controller's" or "the meta controller". A saved key, a param id, a file name and a config key's name don't change. "Preset" stays until the migration renames the folder | 703, 756 | owner — 2026-11-06: "Session and rig need to go away." |
+| 779 | "Rig" leaves every string a person reads, each as what it means: the bus cable, not on this Mac, the meta controller's, and two that were neither: "no bank on this deck" and "the sequencer is the look's one" (rec, the owner's words don't cover them) | 778 | owner — 2026-11-06, the same line; the two extra words (rec) — pending the owner |
+| 780 | A test keeps both words out: `tests/test_person_words.py` scans every string literal in `hyperspace/`, with a list of what stays and why: saved keys and words the code compares against itself. Programmer errors changed too, as the cheapest way to keep that list short; "this session" in the bank's refusal means this run, and says "until a restart" | 778, 779 | (rec) — pending the owner |
 
 "—": no hand check shows it; tests only.
 
@@ -14034,3 +14037,24 @@ still wins, as does a sink row.
 - **A person joining a controller's step.** `_opens` was decided only when a step began, so a typed commit landing inside a controller's settle time neither moved focus nor opened the latch, and ⌘Z refused right after typing. A change seen with the hand up now counts on a step already open (`Undo._observe`); a held step (`keep_open`) still opens nothing. The same goes for the mouse, so row 753's known limit, a mouse held anywhere, now also takes a controller's step already open.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
+
+### 778. "Session" leaves what a person reads
+
+- **The owner, 2026-11-06:** "Session and rig need to go away." Counted in #393 at 30 strings; on `main` at this PR, 30 again by the same scan, plus one it could not see: `ui._micro("session")`, ROUTING's heading, has no space or capital.
+- **Built.** Said as what it means, by hand. "the session's" is "the meta controller's", in the refusals, the Learn notes, the load notes, ROUTING and the desk. SHOW's line and tips say "the meta controller". ROUTING's heading is "meta controller", with "its own rows — edit bindings.json" beside it, so the name isn't said twice.
+- **Not touched.** No saved key, param id, file name, schema or config key. `"session"` in a show file and `RIG` stay until the migration. Comments and docstrings aren't read by a person; SEM's word pass owns those. "Preset" (155 strings) moves with the migration. "Performance param" in one programmer error stays: not asked.
+- **Judge it.** 605.
+
+### 779. "Rig" leaves what a person reads
+
+- **By what each one means, from the owner's list:** "the rig's cable" is the bus cable. "not in this rig" is "not on this Mac", on a placeholder node and in a want's state. "which this rig has not open" is "which is not open on this Mac". A window, a cloud and a device left out of a patch are "the meta controller's"; so is the bus (`All outputs`' tip), a setting and a change in ⌘Z's tip. `--laptop`'s help says "this Mac's remembered window spots".
+- **Two that fit none of those, (rec) — pending the owner.** `NO_BANK`: a bank is a `Deck`'s, so "no LFO bank on this deck". `SEQ_WORDS`: `graphview.home` puts the sequencer on the loadable patch's side, so "the meta controller's" would be false. It says "the sequencer is the look's one, never a patch's; left out", as `CAMERA_WORDS` says of the camera.
+- **Tools.** `desk_coverage.py` and `slew_demo.py` print "the meta controller's". `learn_demo.py`'s "the session's wrong hand" is a recording session, an ordinary English word, and stays; the guard scans only `hyperspace/`.
+- **Judge it.** 606.
+
+### 780. The guard, and the strings nobody reads
+
+- **`tests/test_person_words.py`.** Every string literal under `hyperspace/`, docstrings excluded, bare words included, since #393's filter missed the heading. Keyed by file and whole string, so other PRs moving lines don't trip it. A second test fails when a listed string has gone, so the list shrinks as the migration and the cleanup take those keys away. A third proves the scan on a planted source.
+- **What stays, and why:** `"session"` and `"rig"` as show-file keys in `library.py` and `headless.py`; `"session"` as an attribute name in `loadable.py`, a section key in `graphview.py` and `ui_routing.py`; `"rig"` as a cable's class in `patches.py`; `"rig:"` hashed into a cable id in `graphview.py`. None is ever drawn.
+- **Programmer errors, (rec).** `params.py`'s three `ValueError`s changed anyway: "one meta registry", "this meta registry", "never the meta controller's". Allowlisting them would have cost more words than fixing them.
+- **`modbank.py`.** A person can read this one, on a bank's tooltip. "this session" meant this run of the app, and `next_id`'s docstring says a fresh run starts over, so it says "not reused until a restart".

@@ -2357,8 +2357,8 @@ class DeviceRegistry:
 
 CONNECTED, LOST, OFF, MISSING = "connected", "lost", "off", "missing"
 WANT_STATES = (CONNECTED, LOST, OFF, MISSING)
-# a want's state as a sentence says it ("apc40 (lost)", "leap (not in this rig)")
-STATE_WORDS = {CONNECTED: "connected", LOST: "lost", OFF: "off", MISSING: "not in this rig"}
+# a want's state as a sentence says it ("apc40 (lost)", "leap (not on this Mac)")
+STATE_WORDS = {CONNECTED: "connected", LOST: "lost", OFF: "off", MISSING: "not on this Mac"}
 _MIDI = ("cc", "note", "pitch")             # routing.MIDI_SCHEMES, restated (no app import)
 PLAYER_1 = "player 1"       # who a bare row names, when no device publishes it bare
 WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
@@ -2531,7 +2531,7 @@ def wants_for(table, registry, ids) -> list[Want]:
 
 def want_lines(ws, limit: int = WANT_ROWS_SHOWN) -> list[str]:
     """One line per want whose device is not there: "apc40 (lost): K1, K2",
-    "leap (not in this rig): right hand y" — the first `limit` rows, then
+    "leap (not on this Mac): right hand y" — the first `limit` rows, then
     "+ k more". Nothing for a connected want."""
     out = []
     for w in ws:
@@ -2546,12 +2546,12 @@ def want_lines(ws, limit: int = WANT_ROWS_SHOWN) -> list[str]:
 
 def want_words(ws, limit: int = WANT_ROWS_SHOWN) -> str:
     """The wants as a group node's status line says them (plan 40 T4):
-    "waits for apc40 (lost): K1, K2 · leap (not in this rig): right hand
+    "waits for apc40 (lost): K1, K2 · leap (not on this Mac): right hand
     y"; "" when every device is there.
 
     >>> want_words([Want("apc40", "lost", "cc", ("K1", "K2")),
     ...             Want("leap", "missing", "hand", ("right hand y",))])
-    'waits for apc40 (lost): K1, K2 · leap (not in this rig): right hand y'
+    'waits for apc40 (lost): K1, K2 · leap (not on this Mac): right hand y'
     """
     lines = want_lines(ws, limit)
     return "waits for " + " · ".join(lines) if lines else ""

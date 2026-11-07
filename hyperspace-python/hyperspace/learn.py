@@ -854,10 +854,10 @@ class Learn:
             return (name(x.bare) if name is not None else None) or x.describe()
         why = blocked(table, source)
         if why == "invariant":
-            self.refuse(f"{named(b)} is invariant (the session's) — not learned")
+            self.refuse(f"{named(b)} is invariant (the meta controller's) — not learned")
             return False
         if why == "global":
-            self.refuse(f"{named(b)} is on the global layer (the session's) "
+            self.refuse(f"{named(b)} is on the global layer (the meta controller's) "
                         "— latch SHIFT off to learn into the preset")
             return False
         why = meta_refusal(pid)          # (only now: a row on these two is the meta controller's)
@@ -977,7 +977,7 @@ class Learn:
         self._mapped(b)
         let_go = ", ".join(dict.fromkeys(x.target for x in gone if x.target != pid))
         keeps = "".join(f"; {x.target} keeps {x.describe()}" for x in kept)
-        self.said(f"learned {pid} ← {b.describe()} (into {getattr(table.path, 'name', 'the session')})"
+        self.said(f"learned {pid} ← {b.describe()} (into {getattr(table.path, 'name', 'the meta controller')})"
                   + (f"; {let_go} let go" if let_go else "") + keeps)
         return True
 
@@ -1038,7 +1038,7 @@ class Learn:
             self._land_step(b)
             table.write()
             self.said(f"learned {pid} ← {b.describe()} "
-                      f"(into {getattr(table.path, 'name', 'the session')}); {META_UNDO}")
+                      f"(into {getattr(table.path, 'name', 'the meta controller')}); {META_UNDO}")
         self._ask_pair(propose_row(table, b, land, lambda: self._land_step(b)))
         return True
 
@@ -1104,7 +1104,7 @@ class Learn:
         table.add(b)
         table.write()
         was = ", ".join(dict.fromkeys(x.source for x in gone if x.source != b.source))
-        self.said(f"sent {pid} → {port} (into {getattr(table.path, 'name', 'the session')})"
+        self.said(f"sent {pid} → {port} (into {getattr(table.path, 'name', 'the meta controller')})"
                   + (f"; {was} let go" if was else ""))
         return b
 
@@ -1278,7 +1278,7 @@ class Learn:
             if desk and meta_rows:
                 b = meta_rows[0]
                 where = "on the global layer" if b.layer == "global" else "invariant"
-                self.refuse(f"{name(b)} → {b.target} is {where} (the session's, "
+                self.refuse(f"{name(b)} → {b.target} is {where} (the meta controller's, "
                             "edited in bindings.json) — not unbound")
             return []
         undo.push(f"unbind {real}")                  # one undo step (undo.py, plan 15)
