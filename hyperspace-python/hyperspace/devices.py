@@ -102,12 +102,15 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
+from .players import THERE, UNLISTED, UNPLUGGED
+
 # the open-retry schedule — midi.Ports' (RECONNECT_S, RECONNECT_FAST,
 # RECONNECT_SLOW_S), restated here because midi is imported only behind
 # a device's entry; tests/test_devices.py holds the two equal
 RETRY_S = 2.0
 RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
+REOPEN_S = 3.0           # a device reopened while connected: longer than one `RETRY_S` to find it
 WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
 # fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
@@ -1772,6 +1775,21 @@ class DeviceRegistry:
         """The device of `role`, or None."""
         return next((d for d in self.devices if d.role == role), None)
 
+    def presence(self, role: str) -> str:
+        """Where the controller `role` is, for an undo of a move (row 800): `UNLISTED`,
+        no entry lists it; `UNPLUGGED`, listed and lost; else `THERE`. One switched off is
+        there. One `apply` has just reopened reads as lost until a poll finds it (a pad's
+        `io.on`), and that is no unplugging: it is there for `REOPEN_S`, or until it says."""
+        d = self.get(role)
+        if d is None:
+            return UNLISTED
+        word = self._word(d)
+        reopening = self.__dict__.setdefault("_reopening", {})
+        if word is None or word.startswith(("connected", OFF)):
+            reopening.pop(role, None)
+            return THERE
+        return THERE if self.clock() < reopening.get(role, 0.0) else UNPLUGGED
+
     def first(self, kind: str):
         """The first listed device of `kind` (off or not), or None."""
         return next((d for d in self.devices if d.kind == kind), None)
@@ -2306,6 +2324,8 @@ class DeviceRegistry:
                 devices.append(have.pop(role))
                 continue
             if kept is not None:
+                if str(self._word(kept)).startswith("connected"):     # (`presence`)
+                    self.__dict__.setdefault("_reopening", {})[role] = self.clock() + REOPEN_S
                 self._close(have.pop(role))
                 self._note(f"devices: {role} changed — reopened")
             else:

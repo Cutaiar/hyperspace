@@ -1148,3 +1148,27 @@ def test_a_hand_learn_onto_a_setting_is_refused_in_words(rig):
     lrn.arm("ghost.alpha", "hand:right")
     lrn.learn_source("hand:right.y")
     assert not lrn.refused and t.owner("ghost.alpha").source == "hand:right.y"
+
+
+def test_no_absolute_knob_can_be_learned_onto_the_bank(tmp_path):
+    """Audit R14, moot since row 746 (closed by row 792): `preset.select`'s 24 choices
+    would spread a knob mostly over empty slots, and no door lands one. `preset.*` is meta,
+    one per `Deck`, so `learn_control` refuses it in the rule's words, still table-clean;
+    a hand or a stick is refused the same way; the desk rows' combo doesn't offer it; and
+    no factory row reads a knob onto it. A step or a pad on the bank still skips empties."""
+    from hyperspace import apc40
+    from hyperspace.ui_routing import desk_target
+
+    r = desk_rig(tmp_path)
+    table, lrn, reg = r.router.table, r.learn, r.reg
+    before = [b.to_json() for b in table.bindings]
+    lrn.arm("preset.select", "desk")
+    assert not lrn.learn_control("cc:0:48", apc40)
+    assert lrn.refused and "not learned" in lrn.last
+    lrn.arm("preset.select")
+    lrn.learn_source("hand:right.pitch")
+    assert lrn.refused and "not learned" in lrn.last
+    assert [b.to_json() for b in table.bindings] == before
+    assert not desk_target(reg["preset.select"])
+    rows = [b for b in table.bindings if b.target == "preset.select"]
+    assert rows and all(b.op == "set" for b in rows)

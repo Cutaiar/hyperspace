@@ -341,7 +341,7 @@ def test_open_out_reports_a_refusing_backend(monkeypatch):
         raise RuntimeError("no MIDI backend")
 
     monkeypatch.setattr(bridge.mido, "get_output_names", boom)
-    assert bridge._open_out("Hands") == (None, "out 'Hands': no MIDI backend", False)
+    assert bridge._open_out("Hands") == (None, "out 'Hands': RuntimeError: no MIDI backend", False)
 
 
 def test_a_failed_open_is_said_once_and_retried(monkeypatch, capsys):

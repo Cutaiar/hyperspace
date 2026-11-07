@@ -235,7 +235,7 @@ launch, wait twenty seconds, plug in: lit within ten seconds (five
 tries two seconds apart, then every ten). *Fail:* no LEDs →
 `apc40.enter` / `[midi] port`; wrong param → `apc40.DEFAULT_MAP` (its
 `layer`); knob jumps back → check 31; fader jumps → pickup in
-`MidiIO._apply`; late desk never found → `midi.retry_after`.
+`MidiIO._apply`; late desk never found → `midi.Ports.retry`.
 
 **11. Rings show the setting, LEDs show the state.**
 Headless: `tests/test_midi.py::{test_ring_shows_the_base_and_never_chases_a_performer,test_select_buttons_and_led_state}`.
@@ -7079,7 +7079,7 @@ Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not
 1. Launch with no channel's `audio` on. AUDIO: *Listen to video sound*.
 2. MEDIA: tick `audio` on A (the video playing at rate 1).
 3. Untick it; then pull the headphones or switch the output device.
-*Pass:* step 1 shows no error, the line "silent until a channel's sound
+*Pass:* step 1 shows no error, the line "silent until an on-air channel's sound
 is on (MEDIA)", the bands at rest and SYSTEM shows no `media sound` line
 (nothing opened); step 2 the bands come alive with the sound; unticked,
 the bands decay to rest (not frozen on the last block); a device change
@@ -8348,6 +8348,16 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
+## DI. Video sound on the toggle (plan 58 LY3, row 790)
+Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a fake sound card; the line seen in the real app at both widths, never read by a person.
+**614. It says so, and it's true.** (the rig; a video with sound)
+1. Unfold audio with the mic on, or no source. Hover **Listen to video sound**. *Pass:* the hover says off air's audio routes react while it's on, and no line stands under the button.
+2. Put a video on air with its channel's sound on, and load a look with an audio route off air. With the mic still on or no source: *Pass:* off air doesn't react to the video.
+3. Press **Listen to video sound**, and drag the side pane to its narrowest and then wider. *Pass:* the words "Off air reacts to on air's video sound." read at a glance, whole, at each width, and the off-air preview reacts to the sound you hear.
+4. Press **Listen to mic**. *Pass:* the words go, and off air stops reacting to the video.
+5. Back on **Listen to video sound**, stop the on-air channel's sound and turn on the sound of a video that's off air. *Pass:* you hear nothing, and off air doesn't react.
+*Fail:* words cut off or hidden, words standing while the analyzer is off the mix, a look off air that doesn't react in step 3, or one that reacts in step 2, 4 or 5.
+
 ## DH. GRAPH's start zoom (plan 58 SM2, row 787)
 Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
 **612. It reads where it opens.** (each display you'll run the control window on)
@@ -8423,6 +8433,29 @@ Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tes
 3. Quit, swap the two cables, launch. *Pass:* the same again. **Say what you saw either way:** if macOS moved them, two identical screens can't be told apart without a serial, and row 772 needs the owner's word.
 4. Quit, unplug the left one, launch. *Pass:* "MStar #1" opens on the one still there, with a note that only one is connected and it may be either of a pair; "MStar #2" doesn't open, with a note saying 1 is connected.
 *Fail:* #2 on the left with the arrangement unchanged, step 4 with no note, or a launch that stops.
+
+## DL. A player's moves on the meta stack (SM5, rows 800, 801)
+
+623. On the player screen, with two controllers plugged in. Drag player 2 to off air, leave the mouse on the board, and read the line: it ends "⌘Z takes it back". Press ⌘Z: player 2 is on air again, its controller's rows act on the deck on air, and the line says "undid player 2 to off air". Press ⇧⌘Z: off air again. Drag a controller to another player and press ⌘Z: it goes back, and its rows answer as before. Drag it across again, unplug it and press ⌘Z: it stays, and the line says it was unplugged since. Plug it back in and press ⌘Z: it goes back. Change a HANDS setting, come to the board and press ⌘Z: the setting stays, and the line says so in the warning colour. Move a player, go to the HANDS section and press ⌘Z: the move stays, and the footer says to press over the player screen. Quit and open the app: the players are as you left them. Over a tip that used to say "HANDS page" (Ghost hands' output switch), read "HANDS section".
+## DJ. Audit faults closed (SM4)
+Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which also runs a real refusal in a sandbox. Restart first: `midiports.py` is a new module.
+**615. A desk comes and goes.** (the Mac, with the APC40)
+1. Launch with the desk unplugged. *Pass:* no crash, and the SYSTEM page says it isn't there.
+2. Plug it in. *Pass:* it comes up by itself within a few seconds, LEDs lit, with no relaunch.
+3. Pull it mid-run, wait a minute, plug it back. *Pass:* no crash, and it's back within a few seconds, however long it was out.
+*Fail:* an app that quits, or a desk that needs a relaunch.
+
+**616. A knob won't take the bank.** (the Mac, with the APC40)
+1. PRESETS page: right-click a bank pad's param, Learn desk, if it's offered. Turn a track knob. *Pass:* it's refused in words, or Learn desk isn't offered, and the knob doesn't load anything.
+*Fail:* a knob that loads presets as it turns.
+
+**617. The nudge chips' menu.** (the Mac)
+1. LFO page: right-click nudge −, then nudge +. *Pass:* each opens one menu, with no item listed twice.
+*Fail:* a doubled menu.
+
+**618. The strip in a narrow pane.** (the Mac)
+1. GRAPH: click a node with a strip (view, output) so the side pane shows it, and edit a value so the dot shows. Drag the pane from narrow to wide. *Pass:* ◀ name ● ▶ and save · as… · reset never touch, and the chips drop to their own row when it's narrowest.
+*Fail:* a chip over ▶ or over the name.
 
 ## What no test covers
 

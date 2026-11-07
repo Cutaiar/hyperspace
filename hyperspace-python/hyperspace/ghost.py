@@ -174,7 +174,7 @@ def _the_mirror(reg, state: GhostState) -> RoomSetting:
             modulatable=False,
             tip="Flip the ghost hands left for right, the hands only and every hands "
                 "node — for a real mirror in front of the performer's hands. For a "
-                "Pepper's Ghost glass use Flip X / Flip Y on the OUTPUT page, which "
+                "Pepper's Ghost glass use Flip X / Flip Y in the OUTPUT section, which "
                 "mirror the whole picture; with an output flip on, leave this off or "
                 "the hands flip twice. The room's, not the preset's: a show keeps it.")
     mirror.__dict__["room"] = room

@@ -2296,9 +2296,12 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     # the toggle would "succeed" into silence for ever
     if media is not None:
         r.toggle("audio.mix", "Video sound", mix_on, set_mix, group=g, persist=False,
-                 tip="Listen to the media mixer: the channels whose sound is on, summed "
-                     "after their gains. Silent until a channel's sound is on; no input "
-                     "device is opened.")
+                 tip="Listen to what the room hears of the videos: the on-air channels whose "
+                     "sound is on, summed after their gains. While this is on, the off-air "
+                     "look's audio routes react to that sound too: the analyzer hears what the "
+                     "room hears, and both looks read it. It moves only what those routes "
+                     "drive, and asks nothing of the off-air channels. Silent until an on-air "
+                     "channel's sound is on; no input device is opened.")
     r.enum("audio.device", "Input device",
            lambda: int(getattr(audio, "device_sel", 0)),
            lambda i: setattr(audio, "device_sel", int(i)),
@@ -2318,7 +2321,7 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
               tip="Take back the last gesture or the last load, learn or delete on the "
                   "deck the panel is on; with the mouse on a meta controller setting, or in the output, "
-                  "audio, analyzer or hands section, the last meta controller change (Cmd+Z or Ctrl+Z). "
+                  "audio, analyzer, hands or players section, the last meta controller change (Cmd+Z or Ctrl+Z). "
                   "After you come to a deck or a meta section it takes nothing back until "
                   "you change something there; after that it goes all the way down.")
     r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,
@@ -2911,13 +2914,13 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         # the bindings file puts them on a control, never a loadable patch's row (row 700)
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
-                  tip="Load the next preset of the PRESETS page's list — every "
+                  tip="Load the next preset of the PRESETS section's list — every "
                       "preset by name, a new one included — into the deck off air, "
                       "wrapping at the end. The room does not move. "
                       "The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
-                  tip="Load the previous preset of the PRESETS page's list into the deck "
+                  tip="Load the previous preset of the PRESETS section's list into the deck "
                       "off air, wrapping at the start. The room does not move.")
         # home (plan 15 WP2, decision 27): the show's startup loadable patch. Lit
         # while the show names one — the light the desk's OVERDUB shows

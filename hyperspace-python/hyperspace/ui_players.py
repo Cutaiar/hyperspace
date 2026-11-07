@@ -13,7 +13,10 @@ Each is said the moment it happens: on the line under the lanes and in the
 footer (`Library.say`). The moves go through `MetaController.move_player` and
 `register` and nothing else: where a player's deck is, and what a row does when
 it gets there, is plan 55's. They run after the board's draw (`_board`), since
-`register` can close and open a device.
+`register` can close and open a device. Each is one step on the meta controller's
+undo stack (row 800), so ⌘Z over the board takes it back, and takes back nothing else
+on that stack; the line under the lanes says what ⌘Z did. A controller unplugged since
+stays where it is, and that is said too.
 
 **Where it lives.** A section of the side pane (`ui_pane`, folded at first, its
 header saying who is where) and the same board large, in a window of its own, over
@@ -45,6 +48,7 @@ from dataclasses import dataclass, field
 from imgui_bundle import imgui
 
 from . import devices, ui
+from . import undo as undos
 from .pads import models
 from .players import Duty
 from .pointer import deck_number
@@ -329,16 +333,34 @@ def give_words(role: str, number: int, deck: int, reopened: bool, address: str |
     return words
 
 
+def _takes_it_back(meta) -> bool:
+    """May the board promise ⌘Z? A move's mouse is on the board, so the stack is the one
+    it reaches, even on a drop's frame, when `undo.here` can't yet say."""
+    return undos.takes_back(meta.undo, here_now=True)
+
+
 def _say(panel, st: dict, words: str) -> None:
     """The line under the lanes and the footer. A move the file did not keep says so,
     in the warning colour, and does not promise it stays (`Players.save`)."""
     error = _meta(panel).players.error
     if error:
         words = f"{words.removesuffix(STAYS).rstrip()} {error}"
+    elif _takes_it_back(_meta(panel)):
+        words = f"{words} ⌘Z takes it back."
     st["said"], st["said_warn"] = words, bool(error)
     lib = getattr(panel, "library", None)
     if lib is not None and hasattr(lib, "say"):
         lib.say(warning=words) if error else lib.say(words)
+
+
+def _heard_undo(meta, st: dict) -> None:
+    """What a ⌘Z over the board said (`undo._heard`), on the line under the lanes, once: an
+    undo or a refusal must not leave the line saying what it took back. A refusal, or a
+    file that did not follow, is in the warning colour. Nothing pressed elsewhere is here."""
+    heard = getattr(getattr(meta.undo, "moves", None), "heard", None)
+    if heard is not None and heard is not st.get("heard"):
+        st["heard"] = heard
+        st["said"], st["said_warn"] = heard
 
 
 def move(panel, number: int, duty: Duty) -> None:
@@ -347,6 +369,7 @@ def move(panel, number: int, duty: Duty) -> None:
     if meta.players.get(number).duty == duty:
         return
     left = _deck_no(meta, meta.deck_of_player(number))
+    undos.by_hand(True)         # the mouse's: the step opens the meta stack (row 753)
     meta.move_player(number, duty)
     _say(panel, _state(panel), duty_words(number, duty, meta.players.controllers_of(number), left,
                                           _deck_no(meta, meta.deck_of_player(number))))
@@ -359,6 +382,7 @@ def give(panel, role: str, number: int) -> None:
         return
     regs = getattr(panel, "devices", None)
     was = regs.get(role) if regs is not None else None
+    undos.by_hand(True)         # the mouse's: the step opens the meta stack (row 753)
     meta.register(role, number)
     now = regs.get(role) if regs is not None else None
     pad = isinstance(now, devices.PadDevice)
@@ -778,6 +802,7 @@ def _board(panel, sfx: str, s: float) -> None:
                 give(panel, drag[2], aim)
     if act is not None:
         act[0](*act[1:])
+    _heard_undo(meta, st)
     imgui.push_text_wrap_pos(0.0)
     imgui.text_colored(ui.WARN if st.get("said_warn") else ui.TEXT if st["said"] else ui.FAINT,
                        st["said"] or HINT)
@@ -894,8 +919,7 @@ def window(panel) -> None:
 
 
 def over(panel) -> bool:
-    """Is the mouse over a board, as of the latest draw? ⌘Z there has nothing to take
-    back (`Panel.in_meta_section`): a move is on no undo stack, and neither a deck's
-    edit nor an analyzer's setting should go back in its place."""
+    """Is the mouse over a board, as of the latest draw? ⌘Z there goes to the meta
+    stack, for a player's moves alone (`Panel.in_meta_section`, row 800)."""
     from . import ui_pane  # (late: ui_pane imports this module)
     return bool(_state(panel).get("over_big")) or ui_pane.where(panel) == "players"
