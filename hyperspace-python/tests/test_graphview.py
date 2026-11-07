@@ -1048,6 +1048,49 @@ def test_a_begin_that_raises_leaves_the_editor_holding_no_file(rig, monkeypatch,
     assert list(spare.iterdir()) == []
 
 
+@pytest.mark.parametrize(("base", "zoom", "density"), [
+    (1.0, 1.0, 1.0),        # 1:1, as before
+    (1.0, 1.3, 1.3),        # the show's display: baked at the size it lands
+    (2.0, 1.3, 2.6),
+    (1.0, 1.376, 1.4),      # up to the next step: never stretched
+    (1.0, 0.5, 1.0),        # zoomed out, as before
+    (2.0, 4.0, 4.0),        # capped
+])
+def test_the_canvas_bakes_its_words_for_the_zoom(base, zoom, density):
+    assert ui_graph.canvas_density(base, 1 / zoom) == pytest.approx(density)
+
+
+def test_a_zoom_bakes_once_at_its_end():
+    st = {}
+    assert ui_graph.held_density(st, 1.3, now=0.0) == 1.3      # the start: at once
+    assert ui_graph.held_density(st, 1.3, now=1.0) == 1.3
+    assert ui_graph.held_density(st, 1.4, now=2.0) == 1.3      # a sweep: each step restarts the wait
+    assert ui_graph.held_density(st, 1.5, now=2.2) == 1.3
+    assert ui_graph.held_density(st, 1.6, now=2.4) == 1.3
+    assert ui_graph.held_density(st, 1.6, now=2.6) == 1.3
+    assert ui_graph.held_density(st, 1.6, now=2.8) == 1.6      # held: baked once
+    assert ui_graph.held_density(st, 1.6, now=2.9) == 1.6
+    assert ui_graph.held_density(st, 1.4, now=3.0) == 1.6      # and back, the same
+    assert ui_graph.held_density(st, 1.6, now=3.1) == 1.6      # changed its mind: no bake
+    assert ui_graph.held_density(st, 1.4, now=3.2) == 1.6      # the wait starts over
+
+
+@pytest.mark.parametrize(("zoom", "density"), [(1.0, 1.0), (1.3, 1.3)])
+def test_the_density_holds_for_the_canvas_and_no_further(rig, monkeypatch, zoom, density):
+    during = []
+    real = ui_graph._moved
+
+    def moved(panel, st, view):
+        during.append(imgui.internal.get_font_rasterizer_density())
+        return real(panel, st, view)
+    monkeypatch.setattr(ui_graph, "_moved", moved)
+    st = _start(rig, zoom)
+    frame(rig.panel, "graph")
+    assert st["zoom"] == pytest.approx(1 / zoom)
+    assert during[-1] == pytest.approx(density)
+    assert imgui.internal.get_font_rasterizer_density() == pytest.approx(1.0)
+
+
 def test_a_failed_write_leaves_no_file(monkeypatch, tmp_path):
     monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(tmp_path))
 
