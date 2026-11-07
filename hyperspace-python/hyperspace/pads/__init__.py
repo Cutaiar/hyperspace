@@ -1,7 +1,7 @@
 """Game controllers as one vocabulary (plan 42).
 
 `gamepad.Pad` is what the rest of the app reads: buttons by name
-(``pad:A``), the hat, six axes, and — on a pad that has them — the
+(``pad:S``), the hat, six axes, and — on a pad that has them — the
 touchpad and motion lanes (``touch:``, ``motion:``) and the outputs
 (light bar, rumble, trigger resistance). This package is how a pad
 gets there from whatever the hardware speaks, one piece per job:

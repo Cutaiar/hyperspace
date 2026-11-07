@@ -96,11 +96,11 @@ AXIS_PLANES = (("YZ", "XW"), ("XZ", "YW"), ("XY", "ZW"))
 # turn about +x takes y toward z (YZ +), about +z takes x toward y (XY +),
 # about +y takes z toward x (XZ −). A W plane takes its axis's sign
 AXIS_SIGN = (1.0, -1.0, 1.0)
-W_BUTTON = ("X", "Y", "B")        # the button that throws each axis into W
-RESET_BUTTON = "A"
+W_BUTTON = ("W", "N", "E")        # the button that throws each axis into W (west, north, east)
+RESET_BUTTON = "S"
 HAT_DOWN = 4                      # GLFW's hat bit (gamepad.HAT_DOWN; a test holds them equal)
 # the pad's rows the totem holds off while it drives (`Router.pad(skip=)`)
-SKIP = frozenset({*(f"pad:{b}" for b in (*W_BUTTON, RESET_BUTTON)), "hat:DOWN"})
+SKIP = frozenset({*(f"pad:{b}" for b in (*W_BUTTON, RESET_BUTTON)), "hat:S"})
 
 LOST_S = 0.5                      # no step from the pad it reads this long: it lets go
 PAN_PER_RAD = 1.5                 # world units of pan per radian of tilt
@@ -187,7 +187,7 @@ def register(reg, state: TotemState) -> None:
                    lambda i=i: state.w[i], set_w, group=GROUP,
                    persist=False, modulatable=False,
                    tip=f"A turn about the pad's {axis} drives {plane_of(i, True)} instead of "
-                       f"{plane_of(i, False)}. The pad's {W_BUTTON[i]} latches it.")
+                       f"{plane_of(i, False)}. The pad's {('west', 'north', 'east')[i]} button latches it.")
     reg.toggle(f"{GROUP}.pan", "Totem tilt pans", lambda: state.pan,
                lambda v: setattr(state, "pan", bool(v)), group=GROUP,
                persist=False, modulatable=False,

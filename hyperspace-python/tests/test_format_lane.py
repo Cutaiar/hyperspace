@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -373,6 +374,66 @@ def test_the_install_keeps_which_list_at_once(tmp_path):
     assert json.loads(lib.project.path.read_text())["plays"] == "cart"
     lib.project.play_at_launch(None)
     assert "plays" not in json.loads(lib.project.path.read_text())
+
+
+# ---------------------------------------------------------------- NSEW and `bindings/4` (rows 836–839)
+
+def test_nsew_is_one_idempotent_word_map():
+    from hyperspace.routing_sources import nsew
+    cases = {"pad:A": "pad:S", "pad:B": "pad:E", "pad:X": "pad:W", "pad:Y": "pad:N",
+             "hat:UP": "hat:N", "hat@p2:LEFT": "hat@p2:W", "pad@p2:Y": "pad@p2:N",
+             "pair:UP/DOWN": "pair:hat.N/hat.S", "pair:RIGHT/LEFT": "pair:hat.E/hat.W",
+             "pair:Y/A": "pair:N/S", "pair@p2:B/X": "pair@p2:E/W", "pair:RB/LB": "pair:RB/LB",
+             "pad:LB": "pad:LB", "axis:LX": "axis:LX", "axis:L.N": "axis:L.N", "key:A": "key:A"}
+    for old, new in cases.items():
+        assert nsew(old) == new and nsew(new) == new, old
+
+
+def test_the_d_pad_and_the_cluster_are_two_namespaces():
+    """FQ7's `pair:N/S` is the cluster; the D-pad's pair says so (row 836, rec)."""
+    from hyperspace.routing_sources import pair_poles
+    hat, face = pair_poles("hat.N/hat.S"), pair_poles("N/S")
+    assert [p.source for p in hat] == ["hat:N", "hat:S"] and all(p.hat for p in hat)
+    assert [p.source for p in face] == ["pad:N", "pad:S"] and not any(p.hat for p in face)
+
+
+def test_eleven_moves_a_pair_routes_poles():
+    doc = {"schema": "hyperspace.preset/10", "routes": [
+        {"source": "pair:UP/DOWN", "target": "view.bright", "op": "push"},
+        {"source": "lane:0", "target": "view.zoom", "op": "push"}, "junk"]}
+    out = graphmigrate.eleven(doc)
+    assert out["schema"] == loadable.SAVE_SCHEMA
+    assert [r["source"] if isinstance(r, dict) else r for r in out["routes"]] == [
+        "pair:hat.N/hat.S", "lane:0", "junk"]
+    assert doc["routes"][0]["source"] == "pair:UP/DOWN"       # a copy
+
+
+def test_the_owners_bindings_move_at_the_first_launch_with_a_backup(tmp_path):
+    """Plan 58 §2a: each Mac's own file, by its own road: renamed once, kept first."""
+    from hyperspace import routing
+    src = ROOT / "tests/fixtures/desk-findings/owner-bindings.json"
+    path = tmp_path / "bindings.json"
+    path.write_bytes(src.read_bytes())
+    old = path.read_bytes()
+    t = routing.Bindings.load(path, legacy_midi=None)
+    doc = json.loads(path.read_text())
+    assert doc["schema"] == routing.SCHEMA == "hyperspace.bindings/4"
+    assert doc[routing.PAD_LAYOUT_KEY] == routing.PAD_LAYOUT_NEWEST
+    text = path.read_text()
+    assert not re.search(r'"(pad|hat)(@\w+)?:(A|B|X|Y|UP|DOWN|LEFT|RIGHT)"', text)
+    assert '"overlay.' not in text and '"output.overlay"' in text
+    assert path.with_name("bindings.json.bak-v3").read_bytes() == old
+    assert any(n.startswith("renamed ") for n in t.notes)
+    again = routing.Bindings.load(path, legacy_midi=None)
+    assert again.notes == [] and path.read_text() == text
+
+
+def test_the_factory_names_no_alias_and_no_old_pad_word():
+    from hyperspace import routing
+    text = routing.FACTORY_FILE.read_text()
+    assert '"overlay.' not in text
+    assert not re.search(r'"(pad|hat)(@\w+)?:(A|B|X|Y|UP|DOWN|LEFT|RIGHT)"', text)
+    assert all(b.target not in routing.OVERLAY_ALIASES for b in routing.Bindings.factory().bindings)
 
 
 # ---------------------------------------------------------------- review of #434

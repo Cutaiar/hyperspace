@@ -254,7 +254,7 @@ def test_only_rows_onto_retapered_params_move_and_a_macros_base_sub_moves_as_a_p
              {"source": "hand:left.x", "target": "fx.warp.amount", "op": "push", "value": "x"},
              {"source": "hand:left.x", "target": "fx.nope.amount", "op": "push", "value": 0.5}]
     doc = {"values": {"fx.warp.amount": 0.2, "fx.warp.speed": 0.25},
-           "routes": [*other, {"source": "pad:A", "target": "fx.warp.amount", "op": "set",
+           "routes": [*other, {"source": "pad:S", "target": "fx.warp.amount", "op": "set",
                                "value": 0.5}],
            "desk": [{"source": "cc:0:48", "target": "fx.warp.speed", "op": "abs"},
                     {"source": "note:0:53", "target": "fx.warp.speed", "op": "set",
@@ -499,7 +499,7 @@ def test_the_tool_plans_everything_before_it_writes_backs_up_and_is_idempotent(t
     dout = json.loads((library / "desk" / "d.json").read_text())
     assert dout["desk"][0]["value"] != 0.75 and dout["units"] == {DEPTH_UNIT: DEPTH_TAPER}
     # the meta table: kept beside itself, its set row moved, as the app writes it
-    assert len(list(home.glob("bindings.json.bak-v3*"))) == 1
+    assert len(list(home.glob("bindings.json.bak-v4*"))) == 1
     btext = (home / "bindings.json").read_text()
     bout = json.loads(btext)
     assert btext == routing.dumps_doc(bout) and bout["units"] == {DEPTH_UNIT: DEPTH_TAPER}

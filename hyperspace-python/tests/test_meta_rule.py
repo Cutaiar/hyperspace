@@ -96,7 +96,7 @@ def test_the_five_with_a_foreign_prefix_are_refused_at_the_doors(pid):
 @pytest.mark.parametrize("row", [
     Binding("cc:0:14", "master.gain", "abs"),                  # invariant: the APC's MASTER
     Binding("cc:7:7", "master.trim", "abs", layer="global"),
-    Binding("pad:A", "tempo.tap", "fire"),
+    Binding("pad:S", "tempo.tap", "fire"),
     Binding("key:space", "audio.play", "toggle"),
 ])
 def test_the_meta_controllers_own_rows_are_not_a_loadables(row):
@@ -232,8 +232,8 @@ def test_a_desk_learn_on_a_meta_param_ends_and_a_pad_button_still_lands(tmp_path
     assert lrn.learning is None and table.bindings == rows
     lrn.arm("master.trim")
     assert lrn.learn_control("cc:3:16") is False and lrn.learning == "master.trim"
-    assert lrn.learn_pad_button("pad:A") is True
-    assert any(b.source == "pad:A" and b.target == "master.trim" for b in table.bindings)
+    assert lrn.learn_pad_button("pad:S") is True
+    assert any(b.source == "pad:S" and b.target == "master.trim" for b in table.bindings)
 
 
 def test_a_picked_control_is_refused_on_a_meta_param_and_stays_picked(tmp_path):
@@ -273,7 +273,7 @@ def test_stick_drift_never_ends_a_learn_a_button_can_land(tmp_path):
     assert lrn.learning == "master.gain" and not lrn.refused
     pad.frame(held={gamepad.A}, axes=[1.0, 0.0, 0.0, 0.0, -1.0, -1.0])
     assert gamepad.learn_from(pad, lrn) is True
-    assert any(b.source == "pad:A" and b.target == "master.gain" for b in lrn.table.bindings)
+    assert any(b.source == "pad:S" and b.target == "master.gain" for b in lrn.table.bindings)
 
 
 def test_a_drag_from_an_invariant_control_says_invariant_not_the_rule(rig):
@@ -440,11 +440,11 @@ def test_the_factorys_shift_faders_still_ride_the_band_and_the_master(midi_rig):
 
 
 @pytest.mark.parametrize("row", [
-    Binding("pad:A", "output.passthrough", "toggle"),
-    Binding("pad:A", "band.0.curve", "step", 1.0),
+    Binding("pad:S", "output.passthrough", "toggle"),
+    Binding("pad:S", "band.0.curve", "step", 1.0),
     Binding("key:b", "band.0.fn", "step", 1.0),
-    Binding("pad:A", "scene.select", "step", 1.0),
-    Binding("pad:A", "tempo.bpm", "step", 1.0),
+    Binding("pad:S", "scene.select", "step", 1.0),
+    Binding("pad:S", "tempo.bpm", "step", 1.0),
 ])
 def test_a_key_or_a_pad_button_still_lands_on_a_meta_param(rig, row):
     p = rig.reg[row.target]
@@ -459,7 +459,7 @@ def test_a_pad_button_still_fires_a_meta_trigger(rig):
     fired = []
     p = rig.reg.trigger("band.poke", "Poke", lambda: fired.append(1), group="band")
     assert not p.modulatable
-    act(rig.reg, Binding("pad:A", p.id, "fire"))
+    act(rig.reg, Binding("pad:S", p.id, "fire"))
     assert fired == [1]
 
 
@@ -544,7 +544,7 @@ def test_learn_pair_spring_is_not_offered_and_still_refuses_in_words(tmp_path):
         assert not ui_routing.desk_target(r.reg[pid]) and ui_routing.pad_target(r.reg[pid])
     lrn = Learn(r.reg, r.router.table)
     lrn.arm("master.gain", PAIR_SPRING_WANT)
-    assert lrn.learn_pair("pair:UP/DOWN")
+    assert lrn.learn_pair("pair:hat.N/hat.S")
     assert lrn.refused and WORDS in lrn.last
     assert not r.router.table.routes_to("master.gain")
 

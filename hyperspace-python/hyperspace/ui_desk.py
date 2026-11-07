@@ -653,8 +653,8 @@ def _room(panel) -> tuple[float, float, float, float]:
 # STOP ALL resets the analyzer to the selected scene and a second press within
 # 8 s undoes it; QUANT walks the bank, not the preset list
 DESK_WORDS = {
-    "overlay.on": "Overlay (if config allows)",
-    "overlay.passthrough": "Click-through (overlay)",
+    "output.overlay": "Overlay (if config allows)",
+    "output.passthrough": "Click-through (overlay)",
     "scene.reset_all": "Reset analyzer (again: undo)",
     "preset.next": "Next bank preset",
     FINE_PARAM: "Fine (hold)",

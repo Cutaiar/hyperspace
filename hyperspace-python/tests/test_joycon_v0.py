@@ -87,7 +87,8 @@ def driven(name, totem_on=False):
     router = ShimRouter(reg)
     reg["totem.on"].set(totem_on)
     down: set[str] = set()
-    for _t, r in real.windows()[name]:
+    tape = {"S": "A", "N": "Y", "E": "B", "W": "X"}.get(name, name)   # (the tape's own words)
+    for _t, r in real.windows()[tape]:
         reader._take(r)
         pad.poll(dt=DT)
         down |= {n for n, code in pad.buttons_named.items() if pad.down(code)}
@@ -97,7 +98,7 @@ def driven(name, totem_on=False):
 
 # ---------------------------------------------------------------- buttons and the stick
 
-@pytest.mark.parametrize("button", ["A", "Y", "B", "X", "LP", "RP", "LB", "VIEW", "SHARE", "LSTICK"])
+@pytest.mark.parametrize("button", ["S", "N", "E", "W", "LP", "RP", "LB", "VIEW", "SHARE", "LSTICK"])
 def test_every_real_button_press_reaches_the_pad(button):
     _, down, _ = driven(button)
     assert button in down
@@ -125,7 +126,7 @@ def test_with_the_totem_on_the_real_stick_is_free():
 def test_with_the_totem_on_it_takes_three_arrows_and_gives_the_down_arrow_back():
     _, _, call = driven("rest", totem_on=True)
     skip = call["skip"]
-    assert {"pad:B", "pad:X", "pad:Y"} <= skip and "pad:A" not in skip
+    assert {"pad:E", "pad:W", "pad:N"} <= skip and "pad:S" not in skip
 
 
 # ---------------------------------------------------------------- the Joy-Con's own layout
@@ -135,7 +136,7 @@ def layout_rig(model=JOYCON, table_rows=()):
     `model` that holds what `press` says."""
     reg, state, _ = totem_rig()
     table = routing.Bindings([
-        routing.Binding("pad:A", "view.faces", "toggle"),
+        routing.Binding("pad:S", "view.faces", "toggle"),
         routing.Binding("pad:LB", "view.shape", "step", -1.0),
         routing.Binding("pad:RB", "view.shape", "step", 1.0),
         routing.Binding("pad:VIEW", "tempo.tap", "fire"),
@@ -311,7 +312,7 @@ def test_a_learn_ignores_the_layouts_controls_and_takes_a_free_one():
     dev = PadDevice("joy", {}, Context(reg=reg), io=pad)
     skip = dev._totem_skip(reg, pad)
     assert {"pad:LP", "pad:RP", "pad:LSTICK", "pad:VIEW", "pad:SHARE"} <= skip
-    assert "pad:LB" in skip and "pad:A" not in skip
+    assert "pad:LB" in skip and "pad:S" not in skip
 
 
 def stick_rig(model=JOYCON):
@@ -386,7 +387,7 @@ def test_the_edge_keeps_its_table_its_a_reset_and_its_camera_job():
     state.driving = "edge"
     assert dev._no_camera_job(pad.model, reg) == ()
     state.ang[0] = 1.0
-    pad.frame(hold=("A",))
+    pad.frame(hold=("S",))
     totem.step(state, pad, reg, DT, "edge")
     assert state.ang[0] == pytest.approx(0.0, abs=1e-6)     # A resets the Edge's totem
 

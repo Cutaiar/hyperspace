@@ -285,7 +285,8 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
     if dials:
         out.append(("stick directions", dials))
     hats = [(f"hat:{n}", g, 1.0 if r.hat & gamepad.HATS[n] else 0.0, 0.0, False)
-            for n, g in (("UP", "↑"), ("RIGHT", "→"), ("DOWN", "↓"), ("LEFT", "←")) if has(n)]
+            for n, g in (("N", "↑"), ("E", "→"), ("S", "↓"), ("W", "←"))
+            if has(f"{models.HAT_PREFIX}{n}")]
     if hats:
         out.append(("d-pad", hats))
     model = r.model if models.is_model(r.model) else None
@@ -293,7 +294,8 @@ def _lane_rows(r: Reading, routed=frozenset()) -> list[tuple]:
     def pole(name: str) -> int:
         if not models.control_free(model, name):
             return 0
-        return (int(bool(r.hat & gamepad.HATS[name])) if name in gamepad.HATS
+        hat = name.removeprefix(models.HAT_PREFIX)
+        return (int(bool(r.hat & gamepad.HATS[hat])) if hat != name and hat in gamepad.HATS
                 else int(name in r.down))
     # plan 56: each one lane, one degree of freedom: the model's, and any a row names
     shown = list(models.natural_pairs(model))

@@ -54,6 +54,7 @@ from typing import Any
 
 from . import graph as G
 from .outputs import MAX_OUTPUTS
+from .routing_sources import nsew
 
 FREE_SCHEMA = "hyperspace.preset/5"
 # plan 35 (row 385): `/6` is `/5` with the wired frame in the new ids;
@@ -1754,8 +1755,16 @@ class Forward:
 
 
 def eleven(doc: dict) -> dict:
-    """A `/10` as its `/11` (plan 57 §7): the kind's new word. A copy."""
-    return {**doc, "schema": ELEVEN_SCHEMA}
+    """A `/10` as its `/11` (plan 57 §7): the kind's new word, and a pair route's poles in
+    north, south, east and west (a load drops a `pad:` or `hat:` route, so only a pair's names
+    a pole). A copy."""
+    out = {**doc, "schema": ELEVEN_SCHEMA}
+    routes = doc.get("routes")
+    if isinstance(routes, list):
+        out["routes"] = [{**r, "source": nsew(r["source"])}
+                         if isinstance(r, dict) and isinstance(r.get("source"), str) else r
+                         for r in routes]
+    return out
 
 
 def forward(doc: dict, specs: Specs, *, eye: dict | None = None, camera_at: Any = None,

@@ -199,8 +199,8 @@ def test_a_pair_is_one_freedom_after_the_axes(tmp_path):
     pids = point(p)
     got = [b.source for b in rows(p)]
     assert got[:6] == [f"axis:{a}" for a in gamepad.AXES]
-    assert got[6:] == ["pair:UP/DOWN", "pair:RIGHT/LEFT", "pair:RB/LB", "pair:RP/LP",
-                       "pair:RFN/LFN", "pair:Y/A", "pair:B/X"]
+    assert got[6:] == ["pair:hat.N/hat.S", "pair:hat.E/hat.W", "pair:RB/LB", "pair:RP/LP",
+                       "pair:RFN/LFN", "pair:N/S", "pair:E/W"]
     assert [b.target for b in rows(p)] == pids[:13]
     undo.install(None)
 
@@ -834,11 +834,11 @@ def test_a_filled_controls_outline_is_the_cables_colour_and_faint_when_away(shel
 
 
 def test_a_pair_lights_both_its_poles_in_the_window(shell_rig):  # noqa: F811
-    row = _row("pair:UP/DOWN", "view.alpha", "Filled pair")
+    row = _row("pair:hat.N/hat.S", "view.alpha", "Filled pair")
     panel, table = _window(shell_rig, [row])
     frame(panel)
     got = ui_pad.rows(table, None, ROLE)
-    assert got["hat:UP"] is row and got["hat:DOWN"] is row
+    assert got["hat:N"] is row and got["hat:S"] is row
     table.node_desk = None
 
 
@@ -1024,10 +1024,10 @@ def test_one_rule_for_whose_pad_a_row_is(rig):
     """Review 9: `Bindings.pad_serves`, which `Router.pad` and the fill both ask."""
     t = rig.one.table
     t.primaries = {**getattr(t, "primaries", {}), "pad": ROLE}
-    assert t.pad_serves("", Binding("pad:A", "x"))
+    assert t.pad_serves("", Binding("pad:S", "x"))
     assert t.pad_serves("", Binding(f"pad@{ROLE}:A", "x"))
-    assert not t.pad_serves("", Binding("pad@p2:A", "x"))
-    assert t.pad_serves("p2", Binding("pad@p2:A", "x")) and not t.pad_serves("p2", Binding("pad:A", "x"))
+    assert not t.pad_serves("", Binding("pad@p2:S", "x"))
+    assert t.pad_serves("p2", Binding("pad@p2:S", "x")) and not t.pad_serves("p2", Binding("pad:S", "x"))
 
 
 def test_one_accessor_for_what_runs_and_the_panel_names_the_stick(rig):

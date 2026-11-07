@@ -879,7 +879,7 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R", "Cmd+Z": "SUPER+Z",
             "Cmd+[": "SUPER+LEFT_BRACKET",
             "Home": "HOME"}
-_PADS = {"pad A Y · B X": ["A", "Y", "B", "X"], "pad BACK": ["VIEW"],
+_PADS = {"pad S N · E W": ["S", "N", "E", "W"], "pad BACK": ["VIEW"],
          "LB / RB": ["LB", "RB"], "sticks": ["LSTICK", "RSTICK"]}
 _HATS = {"d-pad ↑ / ↓"}
 _MOUSE = {"drag", "⇧drag", "scroll", "right-click", *_HATS, "LT / RT",

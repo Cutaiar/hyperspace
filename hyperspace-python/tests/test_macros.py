@@ -164,7 +164,8 @@ def test_a_scale_on_a_meta_param_is_left_alone():
     row = {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625,
            "scale": "master.gain"}
     t = Bindings.from_json({"schema": routing.SCHEMA_V2, "bindings": [row]})
-    assert t.bindings[0].scale == "master.gain" and t.macros == {} and not t.changed
+    assert t.bindings[0].scale == "master.gain" and t.macros == {}
+    assert not any("scale" in n for n in t.notes)      # (it changes only by `bindings/4`, plan 57)
     legacy6 = json.loads((CORPUS / "loadable" / "legacy6.json").read_text())
     assert sum(b.get("scale") == "master.gain" for b in legacy6["routes"]) == 6
     assert legacy6["macros"] == {}

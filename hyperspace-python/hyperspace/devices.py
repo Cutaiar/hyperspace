@@ -584,10 +584,10 @@ class PadDevice(Base):
     All in the scene-setter slot.
 
     Several at once (plan 27 B6): the kind is `repeatable`. The first
-    enabled pad entry is the primary — its rows unqualified (``pad:A``,
+    enabled pad entry is the primary — its rows unqualified (``pad:S``,
     ``axis:LX``, every row before B6), the factory pad rows its, the
     sticks' camera job its alone; each later pad publishes under its
-    role (``pad@p2:A``, ``axis@p2:LX``) and starts with no rows. Each
+    role (``pad@p2:S``, ``axis@p2:LX``) and starts with no rows. Each
     reads its own controller (`gamepad.Pad.attach` on the registry's
     shared `Context.pads`): the next free GLFW joystick in list order, or
     the entry's ``joystick = n``; the one libusb reader is lent, not
@@ -749,8 +749,8 @@ class PadDevice(Base):
                          or (n in ("LFN", "RFN") and model.has("fn"))) and has(n)}
         buttons = [Port(n, n, kind="trigger", group="buttons", scheme=sc("pad"))
                    for n in named]
-        hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme=sc("hat"))
-                for n in g.HATS if has(n)]
+        hats = [Port(n, f"D-pad {models.HAT_WORDS[n]}", kind="trigger", group="d-pad", scheme=sc("hat"))
+                for n in g.HATS if has(f"{models.HAT_PREFIX}{n}")]
         extra: list[Port] = []
         from .pads import gesture as ge
         if model is not None and model.has("touch"):

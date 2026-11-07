@@ -625,7 +625,7 @@ DEFAULT_MAP: list[dict] = [
     _note("audio.restart", N_CLIPTRACK),
     # overlay: master-select floats the render over the screen, pan sends
     # clicks through to what is underneath (the panel stops being clickable)
-    _note("overlay.on", N_MASTER_SEL), _note("overlay.passthrough", N_PAN),
+    _note("output.overlay", N_MASTER_SEL), _note("output.passthrough", N_PAN),
     # SEND A latches the sequencer page (plan 31 §A, decision 7; seq_page.py):
     # invariant, lit while the page is up. The page's rows then shadow clip
     # rows 1–5, the clip stops and scene launch 1–5 — the bank, SAVE and

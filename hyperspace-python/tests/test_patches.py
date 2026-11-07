@@ -761,3 +761,10 @@ def test_patches_list_rename_and_delete_as_loadables_do(lib):
     assert {t.name for t in lib.trash()} == {"Blue Wash", "Deep Wash"}
     assert not lib.delete(PATCHES, "Deep Wash")                 # gone: nothing to delete
     assert lib.delete(PATCHES, "acid wash") and lib.list(PATCHES) == []
+
+
+def test_a_patch_saved_in_the_old_pad_words_reads_in_todays():
+    """Review of #435: a pair route saved before bindings/4 must not go silently dead."""
+    p = read({"nodes": [], "routes": [{"source": "pair:UP/DOWN", "target": "view.zoom"},
+                                      {"source": "pad:A", "target": "deck.chase"}]})
+    assert [r["source"] for r in p.routes] == ["pair:hat.N/hat.S", "pad:S"]

@@ -688,7 +688,7 @@ CHEATSHEET = [
     ("G", "overlay: clicks through / back"),
     ("Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
-    ("pad A Y · B X", "faces · lines · points · screen strokes"),
+    ("pad S N · E W", "faces · lines · points · screen strokes"),
     ("pad BACK", "held: the base chase keeps what the sources moved"),
     ("LB / RB", "previous / next shape"),
     ("d-pad ↑ / ↓", "brightness"),

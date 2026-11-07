@@ -334,7 +334,7 @@ def test_a_pairs_consent_does_not_ask_about_a_derived_row(rig):
     rig.one.loaded_patch.point_node_mode(1, "midi", node)
     t = rig.one.table
     assert rig.nd1.rows()
-    new = Binding("pair:UP/DOWN", rig.nd1.rows()[0].target, "push", 1.0)
+    new = Binding("pair:hat.N/hat.S", rig.nd1.rows()[0].target, "push", 1.0)
     assert not [x for x in learn.pole_rows(t, new) if any(x is r for r in rig.nd1.rows())]
     landed = []
     assert learn.propose_row(t, Binding("cc:0:48", "x", "abs", layer="preset"),

@@ -131,7 +131,10 @@ def _pad_source(sources: tuple[str, ...], qualifier: str) -> str:
     """The source a pad's row reads for one freedom: an axis, or a pair's lane."""
     if len(sources) == 1:
         return _address(sources[0], qualifier)
-    pos, neg = (s.partition(":")[2] for s in sources)
+    # (a hat pole is ``hat.N`` in a pair's name, so the D-pad's pair never reads as the
+    # face's ``pair:N/S``: plan 57 §7b)
+    pos, neg = (s.partition(":")[2] if s.startswith("pad:") else s.replace(":", ".", 1)
+                for s in sources)
     return pair_address(pos, neg, qualifier)
 
 
@@ -503,7 +506,7 @@ class NodeDesk:
             poles = pair_poles(rest) if scheme == PAIR_SCHEME else None
             sources = [p.source for p in poles] if poles else [b.bare]
             model = self.devices.pad_model(dev)
-            return "/".join(gamepad.models.glyph(model, s.partition(":")[2],
+            return "/".join(gamepad.models.glyph(model, gamepad.models.glyph_name(s),
                                                  gamepad.glyph(s) or s) for s in sources)
         glyph = getattr(self._profile(role), "glyph", None)
         return (glyph(b.bare) if glyph is not None else None) or b.describe()

@@ -404,7 +404,8 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     model = gamepad.shown_model(getattr(panel, "pad", None))
     other = gamepad.paired_with(c.source, model)
     if other is not None:             # plan 56: one degree of freedom with its partner
-        word = gamepad.models.glyph(model, other.partition(":")[2], gamepad.glyph(other) or other)
+        word = gamepad.models.glyph(model, gamepad.models.glyph_name(other),
+                                     gamepad.glyph(other) or other)
         learn += f"\none axis with {word}: right-click a param → Learn pair"
     if b is not None and _stick_quiet(panel, c.source):
         return (f"{c.glyph} · {said}\n{c.name}\nits row on {b.target} is heard only while "

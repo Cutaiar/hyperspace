@@ -698,7 +698,7 @@ def test_accepts_by_want():
     lrn.arm("view.bright", "hand:right")
     assert lrn.accepts("hand:right.y") and not lrn.accepts("hand:left.roll")
     lrn.arm("view.bright", "pad")
-    pad = ("pad:A", "hat:UP", "axis:LX", "axis:RT")
+    pad = ("pad:S", "hat:N", "axis:LX", "axis:RT")
     assert all(lrn.accepts(s) for s in pad)
     assert not any(lrn.accepts(s) for s in (*desk, *left, *other))
     lrn.arm("view.bright", "desk")
