@@ -83,6 +83,7 @@ from . import (
     devices,
     gamepad,
     lfo,
+    node_desk,
     placement,
     playlist,
     poi,
@@ -2027,6 +2028,7 @@ def main(argv: list[str] | None = None) -> None:
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())
     device_reg.point(meta.pointer, meta.panel_pointer)
+    node_desk.install(meta, device_reg)     # N1a: what each deck's patch points its desks at
     # plan 55: who holds what names a pad's rows, so the list is read again when it
     # changes; a mapping on either deck moves the controller mapped
     meta.on_players.append(lambda: device_reg.apply(device_reg.entries))
