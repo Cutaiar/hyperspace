@@ -26,7 +26,7 @@ from test_ui_shell import (  # noqa: F401 — the fixture
 )
 
 from hyperspace import ui, ui_loadable, ui_pane
-from hyperspace.library import HOME_UNSET, PATCHES, RETIRED_MODULES, Library
+from hyperspace.library import HOME_UNSET, LOADABLE, PATCHES, RETIRED_MODULES, Library
 from hyperspace.ui import PAGE_KEYS
 
 ACID_WASH = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
@@ -422,13 +422,16 @@ def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):
 @pytest.mark.parametrize("width", [258.0, 340.0, 600.0])
 def test_a_module_strip_does_not_overlap(rig, monkeypatch, width):  # noqa: F811
     """Audit U10: plan 49's `strip_name_w` squeezes the name, and at 258 px the chips
-    now wrap, but it left the window's padding out, so at 340 px the save chip still
-    covered ▶ by 6 px. Every module strip, dirty and with its reset, clears itself and
-    the strip's right edge: where it wraps, where it squeezes, and where it has room."""
+    now wrap, but `same_line(avail - w)` counts from the window's edge, so at 340 px the
+    save chip still covered ▶ by 6 px. Every module strip with its reset, and the
+    loadable patches' strip, dirty, clear themselves and the strip's right edge: where
+    it wraps, where it squeezes, and where it has room."""
     panel, lib = rig.panel, rig.lib
     monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)
     groups = [g for g in lib.groups() if g not in lib.kinds and g not in RETIRED_MODULES]
     assert "view" in groups and "pattern" in groups
+    modules = groups
+    groups = [*modules, LOADABLE]
     imgui.new_frame()
     imgui.set_next_window_pos(imgui.ImVec2(0, 0))
     imgui.set_next_window_size(imgui.ImVec2(width + 2 * imgui.get_style().window_padding.x, 800))
@@ -443,7 +446,8 @@ def test_a_module_strip_does_not_overlap(rig, monkeypatch, width):  # noqa: F811
     rects = _rects(panel)
     for group in groups:
         items = {k: v for k, v in rects.items() if k.startswith(f"strip.{group}.")}
-        assert {f"strip.{group}.{k}" for k in ("name", "next", "as", "reset")} <= set(items), group
+        chips = ("name", "next", "save", "as", "reset") if group in modules else ("name", "next", "new", "save", "as")
+        assert {f"strip.{group}.{k}" for k in chips} <= set(items), group
         keys = sorted(items)
         for i, a in enumerate(keys):
             assert items[a][2] <= right + 1, a

@@ -2425,10 +2425,9 @@ else stands and the glide stops; a loadable patch load ends every glide but a
 shared meta param's; off, an unplug or a quit lands every value at once. The
 setting is saved with the show, never with a loadable patch, and is on no knob.
 
-**Reconnect.** With no desk connected the app looks for it every 2 s
-five times, then every 10 s (`midi.RECONNECT_S`, `RECONNECT_FAST`,
-`RECONNECT_SLOW_S`); a desk that vanishes is looked for at the fast pace
-again. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
+**Reconnect.** With no desk connected the app looks for it every 2 s,
+all night (`midi.RECONNECT_S`, row 791), so a desk back from any absence
+is found as fast. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
 comes, it gets its power-up and every light. `enabled = false` on its
 entry (or `[midi] enabled = false` in the old form) stops all of it.
 
@@ -3572,10 +3571,10 @@ What only a person at the machine can check is
   Output 1 waits for its screen and later outputs do not; whether that
   paces the loop on two real screens, and whether a non-waiting
   fullscreen output tears, is unknown.
-- **With no desk connected the app keeps looking** — every 2 s five
-  times, then every 10 s. A look is 0.05 ms and makes no client
-  (`midiports.port_names`, audit R15, closed); `enabled = false` on the
-  desk's entry (or `[midi] enabled = false`) stops it.
+- **With no desk connected the app keeps looking** — every 2 s. A look
+  makes no client (`midiports`, audit R15, closed) and costs about 0.25 ms
+  a pair of ports on the frame thread; `enabled = false` on the desk's
+  entry (or `[midi] enabled = false`) stops it.
 - **At most one hands node makes the layer.** Since plan 28 a loadable patch's
   `graph` section can wire which output gets which hands node and which
   effects it alone takes (§2, the wire list); an output no wire names

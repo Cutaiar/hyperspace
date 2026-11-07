@@ -195,11 +195,9 @@ def strip_name_w(avail: float, chips: tuple[str, ...], dirty_: bool,
 
 
 def _strip_beside(chips: tuple[str, ...], dirty_: bool, extra: float = 0.0) -> float:
-    """What a strip's row holds besides its name button. The chips flush with
-    `same_line(avail - chip_w)`, which counts from the window's edge and the row from
-    the content's, so the row is the window's padding shorter than `avail` (audit U10)."""
+    """What a strip's row holds besides its name button."""
     return (2 * imgui.get_frame_height() + 4 + ui.chip_w(*chips) + imgui.get_style().item_spacing.x
-            + (2 * ui.DOT_R + 2 if dirty_ else 0.0) + extra + imgui.get_cursor_start_pos().x)
+            + (2 * ui.DOT_R + 2 if dirty_ else 0.0) + extra)
 
 
 def _guard(panel, fn, *args):
@@ -380,7 +378,7 @@ def strip(panel, group: str) -> None:
 
     # (new ·) save · as… (· reset on a module strip), flush right
     if roomy:
-        imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
+        ui.flush_right(ui.chip_w(*chips))
     if loaded_patch is not None:
         if ui.chip("new##new"):
             from . import ui_graph  # (late: ui_graph imports ui_routing, which imports this)
@@ -493,7 +491,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
         _guard(panel, lib.load, group, name)
     chips = ("rename", "×") if renamable else ("×",)
     drawn["rows"].append((name, chips))
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
+    ui.flush_right(ui.chip_w(*chips))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     for i, chip in enumerate(chips):
         if i:

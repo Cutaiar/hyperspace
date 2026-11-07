@@ -235,7 +235,7 @@ launch, wait twenty seconds, plug in: lit within ten seconds (five
 tries two seconds apart, then every ten). *Fail:* no LEDs →
 `apc40.enter` / `[midi] port`; wrong param → `apc40.DEFAULT_MAP` (its
 `layer`); knob jumps back → check 31; fader jumps → pickup in
-`MidiIO._apply`; late desk never found → `midi.retry_after`.
+`MidiIO._apply`; late desk never found → `midi.Ports.retry`.
 
 **11. Rings show the setting, LEDs show the state.**
 Headless: `tests/test_midi.py::{test_ring_shows_the_base_and_never_chases_a_performer,test_select_buttons_and_led_state}`.
@@ -8428,8 +8428,8 @@ Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tes
 Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which also runs a real refusal in a sandbox. Restart first: `midiports.py` is a new module.
 **615. A desk comes and goes.** (the Mac, with the APC40)
 1. Launch with the desk unplugged. *Pass:* no crash, and the SYSTEM page says it isn't there.
-2. Plug it in. *Pass:* it comes up by itself within 10 s, LEDs lit, with no relaunch.
-3. Pull it mid-run, wait a few seconds, plug it back. *Pass:* no crash, and it's back within a few seconds.
+2. Plug it in. *Pass:* it comes up by itself within a few seconds, LEDs lit, with no relaunch.
+3. Pull it mid-run, wait a minute, plug it back. *Pass:* no crash, and it's back within a few seconds, however long it was out.
 *Fail:* an app that quits, or a desk that needs a relaunch.
 
 **616. A knob won't take the bank.** (the Mac, with the APC40)

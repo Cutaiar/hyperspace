@@ -1146,7 +1146,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                           "turn: the source's change is added to the base and stays;\n"
                           "      shut the gate, move freely, open it: no jump\n"
                           "click to switch")
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+    ui.flush_right(ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     kill = ui.chip("×")
     imgui.pop_style_color()
@@ -1627,7 +1627,7 @@ def desk(panel, router: Router) -> None:
             ui.tooltip(f"{b.target}: no such param — the control does nothing")
         imgui.same_line()
         imgui.text_disabled(_op_text(b))
-        imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+        ui.flush_right(ui.chip_w("×"))
         imgui.push_style_color(imgui.Col_.text, ui.DIM)
         if ui.chip("×"):
             dead = b
@@ -1741,7 +1741,7 @@ def _sub(panel, router: Router, mid: str, s: Sub, shared: dict[str, list[str]]) 
         if imgui.is_item_hovered():
             ui.tooltip(f"{s.base} is set by {', '.join(others)} too — "
                               "the last write wins")
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+    ui.flush_right(ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     kill = ui.chip("×")
     imgui.pop_style_color()
@@ -1947,8 +1947,7 @@ def modifiers(panel, router: Router) -> None:
         ui.tooltip("Nodes between a source and a route: curve, scale, smooth, "
                           "combine two, a threshold that fires, a one-frame delay")
     sp = imgui.get_style().item_spacing.x
-    imgui.same_line(imgui.get_content_region_avail().x
-                    - (MOD_KIND_W + ui.chip_w("+ modifier") + sp))
+    ui.flush_right(MOD_KIND_W + ui.chip_w("+ modifier") + sp)
     imgui.set_next_item_width(MOD_KIND_W)
     if imgui.begin_combo("##modkind", st["mod_kind"]):
         for kind in MOD_KINDS:
@@ -2035,7 +2034,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
         return dead
     imgui.same_line()
     _mod_bar(router, m)
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+    ui.flush_right(ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     if ui.chip("×"):
         dead = True
@@ -2149,7 +2148,7 @@ def _find_field(panel) -> None:
     before the rows: it starts the frame's set of drawn lines."""
     st = _state(panel)
     on = bool(st["find"].strip())               # spaces alone filter nothing
-    imgui.same_line(imgui.get_content_region_avail().x - _find_w(on))
+    ui.flush_right(_find_w(on))
     imgui.set_next_item_width(FIND_W)
     _, st["find"] = imgui.input_text_with_hint("##rows", "filter", st["find"])
     if st.get("unfind"):
