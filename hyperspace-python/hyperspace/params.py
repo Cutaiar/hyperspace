@@ -936,7 +936,7 @@ class Registry:
         if self.meta_reg is meta_reg:
             return
         if self.meta_reg is not None:
-            raise ValueError("a deck's registry follows one session")
+            raise ValueError("a deck's registry follows one meta registry")
         self.meta_reg = meta_reg
         meta_reg._follow(self)
         for p in list(meta_reg):
@@ -1352,7 +1352,7 @@ class MetaRegistry(Registry):
     def on_air_reg(self, deck: Registry | None) -> None:
         import weakref
         if deck is not None and deck.meta_reg is not self:
-            raise ValueError("the lead is a deck that follows this session")
+            raise ValueError("the lead is a deck that follows this meta registry")
         self.__dict__["_lead"] = weakref.ref(deck) if deck is not None else None
 
     def apply(self) -> None:
@@ -1368,7 +1368,7 @@ class MetaRegistry(Registry):
     def add(self, p: Param) -> Param:
         part = part_of(p)
         if part == "patch":
-            raise ValueError(f"{p.id} is a performance param: a deck's, never the session's")
+            raise ValueError(f"{p.id} is a performance param: a deck's, never the meta controller's")
         if part == PER_DECK_META:
             raise ValueError(f"{p.id} closes over one deck: each deck's own, never shared")
         decks = self.decks
@@ -2321,8 +2321,8 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     # with ⇧ to redo), on the stack `undo.here` names; none installed: nothing
     r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
               tip="Take back the last gesture or the last load, learn or delete on the "
-                  "deck the panel is on; with the mouse on a rig setting, or in the output, "
-                  "audio, analyzer or hands section, the last rig change (Cmd+Z or Ctrl+Z). "
+                  "deck the panel is on; with the mouse on a meta controller setting, or in the output, "
+                  "audio, analyzer or hands section, the last meta controller change (Cmd+Z or Ctrl+Z). "
                   "After you come to a deck or a meta section it takes nothing back until "
                   "you change something there; after that it goes all the way down.")
     r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,
