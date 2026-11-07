@@ -524,6 +524,7 @@ class MetaController:
 
     # (class-level: read by a meta controller from before a hot reload)
     timed: TimedFade | None = None
+    playing: Any = None               # the playlist being played (`playlist.Playing`)
 
     def __init__(self, first: Deck, second: Deck, players: Players | None = None,
                  mix: Mix | None = None):
@@ -736,9 +737,9 @@ class MetaController:
         for fn in self.on_air_moved:
             fn(deck)
 
-    def crossfade(self, to: float | None = None) -> None:
-        """Run the fader to `to` (None: the end of the deck off air) over
-        `output.xfade_s` seconds, read now; 0 is a cut. `tick` moves it, from the
+    def crossfade(self, to: float | None = None, seconds: float | None = None) -> None:
+        """Run the fader to `to` (None: the end of the deck off air) over `seconds`,
+        by default `output.xfade_s`, read now; 0 is a cut. `tick` moves it, from the
         fader's place. A hand on the fader meanwhile ends it there. Asked again while
         one runs, with no `to`, it does nothing: past the middle on air has crossed, so
         "the deck off air" is where it came from, and a double click would turn back."""
@@ -746,7 +747,8 @@ class MetaController:
             if self.timed is not None:
                 return
             to = 1.0 if self.on_air is self.decks[0] else 0.0
-        self.timed = TimedFade(self.mix.xfade, float(to), self.mix.seconds)
+        self.timed = TimedFade(self.mix.xfade, float(to),
+                               self.mix.seconds if seconds is None else float(seconds))
 
     def fader_touched(self, u: float) -> bool:
         """The desk's fader at `u`, caught or not. A timed fade leaves it behind, so
@@ -767,7 +769,8 @@ class MetaController:
 
     def tick(self, now: float, dt: float) -> None:
         """Once a frame: a timed fade's step, through `output.xfade`'s `Param`, then
-        on air by the fader. `dt` dates a fade asked for since the last frame."""
+        on air by the fader, then the playlist, which sees the frame's deck on air. `dt`
+        dates a fade asked for since the last frame."""
         run = self.timed
         if run is not None:
             if self.mix.xfade != run.wrote:
@@ -783,6 +786,8 @@ class MetaController:
                 if done:
                     self.timed = None
         self.follow_fader()
+        if self.playing is not None:
+            self.playing.tick(now)
 
     def _write_fader(self, x: float) -> None:
         p = self.decks[0].reg.get("output.xfade")
@@ -821,6 +826,7 @@ class MetaController:
                 (self.undo, "undo", "Undo"),
                 (self.undo.marks, "library", "MetaMarks"),
                 (self.undo.table, "deck", "MetaRows"),
+                *([(self.playing, "playlist", "Playing")] if self.playing is not None else []),
                 (self.on_air_pointer, "pointer", "Pointer"),
                 (self.panel_pointer, "pointer", "Pointer"),
                 *[(p, "pointer", "Pointer") for p in self.pointers.values()]]

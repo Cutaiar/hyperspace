@@ -55,6 +55,7 @@ from . import (
     ui_pane,
     ui_patterns,
     ui_players,
+    ui_playlist,
     ui_routing,
     ui_seq,
     undo,
@@ -688,7 +689,7 @@ CHEATSHEET = [
 META_SECTIONS = ("output", "audio", "analyzer", "hands")
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-             "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players"]
+             "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
 
 
 class PageHistory:
@@ -807,6 +808,7 @@ class Panel:
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.meta_undo = None  # the meta controller's stack (plan 44 D5b): so does its
         self.meta = None       # set by app.py (deck.MetaController): GRAPH's head, the player screen
+        self.playing = None    # set by app.py (playlist.Playing): the playlist section
         self._fine_drag = None   # the slider a Shift drag holds (`_fine`): its id, mouse x, throw
         self._shift = self._mouse_down = False   # this frame's ⇧ and left button (`_fine_frame`)
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
@@ -890,13 +892,17 @@ class Panel:
         says by its own layer, wherever it is drawn (a mixed section: hands with
         `ghost.*`, SYSTEM with `desk.slew`, a fixture node in the selection); else the
         section under it (`ui_pane.where`); else the deck. None over the player
-        screen: no stack, since a move is on none of them (`undo.here`)."""
+        screen and the playlist's section: no stack, since a move or an edit there is on
+        none of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "patch"
         if ui_players.over(self):
             return None
-        return ui_pane.where(self) in META_SECTIONS
+        section = ui_pane.where(self)
+        if section == "playlist":    # a list's edits are files, on no stack (row 709)
+            return None
+        return section in META_SECTIONS
 
     def go_page(self, i) -> None:
         """`ui.page`'s setter, and `_draw` for an index set straight (⌘[ /
@@ -2116,6 +2122,10 @@ class Panel:
     def _page_players(self, dt: float) -> None:
         """Who is on air, and what they hold (ui_players.py)."""
         ui_players.section(self, dt)
+
+    def _page_playlist(self, dt: float) -> None:
+        """The playlist, for installs (ui_playlist.py)."""
+        ui_playlist.page(self, dt)
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""

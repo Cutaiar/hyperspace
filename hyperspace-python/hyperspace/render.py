@@ -704,6 +704,7 @@ class SceneTarget:
         self._msaa: moderngl.Framebuffer | None = None    # on the renderbuffer, if any
         self.depth: moderngl.Texture | None = None        # single-sampled: the depth
         self._depth_rb = None                             # multisampled: its renderbuffer
+        self._color_rb = None                             # …and the colour's, the size of the frame
         # plan 26 A3: multisampled, the depth resolved for a node that reads
         # it (`depth_texture`), made on first ask: a depth texture and the
         # framebuffer the blit lands in (a colour renderbuffer beside it,
@@ -721,9 +722,9 @@ class SceneTarget:
         self.tex.repeat_x = self.tex.repeat_y = False
         if samples > 0:
             self.fbo = self.ctx.framebuffer(color_attachments=[self.tex])
-            rb = self.ctx.renderbuffer(size, 4, samples=samples)
+            self._color_rb = self.ctx.renderbuffer(size, 4, samples=samples)
             self._depth_rb = self.ctx.depth_renderbuffer(size, samples=samples)
-            self._msaa = self.ctx.framebuffer(color_attachments=[rb],
+            self._msaa = self.ctx.framebuffer(color_attachments=[self._color_rb],
                                               depth_attachment=self._depth_rb)
         else:
             self.depth = _readable_depth(self.ctx, size)
@@ -760,11 +761,12 @@ class SceneTarget:
         # getattr: a target from before A2 has no depth, from before A3 no
         # resolved one
         for res in (self._msaa, self.fbo, self.tex, getattr(self, "depth", None),
-                    getattr(self, "_depth_rb", None), getattr(self, "_rfbo", None),
-                    getattr(self, "_rdepth", None), getattr(self, "_rcol", None)):
+                    getattr(self, "_depth_rb", None), getattr(self, "_color_rb", None),
+                    getattr(self, "_rfbo", None), getattr(self, "_rdepth", None),
+                    getattr(self, "_rcol", None)):
             if res is not None:
                 res.release()
-        self._msaa = self.fbo = self.tex = self.depth = self._depth_rb = None
+        self._msaa = self.fbo = self.tex = self.depth = self._depth_rb = self._color_rb = None
         self._rfbo = self._rdepth = self._rcol = None
         self.size, self.samples = (0, 0), -1
 

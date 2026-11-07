@@ -83,6 +83,7 @@ from . import (
     lfo,
     node_desk,
     placement,
+    playlist,
     poi,
     replay,
     tempo,
@@ -1677,6 +1678,9 @@ def main(argv: list[str] | None = None) -> None:
     panel.pointer = library.pointer = meta.panel_pointer
     panel.meta_undo = meta.undo        # the footer's message slot, beside the deck's
     panel.meta = meta                  # GRAPH's head: the deck it shows, the two verbs
+    # the playlist (plan 44 D6b): ticked by the meta controller, said in its pane section
+    meta.playing = panel.playing = playlist.Playing(meta, library, fade)
+    playlist.register(deck.reg, meta.playing)
     # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())

@@ -310,6 +310,7 @@ from .routing_sources import (  # noqa: F401
     BUILTIN_LANES,
     DECK_SCHEMES,
     MIDI_SCHEMES,
+    MODULATOR_SCHEMES,
     PAIR_SCHEME,
     PAIR_SEP,
     QUALIFIER,
