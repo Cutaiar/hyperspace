@@ -133,7 +133,8 @@ def test_every_class_in_a_hot_module_can_be_re_classed_after_a_reload():
 
 
 def test_the_rule_imports_in_the_lists_order(capsys):
-    """Row 812: it walked a set, so the hash seed chose the first import."""
+    """Row 812: `report` imports in `MODULES`'s order, with the importer passed in, so
+    this test patches nothing in a worker the other tests share."""
     seen = []
 
     def record(name):
@@ -150,9 +151,11 @@ def test_the_rule_imports_in_the_lists_order(capsys):
     ImportError("cannot import name 'X' from partially initialized module",
                 name="hyperspace.ui_desk"),
     ImportError("cannot open shared object file"),
+    ImportError("libfoo.so: cannot open shared object file", name="third_party"),
 ])
 def test_the_rule_skips_only_a_missing_third_party_package(error):
-    """A cycle in `from .x import Name` form must fail, not leave its classes unread."""
+    """Only a third-party `ModuleNotFoundError` skips. A cycle in `from .x import Name`
+    form, or a package that's there and won't load, fails rather than leave classes unread."""
     def importer(_name):
         raise error
 
