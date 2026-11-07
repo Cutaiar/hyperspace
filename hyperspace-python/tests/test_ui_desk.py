@@ -717,7 +717,8 @@ def test_a_pick_lets_go_by_itself(rig, monkeypatch):
 def test_the_panel_opens_beside_a_four_by_three_desk():
     """The desk diagram gets a 4:3 slice of the window's height and the
     panel the rest (ui.panel_w): the two the same size on the default
-    window, the panel wider on a wider one, never under PANEL_W."""
+    window, the panel wider on a wider one, never under PANEL_W — and the
+    column never more than half the window, so the graph keeps room."""
     dw, dh = CONTROL_SIZE
     pw = ui.panel_w(CONTROL_SIZE)
     desk_w = dw - pw - 3 * ui_desk.EDGE
@@ -725,7 +726,22 @@ def test_the_panel_opens_beside_a_four_by_three_desk():
     assert abs(pw - desk_w) <= 2
     assert ui.panel_w((2932, 996)) == 2932 - 36 - int(4 / 3 * 972)
     assert ui.panel_w((960, 900)) == ui.PANEL_W
-    assert ui.panel_w((1696, 900)) == ui.PANEL_W
+    assert ui.panel_w((1696, 900)) == int(1696 - 36 - (1696 - 36) / 2)   # half, not 4:3
+    assert ui.panel_w((1100, 900)) == ui.PANEL_W
+
+
+def test_the_pad_alone_takes_only_its_own_width():
+    """With only the pad diagram up, the column is the pad's width, not
+    the desk's slice: the panel takes everything right of it, and the pad
+    window ends one gap short of the panel (the owner, 2026-11-07: the
+    split for the pad left the graph too little room)."""
+    from hyperspace import ui_pad
+    for display in (CONTROL_SIZE, (1480, 900), (1000, 606)):
+        pad_w = ui_pad.room(display, None)[2]
+        x, _, w, _ = ui.panel_rect(display, desk=False, pad=True)
+        assert w > ui.panel_w(display, desk=True, pad=False) or w == ui.PANEL_W
+        px, _, pw, _ = ui_pad.room(display, x)
+        assert pw == pad_w and abs(px + pw + ui_desk.EDGE - x) <= 1.0, (display, px, pw, x)
 
 
 # ---------------------------------------------------------------- FINE (row 732)
