@@ -8413,7 +8413,7 @@ Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a f
 ## DH. GRAPH's start zoom (plan 58 SM2, row 787)
 Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
 **612. It reads where it opens.** (each display you'll run the control window on)
-1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the numbers are `placement.ZOOM_DENSE` and `ZOOM_HEIGHT`.
+1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the number is `placement.ZOOM_READ`.
 *Fail:* a start as small as before, or a view opening away from the first column.
 **613. Your zoom stays, and layouts don't move.** (the rig)
 1. ⌘+scroll to a zoom of your own and note what's in the canvas's top-left. Load another patch, then resize the control window taller and shorter. *Pass:* your zoom stands through both, and the same node stays in the top-left. This is new: a resize used to zoom the canvas.
@@ -8609,6 +8609,15 @@ Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_gui
 5. Swing it round hard for ten seconds. *Pass:* the shape swings and stays on the screen.
 6. Resize the first output to another shape. *Pass:* the limit follows that frame. A second output of another shape has no limit of its own: the limit is the frame's, not each output's. *Report:* if it clips there.
 *Report, not pass or fail:* how often the hand ends up stuck at an edge until A, and whether that's acceptable for a show. If it isn't, the choices are less hand push (`poi.hand`), or to take position off this pad too, as row 686 did for the Joy-Con.
+## DQ. GRAPH at 1080p (row 818)
+Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the app at a 1920x1080 window, but at 1x only on a taller display and on a real 1080p display only at 2x.
+**634. The show's display.** (the display you'll run the show on, at 1080p)
+1. Open the control window on it, launch, and load a patch. *Pass:* the node words read from where you'll stand, and the first column is at the canvas's top-left.
+2. Count the columns beside the pane. *Pass:* enough to work without panning all the time; about four. Say if you want it tighter or looser: the number is `placement.ZOOM_READ`.
+3. Look at a node's words up close, at a 1x display if you have one. *Pass:* sharp enough not to bother you. They're softer than the head's words above the canvas at any zoom but 1:1; say if it bothers you.
+4. ⌘-scroll to a new zoom during a look with the output up. *Pass:* no visible stutter on the output when you stop, about a third of a second later.
+5. Resize the window. *Pass:* the zoom doesn't change.
+*Fail:* a start as small as before, words too soft to read, a stutter you can see, or a zoom that follows the resize.
 
 ## What no test covers
 
