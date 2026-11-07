@@ -117,22 +117,21 @@ def screens(glfw) -> list[Screen]:
 
 # ---- GRAPH's start zoom (plan 58 SM2) ----
 #
-# Read off the display the control window opens on. The rule takes the
-# display's density and its usable height, never its reported millimetres (a
-# 48-inch panel on the owner's Mac says it is 598 mm wide).
+# Read off the display the control window opens on, by its usable height alone,
+# never its reported millimetres (a 48-inch panel on the owner's Mac says it is
+# 598 mm wide). The show's display is 1080p (the owner, 2026-11-07).
 
-ZOOM_HEIGHT = 1080.0    # a display this many points tall starts at 1:1 ...
-ZOOM_DENSE = 1.3        # ... and a 2x one, whose points are small, this much bigger
+ZOOM_READ = 1.3         # by eye at 1920x1080: words read from a distance, four columns on the canvas
+ZOOM_HEIGHT = 1080.0    # the height whose square root is 1: only a much taller display passes ZOOM_READ
 ZOOM_MAX = 1.5          # by eye: 1.38 reads well in a 900-point window, 1.89 held two nodes
 
 
-def start_zoom(density: float, height: float) -> float:
-    """GRAPH's first zoom on a display, in screen points per canvas unit: the
-    larger of what a dense panel wants and what the display's height wants,
-    from 1 to `ZOOM_MAX`. The height counts by its square root: a taller
-    screen is seen from further off, but a window on it needn't fill it."""
-    dense = 1.0 + (ZOOM_DENSE - 1.0) * (min(max(density, 1.0), 2.0) - 1.0)
-    return min(max(dense, math.sqrt(max(height, 0.0) / ZOOM_HEIGHT)), ZOOM_MAX)
+def start_zoom(height: float) -> float:
+    """GRAPH's first zoom on a display, in screen points per canvas unit:
+    `ZOOM_READ` at 1080p and on anything smaller or denser, more on a much
+    taller screen, up to `ZOOM_MAX`. The height counts by its square root: a
+    taller screen is seen from further off, but a window on it needn't fill it."""
+    return min(max(ZOOM_READ, math.sqrt(max(height, 0.0) / ZOOM_HEIGHT)), ZOOM_MAX)
 
 
 def window_zoom(glfw, win) -> float:
@@ -142,15 +141,10 @@ def window_zoom(glfw, win) -> float:
     scr = screens(glfw)
     try:
         rect = (*glfw.get_window_pos(win), *glfw.get_window_size(win))
-        on = on_screen(rect, scr)
-        if on is None:
-            return 1.0
-        # the monitor's, not the window's: the window's is stale until an event
-        # is pumped after it was moved, and this runs before any is
-        mon = glfw.get_monitors()[scr.index(on)]
-        return start_zoom(float(glfw.get_monitor_content_scale(mon)[0]), on.h)
     except Exception:  # noqa: BLE001 — as above
         return 1.0
+    on = _centre_screen(rect, scr) or _landing(rect, scr)
+    return start_zoom(on.h) if on is not None else 1.0
 
 
 # ---- the file ----

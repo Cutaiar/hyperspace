@@ -8547,6 +8547,14 @@ Fails: an app that needs a restart; a picture that stops; a window sitting on th
 
 **632. Every display out.** (a Mac mini or a closed laptop on external displays, or as many as you can pull; audio on so you can hear it's alive) Pull every display. Nothing can show you anything: wait 10 s, keep the desk moving, and plug them back in any order, one at a time. Passes: the sound never stopped, each display takes up its job as it arrives, the control window returns, and the desk's changes have landed. `<home>/stall.log` has no "render stall" while the picture was drawing with no window.
 
+## DQ. GRAPH at 1080p (row 818)
+Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the app at a 1920x1080 window, but at 1x only on a taller display and on a real 1080p display only at 2x.
+**634. The show's display.** (the display you'll run the show on, at 1080p)
+1. Open the control window on it, launch, and load a patch. *Pass:* the node words read from where you'll stand, and the first column is at the canvas's top-left.
+2. Count the columns beside the pane. *Pass:* enough to work without panning all the time; about four. Say if you want it tighter or looser: the number is `placement.ZOOM_READ`.
+3. Resize the window. *Pass:* the zoom doesn't change.
+*Fail:* a start as small as before, or a zoom that follows the resize.
+
 ## What no test covers
 
 Only a person can settle these:
