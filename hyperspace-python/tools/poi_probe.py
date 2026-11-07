@@ -12,7 +12,8 @@
 The pad is read by the app's own code: a real `gamepad.Pad` polls the
 reader (`pads.hid.HidPad` live, `pads.hid.TapePad` on a replay), and
 `poi.step` runs on the real camera params (`params.build_patch`), so what
-prints here is what the shape does. Close
+prints here is what the poi's code does. The app itself doesn't run it on a
+Joy-Con (`poi.no_position`, register row 686); this tool does. Close
 the app first: hidapi opens the pad exclusively.
 
 **Live**, each line is the poi's state now: the reading (|accel| in g,
@@ -44,6 +45,7 @@ changes to `poi.py` are not in the tree (register row 786).
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import math
 import sys
@@ -70,6 +72,17 @@ class ProbePad(gamepad.Pad):
 
     def _hid_reader(self):
         return self.reader
+
+    @property
+    def model(self):
+        """The reader's, of no family: the app's poi reads no Nintendo pad (`poi.no_position`,
+        register row 686), and this tool exists to run that same code on one's tape."""
+        m = self.__dict__.get("_model")
+        return dataclasses.replace(m, family="probe") if m is not None else None
+
+    @model.setter
+    def model(self, m) -> None:
+        self.__dict__["_model"] = m
 
 
 class Rig:
