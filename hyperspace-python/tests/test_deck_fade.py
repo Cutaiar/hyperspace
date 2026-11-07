@@ -429,14 +429,14 @@ def _fade(log, k=0.0, dream=None, boom=False, dreams=True):
 
 
 def _draw(monkeypatch, fade, log, n=1):
-    from test_app_boundary import _Ctx, _rig_slots, _SwapGlfw
+    from test_app_boundary import _Ctx, _rig_root, _rig_slots, _SwapGlfw
 
-    monkeypatch.setattr(app, "glfw", _SwapGlfw(log, {"w1": (1600, 1000)}))
-    monkeypatch.setattr(app, "_samples_of", lambda ctx, fbo: 4)
+    g = _SwapGlfw(log, {"w1": (1600, 1000)})
+    monkeypatch.setattr(app, "glfw", g)
     slots = _rig_slots(*("x" * n))
     slots[0].switches.flip_x, slots[0].switches.dim = True, 0.4
-    app._draw_render(fade.on_air.renderer, _Ctx(log), object(), slots, flush=lambda: None,
-                     fade=fade)
+    app._draw_render(fade.on_air.renderer, _Ctx(log), object(), slots, _rig_root(log, slots, g),
+                     flush=lambda: None, fade=fade)
     return slots
 
 
@@ -455,7 +455,7 @@ def test_above_0_deck_2_draws_first_and_each_view_carries_its_picture(monkeypatc
     fade = _fade(log, 0.25)
     _draw(monkeypatch, fade, log)
     assert log.index("draw b") < log.index("draw a")
-    assert log.index("bind screen", log.index("draw b")) < log.index("draw a")   # rebound
+    assert log.index("bind frame", log.index("draw b")) < log.index("draw a")   # rebound
     view = fade.off_air.renderer.calls[0][0]
     # at the output's size, through its switches, at full dim: the dim is the on-air deck's
     assert view.size == (1600, 1000) and view.switches.flip_x and view.switches.dim == 1.0

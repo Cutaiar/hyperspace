@@ -39,6 +39,10 @@ import moderngl
 from .glsl import QUAD_VS
 
 MAX_OUTPUTS = 4
+# the scene's MSAA sample count (SC3a). It was read off output 1's window, which
+# only ever supplied the number: the multisampling is the renderer's own
+# framebuffers' (`render.SceneTarget`), and an `Offscreen` says 0 if asked
+FRAME_SAMPLES = 4
 
 
 @dataclass
@@ -306,6 +310,29 @@ class Offscreen:
             except Exception:  # noqa: BLE001, S110 — teardown is best-effort
                 pass
 
+
+
+@dataclass
+class Root:
+    """What the picture rests on (SC3a, plan 58), which no display can take away:
+    `win`, the hidden window holding the renderer's context; `frame`, the
+    `Offscreen` the first view draws into, whichever displays are live;
+    `pacer`, a `pacing.Pacer`. `logical` and `size` are the frame's window
+    points and framebuffer pixels: output 1's, or the last known while it has
+    no window or says nothing usable. The app fills it; the renderer never
+    sees it."""
+
+    win: Any
+    frame: Offscreen
+    pacer: Any
+    logical: tuple[int, int] = (1, 1)
+    size: tuple[int, int] = (1, 1)
+
+    def measure(self, logical: tuple[int, int], size: tuple[int, int]) -> None:
+        """A window's sizes this frame; an empty one keeps the last known."""
+        if min(*logical, *size) > 0:
+            self.logical = (int(logical[0]), int(logical[1]))
+            self.size = (int(size[0]), int(size[1]))
 
 
 # the off-air picture's long side at most: the GRAPH page's backdrop, not a show

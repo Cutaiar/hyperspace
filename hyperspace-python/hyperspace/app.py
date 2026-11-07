@@ -106,20 +106,24 @@ from .media.folder import MediaFolder
 from .media.panel import GRAPH as PANEL_GRAPH
 from .media.panel import PanelSource
 from .outputs import (
+    FRAME_SAMPLES,
     CanvasTap,
+    Handoff,
     Offscreen,
     Presenter,
     Preview,
+    Root,
     Slot,
     Switches,
     View,
 )
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
+from .pacing import Pacer
 from .params import Registry, build_meta
 from .pinch import install as install_pinch
 from .players import Players
 from .pointer import Pointer, Through
-from .render import Renderer, _samples_of
+from .render import Renderer
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
 from .ui import Panel, apply_style, load_fonts
 from .view import ViewState
@@ -127,6 +131,7 @@ from .watchdog import LOG_NAME, RenderWatch, Watchdog
 
 TITLE = "Hyperspace"
 RENDER_SIZE = (1280, 820)
+ROOT_SIZE = (64, 64)     # the hidden window that holds the render context: never drawn on
 # two 4:3 panes side by side: the desk diagram on the left, the panel on
 # the right, the same size (ui.panel_w splits it). 900 tall is what every
 # page is laid out to fit; on a screen narrower than this the window opens
@@ -401,18 +406,42 @@ def _later_rect(slot: Slot, k: int, scr, renders: list,
     return rect, note
 
 
-def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None = None):
-    """The GLFW windows on one shared GL context: the render outputs and
-    the controls. Returns (slots, control window): one `outputs.Slot` per
-    output the config lists (plan 21 WP3; one with no list, as before),
-    `slot.win` its window — or None, with `slot.missing` saying why, for a
-    later output whose screen is not connected (fork F9). Output 1 always
-    opens. Created in this order: output 1, the controls (as before), then
-    the later outputs.
+def _root_window():
+    """The window that holds the renderer's context (SC3a, plan 58), hidden,
+    never destroyed until the app exits, so no unplugged display can take the
+    context or the picture with it. No samples: MSAA is the renderer's own
+    framebuffers' (`outputs.FRAME_SAMPLES`). Every other window shares with it.
+    Its swap never waits, so it paces nothing (`pacing.py`), and nothing is ever
+    drawn on it."""
+    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
+    glfw.window_hint(glfw.SAMPLES, 0)
+    glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, False)
+    glfw.window_hint(glfw.VISIBLE, False)
+    win = glfw.create_window(*ROOT_SIZE, f"{TITLE} — root", None, None)
+    glfw.window_hint(glfw.VISIBLE, True)
+    if not win:
+        glfw.terminate()
+        raise SystemExit("could not create the render context's window")
+    return win
+
+
+def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None = None,
+             root=None):
+    """The GLFW windows on one shared GL context, `root`'s (`_root_window`):
+    the render outputs and the controls. Returns (slots, control window): one
+    `outputs.Slot` per output the config lists (plan 21 WP3; one with no list,
+    as before), `slot.win` its window — or None, with `slot.missing` saying
+    why, for a later output whose screen is not connected (fork F9). Output 1
+    always opens. Created in this order: output 1, the controls (as before),
+    then the later outputs.
 
     `overlay` is the config's ``[output] overlay`` (decision 21 (a)): only
     then is output 1's framebuffer transparent. A later output is never
-    transparent, has no MSAA (it only shows the frame) and its own title.
+    transparent and has its own title. No window has MSAA: each only shows the
+    frame, multisampled before it gets there (SC3a).
 
     Where they open is placement.py's say: ``[output] monitor`` /
     ``control_monitor`` in `cfg` (with a list, `config.load` put output 1's
@@ -482,7 +511,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
     glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
     glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
-    glfw.window_hint(glfw.SAMPLES, 4)
+    glfw.window_hint(glfw.SAMPLES, 0)
     # creation-time hints: only when the config asks for overlay does the
     # framebuffer keep alpha so overlay mode can clear to see-through (the
     # other modes clear opaque, and the renderer keeps every pixel at alpha
@@ -492,15 +521,14 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     # (overlay.py).
     glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, bool(overlay))
     glfw.window_hint(glfw.AUTO_ICONIFY, False)
-    render_win = glfw.create_window(*render_size, TITLE, None, None)
+    render_win = glfw.create_window(*render_size, TITLE, None, root)
     if not render_win:
         glfw.terminate()
         raise SystemExit("could not create the render window")
     # the control window is an ordinary opaque window; the shared context
     # lets both sides see the same buffers, textures and programs
     glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, False)
-    glfw.window_hint(glfw.SAMPLES, 0)
-    ctrl_win = glfw.create_window(*ctrl_size, f"{TITLE} — controls", None, render_win)
+    ctrl_win = glfw.create_window(*ctrl_size, f"{TITLE} — controls", None, root)
     if not ctrl_win:
         glfw.terminate()
         raise SystemExit("could not create the control window")
@@ -512,7 +540,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     if ctrl_rect:
         glfw.set_window_pos(ctrl_win, *ctrl_rect[:2])
     slots[0].win = render_win
-    # the later outputs (plan 21 WP3): in output 1's share group (they
+    # the later outputs (plan 21 WP3): in the root's share group (they
     # sample its frame textures), opaque, no MSAA, never minimised when
     # another window takes focus — the hints above still hold
     # (TRANSPARENT_FRAMEBUFFER off, SAMPLES 0, AUTO_ICONIFY off)
@@ -522,7 +550,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
         rect = later_rects[k]
         size = rect[2:] if rect else RENDER_SIZE
         title = f"{TITLE} — {slot.name or f'output {slot.n}'}"
-        win = glfw.create_window(*size, title, None, render_win)
+        win = glfw.create_window(*size, title, None, root)
         if not win:
             slot.missing = "its window could not be created"
             note = f"output: {slot.label}: {slot.missing} — not opened"
@@ -583,26 +611,27 @@ def _later_output(slot: Slot) -> Output:
     return out
 
 
-def _open_presenters(slots: list[Slot], make_context=None, notes: list | None = None) -> None:
-    """Each later output's `Presenter`, on its own window's context, and
-    the swap rule (fork F6): output 1 waits for its screen (interval 1,
-    set where its context is made), every later output does not
-    (interval 0) — two waiting swaps a frame halve the rate (plan 21 §1:
-    121 fps against 60–81). One that will not build is closed and counts
-    as not opened, its `missing` saying why (`notes`, the SYSTEM page): a
-    window that is never drawn would show garbage and fool the watch
-    (review of #123). The others go on. Leaves output 1's context
-    current."""
+def _open_presenters(slots: list[Slot], root, make_context=None, notes: list | None = None) -> None:
+    """Each output's `Presenter`, on its own window's context, none waiting
+    for its screen: `Pacer.choose` says which one does (fork F6: two waiting
+    swaps a frame halve the rate, plan 21 §1: 121 fps against 60–81). A later
+    output that will not build is closed and counts as not opened, its
+    `missing` saying why (`notes`, the SYSTEM page): a window that is never
+    drawn would show garbage and fool the watch (review of #123). The others
+    go on. Output 1 always opens, so its failing stops the launch, as its
+    context failing always has. Leaves the root's context current."""
     make = make_context or moderngl.create_context
-    for slot in slots[1:]:
+    for slot in slots:
         if not slot.opened:
             continue
         try:
             glfw.make_context_current(slot.win)
             glfw.swap_interval(0)
             slot.presenter = Presenter(make())
-        except Exception as e:  # noqa: BLE001 — one output must not stop the launch
-            glfw.make_context_current(slots[0].win)
+        except Exception as e:
+            glfw.make_context_current(root)
+            if slot is slots[0]:
+                raise
             _quiet(lambda w=slot.win: glfw.destroy_window(w))
             slot.win, slot.presenter = None, None
             slot.missing = f"its GL context would not open ({_err('presenter', e)})"
@@ -610,7 +639,7 @@ def _open_presenters(slots: list[Slot], make_context=None, notes: list | None = 
             print(note, file=sys.stderr)
             if notes is not None:
                 notes.append(note)
-    glfw.make_context_current(slots[0].win)
+    glfw.make_context_current(root)
 
 
 def _open_publishers(slots: list[Slot], ctx, notes: list | None = None) -> None:
@@ -632,8 +661,8 @@ def _open_publishers(slots: list[Slot], ctx, notes: list | None = None) -> None:
 
 def _close_publishers(win, slots: list[Slot]) -> None:
     """Both exits: every publisher closed (an NDI sender's thread joined)
-    and the offscreen targets freed, with the render context current —
-    their GL objects are its."""
+    and the offscreen targets freed, with the render context (the root's,
+    `win`) current — their GL objects are its."""
     _quiet(lambda: glfw.make_context_current(win))
     publish.close_all(slots)
     for slot in slots:
@@ -646,10 +675,12 @@ def _close_publishers(win, slots: list[Slot]) -> None:
 def _gl_flush() -> None:
     """glFlush in the current context: a presenter's context samples the
     renderer's frame textures, and without the flush it sees last frame's
-    (plan 21 §1, measured: 199 of 200 frames late)."""
-    from OpenGL import GL
+    (plan 21 §1, measured: 199 of 200 frames late). The raw call: PyOpenGL's
+    checked one raises on any error moderngl left pending, which would make
+    this line the frame's failure now that every frame runs it (SC3a)."""
+    from OpenGL.raw.GL.VERSION.GL_1_0 import glFlush
 
-    GL.glFlush()
+    glFlush()
 
 
 def _bands(audio) -> tuple[float, ...]:
@@ -664,26 +695,29 @@ def _bands(audio) -> tuple[float, ...]:
         return ()
 
 
-def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
+def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, flush=None,
                  preview=None, monitor=None, fade=None, panel_deck=None) -> None:
     """One render frame onto every output (plan 21 WP3, "the frame in
-    app.draw_render"):
+    app.draw_render"; SC3a, plan 58: the picture depends on no display):
 
-    1. output 1 current; the stranded-target check; its window bound;
-    2. a `View` per output — output 1 on its window's framebuffer (the
-       `View` `Renderer.draw` builds, so one output is today's frame), each
-       later one with its presenter and its framebuffer's size, or (plan
+    1. the root's context current; the stranded-target check; the handover,
+       if the pacing window should change (`Pacer.choose`);
+    2. a `View` per output — output 1 on the root's frame target (`Root.frame`,
+       at its window's framebuffer size, or the last known with no window),
+       each later one with its presenter and its framebuffer's size, or (plan
        32 T9) a publish-only one on its offscreen target at the render
        cap's size ("full": output 1's framebuffer), in their list order;
-       each published one carries its publishers (and its tap);
+       each published one carries its publishers (and its tap). Output 1's view
+       says `FRAME_SAMPLES`: an offscreen target can't, so the scene's MSAA
+       would go without it;
     3. `renderer.draw_outputs`: output 1 drawn whole, a `Handoff` left for
        the others;
-    4. glFlush in output 1's context;
-    5. each later output, in its own `try`: current, `present`, swap (it
-       does not wait). One that raises sets its slot's `error` and tells
-       the watch; the frame goes on;
-    6. output 1 current and swapped, whatever happened (it waits: it paces
-       the loop).
+    4. glFlush in the root's context;
+    5. each window, in its own `try`, the pacing one last: current, `present`
+       (output 1's, its target 1:1), swap (only the pacing one waits). One that
+       raises sets its slot's `error` and tells the watch; the frame goes on;
+    6. the pacing window swapped if the frame did not get that far, whatever
+       happened; the root's context current.
 
     What output 1's view caught is raised after the others were presented,
     as `Renderer.draw` raises it. `preview` (an `outputs.Preview`), when
@@ -702,22 +736,25 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
     `monitor` (another `Preview`, the page's inset of what is on air) when the
     page asked for it."""
     first = slots[0]
-    win = first.win
-    glfw.make_context_current(win)
-    # the window, bound explicitly every frame: the renderer draws into
-    # whatever is bound, and a frame that once left an offscreen
+    glfw.make_context_current(root.win)
+    # the frame target, bound explicitly every frame: the renderer draws into
+    # whatever is bound, and a frame that once left another offscreen
     # framebuffer bound froze the picture with no error (plan 14 WP1).
     # draw_outputs puts its target back; the check is the alarm.
     stranded = ctx.fbo
-    if stranded is not None and stranded.glo != 0 and watch is not None:
+    if (stranded is not None and stranded.glo != 0 and stranded is not root.frame.fbo
+            and watch is not None):
         watch.stranded(stranded.glo)
-    ctx.screen.use()
-    # its own size and DPI (a 1080p projector next to a retina laptop)
-    w, h = glfw.get_window_size(win)
-    fbw, fbh = glfw.get_framebuffer_size(win)
-    ctx.viewport = (0, 0, fbw, fbh)
+    presented = [sl for sl in slots if sl.opened and sl.presenter is not None]
+    pacer = root.pacer
+    pacer.choose([sl.win for sl in presented], root.win)
+    swapped = False
+    # output 1's own size and DPI (a 1080p projector next to a retina laptop)
+    if first.opened:
+        root.measure(glfw.get_window_size(first.win), glfw.get_framebuffer_size(first.win))
+    w, h = root.logical
+    fbw, fbh = root.size
     first.size = (fbw, fbh)
-    later = [sl for sl in slots[1:] if sl.opened and sl.presenter is not None]
     offscreen = [sl for sl in slots[1:] if sl.publish_only and sl.offscreen is not None]
     wanted = preview is not None and preview.take()
     panel_off = fade is not None and panel_deck is not None and panel_deck is fade.off_air
@@ -729,17 +766,20 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
         pv = preview if shown_to_panel else monitor
         pubs, tap = [*pubs, pv], tap if tap is not None else pv.tap
     try:
-        views = [View(first.switches, (fbw, fbh), target=ctx.screen,
+        target = root.frame.fit((fbw, fbh))
+        target.use()
+        ctx.viewport = (0, 0, fbw, fbh)
+        views = [View(first.switches, (fbw, fbh), target=target,
                       bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh),
-                      publish=pubs, tap=tap)]
-        shown = []                      # (slot, view): the presented ones
+                      publish=pubs, tap=tap, samples=FRAME_SAMPLES)]
+        by_slot = {id(first): views[0]}
         pub_size = getattr(renderer, "max_frame", None) or (fbw, fbh)
         for sl in slots[1:]:
-            if sl in later:
+            if sl in presented:
                 sl.size = tuple(int(v) for v in glfw.get_framebuffer_size(sl.win))
                 views.append(View(sl.switches, sl.size, presenter=sl.presenter,
                                   publish=sl.publishers, tap=sl.tap))
-                shown.append((sl, views[-1]))
+                by_slot[id(sl)] = views[-1]
             elif sl in offscreen:
                 sl.size = (int(pub_size[0]), int(pub_size[1]))
                 views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
@@ -748,22 +788,27 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
             fade.begin_frame()
             if fade.k > 0.0 or fade.warm_deck is not None or off_preview:
                 lw, lh, dpr = max(w, 1), max(h, 1), fbw / max(w, 1)
-                samples = _samples_of(ctx, ctx.screen)
-                fade.warm(lw, lh, dpr, first.switches, samples)
+                fade.warm(lw, lh, dpr, first.switches, FRAME_SAMPLES)
                 if fade.k > 0.0:
-                    fade.draw(views, lw, lh, dpr, samples)
+                    fade.draw(views, lw, lh, dpr, FRAME_SAMPLES)
                 if off_preview:
                     off_preview = fade.preview(preview, lw, lh, dpr, (fbw, fbh), first.switches)
-                ctx.screen.use()                  # output 1's window again, with its viewport
+                target.use()                      # the frame target again, with its viewport
                 ctx.viewport = (0, 0, fbw, fbh)
         renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
-        if later or shown_to_panel or watched or off_preview:
+        if presented or shown_to_panel or watched or off_preview:
             (flush or _gl_flush)()
-        for sl, v in shown:
+        for sl in sorted(presented, key=lambda sl: sl.win is pacer.owner):
+            v = by_slot[id(sl)]
+            # output 1's picture is already whole on the frame target: flip, hands,
+            # mix and dim are in it, so its window only shows it, 1:1
+            ho = (Handoff(root.frame.tex, (fbw, fbh), (0, 0, fbw, fbh), bg_alpha=v.bg_alpha)
+                  if sl is first else v.handoff)
+            swapped = swapped or sl.win is pacer.owner
             try:
                 glfw.make_context_current(sl.win)
-                if v.handoff is not None and sl.size[0] > 0 and sl.size[1] > 0:
-                    sl.presenter.present(v.handoff, sl.size)
+                if ho is not None and sl.size[0] > 0 and sl.size[1] > 0:
+                    sl.presenter.present(ho, sl.size)
                 glfw.swap_buffers(sl.win)
                 sl.error = v.error
             except Exception as e:  # noqa: BLE001 — one output must not take the frame down
@@ -773,8 +818,10 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
         if views[0].exc is not None:
             raise views[0].exc
     finally:
-        glfw.make_context_current(win)
-        glfw.swap_buffers(win)
+        if pacer.owner is not None and not swapped:
+            glfw.make_context_current(pacer.owner)
+            glfw.swap_buffers(pacer.owner)
+        glfw.make_context_current(root.win)
 
 
 def control_title(meta) -> str:
@@ -1163,6 +1210,9 @@ class Host:
     # the crossfader and the decks (deck.MetaController): `frame` ticks it first, so
     # every handle above reads the frame's deck on air from the frame's first line
     meta: MetaController | None = None
+    # makes the render context current: what `frame` runs a hot reload's hooks in
+    # (audit V8). None (a host from a test): whatever is current
+    render_current: Callable[[], None] | None = None
 
     @property
     def adapters(self) -> tuple:
@@ -1243,6 +1293,11 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
 
     # the chain object is recreated on source attach; keep bindings fresh
     h.control.chain = h.audio.chain
+    # the render context current for a reload's `on_reload` hooks: they build the
+    # renderer's vertex arrays and framebuffers, which no other context can use
+    # (audit V8, decided in SC3a). Every frame, as the poll can't say beforehand
+    if h.render_current is not None:
+        h.render_current()
     reloader.poll()     # its own throttle clock (monotonic): a file watch, not a frame clock
 
     # ---- polled keys, from either window ----
@@ -1456,24 +1511,29 @@ def main(argv: list[str] | None = None) -> None:
     # the players, on this Mac (plan 55): beside bindings.json, before the devices
     # read who holds what
     players = Players.load(home, cfg.setdefault("notes", []))
+    # the window that holds the render context, hidden, which no unplug can take
+    root_win = _root_window()
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
     # with no list) and the controls; output 1's window is the render window.
     # On a laptop the show machine's windows.json is not read: its spots are the show machine's
-    slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, None if args.laptop else home)
+    slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, None if args.laptop else home, root_win)
     render_win = slots[0].win
     if args.laptop:
         glfw.focus_window(ctrl_win)       # the controls in front of the render window
 
-    # the render side: moderngl on output 1's context, vsynced — it renders
-    # every output's frame (fork F12) and paces the loop (fork F6)
-    glfw.make_context_current(render_win)
-    glfw.swap_interval(1)
+    # the render side: moderngl on the root's context — it renders every
+    # output's frame (fork F12); the first live output's window paces the loop
+    # (fork F6, `pacing.Pacer`)
+    glfw.make_context_current(root_win)
+    glfw.swap_interval(0)
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
-    # each later output: a presenter on its own context, never waiting
-    _open_presenters(slots, notes=cfg.setdefault("notes", []))
+    root = Root(root_win, Offscreen(ctx), Pacer(glfw), logical=RENDER_SIZE, size=RENDER_SIZE)
+    # each output: a presenter on its own context, none waiting yet
+    _open_presenters(slots, root_win, notes=cfg.setdefault("notes", []))
     later = [sl for sl in slots[1:] if sl.opened]
-    # the outputs published out (plan 32 T9), output 1's context current
+    root.pacer.choose([sl.win for sl in slots if sl.opened], root_win)
+    # the outputs published out (plan 32 T9), the root's context current
     _open_publishers(slots, ctx, cfg.setdefault("notes", []))
 
     # the control side: imgui on the control window's context. Its swap
@@ -1670,7 +1730,7 @@ def main(argv: list[str] | None = None) -> None:
     # not current here: the control window's is). Nothing points at it: no
     # controller, no page, no undo, no file. Built now, not on a fade's first
     # frame: compiling its shaders then would stall the room (rec, row 648)
-    glfw.make_context_current(render_win)
+    glfw.make_context_current(root_win)
     renderer2 = renderer.sibling()
     glfw.make_context_current(ctrl_win)
     renderer2.segment_cfg = renderer.segment_cfg
@@ -1740,7 +1800,11 @@ def main(argv: list[str] | None = None) -> None:
         # programs at its next present, in its own context
         *[(sl.output, "overlay", "Output") for sl in later],
         *[(sl.output.backend, "overlay", "GlfwBackend") for sl in later],
-        *[(sl.presenter, "outputs", "Presenter") for sl in later if sl.presenter],
+        *[(sl.presenter, "outputs", "Presenter") for sl in slots if sl.presenter],
+        (root, "outputs", "Root"),
+        (root.frame, "outputs", "Offscreen"),
+        (root.pacer, "pacing", "Pacer"),
+        (root.pacer.floor, "pacing", "Floor"),
         (library, "library", "Library"),
         (library.project, "library", "Project"),
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
@@ -1761,10 +1825,10 @@ def main(argv: list[str] | None = None) -> None:
                   pointer=meta.pointer(MOUSE))
 
     def draw_render(dt: float) -> None:
-        # every render output: output 1 drawn, the others presented, the
-        # others swapped first and output 1 last (_draw_render); the deck on air
+        # every render output: drawn on the root's context, presented, the
+        # pacing window swapped last (_draw_render); the deck on air
         on_air = meta.on_air
-        _draw_render(on_air.renderer, ctx, on_air.view, slots, render_watch,
+        _draw_render(on_air.renderer, ctx, on_air.view, slots, root, render_watch,
                      preview=panel.preview, monitor=panel.monitor, fade=fade,
                      panel_deck=meta.panel)
 
@@ -1811,13 +1875,13 @@ def main(argv: list[str] | None = None) -> None:
         on.loaded_patch.listeners.append(lambda name, on=on: fade.ask_warm(on))
     dream_check(deck, loaded_patch.current)          # the startup loadable patch has already landed
 
-    # both exits close the publishers, in output 1's context (plan 32 T9)
-    publishers = _Closer(lambda: _close_each((lambda: _close_publishers(render_win, slots),
+    # both exits close the publishers, in the root's context (plan 32 T9)
+    publishers = _Closer(lambda: _close_each((lambda: _close_publishers(root_win, slots),
                                               panel.preview.close, panel.monitor.close,
                                               fade.close)))
 
-    def all_windows() -> list:            # both exits destroy these before terminate
-        return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
+    def all_windows() -> list:            # both exits destroy these before terminate, the root last
+        return [*(sl.win for sl in slots[1:]), ctrl_win, render_win, root_win]
 
     def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
         if args.laptop:                   # the show machine's spots are kept for it
@@ -1828,6 +1892,7 @@ def main(argv: list[str] | None = None) -> None:
     host = Host(reg=deck.reg, view=deck.view, control=control, audio=audio, router=deck.router,
                 clock=clock, lfos=deck.lfos, keys=keys, mouse=mouse, output=output,
                 renderer=deck.renderer, panel=panel, reloader=reloader,
+                render_current=lambda: glfw.make_context_current(root_win),
                 draw_render=draw_render, draw_panel=draw_panel,
                 restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters,
                                                  publishers, segmenters), impl,
@@ -1881,6 +1946,7 @@ def main(argv: list[str] | None = None) -> None:
         # a channel asked for `panel:graph` (replay.py, 2026-11-02)
         replay.grab(panel.canvas_tap, impl, imgui.get_draw_data(), panel.canvas_px)
         glfw.swap_buffers(ctrl_win)
+        root.pacer.end_frame()     # the floor: a swap that didn't wait can't run the loop away
         watchdog.pet(now)          # a frame completed: one float write
 
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
