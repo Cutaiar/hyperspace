@@ -80,6 +80,10 @@ KIND = {
     # outside, same shadow-md. Only its min-width differs, and the cell pins
     # the width anyway.
     "contextmenu": {"radius": 10.0, "outset": 6, "ring": True},
+    # The Combobox trigger is an InputGroup measured identical to the
+    # Input, at rounded-lg: a 1px border on a transparent fill, so a
+    # ring. No focus ring in a rest-state pass, so outset 0.
+    "combobox": {"radius": 10.0, "outset": 0, "ring": True},
     "button": {"radius": 10.0, "outset": 0, "ring": False},
     # A group's cell is the whole group. Its four OUTER corners are all
     # rounded at 10 (the first member owns two, the last the other two) and
@@ -128,6 +132,18 @@ def icon_boxes(cell):
         cs = SELECT["chevron"]
         return [(cell["x"] + cell["w"] - 1.0 - SELECT["pad_r"] - cs,
                  cell["y"] + (cell["h"] - cs) / 2.0, cs, cs)]
+    if cell["kind"] == "combobox":
+        # The trigger's trailing chevron: the same Lucide `chevron-down` the
+        # Select draws, and it differs the same way - body to 2 levels, the
+        # outermost pixel of each round cap by up to 59, which is the figure
+        # this cell reported on its first run. Geometry from the measured
+        # tokens, not from a copy of them.
+        import sys as _s
+        _s.path.insert(0, str(HERE))
+        from comp_combobox import COMBOBOX as _CB
+        g = _CB["field_icon"]
+        return [(cell["x"] + cell["w"] - _CB["field_chevron_right"] - g,
+                 cell["y"] + (cell["h"] - g) / 2.0, g, g)]
     if cell["kind"] == "tooltip":
         return [arrow_box(cell)]
     if cell["kind"] == "scroll":
@@ -184,6 +200,52 @@ def arrow_box(cell):
     vis = half - TOOLTIP["arrow_dy"]
     cx = cell["x"] + cell["w"] / 2.0
     return (cx - vis - 1.0, cell["y"] + cell["h"], 2.0 * vis + 2.0, vis + 2.0)
+
+
+def icon_ink(img, box):
+    """An icon's ink MASS and CENTROID inside `box`, for one image.
+
+    The photometric metric cannot judge a stroked icon - a round line cap a
+    third of a pixel longer reads as 59 levels - so icon_boxes drops those
+    pixels from it. That left the icon measured by nothing at all: its
+    position, its colour and even whether it was drawn were invisible, which
+    is how the Combobox trigger shipped a chevron 3px too far right in ink
+    at half the strength the browser uses. Both bugs were found by eye in the
+    first pixel pass and NEITHER could be caught by the cell afterwards,
+    because the excluded region is derived from the same token the draw site
+    reads - move the token and the hole moves with it.
+
+    Mass and centroid are aggregate, so they survive the cap disagreement
+    while still answering the three questions that matter:
+
+      * is it there at all          mass > 0
+      * is it in the right place    centroid, to a fraction of a pixel
+      * is it the right colour      mass, which scales with the ink's alpha
+
+    `bg` is the box's modal level rather than a token: a 16x16 box around a
+    2px stroke is mostly field, so the mode IS the fill, and taking it from
+    the image makes this work in both themes without being told which.
+
+    Returns (mass, cx, cy) with the centroid relative to the box's origin,
+    or (0.0, nan, nan) for a box with no ink.
+    """
+    x, y, w, h = box
+    x0, y0 = int(np.floor(x)), int(np.floor(y))
+    x1, y1 = int(np.ceil(x + w)), int(np.ceil(y + h))
+    sub = img[max(y0, 0):y1, max(x0, 0):x1]
+    if sub.size == 0:
+        return 0.0, float("nan"), float("nan")
+    v = sub.max(axis=2).astype(float) if sub.ndim == 3 else sub.astype(float)
+    vals, counts = np.unique(np.round(v).astype(int), return_counts=True)
+    bg = float(vals[int(np.argmax(counts))])
+    ink = np.abs(v - bg)
+    mass = float(ink.sum())
+    if mass <= 0.0:
+        return 0.0, float("nan"), float("nan")
+    ys, xs = np.mgrid[0:ink.shape[0], 0:ink.shape[1]]
+    return (mass,
+            float((ink * xs).sum() / mass) + (max(x0, 0) - x),
+            float((ink * ys).sum() / mass) + (max(y0, 0) - y))
 
 
 def miter_pixels(cell):

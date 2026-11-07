@@ -383,15 +383,36 @@ def test_the_empty_state_is_muted_after_all():
         T.rgba("popover-foreground", theme=T.LIGHT)[:3]
 
 
-def test_the_search_fields_insets_are_the_measured_ones():
-    """The icon sits at border 1 + the addon's pl-2; the text at border 1 +
-    the 24px addon + the input's own pl-1.5."""
+def test_the_triggers_chevron_is_where_the_browser_puts_it():
+    """The chevron's RIGHT edge is 8.203 in from the trigger's right, and it
+    is drawn in muted-foreground at FULL strength.
+
+    This replaces an assertion that `field_icon_x == 1.0 + T.SPACE[2]`,
+    which is RETRO row 27's trap in miniature: an arithmetic identity over
+    the token, which cannot fail and says nothing about the browser. Worse,
+    the number it modelled belonged to the leading magnifier of the
+    Popover+Command search field - a component this has not been since that
+    recipe was replaced - so it was a correct identity over a dead token.
+
+    Measured on the real Base UI component at two widths, 200 and 320, and
+    constant at both: svg 16x16 with its right edge at trigger_right -
+    8.203, `oklch(0.556 0 0)` at `opacity: 1`, which is muted-foreground.
+    """
     t = C.COMBOBOX
-    assert t["field_icon_x"] == 1.0 + T.SPACE[2]
-    assert t["field_text_x"] == 1.0 + 24.0 + T.SPACE[1.5]
+    assert t["field_chevron_right"] == 8.203
     assert t["field_icon"] == 16.0
+    assert t["field_icon_ink"] == ("muted-foreground", 1.0)
+    # disabled dims it twice: the group's opacity-50 AND the chevron's own
+    # button's. Measured 0.25 of full ink, not 0.5.
+    assert t["field_icon_disabled_opacity"] == 0.5
+    # full strength, and that is the point: #737373, level 115
+    assert T.rgba("muted-foreground", theme=T.LIGHT)[:3] == \
+        tuple(c / 255.0 for c in (0x73, 0x73, 0x73))
     # the line box is 20 in a 32 field, so the glyphs sit 6 down
     assert (t["field_h"] - t["field_line"]) / 2.0 == 6.0
+    # the dead tokens are gone, not merely unused
+    assert "field_icon_x" not in t
+    assert "field_text_x" not in t
 
 
 # --------------------------------------------------------------------------
@@ -813,3 +834,29 @@ def test_the_separators_rule_is_centred_in_its_margin_block():
     # row in a 319 panel
     assert sep.w + 2 * t["pad"] == BROWSER_GRP["sep_w"]
     assert sep.w == BROWSER_GRP["sep_w"] - 2 * t["pad"]
+
+
+# --------------------------------------------------------------------------
+# the panel chrome is menu.py's, and may only stay so while the tokens agree
+# --------------------------------------------------------------------------
+
+def test_panel_chrome_is_menus():
+    """`_panel_chrome` delegates to `menu.panel_chrome`, which hardcodes the
+    popover fill, the foreground/10 ring and `rounded-lg`. COMBOBOX still
+    declares all three, and the delegation is sound only while they say the
+    same thing - so this asserts the equivalence the delegation assumes
+    rather than leaving it to the comment that claims it.
+
+    If a future shadcn moves the Combobox's panel off the menu's chrome,
+    this fails and `_panel_chrome` has to grow its own body back.
+    """
+    import menu as M
+    assert C.COMBOBOX["radius"] == "lg"
+    assert C.COMBOBOX["bg"] == ("popover", 1.0)
+    assert C.COMBOBOX["ring"] == ("foreground", 0.10)
+    # and menu.py draws exactly those
+    assert M.PAD == 4.0
+    src = __import__("inspect").getsource(M.panel_chrome)
+    assert 'ui.col("popover", a)' in src
+    assert 'ui.col("foreground", 0.10 * a)' in src
+    assert 'T.RADII["lg"]' in src

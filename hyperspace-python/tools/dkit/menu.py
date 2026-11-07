@@ -568,9 +568,15 @@ def panel_chrome(ui, dl, x, y, w, h, a: float = 1.0) -> None:
     # clips to; widen the clip while the chrome is drawn
     dl.push_clip_rect(imgui.ImVec2(x - 16, y - 16),
                       imgui.ImVec2(x + w + 16, y + h + 16), False)
-    for _dx, dy, blur, spread, al in T.SHADOW_MD:
-        D.shadow(dl, x, y, w, h, (0, 0, 0, al * a), T.RADII["lg"],
-                 dy=dy, blur=blur, spread=spread)
+    # draw.shadow_stack, not a loop of its own: CSS lists shadows FRONT to
+    # back, so they have to go up reversed, and this loop went up forward
+    # and dropped dx on the floor. Both are invisible on SHADOW_MD - two
+    # layers of the same colour and alpha composite to the same result in
+    # either order, and neither carries a dx - so this is pixel-neutral
+    # today and was one differently-shaped token away from not being.
+    D.shadow_stack(dl, x, y, w, h, T.RADII["lg"],
+                   [(dx, dy, blur, spread, al * a)
+                    for dx, dy, blur, spread, al in T.SHADOW_MD])
     D.fill(dl, x, y, w, h, ui.col("popover", a), T.RADII["lg"])
     D.border(dl, x - 1, y - 1, w + 2, h + 2,
              ui.col("foreground", 0.10 * a), T.RADII["lg"] + 1, 1.0)

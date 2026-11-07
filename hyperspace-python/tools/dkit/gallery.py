@@ -28,6 +28,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import comp_button as CB  # noqa: E402
+import comp_combobox as CC  # noqa: E402
 import draw as D          # noqa: E402
 from ease import Anim     # noqa: E402
 import gradient as G      # noqa: E402
@@ -94,6 +95,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     selects = T.select_table(theme_name)
     tips = T.tooltip_table(theme_name)
     buttons = CB.button_table(theme_name)
+    combos = CC.combobox_table(theme_name)
     ink = T.rgba("foreground", theme=theme)
 
     # Two frames: the first builds the font atlas and settles the backend.
@@ -155,6 +157,21 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
                        cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
                        "gallery.menu", chrome_only=True)
+            elif cell["kind"] == "combobox":
+                # The CLOSED trigger, which in this component IS the input.
+                # field_chrome rather than _input_trigger: the latter submits
+                # a real imgui.input_text, and a widget outside any window
+                # makes ImGui auto-create its "Debug" window over the canvas.
+                #
+                # The open PANEL is not a cell: its chrome is literally
+                # menu.panel_chrome now, so `menu.panel` and
+                # `contextmenu.panel` already measure it. What is still
+                # outside the diff is the panel's ROWS - see HANDOFF.
+                mui = __import__("interact").Ui(dl, faces, theme, Anim(),
+                                                theme_name=theme_name)
+                CC.field_chrome(mui, cell["x"], cell["y"], cell["w"],
+                                cell["h"], combos, text=False,
+                                disabled=cell["variant"] == "disabled")
             elif cell["kind"] == "contextmenu":
                 # Identical chrome to the `menu` cell by design: a
                 # ContextMenu routes its panel through menu.popup, and since

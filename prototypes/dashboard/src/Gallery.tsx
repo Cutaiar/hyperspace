@@ -10,6 +10,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
+import { Combobox, ComboboxInput } from "@/components/ui/combobox"
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel,
   ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger,
@@ -290,6 +291,25 @@ export default function Gallery({
                 </Button>
               ))}
             </ButtonGroup>
+          ) : c.kind === "combobox" ? (
+            // The CLOSED trigger. No `open`: the panel's chrome is already
+            // measured by the menu cells (the kit draws it with literally
+            // menu.panel_chrome), and an open Base UI popover on this route
+            // would put its portal over the ContextMenu anchor that
+            // capture_react.js right-clicks.
+            //
+            // The trigger IS the input - Base UI's ComboboxInput is an
+            // InputGroup wrapping a real <input>, not a Button that opens a
+            // panel with a search box in it. That was the old
+            // Popover+Command recipe and it is the wrong component.
+            <Combobox items={["Alpha", "Beta", "Gamma"]}
+                      disabled={c.variant === "disabled"}>
+              <ComboboxInput
+                placeholder=""
+                className="h-full w-full"
+                style={{ color: "transparent" }}
+              />
+            </Combobox>
           ) : c.kind === "contextmenu" ? (
             // Radix's ContextMenu has no `open` or `defaultOpen` - it is
             // driven by a real contextmenu gesture and nothing else - so the

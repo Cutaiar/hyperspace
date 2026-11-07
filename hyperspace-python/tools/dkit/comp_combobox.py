@@ -298,9 +298,36 @@ COMBOBOX = {
     "field_bg": ("input", 0.3),           # bg-input/30 in BOTH themes
     "field_border": ("input", 0.3),       # border-input/30 in BOTH themes
     "field_icon": 16.0,                   # size-4
-    "field_icon_x": 9.0,                  # border 1 + the addon's pl-2 (8)
-    "field_icon_ink": ("muted-foreground", 0.5),  # opacity-50 on the addon
-    "field_text_x": 31.0,                 # 1 + addon 24 + the input's pl-1.5
+    # The chevron's RIGHT edge, in from the trigger's right. MEASURED on the
+    # real component at two widths (200 and 320) and constant at both, which
+    # is why it is a number here and not an arithmetic model: the addon it
+    # lives in is 32x36 overhanging the 32px field by 2 top and bottom and
+    # 3.797 to the right, and reproducing that box to get at its content is
+    # modelling the browser's layout rather than its paint.
+    #
+    # It replaces `field_icon_x` (9.0 = "border 1 + the addon's pl-2"), which
+    # described a LEADING magnifier in a search field this component has not
+    # had since the Popover+Command recipe was replaced - residue of the same
+    # shape as the 36px `combobox_size` used to reserve for it. Nothing read
+    # it but a test asserting it equalled its own derivation.
+    "field_chevron_right": 8.203,
+    # ENABLED, the chevron is muted-foreground at FULL strength: measured
+    # oklch(0.556 0 0) on the svg at `opacity: 1` (#737373, level 115). The
+    # kit drew it at 0.5 and came out at 185 - 70 levels, the biggest miss
+    # the Combobox cell found on its first run.
+    "field_icon_ink": ("muted-foreground", 1.0),
+    # DISABLED, it is dimmed TWICE, and that is why the old code looked
+    # right. `has-disabled:opacity-50` on the input GROUP dims the box, the
+    # placeholder and the chevron alike - but the chevron also sits in a
+    # BUTTON inside the trailing addon which carries a disabled:opacity-50 of
+    # its own. Measured: group 0.5, addon 1, that button 0.5, svg 1, and the
+    # chevron bottoms out at 217 against a 249 fill, which is 0.25 of full
+    # ink and not the 0.5 one factor gives.
+    #
+    # The previous code wrote `0.5 * dim` with dim itself 0.5 when disabled:
+    # 0.25 disabled, which is right, and 0.5 enabled, which is the bug. One
+    # folded constant cannot be both, so the two facts are named separately.
+    "field_icon_disabled_opacity": 0.5,
     "field_text_r": 1.0,                  # the input's right edge: the border
     "field_font": 14.0,                   # text-sm
     "field_line": 20.0,                   # line-height; centred in h-8 -> +6
@@ -768,14 +795,11 @@ def list_content_h(items, tbl) -> float:
 # the widget
 # --------------------------------------------------------------------------
 #
-# PANEL CHROME. The four lines in `_panel_chrome` are the four `menu.popup`
-# draws, and that is not an accident: the two panels were measured identical
-# (see the module docstring). They are here rather than called because
-# `menu.popup` is one function that owns the popup's whole lifecycle — the
-# style vars, the `begin_popup`, the fade, the chrome AND the row loop — and
-# a Combobox needs the first four with a completely different body. The
-# right fix is a `menu.panel_chrome(ui, x, y, w, h, alpha)` that both call;
-# adding it means editing menu.py, which this change may not do.
+# PANEL CHROME. The two panels were measured identical (see the module
+# docstring), and they are now the same code: `menu.panel_chrome`, which was
+# pulled out of `menu.popup` precisely so that `popup`, the gallery cell and
+# a Combobox could share one answer. This file held a copy of those four
+# lines until then, with a note saying the fix needed menu.py edited.
 
 
 def _col(ui, spec, a: float = 1.0):
@@ -794,20 +818,76 @@ def round_px(v: float) -> float:
 
 
 def _panel_chrome(ui, dl, x, y, w, h, a, tbl) -> None:
-    r = T.RADII[tbl["radius"]]
-    # the shadow and the ring fall OUTSIDE the window rect, which imgui
-    # clips to; widen the clip while the chrome is drawn
-    dl.push_clip_rect(imgui.ImVec2(x - 16, y - 16),
-                      imgui.ImVec2(x + w + 16, y + h + 16), False)
-    D.shadow_stack(dl, x, y, w, h, r,
-                   [(dx, dy, bl, sp, al * a)
-                    for dx, dy, bl, sp, al in T.SHADOW_MD])
-    D.fill(dl, x, y, w, h, _col(ui, tbl["bg"], a), r)
-    D.border(dl, x - 1, y - 1, w + 2, h + 2, _col(ui, tbl["ring"], a),
-             r + 1, 1.0)
-    dl.pop_clip_rect()
+    """The panel's shadow, fill and ring - which is `menu.panel_chrome`.
+
+    This used to be a copy of those four lines, with a note saying the right
+    fix was "a `menu.panel_chrome(ui, x, y, w, h, alpha)` that both call;
+    adding it means editing menu.py, which this change may not do". That
+    function exists now, and its own docstring names a Combobox as one of
+    the three callers it was pulled out for - so the copy was the only thing
+    left of the problem, and the panel's chrome was being diffed against the
+    browser in the `menu` cell while this drew its own version.
+
+    It is now the same code, so `menu.panel` and `contextmenu.panel` in the
+    pixel diff cover this panel's chrome too. test_panel_chrome_is_menus
+    holds the tokens to that, because the delegation is only sound while
+    COMBOBOX's radius, bg and ring still say what menu.py draws.
+    """
+    import menu as M
+    M.panel_chrome(ui, dl, x, y, w, h, a)
 
 
+
+
+def field_chrome(ui, x, y, w, h, tbl, *, value: str = "",
+                 placeholder: str = "", disabled: bool = False,
+                 focus_f: float = 0.0, text: bool = True) -> None:
+    """The trigger's chrome: the box, the ring, the placeholder, the chevron.
+
+    Pulled out of `_input_trigger`'s `if chrome:` tail for the same reason
+    `menu.rows` grew `chrome_only` - the gallery draws into the background
+    draw list, where submitting the real `imgui.input_text` that function is
+    built around would make ImGui auto-create its "Debug" window over the
+    canvas.
+
+    `text=False` is the chrome pass: it drops the placeholder's glyphs and
+    keeps the chevron, which is a vector the diff measures as a silhouette
+    rather than as ink.
+
+    The box is measured identical to `tokens.INPUT`, ring included - Base
+    UI's ComboboxInput is an InputGroup wrapping a real <input>, and the
+    group's band and border measure as the Input's - at `rounded-lg`.
+    """
+    dim = 0.5 if disabled else 1.0
+    it = T.input_table(ui.theme_name)
+    D.field(ui.dl, x, y, w, h, ui.theme, it, focus_f=focus_f,
+            disabled=disabled, radius=T.RADII["lg"])
+    # The placeholder shows whenever the VALUE is empty, focused or not.
+    # Measured in Chromium on the real component: the placeholder ink is
+    # there at rest, under a keyboard focus, and with the list open -
+    # `::placeholder` keys off the value, not the focus. The kit hid it on
+    # focus, so clicking an empty combobox blanked the field.
+    if text and not value:
+        D.label(ui.dl, x + tbl["input_pad_l"], y, placeholder, ui.faces,
+                "regular", tbl["field_font"],
+                ui.col(it["placeholder"][0], it["placeholder"][1] * dim),
+                baseline_box=h)
+    g = tbl["field_icon"]
+    # `has-disabled:opacity-50` is on the input GROUP, so it dims the
+    # chevron and the placeholder along with the box - measured, the group
+    # computes `opacity: 0.5` and the svg's own stays 1. Only the box was
+    # dimmed. Folding the group's opacity into each colour is right here
+    # because the border and the chevron do not overlap; comp_button has to
+    # keep them apart because bg-clip-padding makes its fill and border
+    # disjoint.
+    ink = tbl["field_icon_ink"]
+    # `dim` is the GROUP's opacity; the chevron's own button multiplies a
+    # second one on top of it when disabled. See the two tokens.
+    ia = ink[1] * dim * (tbl["field_icon_disabled_opacity"]
+                         if disabled else 1.0)
+    D.icon(ui.dl, "chevron-down",
+           x + w - tbl["field_chevron_right"] - g, y + (h - g) / 2.0, g,
+           ui.col(ink[0], ia))
 
 
 def _row(ui, it, r, key, tbl, *, selected: bool, checked: bool) -> bool:
@@ -958,7 +1038,7 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     """
     import interact as I
     cz = tbl["field_icon"] + 2 * T.SPACE[1]        # the chevron's addon
-    pl, pr = tbl["input_pad_l"], tbl["input_pad_r"]
+    pl = tbl["input_pad_l"]
 
     cols = I._sandwich_begin(ui, clear_grab=False)
     # imgui's own Col_.text is WHITE by default, which is invisible on the
@@ -968,7 +1048,6 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # copy stops painting a second set of glyphs over the popup's. The
     # selection band goes with it: an inactive InputText draws no band, but
     # saying so costs one call and does not depend on that staying true.
-    dim = 0.5 if disabled else 1.0
     imgui.push_style_color(
         imgui.Col_.text,
         imgui.ImVec4(*ui.col("foreground")) if ink
@@ -1060,28 +1139,11 @@ def _input_trigger(ui, key, tbl, x, y, w, h, text, placeholder, *,
     # the Input's own chrome: measured identical to tokens.INPUT, ring
     # included - the InputGroup's band and border measure as the Input's
     if chrome:
-        it = T.input_table(ui.theme_name)
         focus_f = ui.anim.to(f"{key}:focus",
                              1.0 if (focused or focus_hint) else 0.0)
-        D.field(ui.dl, x, y, w, h, ui.theme, it, focus_f=focus_f,
-                disabled=disabled, radius=T.RADII["lg"])
-        # The placeholder shows whenever the VALUE is empty, focused or
-        # not. Measured in Chromium on the real component: the placeholder
-        # ink is there at rest, under a keyboard focus, and with the list
-        # open - `::placeholder` keys off the value, not the focus. The kit
-        # hid it on focus, so clicking an empty combobox blanked the field.
-        if not out:
-            D.label(ui.dl, x + pl, y, placeholder, ui.faces, "regular",
-                    tbl["field_font"],
-                    ui.col(it["placeholder"][0],
-                           it["placeholder"][1] * dim), baseline_box=h)
-        g = tbl["field_icon"]
-        # `has-disabled:opacity-50` is on the input GROUP, so it dims the
-        # chevron and the placeholder along with the box - measured, the
-        # addon's button computes `opacity: 0.5`. Only the box was dimmed.
-        D.icon(ui.dl, "chevron-down", x + w - 1.0 - T.SPACE[1] - g,
-               y + (h - g) / 2.0, g,
-               ui.col("muted-foreground", 0.5 * dim))
+        field_chrome(ui, x, y, w, h, tbl, value=out,
+                     placeholder=placeholder, disabled=disabled,
+                     focus_f=focus_f)
     # MERGE. `_sandwich_end` only restores the channel; leaving the split
     # open makes the next one nest, which ImGui asserts on rather than
     # tolerates ("Nested channel splitting is not supported").

@@ -145,6 +145,10 @@ def main() -> int:
                     help="value delta a flat-region pixel may carry and still pass")
     ap.add_argument("--arc", type=float, default=1.0,
                     help="corner displacement allowed, in pixels")
+    ap.add_argument("--imass", type=float, default=0.15,
+                    help="fraction an icon's ink mass may differ by")
+    ap.add_argument("--icent", type=float, default=0.5,
+                    help="px an icon's ink centroid may move")
     a = ap.parse_args()
     d = Path(a.dir)
 
@@ -273,6 +277,34 @@ def main() -> int:
                   slice(int(x), int(np.ceil(x + w))))
             worst = int(strict[sl].max()) if strict[sl].size else 0
             print(f"  {c['id']:14} worst {worst} levels over {strict[sl].size} px")
+
+    # --- icons: mass and centroid, which the strict metric cannot see -----
+    # icon_boxes drops these pixels from the photometric metric because a
+    # round line cap disagrees by up to 59 levels. Nothing then measured the
+    # icon at all - see contour.icon_ink. These two aggregates do, and they
+    # FAIL, because "the chevron still has to land on the right pixels" was
+    # written in icon_boxes' docstring while nothing enforced it.
+    irows = []
+    for c in SPEC["cells"]:
+        for n, box in enumerate(C.icon_boxes(c)):
+            if c["kind"] == "tooltip":
+                continue          # a silhouette, reported by area below
+            ma, ax, ay = C.icon_ink(react, box)
+            mb, bx, by = C.icon_ink(mine, box)
+            irows.append((c["id"], n, ma, ax, ay, mb, bx, by))
+    if irows:
+        print()
+        print(f"icons (mass within {a.imass:.0%}, centroid within "
+              f"{a.icent} px):")
+        for cid, n, ma, ax, ay, mb, bx, by in irows:
+            dm = (mb - ma) / ma if ma else float("inf")
+            dc = float(np.hypot(bx - ax, by - ay))
+            bad = abs(dm) > a.imass or not (dc <= a.icent)
+            if bad and cid not in failed:
+                failed.append(cid)
+            print(f"  {cid:22} mass {ma:8.1f} -> {mb:8.1f} ({dm:+.1%})   "
+                  f"centroid ({ax:.2f},{ay:.2f}) -> ({bx:.2f},{by:.2f})  "
+                  f"d={dc:.3f} px   {'FAIL' if bad else 'ok'}")
 
     # --- advisory: the square-corner miters -------------------------------
     mit = [(c, C.miter_pixels(c)) for c in SPEC["cells"]]
