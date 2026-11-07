@@ -18,7 +18,9 @@ there, so "graph" means "what is selected on it"). Everything that moves
 the view moves `ui.page`, so ⌘[ / ⌘] (`ui.PageHistory`) step back and
 forward through every view the pane has shown, whatever moved it: a chip,
 the sections menu, a node's **open on …**, the **←** back chip, a key row, a
-pad, a click on a node.
+pad, a click on a node. The selection's view is kept with the node it
+showed (`ui.view_of`), so the pane is a viewer with a history: back from
+node B to node A selects A again and centres it (`ui.go_view`).
 
 **Every view has a mouse route** (Dillon, 2026-11-07: nothing
 stranded). Over the body, a row of chips (`_bar`) wrapping at the pane's

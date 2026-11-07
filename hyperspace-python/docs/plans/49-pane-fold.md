@@ -338,7 +338,11 @@ are replaced by **one view at a time**, at the pane's full height
 
 - **The view is `ui.page`.** GRAPH's slot is the selection, every other
   slot its section (`showing`, `section_of`, `slot_of`, `show`). Every way
-  a view comes up goes through it, so ⌘[ / ⌘] walk all of them.
+  a view comes up goes through it, so ⌘[ / ⌘] walk all of them. The
+  history keeps the selection's view with its node (`ui.view_of`,
+  `ui.go_view`): back from node B to node A selects and centres A. A step
+  waits a few frames for its node to land (`ui.SETTLE_NOTES`); a node
+  deleted since leaves what landed in its place, the forward run kept.
 - **Every view has a mouse route.** A row of chips: the selection and the
   six sections no node's **open on …** leads to (`TABS`), then
   **sections ▾**, a menu of the other eleven (`MENU`). The menu's chip

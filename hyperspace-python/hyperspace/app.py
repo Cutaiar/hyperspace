@@ -133,7 +133,7 @@ from .players import Players
 from .pointer import Pointer, Through
 from .render import Renderer
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
-from .ui import Panel, apply_style, load_fonts
+from .ui import Panel, apply_style, go_view, load_fonts, view_of
 from .view import ViewState
 from .watchdog import LOG_NAME, RenderWatch, Watchdog
 
@@ -1528,16 +1528,17 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     # (camera.reset) never hears it — a press with ⌘ held is the loop's
     if keys.super() and keys.pressed(glfw.KEY_R):
         h.restart()
-    # ⌘[ / ⌘] go back / forward through the pages visited, as a browser
-    # does; they claim [ and ]'s edge the same way, so brightness (the
-    # table's bare [ ]) never hears them
+    # ⌘[ / ⌘] go back / forward through the side pane's views, as a browser
+    # does — a section, or the selection with the node it showed; they claim
+    # [ and ]'s edge the same way, so brightness (the table's bare [ ]) never
+    # hears them
     hist = getattr(h.panel, "history", None)    # (a panel from before a hot reload)
     if hist is not None:
-        hist.note(h.panel.page)                 # however the page changed since
+        hist.note(view_of(h.panel))             # however the view changed since
         if keys.super():
             for key, by in ((glfw.KEY_LEFT_BRACKET, -1), (glfw.KEY_RIGHT_BRACKET, 1)):
-                if keys.pressed(key) and (page := hist.step(by)) is not None:
-                    h.panel.page = page
+                if keys.pressed(key) and (view := hist.step(by)) is not None:
+                    go_view(h.panel, view)
     on_keys.router.keys(keys)   # key rows: B / ⇧B, R, F1–F8 / ⇧F1–F8, and the rest
     # ↑/↓ ride depth4 toward its range limit, accelerating with hold
     for key, sgn in ((glfw.KEY_UP, 1.0), (glfw.KEY_DOWN, -1.0)):
