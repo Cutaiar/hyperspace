@@ -1,7 +1,7 @@
 """tools/app_driver.py script: the player screen with a full set of controllers
 (stood in: the driver's home lists none), by mouse — at 320 and 240 px in the pane,
 a token dragged across, then the large window and a controller dragged between tokens,
-each taken back by ⌘Z over the board, and redone (row 740); a controller unplugged since
+each taken back by ⌘Z over the board, and redone (row 800); a controller unplugged since
 is refused in words. Each step's words go to stderr; a step that does not do what it
 should stops the run.
 
@@ -102,5 +102,12 @@ def script(d, panel):
     yield from press(d, panel, "edit.undo", lambda: meta.players.player_of("osc").number != 4,
                      "undid osc to player 4")
     yield from d.wait(60)
+    tuned = panel.reg["hands.smooth"]    # a setting of another section: not the board's to take
+    tuned.step(3)
+    yield from d.wait(40)
+    was = tuned.base
+    yield from press(d, panel, "edit.undo", lambda: tuned.base == was,
+                     "nothing to undo on the player screen")
+    yield from d.wait(60)         # refused, in the warning colour
     yield from d.park()
     yield from d.wait(30)

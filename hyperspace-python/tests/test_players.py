@@ -21,7 +21,7 @@ from hyperspace.deck import KEYS, MOUSE, Deck, MetaController
 from hyperspace.hotreload import MODULES
 from hyperspace.learn import SAVE_PARAM
 from hyperspace.params import CHASE_LABEL
-from hyperspace.players import FILE, SCHEMA, Duty, Players, qualifier_of
+from hyperspace.players import FILE, SCHEMA, THERE, UNLISTED, UNPLUGGED, Duty, Players, qualifier_of
 from hyperspace.routing import TURN_GRACE_S, TURN_OP, Binding
 from hyperspace.routing_sources import Layered, Sources
 
@@ -1114,7 +1114,7 @@ def test_let_go_lost_is_the_one_door_the_pad_goes_through(rig, monkeypatch):
 
 
 def _here_meta(rig):
-    undo.where(lambda: True)
+    undo.where(lambda: undo.BOARD)
     rig.tick = lambda n=30: _settle(rig, n)
 
 
@@ -1163,14 +1163,13 @@ def test_a_duty_move_is_one_step_and_the_file_follows(rig, tmp_path):
 
 
 def test_moving_nobody_makes_no_step(rig):
+    """Review of #417: the default holder too, whose file would otherwise change."""
     _here_meta(rig)
-    rig.meta.players.hold("p2", 2)
-    rig.tick()
     steps = len(rig.meta.undo.stack)
     rig.meta.move_player(2, Duty.ON_AIR)
     rig.meta.register("p2", 2)
     rig.tick()
-    assert len(rig.meta.undo.stack) == steps
+    assert len(rig.meta.undo.stack) == steps and "p2" not in rig.meta.players.held
 
 
 def test_two_moves_are_two_steps_each_taken_back_in_turn(rig):
@@ -1269,28 +1268,33 @@ def test_a_given_controller_goes_back_and_the_list_reads_it_again_from_the_tick(
     assert devs.get("second").qualifier == "second" and not meta.relist
 
 
+def _away(rig, **where):
+    """`presence` by role: `_away(rig, hands=UNPLUGGED)`; the dict stays to be changed."""
+    rig.meta.presence = lambda role: where.get(role, THERE)
+    return where
+
+
 def test_a_controller_unplugged_since_is_not_brought_back(rig, tmp_path):
     """Refused in words, and no history moves: back in, the same press takes it back."""
     _here_meta(rig)
     meta, path = rig.meta, tmp_path / FILE
     meta.players.path = path
-    gone = set()
-    meta.unplugged = gone.__contains__
+    where = _away(rig)
     _by_hand(rig, meta.register, "hands", 2)
     saved, steps = path.read_text(), list(meta.undo.stack)
-    gone.add("hands")
+    where["hands"] = UNPLUGGED
     _z(rig)
     assert meta.players.player_of("hands").number == 2 and path.read_text() == saved
     assert meta.undo.stack == steps and not meta.undo.redos
     assert meta.undo.status == ("not undone: hands unplugged since that move. Plug it back in "
                                 "and try again")
     assert not meta.relist
-    gone.clear()
+    where.clear()
     rig.tick()
     _z(rig)
     assert meta.players.player_of("hands").number == 1
     rig.tick()
-    gone.add("hands")
+    where["hands"] = UNPLUGGED
     _shift_z(rig)
     assert meta.players.player_of("hands").number == 1
     assert meta.undo.status.startswith("not redone: hands unplugged")
@@ -1300,10 +1304,69 @@ def test_a_controller_given_while_it_was_gone_goes_back_as_it_came(rig):
     """Not "unplugged since": nothing to bring back, and the board lets it be dragged."""
     _here_meta(rig)
     meta = rig.meta
-    meta.unplugged = {"hands"}.__contains__
+    _away(rig, hands=UNPLUGGED)
     _by_hand(rig, meta.register, "hands", 2)
     _z(rig)
     assert meta.players.player_of("hands").number == 1
+
+
+def test_the_question_belongs_to_each_step_given_there_then_given_gone(rig):
+    """Review of #417: given while there, then again while lost. The second goes back as
+    it came; the first was there then and isn't now, so it refuses."""
+    _here_meta(rig)
+    meta = rig.meta
+    where = _away(rig)
+    _by_hand(rig, meta.register, "hands", 2)
+    where["hands"] = UNPLUGGED
+    _by_hand(rig, meta.register, "hands", 3)
+    _z(rig)
+    assert meta.players.player_of("hands").number == 2
+    rig.tick()
+    _z(rig)
+    assert meta.players.player_of("hands").number == 2, "not under another name, lost"
+    assert meta.undo.status.startswith("not undone: hands unplugged")
+
+
+def test_the_question_belongs_to_each_step_given_gone_then_given_there(rig):
+    """The reverse: the second was there then and refuses; plugged back and taken back,
+    the first goes as it came, wherever the controller is by then."""
+    _here_meta(rig)
+    meta = rig.meta
+    where = _away(rig, hands=UNPLUGGED)
+    _by_hand(rig, meta.register, "hands", 2)
+    where.clear()
+    _by_hand(rig, meta.register, "hands", 3)
+    where["hands"] = UNPLUGGED
+    _z(rig)
+    assert meta.players.player_of("hands").number == 3
+    where.clear()
+    rig.tick()
+    _z(rig)
+    assert meta.players.player_of("hands").number == 2
+    rig.tick()
+    where["hands"] = UNPLUGGED
+    _z(rig)
+    assert meta.players.player_of("hands").number == 1
+
+
+def test_a_controller_off_the_list_passes_and_nothing_waits_behind_it(rig):
+    """No plugging it back in, so no words to that end: its holder goes back, which
+    opens nothing for a role no entry lists, and the step before it is reachable."""
+    _here_meta(rig)
+    meta = rig.meta
+    where = _away(rig)
+    told = []
+    meta.on_players.append(lambda: told.append(1))
+    _by_hand(rig, meta.move_player, 3, Duty.OFF_AIR)
+    _by_hand(rig, meta.register, "hands", 2)
+    where["hands"] = UNLISTED
+    told.clear()
+    _z(rig)
+    assert meta.players.player_of("hands").number == 1
+    assert meta.undo.status == "undid hands to player 2"
+    rig.tick()
+    _z(rig)
+    assert meta.players.get(3).duty == Duty.ON_AIR and meta.undo.status == "undid player 3 to off air"
 
 
 def test_a_duty_goes_back_with_what_the_player_holds_unplugged(rig):
@@ -1312,12 +1375,88 @@ def test_a_duty_goes_back_with_what_the_player_holds_unplugged(rig):
     meta = rig.meta
     _by_hand(rig, meta.register, "hands", 2)
     _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
-    meta.unplugged = {"hands"}.__contains__
+    _away(rig, hands=UNPLUGGED)
     _z(rig)
     assert meta.players.get(2).duty == Duty.ON_AIR
 
 
-def test_the_registry_says_what_is_unplugged():
+class _Reopening:
+    """A pad's adapter: not `on` until a poll finds it, as `gamepad.Pad` is."""
+
+    on = False
+
+    def poll(self):
+        self.on = True
+
+
+def _reopening_rig(rig, monkeypatch, clock):
+    """Real entries through a real `apply`; `poll` a registry poll's worth of finding."""
+    def opened(self):
+        self.io = _Reopening()
+    monkeypatch.setattr(devices.PadDevice, "open", opened)
+    meta, pads = rig.meta, [_pad("pad"), _pad("second")]
+    ctx = devices.Context(reg=rig.one.reg, table=rig.one.table, players=meta.players)
+    devs = devices.DeviceRegistry([], ctx, clock=lambda: clock[0])
+    devs.apply(pads)
+    for d in devs:
+        d.io.on = True
+    meta.players.tell(("pad", "second"), ("pad",))
+    meta.on_players.append(lambda: devs.apply(devs.entries))
+    meta.presence = devs.presence
+    return devs
+
+
+def test_a_controller_just_reopened_is_no_unplugged_one(rig, monkeypatch):
+    """Review of #417: giving a pad reopens it, and it reads as lost until polled. ⌘Z at
+    once does what the board promised, and redo after an undo's relist too."""
+    _here_meta(rig)
+    clock = [0.0]
+    meta, devs = rig.meta, _reopening_rig(rig, monkeypatch, clock)
+    _by_hand(rig, meta.register, "second", 2)
+    assert devs.get("second").status == "lost", "a real reopen: not polled yet"
+    assert devs.presence("second") == THERE
+    _z(rig)
+    assert meta.players.player_of("second").number == 1, meta.undo.status
+    rig.tick()
+    assert devs.get("second").status == "lost" and devs.presence("second") == THERE
+    _shift_z(rig)
+    assert meta.players.player_of("second").number == 2, meta.undo.status
+
+
+def test_a_controller_reopened_and_never_found_is_unplugged(rig, monkeypatch):
+    _here_meta(rig)
+    clock = [0.0]
+    meta, devs = rig.meta, _reopening_rig(rig, monkeypatch, clock)
+    _by_hand(rig, meta.register, "second", 2)
+    clock[0] += devices.REOPEN_S + 0.1
+    assert devs.presence("second") == UNPLUGGED
+    _z(rig)
+    assert meta.players.player_of("second").number == 2
+    assert meta.undo.status.startswith("not undone: second unplugged")
+
+
+def test_a_controller_lost_before_the_reopen_gets_no_grace(rig, monkeypatch):
+    _here_meta(rig)
+    clock = [0.0]
+    meta, devs = rig.meta, _reopening_rig(rig, monkeypatch, clock)
+    devs.get("second").io.on = False
+    meta.register("second", 2)
+    rig.tick(1)
+    assert devs.presence("second") == UNPLUGGED
+
+
+def test_found_again_a_reopened_controller_owes_nothing(rig, monkeypatch):
+    _here_meta(rig)
+    clock = [0.0]
+    meta, devs = rig.meta, _reopening_rig(rig, monkeypatch, clock)
+    meta.register("second", 2)
+    devs.get("second").io.on = True
+    assert devs.presence("second") == THERE
+    devs.get("second").io.on = False             # pulled out straight after: no grace left
+    assert devs.presence("second") == UNPLUGGED
+
+
+def test_the_registry_says_where_a_controller_is():
     class Said(devices.Base):
         def __init__(self, role, status):
             super().__init__(role)
@@ -1329,8 +1468,131 @@ def test_the_registry_says_what_is_unplugged():
 
     devs = devices.DeviceRegistry(devices=[Said("a", "connected"), Said("b", "lost"),
                                            Said("c", "off")])
-    assert not devs.unplugged("a") and devs.unplugged("b") and not devs.unplugged("c")
-    assert devs.unplugged("never listed")
+    assert [devs.presence(r) for r in ("a", "b", "c", "never listed")] == [
+        THERE, UNPLUGGED, THERE, UNLISTED]
+
+
+# ---- a section takes back only its own (row 800, the review of #417) ----
+
+
+def _tune(rig):
+    """A change on the meta stack that is no move: a hands setting, past the settle time."""
+    undo.by_hand(True)
+    rig.one.reg["hands.smooth"].step(3)
+    rig.tick(1)
+    undo.by_hand(False)
+    rig.tick()
+
+
+def test_a_setting_is_not_taken_back_from_the_player_screen(rig):
+    _here_meta(rig)
+    p = rig.one.reg["hands.smooth"]
+    _tune(rig)
+    tuned, steps = p.base, list(rig.meta.undo.stack)
+    _z(rig)
+    assert p.base == tuned and rig.meta.undo.stack == steps
+    assert rig.meta.undo.status == ("nothing to undo on the player screen: the meta controller's "
+                                    "last change is not a player's move. Press over that setting")
+    undo.where(lambda: True)          # over the HANDS section: its own
+    _z(rig)
+    assert p.base != tuned
+
+
+def test_a_move_is_not_taken_back_from_another_section_and_opens_no_device(rig):
+    _here_meta(rig)
+    meta = rig.meta
+    told = []
+    meta.on_players.append(lambda: told.append(1))
+    _by_hand(rig, meta.register, "hands", 2)
+    told.clear()
+    undo.where(lambda: True)          # over the HANDS section
+    _z(rig)
+    rig.tick()
+    assert meta.players.player_of("hands").number == 2 and not told, "no device reopened"
+    assert meta.undo.status == ("not here: the meta controller's last change is a player's move. "
+                                "To undo it, press over the player screen")
+    undo.where(lambda: undo.BOARD)
+    _z(rig)
+    assert meta.players.player_of("hands").number == 1
+
+
+def test_one_stack_one_order_each_place_taking_its_own_in_turn(rig):
+    _here_meta(rig)
+    meta, p = rig.meta, rig.one.reg["hands.smooth"]
+    was = p.base
+    _tune(rig)
+    _by_hand(rig, meta.move_player, 2, Duty.OFF_AIR)
+    undo.where(lambda: True)
+    _z(rig)
+    assert p.base != was and meta.players.get(2).duty == Duty.OFF_AIR, "the move is on top"
+    undo.where(lambda: undo.BOARD)
+    _z(rig)
+    assert meta.players.get(2).duty == Duty.ON_AIR
+    rig.tick()
+    undo.where(lambda: True)
+    _z(rig)
+    assert p.base == was
+    _shift_z(rig)
+    assert p.base != was, "redo: this place's own, and on top of the redos"
+    rig.tick()
+    _shift_z(rig)
+    assert meta.players.get(2).duty == Duty.ON_AIR, "the move's redo waits for the board"
+    undo.where(lambda: undo.BOARD)
+    _shift_z(rig)
+    assert meta.players.get(2).duty == Duty.OFF_AIR
+
+
+# ---- a moved controller goes back to its side (the review of #417) ----
+
+
+def test_a_moved_controller_mapped_off_air_never_lands_on_the_room_s_deck(rig):
+    """The harm: player 1 on air, its pad mapped off air. Moving the player off air and
+    undoing is "nothing changes", and the pad must stay off the room's deck."""
+    _here_meta(rig)
+    meta, one, two = rig.meta, rig.one, rig.two
+    meta.point("pad", two)
+    assert meta.on_air is one
+    _by_hand(rig, meta.move_player, 1, Duty.OFF_AIR)
+    _z(rig)
+    assert meta.players.get(1).duty == Duty.ON_AIR
+    assert meta.pointer("pad").deck is two, "where it was before the move"
+    assert meta.pointer("hands").deck is one, "with no mapping: its player's duty's deck"
+
+
+def test_a_moved_controller_goes_back_to_its_side_after_the_fader_crossed(rig):
+    """A side, not a deck: off air is deck 1 by now, and the room's deck is deck 2."""
+    _here_meta(rig)
+    meta, one, two = rig.meta, rig.one, rig.two
+    meta.point("pad", two)
+    _by_hand(rig, meta.move_player, 1, Duty.OFF_AIR)
+    meta.on_air_pointer.deck = two
+    meta.place_players()
+    _z(rig)
+    assert meta.pointer("pad").deck is one, "off air, as it was: not the room's"
+
+
+def test_a_given_controller_goes_back_to_its_side_and_reseat_leaves_it(rig):
+    _here_meta(rig)
+    meta, two = rig.meta, rig.two
+    meta.point("hands", two)
+    _by_hand(rig, meta.register, "hands", 2)
+    _z(rig)
+    assert meta.players.player_of("hands").number == 1 and meta.pointer("hands").deck is two
+    meta.reseat()
+    assert meta.pointer("hands").deck is two
+
+
+def test_redo_puts_a_controller_back_on_the_side_the_undo_found_it(rig):
+    _here_meta(rig)
+    meta, one, two = rig.meta, rig.one, rig.two
+    meta.point("pad", two)
+    _by_hand(rig, meta.move_player, 1, Duty.OFF_AIR)
+    meta.point("pad", one)            # mapped back to on air while the player is off air
+    _z(rig)
+    assert meta.pointer("pad").deck is two
+    rig.tick()
+    _shift_z(rig)
+    assert meta.pointer("pad").deck is one
 
 
 def test_a_write_that_fails_is_said_by_the_undo(rig, tmp_path):
@@ -1343,9 +1605,9 @@ def test_a_write_that_fails_is_said_by_the_undo(rig, tmp_path):
     assert "not remembered after this run" in meta.undo.status
 
 
-def test_main_tells_the_meta_controller_what_is_unplugged():
+def test_main_tells_the_meta_controller_where_a_controller_is():
     src = Path(app.__file__).read_text()
-    assert "meta.unplugged = lambda role: device_reg.unplugged(role)" in src
+    assert "meta.presence = lambda role: device_reg.presence(role)" in src
 
 
 def test_a_deck_s_cmd_z_does_not_reach_a_move(rig):

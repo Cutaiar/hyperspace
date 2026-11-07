@@ -61,7 +61,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
 from . import envelope, geometry, lfo, poi, sequencer, tempo, totem
@@ -74,7 +74,7 @@ from .loadable import LoadedPatch
 from .lookback import DreamState
 from .outputs import Offscreen, View, preview_size
 from .params import MetaRegistry, Registry, build_registry, part_of
-from .players import Duty, Players
+from .players import THERE, UNPLUGGED, Duty, Players
 from .pointer import Pointer, deck_number
 from .routing import Bindings, Router, Sources
 from .view import ViewState
@@ -435,9 +435,21 @@ class MetaRows:
         return {}
 
 
+@dataclass(frozen=True)
+class MovedThen:
+    """What a step of a player's move remembers of the moment it began (row 800).
+    `gone`: the controllers not there then, so not "unplugged since". `decks`: each
+    pointer's side, on air or off, as a side: the fader may have crossed by the undo."""
+
+    gone: frozenset[str] = frozenset()
+    decks: dict[str, Duty] = field(default_factory=dict)
+
+
 class MetaPlayers:
     """Who holds what and who is where, as `undo.Undo` reads it (`Undo.moves`, row
     740): one part of what the meta stack holds, restored through the meta controller."""
+
+    heard: tuple[str, bool] | None = None    # what ⌘Z last said over the board, and if it warns
 
     def __init__(self, meta: MetaController):
         self.meta = meta
@@ -445,11 +457,14 @@ class MetaPlayers:
     def doc(self) -> dict:
         return self.meta.players.to_json()
 
-    def put(self, doc: dict) -> None:
-        self.meta.put_players(doc)
+    def then(self) -> MovedThen:
+        return self.meta.moved_then()
 
-    def refuses(self, doc: dict) -> str | None:
-        return self.meta.refuses_players(doc)
+    def put(self, doc: dict, then: MovedThen | None = None) -> None:
+        self.meta.put_players(doc, then)
+
+    def refuses(self, doc: dict, then: MovedThen | None = None) -> str | None:
+        return self.meta.refuses_players(doc, then)
 
     def trouble(self) -> str:
         return self.meta.players.error
@@ -546,8 +561,8 @@ class MetaController:
     # (class-level: read by a meta controller from before a hot reload)
     timed: TimedFade | None = None
     playing: Any = None               # the playlist being played (`playlist.Playing`)
-    # role → is it unplugged now (`DeviceRegistry.unplugged`, app.main); None: never
-    unplugged: Callable[[str], bool] | None = None
+    # role → where it is (`DeviceRegistry.presence`, app.main); None: always there
+    presence: Callable[[str], str] | None = None
     relist = False                    # an undo changed who holds what: `tick` tells `on_players`
 
     def __init__(self, first: Deck, second: Deck, players: Players | None = None,
@@ -571,7 +586,6 @@ class MetaController:
         self.panel_pointer = Pointer(first)
         self.pointers: dict[str, Pointer] = {}
         self.on_panel: list[Callable[[Deck], Any]] = []   # told after the panel moves
-        self.moved_unplugged: set[str] = set()   # given while unplugged: not "unplugged since"
         self.undo = meta_stack(first, MetaPlayers(self))
         undos.install_meta(self.undo)
         undos.on_air(first.undo)
@@ -705,52 +719,62 @@ class MetaController:
         """Player `number` holds the controller `role` from now on, remembered;
         the controller goes to that player's deck. One step on the meta stack (row 740)."""
         self.players.get(number)
-        if self.players.player_of(role).number != number:
+        if self.players.player_of(role).number != number:     # (holds already: nothing to write)
             undos.push_meta(f"{role} to player {number}")
-            (self.moved_unplugged.add if self._is_unplugged(role)
-             else self.moved_unplugged.discard)(role)
-        self.players.hold(role, number)
+            self.players.hold(role, number)
         self.point(role, self.deck_of_player(number))
         self.seats[role] = number
         for fn in self.on_players:
             fn()
 
-    def _is_unplugged(self, role: str) -> bool:
-        return self.unplugged is not None and self.unplugged(role)
+    def _where_is(self, role: str) -> str:
+        return self.presence(role) if self.presence is not None else THERE
 
-    def refuses_players(self, doc: dict) -> str | None:
-        """Why who holds what may not go back to `doc` now (row 740): a controller it
-        moves, unplugged since that move. Going back would reopen it under another
-        name, a device nobody has. One given while it was already unplugged goes
-        back as it came, and a duty moves no controller's holder, so neither refuses."""
-        then, now = doc["controllers"], self.players.held
-        gone = [r for r in sorted({*then, *now})
-                if then.get(r) != now.get(r) and r not in self.moved_unplugged
-                and self._is_unplugged(r)]
-        if not gone:
+    def moved_then(self) -> MovedThen:
+        """What a step about to begin must remember (`MovedThen`)."""
+        players = self.players
+        roles = dict.fromkeys((*players.known, *players.held, *self.pointers))
+        roles = [r for r in roles if r not in (KEYS, MOUSE)]
+        return MovedThen(frozenset(r for r in roles if self._where_is(r) != THERE),
+                         {r: Duty.ON_AIR if p.deck is self.on_air else Duty.OFF_AIR
+                          for r, p in self.pointers.items() if r not in (KEYS, MOUSE)})
+
+    def refuses_players(self, doc: dict, then: MovedThen | None = None) -> str | None:
+        """Why who holds what may not go back to `doc` now (row 800): a controller it moves
+        that was there when the step began and is unplugged now. Going back would reopen it
+        under another name, a device nobody has. One off the device list passes: nothing
+        opens for a role no entry lists, there is no plugging it back in to ask for, and
+        nothing must wait behind it for good. One already gone then goes back as it came,
+        and a duty moves no holder."""
+        was, now = doc["controllers"], self.players.held
+        gone = then.gone if then is not None else frozenset()
+        unplugged = [r for r in sorted({*was, *now})
+                     if was.get(r) != now.get(r) and r not in gone
+                     and self._where_is(r) == UNPLUGGED]
+        if not unplugged:
             return None
-        it = "it" if len(gone) == 1 else "them"
-        return (f"{', '.join(gone)} unplugged since that move. Plug {it} back in and "
-                "try again")
+        it = "it" if len(unplugged) == 1 else "them"
+        return f"{', '.join(unplugged)} unplugged since that move. Plug {it} back in and try again"
 
-    def put_players(self, doc: dict) -> None:
-        """An undo of a move (row 740): who holds what and who is where as `doc` says,
-        remembered. What moved goes where its player's duty now says, as `move_player`
-        and `register` send it; a controller nobody moved stays, mapped elsewhere or not.
+    def put_players(self, doc: dict, then: MovedThen | None = None) -> None:
+        """An undo of a move (row 800): who holds what and who is where as `doc` says,
+        remembered. A controller the step moved, by its holder or its player's duty, goes
+        back to the side it was on as the step began, so one mapped off air stays off the
+        room's deck, or where its player's duty says if it had no pointer then. One nobody
+        moved stays, mapped since or not. (Not `reseat`, which knows only the duty's deck.)
         The device list is read again from `tick`, never here: the ⌘Z may be a row
         firing inside a device's own `act`, and that list closes and opens devices."""
         players = self.players
-        holders = {r: players.player_of(r).number for r in self.pointers if r not in (KEYS, MOUSE)}
-        duties = {p.number: p.duty for p in players}
+        was = {r: (players.player_of(r).number, players.player_of(r).duty)
+               for r in self.pointers if r not in (KEYS, MOUSE)}
         held = dict(players.held)
         players.put(doc)
-        for p in players:
-            if p.duty != duties[p.number]:
-                self._place(p.number)
-        for role, was in holders.items():
-            number = players.player_of(role).number
-            if number != was:
-                self.pointers[role].deck, self.seats[role] = self.deck_of_player(number), number
+        sides = then.decks if then is not None else {}
+        for role, seat in was.items():
+            player = players.player_of(role)
+            if (player.number, player.duty) != seat:
+                self.pointers[role].deck = self.deck_for(sides.get(role, player.duty))
+                self.seats[role] = player.number
         if players.held != held:
             self.relist = True
 

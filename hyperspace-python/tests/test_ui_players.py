@@ -594,7 +594,7 @@ def _real_stack(r, monkeypatch):
     stack = undo.Undo(Registry(), deck_mod.MetaRows(SimpleNamespace(rows=[])),
                       moves=deck_mod.MetaPlayers(meta), called="on the meta controller")
     meta.undo = stack
-    meta.unplugged = r.panel.devices.unplugged
+    meta.presence = r.panel.devices.presence
     deck = undo.Undo(Registry(), deck_mod.MetaRows(SimpleNamespace(rows=[])), called="on deck 1")
     monkeypatch.setattr(undo, "_meta", stack)
     monkeypatch.setattr(undo, "_installed", deck)
@@ -628,7 +628,7 @@ def test_cmd_z_over_the_board_is_the_meta_stack_s_and_the_latch_holds(rig, monke
     r, d, meta = rig, rig.d, rig.meta
     stack = _real_stack(r, monkeypatch)
     _over(d)
-    assert ui_players.over(r.panel) and r.panel.in_meta_section() is True
+    assert ui_players.over(r.panel) and r.panel.in_meta_section() == undo.BOARD
     assert undo.here() is stack
     undo.undo()
     assert stack.status == "nothing to undo here yet: make a change on the meta controller first"
@@ -652,7 +652,9 @@ def test_cmd_z_over_the_board_takes_a_duty_back(rig, monkeypatch, tmp_path):
     assert meta.players.get(2).duty == Duty.ON_AIR
     assert meta.pointer("p2").deck is meta.on_air
     assert json.loads((tmp_path / FILE).read_text())["duties"] == {}
+    state = ui_players._state(r.panel)
     assert _said(r) == "undid player 2 to off air", "the line under the lanes follows"
+    assert not state["said_warn"]
     undo.redo()
     r.tick()
     assert meta.players.get(2).duty == Duty.OFF_AIR and _said(r) == "redid player 2 to off air"
@@ -689,9 +691,39 @@ def test_a_controller_unplugged_since_stays_and_the_board_says_why(rig, monkeypa
     assert meta.players.player_of("leap").number == 2 and len(stack.stack) == 1
     assert _said(r) == ("not undone: leap unplugged since that move. Plug it back in and "
                         "try again")
+    assert ui_players._state(r.panel)["said_warn"], "a refusal looks like one"
     r.panel.devices.get("leap").said = "connected"
     undo.undo()
     assert meta.players.player_of("leap").number == 1
+
+
+def test_a_file_that_did_not_follow_the_undo_is_a_warning_on_the_line(rig, monkeypatch, tmp_path):
+    r, d, meta = rig, rig.d, rig.meta
+    _real_stack(r, monkeypatch)
+    _drop(d, _head(d, "players.p2"), lambda: _corner(d, "players.lane.off_air"))
+    r.tick()
+    meta.players.path = tmp_path / "no" / "such" / FILE
+    _over(d)
+    undo.undo()
+    r.tick()
+    assert "not remembered after this run" in _said(r)
+    assert ui_players._state(r.panel)["said_warn"]
+
+
+def test_what_the_stack_says_elsewhere_stays_off_the_line(rig, monkeypatch):
+    """An analyzer's undo minutes later is not the board's; nor a playlist's NOTHING_HERE."""
+    r, d = rig, rig.d
+    stack = _real_stack(r, monkeypatch)
+    _drop(d, _head(d, "players.p2"), lambda: _corner(d, "players.lane.off_air"))
+    r.tick()
+    said = _said(r)
+    stack._say("undid Attack 0.2 → 0.3")
+    r.tick()
+    assert _said(r) == said
+    monkeypatch.setattr(undo, "_where", lambda: None)
+    undo.undo()
+    r.tick()
+    assert stack.status == undo.NOTHING_HERE and _said(r) == said
 
 
 def test_no_promise_of_cmd_z_when_it_would_not_answer(rig):

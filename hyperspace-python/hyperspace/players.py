@@ -46,6 +46,8 @@ SCHEMA = "players/1"
 NUMBERS = (1, 2, 3, 4)
 _ROLE = re.compile(r"p([1-4])")
 NAMES = frozenset(f"p{n}" for n in NUMBERS[1:])     # what a row calls players 2, 3, 4
+# where a controller is, for an undo of a move (`DeviceRegistry.presence`, row 800)
+THERE, UNPLUGGED, UNLISTED = "there", "unplugged", "unlisted"
 
 
 class Duty(StrEnum):

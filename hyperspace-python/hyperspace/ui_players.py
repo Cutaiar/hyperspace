@@ -14,9 +14,9 @@ footer (`Library.say`). The moves go through `MetaController.move_player` and
 `register` and nothing else: where a player's deck is, and what a row does when
 it gets there, is plan 55's. They run after the board's draw (`_board`), since
 `register` can close and open a device. Each is one step on the meta controller's
-undo stack (row 740), so ⌘Z over the board takes it back, and the line under the
-lanes says what ⌘Z did; a controller unplugged since stays where it is, and that is
-said too.
+undo stack (row 800), so ⌘Z over the board takes it back, and takes back nothing else
+on that stack; the line under the lanes says what ⌘Z did. A controller unplugged since
+stays where it is, and that is said too.
 
 **Where it lives.** A section of the side pane (`ui_pane`, folded at first, its
 header saying who is where) and the same board large, in a window of its own, over
@@ -354,13 +354,13 @@ def _say(panel, st: dict, words: str) -> None:
 
 
 def _heard_undo(meta, st: dict) -> None:
-    """What the meta stack last said, on the line under the lanes, once: a ⌘Z's undo or
-    refusal must not leave the line saying what it took back. The stack's clock moving is
-    how this knows; the first look only notes it."""
-    at = getattr(meta.undo, "said_at", 0.0)
-    if st.setdefault("undo_at", at) != at:
-        st["undo_at"] = at
-        st["said"], st["said_warn"] = meta.undo.status, False
+    """What a ⌘Z over the board said (`undo._heard`), on the line under the lanes, once: an
+    undo or a refusal must not leave the line saying what it took back. A refusal, or a
+    file that did not follow, is in the warning colour. Nothing pressed elsewhere is here."""
+    heard = getattr(getattr(meta.undo, "moves", None), "heard", None)
+    if heard is not None and heard is not st.get("heard"):
+        st["heard"] = heard
+        st["said"], st["said_warn"] = heard
 
 
 def move(panel, number: int, duty: Duty) -> None:
@@ -920,6 +920,6 @@ def window(panel) -> None:
 
 def over(panel) -> bool:
     """Is the mouse over a board, as of the latest draw? ⌘Z there goes to the meta
-    stack (`Panel.in_meta_section`), where a move is one step (row 740)."""
+    stack, for a player's moves alone (`Panel.in_meta_section`, row 800)."""
     from . import ui_pane  # (late: ui_pane imports this module)
     return bool(_state(panel).get("over_big")) or ui_pane.where(panel) == "players"

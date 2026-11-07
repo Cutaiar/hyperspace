@@ -53,7 +53,9 @@ invariant and global-layer MIDI rows, sinks) and who holds what (`moves`:
 in a meta section or on a meta param (`where`), which takes the meta stack. Never the newest of all stacks: a
 ⌘Z meant for a knob on one deck must not take back an analyzer tweak from an hour
 ago, and never the panel's focus, which says nothing of where you are an hour on.
-Pressing it never crosses over: a stack with nothing says so.
+Pressing it never crosses over: a stack with nothing says so. On the meta stack the
+player screen (`BOARD`) answers for a player's moves and every other place for the
+rest (`_not_its_own`, row 800).
 
 **The latch** (the owner, 2026-11-06, row 753): a stack you have just come to takes
 nothing back until you change something on it. Whenever focus comes to a stack it
@@ -218,6 +220,7 @@ class Step:
     # a step that is not a load: every group's landed name and reference
     # as of the last quiet frame before it (`marks.lands()`), for `mend`
     lands: Any = None
+    then: Any = None          # `Undo.moves.then()` as the step began (row 800)
 
 
 class Undo:
@@ -244,9 +247,11 @@ class Undo:
     takes those of its loadable patch (plan 44 D5b). A `table` with `rows` and
     `set_rows(rows)` (`deck.MetaRows`) has those watched too. `moves` (optional:
     `deck.MetaPlayers`, row 740) is one more part of what a step holds: `doc()` to
-    compare and hold, `put(doc)` to restore it, `refuses(doc)` the words why it may
-    not go back now (else None, and the step stays where it is, as under the
-    latch), and `trouble()` what went wrong in the last `put`, for the status.
+    compare and hold; `then()`, what a step must remember of the moment it began and
+    `doc` does not hold, kept on the `Step`; `put(doc, then)` to restore it;
+    `refuses(doc, then)`, the words why it may not go back now (else None, and the step
+    stays where it is, as under the latch); `trouble()`, what went wrong in the last
+    `put`, for the status; and `heard`, what ⌘Z last said over the board, for its line.
     """
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
@@ -345,6 +350,22 @@ class Undo:
 
     def _moves_doc(self):
         return self.moves.doc() if self.moves is not None else None
+
+    def _then(self):
+        return self.moves.then() if self.moves is not None else None
+
+    def _next_is_a_move(self, src: list[Step]) -> bool | None:
+        """Is the step a press would take from `src` a player's move? None: there is no
+        such step. As `_swap` chooses it, touching nothing, so a hold goes on."""
+        now = self._take()
+        for step in reversed(src):
+            ids, parts, left = self._differs(step.before, now, tagged=True)
+            if "players" in parts:
+                return True
+            if ids or parts or left or (step.load and self.marks is not None
+                                        and not self._marks_equal(step.before.marks)):
+                return False
+        return None
 
     @staticmethod
     def _same_fp(a: tuple, b: tuple) -> bool:
@@ -456,6 +477,7 @@ class Undo:
         to put back — a refused unbind or a load that fails changes
         nothing and must not cost the redo."""
         self._open = step
+        step.then = self._then()
         self._opens = _begun_on(self)
         self.stack.append(step)
         del self.stack[:-LIMIT]
@@ -566,15 +588,16 @@ class Undo:
                        and not self._marks_equal(step.before.marks))
             if not (ids or parts or left or relabel):
                 continue                      # nothing to put back: dropped
-            why = self.moves.refuses(step.before.moves) if "players" in parts else None
+            then = getattr(step, "then", None)
+            why = self.moves.refuses(step.before.moves, then) if "players" in parts else None
             if why:                           # as the latch's refusal: no history moves
                 src.append(step)
                 self._say(f"not {'undone' if verb == 'undid' else 'redone'}: {why}")
                 return False
             dst.append(Step(step.label, now, load=step.load, action=step.action,
-                            lands=self._read_lands()))
+                            lands=self._read_lands(), then=self._then()))
             del dst[:-LIMIT]
-            left = self._restore(step.before, load=step.load, lands=step.lands)
+            left = self._restore(step.before, load=step.load, lands=step.lands, then=then)
             trouble = self.moves.trouble() if "players" in parts else ""
             self._say(f"{verb} {step.label}" + (f" ({LEFT})" if left else "")
                       + (f". {trouble}" if trouble else ""))
@@ -657,7 +680,7 @@ class Undo:
                                      if f.name in runtime}))
         return out
 
-    def _restore(self, state: State, *, load: bool, lands=None) -> bool:
+    def _restore(self, state: State, *, load: bool, lands=None, then=None) -> bool:
         """Put `state` back, touching only what differs. Returns whether
         tagged ids were left because the bands have changed."""
         reg, table, marks = self.reg, self.table, self.marks
@@ -684,7 +707,7 @@ class Undo:
             # 4⅓. who holds what and who is where (row 740), through the meta
             #     controller, which writes `players.json`, where they live
             if getattr(state, "moves", None) is not None and self._moves_doc() != state.moves:
-                self.moves.put(state.moves)
+                self.moves.put(state.moves, then)
             # 4½. the modifiers and their params (plan 28 N1)
             if state.modifiers is not None and not alike(self._mods(), state.modifiers):
                 table.set_modifiers(state.modifiers, reg)
@@ -834,6 +857,7 @@ def where(inside_meta) -> None:
 
 
 NOTHING_HERE = "nothing to undo here: a playlist's edit is on no stack"
+BOARD = "board"       # what `where` says over the player screen: the meta stack, for moves alone
 
 
 def here() -> Undo | None:
@@ -864,6 +888,44 @@ def _on_no_stack() -> None:
     nothing, as before, and has no list to name."""
     if _inside() is None:
         _meta._say(NOTHING_HERE)
+
+
+def _over_board() -> bool:
+    """Is the mouse over the player screen (`where` says `BOARD`)?"""
+    if _where is None:
+        return False
+    try:
+        return _where() == BOARD
+    except Exception:  # noqa: BLE001 — `_inside` says it
+        return False
+
+
+def _not_its_own(at: Undo, verb: str) -> bool:
+    """A section takes back only its own (row 800): on the meta stack the board answers for
+    a player's moves and every other place for the rest. One stack and one order, so the step
+    a press would reach may be the other's: said, and no history moves. So a setting is not
+    taken back from an unrelated screen, nor a device reopened from the HANDS section."""
+    if at is not _meta or at.moves is None:
+        return False
+    move = at._next_is_a_move(at.stack if verb == "undo" else at.redos)
+    if move is None or move == _over_board():
+        return False
+    if move:
+        at._say(f"not here: the meta controller's last change is a player's move. "
+                f"To {verb} it, press over the player screen")
+    else:
+        at._say(f"nothing to {verb} on the player screen: the meta controller's last change "
+                "is not a player's move. Press over that setting")
+    return True
+
+
+def _heard(at: Undo) -> None:
+    """A press over the board: its answer for the board's line, marked if it did not do
+    what was asked or the file did not follow."""
+    moves = getattr(at, "moves", None)
+    if at is _meta and moves is not None and _over_board():
+        moves.heard = (at.status, not at.status.startswith(("undid ", "redid "))
+                       or bool(moves.trouble()))
 
 
 def _focus(u: Undo | None) -> None:
@@ -948,7 +1010,7 @@ def _refused(at: Undo, verb: str) -> bool:
     if at.latched and not at._will_open():
         at._say(f"nothing to {verb} here yet: make a change {at.called} first")
         return True
-    return False
+    return _not_its_own(at, verb)
 
 
 def installed() -> Undo | None:
@@ -1010,6 +1072,7 @@ def undo() -> None:
     at = here()
     if at is not None:
         _guarded("undo", lambda u: _refused(u, "undo") or u.undo(), on=at)
+        _heard(at)
     else:
         _on_no_stack()
 
@@ -1021,5 +1084,6 @@ def redo() -> None:
     at = here()
     if at is not None:
         _guarded("redo", lambda u: _refused(u, "redo") or u.redo(), on=at)
+        _heard(at)
     else:
         _on_no_stack()
