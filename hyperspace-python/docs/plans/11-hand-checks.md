@@ -8351,8 +8351,10 @@ Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real
 2. Wire the same channel into a `segment`, mode person, and `segment.fg` into an output. *Pass:* the segment's node shows the person in white on black, the right way up, lined up with the channel's picture.
 3. Mode motion, then back to person. *Pass:* the right way up in both.
 4. Hover each node's picture. *Pass:* the hover ends "… mask" with its size, and gives the node's own words.
-5. Lit `pictures · tint cables`. *Pass:* cables out of the two nodes stay plain.
+5. Lit `pictures · tint cables`. *Pass:* the matte's cable stays plain purple; a cable out of `segment.fg` leans toward the foreground's colour. Fold the segment into a group with `fg` going out: the group shows the foreground, not the white-on-black.
 6. Pan both nodes off the canvas and watch the SYSTEM page's thumbnail line for a second. *Pass:* their count drops, and FPS doesn't change noticeably with them on or off screen.
+7. Set the segment's mode to subject, then turn `segment.on` off. *Pass:* the box is black and says why in words readable at a distance, a different line for each.
+8. Open a saved patch of yours whose matte or segment you had placed by hand. *Pass:* no node has moved; if the taller node now covers another, drag it or press tidy, and say how many patches did this.
 *Fail:* a red box, an upside-down person, or a frame-rate dip that follows the nodes on screen.
 
 ## What no test covers

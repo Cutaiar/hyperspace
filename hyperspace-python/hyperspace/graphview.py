@@ -966,6 +966,13 @@ THUMB_FAINT = frozenset({SCENE_PIC})     # drawn faint (`ui_graph.FAINT_PIC`)
 THUMB_H = float(round(190 * 1.25 * 9 / 16))
 
 
+def mask_words(n: VNode) -> str:
+    """Why mask node `n` makes no mask, in its own words: "subject is not in
+    this build", a worker's error, off, nothing wired. Empty when it has no
+    refusal: a mask nothing asked for is plainly black."""
+    return getattr(n.ref, "refused", "") if n.thumb == MASK_PIC else ""
+
+
 def thumb_of(name: str, ref=None) -> str | None:
     """How canvas node `name`'s thumbnail is found (`THUMBS`), its render
     node `ref` deciding for a kind the table does not name; None: text."""
@@ -1229,7 +1236,7 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
     if kind in STAND_IN_SAID:                        # plan 39 T5: its body line, in words
         into = {w.port: w.src for w in (spec.all_wires() if spec is not None else ())
                 if w.node == name}
-        r.said = STAND_IN_SAID[kind](name, into)
+        r.said = r.refused = STAND_IN_SAID[kind](name, into)
     return r
 
 
@@ -3155,6 +3162,7 @@ class VGroup:
     real: dict[str, str] = field(default_factory=dict)
     rows: dict[str, list[VCable]] = field(default_factory=dict)
     thumb: str | None = None
+    thumb_pin: str | None = None        # `thumb`'s outlet, a segment's own pin (`pin_picture`)
     kept_by_host: list = field(default_factory=list)
 
     @property
@@ -3316,11 +3324,27 @@ def _boundary(view: View, g: VGroup, mem) -> None:
     if pics:
         src = g.real[pics[-1].id]
         g.thumb = view.pins.get(src, ("",))[0] or None
-        # (a segment's `fg` is the outlet, its node's thumbnail its matte:
-        # that is not this picture, so the group shows none, as before)
-        held = view.node(g.thumb) if g.thumb else None
-        if held is not None and held.thumb == MASK_PIC:
-            g.thumb = None
+        g.thumb_pin = pin_picture(view, src)
+
+
+def pin_picture(view: View, pin: str) -> str | None:
+    """The render node that makes the picture on output pin `pin`, when it
+    isn't the pin's canvas node: a segment's `fg` or `bg` (`rout:segment.fg`
+    is `segment.fg`, a node the build makes; the canvas node's own thumbnail
+    is its matte). None for any other pin."""
+    name = pin.removeprefix("rout:")
+    return name if name != pin and rgraph.segment_pin(name) is not None \
+        and rgraph.WIRED_MAKES.get(kind_of(name)) == IMAGE else None
+
+
+def group_picture(view: View, g: VGroup) -> VNode | None:
+    """The node a folded group's thumbnail is of: its last picture outlet's
+    (`thumb`), or for a segment's `fg` or `bg` that pin's own picture, as a
+    node of its own name (`thumb_name` finds it by the id)."""
+    n = view.node(g.thumb) if g.thumb else None
+    if n is None or g.thumb_pin is None:
+        return n
+    return VNode(f"render:{g.thumb_pin}", n.kind, n.label, thumb=PICTURE)
 
 
 def group_words(view: View, g: VGroup) -> list[str]:
