@@ -775,6 +775,7 @@ here; overturn → the change, then the same.
 | 756 | SEM's rename: code words follow the signed glossary, by what each thing is. `session` is `MetaRegistry`, `MetaTable`, `meta_reg`, `meta_table`, part `shared_meta`; `rig` is `BusCuts`, fixtures, control rows, the device registry; preset is `LoadedPatch`, `loadable.py`, `LOADABLE`, part `patch`. No saved name, no panel word. The tests' harness word `rig` stays | 746, 57 | owner — 2026-11-06, the glossary, signed; the table approved by the orchestrator, 2026-11-06 |
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
+| 795 | The audit's list now says what's true: R13, R14, R15, U9 and U10 are gone, and P6 and V8 stay open, named for SC3b and SC3a. `ENGINEERING.md` and `CHECKPOINT.md` agree. |
 | 794 | Audit U10, fixed, not moot: plan 49's squeeze left the window's padding out of the strip's budget, so in a band of widths the save chip still covered ▶ by 6 px. `_strip_beside` now counts it. A test draws every module strip at three widths. |
 | 793 | Audit U9, fixed: the two nudge chips on the LFO page each build their own popup (`panel._ctx(nudge, f".{tag}")`), so a right-click draws the menu's items once. |
 | 792 | Audit R14, closed as moot: since row 746 `preset.*` is meta, one per `Deck`, so `learn_control` refuses a knob on `preset.select` through `meta_refusal`, a hand or stick likewise, and the desk rows' combo doesn't offer it. No change to `set_norm`. A test holds every door. |
@@ -14052,6 +14053,12 @@ still wins, as does a sink row.
 - **A person joining a controller's step.** `_opens` was decided only when a step began, so a typed commit landing inside a controller's settle time neither moved focus nor opened the latch, and ⌘Z refused right after typing. A change seen with the hand up now counts on a step already open (`Undo._observe`); a held step (`keep_open`) still opens nothing. The same goes for the mouse, so row 753's known limit, a mouse held anywhere, now also takes a controller's step already open.
 - **What's left of the limit.** A controller's change seen by the same tick as a field's write counts as the person's, since one tick can't tell them apart. It takes a real write within one frame of it, and the write was the person's on that stack or another.
 - **Judge it.** 582.
+
+### 795. The audit's list
+
+- **Gone:** R15 (791), R14 (792), U9 (793), U10 (794). R13 had already left the audit in f673a37a, and `ENGINEERING.md` no longer names it.
+- **Open:** P6, SC3b's. V8, SC3a's to decide, which SM4 leaves alone since it's on the render loop.
+- **Judge it.** Nothing to judge: a list.
 
 ### 794. Audit U10: the strip's budget, measured
 
