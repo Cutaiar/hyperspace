@@ -47,6 +47,10 @@ glyphs (✕ where an Xbox pad's A is), its touchpad with each finger on it
 (every ``motion:`` row), the Edge's back and Fn buttons, and the light
 bar's colour beside the header's word.
 
+**Node mode (N2):** a control node mode fills is outlined in its cable's colour
+(`ui_desk._edge`), faint with the pad on the other `Deck`, and says the param it
+holds; the header counts them.
+
 Read-only: the hover names the control, its param and its source, and a
 click does nothing. Learn pad is still the way onto a control — the
 binding menu on any param (right-click → Learn pad), which the hover
@@ -102,17 +106,28 @@ def _state(panel) -> dict:
     return panel.__dict__.setdefault("_pad_state", {})
 
 
-def rows(table, model=None) -> dict[str, Binding]:
+def _filled(table, role: str) -> list[Binding]:
+    """The rows node mode fills on the pad of `role` ("": no device, so none)."""
+    return table.node_rows(role) if role and hasattr(table, "node_rows") else []
+
+
+def rows(table, model=None, role: str = "") -> dict[str, Binding]:
     """{source: the row that acts} for every enabled pad, D-pad or axis
     row of the table — the first row a control has wins, as the adapters
     read them. Keyed by the layout's source, so a lane addressed by
     number (``axis:4``) lands on the control it names. `model`, the pad
-    read: its own layout's rows stand in for the table's (`layout_of`)."""
+    read: its own layout's rows stand in for the table's (`layout_of`).
+    `role`, the pad drawn: what node mode fills on it (only what nothing
+    else holds, `NodeDesk._pad_free`)."""
     out: dict[str, Binding] = {}
     every = gamepad.layout_for(gamepad.models.MODELS["edge"])   # every control a pad can have
     layout = layout_of(model)
     for b in layout.rows:
         out[b.source] = b
+    for b in _filled(table, role):
+        poles = pair_poles(":".join(b.parts)) if b.scheme == PAIR_SCHEME else None
+        for source in [p.source for p in poles] if poles else [b.bare]:
+            out.setdefault(source, b)
     for b in table.of(*SCHEMES):
         if not b.enabled or layout.hides(b):
             continue
@@ -126,12 +141,13 @@ def rows(table, model=None) -> dict[str, Binding]:
     return out
 
 
-def source_rows(table, model=None) -> dict[str, Binding]:
+def source_rows(table, model=None, role: str = "") -> dict[str, Binding]:
     """{source: the row that acts} by the exact address a row names — the
     lanes view's (``touch:pinch`` apart from ``touch:x``), where `rows`
-    folds every touch row onto the touchpad. `model` as `rows`."""
+    folds every touch row onto the touchpad. `model` and `role` as `rows`."""
     layout = layout_of(model)
     out: dict[str, Binding] = {b.source: b for b in layout.rows}
+    out.update({b.bare: b for b in _filled(table, role)})
     for b in table.of(*SCHEMES):
         if b.enabled and not layout.hides(b):
             out.setdefault(b.source, b)
@@ -152,18 +168,41 @@ def _device(panel):
                  if pad is not None and getattr(d, "io", None) is pad), None)
 
 
-def _stick_quiet(panel, source: str) -> bool:
-    """Is a route on this stick address not heard now (`PadDevice.quiet_stick`, the
-    device's own answer)?"""
+def _role(panel) -> str:
+    """The role of the pad the panel draws, "" with no device."""
+    d = _device(panel)
+    return d.role if d is not None else ""
+
+
+def _node_key(table, role: str) -> tuple:
+    """What the cached rows read of node mode, once a frame."""
+    return (role, table.node_rows_serial(role)) if role and hasattr(table, "node_rows_serial") else ()
+
+
+def _quiet_lanes(panel) -> frozenset[int]:
+    """The `axis` lanes a route on the drawn pad isn't heard on (`PadDevice.quiet_stick`, the
+    device's own answer, for the rows of the deck this window draws, which may not be the one
+    the pad acts on). Once a draw: `_body` keeps it in `_state` while it draws."""
     model = _model(panel)
-    lane = source.removeprefix("axis:")
-    if (not totem.own_layout(model) or lane == source or lane not in gamepad.LANES
-            or gamepad.LANES.index(lane) not in gamepad.left_stick_lanes()):
-        return False
+    if not totem.own_layout(model):
+        return frozenset()
     d = _device(panel)
     if d is None:
-        return totem.quiet_stick(model, getattr(panel, "reg", None), "")
-    return bool(d.quiet_stick(model, d.reg if d.reg is not None else getattr(panel, "reg", None)))
+        quiet = totem.quiet_stick(model, getattr(panel, "reg", None), "")
+        return gamepad.left_stick_lanes() if quiet else frozenset()
+    reg = d.reg if d.reg is not None else getattr(panel, "reg", None)
+    router = getattr(panel, "router", None)        # the panel's deck: what this window draws
+    return d.quiet_stick(model, reg, drawn=router)
+
+
+def _stick_quiet(panel, source: str) -> bool:
+    """Is a route on this stick address not heard now? Lane by lane: node mode may hold one
+    axis of the stick (`_quiet_lanes`)."""
+    lane = source.removeprefix("axis:")
+    if lane == source or lane not in gamepad.LANES:
+        return False
+    quiet = _state(panel).get("quiet")
+    return gamepad.LANES.index(lane) in (_quiet_lanes(panel) if quiet is None else quiet)
 
 
 def built_in(panel, source: str) -> str:
@@ -222,9 +261,10 @@ def dialed(table) -> set[str]:
 def rows_cached(panel, table) -> dict[str, Binding]:
     st = _state(panel)
     model = _model(panel)
-    key = (*_key(table), getattr(model, "id", ""))
+    role = _role(panel)
+    key = (*_key(table), getattr(model, "id", ""), _node_key(table, role))
     if st.get("key") != key or st.get("table") is not table:
-        st.update(key=key, table=table, rows=rows(table, model), dialed=dialed(table))
+        st.update(key=key, table=table, rows=rows(table, model, role), dialed=dialed(table))
     return st["rows"]
 
 
@@ -329,6 +369,10 @@ def _stick(pad, c: gamepad.Control) -> tuple[float, float]:
 
 # ---------------------------------------------------------------- what a control says
 
+NODE_MODE_TIP = ("node mode: a push about the base, saved in this patch. Leave from the node's "
+                 "chip in GRAPH's side pane")
+NODE_AWAY_TIP = "this pad is on the other Deck: it moves that Deck's rows, not these"
+
 def says(panel, c: gamepad.Control, b: Binding | None) -> str:
     """What a lit control does: its row's param in the panel's words
     (`ui_desk.text`), else, an X or Y of a stick a route reads as a dial,
@@ -351,6 +395,9 @@ def label(panel, c: gamepad.Control, b: Binding | None) -> str:
     it; a free axis names the app's own hand on it, a dark control says
     it is free."""
     said = says(panel, c, b)
+    if b is not None and id(b) in _state(panel).get("filled", ()):
+        return (f"{c.glyph} · {b.target} · {said}\n{c.name}\n{NODE_MODE_TIP}"
+                + (f"\n{NODE_AWAY_TIP}" if _state(panel)["filled"][id(b)] else ""))
     if b is not None and b in layout_of(_model(panel)).rows:
         return f"{c.glyph} · {b.target} · {said}\n{c.name}\nthis pad's own control: Learn leaves it alone"
     learn = "right-click a param → Learn pad, then press it here"
@@ -477,7 +524,7 @@ def _draw(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
     """One control at the small size: its glyph on its face."""
     on = bool(said)
     down = held(pad, c)
-    edge = ui.u32(ui.DIM if on else ui.LINE)
+    edge = ui_desk._edge(_state(panel).get("filled", {}), b, on)
     ink = ui.u32(ui.TEXT if on else ui.FAINT)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     if c.kind == "touchpad":
@@ -513,7 +560,7 @@ def _draw_big(panel, dl, pad, c: gamepad.Control, b: Binding | None, said: str,
     control gets none."""
     on = bool(said)
     down = held(pad, c)
-    edge = ui.u32(ui.DIM if on else ui.LINE)
+    edge = ui_desk._edge(_state(panel).get("filled", {}), b, on)
     small = ui.u32(ui.DIM if on else ui.FAINT)         # the glyph: small and dim
     # whose words they are: a row's in the bright ink, a built-in grey
     ink = ui.u32(ui.TEXT if b is not None else ui.DIM)
@@ -685,6 +732,7 @@ def _header(panel, table, closable: bool = False) -> None:
     _totem(panel)
     _poi(panel)
     if table is not None:
+        _node_word(panel, table)
         imgui.same_line()
         n = len(rows_cached(panel, table))
         room = imgui.get_content_region_avail().x - x_w   # narrow in GRAPH's side panel
@@ -702,6 +750,22 @@ def _header(panel, table, closable: bool = False) -> None:
             ui.tooltip(CLOSE_TIP)
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
+
+
+def _node_word(panel, table) -> None:
+    """After the view's: "node · n", as the desk's head says it, with this pad's map on it
+    (`ui_desk.filled_rows`, kept for the controls' outlines this draw)."""
+    role = _role(panel)
+    st = _state(panel)
+    filled = st["filled"] = ui_desk.filled_rows(table, role) if role and hasattr(
+        table, "node_row_away") else {}
+    if not filled:
+        return
+    away = next(iter(filled.values()))
+    imgui.same_line()
+    ui._micro(f"node · {len(filled)}" + (" · other deck" if away else ""), ui_desk._node_ink(away))
+    if imgui.is_item_hovered():
+        ui.tooltip(f"{NODE_MODE_TIP}.\n{NODE_AWAY_TIP if away else ''}".rstrip())
 
 
 def totem_word(reg) -> tuple[str, str] | None:
@@ -848,9 +912,10 @@ def _says_of(panel, table):
     the panel's words, else an axis's built-in meaning, else nothing."""
     st = _state(panel)
     model = _model(panel)
-    key = (*_key(table), getattr(model, "id", ""))
+    role = _role(panel)
+    key = (*_key(table), getattr(model, "id", ""), _node_key(table, role))
     if st.get("src_key") != key or st.get("src_table") is not table:
-        st.update(src_key=key, src_table=table, src_rows=source_rows(table, model))
+        st.update(src_key=key, src_table=table, src_rows=source_rows(table, model, role))
     rows_ = st["src_rows"]
     rows_cached(panel, table)            # (what `_free_words` asks: the sticks read as dials)
 
@@ -867,6 +932,15 @@ def _says_of(panel, table):
 
 
 def _body(panel, table) -> None:
+    st = _state(panel)
+    st["quiet"] = _quiet_lanes(panel)
+    try:
+        _drawn(panel, table)
+    finally:
+        del st["quiet"]         # (outside a draw, asked afresh: nothing to go stale)
+
+
+def _drawn(panel, table) -> None:
     # the × only on the floating window, not GRAPH's inline picture (`inline`)
     _header(panel, table, imgui.internal.get_current_window().name == "##pad")
     if table is None:

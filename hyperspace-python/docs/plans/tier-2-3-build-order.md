@@ -33,7 +33,7 @@ Nothing in waves 4 or 5 has been tried on real hardware. Hand checks from 419 on
 | D5e words #393; D6a + D6b playlist #392, #400; #287's rewrite #395 (the original #287 is still open, for the owner to close); test undo leak #394; cursor-in-a-field fix #398; H1 doc tails #391 | Merged |
 | N1a #396 + N1b #397, node mode on the APC | The owner's row 711 reversal is built and reviewed twice, with a real bug fixed (a committed look came back wrong after a visit). **Waits on hand checks 506–509,** then `main` merged in, `--all`, #396 before #397 |
 | #365 Joy-Con v0 | Another session's. **Waits on the owner's check 520–521, which needs the Joy-Con charged** (its PR: flat until the charger arrives). It also **conflicts with `main`** (register, `devices.py`, `routing.py`, `ui_pad.py`), which must be resolved before it lands |
-| N2a + N2b node mode on pads; then NSEW | Not started; after #365 |
+| N2a + N2b node mode on pads; then NSEW | N2 built on `wave5/n2`, rows 820–823, checks 635–638; NSEW after it |
 | WORDS: "session" and "rig" leave the panel | Merged #407. "Preset" becomes "patch" in the panel with the migration |
 | Row 740, a player's moves on the meta stack | Merged, #417 |
 | The PC words pass, row 668 | Its small remainder merged, #417 |

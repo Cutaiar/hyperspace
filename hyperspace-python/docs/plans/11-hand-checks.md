@@ -8647,6 +8647,39 @@ Fails: an app that needs a restart; a picture that stops; a window sitting on th
 
 **632. Every display out.** (a Mac mini or a closed laptop on external displays, or as many as you can pull; audio on so you can hear it's alive) Pull every display. Nothing can show you anything: wait 10 s, keep the desk moving, and plug them back in any order, one at a time. Passes: the sound never stopped, each display takes up its job as it arrives, the control window returns, and the desk's changes have landed. `<home>/stall.log` has no "render stall" while the picture was drawing with no window.
 
+## DR. Node mode on a pad (N2, rows 820–823)
+
+Nothing here has run on a real pad. The tests and `tools/drive_node_mode_pad.py` use a stand-in on the real router and the real panel.
+
+**635. A pad on a node.** (any pad on, a patch with a node of many params; GRAPH open) Select the node, and click "point pad here" in the side pane.
+1. Passes: the dot lights, one ⌘Z takes it back, and the map lists LX, LY, RX, RY, LT, RT, each with a param. Green cables run from the pad's node to this one.
+2. With the sticks at rest, nothing in the picture moves.
+3. Push each stick and trigger. Passes: its param moves, a stick either way from where it sat, a trigger up only. Let go. Passes: the look is back where it was.
+4. Say whether the depth is right: a stick all the way moves a param half its range. It is one number (row 820).
+5. Save, load another patch, load this one. Passes: the pad is back on the node.
+
+Fails: a stick at rest that moves the look; a param that stays where the stick left it; a dot that doesn't light.
+
+**636. The view and the sticks.** (as 635)
+1. Point at a node with only one or two params. Passes: those axes leave the camera job and move the param; every other axis still does what it did (the left stick orbits, the right stick zooms, the triggers ride depth).
+2. Leave by the chip. Passes: the stick orbits again, at once.
+3. *A Joy-Con,* totem off: its stick orbits. Point it at a node. Passes: the stick moves the param, and the view doesn't orbit under it. Leave: it orbits. With the totem on: the stick is the row's, and the gyro still turns the shape, and with a node of one param only LX is the row's.
+4. *No button stops working.* While pointed: every button that did something still does the same, on a 360, an Edge and a Joy-Con. SL/SR, the stick click, − and capture on a Joy-Con; hold-to-save on the Edge. There is no key to enter or leave.
+5. Hold BACK (a Joy-Con's L or R), push a stick, let go of BACK, then the stick. Passes: the look stays. Leave. Passes: nothing jumps.
+
+**637. What fills.** (an Edge or a DualSense; a node of many params)
+1. On the factory rows: the six axes, then D-pad left/right as one, the one pair with no row. Press → and ←: the param moves each way and comes back.
+2. Learn a row onto RT, then point. Passes: RT keeps its row, and the rest fill. Learn onto an axis the node holds: the row lands there and the map moves off it.
+3. *Beside a desk:* point the APC40 at the same node, then the pad. Passes: the pad's map starts past the knobs' and the knobs don't change.
+4. *An LFO:* with an LFO routed to a param the stick holds. Passes: the LFO stops moving it while pointed and comes back on leave, and the route's cable says so. Say how the step on entering feels in a room.
+5. *Two players:* put a second pad on player 2, and point both. Passes: each has its own map; neither moves the other's params. Move player 2 to the other `Deck`. Passes: its cables go faint, and its stick moves nothing on this one.
+
+**638. Drawn.** (the pad diagram on, from the system section)
+1. Passes: each filled control is outlined in the node cables' green and says its param, and the header says "node · n". Its hover says it's node mode and where to leave.
+2. Move the pad to the other `Deck`. Passes: the outlines go faint, and the header says "other deck".
+3. Point the pad and the desk at different nodes. Passes: a chip for each in the side pane, and each leaves on its own.
+
+Fails: a control doing something its label doesn't say.
 ## DP. The poi at a real pad (row 817)
 Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_guide.py`, and `tests/test_poi_real.py` on the owner's tape. **No one has felt this at a real pad.** The tests hold one Joy-Con tape's numbers, and that's a pad the app's poi no longer reads; how it feels on the pad you use is yours.
 **633. Swing it.** (a DualSense or an Edge, not a Joy-Con: the app's poi reads no Nintendo pad, row 686. In the app, `poi.on`, the output you'd show on)
@@ -8809,6 +8842,7 @@ Only a person can settle these:
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
 - **a real cable, a real TV and a real projector coming and going (629–632): SC3b's real-app runs used a private virtual display, on a locked Mac, and its id changed every time, so a real display keeping its number across a replug is unproven;**
+- node mode on a real pad (635–638): the tests and `tools/drive_node_mode_pad.py` use a stand-in, so how the sticks feel, whether the depth is right, and a real Joy-Con's stick are for a person;
 - the rows on the rig, both Macs through a real Drive, identical displays and a glass (625–628): SC2's real-app runs used this Mac's three different displays, a scratch library and a stand-in pair;
 - the picture and the pacing on real displays, the overlay over a real window, a locked Mac (607–610): SC3a's real-app runs read the back buffers on one Mac, and one person hasn't watched them;
 - video sound by ear (510–513): the tests read a ramp through the callback by

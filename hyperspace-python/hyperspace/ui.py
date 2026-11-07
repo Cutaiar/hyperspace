@@ -1286,7 +1286,7 @@ class Panel:
         `Router.describe`), or "" with no router attached or no owner (a
         source the table doesn't name, a test holding the param by hand)."""
         r = self.router
-        b = r.table.owner(p.id) if r is not None else None
+        b = r.performer_of(p.id) if r is not None else None
         return "" if b is None else f"performed by {r.describe(b)}"
 
     def _mod_text(self, p: Param) -> str:
