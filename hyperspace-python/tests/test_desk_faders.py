@@ -265,7 +265,7 @@ def test_an_older_meta_file_moves_the_fader_rows_to_shift_once(tmp_path):
         assert (b.target, b.layer) == (pid, "global")
         assert any(n.startswith(f"moved cc:{k}:{FADER} → {pid} to the SHIFT layer")
                    for n in t.notes)
-    assert (folder / "bindings.json.bak-v3").exists()
+    assert list(folder.glob("bindings.json.bak-v*"))
     assert t.said.startswith("bindings.json updated (8 rows changed)")
     rows = json.loads(path.read_text())["bindings"]
     assert all(r.get("layer") == "global" for r in rows

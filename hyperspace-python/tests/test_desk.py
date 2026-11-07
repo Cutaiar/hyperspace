@@ -441,9 +441,11 @@ def test_the_default_map_is_sorted_as_plan_13_says():
     for pair in old:                                       # every old row left, sorted
         if pair in gone:
             continue
+        pair = (pair[0], routing.OVERLAY_ALIASES.get(pair[1], pair[1]))   # (plan 57: bindings/4)
         assert pair in have, pair
         assert have[pair] == _layer_by_plan(pair[0]), pair
-    new = [b for b in rows if (b.source, b.target) not in set(old)]
+    renamed = {(s, routing.OVERLAY_ALIASES.get(t, t)) for s, t in old}   # (plan 57: bindings/4)
+    new = [b for b in rows if (b.source, b.target) not in set(old) | renamed]
     # the new rows: SHIFT, invariant, and the global track knobs — which
     # are data, rows in the map: hand feel and BPM on 1–5, 6–8 free
     assert [(b.source, b.target, b.layer) for b in new] == [
