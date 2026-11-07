@@ -913,8 +913,7 @@ def test_scale_is_what_saved_layouts_are_in():
     assert graphview.SCALE == 1.25
 
 
-def test_the_start_zoom_lands_and_leaves_no_file(shell_rig, monkeypatch, tmp_path):
-    rig = shell_rig
+def test_the_start_zoom_lands_and_leaves_no_file(rig, monkeypatch, tmp_path):
     spare = tmp_path / "spare"
     spare.mkdir()
     monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
@@ -924,22 +923,22 @@ def test_the_start_zoom_lands_and_leaves_no_file(shell_rig, monkeypatch, tmp_pat
     assert list(spare.iterdir()) == []              # read, off, gone: nothing saved into it
 
 
-def test_the_start_zoom_keeps_the_view_at_the_corner(shell_rig):
+def test_the_start_zoom_keeps_the_view_at_the_corner(rig):
     """Zoomed from the canvas's origin, as 1:1 opens, not about its middle."""
-    st = _start(shell_rig, 1.6)
+    st = _start(rig, 1.6)
     assert st["seen"][0] == pytest.approx(0.0, abs=12.0)
     assert st["seen"][1] == pytest.approx(0.0, abs=12.0)
 
 
-def test_a_start_zoom_of_one_writes_nothing(shell_rig, monkeypatch):
+def test_a_start_zoom_of_one_writes_nothing(rig, monkeypatch):
     written = []
     monkeypatch.setattr(ui_graph.tempfile, "mkstemp", lambda **k: written.append(k))
-    st = _start(shell_rig, 1.0)
+    st = _start(rig, 1.0)
     assert written == [] and st["zoom"] == pytest.approx(1.0)
 
 
-def test_the_start_zoom_moves_no_position(shell_rig, tmp_path):
-    st = _start(shell_rig, 1.6)
+def test_the_start_zoom_moves_no_position(rig, tmp_path):
+    st = _start(rig, 1.6)
     moved = dict(st["applied"])
     assert moved
     (tmp_path / "other").mkdir()
@@ -947,10 +946,9 @@ def test_the_start_zoom_moves_no_position(shell_rig, tmp_path):
         assert dict(_start(other, 1.0)["applied"]) == moved
 
 
-def test_the_start_zoom_is_not_set_twice(shell_rig):
+def test_the_start_zoom_is_not_set_twice(rig):
     """A person's zoom during a run stays: the view framed to fit stands in
     for one, and a loaded patch and more frames leave it."""
-    rig = shell_rig
     st = _start(rig, 1.6)
     assert st["zoom"] == pytest.approx(1 / 1.6)
     st["frame"] = True
@@ -988,10 +986,9 @@ def _node_on_canvas(monkeypatch, st) -> dict:
 
 @pytest.mark.parametrize("zoom", [1.0, 1.6])
 @pytest.mark.parametrize(("narrower", "shorter"), [(0.0, 23.0), (40.0, 0.0), (40.0, 165.0)])
-def test_a_change_of_canvas_size_moves_no_node(shell_rig, monkeypatch, zoom, narrower, shorter):
+def test_a_change_of_canvas_size_moves_no_node(rig, monkeypatch, zoom, narrower, shorter):
     """The zoom stands, and every node stays where it was against the canvas's
     top-left (the owner, 2026-10-24): a head's extra line, a window's resize."""
-    rig = shell_rig
     st = _start(rig, zoom)
     seen = _node_on_canvas(monkeypatch, st)
     frame(rig.panel, "graph")
@@ -1002,10 +999,9 @@ def test_a_change_of_canvas_size_moves_no_node(shell_rig, monkeypatch, zoom, nar
     assert seen["at"] == pytest.approx(before, abs=1.5 * zoom)      # (the pan is in whole units)
 
 
-def test_a_line_on_the_head_moves_no_node(shell_rig, monkeypatch):
+def test_a_line_on_the_head_moves_no_node(rig, monkeypatch):
     """What changes the canvas's height with no window touched: a patch that
     wires a window this Mac lacks puts a line on the head."""
-    rig = shell_rig
     st = _start(rig, 1.6)
     seen = _node_on_canvas(monkeypatch, st)
     frame(rig.panel, "graph")
@@ -1019,7 +1015,7 @@ def test_a_line_on_the_head_moves_no_node(shell_rig, monkeypatch):
     assert rig.lib.loaded_patch.layout == laid      # a pan, never a move
 
 
-def test_the_page_has_no_scrollbar_and_the_canvas_keeps_its_width(shell_rig, monkeypatch):
+def test_the_page_has_no_scrollbar_and_the_canvas_keeps_its_width(rig, monkeypatch):
     """The canvas's size is one from its first frame: the footer counted whole,
     CONTROLS doesn't overflow into a scrollbar on its second."""
     sizes = []
@@ -1030,7 +1026,7 @@ def test_the_page_has_no_scrollbar_and_the_canvas_keeps_its_width(shell_rig, mon
         real(panel, st, view, size, through)
     monkeypatch.setattr(ui_graph, "_canvas", spy)
     for _ in range(4):
-        frame(shell_rig.panel, "graph")
+        frame(rig.panel, "graph")
     assert len(set(sizes)) == 1 and sizes[0][2] is False
 
 
