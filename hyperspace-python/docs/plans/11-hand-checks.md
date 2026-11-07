@@ -821,7 +821,8 @@ not connected — opening on "<laptop>"'. Restore `fullscreen`.
 swap regardless of file. `monitor = 7`: SYSTEM and terminal: "config: [output] monitor = 7, but 2 screens are connected
 (0–1) — using the last position"; last position used. `monitor = "left"`:
 launches, with "config: [output] monitor = 'left'
-is not a screen index — using the last position". Remove both keys.
+matches no screen (connected: …) — using the last position" (row 771: a
+string is a screen's name). Remove both keys.
 (f) Delete `windows.json`, launch: render top-left, controls flush
 right, primary screen, full size (overlap on small screens). (g) ⌘R with
 a window moved: it stays. An index not connected **at launch** is
@@ -829,7 +830,7 @@ ignored for the run: plug projector in first. *Fail:* off-screen or
 misplaced → `placement.place` / `usable`; wrong screen for index →
 `placement.screens` (GLFW's order); fullscreen size saved →
 `Output.windowed_rect`; no file after Esc → `app._save_windows`; no
-launch with `"left"` → `placement.read` / `config.load`. Window out of
+launch with `"left"` → `placement.settle` / `config.load`. Window out of
 reach: delete `windows.json`.
 
 **62. Instances to zero.**
@@ -8356,10 +8357,46 @@ Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real
 7. Set the segment's mode to subject, then turn `segment.on` off. *Pass:* the box is black and says why in words readable at a distance, a different line for each.
 8. Open a saved patch of yours whose matte or segment you had placed by hand. *Pass:* no node has moved; if the taller node now covers another, drag it or press tidy, and say how many patches did this.
 *Fail:* a red box, an upside-down person, or a frame-rate dip that follows the nodes on screen.
+## DC. The flag says what is true (LY2)
+Register rows 775–776, 2026-11-06. Headless: `tests/test_meta_rule.py`, on the real table, MIDI adapter and router. Restart first: a hot reload leaves a param's old flag until a restart.
+**603. The meta controller still plays.** (the rig, with the APC40)
+1. Latch SHIFT. Ride S1 and S7, then S8: `band.0.post` on the analyzer and `master.dyn`, then `master.trim` on the audio page. *Pass:* each is caught at its own value, then follows the fader.
+2. SHIFT off. Move the APC's MASTER and its crossfader. *Pass:* both act as they did.
+3. Right-click `master.gain`. *Pass:* no "Route a lane here…", the menu reads as it did, and Learn pad is still there. Learn pad with a button: *Pass:* it lands, and the button acts on `master.gain`.
+4. Open a look whose routes are scaled by `master.gain` (`party-tumble`). Pull `master.gain` down. *Pass:* its motion shrinks with it, and `master.gain` itself doesn't move.
+5. Turn the analyzer's post-drive up on a band with a route on its lane. *Pass:* the route moves more.
+*Fail:* a fader or button that stops acting, a "not modulatable" on any meta param's menu, or a look that stops following `master.gain`.
+## DE. "Session" and "rig" are gone (rows 778-780)
+Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans every string; the existing tests pin the words. Drawn by `tools/app_driver.py` with the pane at 240 and 320 px: the SHOW line, ROUTING's two headings and a placeholder's node. Not seen drawn: a placeholder's side pane, the cable hovers, an APC40's refusal.
+**605. The panel's longer words fit.** (any Mac, no devices needed)
+1. PRESETS, SHOW: read the line under the SHOW label, and hover it. *Pass:* "SHOW: PADS, META CONTROLLER" whole at the pane's first width; drag its grip to the narrowest and it ends in "…", never cut off bare; the hover says the bus cables are the preset's.
+2. ROUTING: find the "meta controller" heading over the invariant rows, and "its own rows — edit bindings.json" beside it. Do the same for SINKS, "the meta controller's — out to a sink · right-click a param: Learn sink". *Pass:* at the pane's narrowest (240 px) and its first width (320 px), every word shows, "Learn sink" too, with the note under the heading if there's no room beside it.
+3. With the APC40 connected, Learn desk on MASTER. *Pass:* the refusal says "invariant (the meta controller's)", and the line fits where it lands.
+*Fail:* "session" anywhere; a line cut so it can't be read.
+**606. A missing controller, and a bus cable.**
+1. Load a patch whose rows want a controller that isn't plugged in. On GRAPH, read its placeholder node, and PRESETS' line. *Pass:* "not set up on this Mac"; the node's side pane names `[[devices]]` in config.toml. A controller plugged in but not listed says the same, which is the point.
+2. On GRAPH, hover a cable from All outputs into a window. *Pass:* it starts "the bus cable", and hovering All outputs says "The meta controller's bus". Cut it, then read the line GRAPH says it on. *Pass:* "cut the bus cable". Then cut a cloud's wire into the scene, if a cloud is wired: *Pass:* its hover says "this cloud's wire into the scene", and the line "cut the cloud's wire".
+*Fail:* "rig" anywhere.
+## DA. Screens by name (wave 5 SC1)
+Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tests/test_app_boundary.py`, on stand-in screens. Only a real replug shows what macOS does. A name is read at the launch; a replug while the app runs is SC3b's, not this.
+**600. Outputs stay put across a replug.** (the rig, with two outputs on HDMI)
+1. In the OUTPUT page's Screen list, read the exact names of the screens. In `config.toml` give each `[[output.screens]]` its `monitor` by name, and `[output] control_monitor` too. Launch. *Pass:* each window opens on the screen named, no note in SYSTEM.
+2. Quit. Unplug both HDMI cables, plug them back in the other order, launch. *Pass:* the same pictures on the same screens. An index in the same place would have swapped them.
+3. Set one output's `monitor` to the name cut short (`"MSta"`, or lower case). Launch. *Pass:* that output doesn't open (or output 1 opens at its last spot), and the note lists the screens connected.
+4. Put an index back on one output and launch. *Pass:* it works as it always did.
+*Fail:* a swap in step 2, a window on a screen that matched only part of the name, or a launch that stops.
+
+**601. Two identical screens.** (two displays of one model, if the rig has them; otherwise say skipped)
+1. Launch with one `monitor` given as the bare name. *Pass:* it opens on the left of the two, and the note names both, such as "MStar #1, MStar #2". If the Mac lists them as "DELL (1)" and "DELL (2)", the words are still "DELL #1" and "DELL #2": note in row 772 what it listed.
+2. Set the two outputs to `"MStar #1"` and `"MStar #2"`. Launch. *Pass:* #1 on the left one, #2 on the right.
+3. Quit, swap the two cables, launch. *Pass:* the same again. **Say what you saw either way:** if macOS moved them, two identical screens can't be told apart without a serial, and row 772 needs the owner's word.
+4. Quit, unplug the left one, launch. *Pass:* "MStar #1" opens on the one still there, with a note that only one is connected and it may be either of a pair; "MStar #2" doesn't open, with a note saying 1 is connected.
+*Fail:* #2 on the left with the arrangement unchanged, step 4 with no note, or a launch that stops.
 
 ## What no test covers
 
 Only a person can settle these:
+- what macOS does to screens across a real replug, and to two of one model (600, 601): the tests list stand-in screens in either order;
 - the dream's look (9) and the default hand feel (16);
 - a spawned dream patch's picture with a worker running (497): the tests read
   the section and the values, no worker;

@@ -420,7 +420,7 @@ PLAY_TIP = ("Play the playlist: each look loads off air, then the crossfader run
 def register(reg, playing: Playing) -> list[str]:
     """`playlist.play`, `.next`, `.prev`: the meta controller's (`params.SHARED_META_GROUPS`),
     an operator's verbs. Declared once, on both decks, from lambdas so a hot reload lands."""
-    settings = {"group": "playlist", "modulatable": False}
+    settings = {"group": "playlist"}
     reg.toggle("playlist.play", "Playlist", lambda: playing.on,
                lambda v: playing.play() if v else playing.stop(), persist=False, tip=PLAY_TIP,
                **settings)

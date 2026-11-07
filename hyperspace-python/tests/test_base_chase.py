@@ -410,7 +410,7 @@ def test_the_verb_reaches_continuous_modulatable_look_params():
     for p in reg:
         if p.id in reached:
             assert p.modulatable and p.kind.value == "continuous"
-    assert "master.gain" not in reached, "a session param is the room's"
+    assert "master.gain" not in reached, "a meta controller param is the room's"
     assert not any(p.id in reached for p in meta_reg)
     reg["macro.1"]                             # declared
     assert not any(i.startswith("macro.") for i in reached), "a macro's base moves its subscribers"

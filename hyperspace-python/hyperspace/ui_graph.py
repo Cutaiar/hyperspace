@@ -2690,7 +2690,7 @@ def land_spawn(panel, landing, choices, splice=None) -> str | None:
     """Land `landing` with the sheet's `choices` (`Edit.spawn` / `Edit.splice`:
     one undo step through the doors); its words on the head. Returns the
     refusal, or None. What its rows wait for is said after the landing
-    (plan 40 P4: "…; waits for leap (not in this rig): right hand y") —
+    (plan 40 P4: "…; waits for leap (not set up on this Mac): right hand y") —
     with no conflict there was no sheet to say it before the press."""
     e = group_edit(panel)
     if e is None:
@@ -3668,8 +3668,10 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     # plan 35 G (V2): a frame node's header says its id and its params' prefix
     imgui.text(graphview.side_head(n) if n.kind in graphview.FRAME_VKINDS else n.label)
     if n.status:
+        imgui.push_text_wrap_pos(0.0)               # (a placeholder's says what to do: long)
         imgui.text_disabled(n.status.partition(" · id ")[0]
                             if n.kind in graphview.FRAME_VKINDS else n.status)
+        imgui.pop_text_wrap_pos()
     if isinstance(n.ref, rgraph.SwitchNode):
         _switch_block(panel, view, n)
     if is_pad_node(panel, n):                   # the pad, drawn: what each control does

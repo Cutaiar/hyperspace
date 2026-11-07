@@ -1618,10 +1618,10 @@ def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
     if p is None:
         part = part_of_id(pid)
         if part == "shared_meta":
-            return "a session param, never a preset's (plan 13 D9)"
+            return "a meta controller param, never a preset's (plan 13 D9)"
         return None if part == "patch" else "not part of a preset"
     if part_of(p) == "shared_meta":
-        return "a session param, never a preset's (plan 13 D9)"
+        return "a meta controller param, never a preset's (plan 13 D9)"
     if p.alias:
         return "an alias, not part of a preset"
     if part_of(p) != "patch" or not p.persist:
@@ -1668,7 +1668,7 @@ def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[st
             continue
         if not is_macro(b.scale):
             notes.append(f"dropped the scale {b.scale} of {b.source} → {b.target}: a route's "
-                         "scale is a session param (decision register row 18 (a)); a macro "
+                         "scale is a meta controller param (decision register row 18 (a)); a macro "
                          "attenuates a route as its depth subscriber")
             b.scale = None
             continue
@@ -2801,7 +2801,7 @@ class Bindings:
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
                 notes.append(f"dropped {b.source} → {b.target}: that control is "
-                             "invariant, the session's (plan 13 D6)")
+                             "invariant, the meta controller's (plan 13 D6)")
             elif (why := meta_row_refusal(b)) is not None:
                 notes.append(f"dropped {b.source} → {b.target}: {why}")
             else:
@@ -4093,15 +4093,12 @@ class Router:
         follower, and starts afresh. A cable `modgraph` keeps off to break a
         loop does not run. Plan 55: a row on a controller whose player is on
         another deck has no reading here (`feeds`), so it does not act, and
-        loses its follower and its turn's reading. Plan 44 D4 (row 625, §7's
-        recommendation): on a
-        deck that is not the meta controller's lead, a row onto a shared meta param is
-        dormant. No door lets one in since row 743, but a hot reload leaves
-        one standing until the next load (row 745)."""
+        loses its follower and its turn's reading. A row on a param no lane may
+        drive (`Param.modulatable`) does nothing here and keeps no follower. No
+        door lets one onto a meta param since row 743, but a hot reload leaves
+        one standing until the next load (rows 745, 775)."""
         dt = 1 / 60 if dt is None else dt
         reg = self.reg
-        meta_reg = getattr(reg, "meta_reg", None)
-        follower = meta_reg is not None and meta_reg is not reg and meta_reg.on_air_reg is not reg
         self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
         self.modgraph                                # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]
@@ -4155,8 +4152,8 @@ class Router:
                 if b.when is not None and not self.gated(b, feeds):
                     continue         # gate open: apply() writes the base back
                 p = reg.get(b.target)
-                if p is None or (follower and not reg.lands(p)):
-                    continue         # (plan 44 D4: a shared meta param is the lead's to move)
+                if p is None or not p.modulatable:
+                    continue         # (no lane may drive it: dormant, on any deck, row 775)
                 depth = b.value
                 if b.scale is not None:
                     sp = self.reg.get(b.scale)
@@ -4189,14 +4186,14 @@ class Router:
                 else:
                     # position: the source is the fader — the offset that lands
                     # it (p.norm is the base while modulated, the object before)
-                    if p.kind is Kind.TEXT or not p.modulatable:
+                    if p.kind is Kind.TEXT:
                         continue
                     x = min(1.0, max(0.0, depth * u)) - p.norm
                 # (a position row's share: the base chase's ledger leaves it out)
                 p.modulate(x, position=b.op != "push")
             if step[3]:              # something later in the pass reads it: land it now
                 q = reg.get(step[1])
-                if q is not None and q._base is not None and reg.lands(q):
+                if q is not None and q._base is not None:
                     q.apply(mark)
         for key in [k for k in movers if k not in moved]:
             del movers[key]
@@ -4212,7 +4209,7 @@ class Router:
         is no circle, or on a target it cannot turn. A row in `_turn_cut` only
         reads."""
         if (b.when is None or not whole_circle(b.source) or p.kind is not Kind.CONTINUOUS
-                or p.integer or not p.modulatable):
+                or p.integer):
             return
         d = self.__dict__
         turns = d.setdefault("_turns", {})

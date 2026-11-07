@@ -28,10 +28,12 @@ dream.py, too, is imported only when its gate is open.
                             # framebuffer, and T / MASTER select / the panel cannot
                             # float it see-through; true for a laptop demo
     monitor = -1            # which screen the RENDER window opens on, and the one
-                            # fullscreen covers: a screen index, or -1 = where it
-                            # was last time (else the primary screen)
-    control_monitor = -1    # which screen the CONTROL window opens on: an index,
-                            # or -1 = where it was last time (else the primary).
+                            # fullscreen covers: a screen's exact name ("MStar";
+                            # "MStar #2" for the second of two, left to right), a
+                            # screen index, or -1 = where it was last time (else
+                            # the primary screen)
+    control_monitor = -1    # which screen the CONTROL window opens on: a name, an
+                            # index, or -1 = where it was last time (else the primary).
                             # "Last time" is <home>/windows.json (placement.py),
                             # written on quit and on restart; delete it to forget.
                             # An index with no such screen is treated as -1, with
@@ -76,10 +78,11 @@ dream.py, too, is imported only when its gate is open.
                             # passthrough, bg and alpha stay above and are
                             # output 1's alone (every later output is opaque)
     name = "glass"          # optional: the label on the OUTPUT page and in notes
-    monitor = 1             # a screen index, or -1 = a plain window where it was
-                            # last. Output 1 always opens (an index no screen has
-                            # is -1, with a note). A LATER output whose index no
-                            # screen has is NOT opened, with a note (fork F9); a
+    monitor = 1             # a screen's name, a screen index, or -1 = a plain
+                            # window where it was last. Output 1 always opens (a
+                            # screen that is not there is -1, with a note). A LATER
+                            # output whose screen is not there is NOT opened, with
+                            # a note (fork F9); a
                             # screen plugged in after the launch is not picked up
                             # until the next launch
     fullscreen = true       # a borderless cover of that screen at its current
@@ -292,7 +295,8 @@ DEFAULTS: dict = {
     # overlay.py: the render window's placement and look; ground 0 = see-through.
     # overlay: off, the window is opaque and overlay cannot switch on
     # (decision 21 (a), plan 14 WP2). monitor / control_monitor: the screen
-    # each window opens on, −1 = where it was last time (placement.py)
+    # each window opens on, by name or index, −1 = where it was last time
+    # (placement.py)
     "output": {"overlay": False, "monitor": -1, "control_monitor": -1, "fullscreen": False,
                "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0,
                "keep_awake": True, "render": "1080p",
@@ -383,7 +387,7 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
     name = e.get("name", "")
     out["name"] = name if isinstance(name, str) else str(name)
     if "monitor" in e:
-        out["monitor"], bad = placement.read("monitor", e["monitor"])
+        out["monitor"], bad = placement.kept("monitor", e["monitor"])
         if bad:
             _note(cfg, f"{where} monitor = {e['monitor']!r} is not a screen index — "
                        "using the last position")
@@ -810,11 +814,11 @@ def load(path: Path | None = None) -> dict:
             cfg["output"][key] = DEFAULTS["output"][key]
             _note(cfg, f"config: [output] {key} = {v!r} is not a number — "
                        f"{DEFAULTS['output'][key]}")
-    # a screen index is a whole number: `monitor = "left"` is −1 from here
+    # a screen is a whole number or a name: anything else is −1 from here
     # on (where the window was last time) and the SYSTEM page says so —
     # whether that screen exists is placement's to say, at the launch
     for key in ("monitor", "control_monitor"):
-        cfg["output"][key], note = placement.read(key, cfg["output"].get(key, -1))
+        cfg["output"][key], note = placement.kept(key, cfg["output"].get(key, -1))
         if note:
             cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)
