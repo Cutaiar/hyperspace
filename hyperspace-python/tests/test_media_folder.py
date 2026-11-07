@@ -342,3 +342,81 @@ def test_thumbnail_makes_go_on_the_thumbnail_worker(mk, monkeypatch):
                         lambda p, out: names.append(threading.current_thread().name))
     f.thumb("local:a.png")
     assert wait_for(lambda: names) and names[0].startswith("media-thumb-")
+
+
+# ---- the shared twin (row 802): a `local:`/`file:` id read through the
+# shared folder, and stored as the shared id by an assignment ----
+
+def test_local_id_reads_through_its_shared_twin(mk):
+    """A patch saved on the other Mac names `local:t.png`; this Mac has the
+    file only in the shared folder. It opens anyway, and says `ready`."""
+    f = mk()
+    png(f.shared / "t.png")
+    f.scan()
+    assert f.path("local:t.png") == f.shared / "t.png"
+    assert f.status("local:t.png") == mf.READY
+    e = f.entry("local:t.png")
+    assert e is not None and e.sid == "shared:t.png"   # the stamp follows the file read
+
+
+def test_file_id_reads_through_its_shared_twin(mk):
+    """The other Mac's absolute path (`file:/Users/dallman/...`) falls back
+    on its basename, so a hand-added file travels too."""
+    f = mk()
+    png(f.shared / "the-look.png")
+    f.scan()
+    assert f.path("file:/Users/dallman/Downloads/the-look.png") == f.shared / "the-look.png"
+
+
+def test_own_file_wins_over_the_twin(mk):
+    """This Mac's own copy is what a `local:` id opens when it has one —
+    the fallback is only for an id the scan did not find."""
+    f = mk()
+    png(f.shared / "t.png")
+    png(f.local / "t.png")
+    f.scan()
+    assert f.path("local:t.png") == f.local / "t.png"
+
+
+def test_an_ambiguous_name_has_no_twin(mk):
+    """One basename under two shared folders resolves to neither: guessing
+    between them would be worse than black."""
+    f = mk()
+    png(f.shared / "a" / "t.png")
+    png(f.shared / "b" / "t.png")
+    f.scan()
+    assert f.shared_twin("local:t.png") is None
+    assert f.path("local:t.png") is None
+    assert f.status("local:t.png") == mf.MISSING
+
+
+def test_a_shared_id_never_falls_back(mk):
+    """`shared:` is already the id both Macs read; a missing one stays missing."""
+    f = mk()
+    png(f.shared / "t.png")
+    f.scan()
+    assert f.shared_twin("shared:t.png") is None
+    assert f.path("shared:gone.png") is None
+
+
+def test_no_shared_folder_means_no_twin(mk):
+    """With no `[library] path` there is nothing to fall back to."""
+    f = mk(shared=False)
+    png(f.local / "t.png")
+    f.scan()
+    assert f.shared_twin("local:t.png") is None
+    assert f.prefer_shared("local:t.png") == "local:t.png"
+
+
+def test_prefer_shared_is_the_id_a_save_stores(mk):
+    """A file in both folders is stored as the shared id; one only this Mac
+    has is stored as picked."""
+    f = mk()
+    png(f.shared / "both.png")
+    png(f.local / "both.png")
+    png(f.local / "mine.png")
+    f.scan()
+    assert f.prefer_shared("local:both.png") == "shared:both.png"
+    assert f.prefer_shared("local:mine.png") == "local:mine.png"
+    assert f.prefer_shared("shared:both.png") == "shared:both.png"
+    assert f.prefer_shared("camera:0") == "camera:0"
