@@ -20,6 +20,50 @@ from hyperspace import apc40, gamepad, ui_desk, ui_pad
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.routing import Binding, padmap
 
+# ---------------------------------------------------------------- the close chip
+
+def test_the_pads_x_closes_it_and_never_leaves_the_window_empty(rig, monkeypatch):
+    """Row 808: the floating pad diagram has the × the desk has, flush right on
+    its header; a click turns `ui.pad_diagram` off. GRAPH's inline picture of
+    the pad has none. A hidden panel with no desk comes back with it."""
+    from ui_driver import Driver
+    panel = rig.panel
+    panel.desk = False
+    panel.reg["ui.pad_diagram"].set(True)
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    d = Driver(step=lambda: frame(panel))
+    d.record(monkeypatch.setattr)
+    d.run(d.wait(2))
+    _x0, y0, x1, _y1 = d.rect("pad.close")
+    win = imgui.internal.find_window_by_name("##pad")
+    assert win.pos.x + win.size.x - 40 < x1 <= win.pos.x + win.size.x and y0 < win.pos.y + 40
+    d.run(d.click("pad.close"), d.park())
+    assert not panel.pad_diagram and not panel.reg["ui.pad_diagram"].value
+    assert panel.open
+    # the panel hidden, no desk: closing the pad brings the panel back
+    panel.reg["ui.pad_diagram"].set(True)
+    panel.reg["ui.panel"].set(False)
+    ui_pad.close(panel)
+    assert not panel.pad_diagram and panel.open
+    # with the desk up, the desk fills the window: the panel stays hidden
+    panel.reg["ui.pad_diagram"].set(True)
+    panel.desk = True
+    panel.reg["ui.panel"].set(False)
+    ui_pad.close(panel)
+    assert not panel.pad_diagram and not panel.open
+
+
+def test_the_panel_stays_in_a_window_too_narrow_for_it_and_the_column():
+    """Review of #426: at the narrowest window placement opens (320 wide),
+    with only the pad up, the panel's `PANEL_W` floor put its left edge off
+    the window, where nothing could drag it back. It keeps the window."""
+    from hyperspace import placement, ui
+    for desk, pad in ((False, True), (True, False), (True, True)):
+        for dw in (placement.MIN_SIZE[0], 400, ui.PANEL_W + 2 * ui.PANEL_EDGE + 1):
+            x, _, w, _ = ui.panel_rect((dw, 900), desk, pad)
+            assert x >= ui.PANEL_EDGE and x + w <= dw - ui.PANEL_EDGE + 1e-6, (desk, pad, dw, x, w)
+
+
 # ---------------------------------------------------------------- the layout
 
 

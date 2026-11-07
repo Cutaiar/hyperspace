@@ -33,6 +33,7 @@ import math
 import os
 import time
 from collections.abc import Callable
+from typing import Any
 
 from imgui_bundle import imgui
 
@@ -45,6 +46,7 @@ from . import (
     learn,
     ui_bands,
     ui_desk,
+    ui_displays,
     ui_feel,
     ui_graph,
     ui_lfo,
@@ -107,7 +109,9 @@ PIN_HOLD = 0.5
 # the panel: GRAPH and its side pane of sections (ui_pane.py), a footer
 MESSAGE_S = 4.0  # how long the footer's message slot shows a line after it changes
 CANCEL_TIP = "click to cancel"  # the footer's armed-learn line: on it where it fits, and on hover
-PANEL_W = 540   # the panel never opens narrower (panel_w)
+PANEL_W = 540   # beside the left column the panel is never narrower (panel_w)
+PANEL_EDGE = 12.0   # the panel's margin from the control window's edges (panel_rect)
+COLUMN_MAX = 0.5    # the desk and pad column never takes more of the window than this (panel_w)
 DESK_ASPECT = 4 / 3   # at launch the desk diagram left of the panel is this wide per unit of height
 LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
@@ -172,17 +176,40 @@ def _add_font(role: str, size: float, tracking: float = 0.0) -> None:
             io.fonts.add_font_from_file_ttf(path, size, m)
 
 
-def panel_w(display: tuple[float, float]) -> float:
-    """The panel's width as it opens in a control window of `display`
-    (w, h): the desk diagram left of it gets a `DESK_ASPECT` slice of the
-    window's height and the panel the rest, so neither is stretched — on
-    the default window (app.CONTROL_SIZE) the two come out the same size.
-    Never under `PANEL_W`: a narrow window keeps the panel whole and the
-    desk takes what is left (ui_desk.room). Once open, the panel is
-    wherever it is dragged; this is only where it starts."""
+def panel_w(display: tuple[float, float], desk: bool = True, pad: bool = False) -> float:
+    """The panel's width beside the left column in a control window of
+    `display` (w, h). The column is as wide as what is up in it wants:
+    the desk diagram a `DESK_ASPECT` slice of the window's height, the pad
+    diagram its own width (`ui_pad.room`, far narrower), the wider of the
+    two when both are up. Never more than `COLUMN_MAX` of the window, so
+    the graph keeps room; the panel never under `PANEL_W` either, and a
+    narrow window keeps the panel whole and the column takes what is left
+    (ui_desk.room). On the default window (app.CONTROL_SIZE) the desk and
+    the panel come out the same size."""
+    from . import ui_pad  # (late: ui_pad imports this module)
     dw, dh = display
-    desk = DESK_ASPECT * (dh - 24)
-    return float(int(max(PANEL_W, dw - 36 - desk)))
+    want = 0.0
+    if desk:
+        want = DESK_ASPECT * (dh - 2 * PANEL_EDGE)
+    if pad:
+        want = max(want, ui_pad.room(display, None)[2])
+    room = dw - 3 * PANEL_EDGE
+    return float(int(max(PANEL_W, room - min(want, COLUMN_MAX * room))))
+
+
+def panel_rect(display: tuple[float, float], desk: bool = False,
+               pad: bool = False) -> tuple[float, float, float, float]:
+    """(x, y, w, h) of CONTROLS in a control window of `display`: pinned,
+    never dragged. With the left column up (the `desk` or the `pad`
+    diagram) it is `panel_w` wide at the right; without, it fills the
+    window. Both `PANEL_EDGE` from the window's edges, and never wider
+    than the window allows: in a window too narrow for `PANEL_W` beside
+    the column, the panel keeps the window and the column is under it
+    (the graph is primary; nothing can drag it back into view)."""
+    dw, dh = display
+    full = dw - 2 * PANEL_EDGE
+    w = min(panel_w(display, desk, pad), full) if desk or pad else full
+    return float(int(dw - w - PANEL_EDGE)), PANEL_EDGE, float(int(w)), dh - 2 * PANEL_EDGE
 
 
 def load_fonts() -> None:
@@ -474,6 +501,13 @@ def chip_w(*labels: str) -> float:
     return w + s.item_spacing.x * max(len(labels) - 1, 0)
 
 
+def flush_right(w: float) -> None:
+    """On this row, go to where `w` px end at the content's right edge. `same_line`
+    counts from the window's edge, so `same_line(avail - w)` alone stops the window's
+    padding short and overruns a row budgeted to `avail` (audit U10)."""
+    imgui.same_line(imgui.get_cursor_pos_x() + imgui.get_content_region_avail().x - w)
+
+
 def button_w(*labels: str) -> float:
     """chip_w for full-size buttons (frame padding from the style)."""
     s = imgui.get_style()
@@ -535,7 +569,7 @@ def device_lines(registry) -> list[str]:
 def wanted_lines(registry, table) -> list[str]:
     """Plan 40 T4: the SYSTEM page's lines under the device lines, one per
     device role the loaded patch's rows want and the meta controller lacks — "wanted
-    by the preset: leap — not in this rig; 3 rows wait" (`devices.wants`,
+    by the preset: leap — not set up on this Mac; 3 rows wait" (`devices.wants`,
     `devices.wanted_lines`); none without a registry or a table."""
     if registry is None or table is None:
         return []
@@ -648,7 +682,7 @@ CHEATSHEET = [
     ("Cmd+Z", "undo, after a change here · ⇧ redo (or Ctrl+Z)"),
     ("Home", "home preset, off air (fn ←)"),
     ("Cmd+R", "restart process"),
-    ("Cmd+[ ]", "panel page back · forward"),
+    ("Cmd+[ ]", "panel section back · forward"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
@@ -687,6 +721,10 @@ CHEATSHEET = [
 # (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
 # output; audio holds the master faders and nothing of a loadable patch (row 692)
 META_SECTIONS = ("output", "audio", "analyzer", "hands")
+
+# The analyzer is one for both looks, so what it hears of the video on air reaches the
+# look off air's routes. The owner accepts this (2026-11-06, row 790) and wants it said.
+VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
 
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
              "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
@@ -742,6 +780,8 @@ class Panel:
     envs = Through("envs")
     seq = Through("seq")
     deck = Through(None)
+
+    displays: Any = None  # set by app.py (displays.Running): a row per display (SC2)
 
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
                  bank=None, registry: Registry | None = None, library=None):
@@ -799,6 +839,7 @@ class Panel:
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
+        self.graph_start_zoom = 1.0  # set by app.py: GRAPH's first zoom, off the display (plan 58 SM2)
         self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
         self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
@@ -886,19 +927,20 @@ class Panel:
                    "to the top of the pane, and folds again when the focus moves on unless "
                    "you unfolded it yourself. graph lets go of the focus.")
 
-    def in_meta_section(self) -> bool | None:
+    def in_meta_section(self) -> bool | str | None:
         """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
         panel's deck's. **What is under the mouse decides:** a param undo watches
         says by its own layer, wherever it is drawn (a mixed section: hands with
         `ghost.*`, SYSTEM with `desk.slew`, a fixture node in the selection); else the
-        section under it (`ui_pane.where`); else the deck. None over the player
-        screen and the playlist's section: no stack, since a move or an edit there is on
-        none of them (`undo.here`)."""
+        section under it (`ui_pane.where`); else the deck. Over the player screen, its
+        own window too, `undo.BOARD`: the meta stack, for a player's moves alone (row
+        800). None over the playlist's section: no stack, since an edit there is on none
+        of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "patch"
         if ui_players.over(self):
-            return None
+            return undo.BOARD
         section = ui_pane.where(self)
         if section == "playlist":    # a list's edits are files, on no stack (row 709)
             return None
@@ -1782,7 +1824,7 @@ class Panel:
             if _micro_width(note) > room:
                 note = fit_micro(note, room, 24.0)
         if note:
-            imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
+            flush_right(_micro_width(note) + 4)
             _micro(note, FAINT)
         lib = self.library
         if group is not None and lib is not None and lib.reg is not None:
@@ -1954,28 +1996,30 @@ class Panel:
             ui_desk.diagram(self)
         if not self.open:
             return
-        io = imgui.get_io()
-        # at launch: right of the desk when it is up, else the whole window
-        pw = (panel_w((io.display_size.x, io.display_size.y)) if getattr(self, "desk", True)
-              else io.display_size.x - 24)
-        imgui.set_next_window_pos(
-            imgui.ImVec2(io.display_size.x - pw - 12, 12), imgui.Cond_.once
-        )
-        imgui.set_next_window_size(imgui.ImVec2(pw, io.display_size.y - 24),
-                                   imgui.Cond_.once)
-        opened, self.open = imgui.begin("CONTROLS", self.open)
-        # where the panel is: the desk takes the room left of it (ui_desk.room;
-        # drawn before the panel, it reads this next frame)
-        self._panel_x = imgui.get_window_pos().x
-        if not opened:
-            imgui.end()
-            return
+        # pinned, never dragged: the whole window, or right of the left column
+        # while the desk or the pad diagram is up (`panel_left`). H, the
+        # desk's chip and `ui.panel` show and hide it; there is no title bar.
+        # It stays behind the windows over it (cheat sheet, poi, players)
+        # when clicked. The name stays: `replay` and the tests find the page by it.
+        x, y, w, h = self.panel_rect()
+        imgui.set_next_window_pos(imgui.ImVec2(x, y), imgui.Cond_.always)
+        imgui.set_next_window_size(imgui.ImVec2(w, h), imgui.Cond_.always)
+        imgui.begin("CONTROLS", None,
+                    imgui.WindowFlags_.no_decoration | imgui.WindowFlags_.no_move
+                    | imgui.WindowFlags_.no_saved_settings
+                    | imgui.WindowFlags_.no_bring_to_front_on_focus)
+        self._panel_x = x
         self.ghosts = 0
         self.page = max(0, min(self.page, len(PAGE_KEYS) - 1))
         if self.page != getattr(self, "_focus_seen", None):   # set straight, not through ui.page
             self.go_page(self.page)
-        foot = imgui.get_frame_height_with_spacing()
-        if imgui.begin_child("##page", imgui.ImVec2(0, -foot)):
+        # the footer's line and its separator: short by the separator, CONTROLS
+        # overflowed by a few points and wore a scrollbar from its second frame.
+        # The page fills itself and never scrolls (the pane does): its first
+        # frame's content would give it a scrollbar, and the canvas a narrower
+        # second frame, which the editor answers by moving the view.
+        foot = imgui.get_frame_height_with_spacing() + imgui.get_style().item_spacing.y + 1.0
+        if imgui.begin_child("##page", imgui.ImVec2(0, -foot), 0, imgui.WindowFlags_.no_scrollbar):
             # a desk control is picked and can be mapped (plan 17 WP4): the
             # canvas and the sections are drawn disabled — dimmed, no widget
             # takes a click — and the click on a param is `_ctx_pick`'s. Never
@@ -1990,6 +2034,19 @@ class Panel:
         imgui.end_child()
         self._footer(fps)
         imgui.end()
+
+    def panel_rect(self) -> tuple[float, float, float, float]:
+        """`panel_rect` for this frame's control window and what is up in
+        the column left of the panel (the desk, the pad diagram)."""
+        io = imgui.get_io()
+        return panel_rect((io.display_size.x, io.display_size.y),
+                          bool(getattr(self, "desk", True)),
+                          bool(getattr(self, "pad_diagram", False)))
+
+    def panel_left(self) -> float | None:
+        """The panel's left edge this frame, None while it is hidden: the
+        desk and the pad take the room left of it (their `room`)."""
+        return self.panel_rect()[0] if self.open else None
 
     def _message(self, now: float | None = None) -> tuple[str, bool]:
         """The footer's one message slot (plan 15 WP1): the newest of the
@@ -2112,7 +2169,7 @@ class Panel:
         if lib is not None and lib.reg is not None:
             proj = lib.project
             text = f"{proj.name}{' ●' if proj.is_dirty() else ''}"
-            imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(text).x)
+            flush_right(imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
                 tooltip("the open show — the presets section")
@@ -2140,19 +2197,23 @@ class Panel:
             err = getattr(self.renderer, "dim_error", "")
             if err:
                 imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
+        rows = self.displays
+        if rows is not None:                # which display shows what (SC2)
+            ui_displays.section(self, rows)
         self._output_blocks()
         for want in ui_graph.window_wants(self):   # plan 44 D3: a window the meta controller lacks
             imgui.text_colored(WARN, want)
-        if len(self.reg["output.monitor"].names) > 1:
+        if rows is None and len(self.reg["output.monitor"].names) > 1:
             self._combo("output.monitor")
         if "output.render" in self.reg:     # the render cap, on the toggles' row
             size = getattr(getattr(self.renderer, "scene", None), "size", None)
             tip = self.reg["output.render"].tip
             self._combo("output.render", width=96,
                         tip=f"{tip}\nDrawing {size[0]}×{size[1]} now." if size else None)
-            beside(check_w(self.reg["output.fullscreen"].label))
-        self._check("output.fullscreen")
-        beside(check_w(self.reg["output.overlay"].label))
+            beside(check_w(self.reg["output.fullscreen" if rows is None else "output.overlay"].label))
+        if rows is None:                    # (with rows, fullscreen is a display's)
+            self._check("output.fullscreen")
+            beside(check_w(self.reg["output.overlay"].label))
         # decision 21 (a): overlay only when the config asks — shut, the
         # toggle is drawn disabled with the reason, and its three overlay-only
         # settings (click-through, ground, opacity) would do nothing
@@ -2254,6 +2315,9 @@ class Panel:
         slots = getattr(self, "outputs", None) or []
         if not slots:
             return
+        # (a slot nothing shows and nothing's missing from says nothing: SC2 keeps all of
+        # them for the run, and the rows say which display shows what)
+        slots_all, slots = slots, [sl for sl in slots if getattr(sl, "drawn", sl.opened) or sl.missing]
         several = len(slots) > 1
         fx_on, visible, master = self._outputs_now()
         ghost = self.reg.get("ghost.on")
@@ -2286,8 +2350,8 @@ class Panel:
                 else max(imgui.get_content_region_avail().x - ticks - 8, 40))
         labels = {sl.n: fit_text(f"{sl.n}  {sl.name}" if sl.name else f"{sl.n}", room)
                   for sl in slots}
-        col = imgui.get_cursor_pos_x() + 8 + max(imgui.calc_text_size(t).x
-                                                 for t in labels.values())
+        col = imgui.get_cursor_pos_x() + 8 + max((imgui.calc_text_size(t).x
+                                                  for t in labels.values()), default=0.0)
         for sl in slots:
             pre = f"output.{sl.n}"
             name = sl.name or ("output" if several else "")
@@ -2309,14 +2373,17 @@ class Panel:
             self._through_check(frame, sl.n, slots, bus_cuts)
             # the mirror (plan 23 WP1): two ticks at the right of the dim row,
             # or of the "shows:" line when the output has no dim of its own
+            # (with rows, a window's flips are on its display's row)
             flips = [(pid, t) for pid, t in ((f"{pre}.flip_x", "flip X"),
-                                             (f"{pre}.flip_y", "flip Y")) if pid in self.reg]
+                                             (f"{pre}.flip_y", "flip Y")) if pid in self.reg
+                     and (self.displays is None or not sl.opened)]
             st = imgui.get_style()
             fw = sum(imgui.calc_text_size(t).x + imgui.get_frame_height()
                      + st.item_inner_spacing.x + st.item_spacing.x for _, t in flips)
             if narrow and flips:            # the pane: the flips on a row of their own
                 fw = 0.0
-            if f"{pre}.dim" in self.reg:
+            # (one shown, the master dim is its dim, unless it has a launch dim of its own)
+            if f"{pre}.dim" in self.reg and (several or float(sl.switches.dim) < 1.0):
                 self._row(f"{pre}.dim", width=-(fw + 8) if fw else -1, label="dim")
                 for i, (pid, t) in enumerate(flips):
                     if not narrow or i:
@@ -2326,7 +2393,7 @@ class Panel:
             sw = sl.switches
             why = []
             if sw.hands and ghost is not None and not ghost.value:
-                why.append("hands: ghost hands are off (HANDS page)")
+                why.append("hands: ghost hands are off (HANDS section)")
             elif sw.hands and getattr(self, "hands", None) is None:
                 why.append("hands: no tracker")
             if through_layer(wiring, sl.n, bus_cuts) is not None and not fx_on:
@@ -2378,9 +2445,10 @@ class Panel:
                 tooltip(line)
         self._edit_said("output_said")
         if several:
-            w, h = slots[0].size
+            w, h = slots_all[0].size
             size = f" · frame {w}×{h}" if w and h else ""
-            imgui.text_colored(FAINT, fit_text(f"paced by output 1{size} · below: output 1's "
+            pace = next((sl.n for sl in slots_all if sl.opened), 1)
+            imgui.text_colored(FAINT, fit_text(f"paced by output {pace}{size} · below: output 1's "
                                                "window", imgui.get_content_region_avail().x))
         imgui.dummy(imgui.ImVec2(0, 2))
 
@@ -2613,7 +2681,12 @@ class Panel:
             words = "Stop video sound" if mix_on else "Listen to video sound"
             beside(button_w(words))
             self._button("audio.mix", words)
-        beside(button_w("Load track"))
+            if mix_on:      # true only then; the hover says it before the press (row 790)
+                imgui.push_text_wrap_pos(0.0)
+                imgui.text_colored(DIM, VIDEO_SOUND_REACHES)
+                imgui.pop_text_wrap_pos()
+        else:
+            beside(button_w("Load track"))
         if imgui.button("Load track"):
             self._file_dialog = self.open_file_dialog(
                 "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
@@ -2644,7 +2717,9 @@ class Panel:
                 if getattr(mx, "failed", False):        # the mixer's error is the source's
                     imgui.text_colored(WARN, f"video sound silent — {mx.state}")
                 elif not getattr(mx, "playing", 0):
-                    imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
+                    imgui.push_text_wrap_pos(0.0)   # (longer than the pane's narrow widths)
+                    imgui.text_disabled("silent until an on-air channel's sound is on (MEDIA)")
+                    imgui.pop_text_wrap_pos()
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 
@@ -3115,7 +3190,7 @@ class Panel:
             else:
                 imgui.text_disabled(line)
         if not len(regs):
-            imgui.text_disabled("no devices — [[devices]] in config.toml")
+            imgui.text_disabled("no devices — drag one from the player board's tray")
         for line in devices.wanted_lines(ui_graph.panel_wants(self)):
             imgui.text_colored(WARN, line)          # plan 40 T4: what the loadable patch waits for
 

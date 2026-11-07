@@ -1,5 +1,5 @@
 """The device registry (plan 27): every input or output the meta controller has,
-listed in ``config.toml`` as ``[[devices]]``, opened behind its own entry,
+listed in the library's ``devices.json`` (`devicelist`), opened behind its own entry,
 polled in order each frame, and closed in one list.
 
 A *device* is anything that satisfies the `Device` protocol below:
@@ -69,10 +69,10 @@ hardware is not there reports `lost` and **reconnects itself** on its own
 schedule — today's adapters do (`midi.Ports.retry`, the pad's GLFW poll
 and USB rescan, the hands' Leap thread and DAW port), and a B2 / B4
 device must too; the registry never closes or reopens a `lost` device
-(a `Ports` of its own inside `poll` is the pattern). The registry watches `config.toml`'s
-mtime every `WATCH_FRAMES` frames and re-reads only the device list,
-closing what left and opening what arrived; a bad edit is a note and the
-old list stands.
+(a `Ports` of its own inside `poll` is the pattern). The registry asks the list
+(`devicelist.DeviceList`, whose worker does the disk) every `WATCH_FRAMES` frames
+whether it changed, closing what left and opening what arrived; a bad list is a note
+and the old one stands.
 
 **Sinks** (plan 27 B3). A sink takes values *out* of the app: a device's
 `sinks` are its sink ports (a `Port` whose `scheme` is the device's role and
@@ -102,13 +102,16 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
+from .players import THERE, UNLISTED, UNPLUGGED
+
 # the open-retry schedule — midi.Ports' (RECONNECT_S, RECONNECT_FAST,
 # RECONNECT_SLOW_S), restated here because midi is imported only behind
 # a device's entry; tests/test_devices.py holds the two equal
 RETRY_S = 2.0
 RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
-WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
+WATCH_FRAMES = 30        # the device list's mtime is looked at this often (as the shaders are)
+REOPEN_S = 3.0           # a device reopened while connected: longer than one `RETRY_S` to find it
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
 # fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
 # not a device
@@ -1717,7 +1720,9 @@ class DeviceRegistry:
     own entry (`open_all`), polled in order each frame, closed in one
     list (reverse order). `entries` are checked entries (config.devices);
     `devices` may be given ready-made (tests, the frame-order stubs).
-    `path` is the config.toml to watch, `clock` the retry clock
+    `store` is the list both Macs share (`devicelist.DeviceList`), which it
+    watches and `relist`s from; `path`, with no store, a config.toml to
+    watch instead (RT1 retires that road). `clock` is the retry clock
     (monotonic, as midi.Ports'). `listeners` are called after any open
     or close, so the host can re-point what holds an adapter (the panel,
     the ghost renderer).
@@ -1734,12 +1739,21 @@ class DeviceRegistry:
         """The status-change hook (plan 40 T4): a no-op until the app sets
         an instance's own (`rig.said = …`, app.py)."""
 
+    def renamed(self, old: str, new: str) -> None:
+        """A controller adopted here is `new`: the file gave `old` to the other Mac's. A
+        hook the app sets to the meta controller's (`rename_controller`), so who holds it
+        follows; with none, the players'."""
+        players = getattr(self.ctx, "players", None)
+        if players is not None:
+            players.rename(old, new)
+
     def __init__(self, entries: list[dict] | None = None, ctx: Context | None = None, *,
                  devices: list | None = None, path: Path | None = None,
-                 clock=time.monotonic, notes: list[str] | None = None):
+                 clock=time.monotonic, notes: list[str] | None = None, store=None):
         self.ctx = ctx if ctx is not None else Context()
         self.notes = notes if notes is not None else self.ctx.notes
         self.path = Path(path) if path is not None else None
+        self.store = store
         self.clock = clock
         self.entries: list[dict] = [dict(e) for e in (entries or [])]
         if getattr(self.ctx, "devices", None) is None:
@@ -1771,6 +1785,21 @@ class DeviceRegistry:
     def get(self, role: str):
         """The device of `role`, or None."""
         return next((d for d in self.devices if d.role == role), None)
+
+    def presence(self, role: str) -> str:
+        """Where the controller `role` is, for an undo of a move (row 800): `UNLISTED`,
+        no entry lists it; `UNPLUGGED`, listed and lost; else `THERE`. One switched off is
+        there. One `apply` has just reopened reads as lost until a poll finds it (a pad's
+        `io.on`), and that is no unplugging: it is there for `REOPEN_S`, or until it says."""
+        d = self.get(role)
+        if d is None:
+            return UNLISTED
+        word = self._word(d)
+        reopening = self.__dict__.setdefault("_reopening", {})
+        if word is None or word.startswith(("connected", OFF)):
+            reopening.pop(role, None)
+            return THERE
+        return THERE if self.clock() < reopening.get(role, 0.0) else UNPLUGGED
 
     def first(self, kind: str):
         """The first listed device of `kind` (off or not), or None."""
@@ -1900,7 +1929,7 @@ class DeviceRegistry:
         its role — **once per role**, marked done in `bindings.json` itself
         (`Bindings.sinks_seeded`, never by consuming the owner's config
         key): a role in that list is never seeded again, so deleting every
-        row of it on ROUTING, or saving config.toml mid-session, brings
+        row of it on ROUTING, or the list changing mid-run, brings
         nothing back. A file that already holds sink rows on a role counts
         as seeded for it (the mark is added). Written with one note; from
         then on the rows say and the key is not read."""
@@ -2074,6 +2103,9 @@ class DeviceRegistry:
         close list for a quit and a restart (the pad included)."""
         for d in reversed(self.devices):
             self._close(d)
+        store = self.__dict__.get("store")
+        if store is not None:
+            store.close()
 
     # ---- the frame ----
 
@@ -2256,7 +2288,7 @@ class DeviceRegistry:
                 on = p.deck.reg if p is not None else reg
                 self._guard(d, lambda d=d, on=on: d.send(on, analyzer))
 
-    # ---- config.toml, watched ----
+    # ---- the list, watched ----
 
     def _stat(self) -> float | None:
         if self.path is None:
@@ -2266,10 +2298,43 @@ class DeviceRegistry:
         except OSError:
             return None
 
+    def relist(self) -> bool:
+        """The list as the store has it, applied (an adopt, here on this Mac: an entry
+        that won't check is left out, and the rest stand). True when anything changed."""
+        store = self.__dict__.get("store")
+        if store is None:
+            return False
+        for old, new in store.take_renames():
+            self.renamed(old, new)
+        entries, problems, _notes = store.checked()
+        for why in problems:
+            self._note(why)
+        return self.apply(entries)
+
     def watch(self) -> bool:
-        """Re-read the `[[devices]]` list when config.toml's mtime moved;
-        True when the list changed. A file that will not parse, or a list
-        with a bad entry, is a note and the old list stands."""
+        """Re-read the list when its file moved; True when the list changed. A file
+        that will not parse, or a list with a bad entry, is a note and the old list
+        stands, with every device still running. The store's list when there is one
+        (`DeviceList.look`: the other Mac's change lands here, and no local adopt is
+        lost to it); else `path`'s `[[devices]]`."""
+        store = self.__dict__.get("store")
+        if store is not None:
+            try:
+                changed = store.look()
+                # (asked whether or not the list moved: a launch's rename left no change behind)
+                renames = store.take_renames()
+                for old, new in renames:
+                    self.renamed(old, new)
+                if not changed and not renames:
+                    return False
+                entries, problems, _notes = store.checked()
+                if problems:
+                    self._note(f"devices: the list not applied — {problems[0]} — the old list stands")
+                    return False
+                return self.apply(entries)
+            except Exception as e:  # noqa: BLE001 — what's in a shared file never stops a frame
+                self._note(_err("devices: the list not applied, and the old one stands", e))
+                return False
         if self.path is None:
             return False
         mtime = self._stat()
@@ -2306,6 +2371,8 @@ class DeviceRegistry:
                 devices.append(have.pop(role))
                 continue
             if kept is not None:
+                if str(self._word(kept)).startswith("connected"):     # (`presence`)
+                    self.__dict__.setdefault("_reopening", {})[role] = self.clock() + REOPEN_S
                 self._close(have.pop(role))
                 self._note(f"devices: {role} changed — reopened")
             else:
@@ -2357,8 +2424,8 @@ class DeviceRegistry:
 
 CONNECTED, LOST, OFF, MISSING = "connected", "lost", "off", "missing"
 WANT_STATES = (CONNECTED, LOST, OFF, MISSING)
-# a want's state as a sentence says it ("apc40 (lost)", "leap (not in this rig)")
-STATE_WORDS = {CONNECTED: "connected", LOST: "lost", OFF: "off", MISSING: "not in this rig"}
+# a want's state as a sentence says it ("apc40 (lost)", "leap (not set up on this Mac)")
+STATE_WORDS = {CONNECTED: "connected", LOST: "lost", OFF: "off", MISSING: "not set up on this Mac"}
 _MIDI = ("cc", "note", "pitch")             # routing.MIDI_SCHEMES, restated (no app import)
 PLAYER_1 = "player 1"       # who a bare row names, when no device publishes it bare
 WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
@@ -2531,7 +2598,7 @@ def wants_for(table, registry, ids) -> list[Want]:
 
 def want_lines(ws, limit: int = WANT_ROWS_SHOWN) -> list[str]:
     """One line per want whose device is not there: "apc40 (lost): K1, K2",
-    "leap (not in this rig): right hand y" — the first `limit` rows, then
+    "leap (not set up on this Mac): right hand y" — the first `limit` rows, then
     "+ k more". Nothing for a connected want."""
     out = []
     for w in ws:
@@ -2546,12 +2613,12 @@ def want_lines(ws, limit: int = WANT_ROWS_SHOWN) -> list[str]:
 
 def want_words(ws, limit: int = WANT_ROWS_SHOWN) -> str:
     """The wants as a group node's status line says them (plan 40 T4):
-    "waits for apc40 (lost): K1, K2 · leap (not in this rig): right hand
+    "waits for apc40 (lost): K1, K2 · leap (not set up on this Mac): right hand
     y"; "" when every device is there.
 
     >>> want_words([Want("apc40", "lost", "cc", ("K1", "K2")),
     ...             Want("leap", "missing", "hand", ("right hand y",))])
-    'waits for apc40 (lost): K1, K2 · leap (not in this rig): right hand y'
+    'waits for apc40 (lost): K1, K2 · leap (not set up on this Mac): right hand y'
     """
     lines = want_lines(ws, limit)
     return "waits for " + " · ".join(lines) if lines else ""

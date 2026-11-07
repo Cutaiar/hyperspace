@@ -43,11 +43,11 @@ def test_config_reads_publish_keys(tmp_path):
     assert "ndi = 5 is not a name" in notes and "syphon = True is not a name" in notes
     assert "window = 'no' is not true or false" in notes
 
-    # output 1 holds the GL context and paces the loop: it always opens a window
+    # whether output 1 has a window is the display rows' to say, not this key (SC2)
     p.write_text('[[output.screens]]\nwindow = false\nsyphon = "RIG"\n')
     cfg = config.load(p)
     assert config.screens(cfg)[0]["window"] is True
-    assert any("output 1" in n and "always opens a window" in n for n in cfg["notes"])
+    assert any("output 1" in n and "the display rows' to say" in n for n in cfg["notes"])
 
     # the one-output form: [output] says for output 1
     p.write_text('[output]\nsyphon = "RIG"\nndi = "RIG"\n')
@@ -59,7 +59,7 @@ def test_config_reads_publish_keys(tmp_path):
     (one,) = config.screens(cfg)
     assert (one["ndi"], one["window"]) == ("", True)
     notes = " | ".join(cfg["notes"])
-    assert "[output] ndi = 3 is not a name" in notes and "always opens a window" in notes
+    assert "[output] ndi = 3 is not a name" in notes and "the display rows' to say" in notes
     # with a list, the list says: [output] syphon is ignored, with the note
     p.write_text('[output]\nsyphon = "X"\n[[output.screens]]\nname = "a"\n')
     cfg = config.load(p)
@@ -98,7 +98,7 @@ def test_publish_only_output_has_no_window(monkeypatch, tmp_path):
     assert sum("nothing to publish" in n for n in cfg["notes"]) == 1
     reg = Registry()
     register_switches(reg, slots)
-    assert "output.2.scene" in reg and "output.3.scene" not in reg
+    assert "output.2.scene" in reg and "output.3.scene" in reg       # every slot's (SC2)
 
 
 class _Off:
@@ -118,7 +118,7 @@ def test_draw_render_draws_a_publish_only_output_offscreen_at_the_render_cap():
     target (the renderer's context) at the render cap's size, in its
     place among the outputs; a published output carries its publishers;
     nothing is presented or swapped for it."""
-    from test_app_boundary import _Ctx, _Pres, _Renderer, _rig_slots, _SwapGlfw
+    from test_app_boundary import _Ctx, _Pres, _Renderer, _rig_root, _rig_slots, _SwapGlfw
 
     log: list[str] = []
     g = _SwapGlfw(log, {"w1": (800, 500), "w3": (640, 400)})
@@ -132,16 +132,18 @@ def test_draw_render_draws_a_publish_only_output_offscreen_at_the_render_cap():
         slots[1].publishers = pubs
         r = _Renderer(log)
         r.max_frame = (1920, 1080)
-        app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: log.append("flush"))
+        root = _rig_root(log, slots, g)
+        app._draw_render(r, _Ctx(log), object(), slots, root, flush=lambda: log.append("flush"))
         vs = r.calls[0]
         assert [v.size for v in vs] == [(800, 500), (1920, 1080), (640, 400)]
         assert vs[1].target is off.fbo and vs[1].presenter is None and off.size == (1920, 1080)
         assert vs[1].publish is pubs and vs[0].publish == [] and vs[1].switches is slots[1].switches
-        assert log == ["current w1", "bind screen", "draw 3", "flush",
-                       "current w3", "present proj", "swap w3", "current w1", "swap w1"]
+        assert log == ["current root", "bind frame", "draw 3", "flush",
+                       "current w3", "present proj", "swap w3",
+                       "current w1", "present one", "swap w1", "current root"]
         # "full" (no cap): output 1's framebuffer
         r.max_frame = None
-        app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: None)
+        app._draw_render(r, _Ctx(log), object(), slots, root, flush=lambda: None)
         assert r.calls[1][1].size == (800, 500)
     finally:
         app.glfw = app_glfw

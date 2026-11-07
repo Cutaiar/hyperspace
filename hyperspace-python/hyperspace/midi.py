@@ -124,11 +124,13 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import mido
 
 from . import apc40, generic, seq_page
 from .learn import Learn
+from .midiports import port_names
 from .params import Kind, Param, Registry, is_meta_id
 from .pointer import Through
 from .routing import (
@@ -155,11 +157,8 @@ from .routing import (
 # which profile the file's unqualified rows were written for)
 PROFILES = {"apc40": apc40, "generic": generic}
 RECONNECT_S = 2.0
-RECONNECT_FAST = 5        # looks at RECONNECT_S after a port goes missing, then
-RECONNECT_SLOW_S = 10.0   # this often. Every look makes a CoreMIDI client; one
-#                           the system refuses aborts the process inside rtmidi,
-#                           past any `except` (audit R15), so a desk that is not
-#                           there is not asked after thirty times a minute all night
+RECONNECT_FAST = 5        # bridge.OutPort: looks at RECONNECT_S after a port goes missing,
+RECONNECT_SLOW_S = 10.0   # then this often; a port that opens starts the count again
 HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
 REENTER_S = 2.0     # the intro is sent again at most this often (`MidiIO._reenter`)
 
@@ -238,13 +237,16 @@ class Slew:
 
 
 def find_port(names: list[str], match: str) -> str | None:
+    """The port `match` names: exactly, else the first it is part of, so an entry for
+    "Launch Control XL" never opens "Launch Control XL 2" when both are there."""
     m = match.lower()
-    return next((n for n in names if m in n.lower()), None)
+    return next((n for n in names if m == n.lower()), None) or next(
+        (n for n in names if m in n.lower()), None)
 
 
 def retry_after(misses: int) -> float:
-    """Seconds until the next look for a missing port, after `misses` looks
-    in a row that opened nothing."""
+    """Seconds until `bridge.OutPort`'s next try, after `misses` in a row that opened
+    nothing (`devices.retry_after` is held equal). A desk's `Ports` doesn't slow down."""
     return RECONNECT_S if misses <= RECONNECT_FAST else RECONNECT_SLOW_S
 
 
@@ -255,10 +257,9 @@ class Ports:
     `inp`/`out` may be injected (tests hand in fakes with iter_pending()
     and send()). A controller names both by one substring; the bridge
     names each side on its own — None leaves that side closed. An error
-    on either side drops both, and `retry` reopens them after RECONNECT_S
-    — after RECONNECT_FAST looks that found nothing, every RECONNECT_SLOW_S
-    (`retry_after`); a port that opens puts the count back to zero, so one
-    that drops mid-set is looked for quickly again.
+    on either side drops both, and `retry` looks again every RECONNECT_S,
+    all night: a look is cheap (`midiports`), and a desk plugged back in late
+    comes back as soon as one that was only just lost (row 791).
     """
 
     def __init__(self, in_match: str | None, out_match: str | None = None, *,
@@ -271,7 +272,6 @@ class Ports:
         self.in_name = self.out_name = self.name
         self.error = ""
         self._next_try = 0.0
-        self.misses = 0           # looks in a row that opened nothing
 
     @property
     def on(self) -> bool:
@@ -279,14 +279,15 @@ class Ports:
 
     def connect(self) -> bool:
         """Open whatever is present now; True when something opened."""
-        self.misses += 1
-        self._next_try = self.clock() + retry_after(self.misses)
-        try:
-            iname = find_port(mido.get_input_names(), self.in_match) if self.in_match else None
-            oname = find_port(mido.get_output_names(), self.out_match) if self.out_match else None
-        except Exception as e:  # noqa: BLE001 — backend missing / broken
-            self.error = f"{type(e).__name__}: {e}"[:120]
+        self._next_try = self.clock() + RECONNECT_S
+        # (the one road; it can't abort on a refusal it sees: audit R15)
+        seen = port_names(fresh=True)
+        # (only the sides this entry names: an out-only bridge doesn't care for the inputs)
+        self.error = (seen.in_why if self.in_match else "") or (seen.out_why if self.out_match else "")
+        if self.error:
             return False
+        iname = find_port(seen.inputs, self.in_match) if self.in_match else None
+        oname = find_port(seen.outputs, self.out_match) if self.out_match else None
         if iname is None and oname is None:
             self.inp = self.out = None
             return False
@@ -300,8 +301,6 @@ class Ports:
         self.in_name, self.out_name = iname or "", oname or ""
         self.name = iname or oname
         self.error = ""
-        self.misses = 0
-        self._next_try = self.clock() + RECONNECT_S      # (not the slow pace it was found at)
         return True
 
     def retry(self) -> bool:
@@ -536,7 +535,7 @@ class MidiIO:
 
     def _node_rows(self) -> list[Binding]:
         """What node mode derives for this desk on the deck it is on (N1a)."""
-        return self.table.node_rows(self._role())
+        return cast(Bindings, self.table).node_rows(self._role())
 
     def _own_rows(self) -> list[Binding]:
         """Every row of this desk's whose knob or fader state this adapter keeps:
@@ -690,7 +689,7 @@ class MidiIO:
         layer = of(self._role()) if of is not None else t.layer_serial
         page = getattr(t, "page_serial", 0) if t.is_primary(self._role()) else 0
         return (layer, t.desk_serial, getattr(t, "redraw_serial", 0), page,
-                t.node_rows_serial(self._role()))
+                cast(Bindings, t).node_rows_serial(self._role()))
 
     def _page_rows(self) -> list[Binding]:
         """The surface page's rows, on the first MIDI role's desk only."""

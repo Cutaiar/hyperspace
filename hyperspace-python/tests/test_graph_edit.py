@@ -1933,7 +1933,7 @@ def test_deleting_a_window_unwires_it(tmp_path):
     assert e.drop_node("render:output.2") is None
     assert not [w for w in rig.loaded_patch.graph.spec.wires if w.node == "output.2"]
     assert e.said == graphview.OUTPUT_UNWIRED.format(label="Output 2") == (
-        "Output 2 is a window of this rig: its wires are gone, it shows its ground")
+        "Output 2 is one of the meta controller's windows: its wires are gone, it shows its ground")
     assert ("channel.a", "output.all.image") in wired_wires(rig) and len(pushed) == 1
 
 

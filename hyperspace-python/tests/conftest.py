@@ -29,6 +29,8 @@ _LIVE_FILES = {"test_media_live.py", "test_media_publish.py"}
 _SLOW_FILES = {"test_dream.py"}
 # single tests, "file::function" (any parametrisation)
 _LIVE_TESTS = {
+    # the real app's windows take the focus on a Mac; its rule stays in the fast tier
+    "test_hot_reload_app.py::test_a_save_reaches_every_live_object_of_the_real_app",
     "test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass",
     "test_media_core.py::test_bad_file_is_an_error",      # polls; fails under load
     # plan 39 T4: the real segment backends, once each on a synthetic frame
@@ -260,13 +262,28 @@ def _library_home(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _a_launch_waits_for_its_read(monkeypatch):
+    """A launch waits `devicelist.LAUNCH_S` for the first read of the shared list, which a
+    loaded machine can pass, and then says the library isn't answering, as it should (row
+    803). Tests are about what that read found, so the ceiling is out of reach; the
+    stalled tests of `test_devicelist.py` set their own."""
+    from hyperspace import devicelist, displays
+
+    monkeypatch.setattr(devicelist, "LAUNCH_S", devicelist.SYNC_S)
+    monkeypatch.setattr(displays, "LAUNCH_S", displays.SYNC_S)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_midi(monkeypatch):
     """No test reaches the machine's MIDI: the port lists are empty and an
     open raises, unless the test patches mido itself (a later setattr wins).
     A real scan creates a CoreMIDI client, which reaches the owner's desk
     and, when CoreMIDI refuses one, aborts the process inside rtmidi where
-    no `except` can catch it (the crash of 2026-10-04 22:36)."""
+    no `except` can catch it (the crash of 2026-10-04 22:36). `midiports`
+    asks for no client here, and starts each test with nothing asked."""
     import mido
+
+    from hyperspace import midiports
 
     def closed(name=None, *a, **k):
         raise OSError(f"the tests have no MIDI ports ({name})")
@@ -275,6 +292,8 @@ def _no_real_midi(monkeypatch):
     monkeypatch.setattr(mido, "get_output_names", list)
     monkeypatch.setattr(mido, "open_input", closed)
     monkeypatch.setattr(mido, "open_output", closed)
+    monkeypatch.setattr(midiports, "_create_client", lambda: 0)
+    monkeypatch.setattr(midiports, "_gate", midiports._Gate())
 
 
 @pytest.fixture(autouse=True)

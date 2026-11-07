@@ -80,9 +80,10 @@ def test_meta_settings_never_persist_or_modulate(rig):
     for pid in ("output.monitor", "output.fullscreen", "output.overlay", "output.passthrough"):
         assert not r[pid].persist, pid
         assert not r[pid].modulatable, pid
-    # ground and opacity are a look: a loadable patch keeps them, a lane may drive them
+    # ground and opacity are still saved (SC2 moves them, with the migration), and as the
+    # meta controller's no lane may drive them (row 775)
     for pid in ("output.bg", "output.alpha"):
-        assert r[pid].persist and r[pid].modulatable, pid
+        assert r[pid].persist and not r[pid].modulatable, pid
     saved = r.snapshot("output")
     assert set(saved) == {"output.bg", "output.alpha"}
 
@@ -438,8 +439,8 @@ def test_the_output_switches_are_meta_settings():
     undo step holds them: `undo.watched` needs persist), not modulatable
     (no lane rides them) — and they write the output's `Switches`, which
     the renderer reads. Generated for the outputs that opened, numbered by
-    their place in the config's list; labels name the output when there
-    are several."""
+    their place in the config's list, whether or not a display shows them
+    (SC2); labels name the output when there are several."""
     from hyperspace import undo
     from hyperspace.overlay import register_switches
     from hyperspace.params import part_of
@@ -449,9 +450,10 @@ def test_the_output_switches_are_meta_settings():
     ids = register_switches(reg, slots)
     assert ids == ["output.1.scene", "output.1.hands", "output.1.flip_x",
                    "output.1.flip_y", "output.1.dim",
+                   "output.2.scene", "output.2.hands", "output.2.flip_x",
+                   "output.2.flip_y", "output.2.dim",
                    "output.3.scene", "output.3.hands", "output.3.flip_x",
                    "output.3.flip_y", "output.3.dim"]
-    assert not any(p.id.startswith("output.2.") for p in reg)       # not opened: none
     for pid in ids:
         p = reg[pid]
         assert p.group == "output" and part_of(p) == "shared_meta"

@@ -69,6 +69,7 @@ from __future__ import annotations
 import copy
 import math
 import re
+import warnings
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import Enum
@@ -176,10 +177,12 @@ PATCH_GROUPS = ("view", "rot", "camera", "eye", "pattern", "dream", "fx", "media
 SHARED_META_GROUPS = ("tempo", "hands", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "playlist")
 # plan 44 D3 (row 612): the shared meta params inside a patch group, by
-# group → the last segment of their ids — `ghost.mirror`, and an extra
-# hands node's `ghost.2.mirror`. They keep their group (the HANDS page
-# lists the group; an id is a saved format) and are the meta controller's single copy:
-# `part_of` asks here first, so a loadable patch never names one and the show keeps it
+# group → the last segment of their ids — `ghost.mirror`. They keep their group
+# (the HANDS page lists the group; an id is a saved format) and are the meta
+# controller's single copy: `part_of` asks here first, so a loadable patch never names
+# one and the show keeps it. `ghost.2.mirror` is no param since LY1 (a hands node's
+# state follows `ghost.mirror`); an old show may hold the id, which stays classed here
+# so no look ever takes it, until the old reader goes (CL1)
 SHARED_META_KEYS: dict[str, tuple[str, ...]] = {"ghost": ("mirror",)}
 # review of #371: the shared meta params whose group is not their id's first segment
 # (`edit.undo`, `app.restart`: group `ui`; `seq.page`: group `desk`). The app's
@@ -296,7 +299,7 @@ class Param:
     touched: Callable[[float], bool] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a loadable patch or a project's session (part_of)
-    modulatable: bool = True     # a lane may drive it
+    modulatable: bool = True     # a lane may drive it; never on a meta param (`__post_init__`)
     alias: bool = False          # a view onto another param (band.sel.*)
     # modulation state — runtime only
     _base: float | None = field(default=None, repr=False)   # norm; None = not modulated
@@ -328,6 +331,12 @@ class Param:
         # a group never change, and `snapshot(part=)` asks every frame the
         # dirty dot is drawn
         self._part = None if self.group is None else part_of_id(self.id, self.group)
+        # register row 775: no route lands on a meta param (row 743), so the flag says so,
+        # whatever the declaration said or left out. By the part and by the id, which is
+        # what the doors judge (`is_meta_id`), so the two can't disagree. Its desk rows,
+        # keys and pad buttons set it (`routing.act`, `Router.dispatch`) and never ask this
+        if self._part in META_PARTS or is_meta_id(self.id):
+            self.modulatable = False
 
     # ---- generic value access ----
 
@@ -868,8 +877,8 @@ def is_instance_id(pid: str) -> bool:
     """Is `pid` a param of an extra node instance — `fx.<file>.<n>.<key>`
     or `ghost.<n>.<key>`, n ≥ 2 — one that exists only while a loadable patch's
     graph holds that instance (plan 26 A4)? A loadable patch load sorts such ids
-    against the graph it lands; a show holds back the `ghost.<n>.*` ones
-    the registry lacks until a graph declares them."""
+    against the graph it lands; an old show's `ghost.<n>.*` ones the registry
+    lacks are held back (`Project._held_back`)."""
     parts = pid.split(".")
     if parts[0] == "fx" and len(parts) >= 4:
         mark = parts[2]
@@ -933,7 +942,7 @@ class Registry:
         if self.meta_reg is meta_reg:
             return
         if self.meta_reg is not None:
-            raise ValueError("a deck's registry follows one session")
+            raise ValueError("a deck's registry follows one meta registry")
         self.meta_reg = meta_reg
         meta_reg._follow(self)
         for p in list(meta_reg):
@@ -999,13 +1008,17 @@ class Registry:
 
     def remove(self, pid: str) -> Param | None:
         """Drop a param (a band that was deleted). Bindings to it go dormant —
-        every adapter already treats an unknown id as a no-op. A meta controller
-        param is the meta controller's to drop (plan 44 D3): it leaves every deck."""
+        every adapter already treats an unknown id as a no-op. A shared meta param
+        is the meta controller's to drop, on `MetaRegistry.remove`, and it leaves
+        every deck there. A deck's registry keeps it, warns and returns None (LY1):
+        whatever a deck's own section drops, no other deck loses anything."""
         meta_reg = self.meta_reg
         if meta_reg is not None and meta_reg is not self:
             q = meta_reg.get(pid)
             if q is not None and q is self._p.get(pid):
-                return meta_reg.remove(pid)
+                warnings.warn(f"{pid} is shared: a deck's registry doesn't drop it, "
+                              "MetaRegistry.remove does", stacklevel=2)
+                return None
         p = self._p.pop(pid, None)
         if p is not None:
             self.serial += 1
@@ -1015,7 +1028,8 @@ class Registry:
         return p
 
     def remove_prefix(self, prefix: str) -> list[Param]:
-        return [self.remove(pid) for pid in list(self._p) if pid.startswith(prefix)]
+        gone = (self.remove(pid) for pid in list(self._p) if pid.startswith(prefix))
+        return [p for p in gone if p is not None]
 
     # ---- frame ----
 
@@ -1050,8 +1064,8 @@ class Registry:
 
     def lands(self, p: Param) -> bool:
         """Does this deck land `p`? All its own, and the meta controller's only when
-        it is the meta controller's lead (`apply`). Plan 44 D4: a row of a deck that
-        does not land its target is dormant (`Router.modulate`)."""
+        it is the meta controller's lead. What a macro's base subscriber asks
+        (`Router.follow_macros`) and the line under a row (`ui_routing`)."""
         meta_reg = self.meta_reg
         return (meta_reg is None or meta_reg is self or meta_reg.on_air_reg is self
                 or not self._owned_by_meta(p))
@@ -1064,27 +1078,17 @@ class Registry:
         `Param.apply` skips. Closes the mark: an `apply` with no pass
         before it lands everything, as before.
 
-        Plan 44 D3 (review of #351): a shared meta param is one `Param` in
-        every deck, and an apply consumes its frame's offsets — so only the
-        meta controller's **lead** deck (`MetaRegistry.on_air_reg`, the first that
-        follows it) lands the meta controller's params; every other deck's apply
-        leaves them alone, never releasing what another deck holds. Plan 44
-        D4 (row 625): only the lead's rows act on a shared meta param
-        (`Router.modulate`: another deck's are dormant), so its offsets land
-        in the frame of its pass, and `app.frame` runs the lead first, so
-        another deck reads this frame's meta controller values."""
+        A shared meta param is one `Param` in every deck, and no route moves
+        one (row 775), so it has no offset for any deck to land, and
+        `app.frame` running the lead first is what has another deck read this
+        frame's meta controller values."""
         # over a copy: a modulated trigger may add or remove params
         # (a band layout change) while we are still walking the table.
         # `nonfinite`: the params that dropped a NaN / inf this frame (the
         # stall log names each once, app.py) — those the pass landed too
         mark, self.landed = self.landed, None
-        meta_reg = self.meta_reg
-        follower = (meta_reg is not None and meta_reg is not self
-                    and meta_reg.on_air_reg is not self)
         bad: list[str] = []
         for p in list(self._p.values()):
-            if follower and self._owned_by_meta(p):
-                continue
             if p._base is not None:
                 p.apply(mark)
             if p._bad:
@@ -1344,7 +1348,7 @@ class MetaRegistry(Registry):
     def on_air_reg(self, deck: Registry | None) -> None:
         import weakref
         if deck is not None and deck.meta_reg is not self:
-            raise ValueError("the lead is a deck that follows this session")
+            raise ValueError("the lead is a deck that follows this meta registry")
         self.__dict__["_lead"] = weakref.ref(deck) if deck is not None else None
 
     def apply(self) -> None:
@@ -1360,7 +1364,7 @@ class MetaRegistry(Registry):
     def add(self, p: Param) -> Param:
         part = part_of(p)
         if part == "patch":
-            raise ValueError(f"{p.id} is a performance param: a deck's, never the session's")
+            raise ValueError(f"{p.id} is a performance param: a deck's, never the meta controller's")
         if part == PER_DECK_META:
             raise ValueError(f"{p.id} closes over one deck: each deck's own, never shared")
         decks = self.decks
@@ -2292,9 +2296,12 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     # the toggle would "succeed" into silence for ever
     if media is not None:
         r.toggle("audio.mix", "Video sound", mix_on, set_mix, group=g, persist=False,
-                 tip="Listen to the media mixer: the channels whose sound is on, summed "
-                     "after their gains. Silent until a channel's sound is on; no input "
-                     "device is opened.")
+                 tip="Listen to what the room hears of the videos: the on-air channels whose "
+                     "sound is on, summed after their gains. While this is on, the off-air "
+                     "look's audio routes react to that sound too: the analyzer hears what the "
+                     "room hears, and both looks read it. It moves only what those routes "
+                     "drive, and asks nothing of the off-air channels. Silent until an on-air "
+                     "channel's sound is on; no input device is opened.")
     r.enum("audio.device", "Input device",
            lambda: int(getattr(audio, "device_sel", 0)),
            lambda i: setattr(audio, "device_sel", int(i)),
@@ -2313,8 +2320,8 @@ def build_meta(control, audio, restart=None, media=None) -> MetaRegistry:
     # with ⇧ to redo), on the stack `undo.here` names; none installed: nothing
     r.trigger("edit.undo", "Undo", lambda: undo.undo(), group="ui", modulatable=False,
               tip="Take back the last gesture or the last load, learn or delete on the "
-                  "deck the panel is on; with the mouse on a rig setting, or in the output, "
-                  "audio, analyzer or hands section, the last rig change (Cmd+Z or Ctrl+Z). "
+                  "deck the panel is on; with the mouse on a meta controller setting, or in the output, "
+                  "audio, analyzer, hands or players section, the last meta controller change (Cmd+Z or Ctrl+Z). "
                   "After you come to a deck or a meta section it takes nothing back until "
                   "you change something there; after that it goes all the way down.")
     r.trigger("edit.redo", "Redo", lambda: undo.redo(), group="ui", modulatable=False,
@@ -2907,13 +2914,13 @@ def build_patch(view, bank=None, dream=None, fx=None, ghost=None, media=None, *,
         # the bindings file puts them on a control, never a loadable patch's row (row 700)
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
-                  tip="Load the next preset of the PRESETS page's list — every "
+                  tip="Load the next preset of the PRESETS section's list — every "
                       "preset by name, a new one included — into the deck off air, "
                       "wrapping at the end. The room does not move. "
                       "The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
-                  tip="Load the previous preset of the PRESETS page's list into the deck "
+                  tip="Load the previous preset of the PRESETS section's list into the deck "
                       "off air, wrapping at the start. The room does not move.")
         # home (plan 15 WP2, decision 27): the show's startup loadable patch. Lit
         # while the show names one — the light the desk's OVERDUB shows

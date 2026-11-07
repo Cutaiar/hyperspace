@@ -29,7 +29,7 @@ Nothing in W5 may change an existing saved format before the migration. `output.
 ## Read first, in this order
 
 1. **"The owner's answers" below: they overrule every other document.**
-2. `docs/plans/58-wave-5.md`, all of it.
+2. `docs/plans/58-wave-5.md`, all of it; its §9 corrects §2 and §4 against `main`. Live state: `tier-2-3-build-order.md`, "Where we are".
 3. `docs/GLOSSARY.md`, signed 2026-11-06. New code uses its words. After SEM, the code does too.
 4. `docs/plans/wave-4-session-prompt.md`: "The owner's answers" (ten rounds), which still hold, and "Lessons
    from wave 3".
@@ -136,6 +136,8 @@ plan in the same PR as the first item, and tell the owner only what changes scop
   skipped steps as skipped.
 
 ## Reporting
+
+**Keep the live status current:** `tier-2-3-build-order.md`, "Where we are", has a row per item. Update it whenever an item changes state.
 
 Nothing in wave 4 had been tried on real hardware when this was written, and CL1 is the point of no return for
 old files. SC3b can only be proved by unplugging a real display, so nothing about hot-plug is done until that has happened. Say what's been tried at the machine whenever it matters. CL1's PR body must say in its first line

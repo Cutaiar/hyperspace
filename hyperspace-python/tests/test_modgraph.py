@@ -189,16 +189,16 @@ def test_a_param_the_pass_lands_is_applied_once_a_frame():
         return lambda v: state.__setitem__(k, v)
 
     reg = Registry()
-    gain = reg.continuous("master.gain", "gain", lambda: state["gain"], put("gain"))
+    gain = reg.continuous("view.gain", "gain", lambda: state["gain"], put("gain"))
     on = reg.toggle("view.faces", "faces", lambda: state["on"], put("on"))
     bright = reg.continuous("view.bright", "bright", lambda: state["bright"], put("bright"))
-    table = Bindings([Binding("hand:0", "master.gain", "position"),
+    table = Bindings([Binding("hand:0", "view.gain", "position"),
                       Binding("hand:1", "view.faces", "position"),
-                      Binding("lfo:0", "view.bright", "push", 1.0, scale="master.gain")])
+                      Binding("lfo:0", "view.bright", "push", 1.0, scale="view.gain")])
     router = Router(reg, table)
     router.modgraph                                       # noqa: B018 — builds the plan
     landed = [s[1] for s in router.__dict__["_plan"] if s[0] == "param" and s[3]]
-    assert landed == ["master.gain"]                   # read by the push: lands in the pass
+    assert landed == ["view.gain"]                   # read by the push: lands in the pass
     router.feed("hand", [0.8, 1.0])
     router.feed("lfo", [0.75])
     router.rests["lfo"] = [0.5]
@@ -210,12 +210,12 @@ def test_a_param_the_pass_lands_is_applied_once_a_frame():
         p.apply = spy
     router.modulate()
     assert state["gain"] == pytest.approx(0.8) and gain.modulated   # before the push read it
-    assert calls == ["master.gain"]
+    assert calls == ["view.gain"]
     reg.apply()
     assert gain.modulated and state["gain"] == pytest.approx(0.8)   # not let go a second time
     assert state["on"] is True and on.modulated
     assert state["bright"] == pytest.approx(0.5 + 0.8 * 0.25)       # × this frame's gain, once
-    assert calls.count("master.gain") == 2 and calls.count("view.faces") == 1
+    assert calls.count("view.gain") == 2 and calls.count("view.faces") == 1
     reg.apply()                                        # no pass before it: lands everything
     assert not gain.modulated and state["gain"] == pytest.approx(0.5)
 
@@ -225,7 +225,7 @@ def _mod_rig():
     table, a router: N1's modifiers added through the table's own door."""
     from types import SimpleNamespace
 
-    state = {"view.bright": 0.5, "lfo.1.depth": 0.5, "master.gain": 0.5}
+    state = {"view.bright": 0.5, "lfo.1.depth": 0.5, "view.gain": 0.5}
     reg = Registry()
     for pid in state:
         reg.continuous(pid, pid, lambda k=pid: state[k],

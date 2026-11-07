@@ -44,8 +44,8 @@ the control window) — G, or the pan button on the APC40, takes clicks
 back.
 
 Rig-specific settings (monitor, fullscreen, overlay, passthrough, dim,
-and every output.N.*) never persist in a loadable patch and cannot be modulated; ground and opacity are
-a look and can. The dim (plan 15 WP3, decision 28) is the operator's: it
+and every output.N.*) never persist in a loadable patch. No ``output.*`` param can be
+modulated (row 775); ground and opacity are still saved until the migration moves them. The dim (plan 15 WP3, decision 28) is the operator's: it
 is not a window-system setting — the renderer multiplies the finished
 frame by it (render.Renderer.dim_pass; app.frame hands it over beside
 the ground) — it has no config key, so a launch always starts at full,
@@ -83,6 +83,7 @@ _JOIN_ALL_SPACES = 1 << 0
 _STATIONARY = 1 << 4
 _FULLSCREEN_AUX = 1 << 8
 _OVERLAY_LEVEL = 1000        # NSScreenSaverWindowLevel
+_OVER_A_RENDER = _OVERLAY_LEVEL + 1   # the control window, over a fullscreen render (SC3b)
 
 # the render cap (output.render): the box the frame must fit inside, its
 # aspect kept (outputs.capped); "full" is output 1's framebuffer, uncapped.
@@ -196,6 +197,14 @@ class GlfwBackend:
             ns.setHasShadow_(shadow)
             self._ns_saved = None
 
+    def float_over_renders(self, win, on: bool) -> None:
+        """The control window over a render on its display, a fullscreen one too, which is at
+        `_OVERLAY_LEVEL` (SC3b: it had nowhere free to go). Back to a normal window with off."""
+        self.set_attrib(win, "FLOATING", on)
+        ns = self._nswindow(win)
+        if ns is not None:
+            ns.setLevel_(_OVER_A_RENDER if on else 0)
+
 
 class Output:
     """The render window's output state, its params, and the once-per-frame apply."""
@@ -225,7 +234,7 @@ class Output:
 
     def register(self, reg: Registry) -> None:
         g = "output"
-        settings = {"persist": False, "modulatable": False}
+        settings = {"persist": False}
         # index 0 is "follow window" (monitor −1: the screen holding the
         # window, resolved by _target_monitor); the screens follow (audit P3)
         reg.enum("output.monitor", "Screen", lambda: self.monitor + 1,
@@ -307,6 +316,29 @@ class Output:
     def screen_names(self) -> list[str]:
         """The enum's choices: "follow window" (monitor −1), then every screen."""
         return [self.FOLLOW, *self.monitor_names()]
+
+    # ---- a window coming and going (SC3b) ----
+
+    def swap_window(self, other: Output) -> None:
+        """Trade windows with `other`, and all that goes with one: its backend (which caches
+        its NSWindow), what's been applied to it, where it is. Output 1's params stay with this
+        object, whichever window is output 1's now. `win` None: no window, and `apply` does nothing."""
+        for key in ("win", "backend", "fullscreen", "monitor", "_applied", "_saved_rect", "error"):
+            mine, theirs = getattr(self, key), getattr(other, key)
+            setattr(self, key, theirs)
+            setattr(other, key, mine)
+
+    def back_at(self, rect: tuple[int, int, int, int]) -> None:
+        """The window is back from a moment away, and macOS may have moved it. A plain window goes
+        to `rect`. A fullscreen one covers its display again at the next `apply`, even if the index
+        and the rect are as they were, and `rect` is where it goes when it's a plain window again."""
+        if self._applied["mode"] == "window":
+            if self.backend is not None:
+                self.backend.set_rect(self.win, *rect)
+        else:
+            self._saved_rect = (int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]))
+            self._applied.pop("monitor", None)
+            self._applied.pop("cover", None)
 
     # ---- per frame ----
 
@@ -440,7 +472,7 @@ def _cap(s: str) -> str:
 
 
 def register_switches(reg: Registry, slots) -> list[str]:
-    """The per-output switches (plan 21 WP4): for each opened render output
+    """The per-output switches (plan 21 WP4): for each render output
     N (an `outputs.Slot`, numbered by its place in the config's list),
     ``output.N.scene`` (labelled "picture") and ``output.N.hands`` — the
     window's two mutes (plan 35 O, row 374: off, it ignores what is wired
@@ -457,14 +489,13 @@ def register_switches(reg: Registry, slots) -> list[str]:
     — and not modulatable; a launch (and ⌘R) takes them from the config's
     ``[[output.screens]]`` entry, so a switch flipped at the party lasts
     until the restart. They can be learned onto a desk button like any
-    toggle. An output that did not open gets none; a publish-only one
-    (plan 32 T9: drawn, with no window) gets them all. Returns the ids."""
+    toggle. Every slot gets them, whether or not a display shows it (SC2): a display
+    can take an output up while the app runs (SC3b), and params turning up then would
+    move ids and bindings. Returns the ids."""
     settings = {"persist": False, "modulatable": False}
     several = len(slots) > 1
     ids: list[str] = []
     for sl in slots:
-        if not getattr(sl, "drawn", sl.opened):
-            continue
         sw, pre = sl.switches, f"output.{sl.n}"
         who = _cap(sl.name or f"output {sl.n}")
 
@@ -482,15 +513,15 @@ def register_switches(reg: Registry, slots) -> list[str]:
         reg.toggle(f"{pre}.scene", label("picture"), *flag("scene"), group="output",
                    tip=f"The picture wired into this window{whose} (GRAPH, OUTPUT). Off: "
                        "this window ignores the picture wired into it and shows its "
-                       "ground, the hands over. A mute, not the preset: a rig setting, "
+                       "ground, the hands over. A mute, not the preset: a meta controller setting, "
                        "the config's launch value comes back at a restart.", **settings)
         reg.toggle(f"{pre}.hands", label("hands"), *flag("hands"), group="output",
                    tip=f"The hands and the guide wired into this window{whose}. Off: "
-                       "a mute — this window ignores them. Ghost hands (HANDS page) is "
+                       "a mute — this window ignores them. Ghost hands (HANDS section) is "
                        "the switch for every output at once.", **settings)
         # plan 23 WP1: this output's mirror, its last step — the scene, the
         # hands and the readout together, to undo a Pepper's Ghost glass
-        mirror = ("Ghost mirror (HANDS page) flips the hands only: with this on, "
+        mirror = ("Ghost mirror (HANDS section) flips the hands only: with this on, "
                   "leave it off or the hands flip twice. Launch value: the "
                   "config's flip_x / flip_y.")
         reg.toggle(f"{pre}.flip_x", label("flip X"), *flag("flip_x"), group="output",

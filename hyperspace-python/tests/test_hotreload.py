@@ -125,6 +125,44 @@ def test_bad_save_keeps_last_good_until_fixed(pkg):
     assert t.speak() == "new"
 
 
+def test_a_refused_target_strands_no_other_and_all_are_named(pkg):
+    """Row 802: one object refusing left every later target on its old class."""
+    mod_a = importlib.import_module("hotpkg.mod_a")
+    importlib.import_module("hotpkg.mod_b")
+    first, later = mod_a.Thing(), mod_a.Thing()
+    r = _reloader(lambda: [
+        (first, "mod_a", "Thing"),
+        (object(), "mod_a", "Thing"),           # Python refuses: not a heap type's instance
+        (object(), "mod_a", "Thing"),
+        (SimpleNamespace(), "mod_a", "Gone"),   # no such class
+        (later, "mod_a", "Thing"),
+    ])
+
+    write(pkg, "mod_a", A_V2)
+    assert not r.poll(now=1.0)
+    assert first.speak() == "new" and later.speak() == "new"
+    assert first.rebuilt is True and later.rebuilt is True    # the hooks ran, either side
+    assert r.error.startswith("swap: ") and "mod_a.Thing: TypeError" in r.error
+    assert "(x2)" in r.error                    # the same refusal, said once with its count
+    assert "mod_a.Gone: AttributeError" in r.error
+    assert r.status == ""
+
+
+def test_a_raising_hook_strands_no_other(pkg):
+    mod_a = importlib.import_module("hotpkg.mod_a")
+    importlib.import_module("hotpkg.mod_b")
+    first, later = mod_a.Thing(), mod_a.Thing()
+    r = _reloader(lambda: [(first, "mod_a", "Thing"), (later, "mod_a", "Thing")])
+
+    write(pkg, "mod_a", A_V2.replace("self.rebuilt = True", """self.rebuilt = True
+            if self.count == 0:
+                raise RuntimeError("no")"""))
+    first.count, later.count = 0, 1
+    assert not r.poll(now=1.0)
+    assert later.speak() == "new" and later.rebuilt is True
+    assert "mod_a.Thing: RuntimeError: no" in r.error
+
+
 def test_dataclass_backfill(pkg):
     mod_a = importlib.import_module("hotpkg.mod_a")
     importlib.import_module("hotpkg.mod_b")
@@ -259,7 +297,8 @@ def test_every_package_module_but_the_cold_core_is_watched():
     # in, so a reloaded copy would sum nothing
     # segment (plan 39 T4) is cold: a worker module, its threads outlive a
     # reload (masks went on MODULES, before render, at the 37/38/39 integration)
-    cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch", "segment"}
+    # hot_slots (row 802) is what a hot class's slots stand on across a reload
+    cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch", "segment", "hot_slots"}
     assert names - cold == set(_watched()), sorted((names - cold) ^ set(_watched()))
 
 

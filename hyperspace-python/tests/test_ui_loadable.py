@@ -14,6 +14,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 from imgui_bundle import imgui
 from test_ui_routing import _drawn
 from test_ui_shell import (  # noqa: F401 — the fixture
@@ -25,7 +26,7 @@ from test_ui_shell import (  # noqa: F401 — the fixture
 )
 
 from hyperspace import ui, ui_loadable, ui_pane
-from hyperspace.library import HOME_UNSET, PATCHES, Library
+from hyperspace.library import HOME_UNSET, LOADABLE, PATCHES, RETIRED_MODULES, Library
 from hyperspace.ui import PAGE_KEYS
 
 ACID_WASH = Path(__file__).resolve().parent / "fixtures" / "patches" / "acid-wash.json"
@@ -164,7 +165,7 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     _click(panel, page["rects"]["×.DIAL"])
     assert not (tmp_path / "presets" / "dial.json").exists()
     assert [t.name for t in lib.trash()] == ["DIAL"] and "DIAL" not in lib.list("presets")
-    assert lib.status == "DIAL is in the trash — the PRESETS page's trash can restore it"
+    assert lib.status == "DIAL is in the trash — the PRESETS section's trash can restore it"
     page_frame(panel)
     page = st["page"]
     assert "DIAL" not in [n for n, _ in page["rows"]] and len(page["rows"]) == 24
@@ -416,6 +417,42 @@ def test_the_loadable_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):
         for b in keys[i + 1:]:
             assert not _overlap(items[a], items[b]), (a, b)
     assert not any(k.startswith("strip.") and not k.startswith("strip.presets.") for k in rects)
+
+
+@pytest.mark.parametrize("width", [258.0, 340.0, 600.0])
+def test_a_module_strip_does_not_overlap(rig, monkeypatch, width):  # noqa: F811
+    """Audit U10: plan 49's `strip_name_w` squeezes the name, and at 258 px the chips
+    now wrap, but `same_line(avail - w)` counts from the window's edge, so at 340 px the
+    save chip still covered ▶ by 6 px. Every module strip with its reset, and the
+    loadable patches' strip, dirty, clear themselves and the strip's right edge: where
+    it wraps, where it squeezes, and where it has room."""
+    panel, lib = rig.panel, rig.lib
+    monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)
+    groups = [g for g in lib.groups() if g not in lib.kinds and g not in RETIRED_MODULES]
+    assert "view" in groups and "pattern" in groups
+    modules = groups
+    groups = [*modules, LOADABLE]
+    imgui.new_frame()
+    imgui.set_next_window_pos(imgui.ImVec2(0, 0))
+    imgui.set_next_window_size(imgui.ImVec2(width + 2 * imgui.get_style().window_padding.x, 800))
+    imgui.begin("strips", None, imgui.WindowFlags_.no_scrollbar)
+    avail = imgui.get_content_region_avail().x
+    right = imgui.get_cursor_screen_pos().x + avail
+    for group in groups:
+        ui_loadable.strip(panel, group)
+    imgui.end()
+    imgui.end_frame()
+    assert avail == pytest.approx(width)
+    rects = _rects(panel)
+    for group in groups:
+        items = {k: v for k, v in rects.items() if k.startswith(f"strip.{group}.")}
+        chips = ("name", "next", "save", "as", "reset") if group in modules else ("name", "next", "new", "save", "as")
+        assert {f"strip.{group}.{k}" for k in chips} <= set(items), group
+        keys = sorted(items)
+        for i, a in enumerate(keys):
+            assert items[a][2] <= right + 1, a
+            for b in keys[i + 1:]:
+                assert not _overlap(items[a], items[b]), (a, b, items[a], items[b])
 
 
 def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
