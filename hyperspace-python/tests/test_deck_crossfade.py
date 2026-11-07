@@ -439,7 +439,7 @@ def test_main_moves_nothing_and_calls_no_verb():
         assert verb not in src, verb
     assert "off_air=meta.parked" in src
     assert "pointer=meta.on_air_pointer" in src
-    assert "media.heard = lambda: meta.on_air.loaded_patch.media" in src
+    assert "media.seat(meta)" in src        # what it does: tests/test_video_sound_path.py
 
 
 def test_the_frame_runs_the_deck_parked_list_it_is_handed(rig):

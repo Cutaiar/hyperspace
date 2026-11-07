@@ -688,6 +688,10 @@ CHEATSHEET = [
 # output; audio holds the master faders and nothing of a loadable patch (row 692)
 META_SECTIONS = ("output", "audio", "analyzer", "hands")
 
+# The analyzer is one for both looks, so what it hears of the video on air reaches the
+# look off air's routes. The owner accepts this (2026-11-06, row 790) and wants it said.
+VIDEO_SOUND_REACHES = "Off air reacts to on air's video sound."
+
 PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
              "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players", "playlist"]
 
@@ -2619,7 +2623,12 @@ class Panel:
             words = "Stop video sound" if mix_on else "Listen to video sound"
             beside(button_w(words))
             self._button("audio.mix", words)
-        beside(button_w("Load track"))
+            if mix_on:      # true only then; the hover says it before the press (row 790)
+                imgui.push_text_wrap_pos(0.0)
+                imgui.text_colored(DIM, VIDEO_SOUND_REACHES)
+                imgui.pop_text_wrap_pos()
+        else:
+            beside(button_w("Load track"))
         if imgui.button("Load track"):
             self._file_dialog = self.open_file_dialog(
                 "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
@@ -2650,7 +2659,9 @@ class Panel:
                 if getattr(mx, "failed", False):        # the mixer's error is the source's
                     imgui.text_colored(WARN, f"video sound silent — {mx.state}")
                 elif not getattr(mx, "playing", 0):
-                    imgui.text_disabled("silent until a channel's sound is on (MEDIA)")
+                    imgui.push_text_wrap_pos(0.0)   # (longer than the pane's narrow widths)
+                    imgui.text_disabled("silent until an on-air channel's sound is on (MEDIA)")
+                    imgui.pop_text_wrap_pos()
         else:
             imgui.text_disabled("no source — the shape spins on its own")
 
