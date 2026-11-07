@@ -8358,6 +8358,15 @@ Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_p
 2. Open a patch you laid out by hand before this build. *Pass:* every node is where you put it relative to its neighbours.
 3. After a run, look in the temp folder for `hyperspace-graph-view-*`. *Pass:* none.
 *Fail:* a zoom that changes by itself, or a node moved.
+## DG. The poi probe on a real Joy-Con (wave 5 SM1, row 786)
+Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's tape through the tool, the live loop on a stand-in for the reader. Only a person can run a real pad through it.
+**611. The probe, live, then its own tape.** (a Joy-Con paired, the app closed: hidapi opens the pad exclusively)
+1. From `hyperspace-python/`: `uv run python tools/poi_probe.py --record /tmp/poi.jsonl`. *Pass:* the pad's name, then about ten lines a second; `calibration written to /tmp/poi.jsonl.findings.json`.
+2. Lay the pad on the table for ten seconds. *Pass:* `turn` near 0, `still` climbing, `v 0.00`.
+3. Type `hold` and Enter, then pick it up and hold it as you'd hold a poi handle for ten seconds, without walking. Read `wrist`, `pan` and `wall`. *Report, not pass or fail:* whether the hand runs to `wall hand` as the owner's tape does (row 786).
+4. Press A. *Pass:* `wrist` back to 0, `pan` near its start.
+5. Ctrl-C, then `uv run python tools/poi_probe.py --replay /tmp/poi.jsonl`. *Pass:* `tape written`, then a table with a `hold` row.
+*Fail:* a traceback at any step, or a line that never comes.
 ## DD. Matte and segment thumbnails (SM3)
 Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real GL with a fake worker; the real app seen in motion mode only. Person mode's orientation on real Vision is yours.
 **604. A mask on the node.** (either Mac, a camera or a clip with a person in it)

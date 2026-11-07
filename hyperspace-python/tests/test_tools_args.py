@@ -16,11 +16,25 @@ def dests(tree: ast.Module) -> set[str]:
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "add_subparsers":
             out |= {k.value.value for k in n.keywords if k.arg == "dest"}
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "add_argument":
-            dest = next((k.value.value for k in n.keywords if k.arg == "dest"), None)
+            dest = next((k.value for k in n.keywords if k.arg == "dest"), None)
+            if isinstance(dest, ast.Constant):
+                out.add(dest.value)
+                continue
             flags = [a.value for a in n.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
             long = [f for f in flags if f.startswith("--")] or flags
-            out.add(dest or long[0].lstrip("-").replace("-", "_"))
+            if long:                # (a flag named at run time, `f"--{key}"`, says nothing here)
+                out.add(long[0].lstrip("-").replace("-", "_"))
     return out
+
+
+def test_a_flag_named_at_run_time_is_no_crash_and_declares_nothing():
+    tree = ast.parse('''
+ap.add_argument(f"--{key}", type=float)
+ap.add_argument(f"--{other}", dest=name)
+ap.add_argument("--plain")
+ap.add_argument("-x", dest="ex")
+''')
+    assert dests(tree) == {"func", "plain", "ex"}
 
 
 @pytest.mark.parametrize("tool", TOOLS, ids=lambda p: p.stem)

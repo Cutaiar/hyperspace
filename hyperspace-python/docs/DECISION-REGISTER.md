@@ -776,6 +776,7 @@ here; overturn → the change, then the same.
 | 755 | SEM: Learn desk on a meta param that is one per `Deck` stays **refused, per the seventh round**, in words that say where a person's road is: Learn pad, a key, the APC's factory rows. A road was built on #388 and removed in its review. So a desk button can no longer be learned on Base chase; its home is the pad's BACK | 746, 752 | owner — 2026-11-04, seventh round |
 | 757 | A text field left with the cursor in it is no hand on the panel: `ui_pane._working` no longer counts one, and a field's writers report their own write (`undo.by_hand(True)`), so a value, a label or a name typed still counts and a keystroke that writes nothing does not. A person's change joining a step a controller began now counts too. (A bug in row 753, found by the flake's review.) | 582 | (rec) — pending the owner |
 | 787 | GRAPH's start zoom follows the display the control window opens on, by density and height, through the editor's settings file; `SCALE` and saved positions unmoved. A change of canvas size keeps the zoom and the top-left, at every display: new behaviour on a window's resize | 612, 613 | (rec) — pending the owner |
+| 786 | SM1: `tools/poi_probe.py` and its tape salvaged from the closed #342 and ported to `main`'s `poi.step`, without #342's fixes. On the owner's own tape it shows `main`'s poi running the hand to `HAND_LIMIT` during a hold and leaving it there: **a question for the owner**, not fixed here. | 611 | (rec) — pending the owner |
 | 777 | SM3: a matte and a segment show their mask on GRAPH, in grey, white where it passes. A thumbnail shows only a mask the frame already made. A segment is its matte, not its foreground; a folded group whose last picture outlet is a segment's `fg` shows that foreground; a refusal is said on the node; a mask's hue is never read | 604 | plan 58 SM3; (rec) — pending the owner, on those choices |
 | 773 | One mirror (LY1): `ghost.N.mirror` is no param. An extra hands node's `GhostState` follows `ghost.mirror`, so a hands node adds nothing to what's shared, and one `Deck` dropping its node no longer takes a param from the other (the leak §9 reports, reproduced first). A show file holding the id still opens clean and a save carries it; nothing reads it; a value that differs from `ghost.mirror` is said at open. No format move. **Pending the owner:** this removes check 213's mirrored glass beside unmirrored scene hands; the glass's Flip X replaces it only where the glass shows hands alone. | 602, 213 | (rec) — pending the owner |
 | 774 | A `Deck`'s registry cannot drop a shared meta param: `Registry.remove` keeps it, warns and returns None, `remove_prefix` leaves it out, and only `MetaRegistry.remove` takes one, from every deck. Audited every removal road. | 602 | (rec) — pending the owner |
@@ -14049,6 +14050,25 @@ still wins, as does a sink row.
 - **Judge it.** 582.
 
 ### 787. GRAPH's start zoom follows the display
+### 786. The poi probe, and what it shows
+
+- **Built.** `tools/poi_probe.py` and `tests/fixtures/pads/joycon-poi-excerpt.jsonl` from `origin/worktree-poi-hand-fix` (#342, closed). No `hyperspace/` diff. The walls are `poi.HAND_LIMIT` and `params.PAN_RANGE` (no `box` on `main`), and the push is read against 1 g (no `g_mag`); `--home` is gone with its dial.
+- **The numbers are the app's code, not a copy of it.** A real `gamepad.Pad` polls the reader and the poi runs on the real `params.build_patch` registry. Review of the first build found a stand-in pad and hand-registered camera params that disagreed with the app: frames with no report settled the attitude on a default reading, which on a pad lying on its side made a false 90° and a false wall in 0.68 s. So nothing here is mirrored by hand. `hid.TapePad` reads a replay, with a frame at least every 1/60 s, and past `hid.STALE_S` the reader gives nothing, as live.
+- **`tests/test_poi_real.py` keeps what is true on `main`:** the limits `poi.py` has, the end of the pickup and of the hold, the A press, the D-pad's edge, `poi.hand` 0, a pad heard late or lost. #342's "stays on the screen" tests are dropped, because on `main` it doesn't. The live loop is tested on a stand-in for the reader, held to the real class. No test pins the drift below, so a fix moves nothing here.
+- **What it shows, default dials, the owner's tape of 2026-11-02:**
+
+  | window | secs | frames read still | attitude error median/worst | travel end/farthest | speed max | pan max | frames at the wall |
+  |---|---|---|---|---|---|---|---|
+  | pickup | 5.5 | 23% | 2.6° / 40.8° | 0.45 / 1.44 | 1.49 | 1.17 | 0% |
+  | hold | 8.0 | 18% | 6.9° / 54.2° | **8.00 / 8.00** | 7.08 | 5.56 | 54% |
+
+  The excerpt is cut from a longer tape, jumping from 21.5 s to 30 s. The app would read so long a pause as a lost pad, so the replay does: the hold starts level, with the hand home. That is the kinder start, and it still reaches the wall. The first build's table (hold 58% at the wall, pan max 7.16; pickup farthest 1.88) ran through the pause and is withdrawn.
+
+  In the hold, a turn of up to 178 deg/s at 31 to 33 s raises the attitude error from 0.1° to 16.8°, and no still moment follows to correct it. The hand reaches `HAND_LIMIT` at 33.81 s, 3.8 s in. 8 world units is 3.2 m at `UNITS_PER_M`; the pad was in a hand. From 33.6 s the pad settles (mostly under 2 deg/s, 24 at worst), reading about 1.02 g, while 4.6° to 10.0° of error reads as a 0.08 to 0.19 g push. The stillness only gets in at 36.72 s, 3.1 s later rather than `CALM_S`'s 1.5, because one reading of 0.93 g at 35.13 s restarted the timer at 1.35 s. The attitude then comes right (0.1° at the end) and the velocity zeroes, but no pull home is by design (the owner, 2026-11-03), so the window ends with the hand at 8.00, the pan at +4.63, +1.06 and the zoom at 0.085. Through the default eye a 16:9 output shows about ±3 across and ±1.7 down (#342's reading of the rig's TV, not measured on `main`), so the shape is off the screen, a twelfth of its size, until A.
+- **`--hand 0`:** the same tape with no push: pan max 1.24 and the hand at home. The turn alone is well behaved.
+- **The question for the owner, (rec) — pending the owner.** The poi is off by default, so this only shows with it on. Did it look like this at the machine? Recommendation: a live bug, fixed as one small item, keeping no pull home: the pad dead still stops the hand sooner, and the hand's limit is the screen's size rather than 8. Not built here: the item says don't.
+- **Judge it.** 611.
+
 ### 777. A matte and a segment show their mask on GRAPH
 
 - **Answer.** Plan 58 SM3 asks for row 500's reversal. The choices below are (rec) — pending the owner.
