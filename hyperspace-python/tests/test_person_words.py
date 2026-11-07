@@ -30,14 +30,12 @@ ROOT = Path(hyperspace.__file__).parent
 WORDS = re.compile(r"\b(sessions?|rigs?)\b", re.IGNORECASE)
 
 SAVED_SHOW_KEY = "a key of a saved show file; goes with the one migration"
-ATTRIBUTE = "`getattr(project, 'session')`: the name of `Project.session`"
 # (file, the whole string): how many times it stands in that file, and why it stays. A
 # count and no line numbers: others move lines, and a new use has to come through here.
 LEFT: dict[tuple[str, str], tuple[int, str]] = {
     ("headless.py", "session"): (1, SAVED_SHOW_KEY),
     ("library.py", "session"): (8, SAVED_SHOW_KEY),
     ("library.py", "rig"): (1, SAVED_SHOW_KEY),
-    ("loadable.py", "session"): (2, ATTRIBUTE),
 }
 
 
