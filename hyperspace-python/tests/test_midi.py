@@ -54,7 +54,7 @@ def rig(tmp_path):
     view = ViewState()
     seed(tmp_path)              # the corpus: the party show's bank, TUMBLE first
     lib = Library(tmp_path)
-    project = lib.project
+    project = lib.install
     reg = build_registry(view, control, audio, project)
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)

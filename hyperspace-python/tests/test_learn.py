@@ -25,7 +25,7 @@ def rig(tmp_path):
     chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(tmp_path)
-    reg = build_registry(ViewState(), control, NS(chain=chain), lib.project)
+    reg = build_registry(ViewState(), control, NS(chain=chain), lib.install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     return NS(reg=reg, control=control, table=table, learn=Learn(reg, table))
 
@@ -654,11 +654,11 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     # OVERDUB too: it sends the show home, as it always does
     r.reg["preset.load.2"].fire()
     loaded = lib.current("loadable")
-    assert loaded != lib.project.startup
+    assert loaded != lib.install.startup
     lrn.arm("view.depth4", "desk")
     before = rows()
     push(r, note(apc40.N_OVERDUB), note(apc40.N_OVERDUB, 0))
-    assert lib.current("loadable") == lib.project.startup and lrn.learning == "view.depth4"
+    assert lib.current("loadable") == lib.install.startup and lrn.learning == "view.depth4"
     # nothing learned: depth's one desk row is the fresh layer's D1 (apc40.SCENE, plan 19 WP3)
     assert [b.source for b in table.desk() if b.target == "view.depth4" and b.is_midi] \
         == ["cc:*:16"]

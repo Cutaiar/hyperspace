@@ -457,7 +457,7 @@ def install_plan(library: Path) -> tuple[list[InstallMove], list[str]]:
                 continue
             # it opens in the new reader, before its show goes
             try:
-                names.project._take(json.loads(data), dest, dest.name)
+                names.install._take(json.loads(data), dest, dest.name)
             except (LibraryError, ValueError, TypeError) as e:
                 left.append(f"{path.name}: its install file does not open ({e}) — left as it is")
                 continue

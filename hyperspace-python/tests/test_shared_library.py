@@ -28,7 +28,7 @@ def make(root, machine=None):
     control = Control(chain)
     view = ViewState()
     lib = Library(root, machine=machine, period=0.0)
-    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project)
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install)
     lib.attach(reg)
     loaded_patch = LoadedPatch(lib, reg, Router(reg, Bindings()))
     return SimpleNamespace(lib=lib, reg=reg, loaded_patch=loaded_patch, chain=chain)
@@ -60,7 +60,7 @@ def test_a_save_lands_in_the_library_and_last_show_in_the_machine_home(tmp_path)
     assert rig.lib.home == lib_root and rig.lib.machine == a and rig.lib.missing is None
     path = rig.loaded_patch.save_as("HI FREK")
     assert path == lib_root / LOADABLE / "hi-frek.json" and path.is_file()
-    rig.lib.project.save("mine")
+    rig.lib.install.save("mine")
     assert (lib_root / "installs" / "mine.json").is_file()
     assert sorted(set(files(a)) - set(before)) == [LAST_INSTALL]
     assert (a / LAST_INSTALL).read_text() == "mine\n"
@@ -74,8 +74,8 @@ def test_a_save_lands_in_the_library_and_last_show_in_the_machine_home(tmp_path)
     assert rig.lib.missing == lib_root
     assert "shared library not found at" in rig.lib.warning
     # an unsaved show stands in: nothing read, nothing to list
-    assert rig.lib.project.name == "untitled" and rig.lib.project.path is None
-    assert rig.lib.list(LOADABLE) == [] and rig.lib.project.list() == []
+    assert rig.lib.install.name == "untitled" and rig.lib.install.path is None
+    assert rig.lib.list(LOADABLE) == [] and rig.lib.install.list() == []
     with pytest.raises(LibraryError, match="not saved; fix \\[library\\] path"):
         rig.loaded_patch.save_as("HI FREK 2")
     assert not lib_root.exists()
@@ -107,9 +107,9 @@ def test_a_missing_library_lists_nothing(gone):
     library lists nothing and opens the unsaved `untitled` show."""
     lib = gone.lib
     assert lib.list(LOADABLE) == [] and all(lib.list(g) == [] for g in lib.groups())
-    assert lib.project.name == "untitled" and lib.project.path is None
-    assert lib.project.bank == [None] * 24 and lib.project.startup is None
-    assert lib.project.list() == []
+    assert lib.install.name == "untitled" and lib.install.path is None
+    assert lib.install.bank == [None] * 24 and lib.install.startup is None
+    assert lib.install.list() == []
     assert lib.current(LOADABLE) is None
 
 
@@ -121,8 +121,8 @@ def test_every_write_into_a_missing_library_is_refused(gone):
                  lambda: lib.delete(LOADABLE, name),
                  lambda: lib.rename(LOADABLE, name, "other"),
                  lambda: lib.empty_trash(),
-                 lambda: lib.project.save("mine"),
-                 lambda: lib.project.write(),
+                 lambda: lib.install.save("mine"),
+                 lambda: lib.install.write(),
                  lambda: library._write_json(gone.root / "loadable" / "x.json", {})):
         with pytest.raises(LibraryError, match="shared library not found at"):
             call()
@@ -134,7 +134,7 @@ def test_every_write_into_a_missing_library_is_refused(gone):
 def test_a_bank_save_into_a_missing_library_is_said_not_raised(gone):
     """The bank's ⇧F-key save reports on the footer, as a full disk does."""
     lib = gone.lib
-    lib.project.save_slot(0)
+    lib.install.save_slot(0)
     assert "shared library not found" in (lib.error + lib.warning)
     assert not (gone.tmp / "Dropbox").exists()
 

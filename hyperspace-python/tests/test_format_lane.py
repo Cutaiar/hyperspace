@@ -142,7 +142,7 @@ def test_what_a_save_stopped_writing_goes():
 def test_an_install_round_trips_through_the_project(tmp_path):
     lib = Library(tmp_path, period=0.0)
     path = _put(tmp_path / "installs/room.json", {**install_doc(SHOW), "plays": "cart"})
-    pr = lib.project
+    pr = lib.install
     pr._take(json.loads(path.read_text()), path, path.name)
     assert (pr.stem, pr.startup, pr.plays) == ("room", "TRIP", "cart")
     assert pr.session["output.bg"] == 0.5 and pr.modules == {"band": "Balanced"}
@@ -155,7 +155,7 @@ def test_an_install_round_trips_through_the_project(tmp_path):
 def test_a_newer_install_says_what_to_do(tmp_path):
     lib = Library(tmp_path, period=0.0)
     with pytest.raises(LibraryError, match="git pull and uv sync"):
-        lib.project._take({"schema": "hyperspace.install/2"}, None, "room.json")
+        lib.install._take({"schema": "hyperspace.install/2"}, None, "room.json")
     assert "uv sync" in NEWER_WORDS
 
 
@@ -186,9 +186,9 @@ def test_a_library_not_moved_opens_and_says_so(tmp_path):
     assert loadable_dir(tmp_path) == tmp_path / "presets"
     assert not_moved(tmp_path) == ["presets/", "projects/"]
     assert "presets/ and projects/" in lib.not_moved and "migrate_library.py --apply" in lib.not_moved
-    assert lib.project.list() == ["mine", "party"]
-    assert lib.project.path_for("party") == tmp_path / "projects/party.hyp.json"
-    assert lib.project.path_for("new-one") == tmp_path / "projects/new-one.hyp.json"
+    assert lib.install.list() == ["mine", "party"]
+    assert lib.install.path_for("party") == tmp_path / "projects/party.hyp.json"
+    assert lib.install.path_for("new-one") == tmp_path / "projects/new-one.hyp.json"
     assert list(lib._files(LOADABLE)) == ["trip"]
     assert "presets" not in lib.groups() and "projects" not in lib.groups()
     assert _tree(tmp_path) == before                 # opening rewrites nothing
@@ -198,8 +198,8 @@ def test_a_save_on_a_library_not_moved_stays_in_its_folder_at_the_newest(tmp_pat
     _old_library(tmp_path)
     lib = Library(tmp_path, period=0.0)
     path = tmp_path / "projects/party.hyp.json"
-    lib.project._take(json.loads(path.read_text()), path, path.name)
-    lib.project.write()
+    lib.install._take(json.loads(path.read_text()), path, path.name)
+    lib.install.write()
     doc = json.loads((tmp_path / "projects/party.hyp.json").read_text())
     assert doc["schema"] == INSTALL_SCHEMA and "tuning" in doc
 
@@ -269,8 +269,8 @@ def test_apply_backs_up_first_then_moves_and_a_second_run_does_nothing(tool, tmp
     assert json.loads(after["installs/mine.json"])["startup"] is None
     # opens in the new reader
     fresh = Library(lib, machine=tmp_path / "m2", period=0.0)
-    assert fresh.not_moved == "" and fresh.project.list() == ["mine", "party"]
-    fresh.project._take(party, lib / "installs/party.json", "party.json")
+    assert fresh.not_moved == "" and fresh.install.list() == ["mine", "party"]
+    fresh.install._take(party, lib / "installs/party.json", "party.json")
     assert fresh.path_of(LOADABLE, "TRIP", loose=True) == lib / "loadable/trip.json"
     # once more: nothing, and no second backup
     assert _run(tool, lib, "--apply") == 0
@@ -369,11 +369,11 @@ def test_a_cart_starts_by_itself_when_its_install_says():
 
 def test_the_install_keeps_which_list_at_once(tmp_path):
     lib = Library(tmp_path, period=0.0)
-    lib.project.path = tmp_path / "installs/room.json"
-    lib.project.play_at_launch("cart")
-    assert json.loads(lib.project.path.read_text())["plays"] == "cart"
-    lib.project.play_at_launch(None)
-    assert "plays" not in json.loads(lib.project.path.read_text())
+    lib.install.path = tmp_path / "installs/room.json"
+    lib.install.play_at_launch("cart")
+    assert json.loads(lib.install.path.read_text())["plays"] == "cart"
+    lib.install.play_at_launch(None)
+    assert "plays" not in json.loads(lib.install.path.read_text())
 
 
 # ---------------------------------------------------------------- NSEW and `bindings/4` (rows 836–839)

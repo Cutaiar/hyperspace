@@ -243,7 +243,7 @@ def app(tmp_path):
     control = Control(chain)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState())
     control.library = lib
     clock = tempo.Clock(now=lambda: 0.0)

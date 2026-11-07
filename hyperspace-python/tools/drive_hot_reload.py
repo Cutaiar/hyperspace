@@ -59,5 +59,5 @@ def script(d, panel):
         assert not reloader.runtime_error, f"after {name}: {reloader.runtime_error}"
     for deck in panel.meta.decks:                   # the views came through with their own state
         lib = deck.loaded_patch.lib
-        assert lib.own is deck.loaded_patch and lib.project.lib is lib
+        assert lib.own is deck.loaded_patch and lib.install.lib is lib
     print(f"reloaded: {','.join(names)}", flush=True)

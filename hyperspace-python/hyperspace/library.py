@@ -149,7 +149,7 @@ from . import undo
 from .graph import BusCuts
 from .graphmigrate import CAMERA_NODES, EYE_IDS, OLD_KIND, is_look_id, renamed_layout, retired
 from .groupwords import group_word
-from .hot_slots import DeckLibrarySlots, DeckProjectSlots
+from .hot_slots import DeckInstallSlots, DeckLibrarySlots
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -921,7 +921,7 @@ def _module_values(group: str, doc: dict) -> dict[str, Any]:
 
 # ---------------------------------------------------------------- project
 
-class Project:
+class Install:
     """The open show — the meta controller (plan 13 §2.2): its file (None until
     saved), the meta controller values, the shared meta groups' module labels, and the
     loadable patch bank, the desk's pads.
@@ -979,7 +979,7 @@ class Project:
 
     # ---- documents ----
 
-    def _take(self, doc: dict, path: Path | None, where: str = "project") -> None:
+    def _take(self, doc: dict, path: Path | None, where: str = "install") -> None:
         if doc.get("schema") == PROJECT_V1:
             raise LibraryError(f"{where} is a schema-1 show, which this build does not read "
                                "(no old-schema support, 2026-10-25)")
@@ -1879,7 +1879,7 @@ class Marks(_Landings):
         """Which show this is, and the GRAPH page's positions of its fixture nodes
         (plan 28 N2): a tidy on a deck moves them, and undoing it puts them back
         while the show is the same one."""
-        pr = self.lib.project
+        pr = self.lib.install
         return (pr.ident(), copy.deepcopy(getattr(pr, "layout", {})))
 
     def take(self) -> tuple:
@@ -1934,7 +1934,7 @@ class Marks(_Landings):
         panel, and the bank's lit slot. While the show is the same one its GRAPH
         page positions go back too (the undo of a tidy; they are not in its file
         until it is saved). The rest of the show is `MetaMarks`'."""
-        lib, pr = self.lib, self.lib.project
+        lib, pr = self.lib, self.lib.install
         (show, landed, note, _graph, layout, bins, groups, group_high, bus) = mark[:9]
         # (plan 57: a step from before a hot reload has no node mode)
         mode = mark[9] if len(mark) > 9 else None
@@ -1972,7 +1972,7 @@ class MetaMarks(_Landings):
         """(the show's mark, {group: landed}, {group: its `extra` hook's dict —
         the band layout})."""
         lib = self.lib
-        return (lib.project.mark(), self.lands(),
+        return (lib.install.mark(), self.lands(),
                 {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()})
 
     def before(self, mark: tuple) -> None:
@@ -1995,9 +1995,9 @@ class MetaMarks(_Landings):
         and startup are left as they are: they are in the show's file the moment
         they change, and reverting them in memory would make the show's dirty dot
         lie. `last_show` is never rewritten."""
-        pr = self.lib.project
+        pr = self.lib.install
         show, landed, _extras = mark
-        if Project.ident_of(show) != pr.ident():
+        if Install.ident_of(show) != pr.ident():
             pr.remark(show)
         self._reland(landed)
         pr.follow()
@@ -2066,7 +2066,7 @@ class Library:
         self._mtimes: dict[Path, float] = {}
         self._next = 0.0
         self.loaded_patch = None        # loadable.LoadedPatch, set by its constructor (`presets`, below)
-        self.project = Project(self)
+        self.install = Install(self)
         if self.missing is not None:
             text = missing_text(self.missing)
             print(f"library: {text}", file=sys.stderr)
@@ -2123,8 +2123,8 @@ class Library:
         # app started — is the fresh layout `Project.new` goes back to
         self._fresh_extra = {g: hook() for g, hook in self._extra_hooks.items()}
         self._defaults.clear()
-        missing = self.project._apply()
-        self.report(missing, self.project.name)
+        missing = self.install._apply()
+        self.report(missing, self.install.name)
         return missing
 
     def _fresh_layouts(self) -> None:
@@ -2228,14 +2228,14 @@ class Library:
         library."""
         name = self.last_show()
         if name:
-            user = self.project.path_for(name)
+            user = self.install.path_for(name)
             if user.is_file():
                 try:
-                    self.project._take(_read_json(user), user, user.name)
+                    self.install._take(_read_json(user), user, user.name)
                     return
                 except LibraryError as e:
                     self.error = f"library: {e}"
-        self.project._take({"schema": INSTALL_SCHEMA, "name": UNTITLED}, None)
+        self.install._take({"schema": INSTALL_SCHEMA, "name": UNTITLED}, None)
 
     # ---- the tree ----
 
@@ -2542,7 +2542,7 @@ class Library:
         """What in the open show still names the loadable patch `name` (or, given,
         the file at `path`): its slots (``F6``, ``slot 12``) and its
         ``startup``."""
-        pr, key = self.project, self._fold(LOADABLE, name)
+        pr, key = self.install, self._fold(LOADABLE, name)
         snap = self._lookup(LOADABLE)                   # one look for every slot
         target = path or self._resolve(LOADABLE, name, snap, loose=True)
 
@@ -3153,7 +3153,7 @@ class Library:
         def moved(n):
             return to(n) if hit(n) else n
 
-        pr, done, left = self.project, 0, []
+        pr, done, left = self.install, 0, []
         for show in install_files(self.home):
             label = install_stem(show.name)
             if pr.path is not None and show == pr.path:
@@ -3273,7 +3273,7 @@ class Library:
             self.say(f"{verb} {what}")
             return 0, []
         done, left = self._repoint_by(to)
-        self.project.follow()
+        self.install.follow()
         self.say(f"{verb} {what} ({done} show{'' if done == 1 else 's'} updated)")
         if left:
             self.say(warning=f"{verb} {what}; not updated: {', '.join(left)}")
@@ -3819,9 +3819,9 @@ class Library:
                     else:
                         self.load(group, name)
                     hit.append(f"{group_word(group)}/{name}")
-            if self.project.path in changed:
-                self.project.load(self.project.path, startup=False)
-                hit.append(f"project {self.project.name}")
+            if self.install.path in changed:
+                self.install.load(self.install.path, startup=False)
+                hit.append(f"project {self.install.name}")
             self.error = ""
         except LibraryError as e:                     # a half-saved file: keep running
             self.error = f"library: {e}"
@@ -3833,7 +3833,7 @@ class Library:
 
 # ------------------------------------------------- one deck's view (plan 44 D5a)
 
-class DeckProject(DeckProjectSlots, Project):
+class DeckInstall(DeckInstallSlots, Install):
     """The one show as one deck sees it: every field is the show's (it shares
     the show's `__dict__`), but `lib` is that deck's `DeckLibrary`, so a bank
     verb this object does (a pad on that deck's table) loads, saves and lights
@@ -3854,11 +3854,11 @@ class DeckProject(DeckProjectSlots, Project):
     meta: Any
 
     def __init__(self, lib: DeckLibrary):        # never `Project.__init__`: nothing is new
-        self.__dict__ = lib.base.project.__dict__
+        self.__dict__ = lib.base.install.__dict__
         self.lib = lib
         self.meta = None
 
-    def _landing(self, what: str) -> Project | None:
+    def _landing(self, what: str) -> Install | None:
         """The view a row's load lands on; None when it may not, and that is said."""
         if self.meta is None:
             return self
@@ -3870,7 +3870,7 @@ class DeckProject(DeckProjectSlots, Project):
             return None
         return where
 
-    def _say_loaded(self, where: Project) -> None:
+    def _say_loaded(self, where: Install) -> None:
         name = getattr(where._loader(), "current", None)    # the look's own name
         if self.meta is not None and name:
             where.lib.say(status=self.meta.loaded_words(name))
@@ -3883,11 +3883,11 @@ class DeckProject(DeckProjectSlots, Project):
 
     def load_slot(self, k: int) -> bool | None:
         if not (0 <= k < len(self.bank) and self.bank[k] is not None):
-            return Project.load_slot(self, k)   # loads nothing: it says how to fill it
+            return Install.load_slot(self, k)   # loads nothing: it says how to fill it
         where = self._landing(slot_key(k))
         if where is None:
             return None
-        done = Project.load_slot(where, k)
+        done = Install.load_slot(where, k)
         if done:
             self._say_loaded(where)
         return done
@@ -3895,24 +3895,24 @@ class DeckProject(DeckProjectSlots, Project):
     def cycle(self, step: int = 1) -> None:
         where = self._landing("the pads")
         if where is not None:
-            Project.cycle(where, step)        # (its `load_slot` says what loaded)
+            Install.cycle(where, step)        # (its `load_slot` says what loaded)
 
     def walk(self, step: int = 1) -> str | None:
         where = self._landing("the patch list")
         if where is None:
             return None
-        name = Project.walk(where, step)
+        name = Install.walk(where, step)
         if name:
             self._say_loaded(where)
         return name
 
     def home(self) -> bool | None:
         if not self.startup:
-            return Project.home(self)           # loads nothing: it says so
+            return Install.home(self)           # loads nothing: it says so
         where = self._landing("home")
         if where is None:
             return None
-        done = Project.home(where)
+        done = Install.home(where)
         if done:
             self._say_loaded(where)
         return done
@@ -3927,14 +3927,14 @@ class DeckLibrary(DeckLibrarySlots, Library):
     (`Library.pointer`). The loadable patches kind's and load hooks are this deck's too.
     Its own three fields are slots on a cold base, as `DeckProject`'s are."""
 
-    _project: DeckProject
+    _project: DeckInstall
     base: Library
     own: Any
 
     def __init__(self, base: Library, loaded_patch=None):   # never `Library.__init__`: nothing is new
         self.__dict__ = base.__dict__
         self.base, self.own = base, loaded_patch
-        self._project = DeckProject(self)
+        self._project = DeckInstall(self)
 
     def on_deck(self, loaded_patch=None) -> DeckLibrary:
         """This view, for its first `LoadedPatch` (`Deck.build` makes it before them,
@@ -3955,7 +3955,7 @@ class DeckLibrary(DeckLibrarySlots, Library):
         return self.own.reg if self.own is not None else self.base.reg
 
     @property
-    def project(self) -> DeckProject:
+    def project(self) -> DeckInstall:
         return self._project
 
     @property

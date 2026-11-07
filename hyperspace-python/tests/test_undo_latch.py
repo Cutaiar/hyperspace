@@ -135,7 +135,7 @@ def test_a_step_still_open_when_focus_comes_opens_nothing(rig):
 
 def _pad_rig(rig):
     """A filled pad 1, with deck 2 holding a look of its own, every stack quiet."""
-    rig.one.loaded_patch.lib.project.bank[0] = "party-wake"
+    rig.one.loaded_patch.lib.install.bank[0] = "party-wake"
     rig.two.loaded_patch.load("party-trip")
     go(rig)
 
@@ -357,7 +357,7 @@ def test_riding_a_meta_fader_then_crossing_a_section_opens_nothing(rig):
 
 def test_a_show_loaded_then_crossing_a_section_opens_nothing(rig):
     """Finding 1, a show: no sample of the mouse as its steps close."""
-    pr = rig.lib.project
+    pr = rig.lib.install
     pr.load("house")
     go(rig, 2)
     here_is_meta(rig)
@@ -512,10 +512,10 @@ def test_a_failed_load_shuts_nothing(rig, settled):
 
 def test_a_pad_whose_file_will_not_load_shuts_nothing(rig):
     """The same by the pad's road, with a file that is not there."""
-    rig.one.loaded_patch.lib.project.bank[0] = "party-wake"
+    rig.one.loaded_patch.lib.install.bank[0] = "party-wake"
     p, was = _room_step(rig)
     moved = p.base
-    rig.one.loaded_patch.lib.project.bank[0] = "no-such-look"
+    rig.one.loaded_patch.lib.install.bank[0] = "no-such-look"
     rig.one.reg["preset.load.0"].fire()
     go(rig)
     assert p.base == moved and not rig.one.undo.latched
@@ -794,7 +794,7 @@ def test_pointing_the_panel_at_the_deck_it_is_on_moves_nothing(rig):
 def test_a_show_load_is_a_push_where_you_are_and_no_door_past_the_rule(rig):
     """A show's load steps on two stacks: the deck, where you are, opens; the meta
     stack, where you are not, stays shut, and the file's show is not rewound."""
-    pr = rig.lib.project
+    pr = rig.lib.install
     pr.load("house")
     go(rig)
     assert not rig.one.undo.latched and rig.meta.undo.stack

@@ -73,7 +73,7 @@ def make(d):
     chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(d.root, machine=d.machine, period=0.0)
-    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project)
+    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.install)
     lib.attach(reg)
     loaded_patch = LoadedPatch(lib, reg, Router(reg, Bindings()))
     return SimpleNamespace(lib=lib, reg=reg, loaded_patch=loaded_patch)
@@ -154,7 +154,7 @@ def test_the_watcher_sees_a_subfolder(lib_dirs):
 
 def test_rename_keeps_the_folder_and_repoints_the_show(lib_dirs):
     r = make(lib_dirs)
-    pr = r.lib.project
+    pr = r.lib.install
     assert pr.bank[1] == "party/B"
     dst = r.lib.rename(LOADABLE, "party/B", "BEE")
     assert dst == lib_dirs.loaded_patch / "party" / "bee.json"
@@ -175,7 +175,7 @@ def test_rename_keeps_the_folder_and_repoints_the_show(lib_dirs):
 
 def test_the_bank_holds_a_folder_loadable_and_cycle_and_walk_reach_it(lib_dirs):
     r = make(lib_dirs)
-    pr = r.lib.project
+    pr = r.lib.install
     pr.load_slot(1)
     assert r.lib.current(LOADABLE) == "party/B" and pr.active == 1
     pr.cycle(1)
@@ -194,7 +194,7 @@ def test_the_bank_holds_a_folder_loadable_and_cycle_and_walk_reach_it(lib_dirs):
 
 def test_an_old_show_with_a_bare_name_still_loads_its_top_level_loadable(lib_dirs):
     r = make(lib_dirs)
-    pr = r.lib.project
+    pr = r.lib.install
     pr.load_startup()
     assert r.lib.current(LOADABLE) == "A"
     pr.load_slot(0)
@@ -217,7 +217,7 @@ def test_a_folder_slot_on_an_older_build_is_a_filled_slot_that_loads_nothing(lib
 
 def test_the_two_handed_save_lands_beside_the_loaded_loadable(lib_dirs):
     r = make(lib_dirs)
-    pr = r.lib.project
+    pr = r.lib.install
     r.loaded_patch.load("party/deep/C")
     assert pr.save_into(5)
     assert pr.bank[5] == "party/deep/C 2"
@@ -295,7 +295,7 @@ def test_a_slash_in_a_files_own_name_is_never_a_folder(lib_dirs):
     `Ac/Dc` still finds it."""
     _put(lib_dirs.loaded_patch / "ac-dc.json", "AC/DC")
     r = make(lib_dirs)
-    lib, pr = r.lib, r.lib.project
+    lib, pr = r.lib, r.lib.install
     assert "AC - DC" in lib.list(LOADABLE) and "AC/DC" not in lib.list(LOADABLE)
     assert lib.folder_of(LOADABLE, "AC - DC") == ("", "AC - DC")
     # an old show's spelling: a read finds it, a writer never does (review 2, item 1)
@@ -322,7 +322,7 @@ def test_one_fold_a_folder_with_a_trailing_space_counts_on(lib_dirs):
     r = make(lib_dirs)
     r.loaded_patch.load("late /TRIP")
     two = (folder / "trip-2.json").read_text()
-    assert r.lib.project.save_into(6)
+    assert r.lib.install.save_into(6)
     assert (folder / "trip-3.json").is_file() and (folder / "trip-2.json").read_text() == two
 
 
@@ -411,7 +411,7 @@ def test_a_rename_repoints_a_slot_that_named_it_by_an_old_spelling(lib_dirs):
     a rename, and the show file says the new name."""
     _put(lib_dirs.loaded_patch / "ac-dc.json", "AC/DC")
     r = make(lib_dirs)
-    pr = r.lib.project
+    pr = r.lib.install
     pr.bank[2] = "Ac/Dc"
     pr.write()
     assert r.lib.still_named("AC - DC") == ["F3"]
@@ -447,7 +447,7 @@ def test_a_restore_clears_the_delete_warning_of_a_slashed_name(lib_dirs):
     _put(lib_dirs.loaded_patch / "ac-dc.json", "AC/DC")
     r = make(lib_dirs)
     lib = r.lib
-    lib.project.bank[5] = "AC - DC"
+    lib.install.bank[5] = "AC - DC"
     lib.delete(LOADABLE, "AC - DC")
     assert lib.warning.startswith("AC - DC is in the trash")
     (item,) = lib.trash()
@@ -499,7 +499,7 @@ def test_a_pad_naming_its_loadable_by_another_spelling_lights(lib_dirs):
     read and their pads light, as an exact spelling's does."""
     _put(lib_dirs.loaded_patch / "ac-dc.json", "AC/DC")
     r = make(lib_dirs)
-    pr = r.lib.project
+    pr = r.lib.install
     pr.bank[4], pr.bank[5] = "Ac/Dc", "Party/B"
     pr.load_slot(4)
     assert r.lib.current(LOADABLE) == "AC - DC" and pr.active == 4

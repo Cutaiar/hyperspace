@@ -151,7 +151,7 @@ def build(tmp_path, monkeypatch):
         audio = NS(chain=chain, on=False)
         seed(tmp_path)                 # the corpus: the shipped loadable patches, the party show
         lib = Library(tmp_path)
-        reg = build_registry(ViewState(), control, audio, lib.project)
+        reg = build_registry(ViewState(), control, audio, lib.install)
         lib.attach(reg)
         reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
         reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)

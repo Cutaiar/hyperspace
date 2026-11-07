@@ -35,7 +35,7 @@ def make(tmp_path):
     view = ViewState()
     seed(tmp_path)                  # the corpus: the shipped loadable patches, the party and house shows
     lib = Library(tmp_path)
-    project = lib.project
+    project = lib.install
     reg = build_registry(view, control, audio, project)
     lib.attach(reg)
     return reg, view, control, audio, project

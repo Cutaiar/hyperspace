@@ -76,7 +76,7 @@ def where(r) -> str:
 
 
 def bank(r) -> str:
-    pr = r.lib.project
+    pr = r.lib.install
     return "  ".join(f"F{k + 1} {n or '—'}{'*' if k == pr.active else ''}"
                      for k, n in enumerate(pr.bank))
 
@@ -115,7 +115,7 @@ def footer(r) -> str:
 
 def main() -> None:
     r = demo.boot()
-    lib, proj, table = r.lib, r.lib.project, r.router.table
+    lib, proj, table = r.lib, r.lib.install, r.router.table
     r.midi.clock = lambda: r.t                        # the hold's clock: the demo's frames
     r.log = []                                        # (time, message) the desk was sent
     send = r.ports.send

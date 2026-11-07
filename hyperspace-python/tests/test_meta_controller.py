@@ -29,7 +29,7 @@ from hyperspace import (
     undo,
 )
 from hyperspace.deck import KEYS, MOUSE, Deck, MetaController
-from hyperspace.hot_slots import DeckLibrarySlots, DeckProjectSlots
+from hyperspace.hot_slots import DeckInstallSlots, DeckLibrarySlots
 from hyperspace.hotreload import MODULES
 from hyperspace.library import LOADABLE
 from hyperspace.pointer import Pointer, Through
@@ -282,7 +282,7 @@ def test_a_bank_pad_on_deck_2_loads_on_deck_2_and_its_light_is_deck_2s(rig):
     """A row fires on deck 2's table, so what it does lands there: a load and
     a save by the bank's own road, not the panel's deck."""
     meta, one, two, lib = rig.meta, rig.one, rig.two, rig.r.lib
-    bank = lib.project.bank
+    bank = lib.install.bank
     k = next(i for i, n in enumerate(bank[:8]) if n and n != one.loaded_patch.current)
     two.table.add(Binding("note:0:71", f"preset.load.{k}", "fire"))     # (the meta controller's)
     meta.point(DESK, two)
@@ -290,7 +290,7 @@ def test_a_bank_pad_on_deck_2_loads_on_deck_2_and_its_light_is_deck_2s(rig):
     _send(rig, note(71), note(71, 0))
     assert two.loaded_patch.current == bank[k] and two.loaded_patch.active_slot == k
     assert _look(one) == before and lib.current(LOADABLE) == before["name"]
-    assert lib.project.active == before["lit"]               # the panel's view: deck 1's slot
+    assert lib.install.active == before["lit"]               # the panel's view: deck 1's slot
 
 
 def test_a_save_on_deck_2_captures_deck_2(rig):
@@ -380,16 +380,16 @@ def test_a_meta_fader_keeps_its_catch_across_a_move(rig):
 def test_deck_2s_load_leaves_deck_1s_labels_and_light(rig):
     """The panel on deck 1: `deck2.loaded_patch.load` touches none of what its strip reads."""
     one, two, lib = rig.one, rig.two, rig.r.lib
-    labels, lit = {g: lib.landed(g) for g in lib.landed_groups()}, lib.project.active
+    labels, lit = {g: lib.landed(g) for g in lib.landed_groups()}, lib.install.active
     dots = {g: lib.is_dirty(g) for g in ("view", "pattern")}
     two.loaded_patch.load(next(n for n in sorted(lib.list(LOADABLE)) if n != one.loaded_patch.current))
     assert {g: lib.landed(g) for g in lib.landed_groups()} == labels
-    assert lib.project.active == lit and one.loaded_patch.active_slot == lit
+    assert lib.install.active == lit and one.loaded_patch.active_slot == lit
     assert {g: lib.is_dirty(g) for g in dots} == dots
     # deck 2's undo of that load: nothing of deck 1's either
     two.undo.undo()
     assert {g: lib.landed(g) for g in lib.landed_groups()} == labels
-    assert lib.project.active == lit
+    assert lib.install.active == lit
 
 
 def test_each_deck_keeps_its_own_section_references(rig):
@@ -420,17 +420,17 @@ def test_nothing_of_a_deck_s_view_is_a_second_copy(rig):
     one, two, lib = rig.one, rig.two, rig.r.lib
     view = two.loaded_patch.lib
     assert view.base is lib and view.__dict__ is lib.__dict__
-    assert view.project.__dict__ is lib.project.__dict__ and view.project.bank is lib.project.bank
+    assert view.install.__dict__ is lib.install.__dict__ and view.install.bank is lib.install.bank
     assert view.loaded_patch is two.loaded_patch and view.reg is two.reg
-    assert view.project.lib is view and lib.project.lib is lib
+    assert view.install.lib is view and lib.install.lib is lib
     assert one.loaded_patch.lib.loaded_patch is one.loaded_patch
     lib.status = "said"
     assert view.status == "said"
     # as a reload makes them: new classes over new bases (row 802: this test kept the old
     # bases, so it passed while the real swap refused; test_hot_reload_app.py runs that one)
     new_view = type("DeckLibrary", (DeckLibrarySlots, type("Library", (), {})), {})
-    new_bank = type("DeckProject", (DeckProjectSlots, type("Project", (), {})), {})
-    bank = view.project
+    new_bank = type("DeckProject", (DeckInstallSlots, type("Project", (), {})), {})
+    bank = view.install
     view.__class__ = new_view
     bank.__class__ = new_bank
     assert view.__dict__ is lib.__dict__ and bank.lib is view

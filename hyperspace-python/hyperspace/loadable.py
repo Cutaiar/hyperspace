@@ -807,8 +807,8 @@ class LoadedPatch:
         # lit slot (`Project.active`) on this deck
         self.labels: dict[str, tuple] = {}
         first = getattr(base, "loaded_patch", None) is None
-        self.active_slot = (getattr(base.project, "__dict__", {}).get("active", -1)
-                            if first and hasattr(base, "project") else -1)
+        self.active_slot = (getattr(base.install, "__dict__", {}).get("active", -1)
+                            if first and hasattr(base, "install") else -1)
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
         self.migrated = ""               # plan 36 T3: "/N migrated to /9" when that load was old
@@ -1002,7 +1002,7 @@ class LoadedPatch:
         #    below, never an "unknown id" (review of #351); the migrated
         #    line is said on the strip (`_warn`), not one of `notes`
         gs = self._graph_section()
-        show = getattr(lib, "project", None)
+        show = getattr(lib, "install", None)
         fwd = graphmigrate.forward(doc, gs.specs(), eye=getattr(show, "old_eye", None),
                                    camera_at=getattr(show, "camera_at", None),
                                    look=getattr(show, "old_look", None),
@@ -1613,7 +1613,7 @@ class LoadedPatch:
         a file edited on disk); a loadable patch the bank does not name lights none.
         A save lands here too: either way the loadable patch is no longer `unsaved`."""
         self.unsaved = False
-        self.lib.project.follow()
+        self.lib.install.follow()
         for fn in getattr(self, "listeners", ()):
             try:
                 fn(name)

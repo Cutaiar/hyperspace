@@ -172,7 +172,7 @@ def test_cross_sends_the_file_to_the_trash_and_the_row_goes(rig, tmp_path):  # n
     assert page["foot"] == ["trash (1) ▸"] and "trash" in page["rects"]
     _click(panel, page["rects"]["×.ACID"])                       # F6's loadable patch
     assert lib.warning.startswith("ACID is in the trash — F6 still names it")
-    assert lib.project.bank[5] == "ACID" and "ACID" not in lib.list("loadable")
+    assert lib.install.bank[5] == "ACID" and "ACID" not in lib.list("loadable")
     page_frame(panel)
     assert st["page"]["foot"] == ["trash (2) ▸"]
 
@@ -322,13 +322,13 @@ def test_the_dots_are_clean_after_a_load(rig):  # noqa: F811
         groups = [g for _k, _t, grp, _b in ui_pane.SECTIONS for g in grp]
         lit = [g for g in groups if ui_loadable.dirty(panel, g)]
         assert lit == [], f"{name}: dirty dots on {lit}"
-        assert not lib.project.is_dirty(), "the show is not unsaved"
+        assert not lib.install.is_dirty(), "the show is not unsaved"
     page_frame(panel, "loadable")
     reg["view.bright"].set_value(reg["view.bright"].value + 1.0)   # an edit: the dot comes back
     assert ui_loadable.dirty(panel, "view") and ui_loadable.dirty(panel, "loadable")
-    assert not lib.project.is_dirty()                     # a performance move: the loadable patch's
+    assert not lib.install.is_dirty()                     # a performance move: the loadable patch's
     reg["master.gain"].set(reg["master.gain"].value + 1.0)  # a meta controller move: the show's
-    assert ui_loadable.dirty(panel, "master") and lib.project.is_dirty()
+    assert ui_loadable.dirty(panel, "master") and lib.install.is_dirty()
 
 
 def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig):  # noqa: F811
@@ -705,11 +705,11 @@ def test_the_show_line_names_the_show_and_its_dot(rig, monkeypatch):  # noqa: F8
     st = _page(panel)
     assert ui_loadable.SHOW_LINE.upper() in texts and "party" in texts
     assert "●" not in texts and "show.dot" not in st["rects"]
-    assert not lib.project.is_dirty()
+    assert not lib.install.is_dirty()
     reg["master.gain"].set(reg["master.gain"].value + 1.0)      # a meta controller move
     texts.clear()
     page_frame(panel)
-    assert lib.project.is_dirty() and "●" in texts and "show.dot" in st["rects"]
+    assert lib.install.is_dirty() and "●" in texts and "show.dot" in st["rects"]
     name, dot = st["rects"]["show.name"], st["rects"]["show.dot"]
     assert name[2] <= dot[0] and not _overlap(name, dot)
 
@@ -718,9 +718,9 @@ def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa:
     """The open ▾ combo lists `Project.list()` — the library's shows — and
     a pick opens that show with its startup loadable patch."""
     panel, lib = rig.panel, rig.lib
-    assert lib.project.list() == ["house", "party"]
+    assert lib.install.list() == ["house", "party"]
     st = _page(panel)
-    assert lib.project.name == "party" and lib.current("loadable") is None
+    assert lib.install.name == "party" and lib.current("loadable") is None
     seen: list[str] = []
     real = imgui.selectable
     monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
@@ -732,9 +732,9 @@ def test_open_lists_the_librarys_shows_and_picks_one(rig, monkeypatch):  # noqa:
     monkeypatch.setattr(imgui, "selectable", lambda label, *a, **k: (
         (True, True) if label == "house" else real(label, *a, **k)))
     page_frame(panel)
-    assert lib.project.name == "house" and lib.project.stem == "house"
+    assert lib.install.name == "house" and lib.install.stem == "house"
     assert lib.current("loadable") == "BIG BLUE WAVE"             # the house show's startup
-    assert lib.project.bank[0] == "BIG BLUE WAVE" and not lib.project.is_dirty()
+    assert lib.install.bank[0] == "BIG BLUE WAVE" and not lib.install.is_dirty()
 
 
 def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
@@ -742,7 +742,7 @@ def test_save_as_and_new_work_the_show(rig, tmp_path):  # noqa: F811
     key, and its commit writes under the new name; new starts an unsaved
     `untitled` show with every pad empty and nothing to start on."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    proj = lib.project
+    proj = lib.install
     show = tmp_path / "installs" / "party.json"
     st = _page(panel)
     reg["master.gain"].set(reg["master.gain"].value + 1.0)
@@ -808,7 +808,7 @@ def test_the_footer_says_a_library_line_again(rig, monkeypatch):  # noqa: F811
     again in the same words: a save-as that meets a full bank twice, a
     pad cleared, refilled and cleared again."""
     panel, lib = rig.panel, rig.lib
-    proj = lib.project
+    proj = lib.install
     clock = [1000.0]
     monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
     page_frame(panel, "view")                                      # the first look only remembers
@@ -852,7 +852,7 @@ def test_a_line_said_twice_shows_twice(rig, monkeypatch):  # noqa: F811
     shows them again — an empty F-key, home on a show that names no
     startup loadable patch, a pad naming no file, a show saved twice."""
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    proj = lib.project
+    proj = lib.install
     clock = [1000.0]
     monkeypatch.setattr(ui.time, "monotonic", lambda: clock[0])
     page_frame(panel, "view")                                      # the first look only remembers

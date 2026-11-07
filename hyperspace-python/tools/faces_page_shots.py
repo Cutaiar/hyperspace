@@ -56,7 +56,7 @@ def boot(renderer) -> SimpleNamespace:
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(demo.HOME, period=0.0)
-    reg = build_registry(view, control, audio, lib.project, dream=renderer.lookback.state,
+    reg = build_registry(view, control, audio, lib.install, dream=renderer.lookback.state,
                          fx=renderer.fx.state)
     t = SimpleNamespace(t=0.0)
     clock = tempo.Clock(now=lambda: t.t)
@@ -112,7 +112,7 @@ def main() -> int:
     view.faces = True
     view.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     scene_fbo = ctx.framebuffer(color_attachments=[ctx.texture(RENDER_SIZE, 4)])
-    panel = Panel(r.control, r.audio, view, renderer=renderer, bank=r.lib.project,
+    panel = Panel(r.control, r.audio, view, renderer=renderer, bank=r.lib.install,
                   registry=reg, library=r.lib)
     router = panel.router = Router(reg, Bindings([]))
     router.labels["lane"] = list(r.chain.band_names)   # as the audio engine publishes them

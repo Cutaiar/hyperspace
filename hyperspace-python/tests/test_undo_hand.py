@@ -67,7 +67,7 @@ class Screen:
 
     def __init__(self, rig, monkeypatch):
         self.rig = rig
-        self.panel = Panel(rig.r.control, rig.r.audio, rig.r.view, bank=rig.lib.project,
+        self.panel = Panel(rig.r.control, rig.r.audio, rig.r.view, bank=rig.lib.install,
                            registry=rig.one.reg, library=rig.lib)
         self.d = Driver()
         self.d.record(monkeypatch.setattr)

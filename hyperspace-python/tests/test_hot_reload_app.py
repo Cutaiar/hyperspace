@@ -221,11 +221,11 @@ def test_the_rule_sees_what_it_should(source, refused):
 
 def test_the_decks_views_hold_their_fields_on_a_cold_base():
     from hyperspace import hot_slots
-    from hyperspace.library import DeckLibrary, DeckProject
+    from hyperspace.library import DeckInstall, DeckLibrary
 
     assert issubclass(DeckLibrary, hot_slots.DeckLibrarySlots)
-    assert issubclass(DeckProject, hot_slots.DeckProjectSlots)
-    assert "__slots__" not in vars(DeckLibrary) and "__slots__" not in vars(DeckProject)
+    assert issubclass(DeckInstall, hot_slots.DeckInstallSlots)
+    assert "__slots__" not in vars(DeckLibrary) and "__slots__" not in vars(DeckInstall)
     assert refusal(DeckLibrary, {"hyperspace.library"}) is None
 
 

@@ -259,7 +259,7 @@ def test_the_shows_mark_is_on_the_meta_stack(rig):
     """A show load is the meta controller's: undone in a meta section the show comes
     back and no deck moves; the startup loadable patch is a load on the panel's deck and
     undoes there, leaving the show where it is. The file's bank is never rewound."""
-    pr, one = rig.lib.project, rig.one
+    pr, one = rig.lib.install, rig.one
     assert pr.name == "party"
     assert pr.bank not in one.marks.take()[0]          # a deck's mark holds no bank
     pr.load("house")
@@ -564,7 +564,7 @@ def test_a_decks_step_across_a_show_change_that_changes_nothing_of_it_drops(rig)
     """A deck's marks name the show only for its layout: a step whose `put` would
     change nothing is no step, whatever the show is called now. `Project.new` on a
     deck already at fresh values leaves "undid new show" unsaid."""
-    pr, one = rig.lib.project, rig.one
+    pr, one = rig.lib.install, rig.one
     pr.new("first")
     go(rig)
     one.undo.clear()
@@ -579,7 +579,7 @@ def test_a_decks_step_across_a_show_change_that_changes_nothing_of_it_drops(rig)
 
 def test_undoing_a_tidys_positions_stays_within_one_show(rig):
     """The same show: positions go back. Another show: they are not landed on it."""
-    pr, one = rig.lib.project, rig.one
+    pr, one = rig.lib.install, rig.one
     pr.layout["lfo.1"] = [1, 2]
     go(rig)
     undo.push("tidy", load=True)

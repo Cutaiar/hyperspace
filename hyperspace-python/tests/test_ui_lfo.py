@@ -31,13 +31,13 @@ def rig(tmp_path):
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, audio, lib.project)
+    reg = build_registry(view, control, audio, lib.install)
     clock = tempo.Clock(now=lambda: 0.0)
     lfos = lfo.LFOs(seed=2)
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
     lib.attach(reg)
-    panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, view, bank=lib.install, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     try:
         yield SimpleNamespace(panel=panel, reg=reg, clock=clock, lfos=lfos)

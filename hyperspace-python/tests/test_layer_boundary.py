@@ -351,7 +351,7 @@ def test_every_factory_row_on_the_class_is_the_meta_controllers():
 def test_shift_f_keys_save_by_the_real_road(rig):
     import glfw
 
-    project = rig.one.loaded_patch.lib.project
+    project = rig.one.loaded_patch.lib.install
     _bank(rig, "party-wake", "party-tumble")
     rig.one.loaded_patch.load("party-wake")
     path = rig.lib.path_of("loadable", project.bank[0])

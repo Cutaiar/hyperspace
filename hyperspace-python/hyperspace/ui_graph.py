@@ -558,7 +558,7 @@ def _layouts(panel) -> tuple[dict | None, dict | None]:
     None where the panel has no library."""
     lib = getattr(panel, "library", None)
     loaded_patch = getattr(lib, "loaded_patch", None)
-    project = getattr(lib, "project", None)
+    project = getattr(lib, "install", None)
     pre = getattr(loaded_patch, "layout", None) if loaded_patch is not None else None
     if loaded_patch is not None and pre is None:
         pre = loaded_patch.layout = {}
@@ -3371,7 +3371,7 @@ def render_edit(panel) -> graphview.Edit:
     rg = getattr(getattr(panel, "renderer", None), "_graph", None)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
-    e.show = getattr(lib, "project", None)
+    e.show = getattr(lib, "install", None)
     e.loaded_patch = getattr(lib, "loaded_patch", None)           # (plan 44 D3: the bus cuts are the loadable patch's)
     return e
 
@@ -4261,7 +4261,7 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
     e = graphview.Edit(table, panel.reg, router, view, profile,
                        graph=getattr(getattr(lib, "loaded_patch", None), "graph", None),
                        render=getattr(getattr(panel, "renderer", None), "_graph", None))
-    e.show = getattr(lib, "project", None)              # (plan 36 T1: the meta controller's wires)
+    e.show = getattr(lib, "install", None)              # (plan 36 T1: the meta controller's wires)
     # row 563: a modifier or a voice deleted leaves its group at once
     e.loaded_patch = getattr(lib, "loaded_patch", None)
     return e

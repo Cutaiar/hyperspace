@@ -444,7 +444,7 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("note:4:53", "preset.select", "set", 4.0)) == bank[4]
     # a bank pad of rows 4–5 (plan 19 WP2): a filled slot its loadable patch's name,
     # an empty one nothing at all — not "SLOT 10"
-    assert rig.lib.project.bank[8] and rig.lib.project.bank[9] is None
+    assert rig.lib.install.bank[8] and rig.lib.install.bank[9] is None
     assert text(reg, Binding("note:0:56", "preset.select", "set", 8.0)) == bank[8]
     assert text(reg, Binding("note:1:56", "preset.select", "set", 9.0)) == ""
     assert text(reg, Binding("note:0:94", "view.bright", "step", 3.0)) == "Brightness +3"
@@ -497,7 +497,7 @@ def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
     the pick line still say what the pad is: an empty slot."""
     from hyperspace.learn import Learn
 
-    panel, table, reg, pr = rig.panel, rig.router.table, rig.reg, rig.lib.project
+    panel, table, reg, pr = rig.panel, rig.router.table, rig.reg, rig.lib.install
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     pr.put_slot(11, "WAKE")                                  # G4·4: filled
     pr.load_slot(4)                                          # TRIP on F5: loaded

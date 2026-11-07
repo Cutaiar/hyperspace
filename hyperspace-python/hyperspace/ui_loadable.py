@@ -128,7 +128,7 @@ def names(panel, key: str) -> list[str]:
     hit = st["lists"].get(key)
     if hit is None or now - hit[0] >= LIST_POLL:
         try:
-            listing = lib.project.list() if key == PROJECT else lib.list(key)
+            listing = lib.install.list() if key == PROJECT else lib.list(key)
         except (LibraryError, OSError) as e:
             lib.error = f"library: {e}"
             listing = hit[1] if hit else []
@@ -1048,7 +1048,7 @@ def show_line(panel) -> None:
     lib = panel.library
     if lib is None or lib.reg is None:
         return
-    proj = lib.project
+    proj = lib.install
     imgui.push_id("show")
     # the line's right edge: a chip that would pass it starts a new row
     # (GRAPH's side pane, plan 49; every page has the room for one row)
@@ -1119,7 +1119,7 @@ def _beside(right: float, w: float) -> None:
 
 
 def _project_save_as(panel, name: str) -> None:
-    _guard(panel, panel.library.project.save, name)
+    _guard(panel, panel.library.install.save, name)
     invalidate(panel, PROJECT)
 
 

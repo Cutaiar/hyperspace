@@ -1920,7 +1920,7 @@ def main(argv: list[str] | None = None) -> None:
         # the outputs hook returned
         if output is None:
             raise RuntimeError("Deck.build: the panel hook needs the outputs hook's Output")
-        panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
+        panel = Panel(control, audio, s, renderer, library.install, registry=reg, library=library)
         panels.append(panel)
         panel.graph_start_zoom = placement.window_zoom(glfw, ctrl_win)   # plan 58 SM2
         panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
@@ -2038,7 +2038,7 @@ def main(argv: list[str] | None = None) -> None:
     # the playlist (plan 44 D6b): ticked by the meta controller, said in its pane section
     meta.playing = panel.playing = playlist.Playing(meta, library, fade)
     playlist.register(deck.reg, meta.playing)
-    playlist.at_launch(meta.playing, library.project)     # SM6: `plays` in the install file
+    playlist.at_launch(meta.playing, library.install)     # SM6: `plays` in the install file
     # what ⌘Z goes by (plan 44 D5b); read off the class each time, as a reloaded
     # `ui.py` re-classes the panel and a bound method would keep the old function
     undos.where(lambda: panel.in_meta_section())
@@ -2097,7 +2097,7 @@ def main(argv: list[str] | None = None) -> None:
         (root.pacer, "pacing", "Pacer"),
         (root.pacer.floor, "pacing", "Floor"),
         (library, "library", "Library"),
-        (library.project, "library", "Project"),
+        (library.install, "library", "Project"),
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
         # the devices' adapters, the shims and the registry (devices.py):

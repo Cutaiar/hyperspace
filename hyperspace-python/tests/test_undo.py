@@ -415,7 +415,7 @@ def test_a_loadable_load_is_one_step_by_every_road(rig):
 def test_undo_of_a_load_puts_back_the_values_the_routes_the_desk_the_macros_and_the_name(rig):
     """D2 both ways: the earlier state comes back whole — an unsaved edit
     included — and the library says the earlier loadable patch is loaded."""
-    reg, lib, pr = rig.reg, rig.lib, rig.lib.project
+    reg, lib, pr = rig.reg, rig.lib, rig.lib.install
     reg["view.bright"].step(7)                         # an unsaved edit of TUMBLE
     rig.table.set_macros({"macro.1": {"label": "mine", "subs": [
         {"base": "view.speed", "from": 0.2, "to": 0.9}]}}, reg)
@@ -468,7 +468,7 @@ def test_a_show_load_and_its_startup_loadable_are_one_step_each(rig):
     """A show is the meta controller's and the loadable patch it starts on is a load on
     its deck (plan 44 D5b): one step on each stack, each undoing its own, and
     both undone the `Project` comes back as it was."""
-    reg, lib, pr = rig.reg, rig.lib, rig.lib.project
+    reg, lib, pr = rig.reg, rig.lib, rig.lib.install
     reg["master.gain"].step(-3)                        # a meta controller edit
     settle(rig)
     party = (pr.name, list(pr.bank), pr.startup, pr.path, look(rig),
@@ -659,7 +659,7 @@ def test_a_performers_round_off_lights_no_dot(rig):
         moved |= {k for k, v in now.items() if v != ref[k]}
         assert undo.alike(now, ref), name              # …in their last bits only
         dots = [g for g in ("loadable", "view", "fx", "dream", "band") if lib.is_dirty(g)]
-        assert dots == [] and not lib.project.is_dirty(), name
+        assert dots == [] and not lib.install.is_dirty(), name
     assert moved, "no base moved: this rig no longer shows the round-off"
     # a real edit, the smallest there is, on a param the round-off touched
     # and on one it did not
@@ -1030,7 +1030,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
     else:
         r = boot(tmp_path / "home")
     reg, lib, chain = r.reg, r.lib, r.chain
-    assert lib.project.name == "party" and lib.current(LOADABLE) == "TUMBLE"
+    assert lib.install.name == "party" and lib.current(LOADABLE) == "TUMBLE"
 
     # the audio engine's two per-frame calls over a synthetic signal: a
     # swept tone under a 2 Hz gate, so every band's lane rises and falls
@@ -1096,7 +1096,7 @@ def test_an_idle_app_makes_no_step(tmp_path):
 
     run(120)                                            # TUMBLE, as launched
     assert labels(r) == [], labels(r)
-    bank = [n for n in lib.project.bank if n]
+    bank = [n for n in lib.install.bank if n]
     order = bank[1:] + bank[:1]
     performed: set[str] = set()
     try:
@@ -1238,11 +1238,11 @@ def test_the_output_switches_are_left_alone_by_undo_loadables_and_shows(rig):
     path = r.loaded_patch.save_as("RIG")
     text = path.read_text()
     assert not any(pid in text for pid in ids)
-    r.lib.project.save("rigshow")
-    assert not any(pid in r.lib.project.path.read_text() for pid in ids)
+    r.lib.install.save("rigshow")
+    assert not any(pid in r.lib.install.path.read_text() for pid in ids)
     # loads leave them where they are
     for load in (lambda: r.loaded_patch.load("RIG"), lambda: r.loaded_patch.load("TRIP"),
-                 lambda: r.lib.project.load("party")):
+                 lambda: r.lib.install.load("party")):
         load()
         settle(r)
         assert (sw2.scene, sw2.hands, sw2.dim, sw1.flip_x) == (False, False, 0.3, True)

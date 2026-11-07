@@ -169,7 +169,7 @@ def test_remove_is_off_for_a_folder_holding_a_hidden_file_and_says_what(rig):  #
 def test_move_to_on_a_rows_menu_moves_the_file_and_the_bank_follows(rig):  # noqa: F811
     panel, lib = rig.panel, rig.lib
     _folders(lib, {"party": []})
-    pr = lib.project
+    pr = lib.install
     assert pr.bank[5] == "ACID"
     src = lib.path_of("loadable", "ACID")
     before = src.read_bytes()
@@ -214,7 +214,7 @@ def test_a_row_dragged_onto_a_header_moves_into_that_folder(rig):  # noqa: F811
 def test_a_folder_renamed_from_its_menu_and_the_bank_follows(rig):  # noqa: F811
     panel, lib = rig.panel, rig.lib
     _folders(lib, {"party": ["ACID"]})
-    pr = lib.project
+    pr = lib.install
     pr.bank[5] = "party/ACID"
     st = _page(panel)
     _click(panel, st["page"]["rects"]["folder.party"], button=1)

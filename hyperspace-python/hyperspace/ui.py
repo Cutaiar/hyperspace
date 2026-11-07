@@ -810,7 +810,7 @@ class Panel:
         self.library = library      # library.Library, or None: no strips, no project row
         # the F1–F8 loadable patch bank is the open project's (library.Project)
         self.bank = bank if bank is not None else (
-            library.project if library is not None else None
+            library.install if library is not None else None
         )
         self.reg = registry if registry is not None else build_registry(
             view, control, audio, self.bank
@@ -2097,7 +2097,7 @@ class Panel:
         gap = imgui.get_style().item_spacing.x
         lib = self.library
         if lib is not None and lib.reg is not None:
-            room -= imgui.calc_text_size(f"{lib.project.name} ●").x + 2 * gap
+            room -= imgui.calc_text_size(f"{lib.install.name} ●").x + 2 * gap
         dim = self.reg.get("output.dim")
         if dim is not None and dim.value < 1.0:
             room -= imgui.calc_text_size(f"·  dim {dim.text()}").x + gap
@@ -2167,7 +2167,7 @@ class Panel:
             imgui.text_colored(WARN, black)
         lib = self.library
         if lib is not None and lib.reg is not None:
-            proj = lib.project
+            proj = lib.install
             text = f"{proj.name}{' ●' if proj.is_dirty() else ''}"
             flush_right(imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)

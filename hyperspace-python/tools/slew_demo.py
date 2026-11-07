@@ -107,7 +107,7 @@ def build(seconds: float) -> SimpleNamespace:
     view = ViewState()
     seed(home)
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, audio, lib.project, dream=DreamState(), fx=FxState())
+    reg = build_registry(view, control, audio, lib.install, dream=DreamState(), fx=FxState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     r = SimpleNamespace(t=100.0)
@@ -122,7 +122,7 @@ def build(seconds: float) -> SimpleNamespace:
     loaded_patch = LoadedPatch(lib, reg, router)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, table, inp=inp, out=out, clock=lambda: r.t)
-    lib.project.load_startup()
+    lib.install.load_startup()
     u = undo.Undo(reg, table, marks=Marks(lib), tag=lambda: tuple(s.name for s in chain.spec),
                   on_restore=router.sync_macros)
     undo.install(u)

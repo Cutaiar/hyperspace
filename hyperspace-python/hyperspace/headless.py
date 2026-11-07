@@ -50,7 +50,7 @@ def make_app(home: Path, plan31: bool = True, *, machine: Path | None = None):
     control = Control(chain)
     lib = Library(home, period=0.0) if machine == home else Library(
         home, machine=machine, period=0.0)
-    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState())
     control.library = lib
     clock = tempo.Clock(now=lambda: 0.0)

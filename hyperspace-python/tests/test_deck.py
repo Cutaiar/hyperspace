@@ -76,7 +76,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     audio = SimpleNamespace(chain=chain, on=True)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, audio, lib.project,
+    reg = build_registry(view, control, audio, lib.install,
                          dream=dream if dream is not None else DreamState(),
                          fx=fx if fx is not None else FxState(),
                          ghost=ghost if ghost is not None else GhostState())
@@ -112,7 +112,7 @@ def old_boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     learn = Learn(reg, router.table, lane=router.lane)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, router.table, inp=inp, out=out, learner=learn)
-    lib.project.load_startup()
+    lib.install.load_startup()
     u = undo.Undo(reg, router.table, marks=Marks(lib), only=in_patch,
                   on_restore=router.sync_macros)
     undo.install(u)
@@ -606,8 +606,8 @@ def test_the_band_hooks_are_the_meta_and_two_decks_leave_them_once(tmp_path, mon
     assert r.control.library is r.lib
     hooks = (r.lib._layout_hooks["band"], r.lib._extra_hooks["band"], r.lib._load_hooks["band"])
     startups: list = []
-    real_startup = type(r.lib.project).load_startup
-    monkeypatch.setattr(type(r.lib.project), "load_startup",
+    real_startup = type(r.lib.install).load_startup
+    monkeypatch.setattr(type(r.lib.install), "load_startup",
                         lambda self: (startups.append(1), real_startup(self))[1])
     loaded = r.lib.current(LOADABLE)
     # a second deck leaves the process's one-of-a-kind steps alone (plan 44

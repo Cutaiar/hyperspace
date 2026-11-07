@@ -215,7 +215,7 @@ def _app(media=None, view=None):
     home = Path(tempfile.mkdtemp(prefix="hyperspace-switch-"))
     chain = Analyzer(Analyser())
     lib = Library(home, period=0.0)
-    reg = build_registry(view, Control(chain), SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(view, Control(chain), SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState(), media=media)
     clock = tempo.Clock(now=lambda: 0.0)
     lfos = lfo.LFOs(seed=1)

@@ -78,7 +78,7 @@ def build_rig(tmp_path, renderer=None):
     lib = Library(tmp_path, period=0.0)
     live = {} if renderer is None else {"dream": renderer.lookback.state,
                                         "fx": renderer.fx.state}
-    reg = build_registry(view, control, audio, lib.project, **live)
+    reg = build_registry(view, control, audio, lib.install, **live)
     lib.on_layout("band", control.apply_layout)
     # the rig has everything app.py gives the panel, so every page is
     # measured full: a hands setup over a tracker that sees no hands, an
@@ -102,7 +102,7 @@ def build_rig(tmp_path, renderer=None):
     table = Bindings.factory(path=tmp_path / "bindings.json")
     routing.register_desk(reg, table)
     lib.attach(reg)
-    panel = Panel(control, audio, view, renderer=renderer, bank=lib.project, registry=reg,
+    panel = Panel(control, audio, view, renderer=renderer, bank=lib.install, registry=reg,
                   library=lib)
     # the launch defaults (GRAPH, no desk) asserted once, by
     # test_the_panel_opens_on_graph_filling_the_window; the rig keeps the
@@ -1056,7 +1056,7 @@ def test_dirty_dots_follow_the_poll_cadence(rig):
 
 def test_project_row_and_dirty_state(rig, tmp_path):
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    proj = lib.project
+    proj = lib.install
     frame(panel, "loadable")
     assert not proj.is_dirty()                     # the party show as saved: clean
     ui_loadable._project_save_as(panel, "Show")
@@ -1152,7 +1152,7 @@ def test_loadable_bank_and_strip_on_the_loadables_page(rig):
     frame(panel, "loadable")
     reg["view.shape"].set(5)
     reg["preset.save.2"].fire()
-    assert lib.project.active == 2 and lib.project.bank[2] == "FIELD"
+    assert lib.install.active == 2 and lib.install.bank[2] == "FIELD"
     assert lib.read("loadable", "FIELD")["values"]["view.shape"] == 5
     assert lib.current("loadable") == "FIELD" and not lib.is_dirty("loadable")
     reg["view.shape"].set(1)
