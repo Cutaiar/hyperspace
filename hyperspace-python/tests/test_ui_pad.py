@@ -20,6 +20,50 @@ from hyperspace import apc40, gamepad, ui_desk, ui_pad
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.routing import Binding, padmap
 
+# ---------------------------------------------------------------- the close chip
+
+def test_the_pads_x_closes_it_and_never_leaves_the_window_empty(rig, monkeypatch):
+    """Row 808: the floating pad diagram has the × the desk has, flush right on
+    its header; a click turns `ui.pad_diagram` off. GRAPH's inline picture of
+    the pad has none. A hidden panel with no desk comes back with it."""
+    from ui_driver import Driver
+    panel = rig.panel
+    panel.desk = False
+    panel.reg["ui.pad_diagram"].set(True)
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    d = Driver(step=lambda: frame(panel))
+    d.record(monkeypatch.setattr)
+    d.run(d.wait(2))
+    _x0, y0, x1, _y1 = d.rect("pad.close")
+    win = imgui.internal.find_window_by_name("##pad")
+    assert win.pos.x + win.size.x - 40 < x1 <= win.pos.x + win.size.x and y0 < win.pos.y + 40
+    d.run(d.click("pad.close"), d.park())
+    assert not panel.pad_diagram and not panel.reg["ui.pad_diagram"].value
+    assert panel.open
+    # the panel hidden, no desk: closing the pad brings the panel back
+    panel.reg["ui.pad_diagram"].set(True)
+    panel.reg["ui.panel"].set(False)
+    ui_pad.close(panel)
+    assert not panel.pad_diagram and panel.open
+    # with the desk up, the desk fills the window: the panel stays hidden
+    panel.reg["ui.pad_diagram"].set(True)
+    panel.desk = True
+    panel.reg["ui.panel"].set(False)
+    ui_pad.close(panel)
+    assert not panel.pad_diagram and not panel.open
+
+
+def test_the_panel_stays_in_a_window_too_narrow_for_it_and_the_column():
+    """Review of #426: at the narrowest window placement opens (320 wide),
+    with only the pad up, the panel's `PANEL_W` floor put its left edge off
+    the window, where nothing could drag it back. It keeps the window."""
+    from hyperspace import placement, ui
+    for desk, pad in ((False, True), (True, False), (True, True)):
+        for dw in (placement.MIN_SIZE[0], 400, ui.PANEL_W + 2 * ui.PANEL_EDGE + 1):
+            x, _, w, _ = ui.panel_rect((dw, 900), desk, pad)
+            assert x >= ui.PANEL_EDGE and x + w <= dw - ui.PANEL_EDGE + 1e-6, (desk, pad, dw, x, w)
+
+
 # ---------------------------------------------------------------- the layout
 
 
@@ -117,13 +161,13 @@ def test_the_pad_takes_the_top_of_the_desks_column():
     starts under it (`ui_desk.room`'s `pad_h`)."""
     display = tuple(float(v) for v in NARROW_CONTROL)             # 960 × 900
     panel_x = display[0] - 540 - 12
-    E = ui_desk.EDGE
+    E = ui_pad.EDGE
     x, y, w, h = ui_pad.room(display, panel_x)
     assert (x, y) == (E, E) and x + w <= panel_x - E
     assert h <= ui_pad.MAX_H * display[1]
     # the panel hidden: wider, and wide enough for the labels
     _, _, w2, h2 = ui_pad.room(display, None)
-    assert w2 > w and (w2 - 2 * ui_desk.PAD) / gamepad.LAYOUT_W >= ui_pad.LABEL_UNIT
+    assert w2 > w and (w2 - 2 * ui_pad.PAD) / gamepad.LAYOUT_W >= ui_pad.LABEL_UNIT
     # a panel dragged far left: never narrower than MIN_W
     assert ui_pad.room(display, 100.0)[2] == ui_pad.MIN_W
     # the desk under it: its top edge clears the pad and the gap. With the
@@ -139,8 +183,8 @@ def test_the_pad_takes_the_top_of_the_desks_column():
 def test_a_unit_is_never_taller_than_it_is_wide():
     for display in ((960.0, 900.0), (1512.0, 900.0), (2560.0, 1440.0), (1600.0, 400.0)):
         _, _, w, h = ui_pad.room(display, None)
-        sx = (w - 2 * ui_desk.PAD) / gamepad.LAYOUT_W
-        sy = (h - 2 * ui_desk.PAD - ui_desk.HEAD_H) / gamepad.LAYOUT_H
+        sx = (w - 2 * ui_pad.PAD) / gamepad.LAYOUT_W
+        sy = (h - 2 * ui_pad.PAD - ui_pad.HEAD_H) / gamepad.LAYOUT_H
         assert sy <= sx + 1e-6, (display, sx, sy)
 
 
@@ -202,7 +246,7 @@ def test_the_switch_draws_it_and_hides_it(rig, monkeypatch):
     assert panel._pad_h == 0.0
     reg["ui.pad_diagram"].set(True)
     got = _pad_frames(rig, monkeypatch)
-    assert got["rect"] is not None and got["rect"][:2] == (ui_desk.EDGE, ui_desk.EDGE)
+    assert got["rect"] is not None and got["rect"][:2] == (ui_pad.EDGE, ui_pad.EDGE)
     assert panel._pad_h == got["rect"][3]
 
 

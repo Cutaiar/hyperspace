@@ -522,7 +522,7 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
     """Every item the ghost block draws — the checks, the label cells'
     dummies (the label text is drawn in them), the slider, the combos and
     the chip — as screen rects, and the page's right edge, after three
-    frames at `display` with the CONTROLS window `panel_w` wide."""
+    frames at `display` — with `panel_w`, at a window that makes CONTROLS that wide."""
     import hyperspace.hands.panel as hp
     import hyperspace.ui as ui_mod
 
@@ -552,6 +552,10 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
         for fn in ("checkbox", "slider_float", "slider_int", "combo", "button", "dummy"):
             m.setattr(ui_mod.imgui, fn, item(fn, getattr(imgui, fn)))
         m.setattr(hp, "_ghost", ghost)
+        # a narrower panel is a narrower window: CONTROLS fills it (ui.panel_rect)
+        if panel_w is not None:
+            display = (panel_w + 2 * ui_mod.PANEL_EDGE, display[1])
+            rig.panel.desk = False          # (the rig's desk would take a column of it)
         imgui.get_io().display_size = imgui.ImVec2(*display)
         for _ in range(3):
             rects.clear()
@@ -559,7 +563,6 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
                 page_frame(rig.panel, "hands")
                 continue
             imgui.new_frame()
-            imgui.set_window_size("CONTROLS", imgui.ImVec2(panel_w, display[1] - 24))
             rig.panel.reg["ui.page"].set(PAGE_KEYS.index("hands"))
             rig.panel.draw(1 / 60, 60.0)
             imgui.end_frame()
@@ -569,7 +572,7 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
 @pytest.mark.parametrize("display, panel_w", [
     (CONTROL_SIZE, None),                     # the app's control window, the panel as it opens
     ((320, CONTROL_SIZE[1]), None),           # the narrowest window placement opens (MIN_SIZE)
-    (CONTROL_SIZE, 440),                      # the panel dragged narrower: the groups wrap
+    (CONTROL_SIZE, 440),                      # a window that narrow: the groups wrap
 ])
 def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, display, panel_w):
     """The owner's report of 2026-10-05: with the ghost on, the opacity,

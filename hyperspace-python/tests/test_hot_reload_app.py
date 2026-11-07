@@ -160,50 +160,6 @@ def test_the_rule_skips_only_a_missing_third_party_package(error):
         report(importer)
 
 
-FIRST_IMPORT = """
-import importlib, os, sys
-from hyperspace.hotreload import MODULES
-# third-party only, and shared by the forks: it costs a child most of its time
-for heavy in ("numpy", "glfw", "moderngl", "OpenGL.GL", "imgui_bundle", "PIL.Image", "torch"):
-    try:
-        importlib.import_module(heavy)
-    except ImportError:
-        pass
-wrong = {}
-for name in MODULES:
-    r, w = os.pipe()
-    pid = os.fork()
-    if pid == 0:
-        os.close(r)
-        try:
-            importlib.import_module(f"hyperspace.{name}")
-            said = b""
-        except ModuleNotFoundError as e:
-            said = str(e).encode() if (e.name or "hyperspace").startswith("hyperspace") else b""
-        except BaseException as e:
-            said = f"{type(e).__name__}: {e}".encode()
-        os.write(w, said[:400])
-        os._exit(0)
-    os.close(w)
-    said = os.read(r, 500)
-    os.close(r)
-    _, status = os.waitpid(pid, 0)
-    if said or status:
-        wrong[name] = said.decode() or f"status {status}"
-print(wrong)
-sys.exit(1 if wrong else 0)
-"""
-
-
-def test_any_hot_module_can_be_a_process_s_first_import():
-    """Row 812: an import cycle is fine until a module reads another at import, and then
-    only some orders work, and a tool or a test finds out by chance. One fork each, from
-    a process that has imported only `hotreload`."""
-    out = subprocess.run([sys.executable, "-c", FIRST_IMPORT], capture_output=True, text=True,
-                         check=False, cwd=str(ROOT), timeout=110)
-    assert out.returncode == 0, out.stdout[-3000:] + out.stderr[-1000:]
-
-
 def _hot(source: str) -> tuple[type, set[str]]:
     """The class `V` of `source`, as a module named `hotmod` defines it; `Cold` is cold."""
     mod = types.ModuleType("hotmod")
@@ -268,3 +224,34 @@ def test_the_decks_views_hold_their_fields_on_a_cold_base():
     assert issubclass(DeckProject, hot_slots.DeckProjectSlots)
     assert "__slots__" not in vars(DeckLibrary) and "__slots__" not in vars(DeckProject)
     assert refusal(DeckLibrary, {"hyperspace.library"}) is None
+
+
+COLD = """
+import importlib, json, pkgutil, sys
+import hyperspace
+names = sorted(m.name for m in pkgutil.walk_packages(hyperspace.__path__, "hyperspace."))
+bad = {}
+for name in names:
+    for k in [k for k in sys.modules if k == "hyperspace" or k.startswith("hyperspace.")]:
+        del sys.modules[k]
+    try:
+        importlib.import_module(name)
+    except (AttributeError, ImportError) as e:
+        if isinstance(e, AttributeError) or "circular" in str(e) or "partially" in str(e):
+            bad[name] = f"{type(e).__name__}: {e}"
+    except Exception:
+        pass            # an optional dependency's own failure: not a cycle
+print(json.dumps({"n": len(names), "bad": bad}))
+"""
+
+
+def test_every_module_imports_alone():
+    """Each of the package's modules imports first, into a process with none of the
+    package loaded. A cycle the app's own order never meets still broke
+    the report above whenever a set's order put the module first: `ui_pane` read by
+    `ui_graph`, and `ui_desk` read by `ui_pad`, half made (row 808, ui_diagram.py)."""
+    out = subprocess.run([sys.executable, "-c", COLD], capture_output=True, text=True,
+                         check=False, cwd=str(ROOT), timeout=110)
+    assert out.returncode == 0, out.stderr[-2000:]
+    got = json.loads(out.stdout.strip().splitlines()[-1])
+    assert got["n"] > 100 and not got["bad"], got["bad"]
