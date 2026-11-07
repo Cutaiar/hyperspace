@@ -231,6 +231,11 @@ def test_the_private_names_that_cross_a_module_boundary_are_known():
         # `I._PRECISE["seen"]`. Safe only while wheel.py MUTATES the dict
         # and never rebinds it - see wheel.py's docstring.
         "wheel._PRECISE": {"interact.py"},
+        # item 3b: the primitives left in interact.py ARE the sandwich's
+        # callers, so these cross by construction. comp_combobox also reaches
+        # `I._sandwich_end` through the facade, which `_refs` covers.
+        "uictx._sandwich_begin": {"interact.py"},
+        "uictx._sandwich_end": {"interact.py"},
     }, (
         "the set of PRIVATE names imported across modules changed:\n  "
         + "\n  ".join(f"{k} <- {sorted(v)}" for k, v in sorted(crossing.items())))
