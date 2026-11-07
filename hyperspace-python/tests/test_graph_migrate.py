@@ -244,11 +244,11 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     kinds = lib._kinds
     assert loadable.VERSIONS == (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)   # (plan 40 T2: /8; plan 43 C2: /9)
     try:
-        kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
-        with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
+        kinds["loadable"] = replace(kinds["loadable"], versions=(2, 3, 4, 5))
+        with pytest.raises(LibraryError, match="git pull and uv sync"):
             lib.read("loadable", "six")
     finally:
-        kinds["presets"] = replace(kinds["presets"], versions=loadable.VERSIONS)
+        kinds["loadable"] = replace(kinds["loadable"], versions=loadable.VERSIONS)
 
 
 def test_an_empty_run_is_written_as_frame_to_fx():

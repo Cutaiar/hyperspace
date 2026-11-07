@@ -104,7 +104,7 @@ def test_the_corpus_is_in_the_one_shape():
 
 def test_the_loadables_ladder_is_one_function_the_load_reads_through():
     """A whole loadable patch's steps (`seven`, `nine`, `ten`) are one function,
-    `graphmigrate.forward`, which the load runs: a `/10` passes untouched,
+    `graphmigrate.forward`, which the load runs: an `/11` passes untouched,
     a `/2` comes out `/7`-shaped and said."""
     import inspect
 
@@ -116,7 +116,7 @@ def test_the_loadables_ladder_is_one_function_the_load_reads_through():
     old = json.loads((ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
                       / "party-trip.json").read_text())
     fwd = graphmigrate.forward(old, {})
-    assert fwd.migrated.startswith(f"{old['schema']} migrated to hyperspace.preset/10")
+    assert fwd.migrated.startswith(f"{old['schema']} migrated to hyperspace.loadable/11")
     assert "modules" not in fwd.doc and "desk_template" not in fwd.doc
 
 
