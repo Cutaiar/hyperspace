@@ -64,6 +64,25 @@ KIND = {
     # a menu panel: rounded-lg, a 1px ring 1px outside, and shadow-md
     # reaching ~6px further
     "menu": {"radius": 10.0, "outset": 6, "ring": True},
+    # A Button's radius is SIZE-dependent (8 on the four small sizes, 10
+    # above), so `geom` asks comp_button for it rather than trusting this
+    # number; the entry carries the default. At rest a button has no chrome
+    # outside its border box - the focus ring is a focus state and the
+    # gallery is a rest-state pass - so outset is 0.
+    #
+    # `ring` is False because four of the six variants are FILLED boxes;
+    # `geom` already promotes the outline variant, which is the one that
+    # reads as a 1px border on an opaque fill. `ghost` and `link` paint
+    # nothing at rest, so their radial march finds no step and reports NaN,
+    # which does not fail - while the strict flat metric still holds them to
+    # painting nothing on both sides, which is the real assertion there.
+    "button": {"radius": 10.0, "outset": 0, "ring": False},
+    # A group's cell is the whole group. Its four OUTER corners are all
+    # rounded at 10 (the first member owns two, the last the other two) and
+    # the inner seams are square, so marching the cell's corners is right
+    # without sub-boxes. `in-data-[slot=button-group]:rounded-lg` puts every
+    # size back to 10, measured.
+    "buttongroup": {"radius": 10.0, "outset": 0, "ring": False},
 }
 
 
@@ -73,6 +92,12 @@ def geom(cell):
     radius = k["radius"]
     if cell["kind"] == "select" and cell["variant"] == "sm":
         radius = 8.0                    # sm is rounded-md, not rounded-lg
+    if cell["kind"] == "button":
+        # Ask the source for it. xs/sm/icon-xs/icon-sm are rounded-md (8) and
+        # the rest rounded-lg (10); copying either number here would go stale
+        # the moment BUTTON_SIZES moved.
+        import comp_button as CB
+        radius = CB.button_radius(cell["size"])
     r = min(radius, min(cell["w"], cell["h"]) / 2.0)
     ring = k["ring"] or cell.get("variant") == "outline"
     return r, k["outset"], ring
@@ -153,6 +178,73 @@ def arrow_box(cell):
     vis = half - TOOLTIP["arrow_dy"]
     cx = cell["x"] + cell["w"] / 2.0
     return (cx - vis - 1.0, cell["y"] + cell["h"], 2.0 * vis + 2.0, vis + 2.0)
+
+
+def miter_pixels(cell):
+    """The single pixels where Chromium under-covers a square border corner.
+
+    Measured, and it is a property of the BROWSER, not of the kit. An element
+    with any non-zero border-radius has its whole border rasterized as one
+    antialiased path, so where two present border segments meet at a corner
+    whose radius is 0, each segment's miter edge is drawn at partial coverage
+    and the two compose to ~0.75 rather than 1.0. On `border` over white that
+    is 235 where full coverage is 229 - a 6-level deficit on exactly one
+    pixel per such corner.
+
+    A ButtonGroup is the only place in the kit that mixes radii on one
+    element, and the arithmetic picks out precisely the members where it can
+    happen:
+
+      * a member with NO rounded corner (a middle one) has its border drawn
+        as four axis-aligned rects, with no path antialiasing - measured
+        exact at 229;
+      * a member whose square corner has one of its two adjoining borders
+        DROPPED (the last one's leading corners) has no join to miter -
+        also measured exact;
+      * which leaves the FIRST member's two trailing corners, in both
+        orientations, and nothing else.
+
+    So this is not "the pixels that failed". It is a closed-form list of the
+    corners where the browser's own rasterizer cannot reach full coverage,
+    and ImGui - which strokes the border as one rect - is the side that is
+    geometrically right. Excluded from the strict metric and REPORTED, the
+    way soft_shadow_band is.
+
+    Returns [(x, y), ...] in absolute canvas pixels.
+    """
+    if cell["kind"] != "buttongroup":
+        return []
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import comp_button as CB
+
+    ori = cell["orientation"]
+    rects, cx, cy = [], cell["x"], cell["y"]
+    for m in cell["members"]:
+        if ori == "horizontal":
+            rects.append((cx, cell["y"], float(m), cell["h"]))
+            cx += m
+        else:
+            rects.append((cell["x"], cy, cell["w"], float(m)))
+            cy += m
+
+    # corner name -> the two sides that meet there, as indices into
+    # `borders` = (top, right, bottom, left)
+    ADJ = {"tl": (0, 3), "tr": (0, 1), "br": (2, 1), "bl": (2, 3)}
+    out = []
+    for (x, y, w, h), j in zip(rects, CB.button_group(rects, ori)):
+        if not j.corners:                 # no radius at all: plain rects
+            continue
+        for name, (s0, s1) in ADJ.items():
+            if name in j.corners:         # rounded: it is an arc, not a miter
+                continue
+            if j.borders[s0] <= 0.0 or j.borders[s1] <= 0.0:
+                continue                  # a dropped side cannot form a join
+            px = x if name in ("tl", "bl") else x + w - 1.0
+            py = y if name in ("tl", "tr") else y + h - 1.0
+            out.append((int(px), int(py)))
+    return out
 
 
 def sub_boxes(cell):

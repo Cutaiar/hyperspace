@@ -124,6 +124,20 @@ def soft_shadow_mask(shape: tuple[int, int]) -> np.ndarray:
     return m
 
 
+def miter_mask(shape: tuple[int, int]) -> np.ndarray:
+    """The 1px square-corner miters Chromium cannot cover fully.
+
+    See contour.miter_pixels: a closed-form list, not the pixels that
+    happened to differ. Excluded from the strict metric and REPORTED below.
+    """
+    m = np.zeros(shape, bool)
+    for c in SPEC["cells"]:
+        for x, y in C.miter_pixels(c):
+            if 0 <= y < shape[0] and 0 <= x < shape[1]:
+                m[y, x] = True
+    return m
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dir")
@@ -143,7 +157,8 @@ def main() -> int:
     tol = tolerant_delta(react, mine)
     corners = corner_mask(strict.shape) | vector_mask(strict.shape)
     soft = soft_shadow_mask(strict.shape)
-    corners = corners | soft
+    miter = miter_mask(strict.shape)
+    corners = corners | soft | miter
     arcs = C.measure(react.astype(float), mine.astype(float))
 
     print(f"canvas {react.shape[1]}x{react.shape[0]}   "
@@ -258,6 +273,20 @@ def main() -> int:
                   slice(int(x), int(np.ceil(x + w))))
             worst = int(strict[sl].max()) if strict[sl].size else 0
             print(f"  {c['id']:14} worst {worst} levels over {strict[sl].size} px")
+
+    # --- advisory: the square-corner miters -------------------------------
+    mit = [(c, C.miter_pixels(c)) for c in SPEC["cells"]]
+    mit = [(c, m) for c, m in mit if m]
+    if mit:
+        print()
+        print("square-corner miter (advisory - Chromium under-covers a "
+              "0-radius corner on an element that has a radius elsewhere; "
+              "ImGui is the exact side):")
+        for c, pts in mit:
+            worst = max(int(strict[y, x]) for x, y in pts)
+            vals = ", ".join(f"R{int(react[y, x].max())}/I{int(mine[y, x].max())}"
+                             for x, y in pts)
+            print(f"  {c['id']:14} worst {worst} levels over {len(pts)} px   {vals}")
 
     amp = np.clip(tol.astype(np.int32) * 4, 0, 255).astype(np.uint8)
     sheet = np.concatenate(

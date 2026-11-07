@@ -18,6 +18,7 @@
 const { chromium } = require("playwright")
 const fs = require("fs")
 
+let CTX_AT = null   // where the ContextMenu was opened, for its placement
 const args = process.argv.slice(2)
 const url = args.find((a) => !a.startsWith("--")) || "http://localhost:4173/?probe"
 const jsonAt = args.indexOf("--json")
@@ -28,7 +29,15 @@ const jsonOut = jsonAt >= 0 ? args[jsonAt + 1] : null
 const PROPS = [
   "backgroundColor", "backgroundImage", "opacity",
   "borderTopWidth", "borderTopColor", "borderTopStyle",
+  // All four widths, not just the top: a horizontal ButtonGroup collapses
+  // its SHARED edge, which is a left/right border, and a list that carries
+  // only borderTopWidth reports 1px for every button and cannot see it.
+  "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+  "borderLeftColor",
+  // All four corners. borderBottomRightRadius was the one missing, which is
+  // exactly the corner a button-group's LAST item rounds.
   "borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius",
+  "borderBottomRightRadius",
   "boxShadow", "outlineWidth", "outlineColor",
   "transform", "translate",
   "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
@@ -52,6 +61,38 @@ const PROPS = [
   // Radix mounts portals and runs its open animation after paint; a tooltip
   // or select measured too early reports its pre-animation transform.
   await p.waitForTimeout(700)
+
+  // --- the ContextMenu, which only exists after a real right-click ---------
+  // Radix's ContextMenu has no `defaultOpen`, so until something actually
+  // right-clicks the trigger the only thing under `contextmenu.target` is
+  // the trigger itself. The panel had never been measured: every number in
+  // comp_context_menu.py came from the DropdownMenu's chrome plus a reading
+  // of the classes. Open it BEFORE the static walk below, so the content is
+  // in the DOM when the blocks are read.
+  {
+    const t = p.locator("[data-probe-ctx]").first()
+    if (await t.count()) {
+      // NOT a real right-click: `?probe` also carries an OPEN Combobox, whose
+      // portal covers this trigger and intercepts pointer events, so
+      // locator.click({button:"right"}) times out after 30s. Radix opens on
+      // the `contextmenu` EVENT, so dispatching it on the trigger reaches the
+      // component without going through hit-testing.
+      //
+      // clientX/clientY are passed because Radix places the panel at the
+      // pointer: with the default 0,0 the panel would be measurable but its
+      // POSITION would be a measurement of nothing. These coordinates are the
+      // ones comp_context_menu.place_at_pointer is checked against.
+      const box = await t.boundingBox()
+      CTX_AT = { x: Math.round(box.x + 20), y: Math.round(box.y + 20) }
+      await t.dispatchEvent("contextmenu", {
+        button: 2, clientX: CTX_AT.x, clientY: CTX_AT.y,
+        bubbles: true, cancelable: true,
+      })
+      // Radix mounts the panel in a portal and runs its open animation; the
+      // same 700ms the initial load waits for, for the same reason.
+      await p.waitForTimeout(700)
+    }
+  }
 
   const out = await p.evaluate((PROPS) => {
     const rd = (el, origin) => {
@@ -96,6 +137,16 @@ const PROPS = [
     if (portal.length) res["_portal"] = { parts: portal }
     return res
   }, PROPS)
+
+  // Close the ContextMenu now the walk has recorded it. It is a MODAL layer -
+  // Radix puts pointer-events:none on the body while it is open - so leaving
+  // it up makes every hover below time out, which is the same trap the
+  // ?probe&open Select pass is documented for. Measured, then dismissed.
+  if (CTX_AT) {
+    await p.keyboard.press("Escape")
+    await p.waitForTimeout(300)
+  }
+
 
   // --- interactive states -------------------------------------------------
   // The rest states above come out of one static dump, but the states the
@@ -165,6 +216,9 @@ const PROPS = [
   }
 
   out._states = states
+  // Where the contextmenu event was dispatched, so the panel's rect can be
+  // read as an OFFSET from the pointer rather than an absolute position.
+  if (CTX_AT) out._ctx_at = CTX_AT
 
   if (errs.length) console.log("PAGE ERRORS:\n" + errs.join("\n") + "\n")
   console.log("\n=== interactive states ===")
@@ -188,12 +242,30 @@ const PROPS = [
     v === "rgba(0, 0, 0, 0)" || v === "visible" || v === "1" ||
     (k === "transform" && v === "none")
   for (const [id, blk] of Object.entries(out)) {
+    // `_states` is not a block: it is a flat name -> style map of the
+    // hover/focus/active passes, collected separately above. Printing it
+    // through the part loop is how this crashed with "blk.parts is not
+    // iterable" - which took the whole dump out, since the write happens
+    // first and the print is all anyone sees without --json.
+    if (id === "_states" || id === "_ctx_at") continue
     console.log(`\n=== ${id} ===`)
     for (const part of blk.parts) {
       const geo = `${part.w.toFixed(2)}x${part.h.toFixed(2)} @ ${part.x.toFixed(2)},${part.y.toFixed(2)}`
       console.log(`  ${part.slot.padEnd(22)} ${geo}${part.state ? "  [" + part.state + "]" : ""}`)
       const keep = Object.entries(part.style).filter(([k, v]) => !dull(k, v))
       for (const [k, v] of keep) console.log(`      ${k.padEnd(22)} ${v}`)
+    }
+  }
+
+  // The state passes, which carry no rect of their own beyond w/h.
+  if (out._states) {
+    console.log(`\n=== _states (hover / focus / active) ===`)
+    for (const [name, st] of Object.entries(out._states)) {
+      const { w, h, ...style } = st
+      console.log(`  ${name.padEnd(26)} ${Number(w).toFixed(2)}x${Number(h).toFixed(2)}`)
+      for (const [k, v] of Object.entries(style)) {
+        if (!dull(k, v)) console.log(`      ${k.padEnd(22)} ${v}`)
+      }
     }
   }
   await b.close()

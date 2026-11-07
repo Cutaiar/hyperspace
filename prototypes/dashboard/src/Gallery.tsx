@@ -8,6 +8,8 @@
 // ?gallery         the chrome pass (text hidden) — this is what gets diffed
 // ?gallery&text    the same grid with text, advisory only
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Card } from "@/components/ui/card"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -41,12 +43,15 @@ type Cell = {
   w: number
   h: number
   text: string
-  size?: number
+  size?: number | string
   weight?: number
   fracs?: number[]
   on?: boolean
   content?: number
   frac?: number
+  disabled?: boolean
+  members?: number[]
+  orientation?: string
 }
 
 export default function Gallery({
@@ -236,6 +241,43 @@ export default function Gallery({
                 <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          ) : c.kind === "button" ? (
+            // Pinned to the spec rect by inline style, which beats the
+            // size variant's own h-8/size-8 classes without touching any
+            // other chrome. Text transparent: the chrome pass never
+            // measures glyphs, and a Button's intrinsic WIDTH comes from
+            // its label, which is the one thing the spec exists to pin.
+            <Button
+              variant={c.variant as never}
+              size={c.size as never}
+              disabled={c.disabled}
+              style={{ width: "100%", height: "100%", color: "transparent" }}
+            >
+              {c.text}
+            </Button>
+          ) : c.kind === "buttongroup" ? (
+            // The member widths are pinned too, for the same reason: the
+            // browser's 48.6875 / 47.8125 / 57.5625 are text metrics. What
+            // is being diffed is the JOINS - which corners stay round and
+            // which shared border is dropped.
+            <ButtonGroup
+              orientation={c.orientation as "horizontal" | "vertical"}
+              style={{ width: "100%", height: "100%" }}
+            >
+              {(c.members ?? []).map((m, i) => (
+                <Button
+                  key={i}
+                  variant={c.variant as never}
+                  style={
+                    c.orientation === "vertical"
+                      ? { width: "100%", height: m, color: "transparent" }
+                      : { width: m, height: "100%", color: "transparent" }
+                  }
+                >
+                  {""}
+                </Button>
+              ))}
+            </ButtonGroup>
           ) : c.kind === "card" ? (
             <Card
               className={

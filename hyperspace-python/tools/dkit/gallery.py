@@ -27,6 +27,7 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import comp_button as CB  # noqa: E402
 import draw as D          # noqa: E402
 from ease import Anim     # noqa: E402
 import gradient as G      # noqa: E402
@@ -92,6 +93,7 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
     inputs = T.input_table(theme_name)
     selects = T.select_table(theme_name)
     tips = T.tooltip_table(theme_name)
+    buttons = CB.button_table(theme_name)
     ink = T.rgba("foreground", theme=theme)
 
     # Two frames: the first builds the font atlas and settles the backend.
@@ -153,6 +155,33 @@ def render(theme_name: str, tess: float | None = None) -> np.ndarray:
                 M.rows(mui, MENU_CELL_ITEMS, cell["x"] + M.PAD,
                        cell["y"] + M.PAD, cell["w"] - 2 * M.PAD,
                        "gallery.menu", chrome_only=True)
+            elif cell["kind"] == "button":
+                # label "" is the chrome pass: the oracle paints its text
+                # transparent, so the kit must draw none. Everything being
+                # measured here - the size-dependent radius, the padding-box
+                # fill, the disabled double-dim - is independent of it.
+                CB.button(dl, cell["x"], cell["y"], cell["w"], cell["h"],
+                          "", faces, theme, buttons,
+                          variant=cell["variant"], size=cell["size"],
+                          disabled=cell.get("disabled", False))
+            elif cell["kind"] == "buttongroup":
+                # The members are tiled from the PINNED widths rather than
+                # from button_group_place's intrinsic ones, for the same
+                # reason the spec pins them: an intrinsic width is a text
+                # measurement. The joins are the thing under test.
+                ori = cell["orientation"]
+                rects, cx, cy = [], cell["x"], cell["y"]
+                for m in cell["members"]:
+                    if ori == "horizontal":
+                        rects.append((cx, cell["y"], float(m), cell["h"]))
+                        cx += m
+                    else:
+                        rects.append((cell["x"], cy, cell["w"], float(m)))
+                        cy += m
+                for r, j in zip(rects, CB.button_group(rects, ori)):
+                    CB.button(dl, r[0], r[1], r[2], r[3], "", faces, theme,
+                              buttons, variant=cell["variant"],
+                              size="default", join=j)
             elif cell["kind"] == "text":
                 D.text_cell(dl, cell, faces, ink)
         imgui.render()

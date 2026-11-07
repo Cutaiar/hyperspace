@@ -2,7 +2,7 @@
   "_comment": "The shared gallery spec. Both the React oracle and the ImGui kit read this file and draw the SAME rects, so a diff measures chrome, never text metrics. Rects are CSS/content-box pixels at device-pixel-ratio 1, origin top-left.",
   "canvas": {
     "w": 760,
-    "h": 1300,
+    "h": 1594,
     "bg": "#ffffff"
   },
   "cells": [
@@ -485,6 +485,213 @@
       "w": 180,
       "h": 125,
       "text": ""
+    },
+    {
+      "id": "button.default",
+      "kind": "button",
+      "variant": "default",
+      "size": "default",
+      "x": 40,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.outline",
+      "kind": "button",
+      "variant": "outline",
+      "size": "default",
+      "x": 160,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.secondary",
+      "kind": "button",
+      "variant": "secondary",
+      "size": "default",
+      "x": 280,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.ghost",
+      "kind": "button",
+      "variant": "ghost",
+      "size": "default",
+      "x": 400,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.destructive",
+      "kind": "button",
+      "variant": "destructive",
+      "size": "default",
+      "x": 520,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.link",
+      "kind": "button",
+      "variant": "link",
+      "size": "default",
+      "x": 640,
+      "y": 1320,
+      "w": 100,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.xs",
+      "kind": "button",
+      "variant": "outline",
+      "size": "xs",
+      "x": 40,
+      "y": 1380,
+      "w": 90,
+      "h": 24,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.sm",
+      "kind": "button",
+      "variant": "outline",
+      "size": "sm",
+      "x": 150,
+      "y": 1380,
+      "w": 90,
+      "h": 28,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.default",
+      "kind": "button",
+      "variant": "outline",
+      "size": "default",
+      "x": 260,
+      "y": 1380,
+      "w": 90,
+      "h": 32,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.lg",
+      "kind": "button",
+      "variant": "outline",
+      "size": "lg",
+      "x": 370,
+      "y": 1380,
+      "w": 90,
+      "h": 36,
+      "text": "Button"
+    },
+    {
+      "id": "button.size.icon-xs",
+      "kind": "button",
+      "variant": "outline",
+      "size": "icon-xs",
+      "x": 480,
+      "y": 1380,
+      "w": 24,
+      "h": 24,
+      "text": ""
+    },
+    {
+      "id": "button.size.icon-sm",
+      "kind": "button",
+      "variant": "outline",
+      "size": "icon-sm",
+      "x": 520,
+      "y": 1380,
+      "w": 28,
+      "h": 28,
+      "text": ""
+    },
+    {
+      "id": "button.size.icon",
+      "kind": "button",
+      "variant": "outline",
+      "size": "icon",
+      "x": 564,
+      "y": 1380,
+      "w": 32,
+      "h": 32,
+      "text": ""
+    },
+    {
+      "id": "button.size.icon-lg",
+      "kind": "button",
+      "variant": "outline",
+      "size": "icon-lg",
+      "x": 612,
+      "y": 1380,
+      "w": 36,
+      "h": 36,
+      "text": ""
+    },
+    {
+      "id": "button.disabled",
+      "kind": "button",
+      "variant": "default",
+      "size": "default",
+      "x": 40,
+      "y": 1440,
+      "w": 100,
+      "h": 32,
+      "text": "Button",
+      "disabled": true
+    },
+    {
+      "id": "button.disabled.outline",
+      "kind": "button",
+      "variant": "outline",
+      "size": "default",
+      "x": 160,
+      "y": 1440,
+      "w": 100,
+      "h": 32,
+      "text": "Button",
+      "disabled": true
+    },
+    {
+      "id": "buttongroup.h",
+      "kind": "buttongroup",
+      "variant": "outline",
+      "x": 300,
+      "y": 1440,
+      "w": 200,
+      "h": 32,
+      "members": [
+        60,
+        60,
+        80
+      ],
+      "orientation": "horizontal"
+    },
+    {
+      "id": "buttongroup.v",
+      "kind": "buttongroup",
+      "variant": "outline",
+      "x": 40,
+      "y": 1490,
+      "w": 80,
+      "h": 64,
+      "members": [
+        32,
+        32
+      ],
+      "orientation": "vertical"
     }
   ]
 }
