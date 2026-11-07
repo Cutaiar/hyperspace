@@ -179,7 +179,7 @@ def _clock_strip(panel, clock) -> None:
         if ui.chip(f"{tag}##{nudge.id}.{tag}"):
             nudge.step(sign)
         panel._tip(nudge, f"Nudge the downbeat {tip} a hundredth of a beat (APC NUDGE {tag})")
-        panel._ctx(nudge)
+        panel._ctx(nudge, f".{tag}")    # (two chips, one param: each its own popup, audit U9)
         panel._learn_frame(nudge)
     imgui.end_group()
     # the two faders side by side, so the clock costs the page one row

@@ -194,15 +194,27 @@ context and makes no second one; destroyed by `close` (`Panel.close`,
 which app.py calls on quit and on ⌘R before imgui shuts down). Its
 settings file is off (`Config.settings_file = ""`): the positions are
 the loadable patch's and the show's, never a NodeEditor.json beside the app.
+
+**The start zoom** (plan 58 SM2) is that settings file's one use: the binding
+has no zoom setter, and only the editor's first load reads a zoom. `_canvas`
+makes a temporary file holding just a view (`start_view`) for the editor it
+creates, and `_start_view_read` turns the file off again right after the first
+`ed.begin`, before that frame can save anything. So a zoom is set once per
+editor, and `graphview.SCALE` and every saved position stay as they were.
+Nothing else sets one, and a canvas's change of size keeps both the zoom
+(`CanvasSizeMode.center_only`) and the corner (`keep_corner`).
 """
 
 from __future__ import annotations
 
 import colorsys
 import dataclasses
+import json
 import math
+import os
+import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
@@ -259,7 +271,6 @@ SIDE_W = 320.0           # the side column's width at first, when the page is wi
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
 GRIP_W = 8.0             # the drag grip on the column's left edge
-UI_FILE = ui_pane.UI_FILE   # <machine>/ui.json: this Mac's panel settings (the side width)
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
@@ -282,7 +293,7 @@ IDLE_TIP = ("Nothing in, nothing out: not drawn so the canvas stays readable. + 
             "them here to patch one; patched, it is drawn like any node. The picker "
             "(right-click the canvas) still offers every idle macro.")
 BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it — widen "
-              "CONTROLS to give both room (on a page this wide they sit beside by themselves)")
+              "the window to give both room (in a window this wide they sit beside by themselves)")
 # plan 28 N7: a bundle's thickness follows how many cables it holds, capped
 FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
@@ -299,10 +310,10 @@ PATCH_ONLY = True
 PATCH_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
                    "they reach. Controllers, modulation and macros are left off the canvas "
                    "(nothing is changed, only not drawn). Click to show everything.")
-# 2026-10-26: output 1's picture behind the canvas, fixed to the page (not
+# 2026-10-26: output 1's picture behind the canvas, fixed to the canvas (not
 # the canvas: it neither pans nor zooms), the editor's own ground laid
 # over it at 1 − `backdrop_alpha`
-BACKDROP_TIP = ("Output 1's picture behind the nodes, fixed to the page — the slider "
+BACKDROP_TIP = ("Output 1's picture behind the nodes, fixed to the canvas — the slider "
                 "beside it sets how strongly it shows")
 BACKDROP_ALPHA = 0.35    # how strongly it shows by default
 # 2026-10-26 (the trackpad; ported from Dan's graph-quick-wins): two
@@ -418,13 +429,66 @@ def _state(panel) -> dict:
 EDIT_STATE = (("note", str), ("pin_xy", dict), ("menu", lambda: None), ("menu_at", tuple))
 
 
-def editor(panel):
-    """The panel's editor context, made on first use (settings file off)."""
+def start_view(zoom: float) -> str:
+    """A temporary settings file saying only "start at `zoom`" (screen points
+    per canvas unit), for `Config.settings_file`. "" for 1:1 or if no file can
+    be written: the editor's own start, since no zoom is worth a launch."""
+    if zoom == 1.0:
+        return ""
+    view = {"scroll": {"x": 0, "y": 0}, "zoom": zoom,   # (an empty rect: the zoom is taken as given)
+            "visible_rect": {"min": {"x": 0, "y": 0}, "max": {"x": 0, "y": 0}}}
+    try:
+        fd, path = tempfile.mkstemp(prefix="hyperspace-graph-view-", suffix=".json")
+    except OSError:
+        return ""
+    try:
+        f = os.fdopen(fd, "w")
+    except OSError:
+        os.close(fd)
+        with suppress(OSError):
+            os.unlink(path)
+        return ""
+    try:
+        with f:
+            json.dump({"nodes": {}, "selection": None, "view": view}, f)
+    except OSError:
+        with suppress(OSError):
+            os.unlink(path)
+        return ""
+    return path
+
+
+def _start_view_read(ctx, path: str) -> None:
+    """After the first `ed.begin`, which read the start view: the settings file
+    off before the editor can save into it, and gone."""
+    ed.get_config(ctx).settings_file = ""
+    with suppress(OSError):
+        os.unlink(path)
+
+
+def keep_corner(st: dict, size: tuple[float, float]) -> None:
+    """Before `ed.begin`: a canvas that changed size stays at its top-left. The
+    editor re-centres on any change of size, moving every node by half of it;
+    the pan moves them back in the same frame (`st["pan"]`, as a scroll does)."""
+    last, st["canvas_size"] = st.get("canvas_size"), size
+    if last is None or last == size:
+        return
+    k = st.get("zoom", 1.0) / 2.0       # canvas units a point
+    px, py = st["pan"]
+    st["pan"] = (px + (last[0] - size[0]) * k, py + (last[1] - size[1]) * k)
+
+
+def editor(panel, settings_file: str = ""):
+    """The panel's editor context, made on first use (settings file off, but
+    for the start view `_canvas` hands the one it makes)."""
     st = _state(panel)
     if st["editor"] is None:
         cfg = ed.Config()
-        cfg.settings_file = ""
+        cfg.settings_file = settings_file
         cfg.enable_smooth_zoom = True       # a trackpad's small steps zoom a little each
+        # a canvas that changes size keeps its zoom. The editor's default rescales
+        # with the height: a head's extra line would change a person's zoom.
+        cfg.canvas_size_mode = ed.CanvasSizeMode.center_only
         st["editor"] = ed.create_editor(cfg)
         st["created"] += 1
         st["applied"] = {}      # a new context knows no position yet
@@ -439,6 +503,7 @@ def close(panel) -> None:
         ui_pane.flush(st, force=True)       # plan 49: a fold not yet written
     if not st or st.get("editor") is None:
         return
+    st.pop("canvas_size", None)
     ctx, st["editor"] = st["editor"], None
     st["applied"] = {}
     ed.destroy_editor(ctx)
@@ -745,7 +810,8 @@ def page(panel, dt: float) -> None:
     # the canvas is always the page's whole size: the node editor re-centres
     # its view whenever its canvas changes size (no `CanvasSizeMode` keeps the
     # top-left), so a selection that narrowed it panned every node (the
-    # owner, 2026-10-24). The details are laid over its edge instead.
+    # owner, 2026-10-24). The details are laid over its edge instead, and what
+    # else changes the size (a window, a head's line) is `keep_corner`'s.
     origin = imgui.get_cursor_screen_pos()
     if st["machine"] is None:                   # asked until a library is attached
         st["machine"] = getattr(getattr(panel, "library", None), "machine", None)
@@ -1222,15 +1288,19 @@ def panel_wants(panel) -> list:
 
 def window_wants(panel) -> list[str]:
     """Plan 44 D3 (row 623): the windows the loaded patch wires or cuts
-    that this rig has not open (`graphview.window_wanted_lines` over the
-    loadable patches' graph and bus cuts and the panel's outputs), one line each —
+    that this rig has not open (`graphview.wanted_windows` over the
+    loadable patches' graph and bus cuts, less the panel's outputs), one line each —
     what OUTPUT and the GRAPH head say; [] with no loadable patches (a test's panel)."""
     loaded_patch = getattr(getattr(panel, "library", None), "loaded_patch", None)
     if loaded_patch is None:
         return []
     spec = getattr(getattr(loaded_patch, "graph", None), "spec", None)
-    count = len(getattr(panel, "outputs", None) or ())
-    return graphview.window_wanted_lines(spec, getattr(loaded_patch, "bus", None), count)
+    # (one that has a slot and nothing to show it, as an empty slot has no `missing`, wants one)
+    slots = getattr(panel, "outputs", None) or ()
+    have = {sl.n for sl in slots if getattr(sl, "drawn", sl.opened) or sl.missing}
+    bus = getattr(loaded_patch, "bus", None)
+    return [graphview.WINDOW_WANTED.format(n=n) for n in graphview.wanted_windows(spec, bus)
+            if n not in have]
 
 
 def _wants_chip(panel, beside: bool = True) -> None:
@@ -1371,7 +1441,8 @@ def cable_tints(st: dict, view: graphview.View) -> dict[str, imgui.ImVec4]:
         if c.type != graphview.IMAGE:
             continue
         hit = view.owner(c.src_port)
-        got = th.hue(thumb_name(hit[0])) if hit is not None else None
+        pin = graphview.pin_picture(view, c.src_port)
+        got = th.hue(pin or thumb_name(hit[0])) if hit is not None else None
         if got is not None:
             out[c.id] = imgui.ImVec4(*tint(*got), 1.0)
     return out
@@ -1598,12 +1669,18 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
 def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             through: float = 0.0) -> None:
     """The editor, its ground faded to 1 − `through` over the backdrop."""
-    ed.set_current_editor(editor(panel))
-    if through > 0.0:
-        bg = ed.get_style().color_(ed.StyleColor.bg)
-        ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
-    corner = imgui.get_cursor_screen_pos()
-    ed.begin("##graph", size)
+    view_file = start_view(panel.graph_start_zoom) if st["editor"] is None else ""
+    ed.set_current_editor(editor(panel, view_file))
+    keep_corner(st, (size.x, size.y))
+    try:
+        if through > 0.0:
+            bg = ed.get_style().color_(ed.StyleColor.bg)
+            ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
+        corner = imgui.get_cursor_screen_pos()
+        ed.begin("##graph", size)
+    finally:        # whatever happens, the editor never holds a file a later frame could save into
+        if view_file:
+            _start_view_read(st["editor"], view_file)
     # plan 36 T5: the canvas point at the view's top-left corner, kept for
     # what a new loadable patch lays out where you are looking (`in_view`)
     seen = ed.screen_to_canvas(corner)
@@ -2335,7 +2412,7 @@ def _group_node(panel, st: dict, view: graphview.View, g, drawn: set[str]) -> No
         ed.resume()
     imgui.same_line(NODE_W - PIN)
     _stub(st, graphview.stub_out(g.id), ed.PinKind.output, False, drawn)
-    n = view.node(g.thumb) if g.thumb else None
+    n = graphview.group_picture(view, g)
     if n is not None and n.thumb is not None:   # plan 37: its last picture outlet's
         _thumb(st, n)
     k = len(g.members)
@@ -2678,7 +2755,7 @@ def land_spawn(panel, landing, choices, splice=None) -> str | None:
     """Land `landing` with the sheet's `choices` (`Edit.spawn` / `Edit.splice`:
     one undo step through the doors); its words on the head. Returns the
     refusal, or None. What its rows wait for is said after the landing
-    (plan 40 P4: "…; waits for leap (not in this rig): right hand y") —
+    (plan 40 P4: "…; waits for leap (not set up on this Mac): right hand y") —
     with no conflict there was no sheet to say it before the press."""
     e = group_edit(panel)
     if e is None:
@@ -2933,11 +3010,26 @@ def thumb_wants(st: dict, view: graphview.View, where) -> dict[str, str]:
             continue
         out[thumb_name(n)] = n.thumb
     for g in view.groups:               # plan 40 T2: a folded group's last picture outlet
-        n = view.node(g.thumb) if not g.open and g.thumb else None
+        n = graphview.group_picture(view, g) if not g.open else None
         if n is None or n.thumb is None or by_preview(n):
             continue
         if rect is None or on_screen(rect, *where(g.id)):
             out[thumb_name(n)] = n.thumb
+    return out
+
+
+def tint_wants(st: dict, view: graphview.View, want: dict[str, str]) -> dict[str, str]:
+    """While **tint cables** is lit, the segment pins a cable leaves whose
+    node is wanted (SM3): a hue is read from a thumbnail, and a pin's picture
+    has none otherwise. One copy each, only while the switch is lit."""
+    if not st.get("tint"):
+        return {}
+    out: dict[str, str] = {}
+    for c in view.cables:
+        pin = graphview.pin_picture(view, c.src_port)
+        hit = view.owner(c.src_port) if pin else None
+        if hit is not None and thumb_name(hit[0]) in want:
+            out[pin] = graphview.PICTURE
     return out
 
 
@@ -2956,6 +3048,7 @@ def _want_thumbs(st: dict, view: graphview.View) -> None:
     if th is None:
         return
     want = thumb_wants(st, view, lambda nid: _where(st, nid))
+    want.update(tint_wants(st, view, want))
     if want:
         th.want(want)
     pv = st.get("preview")
@@ -3004,11 +3097,39 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
     dl = imgui.get_window_draw_list()
     dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
     tex, k = _body_of(st, n)
-    if tex is None or k <= 0.0 or getattr(tex, "glo", 0) == 0:
-        return
-    a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
-    dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
-                 imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
+    if tex is not None and k > 0.0 and getattr(tex, "glo", 0) != 0:
+        a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
+        dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
+                     imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
+    words = graphview.mask_words(n) if k < 1.0 else ""
+    if words:                                   # SM3: no mask, and it says why, on the node
+        step = imgui.get_text_line_height_with_spacing()
+        for i, line in enumerate(box_lines(words, imgui.calc_text_size, NODE_W - 12.0)):
+            dl.add_text(imgui.ImVec2(p0.x + 6.0, p0.y + 6.0 + i * step), ui.u32(ui.WARN), line)
+
+
+# as many lines of a mask node's refusal as sit in the picture's box
+BOX_LINES = 4
+
+
+def box_lines(words: str, measure, width: float) -> list[str]:
+    """`words` broken at spaces to fit `width` (`measure(text).x`), at most
+    `BOX_LINES` of them, the last ending "…" when some are left over."""
+    lines: list[str] = []
+    line = ""
+    parts = words.split()
+    for word in parts:
+        wider = f"{line} {word}".strip()
+        if line and measure(wider).x > width:
+            if len(lines) == BOX_LINES - 1:
+                while line and measure(f"{line}…").x > width:
+                    line = line[:-1]
+                return [*lines, f"{line}…"]
+            lines.append(line)
+            line = word
+        else:
+            line = wider
+    return [*lines, line] if line else lines
 
 
 def thumb_tip(st: dict, n: graphview.VNode) -> str:
@@ -3612,8 +3733,10 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
     # plan 35 G (V2): a frame node's header says its id and its params' prefix
     imgui.text(graphview.side_head(n) if n.kind in graphview.FRAME_VKINDS else n.label)
     if n.status:
+        imgui.push_text_wrap_pos(0.0)               # (a placeholder's says what to do: long)
         imgui.text_disabled(n.status.partition(" · id ")[0]
                             if n.kind in graphview.FRAME_VKINDS else n.status)
+        imgui.pop_text_wrap_pos()
     if isinstance(n.ref, rgraph.SwitchNode):
         _switch_block(panel, view, n)
     if is_pad_node(panel, n):                   # the pad, drawn: what each control does
@@ -3969,7 +4092,7 @@ def timing_line(panel) -> str:
         return ""
     v = st["view"]
     size = f"  ({len(v.nodes)} nodes, {len(v.cables)} cables)" if v is not None else ""
-    return f"graph page: {times[len(times) // 2] * 1000:.2f} ms median{size}"
+    return f"graph draw: {times[len(times) // 2] * 1000:.2f} ms median{size}"
 
 
 # ---------------------------------------------------------------- editing (plan 28 N3)

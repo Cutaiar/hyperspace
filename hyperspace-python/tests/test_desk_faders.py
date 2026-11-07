@@ -28,7 +28,6 @@ import pytest
 from conftest import CORPUS
 from test_midi import cc, push, rig, shift  # noqa: F401 — the fixture
 
-import hyperspace.ui  # noqa: F401 — first: ui_desk imports through the panel (ui_pad reads its EDGE)
 from hyperspace import apc40, loadable, routing, ui_desk
 from hyperspace.routing import Binding, Bindings, bindings_path
 from hyperspace.view import ViewState
@@ -295,7 +294,7 @@ def test_a_loadable_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig)
     lib = load_fixture(rig)
     assert lib.loaded_patch.desk_notes == [
         (f"dropped cc:0:{FADER} → view.points_alpha: that control is invariant, the "
-         "session's (plan 13 D6)")]
+         "meta controller's (plan 13 D6)")]
 
 
 # ------------------------------------------------------- lines and points opacity

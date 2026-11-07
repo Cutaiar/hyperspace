@@ -874,7 +874,7 @@ def register(reg, settings: HandSettings) -> None:
     reg.enum(f"{GROUP}.select", "Axis", lambda: min(max(sel[0], 0), len(g.axes) - 1),
              lambda i: sel.__setitem__(0, int(i)), [a.label for a in g.axes], group=GROUP,
              persist=False, modulatable=False,
-             tip="Which axis the page edits — hands.sel.* follow it.")
+             tip="Which axis the section edits — hands.sel.* follow it.")
     reg.continuous(f"{GROUP}.sel.return", "Return", lambda: axis().return_s,
                    lambda v: setattr(axis(), "return_s", float(v)), lo=0.05, hi=3.0,
                    fmt=secs, group=GROUP, alias=True,

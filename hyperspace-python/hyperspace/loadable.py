@@ -77,7 +77,7 @@ A load is a scene-setter (docs/ARCHITECTURE.md §3): it writes bases and
 replaces rows, never an offset. In order (plan 13 §5):
 
 1. note what the file names that a loadable patch may not: a shared meta param
-   ("`tempo.bpm` is the session's, ignored"), an id nobody has, a
+   ("`tempo.bpm` is the meta controller's, ignored"), an id nobody has, a
    ``routes`` row that is not a performer row or that aims at a param
    that is not modulatable (dropped), a row on a meta param (dropped: the
    hard rule, register row 743; the file is not rewritten, and the next
@@ -202,6 +202,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, loadab
     is_switch_id,
     pan_world,
     part_of,
+    part_of_id,
     retaper_depths,
 )
 from .routing import MOD_OPS, Binding, is_continuous, meta_row_refusal
@@ -346,9 +347,9 @@ class GraphSection:
       (`FxState.set_instances` + `fx.declare`: its own on, mix, order,
       clock — patch params, so the loadable patch's `values` carry them),
       and an extra hands node's, `ghost.2.*` (`ghost.register`: the
-      loadable patch's, like `ghost.*`, its values in the loadable patch's `values` — but
-      `ghost.2.mirror`, the room's, which the open show keeps — on a
-      `GhostState` of its own that is kept while the app runs); and (plan 33
+      loadable patch's, like `ghost.*`, its values in the loadable patch's `values`, on a
+      `GhostState` of its own that is kept while the app runs and follows the
+      room's one mirror, `ghost.mirror`, LY1); and (plan 33
       S) each switch's `switch[.n].select` (`params.declare_switches`: a
       patch param, its pick in the loadable patch's `values`); and (plan
       34 Z) each resize's `resize[.n].*` (`params.declare_resizes`, by its
@@ -366,9 +367,8 @@ class GraphSection:
     Owned by `LoadedPatch` (`LoadedPatch.graph`); the app and the tools attach the
     renderer."""
 
-    def __init__(self, reg, fx=None, renderer=None, lib=None):
+    def __init__(self, reg, fx=None, renderer=None):
         self.reg = reg
-        self.lib = lib                          # the open show's session seeds a new hands node
         self.fx = fx if fx is not None else getattr(reg, "fx_state", None)
         self.renderer = None
         self.spec: GraphSpec | None = None      # None: nothing landed (black)
@@ -446,19 +446,16 @@ class GraphSection:
         wired frame, and that is what a save writes (row 394: `/7`, plan 36
         T3; `/9` since plan 43 C2).
 
-        An extra hands node declared for the first time this run takes
-        its room setting (`ghost.2.mirror`, the meta controller's) from the open
-        show; its look is the loadable patch's values (plan 44 D3)."""
+        An extra hands node's look is the loadable patch's values (plan 44 D3);
+        its mirror is the room's one, `ghost.mirror` (LY1). Dropping a node
+        takes only this deck's params."""
         wiring = spec.wiring() if spec is not None else EMPTY
         reg = self.reg
         want = {ghost_prefix(h.n): h.n for h in wiring.extra}
         for name in sorted(self.declared - set(want)):
             reg.remove_prefix(name + ".")
         for name, n in want.items():
-            was = name in self.declared
             declare_ghost(reg, self.states.setdefault(name, GhostState()), n)
-            if not was:
-                self._seed(name)
         self.declared = set(want)
         self._settle(spec)
         self.spec, self.doc = spec, copy.deepcopy(doc)
@@ -513,31 +510,6 @@ class GraphSection:
         else `doc`."""
         free = getattr(self, "free", None)      # (a section from before a hot reload)
         return free if free is not None else self.doc
-
-    def _seed(self, name: str) -> None:
-        """A newly declared hands node's shared meta params (plan 44 D3: its
-        mirror, `params.SHARED_META_KEYS`; its look is the loadable patch's) from the
-        open show's session, where it holds them (`library.Project.session`)
-        — once per show opened (`Project.opened`): after that the node's
-        kept state is the live one."""
-        project = getattr(getattr(self, "lib", None), "project", None)
-        seeded = self.__dict__.setdefault("_seeded", {})
-        show = getattr(project, "opened", None)
-        if name in seeded and seeded[name] == show:
-            return
-        seeded[name] = show
-        session = getattr(project, "session", None) or {}
-        held = {pid: v for pid, v in session.items()
-                if pid.startswith(name + ".") and pid in self.reg
-                and part_of(self.reg[pid]) == "shared_meta"}
-        if held:
-            self.reg.restore(held)
-        if project is not None and isinstance(getattr(project, "session", None), dict):
-            # an id the show lacks takes the state this landing left, as a
-            # show's `_apply` does for a param added since: the show stays clean
-            for pid, v in self.reg.snapshot(part="shared_meta").items():
-                if pid.startswith(name + "."):
-                    project.session.setdefault(pid, v)
 
     def mark(self) -> tuple:
         """What is landed, for an undo of a load (`library.Marks`) — and
@@ -857,7 +829,7 @@ class LoadedPatch:
         self.unsaved = False
         # plan 26 A4: the loaded patch's graph section (its instances'
         # params, the renderer's wiring once one is attached)
-        self.graph = GraphSection(reg, lib=lib)
+        self.graph = GraphSection(reg)
         # plan 44 D3: the bus cuts the loaded patch holds (`graph.BusCuts`)
         self.bus = BusCuts()
         self.landing = (None, None, None)
@@ -1082,7 +1054,7 @@ class LoadedPatch:
                 if pid not in from_show:
                     unknown.append(pid)
             elif part_of(p) == "shared_meta":
-                notes.append(f"{pid} is the session's, ignored")
+                notes.append(f"{pid} is the meta controller's, ignored")
             elif part_of(p) != "patch" or not p.persist:
                 notes.append(f"{pid} is not part of a preset, ignored")
             else:
@@ -1196,11 +1168,14 @@ class LoadedPatch:
             late: list[str] = []
             for pid, v in later.items():
                 p = reg.get(pid)
-                if p is None:
+                if p is None and part_of_id(pid) == "shared_meta":
+                    # (`ghost.<n>.mirror`, no param since LY1, in an old file)
+                    notes.append(f"{pid} is the meta controller's, ignored")
+                elif p is None:
                     if pid not in from_show:
                         late.append(pid)
                 elif part_of(p) == "shared_meta":
-                    notes.append(f"{pid} is the session's, ignored")
+                    notes.append(f"{pid} is the meta controller's, ignored")
                 elif part_of(p) != "patch" or not p.persist:
                     notes.append(f"{pid} is not part of a preset, ignored")
                 else:
@@ -1458,7 +1433,7 @@ class LoadedPatch:
         before plan 26 A4 (a hot reload re-classes, never re-inits)."""
         gs = self.__dict__.get("graph")
         if gs is None:
-            gs = self.graph = GraphSection(self.reg, lib=self.lib)
+            gs = self.graph = GraphSection(self.reg)
             gs.on_land = self.settle_groups
         return gs
 

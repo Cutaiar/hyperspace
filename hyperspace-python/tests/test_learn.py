@@ -631,7 +631,7 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     assert table.layer == "global"
     before, depth4 = rows(), reg["view.depth4"].value
     lrn.arm("view.depth4", "desk")
-    refusal = ("K1 (track knob 1) is on the global layer (the session's) — "
+    refusal = ("K1 (track knob 1) is on the global layer (the meta controller's) — "
                "latch SHIFT off to learn into the preset")
     for _ in range(2):                                       # refused, and again: still armed
         push(r, cc(0x30, 90))                                # track knob 1, SHIFT on
@@ -642,9 +642,9 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     # the invariant controls, through `learn_control` (a click's road): each
     # refused in its own words, the learn still armed, nothing bound
     for source, why in (
-            (f"cc:0:{apc40.CC_MASTER}", "SM (MASTER fader) is invariant (the session's) — not learned"),
-            (f"note:0:{apc40.N_SHIFT}", "⇧ (SHIFT) is invariant (the session's) — not learned"),
-            (f"note:0:{apc40.N_OVERDUB}", "B11 (OVERDUB) is invariant (the session's) — not learned")):
+            (f"cc:0:{apc40.CC_MASTER}", "SM (MASTER fader) is invariant (the meta controller's) — not learned"),
+            (f"note:0:{apc40.N_SHIFT}", "⇧ (SHIFT) is invariant (the meta controller's) — not learned"),
+            (f"note:0:{apc40.N_OVERDUB}", "B11 (OVERDUB) is invariant (the meta controller's) — not learned")):
         assert not lrn.learn_control(source, apc40)
         assert lrn.refused and lrn.last == why and lrn.learning == "view.depth4"
     assert rows() == before
@@ -916,7 +916,7 @@ def test_unbind_removes_the_loadables_desk_rows_and_every_route(tmp_path):
     assert [b.source for b in t.bindings] == ["cc:0:7"]
     # only the meta controller's row left: a refusal, in the words Unbind always used
     assert bare.unbind("a") == [] and bare.refused
-    assert bare.last == ("MIDI CC 7 ch1 → a is invariant (the session's, edited in "
+    assert bare.last == ("MIDI CC 7 ch1 → a is invariant (the meta controller's, edited in "
                          "bindings.json) — not unbound")
     assert bare.unbind("nothing.here") == [] and bare.unbind(()) == []
 
@@ -1083,10 +1083,10 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     # one rule, asked before the click and refused by after it (`learn.blocked`)
     assert learn.blocked(table, s3.source) == "invariant"
     assert learn.blocked(table, "cc:0:48") is None
-    assert ui_desk.mappable(table, s3) == "SM (MASTER fader) is invariant (the session's)"
+    assert ui_desk.mappable(table, s3) == "SM (MASTER fader) is invariant (the meta controller's)"
     lrn.pick(s3.source)
     assert not lrn.map_picked("view.speed", apc40)
-    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the session's) — not learned"
+    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the meta controller's) — not learned"
     assert lrn.control == s3.source and lrn.learning is None and rows() == before
     # every invariant control of D6: MASTER (S1–S8 are layered since plan 24
     # C2), the bank row, SHIFT, TAP,
@@ -1096,7 +1096,7 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     for glyph in ("SM", "G1·1", "G1·8", "⇧", "B20", "B12", "B21", "B22", "B13", "B14",
                   "X", "B11", "G4·1", "G5·8"):
         c = control(glyph)
-        assert "is invariant (the session's)" in (ui_desk.mappable(table, c) or ""), glyph
+        assert "is invariant (the meta controller's)" in (ui_desk.mappable(table, c) or ""), glyph
         lrn.pick(c.source)
         assert not lrn.map_picked("view.speed", apc40) and lrn.refused, glyph
     assert rows() == before
@@ -1107,13 +1107,13 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     assert learn.blocked(table, k1.source) == "global"
     assert learn.blocked(table, s3.source) == "invariant"       # invariant on both layers
     assert ui_desk.mappable(table, k1) == (
-        "K1 (track knob 1) is on the global layer (the session's) — latch SHIFT off to map "
+        "K1 (track knob 1) is on the global layer (the meta controller's) — latch SHIFT off to map "
         "into the preset")
     assert ui_desk.mappable(table, k6) is not None
     lrn.pick(k1.source)
     assert not lrn.map_picked("view.depth4", apc40)
     assert lrn.refused and lrn.last == (
-        "K1 (track knob 1) is on the global layer (the session's) — latch SHIFT off to learn "
+        "K1 (track knob 1) is on the global layer (the meta controller's) — latch SHIFT off to learn "
         "into the preset")
     assert lrn.control == k1.source and lrn.learning is None and rows() == before
     settle(r)
@@ -1148,3 +1148,27 @@ def test_a_hand_learn_onto_a_setting_is_refused_in_words(rig):
     lrn.arm("ghost.alpha", "hand:right")
     lrn.learn_source("hand:right.y")
     assert not lrn.refused and t.owner("ghost.alpha").source == "hand:right.y"
+
+
+def test_no_absolute_knob_can_be_learned_onto_the_bank(tmp_path):
+    """Audit R14, moot since row 746 (closed by row 792): `preset.select`'s 24 choices
+    would spread a knob mostly over empty slots, and no door lands one. `preset.*` is meta,
+    one per `Deck`, so `learn_control` refuses it in the rule's words, still table-clean;
+    a hand or a stick is refused the same way; the desk rows' combo doesn't offer it; and
+    no factory row reads a knob onto it. A step or a pad on the bank still skips empties."""
+    from hyperspace import apc40
+    from hyperspace.ui_routing import desk_target
+
+    r = desk_rig(tmp_path)
+    table, lrn, reg = r.router.table, r.learn, r.reg
+    before = [b.to_json() for b in table.bindings]
+    lrn.arm("preset.select", "desk")
+    assert not lrn.learn_control("cc:0:48", apc40)
+    assert lrn.refused and "not learned" in lrn.last
+    lrn.arm("preset.select")
+    lrn.learn_source("hand:right.pitch")
+    assert lrn.refused and "not learned" in lrn.last
+    assert [b.to_json() for b in table.bindings] == before
+    assert not desk_target(reg["preset.select"])
+    rows = [b for b in table.bindings if b.target == "preset.select"]
+    assert rows and all(b.op == "set" for b in rows)

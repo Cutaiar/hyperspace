@@ -86,16 +86,12 @@ from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .groupwords import group_part, group_word
 from .params import PATCH_GROUPS, Kind
 from .routing import FINE_PARAM, Binding, fine_gives_way, led_shade
+from .ui_diagram import EDGE, GAP, GLYPH_PX, HEAD_H, PAD  # shared with the pad (ui_diagram.py)
 
 MIN_W = 300.0              # the window is never narrower, px
 MIN_H = 120.0              # …or shorter (a control window with no room above the sheet)
 LABEL_UNIT = 44.0          # a layout unit this wide or wider carries labels…
 LABEL_UNIT_H = 32.0        # …if it is also this tall (a short, wide window: glyphs only)
-EDGE = 12.0                # from the control window's edges, the panel and the sheet
-PAD = 8.0
-HEAD_H = 26.0              # the header's line: the layer, the loadable patch, the chip
-GLYPH_PX = 10.0            # the glyphs' type size
-GAP = EDGE                 # from the cheat sheet
 LABEL_PX = (11.0, 18.0)    # the labels' type size: 0.2 of a unit, kept in this range
 LABEL_LINES = 2            # a label wraps to at most this many lines
 BIG, PANEL = "big", "panel"    # the header's chip: hide the panel / bring it back
@@ -217,12 +213,7 @@ def mappable(table, c: apc40.Control) -> str | None:
     if on_page(table, c):                       # (learn.blocked says "invariant" too)
         return f"{name}: {PAGE_OWNS}"
     why = learn.blocked(table, c.source)        # the rule `learn_control` refuses by
-    if why == "invariant":
-        return f"{name} is invariant (the session's)"
-    if why == "global":
-        return (f"{name} is on the global layer (the session's) — latch SHIFT off to map "
-                "into the preset")
-    return None
+    return None if why is None else learn.blocked_words(name, why)
 
 
 def picked(panel) -> apc40.Control | None:
@@ -333,7 +324,7 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
     """What the desk's header says of the picked control, and whether a
     click on a param would map it: "D3 picked: click a param to put it
     here · click D3 again to let go", or why not and what the control
-    does ("S3 (track fader 3) is invariant (the session's): SUB Post-drive")."""
+    does ("S3 (track fader 3) is invariant (the meta controller's): SUB Post-drive")."""
     why = mappable(table, c)
     if why is None:
         if panel.open and ui_pane.shown(panel, ui_pane.ROUTING):
@@ -617,15 +608,11 @@ def room(display: tuple[float, float], panel_x: float | None,
 
 
 def _room(panel) -> tuple[float, float, float, float]:
-    """`room` for this frame: the panel's edge is last frame's (the desk
-    is drawn before the panel), its launch place before there is one."""
+    """`room` for this frame: the panel is pinned (`ui.panel_rect`), so its
+    edge is this frame's though the panel draws after."""
     io = imgui.get_io()
     display = (io.display_size.x, io.display_size.y)
-    panel_x = None
-    if panel.open:
-        panel_x = getattr(panel, "_panel_x", None)
-        if panel_x is None:
-            panel_x = display[0] - ui.panel_w(display) - EDGE
+    panel_x = panel.panel_left()
     sheet = None
     if panel.cheatsheet:
         sheet = (getattr(panel, "_sheet_w", 0.0), getattr(panel, "_sheet_h", 0.0))

@@ -141,6 +141,7 @@ from . import undo
 from .graph import BusCuts
 from .graphmigrate import CAMERA_NODES, EYE_IDS, is_look_id, renamed_layout, retired
 from .groupwords import group_word
+from .hot_slots import DeckLibrarySlots, DeckProjectSlots
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -909,10 +910,6 @@ class Project:
         # the loadable patches before `/9` (`old_eye`), and never landed or written
         # as the show's
         self.old_eye = {pid: self.session.pop(pid) for pid in EYE_IDS if pid in self.session}
-        # how many shows this project object has taken: a hands node of a
-        # loadable patch's graph is seeded from a show's session once per show
-        # opened (plan 26 A4, loadable.GraphSection)
-        self.opened = getattr(self, "opened", 0) + 1
         self.modules = dict(doc.get("modules") or {})
         bank = [str(s) if isinstance(s, str) and s else None
                 for s in list(doc.get("bank") or [])[:SLOTS]]
@@ -1047,9 +1044,9 @@ class Project:
                 hook(doc["layout"])                   # its params exist before the values land
                 lib._fresh_of(group)                  # …and their build values are "fresh"
         missing = lib.restore(self.session) if self.session else []
-        # an extra hands node's settings (`ghost.2.*`, plan 26 A4) wait for
-        # the loadable patch whose graph declares the node (`GraphSection` seeds it
-        # from this session): held back, not unknown
+        # an old show's extra hands node settings (`ghost.2.*`, plan 26 A4; the
+        # look goes to the loadable patches, `old_look`, and `ghost.2.mirror`,
+        # no param since LY1, is read by nothing): held back, not unknown
         missing = [pid for pid in missing if not is_instance_id(pid)]
         # ids the file lacks (a param added since) take the state this load
         # left, so an untouched project is not dirty the moment it opens
@@ -1434,6 +1431,11 @@ class Project:
         lib.remember(self.stem)
         if startup:
             self.load_startup()
+        apart = mirrors_apart(self.session)
+        if apart:
+            lib.say(warning=f"{path.name}: {', '.join(apart)} differs from the Mirror, and "
+                            "there is one Mirror now: those hands follow it. To flip one "
+                            "window, use its Flip X in the OUTPUT section")
         return missing
 
     def new(self, name: str = UNTITLED) -> None:
@@ -1558,12 +1560,24 @@ class Project:
                 or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {}))
 
     def _held_back(self) -> dict:
-        """The meta controller's settings of node instances the registry lacks now
-        (`ghost.2.*` while no loadable patch's graph holds the second hands node,
-        plan 26 A4): kept by a save and never counted as an edit."""
+        """The ids of node instances an old show holds and the registry lacks
+        now (`ghost.2.*`, plan 26 A4; `ghost.2.mirror` always, no param since
+        LY1): kept by a save and never counted as an edit. The old reader goes
+        in CL1."""
         reg = self.lib.reg
         return {pid: v for pid, v in (self.session or {}).items()
                 if is_instance_id(pid) and (reg is None or pid not in reg)}
+
+
+def mirrors_apart(session: dict) -> list[str]:
+    """The `ghost.<n>.mirror` ids an old show holds at another value than its
+    `ghost.mirror`. No param since LY1, so nothing reads them and the picture
+    changes: what `Project.load` says (REVIEW: a removed id reads an old file as
+    it was, or reports it). Goes with the old reader, in CL1."""
+    room = bool(session.get("ghost.mirror", False))
+    return [pid for pid, v in session.items()
+            if pid.startswith("ghost.") and pid.endswith(".mirror")
+            and is_instance_id(pid) and bool(v) != room]
 
 
 def show_eye(doc: Any) -> tuple[dict[str, Any], list[float] | None]:
@@ -2874,7 +2888,7 @@ class Library:
                                  f"name{'s' if len(still) == 1 else ''} it; restore it from "
                                  "the trash, or clear the slot")
             else:
-                self.say(f"{shown} is in the trash — the PRESETS page's trash can restore it")
+                self.say(f"{shown} is in the trash — the PRESETS section's trash can restore it")
         return True
 
     def rename(self, group: str, old: str, new: str) -> Path:
@@ -3667,7 +3681,7 @@ class Library:
 
 # ------------------------------------------------- one deck's view (plan 44 D5a)
 
-class DeckProject(Project):
+class DeckProject(DeckProjectSlots, Project):
     """The one show as one deck sees it: every field is the show's (it shares
     the show's `__dict__`), but `lib` is that deck's `DeckLibrary`, so a bank
     verb this object does (a pad on that deck's table) loads, saves and lights
@@ -3681,9 +3695,11 @@ class DeckProject(Project):
     `preset.*`: `routing.meta_refusal` refuses a patch's row on one at every door. A
     person's save does not change the picture, so it stays on its own deck, as does the panel's load,
     which is the plain `Project`'s and the intentional one. `meta` None (no second
-    deck): a load lands on this deck."""
+    deck): a load lands on this deck. Its own two fields can't be in the shared `__dict__`,
+    so they are slots, held on a cold base: `DeckProjectSlots` says why."""
 
-    __slots__ = ("lib", "meta")
+    lib: DeckLibrary
+    meta: Any
 
     def __init__(self, lib: DeckLibrary):        # never `Project.__init__`: nothing is new
         self.__dict__ = lib.base.project.__dict__
@@ -3750,15 +3766,18 @@ class DeckProject(Project):
         return done
 
 
-class DeckLibrary(Library):
+class DeckLibrary(DeckLibrarySlots, Library):
     """The library as one deck sees it: every file, hook and meta controller label is
     the one library's (it shares its `__dict__`), but `presets` and `reg` are
     this deck's, always, with nothing to remember to say. `LoadedPatch.lib` is one,
     so its load, save, new and marks cannot reach another deck, whichever the
     panel is on; the plain `Library` is the panel's view of the same state
-    (`Library.pointer`). The loadable patches kind's and load hooks are this deck's too."""
+    (`Library.pointer`). The loadable patches kind's and load hooks are this deck's too.
+    Its own three fields are slots on a cold base, as `DeckProject`'s are."""
 
-    __slots__ = ("_project", "base", "own")
+    _project: DeckProject
+    base: Library
+    own: Any
 
     def __init__(self, base: Library, loaded_patch=None):   # never `Library.__init__`: nothing is new
         self.__dict__ = base.__dict__

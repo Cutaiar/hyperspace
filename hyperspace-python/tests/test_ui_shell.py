@@ -271,7 +271,7 @@ def test_system_page_shows_one_line_per_device(rig, monkeypatch):
     bridge.error = "no such port"
     assert shown()[3] == ("bridge  ·  bridge  ·  error: no such port  ·  16 sources", True)
     rig.panel.devices = devices.DeviceRegistry([])
-    assert shown() == [("no devices — [[devices]] in config.toml", False)]
+    assert shown() == [("no devices — drag one from the player board's tray", False)]
 
 
 def _drawn(monkeypatch) -> list[str]:
@@ -522,7 +522,7 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
     """Every item the ghost block draws — the checks, the label cells'
     dummies (the label text is drawn in them), the slider, the combos and
     the chip — as screen rects, and the page's right edge, after three
-    frames at `display` with the CONTROLS window `panel_w` wide."""
+    frames at `display` — with `panel_w`, at a window that makes CONTROLS that wide."""
     import hyperspace.hands.panel as hp
     import hyperspace.ui as ui_mod
 
@@ -552,6 +552,10 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
         for fn in ("checkbox", "slider_float", "slider_int", "combo", "button", "dummy"):
             m.setattr(ui_mod.imgui, fn, item(fn, getattr(imgui, fn)))
         m.setattr(hp, "_ghost", ghost)
+        # a narrower panel is a narrower window: CONTROLS fills it (ui.panel_rect)
+        if panel_w is not None:
+            display = (panel_w + 2 * ui_mod.PANEL_EDGE, display[1])
+            rig.panel.desk = False          # (the rig's desk would take a column of it)
         imgui.get_io().display_size = imgui.ImVec2(*display)
         for _ in range(3):
             rects.clear()
@@ -559,7 +563,6 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
                 page_frame(rig.panel, "hands")
                 continue
             imgui.new_frame()
-            imgui.set_window_size("CONTROLS", imgui.ImVec2(panel_w, display[1] - 24))
             rig.panel.reg["ui.page"].set(PAGE_KEYS.index("hands"))
             rig.panel.draw(1 / 60, 60.0)
             imgui.end_frame()
@@ -569,7 +572,7 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
 @pytest.mark.parametrize("display, panel_w", [
     (CONTROL_SIZE, None),                     # the app's control window, the panel as it opens
     ((320, CONTROL_SIZE[1]), None),           # the narrowest window placement opens (MIN_SIZE)
-    (CONTROL_SIZE, 440),                      # the panel dragged narrower: the groups wrap
+    (CONTROL_SIZE, 440),                      # a window that narrow: the groups wrap
 ])
 def test_the_ghost_controls_never_overlap_or_run_off_the_page(rig, monkeypatch, display, panel_w):
     """The owner's report of 2026-10-05: with the ghost on, the opacity,
@@ -845,7 +848,7 @@ def test_the_routing_page_fits_over_a_loaded_loadable_and_a_full_desk(rig, monke
         {"depth": {"source": "lane:0", "target": "rot.rate.ZW"}, "from": 0.0, "to": 1.0}]}
         for k in range(1, 9)})
     rig.panel.learn = Learn(rig.reg, table)
-    rig.panel.learn.refuse("track knob 1 is on the global layer (the session's) — "
+    rig.panel.learn.refuse("track knob 1 is on the global layer (the meta controller's) — "
                            "latch SHIFT off to learn into the preset")
     # dark now: only clip row 3's first three buttons (the global band scenes' own)
     assert [f.source for f in ui_routing.unmapped(table)] == [
@@ -1224,14 +1227,14 @@ def test_ghost_on_a_compact_slider_and_a_fader_in_a_table(rig):
     _hold(reg, {"camera.zoom": 0.1})   # a _row on the camera page (log range)
     frame(panel, "camera")
     assert panel.ghosts == 1
-    # the selected band's strip (two columns) on the analyzer page, and a
-    # master fader, which sits with the source on the audio page
-    _hold(reg, {"band.0.atk": 0.1, "master.gain": -0.1})
-    frame(panel, "analyzer")
-    assert panel.ghosts == 1
-    _hold(reg, {"band.0.atk": 0.1, "master.gain": -0.1})
+    # a half-width slider and a fader, both on the view page: a meta param's own
+    # pages draw no ghost, since no lane may drive one (row 775)
+    _hold(reg, {"view.points_alpha": 0.1, "view.bright": -0.1})
+    frame(panel, "view")
+    assert panel.ghosts == 2
+    _hold(reg, {"master.gain": -0.1})
     frame(panel, "audio")
-    assert panel.ghosts == 1
+    assert panel.ghosts == 0
 
 
 def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
@@ -2142,7 +2145,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     reg["ghost.on"].set(False)
     drawn, _ = _output_page(rig, monkeypatch, body=True)
     why = [s for s in drawn if s.startswith(("hands:", "through:"))]
-    assert why[0] == why[-1] == "hands: ghost hands are off (HANDS page)"
+    assert why[0] == why[-1] == "hands: ghost hands are off (HANDS section)"
     assert "paced by output 1 · frame 1920×1080 · below: output 1's window" in drawn
     # an output the config lists but that did not open: one line, why
     slots[1].win, slots[1].missing = None, "screen 2 is not connected"
@@ -2160,7 +2163,7 @@ def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeyp
     with build_rig(tmp_path) as r:
         for p in list(r.reg):
             if p.id.startswith(("output.2.", "output.3.", "output.4.", "output.1.")):
-                r.reg.remove_prefix(p.id.rsplit(".", 1)[0] + ".")
+                r.reg.meta_reg.remove_prefix(p.id.rsplit(".", 1)[0] + ".")
         one = [Slot(1, win="w1")]
         reg_sw(r.reg, one)
         r.panel.outputs = one

@@ -173,20 +173,20 @@ def test_the_example_is_a_patch():
 @pytest.mark.parametrize("edit, said", [
     (lambda d: d["nodes"].append({"kind": "camera"}),
      "camera is the look's one camera, never a patch's; left out"),
-    (lambda d: d["nodes"].append({"kind": "cloud"}), "cloud is the rig's; left out"),
+    (lambda d: d["nodes"].append({"kind": "cloud"}), "cloud is the meta controller's; left out"),
     (lambda d: d["nodes"].append({"kind": "output"}),
-     "output is the rig's window; left out — a patch's picture leaves by a port"),
+     "output is the meta controller's window; left out — a patch's picture leaves by a port"),
     (lambda d: d["nodes"].append({"kind": "channel"}),
      ("channel is a media channel, this Mac's files; left out — a patch reads one through "
       "a port")),
     (lambda d: d["wires"].append({"from": "delay", "to": "output.2.image"}),
-     ("wire delay → output.2.image: output.2 is the rig's window; left out — a patch's "
+     ("wire delay → output.2.image: output.2 is the meta controller's window; left out — a patch's "
       "picture leaves by a port")),
     (lambda d: d["wires"].append({"from": "channel.a", "to": "wobble.aux"}),
      ("wire channel.a → wobble.aux: channel.a is a media channel, this Mac's files; left "
       "out — a patch reads one through a port")),
     (lambda d: d["wires"].append({"from": "cloud.1", "to": "acid.aux"}),
-     "wire cloud.1 → acid.aux: cloud.1 is the rig's; left out"),
+     "wire cloud.1 → acid.aux: cloud.1 is the meta controller's; left out"),
     (lambda d: d["ports"][0].update(type="colour"),
      "port in: type 'colour' is not one of image, mask, geometry, value"),
     (lambda d: d["wires"].append({"from": "acid", "to": "zoomblur.image"}),
@@ -214,7 +214,7 @@ def test_a_wire_across_the_edge_is_refused_even_where_a_port_says_it():
                      {"from": "delay", "to": "output.all.image"}]
     assert patches.check(doc) == [
         "wire scene → acid.image crosses the edge: a port says it",
-        ("wire delay → output.all.image: output.all is the rig's window; left out — a "
+        ("wire delay → output.all.image: output.all is the meta controller's window; left out — a "
          "patch's picture leaves by a port")]
 
 
@@ -312,13 +312,13 @@ def test_a_lift_that_names_the_meta_refuses_it_and_keeps_the_rest():
     doc, refused = patches.lift(*parts(noita),
                                 ["render:warp", "render:output.all",
                                  "render:camera", "seq", "env.2", "device:apc40"])
-    assert refused == [("output.all is the rig's window; left out — a patch's picture "
+    assert refused == [("output.all is the meta controller's window; left out — a patch's picture "
                         "leaves by a port"),
                        "camera is the look's one camera, never a patch's; left out",
-                       "the sequencer is the rig's; left out",
+                       "the sequencer is the look's one, never a patch's; left out",
                        ("env.2 is a sequencer lane's envelope; left out (a patch's envelope "
                         "spawns as 6 or more)"),
-                       "device:apc40 is the rig's; left out"]
+                       "device:apc40 is the meta controller's; left out"]
     assert [n["file"] for n in doc["nodes"]] == ["warp"]
     assert {p["was"] for p in doc["ports"]} == {"scene", "doublevision.image"}
 

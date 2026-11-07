@@ -43,7 +43,7 @@ MOD = "--mod" in sys.argv
 BANDS = "--bands" in sys.argv
 HANDS = "--hands" in sys.argv
 MODULATED = {"view.bright": 0.18, "view.faces": 1.0, "camera.zoom": 0.12,
-             "master.gain": -0.15, "band.0.atk": 0.2, "pattern.mod.0": 0.3}
+             "pattern.mod.0": 0.3}
 
 state = {"frame": 0, "panel": None, "shot": None, "router": None, "t": 0.0}
 if HANDS:

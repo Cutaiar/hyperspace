@@ -294,15 +294,28 @@ def _pick_row(panel) -> Binding | None:
     return st.get("mark")
 
 
+def _heading(title: str, note: str) -> None:
+    """A section's micro title and its note: beside it where the room holds both, else
+    under it, wrapped at the pane's edge (`graph.SIDE_MIN` is 240 px)."""
+    room = imgui.get_content_region_avail().x
+    ui._micro(title)
+    gap = imgui.get_style().item_spacing.x
+    if ui._micro_width(title) + gap + imgui.calc_text_size(note).x <= room:
+        imgui.same_line()
+    imgui.push_text_wrap_pos(0.0)
+    imgui.text_disabled(note)
+    imgui.pop_text_wrap_pos()
+
+
 def is_line_of(table, b: Binding, mark: Binding | None, section: str) -> bool:
     """Is the line of row `b`, in `section` ("desk": a patch row or a dark
-    line; "session": an invariant or global row), the picked control's
+    line; "meta": an invariant or global row), the picked control's
     line? Its control must be the picked one, on the layer that is up: a
     desk line while the patch layer is up and the control is not
     invariant; an invariant row always; a global row while SHIFT is on."""
     if mark is None or not b.overlaps(mark):
         return False
-    if section == "session":
+    if section == "meta":
         return b.layer is None or b.layer == table.layer
     return table.layer == "preset" and not table.is_invariant(mark)
 
@@ -957,10 +970,16 @@ def reading(panel, router: Router, source: str) -> float | None:
 
 
 def route_target(p: Param) -> bool:
-    """Can a route land on this param? Modulatable, and not the meta
-    controller's (register row 743). One rule for the target combo, the
-    menu's Learn items and Route from ▸ (`ui_graph.route_from_items`)."""
-    return p.modulatable and meta_refusal(p.id) is None
+    """Can a route land on this param? Modulatable, which no meta param is
+    (register rows 743, 775). One rule for the target combo, the menu's Learn
+    items and Route from ▸ (`ui_graph.route_from_items`)."""
+    return p.modulatable
+
+
+def undriven_words(p: Param) -> str:
+    """Why a row standing on `p`, which no lane may drive, does nothing: the
+    rule's words on a meta param, as `ctx_item` says it."""
+    return f"{meta_refusal(p.id) or f'{p.id} is not modulatable'} — the row is dormant"
 
 
 def _targets(panel) -> list[Param]:
@@ -1110,7 +1129,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         if imgui.is_item_hovered():
             ui.tooltip(f"{b.target}: no such param — the row is dormant")
     elif not p.modulatable and imgui.is_item_hovered():
-        ui.tooltip(f"{b.target} is not modulatable — the row is dormant")
+        ui.tooltip(undriven_words(p))
     imgui.same_line()
     if b.op == TURN_OP:                     # a turn reads no feel: nothing to pick
         imgui.dummy(imgui.ImVec2(feel_w, 0))
@@ -1127,7 +1146,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                           "turn: the source's change is added to the base and stays;\n"
                           "      shut the gate, move freely, open it: no jump\n"
                           "click to switch")
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+    ui.flush_right(ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     kill = ui.chip("×")
     imgui.pop_style_color()
@@ -1176,7 +1195,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if scale is not False:
         b.scale = scale
     if imgui.is_item_hovered():
-        ui.tooltip("A session param whose live value multiplies the depth — "
+        ui.tooltip("A meta controller param whose live value multiplies the depth — "
                           "master.gain, the drive fader, on the rate routes. Never the "
                           "row's own target, never a performance param: a macro scales "
                           "a route through its depth subscriber.")
@@ -1222,7 +1241,7 @@ def _feel_chip(router: Router, b: Binding, width: float) -> None:
     if imgui.is_item_hovered():
         src = router.source_feel(b.scheme)
         auto = ("the source's own: " + (src.describe() if src.on else "none")
-                + (" (the pad's, on the settings page)" if b.scheme == "axis" else ""))
+                + (" (the pad's own feel)" if b.scheme == "axis" else ""))
         now = (auto if b.motion is None else
                "still: the reading as it comes" if not b.motion.on else b.motion.describe())
         ui.tooltip("Feel: how the reading travels before it acts\n"
@@ -1384,7 +1403,7 @@ def _loadable_line(panel, pr, table) -> None:
     ui._micro(layer, ui.RED if glob else ui.DIM)
     if imgui.is_item_hovered():
         ui.tooltip("The desk's layer — SHIFT latches it (desk.shift). Global: "
-                          "the session's controls, never learned (a learn is refused); "
+                          "the meta controller's controls, never learned (a learn is refused); "
                           "preset: the loaded preset's desk. A preset load drops to it.")
     ui.beside(ui.chip_w(word, "as…"))
     # the preset strip's own save chip,
@@ -1608,7 +1627,7 @@ def desk(panel, router: Router) -> None:
             ui.tooltip(f"{b.target}: no such param — the control does nothing")
         imgui.same_line()
         imgui.text_disabled(_op_text(b))
-        imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+        ui.flush_right(ui.chip_w("×"))
         imgui.push_style_color(imgui.Col_.text, ui.DIM)
         if ui.chip("×"):
             dead = b
@@ -1722,7 +1741,7 @@ def _sub(panel, router: Router, mid: str, s: Sub, shared: dict[str, list[str]]) 
         if imgui.is_item_hovered():
             ui.tooltip(f"{s.base} is set by {', '.join(others)} too — "
                               "the last write wins")
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+    ui.flush_right(ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     kill = ui.chip("×")
     imgui.pop_style_color()
@@ -1928,8 +1947,7 @@ def modifiers(panel, router: Router) -> None:
         ui.tooltip("Nodes between a source and a route: curve, scale, smooth, "
                           "combine two, a threshold that fires, a one-frame delay")
     sp = imgui.get_style().item_spacing.x
-    imgui.same_line(imgui.get_content_region_avail().x
-                    - (MOD_KIND_W + ui.chip_w("+ modifier") + sp))
+    ui.flush_right(MOD_KIND_W + ui.chip_w("+ modifier") + sp)
     imgui.set_next_item_width(MOD_KIND_W)
     if imgui.begin_combo("##modkind", st["mod_kind"]):
         for kind in MOD_KINDS:
@@ -2016,7 +2034,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
         return dead
     imgui.same_line()
     _mod_bar(router, m)
-    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+    ui.flush_right(ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     if ui.chip("×"):
         dead = True
@@ -2050,12 +2068,10 @@ def meta_rows(panel, router: Router) -> None:
     be seen; never learned or edited here (D5, D6)."""
     table = router.table
     inv, glob = _meta_rows(table)
-    ui._micro("session")
-    imgui.same_line()
-    imgui.text_disabled("the session's — edit bindings.json")
+    _heading("meta controller", "its own rows — edit bindings.json")
     col = _column([control_glyph(table, b) for b in (*inv, *glob)])
     had = bool(inv or glob)
-    inv, glob = ([b for b in rows if _shown(panel, router, ("session", id(b)), control_hay, b)]
+    inv, glob = ([b for b in rows if _shown(panel, router, ("meta", id(b)), control_hay, b)]
                  for rows in (inv, glob))
     if had and not (inv or glob):
         imgui.text_disabled(NO_MATCH)
@@ -2069,7 +2085,7 @@ def meta_rows(panel, router: Router) -> None:
             imgui.same_line(col)
             op = _op_text(b)
             imgui.text_colored(ui.FAINT, b.target + ("" if op in ("abs", "toggle") else f"  {op}"))
-            _mark_line(panel, table, b, "session", y0)
+            _mark_line(panel, table, b, "meta", y0)
 
 
 # ---- the sinks (plan 27 B3) ----
@@ -2088,9 +2104,7 @@ def sinks(panel, router: Router) -> None:
     file now; a new one comes from a param's right-click → Learn sink ▸."""
     table = router.table
     rows = table.sinks(enabled=False)
-    ui._micro("sinks")
-    imgui.same_line()
-    imgui.text_disabled("the session's — out to a sink · right-click a param: Learn sink")
+    _heading("sinks", "the meta controller's — out to a sink · right-click a param: Learn sink")
     if not rows:
         imgui.text_disabled("nothing goes out")
         return
@@ -2134,7 +2148,7 @@ def _find_field(panel) -> None:
     before the rows: it starts the frame's set of drawn lines."""
     st = _state(panel)
     on = bool(st["find"].strip())               # spaces alone filter nothing
-    imgui.same_line(imgui.get_content_region_avail().x - _find_w(on))
+    ui.flush_right(_find_w(on))
     imgui.set_next_item_width(FIND_W)
     _, st["find"] = imgui.input_text_with_hint("##rows", "filter", st["find"])
     if st.get("unfind"):

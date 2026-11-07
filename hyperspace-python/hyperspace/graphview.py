@@ -129,7 +129,7 @@ from . import modifiers as modmod
 from . import sequencer as seqmod
 from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .groupwords import group_title
-from .params import PATCH_GROUPS, Kind, Param, Registry, is_meta_id
+from .params import PATCH_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
     PAIR_SCHEME,
@@ -167,7 +167,7 @@ CABLE_KINDS = ("route", "setter", "sub", "input", "render", "lane")
 IN, OUT = "in", "out"
 BASE, MOD, DEPTH = "base", "mod", "depth"
 # which layout map a node's position is saved in
-PATCH_SECTION, META_SECTION = "preset", "session"
+PATCH_SECTION, META_SECTION = "preset", "meta"
 
 ANALYZER = "analyzer"
 CAMERA = "camera"            # the shared camera's node: `render:camera` (plan 35 V2: was `eye`)
@@ -264,7 +264,7 @@ class VNode:
     # drawn faint with the line "reaches nothing" — never idle
     faint: bool = False
     # plan 37 C1 (P1): how this node's thumbnail is found (`THUMBS`' word:
-    # "picture", "scene", "layer", "window"), None for a node that stays
+    # "picture", "scene", "layer", "window", "mask"), None for a node that stays
     # text (the modulation side, a group, the camera); and the size of the
     # picture its thumbnail was last copied from (the page sets it each
     # frame from `outputs.PreviewTextures.size_of`: C2's hover says it),
@@ -678,7 +678,8 @@ DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "cli
 # — `SCHEME_ROLE`, devices.py's since plan 40 T4 (imported above)
 # schemes that are no device's: the keyboard, the built-in lanes, the modifiers
 NO_DEVICE = ("key", "lane", "lfo", "env", SEQ, modmod.SCHEME)
-PLACEHOLDER_STATUS = "not in this rig: its cables wait for it"
+PLACEHOLDER_STATUS = ("not set up on this Mac: its cables wait for it. "
+                      "[[devices]] in config.toml lists it")
 
 
 def desk_group(group: str, label: str, invariant: bool = False) -> str:
@@ -819,56 +820,51 @@ HOVERS: dict[str, str] = {
     "echo": "The k-th newest look-back frame.",
     "dream": "Its picture, dreamed: laid over what it takes in, with knobs of its own.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
-    rgraph.ALL_OUTPUTS: ("The rig's bus: a window shows it by a cable from here, unless the "
+    rgraph.ALL_OUTPUTS: ("The meta controller's bus: a window shows it by a cable from here, unless the "
                          "preset cuts that cable or wires that port itself."),
     # R13: `ground`, a source with no render node, drawn so its wires can be seen and deleted
     rgraph.GROUND: ("A window's background where nothing is drawn — the clear colour, or "
                     "see-through in overlay: wired into an output's port, that port shows it."),
 }
 # the words a delete or an add says (plan 35 G)
-OUTPUT_UNWIRED = "{label} is a window of this rig: its wires are gone, it shows its ground"
+OUTPUT_UNWIRED = "{label} is one of the meta controller's windows: its wires are gone, it shows its ground"
 ALL_UNWIRED = ("All outputs stays (every window reads it): its wires are gone, so the "
                "windows show their own wires, else their ground")
 # plan 36 T1 (W1, D1): the meta controller's bus cables from All outputs into each
 # window (`graph.BusCuts`) — which of them stand is the loadable patch's since
 # plan 44 D3 (`loadable.LoadedPatch.bus`, saved under `bus`), in words
-BUS_SAID = ("the rig's cable: All outputs' {port} on {label} — cut it and {label} shows "
+BUS_SAID = ("the bus cable: All outputs' {port} on {label} — cut it and {label} shows "
             "nothing there with this preset (a preset saves its cuts)")
 BUS_IDLE = "nothing is wired into All outputs' {port}"
 BUS_SAME_PORT = "All outputs' {port} goes into a window's {port} (output.1.{port} …)"
 BUS_NO_SHOW = "no preset is loaded: a preset holds which cables from All outputs stand"
-BUS_NO_EFFECT = ("{wire} is the rig's cable: put the node on All outputs' picture, or "
+BUS_NO_EFFECT = ("{wire} is a bus cable: put the node on All outputs' picture, or "
                  "wire the window a picture of its own")
 # plan 44 D3 (plan 43 §6 item 3): a window the loadable patch wires or cuts that this
 # meta controller has not open — requested, said, never an error: the loadable patch is a
 # complete look, the meta controller is what is plugged in
-WINDOW_WANTED = ("this preset wires Output {n}, which this rig has not open — add a "
-                 "window on OUTPUT to show it")
+WINDOW_WANTED = ("this preset wires Output {n}, which is not open on this Mac — choose a "
+                 "display for it on OUTPUT to show it")
 
 
-def wanted_windows(spec, bus_cuts=None, count: int = 0) -> list[int]:
-    """The windows past this meta controller's `count` that the loadable patch asks for (plan 44
-    D3): every `output.<n>` its section wires into, and every one its bus
-    cuts (`rig`, the loadable patch's `graph.BusCuts`) name, n > `count`, in order —
-    what OUTPUT and GRAPH say (`WINDOW_WANTED`) so the owner can open them.
-    Pure; nothing is opened here."""
+def wanted_windows(spec, bus_cuts=None) -> list[int]:
+    """The windows the loadable patch asks for (plan 44 D3): every `output.<n>` its section
+    wires into, and every one its bus cuts (the loadable patch's `graph.BusCuts`) name, in
+    order. `ui_graph.window_wants` says those nothing shows (`WINDOW_WANTED`), so the owner can
+    give them a display. Pure; nothing is opened here."""
     want: set[int] = set()
     wires = list(getattr(spec, "wires", None) or ())
     cut = list(getattr(bus_cuts, "cut", None) or ())
     for w in (*wires, *cut):
         node = getattr(w, "node", "") or ""
         head, _, n = node.partition(".")
-        if head == "output" and n.isdecimal() and int(n) > count:
+        if head == "output" and n.isdecimal():
             want.add(int(n))
     return sorted(want)
 
 
-def window_wanted_lines(spec, bus_cuts=None, count: int = 0) -> list[str]:
-    """`WINDOW_WANTED` for each window `wanted_windows` names: the line OUTPUT
-    (beside the output blocks) and the GRAPH head both say, the same words."""
-    return [WINDOW_WANTED.format(n=n) for n in wanted_windows(spec, bus_cuts, count)]
 # plan 36 T2 (W2): a listed cloud's wire into the scene, the meta controller's too
-CLOUD_SAID = ("the rig's cable: this cloud drawn in the scene — cut it and the scene "
+CLOUD_SAID = ("this cloud's wire into the scene — cut it and the scene "
               "draws no cloud with this preset (a preset saves its cuts)")
 CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
 CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
@@ -941,19 +937,21 @@ NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
 # that draws it, faint (`THUMB_FAINT`); "layer": a hands node — its hands
 # layer, else the scene it is drawn in; "window": an output — what the
 # window shows (output 1 the page's `outputs.Preview`, any other its
-# presenter's picture: `render.thumb_source`). A kind missing here whose
+# presenter's picture: `render.thumb_source`); "mask": a matte's or a
+# segment's mask, in grey, white where it passes. A kind missing here whose
 # node's output is a picture (a kind added later: plan 39's) is a
 # "picture" too (`thumb_of`); the rest (All outputs, the camera, ground,
 # the modulation side) stay text.
 PICTURE, SCENE_PIC, LAYER_PIC, WINDOW_PIC = "picture", "scene", "layer", "window"
+MASK_PIC = "mask"
 THUMBS: dict[str, str] = {
     "channel": PICTURE, "pattern": PICTURE, "scene": PICTURE, "backdrop": PICTURE,
     "composite": PICTURE, "switch": PICTURE, "delay": PICTURE, "resize": PICTURE,
     "lookback": PICTURE, "echo": PICTURE, "dream": PICTURE, "effect": PICTURE,
     "copy": PICTURE, "layer": PICTURE, "guide": PICTURE,
-    # plan 39 at the plan 37 merge: a cut is its picture; a matte (a mask)
-    # and a segment (its own picture is its matte; fg, bg are its pins) are text
-    "cut": PICTURE,
+    # plan 39 at the plan 37 merge: a cut is its picture. SM3 (row 777): a
+    # matte's is its mask, and a segment's its matte (fg, bg are its pins)
+    "cut": PICTURE, "matte": MASK_PIC, "segment": MASK_PIC,
     "shape": SCENE_PIC, "cloud": SCENE_PIC, "hands": LAYER_PIC,
     "output": WINDOW_PIC,
 }
@@ -962,6 +960,13 @@ THUMB_FAINT = frozenset({SCENE_PIC})     # drawn faint (`ui_graph.FAINT_PIC`)
 # (`ui_graph.NODE_W`, 190 × SCALE) at 16:9 — a picture of another aspect
 # is fitted inside it, so the layout never moves with a picture's size
 THUMB_H = float(round(190 * 1.25 * 9 / 16))
+
+
+def mask_words(n: VNode) -> str:
+    """Why mask node `n` makes no mask, in its own words: "subject is not in
+    this build", a worker's error, off, nothing wired. Empty when it has no
+    refusal: a mask nothing asked for is plainly black."""
+    return getattr(n.ref, "refused", "") if n.thumb == MASK_PIC else ""
 
 
 def thumb_of(name: str, ref=None) -> str | None:
@@ -1244,7 +1249,7 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
     if kind in STAND_IN_SAID:                        # plan 39 T5: its body line, in words
         into = {w.port: w.src for w in (spec.all_wires() if spec is not None else ())
                 if w.node == name}
-        r.said = STAND_IN_SAID[kind](name, into)
+        r.said = r.refused = STAND_IN_SAID[kind](name, into)
     return r
 
 
@@ -1628,7 +1633,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             targets.append(pid)
 
     for p in reg:
-        if p.modulatable and not p.alias and not is_meta_id(p.id):       # (register rows 743, 746)
+        if p.modulatable and not p.alias:       # (no meta param is: register rows 743, 746, 775)
             want(p.id)
     for b in (*routes, *setters):
         want(b.target)
@@ -1822,7 +1827,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if not standing.has(w) or src not in view.pins or dst not in view.pins:
             continue
         idle = "scene" in gone
-        view.cables.append(VCable(cable_id(f"rig:{w.src}>{w.node}/{w.port}"), src, dst,
+        view.cables.append(VCable(cable_id(f"cloud:{w.src}>{w.node}/{w.port}"), src, dst,
                                   GEOMETRY, ref=w, kind="render", dormant=idle,
                                   label=CLOUD_IDLE if idle else CLOUD_SAID))
 
@@ -2806,7 +2811,7 @@ def summary(n: VNode) -> list[str]:
         if n.layer:
             lines.append(f"{n.layer} layer · {'up' if n.up else 'down'}")
         if n.placeholder:
-            lines.append("not in this rig")
+            lines.append("not set up on this Mac")
         elif n.grey:
             lines.append(n.status.rpartition(" · ")[2] or "not connected")
     elif n.kind in BANK_SCHEMES:
@@ -2854,7 +2859,8 @@ def picture_hover(n: VNode, gpu_ms: float | None = None) -> str:
     median, "gpu 0.42 ms"). A line it has nothing for is left out."""
     lines = [n.label, *summary(n)]
     if n.picture is not None:
-        lines.append(f"{n.picture[0]}×{n.picture[1]} picture")
+        noun = "mask" if n.thumb == MASK_PIC else "picture"
+        lines.append(f"{n.picture[0]}×{n.picture[1]} {noun}")
     if gpu_ms is not None:
         lines.append(f"gpu {gpu_ms:.2f} ms")
     return "\n".join(lines)
@@ -3169,6 +3175,7 @@ class VGroup:
     real: dict[str, str] = field(default_factory=dict)
     rows: dict[str, list[VCable]] = field(default_factory=dict)
     thumb: str | None = None
+    thumb_pin: str | None = None        # `thumb`'s outlet, a segment's own pin (`pin_picture`)
     kept_by_host: list = field(default_factory=list)
 
     @property
@@ -3330,6 +3337,27 @@ def _boundary(view: View, g: VGroup, mem) -> None:
     if pics:
         src = g.real[pics[-1].id]
         g.thumb = view.pins.get(src, ("",))[0] or None
+        g.thumb_pin = pin_picture(view, src)
+
+
+def pin_picture(view: View, pin: str) -> str | None:
+    """The render node that makes the picture on output pin `pin`, when it
+    isn't the pin's canvas node: a segment's `fg` or `bg` (`rout:segment.fg`
+    is `segment.fg`, a node the build makes; the canvas node's own thumbnail
+    is its matte). None for any other pin."""
+    name = pin.removeprefix("rout:")
+    return name if name != pin and rgraph.segment_pin(name) is not None \
+        and rgraph.WIRED_MAKES.get(kind_of(name)) == IMAGE else None
+
+
+def group_picture(view: View, g: VGroup) -> VNode | None:
+    """The node a folded group's thumbnail is of: its last picture outlet's
+    (`thumb`), or for a segment's `fg` or `bg` that pin's own picture, as a
+    node of its own name (`thumb_name` finds it by the id)."""
+    n = view.node(g.thumb) if g.thumb else None
+    if n is None or g.thumb_pin is None:
+        return n
+    return VNode(f"render:{g.thumb_pin}", n.kind, n.label, thumb=PICTURE)
 
 
 def group_words(view: View, g: VGroup) -> list[str]:
@@ -3616,12 +3644,13 @@ ALREADY = "already patched"
 SELF_LOOP = "a modifier cannot read itself (a loop)"
 MACRO_NO_LANE = "a macro is no lane: it cannot feed a modifier"
 NO_LANE = "{what} is no lane: it cannot feed a modifier"
-KEY_ROWS = "keys are the session's rows: map them on ROUTING"
+KEY_ROWS = "keys are the meta controller's rows: map them on ROUTING"
 MOD_ONLY_ROUTE = "a modifier goes onto a route or a modifier's input"
 ROUTE_END = "a route's end moves to another param's mod"
-META_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
-SHIFT_NODE = "{addr} on the SHIFT node is the session's (bindings.json): map it on ROUTING"
-NOT_REMOVABLE = "{label}: the rig's, not the preset's (nothing to delete)"
+META_ROW = "{what} is the meta controller's (bindings.json): edit it on ROUTING"
+SHIFT_NODE = ("{addr} on the SHIFT node is the meta controller's (bindings.json): "
+              "map it on ROUTING")
+NOT_REMOVABLE = "{label}: the meta controller's, not the preset's (nothing to delete)"
 # plan 43 C2: the camera is the loadable patch's, and every look has exactly one
 CAMERA_KEPT = "{label}: the look's one camera, always there (nothing to delete)"
 NO_SUCH_MOD = "no modifier {kind}"
@@ -3638,7 +3667,7 @@ def bank_refusal(bank, scheme: str) -> str | None:
     if why is not None and len(bank) >= bank.MAX:
         return BANK_FULL.format(k=len(bank), what=BANK_WORDS[scheme][1])
     return why
-NO_BANK = "no {what} bank on this rig"
+NO_BANK = "no {what} bank on this deck"
 LANE_NO_DELETE = ("a lane always fires an envelope: drag its pin onto another "
                   "envelope's fire to rebind it")
 LANE_BOUND = "lane {lane} fires env {env} already"
@@ -3996,10 +4025,8 @@ class Edit:
             if port is not None and port.layer == GLOBAL_LAYER:
                 return SHIFT_NODE.format(addr=addr)
             why = learnmod.blocked(self.table, addr)
-            if why == "invariant":
-                return f"{addr} is invariant (the session's)"
-            if why == "global":
-                return f"{addr} is on the global layer: latch SHIFT off to map into the preset"
+            if why is not None:
+                return learnmod.blocked_words(addr, why)
             # register row 743: what is left would land in the patch layer
             return meta_refusal(p.id)
         return None
@@ -5701,7 +5728,8 @@ def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
     bus_cuts = _bus_cuts(edit)
     if not bus_cuts.has(w):
         return NO_SUCH_WIRE.format(wire=str(w))
-    return _land(edit, _doc(edit), f"cut {w}", f"cut the rig's cable {w}", bus_cuts=bus_cuts.cutting(w))
+    what = "the cloud's wire" if rgraph.is_cloud_wire(w) else "the bus cable"
+    return _land(edit, _doc(edit), f"cut {w}", f"cut {what} {w}", bus_cuts=bus_cuts.cutting(w))
 
 
 def _new_instance(spec, file: str) -> int:
