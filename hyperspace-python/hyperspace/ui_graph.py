@@ -132,7 +132,7 @@ the panel's one selection, shared with the FX page (`Panel.fx_selected`,
 `share`, `select_effect`). The selected node itself is published on the
 panel (2026-10-31, `publish`: `Panel.graph_selected`, the one selected
 node's id, and `graph_selected_at`) for whoever is not this view — a
-controller's node mode, the side pane's fold of every page — as of the
+controller's node mode, the side pane — as of the
 last frame this page drew; a loadable patch landing without that node lets it go
 on any page (`settle`); `select_id` / `Panel.select_graph_node` select
 one from outside, and `node_params` / `Panel.graph_selected_params` are
@@ -174,11 +174,13 @@ the idle lines, forgets every position on the canvas and lays them all
 out again in their areas — one undo step for the positions (`forget`) —
 frames the canvas on them and says so on the head ("laid out 36 nodes in
 6 areas, every one collapsed · 12 idle off the canvas", or "already
-tidy"). **The side pane is always on** (plan 49, stage 1: `ui_pane.py`):
-folding sections — the selection's details (`_side`; with nothing
-selected, a line saying so), then the body of every other page, which this
-page's pane is the only home of (plan 49, stage 3: no rail; this page is
-always drawn, and `ui.page` is the focused section). It lies under the canvas on the panel's narrow
+tidy"). **The side pane is always on** (plan 49: `ui_pane.py`), one
+view at a time at its full height (2026-11-07): the selection's details
+(`_side`; with nothing selected, a line saying so), or the body of one
+of the other pages, which this page's pane is the only home of (plan 49,
+stage 3: no rail; this page is always drawn, and `ui.page` is the view).
+A left click on the canvas that leaves something selected brings the
+selection view up (`_note_pick`). It lies under the canvas on the panel's narrow
 page; the **details beside / below** chip moves it (a page 720 px wide
 puts it in a side column by itself, no chip). **The side column is resizable** (the
 owner, 2026-10-27: "for some UI, the little sidebar … is just not wide
@@ -531,8 +533,6 @@ def close(panel) -> None:
     """Destroy the editor context, if the page ever made one — before
     imgui's own context goes (quit, ⌘R). Safe to call twice."""
     st = panel.__dict__.get(STATE)
-    if st:
-        ui_pane.flush(st, force=True)       # plan 49: a fold not yet written
     if not st or st.get("editor") is None:
         return
     st.pop("canvas_size", None)
@@ -806,11 +806,12 @@ def _dimmed(panel):
             imgui.end_disabled()
 
 
-def band_height(avail_h: float, focused: bool) -> float:
-    """The narrow page's band: `BELOW_H`, or with a section focused all but
-    `CANVAS_MIN` of the page, so the section reads as its page did (plan 49
-    stage 3: with no rail, the desk's narrow panel has only this)."""
-    return max(BELOW_H, avail_h - CANVAS_MIN) if focused else BELOW_H
+def band_height(avail_h: float, section: bool) -> float:
+    """The narrow page's band: `BELOW_H` for the selection, or with a
+    section shown all but `CANVAS_MIN` of the page, so the section reads as
+    its page did (plan 49 stage 3: with no rail, the desk's narrow panel
+    has only this)."""
+    return max(BELOW_H, avail_h - CANVAS_MIN) if section else BELOW_H
 
 
 def page(panel, dt: float) -> None:
@@ -824,13 +825,15 @@ def page(panel, dt: float) -> None:
         if st["machine"] is None:
             st["machine"] = getattr(getattr(panel, "library", None), "machine", None)
         if imgui.begin_child("##graph.side", imgui.ImVec2(0, 0)):
-            ui_pane.draw(panel, st, dt, None, below=imgui.get_content_region_avail().x < WIDE)
+            ui_pane.draw(panel, st, dt, None)
         imgui.end_child()
         return
     st["hide"] = hidden_ids(st, view)       # plan 36 T6: before anything asks `drawn_node`
     sel = _selection(st, view)
     if sel is not None and escaped():           # Esc closes the details: nothing selected
         st["deselect"], sel = True, None
+    if st.pop("canvas_pick", False) and sel is not None:
+        ui_pane.show(panel, ui_pane.SELECTION)  # a click on the canvas: what it picked, shown
     publish(panel, st, sel)
     share(panel, st, sel)
     # plan 49: the pane is always on, so its chip is too (on a narrow page)
@@ -856,7 +859,7 @@ def page(panel, dt: float) -> None:
     # so a narrow window never shrinks what a wide one was set to)
     side = side_width(st["side_w"], avail.x)
     pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide, side,
-                             band_height(avail.y, ui_pane.focused(panel) is not None))
+                             band_height(avail.y, ui_pane.showing(panel) != ui_pane.SELECTION))
     # the node editor still sees a right-click over the details (they lie on
     # its canvas): noted here, before it draws, so `_menus` opens no graph
     # menu there and the control's own Learn menu opens (the owner, 2026-10-24)
@@ -876,6 +879,7 @@ def page(panel, dt: float) -> None:
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     with _dimmed(panel):
         _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
+    _note_pick(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     # off air: the red frame and what is on air's inset, in the canvas's corner, left
     # of the pane beside it, above the band under it (a narrow page)
     page_list = imgui.get_window_draw_list()
@@ -896,10 +900,11 @@ def page(panel, dt: float) -> None:
         if wide:                        # the grip on the column's left edge, then the details
             _grip(st, pos, size, avail.x, side)
             imgui.indent(GRIP_W)
-        # plan 49: folding sections — the selection's details first
+        # the one view: the selection's details, or a section
+        home = home_page(sel[1]) if sel is not None and sel[0] == "node" else None
         ui_pane.draw(panel, st, dt,
                      (lambda: _side(panel, st, view, sel)) if sel else None,
-                     sel_words(sel), below=not wide)
+                     sel_words(sel), home[0] if home else None)
     imgui.end_child()
     _settle_take_over(st)
     imgui.pop_style_color()
@@ -908,6 +913,23 @@ def page(panel, dt: float) -> None:
     times.append(time.perf_counter() - t0)
     del times[:-TIMES]
     _arrive(panel, st)
+
+
+def _note_pick(panel, st: dict, origin, size) -> None:
+    """A left click on the canvas — pressed there and let go, not over the
+    pane, no menu open, no desk control picked — asks the next frame to
+    show the selection, once the editor holds what the click picked
+    (`page`; a click that leaves nothing selected leaves the view as it
+    is). A selection by code (`select_id`, `select_effect`) is no click:
+    the section being worked in stays."""
+    m = imgui.get_mouse_pos()
+    if imgui.is_mouse_clicked(0):
+        st["canvas_press"] = (
+            origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1]
+            and not st.get("over_details") and not getattr(panel, "_picking", False)
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+    if imgui.is_mouse_released(0) and st.pop("canvas_press", False):
+        st["canvas_pick"] = True
 
 
 def pinch_wheel(magnification: float) -> float:
@@ -3938,7 +3960,8 @@ def _wireframe(panel) -> None:
 
 FOLD_AT = 12             # more param rows than this: each group under its own header
 UNWIRED = imgui.ImVec4(0.58, 0.58, 0.61, 0.55)   # an input chip nothing feeds: faint
-OPEN_TIP = "Bring up this node's section of the side pane, with it selected there"
+OPEN_TIP = ("Show this node's section in the side pane, with it selected there "
+            "(its ← chip comes back here)")
 
 
 def side_groups(panel, n: graphview.VNode) -> list[tuple[str, list[str]]]:
@@ -4095,16 +4118,12 @@ def home_page(n: graphview.VNode):
 
 
 def open_on(panel, home) -> None:
-    """Focus `home`'s section (through ``ui.page``) with its item selected
-    there."""
+    """Show `home`'s section in the pane (through ``ui.page``) with its item
+    selected there."""
     key, sel = home
     if sel is not None:
         sel(panel)
-    k = ui.PAGE_KEYS.index(key)
-    if "ui.page" in panel.reg:
-        panel.reg["ui.page"].set(k)
-    else:
-        panel.page = k
+    ui_pane.show(panel, key)
 
 
 def _open_chip(panel, n: graphview.VNode) -> None:

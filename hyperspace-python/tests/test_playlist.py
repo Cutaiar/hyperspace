@@ -759,7 +759,7 @@ def test_the_section_fits_the_pane_and_works(tmp_path, monkeypatch, width):
         d.run(d.wait(2))
         st = _st(r)
         st["side_w"] = ui_graph.SIDE_MIN if width == "min" else ui_graph.SIDE_W
-        _only(st, "playlist")
+        _only(r, "playlist")
         d.run(d.wait(3))
         assert st["pane_drawn"] == ["playlist"]
         assert not _spills(d, st)
@@ -947,12 +947,6 @@ def test_cmd_z_over_the_section_takes_back_nothing_and_says_so(air, monkeypatch)
     assert gain.base == was and bright.base == shown and undo._focused is focus
     assert meta.undo.status == undo.NOTHING_HERE
     assert "playlist" not in META_SECTIONS
-
-
-def test_a_fresh_launchs_floor_is_only_for_a_fresh_launch():
-    assert ui_pane.MIN_BODY_H == 150.0
-    assert ui_pane.body_height(200.0, 2) == 120.0
-    assert ui_pane.body_height(200.0, 3) == 150.0
 
 
 def test_the_section_says_when_nothing_will_play():

@@ -449,13 +449,12 @@ def test_esc_drops_a_carried_token_and_the_release_moves_nobody(rig, tmp_path):
 
 
 def test_esc_with_no_board_on_screen_is_graphs(rig, monkeypatch):
-    """A pick survives no fold: GRAPH's Esc is neither lost to it nor spent on it."""
+    """A pick survives no other view: GRAPH's Esc is neither lost to it nor spent on it."""
     r, d = rig, rig.d
     st = ui_players._state(r.panel)
     _click(d, _head(d, "players.p2"))
     assert st["sel"] == (ui_players.SEL_PLAYER, 2)
-    r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
-    ui_pane.set_open(ui_graph._state(r.panel), "players", False)
+    r.reg["ui.page"].set(PAGE_KEYS.index("graph"))      # the selection: the board goes
     d.run(d.park(), d.wait(3))
     assert "players" not in ui_graph._state(r.panel)["pane_drawn"]
     assert st["sel"] is None, "it went with its board"
@@ -767,8 +766,9 @@ def test_players_is_a_section_at_the_end_of_the_page_keys():
     assert "players" in ui_pane.KEYS
 
 
-def test_the_section_is_folded_at_first():
-    assert not ui_pane.DEFAULT_OPEN["players"] and not ui_pane.DEFAULT_BELOW["players"]
+def test_the_section_has_a_chip_of_its_own():
+    """No node leads to the players: the mouse reaches them by their own chip."""
+    assert "players" in ui_pane.TABS
 
 
 # ---------------------------------------------------------------- the pad's lights

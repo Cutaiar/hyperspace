@@ -113,7 +113,7 @@ def script(d, panel):
                                          *[Entry(n, 3.0, 1.0) for n in LOOKS[1:]]]))
     yield from d.wait(5)
     assert p.select("cart")
-    panel.reg["ui.page"].set(PAGE_KEYS.index("playlist"))     # unfolds it, scrolled to
+    panel.reg["ui.page"].set(PAGE_KEYS.index("playlist"))     # the pane's view
     yield from d.wait(30)         # the section, for the shot
     yield from d.click("chip.playlist.play", frames=3)
     assert p.on
