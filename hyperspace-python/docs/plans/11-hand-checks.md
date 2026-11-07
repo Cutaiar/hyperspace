@@ -8348,6 +8348,14 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
+## DI. Video sound on the toggle (plan 58 LY3, row 790)
+Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a fake sound card; the line seen in the real app at both widths, never read by a person.
+**614. It says so, and it's true.** (the rig; a video with sound)
+1. Unfold audio, and drag the side pane to its narrowest and then wider. *Pass:* under **Listen to video sound**, the words "Off air reacts to on air's video sound." read at a glance, whole, at each width. Hover the button: the whole sentence is there.
+2. Put a video on air with its channel's sound on, and **Listen to video sound**. Off air, load a look with an audio route. *Pass:* the off-air preview reacts to the sound you hear.
+3. Stop the on-air channel's sound. Turn on the sound of a video that's off air. *Pass:* you hear nothing, and off air stops reacting.
+*Fail:* words cut off or hidden, a look off air that doesn't react in step 2, or one that reacts in step 3.
+
 ## DH. GRAPH's start zoom (plan 58 SM2, row 787)
 Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
 **612. It reads where it opens.** (each display you'll run the control window on)
