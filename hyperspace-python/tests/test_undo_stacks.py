@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 from imgui_bundle import imgui
 from test_app_boundary import ORDER, Stub, _host
+from test_ui_pane import _click_view
 from test_ui_shell import build_rig, frame
 from test_undo import DT, SETTLE, boot
 from ui_driver import Driver
@@ -395,27 +396,29 @@ def test_the_meta_sections_are_named_and_exist():
 
 
 def test_where_you_are_is_the_section_under_the_mouse(pane):
-    """Driven with the mouse: over an open meta section's body it is meta; over
-    another section's, or the canvas, it is not, whichever section has the focus;
-    with the mouse off the panel, the focus says."""
+    """Driven with the mouse: over a meta section's body it is meta; over
+    another section's it is not; over the chips above them, nothing."""
     r, d = pane
     st = ui_graph._state(r.panel)
     p = r.panel
-    d.run(d.click("pane.analyzer"), d.park(), d.wait(1))
-    assert "analyzer" in st["pane_drawn"]
+    d.run(_click_view(d, "analyzer"), d.wait(1))
+    assert st["pane_drawn"] == ["analyzer"]
     d.run(d.reveal("scene.select"))
     x0, y0, _x1, _y1 = d.rect("scene.select")          # its top: the pane may clip its bottom
     d.run(d.move((x0 + 4, y0 + 3)), d.wait(1))
     assert ui_pane.where(p) == "analyzer" and p.in_meta_section()
+    d.run(d.click("pane.presets"), d.park(), d.wait(1))
     d.run(d.move("new##new"), d.wait(1))               # the loadable patches section
     assert ui_pane.where(p) == "presets" and not p.in_meta_section()
+    d.run(d.move("pane.sections"), d.wait(1))
+    assert ui_pane.where(p) is None
 
 
 def test_the_panel_says_when_the_person_is_working_it(pane):
     """The real panel, by the mouse: a move is nothing; a press, and the frame of its
     release, is the person's own; the frame after is nothing again (row 753)."""
     _r, d = pane
-    d.run(d.move("pane.analyzer"), d.wait(2))
+    d.run(d.move("pane.sections"), d.wait(2))
     assert not undo._hand
     d.run(d.press(True), d.wait(1))
     assert undo._hand
@@ -431,7 +434,7 @@ def test_the_focus_never_says_where_you_are(pane):
     p = r.panel
     d.run(d.park(), d.wait(1))
     frame(p, "analyzer")
-    assert ui_pane.focused(p) == "analyzer"
+    assert ui_pane.showing(p) == "analyzer"
     d.run(d.move((-50.0, -50.0)), d.wait(2))
     assert ui_pane.where(p) is None and not p.in_meta_section()
     assert undo.here() is undo.installed()

@@ -223,7 +223,7 @@ def _audio_pane(tmp_path, monkeypatch, width=ui_graph.SIDE_W):
         d.run(d.wait(2))
         st = _st(r)
         st["side_w"] = width
-        _only(st, "audio")
+        _only(r, "audio")
         drawn = imgui.text_colored
         lines: list[tuple] = []
 
@@ -315,7 +315,7 @@ def test_one_widget_on_one_section_is_the_door_to_this_choice(tmp_path, monkeypa
             monkeypatch.setattr(imgui, name, counted(getattr(imgui, name)))
         seen = {}
         for key in ui_pane.KEYS:
-            _only(st, key)
+            _only(r, key)
             d.run(d.wait(2))
             assert st["pane_drawn"] == [key]
             count["n"] = 0

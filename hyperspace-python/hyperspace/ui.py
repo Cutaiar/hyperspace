@@ -14,12 +14,12 @@ no extra plumbing. Right-clicking any widget opens the binding menu: it
 names the param id and offers Learn (the host's `learn.Learn`: a knob or a hand completes it) /
 Unbind.
 
-The surface is GRAPH, always drawn, with a side pane of folding sections
-(ui_pane.py, plan 49): each section is a page's body, one per registry
-group or two, and a block in it whose group the library knows carries its
-preset strip (ui_loadable.py) under the title. `ui.page` is the focus: the
-section a key row, a pad or ⌘[ / ⌘] unfolds and scrolls to (`PAGE_KEYS`,
-`Panel.go_page`). A modulated param
+The surface is GRAPH, always drawn, with a side pane that shows one view
+at a time (ui_pane.py, plan 49): the selection's details, or a section,
+each a page's body, one per registry group or two, and a block in it
+whose group the library knows carries its preset strip (ui_loadable.py)
+under the title. `ui.page` is the view: what the pane's chips, a key row,
+a pad or ⌘[ / ⌘] bring up (`PAGE_KEYS`, `Panel.go_page`). A modulated param
 draws its *base* as the handle and a white ghost bar at the *effective*
 value (params.py: `base` vs `eff_norm`), so the setting stays where the
 user put it while a lane rides on top; its tooltip names the performer
@@ -685,13 +685,12 @@ CHEATSHEET = [
 # Plan 49 stage 3: there are no pages to switch. GRAPH is always drawn and
 # every other name is a section of its side pane (`ui_pane.SECTIONS`, which
 # also holds what each one's params are), drawn by the body that was the
-# page: `ui.page` is the focus, and setting it unfolds and scrolls to the
-# section of that name (`Panel.go_page`). The list stays, in its order,
+# page: `ui.page` is the pane's one view, and setting it shows the section
+# of that name (`Panel.go_page`). The list stays, in its order,
 # because the param's value is an index and a binding's `set` stores it:
 # every index a key row, a pad or an old show holds names what it always
 # named. Never reorder it; a new section goes at the end. FX's slot is the
-# fx section. GRAPH's has no section (the canvas is always there): it lets
-# go of the focus.
+# fx section. GRAPH's shows the selection (the canvas is always there).
 # the sections that hold the meta controller's params: ⌘Z there takes its stack
 # (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
 # output; audio holds the master faders and nothing of a loadable patch (row 692)
@@ -706,8 +705,9 @@ PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "au
 
 
 class PageHistory:
-    """The sections focused, back and forward as a browser's are (⌘[ / ⌘]).
-    `note` records the focus now — a key row, a pad, a step here — dropping
+    """The pane's views, back and forward as a browser's are (⌘[ / ⌘]).
+    `note` records the view now — a chip, a key row, a pad, a click on the
+    canvas, a step here — dropping
     the forward run when it is a new visit; `step(-1)` / `step(1)` returns
     the index to go to, or None at either end."""
 
@@ -804,8 +804,8 @@ class Panel:
         self.pad_diagram = False
         self.pad_view = 0       # ui_pad_views.VIEWS: map, faithful, lanes, cockpit
         self.poi_dials = True   # the Poi window (ui_pad.poi_window): shown each time the poi comes on
-        # the focus, an index into PAGE_KEYS (`ui.page`, `go_page`), its one
-        # owner (`ui_pane.focused`); GRAPH's slot is no section, so nothing is focused at launch
+        # the side pane's view, an index into PAGE_KEYS (`ui.page`, `go_page`),
+        # its one owner (`ui_pane.showing`); GRAPH's slot is the selection, the launch's view
         self.page = PAGE_KEYS.index("graph")
         self._focus_seen = self.page            # what `go_page` last acted on (`_draw`)
         self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
@@ -896,11 +896,10 @@ class Panel:
         r.enum("ui.pad_view", "Pad view", lambda: self.__dict__.get("pad_view", 0),
                lambda i: setattr(self, "pad_view", int(i)), list(ui_pad_views.VIEW_LABELS),
                group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
-        r.enum("ui.page", "Focus section", lambda: self.page, lambda i: Panel.go_page(self, i),
+        r.enum("ui.page", "Side pane view", lambda: self.page, lambda i: Panel.go_page(self, i),
                list(PAGE_KEYS), group="ui", persist=False, modulatable=False,
-               tip="Which section of GRAPH's side pane to bring up: it unfolds and scrolls "
-                   "to the top of the pane, and folds again when the focus moves on unless "
-                   "you unfolded it yourself. graph lets go of the focus.")
+               tip="What GRAPH's side pane shows, at its full height: a section, or graph "
+                   "for what is selected on the canvas. ⌘[ / ⌘] step back and forward.")
 
     def in_meta_section(self) -> bool | str | None:
         """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
@@ -923,14 +922,12 @@ class Panel:
 
     def go_page(self, i) -> None:
         """`ui.page`'s setter, and `_draw` for an index set straight (⌘[ /
-        ⌘]): focus slot `i` of `PAGE_KEYS` — its section shown and scrolled
-        to on the pane's next draw (`ui_pane.scroll_to`), or, for GRAPH's slot,
-        no section. Plan 49 stage 3: no page changes; the canvas is always
+        ⌘]): slot `i` of `PAGE_KEYS` is the side pane's view from the next
+        draw (`ui_pane.showing`) — its section, or, for GRAPH's slot, the
+        selection. Plan 49 stage 3: no page changes; the canvas is always
         drawn. Saved indices mean what they meant: the section of the name
         the page had."""
-        i = int(i)
-        self.page = self._focus_seen = i
-        ui_pane.scroll_to(ui_graph._state(self))
+        self.page = self._focus_seen = int(i)
 
     # ---- binding menu: every widget gets one on right-click ----
 
@@ -2002,8 +1999,8 @@ class Panel:
             # canvas and the sections are drawn disabled — dimmed, no widget
             # takes a click — and the click on a param is `_ctx_pick`'s. Never
             # the routing section: there the picked control's own line is what
-            # the user came for. The section headers and the footer stay live:
-            # the focus moves, the line lets go (`ui_graph.page`, `ui_pane._body`)
+            # the user came for. The pane's chips and the footer stay live:
+            # the view moves, the line lets go (`ui_graph.page`, `ui_pane._body`)
             self._picking = ui_desk.picking(self) is not None
             try:
                 self._page_graph(dt)

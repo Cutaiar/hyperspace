@@ -1798,10 +1798,14 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 ## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. It
-is GRAPH, always drawn, and a side pane of folding sections (plan 49,
-`ui_pane.SECTIONS`); a header shows a red dirty dot where its group has
-moved off its loaded patch. `ui.page` is the focus, by index into
-`ui.PAGES`: a section is brought up by it and scrolls in its own body
+is GRAPH, always drawn, and a side pane that shows one view at a time at
+its full height (plan 49, then 2026-11-07: `ui_pane.SECTIONS`): the
+selection, or one section. A row of chips over the body brings each up —
+the selection and the six sections no node leads to, then a **sections**
+chip whose menu holds the other eleven — and a chip shows a red dirty dot
+where its group has moved off its loaded patch. `ui.page` is the view, by
+index into `ui.PAGE_KEYS` (GRAPH's slot the selection), so ⌘[ / ⌘] step
+back and forward through every view; a section scrolls in its own body
 (2372 × 900 is the control size, `app.CONTROL_SIZE`).
 The window is two 4:3 panes: the panel opens at `ui.panel_w`, leaving
 the desk diagram left of it a 4:3 slice of the height and the panel
