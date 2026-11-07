@@ -420,3 +420,47 @@ def test_prefer_shared_is_the_id_a_save_stores(mk):
     assert f.prefer_shared("local:mine.png") == "local:mine.png"
     assert f.prefer_shared("shared:both.png") == "shared:both.png"
     assert f.prefer_shared("camera:0") == "camera:0"
+
+
+# ---- end to end over the real folder (row 809): a patch loaded from disk
+# names `local:`, the file is only in the shared folder, and the channel
+# opens it while the MEDIA banner stays quiet ----
+
+def test_a_patch_naming_local_opens_from_the_shared_folder_and_the_banner_stays_quiet(mk):
+    """The whole road, with no fake resolver: `MediaFolder` *is* the
+    resolver for file kinds, so a `MediaState` over it is what the app runs.
+    The bins are set the way a load sets them (`from_json`, not `assign`),
+    so nothing rewrites the id first — this is the other Mac's patch as it
+    arrives. The channel must open the shared file, and `missing()` — what
+    `ui_media._banner` draws — must not name it."""
+    from hyperspace.media.channels import MediaState
+
+    f = mk()
+    png(f.shared / "t.png")
+    f.scan()
+    m = MediaState(f)
+    assert m.from_json({"channels": {"a": ["local:t.png"]}}) == []   # no note: the id parses
+    assert m.channels["a"].bin[0] == "local:t.png"                   # stored as the patch had it
+
+    m.poll(0.016, 0.0)
+    src = m.channels["a"].source
+    assert src is not None and src.kind == "still", f"opened {src!r}"
+    assert src.path == f.shared / "t.png"            # the shared twin's file, not a `local:` guess
+    assert wait_for(lambda: src.status == mf.READY), src.status
+    assert m.missing() == []                         # the banner says nothing
+    m.close()
+
+
+def test_a_patch_naming_a_local_file_nobody_has_is_still_named_by_the_banner(mk):
+    """The other half, so the banner is not simply silenced: an id with no
+    file in either folder is still listed, which is what the owner's 86
+    remaining references do."""
+    from hyperspace.media.channels import MediaState
+
+    f = mk()
+    f.scan()
+    m = MediaState(f)
+    m.from_json({"channels": {"a": ["local:gone.png"]}})
+    m.poll(0.016, 0.0)
+    assert m.missing() == ["local:gone.png"]
+    m.close()
