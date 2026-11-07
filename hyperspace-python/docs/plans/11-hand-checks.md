@@ -8543,6 +8543,8 @@ Headless: `tests/test_ui_pane.py` (every view by the mouse, a canvas click, open
 
 **632. The narrow band.** (the desk up, the panel narrow) The band shows the chips and the selection; a section grows it to all but a strip of canvas; **selection** shrinks it back. No chip passes the band's edge, a long playlist name included.
 
+**633. Every node in view.** (Mac, the rig's display) Launch: every node is on screen, centred left of the pane, not under it. Zoom right in and drag away, then load another preset (F-key or PRESETS): its nodes all come into view, gliding. **save as…** and an edit leave the view where it is. Load a preset with three nodes: they're not blown up past the size they open at. With the band under the canvas (the desk up), the nodes sit above the band.
+
 ## What no test covers
 
 Only a person can settle these:

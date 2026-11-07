@@ -108,6 +108,9 @@ def build_rig(tmp_path, renderer=None):
     # test_the_panel_opens_on_graph_filling_the_window; the rig keeps the
     # desk up and the VIEW page first, as these tests were measured
     panel.desk, panel.page = True, PAGE_KEYS.index("view")
+    # the canvas at its start zoom and corner, as the canvas tests were measured;
+    # the fit on open and on a load has its own (tests/test_graph_fit.py)
+    panel.graph_fit = False
     panel.history = PageHistory(panel.page)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
