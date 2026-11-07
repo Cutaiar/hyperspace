@@ -195,6 +195,37 @@ def test_a_raising_draw_leaves_the_window_on_its_last_frame(stage):
     assert swaps == [] and not stage.root.pacer._swapped
 
 
+def test_a_view_that_caught_a_draws_error_holds_the_window(stage, monkeypatch):
+    """The real per-view catch: `graph.Shown.paint` paints part of the picture and raises,
+    the renderer records it on the view and carries on, and `_draw_render` raises it
+    after the others had theirs. Output 1's window gets no present and no swap, so the
+    half-drawn target never reaches the projector, and the timer paces."""
+    from hyperspace import graph
+
+    rig = _rig(stage)
+    one, two = stage.output(1), stage.output(2)
+    shots: list = []
+    _read_window(one, shots)
+    proxy = _proxy(rig)
+    app._draw_render(proxy, stage.ctx, rig.view, [one, two], stage.root)
+    assert len(shots) == 1 and stage.root.pacer._swapped
+    stage.root.pacer.end_frame()
+
+    def half(self, frame, dst):
+        dst.clear(1.0, 0.0, 0.0, 1.0)
+        raise RuntimeError("half drawn")
+
+    monkeypatch.setattr(graph.Shown, "paint", half)
+    swaps: list = []
+    real = glfw.swap_buffers
+    monkeypatch.setattr(app.glfw, "swap_buffers", lambda w: (swaps.append(w), real(w))[1])
+    with pytest.raises(RuntimeError, match="half drawn"):
+        app._draw_render(proxy, stage.ctx, rig.view, [one, two], stage.root)
+    rig.close()
+    assert len(shots) == 1 and one.win not in swaps and two.win not in swaps
+    assert "half drawn" in one.error and not stage.root.pacer._swapped
+
+
 def test_a_flip_a_dim_and_a_later_output_all_come_through(stage):
     """Output 1's flip and dim are baked in its frame target; a later output gets its
     own `Handoff` and its own switches."""

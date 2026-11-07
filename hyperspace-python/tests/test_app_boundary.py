@@ -1635,14 +1635,22 @@ def test_a_raising_presenter_does_not_stop_the_frame():
         app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, watch,
                          flush=lambda: None)
         assert slots[1].error == ""
-        # output 1's pipeline raised: the others still get their picture, then it raises
+        # output 1's view caught a draw's error: the others still get their picture,
+        # its half-drawn target is neither shown nor swapped, then it raises
         log.clear()
+        root.pacer.end_frame()
         boom = RuntimeError("scene")
         with pytest.raises(RuntimeError, match="scene"):
             app._draw_render(_Renderer(log, raise_first=boom), _Ctx(log), object(), slots,
                              root, watch, flush=lambda: None)
         assert "present projector" in log and "present third" in log
-        assert log[-3:] == ["present glass", "swap w1", "current root"]
+        assert "present glass" not in log and "swap w1" not in log
+        assert log[-1] == "current root" and not root.pacer._swapped
+        assert slots[0].error == "SCENE: boom"
+        # …and the next good frame clears it and shows
+        app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, watch, flush=lambda: None)
+        assert slots[0].error == "" and root.pacer._swapped
+        root.pacer.end_frame()
         # the whole draw raised: no window is swapped, each holds its last frame (a
         # swap would bring up an old back buffer), and the timer paces the loop
         log.clear()
@@ -1665,6 +1673,45 @@ def test_a_raising_presenter_does_not_stop_the_frame():
         ctx.fbo = root.frame.fbo
         app._draw_render(_Renderer(log), ctx, object(), slots, root, watch, flush=lambda: None)
         assert warned == []
+    finally:
+        app.glfw = app_glfw
+
+
+def test_a_later_output_whose_view_failed_says_so_and_holds():
+    """A later output's caught draw error goes on its slot, with a handoff or without
+    one, and it isn't shown or swapped; output 1 and the rest go on. A good frame clears
+    a stale error. (Second review: an early `continue` skipped the assignment.)"""
+    log: list[str] = []
+    g = _SwapGlfw(log)
+    app_glfw, app.glfw = app.glfw, g
+    boom = RuntimeError("its pipeline")
+
+    class Failing(_Renderer):
+        def __init__(self, log, keep_handoff):
+            super().__init__(log)
+            self.keep_handoff = keep_handoff
+
+        def draw_outputs(self, s, w, h, dpr, views, t_now=None):
+            super().draw_outputs(s, w, h, dpr, views, t_now)
+            views[1].error, views[1].exc = "output: RuntimeError: its pipeline", boom
+            if not self.keep_handoff:
+                views[1].handoff = None
+
+    try:
+        slots = _rig_slots("glass", "projector", "third", presenter=lambda sl: _Pres(log, sl.name))
+        root = _rig_root(log, slots, g)
+        slots[1].error = "stale"
+        for keep in (False, True):
+            log.clear()
+            app._draw_render(Failing(log, keep), _Ctx(log), object(), slots, root,
+                             flush=lambda: None)
+            assert slots[1].error == "output: RuntimeError: its pipeline"
+            assert "present projector" not in log and "swap w2" not in log
+            assert "swap w3" in log and "swap w1" in log and root.pacer._swapped
+            root.pacer.end_frame()
+        log.clear()
+        app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, flush=lambda: None)
+        assert slots[1].error == "" and "swap w2" in log
     finally:
         app.glfw = app_glfw
 

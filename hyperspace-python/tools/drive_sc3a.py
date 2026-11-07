@@ -22,7 +22,7 @@ import glfw
 import numpy as np
 from OpenGL import GL
 
-from hyperspace import render
+from hyperspace import graph, render
 from hyperspace.view import ViewState
 
 LOOKS = ("party-tumble", "party-acid", "party-faces", "party-trip", "woven-lattice",
@@ -86,12 +86,20 @@ def _raising(d, panel):
     yield from d.wait(30)
     good = _on_screen(win)
     moved = _on_screen(win)
-    real = render.Renderer.draw_outputs
+    # `SC3A_RAISE_HOW=view`: the renderer's own per-view catch, a half-drawn picture; else
+    # the whole draw raises
+    if os.environ.get("SC3A_RAISE_HOW") == "view":
+        owner, attr = graph.Shown, "paint"
+    else:
+        owner, attr = render.Renderer, "draw_outputs"
+    real = getattr(owner, attr)
 
     def boom(self, *a, **k):
+        if owner is graph.Shown:
+            a[1].clear(1.0, 0.0, 0.0, 1.0)
         raise RuntimeError("SC3A_RAISE")
 
-    render.Renderer.draw_outputs = boom
+    setattr(owner, attr, boom)
     yield                                    # the first raising frame
     yield
     held = _on_screen(win)
@@ -103,7 +111,7 @@ def _raising(d, panel):
         last = now
         if k % 6 == 0:
             seen.append(_on_screen(win))
-    render.Renderer.draw_outputs = real
+    setattr(owner, attr, real)
     yield from d.wait(30)
     back = _on_screen(win)
     distinct = len({p.tobytes() for p in seen})

@@ -3089,8 +3089,8 @@ swapped this frame, a 60 Hz timer. Under any swap a **floor**, a fixed 240 Hz on
 average with a burst of 8 frames free, so a swap that doesn't wait (a locked Mac, a
 window occluded from birth, a sleeping display) can't run the loop away, and a healthy
 loop, however uneven its frames, never waits. It believes no display's refresh (row 782).
-**A window swaps only what it was just given:** a draw or present that raises leaves it
-on its last frame, and output 1's present raising reaches `RenderWatch.failed`, the red
+**A window swaps only a whole picture it was just given:** a draw or present that raises,
+or a view that caught a draw's error, leaves it on its last frame, and output 1's present raising reaches `RenderWatch.failed`, the red
 banner, after the others had their picture. A window closes
 in this order, or a release can reach the wrong context's objects: that window current,
 its presenter released, destroyed, then `Pacer.choose` between frames (SC3b, which adds

@@ -743,9 +743,10 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
        goes on;
     6. the root's context current, whatever happened.
 
-    **A window swaps only what it was just given.** A draw that raises, or a present
-    that does, leaves it on its last frame, as `frame` promises: a swap there would
-    bring up an old back buffer. With nothing swapped the timer paces (`Pacer`).
+    **A window swaps only a whole picture it was just given.** A draw that raises, a
+    view that caught a draw's error (`View.exc`: its target is half-drawn, or its
+    ground), or a present that raises leaves it on its last frame, as `frame` promises;
+    the slot's `error` says why. With nothing swapped the timer paces (`Pacer`).
 
     What output 1's view caught, and output 1's own present raising, are raised after
     the others were presented, so they reach `RenderWatch.failed` and the red banner:
@@ -833,13 +834,13 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], root: Root, watch=None, fl
             # mix and dim are in it, so its window only shows it, 1:1
             ho = (Handoff(root.frame.tex, (fbw, fbh), (0, 0, fbw, fbh), bg_alpha=v.bg_alpha)
                   if sl is first else v.handoff)
-            if ho is None or sl.size[0] <= 0 or sl.size[1] <= 0:
-                continue                # nothing to show: it holds what it shows
+            sl.error = v.error
+            if v.exc is not None or ho is None or sl.size[0] <= 0 or sl.size[1] <= 0:
+                continue                # a failed or empty picture: it holds what it shows
             try:
                 glfw.make_context_current(sl.win)
                 sl.presenter.present(ho, sl.size)
                 glfw.swap_buffers(sl.win)
-                sl.error = v.error
                 if sl.win is pacer.owner:
                     pacer.swapped()
             except Exception as e:  # noqa: BLE001 — one output must not take the frame down
