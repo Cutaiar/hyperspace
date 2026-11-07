@@ -102,6 +102,7 @@ CALM_S = 0.35                     # …this long while the attitude sees a push 
                                   # attitude is wrong (the tape's 7° read as a push for seconds)
 G_MAG_S = 1.0                     # how fast a still pad's 1 g is learned (`g_mag`)…
 G_MAG_LEARN_G = 0.03              # …no further than this from what it read when it settled
+G_SEED_MAX = 0.25                 # a 1 g further than this from 1 is a swing, not a calibration
 STEP_S = 1.0 / 960.0              # the physics' fixed step
 MAX_STEPS = 96                    # …at most this many a frame (a stall drops the rest)
 K_STIFF = 3000.0                  # the string's stiffness at poi.spring 0 (mass·unit/s² per unit)
@@ -493,9 +494,7 @@ def step(state: PoiState | None, pad, reg, dt: float, role: str = "") -> None:
             _write(state, reg)                   # the sensor not yet on: wait for gravity
             return
         state.att = from_gravity(g)
-        # this pad's 1 g, so its calibration is no push (the reading: `g` may still
-        # be rising from the zeros of a sensor not yet on)
-        state.g_mag = state.g_seed = min(_norm(reading), VALID_G[1])
+        state.g_mag = state.g_seed = _seed_of(_norm(g), _norm(reading))
         state.settled = True
         state.hang()
     _stillness(state, reading, stalled, gyro_dps, dt)
@@ -510,6 +509,16 @@ def step(state: PoiState | None, pad, reg, dt: float, role: str = "") -> None:
         f = (k + 1) / n
         _physics(state, [a + (b - a) * f for a, b in zip(tip0, tip1, strict=True)], STEP_S)
     _write(state, reg)
+
+
+def _seed_of(low_passed: float, reading: float) -> float:
+    """This pad's 1 g at settling, so its calibration is no push: the low-passed
+    gravity if the reading agrees and it could be a calibration. Otherwise 1: a
+    swing (one sample of 2 g is no 1 g) or `gravity` still rising from a sensor
+    not yet on, and a pad off by a little then learns the rest."""
+    if abs(low_passed - reading) < STILL_G and abs(low_passed - 1.0) <= G_SEED_MAX:
+        return low_passed
+    return 1.0
 
 
 def _has_gravity(accel) -> bool:
@@ -618,14 +627,15 @@ def _hand(state: PoiState, accel, dt: float, rate_dps: float = 0.0) -> None:
 def box_limits(state: PoiState) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """Where the hand may be, (low, high): the box's half-extents each way
     from the screen's centre, with the pan's home offsetting it (y down), and
-    the depth about the tip's at rest; with `poi.depth` off, no depth shows,
-    so no wall there."""
+    the depth each way from home (a weight hanging from the tip has `offset()`'s
+    depth equal to the wrist's); with `poi.depth` off, no depth shows, so no
+    wall there."""
     hx, hy, hz = state.box
     home = state.pan_home if state.pan_home is not None else (0.0, 0.0)
     if not state.depth:
         hz = math.inf
-    return ((-hx - home[0], home[1] - hy, HANDLE - hz),
-            (hx - home[0], home[1] + hy, HANDLE + hz))
+    return ((-hx - home[0], home[1] - hy, -hz),
+            (hx - home[0], home[1] + hy, hz))
 
 
 def _bound(state: PoiState, p: Vec, v: Vec) -> None:

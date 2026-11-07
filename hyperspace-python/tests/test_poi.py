@@ -356,6 +356,20 @@ def test_a_wrong_1_g_at_settling_cannot_lock_a_pad_out_of_still():
     assert state.still >= poi.STILL_S and state.wrist_v == [0.0, 0.0, 0.0]
 
 
+@pytest.mark.parametrize("swing", [2.0, 4.0])
+def test_settling_mid_swing_takes_no_1_g_from_the_swing(swing):
+    """Second pass on #430: A pressed mid-swing. One raw sample of 2 g became
+    this pad's 1 g, and read as a phantom 1 g push every frame until A."""
+    reg, state, _ = rig()
+    pad = FakePad()
+    on(reg, state, pad)
+    poi.reset(state)
+    run(reg, state, pad, 1, accel=(0.0, swing, 0.0))
+    assert state.settled
+    assert state.g_mag == pytest.approx(1.0, abs=1e-6) and state.g_seed == state.g_mag
+    assert poi._norm(poi._push(state, [0.0, 1.0, 0.0])) == 0.0
+
+
 def test_a_steady_lift_walks_the_1_g_no_further_than_the_limit():
     """Finding 7 on #430."""
     reg, state, _ = rig()
@@ -374,6 +388,27 @@ def test_waiting_for_gravity_writes_the_shape_on_the_screen():
     run(reg, state, pad, 5, accel=(0.0, 0.0, 0.0))
     assert not state.settled
     assert abs(pan(reg)[1]) <= state.box[1] + 1e-9
+
+
+def test_the_hands_depth_wall_is_even_toward_and_away_from_the_eye():
+    """Second pass on #430: the shape's depth is `offset()`, the weight less
+    `HANDLE`, and a weight hanging from the tip has that equal to the wrist's:
+    so the wrist's own wall is ±hz about home, not about `HANDLE`."""
+    reg, state, _ = rig()
+    hz = state.box[2]
+    lo, hi = poi.box_limits(state)
+    assert (lo[2], hi[2]) == (-hz, hz)
+    pad = FakePad()
+    on(reg, state, pad)
+    assert state.offset()[2] == pytest.approx(state.wrist[2], abs=1e-3)
+    zooms = {}
+    for sign in (1.0, -1.0):
+        poi.reset(state)
+        run(reg, state, pad, 2)
+        state.wrist[2], state.wrist_v[2] = sign * hz, 0.0
+        run(reg, state, pad, 120)
+        zooms[sign] = reg["camera.zoom"].value
+    assert zooms[1.0] * zooms[-1.0] == pytest.approx(1.0, abs=0.02)
 
 
 def test_with_depth_off_no_wall_stands_along_depth():

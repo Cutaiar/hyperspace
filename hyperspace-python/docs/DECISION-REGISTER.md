@@ -14638,8 +14638,8 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 
   ```
   window            secs still   err° med/max   lin g med/max   travel end/max  v max  pan max  walled
-  pickup             5.5   19%    2.6/ 40.9   0.063/ 1.322    0.47/  0.99   1.17     1.24      0%
-  hold               8.0   44%    2.5/ 54.1   0.060/ 0.901    3.74/  3.74   3.89     2.96     67%
+  pickup             5.5   19%    2.6/ 40.9   0.062/ 1.322    0.48/  0.99   1.17     1.29      0%
+  hold               8.0   44%    2.5/ 54.1   0.060/ 0.901    3.88/  3.88   4.17     2.96     66%
   ```
 
   `walled` isn't comparable across the two: before it counted the eight-unit limit, after it counts any wall of a much smaller box.
@@ -14648,7 +14648,7 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 - **Stillness.** `main`'s push test stays, and the sensors alone are a second road: under `QUIET_DPS` (5 deg/s) and steady against the reading's short average, for `CALM_S` (0.35 s, was 1.5). `STILL_S` goes from 0.08 s to 0.2 s, so a carry of a second or two isn't read as still where its push crosses zero.
   - A slower carry can still lose its second half: 0.15 g over 2 s ends near home. `main` did the same. Check 633 says so.
   - A push held dead steady with the pad not turning can't be told from a wrong attitude. 0.1 g held steady moves the hand for 0.7 s (0.59 units, 5.6° of tilt), then reads as still. A real hand isn't that steady; check 633 step 4 asks.
-- **This pad's 1 g.** Read at settling, from the reading, so a pad resting at 1.07 g is no push, and A or a second pad reads it afresh. Learned while still after that, no further than `G_MAG_LEARN_G` (0.03) from what it settled on.
+- **This pad's 1 g.** Read at settling, from the low-passed gravity if the reading agrees and it's within `G_SEED_MAX` (0.25) of 1, so a pad resting at 1.07 g is no push, and A or a second pad reads it afresh. Otherwise 1: settling mid-swing takes nothing from the swing. Learned while still after that, no further than `G_MAG_LEARN_G` (0.03) from what it settled on.
 - **Readings.** Under 0.3 g there's no gravity in it (a sensor not yet on): no push, no settling, and not still. Over 3 g it's a hard swing: it pushes, nothing settles on it. A stalled pad alone counts as still.
 - **Taken from #342** (`origin/worktree-poi-hand-fix`, closed): the box (`box_for`, `DEFAULT_BOX`, `DEPTH_HALF`, `BOX_MIN`, `_bound`), the no-gravity reading, `g_mag`, `HAND_DEADBAND_G` at 0.04, the short average, and the tests for each.
 - **Changed from #342.** Its stillness was the sensors alone, always, which swallows a gentle steady carry. Its weight was clamped with its hand. Its box was set by the guide; `Renderer._poi_layer` sets it here, and `box_for` is `geometry.px_per_unit`'s, once.
