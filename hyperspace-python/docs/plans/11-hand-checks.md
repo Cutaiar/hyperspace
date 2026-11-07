@@ -7664,6 +7664,7 @@ the projector as saved, but for its turn (the pose stays the host's). Fail:
 a host param moved at (1) or (2), or a second scene at (4).
 
 ## BQ. Replace the host's dream, and the dream's own params (wave 3 P2)
+
 Register rows 661–664, 2026-11-03. Headless:
 `tests/test_patches_replace_dream.py` (the sheet, one press and one undo step,
 what goes and what stays, a host group letting go, the splice, the hold, whose
@@ -7715,6 +7716,7 @@ not on the look-back. (4) the same two lists as the canvas. Saved presets play a
 they did. Fail: a knob on neither node, or a picture change on any load.
 
 ## BR. Wire as saved, taking over (wave 3 P3)
+
 Register rows 524, 665–667, 2026-11-04. Headless: `tests/test_wire_take_over.py`
 (one press and one undo step, the words, the plain chip unmoved, what is not taken,
 several cuts, the mouse on the real chip, a stale press). Nobody has seen the chip
@@ -7758,6 +7760,7 @@ chip is left under the mouse. Let go off the chip: nothing is said.
 *Fail:* any cable cut by the old words.
 
 ## BS. The panel fold, stage 3: the rail gone, `ui.page` the focus (plan 49)
+
 Register rows 668–672, 2026-11-03. Headless: `tests/test_ui_pane.py` (the
 four new sections at 240 and 320 px, nothing past the pane's edge; every
 slot a section but GRAPH's; the focus and the fold; the focused header at
@@ -7795,6 +7798,7 @@ Right if: 1 maps it; 2 reads as before; 3 no frame cost you can see. Wrong if:
 headers go dead while picking, or the panel drops the output's frame rate.
 
 ## BT. Video audio 4 of 4: sync and varispeed (plan 45 V4)
+
 Decision register rows 673–677. A channel's sound now follows its transport
 at any rate, in either direction, and the occasional click at rate 1 that
 checks 437 and 446 expected is gone: a click there is now a fail. No restart
@@ -7848,6 +7852,7 @@ sounds like a scratch and not a stutter; the meters follow what is heard all
 through. Fail: a click on the cut, or the meters moving when the sound is silent.
 
 ## BU. The room lanes (plan 51 O1)
+
 Register rows 678–681, 2026-11-03. **Nothing here has run on a real sensor**:
 `tests/test_hands_room.py` plays tapes written from computed poses through
 `TapeSource` and `HandsIO`, and that is the whole of the proof. No preset or
@@ -7886,6 +7891,7 @@ visibly shimmer: this filter is the page's `smooth` and `response`, untuned
 for a camera. Fail: a shimmer you would see on a shape (tell O2 to tune it).
 
 ## BV. The orbit (plan 51 O2)
+
 Register rows 682–685, 2026-11-03. **Nothing here has run on a real sensor**:
 `tests/test_hands_orbit.py` plays tapes from computed poses through `TapeSource`,
 `HandsIO` and `Router.modulate`, and the tape's fist has the same palm vectors as
@@ -7923,6 +7929,7 @@ you wanted the orbit on the projector (row 684). (3) No camera jump on the way d
 vertical that the 20° zone wants to be smaller (row 685).
 
 ## BX. The meta controller's pointers (plan 44 D5a)
+
 Register rows 688–690, 2026-11-04. **Nothing should look or feel different:** every
 pointer is on deck 1 and nothing in the app moves one. Tests cover pointing at deck 2
 (`tests/test_meta_controller.py`); these two check the real app, after a restart.
@@ -7938,6 +7945,7 @@ Read `docs/GLOSSARY.md`. *Pass:* each row says what you mean. Say which to chang
 SEM renames the code from it.
 
 ## BY. Three undo stacks (plan 44 D5b)
+
 Register rows 691–693, 2026-11-04. Restart first. **One thing is different on purpose:**
 a ⌘Z no longer takes back a meta edit made while you were elsewhere.
 **524. ⌘Z by where you are.** (the rig, or a laptop)
@@ -7965,6 +7973,7 @@ a ⌘Z no longer takes back a meta edit made while you were elsewhere.
    row is gone, and stays gone after the restart.
 
 ## BZ. The crossfader's side and copy on air (plan 44 D5c)
+
 Register rows 694–696, 2026-11-04. Restart first. **Nothing here is meant to look different yet:** no control
 calls the new verbs until D5d.
 **526. Neutral at 0.** (the rig, or a laptop)
@@ -7986,6 +7995,7 @@ calls the new verbs until D5d.
 6. Time a 5-second fade by the clock. Grab the fader mid-way. *Pass:* it stops there and is yours.
 
 ## CA. The crossfader, copy, and the panel on either deck (plan 44 D5d)
+
 Register rows 697–702 and 752, 2026-11-04 and 2026-11-06. Restart first. HOLD, TAKE and DROP are gone, so group AI's checks are retired. **This
 replaces the mechanism a show relies on: run it at the rig before one.** 528 goes with it.
 **529. The verbs that replaced the hold.** (the rig)
@@ -8034,6 +8044,7 @@ replaces the mechanism a show relies on: run it at the rig before one.** 528 goe
 *Judge:* is green for off air right, with nothing on the pads saying what the room is on? The panel's chip and the OS title say that.
 
 ## CB. The panel says which `Deck` (plan 44 D5e)
+
 Register rows 703, 704, 2026-11-06. Restart first (a param's label and tips are read at launch), and copy on air to off air so both decks hold a look.
 **535. Which `Deck`, wherever you look.** (the rig, with the APC40)
 1. GRAPH's head chip, to "deck 2 · off air". *Pass:* the inset says "ON AIR · deck 1", the window's title deck 2, and over the PRESETS strip "deck 2 · off air", red, the look's name not cut for it.
@@ -8047,7 +8058,9 @@ Register rows 703, 704, 2026-11-06. Restart first (a param's label and tips are 
 3. The footer's chip starts "players:". On the desk diagram, X reads "Crossfade".
 4. With the panel on air, Home, then ⌘Z. *Pass:* refused in words; the room does not move. The foot's line after Home did not offer ⌘Z.
 *Fail:* a word that describes the old hold, or a load landing on air.
+
 ## CC. The playlist's file (plan 44 D6a)
+
 Register rows 705–707, 2026-11-06. Nothing plays one until group CD. Headless: `tests/test_playlist.py`, over stand-ins.
 **537. The folder is harmless.** Put a `playlists/` folder with one `.json` in a scratch library, as `tests/test_playlist.py` writes one, and launch on it.
 *Pass:* the presets section lists nothing new, the footer says nothing, and a dry run of `tools/migrate_library.py` on that library leaves the folder out.
@@ -8055,6 +8068,7 @@ Register rows 705–707, 2026-11-06. Nothing plays one until group CD. Headless:
 *Judge:* a dwell of 300 is a fade starting every 300 s, whatever the fade takes (row 706), not 300 s alone on air. Right?
 
 ## CD. The playlist plays (plan 44 D6b)
+
 Register rows 708–709, 2026-11-06. Restart first. Headless: `tests/test_playlist.py`, on the real two decks. In the app: `tools/drive_playlist.py`. **One thing is new on purpose:** it writes over the deck off air, whatever is there.
 **539. A cart left running.** (a laptop, then the projector)
 1. In the playlist section at the pane's narrowest, type a name, new, add three looks and one you then delete from the library. Set each dwell to 20.
@@ -8068,6 +8082,7 @@ Register rows 708–709, 2026-11-06. Restart first. Headless: `tests/test_playli
 *Judge:* far enough back, ⌘Z reaches a look the playlist loaded on that deck, and takes it off if that deck is on air (row 709). Right for an install, where nobody is at the panel?
 
 ## CF. Node mode's saved form (plan 57)
+
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round
 trip over the corpus, the fill, the kind). **No panel writes the key until N1b,** so 546 and 547
 edit a throwaway copy by hand. Never the shared library's own file.
@@ -8087,6 +8102,7 @@ cables, amber triggers, blue geometry and violet masks, and faint when its playe
 `Deck`. Say whether the green is right (row 716).
 
 ## CH. BACK holds the base chase; the generic pad swaps, taps and saves nothing (wave 4 B2)
+
 Register rows 723–724, 2026-11-04. Headless: `tests/test_pad_learn.py` (the old
 factory rows moving once, with their backup; a row of the owner's on BACK or the
 d-pad staying; the hold, the release, a sleeping pad, the totem; every model's
@@ -8118,6 +8134,7 @@ save from another pad, or the row gone. A Joy-Con's chase, L on the left and R o
 checked with #365's layout, not here.
 
 ## CJ. The dial's readings: the patch's, on the pad node (wave 4 #287)
+
 Register rows 729–730, 2026-11-06, after Dillon's #287. Headless: `tests/test_dial.py` (a load
 on the other deck, both ways round; two pads on two decks; save and load; the launch readings;
 the pad node's pane). Picture: `assets/28-gamepad-dial/dial-pad-node.png`.
@@ -8145,6 +8162,7 @@ and the faces fill. Fail: the stick on air turning to blend at (2), the one thin
 happen (`PadDevice.poll`, `Registry.dial_modes`), or a face moving at (3).
 
 ## CK. Pane paper cuts (wave 4 PC)
+
 Register rows 731–732, 2026-11-04. Headless: `tests/test_ui_fine.py` (every raw slider's drag,
 its tip), `tests/test_ui_pane.py` (nothing past the pane, nothing colliding, at 240 px and the
 default) and `tests/test_ui_desk.py`. What they cannot judge is the feel and the legibility.
@@ -8165,6 +8183,7 @@ Expected: nothing passes the pane's edge and no control sits on another. At the 
 Expected: the diagram says what the button does, and no row lands on it from the diagram.
 
 ## CL. Players and duties (plan 55)
+
 Register rows 733–736, 2026-11-04. Headless: `tests/test_players.py`, two players with
 fake pads over two decks with different patches, through the real registry, router and
 pass. These checks predate PS (group CN), and can move a player on its screen instead of
@@ -8191,7 +8210,9 @@ Fail: the on-air look moving under the second pad.
 fade first shows it. Say whether the totem's switches should follow the player, as built
 (row 735). Fail: a phase jump, or a pan left behind on a deck. Moving a player mid-turn
 has no way to be done by hand until PS: repeat this check there.
+
 ## CM. "Band" becomes the analyzer in the panel (wave 4 AZ)
+
 Register rows 737–738, 2026-11-04. Words only: nothing should move or load differently.
 **566. The words read right.** (the Mac, an APC40 for step 3 if it is to hand)
 1. Open ANALYZER in the side pane. The head reads ANALYZER TUNING; drag the pane to its narrowest and look again.
@@ -8207,6 +8228,7 @@ Expected: "analyzer" throughout, "band" only as a count or the plain audio word,
 Expected: the route and the knob work as before; no warning about a missing param.
 
 ## CN. The player select screen (wave 4 PS)
+
 Register rows 739–742, 2026-11-04. Headless: `tests/test_ui_players.py`, the real panel and
 `MetaController` by mouse through `tests/ui_driver.py`. **Restart:** a new module.
 **568. Moving a player by mouse.** (the rig, two pads)
@@ -8240,6 +8262,7 @@ should select, as built, or move (row 739), and whether O should work on the ren
 tray should add the entry (row 741).
 
 ## CO. No preset row on a meta param (wave 4 MR)
+
 Register rows 743–745, 2026-11-04.
 **572. The left hand stops driving audio.** (the Mac with the Leap and audio) Before
 this, run `uv run python tools/meta_routes.py "<your library path>"`: it writes
@@ -8260,6 +8283,7 @@ is offered. Fail: a route lands on one, or a menu offers one and then nothing ha
 with no words.
 
 ## CP. The two layers, mechanically (SEM)
+
 Register rows 746, 747, 755, 756, 2026-11-06.
 **574. A person's rows on `preset.*` work; a desk Learn says where to go.** (the rig, with the APC40, a pad)
 With one look on air and another off air: a bank pad and F2 each load off air, and the room is as
@@ -8273,6 +8297,7 @@ save writes the same file, ⌘Z on each stack works, and a save of a file with a
 new `loadable.py` is picked up. Fail: anything but a code word changed.
 
 ## CQ. Paired axes (plan 56)
+
 Register rows 748–751, 2026-11-04. Headless: `tests/test_paired_axes.py`, a scripted
 pad through the real `Router.pad`: each pole, both, a lost pad, a second pad, a save
 and reload, the factory pairs held to their two rows.
@@ -8303,6 +8328,7 @@ pad's press is refused in words and the learn still waits; the row names the sec
 pad's role, and only that pad moves it. Fail: a stuck offset.
 
 ## CR. The undo latch (row 753)
+
 Register row 753, 2026-11-06. Restart first. Headless: `tests/test_undo_latch.py`, every case on the real
 `MetaController`. **One thing is different on purpose:** ⌘Z can say no where it used to act.
 **579. Coming to a stack.** (a laptop)
@@ -8321,6 +8347,7 @@ Register row 753, 2026-11-06. Restart first. Headless: `tests/test_undo_latch.py
 *Judge:* with the panel on air and open, a pad's load shuts it (step 3), and any fade shuts the panel's deck (step 9): both past the owner's sentence, row 753. Right? And a controller's change opens the stack in focus, whoever's it is: another player's knob counts (row 753). Right, or only your own player's?
 
 ## CS. A pair that overlaps a mapping asks (plan 56)
+
 Register row 754, 2026-11-06. Headless: `tests/test_pair_consent.py`: each road asks and
 doesn't, each answer, a file load, undo on the real three stacks. A real panel by the
 mouse: `tools/app_driver.py`, Let the pair take over.
@@ -8339,6 +8366,7 @@ question at any load, and both act. Fail: a row landing or going before you answ
 meta row not coming back.
 
 ## CT. A cursor in a text field is no hand (row 757)
+
 Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui and the real stacks; the real panel by `Driver`.
 **582. A text field, the APC, and ⌘Z.** (the rig, with the APC40)
 1. On deck 1, move Brightness, then click into a find field (ROUTING's filter or the media search). Leave the cursor there and take your hand off the mouse. Ride `master.gain` on the APC. Click into the analyzer, ⌘Z. *Pass:* refused in words; the ride stands.
@@ -8349,6 +8377,7 @@ Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui
 *Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
 
 ## DI. Video sound on the toggle (plan 58 LY3, row 790)
+
 Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a fake sound card; the line seen in the real app at both widths, never read by a person.
 **614. It says so, and it's true.** (the rig; a video with sound)
 1. Unfold audio with the mic on, or no source. Hover **Listen to video sound**. *Pass:* the hover says off air's audio routes react while it's on, and no line stands under the button.
@@ -8359,6 +8388,7 @@ Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a f
 *Fail:* words cut off or hidden, words standing while the analyzer is off the mix, a look off air that doesn't react in step 3, or one that reacts in step 2, 4 or 5.
 
 ## DH. GRAPH's start zoom (plan 58 SM2, row 787)
+
 Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
 **612. It reads where it opens.** (each display you'll run the control window on)
 1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the numbers are `placement.ZOOM_DENSE` and `ZOOM_HEIGHT`.
@@ -8368,7 +8398,9 @@ Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_p
 2. Open a patch you laid out by hand before this build. *Pass:* every node is where you put it relative to its neighbours.
 3. After a run, look in the temp folder for `hyperspace-graph-view-*`. *Pass:* none.
 *Fail:* a zoom that changes by itself, or a node moved.
+
 ## DF. The picture rests on no display (wave 5 SC3a, rows 781-785)
+
 Register rows 781-785, 2026-11-06. Headless and on this Mac: `tests/test_root_frame.py` and `tests/test_pacing.py`, the real `_draw_render` against the old shape on 48 looks, and the real app against the old build. No person has looked at a real projector, the glass, or the overlay over a real window.
 **607. Pacing on an unlocked Mac.** (either Mac, unlocked, the app closed, every display on. The builder's unlocked run met this on 2026-11-06, so it doesn't block a merge. Run it on the show Mac.)
 1. From `hyperspace-python/`: `.venv/bin/python tools/sc3a_spike.py state`. *Pass:* `"locked": false`. Locked, stop: the numbers below would mean nothing.
@@ -8390,7 +8422,9 @@ Register rows 781-785, 2026-11-06. Headless and on this Mac: `tests/test_root_fr
 1. Note the fps on the SYSTEM page. Lock the Mac for a minute. Unlock. *Pass:* the fans climb less than on the old build (it's 240 fps at most while locked, where the old build ran flat out), `<home>/stall.log` has no new `stall`, and the fps returns to the first number.
 2. Minimise the render window for a minute, then bring it back. *Pass:* the same.
 *Fail:* fans climbing, or a picture that doesn't come back.
+
 ## DG. The poi probe on a real Joy-Con (wave 5 SM1, row 786)
+
 Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's tape through the tool, the live loop on a stand-in for the reader. Only a person can run a real pad through it.
 **611. The probe, live, then its own tape.** (a Joy-Con paired, the app closed: hidapi opens the pad exclusively)
 1. From `hyperspace-python/`: `uv run python tools/poi_probe.py --record /tmp/poi.jsonl`. *Pass:* the pad's name, then about ten lines a second; `calibration written to /tmp/poi.jsonl.findings.json`.
@@ -8399,7 +8433,9 @@ Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's ta
 4. Press A. *Pass:* `wrist` back to 0, `pan` near its start.
 5. Ctrl-C, then `uv run python tools/poi_probe.py --replay /tmp/poi.jsonl`. *Pass:* `tape written`, then a table with a `hold` row.
 *Fail:* a traceback at any step, or a line that never comes.
+
 ## DD. Matte and segment thumbnails (SM3)
+
 Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real GL with a fake worker; the real app seen in motion mode only. Person mode's orientation on real Vision is yours.
 **604. A mask on the node.** (either Mac, a camera or a clip with a person in it)
 1. Wire a channel into a `matte` and the matte into a `cut`. *Pass:* the matte's node shows grey, white where it passes, not red, and turning `matte.key` changes it live.
@@ -8411,7 +8447,9 @@ Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real
 7. Set the segment's mode to subject, then turn `segment.on` off. *Pass:* the box is black and says why in words readable at a distance, a different line for each.
 8. Open a saved patch of yours whose matte or segment you had placed by hand. *Pass:* no node has moved; if the taller node now covers another, drag it or press tidy, and say how many patches did this.
 *Fail:* a red box, an upside-down person, or a frame-rate dip that follows the nodes on screen.
+
 ## DB. One mirror (LY1)
+
 Register rows 773, 774, 2026-11-06. Headless: `tests/test_one_mirror.py`, on two real `Deck`s, both ways.
 **602. One mirror, two decks.** (the rig, with the hands tracker)
 1. Make a patch with a second hands node (GRAPH, add a hands node, its on-switch on) and load it on both decks. Hold your hands up. *Pass:* both hands nodes draw, on each deck as you crossfade.
@@ -8420,7 +8458,9 @@ Register rows 773, 774, 2026-11-06. Headless: `tests/test_one_mirror.py`, on two
 4. Crossfade to deck 2, load the same one-hands patch onto deck 1, then crossfade back and forth. *Pass:* no error, the mirror still reaches deck 2's hands.
 5. Save the show, quit, open again. *Pass:* no "unknown" line, the show isn't marked changed, Mirror as you left it.
 *Fail:* a hands node that stops following Mirror, or a picture that moves on the deck you didn't load.
+
 ## DC. The flag says what is true (LY2)
+
 Register rows 775–776, 2026-11-06. Headless: `tests/test_meta_rule.py`, on the real table, MIDI adapter and router. Restart first: a hot reload leaves a param's old flag until a restart.
 **603. The meta controller still plays.** (the rig, with the APC40)
 1. Latch SHIFT. Ride S1 and S7, then S8: `band.0.post` on the analyzer and `master.dyn`, then `master.trim` on the audio page. *Pass:* each is caught at its own value, then follows the fader.
@@ -8429,7 +8469,9 @@ Register rows 775–776, 2026-11-06. Headless: `tests/test_meta_rule.py`, on the
 4. Open a look whose routes are scaled by `master.gain` (`party-tumble`). Pull `master.gain` down. *Pass:* its motion shrinks with it, and `master.gain` itself doesn't move.
 5. Turn the analyzer's post-drive up on a band with a route on its lane. *Pass:* the route moves more.
 *Fail:* a fader or button that stops acting, a "not modulatable" on any meta param's menu, or a look that stops following `master.gain`.
+
 ## DE. "Session" and "rig" are gone (rows 778-780)
+
 Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans every string; the existing tests pin the words. Drawn by `tools/app_driver.py` with the pane at 240 and 320 px: the SHOW line, ROUTING's two headings and a placeholder's node. Not seen drawn: a placeholder's side pane, the cable hovers, an APC40's refusal.
 **605. The panel's longer words fit.** (any Mac, no devices needed)
 1. PRESETS, SHOW: read the line under the SHOW label, and hover it. *Pass:* "SHOW: PADS, META CONTROLLER" whole at the pane's first width; drag its grip to the narrowest and it ends in "…", never cut off bare; the hover says the bus cables are the preset's.
@@ -8440,7 +8482,9 @@ Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans 
 1. Load a patch whose rows want a controller that isn't plugged in. On GRAPH, read its placeholder node, and PRESETS' line. *Pass:* "not set up on this Mac"; the node's side pane names `[[devices]]` in config.toml. A controller plugged in but not listed says the same, which is the point.
 2. On GRAPH, hover a cable from All outputs into a window. *Pass:* it starts "the bus cable", and hovering All outputs says "The meta controller's bus". Cut it, then read the line GRAPH says it on. *Pass:* "cut the bus cable". Then cut a cloud's wire into the scene, if a cloud is wired: *Pass:* its hover says "this cloud's wire into the scene", and the line "cut the cloud's wire".
 *Fail:* "rig" anywhere.
+
 ## DA. Screens by name (wave 5 SC1)
+
 Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tests/test_app_boundary.py`, on stand-in screens. Only a real replug shows what macOS does. A name is read at the launch; a replug while the app runs is SC3b's, not this.
 **600. Outputs stay put across a replug.** (the rig, with two outputs on HDMI)
 1. In the OUTPUT page's Screen list, read the exact names of the screens. In `config.toml` give each `[[output.screens]]` its `monitor` by name, and `[output] control_monitor` too. Launch. *Pass:* each window opens on the screen named, no note in SYSTEM.
@@ -8458,8 +8502,10 @@ Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tes
 
 ## DL. A player's moves on the meta stack (SM5, rows 800, 801)
 
-623. On the player screen, with two controllers plugged in. Drag player 2 to off air, leave the mouse on the board, and read the line: it ends "⌘Z takes it back". Press ⌘Z: player 2 is on air again, its controller's rows act on the deck on air, and the line says "undid player 2 to off air". Press ⇧⌘Z: off air again. Drag a controller to another player and press ⌘Z: it goes back, and its rows answer as before. Drag it across again, unplug it and press ⌘Z: it stays, and the line says it was unplugged since. Plug it back in and press ⌘Z: it goes back. Change a HANDS setting, come to the board and press ⌘Z: the setting stays, and the line says so in the warning colour. Move a player, go to the HANDS section and press ⌘Z: the move stays, and the footer says to press over the player screen. Quit and open the app: the players are as you left them. Over a tip that used to say "HANDS page" (Ghost hands' output switch), read "HANDS section".
+**623. On the player screen, with two controllers plugged in.** Drag player 2 to off air, leave the mouse on the board, and read the line: it ends "⌘Z takes it back". Press ⌘Z: player 2 is on air again, its controller's rows act on the deck on air, and the line says "undid player 2 to off air". Press ⇧⌘Z: off air again. Drag a controller to another player and press ⌘Z: it goes back, and its rows answer as before. Drag it across again, unplug it and press ⌘Z: it stays, and the line says it was unplugged since. Plug it back in and press ⌘Z: it goes back. Change a HANDS setting, come to the board and press ⌘Z: the setting stays, and the line says so in the warning colour. Move a player, go to the HANDS section and press ⌘Z: the move stays, and the footer says to press over the player screen. Quit and open the app: the players are as you left them. Over a tip that used to say "HANDS page" (Ghost hands' output switch), read "HANDS section".
+
 ## DJ. Audit faults closed (SM4)
+
 Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which also runs a real refusal in a sandbox. Restart first: `midiports.py` is a new module.
 **615. A desk comes and goes.** (the Mac, with the APC40)
 1. Launch with the desk unplugged. *Pass:* no crash, and the SYSTEM page says it isn't there.
@@ -8480,6 +8526,7 @@ Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which 
 *Fail:* a chip over ▶ or over the name.
 
 ## DK. Controllers composed in the app (CT1)
+
 Register rows 796–799, 2026-11-06. Headless: `tests/test_devicelist.py`, `tests/test_players.py`, `tests/test_ui_players.py`, `tools/drive_players.py` on real panel frames with stood-in hardware. Nothing here has met real hardware yet. Restart first: `devicelist.py` is a new module. Both Macs on this build.
 
 **619. A pad nobody lists.** (the Mac, with a pad the list has no free entry for)
