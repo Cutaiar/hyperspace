@@ -8600,15 +8600,15 @@ Fails: an app that needs a restart; a picture that stops; a window sitting on th
 **632. Every display out.** (a Mac mini or a closed laptop on external displays, or as many as you can pull; audio on so you can hear it's alive) Pull every display. Nothing can show you anything: wait 10 s, keep the desk moving, and plug them back in any order, one at a time. Passes: the sound never stopped, each display takes up its job as it arrives, the control window returns, and the desk's changes have landed. `<home>/stall.log` has no "render stall" while the picture was drawing with no window.
 
 ## DP. The poi at a real pad (row 817)
-Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_guide.py`, and `tests/test_poi_real.py` on the owner's tape. **No one has felt this at a real pad.** The tests hold one tape's numbers; how it feels is yours.
-**633. Swing it.** (a Joy-Con paired, in the app, `poi.on`, the output you'd show on)
-1. Turn the poi on. Hold the pad as you did on the tape for ten seconds, without walking. *Pass:* the shape's centre never leaves the screen, and its size stays within half to double.
+Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_guide.py`, and `tests/test_poi_real.py` on the owner's tape. **No one has felt this at a real pad.** The tests hold one Joy-Con tape's numbers, and that's a pad the app's poi no longer reads; how it feels on the pad you use is yours.
+**633. Swing it.** (a DualSense or an Edge, not a Joy-Con: the app's poi reads no Nintendo pad, row 686. In the app, `poi.on`, the output you'd show on)
+1. Turn the poi on. Hold the pad as you'd hold a poi handle for ten seconds, without walking. *Pass:* the shape's centre never leaves the screen, and its size stays within half to double.
 2. Hold the pad dead still after a move. *Pass:* the shape stops moving within about a second, and then doesn't creep.
 3. Press A. *Pass:* the shape goes back under the handle.
 4. Carry the pad about half a metre to one side in a second or so, then hold it. *Pass:* the shape follows and stays there, with no pull back. *Fail:* it hardly moves: the carry is being read as still. A much slower carry can come back short, and the tests show it: say how slow matters.
 5. Swing it round hard for ten seconds. *Pass:* the shape swings and stays on the screen.
 6. Resize the first output to another shape. *Pass:* the limit follows that frame. A second output of another shape has no limit of its own: the limit is the frame's, not each output's. *Report:* if it clips there.
-*Report, not pass or fail:* how often the hand ends up stuck at an edge until A, and whether that's acceptable for a show. If it isn't, the choices are less hand push (`poi.hand`), or to take position out as #365 does.
+*Report, not pass or fail:* how often the hand ends up stuck at an edge until A, and whether that's acceptable for a show. If it isn't, the choices are less hand push (`poi.hand`), or to take position off this pad too, as row 686 did for the Joy-Con.
 
 ## What no test covers
 

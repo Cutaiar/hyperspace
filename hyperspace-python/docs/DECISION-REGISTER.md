@@ -14704,10 +14704,10 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
   - `poi.home` and `HAND_BLEED_S`: the pull home the owner ruled out.
   - `TILT_TRUST`, the tilt pulled while moving. Measured on this tape, it moved the hold's travel from 3.55 to 3.48, and it left a metre's carry at 2.09 units rather than 2.5.
   - `_hook_view_reset`: not this fix. A view reset with the hand out still draws the shape home for one frame, then back out, now within the screen.
-- **What's left of the poi.** #431, open as this lands, stops it on Nintendo pads (`poi.no_position`), since the owner dropped position for the Joy-Con on 2026-11-04. So this is for Sony and other gyro pads. The tape is a Joy-Con's; when #431 lands the probe and these tests must still reach `poi.step` for it.
+- **The proof comes from a Joy-Con tape; the fix runs on other gyro pads.** #431 (row 686) stops the poi on Nintendo pads (`poi.no_position`, standing), since the owner dropped position for the Joy-Con on 2026-11-04. So the app reaches this code only from Sony and other gyro pads, while every table here is the owner's Joy-Con through `tools/poi_probe.py`, whose pad is of no family so that it can still reach `poi.step`. Those pads' noise, rate and calibration differ, and no tape of one has been run through this: the constants are tuned on a pad the app no longer reads.
 - **The tests:** `tests/test_poi.py`, `tests/test_poi_real.py`, `tests/test_poi_guide.py`. The totem is untouched.
 - **Limits.**
-  - The poi's feel at a real pad is **unproved**: one tape, replayed, and it isn't even the kind of pad this now serves. Only a person can judge that (check 633).
+  - The poi's feel at a real pad is **unproved**: one tape, replayed, and from a pad it no longer reads. Only a person can judge that, on a pad it does (check 633).
   - The box is the frame's, through the deck's eye: one limit, not one an output. It's the default 16:9 until a frame has rendered.
   - The shape's centre is what's held on the screen: at the wall, part of it is off.
 - **Judge it.** 633.
