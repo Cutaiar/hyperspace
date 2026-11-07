@@ -1412,7 +1412,7 @@ def test_a_second_spawn_takes_the_next_ids_and_its_kept_rows_are_said(rig):
     assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["fx.acid.speed"]
     (kept,) = g2["kept_by_host"]
     assert kept["source"] == "cc:0:48" and kept["target"] == "fx.acid.2.speed"
-    assert graphview.kept_words(kept) == "K1 kept by the patch"
+    assert graphview.kept_words(kept) == "K1 kept by the loadable patch"
     assert ("lane:0", "fx.acid.2.speed") in {(b.source, b.target) for b in table.routes()}
     frame(rig.panel, "graph")
     vg = st["view"].group("group.2")
