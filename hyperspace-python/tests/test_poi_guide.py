@@ -4,6 +4,7 @@ drawn over each output that shows the hands — and nothing at all with the
 poi or the guide off."""
 
 import math
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -138,3 +139,14 @@ def test_the_tip_projects_inside_the_picture_at_rest():
     for p in spheres:
         x, y = project(p[:3])
         assert 0 <= x < W and 0 <= y < H and math.isfinite(x)
+
+
+def test_the_guide_tells_the_poi_what_this_output_shows_whether_or_not_it_draws():
+    """Row 817: the box is the real output's, through this view's eye, with
+    nothing drawn and no GL touched (the poi's guide switched off)."""
+    state = poi.PoiState(on=True, guide=False)
+    view = SimpleNamespace(pan=(0.0, 0.0), zoom=1.0, eye_fov=50.0, eye_distance=6.0)
+    guide = poi_guide.PoiGuide(None)
+    assert guide.layer((1000, 500), view, state) is False
+    assert state.box == poi.box_for(1000, 500, 50.0, 6.0)
+    assert state.box != poi.DEFAULT_BOX

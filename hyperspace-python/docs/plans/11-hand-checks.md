@@ -8395,7 +8395,7 @@ Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's ta
 **611. The probe, live, then its own tape.** (a Joy-Con paired, the app closed: hidapi opens the pad exclusively)
 1. From `hyperspace-python/`: `uv run python tools/poi_probe.py --record /tmp/poi.jsonl`. *Pass:* the pad's name, then about ten lines a second; `calibration written to /tmp/poi.jsonl.findings.json`.
 2. Lay the pad on the table for ten seconds. *Pass:* `turn` near 0, `still` climbing, `v 0.00`.
-3. Type `hold` and Enter, then pick it up and hold it as you'd hold a poi handle for ten seconds, without walking. Read `wrist`, `pan` and `wall`. *Report, not pass or fail:* whether the hand runs to `wall hand` as the owner's tape does (row 786).
+3. Type `hold` and Enter, then pick it up and hold it as you'd hold a poi handle for ten seconds, without walking. Read `wrist`, `pan` and `wall`. *Report, not pass or fail:* whether the hand runs to a wall (`wall x`, `y` or `z`), as the owner's tape does (rows 786, 817).
 4. Press A. *Pass:* `wrist` back to 0, `pan` near its start.
 5. Ctrl-C, then `uv run python tools/poi_probe.py --replay /tmp/poi.jsonl`. *Pass:* `tape written`, then a table with a `hold` row.
 *Fail:* a traceback at any step, or a line that never comes.
@@ -8546,6 +8546,17 @@ Fails: an app that needs a restart; a picture that stops; a window sitting on th
 **631. A re-sync.** (a display that shows an output, fullscreen) In System Settings → Displays, change that display's refresh rate or resolution, then change it back. Or pull and replug its HDMI within a second. Passes: it's black for a moment and comes back showing the same thing, covering the display, and `SYSTEM` says "dropped and came back: the same window", or nothing at all. Fails: another display's picture stops, or the window comes back the wrong size.
 
 **632. Every display out.** (a Mac mini or a closed laptop on external displays, or as many as you can pull; audio on so you can hear it's alive) Pull every display. Nothing can show you anything: wait 10 s, keep the desk moving, and plug them back in any order, one at a time. Passes: the sound never stopped, each display takes up its job as it arrives, the control window returns, and the desk's changes have landed. `<home>/stall.log` has no "render stall" while the picture was drawing with no window.
+
+## DP. The poi at a real pad (row 817)
+Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_guide.py`, and `tests/test_poi_real.py` on the owner's tape. **No one has felt this at a real pad.** The tests hold one tape's numbers; how it feels is yours.
+**633. Swing it.** (a Joy-Con paired, in the app, `poi.on`, the output you'd show on)
+1. Turn the poi on. Hold the pad as you did on the tape for ten seconds, without walking. *Pass:* the shape's centre never leaves the screen, and its size stays within half to double.
+2. Hold the pad dead still after a move. *Pass:* the shape stops moving within about a second, and then doesn't creep.
+3. Press A. *Pass:* the shape goes back under the handle.
+4. Carry the pad about half a metre to one side, gently, then hold it. *Pass:* the shape follows and stays there, with no pull back. *Fail:* it hardly moves: a gentle carry is being read as still.
+5. Swing it round hard for ten seconds. *Pass:* the shape swings and stays on the screen.
+6. Try a second output with a different shape, or resize it. *Pass:* the limit follows what that output shows.
+*Report, not pass or fail:* how often the hand ends up stuck at an edge until A, and whether that's acceptable for a show. If it isn't, the choices are less hand push (`poi.hand`), or to take position out as #365 does.
 
 ## What no test covers
 

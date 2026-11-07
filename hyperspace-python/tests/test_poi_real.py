@@ -4,11 +4,11 @@ and a real hold in the hand, through the app's exact path: the reader's
 per-report turn on the report clock (`hid.Turn`), the frame's newest sample,
 `poi.step`.
 
-These hold only what is true of `poi.py` today, and the tool's own working.
-The tape also shows the hand driven to `poi.HAND_LIMIT` and left there during
-the hold (register row 786). That is reported, not pinned: **nothing here says
-the hand stays on the screen**, and a fix to `poi.py` should not move a test
-here except to add that."""
+These hold the poi to this tape, and the tool's own working. Row 786 is what
+the tape showed before row 817: the hand run to eight units and the shape off
+the screen. It stays on the screen now, and the pad going still stops the hand
+in about half a second. Where it ends is still drift: at the screen's edge,
+until A. No test says it stays near the centre, because it doesn't."""
 
 import dataclasses
 import importlib.util
@@ -22,7 +22,6 @@ import pytest
 
 from hyperspace import poi
 from hyperspace.pads import gesture, models, nintendo
-from hyperspace.params import PAN_RANGE
 
 ROOT = Path(__file__).resolve().parents[1]
 TAPE = ROOT / "tests" / "fixtures" / "pads" / "joycon-poi-excerpt.jsonl"
@@ -67,7 +66,7 @@ def test_the_probe_replays_its_own_tape_on_this_poi(capsys):
     out = capsys.readouterr().out
     table = {ln.split()[0] for ln in out.splitlines() if ln.strip()}
     assert {"pickup", "hold"} <= table
-    assert f"the hand at {poi.HAND_LIMIT:.1f} world units" in out
+    assert "the box: ±" in out
 
 
 def test_the_series_prints_every_frame_between_two_times(capsys):
@@ -85,15 +84,46 @@ def test_a_tape_with_no_calibration_beside_it_reads_nominal(tmp_path, capsys):
     assert [r["note"] for r in rows] == ["pickup", "hold"]
 
 
-def test_the_numbers_stay_finite_and_inside_the_limits_poi_has():
-    """`poi.py`'s own walls hold on a real tape: the hand at `HAND_LIMIT`, the
-    pan at its reach. Those are the only walls it has."""
+def test_a_real_pickup_and_a_real_hold_keep_the_shape_and_the_hand_on_the_screen():
+    """Row 817: every frame of the owner's tape. Before it, the hold ran the
+    hand to eight units, the pan to 5.56 and the zoom to 0.085."""
+    hx, hy, hz = poi.DEFAULT_BOX
+    octave = 2.0 ** (hz * poi.DEPTH_OCTAVES)
     for _, _, _, rig, n in _frames():
-        assert poi._norm(n["wrist"]) <= poi.HAND_LIMIT + 1e-6
-        assert all(abs(v) <= PAN_RANGE + 1e-6 for v in n["pan"])
-        assert n["zoom"] > 0.0
+        x, y = n["pan"]
+        assert abs(x) <= hx + 1e-6 and abs(y) <= hy + 1e-6
+        assert 1.0 / octave - 1e-6 <= n["zoom"] <= octave + 1e-6
+        assert abs(n["wrist"][0]) <= hx + 1e-6 and abs(n["wrist"][1]) <= hy + 1e-6
         assert all(math.isfinite(v) for v in (*n["wrist"], *n["ball"], *n["pan"], n["zoom"]))
         assert rig.state.settled
+
+
+def test_with_the_output_a_small_square_the_tape_stays_on_that_screen(monkeypatch):
+    """The box is the output's, not 16:9's."""
+    small = poi.box_for(600, 600, 40.0, 4.0)
+    monkeypatch.setattr(poi, "DEFAULT_BOX", small)
+    for _, _, _, rig, n in _frames():
+        assert rig.state.box == small
+        assert abs(n["pan"][0]) <= small[0] + 1e-6 and abs(n["pan"][1]) <= small[1] + 1e-6
+
+
+def test_the_pad_going_still_stops_the_hand_within_a_second():
+    """Row 817: from 33.6 s the pad is hardly turning with the attitude a few
+    degrees out. Before, that read as a push until 36.72 s."""
+    stopped = None
+    for _, note, t, rig, n in _frames():
+        if note == "hold" and t >= 33.6 and n["still"] >= poi.STILL_S and n["speed"] == 0.0:
+            stopped = t
+            assert rig.state.wrist_v == [0.0, 0.0, 0.0]
+            break
+    assert stopped is not None and stopped < 34.6
+
+
+def test_no_pull_home_what_the_hold_gathered_stays():
+    """The owner, 2026-11-03: once it stops, the hand does not creep back."""
+    ends = [list(n["wrist"]) for _, note, t, _, n in _frames() if note == "hold" and t >= 35.0]
+    assert poi._norm(poi._sub(ends[0], ends[-1])) < 0.01    # (one blip's frame, at 35.13 s)
+    assert poi._norm(ends[-1]) > 1.0
 
 
 def test_a_real_pickup_lands_near_home_and_leaves_a_quiet_hand():

@@ -787,7 +787,7 @@ here; overturn → the change, then the same.
 | 790 | LY3: video sound reaching the look off air through the analyzer is accepted (a limit beside row 702's), and the toggle says so: its hover always, and a line under it while the analyzer is on the mix. A test names the road and what it moves | 614 | The owner, 2026-11-06: accepted; "say so on the toggle" |
 | 788 | TY1: a new pyright complaint fails, an old one doesn't. `tools/type_ratchet.py` counts complaints against `tools/type_baseline.json` by file and rule, in the fast tier, so CI holds it today; the baseline falls when the tool runs; `--accept` takes a split that leaves every rule's total level, and only `--raise-baseline` raises one. The import walls now take a split's new files by glob (`tests/walls.py`). The per-file size cap comes with TY3. | — | (rec) — pending the owner |
 | 787 | GRAPH's start zoom follows the display the control window opens on, by density and height, through the editor's settings file; `SCALE` and saved positions unmoved. A change of canvas size keeps the zoom and the top-left, at every display: new behaviour on a window's resize | 612, 613 | (rec) — pending the owner |
-| 786 | SM1: `tools/poi_probe.py` and its tape salvaged from the closed #342 and ported to `main`'s `poi.step`, without #342's fixes. On the owner's own tape it shows `main`'s poi running the hand to `HAND_LIMIT` during a hold and leaving it there: **a question for the owner**, not fixed here. | 611 | (rec) — pending the owner |
+| 786 | SM1: `tools/poi_probe.py` and its tape salvaged from the closed #342 and ported to `main`'s `poi.step`, without #342's fixes. On the owner's own tape it shows `main`'s poi running the hand to `HAND_LIMIT` during a hold and leaving it there: not fixed here; fixed by row 817. | 611 | **Answered by the owner, 2026-11-07:** "I haven't seen the poi thing with the tape", and the recommendation accepted |
 | 785 | SC3a's proof: goldens never run `_draw_render`, so the real app and the real function were run against the old build. `tools/sc3a_spike.py`, `tools/sc3a_spike_pacing.sh` and `tools/drive_sc3a.py` come in, as the owner's gate needs them on `main`'s build. Nothing else from the spike is kept. | — | (rec) — pending the owner: the PR waits for the owner's gate, hand check 607 |
 | 784 | Audit V8 decided: `frame` makes the render context current before `reloader.poll()`. Measured: no picture changed on this Mac either way, since Apple's GL shares vertex arrays across a share group. It stays fixed, because the spec doesn't promise that and it costs no context switch. | Mark stale and rebuild at the next draw, as `Presenter` does: more code in six hooks for the same thing | (rec) — pending the owner |
 | 783 | The pacer: the first live window in slot order, so output 1 while it is live, as ever; a handover between frames, reset floor; no live window, a 60 Hz timer. Highest refresh is not built. | Pace on the fastest display: unmeasured against a person, and it would change which frames a projector on output 1 gets | (rec) — pending the owner |
@@ -816,6 +816,7 @@ here; overturn → the change, then the same.
 | 814 | SC3b: the hold, `[output] unplug_hold_s`, 3 s by default, so a TV's re-sync of a second or two costs no window: hidden at once, the same window back, restarted by each return. Arrivals settle 0.25 s. A display off but still listed is no change. | (rec) — pending the owner |
 | 815 | SC3b: the control window waits out the hold, then goes to a display with no render, or floats over a render above a fullscreen one's level; it returns with its row's display. Displays keep their numbers for the run by the Mac's display id, so a twin plugged in on the left leaves the window where it is, the panel says so, and a restart numbers them across the desk again. | (rec) — pending the owner |
 | 816 | SC3b: a row chosen on this Mac acts at once. **What the other Mac chose for a display showing something here waits behind a line and a button,** as a shared row must not move a window in a show. A display not here takes its row as it comes. | (rec) — pending the owner |
+| 817 | The poi's runaway (row 786), fixed in `poi.py`, keeping no pull home: a pad hardly turning and reading steadily stops the hand in about half a second even with its attitude out, and the hand and the weight are held to the screen rather than eight units. Parts taken from #342, named in the section. **Accepted by the owner, 2026-11-07.** How it feels at a real pad is unproved | 633 | Built on the owner's word; feel pending check 633 |
 | 808 | CONTROLS is pinned, not a window inside the window: no title bar, no drag, no resize, no close box. It fills the control window, or sits `ui.panel_w` wide at the right while the desk or pad diagram is up (`ui.panel_rect`), and follows the OS window's size every frame. The column is as wide as what is in it wants (the desk a 4:3 slice of the height, the pad its own far narrower width, the wider when both are up), never more than half the window (`ui.COLUMN_MAX`), so the graph keeps room. H, the desk's chip and `ui.panel` show and hide it; the graph is primary and has no ×. The pad diagram gains the × the desk has (`ui_pad._header`), which turns `ui.pad_diagram` off; clicked, it stays behind the cheat sheet, poi and players windows. The desk and pad read its edge in the same frame (`Panel.panel_left`), not last frame's. Widening the page is widening the OS window. The imgui name stays `CONTROLS` for `replay` and the tests | — | owner — 2026-11-07: "for now just show and hide is fine"; the pad's split left the graph too little room; "the graph panel never needed an x. the pad diagram does. the graph is primary"; a splitter between the column and the panel later |
 | 789 | TY2: #273's structural audit lands as a record, unedited under a dated header: the headline figures re-measured at `e869a408` by one script in its appendix, old names mapped, and which proposals plan 58 §6 rejected. Plan 58 §3 and §6 decide what's done. Replaces #273. | — | (rec) — pending the owner |
 | 812 | HR: row 802's rule imported the package in hash-seed order and flaked. It now imports in `MODULES`'s order and skips only a missing third-party package. Row 808 removed the cause | — | the orchestrator's item, found by `--all` on #425; built, no owner question |
@@ -14238,7 +14239,7 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 
   In the hold, a turn of up to 178 deg/s at 31 to 33 s raises the attitude error from 0.1° to 16.8°, and no still moment follows to correct it. The hand reaches `HAND_LIMIT` at 33.81 s, 3.8 s in. 8 world units is 3.2 m at `UNITS_PER_M`; the pad was in a hand. From 33.6 s the pad settles (mostly under 2 deg/s, 24 at worst), reading about 1.02 g, while 4.6° to 10.0° of error reads as a 0.08 to 0.19 g push. The stillness only gets in at 36.72 s, 3.1 s later rather than `CALM_S`'s 1.5, because one reading of 0.93 g at 35.13 s restarted the timer at 1.35 s. The attitude then comes right (0.1° at the end) and the velocity zeroes, but no pull home is by design (the owner, 2026-11-03), so the window ends with the hand at 8.00, the pan at +4.63, +1.06 and the zoom at 0.085. Through the default eye a 16:9 output shows about ±3 across and ±1.7 down (#342's reading of the rig's TV, not measured on `main`), so the shape is off the screen, a twelfth of its size, until A.
 - **`--hand 0`:** the same tape with no push: pan max 1.24 and the hand at home. The turn alone is well behaved.
-- **The question for the owner, (rec) — pending the owner.** The poi is off by default, so this only shows with it on. Did it look like this at the machine? Recommendation: a live bug, fixed as one small item, keeping no pull home: the pad dead still stops the hand sooner, and the hand's limit is the screen's size rather than 8. Not built here: the item says don't.
+- **Answered by the owner, 2026-11-07:** "I haven't seen the poi thing with the tape", and the recommendation accepted: a live bug, fixed as one small item, keeping no pull home. Built as row 817. The poi is off by default, so this only showed with it on.
 - **Judge it.** 611.
 
 ### 777. A matte and a segment show their mask on GRAPH
@@ -14503,3 +14504,43 @@ Roles are row addresses (`cc@launch-control-xl:0:7`, `axis@xbox:LX`), so a new o
 - **Built.** `DisplayList.chosen` names what this Mac chose. Another Mac's row for a display showing something here waits, with "The other Mac chose: …" and a **take it** button. A display not here takes its row as it comes, and acts on it when it arrives. A launch reads the file as ever.
 - **Owner's call.** If the Macs never run side by side, this is one line to remove.
 - **Judge it.** 626.
+
+### 817. The poi's runaway, fixed
+
+- **The owner, 2026-11-07:** "I haven't seen the poi thing with the tape", accepting row 786's recommendation: a still pad stops the hand sooner, and the hand's limit is the screen's size rather than 8. No pull home stays (the owner, 2026-11-03).
+- **The tape, default dials, before (`main` at e8469ed9):**
+
+  ```
+  window            secs still   err° med/max   lin g med/max   travel end/max  v max  pan max  walled
+  pickup             5.5   23%    2.6/ 40.8   0.067/ 1.332    0.45/  1.44   1.49     1.17      0%
+  hold               8.0   18%    6.9/ 54.2   0.125/ 0.874    8.00/  8.00   7.08     5.56     54%
+  ```
+
+  **After:**
+
+  ```
+  window            secs still   err° med/max   lin g med/max   travel end/max  v max  pan max  walled
+  pickup             5.5   28%    2.6/ 40.7   0.064/ 1.330    0.27/  1.13   1.32     1.17      0%
+  hold               8.0   50%    1.9/ 54.5   0.043/ 0.901    3.55/  3.55   3.76     2.96     67%
+  ```
+
+  `walled` isn't comparable across the two: before it counted the eight-unit limit, after it counts any wall of a much smaller box.
+- **What that means.** The hold stays on the screen on every frame, and the zoom never leaves an octave of home (0.50 at the end, against 0.085). The pad going still stops the hand about half a second after 33.6 s, against 3.1 s. **It doesn't stay near the centre.** The move at 31 to 33.5 s still gathers drift the pad didn't travel, so the hand runs to the wall and stays: the hold ends with the pan at the screen's corner, +2.96, +1.67, half size, until A. That's the limit doing its work, and no pull home's price.
+- **Taken from #342** (`origin/worktree-poi-hand-fix`, closed):
+  - The box: `box_for`, `DEFAULT_BOX`, `DEPTH_HALF`, `BOX_MIN`, `_bound` on the wrist and the weight, and `poi_guide` setting it from the real output each frame.
+  - `_valid` / `VALID_G`: a reading with no gravity in it pushes nothing and settles nothing.
+  - `g_mag`: the 1 g this pad reads, learned while still, with `HAND_DEADBAND_G` at 0.04. The owner's Joy-Con reads 1.022.
+  - The reading's short average as a test of steadiness (`a_lp`).
+  - The tests for each.
+- **Changed from #342.** Its stillness was the sensors alone, always. That swallows a gentle steady carry, which `main`'s stillness guards against and the owner's "a metre stays there" test holds. So stillness keeps `main`'s push test, and the sensors alone are a second road, stricter than #342's (`QUIET_DPS` 5, against 15) and only after `CALM_S`. `CALM_S` falls from 1.5 s to 0.25 s, because the steadiness test now does the work the long wait did.
+- **Not taken from #342:**
+  - `poi.home` and `HAND_BLEED_S`: the pull home the owner ruled out.
+  - `TILT_TRUST`, the tilt pulled while moving. Measured on this tape, it moved the hold's travel from 3.55 to 3.48, and it left a metre's carry at 2.09 units rather than 2.5.
+  - `_hook_view_reset`: not this fix. A view reset with the hand out still draws the shape home for one frame, then back out, now within the screen.
+- **#342's closing note:** "the owner dropped position for the Joy-Con on 2026-11-04", with draft #365 replacing it for now. #365 is still open and the poi's position code is on `main`, so this fixes what's there, at the owner's word of 2026-11-07. When #365 lands, position may go, and this with it.
+- **The tests:** `tests/test_poi.py`, `tests/test_poi_real.py`, `tests/test_poi_guide.py`. The hold on the screen on every frame of the owner's tape, the stop within a second, no pull home, the box the output's. The totem is untouched.
+- **Limits.**
+  - The poi's feel at a real pad is **unproved**: one tape, replayed. A carry and a swing may feel different with the lower `CALM_S` and the new limits, and only a person can judge that (check 633).
+  - The box is the frame's size through the deck's eye, set where the guide runs, so it's the default 16:9 until a frame has rendered.
+  - The shape's centre is what's held on the screen: at the wall, part of it is off.
+- **Judge it.** 633.
