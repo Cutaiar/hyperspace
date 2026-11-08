@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.3 — 2026-11-06
+## v1.3 — 2026-11-07
 
 ### Panel
 
@@ -14,6 +14,17 @@
 - ⌘Z takes back the last edit of the preset you're on, or, with the mouse over a rig-tuning section (the analyzer, hands …), that section's last edit, so a ⌘Z mid-set never undoes a tuning tweak from an hour ago; undoing a whole show load is now two ⌘Zs (#373)
 - After you move to another deck or section, ⌘Z takes nothing back until you make a change there ("nothing to undo here yet: make a change on deck 2 first"), so a stray ⌘Z can't undo something from ten minutes ago; hovering alone no longer changes what ⌘Z reaches (#386)
 - A cursor left in a text field (a find box, a name) no longer counts as working the panel, so a controller move while it sits there can't steal ⌘Z's target (#398)
+- GRAPH opens big enough to read: 1.3× on a 1080p show display or a Retina screen, up to 1.5× on a large one; resizing the window no longer zooms or moves the canvas, and the panel's stray scrollbar is gone (#411, #429)
+- CONTROLS is the control window itself, not a window inside it: no title bar, nothing to drag or close by accident, and it follows the window's size; H still shows and hides it, and the floating pad diagram gets an × (#426)
+- Plainer words: "session" and "rig" are gone (now "meta controller", "this Mac", "bus cable"), "preset" becomes "patch" (the **PATCHES** section, "patch: saved TRIP 2") and "show" becomes "install" ("install: saved party"); saved ids and files are unchanged (#407, #436, #437)
+- Nudge chips each open their own popup, and a patch strip's save chip no longer covers ▶ in a narrow pane (#414)
+
+### Displays
+
+- Each connected display has its own row in the output section: choose what it shows (the control window, an output, or nothing), fullscreen and flips — no more monitor dropdown; the choices live in `<library>/displays.json`, shared by both Macs (#424)
+- A display can be unplugged and plugged back in with no restart: back within `[output] unplug_hold_s` (3 s) its window returns where it was, and the control window moves to another display meanwhile; not yet tried with a real cable (#425)
+- `config.toml` can name a screen: `monitor = "MStar"`, exact, with `"MStar #2"` for the second of two counted left to right, so a replug can't swap outputs at the next launch (#404)
+- The picture no longer depends on output 1's window: a failed draw holds the last frame instead of flickering, and a locked Mac or sleeping display can't run the loop past 240 fps (#420)
 
 ### Decks
 
@@ -27,6 +38,14 @@
 
 - A player select screen: the footer chip reads who is on air and off air ("on air 1 4 · off air 2 3"); click it or press O for the board, then drag a player between ON AIR and OFF AIR, or a controller onto a player, with the mouse; it is also the last section of the side pane (#379)
 - A player's place and controllers are kept on this Mac in `players.json`, beside `bindings.json`; a pad's lights follow its player, and a patch row can name a player (`axis@p2`), drawn on GRAPH as its own placeholder when that player has no controller (#376, #379)
+- Add a controller from the app: the player board's tray lists pads and MIDI devices not yet set up — drag one to a player to adopt it; the list lives in `<library>/devices.json`, shared by both Macs, with a per-Mac on/off chip, and a quit saves this Mac's copy (#418, #423)
+- ⌘Z over the player board takes back moving a controller or a player ("player 2 to off air") (#417)
+- Looking for MIDI devices can no longer crash the app when macOS refuses MIDI access; it says so instead (#414)
+
+### Node mode
+
+- Point a controller at a node: from the chip in GRAPH's selection section, the APC40's K1–K8, D1–D8 and S1–S8 fill with that node's params, saved in the patch, per player and per deck; drawn as their own green cables, outlined on the desk, left from the chip or the cable's menu (#396, #397)
+- Node mode on pads: a pad's sticks and axes push the node's params and the look comes back on release; buttons that already do something are never taken, and the camera orbit stands down only on the filled axes; not yet tried on a real pad (#433)
 
 ### Presets
 
@@ -36,6 +55,7 @@
 - A patch can hold the scene, shape, backdrop, pattern, look-back and dream, so a dream + fx + composite patch can be saved; spawning one where the host already has that node is refused in words (#355)
 - Spawning a patch with a dream into a preset that has one offers **Replace and spawn** on the sheet, one press and one undo step (#361)
 - A new **wire as saved, replacing …** chip lands a patch's outlets even on taken ports and names each cable it cuts; the plain chip still never cuts (#364)
+- The one library migration (`/11`): `presets/` becomes `loadable/`, shows become `installs/<name>.json`, and old trash and backups are cleared after one backup; quit both Macs and run `tools/migrate_library.py --apply` once (#434)
 
 ### Routes
 
@@ -51,26 +71,38 @@
 - A sleeping Joy-Con wakes without a restart, the pad window follows a controller connected after launch, and a hard swing no longer loses the pad's attitude (#338, #339)
 - Making a pair over a button that is already mapped now asks first: **Keep both**, **Let the pair take over** or **Cancel** (#387)
 - The dial readings (petal / blend) are saved in the preset (`pad.dial.left` / `.right`) and picked in the pad node's details on GRAPH instead of SYSTEM; a pad reads the deck it drives, a dialed stick shows its eight sectors, and `dial_left` / `dial_right` in `config.toml` now only set what a preset naming no reading gets (#395)
+- Joy-Con version 0: SL / SR change shape, stick click resets the view, − resets the totem, Capture toggles it, L holds the base chase, and the gyro learns its own rest; not yet tried on a live pad (#431)
+- The DualSense Edge's hold-MENU save works again, in any role (#431)
+- Buttons are named by compass on every pad: `pad:N` / `S` / `E` / `W`, `hat:N` …, pairs `pair:N/S` and `pair:hat.N/hat.S`; the panel says "south button", "d-pad up"; each Mac's `bindings.json` moves once at first launch, kept as `.bak-v3` (#435)
+- The poi stays on the screen: its hand and shape are held to the frame, and a still pad stops it in 0.35 s instead of 1.5 (#430)
 
 ### Desk
 
 - APC40: hold SEND B and every knob moves its param a tenth as far (`desk.fine`); let go and the next detent carries on with no jump (#344)
 - The on-screen APC40 draws SEND B as FINE, lit while held, rather than as a free button (#375)
 
+### Graph
+
+- Matte and segment nodes show their mask as a thumbnail on GRAPH, a segment's `fg` and `bg` pins show their own pictures, and a mask that can't be shown says why (#405)
+
 ### Effects
 
 - New **Grow** effect: grass, sprouts, blobs, noodles, mould, coral or cells grow out of the picture and push its pixels (a lens-like bulge, or a lift along Angle); ride `fx.grow.grow` with an LFO to grow it in and out — at 0 the frame is untouched (#381)
+- New **Wave Table** effect: a disc of the picture at each root is dragged along grass, noodle or curl paths into an extruded tube; scrub or LFO `fx.wavetable.pos` — at 0 the frame is untouched (#406)
 
 ### Media
 
 - The analyzer can listen to the video sound: AUDIO → **Listen to video sound** drives the bands and the beat from the media mix, as the mic does (#343)
 - A video's sound now follows its picture: no clicks at rate 1, any rate plays at that speed, reverse and scrubs are heard, and rate 0 is silent (#357)
 - Launching with a camera, NDI or Syphon source listed no longer crashes at start-up with a `RecursionError` (#381)
+- A patch's media opens on both Macs: a clip missing from this Mac's own folder falls back to the same file in the shared Drive `media/` folder, and assigning a clip that is in both now saves the `shared:` id (#419)
+- **Listen to video sound** says on its hover and under the toggle that the off-air look reacts to the on-air video's sound too (#416)
 
 ### Hands
 
 - Ultraleap room-frame palm lanes, `hand:<side>.room.roll` / `pitch` / `yaw`, read the same on both hands, with HANDS → feel & calibration → **level room** (#358)
 - The orbit: close a hand and turn it, and the camera turns with it, staying put when you open it — a new `turn` route op, clutched by the same hand's grab; not yet tried on a real sensor (#358, #362)
+- A deck dropping its hands node no longer takes the other deck's mirror with it: every hands node now follows the one `ghost.mirror` (#408)
 
 ### For developers
 
@@ -84,6 +116,11 @@
 - The two layers made mechanical: `params.PER_DECK_META`, a third `part_of`, with `is_meta_id` / `is_session_id` / `is_per_deck_meta_id`, and `tests/test_layer_boundary.py` puts every param in one layer and every module on one side of the wall (#388); identifiers renamed to the signed glossary (`MetaRegistry`, `MetaTable`, preset → patch), with saved ids, files and panel words unchanged (#389)
 - `playlist.py` (`Playlist`, `Entry`, `Playing.tick`), ticked last by `MetaController.tick`; `MetaController.crossfade(to, seconds=None)`; `tools/drive_playlist.py` (#392, #400)
 - `.gitattributes` merges the four doc tails by union and `tests/test_doc_numbers.py` catches a number taken twice (#391); tests leave no `undo._hand` / `_loading` behind and a stuck undo stack fails fast (#394)
+- Node mode: `node_desk.NodeDesk` derives rows from `LoadedPatch.node_mode` by `nodemode.fill` for desks and pads, ahead of saved rows, with a `NODE_MODE` cable kind and its own `…|node` bundle (#396, #397, #433)
+- New shared-file stores beside `library.py`: `sharedfile.py`, `devicelist.py` (`devices/1`), `displays.py` (`displays/1`); `midiports.port_names()` never raises; `hotplug.py` and `pacing.py` with a hidden root window holding the GL context (#414, #418, #420, #424, #425)
+- Saving `outputs.py`, `render.py` or `ghost.py` hot reloads again (slots moved to the cold `hot_slots.py`), and the slots rule imports in list order (#421, #427)
+- `Param.__post_init__` makes every meta param non-modulatable (#409); `Project` is `Install` in code (`Library.install`, `DeckInstall`) (#436); `routing.layout_of` gives rows by pad model (#431)
+- `tools/type_ratchet.py` fails a PR on a new pyright complaint against `tools/type_baseline.json` (#412); `docs/AUDIT-STRUCTURE-2026-10.md` records the structure audit (#413); `tools/wait_green.py`, re-measured test times (#403); `tools/poi_probe.py` replays a real Joy-Con tape (#410); the doc tails were restored and `tests/test_doc_numbers.py` checks more (#432)
 
 ## v1.2 — 2026-11-02
 
