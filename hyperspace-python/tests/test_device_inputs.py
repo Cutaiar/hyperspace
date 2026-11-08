@@ -32,7 +32,7 @@ from conftest import seed
 from test_midi import cc, note
 
 import hyperspace.gamepad as gp
-from hyperspace import apc40, devices, hands, lfo, midi, routing, tempo, ui, ui_routing
+from hyperspace import apc40, devices, hands, learn, lfo, midi, routing, tempo, ui, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -328,6 +328,28 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     assert {"source": "cc@launch:0:21", "target": "view.inst_amp", "op": "abs",
             "layer": "preset"} in rows
     assert t.set_desk(rows) == [] and any(x.source == "cc@launch:0:21" for x in t.desk())
+
+
+def test_learn_for_the_second_desk_takes_its_fader_and_not_the_apc40(build):
+    """Learn ▸ Learn Player 1 ▸ <the second desk> (2026-11-07, the DDJ-FLX4 on the
+    rig): the real registry's MIDI desk keeps bare schemes and qualifies each
+    message as it arrives (``cc@launch:…``), so the learn armed for it
+    (``@launch``) is completed by its own fader pair — a 14-bit row — and never
+    by the APC40's bare CC, which a fake with qualified schemes hid."""
+    r = build(entries())
+    lib, t = r.lib, r.table
+    lib.load("loadable", lib.list("loadable")[0])
+    want = learn.only_want("launch")
+    assert learn.source_heads(r.devices.get("launch")) >= {"cc@launch", "note@launch"}
+    assert "cc" in learn.source_heads(r.devices.get("apc40"))
+    r.learn.arm("view.inst_amp", want)
+    push(r, APC, cc(apc40.DEVICE_KNOBS[0], 70))     # the APC40: not this learn's
+    listened(r, "apc40")
+    assert r.learn.learning == "view.inst_amp"
+    push(r, LAUNCH, cc(19, 64), cc(51, 3), cc(19, 64), cc(51, 9))   # its fader, MSB + LSB
+    listened(r)
+    (b,) = [b for b in t.bindings if b.target == "view.inst_amp" and b.device == "launch"]
+    assert (b.source, b.op) == ("cc@launch:0:19", "abs14")
 
 
 def test_the_latch_is_per_role(build):

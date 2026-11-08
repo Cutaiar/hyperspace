@@ -161,6 +161,19 @@ def only_want(role: str) -> str:
     return f"{ONLY}{role}"
 
 
+def source_heads(d) -> frozenset[str]:
+    """The scheme heads a listed device's sources carry (``cc``, ``cc@ddj-flx4``,
+    ``axis@p2``). A pad that is not its kind's primary was qualified when it
+    was made (`devices.make`: its `schemes` already say ``axis@p2``); a MIDI
+    desk never is — its `schemes` stay ``cc`` / ``note`` / ``pitch`` and its
+    `qualifier` (the role, for any desk but the first) goes on each message as
+    it arrives (`MidiIO._source`) — so an unqualified scheme takes the
+    device's qualifier here."""
+    q = str(getattr(d, "qualifier", "") or "")
+    return frozenset(s if not q or "@" in s else qualified(s, q)
+                     for s in (*getattr(d, "schemes", ()), *getattr(d, "feeds", ())))
+
+
 PAD_SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")  # what can complete a "pad" learn
 
 # a push learn's depth when the adapter names none (plan 18 WP3). The hands
@@ -843,9 +856,7 @@ class Learn:
             return want == modifiers.SCHEME
         if want.startswith(ONLY):            # one controller: a source it publishes
             d = self._only_device(want)
-            head = source.partition(":")[0]
-            return d is not None and head in (*getattr(d, "schemes", ()),
-                                              *getattr(d, "feeds", ()))
+            return d is not None and source.partition(":")[0] in source_heads(d)
         if want == DESK:
             return Binding(source, "").is_midi
         if want in PAIR_WANTS:               # a pole, or the pair a port names (plan 56)
