@@ -74,7 +74,7 @@ A reasonable opening message for a new session:
 ## Where it stands
 
 ```
-889 passed, 62 skipped, 0 xfailed (879 with test_gallery.py deselected
+890 passed, 62 skipped, 0 xfailed (880 with test_gallery.py deselected
 under xdist, plus its 10 run -n0).   chrome diff: 71 cells, worst flat
 2 levels, worst corner 0.776 px, "all cells within the bar" in BOTH
 themes - now with the Kbd cells and four Button sizes at INTRINSIC width.
@@ -494,19 +494,27 @@ underline. The strict xfail is promoted to a plain test at 0.1px.
 
 Four things left, each written down rather than done:
 
-* **Cost.** `draw.label` now issues a quad per glyph from Python: measured
-  ~22us for a 24-character string against 0.5us for `add_text` - about
-  4ms a frame at 200 labels (28us before `shape` was cached; the glyph
-  loop is what is left). Measure the dashboard's frame before adopting; a per-run cache of
-  quads keyed on the atlas's texture id is the obvious next step.
-* **Horizontal ink centroids** of whole strings still differ by up to 0.7px
-  (`text.mixed`) and by ~0.3px between themes for the same string, while
-  ink EXTENTS match. That is the rasterizer's stroke weighting (unhinted
-  FreeType through a linear-sampled atlas vs Skia), not placement.
-* **Retina, stock widgets only.** At density 2 the baked ascent is a half
-  pixel (ceil of 0.8 x 2 x px, over 2) and ImGui truncates a text origin to
-  a whole one, so an InputText's value can sit half a pixel off its
-  placeholder there. Not measurable on this rig (Mesa, density 1).
+* **Cost - addressed, RETRO row 70.** The dashboard's `paint()` measured
+  4.6-4.8ms a frame before the fix, 7.8ms with a quad per glyph, and **5.2ms**
+  now: `label` draws `add_text` runs restarted at the kerned pen
+  (`draw.DRIFT_PX`), and `text_w` is pure arithmetic. Layout stays exact;
+  glyphs land within ~0.7px of Chromium's. The other ~4.8ms is the rest of
+  the kit - `draw.sparkline` is the largest self-time under a profiler -
+  and is where the next performance pass should look:
+
+  ```bash
+  xvfb-run -a uv run python tools/dkit/bench_paint.py
+  ```
+
+* **Horizontal ink centroids** of whole strings differ from Chromium's by
+  up to 0.44px, and by ~0.3px between themes for the same string, while
+  ink EXTENTS match to +-2px. Part placement (runs), part the rasterizer's
+  stroke weighting (unhinted FreeType vs Skia).
+* **Retina.** At density 2 the baked ascent can be a half pixel (ceil of
+  0.8 x 2 x px, over 2) and `add_text` truncates a text origin to a whole
+  one, so text drawn by runs or by a stock InputText can sit half a pixel
+  (one device pixel) off `baseline_y` there. Not measurable on this rig
+  (Mesa, density 1).
 * **`label` assumes `line-height: normal`** unless told otherwise. The
   measured rule needs the real line-height when the leading inside the
   line box is odd; every current caller is even (text-xs 16 on 12px,

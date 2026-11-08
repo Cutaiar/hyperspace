@@ -203,3 +203,9 @@ true`) is what turns the diff into a standing check on the text measure:
 rendered with the OLD loader, those five cells FAIL at 26 levels / 2-3px;
 with the new one they pass at 0-1. Row 61's lesson, applied: a pinned
 dimension is a dimension nobody is checking.
+
+## Mine, from making the text fast
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 70 | **The exact text path cost 3ms of a 4.8ms dashboard frame.** One quad per glyph is a dozen Python-to-C calls a glyph, ~1us each, and the dashboard draws 2,119 characters a frame. I had measured it - 22us a string - but only in isolation, and reported it as a follow-up instead of weighing it against the frame | `label` draws `add_text` RUNS, restarted at the kerned pen when ImGui's unkerned one drifts `DRIFT_PX` (0.25); a single glyph keeps the exact quad. `text_w` is pure arithmetic, and the width and the shaping are cached per string. Frame: **7.8ms -> 5.2ms** (pre-fix 4.6, paired runs). Layout stays exact; glyphs within ~0.7px of Chromium's, and the gallery text centroids came out CLOSER than with the quads (worst 0.44px, was 0.69) | **Measure a change's cost where it is paid - one frame of the real page - before calling it done**, not per call. `bench_paint.py` is that number now. Also: "Geist kerns densely" was the fact that killed the obvious split (a run per kerned pair is 16 runs in 24 glyphs); the drift threshold came from measuring how far the unkerned pen actually wanders. The threshold itself turned out not to matter to the frame (0.25 and 0.5 were within noise), so it is set for looks. |

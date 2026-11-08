@@ -211,3 +211,29 @@ def test_a_stock_input_puts_its_glyphs_on_the_labels_baseline(px_, box):
     assert ink_bottom(PROBE_X + 60) == want, (
         f"the stock input's glyphs end at row {ink_bottom(PROBE_X + 60)}, "
         f"the label's at {want}")
+
+
+def test_a_kerned_string_draws_as_wide_as_it_measures():
+    """`label` draws a long string as `add_text` runs (`draw._runs`), which
+    is ImGui's pen - unkerned - restarted at the kerned one whenever it has
+    drifted DRIFT_PX. So the INK has to end where `text_w` says the string
+    does. "AVATAR WAVE" at 14px medium is 56.04 unkerned and 50.08 kerned
+    (Chromium); drawn as one run, its ink would overshoot by ~6px."""
+    _gl()
+    import numpy as np
+    from test_interaction import PROBE_X, PROBE_Y, one_widget
+    s, size = "AVATAR WAVE", 14.0
+    got = {}
+
+    def paint(ui):
+        got["w"] = D.label(ui.dl, PROBE_X, PROBE_Y, s, ui.faces, "medium",
+                           size, (0, 0, 0, 1), baseline_box=20)
+    f = one_widget("light", paint, 2)[-1].max(axis=2).astype(int)
+    band = 255 - f[int(PROBE_Y):int(PROBE_Y) + 20, int(PROBE_X) - 2:]
+    cols = np.nonzero(band.sum(axis=0) > 40)[0]
+    ink_right = int(PROBE_X) - 2 + int(cols[-1]) + 1
+    # "E"'s right side bearing is under a pixel at 14px; a run start may
+    # round by half a pixel, and a run's pen drift is DRIFT_PX at most
+    assert abs(ink_right - (PROBE_X + got["w"])) < 1.5, (
+        f"ink ends at {ink_right}, the string measures to "
+        f"{PROBE_X + got['w']:.2f}")
