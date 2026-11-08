@@ -363,6 +363,6 @@ are replaced by **one view at a time**, at the pane's full height
   views brought up every way, the body at the pane's full height, no
   conflicting ids view by view, the band; the fit tests unchanged
   (`test_every_section_focused_lands_in_view_and_inside_the_pane`). Hand
-  checks 635–638 (group DR).
+  checks 654–658 (group DV).
 - Restart after pulling: `Panel.go_page` and the param's label changed.
 

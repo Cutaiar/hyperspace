@@ -173,7 +173,7 @@ def write_doc(machine, doc: dict, who: str = "panel") -> None:
 def write_key(machine, key: str, value, who: str = "panel") -> None:
     """Keep `value` as ui.json's top-level `key`, the rest of the file as
     it was — for another module's own key (the loadable patches' folds,
-    ``presets``, plan 48 stage 2), deferred by its caller `WRITE_AFTER_S`
+    ``loadable``, plan 48 stage 2), deferred by its caller `WRITE_AFTER_S`
     after its last change."""
     doc = read_doc(machine)
     doc[key] = value

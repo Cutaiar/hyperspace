@@ -73,7 +73,7 @@ def fitted(tmp_path, monkeypatch):
         r.panel.graph_start_zoom = 1.3
         imgui.get_io().display_size = imgui.ImVec2(*WIDE)
         seed(r.lib.home)
-        r.lib.load("presets", "party-trip")
+        r.lib.load("loadable", "party-trip")
         rects = _rects(monkeypatch)
         for _ in range(4):
             frame(r.panel, "graph")
@@ -109,7 +109,7 @@ def test_a_load_brings_every_node_back_into_view(fitted):
     (px, _py), _ = st["details_rect"]
     (cx, _cy), *_ = r.panel.canvas_px
     assert any(a > px or c < cx for a, _b, c, _d in rects.values())   # out of sight
-    r.lib.load("presets", "party-noita")
+    r.lib.load("loadable", "party-noita")
     for _ in range(30):                                 # (a glide, then still)
         frame(r.panel, "graph")
     _in_view(r, st, rects)
