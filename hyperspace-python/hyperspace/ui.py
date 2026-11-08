@@ -33,7 +33,7 @@ import math
 import os
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from imgui_bundle import imgui
 
@@ -62,6 +62,7 @@ from . import (
     ui_seq,
     undo,
 )
+from . import players as players_mod
 from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
@@ -585,7 +586,8 @@ def learn_wants(lrn) -> list[str]:
     the registry lists (`Learn.wants`) beyond the desk, the hands and the
     pad, which have their own items — a new device's role."""
     wants = getattr(lrn, "wants", None)
-    return [w for w in (wants() if callable(wants) else ()) if w not in _OWN_WANTS]
+    return [w for w in (wants() if callable(wants) else ())
+            if w not in _OWN_WANTS and not w.startswith(learn.ONLY)]
 
 
 def sink_items(lrn) -> list[tuple[str, str]]:
@@ -1155,8 +1157,33 @@ class Panel:
         **macro ▸** — the meta controller's knobs by label, one already setting it
         checked; a pick is the cable a drag on GRAPH makes
         (`ui_graph.route_from_menu`). It sits after the Learn items, before
-        Learn sink, and is no Learn: an LFO has no gesture to wait for."""
-        lrn = self.learn
+        Learn sink, and is no Learn: an LFO has no gesture to wait for.
+
+        **With players** (plan 55's meta controller and a device registry: the
+        app), the Learn items are one submenu (the owner, 2026-11-07: "nested
+        by player … dynamically based on which controller is routed to which
+        player"): **Learn ▸ Learn Player 1–4 ▸** each controller that player
+        holds, by name (`_learn_player`), which only that controller completes
+        (`learn.only_want`); then **Any desk** (the old Learn desk: any MIDI
+        desk, or a click on the desk diagram) and the pad's pair learns. A rig
+        with no players keeps the flat items below."""
+        lrn = cast(learn.Learn, self.learn)
+        if getattr(self, "meta", None) is not None and getattr(self, "devices", None) is not None:
+            if imgui.begin_menu("Learn"):
+                for n in players_mod.NUMBERS:
+                    self._learn_player(a, p, n)
+                imgui.separator()
+                if self._desk_target(a) and imgui.menu_item_simple("Any desk"):
+                    lrn.arm(a.id, "desk")
+                self._learn_pairs(a, p)
+                # plugged in, held by nobody (the board's tray): said, so it is found
+                for h in ui_players.tray(self):
+                    imgui.text_disabled(f"{h.name}: nobody holds it — press "
+                                        f"{ui_players.KEY} and drag it to a player")
+                imgui.end_menu()
+            ui_graph.route_from_menu(self, p)
+            self._learn_sinks(a, p)
+            return
         if self._desk_target(a) and imgui.menu_item_simple("Learn desk"):
             lrn.arm(a.id, "desk")
         sides = self._hand_sides() if ui_routing.route_target(p) else []
@@ -1169,15 +1196,7 @@ class Panel:
         if (pad is not None and pad.on and ui_routing.pad_target(a)
                 and imgui.menu_item_simple("Learn pad")):
             lrn.arm(a.id, "pad")
-        # plan 56: two presses, one axis. A pair moves along a range, so a
-        # param with one; "(spring)" a route, on what a route can carry
-        if pad is not None and pad.on and self._desk_target(a) and p.kind in (
-                Kind.CONTINUOUS, Kind.ENUM):
-            if imgui.menu_item_simple("Learn pair"):
-                lrn.arm(a.id, learn.PAIR_WANT)
-            if (p.modulatable and p.kind is Kind.CONTINUOUS and not p.integer
-                    and imgui.menu_item_simple("Learn pair (spring)")):
-                lrn.arm(a.id, learn.PAIR_SPRING_WANT)
+        self._learn_pairs(a, p)
         # any other device the registry lists can be armed for by its role
         # (plan 27 B2, `Learn.wants`): "Learn <role>", on a param a lane
         # can drive; the device completes it from its own `learn`
@@ -1189,15 +1208,68 @@ class Panel:
         # gesture to wait for, so not a Learn; the cable a drag on GRAPH
         # makes (`ui_graph.route_from_menu`)
         ui_graph.route_from_menu(self, p)
-        # plan 27 B3: the param *out* to a sink port — the meta controller's ports
-        # (`Learn.sinks`), a pick lands at once as a meta row
-        # (`Learn.learn_sink`): no prompt, no undo step, no loadable patch dirt
+        self._learn_sinks(a, p)
+
+    def _learn_pairs(self, a: Param, p: Param) -> None:
+        """plan 56: two presses, one axis. A pair moves along a range, so a
+        param with one; "(spring)" a route, on what a route can carry."""
+        lrn, pad = self.learn, getattr(self, "pad", None)
+        if pad is not None and pad.on and self._desk_target(a) and p.kind in (
+                Kind.CONTINUOUS, Kind.ENUM):
+            if imgui.menu_item_simple("Learn pair"):
+                lrn.arm(a.id, learn.PAIR_WANT)
+            if (p.modulatable and p.kind is Kind.CONTINUOUS and not p.integer
+                    and imgui.menu_item_simple("Learn pair (spring)")):
+                lrn.arm(a.id, learn.PAIR_SPRING_WANT)
+
+    def _learn_sinks(self, a: Param, p: Param) -> None:
+        """plan 27 B3: the param *out* to a sink port — the meta controller's ports
+        (`Learn.sinks`), a pick lands at once as a meta row
+        (`Learn.learn_sink`): no prompt, no undo step, no loadable patch dirt."""
+        lrn = self.learn
         ports = sink_items(lrn) if p.kind is not Kind.TRIGGER else []
         if ports and imgui.begin_menu("Learn sink"):
             for address, text in ports:
                 if imgui.menu_item_simple(text):
                     lrn.learn_sink(a.id, address)
             imgui.end_menu()
+
+    def player_learns(self, a: Param, p: Param, number: int) -> list[tuple[str, str | None]]:
+        """Learn ▸ Learn Player `number`'s items: (label, want) for each
+        controller the player holds that can drive this param — a MIDI desk
+        wherever a desk row can go, a pad wherever a pad row can, the hands
+        on a param a hand can drive (one item per side: ``Ultraleap hands ·
+        left``), any other device on a param a lane can drive. Each arms
+        what only that controller completes (`learn.only_want`; the hands'
+        own side). A controller not connected has want None: drawn, not
+        armable. A plain function of the rig, so a test reads it."""
+        out: list[tuple[str, str | None]] = []
+        for h, d in ui_players.learnable(self, number):
+            kind = getattr(d, "kind", "")
+            on = h.state == "on"
+            name = h.name if h.name.lower() == h.role.lower() else f"{h.name}  ·  {h.role}"
+            if kind == "hands":
+                sides = self._hand_sides() if ui_routing.route_target(p) else []
+                out += [(f"{name}  ·  {side}", f"hand:{side}" if on else None) for side in sides]
+                continue
+            fits = (self._desk_target(a) if kind == "midi"
+                    else ui_routing.pad_target(a) if kind == "gamepad"
+                    else ui_routing.route_target(p))
+            if fits:
+                out.append((name if on else f"{name}  ·  not connected",
+                            learn.only_want(h.role) if on else None))
+        return out
+
+    def _learn_player(self, a: Param, p: Param, number: int) -> None:
+        """One player's submenu (`player_learns`), greyed when it holds nothing
+        that can drive this param."""
+        items = self.player_learns(a, p, number)
+        if not imgui.begin_menu(f"Learn Player {number}", bool(items)):
+            return
+        for label, want in items:
+            if imgui.menu_item(label, "", False, want is not None)[0] and want is not None:
+                cast(learn.Learn, self.learn).arm(a.id, want)
+        imgui.end_menu()
 
     def _hand_sides(self) -> list[str]:
         """The hands this meta controller's axes belong to, left first; none without a
@@ -1210,6 +1282,18 @@ class Panel:
         words the menu, the footer, ROUTING and SYSTEM all print. A bare
         learn (`want` None) waits for whatever this rig has."""
         want = getattr(self.learn, "want", None)
+        only = getattr(self.learn, "_only_device", lambda w: None)(want)
+        if only is not None:            # Learn ▸ Learn Player n ▸ <controller>
+            name = ui_players.device_words(only)
+            kind = getattr(only, "kind", "")
+            if kind == "midi":
+                diagram = (str((getattr(only, "entry", None) or {}).get("profile") or "apc40")
+                           == "apc40" and hasattr(ui_desk, "click"))
+                return (f"turn a knob, move a fader or press a button on {name}"
+                        + (", or click one on the diagram…" if diagram else "…"))
+            if kind == "gamepad":
+                return f"press a button or push a stick or a trigger on {name}…"
+            return f"move a control on {name}…"
         if want == "desk":
             # a click on the on-screen desk completes it once the desk is
             # clickable (plan 17 WP4: `ui_desk.click`)

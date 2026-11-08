@@ -32,7 +32,7 @@ from conftest import seed
 from test_midi import cc, note
 
 import hyperspace.gamepad as gp
-from hyperspace import apc40, devices, hands, lfo, midi, routing, tempo, ui, ui_routing
+from hyperspace import apc40, devices, hands, learn, lfo, midi, routing, tempo, ui, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -193,6 +193,15 @@ def push(r, port: str, *msgs) -> None:
     frame(r)
 
 
+def listened(r, role: str = "launch") -> None:
+    """A generic desk's learn listens (midi.LISTEN_S) before it writes the row:
+    its clock moves past the window and a frame lands it."""
+    io = r.devices.get(role).io
+    t0 = io._now()
+    io.clock = lambda: t0 + midi.LISTEN_S + 0.01
+    frame(r)
+
+
 # ---------------------------------------------------------------- the qualifier
 
 def test_a_qualified_source_is_its_roles_and_adds_no_colon():
@@ -290,6 +299,8 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     t.bind(knob, write=False)                      # the param's knob on the APC40…
     r.learn.arm("view.inst_amp", "desk")
     push(r, LAUNCH, cc(21, 90))
+    assert r.learn.learning == "view.inst_amp"     # a generic desk listens first…
+    listened(r)                                    # …then writes the row
     assert any(x is knob for x in t.bindings)      # …stays: one knob per param per desk
     (b,) = [b for b in t.bindings if b.target == "view.inst_amp" and b.device]
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
@@ -319,6 +330,28 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     assert t.set_desk(rows) == [] and any(x.source == "cc@launch:0:21" for x in t.desk())
 
 
+def test_learn_for_the_second_desk_takes_its_fader_and_not_the_apc40(build):
+    """Learn ▸ Learn Player 1 ▸ <the second desk> (2026-11-07, the DDJ-FLX4 on the
+    rig): the real registry's MIDI desk keeps bare schemes and qualifies each
+    message as it arrives (``cc@launch:…``), so the learn armed for it
+    (``@launch``) is completed by its own fader pair — a 14-bit row — and never
+    by the APC40's bare CC, which a fake with qualified schemes hid."""
+    r = build(entries())
+    lib, t = r.lib, r.table
+    lib.load("loadable", lib.list("loadable")[0])
+    want = learn.only_want("launch")
+    assert learn.source_heads(r.devices.get("launch")) >= {"cc@launch", "note@launch"}
+    assert "cc" in learn.source_heads(r.devices.get("apc40"))
+    r.learn.arm("view.inst_amp", want)
+    push(r, APC, cc(apc40.DEVICE_KNOBS[0], 70))     # the APC40: not this learn's
+    listened(r, "apc40")
+    assert r.learn.learning == "view.inst_amp"
+    push(r, LAUNCH, cc(19, 64), cc(51, 3), cc(19, 64), cc(51, 9))   # its fader, MSB + LSB
+    listened(r)
+    (b,) = [b for b in t.bindings if b.target == "view.inst_amp" and b.device == "launch"]
+    assert (b.source, b.op) == ("cc@launch:0:19", "abs14")
+
+
 def test_the_latch_is_per_role(build):
     """SHIFT is the first role's latch (`desk.shift`): with the APC40 on
     its global layer, the second desk is still on its patch layer — its
@@ -336,6 +369,7 @@ def test_the_latch_is_per_role(build):
     push(r, APC, cc(apc40.TRACK_KNOBS[0], 70))      # an APC40 knob: the global layer's
     assert r.learn.learning == "view.inst_amp"
     push(r, LAUNCH, cc(22, 70))                     # the second desk: learned
+    listened(r)
     assert any(x.source == "cc@launch:0:22" for x in t.desk())
     # the second desk's own layer, and D12 across a flip of it
     t.add(Binding("note@launch:0:50", "view.faces", "momentary", layer="preset"))

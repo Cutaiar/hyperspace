@@ -223,7 +223,8 @@ def _glyph_key(d) -> tuple[str, str]:
         return glyph_of_model(model), (model.name if model is not None else "gamepad")
     if kind == "midi":
         apc = str(entry.get("profile") or "apc40") == "apc40"      # as `MidiDevice.profile`
-        return ("apc40", "APC40") if apc else ("midi", "MIDI desk")
+        # a generic desk by the port its entry names ("DDJ-FLX4"), the words it was adopted by
+        return ("apc40", "APC40") if apc else ("midi", str(entry.get("port") or "MIDI desk"))
     if kind == "hands":
         return "hands", "Ultraleap hands"
     if kind == "bridge":
@@ -253,6 +254,27 @@ def held(panel, number: int) -> list[Held]:
         else:
             out.append(Held(role, *_glyph_key(d), _state_of(d)))
     return out
+
+
+def learnable(panel, number: int) -> list[tuple[Held, object]]:
+    """What player `number` holds that the registry lists, each with its
+    device, in the order the player holds them: the param menu's Learn ▸
+    Player n (`Panel._learn_player`). Nothing without a meta controller or a
+    device registry."""
+    regs, meta = getattr(panel, "devices", None), _meta(panel)
+    if regs is None or meta is None:
+        return []
+    out = []
+    for role in meta.players.controllers_of(number):
+        d = regs.get(role)
+        if d is not None:
+            out.append((Held(role, *_glyph_key(d), _state_of(d)), d))
+    return out
+
+
+def device_words(d) -> str:
+    """A listed device in words ("APC40", "DDJ-FLX4", "DualSense Edge")."""
+    return _glyph_key(d)[1]
 
 
 def _loose_midi(regs, st: dict | None) -> list[Held]:
@@ -348,6 +370,12 @@ def _tray(panel, st: dict, now: float | None = None) -> list[Held]:
     if now - st.get("loose_at", -LOOSE_S) >= LOOSE_S:
         st["loose_at"], st["loose"] = now, loose(panel, st)
     return st.get("loose", [])
+
+
+def tray(panel) -> list[Held]:
+    """The tray as the board last looked (at most every LOOSE_S): what the Mac
+    sees and nobody holds — the param menu's Learn says each one is waiting."""
+    return _tray(panel, _state(panel))
 
 
 def summary(panel) -> str:

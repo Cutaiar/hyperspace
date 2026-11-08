@@ -149,6 +149,7 @@ from .modifiers import Modifier, smooth_motion
 from .motion import Motion
 from .params import Kind, Param, is_shared_meta_id, part_of
 from .routing import (
+    OP_WORDS,
     SAVE_PARAM,
     SHIFT_PARAM,
     TURN_OP,
@@ -1496,7 +1497,7 @@ def _op_text(b: Binding) -> str:
         return f"set {b.value:g}"
     if b.op == "step":
         return f"step {b.value:+g}"
-    return b.op
+    return OP_WORDS.get(b.op, b.op)
 
 
 def _column(names: list[str]) -> float:
