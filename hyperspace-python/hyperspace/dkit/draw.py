@@ -492,6 +492,7 @@ def push_css_font(faces, variant: str, css_px: float, tabular: bool = False):
     imgui.push_font(face, css_px if is_geist(faces) else css_px * span_em(faces, variant))
 
 
+@functools.lru_cache(maxsize=64)
 def ascent_descent(css_px: float) -> tuple:
     """Blink's ascent and descent for Geist at `css_px`: each ROUNDED to a
     whole pixel on its own (SkScalarRoundToScalar, Linux and Windows)."""
@@ -540,7 +541,9 @@ def stock_text_y(y: float, css_px: float, box_h: float, faces=None) -> float:
 
 def _glyph_run(dl, x: float, base: float, glyphs: str, pen, css_px: float,
                col: int) -> None:
-    """Draw a shaped run with its left edge at x and its baseline at base.
+    """Draw a shaped run one quad per glyph, its left edge at x and its
+    baseline at base. Exact, and ~10x the cost of `add_text`, so `label`
+    uses it only for a single glyph; longer strings go through `_runs`.
 
     Not `add_text`. ImGui truncates a text origin to a whole pixel and has
     no kerning, so a kerned run - which has to restart after every pair -
@@ -572,6 +575,13 @@ def _glyph_run(dl, x: float, base: float, glyphs: str, pen, css_px: float,
         x += g.advance_x if p is None else p * css_px
 
 
+@functools.lru_cache(maxsize=4096)
+def _width_em(s: str, variant: str, tabular: bool = False):
+    """`s`'s advance in em, or None if a glyph needs the fallback face."""
+    pen = shape(s, variant, tabular)[1]
+    return None if None in pen else sum(pen)
+
+
 def _run_w(glyphs: str, pen, css_px: float) -> float:
     """A shaped run's advance, with the face pushed. Not `calc_text_size`,
     which rounds its width UP to a whole pixel."""
@@ -600,19 +610,57 @@ def fit_text(s, faces, variant, size, max_w, tabular=False) -> str:
     return s[:lo] + "\u2026"
 
 
+# How far ImGui's own pen may drift from the kerned one before `label`
+# starts a new `add_text` run. Measured on the dashboard's strings: at 0.25
+# a 24-character string is 5-8 runs and no glyph lands more than ~0.7px
+# from Chromium's position (half of that is the run's start rounding to a
+# whole pixel, which `add_text` does). One quad per glyph is exact, and was
+# ~10x the cost - 3ms of a dashboard frame. See RETRO row 70.
+DRIFT_PX = 0.25
+
+_RUNS: dict = {}
+
+
+def _runs(glyphs: str, pen, key: str, css_px: float, baked) -> tuple:
+    """`glyphs` cut into ((offset, text), ...) for `add_text`, with the face
+    pushed. Inside a run ImGui places glyphs on its own advances - unhinted,
+    so fractional, but unkerned; a run ends where that pen has drifted more
+    than DRIFT_PX from the kerned one, and the next starts at the kerned
+    offset. Cached: the cut depends only on the string, face and size (and
+    the density the face was baked at)."""
+    ck = (glyphs, key, css_px, baked.rasterizer_density)
+    hit = _RUNS.get(ck)
+    if hit is not None:
+        return hit
+    out, start, rs, ipos, exact = [], 0, 0.0, 0.0, 0.0
+    for i, c in enumerate(glyphs):
+        if i > start and abs(rs + ipos - exact) > DRIFT_PX:
+            out.append((rs, glyphs[start:i]))
+            start, rs, ipos = i, exact, 0.0
+        adv = baked.get_char_advance(ord(c))
+        ipos += adv
+        exact += adv if pen[i] is None else pen[i] * css_px
+    out.append((rs, glyphs[start:]))
+    if len(_RUNS) > 8192:
+        _RUNS.clear()
+    _RUNS[ck] = hit = tuple(out)
+    return hit
+
+
 def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
           baseline_box=0.0, max_w=0.0, tabular=False, line_h=0.0):
     """Draw `s` at (x, y). With baseline_box, centre it vertically in that
     height the way a CSS line box would (`baseline_y`, `line_h` its
     line-height, 0 for normal); with align/box_w, align horizontally.
-    Returns the advance width.
+    Returns the advance width - Chromium's, exactly (`text_w`).
 
-    The baseline is a whole pixel; the run's left edge is NOT. Chromium
-    positions glyphs at subpixel x (measured: a "K" moved by .25px moves
-    its ink by .25), and a centred "W" in a Kbd measured 0.26px off it
-    while this rounded tx. The rounding that keeps scrolled text from
-    wobbling is vertical - `baseline_y`, and the snapped scroll offset -
-    and is untouched."""
+    The LAYOUT is exact: width, alignment and baseline. The glyphs inside
+    the string are drawn by `add_text` in runs (`_runs`), each within
+    DRIFT_PX of the kerned pen plus its start's rounding - so a glyph can
+    sit up to ~0.7px from where Chromium puts it, for a tenth of the cost of
+    placing each one. A single glyph - a Kbd key - is one quad at its exact
+    fractional x, which costs no more than a run and is what keeps a
+    centred "K" or "W" on Chromium's centre (RETRO row 64)."""
     if not is_geist(faces):
         return _label_host(dl, x, y, s, faces, variant, size, col, align=align,
                            box_w=box_w, baseline_box=baseline_box, max_w=max_w,
@@ -620,16 +668,26 @@ def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
     if max_w:
         s = fit_text(s, faces, variant, size, max_w, tabular)
     glyphs, pen = shape(s, variant, tabular)
+    em = _width_em(s, variant, tabular)
     push_css_font(faces, variant, size, tabular)
     try:
-        w = _run_w(glyphs, pen, size)
+        w = em * size if em is not None else _run_w(glyphs, pen, size)
         tx = x
         if align == "right":
             tx = x + box_w - w
         elif align == "center":
             tx = x + (box_w - w) / 2.0
-        _glyph_run(dl, tx, baseline_y(y, size, baseline_box, line_h), glyphs, pen,
-                   size, _u32(col))
+        base = baseline_y(y, size, baseline_box, line_h)
+        c = _u32(col)
+        if len(glyphs) == 1:
+            _glyph_run(dl, tx, base, glyphs, pen, size, c)
+        elif glyphs:
+            baked = imgui.get_font().get_font_baked(size)
+            top = base - baked.ascent
+            for off, sub in _runs(glyphs, pen, face_key(variant, tabular), size,
+                                  baked):
+                # add_text TRUNCATES its origin; rounding first makes it round
+                dl.add_text(imgui.ImVec2(px(tx + off), top), c, sub)
         return float(w)
     finally:
         imgui.pop_font()
@@ -637,13 +695,19 @@ def label(dl, x, y, s, faces, variant, size, col, *, align="left", box_w=0.0,
 
 def text_w(s, faces, variant, size, tabular=False) -> float:
     """The advance of `s` as Chromium lays it out: fractional, kerned, with
-    Geist's ligatures. Checked against canvas measureText in test_text.py."""
+    Geist's ligatures. Checked against canvas measureText in test_text.py.
+
+    Pure arithmetic on the frozen metrics unless `s` holds a glyph Geist
+    does not carry, which only the loaded fallback face can measure."""
     if not is_geist(faces):
         push_css_font(faces, variant, size, tabular)
         try:
             return float(imgui.calc_text_size(s).x)
         finally:
             imgui.pop_font()
+    em = _width_em(s, variant, tabular)
+    if em is not None:
+        return float(em * size)
     glyphs, pen = shape(s, variant, tabular)
     push_css_font(faces, variant, size, tabular)
     try:

@@ -119,10 +119,14 @@ What it took, each measured - read `draw.py`'s "faces and metrics":
   face, zero mismatches) and applied by `draw.shape`. Ligatures matter to
   width: Geist's `tt` and `ff` are 0.05em narrower than their letters. The
   advances come from `hmtx` too - FreeType's are in 1/64ths of a pixel.
-* **Glyphs are placed one quad each, at fractional x.** `add_text`
-  truncates its origin and cannot kern; Chromium positions glyphs at
-  subpixel x. The baseline stays a whole pixel (`draw.baseline_y`, measured
-  on 252 cells - see its docstring for the two roundings).
+* **Layout is exact; glyph placement is close, for speed.** Widths,
+  alignment and baselines come from the frozen metrics. The glyphs are
+  drawn by `add_text` in runs that restart at the kerned pen whenever
+  ImGui's unkerned one drifts 0.25px (`draw.DRIFT_PX`), so a glyph lands
+  within ~0.7px of Chromium's position. One quad per glyph was exact and
+  cost ~3ms of a dashboard frame; runs cost ~0.6ms over the pre-fix
+  loader. The baseline stays a whole pixel (`draw.baseline_y`, measured on
+  252 cells - see its docstring for the two roundings).
 * Tabular figures: proportional Geist digits are 384-663 units wide; frozen
   they are all 600. A live readout cycling 1.36 / 0.50 / 2.08 **jitters by
   9px** proportional and is **stable at 23px** tabular.
