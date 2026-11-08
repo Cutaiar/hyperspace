@@ -193,6 +193,15 @@ def push(r, port: str, *msgs) -> None:
     frame(r)
 
 
+def listened(r, role: str = "launch") -> None:
+    """A generic desk's learn listens (midi.LISTEN_S) before it writes the row:
+    its clock moves past the window and a frame lands it."""
+    io = r.devices.get(role).io
+    t0 = io._now()
+    io.clock = lambda: t0 + midi.LISTEN_S + 0.01
+    frame(r)
+
+
 # ---------------------------------------------------------------- the qualifier
 
 def test_a_qualified_source_is_its_roles_and_adds_no_colon():
@@ -290,6 +299,8 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     t.bind(knob, write=False)                      # the param's knob on the APC40…
     r.learn.arm("view.inst_amp", "desk")
     push(r, LAUNCH, cc(21, 90))
+    assert r.learn.learning == "view.inst_amp"     # a generic desk listens first…
+    listened(r)                                    # …then writes the row
     assert any(x is knob for x in t.bindings)      # …stays: one knob per param per desk
     (b,) = [b for b in t.bindings if b.target == "view.inst_amp" and b.device]
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
@@ -336,6 +347,7 @@ def test_the_latch_is_per_role(build):
     push(r, APC, cc(apc40.TRACK_KNOBS[0], 70))      # an APC40 knob: the global layer's
     assert r.learn.learning == "view.inst_amp"
     push(r, LAUNCH, cc(22, 70))                     # the second desk: learned
+    listened(r)
     assert any(x.source == "cc@launch:0:22" for x in t.desk())
     # the second desk's own layer, and D12 across a flip of it
     t.add(Binding("note@launch:0:50", "view.faces", "momentary", layer="preset"))

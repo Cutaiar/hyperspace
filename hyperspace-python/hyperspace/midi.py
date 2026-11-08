@@ -14,6 +14,14 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
                 after the param moved by other means the knob does nothing
                 until it sweeps through the current value, so a band switch
                 or a loadable patch load never jumps a knob's value.
+       abs14    `abs` at 14 bits (a DJ controller's fader): the row's CC n
+                (n < 32) is the MSB, CC n + 32 on its channel the LSB. An
+                MSB waits for its LSB, which applies the pair at once; an
+                MSB with no LSB after it in the same poll (a sender that
+                sends only the byte that changed) applies at the poll's
+                end, and an LSB alone applies with the MSB it has. While a
+                14-bit row is on CC n, CC n + 32 is that row's LSB and
+                nothing else on this device sees it.
        rel      two's-complement relative encoder → step(±n)
        rel64    64-centred relative encoder → step(±n)
        toggle   rising edge → toggle()/fire()
@@ -35,6 +43,16 @@ that class — with a MIDI source (``cc:<ch>:<n>``, ``note:<ch>:<n>``,
                 (the profile's `blink_of`) and then show their own state;
                 a fire that answers False did nothing, and nothing blinks
   pitch abs     14-bit pitch bend → set_norm
+
+A listening learn (a profile with `LISTENS`: the generic one, which knows
+nothing of its device). A CC that would complete a learn does not: the
+adapter hears every CC for LISTEN_S and then writes the row the way the
+control spoke (`heard_as`) — an MSB with its LSB after it is a 14-bit
+`abs14` row, the same value twice running is a relative encoder (`rel64`
+around 64, `rel` near 0 / 127: a jog sends +1 again and again, a knob
+never repeats itself), anything else `abs` as before. A note and pitch
+bend still learn at once, and the APC40, whose profile knows its
+encoders, learns every CC at once.
 
 Every op here is a scene-setter (plan 09 decision 3): on a param a
 performer owns — a hand, a lane, an LFO riding it through routing.py —
@@ -123,6 +141,7 @@ import sys
 import time
 from collections import deque
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import cast
 
@@ -134,9 +153,12 @@ from .midiports import port_names
 from .params import Kind, Param, Registry, is_meta_id
 from .pointer import Through
 from .routing import (
+    ABS14,
+    ABS_OPS,
     FINE_DIV,
     FINE_PARAM,
     HELD_ONLY,
+    LSB_OFFSET,
     PICKUP_TOL,
     SAVE_PARAM,
     Binding,
@@ -162,6 +184,38 @@ RECONNECT_FAST = 5        # bridge.OutPort: looks at RECONNECT_S after a port go
 RECONNECT_SLOW_S = 10.0   # then this often; a port that opens starts the count again
 HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
 REENTER_S = 2.0     # the intro is sent again at most this often (`MidiIO._reenter`)
+# a listening learn (`heard_as`): how long it hears a CC before it writes the
+# row — long enough for a fader's LSB and a jog's second tick, short enough to
+# feel immediate — and how far from 64 (rel64) or 0 / 128 (rel) an encoder's
+# delta may be: a fast jog flick, never a knob's whole throw
+LISTEN_S = 0.15
+REL_SPAN = 24
+FULL14 = 16383.0
+
+
+def heard_as(msgs: list[tuple[int, int, int]]) -> tuple[int, int, str]:
+    """What a listening learn heard: the (channel, CC, value) messages, the
+    first the one that started it → (channel, CC, op) for the row.
+
+    * Both CC n (n < 32) and CC n + 32 on the first message's channel —
+      MIDI 1.0's 14-bit pair, in either order — is ``abs14`` on CC n.
+    * Else the first control sending one value twice running is a relative
+      encoder (an absolute control sends only when it moved): every value
+      within REL_SPAN of 64 is ``rel64``, every value within REL_SPAN of 0
+      or 128 (and not 0) is ``rel``.
+    * Else ``abs``, as Learn has always made it."""
+    ch, n, _ = msgs[0]
+    seen = {k for c, k, _v in msgs if c == ch}
+    lo = n - LSB_OFFSET if n >= LSB_OFFSET else n
+    if lo < LSB_OFFSET and lo in seen and lo + LSB_OFFSET in seen:
+        return ch, lo, ABS14
+    vals = [v for c, k, v in msgs if (c, k) == (ch, n)]
+    if any(a == b for a, b in pairwise(vals)):
+        if all(abs(v - 64) <= REL_SPAN for v in vals):
+            return ch, n, "rel64"
+        if all(0 < v <= REL_SPAN or v >= 128 - REL_SPAN for v in vals):
+            return ch, n, "rel"
+    return ch, n, "abs"
 
 
 def _hold_key(b) -> object:
@@ -235,6 +289,7 @@ class Slew:
     t_end: float        # the clock when it lands: the last message + desk.slew
     wrote: float        # p.norm as read back after our last write
     steps: int = 0      # the steps it has taken (`_glide`)
+    fine: bool = False  # an abs14 row's: it rests on `target` itself, not a detent (`_rest`)
 
 
 def find_port(names: list[str], match: str) -> str | None:
@@ -606,6 +661,7 @@ class MidiIO:
                 self._connected()
             if not self.on:
                 self._land_all()    # no device: nothing is left in flight
+                self.__dict__.pop("_heard", None)   # a learn half heard: the device went
                 return
         self._was_on = True
         self._follow_pointer()
@@ -613,6 +669,8 @@ class MidiIO:
         self._uncatch_moved()
         for msg in self.ports.recv():
             self._handle(msg)
+        self._flush14()             # an MSB no LSB followed this poll
+        self._settle_heard()        # a listening learn that has heard enough
         self._fire_holds()
         self._follow_table()        # SHIFT pressed just now: this frame's redraw
         # knob smoothing: each glide's step for this frame — after the
@@ -713,7 +771,7 @@ class MidiIO:
     def _uncatch_moved(self) -> None:
         """A param that moved without us re-arms pickup on its knob."""
         for b in self._own_rows():
-            if b.kind not in ("cc", "pitch") or b.op != "abs" or not b.pickup:
+            if b.kind not in ("cc", "pitch") or b.op not in ABS_OPS or not b.pickup:
                 continue
             p = self.reg.get(b.target)
             if p is None or p.kind is Kind.TRIGGER:
@@ -768,11 +826,21 @@ class MidiIO:
             if lrn.accepts(source) and not t.is_invariant(Binding(source, lrn.learning)):
                 for b in t.dispatch(kind, ch, number, role):
                     self._passed_over(b, value)
+                if kind == "cc" and getattr(self.profile, "LISTENS", False):
+                    self._hear(ch, number, value)       # the row comes in `_settle_heard`
+                    return
                 self._learned(kind, ch, number, value)
                 if kind == "note":
                     self._held[(ch, number)] = []   # its release is the learn's: nothing
                     self._log_press(source, f"learn: {lrn.last}", t.layer_of(role))
                 return
+        # a 14-bit row's LSB (CC n + 32, n < 32): it is that row's, nobody else's
+        if kind == "cc" and LSB_OFFSET <= number < 2 * LSB_OFFSET \
+                and self._rows14(ch, number - LSB_OFFSET):
+            reg14 = self._regs14().setdefault((ch, number - LSB_OFFSET), [0, 0, False])
+            reg14[1], reg14[2] = value, False
+            self._apply14(ch, number - LSB_OFFSET)
+            return
         # the layer is read at the press (D12): a note-off goes to the rows
         # its note-on went to, whatever is up by now — on this device's
         # own latch (plan 27 B2)
@@ -798,6 +866,12 @@ class MidiIO:
         timed = []
         did: list[str] = []
         for b in rows:
+            if b.op == ABS14 and kind == "cc":
+                # an MSB: its LSB comes next and applies the pair (`_apply14`),
+                # or the poll's end does (`_flush14`)
+                reg14 = self._regs14().setdefault((ch, number), [0, 0, False])
+                reg14[0], reg14[2] = value, True
+                continue
             p = self.reg.get(b.target)
             if p is None or not b.enabled:
                 self._passed_over(b, value)
@@ -899,9 +973,65 @@ class MidiIO:
         so a pickup row has to pick up again from where the control is
         now — its next applied message would otherwise write the whole
         distance it travelled meanwhile (audit R13)."""
-        if b.kind in ("cc", "pitch") and b.op == "abs" and b.pickup:
+        if b.kind in ("cc", "pitch") and b.op in ABS_OPS and b.pickup:
             b.caught = False
-            b.last_hw = value / (16383.0 if b.kind == "pitch" else 127.0)
+            b.last_hw = value / (16383.0 if b.kind == "pitch" else 127.0)   # (an MSB: near enough)
+
+    # ---- 14-bit rows and the listening learn ----
+
+    def _regs14(self) -> dict[tuple[int, int], list]:
+        """(channel, CC n) → [MSB, LSB, an MSB waiting for its LSB] — made
+        here for an adapter from before a hot reload."""
+        return self.__dict__.setdefault("_r14", {})
+
+    def _rows14(self, ch: int, n: int) -> list[Binding]:
+        """The 14-bit rows on CC n of this device, on the layer that is up."""
+        rows = cast(Bindings, self.table).dispatch("cc", ch, n, self._role())
+        return [b for b in rows if b.op == ABS14]
+
+    def _apply14(self, ch: int, n: int) -> None:
+        """The pair on CC n / n + 32 to its rows, as one 14-bit value."""
+        msb, lsb, _ = self._regs14()[(ch, n)]
+        v = (msb << 7) | lsb
+        self.__dict__.setdefault("_hw", {})[("cc", ch, n)] = v / FULL14
+        reg = cast(Registry, self.reg)
+        for b in self._rows14(ch, n):
+            p = reg.get(b.target)
+            if p is None or not b.enabled:
+                if b.pickup:
+                    b.caught, b.last_hw = False, v / FULL14
+                continue
+            self._apply(b, p, v)
+
+    def _flush14(self) -> None:
+        """An MSB that no LSB followed this poll applies with the LSB it has."""
+        for key, reg14 in list(self._regs14().items()):
+            if reg14[2]:
+                reg14[2] = False
+                self._apply14(*key)
+
+    def _hear(self, ch: int, number: int, value: int) -> None:
+        """A CC heard by a listening learn: the first starts LISTEN_S."""
+        h, pid = self.__dict__.get("_heard"), cast(Learn, self.learner).learning
+        if h is None or h["pid"] != pid:
+            h = self._heard = {"pid": pid, "t0": self._now(), "msgs": []}
+        h["msgs"].append((ch, number, value))
+
+    def _settle_heard(self) -> None:
+        """LISTEN_S after the first CC a listening learn heard, the row is
+        written the way the control spoke (`heard_as`). A learn disarmed or
+        re-armed meanwhile forgets what it heard."""
+        h, lrn = self.__dict__.get("_heard"), cast(Learn, self.learner)
+        if h is None:
+            return
+        if lrn.learning != h["pid"]:
+            self._heard = None
+            return
+        if self._now() - h["t0"] < LISTEN_S:
+            return
+        self._heard = None
+        ch, number, op = heard_as(h["msgs"])
+        lrn.learn_control(self._source("cc", ch, number), self.profile, op=op)
 
     # ---- hold rows ----
 
@@ -1001,8 +1131,8 @@ class MidiIO:
                     b.lit = True
             self._note_written(p)
             return
-        # cc / pitch
-        full = 16383.0 if b.kind == "pitch" else 127.0
+        # cc / pitch (an abs14 row is handed the pair's 14-bit value, `_apply14`)
+        full = FULL14 if b.kind == "pitch" or op == ABS14 else 127.0
         u = value / full
         if op == "rel":
             n = value if value < 64 else value - 128
@@ -1043,13 +1173,15 @@ class MidiIO:
             # knob smoothing (plan 18 WP2): a continuous value glides to
             # where set_norm would put it; at desk.slew 0, and on a
             # discrete or integer target, the write is the immediate one
+            # (an abs14 row rests at its 14-bit value itself, between detents)
             seconds = getattr(self.table, "slew", 0.0)
+            fine = op == ABS14 and p.kind is Kind.CONTINUOUS and not p.integer
             if (seconds > 0.0 and p.kind is Kind.CONTINUOUS and not p.integer
                     and p.id not in self.__dict__.setdefault("_restless", set())):
-                self._aim(p, u, seconds)
+                self._aim(p, u, seconds, fine)
             else:
                 self._slew_state().pop(p.id, None)
-                p.set_norm(u)
+                self._rest(p, u, fine)
         self._note_written(p)
 
     def _note_written(self, p: Param) -> None:
@@ -1169,7 +1301,19 @@ class MidiIO:
         v = p.taper.map(k) if p.taper is not None else p._value_of_norm(k / p.steps)
         return p._norm_of(v)
 
-    def _aim(self, p: Param, u: float, seconds: float) -> None:
+    @staticmethod
+    def _rest(p: Param, u: float, fine: bool = False) -> None:
+        """Where a write comes to rest: `set_norm(u)`, on a detent — or, `fine`
+        (an abs14 row on a continuous, non-integer param), at u itself,
+        between detents (`Param.set` of the un-detented value, as a glide's
+        step and a performer's lane write): 16383 steps would otherwise
+        round to the param's 100 (RAW_STEPS) and gain nothing over 7 bits."""
+        if fine:
+            p.set(p._value_of_norm(min(max(float(u), 0.0), 1.0)))
+        else:
+            p.set_norm(u)
+
+    def _aim(self, p: Param, u: float, seconds: float, fine: bool = False) -> None:
         """Point the param's glide at what `set_norm(u)` would land, to
         arrive `seconds` from now. A param with no glide — or one somebody
         else has written since ours — starts one from where the base is,
@@ -1184,7 +1328,8 @@ class MidiIO:
             polled = self.__dict__.get("_polled")
             t = now if polled is None else min(max(polled, now - SLEW_BACK_S), now)
             s = slews[p.id] = Slew(y, y, t, now, y)
-        s.target = self._landing(p, u)
+        s.fine = fine
+        s.target = min(max(float(u), 0.0), 1.0) if fine else self._landing(p, u)
         s.t_end = now + seconds
 
     def _glide(self, now: float) -> None:
@@ -1212,7 +1357,7 @@ class MidiIO:
                     del slews[pid]
                     continue
                 if seconds <= 0.0 or now >= s.t_end:
-                    p.set_norm(s.target)
+                    self._rest(p, s.target, s.fine)
                     del slews[pid]
                 else:
                     f = min(max((now - s.t) / (s.t_end - s.t), 0.0), 1.0)
@@ -1232,7 +1377,7 @@ class MidiIO:
         for pid, s in list(slews.items()):
             p = self.reg.get(pid)
             if p is not None and abs(p.norm - s.wrote) <= SLEW_TOL:
-                p.set_norm(s.target)
+                self._rest(p, s.target, s.fine)
                 self._note_written(p)
         slews.clear()
 
@@ -1381,10 +1526,10 @@ class MidiIO:
             b.last_out = None
         for b in self._own_rows():
             b.last_out = None
-            if b.kind in ("cc", "pitch") and b.op == "abs" and b.last_hw is None:
+            if b.kind in ("cc", "pitch") and b.op in ABS_OPS and b.last_hw is None:
                 b.last_hw = hw.get(b.control)        # a fresh row: where its control is
             if (switch and b.layer is not None and b.kind in ("cc", "pitch")
-                    and b.op == "abs" and b.feedback != "ring" and b.pickup):
+                    and b.op in ABS_OPS and b.feedback != "ring" and b.pickup):
                 # where the fader is, moved on any layer — or None when no
                 # position is known (never moved since power-up): then only
                 # an on-value catch counts, never a crossing from a stale one
@@ -1392,7 +1537,7 @@ class MidiIO:
                 b.last_hw = pos
                 b.caught = (p is not None and pos is not None
                             and abs(self._ring_norm(p) - pos) <= PICKUP_TOL)
-            if load and b.kind in ("cc", "pitch") and b.op == "abs" and b.feedback != "ring":
+            if load and b.kind in ("cc", "pitch") and b.op in ABS_OPS and b.feedback != "ring":
                 p, seen = self.reg.get(b.target), self._writes.get(b.target)
                 if (b.layer == "preset" or p is None or seen is None or b.last_hw is None
                         or abs(p.norm - seen) > PICKUP_TOL

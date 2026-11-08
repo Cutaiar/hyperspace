@@ -107,6 +107,7 @@ from .params import (
     is_per_deck_meta_id,
 )
 from .routing import (
+    ABS14,
     HELD_ONLY,
     MOD_OPS,
     PAIR_SCHEME,
@@ -148,6 +149,18 @@ DESK = "desk"
 PAIR_WANT, PAIR_SPRING_WANT = "pair", "pair (spring)"
 PAIR_WANTS = (PAIR_WANT, PAIR_SPRING_WANT)
 BARE_WANTS = (DESK, "hand:left", "hand:right", "pad", *PAIR_WANTS)
+# one controller, by its role (the menu's Learn ▸ Player n ▸ <controller>): ``@<role>``
+# is completed only by a source that controller publishes — its own schemes as
+# the registry has them, bare for its kind's primary, ``cc@<role>`` for a second
+# desk — so the APC40 cannot complete a learn armed for the FLX4, nor the reverse
+ONLY = "@"
+
+
+def only_want(role: str) -> str:
+    """The want that only the controller `role` completes."""
+    return f"{ONLY}{role}"
+
+
 PAD_SCHEMES = ("pad", "hat", "axis", "pair", "touch", "motion")  # what can complete a "pad" learn
 
 # a push learn's depth when the adapter names none (plan 18 WP3). The hands
@@ -734,11 +747,29 @@ class Learn:
         (the on-screen desk, and every MIDI role), then each listed
         device's (`DeviceRegistry.wants`: the pad's "pad", the hands'
         "hand:left" / "hand:right", a new device's role). With no registry,
-        BARE_WANTS."""
+        BARE_WANTS. One controller's own (`only_want`: ``@<role>``) is not
+        listed — the menu offers it by player — and `arm` takes it for any
+        listed device."""
         devs = getattr(self, "devices", None)
         if devs is None:
             return BARE_WANTS
         return tuple(dict.fromkeys((DESK, *devs.wants())))
+
+    def is_desk_want(self, want: str | None = None) -> bool:
+        """Is the learn (or `want`) one a desk control completes: "desk", or
+        one MIDI controller's own (``@<role>`` of a MIDI device)?"""
+        want = self.want if want is None else want
+        if want == DESK:
+            return True
+        d = self._only_device(want)
+        return d is not None and getattr(d, "kind", "") == "midi"
+
+    def _only_device(self, want: str | None):
+        """The device an ``@<role>`` want names, or None."""
+        if not want or not want.startswith(ONLY):
+            return None
+        devs = getattr(self, "devices", None)
+        return devs.get(want[len(ONLY):]) if devs is not None else None
 
     def said(self, text: str) -> None:
         """What a learn that landed (or was kept) did, for the status lines."""
@@ -762,7 +793,7 @@ class Learn:
         keeps something per learn (the hands' baseline) can tell a re-arm
         of the same param from the learn it already knew."""
         wants = self.wants()
-        if want is not None and want not in wants:
+        if want is not None and want not in wants and self._only_device(want) is None:
             raise ValueError(f"no such want {want!r}; one of {', '.join(wants)}")
         self.learning = pid
         self.want = want if pid is not None else None
@@ -810,6 +841,11 @@ class Learn:
             return True
         if source.partition(":")[0] == modifiers.SCHEME:
             return want == modifiers.SCHEME
+        if want.startswith(ONLY):            # one controller: a source it publishes
+            d = self._only_device(want)
+            head = source.partition(":")[0]
+            return d is not None and head in (*getattr(d, "schemes", ()),
+                                              *getattr(d, "feeds", ()))
         if want == DESK:
             return Binding(source, "").is_midi
         if want in PAIR_WANTS:               # a pole, or the pair a port names (plan 56)
@@ -825,7 +861,7 @@ class Learn:
 
     # ---- a desk control completes it ----
 
-    def learn_control(self, source: str, profile=None) -> bool:
+    def learn_control(self, source: str, profile=None, op: str | None = None) -> bool:
         """A desk control completes the armed learn: a patch-layer row
         into the loaded patch (plan 13 §3.3). True when it landed.
 
@@ -834,7 +870,11 @@ class Learn:
         control clicked — so it needs no adapter. `profile` is the device's
         module, duck-typed (`is_relative`, `feedback_for`, `named`), for
         the op, the feedback and the control's name; None gives a plain
-        `abs` row named by `Binding.describe`.
+        `abs` row named by `Binding.describe`. `op` is how a CC was heard
+        when the adapter listened instead of asking the profile
+        (`midi.heard_as`: "abs14" a 14-bit pair, "rel" / "rel64" an
+        encoder, "abs"); a trigger target still learns a toggle unless the
+        control is relative.
 
         It binds the param as armed. Refused, with the reason in `last`,
         nothing changed and **the learn still armed**, on an invariant
@@ -874,7 +914,7 @@ class Learn:
             return False
         why = meta_refusal(pid)          # (only now: a row on these two is the meta controller's)
         if why is not None:
-            if self.want == "desk":
+            if self.is_desk_want():
                 self.take()
             road = f"; {PER_DECK_ROAD}" if is_per_deck_meta_id(pid) else ""
             self.refuse(f"{why} — not learned{road}")
@@ -884,10 +924,14 @@ class Learn:
             self.refuse(f"{pid} is held: it takes a button, not {named(b)}")
             return False
         if kind == "cc":
-            if profile is not None and profile.is_relative(number):
+            if op in ("rel", "rel64"):
+                b.op = op
+            elif op is None and profile is not None and profile.is_relative(number):
                 b.op = "rel"
             elif p.kind is Kind.TRIGGER:
                 b.op = "toggle"
+            elif op == ABS14:
+                b.op = ABS14
         elif kind == "note":
             b.op = "momentary" if pid in HELD_ONLY else "toggle"
         b.feedback_from(profile)

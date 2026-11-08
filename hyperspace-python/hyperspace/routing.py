@@ -73,6 +73,9 @@ and returns to. The last two are the *performer* ops:
   abs        an absolute MIDI control's position → set_norm (cc / pitch,
              with soft pickup); a trigger fires on the rising half. MIDI
              only: a continuous source never sets the base
+  abs14      `abs` read at 14 bits: the row's CC n (n < 32) is the MSB and
+             CC n + 32 on the same channel the LSB (MIDI 1.0's pair); the
+             adapter applies the pair once both halves are in (midi.py)
   rel/rel64  a relative encoder's delta → step
   momentary  note-on (a pad button's press) sets a toggle on, note-off
              (its release) sets it off
@@ -386,8 +389,14 @@ HOLD_S = 0.6       # midi.HOLD_S is the note's; tests hold the two equal
 # device does, after `reg.apply()` (`sink_values`)
 SINK_OP = "send"
 SINK_SCHEMES = ("param", "lane")
-OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hold", *MOD_OPS,
-       SINK_OP)
+# a 14-bit absolute control (a DJ controller's fader): the row sits on the MSB's
+# CC n (n < 32) and the adapter fuses CC n + LSB_OFFSET into it (midi.py)
+ABS14 = "abs14"
+ABS_OPS = ("abs", ABS14)        # the absolute MIDI reads: soft pickup, glide, catch
+LSB_OFFSET = 32                 # MIDI 1.0: CC n's LSB is CC n + 32, n in 0–31
+OPS = ("fire", "toggle", "step", "set", "abs", ABS14, "rel", "rel64", "momentary", "hold",
+       *MOD_OPS, SINK_OP)
+OP_WORDS = {ABS14: "14-bit"}    # an op as a row's line says it, where its name is not words
 # the APC40's two layers (plan 13 §3): a MIDI row's `layer` is None — the
 # control is invariant, the meta controller's, one meaning on both layers — or one
 # of these. The table's `layer` says which is up; SHIFT latches it.
@@ -923,7 +932,7 @@ class Binding:
             if s == "pitch":
                 return f"MIDI pitch bend {ch}{on}"
             what = "CC" if s == "cc" else "note"
-            extra = "" if self.op in ("abs", "toggle") else f" {self.op}"
+            extra = "" if self.op in ("abs", "toggle") else f" {OP_WORDS.get(self.op, self.op)}"
             return f"MIDI {what} {self.number} {ch}{on}{extra}"
         addr = ":".join(self.parts)
         on = f" on {self.device}" if self.device else ""     # a second pad's (plan 27 B6)
