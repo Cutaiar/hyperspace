@@ -56,6 +56,20 @@ FITS = ("cover", "contain", "stretch")
 EMPTY = "empty"          # a bin entry with nothing in it: black
 FROZEN = "frozen"        # a live feed held at rate 0 (row 324)
 RECHECK_S = 1.0          # how often a channel asks the resolver about its id again
+
+
+def prefer_shared(resolver, sid: str) -> str:
+    """`sid` as it should be stored, asked of the resolver when it offers
+    `prefer_shared` (`media.folder.MediaFolder`; a fake resolver in a test
+    need not). Storing the id exactly as picked is always safe, so anything
+    that goes wrong here leaves it alone."""
+    fn = getattr(resolver, "prefer_shared", None)
+    if fn is None:
+        return sid
+    try:
+        return fn(sid) or sid
+    except Exception:  # noqa: BLE001 — the id as picked still opens on this Mac
+        return sid
 STILL_KINDS = ("still", "missing")   # untimed and not live: rate means nothing
 CLOSE_BUDGET_S = 1.5     # app exit: how long `MediaState.close` waits for the closes
 CLOSER_IDLE_S = 2.0      # the closer thread ends after this long with nothing to close
@@ -621,9 +635,15 @@ class Channels:
 
     def assign(self, c: str, i: int, sid: str | None) -> None:
         """Put `sid` (None: empty) in channel `c`'s bin at `i`; the next
-        poll opens it if it is the slot on the channel."""
+        poll opens it if it is the slot on the channel.
+
+        A `local:` or `file:` id whose file is also in the shared folder is
+        stored as that `shared:` id (`prefer_shared`): both name the same
+        picture on this Mac, but only the shared one opens on the other, so
+        the patch a save writes is the one that travels."""
         if sid is not None:
             ids.parse(sid)
+            sid = prefer_shared(self.resolver, sid)
         self.channels[c].bin[int(i)] = sid
 
     def to_json(self) -> dict:

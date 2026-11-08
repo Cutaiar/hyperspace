@@ -254,6 +254,9 @@ class MediaResolver:
     def status(self, sid: str) -> str:
         return self.folder.status(sid)
 
+    def prefer_shared(self, sid: str) -> str:
+        return self.folder.prefer_shared(sid)
+
 
 class MediaIO:
     """The media side of the app (plan 32): the folder (scanned on its own
