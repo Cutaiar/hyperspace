@@ -604,7 +604,7 @@ panel's menu, Learn frame, fine drag, tooltip and undo report work unchanged.
 `HYPERSPACE_KIT=0` draws the stock panel throughout.
 
 Checked: the panel's whole suite with the kit on (7912 passed, 5 skipped —
-torch and friends), every test that changed was changed to check the same
+each environmental: macOS-only, a GPU, torch, a recorded hands tape), every test that changed was changed to check the same
 intent on the kit, not loosened (each diff says why); the dkit suite; the
 ImGui gallery byte-identical; captures of every section before and after.
 
