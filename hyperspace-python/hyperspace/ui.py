@@ -14,12 +14,12 @@ no extra plumbing. Right-clicking any widget opens the binding menu: it
 names the param id and offers Learn (the host's `learn.Learn`: a knob or a hand completes it) /
 Unbind.
 
-The surface is GRAPH, always drawn, with a side pane of folding sections
-(ui_pane.py, plan 49): each section is a page's body, one per registry
-group or two, and a block in it whose group the library knows carries its
-preset strip (ui_loadable.py) under the title. `ui.page` is the focus: the
-section a key row, a pad or ⌘[ / ⌘] unfolds and scrolls to (`PAGE_KEYS`,
-`Panel.go_page`). A modulated param
+The surface is GRAPH, always drawn, with a side pane that shows one view
+at a time (ui_pane.py, plan 49): the selection's details, or a section,
+each a page's body, one per registry group or two, and a block in it
+whose group the library knows carries its preset strip (ui_loadable.py)
+under the title. `ui.page` is the view: what the pane's chips, a key row,
+a pad or ⌘[ / ⌘] bring up (`PAGE_KEYS`, `Panel.go_page`). A modulated param
 draws its *base* as the handle and a white ghost bar at the *effective*
 value (params.py: `base` vs `eff_norm`), so the setting stays where the
 user put it while a lane rides on top; its tooltip names the performer
@@ -122,7 +122,7 @@ SCENE_COMBO_MIN = 100   # px; the analyzer's scene combo keeps this beside its l
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 # the dirty dot (plan 19 WP5): a filled red disc 12 px across beside a
 # loadable patch's name — where the "●" glyph left about 7 px of ink — and the
-# header's dot, radius 5, on a section whose group has moved off its loadable patch
+# side pane's chip dot, radius 5, on a section whose group has moved off its loadable patch
 DOT_R = 6.0
 HEADER_DOT_R = 5.0
 
@@ -712,13 +712,12 @@ CHEATSHEET = [
 # Plan 49 stage 3: there are no pages to switch. GRAPH is always drawn and
 # every other name is a section of its side pane (`ui_pane.SECTIONS`, which
 # also holds what each one's params are), drawn by the body that was the
-# page: `ui.page` is the focus, and setting it unfolds and scrolls to the
-# section of that name (`Panel.go_page`). The list stays, in its order,
+# page: `ui.page` is the pane's one view, and setting it shows the section
+# of that name (`Panel.go_page`). The list stays, in its order,
 # because the param's value is an index and a binding's `set` stores it:
 # every index a key row, a pad or an old show holds names what it always
 # named. Never reorder it; a new section goes at the end. FX's slot is the
-# fx section. GRAPH's has no section (the canvas is always there): it lets
-# go of the focus.
+# fx section. GRAPH's shows the selection (the canvas is always there).
 # the sections that hold the meta controller's params: ⌘Z there takes its stack
 # (plan 44 D5b, `Panel.in_meta_section`). The owner named analyzer, hands and
 # output; audio holds the master faders and nothing of a loadable patch (row 692)
@@ -732,27 +731,86 @@ PAGE_KEYS = ["output", "view", "faces", "media", "camera", "lookback", "fx", "au
              "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
 
 
+View = tuple[int, "str | None"]     # (a PAGE_KEYS index, the node selected in the selection view)
+SETTLE_NOTES = 10    # frames a step waits for its view to land before taking what landed
+
+
+def view_of(panel) -> View:
+    """What the side pane shows, as the history keeps it: `Panel.page`, and
+    in the selection's view (GRAPH's slot) the node selected there
+    (`Panel.graph_selected`; None for nothing, a cable, a group or several).
+    A section's view is its slot alone: a node selected while it is up is
+    no step of its own."""
+    page = getattr(panel, "page", 0)
+    graph = PAGE_KEYS.index("graph")
+    return (page, getattr(panel, "graph_selected", None) if page == graph else None)
+
+
+def go_view(panel, view: View) -> None:
+    """Bring `view` back (⌘[ / ⌘]): the slot straight on `Panel.page`, and
+    in the selection's view its node selected again and centred on the
+    canvas (`ui_graph.select_id`), or nothing selected (Esc's request) —
+    only where the canvas's selection differs."""
+    page, nid = view
+    panel.page = page
+    if page != PAGE_KEYS.index("graph") or getattr(panel, "graph_selected", None) == nid:
+        return
+    if nid is not None:
+        ui_graph.select_id(panel, nid)
+    else:
+        ui_graph._state(panel)["deselect"] = True
+
+
 class PageHistory:
-    """The sections focused, back and forward as a browser's are (⌘[ / ⌘]).
-    `note` records the focus now — a key row, a pad, a step here — dropping
-    the forward run when it is a new visit; `step(-1)` / `step(1)` returns
-    the index to go to, or None at either end."""
+    """The side pane's views, back and forward as a browser's are (⌘[ /
+    ⌘]): each a `View`, so the selection's view keeps which node it showed.
+    `note` records the view now — a chip, a key row, a pad, a click on the
+    canvas, a selection, a step here — dropping the forward run when it is a
+    new visit; `step(-1)` / `step(1)` returns the view to go to (`go_view`),
+    or None at either end. After a step, notes wait up to `SETTLE_NOTES`
+    frames for that view's selection to land (it lands a frame or two
+    later); one that never does (its node deleted since) takes the step's
+    place in the list, so the forward run is kept, and is folded into a
+    neighbour it now repeats, so no step goes nowhere. A note on another
+    slot is a new visit at once."""
 
-    def __init__(self, page: int):
-        self.visited, self.at = [page], 0
+    def __init__(self, view):
+        self.visited, self.at = [self._view(view)], 0
+        self.landing: View | None = None
+        self.wait = 0
 
-    def note(self, page: int) -> None:
-        if page == self.visited[self.at]:
+    @staticmethod
+    def _view(view) -> View:
+        return view if isinstance(view, tuple) else (int(view), None)   # (a bare slot)
+
+    def note(self, view) -> None:
+        view = self._view(view)
+        landing, self.landing = self.landing, None
+        if landing is not None and view[0] == landing[0]:   # (another slot: a new visit)
+            if view != landing and self.wait > 0:
+                self.wait -= 1
+                self.landing = landing          # its selection not landed yet
+                return
+            self.visited[self.at] = view        # as it landed
+            at = self.at                        # …and one with a neighbour just like it goes,
+            if at + 1 < len(self.visited) and self.visited[at + 1] == view:
+                del self.visited[at + 1]        # so no ⌘[ / ⌘] lands where it was
+            elif at > 0 and self.visited[at - 1] == view:
+                del self.visited[at]
+                self.at = at - 1
+            return
+        if view == self.visited[self.at]:
             return
         del self.visited[self.at + 1:]
-        self.visited.append(page)
+        self.visited.append(view)
         self.at = len(self.visited) - 1
 
-    def step(self, by: int) -> int | None:
+    def step(self, by: int) -> View | None:
         i = self.at + by
         if not 0 <= i < len(self.visited):
             return None
         self.at = i
+        self.landing, self.wait = self.visited[i], SETTLE_NOTES
         return self.visited[i]
 
 
@@ -831,8 +889,8 @@ class Panel:
         self.pad_diagram = False
         self.pad_view = 0       # ui_pad_views.VIEWS: map, faithful, lanes, cockpit
         self.poi_dials = True   # the Poi window (ui_pad.poi_window): shown each time the poi comes on
-        # the focus, an index into PAGE_KEYS (`ui.page`, `go_page`), its one
-        # owner (`ui_pane.focused`); GRAPH's slot is no section, so nothing is focused at launch
+        # the side pane's view, an index into PAGE_KEYS (`ui.page`, `go_page`),
+        # its one owner (`ui_pane.showing`); GRAPH's slot is the selection, the launch's view
         self.page = PAGE_KEYS.index("graph")
         self._focus_seen = self.page            # what `go_page` last acted on (`_draw`)
         self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
@@ -842,6 +900,9 @@ class Panel:
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
         self.graph_start_zoom = 1.0  # set by app.py: GRAPH's first zoom, off the display (plan 58 SM2)
+        # GRAPH frames every node in what the pane leaves of the canvas when it opens
+        # and on every load (`ui_graph.ask_fit`), never closer than the start zoom
+        self.graph_fit = True
         self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
         self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
@@ -878,7 +939,7 @@ class Panel:
         2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
         while the control window's GL is up. Safe to call twice. A loadable patches
         fold clicked under `WRITE_AFTER_S` ago is written first (plan 48
-        stage 2, as `ui_graph.close` flushes the pane's)."""
+        stage 2)."""
         ui_loadable.flush_folds(self, force=True)
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
@@ -923,11 +984,10 @@ class Panel:
         r.enum("ui.pad_view", "Pad view", lambda: self.__dict__.get("pad_view", 0),
                lambda i: setattr(self, "pad_view", int(i)), list(ui_pad_views.VIEW_LABELS),
                group="ui", persist=False, modulatable=False, tip=ui_pad_views.VIEW_TIP)
-        r.enum("ui.page", "Focus section", lambda: self.page, lambda i: Panel.go_page(self, i),
+        r.enum("ui.page", "Side pane view", lambda: self.page, lambda i: Panel.go_page(self, i),
                list(PAGE_KEYS), group="ui", persist=False, modulatable=False,
-               tip="Which section of GRAPH's side pane to bring up: it unfolds and scrolls "
-                   "to the top of the pane, and folds again when the focus moves on unless "
-                   "you unfolded it yourself. graph lets go of the focus.")
+               tip="What GRAPH's side pane shows, at its full height: a section, or graph "
+                   "for what is selected on the canvas. ⌘[ / ⌘] step back and forward.")
 
     def in_meta_section(self) -> bool | str | None:
         """What ⌘Z goes by, through `undo.where`: its meta stack here, else the
@@ -950,14 +1010,12 @@ class Panel:
 
     def go_page(self, i) -> None:
         """`ui.page`'s setter, and `_draw` for an index set straight (⌘[ /
-        ⌘]): focus slot `i` of `PAGE_KEYS` — its section shown and scrolled
-        to on the pane's next draw (`ui_pane.scroll_to`), or, for GRAPH's slot,
-        no section. Plan 49 stage 3: no page changes; the canvas is always
+        ⌘]): slot `i` of `PAGE_KEYS` is the side pane's view from the next
+        draw (`ui_pane.showing`) — its section, or, for GRAPH's slot, the
+        selection. Plan 49 stage 3: no page changes; the canvas is always
         drawn. Saved indices mean what they meant: the section of the name
         the page had."""
-        i = int(i)
-        self.page = self._focus_seen = i
-        ui_pane.scroll_to(ui_graph._state(self))
+        self.page = self._focus_seen = int(i)
 
     # ---- binding menu: every widget gets one on right-click ----
 
@@ -2108,8 +2166,8 @@ class Panel:
             # canvas and the sections are drawn disabled — dimmed, no widget
             # takes a click — and the click on a param is `_ctx_pick`'s. Never
             # the routing section: there the picked control's own line is what
-            # the user came for. The section headers and the footer stay live:
-            # the focus moves, the line lets go (`ui_graph.page`, `ui_pane._body`)
+            # the user came for. The pane's chips and the footer stay live:
+            # the view moves, the line lets go (`ui_graph.page`, `ui_pane._body`)
             self._picking = ui_desk.picking(self) is not None
             try:
                 self._page_graph(dt)

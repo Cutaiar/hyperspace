@@ -44,6 +44,16 @@ WIDGETS = ("button", "small_button", "invisible_button", "checkbox", "combo", "b
            "input_text", "input_text_with_hint", "input_int", "input_float")
 
 
+def _whole_in_view(lo, hi) -> bool:
+    """Is the item just drawn (`lo`, `hi`) wholly inside its window's clip
+    rect: a control cut by a body's edge takes no click on its cut half,
+    where its centre may be."""
+    if not imgui.is_item_visible():
+        return False
+    clip = imgui.internal.get_current_window().inner_clip_rect
+    return clip.min.y <= lo.y + 0.5 and hi.y <= clip.max.y + 0.5
+
+
 class Driver:
     def __init__(self, step: Callable[[], None] | None = None):
         self.step = step
@@ -78,7 +88,7 @@ class Driver:
             key = label.split("##", 1)[1] if "##" in label else label
             if "##" in label:
                 seen[key] = r
-            if self.revealing in (label, key) and not imgui.is_item_visible():
+            if self.revealing in (label, key) and not _whole_in_view(lo, hi):
                 imgui.set_scroll_here_y(0.5)
             return out
         return drawn
@@ -119,8 +129,8 @@ class Driver:
 
     def reveal(self, key: str) -> Action:
         """Scroll a control into view if its section's body has it scrolled
-        out (plan 49: a section can be taller than the pane; a control out
-        of view is drawn, but takes no click)."""
+        out, or cut by its edge (plan 49: a section can be taller than the
+        pane; a control out of view is drawn, but takes no click)."""
         self.revealing = key
         yield
         self.revealing = None

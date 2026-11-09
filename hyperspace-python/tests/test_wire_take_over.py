@@ -439,7 +439,7 @@ def driven(rig, monkeypatch):  # noqa: F811
     d = _tall_driver(rig, monkeypatch)          # (a pane tall enough for the whole selection)
     d.run(d.wait(2))
     _in_editor(rig, lambda: ed.select_node(ed.NodeId(ui_graph._id(st, "n:" + GID))))
-    _only(st, "selection")
+    _only(rig, "selection")
     d.run(d.wait(3))
     return rig, d, st
 

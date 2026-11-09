@@ -279,6 +279,13 @@ an idealized control object; draft PR #342 is its record.
 - Never push to `main`. The owner merges.
 - A change to a file format backs the old file up before the first
   rewrite.
+- **Work on current `main`, and stay on it.** `git fetch origin main` before
+  starting, and again before every push or hand-off: rebase the branch onto
+  it, rerun the tests, then push. A branch that has fallen behind `main`
+  undoes what merged meanwhile for anyone who runs it (2026-11-07: a branch
+  cut before #426 brought the CONTROLS title bar back on the owner's
+  screen). After a rebase, check the hand-check numbers and DECISIONS rows
+  against `main`'s (`tests/test_doc_numbers.py`).
 
 ## Ideas for later (not started)
 

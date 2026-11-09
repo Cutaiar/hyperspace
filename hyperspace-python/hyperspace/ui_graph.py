@@ -132,7 +132,7 @@ the panel's one selection, shared with the FX page (`Panel.fx_selected`,
 `share`, `select_effect`). The selected node itself is published on the
 panel (2026-10-31, `publish`: `Panel.graph_selected`, the one selected
 node's id, and `graph_selected_at`) for whoever is not this view — a
-controller's node mode, the side pane's fold of every page — as of the
+controller's node mode, the side pane — as of the
 last frame this page drew; a loadable patch landing without that node lets it go
 on any page (`settle`); `select_id` / `Panel.select_graph_node` select
 one from outside, and `node_params` / `Panel.graph_selected_params` are
@@ -172,13 +172,16 @@ one can be patched; patched, it is drawn as any node. The picker still
 offers every idle macro. **Tidy** (`tidy`) collapses every node, closes
 the idle lines, forgets every position on the canvas and lays them all
 out again in their areas — one undo step for the positions (`forget`) —
-frames the canvas on them and says so on the head ("laid out 36 nodes in
+frames the canvas on them in what the side pane leaves of it (`ask_fit`, as the
+canvas's open and every load do) and says so on the head ("laid out 36 nodes in
 6 areas, every one collapsed · 12 idle off the canvas", or "already
-tidy"). **The side pane is always on** (plan 49, stage 1: `ui_pane.py`):
-folding sections — the selection's details (`_side`; with nothing
-selected, a line saying so), then the body of every other page, which this
-page's pane is the only home of (plan 49, stage 3: no rail; this page is
-always drawn, and `ui.page` is the focused section). It lies under the canvas on the panel's narrow
+tidy"). **The side pane is always on** (plan 49: `ui_pane.py`), one
+view at a time at its full height (2026-11-07): the selection's details
+(`_side`; with nothing selected, a line saying so), or the body of one
+of the other pages, which this page's pane is the only home of (plan 49,
+stage 3: no rail; this page is always drawn, and `ui.page` is the view).
+A left click on the canvas that leaves something selected brings the
+selection view up (`_note_pick`). It lies under the canvas on the panel's narrow
 page; the **details beside / below** chip moves it (a page 720 px wide
 puts it in a side column by itself, no chip). **The side column is resizable** (the
 owner, 2026-10-27: "for some UI, the little sidebar … is just not wide
@@ -272,6 +275,10 @@ STUB_REACH = (graphview.COL_W - NODE_W) / 2 + PIN   # a stub's hit, outward past
 GROW_LEFT, CENTRED, GROW_RIGHT = -1, 0, 1   # where a pin's hit rect grows from its drawn square
 SIDE_W = 320.0           # the side column's width at first, when the page is wide enough for it
 SIDE_MIN = 240.0         # …the narrowest a drag may make it
+FIT_WAIT = 1             # frames a fit waits: a new loadable patch's nodes are measured on its second
+FIT_TRIES = 30           # …and frames it goes on asking while none is measured yet
+FIT_TOGETHER = 3         # frames apart a load's new name and new graph may land
+FIT_A, FIT_B = "n:@fit.a", "n:@fit.b"   # the fit's two invisible corners (`_fit_when_asked`)
 CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
 GRIP_W = 8.0             # the drag grip on the column's left edge
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
@@ -531,8 +538,6 @@ def close(panel) -> None:
     """Destroy the editor context, if the page ever made one — before
     imgui's own context goes (quit, ⌘R). Safe to call twice."""
     st = panel.__dict__.get(STATE)
-    if st:
-        ui_pane.flush(st, force=True)       # plan 49: a fold not yet written
     if not st or st.get("editor") is None:
         return
     st.pop("canvas_size", None)
@@ -770,8 +775,8 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
     in its area (plan 28 N9), the idle lines closed — and the head says
     what it did (`tidied`: "laid out 36 nodes in 6 areas, every one
     collapsed · 12 idle off the canvas"), or "already tidy" when nothing
-    moved or folded. The canvas is framed on the nodes after it
-    (`st["frame"]`)."""
+    moved or folded. The canvas is framed on the nodes after it, in what
+    the pane leaves of it (`ask_fit`)."""
     was_open = bool(st["open"]) or bool(st.setdefault("idle_open", set()))
     st["open"] = set()
     st["idle_open"] = set()
@@ -785,7 +790,7 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
                 != tuple(round(v) for v in auto.get(n.id, (0.0, 0.0)))))
     said = tidied(view) if (moved or was_open) else ALREADY_TIDY
     st["note"], st["said"] = "", said
-    st["frame"] = True
+    ask_fit(st)
     return said
 
 
@@ -806,11 +811,12 @@ def _dimmed(panel):
             imgui.end_disabled()
 
 
-def band_height(avail_h: float, focused: bool) -> float:
-    """The narrow page's band: `BELOW_H`, or with a section focused all but
-    `CANVAS_MIN` of the page, so the section reads as its page did (plan 49
-    stage 3: with no rail, the desk's narrow panel has only this)."""
-    return max(BELOW_H, avail_h - CANVAS_MIN) if focused else BELOW_H
+def band_height(avail_h: float, section: bool) -> float:
+    """The narrow page's band: `BELOW_H` for the selection, or with a
+    section shown all but `CANVAS_MIN` of the page, so the section reads as
+    its page did (plan 49 stage 3: with no rail, the desk's narrow panel
+    has only this)."""
+    return max(BELOW_H, avail_h - CANVAS_MIN) if section else BELOW_H
 
 
 def page(panel, dt: float) -> None:
@@ -824,13 +830,16 @@ def page(panel, dt: float) -> None:
         if st["machine"] is None:
             st["machine"] = getattr(getattr(panel, "library", None), "machine", None)
         if imgui.begin_child("##graph.side", imgui.ImVec2(0, 0)):
-            ui_pane.draw(panel, st, dt, None, below=imgui.get_content_region_avail().x < WIDE)
+            ui_pane.draw(panel, st, dt, None)
         imgui.end_child()
         return
     st["hide"] = hidden_ids(st, view)       # plan 36 T6: before anything asks `drawn_node`
+    _fit_on_a_load(panel, st)
     sel = _selection(st, view)
     if sel is not None and escaped():           # Esc closes the details: nothing selected
         st["deselect"], sel = True, None
+    if st.pop("canvas_pick", False) and sel is not None:
+        ui_pane.show(panel, ui_pane.SELECTION)  # a click on the canvas: what it picked, shown
     publish(panel, st, sel)
     share(panel, st, sel)
     # plan 49: the pane is always on, so its chip is too (on a narrow page)
@@ -856,7 +865,7 @@ def page(panel, dt: float) -> None:
     # so a narrow window never shrinks what a wide one was set to)
     side = side_width(st["side_w"], avail.x)
     pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide, side,
-                             band_height(avail.y, ui_pane.focused(panel) is not None))
+                             band_height(avail.y, ui_pane.showing(panel) != ui_pane.SELECTION))
     # the node editor still sees a right-click over the details (they lie on
     # its canvas): noted here, before it draws, so `_menus` opens no graph
     # menu there and the control's own Learn menu opens (the owner, 2026-10-24)
@@ -876,6 +885,7 @@ def page(panel, dt: float) -> None:
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     with _dimmed(panel):
         _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
+    _note_pick(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     # off air: the red frame and what is on air's inset, in the canvas's corner, left
     # of the pane beside it, above the band under it (a narrow page)
     page_list = imgui.get_window_draw_list()
@@ -896,10 +906,11 @@ def page(panel, dt: float) -> None:
         if wide:                        # the grip on the column's left edge, then the details
             _grip(st, pos, size, avail.x, side)
             imgui.indent(GRIP_W)
-        # plan 49: folding sections — the selection's details first
+        # the one view: the selection's details, or a section
+        home = home_page(sel[1]) if sel is not None and sel[0] == "node" else None
         ui_pane.draw(panel, st, dt,
                      (lambda: _side(panel, st, view, sel)) if sel else None,
-                     sel_words(sel), below=not wide)
+                     sel_words(sel), home[0] if home else None)
     imgui.end_child()
     _settle_take_over(st)
     imgui.pop_style_color()
@@ -908,6 +919,23 @@ def page(panel, dt: float) -> None:
     times.append(time.perf_counter() - t0)
     del times[:-TIMES]
     _arrive(panel, st)
+
+
+def _note_pick(panel, st: dict, origin, size) -> None:
+    """A left click on the canvas — pressed there and let go, not over the
+    pane, no menu open, no desk control picked — asks the next frame to
+    show the selection, once the editor holds what the click picked
+    (`page`; a click that leaves nothing selected leaves the view as it
+    is). A selection by code (`select_id`, `select_effect`) is no click:
+    the section being worked in stays."""
+    m = imgui.get_mouse_pos()
+    if imgui.is_mouse_clicked(0):
+        st["canvas_press"] = (
+            origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1]
+            and not st.get("over_details") and not getattr(panel, "_picking", False)
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+    if imgui.is_mouse_released(0) and st.pop("canvas_press", False):
+        st["canvas_pick"] = True
 
 
 def pinch_wheel(magnification: float) -> float:
@@ -1088,7 +1116,7 @@ def select_id(panel, nid: str) -> None:
     node's `render:acid.2`, a modifier's own id — and centre it on the
     canvas next frame (`_select`): the one request path, `select_node`'s
     and `Panel.select_graph_node`'s. The canvas is always drawn, so the
-    focus stays where it is: a section being worked in is not thrown away."""
+    pane's view stays where it is: a section being worked in is not thrown away."""
     _state(panel)["select_node"] = nid
 
 
@@ -1702,6 +1730,8 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             through: float = 0.0) -> None:
     """The editor, its ground faded to 1 − `through` over the backdrop."""
     view_file = start_view(panel.graph_start_zoom) if st["editor"] is None else ""
+    if st["editor"] is None and getattr(panel, "graph_fit", True):
+        ask_fit(st, instant=True)       # the canvas opens with every node in view
     ed.set_current_editor(editor(panel, view_file))
     keep_corner(st, (size.x, size.y))
     try:
@@ -1782,8 +1812,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     held = ui_routing._state(panel).pop("reveal", None)     # "Route a lane here…"
     if held is not None:
         reveal(st, view, held)
-    if st.pop("frame", False):          # a tidy: the canvas framed on its nodes
-        ed.navigate_to_content()
+    _fit_when_asked(panel, st, view, lay, size)    # open, a load, a tidy: every node in view
     area = st.pop("frame_area", None)   # N9: an area chip or a title clicked
     if area is not None:
         frame_area(st, view, area)
@@ -1945,6 +1974,133 @@ def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
     imgui.dummy(imgui.ImVec2(NODE_W, 0))
     imgui.pop_id()
     ed.end_node()
+
+
+def _fit_on_a_load(panel, st: dict) -> None:
+    """Another loadable patch on the canvas — its name and its graph both
+    new within `FIT_TOGETHER` frames (a load, a new, the other deck's), not
+    a save as (the name alone) nor an edit (the graph alone) — asks for
+    every node in view."""
+    lp = getattr(getattr(panel, "library", None), "loaded_patch", None)
+    name = (id(lp), (getattr(lp, "landing", None) or (None,))[0])
+    spec = getattr(getattr(lp, "graph", None), "spec", None)
+    now = imgui.get_frame_count()
+    seen = st.get("fit_seen")
+    st["fit_seen"] = (name, spec)
+    if seen is None:
+        return
+    moved = st.setdefault("fit_moved", {})
+    if seen[0] != name:
+        moved["name"] = now
+    if seen[1] is not spec:
+        moved["spec"] = now
+    if len(moved) == 2:
+        if abs(moved["name"] - moved["spec"]) <= FIT_TOGETHER and getattr(panel, "graph_fit", True):
+            ask_fit(st)
+        moved.clear()
+    elif moved and now - next(iter(moved.values())) > FIT_TOGETHER:
+        moved.clear()
+
+
+def ask_fit(st: dict, instant: bool = False) -> None:
+    """Ask the canvas to bring every node into view, centred in what the
+    pane leaves of it (`_fit_when_asked`), `FIT_WAIT` frames on: a new
+    loadable patch's nodes are placed on its first frame and measured on
+    the next. `instant`: no glide (the launch)."""
+    st["fit"] = {"wait": FIT_WAIT, "tries": FIT_TRIES, "instant": instant}
+
+
+def fit_box(content: tuple[float, float, float, float], canvas: tuple[float, float],
+            pane: tuple[str, float], most_zoom: float) -> tuple[float, float, float, float]:
+    """The canvas box (x0, y0, x1, y1, canvas units) the editor is to frame
+    so `content` sits centred in the part of the canvas the pane leaves —
+    `pane` is ("beside", its width) or ("below", its height), in screen px —
+    never larger on screen than `most_zoom` px a unit. The box has the
+    canvas's own aspect, so the editor's fit maps it onto the canvas
+    whole: the content's box grown to the visible part's aspect (and to
+    that part's size at `most_zoom`), then out under the pane. Pure."""
+    x0, y0, x1, y1 = content
+    cw, ch = max(canvas[0], 1.0), max(canvas[1], 1.0)
+    side, cut = pane
+    vw, vh = (max(cw - cut, 1.0), ch) if side == "beside" else (cw, max(ch - cut, 1.0))
+    w, h = max(x1 - x0, 1.0), max(y1 - y0, 1.0)
+    z = max(most_zoom, 1e-3)
+    w, h = max(w, vw / z), max(h, vh / z)
+    if w / h > vw / vh:                 # wider than the visible part: taller
+        h = w * vh / vw
+    else:
+        w = h * vw / vh
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    bx0, by0 = mx - w / 2, my - h / 2
+    if side == "beside":
+        return (bx0, by0, bx0 + w * cw / vw, by0 + h)
+    return (bx0, by0, bx0 + w, by0 + h * ch / vh)
+
+
+def _content_ids(st: dict, view: graphview.View, lay) -> list[str]:
+    """The editor names of what the canvas draws: its nodes, its groups
+    (folded, or an open one's title) and the idle lines it shows."""
+    names = ["n:" + n.id for n in view.nodes if drawn_node(st, n)]
+    names += ["n:" + (region_id(g.id) if g.open else g.id) for g in view.groups]
+    names += ["n:" + graphview.idle_id(a) for a in lay.lines
+              if not all(i in st["hide"] for i in lay.idle.get(a, []))]
+    return names
+
+
+def _fit_when_asked(panel, st: dict, view: graphview.View, lay, size: imgui.ImVec2) -> None:
+    """Inside the editor, after the nodes: what `ask_fit` asked, once its
+    wait is out and every node is measured (else again next frame, up to
+    `FIT_TRIES`, then on those measured). The binding has no zoom setter, so the box `fit_box` says
+    is marked by two invisible corner nodes, selected with the content and
+    framed (`navigate_to_selection`, zooming in as well as out); the
+    selection — nodes and cables — is then put back as it was."""
+    ask = st.get("fit")
+    if not ask:
+        return
+    if ask["wait"] > 0:
+        ask["wait"] -= 1
+        return
+    ids = [ed.NodeId(_id(st, k)) for k in _content_ids(st, view, lay)]
+    every = [(ed.get_node_position(k), ed.get_node_size(k)) for k in ids]
+    boxes = [(p, z) for p, z in every if z.x > 0 and z.y > 0]
+    if len(boxes) < len(every) or not boxes:    # a node not measured yet: next frame
+        ask["tries"] -= 1
+        if ask["tries"] > 0 or not boxes:
+            if ask["tries"] <= 0:
+                st.pop("fit", None)
+            return
+    st.pop("fit", None)
+    content = (min(p.x for p, _ in boxes), min(p.y for p, _ in boxes),
+               max(p.x + z.x for p, z in boxes), max(p.y + z.y for p, z in boxes))
+    (_x, _y), (pw, ph) = st.get("details_rect") or ((0.0, 0.0), (0.0, 0.0))
+    pane = ("beside", pw) if ph >= size.y - 1 else ("below", ph)
+    box = fit_box(content, (size.x, size.y), pane,
+                  float(getattr(panel, "graph_start_zoom", 1.0) or 1.0))
+    held = list(ed.get_selected_nodes())           # (clear_selection takes the cables too)
+    held_links = list(ed.get_selected_links())
+    clear = imgui.ImVec4(0, 0, 0, 0)
+    ed.push_style_color(ed.StyleColor.node_bg, clear)
+    ed.push_style_color(ed.StyleColor.node_border, clear)
+    ed.push_style_var(ed.StyleVar.node_padding, imgui.ImVec4(0, 0, 0, 0))
+    corners = []
+    for key, (x, y) in ((FIT_A, (box[0], box[1])), (FIT_B, (box[2] - 1.0, box[3] - 1.0))):
+        k = ed.NodeId(_id(st, key))
+        ed.set_node_position(k, imgui.ImVec2(x, y))
+        ed.begin_node(k)
+        imgui.dummy(imgui.ImVec2(1, 1))
+        ed.end_node()
+        corners.append(k)
+    ed.pop_style_var()
+    ed.pop_style_color(2)
+    ed.clear_selection()
+    for k in ids + corners:
+        ed.select_node(k, True)
+    ed.navigate_to_selection(True, 0.0 if ask["instant"] else -1.0)
+    ed.clear_selection()
+    for k in held:
+        ed.select_node(k, True)
+    for k in held_links:
+        ed.select_link(k, True)
 
 
 def pin_hit_size(zoom: float, row_h: float, pitch: float, min_px: float = MIN_PX,
@@ -3691,7 +3847,7 @@ def _selection(st: dict, view: graphview.View):
 
 
 def sel_words(sel) -> str:
-    """The selection section's header words (plan 49): a node's label, a
+    """The selection chip's words (plan 49): a node's label, a
     group's name, else the kind ("cable", "bundle"); "" with nothing."""
     if sel is None:
         return ""
@@ -3938,7 +4094,8 @@ def _wireframe(panel) -> None:
 
 FOLD_AT = 12             # more param rows than this: each group under its own header
 UNWIRED = imgui.ImVec4(0.58, 0.58, 0.61, 0.55)   # an input chip nothing feeds: faint
-OPEN_TIP = "Bring up this node's section of the side pane, with it selected there"
+OPEN_TIP = ("Show this node's section in the side pane, with it selected there "
+            "(its ← chip comes back here)")
 
 
 def side_groups(panel, n: graphview.VNode) -> list[tuple[str, list[str]]]:
@@ -4095,16 +4252,12 @@ def home_page(n: graphview.VNode):
 
 
 def open_on(panel, home) -> None:
-    """Focus `home`'s section (through ``ui.page``) with its item selected
-    there."""
+    """Show `home`'s section in the pane (through ``ui.page``) with its item
+    selected there."""
     key, sel = home
     if sel is not None:
         sel(panel)
-    k = ui.PAGE_KEYS.index(key)
-    if "ui.page" in panel.reg:
-        panel.reg["ui.page"].set(k)
-    else:
-        panel.page = k
+    ui_pane.show(panel, key)
 
 
 def _open_chip(panel, n: graphview.VNode) -> None:

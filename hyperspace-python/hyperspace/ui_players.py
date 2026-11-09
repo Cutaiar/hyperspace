@@ -19,8 +19,8 @@ undo stack (row 800), so ⌘Z over the board takes it back, and takes back nothi
 on that stack; the line under the lanes says what ⌘Z did. A controller unplugged since
 stays where it is, and that is said too.
 
-**Where it lives.** A section of the side pane (`ui_pane`, folded at first, its
-header saying who is where) and the same board large, in a window of its own, over
+**Where it lives.** A section of the side pane (`ui_pane`, its own chip,
+PLAYERS) and the same board large, in a window of its own, over
 whatever is drawn (`window`). The footer's chip and the O key open and close the
 large one, with the panel folded too. Esc closes it. O has no row in `routing.keymap`, and
 if one is learned onto it the row has it and the board does not (`_key_toggles`). Both are the one `_board`; every

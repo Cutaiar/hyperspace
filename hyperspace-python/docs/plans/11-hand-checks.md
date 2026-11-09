@@ -7090,6 +7090,7 @@ Fail: a frozen meter after the untick points at the no-voice block not
 being pushed (`Mixer._push`).
 
 ## BF. The panel fold, stage 1: the side pane always on (plan 49)
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 597–601, 2026-11-03. Headless: `tests/test_ui_pane.py`
 (the panel driver on GRAPH: each section opened by a click and a control
 found in it by its page's id, a click in a section moving the param, a
@@ -7355,6 +7356,7 @@ colour, "this preset wires Output 2, which this rig has not open — add a
 window on OUTPUT to show it"; (2) both lines are gone.
 
 ## BK. The panel fold, stage 2: every page a section, the FX page retired (plan 49)
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 626–632, 2026-11-03. Headless: `tests/test_ui_pane.py`
 (each stage-2 section opened alone at 240 px and 320 px, its page's
 control found inside the pane and nothing past its edge; MEDIA four to
@@ -7761,6 +7763,7 @@ chip is left under the mouse. Let go off the chip: nothing is said.
 
 ## BS. The panel fold, stage 3: the rail gone, `ui.page` the focus (plan 49)
 
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 668–672, 2026-11-03. Headless: `tests/test_ui_pane.py` (the
 four new sections at 240 and 320 px, nothing past the pane's edge; every
 slot a section but GRAPH's; the focus and the fold; the focused header at
@@ -8694,13 +8697,13 @@ Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_gui
 
 Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the app at a 1920x1080 window, but at 1x only on a taller display and on a real 1080p display only at 2x.
 **634. The show's display.** (the display you'll run the show on, at 1080p)
+*Since 658 (GRAPH opens with every node in view, Dillon's choice of 2026-11-07), 1.3 is the most the opening fit zooms in, not the zoom it always opens at: in steps 1 and 2, a patch too wide for 1.3 opens zoomed out, centred left of the pane. Check the words at 1.3 on a small patch, and ⌘-scroll to 1.3 on a big one.*
 1. Open the control window on it, launch, and load a patch. *Pass:* the node words read from where you'll stand, and the first column is at the canvas's top-left.
 2. Count the columns beside the pane. *Pass:* enough to work without panning all the time; about four. Say if you want it tighter or looser: the number is `placement.ZOOM_READ`.
 3. Look at a node's words up close, at a 1x display if you have one. *Pass:* sharp enough not to bother you. They're softer than the head's words above the canvas at any zoom but 1:1; say if it bothers you.
 4. ⌘-scroll to a new zoom during a look with the output up. *Pass:* no visible stutter on the output when you stop, about a third of a second later.
 5. Resize the window. *Pass:* the zoom doesn't change.
 *Fail:* a start as small as before, words too soft to read, a stutter you can see, or a zoom that follows the resize.
-
 ## DS. The one migration (rows 830–835, 839)
 
 Register rows 830–835, 2026-11-07. Proved on a copy of the Drive (counts in row 832). On both Macs, after the run.
@@ -8748,6 +8751,20 @@ Register rows 840–843, 2026-11-07. Headless: `tests/test_person_words.py`.
 1. Put a stray `[` in `config.toml`, launch. *Pass:* the library is the Drive's as before (or, never launched here, nothing listed and saves refused in words).
 2. Put the file back.
 *Fail:* patches saved into `~/Hyperspace` instead of the Drive.
+
+## DV. The side pane is one viewer, and GRAPH frames every node (2026-11-07)
+
+Headless: `tests/test_ui_pane.py` (every view by the mouse, a canvas click, open on … and ←, ⌘[ / ⌘], the body's height, the band, the chips holding still) and `tests/test_graph_fit.py`. A restart after pulling.
+
+**654. Every view, by the mouse.** (Mac, the panel wide) The pane shows the selection at launch. Click each chip — patches, audio, routing, playlist, players, system — then each row of **sections ▾**. *Pass:* each fills the pane under the chips, alone, its chip lit (the menu's chip naming it); **selection** brings the selection back; the chips never move while you work. *Fail:* a section you can't reach, or two at once.
+
+**655. A node and its section.** Click a node on the canvas while patches is up: the selection shows it. Click **open on …**: its section, at full height, with **← <node>** at its top; click it: the node again. Select a node from OUTPUT's open on GRAPH: the section you were in stays. *Fail:* a click on the bare canvas that changes the view.
+
+**656. ⌘[ and ⌘].** After 654 and 655, press ⌘[ again and again, then ⌘]. *Pass:* back through every view in the order seen, forward again, each scrolled where you left it. Select node A, then node B (the selection up): ⌘[ selects A again and centres it on the canvas, ⌘] B. Delete A, then ⌘[ to where it was: the pane shows what is selected, and ⌘] still goes forward.
+
+**657. The narrow band.** (the desk up, the panel narrow) The band shows the chips and the selection; a section grows it to all but a strip of canvas; **selection** shrinks it back. No chip passes the band's edge, a long playlist name included.
+
+**658. Every node in view.** (Mac, the rig's display) Launch: every node is on screen, centred left of the pane, not under it. Zoom right in and drag away, then load another patch (F-key or PATCHES): its nodes all come into view, gliding. **save as…** and an edit leave the view where it is. Load a patch with three nodes: they're not blown up past the size they open at. With the band under the canvas (the desk up), the nodes sit above the band.
 
 ## What no test covers
 

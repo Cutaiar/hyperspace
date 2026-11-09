@@ -256,12 +256,12 @@ def test_the_tray_shows_a_pad_no_entry_reads(rig):
     assert "players.tray.0" in r.d.rects
 
 
-def test_the_header_and_the_footer_say_who_is_where(rig):
+def test_the_footer_says_who_is_where_and_the_pane_chip_does_not(rig):
     r, d, meta = rig, rig.d, rig.meta
     assert ui_players.summary(r.panel) == "on air 1 2  ·  off air —"
     meta.move_player(2, Duty.OFF_AIR)
     assert ui_players.summary(r.panel) == "on air 1  ·  off air 2"
-    assert ui_pane._said(r.panel, "players", "") == ui_players.summary(r.panel)
+    assert ui_pane._said(r.panel, "players", "") == ""          # the chip: PLAYERS alone
     assert "players.open" in d.rects
 
 
@@ -449,13 +449,12 @@ def test_esc_drops_a_carried_token_and_the_release_moves_nobody(rig, tmp_path):
 
 
 def test_esc_with_no_board_on_screen_is_graphs(rig, monkeypatch):
-    """A pick survives no fold: GRAPH's Esc is neither lost to it nor spent on it."""
+    """A pick survives no other view: GRAPH's Esc is neither lost to it nor spent on it."""
     r, d = rig, rig.d
     st = ui_players._state(r.panel)
     _click(d, _head(d, "players.p2"))
     assert st["sel"] == (ui_players.SEL_PLAYER, 2)
-    r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
-    ui_pane.set_open(ui_graph._state(r.panel), "players", False)
+    r.reg["ui.page"].set(PAGE_KEYS.index("graph"))      # the selection: the board goes
     d.run(d.park(), d.wait(3))
     assert "players" not in ui_graph._state(r.panel)["pane_drawn"]
     assert st["sel"] is None, "it went with its board"
@@ -767,8 +766,9 @@ def test_players_is_a_section_at_the_end_of_the_page_keys():
     assert "players" in ui_pane.KEYS
 
 
-def test_the_section_is_folded_at_first():
-    assert not ui_pane.DEFAULT_OPEN["players"] and not ui_pane.DEFAULT_BELOW["players"]
+def test_the_section_has_a_chip_of_its_own():
+    """No node leads to the players: the mouse reaches them by their own chip."""
+    assert "players" in ui_pane.TABS
 
 
 # ---------------------------------------------------------------- the pad's lights

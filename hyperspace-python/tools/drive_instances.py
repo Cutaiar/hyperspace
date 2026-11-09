@@ -14,7 +14,7 @@ def script(d, panel):
     reg["camera.zoom"].set_value(1.0)          # a known camera, whatever the home opened on
     reg["camera.yaw"].set_value(0.45)
     reg["camera.pitch"].set_value(0.3)
-    reg["ui.page"].set(PAGE_KEYS.index("view"))     # the VIEW section, unfolded and scrolled to
+    reg["ui.page"].set(PAGE_KEYS.index("view"))     # the VIEW section, the pane's view
     yield from d.wait(20)
     yield from d.enter("view.instances", 12, frames=20)
     yield from d.park()

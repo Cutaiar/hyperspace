@@ -1,67 +1,71 @@
-"""GRAPH's side pane, always on, as folding sections (plan 49, all three stages).
+"""GRAPH's side pane: one viewer, showing one thing at a time (plan 49,
+then the single viewer of 2026-11-07).
 
-GRAPH is the panel: always drawn (stage 3 took the rail away). The pane is
-always beside the canvas (or under it, on a narrow page) and holds a stack
-of sections, each a header that folds and unfolds by a click:
+GRAPH is the panel: always drawn. The pane is always beside the canvas (or
+under it, on a narrow page) and shows **one view** at the pane's full
+height:
 
-- **selection** — the selected thing's details (`ui_graph._side`), or, with
-  nothing selected, a line in words saying so;
-- every other section (`SECTIONS`) — the body that was a page, drawn by the
-  page's own function (`Panel._page_loadable`, `ui_fx.page`, …), so a
+- **selection**: the selected thing's details (`ui_graph._side`), or,
+  with nothing selected, a line saying so;
+- every other section (`SECTIONS`): the body that was a page, drawn by
+  the page's own function (`Panel._page_loadable`, `ui_fx.page`, …), so a
   section is one row there.
 
-**The focus** (stage 3). `ui.page` no longer switches a page: what a key
-row, a pad or ⌘[ / ⌘] moves names a section (`ui.PAGE_KEYS`, by index, so
-every saved binding keeps its meaning; `section_of`). `Panel.page` is the
-one owner of the focus (`focused` reads it); the pane's next draw scrolls to
-the section (`scroll_to`), shows it however it is folded and gives it the
-room under the headers (`draw`). The focus does not touch the fold: the
-section goes back to what a click left it when the focus moves on (a walk
-through the sections leaves no pile of open ones) or lets go (`ui.page` on
-GRAPH's slot; a click on its own header, `let_go`). A click on another
-header beside the canvas leaves the focus alone. In the narrow band the
-focused section is the only body, the only lit chip, the band grows to
-leave `CANVAS_MIN` of canvas (`ui_graph.band_height`) and a click on any
-chip lets go and shows what it asked for.
+**The view is `ui.page`.** `Panel.page`, an index into `ui.PAGE_KEYS`, is
+the one owner of what the pane shows (`showing`): a section's own slot
+shows it, and GRAPH's slot shows the selection (the canvas is always
+there, so "graph" means "what is selected on it"). Everything that moves
+the view moves `ui.page`, so ⌘[ / ⌘] (`ui.PageHistory`) step back and
+forward through every view the pane has shown, whatever moved it: a chip,
+the sections menu, a node's **open on …**, the **←** back chip, a key row, a
+pad, a click on a node. The selection's view is kept with the node it
+showed (`ui.view_of`), so the pane is a viewer with a history: back from
+node B to node A selects A again and centres it (`ui.go_view`).
 
-The open sections share the pane's height evenly; each body is a child
-of its own, so a long one scrolls by itself. Beside the canvas a body is
-never under `MIN_BODY_H` (past that the pane scrolls). On a narrow page
-the pane is #266's band under the canvas: there the headers are rows of
-chips (a chip that would pass the edge starts the next row: sixteen do not
-fit one) and the bodies share the rest with no floor, so one open
-section has the whole band.
+**Every view has a mouse route** (Dillon, 2026-11-07: nothing
+stranded). Over the body, a row of chips (`_bar`) wrapping at the pane's
+edge: **selection** and the six sections no canvas node leads to (`TABS`:
+patches, audio, routing, playlist, players, system), then a **sections**
+chip whose menu holds the other eleven (`MENU`, each also a node's
+**open on …**). The lit chip is the view; the menu's chip names the view
+while it is one of the eleven. A section opened from the selected node's
+**open on …** has a **← <node>** chip back to it (`draw`'s `home`).
 
-Which sections are open is this Mac's, kept in ``<machine>/ui.json``
-beside the pane's width (``graph.side_w``): ``pane.open`` for the column
-beside the canvas (selection and loadable patches open at first), ``pane.below``
-for the narrow page's band (selection alone at first). A click is
-written `WRITE_AFTER_S` after the last one (`flush`; `ui_graph.close`
-writes what is left), atomically (`library._write_text`). A selection
-never unfolds a section: a folded **selection** header names what is
-selected.
+**A click on the canvas shows the selection** (`ui_graph.page`): a node,
+a cable or a group picked by the mouse brings the selection view up, so
+what was clicked is what the pane shows. A selection made by code (FX's
+show on GRAPH, OUTPUT's open on GRAPH, a controller) leaves the view
+where it is: the section being worked in is not thrown away.
+
+Each section's body is a child of its own (``pane.<key>/##body``), so it
+scrolls by itself and imgui keeps each one's scroll: back to a section is
+back to where it was. Which view is up is not kept between launches: the
+app opens on the selection, as `Panel.page` starts on GRAPH's slot. (The
+folds plan 49 kept in ``<machine>/ui.json`` as ``pane.open`` and
+``pane.below`` are no longer read or written; a file holding them keeps
+them.)
 
 **Ids.** A widget in a section carries the label it carries on its page
 — `##<param id>` for every param widget — so the panel driver
 (`tests/ui_driver.py`, which finds a control by what follows ``##``),
 Learn's framing and the right-click menu find it as on the page. imgui's
 own id is the label hashed under the id stack, and each section's body
-is drawn under ``push_id("pane.<key>")`` inside the pane's child, so a
-section's ids never collide with another's (the loadable patches section and the
-lookback section both draw preset strips). Each header is ``##pane.<key>``
-for the driver.
+is drawn under ``push_id("pane.<key>")`` inside the pane's child. Each
+view's chip, and each menu row, is ``##pane.<key>``; the menu's chip is
+``##pane.sections`` and the back chip ``##pane.back``.
 
 **Narrow.** The pages were laid out for the panel's width; at the pane's
 (`ui_graph.SIDE_MIN`, 240 px, at the narrowest) a chip or a tick that
 would pass the right edge starts a new row (`ui.beside`), and the MEDIA
 grid, the SEQ grid, the LFO and envelope strips and the OUTPUT blocks
 lay themselves out for the room they are given (plan 49, stage 2), as do
-VIEW's rows, ROUTING's head, HANDS and SYSTEM (stage 3).
+VIEW's rows, ROUTING's head, HANDS and SYSTEM (stage 3). In the narrow
+band under the canvas a section's view grows the band
+(`ui_graph.band_height`); the selection's keeps it `BELOW_H`.
 
-**Cost.** Each drawn body's time is kept (``st["pane_ms"]``, a running
-mean) and the SYSTEM page says it under GRAPH's own line
-(`timing_line`); a body scrolled out of the pane's view is not drawn
-(imgui skips the child), so it costs nothing.
+**Cost.** The body drawn has its time kept (``st["pane_ms"]``, a running
+mean) and the SYSTEM page says it under GRAPH's own line (`timing_line`).
+One body draws a frame, so the pane costs one section, never all of them.
 """
 
 from __future__ import annotations
@@ -73,7 +77,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_loadable, ui_players, ui_playlist, undo
+from . import library, ui, ui_fx, ui_loadable, ui_playlist, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -104,8 +108,8 @@ def _wrapped(key: str) -> Callable:
 
 
 # (key, title, the groups for its dirty dot, the body — the page's own
-# draw; None for selection, whose body `draw` is handed): down the pane,
-# the graph's own things first (what is selected, the loadable patch, the shape,
+# draw; None for selection, whose body `draw` is handed), in the sections
+# menu's order: the graph's own things first (what is selected, the loadable patch, the shape,
 # its effects and pictures), then the voices that move them and the desk's
 # rows, then the room and the meta controller
 SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
@@ -126,24 +130,23 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...], Callable | None], ...] = (
     ("output", "output", ("output",), _paged("output")),
     ("playlist", "playlist", (), _paged("playlist")),
     ("system", "system", (), _wrapped("system")),
-    # last, so focused it has the pane: a body has the room under the headers after it
     ("players", "players", (), _paged("players")),
 )
 KEYS = tuple(k for k, *_ in SECTIONS)
-# beside the canvas: selection and loadable patches open at first (stage 1); every
-# section stages 2 and 3 added folded (rec: a fresh Mac's pane reads as it did)
-DEFAULT_OPEN = {k: k in ("selection", "loadable") for k in KEYS}
-DEFAULT_BELOW = {k: k == "selection" for k in KEYS}     # the narrow page's band
-LAYOUTS = {"open": DEFAULT_OPEN, "below": DEFAULT_BELOW}   # ui.json's pane.<layout>
+SELECTION = "selection"
+# the views with a chip of their own: the selection, and the sections no canvas
+# node's "open on …" leads to (`ui_graph.home_page`), so the mouse reaches them
+TABS = (SELECTION, "loadable", "audio", "routing", "playlist", "players", "system")
+MENU = tuple(k for k in KEYS if k not in TABS)  # the sections chip's menu: the rest, in order
+SAYS = (SELECTION, "playlist")   # chips whose words say something live: a fixed width (`_chip`)
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)
-MIN_BODY_H = 150.0       # beside the canvas, an open body is never shorter (the pane scrolls)…
-FRESH_BODY_H = 120.0     # …but with no more open than a fresh launch has, so it fits 900 px
-FRESH_OPEN = 2
-CHIP_MAX = 220.0         # px: the most a band header's words take
-WRITE_AFTER_S = 0.5      # a fold is written this long after the last click
+CHIP_MAX = 220.0         # px: the most a chip's words take
+WRITE_AFTER_S = 0.5      # a setting in ui.json is written this long after the last change
 COST_KEEP = 0.9          # a body's running mean: this much the last mean, the rest the newest
 NOTHING = "nothing selected — click a node, a cable or a group on the canvas"
-OPEN_TIP = "Fold or unfold this section (kept on this Mac)"
+VIEW_TIP = "Show this in the pane (⌘[ / ⌘] step back and forward)"
+MENU_TIP = "The sections a node on the canvas leads to: show one in the pane"
+BACK_TIP = "Back to what is selected on the canvas"
 
 
 # ---------------------------------------------------------------- ui.json
@@ -169,96 +172,51 @@ def write_doc(machine, doc: dict, who: str = "panel") -> None:
 
 def write_key(machine, key: str, value, who: str = "panel") -> None:
     """Keep `value` as ui.json's top-level `key`, the rest of the file as
-    it was — for another module's own key beside the pane's (the loadable patches'
-    folds, ``presets``, plan 48 stage 2), deferred by its caller as
-    `flush` defers the pane's (`WRITE_AFTER_S`)."""
+    it was — for another module's own key (the loadable patches' folds,
+    ``loadable``, plan 48 stage 2), deferred by its caller `WRITE_AFTER_S`
+    after its last change."""
     doc = read_doc(machine)
     doc[key] = value
     write_doc(machine, doc, who)
 
 
-def read_open(machine, layout: str = "open") -> dict[str, bool]:
-    """Which sections this Mac keeps open in `layout` ("open": beside the
-    canvas; "below": the narrow page's band): its defaults overlaid with
-    ``pane.<layout>`` from ui.json, a key that is not a section or a value
-    that is not a bool ignored."""
-    got = dict(LAYOUTS[layout])
-    pane = read_doc(machine).get("pane") if machine is not None else None
-    held = pane.get(layout) if isinstance(pane, dict) else None
-    if isinstance(held, dict):
-        for k, v in held.items():
-            if k in got and isinstance(v, bool):
-                got[k] = v
-    return got
+# ---------------------------------------------------------------- the view
+
+def section_of(page: str | None) -> str:
+    """The view `ui.PAGE_KEYS`' name `page` shows: the section of its name,
+    the selection for GRAPH's (the canvas is always there), or for a name
+    that is no section."""
+    return page if page in KEYS else SELECTION
 
 
-def write_open(machine, opened: dict[str, bool], layout: str = "open") -> None:
-    """Keep `opened` as ``pane.<layout>`` in ui.json, the rest of the file
-    as it was (the side width, the other layout, anything a later build
-    adds)."""
-    doc = read_doc(machine)
-    pane = doc.get("pane")
-    if not isinstance(pane, dict):
-        pane = doc["pane"] = {}
-    pane[layout] = {k: bool(opened.get(k, LAYOUTS[layout][k])) for k in KEYS}
-    write_doc(machine, doc, "pane")
+def slot_of(key: str) -> int:
+    """`key`'s index in `ui.PAGE_KEYS`: the selection's is GRAPH's slot."""
+    return ui.PAGE_KEYS.index("graph" if key == SELECTION else key)
 
 
-# ---------------------------------------------------------------- state
-
-def opened(st: dict, layout: str = "open") -> dict[str, bool]:
-    """`layout`'s open state on GRAPH's page state (`ui_graph._state`):
-    the defaults while the machine is not known, then read from this Mac's
-    file — once, the first frame `st["machine"]` is (a library attached
-    after GRAPH first drew is read then), with any fold clicked before
-    that laid over what the file says (`pane_clicks`), so it is kept and
-    written by the next `flush`."""
-    states = st.get("pane_open")
-    if not isinstance(states, dict) or set(states) - set(LAYOUTS):
-        states = st["pane_open"] = {}           # (a state from before the layouts)
-    machine = st.get("machine")
-    if machine is not None and st.get("pane_from") != machine:
-        st["pane_from"] = machine               # the file, now it can be asked
-        clicks = st.get("pane_clicks") or {}
-        for other in LAYOUTS:
-            states[other] = {**read_open(machine, other), **clicks.get(other, {})}
-    elif layout not in states:
-        states[layout] = read_open(machine, layout)
-    return states[layout]
-
-
-def set_open(st: dict, key: str, on: bool, layout: str = "open",
-             now: float | None = None) -> None:
-    """Fold or unfold section `key` in `layout`; written `WRITE_AFTER_S`
-    after the last change (`flush`)."""
-    got = opened(st, layout)
-    if got.get(key) == on:
-        return
-    got[key] = on
-    st.setdefault("pane_dirty", set()).add(layout)
-    # the clicks not yet written, laid over the file if it is read after them
-    st.setdefault("pane_clicks", {}).setdefault(layout, {})[key] = on
-    st["pane_dirty_at"] = time.monotonic() if now is None else now
-
-
-def section_of(page: str | None) -> str | None:
-    """The section `ui.PAGE_KEYS`' name `page` focuses: the one of its name, or
-    None for a row with none (GRAPH's: the canvas is always there)."""
-    return page if page in KEYS else None
-
-
-def focused(panel) -> str | None:
-    """The section focused now: what `Panel.page`, the one owner of the
-    focus, names (`ui.page`, the history and this always agree)."""
+def showing(panel) -> str:
+    """The view the pane shows: what `Panel.page`, its one owner, names
+    (`ui.page`, the history and this always agree)."""
     page, keys = getattr(panel, "page", None), ui.PAGE_KEYS
-    return section_of(keys[page]) if isinstance(page, int) and 0 <= page < len(keys) else None
+    return section_of(keys[page]) if isinstance(page, int) and 0 <= page < len(keys) else SELECTION
+
+
+def show(panel, key: str) -> None:
+    """Show view `key` in the pane: through ``ui.page`` (so its history, ⌘[
+    / ⌘], has it too), straight on `Panel.page` for a panel without the
+    param."""
+    k = slot_of(key)
+    if "ui.page" in getattr(panel, "reg", ()):
+        panel.reg["ui.page"].set(k)
+    else:
+        panel.page = k
 
 
 def where(panel) -> str | None:
     """The section you are in, for ⌘Z (plan 44 D5b): the one under the mouse, as of
-    the latest draw; anywhere else (the canvas, a header, the desk, the render
-    window) none. Never the focus: a click in another section leaves it, and a
-    key row or a pad moves it, so it would say "analyzer" an hour on."""
+    the latest draw; anywhere else (the canvas, the pane's chips, the desk, the
+    render window) none. Never the view alone: a key row or a pad moves it, and
+    the mouse may be on the canvas, so it would say "analyzer" an hour on."""
     from . import ui_graph  # (late: ui_graph imports this module)
     return (panel.__dict__.get(ui_graph.STATE) or {}).get("pane_under")
 
@@ -283,127 +241,94 @@ def left(panel) -> None:
         st["pane_under"] = None
 
 
-def scroll_to(st: dict) -> None:
-    """Ask the pane's next draw, in whichever layout that is, to scroll the
-    focused section into view — with none focused, to the pane's top. Not a
-    click: `opened` and the file are untouched."""
-    st["pane_scroll"] = True
-
-
-def let_go(panel) -> None:
-    """A click on a header lets go of the focus: `Panel.page` on GRAPH's
-    slot, so `ui.page` and the history say so too. The pane stays where it
-    is: the click was on it."""
-    panel.page = panel._focus_seen = ui.PAGE_KEYS.index("graph")
-
-
 def shown(panel, key: str) -> bool:
-    """Did section `key`'s body draw (the latest draw; a body scrolled out of
-    the pane's view does not): is it on screen, for the words of whoever
-    is not the pane."""
+    """Did section `key`'s body draw in the latest draw (it is the pane's
+    view): is it on screen, for the words of whoever is not the pane."""
     from . import ui_graph  # (late: ui_graph imports this module)
     st = panel.__dict__.get(ui_graph.STATE) or {}
     return key in (st.get("pane_drawn") or ())
 
 
-def flush(st: dict, now: float | None = None, force: bool = False) -> bool:
-    """Write the layouts folded or unfolded since the last write, once
-    `WRITE_AFTER_S` has passed since the last change (`force`: now, as
-    `ui_graph.close` asks). True when it wrote."""
-    dirty, machine = st.get("pane_dirty"), st.get("machine")
-    if not dirty or machine is None:
-        return False
-    now = time.monotonic() if now is None else now
-    if not force and now - st.get("pane_dirty_at", now) < WRITE_AFTER_S:
-        return False
-    states = st.get("pane_open") or {}
-    for layout in sorted(dirty):
-        if layout in states:
-            write_open(machine, states[layout], layout)
-    dirty.clear()
-    st.pop("pane_clicks", None)
-    return True
-
-
-def body_height(room: float, n_open: int, floor: float | None = None) -> float:
-    """Each open body's height: the room under the headers shared evenly, never under
-    `floor`, by default `MIN_BODY_H`, or `FRESH_BODY_H` with no more open than a fresh launch."""
-    if floor is None:
-        floor = FRESH_BODY_H if n_open <= FRESH_OPEN else MIN_BODY_H
-    return max(floor, room / n_open) if n_open else 0.0
-
-
 # ---------------------------------------------------------------- drawing
 
 def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
-         said: str = "", below: bool = False) -> None:
-    """The pane's sections inside the pane's child. `selection` draws the
-    selected thing's details (None: nothing is selected, and the section
-    says so); `said` names it on the header. `below`: the narrow page's
-    band — its own fold state, the headers one row of chips, the bodies
-    sharing the rest with no floor."""
-    layout = "below" if below else "open"
-    got = opened(st, layout)
-    held = focused(panel)                # shown however it is folded
-    scroll = st.pop("pane_scroll", False)
-    if scroll and (below or held is None):
-        imgui.set_scroll_y(0.0)          # (the band: the focused body is under its chips)
-    n_open = sum(1 for k in KEYS if got.get(k))
+         said: str = "", home: str | None = None) -> None:
+    """The pane inside the pane's child: the row of chips (`_bar`), then the
+    view's body at all the height left. `selection` draws the selected
+    thing's details (None: nothing is selected, and the view says so);
+    `said` names it on its chip. `home`: the section the selected node's
+    **open on …** leads to — shown, it has a **←** chip back to the
+    selection."""
+    key = showing(panel)
     # the sections whose bodies drew: last frame's for `timing_line`, which
     # the SYSTEM section asks mid-draw (the tests read this frame's)
     st["pane_last"] = st.get("pane_drawn") or []
     drawn = st["pane_drawn"] = []
-    if below:
-        for i, (key, title, groups, _) in enumerate(SECTIONS):
-            # with one focused it is the only body, so the only chip lit: a
-            # click on another asks for that one, whatever its fold says
-            on = key == held if held else bool(got.get(key))
-            if _header(panel, key, title, on, _said(panel, key, said), groups,
-                       chip=True, first=i == 0):
-                set_open(st, key, not on, layout)
-                if held:                        # a chip lets go: the band as it was clicked
-                    let_go(panel)
-                    held = None
-        room = imgui.get_content_region_avail().y
-        n_open = sum(1 for k in KEYS if got.get(k))
-        h = body_height(room, 1 if held else n_open, 0.0)
-        for key, _, _, body in SECTIONS:
-            if key == held or (held is None and got.get(key)):
-                _body(panel, st, key, body, dt, selection, h, drawn)
-    else:
-        imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)   # a header's height: its face's line
-        head_h = imgui.get_text_line_height_with_spacing()
-        imgui.pop_font()
-        pane_h = imgui.get_content_region_avail().y
-        gap = imgui.get_style().item_spacing.y               # after each body but the last
-        h = body_height(pane_h - head_h * len(SECTIONS) - gap * max(n_open - 1, 0), n_open)
-        # the focused body, with its header scrolled to the top: down to the
-        # headers after it, which stay in view for the next click
-        held_h = (body_height(pane_h - head_h * (len(KEYS) - KEYS.index(held)) - gap, 1)
-                  if held else h)
-        for key, title, groups, body in SECTIONS:
-            on = bool(got.get(key)) or key == held
-            if _header(panel, key, title, on, _said(panel, key, said), groups):
-                set_open(st, key, not on, layout)
-                on = not on
-                if key == held:                 # its own header lets go
-                    let_go(panel)
-                    held = None
-            if key == held and scroll:
-                imgui.set_scroll_here_y(0.0)    # the focused section's header at the top
-            if on:
-                _body(panel, st, key, body, dt, selection, held_h if key == held else h, drawn)
-    flush(st)
+    _bar(panel, key, said)
+    if home is not None and key == home and key != SELECTION and said:
+        most = min(CHIP_MAX, imgui.get_content_region_avail().x - 2 * ui.CHIP_PAD.x)
+        if ui.chip(ui.fit_text(f"←  {said}", most) + "##pane.back"):
+            show(panel, SELECTION)
+        if imgui.is_item_hovered():
+            ui.tooltip(BACK_TIP)
+    imgui.separator()
+    body = next(b for k, _, _, b in SECTIONS if k == key)
+    _body(panel, st, key, body, dt, selection, 0.0, drawn)
+
+
+def _bar(panel, key: str, said: str) -> None:
+    """The views' chips: `TABS`, then the **sections** chip and its menu
+    (`MENU`), each lit while it is the view, a chip that would pass the
+    pane's edge starting the next row. A click shows what it names."""
+    titles = {k: t for k, t, _, _ in SECTIONS}
+    groups = {k: g for k, _, g, _ in SECTIONS}
+    for i, k in enumerate(TABS):
+        if _chip(panel, f"pane.{k}", titles[k].upper(), k == key, _said(panel, k, said),
+                 _dirty(panel, groups[k]), first=i == 0, tip=VIEW_TIP,
+                 dots=bool(groups[k]), full=k in SAYS):
+            show(panel, k)
+    words = f"{titles[key].upper()}  ▾" if key in MENU else "SECTIONS  ▾"
+    widest = max((f"{titles[k].upper()}  ▾" for k in MENU), key=len)
+    if _chip(panel, "pane.sections", words, key in MENU, "",
+             any(_dirty(panel, groups[k]) for k in MENU), first=False, tip=MENU_TIP,
+             dots=True, wide=("SECTIONS  ▾", widest)):
+        imgui.open_popup("##pane.menu")
+    if imgui.begin_popup("##pane.menu"):
+        imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
+        try:
+            for k in MENU:
+                hit, _ = imgui.selectable(f"{titles[k].upper()}##pane.{k}", k == key)
+                if _dirty(panel, groups[k]):
+                    _dot()
+                if hit:
+                    show(panel, k)
+        finally:
+            imgui.pop_font()
+        imgui.end_popup()
+
+
+def _dirty(panel, groups) -> bool:
+    """Has a section's group moved off its loadable patch (the rail's dot)."""
+    return any(ui_loadable.dirty(panel, g, polled=True) for g in groups)
+
+
+def _dot() -> None:
+    """The dirty dot at the right of the item just drawn."""
+    lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    imgui.get_window_draw_list().add_circle_filled(
+        imgui.ImVec2(hi.x - ui.HEADER_DOT_R - 3, (lo.y + hi.y) / 2), ui.HEADER_DOT_R,
+        ui.u32(ui.RED))
 
 
 def _body(panel, st: dict, key: str, body, dt: float, selection, h: float,
           drawn: list) -> None:
-    """Section `key`'s body, `h` tall, under its own id: the page's draw,
-    or the selection's details (or words saying there is none). Its time
-    is kept for the SYSTEM section (`timing_line`). While a desk control is
-    picked every body but ROUTING's is drawn disabled, and a click on a
-    param is `Panel._ctx_pick`'s (ROUTING: the picked control's own line is
-    what the user came for)."""
+    """Section `key`'s body, `h` tall (0: all the height left), under its
+    own id: the page's draw, or the selection's details (or words saying
+    there is none). Its time is kept for the SYSTEM section
+    (`timing_line`). While a desk control is picked every body but
+    ROUTING's is drawn disabled, and a click on a param is
+    `Panel._ctx_pick`'s (ROUTING: the picked control's own line is what the
+    user came for)."""
     picking = getattr(panel, "_picking", False)
     dim = panel._picking = picking and key != ROUTING
     imgui.push_id(f"pane.{key}")
@@ -447,45 +372,48 @@ def timing_line(panel) -> str:
 
 
 def _said(panel, key: str, said: str) -> str:
-    """What a header names beside its title: the selection's what is selected;
-    the players' who is where, so it reads folded."""
+    """What a chip names beside its title: the selection's what is selected;
+    the playlist's where it is. The players' chip is its title alone (Dillon,
+    2026-11-07: who is on and off air read as the chip's own words); the
+    footer's chip says who is where."""
     if key == "selection":
         return said
     if key == "playlist" and getattr(panel, "playing", None) is not None:
         return ui_playlist.where(panel.playing)
-    return ui_players.summary(panel) if key == "players" else ""
+    return ""
 
 
-def _header(panel, key: str, title: str, on: bool, said: str, groups,
-            chip: bool = False, first: bool = True) -> bool:
-    """One section's header: ▾ / ▸ and its title in the micro face (the
-    selection's named after it), a dot where the section's group has moved
-    off its loadable patch. `chip`: as wide as its words (the
-    band's rows), lit while open, on the row of the chip before it (`first`:
-    there is none) unless it would pass the edge. True when clicked."""
-    dot = any(ui_loadable.dirty(panel, g, polled=True) for g in groups)
-    room = 2 * ui.HEADER_DOT_R + 12 if dot else 0.0
+def _chip(panel, cid: str, title: str, lit: bool, said: str, dot: bool,
+          first: bool, tip: str, dots: bool = False, full: bool = False,
+          wide: tuple[str, ...] = ()) -> bool:
+    """One chip of the bar: `title` in the micro face with `said` after it,
+    lit while `lit`, a dot where its section's group has moved off its
+    loadable patch, on the row of the chip before it (`first`: there is
+    none) unless it would pass the edge. True when clicked.
+
+    **Its width never follows what changes** (the rows of chips, and so the
+    body under them, must not jump while you work): a chip that can show a
+    dot (`dots`) keeps the dot's room with or without it; one whose words
+    say something live (`full`: the selection's node, the playlist's place)
+    is `CHIP_MAX` wide whatever they say; one whose words are one of a few
+    (`wide`) is as wide as the widest. Otherwise as wide as its words. Never
+    past the pane's edge."""
+    room = 2 * ui.HEADER_DOT_R + 12 if (dot or dots) else 0.0
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)   # measured in the face it is drawn in
     try:
-        words = f"{'▾' if on else '▸'}  {title.upper()}"
-        if said:
-            words += f"  ·  {said}"
-        if chip:
-            words = ui.fit_text(words, CHIP_MAX)
-            size = imgui.ImVec2(imgui.calc_text_size(words).x + room, 0)
-            if not first:               # a selectable pads its words by the frame's padding
-                ui.beside(size.x + 2 * imgui.get_style().frame_padding.x)
-        else:
-            words = ui.fit_text(words, imgui.get_content_region_avail().x - room - 8)
-            size = imgui.ImVec2(0, 0)
-        hit, _ = imgui.selectable(f"{words}##pane.{key}", on and chip, 0, size)
+        pad = 2 * imgui.get_style().frame_padding.x
+        # (the cursor is at a row's start here: the room is the whole row's)
+        most = min(CHIP_MAX, imgui.get_content_region_avail().x - room - pad)
+        words = ui.fit_text(f"{title}  ·  {said}" if said else title, most)
+        w = most if full else max([imgui.calc_text_size(t).x for t in (words, *wide)])
+        size = imgui.ImVec2(min(w, most) + room, 0)
+        if not first:               # a selectable pads its words by the frame's padding
+            ui.beside(size.x + pad)
+        hit, _ = imgui.selectable(f"{words}##{cid}", lit, 0, size)
     finally:
         imgui.pop_font()
     if imgui.is_item_hovered():
-        ui.tooltip(OPEN_TIP)
+        ui.tooltip(tip)
     if dot:
-        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        imgui.get_window_draw_list().add_circle_filled(
-            imgui.ImVec2(hi.x - ui.HEADER_DOT_R - 3, (lo.y + hi.y) / 2), ui.HEADER_DOT_R,
-            ui.u32(ui.RED))
+        _dot()
     return bool(hit)

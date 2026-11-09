@@ -328,3 +328,41 @@ content — no node, edge or position is added, hidden or laid out
   "on the GRAPH page" tips); 8 the band scrolls on a focus; 9 `REVIEW.md`,
   `ARCHITECTURE.md`, the fit tests; 10 `PAGE_KEYS` names only, the groups in
   `SECTIONS`. Found by the new test: ANALYZER's band row wraps at 240 px.
+
+## After the plan: one viewer (2026-11-07)
+
+Dillon, 2026-11-07: with every page folded in, the open sections shared
+the pane and each got a couple of hundred pixels. The folds and the focus
+are replaced by **one view at a time**, at the pane's full height
+(`ui_pane.draw`, DECISIONS "The side pane is one viewer"):
+
+- **The view is `ui.page`.** GRAPH's slot is the selection, every other
+  slot its section (`showing`, `section_of`, `slot_of`, `show`). Every way
+  a view comes up goes through it, so ⌘[ / ⌘] walk all of them. The
+  history keeps the selection's view with its node (`ui.view_of`,
+  `ui.go_view`): back from node B to node A selects and centres A. A step
+  waits a few frames for its node to land (`ui.SETTLE_NOTES`); a node
+  deleted since leaves what landed in its place, the forward run kept.
+- **Every view has a mouse route.** A row of chips: the selection and the
+  six sections no node's **open on …** leads to (`TABS`), then
+  **sections ▾**, a menu of the other eleven (`MENU`). The menu's chip
+  names the view while it is one of them; dirty dots on the chips and the
+  rows. **open on …** shows the node's section with a **← <node>** chip
+  back.
+- **A click on the canvas shows the selection** (`ui_graph._note_pick`):
+  pressed and let go on the canvas, not over the pane, no menu open, no
+  desk control picked, and something selected after it. A selection by
+  code leaves the view.
+- **Gone:** the fold state and its file (`opened`, `set_open`,
+  `read_open`, `write_open`, `flush`, `DEFAULT_OPEN`, `DEFAULT_BELOW`,
+  `LAYOUTS`), the shared heights (`body_height`, `MIN_BODY_H`,
+  `FRESH_BODY_H`), `focused`, `scroll_to`, `let_go`, `draw`'s `below`.
+  `pane.open` and `pane.below` stay in an old `ui.json`, unread.
+- **Tests:** `tests/test_ui_pane.py` — every view by the mouse alone,
+  one route each, a real canvas click, open on … and ←, ⌘[ / ⌘] through
+  views brought up every way, the body at the pane's full height, no
+  conflicting ids view by view, the band; the fit tests unchanged
+  (`test_every_section_focused_lands_in_view_and_inside_the_pane`). Hand
+  checks 654–658 (group DV).
+- Restart after pulling: `Panel.go_page` and the param's label changed.
+
