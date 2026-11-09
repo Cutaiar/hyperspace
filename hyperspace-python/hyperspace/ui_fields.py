@@ -582,7 +582,8 @@ def _chip_chrome(k, dl, x, y, w, h, variant, hot, down, focus, dim, r) -> None:
 
 
 def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
-         pill: bool = True, icon: str | None = None) -> bool:
+         pill: bool = True, icon: str | None = None, variant: str | None = None,
+         reveal: float = 1.0) -> bool:
     """`ui.chip` / `ui.lit_chip` on the kit — and, with `pill` off and its
     own `pad`, `ui.button` / `ui.small_button` / `ui.arrow_button`: the kit's
     Button chrome at the stock widget's size (its words and `pad`, by
@@ -594,7 +595,11 @@ def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
     imgui id is the stock one's exactly (the label's hash), and the panel
     driver finds it by the same words and id. Disabled — inside
     `begin_disabled`, or drawn at a reduced style alpha as an inert key is —
-    it dims as the kit's disabled Button does. True when clicked."""
+    it dims as the kit's disabled Button does. `variant` overrides the kit
+    Button variant (a row's actions are ``ghost``); `reveal` (0..1) fades the
+    whole chip — a row action shown on the row's hover (`list_row`) — while
+    its hit stays where it is, whole, so a pointer can reach it and the
+    driver can click it. True when clicked."""
     k = ui_kit.begin(None)
     D = _m("draw")
     pad = ui.CHIP_PAD if pad is None else pad
@@ -614,15 +619,19 @@ def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
     hot = anim.to(f"chip:{key}:hot", 1.0 if imgui.is_item_hovered() and not dim else 0.0)
     down = anim.to(f"chip:{key}:down", 1.0 if imgui.is_item_active() else 0.0)
     focus = k.focus_f(f"chip:{key}", imgui.is_item_focused(), disabled=dim)
-    _chip_chrome(k, dl, x, y, w, h, "default" if lit else "secondary", hot, down, focus, dim,
-                 h / 2 if pill else min(ui.ROUND, h / 2))
+    reveal = max(reveal, hot, focus)            # its own hover or focus shows it whole
+    if reveal > 0.01:
+        _chip_chrome(k, dl, x, y, w, h, variant or ("default" if lit else "secondary"),
+                     hot, down, focus, dim, h / 2 if pill else min(ui.ROUND, h / 2))
     # lit: white on the red; an unlit lit_chip: its colour; anything else: TEXT
     ink = imgui.ImVec4(1, 1, 1, 1) if lit else (color if color is not None else ui.TEXT)
+    ink = imgui.ImVec4(ink.x, ink.y, ink.z, ink.w * reveal)
     if icon:
         g = min(16.0, h - 6.0)
-        D.icon(k.dl, icon, x + (w - g) / 2, y + (h - g) / 2, g,
-               (ink.x, ink.y, ink.z, ink.w * (0.5 if dim else 1.0)))
-    elif words:
+        if reveal > 0.01:
+            D.icon(dl, icon, x + (w - g) / 2, y + (h - g) / 2, g,
+                   (ink.x, ink.y, ink.z, ink.w * (0.5 if dim else 1.0)))
+    elif words and reveal > 0.01:
         tw = imgui.calc_text_size(words).x
         # through imgui's own RenderText, as a stock button draws its words:
         # no item, and nothing a reader of the draw list's add_text calls

@@ -926,3 +926,61 @@ def test_a_line_assigned_every_frame_does_not_pin_the_footer(rig, monkeypatch): 
     assert lib.said["status"] == said["status"]
     scene.set(2)
     assert lib.status != line and panel._message() == (lib.status, False)
+
+
+# ---- the list on the kit: a search, and a row's actions shown on its hover ----
+
+def test_the_search_lists_the_patches_that_have_the_letters_flat(rig):  # noqa: F811
+    """A few letters, from a name or its folder: the list is the patches that
+    have them, flat, each with its folder; none, and the list says so."""
+    panel, lib = rig.panel, rig.lib
+    folder = lib.home / "loadable" / "party"
+    folder.mkdir()
+    lib.path_of("loadable", "DIAL").rename(folder / "dial.json")
+    st = _page(panel)
+    every = [n for n, _ in st["page"]["rows"]]
+    assert "party/DIAL" in every and len(every) == 25
+    st["find"] = "wav"
+    page_frame(panel)
+    found = [n for n, _ in st["page"]["rows"]]
+    assert found == [n for n in lib.list("loadable") if "wav" in n.casefold()] and found
+    st["find"] = "PARTY"                            # its folder's letters, either case
+    page_frame(panel)
+    assert [n for n, _ in st["page"]["rows"]] == ["party/DIAL"]
+    assert ("party", "DIAL") in st["page"]["text"]                 # flat: its folder said
+    assert st["page"]["folders"] == []                             # no headers while searching
+    st["find"] = "zzz"
+    page_frame(panel)
+    assert st["page"]["rows"] == []
+    st["find"] = ""
+    page_frame(panel)
+    assert [n for n, _ in st["page"]["rows"]] == every
+
+
+@pytest.mark.skipif(not ui_kit.enabled(), reason="the kit is switched off (HYPERSPACE_KIT=0)")
+def test_a_rows_actions_show_on_its_hover_and_take_a_click_unseen(rig):  # noqa: F811
+    """On the kit a row's `rename` and × are icons shown while the row is
+    hovered — twenty-five rows are not fifty chips — eased in, and gone
+    again when the pointer leaves; and a click on where one is takes it
+    whether it shows yet or not (the driver's click, a quick pointer)."""
+    panel, lib = rig.panel, rig.lib
+    st = _page(panel)
+    assert ui_kit.ready()
+    anim = panel.__dict__[ui_kit.STATE]["ui"].anim      # the panel's kit state (ui_kit.begin)
+
+    def reveal(name: str) -> float:
+        return anim._t[f"row:{name}:reveal"].value
+
+    assert reveal("DIAL") == 0.0 and reveal("ACID") == 0.0        # at rest: hidden
+    x0, y0, x1, y1 = st["page"]["rects"]["row.DIAL"]
+    io = imgui.get_io()
+    io.add_mouse_pos_event(x0 + 20, (y0 + y1) / 2)
+    for _ in range(20):                                            # past the 150 ms ease
+        page_frame(panel)
+    assert reveal("DIAL") == pytest.approx(1.0) and reveal("ACID") == 0.0
+    io.add_mouse_pos_event(-1.0, -1.0)
+    for _ in range(20):
+        page_frame(panel)
+    assert reveal("DIAL") == pytest.approx(0.0)
+    _click(panel, st["page"]["rects"]["×.DIAL"])                   # unseen, still there
+    assert "DIAL" not in lib.list("loadable")

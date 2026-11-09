@@ -58,7 +58,7 @@ import time
 
 from imgui_bundle import imgui
 
-from . import loadable, ui, undo
+from . import loadable, ui, ui_kit, undo
 from .groupwords import group_word
 from .library import (
     LOADABLE,
@@ -468,12 +468,16 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
     # (plan 48 stage 2: under its folder's header — `tree` — a row is the
     # leaf alone, the header says the folder)
     folder, leaf = lib.folder_of(group, name)      # the library's one rule
-    x = imgui.get_cursor_pos_x()
+    kit = _kit_row(panel, name) if ui_kit.ready() else None
+    x = imgui.get_cursor_pos_x()            # (after the kit row's inset: the words' start)
     imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.92, 0.92, 0.92, 1))
     label = (f"{leaf}##{name}##pick" if folder and tree else
              f"##{name}##pick" if folder else f"{name}##pick")
-    picked, _ = imgui.selectable(label, name == cur, imgui.SelectableFlags_.allow_overlap)
+    picked, _ = imgui.selectable(label, name == cur, imgui.SelectableFlags_.allow_overlap,
+                                 imgui.ImVec2(0, kit["h"]) if kit else imgui.ImVec2(0, 0))
     rect(f"row.{name}")
+    if kit:
+        kit["hot"] = imgui.is_item_hovered()
     dragged = False
     if group == LOADABLE:
         # plan 48 stage 2: a row drags onto a folder's header, and its
@@ -488,8 +492,12 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
             imgui.end_popup()
     if folder and not tree:
         imgui.same_line(x, 0)
+        if kit:                     # the row is a chip tall: its words on the selectable's line
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + ui.CHIP_PAD.y)
         imgui.text_colored(ui.DIM, f"{folder.replace('/', ' / ')} / ")
         imgui.same_line(0, 0)
+        if kit:                     # (same_line goes back to the line's top: down again)
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + ui.CHIP_PAD.y)
         imgui.text(leaf)
     imgui.pop_style_color()
     drawn.setdefault("text", []).append((folder, leaf))
@@ -497,12 +505,22 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
         _guard(panel, lib.load, group, name)
     chips = ("rename", "×") if renamable else ("×",)
     drawn["rows"].append((name, chips))
-    ui.flush_right(ui.chip_w(*chips))
+    if kit:     # the row's actions: icons, at its end, shown while the row is hovered
+        imgui.same_line(0, 0)
+        ui.flush_right(len(chips) * kit["h"] + imgui.get_style().item_spacing.x * (len(chips) - 1))
+    else:
+        ui.flush_right(ui.chip_w(*chips))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     for i, chip in enumerate(chips):
         if i:
             imgui.same_line()
-        hit = ui.chip(f"{chip}##{chip}.{name}")
+        if kit:
+            hit = ui.chip(f"{chip}##{chip}.{name}", imgui.ImVec2(kit["h"], kit["h"]),
+                          icon=ROW_ICONS[chip], variant="ghost", pill=False, reveal=kit["reveal"],
+                          color=ui.DIM)
+            kit["hot"] = kit["hot"] or imgui.is_item_hovered()
+        else:
+            hit = ui.chip(f"{chip}##{chip}.{name}")
         rect(f"{chip}.{name}")
         if imgui.is_item_hovered():
             ui.tooltip("Give it another name: the file, and every install that names it"
@@ -516,6 +534,63 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
             _guard(panel, lib.delete, group, name)
         invalidate(panel, group)
     imgui.pop_style_color()
+    if kit:
+        _kit_row_end(panel, kit, name, name == cur)
+
+
+# ---- a row on the kit (tools/dkit) ----
+
+ROW_ICONS = {"rename": "pencil", "×": "trash_2"}    # a row's actions, as Lucide draws them
+ROW_INSET = 8.0          # px: a row's words in from its band (tokens.SPACE[2])
+FIND_HINT = "search patches"
+FIND_TIP = "Letters from a patch's name or its folder: the list shows the patches that have them"
+
+
+def _kit_row(panel, name: str) -> dict:
+    """Begin a list row on the kit: the row's height (a chip's, so the list's
+    pitch is `list_row_h` as before), the draw list split so the row's band
+    goes UNDER what the selectable and its actions draw, imgui's own
+    selectable highlight cleared — the kit draws the band — and how far
+    the row's actions are shown (eased on last frame's hover of the row or
+    of either action: an action takes the hover from the row it is on)."""
+    k = ui_kit.begin(panel)
+    p = imgui.get_cursor_screen_pos()
+    h = imgui.get_text_line_height() + 2 * ui.CHIP_PAD.y
+    dl = imgui.get_window_draw_list()
+    dl.channels_split(2)
+    dl.channels_set_current(1)
+    clear = imgui.ImVec4(0, 0, 0, 0)
+    for c in (imgui.Col_.header, imgui.Col_.header_hovered, imgui.Col_.header_active):
+        imgui.push_style_color(c, clear)
+    imgui.push_style_var(imgui.StyleVar_.selectable_text_align, imgui.ImVec2(0.0, 0.5))
+    imgui.indent(ROW_INSET)             # the words clear of the band's red edge
+    hot = _state(panel).setdefault("row_hot", {})
+    return {"k": k, "x": p.x, "y": p.y, "w": imgui.get_content_region_avail().x, "h": h,
+            "dl": dl, "hot": False,
+            "reveal": k.anim.to(f"row:{name}:reveal", 1.0 if hot.get(name) else 0.0)}
+
+
+def _kit_row_end(panel, kit: dict, name: str, loaded: bool) -> None:
+    """End a list row on the kit: the band under it — the loaded patch an
+    `accent` band with the one red at its left edge; a hovered row `muted`,
+    half strength — and the draw list merged back."""
+    k, dl = kit["k"], kit["dl"]
+    imgui.unindent(ROW_INSET)
+    imgui.pop_style_var()
+    imgui.pop_style_color(3)
+    _state(panel)["row_hot"][name] = kit["hot"]
+    dl.channels_set_current(0)
+    x, y, w, h = kit["x"], kit["y"], kit["w"], kit["h"]
+    r = ui_kit.mod("tokens").RADII["md"]
+    hot = k.anim.to(f"row:{name}:hot", 1.0 if kit["hot"] else 0.0)
+    if loaded:
+        dl.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h),
+                           imgui.color_convert_float4_to_u32(imgui.ImVec4(*k.col("accent"))), r)
+        dl.add_rect_filled(imgui.ImVec2(x, y + 4), imgui.ImVec2(x + 2, y + h - 4), ui.u32(ui.RED), 1.0)
+    elif hot > 0.01:
+        dl.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h),
+                           imgui.color_convert_float4_to_u32(imgui.ImVec4(*k.col("muted", 0.5 * hot))), r)
+    dl.channels_merge()
 
 
 def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
@@ -611,12 +686,26 @@ def loadable_list(panel) -> None:
 
     flush_folds(panel)                  # a fold clicked WRITE_AFTER_S ago, kept
     tree = _tree(lib, rows, folder_list(panel))
+    # the search: a few letters of a name, anywhere in it (its folder too),
+    # and the list is the patches that have them, flat, each with its folder
+    imgui.set_next_item_width(-1)
+    _, st["find"] = ui.input_text_with_hint("##presets.find", FIND_HINT, st.get("find", ""))
+    if imgui.is_item_hovered():
+        ui.tooltip(FIND_TIP)
+    query = st["find"].strip().casefold()
     room = imgui.get_content_region_avail().y - _reserve()
     height = max(room, list_row_h() * MIN_ROWS)
     if imgui.begin_child("##presets.rows", imgui.ImVec2(0, height)):
         if not tree["count"].get(""):  # no loadable patch anywhere, folders or none
             imgui.text_disabled("no patches — new, then save as… makes one")
-        _folder_body(panel, "", tree, cur, drawn, rect)
+        if query:
+            found = [n for n in rows if query in n.casefold()]
+            for name in found:
+                _list_row(panel, LOADABLE, name, cur, drawn, rect)
+            if not found:
+                imgui.text_disabled(f"no patch has “{st['find'].strip()}”")
+        else:
+            _folder_body(panel, "", tree, cur, drawn, rect)
     imgui.end_child()
     rect("rows")
     if _name_field(panel, "newfolder:", lambda n: _make_folder(panel, "", n), "folder name"):
@@ -727,9 +816,21 @@ def _folder(panel, folder: str, tree: dict, cur, drawn: dict, rect) -> None:
     if shut and where is not None and (where == folder or where.startswith(folder + "/")):
         label += f"  ·  {cur.rpartition('/')[2]}"
     imgui.set_next_item_open(not shut, imgui.Cond_.always)
+    kit = ui_kit.ready()
+    if kit:                 # the header on the kit's colours: muted, hover and press a step up
+        k = ui_kit.begin(panel)
+        for c, (tok, al) in ((imgui.Col_.header, ("muted", 0.6)),
+                             (imgui.Col_.header_hovered, ("muted", 1.0)),
+                             (imgui.Col_.header_active, ("accent", 1.0))):
+            imgui.push_style_color(c, imgui.ImVec4(*k.col(tok, al)))
+        imgui.push_style_var(imgui.StyleVar_.frame_rounding,
+                             ui_kit.mod("tokens").RADII["md"])
     opened = imgui.tree_node_ex(f"{label}###folder.{folder}",
                                 imgui.TreeNodeFlags_.framed
                                 | imgui.TreeNodeFlags_.span_avail_width)
+    if kit:
+        imgui.pop_style_var()
+        imgui.pop_style_color(3)
     rect(f"folder.{folder}")
     if imgui.is_item_toggled_open():
         set_folded(panel, folder, not opened)

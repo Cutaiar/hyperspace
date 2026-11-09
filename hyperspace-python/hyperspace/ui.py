@@ -304,10 +304,12 @@ def u32(c: imgui.ImVec4) -> int:
 CHIP_PAD = imgui.ImVec2(10, 3)
 
 
-def chip(label: str, size: imgui.ImVec2 | None = None) -> bool:
-    """A compact pill button — small_button, with room to breathe."""
+def chip(label: str, size: imgui.ImVec2 | None = None, **kit) -> bool:
+    """A compact pill button — small_button, with room to breathe. `kit`:
+    what the kit's chip can do besides (`ui_fields.chip`: an icon, a
+    variant, a reveal); the stock chip draws its words and ignores them."""
     if ui_kit.ready():                  # on the kit (tools/dkit): the same size and id
-        return ui_fields.chip(label, size)
+        return ui_fields.chip(label, size, **kit)
     imgui.push_style_var(imgui.StyleVar_.frame_padding, CHIP_PAD)
     imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
     hit = imgui.button(label, size if size is not None else imgui.ImVec2(0, 0))

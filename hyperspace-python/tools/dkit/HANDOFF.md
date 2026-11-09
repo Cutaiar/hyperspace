@@ -666,6 +666,30 @@ Still stock, beyond the bespoke: `begin_combo` menus with their own rows
 enums over 12 names, `imgui.combo` in `ui_displays`, `input_float` in the
 playlist.
 
+### 5d. The patches list, redesigned rather than restyled
+
+The list is the one place a reskin was not enough: twenty-five rows of
+`rename` and `×` chips were fifty pills louder than the names, the loaded
+patch was not marked in it, and nothing searched it. On the kit now
+(`ui_loadable._list_row` / `_kit_row`, every list that draws rows):
+
+* a row is its selectable, unchanged underneath — its id, its drag onto a
+  folder, its right-click **move to ▸**, its selected state — with a kit
+  band drawn under it: `muted` on hover, `accent` with the one red at its
+  left edge for the loaded patch;
+* `rename` and × are a pencil and a trash can at the row's end, shown on the
+  row's hover (eased; an action keeps its row lit) and hidden otherwise.
+  Their hit stays put whole while hidden, and they are still `ui.chip`s
+  with the stock labels, so their ids, their rects and every test that
+  clicks them are as they were (`ui_fields.chip`'s `reveal`);
+* a search over the list (both paths): letters of a name or its folder,
+  and the list is the matches, flat, each with its folder dimmed;
+* the folder headers on the kit's colours.
+
+`tests/test_ui_loadable.py`: the search, and the actions' reveal and their
+unseen click — each reverted once. Cost: within the noise of the section's
+earlier figure, and fewer vertices than the stock list draws.
+
 Note on the count: one run reported 6 skipped where every other reports 5
 (the five are environmental: macOS, CoreMIDI, a GPU, torch, a recorded
 tape); it did not reproduce in the next full run.
