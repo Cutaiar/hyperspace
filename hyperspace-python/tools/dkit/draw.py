@@ -749,7 +749,7 @@ def shadow_stack(dl, x, y, w, h, radius, layers) -> None:
 # a time. The interactive versions in interact.py call straight into these.
 
 def slider(dl, x, y, w, h, fracs, theme, tbl, *, ring_f=0.0, disabled=False,
-           track_h=None, thumb=None):
+           track_h=None, thumb=None, origin=0.0):
     """shadcn Slider.
 
     `ring_f` is 0..1 for the thumb's band, so a caller can ease it rather
@@ -770,7 +770,8 @@ def slider(dl, x, y, w, h, fracs, theme, tbl, *, ring_f=0.0, disabled=False,
         tok, al = tbl[key]
         return rgba(tok, al * mul * a, theme=theme if themed else None)
 
-    track, rng, thumbs = B.slider_geom(x, y, w, h, fracs, track_h=th, thumb=tz)
+    track, rng, thumbs = B.slider_geom(x, y, w, h, fracs, track_h=th, thumb=tz,
+                                       origin=origin)
     # Exact geometry above, snapped paint below - the browser does the same.
     ptrack = snap(track.x, track.y, track.w, track.h)
     fill(dl, *ptrack[:4], c("track"), ptrack[3] / 2.0)

@@ -181,3 +181,10 @@ one level down again - the text measurement every component shares - and it
 surfaced only because the gallery cell was allowed to size itself. That is
 worth doing deliberately: one cell per text-sized component drawn at its
 OWN width, not the spec's, is a cheap standing check on the font loader.
+
+## Mine, from porting CAMERA onto the kit (item 5)
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 64 | I wired CAMERA into the pane as a new body function, bypassing `Panel._page_camera` - and `test_a_picked_control_dims_every_page_but_routing` went red, because it spies on every `_page_<key>` as THE entry to a section | `_page_camera` stays the entry and delegates; the stock drawing is `_camera_stock` | **`ui_pane.py` says it in a comment: "the `Panel._page_<key>` methods are the bodies' one name".** A convention a test enforces by spying is an interface. I read the file and routed round it anyway. And the trap it hid: `page_frame` in the test rig calls `_page_<key>` by name, so with my first wiring every `page_frame("camera")` test would have quietly measured the stock section. |
+| 65 | The first revert-check of the Ctrl+click test PASSED: I mutated the slider into a 0..1 domain and the typed 2.5 still landed, because imgui's text entry does not clamp and my mutation forgot to map the result back | Re-ran with the real alternative - a norm port that maps through `_value_of_norm` - and it went red (2.5 typed, 200 landed) | **A mutation has to be the mistake someone would actually make, not any change near the line.** Row 60 was a mutation that crashed; this was one that was harmless by accident. Both read as a verdict on the test when they were a verdict on the mutation. |

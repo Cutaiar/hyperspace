@@ -256,7 +256,8 @@ FINE = 0.1          # Shift scales a drag to a tenth, as the panel's does
 
 
 def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
-           snap=0.02, fine=True, disabled=False, fmt="%.3f") -> tuple:
+           snap=0.02, fine=True, disabled=False, fmt="%.3f", flags=0,
+           frac=None, origin=0.0) -> tuple:
     """shadcn Slider over a real `imgui.slider_float`.
 
     Returns (changed, value). `value` is in the caller's own domain; a taper
@@ -267,6 +268,18 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
     one, as a fraction of the span. Shift makes a drag ten times finer, which
     the stock slider has no notion of, so it is applied by hand from the
     mouse delta while the item is active.
+
+    Three hooks for a caller that owns its own value model, which is what
+    adopting the kit in Hyperspace needed (`hyperspace/ui_camera.py`):
+
+    * `flags` go to the stock slider - `SliderFlags_.logarithmic` for a log
+      param, so Ctrl+click still types a VALUE rather than a fraction, which
+      is what passing a 0..1 norm in its place would have cost;
+    * `frac` is where the thumb is drawn, 0..1, when the caller's mapping is
+      not linear in `value` (a log range, a taper). It is this frame's
+      INPUT: the thumb lands where the value was when the frame began, as
+      Hyperspace's `_track` draws it;
+    * `origin` is where the fill starts (`rect.slider_geom`).
     """
     span = float(hi - lo) or 1.0
     cols = _sandwich_begin(ui)
@@ -290,7 +303,7 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
     if disabled:
         imgui.begin_disabled()
     changed, out = imgui.slider_float(f"##{key}", float(value), float(lo),
-                                      float(hi), fmt)
+                                      float(hi), fmt, flags)
     if disabled:
         imgui.end_disabled()
     imgui.pop_item_width()
@@ -322,7 +335,8 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
                 out = d
                 break
 
-    frac = (out - lo) / span
+    if frac is None:
+        frac = (out - lo) / span
     tbl = ui.slider_tbl
     # The thumb is the one control whose band is not focus-only: it carries
     # `hover:ring-3 focus-visible:ring-3 active:ring-3`, so THREE states turn
@@ -335,7 +349,7 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
         f"{key}:ring",
         1.0 if (hovered or active or kb_focus) and not disabled else 0.0)
     D.slider(ui.dl, x, y, w, h, [min(max(frac, 0.0), 1.0)], ui.theme, tbl,
-             ring_f=ring_f, disabled=disabled)
+             ring_f=ring_f, disabled=disabled, origin=origin)
     ui.dl.channels_merge()
     return changed, out
 

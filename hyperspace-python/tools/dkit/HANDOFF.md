@@ -127,7 +127,7 @@ someone else's work. Run it serially before believing it.
 | Dialog, Sheet on top of it | **not started — but no longer blocked** |
 | variant resolver (cva) | not started, eight ad-hoc tables |
 | text wrapping / multi-line measure | not started |
-| **adoption** | **nothing imports the kit.** Unchanged since day one. |
+| **adoption** | **CAMERA is on the kit** (`hyperspace/ui_camera.py`, `ui_kit.py`), on branch `claude/dkit-port-ui-pane` - see item 5. The other sixteen sections are not. |
 
 ## Pick up here — the list, verified rather than remembered
 
@@ -505,13 +505,80 @@ follows the Switch rather than inventing a Controls card for one
 component.
 Checkbox is 47 toggle params and the cheapest of them.
 
-**5. And the one that decides it all**: port one real `ui_pane.py` section.
-Nothing imports the kit. Until that happens the hypothesis is untested in
-the only place that matters.
+**5. One `ui_pane.py` section is ported: CAMERA.** On its own branch,
+`claude/dkit-port-ui-pane`, cut from `claude/magical-ritchie-fkh5e0` so it
+can be kept or dropped whole.
 
-```bash
-grep -rn "tools.dkit\|from dkit\|import dkit" --include=*.py hyperspace/ tests/ | head
-```
+What was ported: the seven continuous params (`camera.zoom/yaw/pitch/pan.x/
+pan.y`, `eye.fov/distance`), Reset view, and its key hint. Each field is a
+header (label left, readout right) over the kit's `interact.slider`, laid out
+by `box.flex` on `tokens.SPACE`; Reset view is `comp_button.ui_button`
+(`secondary`, `sm`); the `R` is a `draw.kbd`. `Panel._page_camera` is still
+the section's entry and calls `ui_camera.page`, which falls back to
+`Panel._camera_stock` without the kit or with `HYPERSPACE_KIT=0` - the A/B
+switch for looking at both.
+
+How it was checked:
+
+* `tests/test_ui_camera.py`, 11 driven tests through the real pane route.
+  `test_the_section_is_the_kit` is first on purpose: a pass on the fallback
+  proves nothing (row 56). Each of the other ten was reverted once and went
+  red for its stated reason (row 60), the Ctrl+click one only after the
+  mutation was made the REAL alternative - see RETRO row 65.
+* `tests/` whole fast tier and `tools/dkit` re-run after the change; figures
+  in the commit, not here, because figures here go stale (row 45).
+* the ImGui gallery capture is **byte-identical** before and after, both
+  themes - the three kit hooks below default to the old behaviour.
+* looked at in the real app (`tools/app_driver.py`), at `SIDE_W` and
+  `SIDE_MIN`, stock and kit side by side.
+
+What it found - the reason to do it:
+
+* **The integration seam is "the last item", and it is cheap.** Every panel
+  behaviour on a param widget - the right-click menu, Learn's frame, the
+  ⇧-drag fine mode, the tooltip, the desk-pick - acts on imgui's LAST item.
+  The kit's controls leave their real imgui item last (the slider_float, the
+  invisible_button), so all of it worked unchanged. No behaviour was
+  reimplemented; `ui_camera.py` is 223 lines including its docstrings, `ui_kit.py` 199.
+* **The kit's slider assumed a linear value domain.** Its docstring said to
+  pass a 0..1 norm for a non-linear param, which for a log param makes
+  Ctrl+click type a fraction. Three keyword hooks fix it, each defaulting to
+  the old behaviour: `flags` (pass `logarithmic`), `frac` (the caller's own
+  fraction for the thumb) and `origin` (a bipolar param fills from its zero,
+  as Hyperspace's do; `rect.slider_geom`). Integer and tapered params are
+  still not supported - the kit slider is float-only.
+* **Two fine modes.** The kit's ⇧-drag is a linear delta in the value
+  domain; the panel's is anchored in the THROW and correct for log. The
+  port uses the panel's (`fine=False`). RETRO row 7 says a behaviour gets
+  one switch - the kit's should go, or become the panel's.
+* **The kit is not a package.** `ui_kit._import` puts `tools/dkit` on
+  `sys.path` and asserts each module came from there, because names like
+  `draw`, `tokens` and `wheel` (a PyPI package) are top-level. A packaged
+  build has no `tools/`, so it falls back. Keeping the kit means making it
+  `hyperspace/dkit/` with relative imports - the next step if this is kept.
+* **A theme is a palette AND a name.** `theme_name="dark"` selects tables
+  that hold shadcn LITERALS (`secondary`'s hover `#2f2f2f`, the slider
+  thumb's `#ffffff`). `ui_kit` re-seeds the button table with the panel's
+  hover; the white thumb was left, as it reads right on black.
+* **Type cannot be handed in.** `draw.FONT_SPAN_EM` is a module-global keyed
+  by variant and calibrated to Geist, so a host cannot give the kit its own
+  faces. Labels and readouts are drawn in the panel's faces by
+  `ui_camera`; the Button's and the Kbd's text is Geist. Visible side by
+  side - "Reset view" is not in the panel's Inter.
+* **The press-to-thumb mapping is off by up to 2 px.** imgui's slider has a
+  hard 2 px grab padding the kit thumb does not; pushing `grab_min_size` to
+  the thumb's 12 gets it there (`test_a_slider_press_lands_where_the_thumb_is_drawn`,
+  2.5 px bound; without the push it is 3.1).
+* **It is taller.** ~427 px first field to Reset view, against 287 stock:
+  a stacked field costs a header row. In exchange the 240 px pane reads
+  cleanly - the stock readout sits under its own value marker there - and
+  "EYE FIELD OF VIEW" is no longer cut.
+* **No oracle for it.** The pixel diff measures the kit in shadcn's palette;
+  nothing measures it in Hyperspace's. The section was judged by eye.
+
+Not done: the narrow band's layout was only checked for spills by the
+existing `test_ui_pane` cases, not looked at; a modulated param's ghost tick
+is drawn but not driven (no router lane in the test rig).
 
 ### Two smaller things, both recorded in code
 

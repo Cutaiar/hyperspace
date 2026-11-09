@@ -88,6 +88,22 @@ def test_slider_two_thumbs():
     assert [t.x for t in thumbs] == pytest.approx([68.4, 159.6], abs=0.02)
 
 
+def test_a_single_thumb_fills_from_its_origin():
+    """`origin`: a bipolar param fills from its zero (Hyperspace's
+    `Panel._origin`), on either side of it; the thumb keeps its own
+    inset mapping, and a range slider's ends are its thumbs whatever
+    `origin` says. The default is shadcn's left end, unchanged."""
+    _, rng, thumbs = B.slider_geom(0, 0, 240, 16, [0.25], origin=0.5)
+    assert (rng.x, rng.w) == pytest.approx((60.0, 60.0))
+    assert thumbs[0].x == pytest.approx(0.25 * (240 - 12))
+    _, rng, _ = B.slider_geom(0, 0, 240, 16, [0.75], origin=0.5)
+    assert (rng.x, rng.w) == pytest.approx((120.0, 60.0))
+    _, rng, _ = B.slider_geom(0, 0, 240, 16, [0.25])
+    assert (rng.x, rng.w) == pytest.approx((0.0, 60.0))
+    _, rng, _ = B.slider_geom(0, 0, 240, 16, [0.3, 0.7], origin=0.5)
+    assert (rng.x, rng.w) == pytest.approx((72.0, 96.0))
+
+
 def test_slider_thumb_never_overhangs_the_track():
     """What the inset is FOR, swept rather than spot-checked."""
     for w in (40, 120, 200, 240, 320):

@@ -179,7 +179,7 @@ def card_body(card, *, description: bool = True):
                 card.y + card.h - CARD_PAD - top)
 
 
-def slider_geom(x, y, w, h, fracs, *, track_h=4.0, thumb=12.0):
+def slider_geom(x, y, w, h, fracs, *, track_h=4.0, thumb=12.0, origin=0.0):
     """(track, range, [thumb, ...]) for a slider, in CSS pixels.
 
     The measured law, and the surprise in it: the range and the thumb do NOT
@@ -197,11 +197,19 @@ def slider_geom(x, y, w, h, fracs, *, track_h=4.0, thumb=12.0):
 
     `fracs` is one fraction for a single thumb, or two for a range. The track
     is centred vertically in (y, h), which is what `items-center` does.
+
+    `origin` is where a SINGLE thumb's range starts, as a fraction: 0, the
+    left end, is shadcn's and the default. Hyperspace fills a bipolar param
+    (yaw, pan: `lo < 0 < hi`) from its zero (`ui.Panel._origin`), so a port
+    passes that; the range then runs from whichever of the two is lower.
+    Ignored for a range slider, whose two thumbs ARE the ends.
     """
     fs = sorted(fracs if isinstance(fracs, (list, tuple)) else [fracs])
     track = Rect(x, y + (h - track_h) / 2.0, w, track_h)
-    lo = fs[0] if len(fs) > 1 else 0.0
-    hi = fs[-1]
+    if len(fs) > 1:
+        lo, hi = fs[0], fs[-1]
+    else:
+        lo, hi = min(origin, fs[0]), max(origin, fs[0])
     rng = Rect(x + lo * w, track.y, (hi - lo) * w, track_h)
     span = max(w - thumb, 0.0)
     thumbs = [Rect(x + f * span, y + (h - thumb) / 2.0, thumb, thumb)

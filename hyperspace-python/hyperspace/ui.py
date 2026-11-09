@@ -45,10 +45,12 @@ from . import (
     graphview,
     learn,
     ui_bands,
+    ui_camera,
     ui_desk,
     ui_displays,
     ui_feel,
     ui_graph,
+    ui_kit,
     ui_lfo,
     ui_loadable,
     ui_lookback,
@@ -225,6 +227,7 @@ def load_fonts() -> None:
     _add_font("num", FONT_NUM)
     if _FONTS["ui"] is not None:
         imgui.get_io().font_default = _FONTS["ui"]
+    ui_kit.load_faces(imgui.get_io())      # the kit's, for the sections drawn on it
 
 
 TIP_CH = 65   # a tooltip wraps at this many characters: a readable line (the owner, 2026-10-26)
@@ -2793,6 +2796,12 @@ class Panel:
             return None
 
     def _page_camera(self, dt: float) -> None:
+        """The CAMERA section, on the kit (tools/dkit) where it is there
+        (`ui_camera.page`); else `_camera_stock`."""
+        ui_camera.page(self, dt)
+
+    def _camera_stock(self, dt: float) -> None:
+        """CAMERA as the stock widgets draw it: the section without the kit."""
         self._section("camera", "camera")
         self._row("camera.zoom")
         self._row("camera.yaw")
