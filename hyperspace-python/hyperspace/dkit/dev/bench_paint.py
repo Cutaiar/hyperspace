@@ -10,6 +10,8 @@ machine, and a change smaller than that is not shown by one run.
 
 Figures (Mesa, 1440x1100, RETRO row 70): 4.8ms before the font-loader fix,
 7.8ms with a quad per glyph, 5.2ms with `add_text` runs (paired runs, same machine: 4.6 pre-fix).
+The CPU pass (RETRO rows 71-72), on a slower box: 6.53 -> 3.33ms paired,
+pixel-identical. Use 300 frames and the median of several runs' medians.
 """
 
 from __future__ import annotations
