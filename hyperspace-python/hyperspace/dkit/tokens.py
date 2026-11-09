@@ -129,6 +129,26 @@ def rgba(c: str | tuple, a: float = 1.0, theme: dict | None = None) -> tuple:
     """
     if theme and isinstance(c, str) and c in theme:
         c = theme[c]
+    # Memoised on what the colour RESOLVED to, not on the theme: a theme is
+    # a mutable dict, and keying on it (or its id) would go stale the moment
+    # one were edited. Resolving the token is one dict lookup; the parse
+    # below is what cost ~300 calls a frame.
+    try:
+        return _RGBA[(c, a)]
+    except KeyError:
+        pass
+    except TypeError:                   # a list: unhashable, so not cached
+        return _rgba(c, a)
+    if len(_RGBA) > 4096:               # an animated alpha mints new keys
+        _RGBA.clear()
+    _RGBA[(c, a)] = out = _rgba(c, a)
+    return out
+
+
+_RGBA: dict = {}
+
+
+def _rgba(c, a):
     if isinstance(c, (tuple, list)):
         v = [x / 255.0 for x in c]
         if len(v) == 3:
