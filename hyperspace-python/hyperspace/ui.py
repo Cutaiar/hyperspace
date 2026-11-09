@@ -49,6 +49,7 @@ from . import (
     ui_desk,
     ui_displays,
     ui_feel,
+    ui_fields,
     ui_graph,
     ui_kit,
     ui_lfo,
@@ -1686,6 +1687,8 @@ class Panel:
 
     def _fader(self, pid: str) -> bool:
         """Full-width taper fader: label and readout over a filled track, detent notch."""
+        if ui_kit.ready():              # on the kit (tools/dkit): a slider field
+            return ui_fields.inline_fader(self, pid)
         a = self.reg[pid]           # what the widget is: id, label, tip, binding
         p = self._real(a)           # what it reads and writes
         pos = p.position()
@@ -1755,6 +1758,8 @@ class Panel:
     def _slider(self, pid: str, width: float = -1) -> bool:
         """Compact slider with the readout inside. A tapered range slides
         over its detents (the instance count's), as a fader does."""
+        if ui_kit.ready():              # on the kit (tools/dkit): a track, its readout beside
+            return ui_fields.inline_slider(self, pid, width)
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
@@ -1859,6 +1864,10 @@ class Panel:
                rows: int = -1) -> bool:
         """A drop-down of the enum's choices; `rows` the most the list shows
         before it scrolls (imgui's default, eight, at -1)."""
+        if ui_kit.ready():              # on the kit (tools/dkit): a Select, short enums
+            got = ui_fields.inline_select(self, pid, width, tip)
+            if got is not None:
+                return got
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
@@ -1905,6 +1914,8 @@ class Panel:
         return changed
 
     def _check(self, pid: str, label: str | None = None) -> bool:
+        if ui_kit.ready():              # on the kit (tools/dkit): a Switch, the same room
+            return ui_fields.inline_check(self, pid, label)
         a = self.reg[pid]
         p = self._real(a)
         text = a.label if label is None else label
@@ -1918,6 +1929,8 @@ class Panel:
         return changed
 
     def _button(self, pid: str, label: str | None = None, small: bool = False) -> bool:
+        if ui_kit.ready():              # on the kit (tools/dkit): a Button, the same room
+            return ui_fields.inline_button(self, pid, label, small)
         p = self.reg[pid]
         text = f"{p.label if label is None else label}##{pid}"
         hit = chip(text) if small else imgui.button(text)

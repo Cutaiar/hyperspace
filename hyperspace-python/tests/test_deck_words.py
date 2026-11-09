@@ -211,6 +211,9 @@ def _page_draws(panel, monkeypatch):
     monkeypatch.setattr(imgui, "button", lambda s, *a: (buttons.append(s), real_button(s, *a))[1])
     monkeypatch.setattr(ui, "_micro", lambda s, *a: (micro.append(s), real_micro(s, *a))[1])
     imgui.new_frame()
+    # a fixed size: the kit strip (ui_strip) fits the room it is given, and a
+    # window with none fits itself to its contents, so each would size the other
+    imgui.set_next_window_size(imgui.ImVec2(600, 400))
     imgui.begin("probe")
     try:
         ui_loadable.page(panel)

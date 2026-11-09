@@ -552,7 +552,9 @@ def _ghost_rects(rig, monkeypatch, display=CONTROL_SIZE, panel_w=None):
         finally:
             live[0] = False
     with monkeypatch.context() as m:
-        for fn in ("checkbox", "slider_float", "slider_int", "combo", "button", "dummy"):
+        # (an invisible_button too: a check on the kit is one, ui_fields.inline_check)
+        for fn in ("checkbox", "slider_float", "slider_int", "combo", "button", "dummy",
+                   "invisible_button"):
             m.setattr(ui_mod.imgui, fn, item(fn, getattr(imgui, fn)))
         m.setattr(hp, "_ghost", ghost)
         # a narrower panel is a narrower window: CONTROLS fills it (ui.panel_rect)
@@ -622,22 +624,25 @@ def test_the_ghost_more_popup_has_mirror_and_tethers(rig, monkeypatch):
     with "with a guide on" until a guide is chosen. A click on Mirror in
     the popup sets ghost.mirror."""
     labels: list[str] = []
-    real = imgui.checkbox
     rects: dict[str, tuple] = {}
 
-    def checkbox(label, v):
-        out = real(label, v)
-        labels.append(label)
-        lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
-        rects[label] = (lo.x, lo.y, hi.x, hi.y)
-        return out
+    def spy(real):
+        def rec(label, *a, **k):
+            out = real(label, *a, **k)
+            key = label.split("##", 1)[-1]      # the param id, stock checkbox or kit check
+            labels.append(key)
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            rects[key] = (lo.x, lo.y, hi.x, hi.y)
+            return out
+        return rec
     rig.reg["ghost.on"].set(True)
-    monkeypatch.setattr(imgui, "checkbox", checkbox)
+    monkeypatch.setattr(imgui, "checkbox", spy(imgui.checkbox))
+    monkeypatch.setattr(imgui, "invisible_button", spy(imgui.invisible_button))
     _, lines, _ = _ghost_more(rig, monkeypatch)
-    assert "Mirror##ghost.mirror" in labels and "Tethers##ghost.tethers" in labels
+    assert "ghost.mirror" in labels and "ghost.tethers" in labels
     assert "with a guide on" in lines
     assert rig.reg["ghost.mirror"].value is False
-    _click(rig.panel, rects["Mirror##ghost.mirror"])
+    _click(rig.panel, rects["ghost.mirror"])
     assert rig.reg["ghost.mirror"].value is True
     rig.reg["ghost.guide"].set(1)
     _, lines, _ = _ghost_more(rig, monkeypatch)

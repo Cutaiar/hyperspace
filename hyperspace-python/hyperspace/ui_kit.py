@@ -159,7 +159,7 @@ def begin(panel):
     st = panel.__dict__.get(STATE)
     if st is None:
         U, ease = mod("uictx"), mod("ease")
-        ui = U.Ui(None, _FACES, theme(), ease.Anim(), theme_name="dark")
+        ui = _panel_ui(U)(None, _FACES, theme(), ease.Anim(), theme_name="dark")
         # (the cache `comp_button._table_for` reads, filled with the panel's)
         ui.anim.store.setdefault("button_tbl", {})["dark"] = _button_table("dark")
         st = panel.__dict__[STATE] = {"ui": ui, "frame": None}
@@ -167,6 +167,20 @@ def begin(panel):
     _tick(st, ui)
     ui.dl = imgui.get_window_draw_list()
     return ui
+
+
+def _panel_ui(U):
+    """The kit's `Ui`, less one check: the kit refuses a key it has seen
+    this frame (`Ui.hit`), where imgui tells two items apart by the whole
+    id stack — and the panel draws one param in two scopes on purpose (a
+    chip and a check for one FX, under different ``push_id``s). imgui's own
+    conflict check, which the panel's tests run (`tests/test_ui_pane.py`'s
+    "no conflicting imgui ids"), is the one that holds here."""
+    class PanelUi(U.Ui):
+        def hit(self, key, *a, **k):
+            self._seen.discard(key)
+            return super().hit(key, *a, **k)
+    return PanelUi
 
 
 def _tick(st: dict, ui) -> None:
@@ -192,9 +206,13 @@ def block(h: float) -> tuple[float, float, float, float]:
 
 def end_block(rect: tuple[float, float, float, float]) -> None:
     """Tell imgui's flow the block `rect` was drawn: the cursor back to its
-    corner, then one item its size, so what follows is laid out after it
-    and the window's scroll knows its extent (the kit placed its own items
-    by screen position)."""
+    corner, then the layout advanced by its size (`ItemSize`), so what
+    follows is laid out after it and the window's scroll knows its extent
+    (the kit placed its own items by screen position). No item is added:
+    the kit control drawn last stays imgui's last item, which is what the
+    panel's tooltip, menu and Learn calls after a widget act on — and a
+    dummy over the block would be a second item on the same rect for
+    anything that walks a section's items."""
     x, y, w, h = rect
     imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
-    imgui.dummy(imgui.ImVec2(w, h))
+    imgui.internal.item_size(imgui.ImVec2(w, h))

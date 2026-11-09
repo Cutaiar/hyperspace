@@ -370,3 +370,168 @@ def form(panel, k, spec, draw_cell, **gaps) -> None:
     for key, (cx, cy, cw, ch) in cells.items():
         draw_cell(key, (x + cx, y + cy, cw, ch))
     ui_kit.end_block((x, y, w, h))
+
+
+# ---------------------------------------------------------------- in imgui's flow
+#
+# The panel's own widget calls (`Panel._check`, `Panel._button`) drawn on the
+# kit where they stand: at the cursor, exactly as wide and tall as the stock
+# widget they replace, so a section's same_line / `ui.beside` arithmetic —
+# written against `ui.check_w`, `ui.button_w`, `ui.chip_w` — holds unchanged,
+# and every section that calls them is on the kit without its layout being
+# touched.
+
+def inline_check(panel, pid: str, label: str | None = None) -> bool:
+    """`Panel._check` on the kit: the kit's small Switch centred in the box
+    a stock checkbox has, its words after it, the whole of it `ui.check_w`
+    wide and one frame tall — the stock checkbox's footprint, so a row of
+    them keeps its arithmetic.
+
+    One hit over the whole row, as a checkbox has, and NOT the kit Switch's
+    own: shadcn stretches a switch's target 11 px past each end
+    (`interact.switch`, `rect.stretched_hit`), which in a row of checks
+    reaches into the next one's words and takes its clicks. The words are a
+    real text item (the panel's word face; TEXT while on, DIM off), drawn
+    after the hit, so whatever reads a section's text reads them. True
+    when flipped."""
+    k = ui_kit.begin(panel)
+    D = _m("draw")
+    a = panel.reg[pid]
+    p = panel._real(a)
+    on = bool(p.base)
+    words = (a.label if label is None else label).split("##")[0]
+    fh = imgui.get_frame_height()
+    w = ui.check_w(words)
+    x, y, _, _ = ui_kit.block(fh)
+    sw, sh, _ = _m("tokens").SWITCH_SIZES["sm"]
+    dim = _dim(panel)
+    with _m("uictx").chrome(k):
+        st = k.hit(pid, x, y, w, fh)
+        panel._tip(a)
+        panel._ctx(a)
+        panel._learn_frame(a)
+        panel._mod_dot(p)
+        on_f = k.anim.to(f"{pid}:on", 1.0 if on else 0.0)
+        D.switch(k.dl, x + (fh - sw) / 2, y + (fh - sh) / 2, on_f, k.theme, k.switch_tbl,
+                 size="sm", focus_f=k.focus_f(pid, st.focused, disabled=dim), disabled=dim)
+        if words:
+            gap = imgui.get_style().item_inner_spacing.x
+            imgui.set_cursor_screen_pos(imgui.ImVec2(x + fh + gap, y))
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(ui.TEXT if on else ui.DIM, words)
+    ui_kit.end_block((x, y, w, fh))
+    if st.clicked and not dim:
+        p.set(not on)
+        return True
+    return False
+
+
+def inline_button(panel, pid: str, label: str | None = None, small: bool = False) -> bool:
+    """`Panel._button` on the kit: the kit's Button where the stock button (or,
+    `small`, the chip) would be, as wide as it — the stock words' width and
+    padding, so a row laid out with `ui.button_w` / `ui.chip_w` holds — and
+    as tall. A press fires a trigger, flips a toggle. True when pressed."""
+    k = ui_kit.begin(panel)
+    a = panel.reg[pid]
+    words = (a.label if label is None else label).split("##")[0]
+    if small:
+        w = ui.chip_w(words)
+        h = imgui.get_text_line_height() + 2 * ui.CHIP_PAD.y
+        size, variant = "xs", "secondary"
+    else:
+        w = imgui.calc_text_size(words).x + 2 * imgui.get_style().frame_padding.x
+        h = imgui.get_frame_height()
+        size, variant = BUTTON_SIZE, "secondary"
+    x, y, _, _ = ui_kit.block(h)
+    with _m("uictx").chrome(k):
+        st = _m("comp_button").ui_button(k, pid, x, y, w, h, words, variant=variant, size=size,
+                                         disabled=_dim(panel))
+    panel._tip(a)
+    panel._ctx(a)
+    panel._learn_frame(a)
+    ui_kit.end_block((x, y, w, h))
+    if st.clicked:
+        a.toggle()
+        return True
+    return False
+
+
+def inline_fader(panel, pid: str) -> bool:
+    """`Panel._fader` on the kit: the slider field (`slider`) the full width
+    at the cursor — its label and readout over the kit's track, a tick at
+    a taper's unity detent. True when written."""
+    k = ui_kit.begin(panel)
+    x, y, w, _ = ui_kit.block(0.0)
+    h = slider_h()
+    with _m("uictx").chrome(k):
+        changed = slider(panel, k, pid, (x, y, w, h))
+    ui_kit.end_block((x, y, w, h))
+    return changed
+
+
+SLIDER_TRACK_MIN = 24.0   # px: the least track an inline slider keeps beside its readout
+
+
+def inline_slider(panel, pid: str, width: float = -1) -> bool:
+    """`Panel._slider` on the kit, in the room the stock one had (`width`:
+    -1 the rest of the line, under 0 that much short of it): the kit's track,
+    its readout at the row's end in the readout face — the value alone, the
+    label beside it already says what (`readout`); red while a lane rides
+    it. One frame tall, so a row of them keeps its height. True when
+    written."""
+    k = ui_kit.begin(panel)
+    a = panel.reg[pid]
+    p = panel._real(a)
+    avail = imgui.get_content_region_avail().x
+    w = avail if width == -1 else (avail + width if width < 0 else width)
+    fh = imgui.get_frame_height()
+    x, y, _, _ = ui_kit.block(fh)
+    value = readout(a.label, panel._mod_text(p) if p.modulated else p.text())
+    rw = ui._readout_width(value)
+    gap = _m("tokens").SPACE[2]
+    col = ui.RED if p.modulated else ui.TEXT
+    beside = w - rw - gap >= SLIDER_TRACK_MIN
+    track = w - rw - gap if beside else w
+    with _m("uictx").chrome(k):
+        # the hit is the whole row, as the stock slider's frame was: the
+        # track is centred in it, and a row of controls keeps one top
+        changed = _slider(panel, k, a, p, x, y, track, fh)
+        if beside:
+            text(k.dl, x + track + gap, y, fh, value, "num", ui.FONT_NUM, col)
+        else:
+            # too narrow for both side by side (a cell of the 240 px pane):
+            # the readout over the track's middle, on a plate of the ground
+            tx = x + (w - min(rw, w)) / 2
+            pad = _m("tokens").SPACE[1]
+            k.dl.add_rect_filled(imgui.ImVec2(tx - pad, y + 4), imgui.ImVec2(tx + min(rw, w) + pad, y + fh - 4),
+                                 imgui.get_color_u32(imgui.Col_.window_bg), ui.ROUND)
+            imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+            shown = ui.fit_text(value, w)
+            imgui.pop_font()
+            text(k.dl, tx, y, fh, shown, "num", ui.FONT_NUM, col)
+    ui_kit.end_block((x, y, w, fh))
+    return changed
+
+
+SELECT_ROWS_MAX = 12      # an enum longer than this keeps imgui's combo: the kit's menu has no scroll yet
+
+
+def inline_select(panel, pid: str, width: float = -1, tip: str | None = None) -> bool | None:
+    """`Panel._combo` on the kit, in the room the stock combo had (`width`
+    as `inline_slider`'s): the kit's Select, one frame tall. None — draw
+    the stock combo — for an enum of more than `SELECT_ROWS_MAX` names,
+    which the kit's menu cannot scroll through (its HANDOFF: `menu.popup`
+    has no height clamp). Else True when another name is chosen."""
+    a = panel.reg[pid]
+    p = panel._real(a)
+    if len(p.names) > SELECT_ROWS_MAX:
+        return None
+    k = ui_kit.begin(panel)
+    avail = imgui.get_content_region_avail().x
+    w = avail if width == -1 else (avail + width if width < 0 else width)
+    fh = imgui.get_frame_height()
+    x, y, _, _ = ui_kit.block(fh)
+    with _m("uictx").chrome(k):
+        changed = select(panel, k, pid, (x, y, w, fh), tip=tip)
+    ui_kit.end_block((x, y, w, fh))
+    return changed

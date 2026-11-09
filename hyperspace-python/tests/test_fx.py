@@ -614,7 +614,8 @@ class PageRig:
                 self.disabled[key] = depth[0]
                 return out
             monkeypatch.setattr(imgui, fn, rec)
-        for fn in ("button", "checkbox", "slider_float", "slider_int", "combo"):
+        # (an invisible_button too: a check on the kit is one, ui_fields.inline_check)
+        for fn in ("button", "checkbox", "slider_float", "slider_int", "combo", "invisible_button"):
             item(fn)
         real_text, real_begin, real_end = (imgui.text_colored, imgui.begin_disabled,
                                            imgui.end_disabled)
