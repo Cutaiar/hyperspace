@@ -1133,7 +1133,7 @@ def test_each_chip_is_as_wide_as_its_name(pane, monkeypatch):
     """No chip is padded out (Dillon, 2026-11-09): each is its title's width,
     the dirty dot in its corner taking no room; only the sections chip is
     the width of its widest name."""
-    r, d = pane
+    _r, d = pane
     monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)     # every dot up
     d.run(d.wait(2))
     imgui.new_frame()

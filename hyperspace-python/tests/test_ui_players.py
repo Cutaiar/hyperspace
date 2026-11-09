@@ -261,8 +261,8 @@ def test_the_footer_says_who_is_where_and_the_pane_chip_does_not(rig):
     assert ui_players.summary(r.panel) == "on air 1 2  ·  off air —"
     meta.move_player(2, Duty.OFF_AIR)
     assert ui_players.summary(r.panel) == "on air 1  ·  off air 2"
-    assert "PLAYERS##pane.players" in d.rects                    # the chip: PLAYERS alone,
-    from hyperspace import ui as ui_mod                           # who is where its tooltip
+    assert "PLAYERS##pane.players" in d.rects   # the chip: PLAYERS alone, who is where its tooltip
+    from hyperspace import ui as ui_mod
     said: list[str] = []
     real = ui_mod.tooltip
     ui_mod.tooltip = lambda text: (said.append(text), real(text))
