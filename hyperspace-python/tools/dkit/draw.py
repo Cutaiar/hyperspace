@@ -683,27 +683,47 @@ def meter(dl, x, y, w, h, frac, theme, *, track="muted", bar="primary"):
         fill(dl, x, y, fw, h, rgba(bar, theme=theme), r)
 
 
+_SPARK: dict = {}
+
+
 def sparkline(dl, x, y, w, h, values, col, *, lo=0.0, hi=1.0, fill_a=0.18):
     """A filled area chart. Two polylines rather than a tessellated mesh: the
     fill is a concave polygon, so it goes through add_concave_poly_filled -
-    the same call ui_bands.py:261 already uses for the spectrogram."""
+    the same call ui_bands.py:261 already uses for the spectrogram.
+
+    The points are cached on everything they are computed from - the rect,
+    the range and the values themselves - because building 180 of them was
+    most of the Python in a dashboard frame. The draw calls still run every
+    frame (an ImGui draw list is rebuilt each one), but on the cached
+    ImVec2s rather than fresh copies of them."""
     if len(values) < 2:
         return
-    span = max(hi - lo, 1e-6)
-    pts = []
-    for i, v in enumerate(values):
-        px = x + w * i / (len(values) - 1)
-        py = y + h * (1.0 - (min(max(v, lo), hi) - lo) / span)
-        pts.append(imgui.ImVec2(px, py))
+    key = (x, y, w, h, lo, hi, tuple(values))
+    hit = _SPARK.get(key)
+    if hit is None:
+        span = max(hi - lo, 1e-6)
+        n1 = len(values) - 1
+        base = y + h
+        pts, bot = [], []
+        for i, v in enumerate(values):
+            px = x + w * i / n1
+            py = y + h * (1.0 - (min(max(v, lo), hi) - lo) / span)
+            p = imgui.ImVec2(px, py)
+            pts.append(p)
+            # p.x, not px: the ImVec2 holds the float32, as the quad's top did
+            bot.append(imgui.ImVec2(p.x, base))
+        if len(_SPARK) > 256:
+            _SPARK.clear()
+        _SPARK[key] = hit = (pts, bot)
+    pts, bot = hit
     if fill_a > 0:
         # One convex trapezoid per segment rather than one concave polygon:
         # add_concave_poly_filled triangulates the whole outline and leaves
         # visible streaks across an area chart's interior.
         c = _u32((col[0], col[1], col[2], fill_a))
-        base = y + h
-        for a, b in zip(pts, pts[1:]):
-            dl.add_quad_filled(imgui.ImVec2(a.x, a.y), imgui.ImVec2(b.x, b.y),
-                               imgui.ImVec2(b.x, base), imgui.ImVec2(a.x, base), c)
+        quad = dl.add_quad_filled
+        for i in range(len(pts) - 1):
+            quad(pts[i], pts[i + 1], bot[i + 1], bot[i], c)
     # imgui_bundle orders this (col, thickness, flags), as with add_rect
     dl.add_polyline(pts, _u32(col), thickness=1.5, flags=0)
 

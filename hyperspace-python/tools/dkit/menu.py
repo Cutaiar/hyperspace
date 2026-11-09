@@ -628,7 +628,29 @@ def row_h(it) -> float:
 
 
 def measure(ui, items, min_w: float = MIN_W) -> tuple[float, float]:
-    """The content box a menu needs, before chrome padding."""
+    """The content box a menu needs, before chrome padding.
+
+    Memoised in `ui.anim.store`, on every field it reads, so for as long as
+    one session's faces and font atlas live. NOT a module-level cache, and
+    the reason is a pixel: measuring a shortcut such as "\u2318C" makes
+    ImGui BAKE the fallback glyph into the font atlas, and when that first
+    happens decides where later glyphs are packed - which moved 30 pixels of
+    the contact sheet by up to 107 levels when closed menus stopped
+    measuring. So every menu is still measured, on the frame it first
+    appears in a session, exactly as before; only the repeats are skipped.
+    See RETRO row 71."""
+    sig = (min_w, tuple((it.kind, it.label, it.icon, it.shortcut, it.checked)
+                        for it in items))
+    memo = ui.anim.store.setdefault("menu.measure", {})
+    hit = memo.get(sig)
+    if hit is None:
+        if len(memo) > 512:
+            memo.clear()
+        memo[sig] = hit = _measure(ui, items, min_w)
+    return hit
+
+
+def _measure(ui, items, min_w):
     w = min_w - 2 * PAD
     h = 0.0
     for it in items:
@@ -766,7 +788,16 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
     which reads wrong for a row action: the menu should land in the same
     place however you arrived at the button.
     """
-    cw, ch = measure(ui, items, min_w)
+    # A CLOSED menu - nearly all of them, nearly every frame - returns here.
+    # `begin_popup` asks exactly this question first and, when the answer
+    # is no, clears the next-window data and returns False; so placing it
+    # and pushing the style only to have that thrown away was ~30 menus of
+    # work a dashboard frame for nothing.
+    cw, ch = measure(ui, items, min_w)      # even closed: see `measure`
+    if not imgui.is_popup_open(key):
+        LAST_RECT.pop(key, None)
+        ui.anim.to(f"{key}:open", 0.0)
+        return None
     w, h = cw + 2 * PAD, ch + 2 * PAD
 
     if anchor is not None:
