@@ -74,7 +74,7 @@ A reasonable opening message for a new session:
 ## Where it stands
 
 ```
-906 passed, 64 skipped, 0 xfailed (896 with test_gallery.py deselected
+907 passed, 65 skipped, 0 failed (897 with test_gallery.py deselected
 under xdist, plus its 10 run -n0).   dashboard paint(): 6.53 -> 3.33 ms
 (bench_paint.py, paired, this box), every captured frame byte-identical.
 ```
@@ -88,9 +88,10 @@ benched (table in RETRO). The check it was held to is **`capture_frames.py`**:
 frame - byte-identical to the base in both run orders. `test_caches.py` has a
 test for each way a cache could go stale, each seen to fail with the cache
 broken on purpose. Figures re-run here: the suite was 881 passed / 63
-skipped at the base commit (the "880/62" below was already stale); the 15
-new passes are `test_caches.py`'s 14 and one `test_module_surface` case, and
-the one new skip is that check's "no from-imports" for `test_caches.py`.
+skipped at the base commit (the "880/62" below was already stale); the 16
+new passes are `test_caches.py`'s 14 and two `test_module_surface` cases, and
+the two new skips are that check's "no from-imports" for `test_caches.py`
+and `capture_frames.py`, which import the kit's modules whole.
 
 Two things worth knowing before the next change. A closed menu still
 MEASURES itself (memoised): measuring "⌘C" bakes a fallback glyph into
