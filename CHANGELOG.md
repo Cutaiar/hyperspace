@@ -1,10 +1,12 @@
 # Changelog
 
-## v1.3 — 2026-11-07
+## v1.3 — 2026-11-08
 
 ### Panel
 
-- GRAPH is always on screen: the rail is gone and every other page (presets, look-back, faces, analyzer, media, fx, LFO, sequencer, audio, camera, output, view, routing, hands, system) is a folding section of GRAPH's side pane; ⌘[ / ⌘] and `ui.page` now pick the focus section, and the FX page is retired (#345, #350, #360)
+- GRAPH is always on screen: the rail is gone and every other page (presets, look-back, faces, analyzer, media, fx, LFO, sequencer, audio, camera, output, view, routing, hands, system) is a section of GRAPH's side pane, and the FX page is retired (#345, #350, #360)
+- The side pane shows one view at a time at full height — the selection or one section — picked from a row of chips (SELECTION, PATCHES, AUDIO, ROUTING, PLAYLIST, PLAYERS, SYSTEM, and **SECTIONS ▾** for the rest); ⌘[ / ⌘] step back and forward through every view and every node you selected, and each section keeps its own scroll (#439)
+- The pane's chips hold still: each is as wide as its name, with a dirty dot in its corner, and what's selected, where the playlist is and who's on air move into their tooltips (#439, #440)
 - LOOKBACK is drawn as its two picture nodes, LOOK-BACK and DREAM, with `dream.on` on the dream's head (#350)
 - Hold Shift while dragging a panel slider or fader and it moves a tenth as far, with no jump when Shift goes down or up, one undo step a drag (#348)
 - The panel says "analyzer", not "band", for the audio analyzer and its tuning; nothing saved changes (#368)
@@ -14,7 +16,7 @@
 - ⌘Z takes back the last edit of the preset you're on, or, with the mouse over a rig-tuning section (the analyzer, hands …), that section's last edit, so a ⌘Z mid-set never undoes a tuning tweak from an hour ago; undoing a whole show load is now two ⌘Zs (#373)
 - After you move to another deck or section, ⌘Z takes nothing back until you make a change there ("nothing to undo here yet: make a change on deck 2 first"), so a stray ⌘Z can't undo something from ten minutes ago; hovering alone no longer changes what ⌘Z reaches (#386)
 - A cursor left in a text field (a find box, a name) no longer counts as working the panel, so a controller move while it sits there can't steal ⌘Z's target (#398)
-- GRAPH opens big enough to read: 1.3× on a 1080p show display or a Retina screen, up to 1.5× on a large one; resizing the window no longer zooms or moves the canvas, and the panel's stray scrollbar is gone (#411, #429)
+- GRAPH opens, and refits with a glide whenever another patch loads, with every node in view beside the side pane; **Tidy** frames the same way, keeping the selection; the fit zooms in no further than 1.3× on a 1080p show display or a Retina screen, 1.5× on a large one; resizing the window no longer zooms or moves the canvas, and the panel's stray scrollbar is gone (#411, #429, #439)
 - CONTROLS is the control window itself, not a window inside it: no title bar, nothing to drag or close by accident, and it follows the window's size; H still shows and hides it, and the floating pad diagram gets an × (#426)
 - Plainer words: "session" and "rig" are gone (now "meta controller", "this Mac", "bus cable"), "preset" becomes "patch" (the **PATCHES** section, "patch: saved TRIP 2") and "show" becomes "install" ("install: saved party"); saved ids and files are unchanged (#407, #436, #437)
 - Nudge chips each open their own popup, and a patch strip's save chip no longer covers ▶ in a narrow pane (#414)
@@ -80,6 +82,8 @@
 
 - APC40: hold SEND B and every knob moves its param a tenth as far (`desk.fine`); let go and the next detent carries on with no jump (#344)
 - The on-screen APC40 draws SEND B as FINE, lit while held, rather than as a free button (#375)
+- A generic MIDI desk such as the DDJ-FLX4 learns at full resolution: Learn listens for a moment, then a 14-bit fader becomes an `abs14` row, a jog a `rel64` / `rel` row, anything else `abs` as before; notes and the APC40 still learn at once; not yet tried on a real FLX4 (#438)
+- Learn ▸ Learn Player 1–4 ▸ a controller learns from that one controller, named by model or port ("DDJ-FLX4"); **Any desk** is the old Learn desk, and a plugged-in controller nobody holds is listed greyed (#438)
 
 ### Graph
 
@@ -121,6 +125,7 @@
 - Saving `outputs.py`, `render.py` or `ghost.py` hot reloads again (slots moved to the cold `hot_slots.py`), and the slots rule imports in list order (#421, #427)
 - `Param.__post_init__` makes every meta param non-modulatable (#409); `Project` is `Install` in code (`Library.install`, `DeckInstall`) (#436); `routing.layout_of` gives rows by pad model (#431)
 - `tools/type_ratchet.py` fails a PR on a new pyright complaint against `tools/type_baseline.json` (#412); `docs/AUDIT-STRUCTURE-2026-10.md` records the structure audit (#413); `tools/wait_green.py`, re-measured test times (#403); `tools/poi_probe.py` replays a real Joy-Con tape (#410); the doc tails were restored and `tests/test_doc_numbers.py` checks more (#432)
+- The `abs14` route op reads CC n + 32 as the LSB and rests between detents; `midi.heard_as` and `midi.LISTEN_S` drive the listening Learn, and `players.controllers_of` feeds its menu (#438); `Panel.graph_fit` switches GRAPH's fit off, as the canvas tests' rig does — restart after pulling (#439)
 
 ## v1.2 — 2026-11-02
 
