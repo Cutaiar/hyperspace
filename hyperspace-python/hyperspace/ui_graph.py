@@ -1965,7 +1965,7 @@ def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
     opened = area in st["idle_open"]
     imgui.text_disabled(ui.fit_text(idle_line(view, ids), NODE_W - 30))
     imgui.same_line(NODE_W - 30 - PIN)
-    if imgui.small_button("-" if opened else "+"):
+    if ui.small_button("-" if opened else "+"):
         toggle_idle(st, area)
     if imgui.is_item_hovered():
         ed.suspend()
@@ -2220,7 +2220,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     imgui.text(ui.fit_text(n.label, NODE_W - 40 - 2 * PIN))
     imgui.pop_style_color()
     imgui.same_line(NODE_W - 30 - PIN)          # the + clear of the out stub
-    if imgui.small_button("+" if shut else "-"):
+    if ui.small_button("+" if shut else "-"):
         toggle_open(st, n.id)
     if imgui.is_item_hovered():
         ed.suspend()
@@ -2240,7 +2240,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         ed.end_node()
         return
     every = full(st, n.id)
-    if imgui.small_button("patched only" if every else "all ports"):
+    if ui.small_button("patched only" if every else "all ports"):
         st["flip"] ^= {n.id}
     ports = shown(st, n)
     group = None
@@ -2251,7 +2251,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
             folded = (n.id, group) in st["folds"]
             count = sum(1 for p in n.ports if p.group == group)
             sign = "+" if folded else "-"
-            if imgui.small_button(f"{sign} {group_title(group) or 'misc'} ({count})"
+            if ui.small_button(f"{sign} {group_title(group) or 'misc'} ({count})"
                                   f"##{group}"):
                 st["folds"] ^= {(n.id, group)}
         if port not in ports:
@@ -2568,7 +2568,7 @@ def _region_title(panel, st: dict, g) -> None:
         ui.tooltip(REGION_TIP)
         ed.resume()
     imgui.same_line(max(width - 24, 40))
-    if imgui.small_button("-"):
+    if ui.small_button("-"):
         set_open(panel, g.id, False)
     if imgui.is_item_hovered():
         ed.suspend()
@@ -2595,7 +2595,7 @@ def _group_node(panel, st: dict, view: graphview.View, g, drawn: set[str]) -> No
     imgui.same_line()
     imgui.text(ui.fit_text(g.name, NODE_W - 40 - 2 * PIN))
     imgui.same_line(NODE_W - 30 - PIN)
-    if imgui.small_button("+"):
+    if ui.small_button("+"):
         set_open(panel, g.id, True)
     if imgui.is_item_hovered():
         ed.suspend()
@@ -2631,7 +2631,7 @@ def _group_side(panel, st: dict, view: graphview.View, g) -> None:
     if names.get(g.id, (None, None))[0] != g.name:
         names[g.id] = (g.name, g.name)
     imgui.set_next_item_width(imgui.get_content_region_avail().x)
-    entered, text = imgui.input_text("##graph.group.name", names[g.id][1],
+    entered, text = ui.input_text("##graph.group.name", names[g.id][1],
                                      imgui.InputTextFlags_.enter_returns_true)
     names[g.id] = (g.name, text)
     if entered:
@@ -3022,9 +3022,9 @@ def _patch_form(panel, g, form: list) -> None:
     ui._micro("save as patch")
     w = imgui.get_content_region_avail().x
     imgui.set_next_item_width(w)
-    _, form[1] = imgui.input_text_with_hint("##graph.patch.name", "name", form[1])
+    _, form[1] = ui.input_text_with_hint("##graph.patch.name", "name", form[1])
     imgui.set_next_item_width(w)
-    _, form[2] = imgui.input_text_with_hint("##graph.patch.note", "note", form[2])
+    _, form[2] = ui.input_text_with_hint("##graph.patch.note", "note", form[2])
     if ui.chip("Save##graph.patch"):
         save_patch(panel, g.id, form[1], form[2])
     if imgui.is_item_hovered():

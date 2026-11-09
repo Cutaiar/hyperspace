@@ -259,14 +259,14 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
     copy = "Copy to shared"
     imgui.set_next_item_width(-(ui.button_w(copy) + imgui.get_style().item_spacing.x))
     imgui.push_font(ui._FONTS["ui"], ui.FONT_BASE)
-    _, st["search"] = imgui.input_text_with_hint("##media.search", "search", st["search"])
+    _, st["search"] = ui.input_text_with_hint("##media.search", "search", st["search"])
     imgui.pop_font()
     imgui.same_line()
     pick = st["pick"] or ""
     can = (folder is not None and getattr(folder, "shared", None) is not None
            and pick.startswith(("local:", "file:")) and st["copy"] is None)
     imgui.begin_disabled(not can)
-    if imgui.button(f"{copy}##media.copy"):
+    if ui.button(f"{copy}##media.copy"):
         copy_to_shared(panel)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):

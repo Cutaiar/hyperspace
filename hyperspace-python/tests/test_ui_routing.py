@@ -18,7 +18,7 @@ from imgui_bundle import imgui
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import routing, ui_graph, ui_loadable, ui_routing
+from hyperspace import routing, ui, ui_graph, ui_loadable, ui_routing
 from hyperspace.bands import CEIL
 from hyperspace.learn import LANE_DEPTH
 from hyperspace.library import LibraryError
@@ -1046,14 +1046,14 @@ def test_typing_in_the_filter_is_imguis_keyboard_not_the_apps(rig, monkeypatch):
     frame(panel, "routing")
     frame(panel)
     assert not io.want_capture_keyboard
-    real = imgui.input_text_with_hint
+    real = ui.input_text_with_hint       # the panel's field: stock, or the kit's (ui_fields)
     focus = [True]
 
     def field(label, *a, **k):
         if label == "##rows" and focus:
             imgui.set_keyboard_focus_here()               # a click in the field
         return real(label, *a, **k)
-    monkeypatch.setattr(imgui, "input_text_with_hint", field)
+    monkeypatch.setattr(ui, "input_text_with_hint", field)
     for _ in range(3):
         frame(panel)
     focus.clear()
@@ -1287,14 +1287,14 @@ def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
     rig.lib.load("loadable", "TRIP")
     for _ in range(3):
         frame(panel, "routing")
-    real = imgui.input_text_with_hint
+    real = ui.input_text_with_hint       # the panel's field: stock, or the kit's (ui_fields)
     focus = [True]
 
     def field(label, *a, **k):
         if label == "##rows" and focus:
             imgui.set_keyboard_focus_here()                   # a click in the field
         return real(label, *a, **k)
-    monkeypatch.setattr(imgui, "input_text_with_hint", field)
+    monkeypatch.setattr(ui, "input_text_with_hint", field)
     for _ in range(3):
         frame(panel)
     focus.clear()

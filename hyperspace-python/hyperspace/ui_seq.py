@@ -501,7 +501,7 @@ def _folded(panel, seq, envs, n: int) -> None:
     bx = THUMB_W + sp + NAME_W
     _level_bar(dl, env.out, pos.x + bx, pos.y, max(w - bx, 0.0), h)
     imgui.same_line(0, sp)
-    if imgui.arrow_button(f"##{p}.open", imgui.Dir.right) or hit:
+    if ui.arrow_button(f"##{p}.open", imgui.Dir.right) or hit:
         open_strip(panel, n)
     if imgui.is_item_hovered():
         ui.tooltip(f"Open env {n} (the open one folds)")

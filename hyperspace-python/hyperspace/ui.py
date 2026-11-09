@@ -306,6 +306,8 @@ CHIP_PAD = imgui.ImVec2(10, 3)
 
 def chip(label: str, size: imgui.ImVec2 | None = None) -> bool:
     """A compact pill button — small_button, with room to breathe."""
+    if ui_kit.ready():                  # on the kit (tools/dkit): the same size and id
+        return ui_fields.chip(label, size)
     imgui.push_style_var(imgui.StyleVar_.frame_padding, CHIP_PAD)
     imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
     hit = imgui.button(label, size if size is not None else imgui.ImVec2(0, 0))
@@ -313,9 +315,69 @@ def chip(label: str, size: imgui.ImVec2 | None = None) -> bool:
     return hit
 
 
+def button(label: str, size: imgui.ImVec2 | None = None) -> bool:
+    """`imgui.button`, on the kit where it is there (`ui_fields.chip`, the
+    stock button's size and id: its words and the frame padding)."""
+    if ui_kit.ready():
+        return ui_fields.chip(label, size, pad=imgui.get_style().frame_padding, pill=False)
+    return imgui.button(label, size if size is not None else imgui.ImVec2(0, 0))
+
+
+def small_button(label: str) -> bool:
+    """`imgui.small_button` — a button with no vertical padding — on the kit
+    where it is there, as `button`."""
+    if ui_kit.ready():
+        return ui_fields.chip(label, pad=imgui.ImVec2(imgui.get_style().frame_padding.x, 0),
+                              pill=False)
+    return imgui.small_button(label)
+
+
+def _arrow_icon(direction) -> str:
+    """Lucide's chevron for an `imgui.Dir` (whose str is a bare number here)."""
+    d = imgui.Dir
+    return {int(d.left): "chevron_left", int(d.right): "chevron_right",
+            int(d.up): "chevron_up", int(d.down): "chevron_down"}[int(direction)]
+
+
+def arrow_button(str_id: str, direction) -> bool:
+    """`imgui.arrow_button` — a frame-high square with an arrow — on the kit
+    where it is there: the kit's Button with Lucide's chevron, the same id."""
+    if ui_kit.ready():
+        name = _arrow_icon(direction)
+        fh = imgui.get_frame_height()
+        return ui_fields.chip(str_id, imgui.ImVec2(fh, fh), pill=False, icon=name)
+    return imgui.arrow_button(str_id, direction)
+
+
+def input_text_with_hint(label: str, hint: str, text: str, flags: int = 0) -> tuple[bool, str]:
+    """`imgui.input_text_with_hint`, on the kit where it is there (a label
+    that is all id, ``##…``: `ui_fields.text_field`, the same id and room)."""
+    if ui_kit.ready() and label.startswith("##"):
+        return ui_fields.text_field(label, hint, text, flags)
+    return imgui.input_text_with_hint(label, hint, text, flags)
+
+
+def input_text(label: str, text: str, flags: int = 0) -> tuple[bool, str]:
+    """`imgui.input_text`, on the kit where it is there, as `input_text_with_hint`."""
+    if ui_kit.ready() and label.startswith("##"):
+        return ui_fields.text_field(label, "", text, flags)
+    return imgui.input_text(label, text, flags)
+
+
+def checkbox(label: str, value: bool) -> tuple[bool, bool]:
+    """`imgui.checkbox` — `(clicked, value)` — for a check with no param
+    behind it (`Panel._check` draws a param's); on the kit where it is
+    there, the same footprint and id (`ui_fields.check`)."""
+    if ui_kit.ready():
+        return ui_fields.check(label, value)
+    return imgui.checkbox(label, value)
+
+
 def lit_chip(label: str, lit: bool, color: imgui.ImVec4 | None = None,
              size: imgui.ImVec2 | None = None) -> bool:
     """A chip that is solid red while on — a lit key, readable from the floor."""
+    if ui_kit.ready():                  # on the kit (tools/dkit): the same size and id
+        return ui_fields.chip(label, size, lit=lit, color=color or DIM)
     if lit:
         imgui.push_style_color(imgui.Col_.button, RED)
         imgui.push_style_color(imgui.Col_.button_hovered, imgui.ImVec4(1.0, 0.40, 0.40, 1))
@@ -2675,7 +2737,7 @@ class Panel:
         on = graphview.is_through(frame, n, bus_cuts)
         why = None if on else graphview.through_refusal(frame, n, slots, bus_cuts)
         imgui.begin_disabled(why is not None)
-        changed, v = imgui.checkbox(f"{THROUGH_WORDS}##through.{n}", on)
+        changed, v = checkbox(f"{THROUGH_WORDS}##through.{n}", on)
         imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
             tooltip(why or "the hands bent by the effects on this output (written "
@@ -2863,7 +2925,7 @@ class Panel:
                 imgui.pop_text_wrap_pos()
         else:
             beside(button_w("Load track"))
-        if imgui.button("Load track"):
+        if button("Load track"):
             self._file_dialog = self.open_file_dialog(
                 "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
             if self._file_dialog is None:
@@ -3339,7 +3401,7 @@ class Panel:
             imgui.text_wrapped(line)
         dismissible = (rw is not None and getattr(rw, "dismissible", False)) or (
             self.dream_error and not getattr(self, "_dream_waved", False))
-        if dismissible and imgui.small_button("dismiss##alerts"):
+        if dismissible and small_button("dismiss##alerts"):
             self.dismiss_alerts()
         imgui.end()
         imgui.pop_style_color(2)

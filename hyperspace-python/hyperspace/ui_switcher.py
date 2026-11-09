@@ -96,8 +96,12 @@ def _sections(panel, k, key: str, x: float, y: float, w: float) -> None:
     I, M = ui_kit.mod("interact"), ui_kit.mod("menu")
     titles = {kk: t for kk, t, _, _ in ui_pane.SECTIONS}
     groups = {kk: g for kk, _, g, _ in ui_pane.SECTIONS}
+    # the rows' dirty marks only while the menu is up: asking every group
+    # each frame for a menu nobody sees was the switcher's largest cost
+    # (tools/profile_kit.py; a group's dirt is a snapshot compare)
+    up = imgui.is_popup_open("##sel.pane.sections")
     items = [M.Item(id=kk, label=titles[kk].upper(), checked=kk == key,
-                    shortcut=DIRTY if ui_pane._dirty(panel, groups[kk]) else "")
+                    shortcut=DIRTY if up and ui_pane._dirty(panel, groups[kk]) else "")
              for kk in ui_pane.MENU]
     label = titles[key].upper() if key in ui_pane.MENU else ""
     chosen, _open = I.select(k, "pane.sections", x, y, w, label, items,
@@ -105,5 +109,10 @@ def _sections(panel, k, key: str, x: float, y: float, w: float) -> None:
                              row_id=lambda it, i: f"pane.{it.id}")
     if imgui.is_item_hovered() and not _open:
         ui.tooltip(ui_pane.MENU_TIP)
+    # a section in the menu moved off its patch: a dot on the Select, as on
+    # the stock sections chip (any(): the first dirty group answers)
+    if any(ui_pane._dirty(panel, groups[kk]) for kk in ui_pane.MENU):
+        r = ui_pane.CHIP_DOT_R
+        k.dl.add_circle_filled(imgui.ImVec2(x + w - r - 3, y + r + 3), r, ui.u32(ui.RED))
     if chosen is not None and chosen != key:
         ui_pane.show(panel, chosen)

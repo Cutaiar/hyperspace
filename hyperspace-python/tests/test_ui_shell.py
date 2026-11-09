@@ -2084,6 +2084,18 @@ def _output_page(rig, monkeypatch, page="output", body=False) -> tuple[list[str]
         m.setattr(ui_mod.imgui, "text_disabled", lambda s: (real["text_disabled"](s), rec(s))[0])
         m.setattr(ui_mod.imgui, "checkbox",
                   lambda label, v: (real["checkbox"](label, v), rec(label.split("##")[0]))[0])
+        # on the kit a check with no param is an invisible_button with the
+        # check's own label (ui_fields.check): its words are the label's too
+        real_ib = imgui.invisible_button
+
+        def ib(label, *a, **k):
+            out = real_ib(label, *a, **k)
+            words = label.split("##")[0]
+            if words and label.startswith(words + "##") and ui_mod.ui_kit.ready() \
+                    and label.split("##", 1)[1].startswith(("through.", "display.")):
+                rec(words)
+            return out
+        m.setattr(ui_mod.imgui, "invisible_button", ib)
         for _ in range(3):
             drawn.clear()
             edges.clear()

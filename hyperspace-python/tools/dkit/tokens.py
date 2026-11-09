@@ -134,14 +134,24 @@ def rgba(c: str | tuple, a: float = 1.0, theme: dict | None = None) -> tuple:
         if len(v) == 3:
             v.append(1.0)
         return (v[0], v[1], v[2], v[3] * a)
-    s = c.lstrip("#")
-    if len(s) == 3:
-        s = "".join(ch * 2 for ch in s)
-    r = int(s[0:2], 16) / 255.0
-    g = int(s[2:4], 16) / 255.0
-    b = int(s[4:6], 16) / 255.0
-    al = int(s[6:8], 16) / 255.0 if len(s) == 8 else 1.0
+    hit = _HEX.get(c)
+    if hit is None:
+        s = c.lstrip("#")
+        if len(s) == 3:
+            s = "".join(ch * 2 for ch in s)
+        hit = _HEX[c] = (int(s[0:2], 16) / 255.0, int(s[2:4], 16) / 255.0,
+                         int(s[4:6], 16) / 255.0,
+                         int(s[6:8], 16) / 255.0 if len(s) == 8 else 1.0)
+    r, g, b, al = hit
     return (r, g, b, al * a)
+
+
+# A colour's parse, by its string: a draw asks for a few dozen colours ~200
+# times a frame (measured in Hyperspace's panel, tools/profile_kit.py), and
+# parsing the hex each time was the kit's largest own cost there. Keyed by
+# the string alone - never by `a`, which is an eased, continuous value and
+# would grow the table without bound.
+_HEX: dict = {}
 
 
 # Per-variant chrome for Badge, read off src/components/ui/badge.tsx.

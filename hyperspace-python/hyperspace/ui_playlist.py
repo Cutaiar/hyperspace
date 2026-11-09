@@ -60,7 +60,7 @@ def _pick(panel, p) -> None:
         imgui.end_combo()
     st = _state(panel)
     imgui.set_next_item_width(max(60.0, imgui.get_content_region_avail().x - ui.chip_w("new") - 8))
-    _, st["name"] = imgui.input_text_with_hint("##playlist.name", "a new list's name", st["name"])
+    _, st["name"] = ui.input_text_with_hint("##playlist.name", "a new list's name", st["name"])
     ui.beside(ui.chip_w("new"))
     if ui.chip("new##playlist.new") and st["name"].strip():
         _new(panel, p, st)
@@ -92,7 +92,7 @@ def _transport(panel, p) -> None:
         panel._slider("output.xfade_s")
     install = panel.library.install
     at_launch = bool(p.key) and getattr(install, "plays", None) == p.key
-    if imgui.checkbox("start this list at launch##playlist.at_launch", at_launch)[0] and p.key:
+    if ui.checkbox("start this list at launch##playlist.at_launch", at_launch)[0] and p.key:
         install.play_at_launch(None if at_launch else p.key)
     if imgui.is_item_hovered():
         ui.tooltip("A cart: when the app opens, this list plays by itself. Kept in the install file.")

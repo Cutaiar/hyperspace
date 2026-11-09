@@ -698,7 +698,7 @@ def _editor(panel, io, settings, k: int) -> None:
     ui.beside(ui.check_w(panel.reg[f"{p}.bipolar"].label))
     panel._check(f"{p}.bipolar")
     ui.beside(ui.chip_w("mirror"))
-    if imgui.small_button("mirror"):
+    if ui.small_button("mirror"):
         mirror(settings, a.name)
     if imgui.is_item_hovered():
         ui.tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
@@ -707,7 +707,7 @@ def _editor(panel, io, settings, k: int) -> None:
         ui.beside(ui.chip_w("solo"))
         solo = io.solo == k
         imgui.push_style_color(imgui.Col_.text, ui.RED if solo else ui.DIM)
-        if imgui.small_button("solo"):
+        if ui.small_button("solo"):
             io.solo = None if solo else k
         imgui.pop_style_color()
         if imgui.is_item_hovered():
@@ -773,10 +773,10 @@ def _calibrate(io, settings, k: int) -> None:
     left = io.calibrating
     if left > 0:
         imgui.text_colored(ui.RED, f"sweeping… {math.ceil(left)} s — every axis, end to end")
-        if imgui.small_button("cancel"):
+        if ui.small_button("cancel"):
             io.cancel_calibration()
     else:
-        if imgui.small_button(f"calibrate {CAL_SECONDS:.0f} s"):
+        if ui.small_button(f"calibrate {CAL_SECONDS:.0f} s"):
             io.start_calibration(CAL_SECONDS)
         if imgui.is_item_hovered():
             ui.tooltip("For the next 20 s, move each hand through everything it "
@@ -785,7 +785,7 @@ def _calibrate(io, settings, k: int) -> None:
                               "and the box becomes what your palms covered plus "
                               f"{BOX_MARGIN:.0f} mm; a hand outside it reads absent.")
         imgui.same_line()
-        if imgui.small_button("reset ranges"):
+        if ui.small_button("reset ranges"):
             io.reset_ranges()
         if imgui.is_item_hovered():
             ui.tooltip("Every axis's range back to its default, and the box "
@@ -810,7 +810,7 @@ def _level(io) -> None:
     if io.levelling > 0:
         imgui.text_colored(ui.RED, "levelling… hold one hand flat, fingers forward")
         return
-    if imgui.small_button("level room"):
+    if ui.small_button("level room"):
         io.start_level()
     if imgui.is_item_hovered():
         ui.tooltip("Only one hand in view: hold it flat with the fingers pointing where forward is, "
@@ -819,7 +819,7 @@ def _level(io) -> None:
                    "for this box: the answer to a sensor mounted at an angle.")
     imgui.same_line()
     if getattr(io, "level", None) is not None:
-        if imgui.small_button("clear##level"):
+        if ui.small_button("clear##level"):
             io.clear_level()
         imgui.same_line()
         imgui.text_disabled("room levelled")

@@ -535,3 +535,118 @@ def inline_select(panel, pid: str, width: float = -1, tip: str | None = None) ->
         changed = select(panel, k, pid, (x, y, w, fh), tip=tip)
     ui_kit.end_block((x, y, w, fh))
     return changed
+
+
+# ---------------------------------------------------------------- chips
+
+def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
+         pill: bool = True, icon: str | None = None) -> bool:
+    """`ui.chip` / `ui.lit_chip` on the kit — and, with `pill` off and its
+    own `pad`, `ui.button` / `ui.small_button` / `ui.arrow_button`: the kit's
+    Button chrome at the stock widget's size (its words and `pad`, by
+    default `ui.CHIP_PAD`; or `size`), lit solid in the one red; the words
+    in the panel's own face through imgui's RenderText — TEXT, or `color`
+    (an unlit `lit_chip`'s DIM) — or a Lucide `icon` in their place.
+
+    The hit is an `invisible_button` with the widget's own label, so its
+    imgui id is the stock one's exactly (the label's hash), and the panel
+    driver finds it by the same words and id. Disabled — inside
+    `begin_disabled`, or drawn at a reduced style alpha as an inert key is —
+    it dims as the kit's disabled Button does. True when clicked."""
+    k = ui_kit.begin(None)
+    C, D = _m("comp_button"), _m("draw")
+    pad = ui.CHIP_PAD if pad is None else pad
+    words = "" if icon else label.split("##")[0]
+    sx = size.x if size is not None else 0.0
+    sy = size.y if size is not None else 0.0
+    line = imgui.get_text_line_height()
+    w = sx if sx > 0 else (line + 2 * pad.y if icon else imgui.calc_text_size(words).x + 2 * pad.x)
+    h = sy if sy > 0 else line + 2 * pad.y
+    p = imgui.get_cursor_screen_pos()
+    x, y = p.x, p.y
+    k.dl = imgui.get_window_draw_list()
+    with _m("uictx").chrome(k):
+        hit = imgui.invisible_button(label, imgui.ImVec2(max(w, 1.0), max(h, 1.0)))
+        key = f"chip:{imgui.get_item_id()}"
+        dim = imgui.get_style().alpha < 0.99
+        hot = k.anim.to(f"{key}:hot", 1.0 if imgui.is_item_hovered() and not dim else 0.0)
+        down = k.anim.to(f"{key}:down", 1.0 if imgui.is_item_active() else 0.0)
+        focus = k.focus_f(key, imgui.is_item_focused(), disabled=dim)
+        tbl = C._table_for(k)
+        C.button(k.dl, x, y, w, h, "", k.faces, k.theme, tbl,
+                 variant="default" if lit else "secondary", size="xs",
+                 hot=hot, down=down, focus_f=focus, disabled=dim,
+                 radius=h / 2 if pill else min(ui.ROUND, h / 2))
+    # lit: white on the red; an unlit lit_chip: its colour; anything else: TEXT
+    ink = imgui.ImVec4(1, 1, 1, 1) if lit else (color if color is not None else ui.TEXT)
+    if icon:
+        g = min(16.0, h - 6.0)
+        D.icon(k.dl, icon, x + (w - g) / 2, y + (h - g) / 2, g,
+               (ink.x, ink.y, ink.z, ink.w * (0.5 if dim else 1.0)))
+    elif words:
+        tw = imgui.calc_text_size(words).x
+        # through imgui's own RenderText, as a stock button draws its words:
+        # no item, and nothing a reader of the draw list's add_text calls
+        # (the desk's glyph tests) would take for a drawing of its own
+        imgui.push_style_color(imgui.Col_.text, ink)
+        imgui.internal.render_text(imgui.ImVec2(round(x + (w - tw) / 2), round(y + (h - line) / 2)),
+                                   words)
+        imgui.pop_style_color()
+    return bool(hit)
+
+
+def check(label: str, value: bool) -> tuple[bool, bool]:
+    """`imgui.checkbox` on the kit, for a check with no param behind it (a
+    route's on, a display's flips): the same contract — `(clicked, value)`
+    — the same footprint (`ui.check_w`, one frame tall) and the same id
+    (an `invisible_button` with the check's own label), the kit's small
+    Switch in the box and the words after it through imgui's RenderText.
+    Disabled (`begin_disabled`) it dims and takes no click, as imgui's."""
+    k = ui_kit.begin(None)
+    D = _m("draw")
+    words = label.split("##")[0]
+    fh = imgui.get_frame_height()
+    w = ui.check_w(words)
+    p = imgui.get_cursor_screen_pos()
+    x, y = p.x, p.y
+    k.dl = imgui.get_window_draw_list()
+    sw, sh, _ = _m("tokens").SWITCH_SIZES["sm"]
+    with _m("uictx").chrome(k):
+        hit = imgui.invisible_button(label, imgui.ImVec2(w, fh))
+        key = f"check:{imgui.get_item_id()}"
+        dim = imgui.get_style().alpha < 0.99
+        out = (not value) if hit else bool(value)
+        on_f = k.anim.to(f"{key}:on", 1.0 if out else 0.0)
+        D.switch(k.dl, x + (fh - sw) / 2, y + (fh - sh) / 2, on_f, k.theme, k.switch_tbl,
+                 size="sm", focus_f=k.focus_f(key, imgui.is_item_focused(), disabled=dim),
+                 disabled=dim)
+    if words:
+        gap = imgui.get_style().item_inner_spacing.x
+        imgui.push_style_color(imgui.Col_.text, ui.TEXT if out else ui.DIM)
+        imgui.internal.render_text(
+            imgui.ImVec2(round(x + fh + gap), round(y + (fh - imgui.get_text_line_height()) / 2)),
+            words)
+        imgui.pop_style_color()
+    return bool(hit), out
+
+
+# ---------------------------------------------------------------- text fields
+
+def text_field(label: str, hint: str, text: str, flags: int = 0) -> tuple[bool, str]:
+    """`imgui.input_text_with_hint` on the kit: the kit's Input (its frame,
+    focus ring, placeholder) over imgui's own `input_text`, which keeps the
+    caret, the selection and the clipboard — same contract `(changed,
+    text)`, same `flags` (Enter-returns-true, select-all…), same id (the
+    label's ``##`` part), in the width the caller set (`calc_item_width`,
+    which honours `set_next_item_width`) and one frame tall."""
+    k = ui_kit.begin(None)
+    key = label.split("##", 1)[1]
+    w = imgui.calc_item_width()
+    fh = imgui.get_frame_height()
+    p = imgui.get_cursor_screen_pos()
+    k.dl = imgui.get_window_draw_list()
+    with _m("uictx").chrome(k):
+        changed, out = _m("interact").text_input(k, key, p.x, p.y, w, text, h=fh,
+                                                 placeholder=hint, flags=flags)
+    ui_kit.end_block((p.x, p.y, w, fh))
+    return changed, out

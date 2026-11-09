@@ -295,7 +295,7 @@ def _folded(panel, lfos, n: int, first: bool = False) -> None:
     if first:
         _add_chip(panel, lfos)
         imgui.same_line()
-    if imgui.arrow_button(f"##{p}.open", imgui.Dir.right) or hit:
+    if ui.arrow_button(f"##{p}.open", imgui.Dir.right) or hit:
         select(panel, n)
     if imgui.is_item_hovered():
         ui.tooltip(f"Open LFO {n} (the open one folds)")

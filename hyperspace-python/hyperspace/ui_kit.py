@@ -152,17 +152,25 @@ def _button_table(theme_name: str) -> dict:
 
 # ---------------------------------------------------------------- per frame
 
-def begin(panel):
+_SHARED: dict = globals().get("_SHARED", {})   # `begin(None)`'s state: kept across a reload
+
+
+def begin(panel=None):
     """The kit's `Ui` for what the current window draws next: kept on the
     panel (`STATE`) with its clock and theme, its draw list this window's.
-    Call `ready` first."""
-    st = panel.__dict__.get(STATE)
+    With no panel (a module-level helper — `ui.chip` — has none), one Ui
+    for the process. Call `ready` first."""
+    if panel is None:
+        holder = _SHARED
+    else:
+        holder = panel.__dict__
+    st = holder.get(STATE)
     if st is None:
         U, ease = mod("uictx"), mod("ease")
         ui = _panel_ui(U)(None, _FACES, theme(), ease.Anim(), theme_name="dark")
         # (the cache `comp_button._table_for` reads, filled with the panel's)
         ui.anim.store.setdefault("button_tbl", {})["dark"] = _button_table("dark")
-        st = panel.__dict__[STATE] = {"ui": ui, "frame": None}
+        st = holder[STATE] = {"ui": ui, "frame": None}
     ui = st["ui"]
     _tick(st, ui)
     ui.dl = imgui.get_window_draw_list()

@@ -231,7 +231,7 @@ def _name_field(panel, key: str, commit, hint: str = "patch name") -> bool:
     imgui.set_next_item_width(-(ui.chip_w("ok", "×") + imgui.get_style().item_spacing.x))
     if st.pop("focus", False):          # the field takes the keyboard once, on open
         imgui.set_keyboard_focus_here()
-    entered, st["buf"] = imgui.input_text_with_hint(
+    entered, st["buf"] = ui.input_text_with_hint(
         f"##name.{key}", hint, st["buf"],
         imgui.InputTextFlags_.enter_returns_true | imgui.InputTextFlags_.auto_select_all,
     )
