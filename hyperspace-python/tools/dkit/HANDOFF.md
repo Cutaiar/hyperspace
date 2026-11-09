@@ -628,6 +628,48 @@ Not done, in order of what shows most:
 Watch for: `tools/app_driver.py` leaves an `imgui.ini` in
 `hyperspace-python/` that later test runs load (RETRO row 70) — delete it.
 
+### 5c. The generic widgets, and what it costs
+
+Then everything generic went over too, each with the stock widget's
+contract, size and imgui id — the hit is an `invisible_button` with the
+widget's own label, so the label's hash, and so the id, is unchanged:
+`ui.chip` / `ui.lit_chip` (~100 call sites), `ui.button`,
+`ui.small_button`, `ui.arrow_button` (26 call sites moved off imgui's), a
+`ui.checkbox` for checks with no param (6), `ui.input_text` /
+`ui.input_text_with_hint` (9). Bespoke drawings stay as they are: the
+spring picker, the LFO scope, the SEQ grid, meters, plots, the canvas.
+
+**Profile** (`tools/profile_kit.py`: CPU time of the real `Panel.draw` +
+`render` per section, stock against kit, each in its own process; 600
+frames a section, median; a 2.1 GHz Xeon under Xvfb):
+
+```
+              stock ms   kit ms   delta
+mean (18)       3.57      4.78    +1.21 ms  (+34%)
+range                              -0.2 .. +2.2 ms   (noise ~ ±0.3)
+vertices                           +10 .. +30 %
+```
+
+The kit LOSES performance: about 1.2 ms of panel CPU a frame here, out of
+a 16.7 ms frame — on an M-series Mac expect roughly half. It is spread over
+every widget (Python per control: eased states, colour lookups, chrome),
+not one hotspot; the two that were hotspots are fixed — a colour's hex
+parsed once (`tokens._HEX`), and a chip's chrome drawn by a lean path with
+its colours resolved once (`ui_fields._chip_chrome`) — which took the
+whole-panel port from +1.86 to +1.2 ms. What would take more off: fewer
+`anim.to` calls per widget (a chip eases three values whether it is
+touched or not), and drawing a section's static chrome once per layout
+change rather than per frame.
+
+Still stock, beyond the bespoke: `begin_combo` menus with their own rows
+(routing's per-route pickers, OUTPUT's "shows:", LOOK-BACK's layer), the
+enums over 12 names, `imgui.combo` in `ui_displays`, `input_float` in the
+playlist.
+
+Note on the count: one run reported 6 skipped where every other reports 5
+(the five are environmental: macOS, CoreMIDI, a GPU, torch, a recorded
+tape); it did not reproduce in the next full run.
+
 ### Two smaller things, both recorded in code
 
 `menu.popup` has no scroll area or height clamp, so a long menu cannot

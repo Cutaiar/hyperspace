@@ -38,7 +38,7 @@ NOTCH = 3.0              # px a detent's tick stands off the track, above and be
 
 
 def _m(name: str):
-    return ui_kit.mod(name)
+    return ui_kit._MODS.get(name) or ui_kit.mod(name)
 
 
 def _dim(panel) -> bool:
@@ -290,7 +290,13 @@ def select(panel, k, pid: str, rect, tip: str | None = None) -> bool:
 
 
 def button_w(k, words: str) -> float:
-    return _m("comp_button").button_size(BUTTON_SIZE, words, k.faces)[0]
+    """A kit Button's width for `words`: measured once per string and kept
+    (`anim.store`; a strip asks for its four every frame)."""
+    cache = k.anim.store.setdefault("button_w", {})
+    got = cache.get(words)
+    if got is None:
+        got = cache[words] = _m("comp_button").button_size(BUTTON_SIZE, words, k.faces)[0]
+    return got
 
 
 def button(panel, k, pid: str, rect, label: str | None = None, *,
@@ -539,6 +545,42 @@ def inline_select(panel, pid: str, width: float = -1, tip: str | None = None) ->
 
 # ---------------------------------------------------------------- chips
 
+def _chip_colours(k, variant: str) -> tuple:
+    """(rest, hover, ring) of a kit Button variant's fill, as imgui colours —
+    resolved once per variant and kept (`anim.store`): a chip is drawn ~70
+    times a frame, and the Button's general path resolved and mixed five
+    tokens for each (tools/profile_kit.py)."""
+    cache = k.anim.store.setdefault("chip_cols", {})
+    got = cache.get(variant)
+    if got is None:
+        T = _m("tokens")
+        v = _m("comp_button")._table_for(k)[variant]
+        got = cache[variant] = tuple(imgui.ImVec4(*T.rgba(tok, al, theme=k.theme))
+                                     for tok, al in (v["fill"], v["hover_fill"], v["ring"]))
+    return got
+
+
+def _chip_chrome(k, dl, x, y, w, h, variant, hot, down, focus, dim, r) -> None:
+    """The kit Button's chrome for a chip, lean: what `comp_button.button`
+    paints for a variant with a transparent border — the fill inset by that
+    border (`bg-clip-padding`), the hover tint, the press's 1 px nudge, the
+    focus ring outside the box, half strength disabled — without its
+    general path (joins, borders, glyphs), which a chip never uses."""
+    C, D = _m("comp_button"), _m("draw")
+    rest, hover, ring = _chip_colours(k, variant)
+    t = 0.0 if dim else hot
+    a = 0.5 if dim else 1.0
+    fill = imgui.ImVec4(rest.x + (hover.x - rest.x) * t, rest.y + (hover.y - rest.y) * t,
+                        rest.z + (hover.z - rest.z) * t, (rest.w + (hover.w - rest.w) * t) * a)
+    by = round(y + down * C.NUDGE)
+    bx, bw, bh = round(x), round(w), round(h)
+    if focus > 0.01 and not dim:
+        D.ring(dl, bx, by, bw, bh, (ring.x, ring.y, ring.z, ring.w * focus), r, _m("tokens").RING_W)
+    b = C.BORDER_W
+    dl.add_rect_filled(imgui.ImVec2(bx + b, by + b), imgui.ImVec2(bx + bw - b, by + bh - b),
+                       imgui.color_convert_float4_to_u32(fill), max(r - b, 0.0))
+
+
 def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
          pill: bool = True, icon: str | None = None) -> bool:
     """`ui.chip` / `ui.lit_chip` on the kit — and, with `pill` off and its
@@ -554,7 +596,7 @@ def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
     `begin_disabled`, or drawn at a reduced style alpha as an inert key is —
     it dims as the kit's disabled Button does. True when clicked."""
     k = ui_kit.begin(None)
-    C, D = _m("comp_button"), _m("draw")
+    D = _m("draw")
     pad = ui.CHIP_PAD if pad is None else pad
     words = "" if icon else label.split("##")[0]
     sx = size.x if size is not None else 0.0
@@ -564,19 +606,16 @@ def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
     h = sy if sy > 0 else line + 2 * pad.y
     p = imgui.get_cursor_screen_pos()
     x, y = p.x, p.y
-    k.dl = imgui.get_window_draw_list()
-    with _m("uictx").chrome(k):
-        hit = imgui.invisible_button(label, imgui.ImVec2(max(w, 1.0), max(h, 1.0)))
-        key = f"chip:{imgui.get_item_id()}"
-        dim = imgui.get_style().alpha < 0.99
-        hot = k.anim.to(f"{key}:hot", 1.0 if imgui.is_item_hovered() and not dim else 0.0)
-        down = k.anim.to(f"{key}:down", 1.0 if imgui.is_item_active() else 0.0)
-        focus = k.focus_f(key, imgui.is_item_focused(), disabled=dim)
-        tbl = C._table_for(k)
-        C.button(k.dl, x, y, w, h, "", k.faces, k.theme, tbl,
-                 variant="default" if lit else "secondary", size="xs",
-                 hot=hot, down=down, focus_f=focus, disabled=dim,
-                 radius=h / 2 if pill else min(ui.ROUND, h / 2))
+    dl = imgui.get_window_draw_list()
+    hit = imgui.invisible_button(label, imgui.ImVec2(max(w, 1.0), max(h, 1.0)))
+    key = imgui.get_item_id()
+    dim = imgui.get_style().alpha < 0.99
+    anim = k.anim
+    hot = anim.to(f"chip:{key}:hot", 1.0 if imgui.is_item_hovered() and not dim else 0.0)
+    down = anim.to(f"chip:{key}:down", 1.0 if imgui.is_item_active() else 0.0)
+    focus = k.focus_f(f"chip:{key}", imgui.is_item_focused(), disabled=dim)
+    _chip_chrome(k, dl, x, y, w, h, "default" if lit else "secondary", hot, down, focus, dim,
+                 h / 2 if pill else min(ui.ROUND, h / 2))
     # lit: white on the red; an unlit lit_chip: its colour; anything else: TEXT
     ink = imgui.ImVec4(1, 1, 1, 1) if lit else (color if color is not None else ui.TEXT)
     if icon:

@@ -76,9 +76,11 @@ def enabled() -> bool:
 
 
 def ready() -> bool:
-    """Can a section draw on the kit this frame: wanted, importable, and
-    its faces in the atlas (`load_faces` ran with `ui.load_fonts`)."""
-    return enabled() and bool(_FACES) and bool(_import())
+    """Can a section draw on the kit this frame: its faces are in the atlas
+    — which `load_faces` puts there only when the kit is wanted and
+    imported (with `ui.load_fonts`, so ``HYPERSPACE_KIT`` is read when a
+    context's fonts load, not on each of the few hundred calls a frame)."""
+    return bool(_FACES)
 
 
 def mod(name: str):
