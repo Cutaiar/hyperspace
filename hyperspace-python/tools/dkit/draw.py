@@ -797,26 +797,61 @@ def icon(dl, name, x, y, size, col, *, width=None) -> bool:
     individually guarded — ARCHITECTURE.md:168 — and a kit should not fight
     that).
     """
-    subs = ICONS.get(name.replace("-", "_"))
-    if not subs or col[3] <= 0.0:
+    if col[3] <= 0.0:
         return False
+    k = (name, x, y, size, width)
+    plan = _ICON_PLANS.get(k)
+    if plan is None:
+        plan = _icon_plan(name, x, y, size, width)
+        if plan is None:
+            return False
+        if len(_ICON_PLANS) > 2048:     # a scroll mints a key per offset
+            _ICON_PLANS.clear()
+        _ICON_PLANS[k] = plan
+    w, paths = plan
+    c = _u32(col)
+    line, curve = dl.path_line_to, dl.path_bezier_cubic_curve_to
+    for ops, flags in paths:
+        dl.path_clear()
+        for op in ops:
+            if len(op) == 1:
+                line(op[0])
+            else:
+                curve(*op)
+        # imgui_bundle orders this (col, thickness, flags) - the third time
+        # this binding reverses the C++ order; always pass these by keyword
+        dl.path_stroke(c, thickness=w, flags=flags)
+    return True
+
+
+# Each icon's path at a place and size, as ImVec2s: the ops are replayed
+# every frame (a draw list is rebuilt each one), the arithmetic is not.
+_ICON_PLANS: dict = {}
+
+
+def _icon_plan(name, x, y, size, width):
+    """(stroke width, [(ops, flags)]) for `icon` - one entry per subpath, an
+    op being (pt,) for a line-to or (c1, c2, end) for a cubic. None for an
+    unknown or empty icon."""
+    subs = ICONS.get(name.replace("-", "_"))
+    if not subs:
+        return None
     s = size / ICON_BOX
     w = (width if width is not None else ICON_STROKE) * s
-    c = _u32(col)
+    paths = []
     for ops in subs:
-        dl.path_clear()
+        out = []
         closed = False
         first = last = None
         for op in ops:
             k = op[0]
             if k in ("M", "L"):
-                dl.path_line_to(imgui.ImVec2(x + op[1] * s, y + op[2] * s))
+                out.append((imgui.ImVec2(x + op[1] * s, y + op[2] * s),))
                 last = (op[1], op[2])
             elif k == "C":
-                dl.path_bezier_cubic_curve_to(
-                    imgui.ImVec2(x + op[1] * s, y + op[2] * s),
-                    imgui.ImVec2(x + op[3] * s, y + op[4] * s),
-                    imgui.ImVec2(x + op[5] * s, y + op[6] * s))
+                out.append((imgui.ImVec2(x + op[1] * s, y + op[2] * s),
+                            imgui.ImVec2(x + op[3] * s, y + op[4] * s),
+                            imgui.ImVec2(x + op[5] * s, y + op[6] * s)))
                 last = (op[5], op[6])
             elif k == "Z":
                 closed = True
@@ -828,11 +863,9 @@ def icon(dl, name, x, y, size, col, *, width=None) -> bool:
         if closed and first and last and \
                 abs(first[0] - last[0]) < 1e-6 and abs(first[1] - last[1]) < 1e-6:
             closed = False
-        # imgui_bundle orders this (col, thickness, flags) - the third time
-        # this binding reverses the C++ order; always pass these by keyword
-        dl.path_stroke(c, thickness=w,
-                       flags=imgui.ImDrawFlags_.closed if closed else 0)
-    return True
+        paths.append((tuple(out),
+                      int(imgui.ImDrawFlags_.closed) if closed else 0))
+    return w, tuple(paths)
 
 
 def icon_centred(dl, name, cx, cy, size, col, **kw) -> bool:

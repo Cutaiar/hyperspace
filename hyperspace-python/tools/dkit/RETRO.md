@@ -209,3 +209,56 @@ dimension is a dimension nobody is checking.
 | # | Issue | Fix | What would have caught it |
 |---|---|---|---|
 | 70 | **The exact text path cost 3ms of a 4.8ms dashboard frame.** One quad per glyph is a dozen Python-to-C calls a glyph, ~1us each, and the dashboard draws 2,119 characters a frame. I had measured it - 22us a string - but only in isolation, and reported it as a follow-up instead of weighing it against the frame | `label` draws `add_text` RUNS, restarted at the kerned pen when ImGui's unkerned one drifts `DRIFT_PX` (0.25); a single glyph keeps the exact quad. `text_w` is pure arithmetic, and the width and the shaping are cached per string. Frame: **7.8ms -> 5.2ms** (pre-fix 4.6, paired runs). Layout stays exact; glyphs within ~0.7px of Chromium's, and the gallery text centroids came out CLOSER than with the quads (worst 0.44px, was 0.69) | **Measure a change's cost where it is paid - one frame of the real page - before calling it done**, not per call. `bench_paint.py` is that number now. Also: "Geist kerns densely" was the fact that killed the obvious split (a run per kerned pair is 16 runs in 24 glyphs); the drift threshold came from measuring how far the unkerned pen actually wanders. The threshold itself turned out not to matter to the frame (0.25 and 0.5 were within noise), so it is set for looks. |
+
+## Mine, from the per-frame CPU pass
+
+The brief: make `dashboard.paint()` as cheap as possible **without changing a
+single rendered pixel**. Measured with `bench_paint.py` (300 frames, the
+median of five runs' medians, idle 4-core cloud box, Mesa, 1440x1100) - this
+machine runs the old code at ~6.1ms where the brief's figure was 5.2, so
+compare the columns, not the absolutes to older rows. Each stage is the one
+above plus one change, rebuilt from the base commit and benched in one sweep:
+
+| Stage | Change | median | min |
+|---|---|---|---|
+| 0 | base (`79d3f02`) | 6.11 | 5.87 |
+| 1 | `sparkline`: points cached on (rect, range, values); the quads reuse the cached ImVec2s | 5.37 | 4.92 |
+| 2 | `menu.popup`: a CLOSED menu skips placement, the style push and `begin_popup`; `menu.measure` memoised per session | 4.52 | 4.37 |
+| 3 | `tokens.rgba` memoised on the RESOLVED colour + alpha | 4.81* | 4.29 |
+| 4 | `dashboard._laid_out`: paint's `lay_out` memoised on (w, h, scroll) | 4.16 | 4.11 |
+| 5 | `label`: each call's placement (fit, width, baseline, run origins) memoised on every argument | 3.64 | 3.41 |
+| 6 | `icon`: each icon's scaled path cached as ImVec2s | 3.44 | 3.24 |
+
+\* within noise in this sweep; in a direct pair it was 4.35 -> 4.10. Paired
+end to end (base, final, base, final): **6.53 -> 3.33ms**, -49%. 634 frames
+across 20 scenarios (static, resized, hover, scroll + kebab menu + its items,
+tabs, the contact sheet and back, each theme) plus the ImGui gallery in both
+themes are **byte-identical** to the base, in both run orders
+(`capture_frames.py`, new, is that check - use it for any change that must
+not move a pixel).
+
+| # | Issue | Fix | What would have caught it |
+|---|---|---|---|
+| 71 | **Skipping the work for closed menus changed 30 pixels, by up to 107 levels**, in the contact sheet - nowhere near a menu. A closed `menu.popup` used to `measure` every frame, and measuring "⌘C" makes ImGui BAKE DejaVu's command key into the dynamic font atlas. When that first happens decides where later glyphs are packed, and the contact sheet's glyphs sampled differently from a differently packed atlas | `measure` still runs for a closed menu, memoised in `ui.anim.store` (per session, so per atlas), so the first one still bakes on frame one and the repeats are free. `test_a_closed_menu_is_still_measured` holds it, with the reason in its docstring | **The byte comparison, and only the byte comparison.** It was a "pure" change by every argument I had - `begin_popup` provably throws the work away - and the argument was right about ImGui's state and wrong about the ATLAS, which is state too. A measure that touches a font is not pure. The same sensitivity is pre-existing: 14 contact-sheet pixels differ depending on whether ANY earlier `render()` ran in the process (so `capture_frames.py`, which hashes every frame, compares captures taken in the SAME order) |
+| 72 | Tried: draw a label with `add_text(font, size, ...)` instead of pushing the face, since the plain overload forwards to it. It changed every dashboard frame (1,283 px, up to 136 levels - glyph edges, invisible by eye) and saved nothing measurable | Reverted | Reading the C++ said "same call"; the pixels said otherwise and I did not chase why, because there was no speed to buy. A plausible equivalence is a hypothesis until the capture agrees - row 65's lesson, at a lower level |
+
+### What this pass says
+
+**Most of the frame was Python rebuilding things that had not changed.**
+Every cache here is keyed on everything its output depends on and nothing
+else - the RESOLVED colour rather than the theme dict, the values rather
+than the list, the label's every argument plus a live check of the baked
+font's density - and everything that can change frame to frame without its
+inputs changing stays live: the colour (`_u32` reads ImGui's style alpha,
+which `begin_disabled` halves), the font push and every draw call (an ImGui
+draw list is rebuilt each frame; only the arithmetic feeding it is reused).
+`test_caches.py` has one test per way a cache could go stale, and each was
+checked by making the cache stale on purpose and watching it fail (all eight
+did).
+
+What is left, by self time: the `add_text` calls themselves (a label is ~1us
+of Python and ~1us a run of C++, and runs are the geometry), `uictx.hit`'s
+ImGui calls (72 a frame), the sparkline's thickness-1.5 polyline (45us each,
+all in ImGui's AA tessellation - 6 a frame), and widget code spread thinly.
+Nothing left is a single big win; the next one would be fewer draw calls,
+which is a pixel change and a different brief.

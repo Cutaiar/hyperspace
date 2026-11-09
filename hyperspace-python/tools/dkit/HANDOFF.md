@@ -74,6 +74,34 @@ A reasonable opening message for a new session:
 ## Where it stands
 
 ```
+906 passed, 64 skipped, 0 xfailed (896 with test_gallery.py deselected
+under xdist, plus its 10 run -n0).   dashboard paint(): 6.53 -> 3.33 ms
+(bench_paint.py, paired, this box), every captured frame byte-identical.
+```
+
+**The CPU pass (RETRO rows 71-72).** `paint()` now reuses what has not
+changed between frames: sparkline points, closed menus' placement, colours,
+the page layout, each label's placement and each icon's path - with the
+colour, the font push and every draw call still live. Seven stages, each
+benched (table in RETRO). The check it was held to is **`capture_frames.py`**:
+634 frames over 20 scenarios plus the ImGui gallery, both themes, hashed per
+frame - byte-identical to the base in both run orders. `test_caches.py` has a
+test for each way a cache could go stale, each seen to fail with the cache
+broken on purpose. Figures re-run here: the suite was 881 passed / 63
+skipped at the base commit (the "880/62" below was already stale); the 15
+new passes are `test_caches.py`'s 14 and one `test_module_surface` case, and
+the one new skip is that check's "no from-imports" for `test_caches.py`.
+
+Two things worth knowing before the next change. A closed menu still
+MEASURES itself (memoised): measuring "⌘C" bakes a fallback glyph into
+the font atlas, and dropping it moved 30 contact-sheet pixels (row 71). And
+those contact-sheet pixels depend on atlas packing order anyway - 14 of them
+differ by whether any `render()` ran earlier in the process - so compare
+captures taken in the same order.
+
+Before that:
+
+```
 890 passed, 62 skipped, 0 xfailed (880 with test_gallery.py deselected
 under xdist, plus its 10 run -n0).   chrome diff: 71 cells, worst flat
 2 levels, worst corner 0.776 px, "all cells within the bar" in BOTH
