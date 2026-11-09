@@ -21,6 +21,10 @@ const WANT = [
   "chevron-left", "chevron-up", "plus", "minus", "x", "check", "search",
   "trash-2", "copy", "link", "unlink", "eye", "eye-off", "lock", "unlock",
   "play", "pause", "grip-vertical", "pencil", "circle", "info",
+  // Hyperspace's side pane (hyperspace/ui_switcher.py): its seven views and
+  // its patch strip
+  "mouse-pointer-2", "list-music", "users", "route", "cpu", "audio-lines",
+  "save", "save-all", "rotate-ccw", "folder-open",
 ]
 
 const dir = path.join(__dirname, "../../../prototypes/dashboard/node_modules/lucide-react/dist/esm/icons")

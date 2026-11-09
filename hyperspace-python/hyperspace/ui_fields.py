@@ -1,0 +1,372 @@
+"""A param as a kit control (`ui_kit`, tools/dkit): one function per kind of
+param, each drawn into a rectangle a kit layout gave it, each keeping
+everything a param widget is on the panel.
+
+The rule every one of them keeps, and the reason the port is cheap: the
+kit control's real imgui item — the slider_float, the invisible_button —
+is the LAST item when the kit returns, and every panel behaviour on a param
+widget acts on the last item. So the right-click menu (`Panel._ctx`, and
+`_ctx_label` on a label), Learn's red frame (`_learn_frame`), the tooltip
+(`_tip`, `_fine_tip`), ⇧-drag fine mode (`_fine`, `_fine_throw`), the
+modulation dot (`_mod_dot`) and a picked desk control (`_ctx_pick`, through
+`_ctx`) are the panel's own calls, made here exactly as `Panel._slider`,
+`_check`, `_combo` and `_button` make them. Each control carries
+``##<param id>``, so the panel driver (`tests/ui_driver.py`) finds it.
+
+- `slider`: a CONTINUOUS param (log, tapered, integer, bipolar) — a header
+  (label, readout) over the kit's slider; `slider_h` is its height;
+- `switch`: a TOGGLE — its label, the kit's Switch at the row's end;
+- `select`: an ENUM — the kit's Select, its rows the param's names;
+- `toggles`: TOGGLEs side by side as one joined group, lit while on;
+- `button`: a TRIGGER — the kit's Button.
+
+A rectangle is (x, y, w, h) in screen pixels, as `ui_kit.block` gives one.
+"""
+
+from __future__ import annotations
+
+from imgui_bundle import imgui
+
+from . import ui, ui_kit, undo
+from .params import Kind
+
+SLIDER_H = 20.0          # a slider's row: the 12 px thumb, its ring, and room to press
+ROW_H = 28.0             # a switch's, a select's, a button's row: the panel's frame height
+SELECT_SIZE = "sm"       # 28 tall, as ROW_H
+BUTTON_SIZE = "sm"
+NOTCH = 3.0              # px a detent's tick stands off the track, above and below
+
+
+def _m(name: str):
+    return ui_kit.mod(name)
+
+
+def _dim(panel) -> bool:
+    """A desk control is picked: every body but ROUTING's is disabled
+    (`ui_pane._body`), and the kit draws its own disabled look."""
+    return bool(getattr(panel, "_picking", False))
+
+
+def head_h() -> float:
+    """A field header's height: the taller of the label's line and the readout's."""
+    out = 0.0
+    for font, size in (("micro", ui.FONT_MICRO), ("num", ui.FONT_NUM)):
+        imgui.push_font(ui._FONTS[font], size)
+        out = max(out, imgui.get_text_line_height())
+        imgui.pop_font()
+    return out
+
+
+def slider_h() -> float:
+    """A slider field's height: its header, a step, its slider."""
+    return head_h() + _m("tokens").SPACE[1] + SLIDER_H
+
+
+def text(dl, x: float, y: float, h: float, s: str, font: str, size: float, col) -> float:
+    """`s` in one of the panel's faces, centred on a row `h` tall; its width."""
+    imgui.push_font(ui._FONTS[font], size)
+    try:
+        ext = imgui.calc_text_size(s)
+        dl.add_text(imgui.ImVec2(round(x), round(y + (h - ext.y) / 2)), ui.u32(col), s)
+        return ext.x
+    finally:
+        imgui.pop_font()
+
+
+def _label_hit(panel, a, x: float, y: float, w: float, h: float) -> None:
+    """The label as an item, so a right-click on it opens the param's menu
+    (`Panel._ctx_label`, as `_label_cell`'s does)."""
+    imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    imgui.dummy(imgui.ImVec2(max(w, 1.0), max(h, 1.0)))
+    panel._ctx_label(a)
+
+
+# ---------------------------------------------------------------- slider
+
+def slider(panel, k, pid: str, rect, label: str | None = None, *,
+           head: bool = True) -> bool:
+    """A CONTINUOUS param in `rect`: with `head` a header — its label (DIM,
+    the label face, cut to fit) and readout (the readout face, `base →
+    effective` in red while a lane rides it) — over the kit's slider; without,
+    the slider alone, centred. A taper slides over its detents, with a tick
+    at unity (`Panel._fader`'s notch); an integer over whole steps; a log
+    range logarithmically, so Ctrl+click types a value. True when written."""
+    B, T = _m("box"), _m("tokens")
+    x, y, w, h = rect
+    a = panel.reg[pid]
+    p = panel._real(a)
+    if head:
+        hh = head_h()
+        _head(panel, k, a, p, x, y, w, hh, label)
+        sy = y + hh + T.SPACE[1]
+    else:
+        sy = y + (h - SLIDER_H) / 2
+    return _slider(panel, k, a, p, x, sy, w, SLIDER_H)
+
+
+def readout(label: str, value: str) -> str:
+    """`value` without the words that repeat `label`: a param whose readout
+    names itself for the stock slider's inside ("points 1.00", "12
+    instance(s)") reads "1.00", "12" under a header that already says
+    POINTS, INSTANCES. A word repeats the label when it shares its first
+    four letters with one of the label's words; nothing left, `value` as
+    it was."""
+    words = {w.lower()[:4] for w in label.split() if len(w) >= 4}
+    keep = [t for t in value.split(" ")
+            if not (len(t) >= 4 and "".join(c for c in t.lower() if c.isalpha())[:4] in words)]
+    out = " ".join(keep).strip()
+    return out or value
+
+
+def _head(panel, k, a, p, x, y, w, h, label) -> None:
+    B, T = _m("box"), _m("tokens")
+    value = panel._mod_text(p) if p.modulated else p.text()
+    value = readout(a.label if label is None else label, value)
+    tw = ui._readout_width(value)
+    lab, val = B.flex(B.Rect(x, y, w, h), [B.Item(grow=1), B.Item(w=tw, shrink=0)],
+                      direction="row", gap=T.SPACE[2])
+    words = ui.fit_micro(a.label if label is None else label, lab.w)
+    text(k.dl, lab.x, y, h, words, "micro", ui.FONT_MICRO, ui.DIM)
+    text(k.dl, val.x, y, h, value, "num", ui.FONT_NUM, ui.RED if p.modulated else ui.TEXT)
+    _label_hit(panel, a, lab.x, y, lab.w, h)
+
+
+def _slider(panel, k, a, p, x, y, w, h) -> bool:
+    I, tbl = _m("interact"), k.slider_tbl
+    thumb = tbl["thumb"]
+    span = w - thumb
+    t0 = p.norm
+    shown = (panel._mod_text(p) if p.modulated else p.text()).replace("%", "%%")
+    if p.taper is not None:                 # the detents: the stock slider over positions
+        steps = p.steps
+        value, lo, hi, flags = float(p.position()), 0.0, float(steps), 0
+    elif p.integer:
+        steps = int(p.hi) - int(p.lo)
+        value, lo, hi, flags = float(p.base), float(p.lo), float(p.hi), 0
+    else:
+        steps = 0
+        value, lo, hi = float(p.base), float(p.lo), float(p.hi)
+        flags = imgui.SliderFlags_.logarithmic if p.log else 0
+    # the stock slider as tall as the row, its grab the kit thumb: a press
+    # lands where the thumb is drawn (to imgui's 2 px grab padding)
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, (h - ui.FONT_NUM) / 2))
+    imgui.push_style_var(imgui.StyleVar_.grab_min_size, thumb)
+    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    try:
+        changed, nv = I.slider(k, a.id, x, y, w, h, value, lo, hi, fine=False,
+                               disabled=_dim(panel), fmt=shown, flags=flags, frac=t0,
+                               origin=panel._origin(p))
+    finally:
+        imgui.pop_font()
+        imgui.pop_style_var(2)
+    own, t = panel._fine(p, t0, x + thumb / 2, span)
+    if own:
+        changed = t is not None             # a frame the mouse did not move writes nothing
+        if changed:
+            nv = round(t * steps) if p.taper is not None else p._value_of_norm(t)
+    panel._fine_tip(a, p)
+    panel._ctx(a)
+    panel._learn_frame(a)
+    cy = y + h / 2
+    if p.taper is not None and p.taper.unity is not None and steps:
+        nx = x + thumb / 2 + span * p.taper.unity / steps
+        col = ui.u32(ui.FAINT)
+        th = tbl["track_h"] / 2
+        k.dl.add_line(imgui.ImVec2(nx, cy - th - NOTCH - 3), imgui.ImVec2(nx, cy - th - NOTCH), col, 1.5)
+        k.dl.add_line(imgui.ImVec2(nx, cy + th + NOTCH), imgui.ImVec2(nx, cy + th + NOTCH + 3), col, 1.5)
+    if p.modulated:                         # the effective value: a white tick on the track
+        gx = x + thumb / 2 + span * min(max(p.eff_norm, 0.0), 1.0)
+        k.dl.add_rect_filled(imgui.ImVec2(gx - 1.5, cy - 5), imgui.ImVec2(gx + 1.5, cy + 5),
+                             ui.u32(ui.GHOST), 1.5)
+        panel.ghosts += 1
+    if not changed:
+        return False
+    undo.by_hand(True)                      # (typed into it, or dragged: row 757)
+    if p.taper is not None:
+        pos = int(round(nv))
+        if pos == p.position():
+            return False
+        p.set_position(pos)
+    elif p.integer:
+        p.set_value(int(round(nv)))
+    else:
+        p.set_value(nv)
+    return True
+
+
+# ---------------------------------------------------------------- toggles
+
+def switch_w() -> float:
+    return _m("tokens").SWITCH_SIZES["default"][0]
+
+
+def switch(panel, k, pid: str, rect, label: str | None = None) -> bool:
+    """A TOGGLE in `rect`: its label (the panel's word face) and the kit's
+    Switch at the row's end. A click on either flips it. True when flipped."""
+    T = _m("tokens")
+    x, y, w, h = rect
+    a = panel.reg[pid]
+    p = panel._real(a)
+    sw, sh, _ = T.SWITCH_SIZES["default"]
+    words = a.label if label is None else label
+    imgui.push_font(ui._FONTS["ui"], ui.FONT_BASE)
+    words = ui.fit_text(words, w - sw - T.SPACE[2])
+    imgui.pop_font()
+    text(k.dl, x, y, h, words, "ui", ui.FONT_BASE, ui.TEXT if p.base else ui.DIM)
+    # the words take the click too, as a checkbox's label does (no id: the
+    # switch is the param's one control the driver finds)
+    imgui.set_cursor_screen_pos(imgui.ImVec2(x, y))
+    word_hit = imgui.invisible_button(f"##words.{pid}", imgui.ImVec2(max(w - sw - T.SPACE[2], 1), h))
+    panel._ctx_label(a)
+    clicked, _on = _m("interact").switch(k, pid, x + w - sw, y + (h - sh) / 2, bool(p.base),
+                                          disabled=_dim(panel))
+    panel._tip(a)
+    panel._ctx(a)
+    panel._learn_frame(a)
+    panel._mod_dot(p)
+    if (clicked or word_hit) and not _dim(panel):
+        p.set(not bool(p.base))
+        return True
+    return False
+
+
+def toggles(panel, k, pids, labels, rect, inert=()) -> str | None:
+    """TOGGLEs side by side as one joined group (`comp_button.button_group`),
+    each lit — the one red — while on, the group sharing `rect`'s width
+    evenly. `inert`: ids drawn at a third of their strength (still
+    switchable). The id flipped, or None."""
+    C = _m("comp_button")
+    x, y, w, h = rect
+    n = len(pids)
+    each = w / n
+    rects = [(x + i * each, y, each, h) for i in range(n)]
+    joins = C.button_group(rects, "horizontal")
+    hit = None
+    for pid, words, (rx, ry, rw, rh), j in zip(pids, labels, rects, joins):
+        a = panel.reg[pid]
+        p = panel._real(a)
+        on = bool(p.base)
+        dull = pid in inert
+        if dull:
+            imgui.push_style_var(imgui.StyleVar_.alpha, 0.35)
+        st = C.ui_button(k, pid, rx, ry, rw, rh, words, variant="default" if on else "outline",
+                         size=BUTTON_SIZE, join=j, in_group=True, disabled=_dim(panel))
+        if dull:
+            imgui.pop_style_var()
+        panel._tip(a)
+        panel._ctx(a)
+        panel._learn_frame(a)
+        panel._mod_dot(p)
+        if st.clicked:
+            p.toggle()
+            hit = pid
+    return hit
+
+
+# ---------------------------------------------------------------- enums, triggers
+
+def select(panel, k, pid: str, rect, tip: str | None = None) -> bool:
+    """An ENUM in `rect`: the kit's Select, a row per name, the current one
+    checked. True when another is chosen."""
+    M = _m("menu")
+    x, y, w, h = rect
+    a = panel.reg[pid]
+    p = panel._real(a)
+    names = p.names
+    cur = int(p.base)
+    items = [M.Item(id=str(i), label=n, checked=i == cur) for i, n in enumerate(names)]
+    chosen, _open = _m("interact").select(
+        k, pid, x, y + (h - ROW_H) / 2, w, names[cur] if 0 <= cur < len(names) else "",
+        items, size=SELECT_SIZE, disabled=_dim(panel))
+    # the trigger's item is the select's hit, submitted first: ask for it again
+    panel._tip(a, tip)
+    panel._ctx(a)
+    panel._learn_frame(a)
+    panel._mod_dot(p)
+    if chosen is not None and int(chosen) != cur:
+        p.set(int(chosen))
+        return True
+    return False
+
+
+def button_w(k, words: str) -> float:
+    return _m("comp_button").button_size(BUTTON_SIZE, words, k.faces)[0]
+
+
+def button(panel, k, pid: str, rect, label: str | None = None, *,
+           variant: str = "secondary") -> bool:
+    """A TRIGGER (or a toggle flipped by a press) as the kit's Button in
+    `rect`, as wide as its words unless `rect` is narrower. True when pressed."""
+    C = _m("comp_button")
+    x, y, w, h = rect
+    a = panel.reg[pid]
+    words = a.label if label is None else label
+    bw = min(button_w(k, words), w)
+    bh = C.BUTTON_SIZES[BUTTON_SIZE]["h"]
+    st = C.ui_button(k, pid, x, y + (h - bh) / 2, bw, bh, words, variant=variant,
+                     size=BUTTON_SIZE, disabled=_dim(panel))
+    panel._tip(a)
+    panel._ctx(a)
+    panel._learn_frame(a)
+    if st.clicked:
+        a.toggle()
+        return True
+    return False
+
+
+def any_param(panel, k, pid: str, rect) -> bool:
+    """`pid` drawn as its kind asks: a slider field, a switch, a select or
+    a button."""
+    kind = panel._real(panel.reg[pid]).kind
+    if kind is Kind.CONTINUOUS:
+        return slider(panel, k, pid, rect)
+    if kind is Kind.TOGGLE:
+        return switch(panel, k, pid, rect)
+    if kind is Kind.ENUM:
+        return select(panel, k, pid, rect)
+    return button(panel, k, pid, rect)
+
+
+def height(panel, pid: str) -> float:
+    """The row `any_param` wants for `pid`."""
+    return slider_h() if panel._real(panel.reg[pid]).kind is Kind.CONTINUOUS else ROW_H
+
+
+# ---------------------------------------------------------------- forms
+
+def rows(w: float, spec, *, gap_x: float | None = None, gap_y: float | None = None
+         ) -> tuple[dict, float]:
+    """Lay a form out `w` wide from (0, 0): `spec` is its rows down, each a
+    list of cells across — (key, height) or (key, height, grow) — sharing
+    the row's width by their grow (1 each by default), `gap_x` apart; the
+    rows `gap_y` apart, each as tall as its tallest cell. A row of one
+    ``None`` is a further step of space (the gap between groups). Returns
+    ({key: (x, y, w, h)}, the form's height). `box.flex` both ways, on
+    `tokens.SPACE`'s steps."""
+    B, T = _m("box"), _m("tokens")
+    gx = T.SPACE[3] if gap_x is None else gap_x
+    gy = T.SPACE[3] if gap_y is None else gap_y
+    heights = [T.SPACE[1] if row == [None] else max(c[1] for c in row) for row in spec]
+    total = sum(heights) + gy * max(len(spec) - 1, 0)
+    bands = B.flex(B.Rect(0.0, 0.0, w, total), [B.Item(h=h, shrink=0) for h in heights],
+                   direction="column", gap=gy)
+    out = {}
+    for row, band in zip(spec, bands):
+        if row == [None]:
+            continue
+        cells = B.flex(band, [B.Item(grow=c[2] if len(c) > 2 else 1.0, h=c[1]) for c in row],
+                       direction="row", gap=gx, align="start")
+        for c, r in zip(row, cells):
+            out[c[0]] = (r.x, r.y, r.w, c[1])
+    return out, total
+
+
+def form(panel, k, spec, draw_cell, **gaps) -> None:
+    """A form at the window's cursor: `rows(spec)` laid out the content's
+    width, `draw_cell(key, rect)` for each cell, then imgui's flow told the
+    block's size (`ui_kit.end_block`)."""
+    x, y, w, _ = ui_kit.block(0.0)
+    cells, h = rows(w, spec, **gaps)
+    for key, (cx, cy, cw, ch) in cells.items():
+        draw_cell(key, (x + cx, y + cy, cw, ch))
+    ui_kit.end_block((x, y, w, h))

@@ -37,7 +37,8 @@ from imgui_bundle import imgui
 
 KIT_DIR = Path(__file__).resolve().parents[1] / "tools" / "dkit"
 # what the panel imports, leaves first; each must come from KIT_DIR
-KIT_MODULES = ("tokens", "ease", "rect", "box", "draw", "uictx", "interact", "comp_button")
+KIT_MODULES = ("tokens", "ease", "rect", "flex", "tree", "box", "draw", "uictx", "wheel",
+               "interact", "menu", "comp_button")
 STATE = "_kit"           # the panel's attribute: survives a reload of this module
 ENV = "HYPERSPACE_KIT"   # "0": no kit, every section as it was drawn before
 

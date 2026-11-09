@@ -540,7 +540,7 @@ def text_input(ui: Ui, key, x, y, w, text, *, h=None, placeholder="",
 
 
 def select(ui: Ui, key, x, y, w, label, items, *, size="default",
-           disabled=False, placeholder="Select") -> tuple:
+           disabled=False, placeholder="Select", row_id=None) -> tuple:
     """shadcn Select: the trigger here, the panel on imgui's popup stack.
 
     Returns (chosen_id_or_None, open). The popup is menu.popup - the hard
@@ -591,7 +591,8 @@ def select(ui: Ui, key, x, y, w, label, items, *, size="default",
     # which already says so in its own comment.
     chosen = menu.popup(ui, pkey, items, min_w=w,
                         anchor=B.Rect(x, y, w, hh), side="bottom",
-                        align="start", offset=4.0, role="listbox")
+                        align="start", offset=4.0, role="listbox",
+                        row_id=row_id)
     return chosen, open_
 
 

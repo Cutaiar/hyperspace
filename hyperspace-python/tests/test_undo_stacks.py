@@ -17,7 +17,7 @@ from test_ui_shell import build_rig, frame
 from test_undo import DT, SETTLE, boot
 from ui_driver import Driver
 
-from hyperspace import app, lfo, routing, ui_graph, ui_pane, undo
+from hyperspace import app, lfo, routing, ui_graph, ui_kit, ui_pane, undo
 from hyperspace.deck import Deck, MetaController
 from hyperspace.library import LOADABLE
 from hyperspace.params import part_of, part_of_id
@@ -408,7 +408,8 @@ def test_where_you_are_is_the_section_under_the_mouse(pane):
     d.run(d.move((x0 + 4, y0 + 3)), d.wait(1))
     assert ui_pane.where(p) == "analyzer" and p.in_meta_section()
     d.run(d.click("pane.loadable"), d.park(), d.wait(1))
-    d.run(d.move("new##new"), d.wait(1))               # the loadable patches section
+    new = "strip.loadable:new" if ui_kit.ready() else "new##new"     # (ui_strip on the kit)
+    d.run(d.move(new), d.wait(1))                       # the loadable patches section
     assert ui_pane.where(p) == "loadable" and not p.in_meta_section()
     d.run(d.move("pane.sections"), d.wait(1))
     assert ui_pane.where(p) is None

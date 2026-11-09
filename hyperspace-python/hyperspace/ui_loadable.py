@@ -306,6 +306,11 @@ def strip(panel, group: str) -> None:
     lib = panel.library
     if lib is None or lib.reg is None or group in RETIRED_MODULES:
         return                  # (plan 40 T5: a retired module group has no strip)
+    from . import ui_kit
+    if ui_kit.ready():
+        from . import ui_strip  # (late: it imports this module) — on the kit (tools/dkit)
+        ui_strip.strip(panel, group)
+        return
     # the deck this name is on, for the hover (`page` says it over the strip)
     meta = getattr(panel, "meta", None) if group == LOADABLE else None
     imgui.push_id(f"strip.{group}")

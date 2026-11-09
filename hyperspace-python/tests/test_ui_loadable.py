@@ -25,7 +25,7 @@ from test_ui_shell import (  # noqa: F401 — the fixture
     rig,
 )
 
-from hyperspace import ui, ui_loadable, ui_pane
+from hyperspace import ui, ui_kit, ui_loadable, ui_pane
 from hyperspace.library import HOME_UNSET, LOADABLE, PATCHES, RETIRED_MODULES, Library
 from hyperspace.ui import PAGE_KEYS
 
@@ -105,12 +105,17 @@ def test_the_strips_name_is_a_readout_and_opens_no_list(rig, monkeypatch):  # no
     panel, lib = rig.panel, rig.lib
     got = _labels(monkeypatch)
     _page(panel)
-    assert "—##name" in got["button"]
+    st = ui_loadable._state(panel)
+
+    def said() -> str:          # what the name's button reads: the stock button's or the kit's
+        if ui_kit.ready():
+            return st["names"]["loadable"]
+        return next(b for b in got["button"] if b.endswith("##name")).split("##")[0]
+    assert said() == "—"
     lib.load("loadable", "TRIP")
     got["button"].clear()
     page_frame(panel)
-    assert "TRIP##name" in got["button"]
-    st = ui_loadable._state(panel)
+    assert said() == "TRIP"
     _click(panel, st["rects"]["strip.loadable.name"])
     page_frame(panel)
     assert "list" not in st                                       # no popup list opened

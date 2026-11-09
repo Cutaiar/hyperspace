@@ -77,7 +77,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_loadable, ui_players, ui_playlist, undo
+from . import library, ui, ui_fx, ui_kit, ui_loadable, ui_players, ui_playlist, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -264,7 +264,11 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     # the SYSTEM section asks mid-draw (the tests read this frame's)
     st["pane_last"] = st.get("pane_drawn") or []
     drawn = st["pane_drawn"] = []
-    _bar(panel, key, said)
+    if ui_kit.ready():
+        from . import ui_switcher  # (late: it imports this module)
+        ui_switcher.bar(panel, key, said)      # on the kit (tools/dkit)
+    else:
+        _bar(panel, key, said)
     if home is not None and key == home and key != SELECTION and said:
         most = min(CHIP_MAX, imgui.get_content_region_avail().x - 2 * ui.CHIP_PAD.x)
         if ui.chip(ui.fit_text(f"←  {said}", most) + "##pane.back"):

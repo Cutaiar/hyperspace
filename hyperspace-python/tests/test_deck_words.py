@@ -10,7 +10,7 @@ import pytest
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from test_undo import boot
 
-from hyperspace import lfo, routing, ui, ui_desk, ui_loadable, ui_players, ui_routing, undo
+from hyperspace import lfo, routing, ui, ui_desk, ui_kit, ui_loadable, ui_players, ui_routing, undo
 from hyperspace.deck import Deck, MetaController
 from hyperspace.pointer import deck_number
 from hyperspace.routing import Binding
@@ -217,6 +217,10 @@ def _page_draws(panel, monkeypatch):
     finally:
         imgui.end()
         imgui.end_frame()
+    if ui_kit.ready():          # the kit strip (ui_strip): its name and the button's width
+        st = ui_loadable._state(panel)
+        r = st["rects"]["strip.loadable.name"]
+        return (st["names"]["loadable"], round(r[2] - r[0], 3)), micro
     return next(b for b in buttons if b.endswith("##name")), micro
 
 
@@ -229,7 +233,7 @@ def test_the_deck_is_said_over_the_strip_and_costs_the_name_nothing(rig, shell_r
     rig.meta.point_panel(rig.two)
     monkeypatch.setattr(panel, "meta", rig.meta, raising=False)
     named, micro = _page_draws(panel, monkeypatch)
-    assert named == bare and "deck" not in named
+    assert named == bare and "deck" not in str(named)
     assert "deck 2 · off air" in micro
 
 

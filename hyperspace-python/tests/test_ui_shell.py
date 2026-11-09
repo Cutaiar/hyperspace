@@ -22,7 +22,7 @@ from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
 # the narrowest control window that opens the panel at ui.PANEL_W (the
 # default before the 4:3 split): the small desk, glyphs only, beside it
 NARROW_CONTROL = (960, 900)
-from hyperspace import ui_fx
+from hyperspace import ui_fx, ui_kit
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.loadable import LoadedPatch
@@ -679,11 +679,15 @@ ROT_RATES = tuple(f"rot.rate.{name}" for name in PLANES)
 
 
 def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
-    """The controls WP6 moved — the layout, motion, amp and rate in one row,
-    the six plane rates two to a row — each open their own binding menu on
-    a right-click, and the row's controls sit side by side on one line
-    inside the page."""
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    """The controls WP6 moved — the layout, motion, amp and rate, the six
+    plane rates two to a row — each open their own binding menu on a
+    right-click, and sit side by side inside the page without overlapping:
+    on the kit (`ui_view`) the layout and motion Selects share a line and
+    the amp and rate fields the next; the stock page has all four on one.
+    The window is taller than the control size: on the kit VIEW is longer
+    than one screen (the pane scrolls, REVIEW: a section may scroll down),
+    and a control scrolled out of view takes no click."""
+    imgui.get_io().display_size = imgui.ImVec2(CONTROL_SIZE[0], 1600)
     rects: dict[str, tuple[float, float, float, float]] = {}
     opened: list[str] = []
 
@@ -696,7 +700,7 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
             rects[label.split("##", 1)[-1]] = (lo.x, lo.y, hi.x, hi.y)
             return out
         monkeypatch.setattr(imgui, fn, rec)
-    for fn in ("combo", "slider_float", "slider_int"):
+    for fn in ("combo", "slider_float", "slider_int", "invisible_button"):
         item(fn)
     real_popup = imgui.begin_popup_context_item
 
@@ -713,8 +717,9 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
     for _ in range(3):
         page_frame(rig.panel, "view")
     row = [rects[pid] for pid in FIELD_ROW]
-    assert len({round(r[1]) for r in row}) == 1                    # one line
-    assert all(row[k][2] < row[k + 1][0] for k in range(3))        # none overlaps the next
+    pairs = ((0, 1), (2, 3)) if ui_kit.ready() else ((0, 1), (1, 2), (2, 3))
+    for a, b in pairs:                                             # side by side, apart
+        assert round(row[a][1]) == round(row[b][1]) and row[a][2] < row[b][0], (a, b, row)
     # the count and Fit share a line; spacing and a lattice's depth the next
     rig.reg["view.inst_layout"].set(5)
     for _ in range(3):

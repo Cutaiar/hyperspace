@@ -741,8 +741,12 @@ def _row(ui, it, x, y, w, key, alpha, *, chrome_only: bool = False,
 def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
           side: str = "bottom", align: str = "end",
           offset: float = 4.0, role: str = "menu",
-          keyboard: bool = True) -> str | None:
+          keyboard: bool = True, row_id=None) -> str | None:
     """Draw the menu `key` if ImGui has it open. Returns the chosen item id.
+
+    `row_id(item, index)` names each row's hit target, for a host whose
+    tests find a row by its own id (Hyperspace's side pane: ``pane.fx``);
+    by default a row is ``<key>.<index>``.
 
     The keyboard is the measured model in THE KEYBOARD above, and it lives
     here so that the dropdown, the ContextMenu and the Select inherit one
@@ -828,7 +832,8 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
 
         iy = y + PAD
         for i, it in enumerate(items):
-            if _row(ui, it, x + PAD, iy, cw, f"{key}.{i}", a,
+            rk = row_id(it, i) if row_id is not None else f"{key}.{i}"
+            if _row(ui, it, x + PAD, iy, cw, rk, a,
                     hi=(i == at) if keyboard else None):
                 chosen = it.id
                 imgui.close_current_popup()

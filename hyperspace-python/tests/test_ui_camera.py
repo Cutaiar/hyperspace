@@ -14,7 +14,7 @@ from imgui_bundle import imgui
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import ui, ui_camera, ui_graph, ui_kit
+from hyperspace import ui, ui_camera, ui_fields, ui_graph, ui_kit
 from hyperspace.ui import PAGE_KEYS
 
 WIDE = (1600, 900)      # the pane beside the canvas (test_ui_pane.WIDE)
@@ -51,7 +51,7 @@ def test_the_section_is_the_kit(cam):
     assert ui_kit.ready()
     assert ui_kit.STATE in r.panel.__dict__
     for pid in SLIDERS:
-        assert _h(d.rect(pid)) == ui_camera.SLIDER_H, pid
+        assert _h(d.rect(pid)) == ui_fields.SLIDER_H, pid
     assert _h(d.rect(ui_camera.RESET)) == ui_kit.mod("comp_button").BUTTON_SIZES["sm"]["h"]
 
 
@@ -79,10 +79,11 @@ def test_a_slider_press_lands_where_the_thumb_is_drawn(cam):
     point of the track leaves the thumb's centre under it (to imgui's 2 px
     grab padding)."""
     r, d = cam
-    x0, y0, x1, y1 = d.rect("camera.pan.x")
     p = r.reg["camera.pan.x"]
     thumb = ui_kit.mod("tokens").SLIDER["thumb"]
     for u in (0.2, 0.75):
+        d.run(d.wait(2))      # (a write dirties the patch: the strip above can move the body)
+        x0, y0, x1, y1 = d.rect("camera.pan.x")
         at = x0 + thumb / 2 + (x1 - x0 - thumb) * u
         d.run(d.click((at, (y0 + y1) / 2)), d.park())
         drawn = x0 + thumb / 2 + (x1 - x0 - thumb) * p.norm
@@ -103,6 +104,7 @@ def test_a_drag_moves_each_slider(cam):
         p = r.reg[pid]
         p.set_value(p.lo + (p.hi - p.lo) * 0.25 if not p.log else math.sqrt(p.lo * p.hi) / 2)
         before = p.base
+        d.run(d.wait(2))      # the controls where they are after the write (see above)
         x, y = d.centre(pid)
         d.run(d.move((x - 30, y)), d.press(True), d.move((x + 30, y), 6), d.press(False),
               d.park())
@@ -117,7 +119,7 @@ def test_a_shift_drag_moves_a_tenth_as_far(cam):
 
     def drag(held: bool) -> float:
         p.set_value(0.0)
-        d.run(d.wait(1))
+        d.run(d.wait(2))
         x, y = d.centre("camera.pan.x")
         io = imgui.get_io()
         d.run(d.move((x, y)), d.press(True))

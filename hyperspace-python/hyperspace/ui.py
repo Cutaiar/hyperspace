@@ -62,6 +62,7 @@ from . import (
     ui_playlist,
     ui_routing,
     ui_seq,
+    ui_view,
     undo,
 )
 from . import players as players_mod
@@ -2670,6 +2671,12 @@ class Panel:
             self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
 
     def _page_view(self, dt: float) -> None:
+        """The VIEW section, on the kit (tools/dkit) where it is there
+        (`ui_view.page`); else `_view_stock`."""
+        ui_view.page(self, dt)
+
+    def _view_hero(self) -> None:
+        """VIEW's head: the big cell count, the shape's names beside it."""
         v = self.view
         sh = SHAPES[v.shape]
         g = geom(v.shape)
@@ -2690,6 +2697,11 @@ class Panel:
         imgui.end_group()
         imgui.spacing()
 
+    def _view_stock(self, dt: float) -> None:
+        """VIEW as the stock widgets draw it: the section without the kit."""
+        v = self.view
+        sh = SHAPES[v.shape]
+        self._view_hero()
         self._section("view", "view")
         self._shape_combo()
         self._fader("view.bright")
