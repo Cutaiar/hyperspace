@@ -127,7 +127,7 @@ someone else's work. Run it serially before believing it.
 | Dialog, Sheet on top of it | **not started — but no longer blocked** |
 | variant resolver (cva) | not started, eight ad-hoc tables |
 | text wrapping / multi-line measure | not started |
-| **adoption** | **CAMERA is on the kit** (`hyperspace/ui_camera.py`, `ui_kit.py`), on branch `claude/dkit-port-ui-pane` - see item 5. The other sixteen sections are not. |
+| **adoption** | **the whole panel draws on the kit** where it is there (`ui_kit.ready`), on branch `claude/dkit-port-ui-pane` - see items 5 and 5b; `HYPERSPACE_KIT=0` draws it stock. |
 
 ## Pick up here — the list, verified rather than remembered
 
@@ -579,6 +579,54 @@ What it found - the reason to do it:
 Not done: the narrow band's layout was only checked for spills by the
 existing `test_ui_pane` cases, not looked at; a modulated param's ghost tick
 is drawn but not driven (no router lane in the test rig).
+
+### 5b. Past one section — the whole panel on the kit
+
+Asked to "reimagine a lot more of the UI", on the same branch, after
+catching `claude/magical-ritchie-fkh5e0` up with main (a merge; it was 68
+commits behind — RETRO row 66). With the kit there, the panel now draws:
+
+* **the pane's view switcher** (`ui_switcher.py`): the three rows of
+  uppercase chips become one TabsList of Lucide icons for the seven fixed
+  views, and one Select for the other eleven sections;
+* **every patch strip** (`ui_strip.py`): ◀ name ● ▶ as one joined group,
+  the dirty dot its own segment, save solid red while dirty;
+* **VIEW, re-laid-out** (`ui_view.py`): slider fields with unity ticks,
+  the planes as one toggle group, switches two to a row, Selects;
+* **every other section, restyled in place**: `Panel._check`, `_button`,
+  `_fader`, `_slider` and `_combo` draw the kit control in exactly the room
+  the stock widget had (`ui_fields.inline_*`), so a section's own layout
+  code is untouched and every section changes at once.
+
+`ui_fields.py` is the one place a param becomes a kit control. Its rule is
+the same as CAMERA's: the kit control's imgui item is the last item, so the
+panel's menu, Learn frame, fine drag, tooltip and undo report work unchanged.
+`HYPERSPACE_KIT=0` draws the stock panel throughout.
+
+Checked: the panel's whole suite with the kit on (7912 passed, 5 skipped —
+torch and friends), every test that changed was changed to check the same
+intent on the kit, not loosened (each diff says why); the dkit suite; the
+ImGui gallery byte-identical; captures of every section before and after.
+
+Not done, in order of what shows most:
+
+* **Seven direct `imgui.checkbox` calls** (`ui_displays`, `ui_fx`,
+  `ui_routing`, `ui_playlist`, one in `ui.py`) — still stock squares
+  beside kit switches; route each through `Panel._check` or
+  `ui_fields.inline_check`.
+* **Enums over 12 names** (the shape menu, long lists) keep imgui's combo:
+  `menu.popup` has no scroll or height clamp. That, not the Select, is
+  the next kit change.
+* **AUDIO, OUTPUT, SYSTEM are restyled, not re-laid-out** as VIEW is.
+* **`menu.popup`'s rows** are kit-styled but each Select still opens on
+  imgui's popup stack: fine, but the kit's `layer.py` is unused.
+* **Narrow sliders** put their readout over the track; a two-line field
+  (as VIEW's) reads better wherever a section has the height.
+* **Type**: Button/Kbd/Select text is Geist, labels are the panel's
+  Inter — `draw.FONT_SPAN_EM` is still module-global.
+
+Watch for: `tools/app_driver.py` leaves an `imgui.ini` in
+`hyperspace-python/` that later test runs load (RETRO row 70) — delete it.
 
 ### Two smaller things, both recorded in code
 
