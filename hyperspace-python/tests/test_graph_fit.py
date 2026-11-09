@@ -161,3 +161,31 @@ def test_off_in_the_rig_the_canvas_opens_as_measured(tmp_path):
         for _ in range(3):
             frame(r.panel, "graph")
         assert "fit" not in ui_graph._state(r.panel)
+
+
+def test_a_fit_keeps_a_selected_cable(fitted, monkeypatch):
+    """The selection kept is the selection, a cable's too (review, 2026-11-09):
+    `clear_selection` clears links as well as nodes."""
+    r, st, _rects = fitted
+    view = ui_graph.view_of(r.panel)
+    ids = {c.id for c in view.cables} | set(st["bundles"])
+    cid = next(k[2:] for k in st["ids"] if k.startswith("c:") and k[2:] in ids)
+    real = ui_graph._fit_when_asked
+    once = {"done": False}
+
+    def select_then_draw(panel, st_, v, lay, size):
+        if not once["done"]:                            # (inside the editor)
+            ed.select_link(ed.LinkId(ui_graph._id(st_, "c:" + cid)))
+            once["done"] = True
+        return real(panel, st_, v, lay, size)
+    monkeypatch.setattr(ui_graph, "_fit_when_asked", select_then_draw)
+    for _ in range(3):
+        frame(r.panel, "graph")
+    before = ui_graph._selection(st, st["view"])
+    assert before is not None and before[0] in ("cable", "bundle")
+    ui_graph.ask_fit(st)
+    for _ in range(4):
+        frame(r.panel, "graph")
+    after = ui_graph._selection(st, st["view"])
+    assert after is not None and (after[0], getattr(after[1], "id", None)) == \
+        (before[0], getattr(before[1], "id", None))

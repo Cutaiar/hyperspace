@@ -7090,7 +7090,7 @@ Fail: a frozen meter after the untick points at the no-voice block not
 being pushed (`Mixer._push`).
 
 ## BF. The panel fold, stage 1: the side pane always on (plan 49)
-*Superseded 2026-11-07 by group DO (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 597–601, 2026-11-03. Headless: `tests/test_ui_pane.py`
 (the panel driver on GRAPH: each section opened by a click and a control
 found in it by its page's id, a click in a section moving the param, a
@@ -7356,7 +7356,7 @@ colour, "this preset wires Output 2, which this rig has not open — add a
 window on OUTPUT to show it"; (2) both lines are gone.
 
 ## BK. The panel fold, stage 2: every page a section, the FX page retired (plan 49)
-*Superseded 2026-11-07 by group DO (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 626–632, 2026-11-03. Headless: `tests/test_ui_pane.py`
 (each stage-2 section opened alone at 240 px and 320 px, its page's
 control found inside the pane and nothing past its edge; MEDIA four to
@@ -7763,7 +7763,7 @@ chip is left under the mouse. Let go off the chip: nothing is said.
 
 ## BS. The panel fold, stage 3: the rail gone, `ui.page` the focus (plan 49)
 
-*Superseded 2026-11-07 by group DO (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 668–672, 2026-11-03. Headless: `tests/test_ui_pane.py` (the
 four new sections at 240 and 320 px, nothing past the pane's edge; every
 slot a section but GRAPH's; the focus and the fold; the focused header at

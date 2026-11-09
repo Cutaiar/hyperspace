@@ -276,9 +276,9 @@ def test_a_step_waits_for_its_selection_and_keeps_the_forward_run():
     for _ in range(ui.SETTLE_NOTES):
         h.note((g, "b"))                               # "a" not landed yet: nothing moves
     assert h.visited == [(g, None), (g, "a"), (g, "b"), (3, None)]
-    h.note((g, "b"))                                   # never came: what landed, in its place
-    assert h.visited == [(g, None), (g, "b"), (g, "b"), (3, None)] and h.at == 1
-    assert h.step(1) == (g, "b") and h.step(1) == (3, None)
+    h.note((g, "b"))                                   # never came: what landed, in its place,
+    assert h.visited == [(g, None), (g, "b"), (3, None)] and h.at == 1    # one "b", not two
+    assert h.step(1) == (3, None)                      # ⌘] goes forward at the first press
     assert ui.PageHistory(4).visited == [(4, None)]    # a bare slot, as before
 
 

@@ -122,7 +122,7 @@ SCENE_COMBO_MIN = 100   # px; the analyzer's scene combo keeps this beside its l
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
 # the dirty dot (plan 19 WP5): a filled red disc 12 px across beside a
 # loadable patch's name — where the "●" glyph left about 7 px of ink — and the
-# header's dot, radius 5, on a section whose group has moved off its loadable patch
+# side pane's chip dot, radius 5, on a section whose group has moved off its loadable patch
 DOT_R = 6.0
 HEADER_DOT_R = 5.0
 
@@ -770,8 +770,9 @@ class PageHistory:
     or None at either end. After a step, notes wait up to `SETTLE_NOTES`
     frames for that view's selection to land (it lands a frame or two
     later); one that never does (its node deleted since) takes the step's
-    place in the list, so the forward run is kept. A note on another slot
-    is a new visit at once."""
+    place in the list, so the forward run is kept, and is folded into a
+    neighbour it now repeats, so no step goes nowhere. A note on another
+    slot is a new visit at once."""
 
     def __init__(self, view):
         self.visited, self.at = [self._view(view)], 0
@@ -791,6 +792,12 @@ class PageHistory:
                 self.landing = landing          # its selection not landed yet
                 return
             self.visited[self.at] = view        # as it landed
+            at = self.at                        # …and one with a neighbour just like it goes,
+            if at + 1 < len(self.visited) and self.visited[at + 1] == view:
+                del self.visited[at + 1]        # so no ⌘[ / ⌘] lands where it was
+            elif at > 0 and self.visited[at - 1] == view:
+                del self.visited[at]
+                self.at = at - 1
             return
         if view == self.visited[self.at]:
             return
@@ -932,7 +939,7 @@ class Panel:
         2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
         while the control window's GL is up. Safe to call twice. A loadable patches
         fold clicked under `WRITE_AFTER_S` ago is written first (plan 48
-        stage 2, as `ui_graph.close` flushes the pane's)."""
+        stage 2)."""
         ui_loadable.flush_folds(self, force=True)
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None

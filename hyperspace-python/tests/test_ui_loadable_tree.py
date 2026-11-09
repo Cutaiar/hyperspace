@@ -89,7 +89,7 @@ def test_a_header_folds_by_a_click_and_the_fold_is_this_macs(rig):  # noqa: F811
     page = st["page"]
     assert page["folders"] == [("party", False)]                    # its folders go with it
     assert not [n for n, _ in page["rows"] if n.startswith("party/")]
-    # written WRITE_AFTER_S after the click, as the pane's folds are (review of #349)
+    # written WRITE_AFTER_S after the click (review of #349)
     assert "loadable" not in json.loads(ui_json.read_text())
     assert ui_loadable.flush_folds(panel, now=time.monotonic() + ui_pane.WRITE_AFTER_S + 0.1)
     assert not ui_loadable.flush_folds(panel, force=True)            # nothing left to write

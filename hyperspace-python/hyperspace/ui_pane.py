@@ -214,9 +214,9 @@ def show(panel, key: str) -> None:
 
 def where(panel) -> str | None:
     """The section you are in, for ⌘Z (plan 44 D5b): the one under the mouse, as of
-    the latest draw; anywhere else (the canvas, a header, the desk, the render
-    window) none. Never the focus: a click in another section leaves it, and a
-    key row or a pad moves it, so it would say "analyzer" an hour on."""
+    the latest draw; anywhere else (the canvas, the pane's chips, the desk, the
+    render window) none. Never the view alone: a key row or a pad moves it, and
+    the mouse may be on the canvas, so it would say "analyzer" an hour on."""
     from . import ui_graph  # (late: ui_graph imports this module)
     return (panel.__dict__.get(ui_graph.STATE) or {}).get("pane_under")
 
@@ -242,9 +242,8 @@ def left(panel) -> None:
 
 
 def shown(panel, key: str) -> bool:
-    """Did section `key`'s body draw (the latest draw; a body scrolled out of
-    the pane's view does not): is it on screen, for the words of whoever
-    is not the pane."""
+    """Did section `key`'s body draw in the latest draw (it is the pane's
+    view): is it on screen, for the words of whoever is not the pane."""
     from . import ui_graph  # (late: ui_graph imports this module)
     st = panel.__dict__.get(ui_graph.STATE) or {}
     return key in (st.get("pane_drawn") or ())

@@ -1116,7 +1116,7 @@ def select_id(panel, nid: str) -> None:
     node's `render:acid.2`, a modifier's own id — and centre it on the
     canvas next frame (`_select`): the one request path, `select_node`'s
     and `Panel.select_graph_node`'s. The canvas is always drawn, so the
-    focus stays where it is: a section being worked in is not thrown away."""
+    pane's view stays where it is: a section being worked in is not thrown away."""
     _state(panel)["select_node"] = nid
 
 
@@ -2053,7 +2053,7 @@ def _fit_when_asked(panel, st: dict, view: graphview.View, lay, size: imgui.ImVe
     `FIT_TRIES`, then on those measured). The binding has no zoom setter, so the box `fit_box` says
     is marked by two invisible corner nodes, selected with the content and
     framed (`navigate_to_selection`, zooming in as well as out); the
-    selection is then put back as it was."""
+    selection — nodes and cables — is then put back as it was."""
     ask = st.get("fit")
     if not ask:
         return
@@ -2076,7 +2076,8 @@ def _fit_when_asked(panel, st: dict, view: graphview.View, lay, size: imgui.ImVe
     pane = ("beside", pw) if ph >= size.y - 1 else ("below", ph)
     box = fit_box(content, (size.x, size.y), pane,
                   float(getattr(panel, "graph_start_zoom", 1.0) or 1.0))
-    held = [k for k in ed.get_selected_nodes()]
+    held = list(ed.get_selected_nodes())           # (clear_selection takes the cables too)
+    held_links = list(ed.get_selected_links())
     clear = imgui.ImVec4(0, 0, 0, 0)
     ed.push_style_color(ed.StyleColor.node_bg, clear)
     ed.push_style_color(ed.StyleColor.node_border, clear)
@@ -2098,6 +2099,8 @@ def _fit_when_asked(panel, st: dict, view: graphview.View, lay, size: imgui.ImVe
     ed.clear_selection()
     for k in held:
         ed.select_node(k, True)
+    for k in held_links:
+        ed.select_link(k, True)
 
 
 def pin_hit_size(zoom: float, row_h: float, pitch: float, min_px: float = MIN_PX,
@@ -3844,7 +3847,7 @@ def _selection(st: dict, view: graphview.View):
 
 
 def sel_words(sel) -> str:
-    """The selection section's header words (plan 49): a node's label, a
+    """The selection chip's words (plan 49): a node's label, a
     group's name, else the kind ("cable", "bundle"); "" with nothing."""
     if sel is None:
         return ""
