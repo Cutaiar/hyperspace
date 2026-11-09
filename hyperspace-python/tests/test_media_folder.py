@@ -342,3 +342,125 @@ def test_thumbnail_makes_go_on_the_thumbnail_worker(mk, monkeypatch):
                         lambda p, out: names.append(threading.current_thread().name))
     f.thumb("local:a.png")
     assert wait_for(lambda: names) and names[0].startswith("media-thumb-")
+
+
+# ---- the shared twin (row 809): a `local:`/`file:` id read through the
+# shared folder, and stored as the shared id by an assignment ----
+
+def test_local_id_reads_through_its_shared_twin(mk):
+    """A patch saved on the other Mac names `local:t.png`; this Mac has the
+    file only in the shared folder. It opens anyway, and says `ready`."""
+    f = mk()
+    png(f.shared / "t.png")
+    f.scan()
+    assert f.path("local:t.png") == f.shared / "t.png"
+    assert f.status("local:t.png") == mf.READY
+    e = f.entry("local:t.png")
+    assert e is not None and e.sid == "shared:t.png"   # the stamp follows the file read
+
+
+def test_file_id_reads_through_its_shared_twin(mk):
+    """The other Mac's absolute path (`file:/Users/dallman/...`) falls back
+    on its basename, so a hand-added file travels too."""
+    f = mk()
+    png(f.shared / "the-look.png")
+    f.scan()
+    assert f.path("file:/Users/dallman/Downloads/the-look.png") == f.shared / "the-look.png"
+
+
+def test_own_file_wins_over_the_twin(mk):
+    """This Mac's own copy is what a `local:` id opens when it has one —
+    the fallback is only for an id the scan did not find."""
+    f = mk()
+    png(f.shared / "t.png")
+    png(f.local / "t.png")
+    f.scan()
+    assert f.path("local:t.png") == f.local / "t.png"
+
+
+def test_an_ambiguous_name_has_no_twin(mk):
+    """One basename under two shared folders resolves to neither: guessing
+    between them would be worse than black."""
+    f = mk()
+    png(f.shared / "a" / "t.png")
+    png(f.shared / "b" / "t.png")
+    f.scan()
+    assert f.shared_twin("local:t.png") is None
+    assert f.path("local:t.png") is None
+    assert f.status("local:t.png") == mf.MISSING
+
+
+def test_a_shared_id_never_falls_back(mk):
+    """`shared:` is already the id both Macs read; a missing one stays missing."""
+    f = mk()
+    png(f.shared / "t.png")
+    f.scan()
+    assert f.shared_twin("shared:t.png") is None
+    assert f.path("shared:gone.png") is None
+
+
+def test_no_shared_folder_means_no_twin(mk):
+    """With no `[library] path` there is nothing to fall back to."""
+    f = mk(shared=False)
+    png(f.local / "t.png")
+    f.scan()
+    assert f.shared_twin("local:t.png") is None
+    assert f.prefer_shared("local:t.png") == "local:t.png"
+
+
+def test_prefer_shared_is_the_id_a_save_stores(mk):
+    """A file in both folders is stored as the shared id; one only this Mac
+    has is stored as picked."""
+    f = mk()
+    png(f.shared / "both.png")
+    png(f.local / "both.png")
+    png(f.local / "mine.png")
+    f.scan()
+    assert f.prefer_shared("local:both.png") == "shared:both.png"
+    assert f.prefer_shared("local:mine.png") == "local:mine.png"
+    assert f.prefer_shared("shared:both.png") == "shared:both.png"
+    assert f.prefer_shared("camera:0") == "camera:0"
+
+
+# ---- end to end over the real folder (row 809): a patch loaded from disk
+# names `local:`, the file is only in the shared folder, and the channel
+# opens it while the MEDIA banner stays quiet ----
+
+def test_a_patch_naming_local_opens_from_the_shared_folder_and_the_banner_stays_quiet(mk):
+    """The whole road, with no fake resolver: `MediaFolder` *is* the
+    resolver for file kinds, so a `MediaState` over it is what the app runs.
+    The bins are set the way a load sets them (`from_json`, not `assign`),
+    so nothing rewrites the id first — this is the other Mac's patch as it
+    arrives. The channel must open the shared file, and `missing()` — what
+    `ui_media._banner` draws — must not name it."""
+    from hyperspace.media.channels import MediaState
+
+    f = mk()
+    png(f.shared / "t.png")
+    f.scan()
+    m = MediaState(f)
+    assert m.from_json({"channels": {"a": ["local:t.png"]}}) == []   # no note: the id parses
+    assert m.channels["a"].bin[0] == "local:t.png"                   # stored as the patch had it
+
+    m.poll(0.016, 0.0)
+    src = m.channels["a"].source
+    assert src is not None and src.kind == "still", f"opened {src!r}"
+    assert src.path == f.shared / "t.png"            # the shared twin's file, not a `local:` guess
+    assert wait_for(lambda: src.status == mf.READY), src.status
+    assert m.missing() == []                         # the banner says nothing
+    m.close()
+
+
+def test_a_patch_naming_a_local_file_nobody_has_is_still_named_by_the_banner(mk):
+    """The other half, so the banner is not simply silenced: an id with no
+    file in either folder is still listed, which is what the owner's 86
+    remaining references do."""
+    from hyperspace.media.channels import MediaState
+
+    f = mk()
+    f.scan()
+    m = MediaState(f)
+    m.from_json({"channels": {"a": ["local:gone.png"]}})
+    m.poll(0.016, 0.0)
+    assert m.missing() == ["local:gone.png"]
+    m.close()

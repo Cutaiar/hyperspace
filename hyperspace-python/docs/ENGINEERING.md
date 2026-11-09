@@ -10,7 +10,7 @@ check by hand is [`TESTING-GUIDE.md`](TESTING-GUIDE.md) and
 
 Contents: 1 Geometry · 2 Rendering · 3 Running it · 4 The home folder ·
 5 `config.toml` · 6 The control window · 7 Keys and the gamepad · 8 The
-APC40 · 9 Learn, Unbind and routing · 10 Presets, shows and the bank ·
+APC40 · 9 Learn, Unbind and routing · 10 Loadable patches, shows and the bank ·
 11 Undo · 12 Hands · 13 Audio · 14 Outputs · 15 Hot reload and the
 watchdog · 16 Testing · 17 Known limits.
 
@@ -82,7 +82,7 @@ of its dimmest. It sits under every real solid's thinnest (the Rose at
 rest, 0.16). At rest only the Flow mark is thinner; through each plane
 from rest in 5° steps only the Flow mark and the Orbit; over 40 random
 poses of every shape none is. Every other pose draws as it always did,
-and no corpus preset's shape ever reaches it, so no golden frame moves
+and no corpus loadable patch's shape ever reaches it, so no golden frame moves
 (decision register row 542;
 `tests/test_render.py::test_a_shape_flat_toward_the_eye_draws_at_full_weight`,
 `::test_only_a_plane_figure_is_thinner_than_the_depth_floor_at_rest`,
@@ -90,7 +90,7 @@ and no corpus preset's shape ever reaches it, so no golden frame moves
 the 4D shapes and then the 3D ones under their own headings (the index
 stays the identity), and the W plane keys dim while they can do nothing.
 
-So a preset on a 3D shape moves only through its 3D planes: in the test
+So a loadable patch on a 3D shape moves only through its 3D planes: in the test
 corpus, `plasma-heart` (XZ, YZ), `spiral-silk` (YZ) and `inverse-halo`
 (XZ) keep turning; their bass → W routes no longer move them.
 
@@ -169,7 +169,7 @@ spikes, the core buried) or a compound brings its own. A curve (the toys
 with F 0) draws no points: its samples are not corners.
 
 **The warm-up.** `geometry.warm_all`, started in `app.main` after the
-startup preset, builds every shape's `geom`, `faces`, `face_triangles`
+startup loadable patch, builds every shape's `geom`, `faces`, `face_triangles`
 and `face_uvs` on a daemon thread, the startup shape first, so the first
 switch to a big shape does not stutter. Each shape has its own lock: a
 frame that reaches a shape the warmer is on waits for it, one that wants
@@ -182,7 +182,7 @@ Catalan duals; star polychora; prisms and pyramids; surfaces and
 fibrations), **3D** (surfaces, Platonic, Archimedean and
 Catalan solids, star polyhedra, compounds, mathematical toys, vector
 marks) and **Scenes**. `geometry.menu()` lists them; within a family, index order.
-The index stays the identity, so the menu's order never reaches a preset
+The index stays the identity, so the menu's order never reaches a loadable patch
 (`tests/test_catalog.py::test_the_menu_holds_every_shape_once_by_kind`).
 
 | # | Shape | Family | F | V | E |
@@ -337,11 +337,11 @@ stay the parity oracle.
 at the origin: `eye.fov` (47.6°, `geometry.EYE_FOV`, across the
 picture's shorter side; 10–120°) and `eye.distance` (3.78 shape radii,
 `EYE_DISTANCE`; 1.5–40, log), on the CAMERA page in its one
-section. Since plan 43 C2 they are the **preset's** — with `camera.*` the
-one orbit camera (group `eye`, a performance group: a load lands the
+section. Since plan 43 C2 they are the **loadable patch's** — with `camera.*` the
+one orbit camera (group `eye`, a patch group: a load lands the
 framing) — and modulatable: a lane breathes the framing (register rows
-555, 574). The defaults are the rig's **reference eye** too: the hands'
-calibration is fitted to them, never to the preset's eye. The defaults are
+555, 574). The defaults are the meta controller's **reference eye** too: the hands'
+calibration is fitted to them, never to the loadable patch's eye. The defaults are
 `project_h`'s old 3D divide: at zoom 1 and pan 0 every vertex lands
 within 2.3e-13 px of `project_h` in float64 and 1.1e-4 px in float32,
 against a bar of half a pixel
@@ -357,11 +357,11 @@ shape has its own perspective, and copies (`view.instances`) are copies
 in the world, a cell `render.CELL` = 2.4 radii apart before the zoom.
 `camera.pan.x/y` are in world units — shape radii, ±12
 (`params.PAN_RANGE`), y positive down the screen as it always was. A
-preset, camera module or `camera/default.json` without `"units":
+loadable patch, camera module or `camera/default.json` without `"units":
 {"camera.pan": "world"}` stored logical px: `params.pan_world` divides
 them by `geometry.PAN_REF_PX` = 324 (the default eye's px per unit at
 1080p, the render cap and the party projector) at load, so an old
-preset sits where it did on the 1080p projector (nearer the centre on a
+loadable patch sits where it did on the 1080p projector (nearer the centre on a
 smaller window); every save writes the marker, and the schema stays
 `hyperspace.preset/2`. The mouse pans by cursor px / px-per-unit and the
 wheel zooms about the point under the cursor (`app._px_per_unit`). The
@@ -449,7 +449,7 @@ KALEIDO six wedges, whatever the inputs. FLAT reads none.
 - **A new mode** is a case in `design()` (or a function of its own) that
   reads the inputs only through the accessors and helpers, **plus** a
   `Mode` entry at the end of `patterns.MODES` — appended, never inserted,
-  since a preset holds the mode as an index — with its one line and
+  since a loadable patch holds the mode as an index — with its one line and
   eight phrases. The tests hold the shader's cases, accessors and header
   to the table.
 - **Checking the shader.** `uv run python tools/check_glsl.py` compiles
@@ -566,7 +566,7 @@ its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
 dependency order too, in `Router.modulate`: ARCHITECTURE §2.) For one default
 output the order is `shape → ghost → scene → cover → hands → history →
 plasma → acid → kaleido → … → huecycle → palette → fx → capture →
-output.1`: one effect node per instance in the run the preset wires from
+output.1`: one effect node per instance in the run the loadable patch wires from
 `frame` to `fx.image` (plan 33; in wire order, on or off), and none for an
 effect the graph does not wire.
 
@@ -603,7 +603,7 @@ The capture takes the scene. The renderer's `Wiring` (`graph.Wiring`,
 - `draw` and `extra`: the first hands node drawn `solid` or as `lines`,
   and the hands nodes after it (below).
 
-Nothing in the app sets `Wiring` but a preset's `graph` section. The
+Nothing in the app sets `Wiring` but a loadable patch's `graph` section. The
 OUTPUT page's "shows:" line says it in words ("scene + hands: in the
 scene as lines", "· depth-aware"), its hover the loaded graph in one
 line, and the LOOKBACK page "history: the scene · with the hands"
@@ -612,17 +612,17 @@ line, and the LOOKBACK page "history: the scene · with the hands"
 **The hands** (`graph.Hands`, the `ghost.*` params' node) are `ghost.py`'s
 five styles as geometry in the shared camera: `ghost.shared_camera`
 takes the Leap's millimetres into the world through the calibration in
-`hands.json` (§12) — fitted to the rig's reference eye, whatever the
-preset's (plan 43 C2, row 575) — and the eye. A frame's poses are settled
+`hands.json` (§12) — fitted to the meta controller's reference eye, whatever the
+loadable patch's (plan 43 C2, row 575) — and the eye. A frame's poses are settled
 once (`Ghost.settle`) for every draw of them: hands drawn **in the scene**
-go through the preset's eye and scale with the shape as it zooms; a
+go through the loadable patch's eye and scale with the shape as it zooms; a
 **hands layer** is drawn through the reference eye (`Settled.layer`) and
 keeps its size on screen. A hands node is timed by its
 consumer: inside a scene its draw is its own SYSTEM line (`ghost`); its
 layer's draw is the layer's line (`hands`).
 
-**The graph in a preset** (`graph.read_graph`, `GraphSpec`,
-`preset.GraphSection`). A preset may carry a `graph` section, before
+**The graph in a loadable patch** (`graph.read_graph`, `GraphSpec`,
+`loadable.GraphSection`). A loadable patch may carry a `graph` section, before
 `values`: the nodes that differ from the default graph, one JSON object
 each, one per line. `tests/fixtures/presets/hands-lines.json` (a test
 fixture) puts the hands in the scene as lines
@@ -654,21 +654,23 @@ honour costs only that effect its place: below.) A point cloud is not a
 kind here: clouds follow the device list (below), and `{"kind":
 "cloud"}` is an unknown kind (plan 28 added none). Since plan 28 the
 section may also carry a `wires` list (below). Undoing a load puts the
-loaded preset's graph back before its values (`library.Marks`).
+loaded patch's graph back before its values (`library.Marks`).
 
 **Two of a node.** `{"kind": "effect", "file": "acid", "instance": 2}`
 adds a second acid: the effect `acid.2` in `FxState`
 (`set_instances`), its params `fx.acid.2.*` ("Acid 2 mix", performance
-params in the preset's `values`), its own clock and place in the chain,
+params in the loadable patch's `values`), its own clock and place in the chain,
 on the acid file's one compiled program. `{"kind": "hands", "instance":
 2}` adds a second hands node `ghost.2`: its own `Ghost`
-(`Renderer.ghost_of`) over its own state, its own session params
-`ghost.2.on/alpha/mirror/guide/tethers/style` (`ghost.2.on` starts off),
+(`Renderer.ghost_of`) over its own state, its own patch params
+`ghost.2.on/alpha/guide/tethers/style` (`ghost.2.on` starts off; the state
+follows the room's one `ghost.mirror`, LY1),
 its layer `hands.2` and its lone readout `readout.2`. Every `into:
 "scene"` node is in the scene; the `into: "layer"` node (else the first)
 makes the one layer, laid on the outputs without the hands in their
-scene. A show holds `ghost.<n>.*` back until a preset's graph declares
-the node, then seeds it. `draw: "lines"` draws a style's meshes as their
+scene. An old show's `ghost.<n>.*` ids are held back and kept by a save; its look
+still lands (`old_look`). Only `ghost.<n>.mirror` is read by nothing, and the show
+says so at open if it differs from `ghost.mirror` (row 773). `draw: "lines"` draws a style's meshes as their
 triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
 solid.
 
@@ -770,7 +772,7 @@ per line, kept in the file's order:
 
 `from` is a node's one output — `scene`, `hands`, `hands.<n>`,
 `history`, an effect instance (`palette`, `acid.2`), a composite; `to`
-is one of the ports a preset may wire: `output.<n>.image`, `.hands`,
+is one of the ports a loadable patch may wire: `output.<n>.image`, `.hands`,
 `.readout`, `history.image`, an effect's `image`, a composite's `under`
 / `over` (`graph.WIRE_TAKES`; geometry and mask ports are typed but not
 wireable — a hands node's place stays its `into`). D1's placements are
@@ -782,8 +784,8 @@ output's own end (`graph.Wired`, `wire(output.<n>)` on SYSTEM), ignoring
 its scene and through switches; into `.hands` it lays that node over
 (depth-aware when the blend says so; on a through output it replaces the
 switch's hands, which the effects then no longer bend); into `.readout`
-that layer's guide. **An output no wire names keeps the session's
-switches** — the rig's, not the look's — and a load never writes a
+that layer's guide. **An output no wire names keeps the meta controller's
+switches** — the meta controller's, not the look's — and a load never writes a
 switch. The wires ride in `Wiring.wires`, so `Renderer._graph_for`
 rebuilds when they change. A refused wire (a port of another type, a
 node or port that does not exist, two wires into one port, the history
@@ -793,7 +795,7 @@ wiring` — and that port keeps its default; the rest stands and the
 section is kept as written. A malformed wire is an unreadable section
 (the default graph). A wire on a node this frame lacks is dormant and
 said. The canvas edits it (§6, the GRAPH page). An older build refuses
-the `wires` key, and D1's keys, and opens such a preset as the default
+the `wires` key, and D1's keys, and opens such a loadable patch as the default
 graph with a note (register row 277).
 
 **The `VALUE` port** (`graph.VALUE = "value"`, plan 30 D2): a fourth port
@@ -814,7 +816,7 @@ one instanced quad per point through the eye — a hard round dot, alpha
 the see-through shape, so a dot in front of an edge hides it and an edge
 in front of a dot is drawn over it. Its world transform is one uniform
 scale about the world origin, `cloud.scale`; the shape's `camera.*` and
-`rot.*` do not move it. The look is the group `cloud`, the preset's since plan 44 D3:
+`rot.*` do not move it. The look is the group `cloud`, the loadable patch's since plan 44 D3:
 `cloud.size` (radius, logical px, 0.5–12, 2), `cloud.scale` (0.01–10,
 0.3: the fixture knot at about the shape's size), `cloud.bright` (0–2,
 1), `cloud.colors` (the source's colours, on; off or none, white) — no
@@ -854,7 +856,7 @@ desk use the registry's ("Echo time apart", "Dream speed"). All
 **The dream worker** (`dream.py`, torch, MPS when available) runs a few
 gradient-ascent steps per submitted echo on its own thread; `submit`
 never blocks and the latest result wins; `step × steps / k` is clamped so
-a preset cannot run away. The weights (one file per net, VGG16 528 MB or
+a loadable patch cannot run away. The weights (one file per net, VGG16 528 MB or
 GoogLeNet 50 MB, whichever net the layer belongs to) are read from
 `weights_dir`, then torch's hub cache, and downloaded there on first use.
 A net is read once a run: every layer of it is a cut of the same loaded
@@ -863,7 +865,7 @@ of a net takes about 1.5 s for VGG16). The deepest layers cost about half
 again what conv3_3 does per frame and say "slower" in the menu.
 If the worker cannot start, the reason is on the SYSTEM page, the
 LOOKBACK page and the red banner, and the look-back runs echoes only; a
-preset that asks for the dream with no worker is a warning, once.
+loadable patch that asks for the dream with no worker is a warning, once.
 
 **Effects** (`fx.py`, FX page, GRAPH). One GLSL file per effect in
 `shaders/fx/` — acid, blend, deconverge, displace, doublevision, edges,
@@ -890,8 +892,8 @@ older file's depths are converted at load (`params.retaper_depths`, the
 marker `units["fx.depth"]`) and **the owner runs
 `tools/retaper_routes.py` on the library before the next show** (below). `// @order <n>`
 is still parsed (`EffectSpec.order`) and read only by `graphmigrate`, to
-give an old preset's effect without a saved order its place in that
-preset's run; where an effect sits now is its wires. A new effect file
+give an old loadable patch's effect without a saved order its place in that
+loadable patch's run; where an effect sits now is its wires. A new effect file
 needs no `@order`.
 
 **No shader multiplies time by a param** (the owner, 2026-11-02, after
@@ -936,10 +938,10 @@ pulse step continuously an hour in; warp's scale re-zooms by the size of
 the step, the same at any hour). The harness stands each `@clock` where
 the hour at the run's knobs left it.
 
-**The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95` (read only by the migration, which puts it last in an old preset's run),
+**The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95` (read only by the migration, which puts it last in an old loadable patch's run),
 so, unplaced, last in the chain, after the look-back and before the dim — and
 before the hands unless an output sends them through the effects; plan
-30: a preset's graph may place it on the hands' layer only, one output
+30: a loadable patch's graph may place it on the hands' layer only, one output
 only, or the scene before the history). Off and at `@mix 0` by default, so switching it on changes
 nothing until its mix is raised. `mode` is a `@param choice` (an enum,
 drawn as a picker). **compress** (plan 30 N8, the owner's colour
@@ -957,12 +959,12 @@ the whole cylinder, so on at mix 1 changes nothing on an opaque ground
 more). A document with the fold's old ids (`centre`/`width`,
 `sat_lo`/`_hi`, `val_lo`/`_hi`) — values, routes, desk rows, macros — is
 read as the slice on load (`palettecompat.palette_slice`, a leaf, from
-`Presets.load_doc` and `library._module_values`; a row on the centre
+`LoadedPatch.load_doc` and `library._module_values`; a row on the centre
 goes to `hue_turn`). **gradient** maps brightness through the
 first `anchors` (2–4) of four anchor colours, `a1`–`a4` hue / sat / val,
 a grey ramp by default.
 On a see-through ground the result is scaled by the pixel's alpha. A
-palette is kept in a preset's values, or in a patch with its node (plan
+palette is kept in a loadable patch's values, or in a patch with its node (plan
 40); until plan 40 a saved palette was an `fx` module preset, and the fx
 module presets (`library/fx/*.json`) are retired (D6: no factory folder,
 no strip on the FX page, `library.RETIRED_MODULES`; an old
@@ -1047,7 +1049,7 @@ error skips the pass.
 its picture is the selected input's, passed through at the size its
 consumer asks: no pass, no texture of its own, a cut. `switch[.n].select`
 is an enum (off, 1–8, modulatable, group `switch`) declared per switch
-the graph names and saved with the preset's values; the picks live in
+the graph names and saved with the loadable patch's values; the picks live in
 `ViewState.switch` and reach the frame as `Frame.selects`. **Only the
 selected input runs:** `Graph.pulled(frame)` walks from every node with
 no readers and follows each switch's pick only (cached per tuple of picks,
@@ -1071,8 +1073,8 @@ effect's clock advances in frames its picture is not made (as a placed
 effect's always did), so it can jump phase when it comes back; an
 effect behind an unselected switch input stands still.
 
-**Presets and the free graph** (plan 33, rows 343 and 346–347;
-`hyperspace/graphmigrate.py`, `preset.py`). **Load:** `Presets.load_doc`
+**Loadable patches and the free graph** (plan 33, rows 343 and 346–347;
+`hyperspace/graphmigrate.py`, `loadable.py`). **Load:** `LoadedPatch.load_doc`
 runs `graphmigrate.migrate(doc, specs, desk=)` on every document. A
 section with no `frame`/`fx.image` run is given one: the effects that are
 `on` and either at `mix > 0` or driven by a route, desk row, macro,
@@ -1083,7 +1085,7 @@ wires; a route onto either as a switch with the old pick and the rows
 retargeted to `switch.select`. An effect left out was off, so the
 picture is the same; one something drives says so in a load note. (Until
 plan 40, loading an fx module replaced the loaded graph's run with it —
-`graphmigrate.module_runs`, `Presets._fx_module`; the fx module presets
+`graphmigrate.module_runs`, `LoadedPatch._fx_module`; the fx module presets
 are retired and those are gone. A reusable run is a patch now: §6, "Groups
 and patches".) Switching on an effect that is in no run adds nothing to
 the picture.
@@ -1091,19 +1093,19 @@ the picture.
 the wired frame"). Until then plan 33 wrote the lowest schema that lost
 nothing — `/5` only for a graph `/4` could not say, else the section
 stripped of the free graph's words and the retired values laid back so an
-untouched `/2`–`/4` preset saved byte-identical; that save side
+untouched `/2`–`/4` loadable patch saved byte-identical; that save side
 (`schema_of`, `needs_free`, `legacy_section`, `legacy_values`,
 `with_retired`, `reordered`) is gone. The bytes those older builds wrote
 (`tests/fixtures/plan33-v4-saves/`, `plan35-v5-saves/`) are kept as old
-files to load. A person's own preset that drives a channel choice loads
+files to load. A person's own loadable patch that drives a channel choice loads
 with a switch.
 
-**Presets and the wired frame** (plan 35, rows 372–393;
-`graphmigrate.py`, `preset.py`, `graph.py`). **The marker.** A graph
+**Loadable patches and the wired frame** (plan 35, rows 372–393;
+`graphmigrate.py`, `loadable.py`, `graph.py`). **The marker.** A graph
 section that says `"frame": "wired"` is a wired frame: its nodes and
 wires are everything the renderer builds (`graph.build_graph`), and the
 key is the section's own marker (`read_graph` knows no schema). Every
-readable section becomes one on load: `Presets.load_doc` runs
+readable section becomes one on load: `LoadedPatch.load_doc` runs
 `graphmigrate.migrate`, which runs plan 33's steps, then `renamed`, then
 `wired_section`, and writes the frame `frame_wires` gives (today's frame
 for the default switches) once into `output.all`. A window's mutes are
@@ -1120,16 +1122,16 @@ refused in words, and saved canvas positions follow the rename
 (`graphmigrate.renamed_layout`; a dissolved node's position — `render:frame`,
 `render:fx`, `render:capture` … — is dropped, so a re-read is the
 identity). **Save (row 394, the owner, 2026-10-25: "anytime we update a
-schema, both machines will comply with that"):** every performance preset
-save is `hyperspace.preset/6` (`preset.WIRED_SCHEMA`; `Presets.document`)
+schema, both machines will comply with that"):** every performance loadable patch
+save is `hyperspace.preset/6` (`loadable.WIRED_SCHEMA`; `LoadedPatch.document`)
 in today's words — the wired frame the load or the GRAPH page landed (with
 nothing loaded, the factory frame `graphmigrate.wired_of(Wiring())`),
 today's node and canvas ids, every value the registry holds (the media
 family, the envelopes and the sequencer included), the `media` section,
 no retired id. An untouched `/2`–`/5` file therefore saves as `/6`, and
 the `/6` is a fixed point: loaded and saved untouched again it is the same
-bytes (`tests/test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point`,
-every corpus preset and fixture, `/2` to `/6`, the older builds'
+bytes (`tests/test_graph_free.py::test_every_old_loadable_saves_as_six_and_is_a_fixed_point`,
+every corpus loadable patch and fixture, `/2` to `/6`, the older builds'
 recorded saves among them), drawing exactly its goldens
 (`tests/test_golden_frames.py::test_every_preset_resaved_as_six_draws_its_goldens`).
 Every reader stays: `VERSIONS = (2, 3, 4, 5, 6)`, each migrated on load.
@@ -1140,23 +1142,23 @@ older build refuses a `/6` file by the ladder's words**, so both Macs run
 the newest build (row 394 assumes it). **Migrating a library:**
 `tools/migrate_library.py` (dry run by default; `--apply` backs the
 library up to `~/Hyperspace/library-backup-<stamp>/` first, then rewrites
-each preset in place, atomically, through `headless.resave` — the app's
+each loadable patch in place, atomically, through `headless.resave` — the app's
 own load and save — only where it loads, its `/6` is a fixed point and it
 draws the same picture on the golden rig (`golden_frames.picture`);
-`--force NAME` writes one anyway). **A new preset**
-(`Presets.new`) is the library's fresh values, routes cleared, the desk
-written as the default preset layer (`fresh_desk()`), and
+`--force NAME` writes one anyway). **A new loadable patch**
+(`LoadedPatch.new`) is the library's fresh values, routes cleared, the desk
+written as the default patch layer (`fresh_desk()`), and
 `{"frame": "wired"}`; it is named `untitled` and dirty until saved. **Tools:**
 `tools/golden_frames.py` writes each golden state as the output's own
 wires with the mutes all on; `--signatures` adds a missing case to
 `tests/fixtures/frame-signatures.json` from `build_graph` alone (never
 re-records an existing one), and `--names` rewrites only the fixtures'
 recorded node names and asserts the `goldens` list is unchanged.
-`tools/calm_lanes.py` (2026-11-02) held every preset's band routes to
+`tools/calm_lanes.py` (2026-11-02) held every loadable patch's band routes to
 `learn.LANE_DEPTH` as springs, once. `tools/retaper_routes.py` (wave 0
 T1) measures every route depth, `set` value and macro base subscriber
 onto an effect's `speed` or `amount` param along the new tapers, once —
-in the library's presets, patches and desk templates and in the machine
+in the library's loadable patches, patches and desk templates and in the machine
 home's `bindings.json` (a show holds no rows): a dry run by default,
 every change worked out before anything is written; `--write` backs the
 library up to `~/Hyperspace/library-backup-<stamp>/` first (and
@@ -1164,7 +1166,7 @@ library up to `~/Hyperspace/library-backup-<stamp>/` first (and
 as the app writes its kind, naming every row that moved and every row
 left (a value that is not a number). **The owner runs it on the library
 before the next show**, both Macs on this build; until then an old file
-is converted at every door it comes in by — a preset load, a template's
+is converted at every door it comes in by — a loadable patch load, a template's
 expansion, `Library.read_patch`, `Bindings.from_json` — and nothing is
 lost.
 
@@ -1190,7 +1192,7 @@ holds, or one after `dream.res` changed, reads nothing for a frame or
 more. `dream` is the dreamed picture, "no dream worker: reads nothing"
 without the worker. **The resize** crops and makes a picture at a size of
 its own, so a delay fed through it holds a small buffer and an effect after
-it runs small. **`resize[.n].*` are a preset's values** (group `resize`,
+it runs small. **`resize[.n].*` are a loadable patch's values** (group `resize`,
 declared from the section's entries, kept while the entry is, all
 modulatable, in no module): `size` (the long side, 16–2048 in powers of
 two; default 256), `aspect` (`input`, `square`), `fit` (`cover`,
@@ -1202,9 +1204,9 @@ stepped, and a route on it remakes the delay pair and the effect pools
 after the resize at each step, bounded by `SIZED_KEEP_FRAMES`. A loop
 drag on GRAPH is refused red in `LOOP_FACES`, `LOOP_BACKDROP` or (any
 other loop in a wired frame) `LOOP_PLAIN`. **Both Macs:** a graph with
-a delay, resize, echo or dream saves `/6` like every preset (row 394),
+a delay, resize, echo or dream saves `/6` like every loadable patch (row 394),
 which a plan 33/34 build refuses; both run the newest build. No factory
-preset has a delay, resize, echo or dream. The nodes' internals (`delay(write)`) are not on the canvas.
+loadable patch has a delay, resize, echo or dream. The nodes' internals (`delay(write)`) are not on the canvas.
 
 **Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
 `params.instance_of`, pinned by `tests/test_params.py`). A render node's
@@ -1215,9 +1217,9 @@ look-back. **The first instance of a node keeps today's ids**
 marked, and the marker is its number, 2 or more, as a segment **right
 after the prefix**: `fx.acid.2.mix`, `ghost.2.alpha`, `dream.3.mix`.
 The marker is never a new first segment: the first segment is the
-group, the group decides whether a param is in a preset (`part_of`),
+group, the group decides whether a param is in a loadable patch (`part_of`),
 and an extra instance belongs where its first does. So a graph with one
-instance of everything — every preset and binding written before the
+instance of everything — every loadable patch and binding written before the
 graph — never migrates. No effect file and no param key may be purely
 decimal, or it would read as a marker.
 
@@ -1226,7 +1228,7 @@ effect named `acid.2` in `FxState`), `ghost.<n>.*` for a hands node,
 its layer `hands.<n>` and readout `readout.<n>` (node names, not param
 prefixes), and a point cloud's nodes `cloud.<n>` (which share `cloud.*`
 for now). No `dream` instance exists yet. A load sorts the instance ids
-in a preset's `values` (`params.is_instance_id`) against the graph it
+in a loadable patch's `values` (`params.is_instance_id`) against the graph it
 lands, so an id whose node is not in the graph is an unknown id with a
 note. `fx.parse` refuses a `@param` key of digits alone, and
 `FxState.load` an effect file whose stem has a dot or is digits alone
@@ -1257,28 +1259,28 @@ the same. Apple's driver reads some tiny nodes as 0.00; the figures are
 GPU time, not the CPU's.
 
 **Golden frames** (`tools/golden_frames.py`, `tests/golden/frames/`).
-Every corpus preset (`golden_frames.CORPUS_PRESETS`: the twenty-four
-presets the build shipped until 2026-10-28, kept as test data under
+Every corpus loadable patch (`golden_frames.CORPUS_LOADABLES`: the twenty-four
+loadable patches the build shipped until 2026-10-28, kept as test data under
 `tests/corpus/presets/`) is copied into a throwaway home and loaded
-through the real `Presets`, with two synthetic hands
+through the real `LoadedPatch`, with two synthetic hands
 (`tests/fake_hands.py`: the left open, the right a fist) present or
 absent through the real `HandsIO`, the ghost on, the LFOs and the
-analyzer at rest (never stepped, never fed), the dream off, the preset's
+analyzer at rest (never stepped, never fed), the dream off, the loadable patch's
 own look-back kept, and drawn for 8 frames at 1/60 s on a pinned clock at
 960×600, dpr 1: the eight `Switches` states as eight outputs of one
 frame (output 1 4× MSAA like the window); `solo` (output 1 alone, drawn
-direct) and, for the presets with an effect on,
+direct) and, for the loadable patches with an effect on,
 `solo-scene+hands+through`; party-trip once at 3840×2160 (2×, 1080p
 logical) under the 1080p cap; the other wirings (`in-scene/…`,
-`depth/…`, `history+hands/…`); the fixture presets, hands present, in
-the eight states (`FIXTURE_PRESETS`: `hands-lines` and plan 30's three
+`depth/…`, `history+hands/…`); the fixture loadable patches, hands present, in
+the eight states (`FIXTURE_LOADABLES`: `hands-lines` and plan 30's three
 placements, `palette-hands`, `palette-glass`, `acid-scene`, and plan
 28's two wire fixtures, `hands-glass-only` and `wired-outputs`); and a
 recorded cloud listed in a scratch config (`cloud/…`). A golden is the
 SHA-256 of the full-resolution RGBA frame, with a quarter-size PNG per
 distinct picture and the route each state reached (a wired output's
-route reads `none`, with a `"wired"` key naming its source): **596
-goldens, 140 distinct pictures** (556 before plan 30, which recorded 24
+route reads `none`, with a `"wired"` key naming its source): **789
+goldens, 195 distinct pictures** on 2026-11-06 (556 before plan 30, which recorded 24
 for its fixtures, and plan 28's N4 16 for its own; neither moved one
 recorded before it), recorded on `GL_RENDERER` "Apple
 M3 Max" (GL_VERSION "4.1 Metal - 90.5"). `tests/test_golden_frames.py`
@@ -1286,7 +1288,7 @@ compares every hash exactly there and skips with a note on any other
 renderer. The tool:
 
 ```bash
-uv run python tools/golden_frames.py                          # diff; "all 596 frames match their goldens (…)"
+uv run python tools/golden_frames.py                          # diff; "all <n> frames match their goldens (…)"
 uv run python tools/golden_frames.py --only party-trip,legacy6 # those presets only
 uv run python tools/golden_frames.py --record                 # re-record every golden
 uv run python tools/golden_frames.py --only hands-lines --record   # re-record those, keep the rest
@@ -1342,13 +1344,13 @@ Environment variables:
 Everything the app writes lives in two places that are one folder unless
 you say otherwise: the **home**, `$HYPERSPACE_HOME` (default
 `~/Hyperspace`), created on the first launch, holds this machine's own
-files; the **library** holds the presets and shows. The library is the
+files; the **library** holds the loadable patches and shows. The library is the
 home too, unless `[library] path` in `config.toml` points it at another
 folder — typically a cloud-synced one shared with someone (see "The
 shared library" below). The library has one tier (2026-10-28): nothing
 ships with the app, every file in it is yours. All formats are plain JSON with a `schema`
 string, and the library is watched: edit a file in an editor (or let a
-cloud client sync one in) while the app runs and the loaded preset or show
+cloud client sync one in) while the app runs and the loaded patch or show
 follows within a couple of seconds. In code, `Library.home` is the library
 root and `Library.machine` the home.
 
@@ -1356,9 +1358,9 @@ root and `Library.machine` the home.
 
 | Path | What it is | Format |
 |---|---|---|
-| `presets/<slug>.json`, `presets/<folder>/…/<slug>.json` | Your presets (§10), in folders you make in Finder if you like (plan 48): one in `presets/party/` is named `party/<its name>`. A hidden folder (`.cache`) is not read. | `hyperspace.preset/10` (every save, plan 44 D3; older ones are read and migrated on load) |
-| `projects/<slug>.hyp.json` | Your shows (the code calls them projects): the rig's session, the pads, `startup`. | `hyperspace.project/3` (plan 44 D3; a `/2` is read once, kept as `.bak-v2-look` beside it at its first write) |
-| `patches/<slug>.json` | Your patches (plan 40): a group of GRAPH nodes and its boundary, spawned into a preset, never loaded. Written only by **save as patch…** / **update patch**. | `hyperspace.patch/1` |
+| `presets/<slug>.json`, `presets/<folder>/…/<slug>.json` | Your loadable patches (§10), in folders you make in Finder if you like (plan 48): one in `presets/party/` is named `party/<its name>`. A hidden folder (`.cache`) is not read. | `hyperspace.preset/10` (every save, plan 44 D3; older ones are read and migrated on load) |
+| `projects/<slug>.hyp.json` | Your shows (the code calls them projects): the meta controller, the pads, `startup`. | `hyperspace.project/3` (plan 44 D3; a `/2` is read once, kept as `.bak-v2-look` beside it at its first write) |
+| `patches/<slug>.json` | Your patches (plan 40): a group of GRAPH nodes and its boundary, spawned into a loadable patch, never loaded. Written only by **save as patch…** / **update patch**. | `hyperspace.patch/1` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `hands/`, `view/` …). An `fx/` folder from before plan 40 is ignored: the fx module presets are retired (`library.RETIRED_MODULES`). | `hyperspace.preset/1` |
 | `trash/…` | Only in a library from before plan 48: the trash every Mac shared. Listed at the foot of the trash popup (marked old); a restore copies a file back and leaves it there; never written, never emptied by the app — clear it in Finder. | as the original |
 
@@ -1366,8 +1368,8 @@ root and `Library.machine` the home.
 
 | Path | What it is | Format |
 |---|---|---|
-| `config.toml` | The rig's settings (§5). Optional. | TOML |
-| `bindings.json` | The session's controls only: keys, gamepad, and the APC40's invariant and global-layer rows. Delete it to get `hyperspace/bindings.default.json` back. | `hyperspace.bindings/3` |
+| `config.toml` | The meta controller's settings (§5). Optional. | TOML |
+| `bindings.json` | The meta controller's controls only: keys, gamepad, and the APC40's invariant and global-layer rows. Delete it to get `hyperspace/bindings.default.json` back. | `hyperspace.bindings/3` |
 | `hands.json` | The hands' calibrated ranges and the interaction box (§12). | `hyperspace.hands/2` |
 | `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |
 | `ui.json` | This Mac's panel settings: the GRAPH page's side-pane width (`graph.side_w`, PR #266), written when its grip is let go. Safe to delete. | plain JSON |
@@ -1382,15 +1384,15 @@ root and `Library.machine` the home.
 A `midi_map.json` or `config.toml` left in the working directory from an
 old build is copied in on the first run; a `midi_map.json` in the home is
 read once, only when `bindings.json` does not exist yet. A `bindings/`
-folder of old routing presets is no longer read.
+folder of old routing loadable patches is no longer read.
 
 ### What the app may rewrite, move or delete
 
 | File | When | Kept first |
 |---|---|---|
 | `presets/<name>.json`, `patches/<name>.json`, `<group>/<name>.json` | A save over it, ⇧F1–F8, × on the PRESETS page (its list or its patches fold), a rename, **update patch**. Never a load or a spawn. | A copy in this Mac's `trash/<group>/[<folder>/]`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
-| `projects/<show>.hyp.json` | A pad change, save; a rename of a preset it names. Never a load. | The first write that puts a preset past slot 8: `<show>.hyp.json.bak-v2-bank8`; the first write over a show holding the stick spring's old ids: `.bak-v2-spring`; the first write over a show holding the eye (plan 43 C2: the presets' now): `.bak-v2-eye` — no copy, no write. A rename: a copy in `trash/projects/`. |
-| `bindings.json` | At launch, when a newer build adds factory rows (the bank pads, OVERDUB, the clip-stop row, Home, the undo keys) where the control or key is free. A row you changed is left as you had it. | `bindings.json.bak-v<schema>` (`.bak-v3` for today's files; a dated name if that exists, never over any `.bak-*`). No copy, no rewrite: the table runs from memory for the session and the next launch tries again. |
+| `projects/<show>.hyp.json` | A pad change, save; a rename of a loadable patch it names. Never a load. | The first write that puts a loadable patch past slot 8: `<show>.hyp.json.bak-v2-bank8`; the first write over a show holding the stick spring's old ids: `.bak-v2-spring`; the first write over a show holding the eye (plan 43 C2: the loadable patches' now): `.bak-v2-eye` — no copy, no write. A rename: a copy in `trash/projects/`. |
+| `bindings.json` | At launch, when a newer build adds factory rows (the bank pads, OVERDUB, the clip-stop row, Home, the undo keys) where the control or key is free. A row you changed is left as you had it. | `bindings.json.bak-v<schema>` (`.bak-v3` for today's files; a dated name if that exists, never over any `.bak-*`). No copy, no rewrite: the table runs from memory for the meta controller and the next launch tries again. |
 | `hands.json` | A calibration sweep or "reset ranges". A schema-1 file is read as it is and never rewritten at launch. | The first rewrite of a schema-1 file: `hands.json.bak-v1`. |
 | `<group>/…` | Restore from the trash. | Nothing to keep: a restore never writes over a file — a taken name restores as the next free name. |
 | this Mac's `trash/**` | **Empty trash.** | **Nothing. Emptying the trash is the one action in the app that keeps no copy.** It deletes exactly the files its popup lists as this Mac's, after a second click; the library's old trash is left. |
@@ -1398,7 +1400,7 @@ folder of old routing presets is no longer read.
 
 Every library write is atomic: the text goes to a dot-named temp file
 beside the target (never `*.json`) and replaces it in one step, so a cloud
-client never syncs a half-written preset.
+client never syncs a half-written loadable patch.
 
 ### The trash
 
@@ -1420,7 +1422,7 @@ empties it.
 `[library] path` (plan 25) points the library at a folder of its own —
 typically one in a cloud drive (Dropbox, iCloud Drive, Google Drive,
 Syncthing; the app does not care which) that two people share, so a
-preset either of them saves shows up on the other's machine. The machine
+loadable patch either of them saves shows up on the other's machine. The machine
 files above stay in the home. Unset or `""` is the home, as always.
 `tools/move_library.py DEST` copies an existing library into the folder
 once (never over a file) and prints the two lines to add;
@@ -1432,7 +1434,7 @@ once (never over a file) and prints the two lines to add;
   are off" in red, nothing lists, and every save, delete, rename or
   restore is refused with "shared library not found at … — not saved".
   Fix the folder or the path and restart.
-- **Conflict copies.** When both machines save the same preset while one
+- **Conflict copies.** When both machines save the same loadable patch while one
   is offline, the cloud client keeps both, e.g.
   `hi-frek (Dan's conflicted copy 2026-10-14).json` with the same name
   inside. The file whose stem is the name's slug keeps the name; the other
@@ -1451,22 +1453,22 @@ once (never over a file) and prints the two lines to add;
   "schema … is not a hyperspace.preset" (or "newer than this build")
   rather than load them and strip what it does not know on its next save.
   This build reads every older schema (`/2`–`/9`, a `/2` show) and
-  migrates it on load (an old preset takes the eye, the hands' and clouds'
+  migrates it on load (an old loadable patch takes the eye, the hands' and clouds'
   looks and the bus cuts its old show held). To move a whole library at
   once — **between shows, both Macs updated together, a backup first** —
-  `uv run python tools/migrate_library.py` (a dry run: the rig's show and
-  its eye, looks and cuts, the retaper, every preset's round-trip picture),
+  `uv run python tools/migrate_library.py` (a dry run: the meta controller's show and
+  its eye, looks and cuts, the retaper, every loadable patch's round-trip picture),
   then `--apply`: it backs the library up to
   `~/Hyperspace/library-backup-<stamp>/`, measures the unmarked route
   depths along the effect tapers first (wave 0 T1, register row 561),
-  writes every preset — every folder down — as `/10` with the show's eye,
+  writes every loadable patch — every folder down — as `/10` with the show's eye,
   looks and cuts (one pass: a library not yet at `/9` takes that step in
   the same load), and rewrites every show as `/3` (`.bak-v2-look` beside a
   `/2`, `.bak-v2-eye` beside a `/3` that still held the eye).
 
 | Schema | What it added | Read | Written |
 |---|---|---|---|
-| `hyperspace.preset/2` | the preset (plan 13) | migrated to `/7` on load | never |
+| `hyperspace.preset/2` | the loadable patch (plan 13) | migrated to `/7` on load | never |
 | `/3`, `/4` | the envelopes and the sequencer (plan 31); media (plan 32) | migrated to `/7` on load | never |
 | `/5`, `/6` | the free graph (plan 33); the wired frame in the new ids (plan 35) | migrated to `/7` on load | never |
 | `/7` | the frame that says everything (plan 36) | as it is, the eye filled in (`graphmigrate.nine`) | never |
@@ -1486,7 +1488,7 @@ on the SYSTEM page; a value of the wrong kind is its default with a note
 on stderr and the SYSTEM page — never a dead launch.
 
 ```toml
-[[devices]]             # the rig's devices (plan 27, devices.py), one table each, in poll order
+[[devices]]             # the meta controller's devices (plan 27, devices.py), one table each, in poll order
 role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
 kind = "midi"           # midi · gamepad · hands · bridge · midi-out · osc · cloud
 enabled = true          # false: listed as `off`, nothing opened, its adapter never imported
@@ -1500,13 +1502,14 @@ map = "midi_map.json"   # an old map, read once when bindings.json does not exis
 
 [output]                # output 1 and the control window
 overlay = false         # true allows overlay mode; false: always opaque, T does nothing
-monitor = -1            # screen index for the render window (and fullscreen); -1 = where it was last
-control_monitor = -1    # screen index for the control window; -1 = where it was last
+monitor = -1            # the render window's screen (and fullscreen's): a name ("MStar", "MStar #2") or an index; -1 = where it was last
+control_monitor = -1    # the control window's screen: a name or an index; -1 = where it was last
 fullscreen = false
 on_start = false        # launch straight into overlay (needs overlay = true)
 passthrough = true      # overlay: clicks go to the window underneath
 bg = 0.0                # overlay: ground, 0 see-through … 1 black
 alpha = 1.0             # overlay: whole-window opacity
+unplug_hold_s = 3.0     # how long a window waits for its display to come back (hotplug.py)
 
 [[output.screens]]      # optional; one table per render output, at most 4 (§14)
 name = "glass"
@@ -1590,7 +1593,7 @@ as built.
   every 2 s: a dropped file appears without a relaunch, a removed one is
   `missing`, a cloud placeholder is `fetching`. A file added from anywhere
   (**Add file…**) is `file:<absolute path>`; **Copy to shared** turns it
-  into `shared:`. A preset that names a `local:`, `file:` or live source
+  into `shared:`. A loadable patch that names a `local:`, `file:` or live source
   this Mac lacks loads, shows black for it, and the MEDIA page's banner
   lists it.
 - **Formats.** Stills: png, jpg, webp, bmp, tiff, heic. Video: mp4, mov,
@@ -1663,17 +1666,23 @@ as built.
   only), `cyndilib` (its macOS wheel carries `libndi`; check the NDI SDK's
   licence before shipping a build). A live kind whose library is missing
   says so in its status (`cyndilib not installed`) instead of raising.
-- **Both Macs on the newest build** (row 394): every preset saves
+- **Both Macs on the newest build** (row 394): every loadable patch saves
   `hyperspace.preset/6` — the free graph (plan 33), feedback (plan 34),
   the wired frame and its renamed node ids (plan 35) and the media section
   (plan 32) all in it — and an older build refuses it by the ladder's
-  words. See "Presets and the wired frame" in §2. A pre-plan-32 preset's
+  words. See "Presets and the wired frame" in §2. A pre-plan-32 loadable patch's
   `view.bmp_*` values are dropped on load with a note
   (`bitmap file <path> is no longer read: put it on a media channel`); put
   the picture on a channel instead. The APC40's knob 7 still moves the faces'
   media opacity.
 
 ### The device list
+
+**Since wave 5 CT1 the list lives in `<library>/devices.json`, shared by both Macs,
+and is set from the player board: a new controller waits in the tray until it's
+dragged to a player. On or off is each Mac's, in `<home>/devices.here.json`, by a chip on
+the same board. What follows is the seed, read once per Mac and then not at all; RT1
+retires it. `devicelist.py` has the rules.**
 
 Every input and output is a `[[devices]]` entry (plan 27). Without a
 list, nothing changes: the four device tables above — `[gamepad]`,
@@ -1688,8 +1697,8 @@ with a note ("config: [[devices]] is listed, so [midi] is ignored — its
 midi entry says"). The first entry of each of those kinds is folded back
 into its table (`cfg["midi"]`, `cfg["hands"]`, …), so code that still
 reads them reads the entry. `[dream]` stays a table: it is a worker, not
-a device. Today's rig as a list (this exact block equals the old tables,
-`tests/test_devices.py::test_todays_rig_as_a_devices_list_equals_the_old_tables`):
+a device. Today's meta controller as a list (this exact block equals the old tables,
+`tests/test_devices.py::test_todays_meta_as_a_devices_list_equals_the_old_tables`):
 
 ```toml
 [[devices]]
@@ -1790,10 +1799,14 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 ## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. It
-is GRAPH, always drawn, and a side pane of folding sections (plan 49,
-`ui_pane.SECTIONS`); a header shows a red dirty dot where its group has
-moved off its loaded preset. `ui.page` is the focus, by index into
-`ui.PAGES`: a section is brought up by it and scrolls in its own body
+is GRAPH, always drawn, and a side pane that shows one view at a time at
+its full height (plan 49, then 2026-11-07: `ui_pane.SECTIONS`): the
+selection, or one section. A row of chips over the body brings each up —
+the selection and the six sections no node leads to, then a **sections**
+chip whose menu holds the other eleven — and a chip shows a red dirty dot
+where its group has moved off its loaded patch. `ui.page` is the view, by
+index into `ui.PAGE_KEYS` (GRAPH's slot the selection), so ⌘[ / ⌘] step
+back and forward through every view, the selection's with the node it showed; a section scrolls in its own body
 (2372 × 900 is the control size, `app.CONTROL_SIZE`).
 The window is two 4:3 panes: the panel opens at `ui.panel_w`, leaving
 the desk diagram left of it a 4:3 slice of the height and the panel
@@ -1810,15 +1823,15 @@ the panel at 540 and the desk takes what is left.
 | CAMERA | Zoom (0.005–200×, log, so 1× sits at the knob's noon — far enough out to frame a field of thousands), yaw, pitch, pan, reset. |
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
 | FX | The effect stack (§2). |
-| AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
+| AUDIO | Listen to mic / Listen to video sound (the media mix, plan 45 V3; while on, a line under it says off air reacts, row 790) / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | Under its head, ANALYZER TUNING: the analyzer's scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
-| ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
+| ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the meta controller's MIDI rows read-only, the sinks, and a filter (§9). |
 | GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
 | LFO | The tap-tempo clock and the LFOs (four by default, up to 16: `+ lfo`, `×`; above four all but the open strip fold to a line; plan 31). |
 | SEQ | The step sequencer (plan 31, `ui_seq.py`): run · span · restart, length and swing; the 5 × 8 grid in the APC40's LED colours (the playhead's column in red, columns past the length dimmed); each lane's select, mute and envelope; a strip per envelope, one open, `+ env` for extras. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
-| PRESETS | The preset strip (◀ name ● ▶ · new · save · as…), every preset as a list filling the page (click loads; rename, ×), the trash at its foot, your patches under **patches** (rename and ×; a click spawns nothing — spawn is GRAPH's, plan 40), and one line for the show: its name ●, open ▾, save, as…, new (§10). |
-| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel (a spring's preset beside it: snappy, smooth, bouncy, wobbly, lazy or custom, each drawn as its curve in the list), its knobs — attack and release, or a spring's perceptual duration and bounce — and beside them the feel's shape (how it carries a jump, a picture of the knobs) over the feel working live: the stick that moved most lately, as read (dim) and after the feel (white), over the last few seconds (`ui_feel.py`). |
+| PRESETS | The preset strip (◀ name ● ▶ · new · save · as…), every loadable patch as a list filling the page (click loads; rename, ×), the trash at its foot, your patches under **patches** (rename and ×; a click spawns nothing — spawn is GRAPH's, plan 40), and one line for the show: its name ●, open ▾, save, as…, new (§10). |
+| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel (a spring's loadable patch beside it: snappy, smooth, bouncy, wobbly, lazy or custom, each drawn as its curve in the list), its knobs — attack and release, or a spring's perceptual duration and bounce — and beside them the feel's shape (how it carries a jump, a picture of the knobs) over the feel working live: the stick that moved most lately, as read (dim) and after the feel (white), over the last few seconds (`ui_feel.py`). |
 
 **The FACES page** (`ui_patterns.py`), top to bottom:
 
@@ -1840,7 +1853,7 @@ the panel at 540 and the desk takes what is left.
   it", "macro.4 sets its base", "(off)" — a link to ROUTING filtered to
   that input. An input nothing drives offers **+ SUB** … **+ AIR**
   (inputs 0–5), **+ LFO 1** (HUE) or **+ LFO 2** (SPREAD): a click adds a
-  push route at the factory depth into the loaded preset and stays on
+  push route at the factory depth into the loaded patch and stays on
   FACES; ⌘Z takes it back. Second: the slider (`base → effective` while
   driven, a white bar at the effective value) and a **1** chip back to
   neutral. On FLAT every row reads "FLAT reads no input", dimmed but
@@ -1857,7 +1870,7 @@ for the modulation and the render graph, rebuilt from the live table,
 registry, Router, device registry and render graph whenever one changes
 (`graphview.key`), its readings refreshed each frame. ROUTING and GRAPH
 show one table: GRAPH edits the routes and the modifiers, ROUTING keeps
-the desk, the macros, the session's rows and the sinks until it is
+the desk, the macros, the meta controller's rows and the sinks until it is
 retired (plan 28 N7, the owner's decision of 2026-10-20).
 
 - **Collapsed by default** (N7). Every node starts collapsed: its title
@@ -1869,7 +1882,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   on the head and the node's own **all ports / patched only** chip within;
   its port groups fold); **−** collapses it; the head's **expand all** /
   **collapse all** does every node. Which nodes are expanded is UI state
-  only (not in the preset or the show; every node collapsed at launch).
+  only (not in the loadable patch or the show; every node collapsed at launch).
 - **One wire a node pair** (N7). While either end is collapsed, every
   value and trigger cable from one node to another is one wire
   (`graphview.VBundle`, `graphview.wiring`) from stub to stub: coloured
@@ -1891,7 +1904,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   screen zoomed out, no wider than the area): **CONTROLLERS** (devices,
   keys, placeholders, a desk template), **AUDIO** (the analyzer and the
   band, tempo, master, audio and band-scene params; **OTHER** — the
-  preset, ui and desk params, the missing ones — under it in its
+  loadable patch, ui and desk params, the missing ones — under it in its
   column), **MODULATION** (LFOs, modifiers, macros), **GEOMETRY** (the
   shape, the hands, a cloud, the eye, and the scene, cover and hands'
   layer that draw them) and **SHADERS** (capture, history, effects,
@@ -1915,8 +1928,8 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
 - **Nodes**, left to right: each listed device by role — the APC40 as
   *apc40* (every control, the invariant ones first) and *apc40 (SHIFT)*
   (the global layer's, faint unless SHIFT is latched), the hands folded
-  as axes, pinches, grab, presence, dance; a device the rig lacks a grey
-  placeholder named by role, its cables waiting; a preset's desk template
+  as axes, pinches, grab, presence, dance; a device the meta controller lacks a grey
+  placeholder named by role, its cables waiting; a loadable patch's desk template
   one collapsed node (**+** opens it); the keys; the analyzer (a port per
   band); each LFO (its knobs as input ports); the modifiers; the macros
   (bus nodes); a node per param group no render node owns (`tempo`,
@@ -1947,7 +1960,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
 - **Editing the modulation.** Drag a source onto a `mod` stub: the route
   a Learn would make (push or position, `learn.row_for`), Replace / Keep
   if the param is taken. A desk control onto a `base` stub: a desk learn
-  (a preset-layer row); a pad button: the pad learn's session row. A
+  (a patch-layer row); a pad button: the pad learn's meta row. A
   macro onto `base` or a `depth` stub: a subscriber. A lane onto a
   modifier's `in`: its input. Drag from a patched input pin to another
   input pin to move a cable's end. Refused in words on the head: "a hand
@@ -1956,7 +1969,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   ROUTING", a SHIFT-node port into `base`. A free modifier let go over a
   cable is inserted into it (or a cable's right-click **insert ▸**).
 - **Editing the render graph**: an image cable between two ports is a
-  wire in the preset (§2), red with the file's words while it is wrong;
+  wire in the loadable patch (§2), red with the file's words while it is wrong;
   a geometry cable from a hands node into the scene or layer sets its
   `into`.
 - **Right-click**: on a `mod` stub, the param menu's Learn items (Learn
@@ -1972,15 +1985,15 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   several, disabled with why when it feeds nothing:
   `ui_graph.add_feedback_after`, `node_below`); on the canvas, the picker:
   **modifier ▸** a kind, **effect ▸** a file, **hands**, **composite**,
-  **macro ▸** an idle one. Delete takes the selection: a session row's
-  cable and the rig's nodes are refused in words; a default render cable
-  too. Every edit is one undo step and dirties the preset.
-- **Positions**: where a node is dropped is saved — in the preset's
+  **macro ▸** an idle one. Delete takes the selection: a meta row's
+  cable and the meta controller's nodes are refused in words; a default render cable
+  too. Every edit is one undo step and dirties the loadable patch.
+- **Positions**: where a node is dropped is saved — in the loadable patch's
   `layout` for the look's nodes (modifiers, macros, render nodes,
-  performance groups, the template), in the show's for the rig's
-  (devices, the analyzer, LFOs, outputs, session groups); an unplaced
+  patch groups, the template), in the show's for the meta controller's
+  (devices, the analyzer, LFOs, outputs, shared meta groups); an unplaced
   node takes its column by kind (a collapsed node its lines' height).
-  SYSTEM shows `graph page: X ms median (N nodes, M cables)` (1.27 ms on
+  SYSTEM shows `graph draw: X ms median (N nodes, M cables)` (1.27 ms on
   party-trip at 960 × 900, collapsed; 2.66 ms with every node expanded;
   N2's page drew 2.3–2.8 ms).
 - **The editor context** is held on the panel (a hot reload of
@@ -1999,13 +2012,13 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   media channel or the sequencer, each refused in words on the head
   ("scene is the frame's; left out"). A node in another group moves, said;
   a group never holds a group. The group is `group.<n>` (one past the
-  highest), named "group n", saved in the preset's `groups` (`/8`).
+  highest), named "group n", saved in the loadable patch's `groups` (`/8`).
 - **Folded** (the default, D4): one node at its members' top-left with no
   position of its own — its name, "group · n nodes · from <patch>", its
   status line (`devices.want_words` over the rows on its members:
   "waits for apc40 (lost): K1"), plan 37's thumbnail of its last picture
   outlet, then its pins: one typed pin per picture cable crossing in or
-  out, an out pin per member lane leaving, one row per member param a rig
+  out, an out pin per member lane leaving, one row per member param a meta controller
   row or crossing route lands on and per member modifier input read from
   outside (`VGroup.ports`, `ends`, `real`). Its internal cables are not
   drawn — **the one sanctioned exception to "no hidden edges"**; every
@@ -2013,21 +2026,21 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   ungrouped (`graphview.wiring(folded=)`). A drag onto a pin lands on the
   member's pin behind it (`real_pin`); a drop on the plain stub is refused
   in words. The head's "N hidden" counts folded members.
-- **Open** (`+`; `−` folds; both one undo step and a preset edit): the
+- **Open** (`+`; `−` folds; both one undo step and a loadable patch edit): the
   members at their own positions inside a tinted region drawn under them
   on the canvas's draw list, its title an editor node over the band so it
   can be dragged (the members follow live, `_place_groups`; one step on
   release). A member dropped wholly outside the region it had leaves the
   group; several dropped out together are one step; the last to leave
   removes the group. A member deleted while grouped leaves the list at the
-  next save (`Presets.live_groups`).
+  next save (`LoadedPatch.live_groups`).
 - **The group's menu**: open / fold, rename… (the side pane's name field),
   **save as patch…**, **update patch** (a group spawned from one), ungroup
   (`Edit.ungroup`: the list goes, every node and cable stays). Delete on a
   group node is refused in words.
 - **The side pane** of a selected group: the name, its provenance, the
   status, a chip per member (a click opens the group and selects it), the
-  boundary in words, the rows kept by the preset, and the chips **wire as
+  boundary in words, the rows kept by the loadable patch, and the chips **wire as
   saved** (a spawned group with open pins; free ports only, refused in
   words otherwise, one step), **save as patch…** and **update patch**,
   with the name / note form.
@@ -2038,28 +2051,28 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   the canvas's right-click picker has **spawn ▸** at the click. A line
   dragged out of the list lights the nearest picture cable it can splice
   into (one inlet and one outlet of the cable's type; the section's cables,
-  not the rig's bus), and letting go splices it in (`Edit.splice`). The
+  not the meta controller's bus), and letting go splices it in (`Edit.splice`). The
   list is re-read when the library's poll hands back a new listing.
 - **Spawn** (`ui_graph.spawn` → `patches.spawn` → `Edit.spawn`): fresh ids
   by the instance rule (`acid` → `acid.2`), `mod.<next>`, the banks' next
   voices (envelopes from 6), a free macro; the landing goes through the
   doors in load order as one undo step, folded, its host ports open pins
-  ("in · open (was scene)") for the session, the rename map on the hover
+  ("in · open (was scene)") for the meta controller, the rename map on the hover
   ("spawned as acid → acid.2"). With conflicts, **the sheet** (in
   `ui_routing.modal`, ahead of Replace / Keep): one row per conflict, each
   on the patch to start, **keep all existing** / **take all**, the patch's
   wants, **Spawn** / **Cancel**; `Learn.hold` while it is up. A row the
-  preset keeps lands in the group's `kept_by_host` and is said ("K1 kept
+  loadable patch keeps lands in the group's `kept_by_host` and is said ("K1 kept
   by the preset"). After the landing the head says what its rows wait for
   ("waits for leap (not in this rig): right hand y"). No file is written.
 - **Save as patch** (`Edit.save_patch` → `patches.lift` over
-  `Presets.parts()` → `Library.save_patch`): refused on a member a patch
+  `LoadedPatch.parts()` → `Library.save_patch`): refused on a member a patch
   may not hold or on another patch's name; writes
   `<library>/patches/<slug>.json` and nothing else; sets the group's
   `patch` (one step).
 - **The wants chip.** GRAPH's head and the PRESET strip show **N devices
-  missing** when a device the loaded preset's rows name is lost, off or
-  not in the rig, its hover one line per role ("apc40 (lost): K1, K2, …");
+  missing** when a device the loaded patch's rows name is lost, off or
+  not in the meta controller, its hover one line per role ("apc40 (lost): K1, K2, …");
   SYSTEM lists "wanted by the preset: leap — not in this rig; 3 rows wait".
   `devices.wants` is asked once a frame for all three
   (`ui_graph.panel_wants`). The footer says a device's coming and going
@@ -2067,7 +2080,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
 
 Every page that is a registry group carries a preset strip for its
 module presets — except FX since plan 40: the fx module presets are
-retired, so `ui_presets.strip` draws nothing for that group.
+retired, so `ui_loadable.strip` draws nothing for that group.
 
 **Widgets.** A fader fills red from its origin to its value. A param a
 performer (a hand, a band, an LFO) is driving shows its *setting* as the
@@ -2094,13 +2107,13 @@ window's bottom-left, lit exactly as the device is, from the table — so
 it works with no device. With the panel hidden (H, the APC40's DEVICE
 ON/OFF, or the chip in the desk's header) it fills the control window.
 Once it is big enough every lit control carries what it does (the
-param's label, a bank pad's preset name, a step's amount); bright ink is
+param's label, a bank pad's loadable patch name, a step's amount); bright ink is
 the layer that is up, grey an invariant control.
 
 **Click a desk control, then a param.** A left click on a control in the
 diagram picks it: it is framed on the desk and on its ROUTING line, and
 every page but ROUTING is dimmed and takes no input except a click on a
-param, which puts the control on that param in the loaded preset (one
+param, which puts the control on that param in the loaded patch (one
 undo step). A pick lets go by itself after 20 s with no click
 (`ui_desk.PICK_S`), or on a click on it, the desk's empty ground or the
 footer line. No click maps until the mouse has moved 12 px from the click
@@ -2108,12 +2121,12 @@ that picked. An invariant control, or any control while SHIFT is
 latched, is picked only to show its line; the header says why. With
 "Learn desk" armed, a click on the diagram completes the learn as a
 knob would. **While a mappable control is picked, the desk offers this
-preset's params** (plan 24) in a list on its empty ground under the
+loadable patch's params** (plan 24) in a list on its empty ground under the
 transport row (`ui_desk.OFFER`, which covers no control), ranked by
 `learn.ranked` in four tiers — routed (a route or macro moves it), moved
 (its base is off the group default), on (it belongs to an effect, the
 look-back, the faces, the points or the lines, and that is on), on the
-desk — never offering one the preset cannot show (`learn.cannot_show`).
+desk — never offering one the loadable patch cannot show (`learn.cannot_show`).
 A chip, "all params ▾" ("all ▾" on the small desk), opens the same list
 and a menu per group of the rest. A click on an item maps the control
 there through `Learn.map_picked`, the same road as a click on a page.
@@ -2135,10 +2148,10 @@ loop keys — Cmd+R, ↑, ↓, Esc, Q (`app.LOOP_KEYS`) — are the app's own.
 | M | microphone on / off |
 | K · 0 | play / pause the track · restart it |
 | R | reset the view and camera |
-| F1–F8 · ⇧F1–F8 | load pad 1–8 · save the live state as that pad's preset |
+| F1–F8 · ⇧F1–F8 | load pad 1–8 · save the live state as that pad's loadable patch |
 | B · ⇧B | tap tempo · the global LFO trigger |
 | Cmd+Z or Ctrl+Z · with ⇧ | undo · redo |
-| Home (fn ← on a laptop) | home: load the show's startup preset |
+| Home (fn ← on a laptop) | home: load the show's startup loadable patch |
 | H · / or ? | hide / show the panel · the cheat sheet |
 | T · G | overlay on / off (only with `[output] overlay = true`) · overlay click-through |
 | Cmd+R · Esc / Q | restart · quit |
@@ -2205,7 +2218,7 @@ reads nothing, so no route moves at launch. The line reads `connected`
 while a message came within `timeout` (5 s), `lost` otherwise; while
 lost the axes hold their values unless `hold = false`. **Learn phone**
 on a param's menu takes the next fader moved a quarter of its travel (a
-route) or button pressed (a session row). The socket (UDP, `0.0.0.0:9000`
+route) or button pressed (a meta row). The socket (UDP, `0.0.0.0:9000`
 by default) is read without a thread in the scene-setter slot, at most
 512 datagrams a frame; a datagram that is not OSC is counted on the line;
 a port another program holds is an `error:` line, retried until it
@@ -2224,12 +2237,33 @@ nothing while the stick is let go. A route on any dial lane takes its
 whole stick off the camera job. Two readings, per stick: **petal** (hard
 sectors, the whole push to the one pointed into, a sticky border) and
 **blend** (each lane a triangle about its own direction, so a sweep round
-the rim crossfades one route into the next). The gamepad entry's `dial_left` /
-`dial_right` (`[[devices]]`, or the old `[gamepad]` table) set where a launch starts (petal / blend); SYSTEM → gamepad
-draws both faces, names each sector's route, and has the two readings and
-**Swap dials** (`desk.pad.dial.*`, never saved). The **DIAL** factory
-preset fills both clocks. With a Learn armed for the pad, a stick that
-already has a dial route learns the sector it points into.
+the rim crossfades one route into the next).
+
+**The readings are the loadable patch's** (`pad.dial.left` / `pad.dial.right`, group
+`pad`, `params.PATCH_GROUPS`; rows 729–730): saved in its `values` and put back by its
+load, like its routes, since a reading changes what those routes do. **Swap dials**
+(`pad.dial.swap`) trades them, an edit undo takes back. Every `Deck`'s registry holds its
+own (`params.declare_dial`, in `build_registry`, so with a pad or without), and **a pad
+reads the `Deck` it drives**: `PadDevice.poll` hands it that deck's `Registry.dial_modes`
+through its pointer each frame. So a load on the deck off air changes nothing a pad on
+air reads, and a pad moved across reads the other deck's from the next frame.
+The first enabled gamepad entry's `dial_left` / `dial_right` (`[[devices]]`, or the old
+`[gamepad]` table) are the launch readings (`app._dial_launch`,
+`MetaRegistry.dial_launch`): where each deck starts, so the fresh values, so what a
+loadable patch that names none gets. Read at launch: an edit waits for the next one, and
+another pad's are said and not read.
+
+**Where they show**: the GRAPH page's pad node. Selected, its details draw the pad's
+picture, then both sticks' faces, each sector filled to how far it reads and named by its
+route's param, and the two readings and the swap: the panel's deck's. A pad on the other
+deck moves no face and the details say so (`Panel.pad_reads_here`). Under `DIAL_WIDE`, the
+pane's width, a face has its legend under it. On the pad's picture (there and in the
+floating pad window) a stick a route reads as a dial shows its eight sectors in its well,
+and its X and Y read "Left dial · petal" in grey instead of the orbit they no longer
+drive. SYSTEM keeps the sticks' feel, the meta controller's. The DIAL loadable patch
+(`tests/corpus/presets/dial.json`; copy it into your library's `presets/`) fills both
+clocks. With a Learn armed for the pad, a stick that already has a dial route learns the
+sector it points into.
 
 ## 8. The APC40
 
@@ -2248,11 +2282,11 @@ rec-arm; column 9 scene launch 1–5, STOP ALL, MASTER select), B1–B22 the
 other buttons, ⇧ SHIFT. Akai's name is in each hover.
 
 **Two layers under a latched SHIFT.** SHIFT's LED is lit while the
-**global** layer (the session's) is up; otherwise the **preset** layer
-(the loaded preset's own desk) is up. A control the up layer does not map
+**global** layer (the meta controller's) is up; otherwise the **patch** layer
+(the loaded patch's own desk) is up. A control the up layer does not map
 is dark and does nothing. **Invariant** controls mean the same on both
 layers; none of them can be learned, mapped by a click or unbound, a
-preset's desk row on one is dropped at load with a note, and each keeps
+loadable patch's desk row on one is dropped at load with a note, and each keeps
 doing its job while a learn is armed.
 
 | Control | Layer | Does |
@@ -2264,7 +2298,7 @@ doing its job while a learn is armed.
 | Clip stop 8 (G6·8) | invariant | **SAVE**: held, a bank pad's tap saves into its slot (lit while held) |
 | Clip stops 1–7 (G6·1–7) | free | nothing by default (dark); Learn them for toggles |
 | Scene launch 1–4 (G1·9–G4·9) | invariant | points, lines, faces, rotate (each LED the live state) |
-| OVERDUB | invariant | **home** (lit while the show names a startup preset) |
+| OVERDUB | invariant | **home** (lit while the show names a startup loadable patch) |
 | QUANT | invariant | next filled pad |
 | SHIFT | invariant | latch the global layer |
 | TAP TEMPO · NUDGE + / − · METRONOME | invariant | tap · shift the downbeat by a hundredth of a beat · the global LFO trigger (blinks on the beat) |
@@ -2279,83 +2313,83 @@ doing its job while a learn is armed.
 | K1–K5 | global | hand steadiness, response, catch, the selected axis's return, BPM (K6–K8 dark) |
 | S1–S6 · S7 · S8 | global | band 1–6 post-drive · master dynamics · master trim (`apc40.SHIFT_FADERS`) |
 | Clip row 2 · row 3, columns 1–3 | global | analyzer scenes 1–8 · 9–11 |
-| K1–K8 | preset (factory default) | brightness, speed, instances, pattern mix, field amp, field rate, bitmap opacity, zoom |
-| D1–D4 | preset (factory default) | 4D depth, camera yaw, camera pitch, pattern (D5–D8 dark) |
-| S1–S8 | preset | the preset's own fader rows; **none by default**, so dark unless the preset binds one |
-| C (cue knob) | preset | step the shape, one click a shape |
-| Activator (G8), columns 1–6 | preset | toggle planes ZW, XW, YW, XY, XZ, YZ |
-| Row 3, columns 5–8 | preset | field motion STILL, ORBIT, WAVE, RIPPLE |
-| Scene launch 5 (G5·9) | preset | reset view |
-| ▲ ▼ | preset | brightness up / down |
+| K1–K8 | loadable patch (factory default) | brightness, speed, instances, pattern mix, field amp, field rate, bitmap opacity, zoom |
+| D1–D4 | loadable patch (factory default) | 4D depth, camera yaw, camera pitch, pattern (D5–D8 dark) |
+| S1–S8 | loadable patch | the loadable patch's own fader rows; **none by default**, so dark unless the loadable patch binds one |
+| C (cue knob) | loadable patch | step the shape, one click a shape |
+| Activator (G8), columns 1–6 | loadable patch | toggle planes ZW, XW, YW, XY, XZ, YZ |
+| Row 3, columns 5–8 | loadable patch | field motion STILL, ORBIT, WAVE, RIPPLE |
+| Scene launch 5 (G5·9) | loadable patch | reset view |
+| ▲ ▼ | loadable patch | brightness up / down |
 
-The preset rows above are what a fresh preset starts with
-(`apc40.SCENE` on D1–D4); a factory or user preset with knobs of its own
-replaces all eight device knobs, and a preset with an empty desk has
-every preset-layer control dark. D4 steps through the seventeen
+The patch rows above are what a fresh loadable patch starts with
+(`apc40.SCENE` on D1–D4); a factory or user loadable patch with knobs of its own
+replaces all eight device knobs, and a loadable patch with an empty desk has
+every patch-layer control dark. D4 steps through the seventeen
 patterns, which show only where faces are drawn. **The track faders are
-the preset's** (plan 24): a preset binds them in its desk like the knobs
-(`preset.track_fader(k, target)`), nothing is inherited, and a preset
-that binds none leaves them dark. A preset file from before plan 24 may
+the loadable patch's** (plan 24): a loadable patch binds them in its desk like the knobs
+(`loadable.track_fader(k, target)`), nothing is inherited, and a loadable patch
+that binds none leaves them dark. A loadable patch file from before plan 24 may
 still carry four scene-launch toggle rows; a load drops exactly those
-four without a note (`routing.TOGGLE_DESK_ROWS`), and any other preset
+four without a note (`routing.TOGGLE_DESK_ROWS`), and any other loadable patch
 row on an invariant control with the usual note.
 
 **Desk templates** (plan 24). A template is a named binding set,
 `<library>/desk/<slug>.json` (`{"schema": "hyperspace.desk/1", "name",
 "note"?, "desk": [rows]}`), read by `Library.desk_template`; they sit
-in the library, so a shared `[library] path` shares them. A preset that
+in the library, so a shared `[library] path` shares them. A loadable patch that
 says `"desk_template": "<name>"` keeps only its overrides in `"desk"`: a
 row replaces every template row on the same control, and `{"source": …,
 "dark": true}` leaves a template control unmapped. A load expands it
 (`preset.expand_desk`: the template's rows not overridden, then the
 overrides); a save writes the name and the rows that differ from the
 template as the load read it (`compact_desk`), so a template edited on
-disk reaches every preset that uses it at its next load and never turns
+disk reaches every loadable patch that uses it at its next load and never turns
 into overrides. A missing template is a note and the overrides alone. A
-preset with no `desk_template` loads and saves as before. No UI writes a
+loadable patch with no `desk_template` loads and saves as before. No UI writes a
 template yet; `preset.template_doc` and a text editor do.
 
 **The coverage report.** `uv run python tools/desk_coverage.py` loads
-every preset in a scratch home and marks each of the preset layer's 38
-controls (D1–D8, K1–K8, S1–S8 and the factory map's other preset-layer
+every loadable patch in a scratch home and marks each of the patch layer's 38
+controls (D1–D8, K1–K8, S1–S8 and the factory map's other patch-layer
 controls) **mapped**, **dark** or **dead** — a row whose param the
-preset cannot show (`learn.cannot_show`: a pattern knob with the faces
+loadable patch cannot show (`learn.cannot_show`: a pattern knob with the faces
 off, a bitmap knob with no bitmap, an effect's knob with it off, …). It
 writes [`plans/assets/24-party-fixes/desk-coverage.md`](plans/assets/24-party-fixes/desk-coverage.md);
 `--check` says whether that file is stale, `--stdout` prints it, and
-`--library DIR` prints a report that adds that library's presets and
+`--library DIR` prints a report that adds that library's loadable patches and
 templates (copied, never written; the committed file is untouched). The
 owner's bar for the authoring pass is at most four dark or dead per
-preset; today no preset meets it.
+loadable patch; today no loadable patch meets it.
 
-**Bank pad lights** (rows 1, 4, 5): green while its preset is the loaded
-one, amber while its slot holds another preset (velocity 5, Akai's
+**Bank pad lights** (rows 1, 4, 5): green while its loadable patch is the loaded
+one, amber while its slot holds another loadable patch (velocity 5, Akai's
 "yellow"; `apc40.filled_of`), dark when empty. The diagram draws amber at
-half strength with the preset's name.
+half strength with the loadable patch's name.
 
 **Save on the desk: the two-handed save** (plan 24). Hold **SAVE**
 (track 8's clip stop, `apc40.SAVE`) and tap a bank pad (clip rows 1, 4
 and 5), on either layer: the live state is saved as a **new** user
-preset named from the loaded one with the next free number (moo → moo
+loadable patch named from the loaded one with the next free number (moo → moo
 2; with nothing loaded, PRESET 1; it never overwrites a file), it
-becomes the loaded preset and goes into
+becomes the loaded patch and goes into
 *that* pad's slot, and the show is written at once ("saved TRIP 2 →
 F6", or "→ slot 10"); the pad blinks for 1.5 s (`midi.BLINK_S`). **A
-filled pad takes the new preset too**: the slot points at it, and the
-preset it named keeps its file and stays in the list, unpadded ("… (TRIP
+filled pad takes the new loadable patch too**: the slot points at it, and the
+loadable patch it named keeps its file and stays in the list, unpadded ("… (TRIP
 2 is still in the preset list)"). Nothing is overwritten and nothing
 goes to the trash (`library.Project.save_into`). The tap never loads the
-pad; SAVE alone does nothing. SAVE is a `momentary` row on the session
+pad; SAVE alone does nothing. SAVE is a `momentary` row on the meta controller
 param `desk.save`, lit while held: it is never latched or learned, a
 reconnect lets go of it, and where the owner's `bindings.json` already
 holds clip stop 8 it is not added and every launch says so. **Holding an
 empty bank pad** for 0.6 s (`midi.HOLD_S`) still saves into it the same
 way (`Project.save_empty`); holding a filled pad just loads it. To free
 a pad, right-click its slot on the PRESETS page → **free this pad
-(keeps the preset)**. (Until 2026-10-09 the clip-stop row was a SAVE AS
+(keeps the loadable patch)**. (Until 2026-10-09 the clip-stop row was a SAVE AS
 bar into the next empty slot.)
 
-**Every load relights the whole desk** (plan 24). On a preset load, and
+**Every load relights the whole desk** (plan 24). On a loadable patch load, and
 at power-up, every control of the layout that no active row draws is
 sent dark (`MidiIO._dark_desk`), not only those a row once named, so a
 light another program left on goes out.
@@ -2371,18 +2405,18 @@ and fader moves are not. It is in memory only.
 
 **Knobs and faders.** The track and device knobs are endless encoders:
 the app sets their position with the ring's CC, so a knob continues from
-its ring after a layer switch or a preset load. The faders are real pots
+its ring after a layer switch or a loadable patch load. The faders are real pots
 with **soft pickup**: after a change they do nothing until moved through
-the param's value. **A load lets go of every fader the new preset
-binds**, so each picks up from the new preset; a fresh row starts from
+the param's value. **A load lets go of every fader the new loadable patch
+binds**, so each picks up from the new loadable patch; a fresh row starts from
 where its fader physically is (the last value it sent), so a fader
-already on the value catches on its first move. The session's faders —
+already on the value catches on its first move. The meta controller's faders —
 the crossfader, MASTER and the band strip under SHIFT — keep their catch
 through a load unless the load moved their param, so they carry on from
 where they are. **On a layer switch** each layered fader starts again
 from where it physically is and is caught only when its param already
 sits there, so a fader moved on one layer never jumps the other layer's
-param (the preset's on S1–S8, the band's under SHIFT). A fader not moved
+param (the loadable patch's on S1–S8, the band's under SHIFT). A fader not moved
 since launch or a reconnect has no position, and catches only on a move
 that lands on the value. A fader moved while its row is disabled, or
 while an armed learn takes its messages, picks up again from where it is
@@ -2398,14 +2432,13 @@ each new value over that long instead of landing a detent at a time, and
 comes to rest on the same detent it would have. Not smoothed: the cue
 knob and every other relative row, buttons, and an `abs` row on an enum,
 toggle, trigger or whole-number param. A value set meanwhile by anything
-else stands and the glide stops; a preset load ends every glide but a
-session param's; off, an unplug or a quit lands every value at once. The
-setting is saved with the show, never with a preset, and is on no knob.
+else stands and the glide stops; a loadable patch load ends every glide but a
+shared meta param's; off, an unplug or a quit lands every value at once. The
+setting is saved with the show, never with a loadable patch, and is on no knob.
 
-**Reconnect.** With no desk connected the app looks for it every 2 s
-five times, then every 10 s (`midi.RECONNECT_S`, `RECONNECT_FAST`,
-`RECONNECT_SLOW_S`); a desk that vanishes is looked for at the fast pace
-again. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
+**Reconnect.** With no desk connected the app looks for it every 2 s,
+all night (`midi.RECONNECT_S`, row 791), so a desk back from any absence
+is found as fast. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
 comes, it gets its power-up and every light. `enabled = false` on its
 entry (or `[midi] enabled = false` in the old form) stops all of it.
 
@@ -2417,7 +2450,7 @@ no layout, so its line counts 0 sources; the entry must name a `port`).
 `bindings.json`'s top-level `"profile"` only says which profile its
 unqualified rows were written for; the entry's profile is the desk's.
 **One desk owns the unqualified rows** — every row in `bindings.json`
-and in every preset before plan 27 (`cc:0:48`): the first MIDI entry
+and in every loadable patch before plan 27 (`cc:0:48`): the first MIDI entry
 whose profile is `bindings.json`'s (`apc40`), else the first MIDI entry
 listed (`DeviceRegistry.midi_roles`). **Any other desk's rows carry its
 role** after `@` on the kind — `cc@launch:0:21`, `note@launch:0:40`,
@@ -2425,9 +2458,9 @@ role** after `@` on the kind — `cc@launch:0:21`, `note@launch:0:40`,
 for you; ROUTING and the footer say "MIDI CC 21 ch1 on launch". A knob
 on one desk never moves another desk's row. **SHIFT** (`desk.shift`) is
 the owning desk's latch; every other desk has a layer of its own
-(`Bindings.layer_of(role)`), the preset layer, and no SHIFT — so with
+(`Bindings.layer_of(role)`), the patch layer, and no SHIFT — so with
 the APC40 on SHIFT a second desk's rows still act and a learn on it
-still lands; a preset load drops every desk to the preset layer; a
+still lands; a loadable patch load drops every desk to the patch layer; a
 layer switch re-arms only that desk's faders. A desk learn replaces the
 param's knob on the same desk only (one knob per param per desk). The
 on-screen desk, the desk log and the panel's knob hints are the first
@@ -2447,46 +2480,46 @@ routes (`push` / `position`), one performer per param, the referee — is
 how it is operated.
 
 **The right-click menu** opens on a param's widget, on a row's label and
-on every analyzer meter. It lists what is bound — the preset's desk rows
+on every analyzer meter. It lists what is bound — the loadable patch's desk rows
 ("K2 (track knob 2)"), each route in words ("R height pushes +0.45"), the
-session's rows dim — then:
+meta controller's rows dim — then:
 
 - **Learn desk** — wherever a desk row can go, device plugged in or not.
   Completed only by the desk: a knob, a button, a fader, or a click on
   the diagram. The invariant controls keep working meanwhile (a fader
-  moves, a bank pad loads — the learn then lands in the preset just
+  moves, a bank pad loads — the learn then lands in the loadable patch just
   loaded). With SHIFT latched any other control is refused in words
   and the learn stays armed: unlatch and the same learn lands.
 - **Learn hand ▸ left / right** — only with a tracker, on a param a hand
   can drive (not a setting such as `ghost.mirror`), for the sides the
-  rig's axes have. Completed only by an axis of that hand; the other
+  meta controller's axes have. Completed only by an axis of that hand; the other
   hand and the desk do their own jobs meanwhile.
 - **Learn pad** — while a pad is connected, wherever Learn desk is: a
-  button or the d-pad makes a session row in `bindings.json` (written
-  at once), a stick or a trigger a route in the preset (§7).
+  button or the d-pad makes a meta row in `bindings.json` (written
+  at once), a stick or a trigger a route in the loadable patch (§7).
 - **Learn <role>** — on a modulatable param, for any other listed device
   that feeds (plan 27; an OSC phone: "Learn phone"): completed only by
   that device — an OSC fader moved a quarter of its travel lands a
-  route, a button a session row. What the menu offers is "desk" plus the
+  route, a button a meta row. What the menu offers is "desk" plus the
   devices' `wants` (`Learn.wants`).
 - **Learn sink ▸** `<role>:<channel>` — on any param but a trigger, for
-  every sink port the rig lists (`bridge:3 · pitch ch4`): sends the
+  every sink port the meta controller lists (`bridge:3 · pitch ch4`): sends the
   param's effective value out on that port (§13). It lands at once, as a
-  session row in `bindings.json` — no question, no undo step, no preset
+  meta row in `bindings.json` — no question, no undo step, no loadable patch
   dirt — and takes the port from whatever sent on it before.
 - **Cancel learn** while this param is armed.
 - **Unbind** — shown only when there is something to remove; a submenu
   ("desk — K2", "route — R height, LFO 1", "both") when there are both.
-  Removes the preset's desk rows and every route on the param, as one
-  undo step; never a session row.
+  Removes the loadable patch's desk rows and every route on the param, as one
+  undo step; never a meta row.
 - The hand rows' "Gate: … ▸" and "Route a lane here…".
 
-**A learn writes into the loaded preset** — never `bindings.json` — and
-lights its dirty dot until a save. A desk learn makes a preset-layer row;
+**A learn writes into the loaded patch** — never `bindings.json` — and
+lights its dirty dot until a save. A desk learn makes a patch-layer row;
 the line says what let go ("learned view.bright ← D3 (device knob 3)
 (into the preset); K1 let go"). A hand learn makes a route naming the
-axis by name (`hand:right.pitch`), so a rig that reorders `[hands] dofs`
-keeps its presets; a name the rig lacks is dormant. What it lands as:
+axis by name (`hand:right.pitch`), so a meta controller that reorders `[hands] dofs`
+keeps its loadable patches; a name the meta controller lacks is dormant. What it lands as:
 a tilt, or a sideways or in/out move on an axis whose "Centred" is on,
 **pushes** by `hands.learn_depth` (default 0.25, 0.05–1, HANDS page,
 saved with the show) — it adds to the setting and is nothing while the
@@ -2497,13 +2530,13 @@ learn takes that axis's other routes with it (the line says "moved
 from …"; one ⌘Z puts them back). An armed learn never times out.
 
 **The ROUTING page** is one page over the loaded preset: its head (the
-preset, its dirty dot, save / as…, which desk layer is up), then a
+loadable patch, its dirty dot, save / as…, which desk layer is up), then a
 pointer line, "routes and modifiers: the GRAPH page" (a click opens
 GRAPH: since plan 28 N7 the routes and the MODIFIERS strip are drawn and
 edited there, ROUTING's own `_row` in GRAPH's side pane; their functions
 stay in `ui_routing`; while the filter holds text its red count takes the
 pointer's place), the desk with its dark controls, the macros and
-their subscribers, the session's MIDI rows read-only, and the **sinks**
+their subscribers, the meta controller's MIDI rows read-only, and the **sinks**
 (plan 27: each sink row with a checkbox and a ×, both writing
 `bindings.json`). "Route a lane here…" adds its route and opens GRAPH. A
 route's source list (its row's combo) is the analyzer's lanes, LFO 1–4,
@@ -2511,10 +2544,10 @@ then each listed device's sources in the `[[devices]]` order
 (`Router.schemes()`; a scheme a route names is offered too). **The
 filter** (on the pointer line) keeps only the lines that contain every
 typed word, matched anywhere — a desk line's glyph, Akai's name and
-target; a macro's id, label and subscribers; a session or sink row. It is UI state:
-not saved, no undo step, empty at launch, left alone by a preset load;
+target; a macro's id, label and subscribers; a meta controller or sink row. It is UI state:
+not saved, no undo step, empty at launch, left alone by a loadable patch load;
 its × and a click on a desk control clear it. A route's `scale` can only
-be a session param, which it only reads. No route lands on a session
+be a shared meta param, which it only reads. No route lands on a meta controller
 param at all (register row 743): the target combo does not offer one,
 and the param's menu says why.
 
@@ -2533,7 +2566,7 @@ checkbox still on) and in the file, and the rest runs. Put a `delay`
 modifier in the loop and it runs, one frame late.
 
 **Modifiers** (plan 28 N1, `modifiers.py`): value nodes between a source
-and a route, saved in the preset beside its routes (never in
+and a route, saved in the loadable patch beside its routes (never in
 `bindings.json`). Each publishes a lane `mod:<n>` that a route sources
 like any other.
 
@@ -2546,9 +2579,9 @@ like any other.
 | `threshold` | 1 | `on` 0.6, `off` 0.4, `hold` 0…2 s (0.1): 1 on the rising edge for the hold | trigger (also a gate) |
 | `delay` | 1 | — | last frame's input |
 
-Their params `mod.<n>.<p>` are performance params (the `mod` group),
+Their params `mod.<n>.<p>` are patch params (the `mod` group),
 routable and modulatable. A modifier whose input is not live (a hand out
-of the box, a device the rig lacks, no input picked) is **dormant**: its
+of the box, a device the meta controller lacks, no input picked) is **dormant**: its
 lane reads absent, so a route on it lets go and the base returns.
 Removing one leaves the routes on its lane, dormant; ids are one past
 the highest (`mod.1`, `mod.2` …). (A desk template carried them once:
@@ -2570,47 +2603,47 @@ On GRAPH (§6): the picker's smooth and combine, cables into their
 inputs (or onto their collapsed stubs, picking the input), the combine's
 how in its side pane, a cable from it onto acid's `fx.acid.mix` mod.
 
-## 10. Presets, shows and the bank
+## 10. Loadable patches, shows and the bank
 
-A **preset** (`presets/<slug>.json`) is one whole performance moment —
-a complete look (plan 43): the performance groups' values (`view rot
-camera eye pattern dream fx media backdrop … lfo env seq macro mod`,
-`params.PERFORMANCE_GROUPS`; the eye since C2), the spin's pose (`pose`,
+A **loadable patch** (`presets/<slug>.json`) is one whole performance moment —
+a complete look (plan 43): the patch groups' values (`view rot
+camera eye pattern dream fx media backdrop … lfo env seq macro pad mod`,
+`params.PATCH_GROUPS`; the eye since C2), the spin's pose (`pose`,
 right after `values`: the six `rot.phase.*`, `view.body` folded in — a
 load sets the turn there; a file without one leaves it spinning), the
 performer routes, the
-desk's preset layer, the macros and the module labels — and, when it has
+desk's patch layer, the macros and the module labels — and, when it has
 them, a `graph` section (§2: its nodes and, since plan 28, its `wires`),
 its `modifiers` (after `routes`: one entry each, `{"id": "mod.1",
 "kind": "smooth", "in": ["hand:right.energy"], "attack": 0.05,
 "release": 0.6}`, its params at their bases; no `mod.*` id in `values`)
 and its `layout` (last: `{"<node id>": [x, y]}` for the GRAPH page's
-nodes the preset holds, whole canvas units, sorted, written only for a
+nodes the loadable patch holds, whole canvas units, sorted, written only for a
 node dropped by hand). None of the three is written when empty, so a
-preset without them saves byte for byte as before, and none bumps the
-schema. The show keeps the rig's nodes' positions in its own `layout`.
-Since plan 40 a preset may end with `groups` (after `layout`, one group a
+loadable patch without them saves byte for byte as before, and none bumps the
+schema. The show keeps the meta controller's nodes' positions in its own `layout`.
+Since plan 40 a loadable patch may end with `groups` (after `layout`, one group a
 line: `{"id": "group.1", "name": "acid wash", "patch": "acid-wash",
 "nodes": ["render:acid.2", "mod.3"], "open": false}`, and a
-`kept_by_host` list when a spawn's sheet kept rows for the preset); it is
+`kept_by_host` list when a spawn's sheet kept rows for the loadable patch); it is
 written only when a group exists (§6, "Groups and patches"). Since plan
-44 D3 a preset may hold `bus` (`{"cut": [{"from", "to"}, …]}`: the rig's
+44 D3 a loadable patch may hold `bus` (`{"cut": [{"from", "to"}, …]}`: the meta controller's
 cables from All outputs into a window, or a cloud's into the scene, that
-this preset cuts — none is every cable standing), written only when
+this loadable patch cuts — none is every cable standing), written only when
 something is cut, in the dirty dot and the load's undo step. Every save
 is `hyperspace.preset/10` (§4).
 A build from before plans 28 and 30 ignores `modifiers` and `layout` with no
 note and **drops them when it saves**, and opens a `graph` with wires or
 placements as the default graph with a note: keep both Macs of a shared
 library on the same build (register row 277). **A load replaces all of
-it** — every performance param lands from the file or the value its
+it** — every patch param lands from the file or the value its
 object was built with (plan 44 D3: never a group's `default.json`), every
-route and preset-layer row is replaced, the bus cuts are the file's — and
-never touches a session param (`tempo hands band master scene audio
+route and patch-layer row is replaced, the bus cuts are the file's — and
+never touches a shared meta param (`tempo hands band master scene audio
 output overlay ui desk`, and `ghost.mirror`; the eye left this list in
 plan 43 C2, the hands' and clouds' looks in plan 44 D3): a tapped BPM, the
-hands' feel and the mirror survive any preset; the ghost hands' look is
-the preset's. Anything a file names that it may not (a session id, an unknown
+hands' feel and the mirror survive any loadable patch; the ghost hands' look is
+the loadable patch's. Anything a file names that it may not (a meta controller id, an unknown
 id, a route onto a param that is not modulatable, a desk row on an
 invariant control, a route onto a modifier the file does not hold, a
 `mod.*` id in `values`, an unreadable `layout` entry) is dropped with a
@@ -2618,43 +2651,43 @@ note and the file is left as it is.
 
 **One tier** (2026-10-28, the owner's: "no factory presets, nothing
 hidden, nothing dim, nothing I cannot delete"). Nothing ships with the
-app. Every preset in the library is yours — listed, loaded, renamed and
+app. Every loadable patch in the library is yours — listed, loaded, renamed and
 trashed alike — and a fresh library is empty: the app starts on a blank
-preset (`new`) in an unsaved show. The twenty-five presets the build
+loadable patch (`new`) in an unsaved show. The twenty-five loadable patches the build
 used to ship (TUMBLE, FACES, BIG BLUE WAVE, legacy6, seq-demo…), their
 generator and the `party` / `house` shows left the app that day; the
 files live on only as the golden frames' corpus (`tests/corpus/`, §16)
 and nothing in the app reads them. The eleven band **scenes** are code
-data (`hyperspace/scenes/band/`, §13), not presets.
+data (`hyperspace/scenes/band/`, §13), not loadable patches.
 
 **Folders** (plan 48, stage 1). Make folders under `presets/` in Finder
-and move presets into them; the app lists every folder down (hidden ones
-skipped) and names a preset in one by its folder: `presets/party/trip.json`,
+and move loadable patches into them; the app lists every folder down (hidden ones
+skipped) and names a loadable patch in one by its folder: `presets/party/trip.json`,
 whose own `name` is `TRIP`, is `party/TRIP` in the list, on the strip,
-on a pad and in a show's bank (a top-level preset's name is bare, as
+on a pad and in a show's bank (a top-level loadable patch's name is bare, as
 before, so every older show reads unchanged). The file keeps only its
 own name; the folder is where it is. **save** writes back to the file
-the preset came from; **as…** writes the name you type, into its folder
-if it has one (`party/NEW`, made if need be); a new preset grown from
+the loadable patch came from; **as…** writes the name you type, into its folder
+if it has one (`party/NEW`, made if need be); a new loadable patch grown from
 the loaded one — the two-handed save, `preset.save_new`, an empty pad's
 hold — lands beside it, in its folder; **rename** keeps the folder (its
-field holds the name alone). Moving a preset between folders, and making
+field holds the name alone). Moving a loadable patch between folders, and making
 or renaming a folder, is Finder's until stage 2; a folder left empty
 stays.
 
 A **show** (`projects/<slug>.hyp.json`; the code says *project*) is the
-room the presets play in: the session's values, the module presets of
-the session groups (the band layout and scene), the **pads** (the bank,
-below) and a `startup` preset (`hyperspace.project/3`, plan 44 D3: the bus
-cuts are each preset's now, §2; an old show's are handed to old presets). A launch opens the show opened last (`last_show`) if
+room the loadable patches play in: the meta controller's values, the module presets of
+the shared meta groups (the band layout and scene), the **pads** (the bank,
+below) and a `startup` loadable patch (`hyperspace.project/3`, plan 44 D3: the bus
+cuts are each loadable patch's now, §2; an old show's are handed to old loadable patches). A launch opens the show opened last (`last_show`) if
 its file is there; otherwise, and on **new**, an unsaved show called
 `untitled` with every pad empty, which **save** writes into the library.
 
-**The pads** (the bank: twenty-four preset names, `library.SLOTS`) are
+**The pads** (the bank: twenty-four loadable patch names, `library.SLOTS`) are
 the desk's. The APC40's clip row 1 loads pads 1–8 (F1–F8 too), clip rows
-4–5 pads 9–24. ⇧F1–F8 save the live state as that pad's preset
+4–5 pads 9–24. ⇧F1–F8 save the live state as that pad's loadable patch
 (`PRESET <n>` for an empty one); on the desk, hold **SAVE** and tap a pad,
-or hold an empty pad, to save a **new** preset into it (§8). QUANT and
+or hold an empty pad, to save a **new** loadable patch into it (§8). QUANT and
 the gamepad's B step to the next **filled** pad; a learned step or knob
 on `preset.select` also skips empty ones. An empty pad or a name with no
 file loads nothing and says so ("slot 13: an empty slot"). A show file
@@ -2664,19 +2697,19 @@ the show the moment it happens and is not an undo step. Nothing on the
 panel assigns a pad: the page shows no pads (below).
 
 **Home** — the Home key or the APC40's OVERDUB loads the show's `startup`
-preset, as a load like any other (one undo step, "home → moo"). A show
+loadable patch, as a load like any other (one undo step, "home → moo"). A show
 that names none loads nothing and says so ("home: this show names no
 startup preset"). Nothing on the panel sets `startup` since 2026-10-28:
 a show file keeps what it says, a new show says nothing.
 
-**The PRESETS page** (`ui_presets.page`), top to bottom: **the preset
-strip** — ◀ the loaded preset's name ● ▶ (the name is a readout; the
+**The PRESETS page** (`ui_loadable.page`), top to bottom: **the loadable patch
+strip** — ◀ the loaded patch's name ● ▶ (the name is a readout; the
 arrows step the list by name), **new** (a blank preset: default values,
 shape → scene → All outputs, named `untitled` and dirty until saved),
-**save** (over the loaded preset's file; on `untitled` it asks for a
-name) and **as…**; **the list** — every preset by name, case folded,
+**save** (over the loaded patch's file; on `untitled` it asks for a
+name) and **as…**; **the list** — every loadable patch by name, case folded,
 filling the page (never shorter than three rows, scrolling past the room
-it has), the loaded one selected, a folder's preset drawn `party / TRIP`
+it has), the loaded one selected, a folder's loadable patch drawn `party / TRIP`
 with the folder dim: a click loads, **rename** turns the
 row into a name field, **×** sends the file to this Mac's trash; **trash (n) ▸**
 at the list's foot, only while the trash holds something — every file in
@@ -2695,10 +2728,10 @@ drops down but **open ▾**, nothing is dim, no row is special.
 **The dirty dot** (`ui.dirty_dot`) is a red disc on every strip, on
 ROUTING's head and on a section's header; while there is something to save the
 save chip is solid red. It compares the live state with the loaded
-preset or show within undo's float tolerance, so a performer's round-off
+loadable patch or show within undo's float tolerance, so a performer's round-off
 lights nothing. Nothing asks before a save.
 
-**× and rename** work on every preset. × copies the file to the trash
+**× and rename** work on every loadable patch. × copies the file to the trash
 first and refuses the delete if it cannot (a full disk never makes a
 delete unrecoverable); pads that name it keep the name, and the line says
 what still points at it, so a restore makes them work again. **rename**
@@ -2710,7 +2743,7 @@ step: the trash is their net.
 their group; each module's strip is on its own page (band on AUDIO,
 patterns on FACES…) with its popup list, save, as… and reset — the
 PRESETS page shows none of them. The analyzer's **scenes** are not module
-presets since 2026-10-28: they are the eleven files under
+loadable patches since 2026-10-28: they are the eleven files under
 `hyperspace/scenes/band/`, read by the scene combo (§13); a band preset
 you save is yours, in `band/`, and never stands in for a scene.
 
@@ -2721,7 +2754,7 @@ it did ("undid Brightness 2.00× → 2.96×", "nothing to undo").
 
 **A step** is one gesture — a slider drag, a desk knob turn, a typed
 value, a toggle, a key or pad press that sets something, a mouse orbit,
-an edit on ROUTING — or one replacing action: a preset load by any road,
+an edit on ROUTING — or one replacing action: a loadable patch load by any road,
 a show load or new show, home, a module preset load or reset, a learn
 landing, an Unbind, a ×, Replace in the Replace / Keep prompt. Once a
 frame `Undo.tick` compares a fingerprint of what the user sets; a change
@@ -2730,16 +2763,16 @@ slider moved within 0.4 s of a load joins the load's step. The stack
 keeps 100 steps; a launch starts empty.
 
 **Watched:** the base of every persisted param that is not an alias, a
-trigger or in the `tempo` group — performance and session alike, the
-camera included — and the loaded preset's routes, preset layer and
+trigger or in the `tempo` group — performance and meta controller alike, the
+camera included — and the loaded patch's routes, patch layer and
 macros.
 
 **Not a step:** a performer (a hand, a band, an LFO writes an offset,
 never the base); the rotation phases; the tempo (a tap is never undone);
 triggers; selections and panel state (`band.select`, `Panel.fx_selected`,
-`preset.select`, `desk.shift`, `ui.*`); the transport; the rig's output
+`preset.select`, `desk.shift`, `ui.*`); the transport; the meta controller's output
 settings (screen, fullscreen, overlay, the master dim, every
-`output.N.*` switch); `bindings.json`'s session rows; a band added,
+`output.N.*` switch); `bindings.json`'s meta rows; a band added,
 removed or moved (a step's band strips land only on the layout they were
 taken on); a save, a delete, a pad change (their net is the trash and
 the show file).
@@ -2748,7 +2781,7 @@ the show file).
 table's own calls: undoing one slider sets one param — no load runs, the
 desk layer stays, faders keep their catch, LFOs keep their phase. Undoing
 a load also puts back what the library calls loaded, so the PRESETS page
-names the earlier preset and **save** writes that one. A restore writes
+names the earlier loadable patch and **save** writes that one. A restore writes
 no file. The band strips' 8-second "Reset all → Undo" is separate.
 
 ## 12. Hands
@@ -2859,16 +2892,16 @@ following the skeleton raw (no smoothing), a display only.
 | `ghost.tethers` | off | with a guide: a line from each routed mark to a label naming the params it drives |
 | `ghost.style` | HANDS | HANDS (capsules), JOINTS (beads), PALMS (an orb that swells as the hand opens, a ring, a spoke), CAGE (a wire octahedron), MARIONETTE (fingertips on strings from a bar) |
 
-All six are in the `ghost` group, a performance group since plan 44 D3:
-the hands' look is the preset's, saved and landed with it — but for
-`ghost.mirror`, a session key (`params.SESSION_KEYS`): the room's, saved
-with the show, never moved by a preset. `mirror`, `guide`, `tethers` and `style` are
-settings — a hand learn onto one is refused in words, and a preset's
+All six are in the `ghost` group, a patch group since plan 44 D3:
+the hands' look is the loadable patch's, saved and landed with it — but for
+`ghost.mirror`, a shared meta key (`params.SHARED_META_KEYS`): the room's, saved
+with the show, never moved by a loadable patch. `mirror`, `guide`, `tethers` and `style` are
+settings — a hand learn onto one is refused in words, and a loadable patch's
 route onto one is dropped at load. The ghost hands are drawn in the
 shape's camera (plan 26, §2): the eye, and the calibration in
 `hands.json` — `"units": {"mm": null, "origin": null, "tilt": 32.0}`,
 "from the box" by default, which fits the padded box (or, with no box,
-the calibrated ranges) into a 16:9 picture of the rig's reference eye (the default eye, whatever the preset's: plan 43 C2), seen from 32°
+the calibrated ranges) into a 16:9 picture of the meta controller's reference eye (the default eye, whatever the loadable patch's: plan 43 C2), seen from 32°
 above; an `mm` or `origin` written there wins. `hands.json` is
 `hyperspace.hands/3`; an older file is kept as `hands.json.bak-v2` before
 the first rewrite. A hand leaving fades out over 0.3 s and one coming
@@ -2939,7 +2972,7 @@ tempo clock).
 Bass Engine, Air & Lace, Inverse World, Percussive, Tremolo Web,
 Harmonic Bloom, Slow Bass / Fast Air. A scene is a band document shipped
 with the code (`hyperspace/scenes/band/*.json`, `control.SCENES_DIR`),
-never a library preset since 2026-10-28 — a band preset you save is yours
+never a library loadable patch since 2026-10-28 — a band preset you save is yours
 alone. The scene combo, the APC40's scene pads and
 **Reset** re-tune the bands you have from the scene; the band preset
 strip loads a file whole, layout included. **Reset all** relabels to
@@ -2965,7 +2998,7 @@ bridge · connected · 16 sources · 2 sinks · IAC Driver Bus 1 · pitch, 16
 lanes · 41 sent`.
 
 **Sink rows** (plan 27). What a sink sends is rows in `bindings.json`
-(the session's: sinks are rig), `{"source": "param:view.bright",
+(the meta controller's: sinks are meta controller), `{"source": "param:view.bright",
 "target": "bridge:6", "op": "send"}` — a source `param:<id>` (the
 param's effective norm), `lane:<i>` (the lane as a route reads it) or
 `lane:*` (every lane from the row's channel on), a target `<role>:<k>`
@@ -2973,7 +3006,7 @@ param's effective norm), `lane:<i>` (the lane as a route reads it) or
 `channel + k + 1`, with `cc14` the CC pair `cc + k` / `cc + k + 32`). An
 explicit row wins its channel over a `lane:*`; a trigger or an unknown id
 sends 0. Make one with the param menu's **Learn sink ▸**, or on ROUTING →
-sinks; a sink row is never a performer, never in a preset, never asks
+sinks; a sink row is never a performer, never in a loadable patch, never asks
 Replace / Keep, and Unbind never removes it. **The old `send` list
 becomes rows once**: the first launch an entry with a `send` list (the
 bridge's default `["lane:*"]` included) is on and its role has no sink
@@ -3031,35 +3064,58 @@ to the mix is V3's.
 
 ## 14. Outputs
 
+**A display can come and go with no restart** (`hotplug.py`, rows 813–816): which display shows what is its row's (`displays.py`), and what's below about the config is its seed. A row's target acts at once. A display gone has its window hidden at once and closed after `[output] unplug_hold_s`, and its job comes back with it.
+
 **One output** by default: the render window, from `[output] monitor` /
 `fullscreen`. **Several** from `[[output.screens]]` (§5), up to four
 (`outputs.MAX_OUTPUTS`), numbered by their place in the list whether or
-not they opened. Output 1 is made as the single render window always is
-(4× MSAA; transparent only with `[output] overlay = true`), sets the
-frame's size and paces the loop (its swap waits for its screen; later
+not they opened. Output 1 is transparent only with `[output] overlay = true`,
+sets the frame's size and paces the loop (its swap waits for its screen; later
 outputs' swaps do not). Later outputs are opaque, never overlay, and
 their screen and fullscreen come only from the config (the OUTPUT page's
 Screen and Fullscreen rows move output 1). A later output whose
-`monitor` names no connected screen **is not opened**, with a note
-("output 2 (projector): monitor = 2, but 2 screens are connected (0–1) —
-not opened"); output 1 always opens. A later output of another shape
+`monitor`, index or name, finds no connected screen **is not opened**,
+with a note ("output 2 (projector): monitor = 2, but 2 screens are
+connected (0–1) — not opened"); output 1 always opens. A later output of another shape
 shows the whole frame letterboxed, the hands registered on it. Each
 later output is drawn from the shared textures in its own context
 (`outputs.Presenter`); a failing present marks that output and the rest
 go on.
 
+**The picture depends on no display** (SC3a, rows 781–784). A hidden 64×64 window,
+the *root* (`app._root_window`), holds the renderer's context and is destroyed only
+at exit, last. The frame goes to `outputs.Root.frame`, an `Offscreen` at output 1's
+framebuffer size, or the last known while it has no window; **every** output's window,
+output 1's too, shows it through a `Presenter`. No window has MSAA. The frame's 4× is
+the renderer's own framebuffers' (`render.SceneTarget`), and the number comes from
+`outputs.FRAME_SAMPLES`, since an `Offscreen` would say 0
+(`tests/test_root_frame.py::test_the_frame_keeps_its_msaa_with_no_multisampled_window`).
+`pacing.Pacer`: the first live window in slot order has swap interval 1, the others
+0, and its swap is the frame's last; with none live, no display connected, or nothing
+swapped this frame, a 60 Hz timer. Under any swap a **floor**, a fixed 240 Hz on
+average with a burst of 8 frames free, so a swap that doesn't wait (a locked Mac, a
+window occluded from birth, a sleeping display) can't run the loop away, and a healthy
+loop, however uneven its frames, never waits. It believes no display's refresh (row 782).
+**A window swaps only a whole picture it was just given:** a draw or present that raises,
+or a view that caught a draw's error, leaves it on its last frame, and output 1's present raising reaches `RenderWatch.failed`, the red
+banner, after the others had their picture. A window closes
+in this order, or a release can reach the wrong context's objects: that window current,
+its presenter released, destroyed, then `Pacer.choose` between frames (SC3b, which adds
+the closing at run time; `tests/test_root_frame.py`'s `close_output`). Creating one
+costs 35–50 ms, once.
+
 **Per-output switches** (`overlay.register_switches`): `output.N.scene`,
 `output.N.hands`, `output.N.through` ("Hands through effects") and, with
 two or more outputs or a lone entry whose `dim` is under 1,
-`output.N.dim` (multiplied by the master dim). They are **rig settings**:
+`output.N.dim` (multiplied by the master dim). They are **meta settings**:
 set from the config entry at every launch and Cmd+R (defaults scene on,
-hands on, through off, dim 1), never saved, never in a preset, show or
+hands on, through off, dim 1), never saved, never in a loadable patch, show or
 undo step; a switch flipped mid-set lasts until the restart. They can be
 learned onto a desk button. What every output draws through is the
-loaded preset's one camera (plan 43 C2): the window is the rig's, the
+loaded patch's one camera (plan 43 C2): the window is the meta controller's, the
 framing is the look's — and so (plan 44 D3) are the bus cuts: which of the
-rig's cables from All outputs reach a window is the loaded preset's
-(`Presets.bus`); a window the preset wires that this rig has not open is
+meta controller's cables from All outputs reach a window is the loaded patch's
+(`LoadedPatch.bus`); a window the loadable patch wires that this rig has not open is
 asked for in words (`graphview.wanted_windows`, `WINDOW_WANTED`).
 
 | Scene | Hands | Through | The output shows |
@@ -3073,7 +3129,7 @@ asked for in words (`graphview.wanted_windows`, `WINDOW_WANTED`).
 
 "Hands shown" also needs `ghost.on` and a hand drawn this frame; with no
 effect on, "through" changes nothing. The echoes and the dream do not
-hold the hands unless a preset's graph wires the history to the scene
+hold the hands unless a loadable patch's graph wires the history to the scene
 with the hands (§2). With the guide on, its gauges and labels are drawn over
 the hands after the effects, so they are never bent. The OUTPUT page
 says in words what each output shows ("scene + hands through the
@@ -3081,8 +3137,8 @@ effects · 64%", "black — the scene is off and no hand shows").
 
 **The master dim** (`output.dim`, the crossfader, the OUTPUT page's first
 row) multiplies the finished frame — scene, look-back, effects and
-hands — on every output: 0 black, 1 full. It is a rig setting: not
-saved, not modulatable, not in any preset, show or undo step, so every
+hands — on every output: 0 black, 1 full. It is a meta setting: not
+saved, not modulatable, not in any loadable patch, show or undo step, so every
 launch starts at full. On an opaque ground the ground stays opaque black;
 in overlay the render fades off the desktop.
 
@@ -3094,8 +3150,22 @@ see-through, clicks passing through (G or PAN takes them back);
 `output.bg` and `output.alpha` set the ground and opacity. The
 `overlay.*` ids are aliases of `output.*`.
 
+**A screen by name** (`placement.match`, row 771): `monitor` and
+`control_monitor`, and `monitor` on a `[[output.screens]]` entry, may
+give a screen's exact whole name, case and all: "TV" does not find
+"TV Samsung". Two screens of one name are two screens: "MStar #2" is the
+second of them, counted left to right across the desk by the monitor's
+frame rather than in the window system's order, so a replug can't swap
+them. A Mac's own " (n)" isn't counted, so "DELL #2" works when it lists
+"DELL (1)" and "DELL (2)". "MStar" alone on two is the first, with a note
+naming both; "MStar #1" on a twin alone uses it, with a note every launch
+(row 772). `placement.labels` gives the word for each screen. An index
+still works. A name becomes an index once, at the launch
+(`placement.settle`, `app._slots`): `Output.monitor` and `Slot.monitor`
+stay indices at runtime until SC3b.
+
 **Where windows open** (`placement.py`): a configured `monitor` /
-`control_monitor` index first, then `windows.json` (the last quit's
+`control_monitor` first, then `windows.json` (the last quit's
 rects — always the plain window's, never a fullscreen cover), else the
 render window top-left of the primary screen and the controls flush
 right; two later outputs with no memory open 40 px apart. A remembered
@@ -3119,15 +3189,27 @@ context (it is held on the panel, not in the module), so the page goes
 on drawing with its zoom and selection. The deck (`deck.py`, plan 44
 D1) is on the list after `learn`, before `midi`: a save re-classes the
 live `Deck` and its objects come from `Deck.targets()`, which `main`'s
-target list takes first, then the rig's. `Deck.build` runs once at
+target list takes first, then the meta controller's. `Deck.build` runs once at
 launch, so a change to it — or a field added to a live object — needs
 Cmd+R, not a save. A reload of `media/mixer.py` keeps the
 media sound playing: the live mixer is re-classed by `MediaState` and
 the stream's callback reaches the new code through the class; adding
 the module itself needed a restart.
 
+A hot class adds nothing to the layout over another hot class: it declares no
+`__slots__` over one, and it isn't slotless over one that declares slots, because it
+would gain a `__dict__` (`__slots__ = ()` is fine). Python refuses to re-class such an
+object once the base has reloaded (`object layout differs`). `DeckLibrary` and
+`DeckProject` share another object's `__dict__` and must keep their own fields
+out of it, so they take slots from a base in cold `hot_slots.py`. A refusal strands
+nothing: every other target is re-classed and its hook runs, `error` names each
+class refused with its count, and the next save tries again. `tests/test_hot_reload_app.py`
+holds the rule on every real class in a hot module, and runs a save through the
+real swap in the real app; `tools/drive_hot_reload.py` is how to see one, and
+`tools/app_driver.py` keeps stepping across a reload (row 802).
+
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
-<kind>` header — the time, the loaded preset, what happened — and every
+<kind>` header — the time, the loaded patch, what happened — and every
 thread's stack, for:
 
 - `stall` — no frame completed for 2 s;
@@ -3136,7 +3218,7 @@ thread's stack, for:
 - `render stall` — no render output presented for 2 s while the loop
   runs (minimised, occluded, another Space…), with the window's state;
 - `warning` — one output not presenting while another does, an output's
-  present that raised, or a preset asking for the dream with no worker;
+  present that raised, or a loadable patch asking for the dream with no worker;
 - `stranded target` — a frame that began on an offscreen framebuffer;
 - `non-finite` — a param that dropped a NaN or inf.
 
@@ -3148,22 +3230,51 @@ show: a log that will not open is kept as an error and the loop goes on.
 ## 16. Testing
 
 ```bash
-uv run pytest -q          # the fast tier, in parallel (~17 s)
-uv run pytest --all -q    # every tier: golden, slow, live (~55 s)
+uv run pytest -q          # the fast tier, in parallel
+uv run pytest --all -q    # every tier: golden, slow, live
 uv run ruff check .
 ```
+
+**Last measured, 2026-11-06, at 8977705 (one line, changed only by the orchestrator, so parallel PRs don't conflict here):** `--collect-only` 6,753 fast tier and 6,976 with `--all` (`golden` 144, `slow` 44, `live` 36; one test is in two tiers); `fast-tier.sh -rs --durations=10`, `6750 passed, 3 skipped` in 133 s on a shared "Apple M3 Max"; CI's `Fast tier` step on `ubuntu-24.04`, about four minutes; `--all` not yet timed.
+
+`fast-tier.sh` is `~/.claude/handoffs/wave4/fast-tier.sh`: `pytest -q -n 4` behind two
+machine-wide slots. A bare `uv run pytest -q` (`-n auto`, sixteen workers) has not been
+timed at this size, because a shared Mac doesn't run one. (The ~17 s and ~55 s this section
+gave until 2026-11-06 were `-n auto` on a suite of about 3,940 tests.)
+
+**The `--all` that the orchestrator runs records its durations.** It adds
+`--durations=60` to `fast-tier.sh --all -rs`, and its summary line, wall time and slowest
+list go in the merge body or the PR body, **never in a commit on the PR**: a commit moves
+the head that CI just vouched for. The orchestrator updates the line above, with the date
+and head, in the next docs commit that lands anyway. Plan 58 §6's "cheaper goldens" waits
+on this figure, and conftest's tier tables are re-measured from the same list.
 
 - Tiers: `golden`, `slow` and `live` are markers `tests/conftest.py`
   applies by name (see "Running the automated tests" in
   `TESTING-GUIDE.md`); the default run is `-n auto` without them. Run
-  `--all` before a merge and after touching rendering or presets.
+  `--all` before a merge and after touching rendering or loadable patches.
 - **One tier at a time on a shared Mac** (row 589). Every xdist worker
   that imports torch holds about 1 GB, and `-n auto` is sixteen of them
   on the M3 Max: two or three `--all` runs from parallel sessions took
-  the machine to 140 GB on 2026-11-01. A session that is not the one
+  the machine to 140 GB on 2026-11-01. A Claude Code session that is not the one
   merging runs the fast tier with a few workers (`-n 4`), one run at a
   time, and leaves `--all`, the goldens and `tests/test_media_live.py`
   to whoever merges.
+- **A builder's last check may be CI rather than a machine slot** (row 770). Push, then
+  `python3 tools/wait_green.py <pr> <head>`, plain `python3` because it is standard library
+  only and `uv run`'s own failure codes would read as its codes. It waits for that head's
+  newest `tests` run and exits 0 only if that run finished with success. 2: it finished
+  any other way, skipped included. 3: the PR's head isn't the one given or moved during the
+  wait; it is read again on every poll, since a push cancels the old head's run
+  (`cancel-in-progress`). 4: no run appeared in 10 minutes. 5: still going 30 minutes after
+  it appeared. 6: `gh` gave no answer, at the first read or for 5 minutes in a row, with
+  `gh`'s own stderr shown. 1: bad arguments, a head under 7 characters, or `--help`. It
+  only waits and it merges nothing, with two `gh` reads and no other way out
+  (`tests/test_wait_green.py`). `main` has no required checks, so `gh pr merge --auto`
+  merges at once: whoever merges waits first, and then merges by hand. CI is ruff and the
+  fast tier on Linux, so it sees no golden, no `slow` or `live` test and no Mac GL. A PR
+  that touches the render path, the loader or `graphmigrate` still gets the orchestrator's
+  `--all`, and a builder reports "CI green at <head>" as that, not as a run of the fast tier.
 - **A hung test fails by name.** pyproject's addopts carry
   `--dist load --timeout=120 --max-worker-restart=4` and its ini key
   `timeout_method = "thread"`. **Workers use the thread method, a
@@ -3177,7 +3288,7 @@ uv run ruff check .
   no summary, so there the signal method fails the test and goes on
   (a `sleep(130)` under `-n0 --timeout=5`: "1 failed, 2 passed"; with
   `--timeout-method=thread` named, the process ended with no summary).
-  The slowest fast-tier test takes about 6 s, far under the limit.
+  The slowest fast-tier test takes about 7 s (7.28 s, 2026-11-06), far under the limit.
 - **The restart cap, measured** (2026-11-02, `-n 2`, one test that
   `os._exit`s and forty quick ones; "default" is xdist's own cap,
   `-n` × 4):
@@ -3205,6 +3316,10 @@ uv run ruff check .
   passed", the run ended, one test lost after the fifth crash). So a
   run that crashed still shows a count to compare with a clean run's,
   and a recurring hang ends it rather than stalling it.
+- **What opens the real app's windows is `live`** (row 802): they take the focus on a
+  Mac on every run, so it's for `--all`, which CI doesn't run. Its fast-tier
+  guard has to stand alone, as `test_every_class_in_a_hot_module_can_be_re_classed_after_a_reload`
+  does for `test_a_save_reaches_every_live_object_of_the_real_app`.
 - **Live tests take turns, across workers and across processes.**
   `--dist load` hands a test to any worker, so nothing in xdist keeps
   two `live` tests of one run apart (the old `xdist_group("live")` only
@@ -3244,7 +3359,7 @@ uv run ruff check .
   and a deselected test is never looked at); none does today. The file is
   per account (`hyperspace-tests-live-<uid>.lock`); a lock file that
   cannot be opened or locked is a skip with the reason, never an error.
-  The folder is `tempfile.gettempdir()`, so a session whose `TMPDIR`
+  The folder is `tempfile.gettempdir()`, so a Claude Code session whose `TMPDIR`
   differs (a sandbox that sets its own) gets a different lock file and
   does not take turns with the others.
 - **Why `glfwInit()` hangs on the Mac, and the recovery.** A sample of
@@ -3297,10 +3412,13 @@ uv run ruff check .
   (row 606). The source is fixed too: a test that calls `glfw.init()`
   calls `glfw.terminate()` when it is done (that test does now); the
   guard stays as the belt.
-- One test is skipped:
+- The fast tier skips three tests on the Mac (2026-11-06, `-rs`):
   `tests/test_hands_tape.py::test_every_recorded_tape_replays_through_the_ghost`,
   because no real hand tape has been recorded into
-  `tests/fixtures/hands/` (`tools/hands_tape.py record` on the rig).
+  `tests/fixtures/hands/` (`tools/hands_tape.py record` on the rig);
+  one in `tests/test_paired_axes.py` ("no Model.layout on this base (#365)");
+  and the face shaders' reference-compiler test where `glslangValidator`
+  is not installed.
 - The parity net: `tests/golden/` traces recorded from the retired HTML
   app (`tools/record_golden.py`, which needs Playwright's Chromium) hold
   geometry exact and the audio chain's behaviour; `tests/legacy_chain.py`
@@ -3330,13 +3448,13 @@ uv run ruff check .
   system font, so a fit test measures the same on the Mac and in CI and
   holds every line whole everywhere. A fit test that breaks is fixed in
   the layout, not loosened.
-- The golden frames: `tests/test_golden_frames.py` compares 596
-  full-resolution frames — every corpus preset in every output state,
-  hands absent and present, the other wirings, the fixture presets and a
+- The golden frames: `tests/test_golden_frames.py` compares 789
+  (2026-11-06) full-resolution frames — every corpus loadable patch in every output state,
+  hands absent and present, the other wirings, the fixture loadable patches and a
   recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only
   (anywhere else it skips with a note). `tools/golden_frames.py` diffs
   them and writes a contact sheet of what moved; `--record` re-records
-  (`--only` a few presets). How, when and why to re-record: §2, "Golden
+  (`--only` a few loadable patches). How, when and why to re-record: §2, "Golden
   frames". The render graph's own tests: `tests/test_graph.py`,
   `tests/test_camera.py`, `tests/test_hands_node.py`,
   `tests/test_graph_json.py`, `tests/test_cloud_node.py`,
@@ -3344,7 +3462,7 @@ uv run ruff check .
 - The modulation graph and the node editor (plan 28), all headless:
   `tests/test_modgraph.py` (the sort, the loops, the edges the design
   names, a param applied once a frame), `tests/test_modifiers.py` (each
-  kind on a scripted input, the preset key, templates, undo, the
+  kind on a scripted input, the loadable patch key, templates, undo, the
   MODIFIERS strip), `tests/test_graphview.py` (the model with no imgui,
   and the page drawn once on the real `imgui_node_editor` under the test
   imgui harness), `tests/test_graph_edit.py` (every edit through the
@@ -3352,8 +3470,8 @@ uv run ruff check .
   `tests/test_graph_wires.py` (the wire list, outputs as nodes, the
   canvas's render edits) and `tests/test_graphview_devices.py` (the
   APC40's two nodes, templates, placeholders). **The equivalence test**,
-  `tests/test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier`,
-  plays every corpus preset with a synthetic hand tape through the base
+  `tests/test_routing.py::test_every_factory_loadable_lands_the_same_values_one_frame_earlier`,
+  plays every corpus loadable patch with a synthetic hand tape through the base
   build's `modulate` (kept verbatim as `_lagged_modulate`) and through
   today's, and asserts every modulatable param identical or exactly as
   many frames earlier as the base was late.
@@ -3367,7 +3485,7 @@ uv run ruff check .
   recorded digest (`tests/golden/shape_digests.json`, floats rounded to
   1e-9) and every 4D shape to `VOLUME_FLOOR` through each W plane;
   `tools/turntable.py` draws the same sweeps (§1).
-- Fixtures: `tests/fixtures/` holds the test-only presets, templates
+- Fixtures: `tests/fixtures/` holds the test-only loadable patches, templates
   and palettes a test copies into a scratch library (plan 24's
   `desk-trust/`, `desk-faders/`, `desk-templates/`, `dance-sources/`,
   `grab-follow/` and `palettes/`, plan 27's `osc/` and `clouds/`, plan
@@ -3376,11 +3494,11 @@ uv run ruff check .
   plan 28's `presets/hands-glass-only.json`, `wired-outputs.json` and
   `modifiers/`, and `macro-candidates/`). The folder
   is gitignored at the repo root, so a new fixture is added with
-  `git add -f`. No test proves a mechanism by editing a corpus preset.
+  `git add -f`. No test proves a mechanism by editing a corpus loadable patch.
 - The desk coverage report: `tests/test_desk_coverage.py` regenerates
   `docs/plans/assets/24-party-fixes/desk-coverage.md` with
   `tools/desk_coverage.py` and fails when the committed file differs by
-  a byte; after a change to a desk, a preset or `learn.cannot_show`, run
+  a byte; after a change to a desk, a loadable patch or `learn.cannot_show`, run
   `uv run python tools/desk_coverage.py` and commit the report
   (`--check` tells you whether it is stale).
 - Import boundaries are tests: the core never imports `midi`, `bridge`
@@ -3397,6 +3515,39 @@ uv run ruff check .
   device bound itself) and `tests/test_clouds.py`.
   `tests/test_app_boundary.py`'s `ORDER` pins the three device slots.
 
+### Doc tails
+
+`DECISION-REGISTER.md`, `DECISIONS.md`, `plans/11-hand-checks.md` and
+`plans/README.md` merge by union (`.gitattributes` at the repo's root, plan 58 H1):
+two PRs that each add a row at the tail merge clean, both rows kept. Most replayed
+conflicts were these files, not code.
+
+- **What it costs.** Git no longer stops two PRs that took one number, so
+  `tests/test_doc_numbers.py` does: register rows and sections, hand-check group
+  letters and check numbers each unique. Take the next free number after merging main.
+- **What it can't see.** Two PRs that edit one prose line keep both versions, so read
+  the merged preamble of a doc you edited. Each side's added lines stay in one block,
+  but a line both ends share, usually the blank between them, is kept once.
+- **What a section can lose.** `tests/test_doc_numbers.py` also fails on a heading with
+  nothing under it, two "Judge it." lines under one heading, a row with no section or a
+  section with no row, a table row's cell count, and a check outside a lettered group.
+  **Row 819's audit, 2026-11-07: keep the union with this test.** In 86 merges where both
+  sides appended, siblings at one tail cost blank lines and no text. The one loss, 770's
+  and 771's, was #411's review commit deleting from its own section to the file's end; the
+  union then hid that from a merge that would have stopped on it. So edit your section up
+  to the next heading, never to the end of the file, and read a tail's `-` lines in your
+  diff: a removed line you didn't write is the warning. Per-row section files would end
+  this, at 800 files and a conflict for every open PR: only if a merge itself loses text.
+- **Order.** Rows land in merge order. `uv run python tools/sort_register.py` puts the
+  register back; it changes no text.
+- **A branch from before `.gitattributes`.** `git merge` reads the attribute from the
+  tree you're on, so merging main into such a branch still conflicts. Run
+  `git checkout origin/main -- .gitattributes` first.
+- **On GitHub.** The server doesn't honour the attribute, on `main` or not: its merge API
+  and a PR's mergeable state both said conflict on a pair that merges clean locally
+  (retested 2026-11-06 with it on `main`). So a PR showing a conflict in these files
+  alone needs main merged locally and pushed; union resolves them with no hand work.
+
 ### CI
 
 `.github/workflows/tests.yml` runs on every pull request and every push
@@ -3407,9 +3558,7 @@ hung test fails alone and names itself instead of stalling its worker;
 a crashed worker's queue goes to its replacement, up to four, then the
 run ends — row 605) — the same values pyproject's addopts carry, with
 the thread method, so the explicit flags are redundant but consistent.
-(Until the owner lands that workflow edit, CI still says
-`--max-worker-restart=0`, which wins over addopts.) The fast tier takes about two minutes on
-four cores.
+The fast tier takes about four minutes on four cores (§16's last-measured line).
 
 - **What it leaves out.** `UV_NO_GROUP="hands dream"`: no Ultraleap SDK
   to build `leapc-cffi` against, and Linux torch wheels pull gigabytes
@@ -3451,6 +3600,18 @@ four cores.
   process) and the kernel killed it. Per test, a worker peaks near 1 GB.
   `test_golden_frames.py` and `test_graph_frame.py` keep their own
   module-scoped context for their module-scoped rigs.
+- **The type ratchet** (row 788). A new pyright complaint fails, an old
+  one doesn't: `tools/type_ratchet.py` counts them against
+  `tools/type_baseline.json` by file and rule, under `[tool.pyright]`
+  (pyright pinned exactly in the dev group). It holds in the fast tier,
+  `tests/test_type_ratchet.py::test_no_new_complaint_in_the_app`, so CI
+  holds it with no step of its own. It takes 12 to 22 s of one worker on
+  the Mac (13.38 s in a full `-n 4` fast tier of 137.78 s), about 3 s of
+  that tier's wall time by division, not measured apart.
+  `uv run python tools/type_ratchet.py` lowers the baseline where errors
+  went (commit it), on a full sync only; `--check` writes nothing;
+  `--accept` takes a split that leaves every rule's total level;
+  `--raise-baseline` is the one way up, and the PR says why. Pyright reads the source and opens no GL.
 - **Making it blocking** is a setting on `main`, not a file: Settings →
   Rules → Rulesets → New branch ruleset, target `main`, "Require status
   checks to pass", add `tests` (or Settings → Branches → a protection
@@ -3469,14 +3630,17 @@ What only a person at the machine can check is
 - **Frame pacing with two screens has never been observed by a person.**
   Output 1 waits for its screen and later outputs do not; whether that
   paces the loop on two real screens, and whether a non-waiting
-  fullscreen output tears, is unknown.
-- **With no desk connected the app keeps looking** — every 2 s five
-  times, then every 10 s. Each look creates a CoreMIDI client; `enabled
-  = false` on the desk's entry (or `[midi] enabled = false`) stops it.
-- **At most one hands node makes the layer.** Since plan 28 a preset's
+  fullscreen output tears, is unknown. **A window on a 60 Hz display here
+  swaps at 120** (measured on this Mac, row 782: macOS's swap doesn't follow the
+  window's own display), so the floor believes no display's refresh.
+- **With no desk connected the app keeps looking** — every 2 s. A look
+  makes no client (`midiports`, audit R15, closed) and costs about 0.25 ms
+  a pair of ports on the frame thread; `enabled = false` on the desk's
+  entry (or `[midi] enabled = false`) stops it.
+- **At most one hands node makes the layer.** Since plan 28 a loadable patch's
   `graph` section can wire which output gets which hands node and which
   effects it alone takes (§2, the wire list); an output no wire names
-  keeps the session's switches.
+  keeps the meta controller's switches.
 - **No mouse drag on the GRAPH page has been tested**: the tests drive
   its functions and draw the real widget headless, never a real drag
   (plan 28's hand checks 247–258).
@@ -3498,5 +3662,4 @@ What only a person at the machine can check is
   held in the bundled fonts, the same on the Mac (§16).
 - The amber "filled" pad light and the save-as blink use Akai's
   documented velocities and have not been confirmed on an APC40 mk1.
-- Open findings in [`AUDIT-2026-09.md`](AUDIT-2026-09.md): R13, R14,
-  R15, U9, U10, P6, V8.
+- **A display coming and going** (`hotplug.py`, audit P6) has only met a virtual display on a locked Mac: hand check 629 is a real cable.

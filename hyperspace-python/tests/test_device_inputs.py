@@ -19,7 +19,7 @@ fake bus, so a desk can be missing at launch and plugged in later):
   hands feed `hand` and `hands` through `hands/device.py`;
 - **schemes from the registry**: the router's continuous schemes and their
   order, the learn's wants, the referee's row schemes;
-- **nothing old moves**: a pre-run `bindings.json` and every corpus preset
+- **nothing old moves**: a pre-run `bindings.json` and every corpus loadable patch
   load with no note and no dirt with two desks listed.
 """
 
@@ -32,15 +32,15 @@ from conftest import seed
 from test_midi import cc, note
 
 import hyperspace.gamepad as gp
-from hyperspace import apc40, devices, hands, lfo, midi, routing, tempo, ui, ui_routing
+from hyperspace import apc40, devices, hands, learn, lfo, midi, routing, tempo, ui, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.learn import Learn, blocked
 from hyperspace.library import Library
+from hyperspace.loadable import LoadedPatch
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
 from hyperspace.routing import SHIFT_PARAM, Binding, Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
@@ -149,9 +149,9 @@ def build(tmp_path, monkeypatch):
         chain = Analyzer(Analyser())
         control = Control(chain)
         audio = NS(chain=chain, on=False)
-        seed(tmp_path)                 # the corpus: the shipped presets, the party show
+        seed(tmp_path)                 # the corpus: the shipped loadable patches, the party show
         lib = Library(tmp_path)
-        reg = build_registry(ViewState(), control, audio, lib.project)
+        reg = build_registry(ViewState(), control, audio, lib.install)
         lib.attach(reg)
         reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
         reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
@@ -176,9 +176,9 @@ def build(tmp_path, monkeypatch):
         router.use(rig)
         learn.devices = rig
         rig.open_all()
-        presets = Presets(lib, reg, router)
+        loaded_patch = LoadedPatch(lib, reg, router)
         return NS(reg=reg, table=table, router=router, learn=learn, devices=rig, lib=lib,
-                  presets=presets, bus=bus, notes=notes, path=path, tracker=tracker)
+                  loaded_patch=loaded_patch, bus=bus, notes=notes, path=path, tracker=tracker)
     return make
 
 
@@ -190,6 +190,15 @@ def frame(r, dt: float = 1 / 60, now: float = 1.0) -> None:
 
 def push(r, port: str, *msgs) -> None:
     r.bus.ports[port].queue.extend(msgs)
+    frame(r)
+
+
+def listened(r, role: str = "launch") -> None:
+    """A generic desk's learn listens (midi.LISTEN_S) before it writes the row:
+    its clock moves past the window and a frame lands it."""
+    io = r.devices.get(role).io
+    t0 = io._now()
+    io.clock = lambda: t0 + midi.LISTEN_S + 0.01
     frame(r)
 
 
@@ -264,10 +273,10 @@ def test_two_desks_open_each_with_its_profile_and_its_own_rows(build):
     lines = ui.device_lines(r.devices)
     assert lines[0].startswith("apc40  ·  midi  ·  connected  ·  ")
     assert lines[1].startswith("launch  ·  midi  ·  connected  ·  0 sources  ·  Launch Control XL")
-    # the APC40's crossfader still dims through its invariant row, the
-    # generic desk's CC 15 does nothing (no row of its own)
+    # the APC40's MASTER still dims through its invariant row, the
+    # generic desk's CC 14 does nothing (no row of its own)
     dim = r.reg["output.dim"]
-    push(r, LAUNCH, cc(apc40.CC_XFADE, 0))
+    push(r, LAUNCH, cc(apc40.CC_MASTER, 0))
     assert dim.value == pytest.approx(1.0)
     r.devices.close()
     assert r.bus.ports[LAUNCH].sent == []                          # not even a leave
@@ -276,26 +285,28 @@ def test_two_desks_open_each_with_its_profile_and_its_own_rows(build):
 
 def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     """The acceptance: Learn desk, a knob on the second controller — the
-    row is `cc@launch:…`, a preset-layer `abs` row with soft pickup and no
-    feedback, into the loaded preset (dirty, no file written) — and from
+    row is `cc@launch:…`, a patch-layer `abs` row with soft pickup and no
+    feedback, into the loaded patch (dirty, no file written) — and from
     then on that knob drives the param while the same CC on the APC40 does
     not, and the reverse. A note learns as a toggle; the same Learn
     completes from the APC40 too."""
     r = build(entries())
     lib, t = r.lib, r.table
-    lib.load("presets", lib.list("presets")[0])
-    assert not lib.is_dirty("presets")
+    lib.load("loadable", lib.list("loadable")[0])
+    assert not lib.is_dirty("loadable")
     before = r.path.read_bytes() if r.path.exists() else None
     knob = Binding(f"cc:0:{apc40.DEVICE_KNOBS[7]}", "view.inst_amp", "abs", layer="preset")
     t.bind(knob, write=False)                      # the param's knob on the APC40…
     r.learn.arm("view.inst_amp", "desk")
     push(r, LAUNCH, cc(21, 90))
+    assert r.learn.learning == "view.inst_amp"     # a generic desk listens first…
+    listened(r)                                    # …then writes the row
     assert any(x is knob for x in t.bindings)      # …stays: one knob per param per desk
     (b,) = [b for b in t.bindings if b.target == "view.inst_amp" and b.device]
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
         "cc@launch:0:21", "abs", "preset", None, True)
     assert r.learn.learning is None and "learned view.inst_amp" in r.learn.last
-    assert lib.is_dirty("presets")                                 # into the preset…
+    assert lib.is_dirty("loadable")                                 # into the loadable patch…
     assert (r.path.read_bytes() if r.path.exists() else None) == before   # …not the file
     amp = r.reg["view.inst_amp"]
     for v in (60, 40):                     # soft pickup: crossing the base catches it
@@ -312,19 +323,41 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     push(r, LAUNCH, note(40), note(40, 0))
     assert r.reg["view.points"].value != pts
     assert r.bus.ports[LAUNCH].sent == []          # still nothing sent to it
-    # the preset's desk carries the qualified rows through a save and a load
+    # the loadable patch's desk carries the qualified rows through a save and a load
     rows = [x.to_json() for x in t.desk()]
     assert {"source": "cc@launch:0:21", "target": "view.inst_amp", "op": "abs",
             "layer": "preset"} in rows
     assert t.set_desk(rows) == [] and any(x.source == "cc@launch:0:21" for x in t.desk())
 
 
+def test_learn_for_the_second_desk_takes_its_fader_and_not_the_apc40(build):
+    """Learn ▸ Learn Player 1 ▸ <the second desk> (2026-11-07, the DDJ-FLX4 on the
+    rig): the real registry's MIDI desk keeps bare schemes and qualifies each
+    message as it arrives (``cc@launch:…``), so the learn armed for it
+    (``@launch``) is completed by its own fader pair — a 14-bit row — and never
+    by the APC40's bare CC, which a fake with qualified schemes hid."""
+    r = build(entries())
+    lib, t = r.lib, r.table
+    lib.load("loadable", lib.list("loadable")[0])
+    want = learn.only_want("launch")
+    assert learn.source_heads(r.devices.get("launch")) >= {"cc@launch", "note@launch"}
+    assert "cc" in learn.source_heads(r.devices.get("apc40"))
+    r.learn.arm("view.inst_amp", want)
+    push(r, APC, cc(apc40.DEVICE_KNOBS[0], 70))     # the APC40: not this learn's
+    listened(r, "apc40")
+    assert r.learn.learning == "view.inst_amp"
+    push(r, LAUNCH, cc(19, 64), cc(51, 3), cc(19, 64), cc(51, 9))   # its fader, MSB + LSB
+    listened(r)
+    (b,) = [b for b in t.bindings if b.target == "view.inst_amp" and b.device == "launch"]
+    assert (b.source, b.op) == ("cc@launch:0:19", "abs14")
+
+
 def test_the_latch_is_per_role(build):
     """SHIFT is the first role's latch (`desk.shift`): with the APC40 on
-    its global layer, the second desk is still on its preset layer — its
+    its global layer, the second desk is still on its patch layer — its
     rows act and a learn on it lands (D5 refuses only the APC40's). Its
-    layer is its own (`set_layer(…, role)`); a preset load drops every
-    role to the preset layer (D4); a press and its release on the second
+    layer is its own (`set_layer(…, role)`); a loadable patch load drops every
+    role to the patch layer (D4); a press and its release on the second
     desk belong to the layer that was up at the press (D12)."""
     r = build(entries())
     t, shift = r.table, r.reg[SHIFT_PARAM]
@@ -336,6 +369,7 @@ def test_the_latch_is_per_role(build):
     push(r, APC, cc(apc40.TRACK_KNOBS[0], 70))      # an APC40 knob: the global layer's
     assert r.learn.learning == "view.inst_amp"
     push(r, LAUNCH, cc(22, 70))                     # the second desk: learned
+    listened(r)
     assert any(x.source == "cc@launch:0:22" for x in t.desk())
     # the second desk's own layer, and D12 across a flip of it
     t.add(Binding("note@launch:0:50", "view.faces", "momentary", layer="preset"))
@@ -352,7 +386,7 @@ def test_the_latch_is_per_role(build):
     assert lines.value is True and faces.value is False
     push(r, LAUNCH, note(50, 0))
     assert lines.value is False and faces.value is False    # each release let its own go
-    t.drop_layer()                                   # a preset load: every desk back (D4)
+    t.drop_layer()                                   # a loadable patch load: every desk back (D4)
     assert t.layer_of("launch") == "preset" and t.layer_of("apc40") == "preset"
     assert shift.value is False
 
@@ -379,7 +413,7 @@ def test_a_missing_desk_is_lost_its_rows_wait_and_it_comes_up_with_its_feedback(
     toggles = {m.note: m.velocity for m in port.sent if m.type == "note_on" and m.channel == 0}
     assert toggles[apc40.N_SCENE[2]] == (1 if r.reg["view.faces"].value else 0)
     assert len(port.sent) > 50
-    push(r, APC, cc(apc40.CC_XFADE, 127), cc(apc40.CC_XFADE, 64))   # and its rows act
+    push(r, APC, cc(apc40.CC_MASTER, 127), cc(apc40.CC_MASTER, 64))   # and its rows act
     assert r.reg["output.dim"].value < 1.0
     # a generic entry with no port is an error line, never the first port there
     r2 = build(entries(launch=False) + [{"role": "nano", "kind": "midi", "enabled": True,
@@ -420,9 +454,9 @@ def test_the_pad_runs_on_the_registry_rows_axes_and_its_camera_job(build):
     faces = r.reg["view.faces"].value
     r.learn.arm("view.points", "pad")
     pad.frame()
-    pad.frame(held={gp.A})                                   # pad:A is view.faces's
+    pad.frame(held={gp.A})                                   # pad:S is view.faces's
     frame(r)
-    assert any(b.source == "pad:A" and b.target == "view.points" for b in r.table.bindings)
+    assert any(b.source == "pad:S" and b.target == "view.points" for b in r.table.bindings)
     assert r.reg["view.faces"].value == faces                # the learning press only learned
     pad.source = None
     frame(r)
@@ -478,7 +512,7 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
     assert r.router.schemes()[-1] == "wand1"
     r.learn.arm("view.bright", "wand1")
     assert r.learn.accepts("wand1:tilt") and not r.learn.accepts("hand:left.x")
-    # a preset row on a scheme no device of this rig publishes is a dormant
+    # a patch row on a scheme no device of this rig publishes is a dormant
     # performer, not dropped (decision 11), and the page still offers it
     r.table.add(Binding("osc:3", "view.inst_amp", "push", 0.5))
     assert r.table.owner("view.inst_amp").source == "osc:3"
@@ -487,10 +521,10 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
 
 # ---------------------------------------------------------------- nothing old moves
 
-def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(build):
+def test_a_pre_run_bindings_json_and_every_loadable_load_quietly_with_two_desks(build):
     """The acceptance's other half: a `bindings.json` written before plan
     27 (today's factory file) loads with no note, no rewrite, nothing
-    said; every corpus preset then loads with no desk note and no dirt
+    said; every corpus loadable patch then loads with no desk note and no dirt
     with two desks and the pad listed; the APC40's rows are exactly the
     file's, unqualified."""
     text = routing.FACTORY_FILE.read_text()
@@ -502,11 +536,11 @@ def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(bu
     assert all(not b.device for b in t.midi())
     assert len(r.devices.get("apc40").io.bindings) == len(t.midi())
     lib = r.lib
-    for name in lib.list("presets"):
-        lib.presets.load(name)
+    for name in lib.list("loadable"):
+        lib.loaded_patch.load(name)
         frame(r)
-        assert lib.presets.desk_notes == [], name
-        assert not lib.is_dirty("presets"), name
+        assert lib.loaded_patch.desk_notes == [], name
+        assert not lib.is_dirty("loadable"), name
     assert r.path.read_text() == text                # never rewritten
     assert not r.notes                               # the registry said nothing either
 
@@ -525,12 +559,12 @@ def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build)
     rows = t.of("pad", "hat")
     assert rows and all(not b.device and t.role_of(b) == "pad" for b in rows)
     lib = r.lib
-    for name in lib.list("presets"):
-        lib.presets.load(name)
+    for name in lib.list("loadable"):
+        lib.loaded_patch.load(name)
         frame(r)
-        assert not lib.is_dirty("presets"), name
+        assert not lib.is_dirty("loadable"), name
     one, two = r.devices.get("pad").io, r.devices.get("p2").io
-    faces = r.reg["view.faces"].value                    # pad:A's
+    faces = r.reg["view.faces"].value                    # pad:S's
     one.frame()
     two.frame()
     frame(r)

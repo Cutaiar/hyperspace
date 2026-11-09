@@ -1,10 +1,10 @@
-"""Probe `glfw.init()` in a child process, once per session, so a GL-window
+"""Probe `glfw.init()` in a child process, once per meta controller, so a GL-window
 test skips instead of hanging.
 
 On macOS `glfw.init()` runs `[NSApplication run]`. If a previous Python GUI
 process died with a window open, AppKit shows the "reopen windows?" alert
 (NSPersistentUIRestorer -> NSAlert runModal), and a hidden process blocks in
-it forever (also when there is no window server for the session). Nothing
+it forever (also when there is no window server for the meta controller). Nothing
 in the parent can interrupt that call, so the first GL-window test asks a
 child with a hard timeout. The recovery: ENGINEERING.md §16, "Why
 `glfwInit()` hangs on the Mac". Cached per process (so per xdist worker).

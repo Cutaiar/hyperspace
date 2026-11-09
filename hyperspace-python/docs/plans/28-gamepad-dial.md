@@ -49,11 +49,14 @@ There is one reading per stick, switched live:
 | **petal** | the whole radius in the sector the stick points into, 0 in every other; a border is sticky (`DIAL_STICKY`, 15 % of a sector) so a stick held on one does not flicker | eight separate buttons with depth: crossing a border is a cut from one parameter to the next |
 | **blend** | a triangle about each sector's own direction: on a sector's centre it has the whole radius, halfway to the next the two share it | a crossfade: a sweep round the rim morphs one parameter into the next, and the lanes always add up to the radius |
 
-They start as the gamepad entry's `dial_left = "petal"` and `dial_right = "blend"`
-(a `[[devices]]` entry, or the old `[gamepad]` table).
-**Swap dials** (`desk.pad.dial.swap`) trades them, so the same routes can
-be felt both ways. Learn pad can put it on BACK (`pad:VIEW`), which is
-free.
+The readings are the loadable patch's since rows 729–730 (`pad.dial.left`, `.right`;
+one per `Deck`, and a pad reads the `Deck` it drives); the gamepad entry's
+`dial_left = "petal"` and `dial_right = "blend"` (a `[[devices]]` entry, or the old
+`[gamepad]` table) are what a loadable patch that names none gets. They are set on the
+GRAPH page's pad node.
+**Swap dials** (`pad.dial.swap`) trades them, so the same routes can
+be felt both ways. Learn pad can put it on a free button; a row on it acts on the deck
+that pad is on. (A row on the old `desk.pad.dial.*` ids moves on load, row 730.)
 
 ## The DIAL preset
 

@@ -29,7 +29,7 @@ branch proving the PRs together before anything merges.
 5. `REVIEW.md`, `docs/ENGINEERING.md` §15 and §16, `docs/ARCHITECTURE.md`
    §3–§4, and plans 49, 51, 52.
 
-## The owner's answers, 2026-11-04 (these overrule anything below)
+## The owner's answers, 2026-11-04 to 06 (these overrule anything below)
 
 **The preset is the authority; a deck is a device.** A deck is the mechanism for
 swapping quickly between presets and choosing which graph renders, holding only
@@ -112,8 +112,8 @@ tuned to facilitate a performance and should not be actively modified during one
   copied down from `party-tumble`; 2 more are `axis:RX → master.dyn`. So the rule's first
   visible result is that the left hand stops driving audio in those looks.
 - **U1, U2 as recommended:** ⌘Z by where you are; a load is a step on the slot's stack.
-- **Q1, Q2 as recommended:** merge on green for wave 4; checks 489–492 before D5d, and
-  506–509 before N1.
+- **Q1, Q2 as recommended:** merge on green for wave 4; 506–509 before N1. (Checks 489–492
+  before D5d too, until the owner dropped that gate, 2026-11-06.)
 - **The names (SEM).** The code's concepts must come to follow the owner's words, once.
   See "The semantic migration" below.
 
@@ -141,6 +141,8 @@ tuned to facilitate a performance and should not be actively modified during one
 - **The absolute rule: no preset can affect another preset.** Not a question to ask. Any
   path by which one can is a bug, or a sign the thing belongs in the preset. D5d's leak
   test runs both ways. A row acts only on the `Deck` its player is on, which answers DQ4.
+  (A load is the named exception: a meta controller verb, always into the off-air `Deck`.
+  The owner, 2026-11-06, row 700.)
   The one accepted exception is the shared dream worker (DQ8), a known limitation.
 - **The dim and the crossfade are separate controls.** The master dim is the meta
   controller's. Overturns row 559 and plan 44 §5. **A crossfade may fade into an empty
@@ -218,6 +220,34 @@ stay, and load only into the off-air `Deck`. If they should go too, it is a one-
 - **Venues probably go.** Composing displays and peripherals in the app is new work, not
   scheduled in this wave.
 
+**Ninth round, 2026-11-06.**
+- **The gate on D5d is dropped:** "we can drop the gate". Checks 489–492 no longer hold #380; try
+  #380 on the rig before SEM starts, if that can be done.
+- **Bank pads and F-keys load off air** (row 700, on #380, option (b)): always into the off-air `Deck`, never
+  touching the room, and refused while the crossfader is between its ends. A load is a meta
+  controller verb. The panel's own load still goes to the `Deck` the panel is looking at.
+- **The glossary is signed**, reviewed with Dillon. `docs/GLOSSARY.md` now says patch and loadable
+  patch. SEM follows it.
+- **FQ3–FQ7 as recommended, and one migration:** see `57-format-lane.md` §6.
+- **Wave 5 is to be planned now,** with its launch prompt. It runs after this wave lands.
+
+**Tenth round, 2026-11-06.**
+- **This session carries on with the rest of this wave.** #287 is ours to rewrite. Merge on green holds.
+- **An undo latch (UL):** "before you can start popping from that stack, you should have to push to that stack at
+  least once after a focus event happens", so "you can't accidentally switch what you're focused on and then press
+  Control-Z and have it undo an action that you took 10 minutes ago". A warning is fine, "but a more mechanical latch
+  would be a more ergonomic choice". Row 753, check 579, group CR.
+- **The pending rows are bulk accepted,** marked so in the register, but for 417, 609 and 751.
+- **Rulings on those three:** all 17 face patterns stay; SEND B stays FINE; creating a pair over an existing mapping must
+  ask (PC2: "you should have to explicitly consent to either keeping both mappings on that control or the option to remove
+  the existing mapping and let the pair take over that axis"). Row 754, check 580, group CS. **UL and PC2 land before SEM.**
+
+**Eleventh round, 2026-11-06.**
+- **The panel says patches.** "Session and rig need to go away. Presets need to go away." Preset's word changes with the migration.
+- **Node mode:** "we need to have LFOs and audio routes be allowed to be overwritten for node mode, as long as they come back when you disengage node mode". This reverses row 711's rec. SHIFT and knobs first as recommended.
+- **Row 730:** saves carry the readings. **Playlist:** ⌘Z may reach its look; a cart starts by itself (plan 58 SM6); dwell is fade start to fade start.
+- **Wave 5 starts now,** beside the end of this wave; only its cleanup waits for the migration. See `wave-5-session-prompt.md`.
+
 ## Joy-Con version 0 (#365), from another session, 2026-11-04
 
 The Joy-Con integration was scaled back to a workable control surface for an upcoming
@@ -259,9 +289,15 @@ the wall it adds (below) is not, so it is sized M–L, and it may be two PRs.
 | --- | --- | --- |
 | meta controller | `session` (486 uses; `SessionRegistry`, `SessionTable`, `part_of == "session"`), `rig` (517 uses; `RigWires`, `RigMade`), lowercase "deck" in prose | **One concept, settled 2026-11-04.** The word `rig` goes |
 | `Deck` | `Deck` | **Stays:** a loaded preset, living inside the meta controller. "Slot" is not a type: on air and off air say which `Deck` |
-| analyzer | `band` (336 uses) | Words in AZ; ids in the format lane or never |
+| analyzer | `band` (336 uses) | Words in AZ; ids stay (FQ3) |
 | player, duty | none yet | New: named right from PL |
 | patch, loadable patch | preset, and "performance" (`part_of`) | The eighth round's words, replacing "one word: preset". Old names stay until SEM |
+
+**Found by wave 5's planning, 2026-11-06 (plan 58 §2), and SEM's to do:** `preset.*`, `deck.chase`, `totem.*` and
+`poi.*` are in neither layer, and can't just join the meta list: `Registry.add` makes a session param one object on
+both `Deck`s (`params.py:930–936`), and these close over one `Deck`. They need a class of "meta, one per `Deck`",
+counted as meta for the refusal and the one-layer test. #380 already refuses a patch's row on a load or a save
+(row 752); SEM's class replaces that refusal.
 
 **SEM must also make the line hold mechanically,** not only rename it: every param is in
 exactly one layer, a test fails on anything in neither or both, and an import wall keeps
@@ -277,7 +313,7 @@ Three rules, starting now:
    must not. Name it from the glossary, and PL's `Player` and `Duty` likewise. Old names
    stay until SEM, so no PR renames in passing.
 3. **Code in SEM; files in the format lane.** A saved key or id (`session` in a show,
-   `band.*`) is a format move and rides the one migration. SEM touches only names in code.
+   and so on) is a format move and rides the one migration. SEM touches only names in code.
    If a saved name cannot change cheaply, it stays and the glossary says so.
 
 Merge order is unchanged by it. It holds the lanes between D5d and stage 5.
@@ -290,11 +326,11 @@ owner's hand checks and show dates, not build time.
 
 | Stage | Serial spine | In parallel | Merges when |
 | --- | --- | --- | --- |
-| 0 | Owner: sign the glossary at D5a | #363; #365 when its pad charges | now |
+| 0 | Owner: sign the glossary (**signed 2026-11-06**) | #363; #365 when its pad charges | now |
 | 1 | **D5a** pointers, with one deck pointer per player; `docs/GLOSSARY.md` (**merged**, #370) | B2, PA, AZ, MR, PC, NSEW design | green |
 | 2 | **D5b** per-slot and meta undo (**merged**, #373) → **PL** players and duties | NSEW build | green |
 | 3 | **D5c** copy, swap, take | **PS** the select screen; NM0 (needs PL); the format lane | green |
-| 4 | **D5d** controls, `hold.py` gone | none on `ui_graph.py`, `preset.py`, chase lines | checks 489–492, between shows |
+| 4 | **D5d** controls, `hold.py` gone | none on `ui_graph.py`, `preset.py`, chase lines | green (the owner, 2026-11-06: checks 489–492 no longer gate it) |
 | 4.5 | **SEM**, the rename, alone | nothing open | green, goldens unmoved |
 | 5 | **N1a + N1b**, stacked | D5e; D6a; #287 | N1: checks 506–509 |
 | 6 | **N2a + N2b** | D6b | green |
@@ -305,7 +341,7 @@ owner's hand checks and show dates, not build time.
   D5a and D5b are merged; PL is next on the spine.
 - **The spine is serial on purpose.** D5a–D5d freeze `deck.py`, `app.frame` and the
   handles, then `ui_graph.py` and `preset.py`. Everything else stays off them.
-- **One format lane, one migration.** NSEW, NM0 and any `band` id rename all touch saved
+- **One format lane, one migration.** NSEW, the patch words and shows going all touch saved
   files. Build them apart, land them as one bump with one backup, between shows, both
   Macs together. Two bumps in a week is what the rule warns against.
 - **Players go before node mode and after undo:** NM0 saves player names, and D5a's
@@ -339,7 +375,7 @@ owner's hand checks and show dates, not build time.
 | D5a | `Decks`, read-through pointers, both on deck 1 | Core | M–L | P3 merged | yes |
 | D5b | Each deck's undo and dot; the session rule (256 of 548 watched params are session) | Core | M | D5a | yes while panel = on air |
 | D5c | `copy`, the timed fade, on air by the fader's side, the preview road, no caller but tests | Core | M | D5b | yes |
-| D5d | The crossfader and MASTER fader rows; **`hold.py` and its three controls deleted**; the leak test, both ways | Core | M–L | D5c; **merge gate: checks 489–492** | no: the first thing the owner sees |
+| D5d | The crossfader and MASTER fader rows; **`hold.py` and its three controls deleted**; the leak test, both ways | Core | M–L | D5c; no check gates it (the owner, 2026-11-06, of 489–492) | no: the first thing the owner sees |
 | D5e | Deck indicator, ROUTING's dormant words, desk diagram, SYSTEM | UI | S | D5d, DQ7 | UI only |
 | D6a | `playlist.py`, its file kind, `tick` over stand-ins | Library | M | D5d, DQ5 | no behaviour yet |
 | D6b | Triggers, the frame hook, a pane section, the warm draw | Library | S–M | D6a | |
@@ -362,8 +398,8 @@ deck question is only testable once D5d exists, so it waits. While D5d is open,
 `ui_graph.py`, `preset.py` and `params.py`'s chase lines are frozen. While
 D5a–D5c are open, `deck.py`, `app.frame` and the `Host` / `Panel` handles are.
 
-**Land D5d between shows**, with HOLD, TAKE and DROP exercised at the rig before
-one: it replaces a mechanism a show relies on. Until D5d, raising `output.xfade`
+**Land D5d between shows.** It replaces a mechanism a show relies on. The owner,
+2026-11-06: checks 489–492 no longer gate it. Until D5d, raising `output.xfade`
 fades to black, so learn no fader on it for a show.
 
 ## Decisions for the owner
@@ -373,7 +409,7 @@ Details are in the two plan documents.
 
 **Asked once, wave-wide:**
 - **Q1.** Merge authority for the wave. **Answered, 2026-11-04:** merge on green.
-- **Q2.** The merge gates. **Answered:** 489–492 before D5d, 506–509 before N1;
+- **Q2.** The merge gates. **Answered:** 506–509 before N1 (the gate of 489–492 before D5d was dropped 2026-11-06);
   build freely, gate merges only.
 - **Q3.** NSEW in this wave, after #365? Rec yes. And row 546 (`controller =`'s
   form), row 552 (the pad draws its own face), which it touches.
@@ -428,7 +464,7 @@ BW. Pre-assign (unused ones are fine; do not reuse 602–604 or 633–635):
 | D5a | 688–690 | 522–523 | BX |
 | D5b | 691–693 | 524–525 | BY |
 | D5c | 694–696 | 526–528 | BZ |
-| D5d | 697–702 | 529–534 | CA |
+| D5d | 697–702, 752 | 529–534, 578 | CA |
 | D5e | 703–704 | 535–536 | CB |
 | D6a | 705–707 | 537–538 | CC |
 | D6b | 708–709 | 539–540 | CD |

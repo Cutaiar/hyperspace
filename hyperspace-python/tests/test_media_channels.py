@@ -427,3 +427,49 @@ def test_a_frozen_live_channel_says_frozen():
     m.channels["a"].rate = 1.0
     m.poll(1 / 60, 0.2)
     assert m.status("a") == "lost"
+
+
+# ---- assign stores the shared id when there is one (row 809) ----
+
+class Twinned(Here):
+    """A resolver that offers `prefer_shared`, as `MediaFolder` does: the
+    named basenames are in the shared folder too."""
+
+    def __init__(self, *files, shared=()):
+        super().__init__(*files)
+        self.shared = set(shared)
+
+    def prefer_shared(self, sid):
+        kind, _, ref = sid.partition(":")
+        if kind in ("local", "file") and ref.rpartition("/")[2] in self.shared:
+            return f"shared:{ref.rpartition('/')[2]}"
+        return sid
+
+
+def test_assign_stores_the_shared_twin():
+    m = MediaState(Twinned("local:t.png", shared=("t.png",)), opener=FakeOpener())
+    m.assign("a", 0, "local:t.png")
+    assert m.channels["a"].bin[0] == "shared:t.png"          # what a save writes
+    assert m.to_json()["channels"]["a"][0] == "shared:t.png"
+
+
+def test_assign_leaves_an_untwinned_id_alone():
+    m = MediaState(Twinned("local:mine.png", shared=()), opener=FakeOpener())
+    m.assign("a", 0, "local:mine.png")
+    m.assign("a", 1, "camera:0")
+    m.assign("a", 2, None)
+    assert m.channels["a"].bin[:3] == ["local:mine.png", "camera:0", None]
+
+
+def test_assign_works_without_prefer_shared():
+    """A resolver that does not offer it (every fake before now) stores the
+    id as picked rather than raising."""
+    m, _ = state("local:t.png")
+    m.assign("a", 0, "local:t.png")
+    assert m.channels["a"].bin[0] == "local:t.png"
+
+
+def test_assign_still_refuses_a_non_id():
+    m, _ = state()
+    with pytest.raises(ValueError):
+        m.assign("a", 0, "not-an-id")

@@ -98,14 +98,14 @@ def run(ctx, dream, worker, frames, fps=60.0):
     return times, px
 
 
-def preset_shot(ctx, slug: str, frames: int, precision: str, poses) -> None:
-    """A party preset (plan 14 WP6: WAKE with the worker on, as the app
+def loadable_shot(ctx, slug: str, frames: int, precision: str, poses) -> None:
+    """A party loadable patch (plan 14 WP6: WAKE with the worker on, as the app
     opens it by default) through the real loader and hand chain
-    (tools/preset_shots.Stage), the DreamWorker on its slot, paced at 60
+    (tools/loadable_shots.Stage), the DreamWorker on its slot, paced at 60
     fps; one frame per pose to docs/plans/assets/12-presets/<slug>-dream/,
     and a sheet beside them."""
     sys.path.insert(0, str(ROOT / "tools"))
-    import preset_shots as ps
+    import loadable_shots as ps
 
     from hyperspace.dream import DreamWorker
 
@@ -161,7 +161,7 @@ def main() -> None:
 
     ctx = moderngl.create_context(standalone=True)
     if args.preset:
-        preset_shot(ctx, args.preset, args.frames, args.precision, WAKE_POSES)
+        loadable_shot(ctx, args.preset, args.frames, args.precision, WAKE_POSES)
         return
     # the spike's defaults (DreamState), the dream buffer alone over the scene
     dream = DreamState(on=True, echoes=0, gap=0.0, layer=LAYERS.index(args.layer))

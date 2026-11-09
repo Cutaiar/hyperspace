@@ -128,8 +128,8 @@ def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
     if lines:
         for b in rows:                  # in the adapter's words: "R height positions …"
             imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
-    # routes are the loaded preset's (plan 13 §3.3): an edit here changes
-    # the table and the preset's dirty dot, and writes no file
+    # routes are the loaded patch's (plan 13 §3.3): an edit here changes
+    # the table and the loadable patch's dirty dot, and writes no file
     if gate and rows:
         _gate_menu(router, rows)
 
@@ -137,7 +137,7 @@ def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
 def _gate_menu(router, rows) -> bool:
     """Pick the pinch that has to be held for these rows to act; the pick
     is written by name (``hand:right.pinch.index``, decision register row
-    20), and a gate an older preset names by number shows as its switch."""
+    20), and a gate an older loadable patch names by number shows as its switch."""
     gates = getattr(router, "gates", {}).get("hand") or []
     if not gates:
         return False
@@ -168,7 +168,7 @@ def page(panel, dt: float) -> None:
     io = getattr(panel, "hands", None)
     panel._section("hands", GROUP if settings is not None else None)
     if settings is None:
-        imgui.text_disabled("no hands setup — see [hands] in config.toml")
+        imgui.text_disabled("no hands setup — the SYSTEM page says why")
         return
     _status(io, getattr(panel, "config_notes", None) or ())
     _box(io)
@@ -200,7 +200,7 @@ def _ghost(panel) -> None:
     Two lines while the ghost is on — the page has no room for a third
     (test_ui_shell): ``[x] Ghost hands  OPACITY [slider]  more ▸`` then
     ``STYLE [combo]  GUIDE [combo]``. "more ▸" opens a popup with the
-    rig's settings (Mirror, and Tethers once a guide is on) and the
+    meta controller's settings (Mirror, and Tethers once a guide is on) and the
     ghost's notes; while there is a note the chip reads "! more ▸" in the
     warning colour and its hover says it. Each group goes on the line only
     when it fits beside what is there, so a narrower panel wraps it rather
@@ -298,7 +298,7 @@ def _more_chip(panel, label: str, notes) -> None:
 
 
 def _more_popup(panel, notes) -> None:
-    """The rig's ghost settings and the ghost's notes, off "more ▸"."""
+    """The meta controller's ghost settings and the ghost's notes, off "more ▸"."""
     if not imgui.begin_popup(GHOST_POPUP):
         return
     reg = panel.reg
@@ -337,8 +337,8 @@ def _status(io, notes=()) -> None:
         if why:
             imgui.text_colored(ui.WARN, why)
         else:
-            imgui.text_disabled("tracker off — [hands] enabled = true in config.toml; "
-                                "the setup still edits and saves")
+            imgui.text_disabled("tracker off — click it on the player board (O) to turn it on "
+                                "on this Mac; the setup still edits and saves")
         return
     port = io.out_name or "no DAW port"
     imgui.text_disabled(f"{io.status or '—'}  ·  {_ins(io)}  ·  {port}")

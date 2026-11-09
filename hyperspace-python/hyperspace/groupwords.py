@@ -21,7 +21,9 @@ class GroupWords:
     part: str                # one of its parts, for a small button: "band"
 
 
-GROUPS = {"band": GroupWords("analyzer", "analyzer tuning", "band")}
+GROUPS = {"band": GroupWords("analyzer", "analyzer tuning", "band"),
+          # plan 57 (FQ4): the loadable patches' group, "presets" until the one migration
+          "loadable": GroupWords("patch", "patches", "patch")}
 
 
 def _of(group) -> GroupWords | None:

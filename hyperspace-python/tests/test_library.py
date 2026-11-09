@@ -1,4 +1,4 @@
-"""The preset & project library: files, dirty state, live edits.
+"""The loadable patch & project library: files, dirty state, live edits.
 
 Every test builds its library on tmp_path (or points HYPERSPACE_HOME at
 one) — nothing here may touch ~/Hyperspace.
@@ -11,8 +11,8 @@ from types import SimpleNamespace
 import pytest
 from conftest import (
     OWNER_KNOB,
+    OWNER_LOADABLES,
     OWNER_PAD,
-    OWNER_PRESETS,
     OWNER_ROW,
     OWNER_SHOWS,
     boot_home,
@@ -23,14 +23,14 @@ from conftest import (
     tree,
 )
 
-from hyperspace import config, library, params, patches, placement, preset, routing
+from hyperspace import config, library, loadable, params, patches, placement, routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.bands import BANDS
 from hyperspace.control import SCENES, SCENES_DIR, Control
 from hyperspace.library import Library, LibraryError, migrate_doc, scene_doc, slug
+from hyperspace.loadable import LoadedPatch
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
 from hyperspace.routing import Bindings as _Bindings
 from hyperspace.routing import Router as _Router
 from hyperspace.view import ViewState
@@ -52,7 +52,7 @@ def edit(path, fn):
 
 
 def make(home, show: str | None = "house"):
-    """Over a home seeded with the corpus (conftest.seed: the presets the
+    """Over a home seeded with the corpus (conftest.seed: the loadable patches the
     build once shipped and the party and house shows) that opened `show`
     last — the house moods these tests were written on (None: the party
     show, the seed's `last_show`)."""
@@ -64,11 +64,11 @@ def make(home, show: str | None = "house"):
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, audio, lib.project)
+    reg = build_registry(view, control, audio, lib.install)
     lib.attach(reg)
-    presets = Presets(lib, reg, _Router(reg, _Bindings()))    # the bank's loader, as app.py builds it
+    loaded_patch = LoadedPatch(lib, reg, _Router(reg, _Bindings()))    # the bank's loader, as app.py builds it
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
-                           presets=presets)
+                           loaded_patch=loaded_patch)
 
 
 @pytest.fixture()
@@ -132,7 +132,7 @@ def test_the_band_scenes_ship_in_the_package():
     names = {json.loads(p.read_text())["name"] for p in SCENES_DIR.glob("*.json")}
     assert names == set(SCENES)
     doc = json.loads((SCENES_DIR / "balanced.json").read_text())
-    assert doc["schema"] == "hyperspace.preset/1" and doc["group"] == "band"
+    assert doc["schema"] == "hyperspace.patch/2" and doc["group"] == "band"
     # (plan 50: read as a patch of the band group, through the one ladder)
     assert scene_doc(SCENES_DIR / "balanced.json") == patches.forward(doc)
     assert patches.forward(doc)["schema"] == "hyperspace.patch/2"
@@ -153,66 +153,66 @@ def test_slug():
     assert slug("***") == "untitled"
 
 
-def test_macros_are_performance_state(rig, tmp_path):
-    """Plan 13 WP1 / WP2: the macros are performance state. A preset
-    carries them and a project (the session) does not; the module strips
+def test_macros_are_patch_state(rig, tmp_path):
+    """Plan 13 WP1 / WP2: the macros are performance state. A loadable patch
+    carries them and a project (the meta controller) does not; the module strips
     still list no `macro` group (a macro's meaning is its subscribers,
-    which live in the preset). The live table keeps them too until plan
+    which live in the loadable patch). The live table keeps them too until plan
     13 WP5 (test_routing)."""
     lib, reg = rig.lib, rig.reg
     assert "macro" not in lib.groups() and "view" in lib.groups()
     m = reg["macro.2"]
     m.set_value(0.3)
-    lib.project.save_slot(0)
-    assert lib.read("presets", lib.project.bank[0])["values"]["macro.2"] == pytest.approx(0.3)
+    lib.install.save_slot(0)
+    assert lib.read("loadable", lib.install.bank[0])["values"]["macro.2"] == pytest.approx(0.3)
     m.set_value(0.7)
-    assert lib.is_dirty("presets")                   # the loaded preset tracks it
-    lib.project.load_slot(0)
-    assert m.value == pytest.approx(0.3)             # the preset brought it back
-    path = lib.project.save("Show")
+    assert lib.is_dirty("loadable")                   # the loaded patch tracks it
+    lib.install.load_slot(0)
+    assert m.value == pytest.approx(0.3)             # the loadable patch brought it back
+    path = lib.install.save("Show")
     doc = json.loads(path.read_text())
-    assert "macro.2" not in doc["session"] and "values" not in doc
+    assert "macro.2" not in doc["tuning"] and "values" not in doc
     assert "macro" not in doc["modules"]
     m.set_value(0.1)
-    assert not lib.project.is_dirty()                # not the session's
+    assert not lib.install.is_dirty()                # not the meta controller's
 
 
-def test_a_project_keeps_the_session_apart(rig, tmp_path):
-    """Plan 13 §2.2 / §4: a project file (schema 2) holds the session part
-    as `session` and the bank as names; the performance is the preset's.
-    is_dirty sees the session, the bank and the startup preset; a file
-    that lacks a session id takes the loaded state, so it opens clean."""
+def test_a_project_keeps_the_meta_apart(rig, tmp_path):
+    """Plan 13 §2.2 / §4: a project file (schema 2) holds the meta controller part
+    as `session` and the bank as names; the performance is the loadable patch's.
+    is_dirty sees the meta controller, the bank and the startup loadable patch; a file
+    that lacks a meta controller id takes the loaded state, so it opens clean."""
     lib, reg = rig.lib, rig.reg
     reg["view.shape"].set(5)
     reg["master.gain"].set(2.0)
-    path = lib.project.save("Split")
+    path = lib.install.save("Split")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.project/3" and "values" not in doc
-    assert doc["session"] == reg.snapshot(part="session")
-    assert "master.gain" in doc["session"] and "view.shape" not in doc["session"]
+    assert doc["schema"] == "hyperspace.install/1" and "values" not in doc
+    assert doc["tuning"] == reg.snapshot(part="shared_meta")
+    assert "master.gain" in doc["tuning"] and "view.shape" not in doc["tuning"]
     # the file holds the F-keys' eight (plan 19 WP1: `bank_doc`), the show 24
-    assert doc["bank"] == lib.project.bank[:8] == library.bank_doc(lib.project.bank)
+    assert doc["bank"] == lib.install.bank[:8] == library.bank_doc(lib.install.bank)
     assert doc["startup"] == "BIG BLUE WAVE"
-    assert not lib.project.is_dirty()
-    reg["view.shape"].set(6)                         # a performance move: the preset's
-    assert not lib.project.is_dirty()
-    reg["master.gain"].set(1.0)                      # a session move dirties the project
-    assert lib.project.is_dirty()
-    lib.project.save()
-    lib.project.startup = "EMBER ORBIT"              # …as does the startup combo
-    assert lib.project.is_dirty()
-    lib.project.save()
+    assert not lib.install.is_dirty()
+    reg["view.shape"].set(6)                         # a performance move: the loadable patch's
+    assert not lib.install.is_dirty()
+    reg["master.gain"].set(1.0)                      # a meta controller move dirties the project
+    assert lib.install.is_dirty()
+    lib.install.save()
+    lib.install.startup = "EMBER ORBIT"              # …as does the startup combo
+    assert lib.install.is_dirty()
+    lib.install.save()
     short = {k: v for k, v in doc.items() if k != "session"}
-    short["session"] = {"master.gain": 3.0}
-    (tmp_path / "projects" / "short.hyp.json").write_text(json.dumps(short))
-    lib.project.load("short")
-    assert rig.chain.gain == 3.0 and "band.0.atk" in lib.project.session
-    assert not lib.project.is_dirty()
+    short["tuning"] = {"master.gain": 3.0}
+    (tmp_path / "installs" / "short.json").write_text(json.dumps(short))
+    lib.install.load("short")
+    assert rig.chain.gain == 3.0 and "band.0.atk" in lib.install.session
+    assert not lib.install.is_dirty()
 
 
-# ---------------------------------------------------------------- presets
+# ---------------------------------------------------------------- loadable patches
 
-def test_load_fills_missing_ids_from_the_default_preset(rig, tmp_path):
+def test_load_fills_missing_ids_from_the_default_loadable(rig, tmp_path):
     lib = rig.lib
     band(tmp_path, "Balanced", "Kick & Sizzle")
     (tmp_path / "patches" / "band" / "sparse.json").write_text(json.dumps({
@@ -294,7 +294,7 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
     """Code review of PR #44 (A2): every band document the library writes
     is built by Library.document, so a band preset that has no file when
     the project is saved is copied inline with its layout. (Applying a
-    module's layout on project load is a separate, older gap: Project._apply
+    module's layout on project load is a separate, older gap: Install._apply
     never ran the layout hook; filed for plan 11's library sweep.)"""
     lib, control, chain = rig.lib, rig.control, rig.chain
     lib.on_layout("band", control.apply_layout)
@@ -305,8 +305,8 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
     (tmp_path / "patches" / "band" / "gone.json").unlink()        # current, but no file anywhere
     lib._sync(tmp_path / "patches" / "band" / "gone.json")
     assert lib.current("band") == "Gone" and lib.path_of("band", "Gone") is None
-    lib.project.save("P")
-    inline = json.loads((tmp_path / "projects" / "p.hyp.json").read_text())["modules"]["band"]
+    lib.install.save("P")
+    inline = json.loads((tmp_path / "installs" / "p.json").read_text())["modules"]["band"]
     assert inline["name"] == "Gone" and "schema" not in inline and "group" not in inline
     assert [b.get("name") for b in inline["layout"]["bands"]][6] == "HIGH"
     assert len(inline["layout"]["bands"]) == 7 and "band.6.atk" in inline["values"]
@@ -314,17 +314,17 @@ def test_a_projects_inline_band_copy_carries_the_layout(rig, tmp_path):
 
 def test_delete_and_rename(rig, tmp_path):
     """Audit L5: `rename` had no caller and went; delete deletes any file
-    (False only when there is no such preset). Plan 19 WP4 brings a rename
-    back with a caller (the preset list), for the presets' group — and
+    (False only when there is no such loadable patch). Plan 19 WP4 brings a rename
+    back with a caller (the preset list), for the loadable patches' group — and
     plan 40 the patches' (`RENAMABLE`): a module preset is named by shows
     and scenes."""
     lib = rig.lib
     lib.save_as("camera", "Wide")
     assert lib.list("camera") == ["Wide"] and lib.current("camera") == "Wide"
-    with pytest.raises(LibraryError, match="only a preset can be renamed"):
+    with pytest.raises(LibraryError, match="only a loadable patch can be renamed"):
         lib.rename("camera", "Wide", "Tall")
-    assert library.RENAMABLE == ("presets", "patches")
-    assert not lib.delete("band", "Percussive")             # no such preset
+    assert library.RENAMABLE == ("loadable", "patches")
+    assert not lib.delete("band", "Percussive")             # no such loadable patch
     assert not lib.delete("camera", "never was")
     assert lib.delete("camera", "Wide")
     assert lib.list("camera") == [] and lib.current("camera") is None
@@ -332,7 +332,7 @@ def test_delete_and_rename(rig, tmp_path):
 
 def test_a_group_registered_after_attach_has_a_default_too(rig):
     """Audit L6: the overlay's output.* registered after attach(), so reset
-    and the dirty dot ignored them until a preset saved them. Now a group's
+    and the dirty dot ignored them until a loadable patch saved them. Now a group's
     fresh values are adopted the first time anyone asks about it."""
     lib, reg = rig.lib, rig.reg
     late = SimpleNamespace(alpha=1.0)
@@ -343,7 +343,7 @@ def test_a_group_registered_after_attach_has_a_default_too(rig):
     assert lib.is_dirty("late")
     assert lib.reset("late") is None and late.alpha == 1.0 and not lib.is_dirty("late")
     reg["late.alpha"].set_value(0.5)
-    lib.project.new()                                  # a fresh project: fresh values everywhere
+    lib.install.new()                                  # a fresh project: fresh values everywhere
     assert late.alpha == 1.0
 
 
@@ -362,7 +362,7 @@ def test_the_home_is_ensured_once_per_process(tmp_path, monkeypatch):
 
 def test_a_project_restores_a_modules_layout(rig, tmp_path):
     """Audit L8: a project saved on eight bands comes back with eight —
-    `Project._apply` takes the same road a strip load does, layout first."""
+    `Install._apply` takes the same road a strip load does, layout first."""
     lib, control, chain = rig.lib, rig.control, rig.chain
     band(tmp_path, "Balanced")
     lib.on_layout("band", control.apply_layout)
@@ -371,130 +371,130 @@ def test_a_project_restores_a_modules_layout(rig, tmp_path):
     control.add_band()
     chain.set_band(7, name="TOP")
     lib.save_as("band", "Eight")                         # by name in the library…
-    p = lib.project.save("Wide")
+    p = lib.install.save("Wide")
     lib.load("band", "Balanced")
     assert chain.n == 6
-    assert lib.project.load("Wide") == []
+    assert lib.install.load("Wide") == []
     assert chain.n == 8 and chain.band_names[7] == "TOP" and lib.current("band") == "Eight"
     assert not lib.is_dirty("band")
     # an edit saved with the project comes back as an edit — dirty against
     # "Eight" — and the band the layout made has its build value as fresh
     rig.reg["band.7.atk"].set_value(0.9)
     edited = chain.params[7].atk                         # as detented by the taper
-    lib.project.save("Wide")
+    lib.install.save("Wide")
     lib.load("band", "Balanced")
-    lib.project.load("Wide")
+    lib.install.load("Wide")
     assert chain.params[7].atk == edited and lib.is_dirty("band")
     assert lib.defaults("band")["band.7.atk"] != edited
     # a new project goes back to the layout the app started with
-    lib.project.new()
+    lib.install.new()
     assert chain.n == 6 and lib.current("band") is None         # a blank show: no module
     # …and the module as an inline copy, when its file is gone
-    lib.project.load("Wide")
+    lib.install.load("Wide")
     (tmp_path / "patches" / "band" / "eight.json").unlink()
     lib._sync(tmp_path / "patches" / "band" / "eight.json")
-    lib.project.save("Wide")
+    lib.install.save("Wide")
     lib.load("band", "Balanced")
     assert chain.n == 6
-    assert lib.project.load(p) == []
+    assert lib.install.load(p) == []
     assert chain.n == 8 and chain.band_names[7] == "TOP"
 
 
 # --------------------------------------------------------- document kinds
 
-def test_presets_are_the_librarys_one_document_kind(rig, tmp_path):
-    """Audit L1, closed by plan 13 WP5: one preset system. The routing
-    presets' kind is gone (was test_routing_presets_are_a_document_kind_of_
+def test_loadables_are_the_librarys_one_document_kind(rig, tmp_path):
+    """Audit L1, closed by plan 13 WP5: one loadable patch system. The routing
+    loadable patches' kind is gone (was test_routing_presets_are_a_document_kind_of_
     the_library); what they were — legacy6, lfo-breathe, the hands-* — are
-    presets, which list, load, save, dirty and delete through the library
+    loadable patches, which list, load, save, dirty and delete through the library
     like any module's. A user's old bindings/ folder is no group."""
     from hyperspace.routing import Binding
 
-    lib, router = rig.lib, rig.presets.router
+    lib, router = rig.lib, rig.loaded_patch.router
     # plan 40 T1: and the patches, a kind that is spawned, never loaded
-    assert lib.kinds == ("patches", "presets") and not hasattr(lib, "routing")
+    assert lib.kinds == ("patches", "playlists", "loadable") and not hasattr(lib, "routing")
     (tmp_path / "bindings").mkdir()
     (tmp_path / "bindings" / "mine.json").write_text("{}")
-    assert "bindings" not in lib.groups() and "presets" in lib.groups()
-    names = lib.list("presets")
+    assert "bindings" not in lib.groups() and "loadable" in lib.groups()
+    names = lib.list("loadable")
     assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(names)
-    assert lib.current("presets") is None
-    assert not lib.is_dirty("presets")                    # nothing loaded: never dirty
+    assert lib.current("loadable") is None
+    assert not lib.is_dirty("loadable")                    # nothing loaded: never dirty
     rig.view.pattern_mod[0] = 0.4
-    lib.load("presets", "legacy6")
+    lib.load("loadable", "legacy6")
     assert rig.view.pattern_mod[0] == 1.0                 # its bases land (plan 22 B3: 1)
-    assert lib.current("presets") == "legacy6" and not lib.is_dirty("presets")
+    assert lib.current("loadable") == "legacy6" and not lib.is_dirty("loadable")
     assert len(router.table.routes()) == 12
     router.table.add(Binding("lane:2", "view.bright", "push", 0.3))
-    assert lib.is_dirty("presets")
-    path = lib.save_as("presets", "My Routes")
-    assert path == tmp_path / "presets" / "my-routes.json"
+    assert lib.is_dirty("loadable")
+    path = lib.save_as("loadable", "My Routes")
+    assert path == tmp_path / "loadable" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/10" and len(doc["routes"]) == 13
-    assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
-    lib.load("presets", "hands-play")
+    assert doc["schema"] == "hyperspace.loadable/11" and len(doc["routes"]) == 13
+    assert lib.current("loadable") == "My Routes" and not lib.is_dirty("loadable")
+    lib.load("loadable", "hands-play")
     assert not router.table.routes_to("view.bright")[0].source.startswith("lane")
-    lib.load("presets", "My Routes")
+    lib.load("loadable", "My Routes")
     assert [b.source for b in router.table.routes_to("view.bright")] == ["lane:2"]
-    assert lib.delete("presets", "My Routes") and "My Routes" not in lib.list("presets")
+    assert lib.delete("loadable", "My Routes") and "My Routes" not in lib.list("loadable")
     with pytest.raises(LibraryError):
-        lib.load("presets", "no-such")
+        lib.load("loadable", "no-such")
 
 
-def test_a_bad_preset_is_reported_not_fatal(rig, tmp_path):
-    """Was test_a_bad_routing_preset_is_reported_not_fatal: a preset of an
+def test_a_bad_loadable_is_reported_not_fatal(rig, tmp_path):
+    """Was test_a_bad_routing_preset_is_reported_not_fatal: a loadable patch of an
     unknown schema, or with a row that is no row, is refused with a
     LibraryError and the rest of the tree is fine."""
     lib = rig.lib
-    d = tmp_path / "presets"
+    d = tmp_path / "loadable"
     (d / "odd.json").write_text(json.dumps({"schema": "hyperspace.bindings/3", "name": "odd"}))
     with pytest.raises(LibraryError):
-        lib.load("presets", "odd")
+        lib.load("loadable", "odd")
     (d / "worse.json").write_text(json.dumps(
         {"schema": "hyperspace.preset/2", "name": "worse", "routes": [{"source": "lane:0"}]}))
     with pytest.raises(LibraryError):
-        lib.load("presets", "worse")
+        lib.load("loadable", "worse")
     (d / "worst.json").write_text(json.dumps(
         {"schema": "hyperspace.preset/2", "name": "worst", "routes": ["lane:0"]}))
     with pytest.raises(LibraryError):
-        lib.load("presets", "worst")
+        lib.load("loadable", "worst")
     (d / "bare.json").write_text(json.dumps({"name": "bare", "values": {}}))    # no schema
     with pytest.raises(LibraryError):
-        lib.load("presets", "bare")
-    assert "TUMBLE" in lib.list("presets")                # the rest of the tree is fine
+        lib.load("loadable", "bare")
+    assert "TUMBLE" in lib.list("loadable")                # the rest of the tree is fine
 
 
-def test_the_preset_kind_reaches_presets_at_call_time(rig):
-    """Hot reload re-classes `Presets` in place; the kind's hooks must not
+def test_the_loadable_kind_reaches_loadables_at_call_time(rig):
+    """Hot reload re-classes `LoadedPatch` in place; the kind's hooks must not
     hold the pre-reload bound methods (was the routing kind's test)."""
     lib = rig.lib
     seen = []
-    rig.presets.signature = lambda: seen.append("sig") or ()
-    lib.load("presets", "hands-play")
+    rig.loaded_patch.signature = lambda: seen.append("sig") or ()
+    lib.load("loadable", "hands-play")
     assert seen == ["sig"]
 
 
 def test_a_project_naming_the_old_routing_layer_is_ignored(rig, tmp_path):
     """A hand-edited project naming a `bindings` module (the routing
-    presets' old group) loads, and names nothing current."""
+    loadable patches' old group) loads, and names nothing current."""
     lib = rig.lib
-    p = tmp_path / "projects" / "odd.hyp.json"
+    p = tmp_path / "installs" / "odd.json"
     p.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "Odd",
                              "session": {}, "modules": {"bindings": "lfo-breathe"}}))
-    assert lib.project.load("odd") == []
+    assert lib.install.load("odd") == []
     assert lib.current("bindings") is None
 
 
-def test_a_project_never_carries_the_loaded_preset(rig, tmp_path):
-    """Audit L3, and plan 13 §2.2: `Project.io` is gone, and the loaded
-    preset (routes and all) stays out of a project's modules — the bank
-    names presets, the project holds the session."""
+def test_a_project_never_carries_the_loaded_loadable(rig, tmp_path):
+    """Audit L3, and plan 13 §2.2: `Install.io` is gone, and the loaded
+    loadable patch (routes and all) stays out of a project's modules — the bank
+    names loadable patches, the project holds the meta controller."""
     lib = rig.lib
-    lib.load("presets", "hands-play")
-    doc = json.loads(lib.project.save("Set").read_text())
+    lib.load("loadable", "hands-play")
+    doc = json.loads(lib.install.save("Set").read_text())
     assert "io" not in doc and "bindings" not in doc["modules"]
-    assert "presets" not in doc["modules"]
-    assert not hasattr(lib.project, "io")
+    assert "loadable" not in doc["modules"]
+    assert not hasattr(lib.install, "io")
 
 
 def test_next_prev_cycle_by_name(rig, tmp_path):
@@ -534,13 +534,13 @@ def test_bad_files_are_reported_not_fatal(rig, tmp_path):
         lib.load("view", "F")
     with pytest.raises(LibraryError, match="a patch of the camera group, not a patch of the view"):
         lib.load("view", "O")
-    with pytest.raises(LibraryError, match="no preset"):
+    with pytest.raises(LibraryError, match="no patch"):
         lib.load("view", "nope")
 
 
 def test_schema_migration_table():
     """The shows' ladder (plan 50: the only one `migrate_doc` serves — a
-    preset's is `graphmigrate.forward`, a fragment's `patches.forward`)."""
+    loadable patch's is `graphmigrate.forward`, a fragment's `patches.forward`)."""
     with pytest.raises(LibraryError, match="no schema"):
         migrate_doc({}, "hyperspace.project")
     with pytest.raises(LibraryError, match="not a hyperspace.project"):
@@ -564,59 +564,59 @@ def test_schema_migration_table():
 
 def test_project_save_load_new(rig, tmp_path):
     lib, reg = rig.lib, rig.reg
-    assert lib.project.name == "house"                        # the seed's, opened last
-    assert lib.project.path == tmp_path / "projects" / "house.hyp.json"
+    assert lib.install.name == "house"                        # the seed's, opened last
+    assert lib.install.path == tmp_path / "installs" / "house.json"
     band(tmp_path, "Balanced", "Percussive")
     lib.load("band", "Percussive")
     lib.save_as("view", "Mine")
     reg["camera.zoom"].set_value(3.0)
     reg["master.gain"].set(2.5)
-    lib.project.save_slot(2)
-    p = lib.project.save("Gig")
-    assert p == tmp_path / "projects" / "gig.hyp.json"
-    assert lib.project.list() == ["gig", "house", "party"]   # house, party: the seed's
+    lib.install.save_slot(2)
+    p = lib.install.save("Gig")
+    assert p == tmp_path / "installs" / "gig.json"
+    assert lib.install.list() == ["gig", "house", "party"]   # house, party: the seed's
     doc = json.loads(p.read_text())
-    assert doc["schema"] == "hyperspace.project/3" and doc["name"] == "Gig"
-    # a performance group's label is the preset's, never the project's
+    assert doc["schema"] == "hyperspace.install/1" and doc["name"] == "Gig"
+    # a patch group's label is the loadable patch's, never the project's
     assert doc["modules"] == {"band": "Percussive"}
-    assert doc["session"]["master.gain"] == 2.5 and "camera.zoom" not in doc["session"]
+    assert doc["tuning"]["master.gain"] == 2.5 and "camera.zoom" not in doc["tuning"]
     assert doc["bank"][2] == "STROBE CAGE"
-    assert lib.read("presets", "STROBE CAGE")["values"]["camera.zoom"] == 3.0
+    assert lib.read("loadable", "STROBE CAGE")["values"]["camera.zoom"] == 3.0
     assert "io" not in doc                                  # audit L3: never written, gone
 
-    lib.project.new()
-    assert lib.project.name == "untitled" and lib.project.path is None
-    assert rig.chain.gain == 1.0                                     # a fresh session…
+    lib.install.new()
+    assert lib.install.name == "untitled" and lib.install.path is None
+    assert rig.chain.gain == 1.0                                     # a fresh rig…
     assert lib.current("band") is None                               # …no module preset,
-    assert lib.project.bank == [None] * library.SLOTS                # …an empty bank
-    assert lib.project.startup is None                               # …and nothing to start on
+    assert lib.install.bank == [None] * library.SLOTS                # …an empty bank
+    assert lib.install.startup is None                               # …and nothing to start on
 
-    missing = lib.project.load("Gig")
-    assert missing == [] and lib.project.path == p
+    missing = lib.install.load("Gig")
+    assert missing == [] and lib.install.path == p
     assert rig.chain.gain == 2.5
     assert lib.current("band") == "Percussive" and not lib.is_dirty("band")
-    assert lib.project.active == 0                                   # the startup preset's slot
-    # a module whose preset is gone is still "loaded", the values speak for it
+    assert lib.install.active == 0                                   # the startup loadable patch's slot
+    # a module whose loadable patch is gone is still "loaded", the values speak for it
     lib.save_as("band", "Mine")
-    lib.project.save()
+    lib.install.save()
     lib.delete("band", "Mine")
-    lib.project.load(p)
+    lib.install.load(p)
     assert lib.current("band") == "Mine" and not lib.is_dirty("band")
     # saving now keeps an inline copy so the project stays whole elsewhere
-    doc = json.loads(lib.project.save().read_text())
+    doc = json.loads(lib.install.save().read_text())
     assert doc["modules"]["band"]["name"] == "Mine" and "band.0.atk" in doc["modules"]["band"]["values"]
 
 
 def test_project_unknown_ids_and_a_short_bank(rig, tmp_path):
-    p = tmp_path / "projects" / "odd.hyp.json"
+    p = tmp_path / "installs" / "odd.json"
     p.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "Odd",
                              "session": {"master.gain": 2.0, "warp.core": 1},
                              "bank": ["ONE"]}))
-    assert rig.lib.project.load("odd") == ["warp.core"]
+    assert rig.lib.install.load("odd") == ["warp.core"]
     assert rig.chain.gain == 2.0
     # a short bank is padded with empty slots; nothing is seeded any more
-    assert rig.lib.project.bank == ["ONE"] + [None] * (library.SLOTS - 1)
-    assert rig.lib.project.name == "Odd" and rig.lib.project.path == p
+    assert rig.lib.install.bank == ["ONE"] + [None] * (library.SLOTS - 1)
+    assert rig.lib.install.name == "Odd" and rig.lib.install.path == p
 
 
 def test_the_users_copy_of_the_last_show_opens_on_attach(tmp_path):
@@ -624,15 +624,15 @@ def test_the_users_copy_of_the_last_show_opens_on_attach(tmp_path):
     band(tmp_path, "Tremolo Web")
     r.reg["master.gain"].set(2.0)
     r.lib.load("band", "Tremolo Web")
-    r.lib.project.save()                              # the house show, opened last
+    r.lib.install.save()                              # the house show, opened last
     r2 = make(tmp_path, show=None)
-    assert r2.lib.project.path == tmp_path / "projects" / "house.hyp.json"
+    assert r2.lib.install.path == tmp_path / "installs" / "house.json"
     assert r2.chain.gain == 2.0 and r2.lib.current("band") == "Tremolo Web"
 
 
 # ---------------------------------------------------------------- live editing
 
-def test_editing_the_loaded_preset_reflects_in_the_app(rig, tmp_path):
+def test_editing_the_loaded_loadable_reflects_in_the_app(rig, tmp_path):
     lib = rig.lib
     assert not lib.poll(now=1.0)                      # quiet tree
     path = lib.save_as("view", "Live")
@@ -640,7 +640,7 @@ def test_editing_the_loaded_preset_reflects_in_the_app(rig, tmp_path):
     edit(path, lambda d: d["values"].__setitem__("view.bright", 3.0))
     assert lib.poll(now=3.0)
     assert rig.view.bright == 3.0 and "view/Live" in lib.status
-    # a file for a preset that is not loaded changes nothing but the listing
+    # a file for a loadable patch that is not loaded changes nothing but the listing
     other = tmp_path / "patches" / "view" / "other.json"
     other.write_text(json.dumps({"schema": "hyperspace.preset/1", "group": "view",
                                  "name": "Other", "values": {"view.bright": 0.1}}))
@@ -659,13 +659,13 @@ def test_editing_the_loaded_preset_reflects_in_the_app(rig, tmp_path):
 
 def test_editing_the_open_project_reloads_it(rig, tmp_path):
     lib = rig.lib
-    p = lib.project.save("Set")
+    p = lib.install.save("Set")
     lib.poll(now=1.0)
-    rig.view.shape = 3                                 # the performance, the preset's
-    edit(p, lambda d: (d["session"].__setitem__("master.gain", 4.0),
+    rig.view.shape = 3                                 # the performance, the loadable patch's
+    edit(p, lambda d: (d["tuning"].__setitem__("master.gain", 4.0),
                        d["bank"].__setitem__(0, "RENAMED")))
     assert lib.poll(now=2.0)
-    assert rig.chain.gain == 4.0 and lib.project.bank[0] == "RENAMED"
+    assert rig.chain.gain == 4.0 and lib.install.bank[0] == "RENAMED"
     assert rig.view.shape == 3                         # an edit re-reads; no startup load
 
 
@@ -686,17 +686,17 @@ def test_a_band_presets_normalisation_switch_round_trips(rig):
 
 
 def test_the_librarys_shows_are_listed_and_load_by_name(rig, tmp_path):
-    """The load combo lists the library's shows (`projects/*.hyp.json`;
+    """The load combo lists the library's shows (`projects/*.json`;
     plan 12's `party`, from the seed); opening one by name lands its bank,
-    and its startup preset with it."""
+    and its startup loadable patch with it."""
     lib = rig.lib
-    assert lib.project.list() == ["house", "party"]
-    assert lib.project.load("party") == []
-    assert lib.project.name == "party"
-    assert lib.project.path == tmp_path / "projects" / "party.hyp.json"
-    assert lib.project.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA",
+    assert lib.install.list() == ["house", "party"]
+    assert lib.install.load("party") == []
+    assert lib.install.name == "party"
+    assert lib.install.path == tmp_path / "installs" / "party.json"
+    assert lib.install.bank == ["TUMBLE", "FACES", "FIELD", "WAKE", "TRIP", "ACID", "MANDALA",
                                 "NOITA", "TRACER"] + [None] * 15    # plan 19 WP1: slot 9
-    assert lib.current("presets") == "TUMBLE" and lib.project.active == 0
+    assert lib.current("loadable") == "TUMBLE" and lib.install.active == 0
     assert rig.view.shape == 10 and lib.current("band") == "Balanced"
 
 
@@ -704,14 +704,14 @@ def test_the_librarys_shows_are_listed_and_load_by_name(rig, tmp_path):
 
 def trash(home, group) -> list:
     # (plan 50: a group's patches sit under patches/<group>/, and so in the trash)
-    d = home / library.TRASH / (group if group in ("presets", "projects", "patches")
+    d = home / library.TRASH / (group if group in ("loadable", "installs", "patches")
                                 else f"patches/{group}")
     return sorted(d.iterdir()) if d.is_dir() else []
 
 
-def test_a_save_over_a_preset_keeps_the_old_file_in_the_trash(rig, tmp_path, monkeypatch,
+def test_a_save_over_a_loadable_keeps_the_old_file_in_the_trash(rig, tmp_path, monkeypatch,
                                                               capsys):
-    """Every road that overwrites a user preset file copies it to
+    """Every road that overwrites a user loadable patch file copies it to
     `<home>/trash/<group>/` first — the strip's Save and as…, ⇧F — with
     the file's own name and a date; the copy is the old file, byte for
     byte. A copy that fails does not stop the save: the warning says so."""
@@ -726,15 +726,15 @@ def test_a_save_over_a_preset_keeps_the_old_file_in_the_trash(rig, tmp_path, mon
     assert kept.name.startswith("loud-one.") and kept.suffix == ".json"
     stamp = kept.name[len("loud-one."):-len(".json")]
     assert len(stamp) == 15 and stamp[8] == "-" and stamp.replace("-", "").isdigit()
-    # a preset (the document kind), by ⇧F: the bank's save
-    lib.project.save_slot(2)                                  # over STROBE CAGE, the seed's
-    name = lib.project.bank[2]
-    mine = lib.path_of("presets", name)
+    # a loadable patch (the document kind), by ⇧F: the bank's save
+    lib.install.save_slot(2)                                  # over STROBE CAGE, the seed's
+    name = lib.install.bank[2]
+    mine = lib.path_of("loadable", name)
     old = mine.read_bytes()
-    (seeds,) = trash(tmp_path, "presets")                     # the seed's file, kept
+    (seeds,) = trash(tmp_path, "loadable")                     # the seed's file, kept
     reg["view.shape"].set(7)
-    lib.project.save_slot(2)
-    (kept,) = [p for p in trash(tmp_path, "presets") if p != seeds]
+    lib.install.save_slot(2)
+    (kept,) = [p for p in trash(tmp_path, "loadable") if p != seeds]
     assert kept.read_bytes() == old and mine.read_bytes() != old
     # a module preset saved over, the same: the old file kept
     band(tmp_path, "Balanced")
@@ -778,15 +778,15 @@ def test_a_delete_keeps_the_file_in_the_trash_or_does_not_delete(rig, tmp_path, 
 
 
 def test_a_save_that_changes_nothing_trashes_nothing(rig, tmp_path):
-    """Fork 6 (b): Save on an unchanged preset leaves the trash alone."""
+    """Fork 6 (b): Save on an unchanged loadable patch leaves the trash alone."""
     lib, reg = rig.lib, rig.reg
     lib.save_as("view", "Same")
     for _ in range(3):
         lib.overwrite("view")
         lib.save_as("view", "Same")
     assert trash(tmp_path, "view") == [] and not (tmp_path / library.TRASH).exists()
-    rig.presets.save_as("LOOK")
-    rig.presets.save_as("LOOK")
+    rig.loaded_patch.save_as("LOOK")
+    rig.loaded_patch.save_as("LOOK")
     assert not (tmp_path / library.TRASH).exists()
     reg["view.bright"].set_value(1.5)
     lib.overwrite("view")
@@ -811,7 +811,7 @@ def test_two_trashings_in_one_second_do_not_collide(rig, tmp_path, monkeypatch):
 
 
 def test_the_trash_is_no_group_and_is_never_watched(rig, tmp_path):
-    """`trash` is listed as no group, its files as no presets, and the file
+    """`trash` is listed as no group, its files as no loadable patches, and the file
     watch never sees them: editing or adding a trashed file re-applies
     nothing."""
     lib, reg = rig.lib, rig.reg
@@ -851,8 +851,8 @@ def test_next_name_counts_on_from_a_trailing_number():
     assert nn("TRIP  7", set()) == "TRIP 8"                    # any whitespace before it is
     assert nn("ACID (2)", set()) == "ACID (2) 2"
     for none in (None, "", "   "):
-        assert nn(none, set()) == "PRESET 1"
-    assert nn(None, {"preset-1", "preset-2"}) == "PRESET 3"
+        assert nn(none, set()) == "PATCH 1"
+    assert nn(None, {"patch-1", "patch-2"}) == "PATCH 3"
     # `taken` is slugs: a name that differs only in case or punctuation is taken
     assert nn("Trip", {slug("TRIP 2")}) == "Trip 3"
     assert nn("TRIP", {"trip-2"}) != nn("TRIP", set())
@@ -867,11 +867,11 @@ def test_next_empty_reads_the_banks_own_length(tmp_path):
     import inspect
 
     r = make(tmp_path, None)
-    pr = r.lib.project
+    pr = r.lib.install
     assert len(pr.bank) == library.SLOTS == 24 and routing.F_KEYS == 8
     assert pr.next_empty() == 9                                 # the party show: slot 10
     r.reg["preset.save_new"].fire()
-    name = r.lib.current("presets")
+    name = r.lib.current("loadable")
     assert pr.bank[9] == name and pr.active == 9
     assert r.lib.status == f"saved {name} → slot 10"
     assert pr.next_empty() == 10
@@ -884,7 +884,7 @@ def test_next_empty_reads_the_banks_own_length(tmp_path):
     pr.bank[17] = None
     assert pr.next_empty() == 17
     r.reg["preset.save_new"].fire()                             # into slot 18
-    name = r.lib.current("presets")
+    name = r.lib.current("loadable")
     assert pr.bank[17] == name and pr.active == 17
     assert r.lib.status == f"saved {name} → slot 18"
     pr.put_slot(23, "WAKE")
@@ -892,8 +892,8 @@ def test_next_empty_reads_the_banks_own_length(tmp_path):
     assert r.lib.status == "slot 24: WAKE"
     pr.clear_slot(20)
     assert pr.bank[20] is None and pr.next_empty() == 20
-    for fn in (library.Project.next_empty, library.Project.save_new, library.Project.put_slot,
-               library.Project.clear_slot, library.Project._set_slot):
+    for fn in (library.Install.next_empty, library.Install.save_new, library.Install.put_slot,
+               library.Install.clear_slot, library.Install._set_slot):
         src = inspect.getsource(fn)
         assert "SLOTS" not in src, fn.__name__
 
@@ -901,7 +901,7 @@ def test_next_empty_reads_the_banks_own_length(tmp_path):
 # ------------------------------------------- plan 19 WP1: a bank of twenty-four
 
 def bak8(show):
-    """The backups `Project.write` has made of an eight-slot show file."""
+    """The backups `Install.write` has made of an eight-slot show file."""
     return sorted(show.parent.glob(f"{show.name}.bak-v{library.BANK8_BACKUP}*"))
 
 
@@ -917,8 +917,8 @@ def test_the_bank_is_twenty_four_and_the_f_keys_eight(tmp_path):
     `params` hold too (neither may import `library`)."""
     assert library.SLOTS == 24
     assert library.F_KEYS == 8 == routing.F_KEYS == params.F_KEYS
-    assert len(make(tmp_path).lib.project.bank) == 24
-    assert len(library.Project(SimpleNamespace()).bank) == 24
+    assert len(make(tmp_path).lib.install.bank) == 24
+    assert len(library.Install(SimpleNamespace()).bank) == 24
     assert [library.slot_key(k) for k in (0, 7, 8, 11, 23)] == ["F1", "F8", "slot 9", "slot 12",
                                                                  "slot 24"]
 
@@ -939,30 +939,30 @@ def test_a_bank_is_written_as_far_as_its_last_filled_slot():
 
 def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     """The fixture every "on a copy" test stands on: two shows with
-    eight-name banks, three presets whose desks hold the sixteen shape pads
+    eight-name banks, three loadable patches whose desks hold the sixteen shape pads
     as today's writer wrote them (one with a re-aimed pad and a learned
     knob), a bindings.json with the owner's row, and the machine's files."""
     home = owner_home
     for show in OWNER_SHOWS:
-        doc = json.loads((home / "projects" / f"{show}.hyp.json").read_text())
-        assert doc["schema"] == "hyperspace.project/3" and len(doc["bank"]) == 8
+        doc = json.loads((home / "installs" / f"{show}.json").read_text())
+        assert doc["schema"] == "hyperspace.install/1" and len(doc["bank"]) == 8
         assert all(doc["bank"]), show
-    mine = json.loads((home / "projects" / "mine.hyp.json").read_text())
-    assert mine["bank"][:3] == list(OWNER_PRESETS) and mine["startup"] == "NIGHT ONE"
-    assert (home / "last_show").read_text().strip() == "mine"
+    mine = json.loads((home / "installs" / "mine.json").read_text())
+    assert mine["bank"][:3] == list(OWNER_LOADABLES) and mine["startup"] == "NIGHT ONE"
+    assert (home / "last_install").read_text().strip() == "mine"
     pads = old_shape_pads()
     assert len(pads) == 16 and {p["target"] for p in pads} == {"view.shape"}
-    for name in OWNER_PRESETS:
-        doc = json.loads((home / "presets" / f"{slug(name)}.json").read_text())
-        assert doc["schema"] == "hyperspace.preset/10" and doc["name"] == name   # (row 394)
+    for name in OWNER_LOADABLES:
+        doc = json.loads((home / "loadable" / f"{slug(name)}.json").read_text())
+        assert doc["schema"] == "hyperspace.loadable/11" and doc["name"] == name   # (row 394)
         by_source = {row["source"]: row for row in doc["desk"]}
         for pad in pads:
             if name == "NIGHT TWO" and pad["source"] == OWNER_PAD["source"]:
                 assert by_source[pad["source"]] == OWNER_PAD        # the pad the owner re-aimed
             else:
                 assert by_source[pad["source"]] == pad, (name, pad["source"])
-    two = json.loads((home / "presets" / "night-two.json").read_text())
-    knob = preset.desk_json([preset.device_knob(*OWNER_KNOB)])[0]
+    two = json.loads((home / "loadable" / "night-two.json").read_text())
+    knob = loadable.desk_json([loadable.device_knob(*OWNER_KNOB)])[0]
     assert knob in two["desk"]                                      # the knob the owner learned
     table = json.loads((home / "bindings.json").read_text())
     source, target = OWNER_ROW
@@ -973,72 +973,72 @@ def test_the_owner_home_is_shaped_like_the_owners(owner_home):
     assert len([b for b in table["bindings"] if b["target"] == "preset.select"]) == 8
     assert json.loads((home / "windows.json").read_text())["schema"] == "hyperspace.windows/1"
     assert (home / "stall.log").is_file() and (home / "weights" / "model.safetensors").is_file()
-    assert len(list((home / "trash" / "presets").glob("night-one.*.json"))) == 1
+    assert len(list((home / "trash" / "loadable").glob("night-one.*.json"))) == 1
     assert os.environ["HYPERSPACE_HOME"] == str(home)
 
 
 def test_an_eight_slot_show_loads_and_is_not_rewritten(owner_home):
     """The owner's files, rule 1 (on a copy): a show with an eight-name
     bank opens, padded to twenty-four in memory, clean — and is not
-    rewritten: after a launch, preset loads, home, opening the other show
+    rewritten: after a launch, loadable patch loads, home, opening the other show
     and a quit, every file in the home but `last_show` and `windows.json`
     (written as they always were) has the bytes and the mtime it had —
     and but `bindings.json`, which the first launch of plan 19 WP2 rewrites
     once, backed up first (test_routing.py's tests on this home)."""
     home = owner_home
-    quiet = ("last_show", "windows.json", "bindings.json")
+    quiet = ("last_install", "windows.json", "bindings.json")
     before = tree(home, but=quiet)
     r = boot_home(home)                                   # the launch: `mine`, opened last
-    lib, pr = r.lib, r.lib.project
-    assert pr.name == "mine" and pr.path == home / "projects" / "mine.hyp.json"
-    assert len(pr.bank) == 24 and pr.bank[:3] == list(OWNER_PRESETS)
+    lib, pr = r.lib, r.lib.install
+    assert pr.name == "mine" and pr.path == home / "installs" / "mine.json"
+    assert len(pr.bank) == 24 and pr.bank[:3] == list(OWNER_LOADABLES)
     assert all(pr.bank[:8]) and pr.bank[8:] == [None] * 16
-    assert not pr.is_dirty() and lib.current("presets") == "NIGHT ONE" and pr.active == 0
+    assert not pr.is_dirty() and lib.current("loadable") == "NIGHT ONE" and pr.active == 0
     assert [r.reg["preset.select"].has(k) for k in (0, 7, 8, 23)] == [True, True, False, False]
     r.reg["preset.load.1"].fire()                          # F2
-    assert lib.current("presets") == "NIGHT TWO" and pr.active == 1
+    assert lib.current("loadable") == "NIGHT TWO" and pr.active == 1
     r.reg["preset.select"].set(4)                          # a pad of clip row 1
     r.reg["preset.home"].fire()
-    assert lib.current("presets") == "NIGHT ONE" and not pr.is_dirty()
+    assert lib.current("loadable") == "NIGHT ONE" and not pr.is_dirty()
     pr.load_slot(12)                                       # an empty far slot: said, nothing else
     assert lib.warning == "slot 13: an empty slot — hold its pad to save the live state into it"
     lib.poll()
     assert tree(home, but=quiet) == before
     pr.load("party")                                       # the user copy of the party show
-    assert pr.path == home / "projects" / "party.hyp.json" and not pr.is_dirty()
+    assert pr.path == home / "installs" / "party.json" and not pr.is_dirty()
     assert len(pr.bank) == 24 and pr.bank[8:] == [None] * 16      # no TRACER: the file is yours
     r.reg["preset.load.7"].fire()
     lib.poll()
     quit_(home)
     assert tree(home, but=quiet) == before
-    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v4"]
     # and a second launch finds the same, bindings.json and its backup too
     after = tree(home, but=quiet[:2])
     again = boot_home(home)
-    assert again.lib.project.name == "party" and not again.lib.project.is_dirty()
+    assert again.lib.install.name == "party" and not again.lib.install.is_dirty()
     assert tree(home, but=quiet[:2]) == after
 
 
-def test_loading_never_rewrites_a_preset_file(owner_home):
-    """The owner's files (on a copy): every preset in the home loads — from
-    the bank, the strip and the file watch — and no preset file changes by
+def test_loading_never_rewrites_a_loadable_file(owner_home):
+    """The owner's files (on a copy): every loadable patch in the home loads — from
+    the bank, the strip and the file watch — and no loadable patch file changes by
     a byte or a tick of its mtime."""
     home = owner_home
-    def presets_of(root):
+    def loadables_of(root):
         return {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
-                for p in sorted((root / "presets").glob("*.json"))}
-    before = presets_of(home)
+                for p in sorted((root / "loadable").glob("*.json"))}
+    before = loadables_of(home)
     r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
+    lib, pr = r.lib, r.lib.install
     for k in range(8):
         pr.load_slot(k)
-        assert lib.current("presets") == pr.bank[k] and not lib.is_dirty("presets"), pr.bank[k]
-    for name in lib.list("presets"):
-        lib.load("presets", name)
+        assert lib.current("loadable") == pr.bank[k] and not lib.is_dirty("loadable"), pr.bank[k]
+    for name in lib.list("loadable"):
+        lib.load("loadable", name)
         lib.poll()
-    assert set(OWNER_PRESETS) <= set(lib.list("presets"))
-    assert presets_of(home) == before
-    assert len(list((home / "trash" / "presets").iterdir())) == 1        # nothing new in the trash
+    assert set(OWNER_LOADABLES) <= set(lib.list("loadable"))
+    assert loadables_of(home) == before
+    assert len(list((home / "trash" / "loadable").iterdir())) == 1        # nothing new in the trash
 
 
 def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home):
@@ -1048,10 +1048,10 @@ def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home)
     made: nothing about the file's shape changes."""
     home = owner_home
     r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
-    show = home / "projects" / "mine.hyp.json"
+    lib, pr = r.lib, r.lib.install
+    show = home / "installs" / "mine.json"
     was = json.loads(show.read_text())
-    pr.startup = "NIGHT TWO"                               # the startup preset, in memory
+    pr.startup = "NIGHT TWO"                               # the startup loadable patch, in memory
     pr.write()
     doc = json.loads(show.read_text())
     assert doc == {**was, "startup": "NIGHT TWO"} and len(doc["bank"]) == 8
@@ -1062,9 +1062,9 @@ def test_a_show_that_uses_only_the_first_eight_is_written_with_eight(owner_home)
     doc = json.loads(show.read_text())
     assert len(doc["bank"]) == 8 and doc["bank"][3] == "NIGHT THREE" and doc["bank"][6] is None
     r.reg["preset.save.6"].fire()                          # ⇧F7 into the hole
-    assert len(json.loads(show.read_text())["bank"]) == 8 and pr.bank[6] == "PRESET 7"
+    assert len(json.loads(show.read_text())["bank"]) == 8 and pr.bank[6] == "PATCH 7"
     # (the one backup in the home is bindings.json's, from the launch: plan 19 WP2)
-    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v3"]
+    assert [p.name for p in home.rglob("*.bak-*")] == ["bindings.json.bak-v4"]
     assert not pr.is_dirty() and pr.bank_error == ""
     assert lib.warning == ""
     # a far slot filled and cleared again: the file is back to eight entries
@@ -1083,15 +1083,15 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
     slot menu, from ⇧click and from the desk's save-as."""
     home = owner_home
     r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
-    show = home / "projects" / "mine.hyp.json"
+    lib, pr = r.lib, r.lib.install
+    show = home / "installs" / "mine.json"
     old = show.read_bytes()
     pr.put_slot(11, "NIGHT TWO")
     assert pr.bank[11] == "NIGHT TWO" and lib.status == "slot 12: NIGHT TWO"
-    assert [p.name for p in bak8(show)] == ["mine.hyp.json.bak-v2-bank8"]
+    assert [p.name for p in bak8(show)] == ["mine.json.bak-v2-bank8"]
     assert bak8(show)[0].read_bytes() == old               # the file from before any far slot
     doc = json.loads(show.read_text())
-    assert doc["schema"] == "hyperspace.project/3"         # the schema stays (fork 2; plan 44 D3: /3)
+    assert doc["schema"] == "hyperspace.install/1"         # the schema stays (fork 2; plan 44 D3: /3)
     assert len(doc["bank"]) == 12 and doc["bank"][8:] == [None, None, None, "NIGHT TWO"]
     assert doc["bank"][:8] == json.loads(old)["bank"] and not pr.is_dirty()
     # a second far write, a save and "starts on": the long bank is on disk, no second copy
@@ -1103,37 +1103,37 @@ def test_the_first_write_past_slot_eight_keeps_the_eight_slot_file(owner_home):
     assert len(bak8(show)) == 1 and bak8(show)[0].read_bytes() == old
     assert len(json.loads(show.read_text())["bank"]) == 21
     # a launch reads the long bank back
-    again = boot_home(home).lib.project
+    again = boot_home(home).lib.install
     assert again.bank == pr.bank and again.bank[20] == "WAKE" and not again.is_dirty()
 
     # ---- no backup, no write: the other show, its eight-slot file still on disk
     pr.load("party")
-    show = home / "projects" / "party.hyp.json"
+    show = home / "installs" / "party.json"
     old = show.read_bytes()
-    mine = (home / "projects" / "mine.hyp.json.bak-v2-bank8")
+    mine = (home / "installs" / "mine.json.bak-v2-bank8")
     own = show.with_name(show.name + ".bak-v2-bank8")
     own.write_text("a copy the owner made by hand")        # a name already taken
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(routing, "backup", lambda path, schema: None)
         said = dict(lib.said)
-        why = "party.hyp.json: not written — no backup of the eight-slot file could be made"
+        why = "party.json: not written — no backup of the eight-slot file could be made"
         pr.put_slot(9, "WAKE")                             # the slot menu
         assert pr.bank[9] is None and show.read_bytes() == old
-        assert pr.bank_error == f"presets: {why}"
+        assert pr.bank_error == f"patches: {why}"
         assert lib.warning == f"slot 10: not changed — {why}"
         assert lib.said["warning"] == said.get("warning", 0) + 1     # the footer shows it
         assert not pr.is_dirty()
         pr.save_slot(12)                                   # ⇧click on a far slot
         assert pr.bank[12] is None and show.read_bytes() == old
-        assert lib.current("presets") == "PRESET 13" and pr.active == -1   # in no slot: none lit
-        assert "PRESET 13" in lib.list("presets")          # the preset is saved, and listed
-        assert lib.warning == f"saved PRESET 13 — slot 13 not changed — {why}"
+        assert lib.current("loadable") == "PATCH 13" and pr.active == -1   # in no slot: none lit
+        assert "PATCH 13" in lib.list("loadable")          # the loadable patch is saved, and listed
+        assert lib.warning == f"saved PATCH 13 — slot 13 not changed — {why}"
         assert r.reg["preset.save_new"].fire() is True     # the desk's save-as: F1–F8 are full
-        name = lib.current("presets")
-        assert name in lib.list("presets") and name not in pr.bank and pr.active == -1
+        name = lib.current("loadable")
+        assert name in lib.list("loadable") and name not in pr.bank and pr.active == -1
         assert show.read_bytes() == old and not pr.is_dirty()
-        assert lib.warning == (f"saved {name} — the show could not be written: it is in the "
-                               f"preset list ({why})")
+        assert lib.warning == (f"saved {name} — the install could not be written: it is in the "
+                               f"patch list ({why})")
         # a write that keeps the bank at eight needs no backup, and goes through
         pr.put_slot(2, "NIGHT ONE")
         assert pr.bank[2] == "NIGHT ONE" and json.loads(show.read_text())["bank"][2] == "NIGHT ONE"
@@ -1178,19 +1178,19 @@ def test_save_as_lands_on_slot_nine_once_the_f_keys_are_full(owner_home):
     eight-slot file kept once."""
     home = owner_home
     r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
-    show = home / "projects" / "mine.hyp.json"
+    lib, pr = r.lib, r.lib.install
+    show = home / "installs" / "mine.json"
     old = show.read_bytes()
     assert pr.next_empty() == 8
     assert r.reg["preset.save_new"].fire() is True
-    assert pr.bank[8] == "NIGHT ONE 2" == lib.current("presets") and pr.active == 8
+    assert pr.bank[8] == "NIGHT ONE 2" == lib.current("loadable") and pr.active == 8
     assert lib.status == "saved NIGHT ONE 2 → slot 9"
     assert json.loads(show.read_text())["bank"] == [*json.loads(old)["bank"], "NIGHT ONE 2"]
     r.reg["preset.save_new"].fire()
     assert pr.bank[9] == "NIGHT ONE 3" and lib.status == "saved NIGHT ONE 3 → slot 10"
     assert len(bak8(show)) == 1 and bak8(show)[0].read_bytes() == old
     r.reg["preset.select"].set(8)                          # what a pad of clip row 4 will send
-    assert lib.current("presets") == "NIGHT ONE 2" and pr.active == 8
+    assert lib.current("loadable") == "NIGHT ONE 2" and pr.active == 8
 
 
 def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
@@ -1198,18 +1198,18 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     so a build from before plan 19 opens a long bank by cutting it to
     eight (`_take`'s `[:SLOTS]` with SLOTS = 8). It shows slots 1–8
     correctly, and its next write of that show drops the far slots'
-    names from the file. The presets' files are untouched, and
+    names from the file. The loadable patches' files are untouched, and
     `.bak-v2-bank8` is the file from before any far slot existed."""
     home = owner_home
     r = boot_home(home)
-    pr = r.lib.project
-    show = home / "projects" / "mine.hyp.json"
+    pr = r.lib.install
+    show = home / "installs" / "mine.json"
     eight = json.loads(show.read_text())["bank"]
     pr.put_slot(8, "WAKE")
     pr.put_slot(23, "TRIP")
     doc = json.loads(show.read_text())
-    assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.project/3"
-    presets_before = {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")}
+    assert len(doc["bank"]) == 24 and doc["schema"] == "hyperspace.install/1"
+    loadables_before = {p.name: p.read_bytes() for p in (home / "loadable").glob("*.json")}
     # the older build's reading of the file (library.py before plan 19, SLOTS = 8)
     old_slots = 8
     bank = [str(s) if isinstance(s, str) and s else None
@@ -1218,9 +1218,9 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
     assert bank == eight == pr.bank[:8]                    # slots 1–8, right
     # …and what it writes back: eight entries, the far names gone from the file
     show.write_text(json.dumps({**doc, "bank": bank}, indent=1) + "\n")
-    again = boot_home(home).lib.project
+    again = boot_home(home).lib.install
     assert again.bank == eight + [None] * 16 and not again.is_dirty()
-    assert {p.name: p.read_bytes() for p in (home / "presets").glob("*.json")} == presets_before
+    assert {p.name: p.read_bytes() for p in (home / "loadable").glob("*.json")} == loadables_before
     assert json.loads(bak8(show)[0].read_text())["bank"] == eight
 
 
@@ -1229,7 +1229,7 @@ def test_a_long_bank_read_by_eight_slots_shows_the_first_eight(owner_home):
 def _shows_naming(r, name: str) -> None:
     """The owner's two shows both name `name` on a slot and as "starts on",
     and `mine` (open, `name` loaded from F2) is clean."""
-    pr = r.lib.project
+    pr = r.lib.install
     pr.load("party", startup=False)
     pr.put_slot(5, name)
     pr.startup = name
@@ -1238,7 +1238,7 @@ def _shows_naming(r, name: str) -> None:
     pr.startup = name
     pr.write()
     pr.load_slot(1)
-    assert r.lib.current("presets") == name and pr.active == 1 and not pr.is_dirty()
+    assert r.lib.current("loadable") == name and pr.active == 1 and not pr.is_dirty()
 
 
 def _trashed(home, folder: str) -> list:
@@ -1249,7 +1249,7 @@ def _trashed(home, folder: str) -> list:
 def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     """The owner's files (on a copy): rename NIGHT TWO → SUNRISE. The new
     file is the old document with only its name changed; the old file is
-    in `trash/presets/` byte for byte; `mine` (open) and the user copy of
+    in `trash/loadable/` byte for byte; `mine` (open) and the user copy of
     `party` name SUNRISE on their slots and as "starts on", each old show
     file in `trash/projects/` byte for byte; the open show's dot is clean
     and its light on the slot. A schema-1 show naming it is left alone, and
@@ -1257,66 +1257,66 @@ def test_rename_updates_every_show_and_keeps_each_old_file(owner_home):
     Nothing else in the home changes."""
     home = owner_home
     r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
+    lib, pr = r.lib, r.lib.install
     _shows_naming(r, "NIGHT TWO")
-    shows = home / "projects"
+    shows = home / "installs"
     old1 = {"schema": "hyperspace.project/1", "name": "old",
             "bank": [{"name": "NIGHT TWO", "view": {}}], "startup": "NIGHT TWO"}
-    (shows / "old.hyp.json").write_text(json.dumps(old1))
-    spare = json.loads((shows / "party.hyp.json").read_text())
-    (shows / "spare.hyp.json").write_text(json.dumps({**spare, "name": "spare"}))
-    (shows / "other.hyp.json").write_text(json.dumps({**spare, "name": "other",
+    (shows / "old.json").write_text(json.dumps(old1))
+    spare = json.loads((shows / "party.json").read_text())
+    (shows / "spare.json").write_text(json.dumps({**spare, "name": "spare"}))
+    (shows / "other.json").write_text(json.dumps({**spare, "name": "other",
                                                       "bank": ["WAKE"], "startup": None}))
     lib.poll()
-    preset_before = (home / "presets" / "night-two.json").read_bytes()
-    show_before = {s: (shows / f"{s}.hyp.json").read_bytes()
+    loadable_before = (home / "loadable" / "night-two.json").read_bytes()
+    show_before = {s: (shows / f"{s}.json").read_bytes()
                    for s in ("mine", "party", "old", "spare", "other")}
     trash_before = {p.name for p in home.rglob("trash/**/*") if p.is_file()}
     before = tree(home)
     real = library.to_trash
     with pytest.MonkeyPatch.context() as m:
         m.setattr(library, "to_trash",
-                  lambda p, root, origin=None: None if p.name == "spare.hyp.json"
+                  lambda p, root, origin=None: None if p.name == "spare.json"
                   else real(p, root, origin))
-        new = lib.rename("presets", "NIGHT TWO", "SUNRISE")
-    assert new == home / "presets" / "sunrise.json"
-    assert not (home / "presets" / "night-two.json").exists()
-    doc, was = json.loads(new.read_text()), json.loads(preset_before)
+        new = lib.rename("loadable", "NIGHT TWO", "SUNRISE")
+    assert new == home / "loadable" / "sunrise.json"
+    assert not (home / "loadable" / "night-two.json").exists()
+    doc, was = json.loads(new.read_text()), json.loads(loadable_before)
     assert doc == {**was, "name": "SUNRISE"}
-    (kept,) = [p for p in _trashed(home, "presets") if p.name.startswith("night-two.")]
-    assert kept.read_bytes() == preset_before
+    (kept,) = [p for p in _trashed(home, "loadable") if p.name.startswith("night-two.")]
+    assert kept.read_bytes() == loadable_before
     for s in ("mine", "party"):
-        d = json.loads((shows / f"{s}.hyp.json").read_text())
+        d = json.loads((shows / f"{s}.json").read_text())
         assert "SUNRISE" in d["bank"] and "NIGHT TWO" not in d["bank"], s
         assert d["startup"] == "SUNRISE", s
-        (k,) = [p for p in _trashed(home, "projects") if p.name.startswith(f"{s}.hyp.")]
+        (k,) = [p for p in _trashed(home, "installs") if p.name.startswith(f"{s}.")]
         assert k.read_bytes() == show_before[s] and k.name.endswith(".json")
     for s in ("old", "spare", "other"):                            # left as they were
-        assert (shows / f"{s}.hyp.json").read_bytes() == show_before[s], s
-    assert {p.name for p in _trashed(home, "projects")} == {
-        p.name for p in _trashed(home, "projects") if p.name.startswith(("mine.", "party."))}
-    assert lib.status == "renamed NIGHT TWO → SUNRISE (2 shows updated)"
+        assert (shows / f"{s}.json").read_bytes() == show_before[s], s
+    assert {p.name for p in _trashed(home, "installs")} == {
+        p.name for p in _trashed(home, "installs") if p.name.startswith(("mine.", "party."))}
+    assert lib.status == "renamed NIGHT TWO → SUNRISE (2 installs updated)"
     assert "spare (it could not be kept in the trash)" in lib.warning
     assert "old (a hyperspace.project/1 show" in lib.warning and "other" not in lib.warning
-    # the open show, through its Project: the name on the slot, clean, the light on it
+    # the open show, through its Install: the name on the slot, clean, the light on it
     assert pr.bank[1] == "SUNRISE" and pr.startup == "SUNRISE" and not pr.is_dirty()
-    assert lib.current("presets") == "SUNRISE" and pr.active == 1
-    assert "SUNRISE" in lib.list("presets") and "NIGHT TWO" not in lib.list("presets")
+    assert lib.current("loadable") == "SUNRISE" and pr.active == 1
+    assert "SUNRISE" in lib.list("loadable") and "NIGHT TWO" not in lib.list("loadable")
     # nothing else changed
-    changed = {"presets/night-two.json", "presets/sunrise.json", "projects/mine.hyp.json",
-               "projects/party.hyp.json"}
+    changed = {"loadable/night-two.json", "loadable/sunrise.json", "installs/mine.json",
+               "installs/party.json"}
     after = tree(home, but=("trash/",))
     assert {k: v for k, v in after.items() if k not in changed} == {
         k: v for k, v in before.items() if k not in changed and not k.startswith("trash/")}
     assert trash_before <= {p.name for p in home.rglob("trash/**/*") if p.is_file()}
     # the other show, opened: its slot has the new name and loads it
     pr.load("party")
-    assert pr.bank[5] == "SUNRISE" and lib.current("presets") == "SUNRISE"
+    assert pr.bank[5] == "SUNRISE" and lib.current("loadable") == "SUNRISE"
 
 
 def test_rename_refuses_a_taken_name(owner_home):
     """Refused, nothing on disk changed: an empty name, a name taken by
-    another preset's name or its file stem, or by another spelling of the
+    another loadable patch's name or its file stem, or by another spelling of the
     same slug. A rename that only changes case or spacing keeps the
     file's stem: rewritten in place, its old text in the trash."""
     home = owner_home
@@ -1328,19 +1328,19 @@ def test_rename_refuses_a_taken_name(owner_home):
                           ("NIGHT TWO", "night  one!", "taken"),
                           ("NIGHT TWO", "TRIP", "taken"),
                           ("NIGHT TWO", "party-trip", "taken"),
-                          ("GONE", "X", "no preset")):
+                          ("GONE", "X", "no patch")):
         with pytest.raises(LibraryError, match=why):
-            lib.rename("presets", old, new)
+            lib.rename("loadable", old, new)
         assert tree(home) == before, (old, new)
-    assert lib.rename("presets", "NIGHT TWO", "NIGHT TWO") == home / "presets" / "night-two.json"
+    assert lib.rename("loadable", "NIGHT TWO", "NIGHT TWO") == home / "loadable" / "night-two.json"
     assert tree(home) == before                                    # the same name: nothing
-    old = (home / "presets" / "night-two.json").read_bytes()
-    assert lib.rename("presets", "NIGHT TWO", "Night Two") == home / "presets" / "night-two.json"
-    assert json.loads((home / "presets" / "night-two.json").read_text())["name"] == "Night Two"
-    assert [p.read_bytes() for p in _trashed(home, "presets")
+    old = (home / "loadable" / "night-two.json").read_bytes()
+    assert lib.rename("loadable", "NIGHT TWO", "Night Two") == home / "loadable" / "night-two.json"
+    assert json.loads((home / "loadable" / "night-two.json").read_text())["name"] == "Night Two"
+    assert [p.read_bytes() for p in _trashed(home, "loadable")
             if p.name.startswith("night-two.")] == [old]
-    assert "Night Two" in lib.list("presets") and "NIGHT TWO" not in lib.list("presets")
-    assert lib.project.bank[1] == "Night Two"
+    assert "Night Two" in lib.list("loadable") and "NIGHT TWO" not in lib.list("loadable")
+    assert lib.install.bank[1] == "Night Two"
 
 
 def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
@@ -1355,48 +1355,48 @@ def test_a_rename_that_cannot_keep_the_old_file_changes_nothing(owner_home):
         m.setattr(library, "to_trash", lambda path, root, origin=None: None)
         for new in ("SUNRISE", "night two"):
             with pytest.raises(LibraryError, match="could not be kept in the trash"):
-                lib.rename("presets", "NIGHT TWO", new)
+                lib.rename("loadable", "NIGHT TWO", new)
             assert tree(home) == before, new
-    assert "NIGHT TWO" in lib.list("presets") and "SUNRISE" not in lib.list("presets")
-    assert lib.project.bank[1] == "NIGHT TWO"
+    assert "NIGHT TWO" in lib.list("loadable") and "SUNRISE" not in lib.list("loadable")
+    assert lib.install.bank[1] == "NIGHT TWO"
 
 
-def test_renaming_the_loaded_preset_keeps_its_unsaved_edit(owner_home):
-    """The loaded preset renamed: the name changes, the dot stays lit (the
+def test_renaming_the_loaded_loadable_keeps_its_unsaved_edit(owner_home):
+    """The loaded patch renamed: the name changes, the dot stays lit (the
     clean reference is the one it had), and save writes the new file."""
     home = owner_home
     r = boot_home(home)
     lib, reg = r.lib, r.reg
-    lib.project.load_slot(1)
+    lib.install.load_slot(1)
     reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
-    assert lib.is_dirty("presets")
-    lib.rename("presets", "NIGHT TWO", "SUNRISE")
-    assert lib.current("presets") == "SUNRISE" and lib.is_dirty("presets")
-    assert lib.project.active == 1
-    path = lib.overwrite("presets")
-    assert path == home / "presets" / "sunrise.json" and not lib.is_dirty("presets")
+    assert lib.is_dirty("loadable")
+    lib.rename("loadable", "NIGHT TWO", "SUNRISE")
+    assert lib.current("loadable") == "SUNRISE" and lib.is_dirty("loadable")
+    assert lib.install.active == 1
+    path = lib.overwrite("loadable")
+    assert path == home / "loadable" / "sunrise.json" and not lib.is_dirty("loadable")
     assert json.loads(path.read_text())["name"] == "SUNRISE"
-    assert not (home / "presets" / "night-two.json").exists()
+    assert not (home / "loadable" / "night-two.json").exists()
 
 
-def test_a_deleted_preset_says_which_slots_still_name_it(owner_home):
-    """× on your own preset is plan 15's delete, unchanged; new is what is
-    said: which slots and the startup preset still name it (nothing on the
+def test_a_deleted_loadable_says_which_slots_still_name_it(owner_home):
+    """× on your own loadable patch is plan 15's delete, unchanged; new is what is
+    said: which slots and the startup loadable patch still name it (nothing on the
     panel sets it since the library went one-tier; the file still carries
     it). The slots are not cleared for the owner — a restore to the old
     name makes them work."""
     home = owner_home
     r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
-    show = (home / "projects" / "mine.hyp.json").read_bytes()
-    assert lib.delete("presets", "NIGHT ONE")                 # F1 and the startup preset
-    assert lib.warning == ("NIGHT ONE is in the trash — F1 and the startup preset still name it; "
+    lib, pr = r.lib, r.lib.install
+    show = (home / "installs" / "mine.json").read_bytes()
+    assert lib.delete("loadable", "NIGHT ONE")                 # F1 and the startup loadable patch
+    assert lib.warning == ("NIGHT ONE is in the trash — F1 and the startup patch still name it; "
                            "restore it from the trash, or clear the slot")
     assert pr.bank[0] == "NIGHT ONE" and pr.startup == "NIGHT ONE"
-    assert (home / "projects" / "mine.hyp.json").read_bytes() == show
+    assert (home / "installs" / "mine.json").read_bytes() == show
     pr.load("party", startup=False)                          # a show that names it nowhere
-    assert lib.delete("presets", "NIGHT THREE")
-    assert lib.status == "NIGHT THREE is in the trash — the PRESETS page's trash can restore it"
+    assert lib.delete("loadable", "NIGHT THREE")
+    assert lib.status == "NIGHT THREE is in the trash — the PATCHES section's trash can restore it"
 
 
 def test_the_watcher_never_resurrects_or_reloads(owner_home):
@@ -1405,7 +1405,7 @@ def test_the_watcher_never_resurrects_or_reloads(owner_home):
     applies nothing, recreates nothing — and `current` is right after each."""
     home = owner_home
     r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
+    lib, pr = r.lib, r.lib.install
     loads = []
     real = lib.load
     lib.load = lambda *a, **k: (loads.append(a), real(*a, **k))[1]
@@ -1416,21 +1416,21 @@ def test_the_watcher_never_resurrects_or_reloads(owner_home):
         return lib.poll(clock[0])
 
     pr.load_slot(1)
-    assert lib.current("presets") == "NIGHT TWO"
+    assert lib.current("loadable") == "NIGHT TWO"
     loads.clear()
-    lib.rename("presets", "NIGHT TWO", "SUNRISE")
-    assert not poll() and lib.current("presets") == "SUNRISE"
-    assert not (home / "presets" / "night-two.json").exists()
-    lib.delete("presets", "SUNRISE")
-    assert not poll() and lib.current("presets") is None
-    assert not (home / "presets" / "sunrise.json").exists()
+    lib.rename("loadable", "NIGHT TWO", "SUNRISE")
+    assert not poll() and lib.current("loadable") == "SUNRISE"
+    assert not (home / "loadable" / "night-two.json").exists()
+    lib.delete("loadable", "SUNRISE")
+    assert not poll() and lib.current("loadable") is None
+    assert not (home / "loadable" / "sunrise.json").exists()
     (item,) = [t for t in lib.trash() if t.name == "SUNRISE"]
     lib.restore_trash(item)
-    assert not poll() and lib.current("presets") is None       # a restore loads nothing
+    assert not poll() and lib.current("loadable") is None       # a restore loads nothing
     lib.empty_trash()
     assert not poll()
-    assert loads == [] and lib.list("presets").count("SUNRISE") == 1
-    assert "NIGHT TWO" not in lib.list("presets")
+    assert loads == [] and lib.list("loadable").count("SUNRISE") == 1
+    assert "NIGHT TWO" not in lib.list("loadable")
 
 
 def test_restore_never_overwrites(owner_home):
@@ -1443,61 +1443,61 @@ def test_restore_never_overwrites(owner_home):
     restored show is listed, not opened. Nothing else changes."""
     home = owner_home
     r = boot_home(home)
-    lib, pr = r.lib, r.lib.project
-    night_one = (home / "presets" / "night-one.json").read_bytes()
+    lib, pr = r.lib, r.lib.install
+    night_one = (home / "loadable" / "night-one.json").read_bytes()
     # a taken stem
     (item,) = [t for t in lib.trash() if t.name == "NIGHT ONE"]
-    assert item.group == "presets" and item.when
+    assert item.group == "loadable" and item.when
     before = tree(home, but=("trash/",))
     assert lib.restore_trash(item) == "NIGHT ONE 2"
     assert lib.status == "restored as NIGHT ONE 2 — NIGHT ONE is taken"
     assert not item.path.exists()
-    assert json.loads((home / "presets" / "night-one-2.json").read_text())["name"] == "NIGHT ONE 2"
-    assert (home / "presets" / "night-one.json").read_bytes() == night_one
-    assert tree(home, but=("trash/", "presets/night-one-2.json")) == before
+    assert json.loads((home / "loadable" / "night-one-2.json").read_text())["name"] == "NIGHT ONE 2"
+    assert (home / "loadable" / "night-one.json").read_bytes() == night_one
+    assert tree(home, but=("trash/", "loadable/night-one-2.json")) == before
     # a free stem: back as it was, and the slot that named it loads it again
-    three = (home / "presets" / "night-three.json").read_bytes()
-    lib.delete("presets", "NIGHT THREE")
+    three = (home / "loadable" / "night-three.json").read_bytes()
+    lib.delete("loadable", "NIGHT THREE")
     (item,) = [t for t in lib.trash() if t.name == "NIGHT THREE"]
     assert lib.restore_trash(item) == "NIGHT THREE" and lib.status == "restored NIGHT THREE"
-    assert (home / "presets" / "night-three.json").read_bytes() == three
+    assert (home / "loadable" / "night-three.json").read_bytes() == three
     pr.load_slot(2)
-    assert lib.current("presets") == "NIGHT THREE"
+    assert lib.current("loadable") == "NIGHT THREE"
     # a taken name: another file of yours now carries it
-    lib.delete("presets", "NIGHT THREE")
-    other = home / "presets" / "elsewhere.json"
-    other.write_text(preset.dumps({**json.loads(three), "name": "NIGHT THREE"}))
+    lib.delete("loadable", "NIGHT THREE")
+    other = home / "loadable" / "elsewhere.json"
+    other.write_text(loadable.dumps({**json.loads(three), "name": "NIGHT THREE"}))
     (item,) = [t for t in lib.trash() if t.name == "NIGHT THREE"]
     assert lib.restore_trash(item) == "NIGHT THREE 2"
-    assert json.loads((home / "presets" / "night-three-2.json").read_text())["name"] == \
+    assert json.loads((home / "loadable" / "night-three-2.json").read_text())["name"] == \
         "NIGHT THREE 2"
     assert json.loads(other.read_text())["name"] == "NIGHT THREE"
     # a write that fails: the trash copy stays (a read-only folder fails
     # it, except for root, who writes through one — a container's user)
-    lib.delete("presets", "NIGHT TWO")
+    lib.delete("loadable", "NIGHT TWO")
     (item,) = [t for t in lib.trash() if t.name == "NIGHT TWO"]
     if os.geteuid() != 0:
-        os.chmod(home / "presets", 0o555)
+        os.chmod(home / "loadable", 0o555)
         try:
             with pytest.raises(LibraryError, match="not restored"):
                 lib.restore_trash(item)
         finally:
-            os.chmod(home / "presets", 0o755)
-    assert item.path.exists() and not (home / "presets" / "night-two.json").exists()
+            os.chmod(home / "loadable", 0o755)
+    assert item.path.exists() and not (home / "loadable" / "night-two.json").exists()
     assert lib.restore_trash(item) == "NIGHT TWO" and not item.path.exists()
     # a show: the copy a rename kept, under the next free name; not opened
-    lib.rename("presets", "NIGHT TWO", "SUNRISE")
-    (item,) = [t for t in lib.trash() if t.group == "projects" and t.name == "mine"]
-    assert lib.restore_trash(item) == "mine 2" and lib.status == "restored as show mine 2 — " \
+    lib.rename("loadable", "NIGHT TWO", "SUNRISE")
+    (item,) = [t for t in lib.trash() if t.group == "installs" and t.name == "mine"]
+    assert lib.restore_trash(item) == "mine 2" and lib.status == "restored as install mine 2 — " \
         "mine is taken"
-    shown = json.loads((home / "projects" / "mine-2.hyp.json").read_text())
+    shown = json.loads((home / "installs" / "mine-2.json").read_text())
     assert shown["name"] == "mine 2" and "NIGHT TWO" in shown["bank"]
     assert "mine-2" in pr.list() and pr.name == "mine"
     # not in the trash: refused
     with pytest.raises(LibraryError, match="not in the trash"):
-        lib.restore_trash(library.Trashed(home / "presets" / "sunrise.json", "presets",
+        lib.restore_trash(library.Trashed(home / "loadable" / "sunrise.json", "loadable",
                                           "SUNRISE", ""))
-    assert (home / "presets" / "sunrise.json").exists()
+    assert (home / "loadable" / "sunrise.json").exists()
 
 
 def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
@@ -1508,14 +1508,14 @@ def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
     home = owner_home
     r = boot_home(home)
     lib = r.lib
-    lib.delete("presets", "NIGHT THREE")
-    lib.rename("presets", "NIGHT TWO", "SUNRISE")
+    lib.delete("loadable", "NIGHT THREE")
+    lib.rename("loadable", "NIGHT TWO", "SUNRISE")
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "keep.json").write_text("{}")
     (outside / "dir").mkdir()
     (outside / "dir" / "also.20261004-010102.json").write_text("{}")
-    (home / "trash" / "presets" / "evil.20261004-010101.json").symlink_to(outside / "keep.json")
+    (home / "trash" / "loadable" / "evil.20261004-010101.json").symlink_to(outside / "keep.json")
     (home / "trash" / "fx").symlink_to(outside / "dir", target_is_directory=True)
     listed = lib.trash()
     real = [t.path for t in listed if not t.path.is_symlink() and t.path.parent.name != "fx"]
@@ -1524,8 +1524,8 @@ def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
                             reverse=True)                     # newest first
     before = tree(home, but=("trash/",))
     with pytest.MonkeyPatch.context() as m:
-        sneaky = library.Trashed(home / "trash" / "presets" / ".." / ".." / "presets" /
-                                 "night-one.json", "presets", "NIGHT ONE", "")
+        sneaky = library.Trashed(home / "trash" / "loadable" / ".." / ".." / "loadable" /
+                                 "night-one.json", "loadable", "NIGHT ONE", "")
         m.setattr(lib, "trash", lambda: [*listed, sneaky])
         assert lib.empty_trash() == 4
     assert not any(p.exists() for p in real)
@@ -1533,37 +1533,37 @@ def test_empty_trash_removes_only_the_trash(owner_home, tmp_path):
     assert "also.20261004-010102.json" in lib.warning
     assert (outside / "keep.json").read_text() == "{}"
     assert (outside / "dir" / "also.20261004-010102.json").exists()
-    assert (home / "presets" / "night-one.json").exists()
+    assert (home / "loadable" / "night-one.json").exists()
     assert tree(home, but=("trash/",)) == before
-    assert not (home / "trash" / "projects").exists()           # emptied, removed
-    assert (home / "trash" / "presets").is_dir()                # the symlink is still in it
-    assert sorted(p.name for p in (home / "trash").iterdir()) == ["fx", "presets"]
+    assert not (home / "trash" / "installs").exists()           # emptied, removed
+    assert (home / "trash" / "loadable").is_dir()                # the symlink is still in it
+    assert sorted(p.name for p in (home / "trash").iterdir()) == ["fx", "loadable"]
 
 
 def test_the_trash_lists_only_what_it_kept(owner_home):
     """Review of PR #117: a Finder `.DS_Store` (or any file `to_trash` did
     not write) in a trash folder is not listed, not restored and not
-    emptied — a restore would have made it a preset."""
+    emptied — a restore would have made it a loadable patch."""
     home = owner_home
     lib = boot_home(home).lib
-    junk = [home / "trash" / "presets" / ".DS_Store", home / "trash" / "presets" / "notes.txt"]
+    junk = [home / "trash" / "loadable" / ".DS_Store", home / "trash" / "loadable" / "notes.txt"]
     for p in junk:
         p.write_bytes(b"\x00\x01Bud1")
     assert [t.path.name.split(".")[0] for t in lib.trash()] == ["night-one"]
     with pytest.raises(LibraryError, match="not a file the trash kept"):
-        lib.restore_trash(library.Trashed(junk[0], "presets", "", ""))
-    assert ".DS_Store" not in lib.list("presets")
+        lib.restore_trash(library.Trashed(junk[0], "loadable", "", ""))
+    assert ".DS_Store" not in lib.list("loadable")
     assert lib.empty_trash() == 1 and all(p.exists() for p in junk)
 
 
 # ------------------------------------------- the stick spring's knobs (2026-10-29)
 
 def _bare(home):
-    """A library over an empty home with the desk's session params — the
+    """A library over an empty home with the desk's shared meta params — the
     pad's feel among them (routing._register_pad_feel, through the Router)."""
     chain = Analyzer(Analyser())
     lib = Library(home, period=0.0)
-    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.project)
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.install)
     table = _Bindings()
     _Router(reg, table)
     lib.attach(reg)
@@ -1581,10 +1581,11 @@ def test_an_old_shows_stick_spring_opens_as_it_was_and_is_kept_before_a_save_dro
     `<file>.bak-v2-spring`, before writing today's ids — once. No backup,
     no write."""
     lib, table = _bare(tmp_path)
-    pr = lib.project
+    pr = lib.install
     pr.save("old")
     show = pr.path
     doc = json.loads(show.read_text())
+    doc = {**doc, "schema": "hyperspace.project/3", "session": doc.pop("tuning")}
     for k in ("desk.pad.duration", "desk.pad.bounce"):
         doc["session"].pop(k)
     doc["session"].update({"desk.pad.hz": 4.0, "desk.pad.damp": 0.3, "desk.pad.feel": 2})
@@ -1603,7 +1604,7 @@ def test_an_old_shows_stick_spring_opens_as_it_was_and_is_kept_before_a_save_dro
     assert show.read_bytes() == old and spring_baks(show) == []
     pr.save()
     assert [p.read_bytes() for p in spring_baks(show)] == [old]
-    session = json.loads(show.read_text())["session"]
+    session = json.loads(show.read_text())["tuning"]
     assert "desk.pad.hz" not in session and "desk.pad.damp" not in session
     assert (session["desk.pad.duration"], session["desk.pad.bounce"]) == pytest.approx((0.25, 0.7))
     pr.save()                                                 # today's file on disk: no second copy

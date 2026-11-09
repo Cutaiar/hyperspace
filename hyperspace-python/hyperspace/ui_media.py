@@ -114,11 +114,13 @@ def _state(panel) -> dict:
 
 
 def media_of(panel):
-    """The channels (`MediaState`): the app's (`panel.media.state`), else the
-    registry's own (`build_registry` keeps the one its params write)."""
-    io = getattr(panel, "media", None)
-    state = getattr(io, "state", None)
-    return state if state is not None else getattr(panel.reg, "media", None)
+    """The channels (`MediaState`) of the deck the panel is on: its registry's own
+    (`build_registry` keeps the one its params write), else the app's
+    (`panel.media.state`: a stand-in registry has none)."""
+    state = getattr(getattr(panel, "reg", None), "media", None)
+    if state is not None:
+        return state
+    return getattr(getattr(panel, "media", None), "state", None)
 
 
 def folder_of(panel):
@@ -211,7 +213,7 @@ def _banner(state) -> None:
     gone = state.missing()
     if not gone:
         return
-    ui._micro("this preset relies on sources this Mac lacks", ui.WARN)
+    ui._micro("this patch relies on sources this Mac lacks", ui.WARN)
     w = imgui.get_content_region_avail().x
     tail = " — shows black"     # the heading says why; a long id is fitted, never this
     for sid in gone[:BANNER_LINES]:
@@ -298,7 +300,7 @@ def _empty_words(panel, tab: int) -> str:
     if _state(panel)["search"]:
         return "nothing matches"
     if tab == 2:
-        return "no live feeds — Syphon, NDI and cameras listed in config.toml show here"
+        return "no live feeds — Syphon, NDI and cameras in the device list show here"
     if folder_of(panel) is None:
         return "no media folder"
     if tab == 0 and getattr(folder_of(panel), "shared", None) is None:

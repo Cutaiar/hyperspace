@@ -29,6 +29,8 @@ _LIVE_FILES = {"test_media_live.py", "test_media_publish.py"}
 _SLOW_FILES = {"test_dream.py"}
 # single tests, "file::function" (any parametrisation)
 _LIVE_TESTS = {
+    # the real app's windows take the focus on a Mac; its rule stays in the fast tier
+    "test_hot_reload_app.py::test_a_save_reaches_every_live_object_of_the_real_app",
     "test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass",
     "test_media_core.py::test_bad_file_is_an_error",      # polls; fails under load
     # plan 39 T4: the real segment backends, once each on a synthetic frame
@@ -46,7 +48,7 @@ _SLOW_TESTS = {
     "test_media_channels.py::test_rapid_switching_with_slow_closes_stays_fast_and_balances",
     "test_media_channels.py::test_a_video_stuck_opening_never_jams_the_closer",
     "test_media_channels.py::test_a_slow_close_never_holds_the_frame_thread",
-    "test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point",
+    "test_graph_free.py::test_every_old_loadable_saves_as_six_and_is_a_fixed_point",
     "test_undo.py::test_an_idle_app_makes_no_step",
     "test_undo.py::test_a_performers_round_off_lights_no_dot",
     "test_graph_areas.py::test_every_node_has_one_area_and_the_three_concerns_are_separate",
@@ -56,15 +58,15 @@ _SLOW_TESTS = {
     "test_geometry.py::test_warm_all_fills_every_shapes_caches",
     "test_app_boundary.py::test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck",
     "test_graph_legible.py::test_every_node_has_a_label_and_a_hover",
-    "test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier",
+    "test_routing.py::test_every_factory_loadable_lands_the_same_values_one_frame_earlier",
     "test_graph_delay.py::test_nothing_of_plan_33_has_an_own_size",
     "test_plan12_presets.py::test_each_hand_axis_moves_its_target_as_the_table_says",
-    "test_migrate_library.py::test_the_real_picture_check_passes_an_old_preset",
+    "test_migrate_library.py::test_the_real_picture_check_passes_an_old_loadable",
     "test_watchdog.py::test_a_stall_that_holds_the_gil_is_caught_by_the_c_backstop",
     "test_render.py::test_nothing_aimed_at_the_faces_is_the_old_frame_exactly",
     "test_render.py::test_every_layout_and_motion_draws_any_count",
     "test_desk_coverage.py::test_the_committed_report_is_fresh_and_regenerates_byte_identical",
-    "test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says",
+    "test_loadable.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says",
 }
 
 
@@ -260,13 +262,28 @@ def _library_home(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _a_launch_waits_for_its_read(monkeypatch):
+    """A launch waits `devicelist.LAUNCH_S` for the first read of the shared list, which a
+    loaded machine can pass, and then says the library isn't answering, as it should (row
+    803). Tests are about what that read found, so the ceiling is out of reach; the
+    stalled tests of `test_devicelist.py` set their own."""
+    from hyperspace import devicelist, displays
+
+    monkeypatch.setattr(devicelist, "LAUNCH_S", devicelist.SYNC_S)
+    monkeypatch.setattr(displays, "LAUNCH_S", displays.SYNC_S)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_midi(monkeypatch):
     """No test reaches the machine's MIDI: the port lists are empty and an
     open raises, unless the test patches mido itself (a later setattr wins).
     A real scan creates a CoreMIDI client, which reaches the owner's desk
     and, when CoreMIDI refuses one, aborts the process inside rtmidi where
-    no `except` can catch it (the crash of 2026-10-04 22:36)."""
+    no `except` can catch it (the crash of 2026-10-04 22:36). `midiports`
+    asks for no client here, and starts each test with nothing asked."""
     import mido
+
+    from hyperspace import midiports
 
     def closed(name=None, *a, **k):
         raise OSError(f"the tests have no MIDI ports ({name})")
@@ -275,6 +292,8 @@ def _no_real_midi(monkeypatch):
     monkeypatch.setattr(mido, "get_output_names", list)
     monkeypatch.setattr(mido, "open_input", closed)
     monkeypatch.setattr(mido, "open_output", closed)
+    monkeypatch.setattr(midiports, "_create_client", lambda: 0)
+    monkeypatch.setattr(midiports, "_gate", midiports._Gate())
 
 
 @pytest.fixture(autouse=True)
@@ -308,10 +327,10 @@ def _no_real_joysticks(monkeypatch):
 @pytest.fixture(autouse=True)
 def _renderers_draw_todays_frame(request, monkeypatch):
     """Plan 36 T3 (W3): the app's `Renderer` starts on the empty frame
-    (`graph.EMPTY`, black) until a preset's graph lands. The tests' bare
+    (`graph.EMPTY`, black) until a loadable patch's graph lands. The tests' bare
     renderers draw a scene to look at, so here — the tests' word, never the
     app's — a new one is handed today's frame as the one-way migration
-    writes it for a section-less old preset (`graphmigrate.wired_wiring(
+    writes it for a section-less old loadable patch (`graphmigrate.wired_wiring(
     Wiring())`). A test marked `empty_frame` gets the app's own."""
     if request.node.get_closest_marker("empty_frame") is not None:
         return
@@ -336,13 +355,13 @@ def _renderers_draw_todays_frame(request, monkeypatch):
 def _graph_page_starts_on_the_full_canvas(request, monkeypatch):
     """Plan 36 T6 (D4): the GRAPH page's **preset only** chip starts lit in
     the app, hiding the controllers and modulation. The page tests look at
-    the whole canvas, so theirs starts off; tests/test_graph_preset_only.py
+    the whole canvas, so theirs starts off; tests/test_graph_patch_only.py
     turns it back on."""
     from hyperspace import ui_graph
 
     if request.node.name == "test_default_is_on":
         return
-    monkeypatch.setattr(ui_graph, "PRESET_ONLY", False)
+    monkeypatch.setattr(ui_graph, "PATCH_ONLY", False)
 
 
 @pytest.fixture(autouse=True)
@@ -350,31 +369,41 @@ def _no_undo_left_installed():
     """`undo.install` is one per process (the app has one Undo): a test
     that installs one must not leave it for the next test's push sites."""
     yield
+    leave_no_undo()
+
+
+def leave_no_undo() -> None:
+    """What the next test on this worker must not inherit from `undo`'s module state. A
+    panel drawn by a test sets `_hand` from live ImGui (`ui_pane.left`), and it moves the
+    latch's focus; a load inside its settle time leaves `_loading` on a dead stack, and
+    the next ⌘Z shuts whatever deck is installed."""
     from hyperspace import undo
 
     undo.install(None)
     undo.install_meta(None)
+    undo.by_hand(False)
+    undo._loading = None
 
 
 def opened_last(home, show: str = "house"):
-    """A home whose last opened show is `show` (library.LAST_SHOW) — what
+    """A home whose last opened show is `show` (library.LAST_INSTALL) — what
     the tests written against the house moods, the default show until plan
     14 WP3 made the party show the one a fresh home opened, stand on."""
     from pathlib import Path
 
     home = Path(home)
     home.mkdir(parents=True, exist_ok=True)
-    (home / "last_show").write_text(f"{show}\n")
+    (home / "last_install").write_text(f"{show}\n")
     return home
 
 
 # ------------------------------------------------ the corpus: what the build once shipped
 
 CORPUS = Path(__file__).resolve().parent / "corpus"
-# the groups the corpus holds: the twenty-five presets, the three dream
+# the groups the corpus holds: the twenty-five loadable patches, the three dream
 # patches of one group (plan 50: what the module presets were, under
 # patches/dream/), and the two shows (party, house) whose banks name them
-CORPUS_GROUPS = ("presets", "dream", "projects")
+CORPUS_GROUPS = ("loadable", "dream", "installs")
 # (each laid out as a library lays it out: `library.group_folder`, the one table)
 
 
@@ -382,11 +411,11 @@ def seed(home, *groups: str, last_show: str | None = "party"):
     """Copy the corpus into `home` — every file of each group in `groups`
     (all of CORPUS_GROUPS by default), never over a file already there —
     and, unless `last_show` is None, name the show a launch opens
-    (`library.LAST_SHOW`) when nothing names one yet. Returns `home`.
+    (`library.LAST_INSTALL`) when nothing names one yet. Returns `home`.
 
     The library has one tier since 2026-10-28: nothing ships with the app,
     a fresh home is empty and opens an unsaved show. The tests written
-    against the shipped presets (TUMBLE, WAKE, the party show's bank…)
+    against the shipped loadable patches (TUMBLE, WAKE, the party show's bank…)
     stand on this seed instead — `boot_home` seeds by default."""
     import shutil
 
@@ -402,34 +431,34 @@ def seed(home, *groups: str, last_show: str | None = "party"):
         for f in sorted(src.glob("*.json")):
             if not (dst / f.name).exists():
                 shutil.copyfile(f, dst / f.name)
-    mark = home / "last_show"
-    if last_show and "projects" in (groups or CORPUS_GROUPS) and not mark.exists():
+    mark = home / "last_install"
+    if last_show and "installs" in (groups or CORPUS_GROUPS) and not mark.exists():
         mark.write_text(f"{last_show}\n")
     return home
 
 
 # ------------------------------------------------ plan 19: a home like the owner's
 
-# the three presets `owner_home` holds, saved through `Presets.save_as`
-OWNER_PRESETS = ("NIGHT ONE", "NIGHT TWO", "NIGHT THREE")
+# the three loadable patches `owner_home` holds, saved through `LoadedPatch.save_as`
+OWNER_LOADABLES = ("NIGHT ONE", "NIGHT TWO", "NIGHT THREE")
 # in NIGHT TWO: a pad of clip row 4 the owner re-aimed, as its desk row,
 # and a device knob the owner learned (knob 1–8, target)
 OWNER_PAD = {"source": "note:2:56", "target": "fx.acid.on", "op": "toggle", "feedback": "led"}
 OWNER_KNOB = (3, "fx.mix")
-# the session row of bindings.json the owner changed: (source, new target)
+# the meta row of bindings.json the owner changed: (source, new target)
 OWNER_ROW = ("cc:0:15", "master.gain")
 OWNER_SHOWS = ("mine", "party")           # each with an eight-name bank
 
 
 def old_shape_pads() -> list[dict]:
-    """The sixteen shape pads of clip rows 4 and 5 as a preset saved before
-    plan 19 WP2 holds them in its `desk` (`preset.desk_json` of the rows
-    `apc40.DEFAULT_MAP` had on the preset layer): pad k of row 4 sets shape
+    """The sixteen shape pads of clip rows 4 and 5 as a loadable patch saved before
+    plan 19 WP2 holds them in its `desk` (`loadable.desk_json` of the rows
+    `apc40.DEFAULT_MAP` had on the patch layer): pad k of row 4 sets shape
     k, pad k of row 5 shape 8 + k."""
-    from hyperspace import apc40, preset
+    from hyperspace import apc40, loadable
     from hyperspace.routing import Binding
 
-    return preset.desk_json(
+    return loadable.desk_json(
         Binding(f"note:{k}:{apc40.N_CLIP[3 + row]}", "view.shape", "set", float(8 * row + k),
                 feedback="led", on=apc40.GREEN, layer="preset")
         for row in range(2) for k in range(8))
@@ -438,12 +467,12 @@ def old_shape_pads() -> list[dict]:
 def boot_home(home, *, corpus: bool = True):
     """The app's construction order (app.main), headless, over `home` —
     seeded with the corpus first unless `corpus` is off (`seed`: the
-    shipped presets and the party show, which a fresh home then opens as
+    shipped loadable patches and the party show, which a fresh home then opens as
     it did until 2026-10-28): the library, the registry, the table from
-    `<home>/bindings.json`, the router, the presets and the startup preset."""
+    `<home>/bindings.json`, the router, the loadable patches and the startup loadable patch."""
     from types import SimpleNamespace
 
-    from hyperspace import lfo, preset, routing, tempo
+    from hyperspace import lfo, loadable, routing, tempo
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
     from hyperspace.control import Control
@@ -459,7 +488,7 @@ def boot_home(home, *, corpus: bool = True):
     control = Control(chain)
     view = ViewState()
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.project,
+    reg = build_registry(view, control, SimpleNamespace(chain=chain), lib.install,
                          dream=DreamState(), fx=FxState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
@@ -472,26 +501,26 @@ def boot_home(home, *, corpus: bool = True):
     routing.register_desk(reg, table)
     lib.attach(reg)
     router = routing.Router(reg, table)
-    presets = preset.Presets(lib, reg, router)
-    lib.project.load_startup()
+    loaded_patch = loadable.LoadedPatch(lib, reg, router)
+    lib.install.load_startup()
     return SimpleNamespace(lib=lib, reg=reg, view=view, control=control, chain=chain,
-                           router=router, presets=presets, clock=clock, home=home)
+                           router=router, loaded_patch=loaded_patch, clock=clock, home=home)
 
 
 def _with_old_pads(path, re_aimed: dict | None = None) -> None:
-    """A preset file as a build from before plan 19 WP2 saved it: every one
+    """A loadable patch file as a build from before plan 19 WP2 saved it: every one
     of the sixteen pads of clip rows 4 and 5 has its row in `desk` — the
     old shape row, or `re_aimed` on its pad. Today's writer puts them there
     itself and the file is left alone; once the desk stops mapping those
     pads (WP2) they are written in, in the kind's own text."""
     import json
 
-    from hyperspace import apc40, preset
+    from hyperspace import apc40, loadable
 
     doc = json.loads(path.read_text())
     # (the fresh layer's device knobs, apc40.SCENE, came with plan 19 WP3:
-    # a preset saved before it had none — its knobs dark, or what was learned)
-    scene = preset.desk_json(b for b in preset.fresh_desk()
+    # a loadable patch saved before it had none — its knobs dark, or what was learned)
+    scene = loadable.desk_json(b for b in loadable.fresh_desk()
                              if b.kind == "cc" and b.number in apc40.DEVICE_KNOBS)
     desk = [row for row in doc.get("desk") or [] if row not in scene]
     have = {row["source"] for row in desk}
@@ -500,7 +529,7 @@ def _with_old_pads(path, re_aimed: dict | None = None) -> None:
     missing = [row for row in want if row["source"] not in have]
     if missing or len(desk) != len(doc.get("desk") or []):
         doc["desk"] = desk + missing
-        path.write_text(preset.dumps(doc))
+        path.write_text(loadable.dumps(doc))
 
 
 def far_pads() -> list[str]:
@@ -513,8 +542,8 @@ def far_pads() -> list[str]:
 
 def _without_bank_pads(path) -> None:
     """A bindings.json as a build from before plan 19 WP2 wrote it: no row
-    on the pads of clip rows 4 and 5 (they were the preset layer's shape
-    pads, which the session file never held). Today's writer puts the
+    on the pads of clip rows 4 and 5 (they were the patch layer's shape
+    pads, which the meta controller file never held). Today's writer puts the
     bank's sixteen rows there, so they are taken out again, in the table's
     own text — the rest of the file is byte for byte what was written."""
     import json
@@ -544,52 +573,52 @@ def owner_home(tmp_path):
 def build_owner_home(home):
     """Make `home` (a folder that does not exist yet) a home shaped like
     the owner's after a night on the build from before plan 19, by running
-    the writers (`Presets.save_as`, `Project.save`, `Bindings.write`,
+    the writers (`LoadedPatch.save_as`, `Install.save`, `Bindings.write`,
     `placement.save`, `to_trash`), not by hand-written JSON, so it tracks
     the formats (tools/bank_demo.py builds its home here too):
 
-    - ``projects/mine.hyp.json`` and ``projects/party.hyp.json`` (a user
+    - ``projects/mine.json`` and ``projects/party.json`` (a user
       copy of the party show), each with an **eight-name** bank; ``mine``
-      names the three presets below and is the show opened last;
-    - ``presets/``: NIGHT ONE, NIGHT TWO, NIGHT THREE (`OWNER_PRESETS`),
+      names the three loadable patches below and is the show opened last;
+    - ``loadable/``: NIGHT ONE, NIGHT TWO, NIGHT THREE (`OWNER_LOADABLES`),
       each with a `desk` holding the sixteen shape pads of clip rows 4–5
       (`old_shape_pads`); NIGHT TWO has one of those pads re-aimed
       (`OWNER_PAD`) and a learned device knob (`OWNER_KNOB`);
     - ``bindings.json`` as the table wrote it before plan 19 WP2 — no row
-      on clip rows 4 and 5 (`_without_bank_pads`) — one session row changed
+      on clip rows 4 and 5 (`_without_bank_pads`) — one meta row changed
       (`OWNER_ROW`);
     - ``last_show``, ``windows.json``, a ``stall.log``, a file under
-      ``weights/`` and one file already in ``trash/presets/``.
+      ``weights/`` and one file already in ``trash/loadable/``.
 
     Returns `home`. Never run on a real home: it is built from nothing."""
     import json
     from pathlib import Path
 
-    from hyperspace import library, placement, preset
+    from hyperspace import library, loadable, placement
     from hyperspace.routing import Binding
 
     home = Path(home)
     if home.exists():
         raise FileExistsError(f"{home}: an owner-like home is built in a new folder")
     r = boot_home(home)                             # a fresh home: the factory party show
-    reg, pr, table = r.reg, r.lib.project, r.router.table
-    one, two, three = OWNER_PRESETS
+    reg, pr, table = r.reg, r.lib.install, r.router.table
+    one, two, three = OWNER_LOADABLES
     # NIGHT ONE: TUMBLE, dimmer
     reg["view.bright"].set(reg["view.bright"].value * 0.8)
-    r.presets.save_as(one)
+    r.loaded_patch.save_as(one)
     # NIGHT TWO: a pad of row 4 re-aimed and a device knob learned
     rows = [b for b in table.desk() if b.source != OWNER_PAD["source"]]
     rows.append(Binding.from_json({**OWNER_PAD, "layer": "preset"}))
-    rows.append(preset.device_knob(*OWNER_KNOB))
+    rows.append(loadable.device_knob(*OWNER_KNOB))
     table.set_desk(rows, load=False)
     reg["view.speed"].set(reg["view.speed"].value * 0.5)
-    r.presets.save_as(two)
+    r.loaded_patch.save_as(two)
     # NIGHT THREE: WAKE with its eight device knobs, the trail longer
-    r.presets.load("WAKE")
+    r.loaded_patch.load("WAKE")
     reg["dream.fade"].set_norm(0.7)
-    r.presets.save_as(three)
-    folder = home / library.PRESETS
-    for name in OWNER_PRESETS:
+    r.loaded_patch.save_as(three)
+    folder = home / library.LOADABLE
+    for name in OWNER_LOADABLES:
         _with_old_pads(folder / f"{library.slug(name)}.json",
                        OWNER_PAD if name == two else None)
     # the user copy of the party show, with the eight names it had before
@@ -597,11 +626,11 @@ def build_owner_home(home):
     pr.load("party", startup=False)
     pr.bank[library.F_KEYS:] = [None] * (len(pr.bank) - library.F_KEYS)
     pr.save()
-    # mine: the three presets and five of the party's, starting on NIGHT ONE
+    # mine: the three loadable patches and five of the party's, starting on NIGHT ONE
     pr.bank[:3] = [one, two, three]
     pr.startup = one
     pr.save("mine")
-    # bindings.json: the session's rows, one of them the owner's own
+    # bindings.json: the meta controller's rows, one of them the owner's own
     source, target = OWNER_ROW
     row = next(b for b in table.bindings if b.source == source and b.layer != "preset")
     row.target = target
@@ -614,7 +643,7 @@ def build_owner_home(home):
     (home / "weights" / "model.safetensors").write_bytes(bytes(range(256)) * 4)
     assert library.to_trash(folder / f"{library.slug(one)}.json", home) is not None
     for show in OWNER_SHOWS:
-        doc = json.loads((home / "projects" / f"{show}.hyp.json").read_text())
+        doc = json.loads((home / "installs" / f"{show}.json").read_text())
         assert len(doc["bank"]) == library.F_KEYS, show
     return home
 

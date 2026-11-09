@@ -1,15 +1,15 @@
 # ruff: noqa: F811 — `rig` is test_ui_shell's fixture, taken as each test's argument
-"""Plan 24 C3 — every preset's desk interesting (decision 19).
+"""Plan 24 C3 — every loadable patch's desk interesting (decision 19).
 
-- **The coverage report** (tools/desk_coverage.py): every preset × every
-  control of the APC40's preset layer, each `mapped`, `dark` or `dead`
+- **The coverage report** (tools/desk_coverage.py): every loadable patch × every
+  control of the APC40's patch layer, each `mapped`, `dark` or `dead`
   (`learn.cannot_show`). Its output is committed at
   docs/plans/assets/24-party-fixes/desk-coverage.md; this test
   regenerates it — twice, byte for byte — and fails when the committed
   file is stale. The owner's bar (at most four dark or dead) is reported,
-  not met: no preset is remapped in this run.
+  not met: no loadable patch is remapped in this run.
 - **Click-to-map ranked**: a picked control on the on-screen desk is
-  offered the params this preset uses first (`learn.ranked`, a pure
+  offered the params this loadable patch uses first (`learn.ranked`, a pure
   function), then the rest by group; an item clicked goes through
   `Learn.map_picked`, the one road.
 """
@@ -72,21 +72,21 @@ def test_the_committed_report_is_fresh_and_regenerates_byte_identical(tool):
         assert e.value.code == 2
 
 
-def test_the_preset_layer_is_the_three_strips_and_the_maps_preset_controls(tool):
+def test_the_loadable_layer_is_the_three_strips_and_the_maps_loadable_controls(tool):
     glyphs = [c.glyph for c in tool.layer_controls()]
     strips = [f"{s}{k}" for s in "DKS" for k in range(1, 9)]
     assert glyphs[:24] == strips
     assert set(glyphs[24:]) == {"G3·5", "G3·6", "G3·7", "G3·8", *(f"G8·{k}" for k in range(1, 7)),
                                 "G5·9", "C", "B16", "B17"}
-    # none of the session's controls: MASTER, the crossfader, SHIFT, SAVE, the bank pads,
+    # none of the meta controller's controls: MASTER, the crossfader, SHIFT, SAVE, the bank pads,
     # the render toggles (scene launch 1–4)
     assert not {"SM", "X", "⇧", "G6·8", "G1·1", "G4·1", "G1·9", "G4·9"} & set(glyphs)
 
 
-def test_every_corpus_presets_numbers_are_in_the_report(tool, tmp_path):
+def test_every_corpus_loadables_numbers_are_in_the_report(tool, tmp_path):
     """The numbers the PR body and the decisions file quote: every corpus
-    preset (`tests/corpus/presets`, the presets the build shipped) is a
-    row; the faders are dark on every one (no preset has fader rows in this
+    loadable patch (`tests/corpus/loadable`, the loadable patches the build shipped) is a
+    row; the faders are dark on every one (no loadable patch has fader rows in this
     run); none meets the bar yet."""
     controls, rows = tool.coverage(tmp_path)
     names = [r.name for r in rows]
@@ -103,10 +103,10 @@ def test_every_corpus_presets_numbers_are_in_the_report(tool, tmp_path):
     assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no media channel")
 
 
-def test_a_library_preset_that_named_a_template_is_reported_with_its_own_rows(tool, tmp_path):
-    """`--library` copies a library's presets into the scratch home (the
+def test_a_library_loadable_that_named_a_template_is_reported_with_its_own_rows(tool, tmp_path):
+    """`--library` copies a library's loadable patches into the scratch home (the
     source is only read): plan 44 D3 retired the desk templates, so the
-    fixture preset that named one is its own rows — D2 the dream (on), K3
+    fixture loadable patch that named one is its own rows — D2 the dream (on), K3
     the pattern mix (faces on) — and every other control dark."""
     lib = tmp_path / "lib"
     shutil.copytree(FIXTURES, lib)
@@ -188,16 +188,16 @@ DEFAULTS = {"view.bright": 1.0, "view.speed": 0.5, "view.pattern": 0, "view.patt
             "fx.plasma.level": 0.2, "dream.mix": 0.3, "lfo.1.depth": 0.0}
 
 
-def test_ranked_puts_the_presets_own_params_first_in_tiers():
+def test_ranked_puts_the_loadables_own_params_first_in_tiers():
     used, rest = ranked(PARAMS, VALUES, DEFAULTS, routed={"camera.zoom"},
                         on_desk={"view.speed"})
     assert used == [("camera.zoom", ROUTED), ("view.bright", MOVED),
                     ("view.pattern", ON), ("view.pattern_mix", ON),
                     ("fx.kaleido.mix", ON), ("fx.kaleido.segments", ON),
                     ("view.speed", DESKED)]
-    # the rest by group, the performance groups first, each in registry order:
-    # the plasma is off and the look-back is off (dead), so not this preset's;
-    # a session param off its value is not "moved" (the preset never sets it)
+    # the rest by group, the patch groups first, each in registry order:
+    # the plasma is off and the look-back is off (dead), so not this loadable patch's;
+    # a shared meta param off its value is not "moved" (the loadable patch never sets it)
     assert rest == [("dream", ["dream.mix"]), ("fx", ["fx.plasma.level"]),
                     ("lfo", ["lfo.1.depth"]), ("band", ["band.0.post"]),
                     ("tempo", ["tempo.bpm"])]
@@ -205,7 +205,7 @@ def test_ranked_puts_the_presets_own_params_first_in_tiers():
     assert sorted(every) == sorted(p for p, _ in PARAMS)
 
 
-def test_ranked_is_pure_and_never_offers_a_dead_param_as_the_presets():
+def test_ranked_is_pure_and_never_offers_a_dead_param_as_the_loadables():
     args = (PARAMS, dict(VALUES), dict(DEFAULTS), {"dream.mix"}, set())
     a = ranked(*args)
     assert ranked(*args) == a and args[1] == VALUES          # the same answer, nothing moved
@@ -226,7 +226,7 @@ def test_the_offer_covers_no_control():
         assert apart, c
 
 
-def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig, monkeypatch):
+def test_a_picked_control_is_offered_this_loadables_params_and_a_click_maps_it(rig, monkeypatch):
     """TRIP loaded, D5 picked: the offer lists TRIP's own params first —
     its routed and moved ones, its effects that are on — and none of a
     module it has off; a click on the first item puts D5 there through
@@ -235,7 +235,7 @@ def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig
     panel, table = rig.panel, rig.router.table
     imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     pushes = _pushes(monkeypatch)
     calls = []
     real = lrn.map_picked
@@ -307,7 +307,7 @@ def test_the_offer_reads_routes_and_macros_as_routed(rig):
     """A route's target and a macro's base subscriber are "routed"."""
     panel, table = rig.panel, rig.router.table
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     lrn.pick(_control("D6").source)
     used, _ = ui_desk.offer(panel, table)
     assert ("camera.pan.x", ROUTED) not in used

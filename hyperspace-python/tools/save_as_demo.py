@@ -2,20 +2,20 @@
 """Save-as on the desk, shown headless (plan 15 WP4, decision 29).
 
 The APC40's clip-stop row is one SAVE AS bar: any of its eight buttons
-held 0.6 s saves the live state as a **new** preset, named from the
+held 0.6 s saves the live state as a **new** loadable patch, named from the
 loaded one, into the next empty bank slot, whose pad blinks. A tap does
 nothing; the desk never overwrites. This builds the app's objects the
 way `tools/undo_demo.py` does — no window, a `MidiIO` over fake ports,
 its clock the demo's own — and prints a transcript: a slot cleared, a
 tap, a hold with every LED velocity the desk is sent and when, the
-footer's line, the files in `<home>/presets`, a second hold onto a full
+footer's line, the files in `<home>/loadable`, a second hold onto a full
 bank, two buttons held at once, the new slot's pad loading it, the
 PRESETS page's "put preset here…" and "clear slot" calls, and a Learn
 the bar refuses.
 
 It always runs on a fresh temp home of its own (`undo_demo` sets
 `HYPERSPACE_HOME` on import, before anything reads it, and seeds it with
-the test corpus: the party show and its presets): it cannot touch
+the test corpus: the party show and its loadable patches): it cannot touch
 ~/Hyperspace.
 
   uv run python tools/save_as_demo.py [--out docs/plans/assets/15-safety-net/save-as-demo.txt]
@@ -39,7 +39,7 @@ from undo_demo import frames, say, settle, stack
 import mido
 
 from hyperspace import apc40, midi
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 
 STOP, PAD = apc40.N_CLIPSTOP, apc40.N_CLIP[0]
 
@@ -71,22 +71,22 @@ def wait(r, seconds: float) -> None:
 
 def where(r) -> str:
     lib, bright = r.lib, r.reg["view.bright"]
-    return (f"preset {lib.current(PRESETS)}{' •' if lib.is_dirty(PRESETS) else ''}, "
+    return (f"preset {lib.current(LOADABLE)}{' •' if lib.is_dirty(LOADABLE) else ''}, "
             f"{bright.label} {bright.fmt(bright.base)}")
 
 
 def bank(r) -> str:
-    pr = r.lib.project
+    pr = r.lib.install
     return "  ".join(f"F{k + 1} {n or '—'}{'*' if k == pr.active else ''}"
                      for k, n in enumerate(pr.bank))
 
 
 def files(r) -> str:
-    return ", ".join(sorted(p.name for p in (demo.HOME / "presets").glob("*.json"))) or "(none)"
+    return ", ".join(sorted(p.name for p in (demo.HOME / "loadable").glob("*.json"))) or "(none)"
 
 
 def leds(r, since: int, t0: float) -> None:
-    """Every LED message the desk was sent for the bar and the preset row
+    """Every LED message the desk was sent for the bar and the patch row
     since `since`, with the time since `t0`: the bar as one line when its
     eight buttons got the same velocity in the same poll."""
     by_time: dict[float, dict[tuple[int, int], int]] = {}
@@ -115,35 +115,35 @@ def footer(r) -> str:
 
 def main() -> None:
     r = demo.boot()
-    lib, proj, table = r.lib, r.lib.project, r.router.table
+    lib, proj, table = r.lib, r.lib.install, r.router.table
     r.midi.clock = lambda: r.t                        # the hold's clock: the demo's frames
     r.log = []                                        # (time, message) the desk was sent
     send = r.ports.send
     r.ports.send = lambda m: (r.log.append((r.t, m)), send(m))[1]
-    show = demo.HOME / "projects" / "party.hyp.json"
+    show = demo.HOME / "installs" / "party.json"
 
     say("Hyperspace — save-as on the desk, headless (tools/save_as_demo.py; plan 15 WP4, "
         "decision 29)")
     say(f"home folder: {demo.HOME}  (a temp folder made by this script)")
     frames(r, 5)
     rows = [b for b in table.midi() if b.op == "hold"]
-    say(f"show: {proj.name}   preset: {lib.current(PRESETS)}   "
+    say(f"show: {proj.name}   preset: {lib.current(LOADABLE)}   "
         f"hold {midi.HOLD_S} s, blink {midi.BLINK_S} s")
     say(f"the bar: {len(rows)} rows, {r.midi.control_name(rows[0])} … "
         f"{r.midi.control_name(rows[-1])}  →  {rows[0].target}  op {rows[0].op}  "
         f"layer {rows[0].layer} (None: invariant)")
     say(f"bank: {bank(r)}   (* the loaded one)")
-    say(f"<home>/presets: {files(r)}")
+    say(f"<home>/loadable: {files(r)}")
     say("LED velocities: 0 off · 1 on · 2 blink (a plain button); the clip grid: 1 green · "
         "2 green blink")
 
     say()
-    say('1. "clear slot" on F6 (the PRESETS page\'s menu item calls Project.clear_slot)')
+    say('1. "clear slot" on F6 (the PRESETS page\'s menu item calls Install.clear_slot)')
     proj.clear_slot(5)
     say(f"    footer: {footer(r)}")
     say(f"    bank: {bank(r)}")
     say(f"    the show's file now holds: {json.loads(show.read_text())['bank']}")
-    say(f"    ACID is still a preset: {'ACID' in lib.list(PRESETS)}   <home>/presets: {files(r)}")
+    say(f"    ACID is still a preset: {'ACID' in lib.list(LOADABLE)}   <home>/loadable: {files(r)}")
 
     say()
     say("2. TRIP (pad G1·5), an edit, then a tap on the bar: pressed 0.3 s, let go")
@@ -160,7 +160,7 @@ def main() -> None:
     wait(r, 2.0)
     say("    LEDs (time since the press):")
     leds(r, mark, t0)
-    say(f"    after:  {where(r)}   <home>/presets: {files(r)}")
+    say(f"    after:  {where(r)}   <home>/loadable: {files(r)}")
 
     say()
     say("3. A hold: G6·4 down and kept down")
@@ -179,11 +179,11 @@ def main() -> None:
     leds(r, mark, t0)
     say(f"    bank: {bank(r)}")
     say(f"    the show's file now holds: {json.loads(show.read_text())['bank']}")
-    say(f"    <home>/presets: {files(r)}")
-    doc = json.loads((demo.HOME / "presets" / "trip-2.json").read_text())
+    say(f"    <home>/loadable: {files(r)}")
+    doc = json.loads((demo.HOME / "loadable" / "trip-2.json").read_text())
     say(f"    trip-2.json: name {doc['name']!r}, view.bright {doc['values']['view.bright']:g} "
         f"(the edit); TRIP itself is untouched: "
-        f"{lib.read(PRESETS, 'TRIP')['values']['view.bright']:g}")
+        f"{lib.read(LOADABLE, 'TRIP')['values']['view.bright']:g}")
     stack(r)
 
     say()
@@ -198,22 +198,22 @@ def main() -> None:
     say("    LEDs (time since the press):")
     leds(r, mark, t0)
     say(f"    bank: {bank(r)}")
-    say(f"    <home>/presets: {files(r)}")
+    say(f"    <home>/loadable: {files(r)}")
 
     say()
     say("5. Two buttons held (a hand across G6·2 and G6·3, the second 0.2 s later), "
         "both kept down 3 s")
-    before = len(list((demo.HOME / "presets").glob("*.json")))
+    before = len(list((demo.HOME / "loadable").glob("*.json")))
     down(r, STOP, 1)
     wait(r, 0.2)
     down(r, STOP, 2)
     wait(r, 3.0)
     up(r, STOP, 1, 2)
     wait(r, 1.0)
-    after = len(list((demo.HOME / "presets").glob("*.json")))
+    after = len(list((demo.HOME / "loadable").glob("*.json")))
     say(f"    {where(r)}   new files: {after - before}")
     say(f"    footer: {footer(r)}")
-    say(f"    <home>/presets: {files(r)}")
+    say(f"    <home>/loadable: {files(r)}")
 
     say()
     say("6. The new slot's pad: G1·1 (TUMBLE), then G1·6")
@@ -229,7 +229,7 @@ def main() -> None:
     say(f"    bank: {bank(r)}")
 
     say()
-    say("7. A preset put on a slot and a slot cleared (Project.put_slot / clear_slot)")
+    say("7. A preset put on a slot and a slot cleared (Install.put_slot / clear_slot)")
     was = files(r)
     proj.put_slot(1, "TRIP 3")
     say(f"    put TRIP 3 on F2:  footer: {footer(r)}")
@@ -253,7 +253,7 @@ def main() -> None:
 
     say()
     say("8. A Learn armed on a param, then a button of the bar held: refused (invariant, D6)")
-    count = len(list((demo.HOME / "presets").glob("*.json")))
+    count = len(list((demo.HOME / "loadable").glob("*.json")))
     r.learn.arm("view.depth4")
     down(r, STOP, 4)
     wait(r, 1.0)

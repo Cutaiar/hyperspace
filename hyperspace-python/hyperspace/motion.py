@@ -12,7 +12,7 @@ A `Motion` is a feel: how a reading travels to where the source is. A route
 row carries one (`routing.Binding.motion`) and the Router runs it on the
 row's reading before push / position, so a stick that snaps back to centre
 arrives at the param as a glide or a bounce. A row with none takes its
-source's own feel (`Router.feel_of`): the pad's, a session setting, for
+source's own feel (`Router.feel_of`): the pad's, a meta controller setting, for
 the `axis` lanes — the same knobs drive the sticks' default camera job.
 
   follow   asymmetric one-pole, the analyzer's level path: `atk` seconds
@@ -59,7 +59,7 @@ SPRINGS = {
     "wobbly": (0.8, 0.6),
     "lazy": (1.2, 0.0),
 }
-CUSTOM = "custom"         # knobs that are no named spring, as a preset combo reads them
+CUSTOM = "custom"         # knobs that are no named spring, as a loadable patch combo reads them
 SETTLE = 1e-4       # a Follower this close to its target, and this slow, lands
 _CRIT = 1e-6         # |damp − 1| under this is critical damping
 BAND = 0.02          # `settle`: within this of where it is going counts as arrived
@@ -131,7 +131,7 @@ def spring_feel(hz: float, damp: float) -> tuple[float, float]:
 
 
 def spring_name(dur: float, bounce: float) -> str | None:
-    """The SPRINGS entry these knobs are, None when they are no preset."""
+    """The SPRINGS entry these knobs are, None when they are no loadable patch."""
     for name, (d, b) in SPRINGS.items():
         if abs(d - dur) < 1e-3 and abs(b - bounce) < 1e-3:
             return name
@@ -140,7 +140,7 @@ def spring_name(dur: float, bounce: float) -> str | None:
 
 @dataclass(frozen=True)
 class Motion:
-    """A feel, as a route row or the pad's session setting holds it."""
+    """A feel, as a route row or the pad's meta controller setting holds it."""
 
     mode: str = "follow"
     atk: float = 0.02     # follow: s, away from rest

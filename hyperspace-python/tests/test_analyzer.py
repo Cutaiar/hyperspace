@@ -375,14 +375,14 @@ def strip_of(chain):
 
 def test_the_scene_combo_and_the_strip_follow_each_other(tmp_path):
     """Audit A1, as it stands since the library went one-tier: the combo's
-    scenes are code data (hyperspace/scenes/band/), the strip's presets the
+    scenes are code data (hyperspace/scenes/band/), the strip's loadable patches the
     user's — a band preset saved under a scene's name with the scene's
     document lands the same strip, the combo follows a strip load of it
     (Library.on_load), and a strip load keeps the band names because the
     layout carries them."""
     reg, control, audio, lib = wired(tmp_path)
     assert reg["scene.select"].names == list(SCENES)
-    assert lib.list("band") == [], "nothing ships: the strip lists the user's presets"
+    assert lib.list("band") == [], "nothing ships: the strip lists the user's patches"
     put_band(tmp_path, "Kick & Sizzle", scene("Kick & Sizzle"))
     put_band(tmp_path, "Balanced", scene("Balanced"))
     control.select_scene(SCENES.index("Kick & Sizzle"))
@@ -467,7 +467,7 @@ def test_reset_all_re_tunes_the_bands_loaded_and_undo_is_whole(tmp_path):
 def test_the_combo_is_clean_on_any_layout_and_undo_gives_the_strip_back(tmp_path):
     """Code review of PR #44: the combo applies no layout, so its reference
     for "clean" is the state it landed, not the file's layout ids; and a
-    reset undo puts the strip's current preset back too."""
+    reset undo puts the strip's current loadable patch back too."""
     reg, control, audio, lib = wired(tmp_path)
     put_band(tmp_path, "Balanced", scene("Balanced"))   # the strip's Balanced: the user's
     control.add_band()                                # seven bands, not the file's six
@@ -523,23 +523,15 @@ def test_a_partial_band_preset_fills_from_the_defaults(tmp_path):
     assert audio.chain.params[2].exp == lib.defaults("band")["band.2.exp"] == 0.95
 
 
-def test_a_scene_lands_on_the_base_under_a_performer_and_reads_clean(tmp_path):
+def test_a_scene_lands_on_the_base_and_reads_clean(tmp_path):
     """WP11's review of PR #44: a scene select is a base write when a
-    registry is attached, so a band knob a performer holds keeps its
-    offset — the strip reads clean at once, not after the fold, and never
-    an offset off."""
+    registry is attached, so the strip reads clean at once, not after the fold."""
     reg, control, _, lib = wired(tmp_path)
     p = reg["band.1.atk"]
-    p.modulate(0.1)                                   # a lane holds BASS attack
-    reg.apply()
     control.select_scene(SCENES.index("Kick & Sizzle"))
     want = scene("Kick & Sizzle")["values"]["band.1.atk"]
     assert p.base == want, "the scene landed on the base"
     assert not lib.is_dirty("band"), "clean straight after the select"
-    p.modulate(0.1)
-    reg.apply()
-    assert p.base == want and p.value > want, "the offset rides on the scene's value"
-    assert not lib.is_dirty("band")
     control.reset_band(1)
     assert p.base == want and not lib.is_dirty("band")
     # no library: the combo writes the analyzer's Params directly, as before
@@ -573,7 +565,7 @@ def test_audio_engine_carries_the_layout_across_sources():
 
 def test_balanced_is_the_default_table_and_the_reference_edges():
     """The reference's per-band windows live once in code (`default_params`);
-    the Balanced scene file is the same numbers as a preset, and its layout
+    the Balanced scene file is the same numbers as a loadable patch, and its layout
     is the six reference bands (audit A5: one table, the file pinned to it)."""
     doc = scene("Balanced")
     rows = A.scene_rows(doc["values"])

@@ -12,8 +12,7 @@ stays (f and q both change, `drag_edge`); a left-drag box on the map
 sets the selected band's f/q from its frequency extent (`fit_box`, the
 time extent is ignored); a plain click selects the narrowest band under
 it. Every write goes through the registry (band.{i}.f / .q), so it is
-what a preset saves, what MIDI can learn, and ghosted (the base is the
-handle, a red hairline marks the effective centre) while a lane rides it.
+what the meta controller saves and what MIDI can learn; no lane may ride it (row 775).
 
 Cost: the history is 240 × 256 and implot's heat map is a quad per cell,
 which was 3 ms and 246 k vertices a frame headless — too much for a 320
@@ -266,12 +265,6 @@ def _overlays(panel, freqs: np.ndarray, ly: np.ndarray) -> None:
                  pos.y + size.y - ui.FONT_MICRO / 2 - 3)
         dl.add_text(imgui.ImVec2(x0 + 4, yc - ui.FONT_MICRO / 2 - 1),
                     ui.u32(ui.RED if sel else ui.DIM), chain.band_names[i].upper())
-        # a modulated centre: the effective value as a red hairline ghost
-        pf = reg[f"band.{i}.f"]
-        if pf.modulated:
-            yg = py(math.log2(max(pf.value, 1e-3)))
-            dl.add_line(imgui.ImVec2(x0, yg), imgui.ImVec2(x1, yg), ui.u32(ui.RED), 1.0)
-            panel.ghosts += 1
     implot.pop_plot_clip_rect()
 
 

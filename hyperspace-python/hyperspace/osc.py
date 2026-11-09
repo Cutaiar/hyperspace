@@ -29,7 +29,7 @@ pad button's press — a row on ``phone:hit`` with op `fire`, `toggle`,
 lands the velocity itself on the param (a trigger fires), `momentary`
 holds a toggle while the velocity is above 0 and lets go at 0. The
 velocity is the message's first number clamped to 0–1 (`range` is the
-axes' only), 1 when the message carries none. Hit rows are the session's (`bindings.json`), as the pad's
+axes' only), 1 when the message carries none. Hit rows are the meta controller's (`bindings.json`), as the pad's
 are; a Learn armed for the role (`Learn <role>` in a param's menu) takes
 the next hit as a button row or the next axis moved `LEARN_TRAVEL` from
 its rest as a route.
@@ -326,7 +326,7 @@ class OscDevice(Base):
 
     def learn(self, learn) -> bool:
         """An armed Learn this device may complete (`Learn.accepts`): a hit
-        lands a button row (`learn_pad_button`, the session's, like a pad
+        lands a button row (`learn_pad_button`, the meta controller's, like a pad
         button's) and holds this frame's rows back; else an axis moved
         `LEARN_TRAVEL` from its rest lands a route (`learn_source`)."""
         if learn is None or getattr(learn, "learning", None) is None or self.layout is None:

@@ -140,9 +140,9 @@ def page(layout: str = "HEX", motion: str = "ORBIT", name: str = "view-page-layo
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     v = ViewState()
     lib = Library(demo.HOME, period=0.0)
-    reg = build_registry(v, control, audio, lib.project)
+    reg = build_registry(v, control, audio, lib.install)
     lib.attach(reg)
-    panel = Panel(control, audio, v, bank=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, v, bank=lib.install, registry=reg, library=lib)
     reg["ui.page"].set(PAGE_KEYS.index("view"))
     reg["view.instances"].set(7)
     reg["view.inst_layout"].set(INST_LAYOUT.index(layout))
@@ -158,7 +158,7 @@ def page(layout: str = "HEX", motion: str = "ORBIT", name: str = "view-page-layo
 
     for _ in range(8):
         if driven:
-            # a lane on every plane rate, as the party presets route them:
+            # a lane on every plane rate, as the party loadable patches route them:
             # the cells read `base → effective`
             for k, plane in enumerate(("XY", "XZ", "YZ", "XW", "YW", "ZW")):
                 reg[f"rot.rate.{plane}"].modulate(0.05 * (k + 1) * (-1) ** k)

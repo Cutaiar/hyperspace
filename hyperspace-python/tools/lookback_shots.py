@@ -61,7 +61,7 @@ def main() -> None:
     args = ap.parse_args()
     ctx = moderngl.create_context(standalone=True)
 
-    # the shot: the tracer-only preset's look, a little heavier so it reads in a still
+    # the shot: the tracer-only loadable patch's look, a little heavier so it reads in a still
     dream = DreamState(on=True, echoes=8, gap=3 / 60, fade=fade_of_decay(0.94), echo_mix=0.7,
                        darken=0.2,
                        contrast=1.2, res=2)

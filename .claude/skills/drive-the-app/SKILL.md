@@ -64,12 +64,14 @@ worked example.
 
 - **Find controls by id**, never by coordinates: the text after `##` —
   the param id for everything `ui.py` draws for a param; a side pane
-  section's header is `pane.<key>`. A missing id raises with what was
+  view's chip is `pane.<key>`, the sections menu's chip `pane.sections`
+  (its rows are `pane.<key>` too, once it is open). A missing id raises with what was
   drawn: read it, it names the right one.
 - **There are no pages** (plan 49): GRAPH is always drawn and the rest are
-  sections of its side pane. `panel.reg["ui.page"].set(PAGE_KEYS.index("view"))`
-  focuses one — unfolded, scrolled to the pane's top; do that a frame or two
-  before looking for its controls. A body can be taller than the pane: the
+  sections of its side pane, shown one at a time.
+  `panel.reg["ui.page"].set(PAGE_KEYS.index("view"))` shows one (GRAPH's
+  slot is the selection); do that a frame or two before looking for its
+  controls. A body can be taller than the pane: the
   driver's actions scroll a control into view first (`Driver.reveal`).
 - **Menus and exact values by keyboard**: `pick` opens a combo and walks
   it with the arrow keys; `enter` Ctrl+clicks a slider and types (Cmd on a
@@ -88,7 +90,7 @@ worked example.
 - A show or preset brings its own camera: set `camera.zoom`, `yaw`,
   `pitch`, `pan` in the script before judging framing (a show left zoom at
   1.3 once and cropped every fitted field in a demo).
-- Load another preset with `panel.presets.load(name)`.
+- Load another preset with `panel.loaded_patch.load(name)`.
 
 ## A video
 

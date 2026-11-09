@@ -5,7 +5,7 @@ fx section (`ui_pane.SECTIONS`), and `ui.page` on FX focuses that section.
 "The page" below is that section's body.
 
 The owner's "file explorer" over the graph (row 348): the page lists every
-effect instance the loaded preset's graph holds — in the run, on a branch,
+effect instance the loaded patch's graph holds — in the run, on a branch,
 unreached — grouped by where its path ends (`groups`): **Run** (in wire
 order), **→ faces**, **→ pattern media**, **→ backdrop**, **→ output N**,
 **→ <effect> aux**, and **reaches nothing** last. An effect behind a switch
@@ -71,14 +71,14 @@ IDLE = {
             "Switch this effect on."),
     UNREACHED: ("it reaches nothing — wire it on GRAPH to see it", None, None, None),
     "faces off": ("it ends on the faces, and Faces is off", "faces on", "view.faces",
-                  "Switch the faces on (the Faces check on the VIEW and FACES pages)."),
+                  "Switch the faces on (the Faces check in the VIEW and FACES sections)."),
     "bypassed": ("every effect is bypassed", "effects on", "fx.on",
                  "Switch the effects on (the Effects check at the top)."),
     "fx mix 0": ("FX mix is at 0", None, None, None),     # its fader is at the top of the page
     "mix 0": ("its mix is at 0", None, None, None),       # its fader is the next row
 }
 # one line at the page's width (plan 20 WP2: it wrapped to two by 2 px)
-RESET_NOTE = "a preset load resets these: save a preset to keep them"
+RESET_NOTE = "a patch load resets these: save a patch to keep them"
 
 
 def groups(spec) -> list[tuple[str, list[str]]]:
@@ -173,8 +173,8 @@ def _group_key(end: str) -> tuple:
 
 
 def _spec(panel):
-    """The loaded preset's graph spec (`Panel.graph_now`), or None: a
-    stand-in Panel, no presets, no graph."""
+    """The loaded patch's graph spec (`Panel.graph_now`), or None: a
+    stand-in Panel, no loadable patches, no graph."""
     now = getattr(panel, "graph_now", None)
     try:
         return now()[1] if now is not None else None
@@ -189,7 +189,7 @@ def page(panel, dt: float) -> None:
     panel._check("fx.on")
     imgui.same_line()
     panel._slider("fx.mix")
-    # plan 14 WP5: a preset load replaces every effect value (plan 13 D2),
+    # plan 14 WP5: a loadable patch load replaces every effect value (plan 13 D2),
     # so what is tried here is gone on the next F-key unless it is saved
     _faint(RESET_NOTE)
     if fx is None:

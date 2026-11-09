@@ -31,13 +31,13 @@ def rig(tmp_path):
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(tmp_path, period=0.0)
-    reg = build_registry(view, control, audio, lib.project)
+    reg = build_registry(view, control, audio, lib.install)
     clock = tempo.Clock(now=lambda: 0.0)
     lfos = lfo.LFOs(seed=2)
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
     lib.attach(reg)
-    panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+    panel = Panel(control, audio, view, bank=lib.install, registry=reg, library=lib)
     panel.clock, panel.lfos = clock, lfos
     try:
         yield SimpleNamespace(panel=panel, reg=reg, clock=clock, lfos=lfos)
@@ -92,6 +92,25 @@ def test_the_page_has_no_conflicting_ids(rig, monkeypatch):
     dup = {lb for i, lb in ids if seen.count(i) > 1}
     assert not dup, f"conflicting ids {sorted(dup)}"
     assert len([lb for _, lb in ids if lb.endswith(".reset")]) == 4
+
+
+def test_the_two_nudge_chips_have_a_popup_each(rig, monkeypatch):
+    """Audit U9: with one id, a right-click on either chip drew the menu's items
+    twice. No popup id is built twice on the page, whichever param it stands for."""
+    popups: list[str] = []
+    real = imgui.begin_popup_context_item
+
+    def rec(popup_id=None, *a, **k):
+        popups.append(popup_id)
+        return real(popup_id, *a, **k)
+    monkeypatch.setattr(imgui, "begin_popup_context_item", rec)
+    imgui.new_frame()
+    imgui.begin("page")
+    ui_lfo.page(rig.panel, 1 / 60)
+    imgui.end()
+    imgui.end_frame()
+    assert len(popups) == len(set(popups)), sorted(p for p in popups if popups.count(p) > 1)
+    assert len([p for p in popups if p.startswith("##ctx.tempo.nudge.")]) == 2, popups
 
 
 def test_the_lfos_are_offered_as_routing_sources(rig):
@@ -218,7 +237,7 @@ def test_sixteen_lfos_scroll_and_one_is_open(rig, monkeypatch):
 
 def test_the_selection_follows_the_bank(rig):
     """A removed open strip hands the open slot to the first; an added LFO
-    opens; the selection is the Panel's, never the preset's."""
+    opens; the selection is the Panel's, never the loadable patch's."""
     _bank(rig.lfos, [1, 3, 5, 7, 9])
     assert ui_lfo.selected(rig.panel, rig.lfos) == 1
     ui_lfo.select(rig.panel, 7)

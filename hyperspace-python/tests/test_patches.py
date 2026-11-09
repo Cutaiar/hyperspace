@@ -1,19 +1,19 @@
 """Plan 40 T1 (P1, D5): the patch as data — `patches.py` and the library's
 `patches` kind.
 
-No GL, no imgui: a corpus preset's parts are landed headless from its file
-(the graph section read, the routes and preset-layer desk in a bare
+No GL, no imgui: a corpus loadable patch's parts are landed headless from its file
+(the graph section read, the routes and patch-layer desk in a bare
 `routing.Bindings`, its values as the registry's snapshot would hold them).
 
 - `check` refuses each refusable thing in words;
 - `read` classifies the spec's example (tests/fixtures/patches/acid-wash.json)
-  into its rig rows and host ports;
+  into its control rows and host ports;
 - `lift` of warp, doublevision and fractals out of party-noita gives one
   inlet, one outlet, the three effects' values and their desk rows;
 - `spawn` renames into a host that holds them, lists a desk conflict, and
   notes a macro with no free number;
 - the round trip — `read(lift(spawn(p)))` is `read(p)` up to the renames and
-  the origin — over the example and over every corpus preset's main run;
+  the origin — over the example and over every corpus loadable patch's main run;
 - the library lists, renames, saves and reads patches, and never loads one.
 """
 
@@ -35,21 +35,21 @@ from hyperspace.routing import Binding, Bindings
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "patches"
 ACID_WASH = FIXTURES / "acid-wash.json"
-# the presets the build once shipped (tests/corpus: test data, never read by the app)
-PRESETS = Path(__file__).resolve().parent / "corpus" / "presets"
+# the loadable patches the build once shipped (tests/corpus: test data, never read by the app)
+LOADABLE = Path(__file__).resolve().parent / "corpus" / "loadable"
 
 
 def example() -> dict:
     return json.loads(ACID_WASH.read_text())
 
 
-def preset(name: str) -> dict:
-    return json.loads((PRESETS / f"{name}.json").read_text())
+def loadable(name: str) -> dict:
+    return json.loads((LOADABLE / f"{name}.json").read_text())
 
 
 def parts(doc: dict):
-    """A preset's parts as the app holds them once it has landed: the
-    section read, the table (its routes, its preset-layer desk, modifiers
+    """A loadable patch's parts as the app holds them once it has landed: the
+    section read, the table (its routes, its patch-layer desk, modifiers
     and macros), the performance values (a modifier's params among them, as
     the registry's snapshot has them) and the GRAPH layout."""
     spec = G.read_graph(doc["graph"])
@@ -110,7 +110,7 @@ def same(a: dict, b: dict) -> None:
     a, b = {**a, "name": "", "note": ""}, {**b, "name": "", "note": ""}
     ra, rb = read(a), read(b)
     for f in ("nodes", "wires", "values", "modifiers", "routes", "desk", "macros", "lfos",
-              "envs", "layout", "ports", "rig_rows", "host_ports"):
+              "envs", "layout", "ports", "control_rows", "host_ports"):
         assert getattr(ra, f) == getattr(rb, f), f
     assert ra == rb
 
@@ -122,7 +122,7 @@ def test_patches_is_a_leaf():
     modifiers' id rule — never the app, the library, a page or the renderer
     (library imports it, for `check`)."""
     tree = ast.parse(Path(patches.__file__).read_text())
-    banned = {"library", "preset", "app", "render", "graphview", "undo", "control", "params",
+    banned = {"library", "loadable", "app", "render", "graphview", "undo", "control", "params",
               "midi", "apc40", "devices", "imgui"}
     for node in ast.walk(tree):
         names = []
@@ -139,17 +139,17 @@ def test_patches_is_a_leaf():
                          "write"}
 
 
-def test_the_rig_nodes_are_graphviews_not_removable():
-    """`RIG_NODES` restates the render nodes the GRAPH page refuses to delete
+def test_the_meta_nodes_are_graphviews_not_removable():
+    """`FIXTURE_NODES` restates the render nodes the GRAPH page refuses to delete
     (`graphview.spec_name`): the clouds as the rig's (`NOT_REMOVABLE`), the
     camera as the look's one (`CAMERA_KEPT`, plan 43 C2); the two lists
     agree, and the patch reads a name's kind as the canvas does."""
-    assert set(patches.RIG_NODES) == {graphview.CAMERA, "cloud"}
+    assert set(patches.FIXTURE_NODES) == {graphview.CAMERA, "cloud"}
     for name in ("camera", "cloud", "cloud.2"):
         got, why = graphview.spec_name(f"render:{name}")
         said = graphview.CAMERA_KEPT if name == "camera" else graphview.NOT_REMOVABLE
         assert got is None and why == said.format(label=graphview.label_of(name)), (name, why)
-        words = patches.CAMERA_WORDS if name == "camera" else patches.RIG_WORDS
+        words = patches.CAMERA_WORDS if name == "camera" else patches.FIXTURE_WORDS
         assert patches.held_words(name) == words.format(name=name)
     for name in ("acid", "acid.2", "composite.3", "hands.2", "hands.2.layer", "segment.fg",
                  "output.all", "output.2", "channel.a", "scene", "lookback.2", "camera",
@@ -173,20 +173,20 @@ def test_the_example_is_a_patch():
 @pytest.mark.parametrize("edit, said", [
     (lambda d: d["nodes"].append({"kind": "camera"}),
      "camera is the look's one camera, never a patch's; left out"),
-    (lambda d: d["nodes"].append({"kind": "cloud"}), "cloud is the rig's; left out"),
+    (lambda d: d["nodes"].append({"kind": "cloud"}), "cloud is the meta controller's; left out"),
     (lambda d: d["nodes"].append({"kind": "output"}),
-     "output is the rig's window; left out — a patch's picture leaves by a port"),
+     "output is the meta controller's window; left out — a patch's picture leaves by a port"),
     (lambda d: d["nodes"].append({"kind": "channel"}),
      ("channel is a media channel, this Mac's files; left out — a patch reads one through "
       "a port")),
     (lambda d: d["wires"].append({"from": "delay", "to": "output.2.image"}),
-     ("wire delay → output.2.image: output.2 is the rig's window; left out — a patch's "
+     ("wire delay → output.2.image: output.2 is the meta controller's window; left out — a patch's "
       "picture leaves by a port")),
     (lambda d: d["wires"].append({"from": "channel.a", "to": "wobble.aux"}),
      ("wire channel.a → wobble.aux: channel.a is a media channel, this Mac's files; left "
       "out — a patch reads one through a port")),
     (lambda d: d["wires"].append({"from": "cloud.1", "to": "acid.aux"}),
-     "wire cloud.1 → acid.aux: cloud.1 is the rig's; left out"),
+     "wire cloud.1 → acid.aux: cloud.1 is the meta controller's; left out"),
     (lambda d: d["ports"][0].update(type="colour"),
      "port in: type 'colour' is not one of image, mask, geometry, value"),
     (lambda d: d["wires"].append({"from": "acid", "to": "zoomblur.image"}),
@@ -214,7 +214,7 @@ def test_a_wire_across_the_edge_is_refused_even_where_a_port_says_it():
                      {"from": "delay", "to": "output.all.image"}]
     assert patches.check(doc) == [
         "wire scene → acid.image crosses the edge: a port says it",
-        ("wire delay → output.all.image: output.all is the rig's window; left out — a "
+        ("wire delay → output.all.image: output.all is the meta controller's window; left out — a "
          "patch's picture leaves by a port")]
 
 
@@ -245,13 +245,13 @@ def test_spawn_lands_only_the_members_values():
 # ---------------------------------------------------------------- read
 
 def test_read_classifies_the_example():
-    """The spec's example: the lane route and K1's desk row are rig rows
+    """The spec's example: the lane route and K1's desk row are control rows
     (verbatim); the two picture ports are its host ports; the modifier's
     route is the patch's own, inside."""
     doc = example()
     p = read(doc)
-    assert [r["source"] for r in p.rig_rows] == ["lane:0", "cc:0:48"]
-    assert p.rig_rows == (doc["routes"][1], doc["desk"][0])
+    assert [r["source"] for r in p.control_rows] == ["lane:0", "cc:0:48"]
+    assert p.control_rows == (doc["routes"][1], doc["desk"][0])
     assert [h["id"] for h in p.host_ports] == ["in", "out"]
     assert p.host_ports == tuple(sorted(doc["ports"], key=lambda x: x["id"]))
     assert p.members.render == ("acid", "delay", "wobble")
@@ -274,7 +274,7 @@ def test_read_derives_the_value_ports():
     assert [(h.get("from"), h.get("to"), h["was"]) for h in values] == [
         ("lfo:0", None, "view.bright"), (None, "fx.wobble.freq", "lfo:3"),
         ("macro.2", None, "view.speed"), (None, "mod.2.in2", "env:6")]
-    assert [r["source"] for r in p.rig_rows] == ["lane:0", "cc:0:48"]
+    assert [r["source"] for r in p.control_rows] == ["lane:0", "cc:0:48"]
 
 
 # ---------------------------------------------------------------- lift
@@ -286,7 +286,7 @@ def test_lift_of_noitas_core():
     """warp, doublevision and fractals out of party-noita: one inlet from
     the scene, one outlet into tripcolour, the three effects' values and
     no others, the desk rows and hand routes on their params verbatim."""
-    noita = preset("party-noita")
+    noita = loadable("party-noita")
     doc, refused = patches.lift(*parts(noita), NOITA_CORE)
     assert refused == []
     assert patches.check({**doc, "name": "noita core"}) == []
@@ -304,21 +304,21 @@ def test_lift_of_noitas_core():
     assert [n["file"] for n in doc["nodes"]] == ["doublevision", "fractals", "warp"]
     assert doc["layout"] == {} and doc["lfos"] == doc["envs"] == []
     p = read(doc)
-    assert len(p.rig_rows) == len(doc["desk"]) + len(doc["routes"])
+    assert len(p.control_rows) == len(doc["desk"]) + len(doc["routes"])
 
 
-def test_a_lift_that_names_the_rigs_refuses_it_and_keeps_the_rest():
-    noita = preset("party-noita")
+def test_a_lift_that_names_the_meta_refuses_it_and_keeps_the_rest():
+    noita = loadable("party-noita")
     doc, refused = patches.lift(*parts(noita),
                                 ["render:warp", "render:output.all",
                                  "render:camera", "seq", "env.2", "device:apc40"])
-    assert refused == [("output.all is the rig's window; left out — a patch's picture "
+    assert refused == [("output.all is the meta controller's window; left out — a patch's picture "
                         "leaves by a port"),
                        "camera is the look's one camera, never a patch's; left out",
-                       "the sequencer is the rig's; left out",
+                       "the sequencer is the look's one, never a patch's; left out",
                        ("env.2 is a sequencer lane's envelope; left out (a patch's envelope "
                         "spawns as 6 or more)"),
-                       "device:apc40 is the rig's; left out"]
+                       "device:apc40 is the meta controller's; left out"]
     assert [n["file"] for n in doc["nodes"]] == ["warp"]
     assert {p["was"] for p in doc["ports"]} == {"scene", "doublevision.image"}
 
@@ -377,7 +377,7 @@ def test_lift_renames_to_the_lowest_ids_and_rebases_the_layout():
 # ---------------------------------------------------------------- spawn
 
 def test_spawn_into_a_host_that_holds_warp_renames_every_reference():
-    noita = preset("party-noita")
+    noita = loadable("party-noita")
     doc, _ = patches.lift(*parts(noita), NOITA_CORE)
     doc["name"] = "noita core"
     landing = spawn(doc, host_of(parts(noita)), at=(400, 80))
@@ -416,7 +416,7 @@ def test_a_spawn_with_k1_already_mapped_lists_one_conflict_and_lands_nothing():
     """acid-wash into party-noita, where K1 (cc:0:48) is view.bright: one
     conflict — the lane route is no one-owner source — and the host's parts
     are as they were (spawn is pure)."""
-    p = parts(preset("party-noita"))
+    p = parts(loadable("party-noita"))
     before = [b.to_json() for b in p[1].bindings], p[1].macros_doc(), p[1].modifiers_doc()
     landing = spawn(example(), host_of(p))
     assert landing.conflicts == (patches.Conflict(
@@ -549,7 +549,7 @@ def test_used_up_voice_ids_are_a_note():
 def test_host_of_without_banks_starts_past_every_voice_the_table_names():
     """No bank handed in: one past the highest voice id the table's lanes
     name, and past the default membership (LFOs 1–4, lane envelopes 1–5)."""
-    host = Host.of(*parts(preset("party-noita"))[:2])
+    host = Host.of(*parts(loadable("party-noita"))[:2])
     assert host.next_voice == {"lfo": 5, "env": 6}
     table = Bindings([Binding("lfo:7", "view.bright", "push")])
     table.set_modifiers([{"id": "mod.1", "kind": "smooth", "in": ["env:9"]}])
@@ -562,7 +562,7 @@ def test_host_of_without_banks_starts_past_every_voice_the_table_names():
 def test_a_patch_twice_collides_with_itself_row_by_row():
     """The second spawn of one patch: its K1 row and its hand row meet the
     first's (now the host's), and its ids are the next ones."""
-    p = parts(preset("party-noita"))
+    p = parts(loadable("party-noita"))
     doc = example()
     doc["routes"].append({"source": "hand:left.z", "target": "fx.acid.reach", "op": "push"})
     first = spawn(doc, host_of(p))
@@ -596,13 +596,13 @@ def round_trip(doc: dict, p, at=(240, 120)) -> tuple[dict, object]:
 
 @pytest.mark.parametrize("host", ["party-noita", "party-acid", "party-wake"])
 def test_the_example_round_trips(host):
-    back, landing = round_trip(example(), parts(preset(host)))
+    back, landing = round_trip(example(), parts(loadable(host)))
     same(back, example())
     if host == "party-acid":
         assert landing.renames["acid"] == "acid.2"
 
 
-# a preset whose main run (the effects wired one after another into All
+# a loadable patch whose main run (the effects wired one after another into All
 # outputs' picture) is empty: nothing to cut
 NO_RUN = {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play", "hex-engine",
           "inverse-halo", "legacy6", "party-faces", "party-field", "party-tumble",
@@ -610,12 +610,12 @@ NO_RUN = {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play", "hex-engi
           "party-tracer"}
 
 
-def test_a_patch_cut_from_every_corpus_presets_main_run_round_trips():
+def test_a_patch_cut_from_every_corpus_loadables_main_run_round_trips():
     """For each corpus preset: its main run (`graph.run_back` into
-    `output.all.image`) lifted, spawned back into the same preset — every
+    `output.all.image`) lifted, spawned back into the same loadable patch — every
     id renamed, `.2` — landed, and lifted again reads as the first."""
     skipped, done = set(), []
-    for path in sorted(PRESETS.glob("*.json")):
+    for path in sorted(LOADABLE.glob("*.json")):
         doc = json.loads(path.read_text())
         spec = G.read_graph(doc["graph"])
         run = G.run_back(spec, "output.all.image")
@@ -641,7 +641,7 @@ def test_select_is_the_lifts_rule_and_refuses_a_group():
     """`select` (factored out of `lift` for the GRAPH page's Group): the
     lift's members and words, and a group named among the ids — no
     nesting — left out in words."""
-    spec, table, _values, _layout = parts(preset("party-noita"))
+    spec, table, _values, _layout = parts(loadable("party-noita"))
     mem, refused = patches.select(spec, table, ["render:output.1", "render:warp", "group.2",
                                                 "macro.3", "env.2", "env.7", "mod.1"])
     assert mem.render == ("warp",) and mem.macros == (3,) and mem.envs == (7,)
@@ -658,7 +658,7 @@ def test_crossing_and_the_sides_classify_what_crosses_a_region():
     `wire_type` what it carries at the edge); `side`, `sub_side` and
     `input_side` where a row, a macro subscriber and a modifier input sit —
     the rules `read` and `lift` keep and the group node draws."""
-    spec, table, _values, _layout = parts(preset("party-noita"))
+    spec, table, _values, _layout = parts(loadable("party-noita"))
     mem, _ = patches.select(spec, table, NOITA_CORE)
     where = {(w.src, w.dst): (at, patches.wire_type(w, at))
              for w, at in patches.crossing(spec, mem.render)}
@@ -667,7 +667,7 @@ def test_crossing_and_the_sides_classify_what_crosses_a_region():
                      ("doublevision", "fractals.image"): (patches.INSIDE, "image"),
                      ("fractals", "tripcolour.image"): (patches.OUT, "image")}
     m = patches._Members(("acid",), mods=(2,), lfos=(5,), macros=(1,))
-    assert patches.side(m, "cc:0:48", "fx.acid.speed") == patches.RIG
+    assert patches.side(m, "cc:0:48", "fx.acid.speed") == patches.CONTROL
     assert patches.side(m, "lfo:0", "fx.acid.speed") == patches.INTO      # a host LFO
     assert patches.side(m, "lfo:4", "view.bright") == patches.OUT          # its own, out
     assert patches.side(m, "mod:2", "fx.acid.mix") == patches.INSIDE
@@ -677,7 +677,7 @@ def test_crossing_and_the_sides_classify_what_crosses_a_region():
     assert patches.sub_side(m, "macro.4", "fx.acid.mix") == patches.INTO
     assert patches.sub_side(m, "macro.4", "view.bright") is None
     assert patches.input_side(m, "mod.2", "lfo:4") == patches.INSIDE
-    assert patches.input_side(m, "mod.2", "hand:right.y") == patches.RIG
+    assert patches.input_side(m, "mod.2", "hand:right.y") == patches.CONTROL
     assert patches.input_side(m, "mod.2", "lfo:0") == patches.INTO
     assert patches.input_side(m, "mod.7", "lfo:4") == patches.OUT
     assert patches.input_side(m, "mod.7", "lfo:0") is None
@@ -702,7 +702,7 @@ def test_a_fresh_library_lists_no_patch(tmp_path):
 
 
 def test_save_patch_then_read_patch_is_the_same_dict(lib):
-    noita = preset("party-noita")
+    noita = loadable("party-noita")
     doc, _ = patches.lift(*parts(noita), NOITA_CORE)
     doc.update(name="Noita Core", note="the middle of noita")
     path = lib.save_patch(doc)
@@ -710,7 +710,7 @@ def test_save_patch_then_read_patch_is_the_same_dict(lib):
     assert lib.read_patch("Noita Core") == doc
     assert lib.read_patch("noita-core") == doc
     assert lib.status == "patches: saved Noita Core"
-    assert not (lib.home / "presets").exists()          # nothing else written
+    assert not (lib.home / "loadable").exists()          # nothing else written
     # saved again with another note: the old text goes to the trash first
     lib.save_patch({**doc, "note": "changed"})
     assert [t.group for t in lib.trash()] == [PATCHES]
@@ -729,7 +729,7 @@ def test_a_bad_patch_is_a_library_error(lib):
     (lib.home / PATCHES).mkdir(parents=True, exist_ok=True)
     (lib.home / PATCHES / "old.json").write_text(json.dumps(
         {**doc, "name": "old", "schema": "hyperspace.patch/3"}))
-    with pytest.raises(LibraryError, match="is not a hyperspace.patch"):
+    with pytest.raises(LibraryError, match="git pull and uv sync"):
         lib.read_patch("old")
     (lib.home / PATCHES / "bad.json").write_text(json.dumps(
         {**doc, "name": "bad", "nodes": [*doc["nodes"], {"kind": "camera"}]}))
@@ -739,7 +739,7 @@ def test_a_bad_patch_is_a_library_error(lib):
         lib.load(PATCHES, "acid wash")
 
 
-def test_patches_list_rename_and_delete_as_presets_do(lib):
+def test_patches_list_rename_and_delete_as_loadables_do(lib):
     """Listed by name, case folded; a patch renames, the old file to the
     trash; × deletes it, the file to the trash (one tier: every patch is
     the user's)."""
@@ -761,3 +761,10 @@ def test_patches_list_rename_and_delete_as_presets_do(lib):
     assert {t.name for t in lib.trash()} == {"Blue Wash", "Deep Wash"}
     assert not lib.delete(PATCHES, "Deep Wash")                 # gone: nothing to delete
     assert lib.delete(PATCHES, "acid wash") and lib.list(PATCHES) == []
+
+
+def test_a_patch_saved_in_the_old_pad_words_reads_in_todays():
+    """Review of #435: a pair route saved before bindings/4 must not go silently dead."""
+    p = read({"nodes": [], "routes": [{"source": "pair:UP/DOWN", "target": "view.zoom"},
+                                      {"source": "pad:A", "target": "deck.chase"}]})
+    assert [r["source"] for r in p.routes] == ["pair:hat.N/hat.S", "pad:S"]

@@ -7,7 +7,7 @@ picture is the trail, laid over nothing — a composite lays it on. `dream`
 is picture in → dreamed picture out: it submits its input to the worker
 itself, pulls its own results, and with `dream.on` off passes its input
 through and submits nothing, so the worker sleeps. One live dream at a time.
-An old preset's one-shader look-back migrates to `scene → lookback →
+An old loadable patch's one-shader look-back migrates to `scene → lookback →
 composite (add)` — and `lookback → dream →` into it with a dream mix above
 0 — and its goldens are unmoved (tests/test_golden_frames.py)."""
 
@@ -78,7 +78,7 @@ def _frames(ctx, r, s, n=4, views=1):
     return [_px(v.target) for v in vs]
 
 
-# the factory frame of an old preset with its tracers on and a dream mix
+# the factory frame of an old loadable patch with its tracers on and a dream mix
 # above 0: `scene → lookback → dream → composite (add, under the scene)`
 WAKE = (("shape", "scene.geometry"), ("scene", "lookback.occluder"),
         ("scene", "composite.under"), ("lookback", "dream.image"),
@@ -218,7 +218,7 @@ def _pairs(section):
     ({"dream.on": True, "dream.mix": 0.0}, False),
     ({"dream.on": False, "dream.mix": 0.5}, None),
 ])
-def test_an_old_dream_preset_migrates_to_the_drawn_chain(values, dream):
+def test_an_old_dream_loadable_migrates_to_the_drawn_chain(values, dream):
     """An old file's look-back: on with a dream mix, `scene → lookback →
     dream → composite (add, under the scene) → All outputs`, the cover and
     the occluder its own wires, `dream.on` on; on with no mix, the same
@@ -338,7 +338,7 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
 
     from hyperspace import learn
 
-    doc = json.loads((CORPUS / "presets" / "party-tracer.json").read_text())
+    doc = json.loads((CORPUS / "loadable" / "party-tracer.json").read_text())
     values = doc["values"]
     assert values["dream.on"] is False
     drawn = learn.drawn_of(G.read_graph(doc["graph"]))
@@ -357,11 +357,11 @@ def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
     assert learn.cannot_show("dream.2.fade", values, drawn=drawn) == "no look-back"
 
 
-def test_the_tracer_only_group_preset_leaves_the_worker_idle(ctx, tmp_path):
+def test_the_tracer_only_group_loadable_leaves_the_worker_idle(ctx, tmp_path):
     """The dream group's `tracer-only` (echoes alone, mix 0) says the dream
     off since plan 36 T4: applied over a frame drawing a dream, the dream
     passes through and the worker gets no submission; its note says a
-    values-only preset draws no node."""
+    values-only loadable patch draws no node."""
     from conftest import seed
     from test_lookback import registry
 

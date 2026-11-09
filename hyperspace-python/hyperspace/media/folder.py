@@ -6,7 +6,15 @@ Everything slow lives in `scan()`, which runs on the media pool: stat, the
 cloud-placeholder flags, a timed read of each file's first 64 KiB. `status()`
 and `path()` only read what the last scan found, so the frame thread never
 touches the disk for them. A file that is mid-sync reads `fetching`, one that
-has gone reads `missing`, junk reads `error: ...`; none of it stops a scan."""
+has gone reads `missing`, junk reads `error: ...`; none of it stops a scan.
+
+A `local:` or `file:` id names a folder this Mac alone has, so a patch saved
+on one machine cannot resolve it on the other. When the shared folder holds
+the same basename exactly once, that copy stands in (`shared_twin`): one
+road, `_resolve`, serves `path()`, `status()` and `entry()`, so the picture,
+the MEDIA banner and the reopen stamp never disagree. `prefer_shared` is the
+write half — a bin assignment stores the shared id when there is one, so new
+patches name what both Macs can open."""
 
 from __future__ import annotations
 
@@ -77,6 +85,9 @@ class MediaFolder:
         self._info: dict[str, Entry] = {}     # every known id, incl. added file: ones
         self._files: dict[str, Path] = {}     # file: ids from add_file
         self._probed: dict[tuple, str] = {}   # (path, mtime_ns, size, dataless) -> status
+        # basename -> the one shared: id with that name, rebuilt by every scan;
+        # a name held by two shared files is in neither (see `shared_twin`)
+        self._shared_by_name: dict[str, str] = {}
         self._lock = threading.Lock()
         self._scan_lock = threading.Lock()
         self._scan_job: Future | None = None
@@ -91,16 +102,50 @@ class MediaFolder:
     # Nothing here touches the disk: these are called from the frame / UI
     # thread, so they answer from the last scan. An id the scan has not seen
     # is None / `missing` until the next one.
+    def shared_twin(self, sid: str) -> str | None:
+        """The `shared:` id of the one shared file named like `sid`, or None.
+
+        Only `local:` and `file:` ids have a twin — they are the ones that
+        name a folder the other Mac has not got. Only an unambiguous match
+        counts: a basename held by two shared files resolves to neither,
+        since picking one would be worse than showing black.
+        """
+        kind, _, ref = str(sid).partition(":")
+        if kind not in ("local", "file"):
+            return None
+        return self._shared_by_name.get(os.path.basename(ref))
+
+    def prefer_shared(self, sid: str) -> str:
+        """`sid` as it should be stored: its shared twin when there is one,
+        else `sid` unchanged. A bin assignment goes through this, so the
+        patch a save writes names the copy both Macs can open."""
+        return self.shared_twin(sid) or sid
+
+    def _resolve(self, sid: str) -> Entry | None:
+        """The scan entry `sid` reads through: its own, else its shared
+        twin's. An id the scan has got — ready, downloading or broken — is
+        answered as itself; only one the scan never saw, or saw go, falls
+        back, so a file on its way is still waited for rather than swapped
+        out from under the channel."""
+        e = self._info.get(sid)
+        if e is not None and e.status != MISSING:
+            return e
+        twin = self.shared_twin(sid)
+        alt = self._info.get(twin) if twin is not None else None
+        return alt if alt is not None else e
+
     def path(self, sid: str) -> Path | None:
         """The file for `sid`, or None: not seen, gone, or still
         downloading (`fetching`) — reading a cloud file mid-download blocks
         until it lands (or for good, offline), so nothing opens one; the
-        scan after it lands says `ready` (final review A-I1)."""
-        e = self._info.get(sid)
+        scan after it lands says `ready` (final review A-I1). A `local:` or
+        `file:` id the scan has not got reads through its shared twin
+        (`shared_twin`), so a patch from the other Mac opens here."""
+        e = self._resolve(sid)
         if e is not None and e.status not in (MISSING, FETCHING):
             return e.path
         if sid.startswith("file:") and sid not in self._files:
-            self.add_file(sid[5:])   # a preset named it: put it on the books
+            self.add_file(sid[5:])   # a loadable patch named it: put it on the books
         return None
 
     def live(self, sid: str):
@@ -108,8 +153,9 @@ class MediaFolder:
 
     def entry(self, sid: str) -> Entry | None:
         """The last scan's entry for `sid` (its size and mtime say whether
-        the file was replaced), or None. No disk access."""
-        return self._info.get(sid)
+        the file was replaced), or None — its shared twin's when the id
+        itself is not there, the same road `path` takes. No disk access."""
+        return self._resolve(sid)
 
     # -- scanning ----------------------------------------------------------
     def add_file(self, path) -> str:
@@ -255,15 +301,25 @@ class MediaFolder:
                 return {s: (e.size, e.mtime, e.status) for s, e in d.items()}
             if sig(info) != sig(self._info):
                 self.changed += 1
+            by_name: dict[str, str] = {}
+            twice: set[str] = set()
+            for e in listed:
+                if e.sid.startswith("shared:"):
+                    nm = os.path.basename(e.sid[7:])
+                    (twice.add(nm) if nm in by_name else by_name.setdefault(nm, e.sid))
+            for nm in twice:
+                by_name.pop(nm, None)
             self.entries = listed
             self._info = info
+            self._shared_by_name = by_name
             if len(self._probed) > 20000:
                 self._probed.clear()
             return found if all else list(listed)
 
     def status(self, sid: str) -> str:
-        """The last scan's word on `sid`; `missing` for anything it did not see."""
-        e = self._info.get(sid)
+        """The last scan's word on `sid`; `missing` for anything it did not
+        see and has no shared twin for (`_resolve`)."""
+        e = self._resolve(sid)
         return e.status if e is not None else MISSING
 
     # -- the watch timer ---------------------------------------------------

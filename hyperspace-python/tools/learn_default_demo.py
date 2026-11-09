@@ -3,7 +3,7 @@
 
 SYNTHETIC HANDS: no tracker and no window. The app's objects are built
 the way `tools/undo_demo.py` builds them (its `boot`: library, registry,
-router, presets, the one `Learn`, a `HandsIO` over a fake tracking source,
+router, loadable patches, the one `Learn`, a `HandsIO` over a fake tracking source,
 the `Undo`), and a palm is moved through the real `HandsIO` chain — the
 default ranges and the default feel (One Euro, the 0.04 dead zone of a
 centred axis, the catch), no interaction box. Each learn is armed the way
@@ -59,7 +59,7 @@ def palm(side: str = "right", *, y: float = 200.0, roll: float = 0.0, pitch: flo
 
 
 def stage(bases: dict[str, float]) -> NS:
-    """The app's objects with the startup preset's own routes taken out
+    """The app's objects with the startup loadable patch's own routes taken out
     (so every row below is one this script learned) and the bases set."""
     r = demo.boot()
     r.router.table.set_routes([])

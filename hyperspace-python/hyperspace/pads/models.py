@@ -1,9 +1,9 @@
 """Which controllers the app knows, and what an entry's ``controller =`` picks.
 
 **One vocabulary for every pad.** A row names a control by what it is on
-an Xbox pad — ``pad:A``, ``axis:LT`` — whatever pad is in the hand: the
-DualSense's cross is ``pad:A``, its L2 ``axis:LT``, its Create
-``pad:VIEW`` (SDL's positional mapping), so a preset made on one pad
+an Xbox pad — ``pad:S``, ``axis:LT`` — whatever pad is in the hand: the
+DualSense's cross is ``pad:S``, its L2 ``axis:LT``, its Create
+``pad:VIEW`` (SDL's positional mapping), so a loadable patch made on one pad
 plays on the other. `CANON` is that vocabulary as indices into a pad's
 button list: the Xbox's raw GLFW indices as they always were
 (gamepad.py's map, captured on a Series S), then the controls an Xbox
@@ -12,7 +12,7 @@ pad lacks at indices well past anything a GLFW pad reports
 
 **A `Model` per kind of pad**: its USB ids, its family, the road that
 reads it (``glfw``, ``hid``, ``usb``), what it has (`caps`), what its
-controls are called on its own face (`glyphs`: ✕ for ``pad:A`` on a
+controls are called on its own face (`glyphs`: ✕ for ``pad:S`` on a
 DualSense) — the on-screen pad draws that, the rows keep the canonical
 name — and, for a pad that is less than an Xbox face, which canonical
 controls it has at all (`controls`: one Joy-Con has one stick, four
@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 
 # ---- the canonical buttons: today's Xbox indices, then the extras ----
 CANON: dict[str, int] = {
-    "A": 0, "B": 1, "X": 3, "Y": 4, "LB": 6, "RB": 7, "VIEW": 10, "MENU": 11,
+    "S": 0, "E": 1, "W": 3, "N": 4, "LB": 6, "RB": 7, "VIEW": 10, "MENU": 11,
     "GUIDE": 12, "LSTICK": 13, "RSTICK": 14, "SHARE": 15,
 }
 TOUCH, LP, RP, LFN, RFN = 32, 33, 34, 35, 36     # a pad without them never sets them
@@ -71,13 +71,21 @@ class Model:
     caps: frozenset[str] = frozenset()
     glyphs: dict[str, str] = field(default_factory=dict)
     controls: frozenset[str] | None = None
+    # a pad's own controls (the owner, 2026-11-04): (control, param, op, value)
+    # rows that stand in for every table row on that control, whichever table
+    # is loaded (a controller is generic, with extensions by model)
+    layout: tuple[tuple[str, str, str, float], ...] = ()
+    # the totem's reset is a row of `layout`, and its sticks and triggers have
+    # no camera job but the one the totem leaves (a Joy-Con's). Apart from
+    # `layout`: having rows of its own says nothing of the camera job
+    totem_layout: bool = False
 
     def has(self, cap: str) -> bool:
         return cap in self.caps
 
     def has_control(self, name: str) -> bool:
-        """Does this pad have the canonical control `name` (``A``, ``LX``,
-        ``UP`` …)? Every pad has the whole Xbox face unless its `controls`
+        """Does this pad have the canonical control `name` (``S``, ``LX``,
+        ``hat.N`` …)? Every pad has the whole Xbox face unless its `controls`
         say less (a single Joy-Con: one stick, no D-pad)."""
         return self.controls is None or name in self.controls
 
@@ -87,7 +95,7 @@ class Model:
 
 
 _SONY_GLYPHS = {
-    "A": "✕", "B": "○", "X": "□", "Y": "△", "LB": "L1", "RB": "R1",
+    "S": "✕", "E": "○", "W": "□", "N": "△", "LB": "L1", "RB": "R1",
     "VIEW": "CREATE", "MENU": "OPTIONS", "GUIDE": "PS", "SHARE": "MIC",
     "LSTICK": "L3", "RSTICK": "R3", "LT": "L2", "RT": "R2", "TOUCH": "TOUCH",
     "LP": "L4", "RP": "R4", "LFN": "LFn", "RFN": "RFn",
@@ -98,27 +106,42 @@ _SONY_OUT = frozenset({"touch", "motion", "light", "rumble", "triggers", "player
 # under the thumb, pointing where the hand points — and is first of all
 # its six-axis sensor. What it has reads by position: its one stick is the
 # left stick (``axis:LX`` / ``LY``, its click ``pad:LSTICK``); the (L)'s
-# four arrow buttons are the face by where they sit (↓ ``pad:A``, →
-# ``B``, ← ``X``, ↑ ``Y``); its L and ZL ``pad:LB`` and ``axis:LT``, the
+# four arrow buttons are the face by where they sit (↓ ``pad:S``, →
+# ``E``, ← ``W``, ↑ ``N``); its L and ZL ``pad:LB`` and ``axis:LT``, the
 # (R)'s R and ZR ``pad:RB`` and ``axis:RT``; SL and SR on the rail are the
 # back pair ``pad:LP`` / ``pad:RP`` (as the Edge's paddles); − ``VIEW``,
 # + ``MENU``, capture ``SHARE``, HOME ``GUIDE``. No D-pad, no right stick,
 # no touchpad. Its outputs: rumble (two bands) and the four player lights
 # — no light bar, no trigger resistance, no mic light.
 _JOYCON_CAPS = frozenset({"motion", "back", "rumble", "players"})
-_JOYCON_COMMON = frozenset({"LX", "LY", "LSTICK", "A", "B", "X", "Y", "LP", "RP"})
+_JOYCON_COMMON = frozenset({"LX", "LY", "LSTICK", "S", "E", "W", "N", "LP", "RP"})
+# the Joy-Con's own layout (the owner, 2026-11-04): SL / SR the shape in every
+# mode, the stick's click the view's reset; − (+ on the R) the totem's reset,
+# capture (HOME on the R) the totem on and off; L (R) holds the base chase
+# (register row 724). ZL (ZR) is free
+_JOYCON_ROWS = (("LP", "view.shape", "step", -1.0), ("RP", "view.shape", "step", 1.0),
+                ("LSTICK", "camera.reset", "fire", 1.0))
+_JOYCON_L_LAYOUT = (*_JOYCON_ROWS, ("VIEW", "totem.reset", "fire", 1.0),
+                    ("SHARE", "totem.on", "toggle", 1.0),
+                    ("LB", "deck.chase", "momentary", 1.0))
+_JOYCON_R_LAYOUT = (*_JOYCON_ROWS, ("MENU", "totem.reset", "fire", 1.0),
+                    ("GUIDE", "totem.on", "toggle", 1.0),
+                    ("RB", "deck.chase", "momentary", 1.0))
+# hold-to-save is the Edge's alone (row 724): "the controller Dylan will be
+# using for VJ-style setups"
+_EDGE_LAYOUT = (("MENU", "preset.save_new", "hold", 1.0),)
 _JOYCON_L_GLYPHS = {
-    "A": "↓", "B": "→", "X": "←", "Y": "↑", "LB": "L", "LT": "ZL", "LP": "SL", "RP": "SR",
+    "S": "↓", "E": "→", "W": "←", "N": "↑", "LB": "L", "LT": "ZL", "LP": "SL", "RP": "SR",
     "VIEW": "−", "SHARE": "◉", "LSTICK": "L3",
 }
-# the (R)'s face by position too: its B sits at the bottom (``pad:A``), its
-# A at the right (``B``), its Y at the left (``X``), its X at the top (``Y``)
+# the (R)'s face by position too: its B sits at the bottom (``pad:S``), its
+# A at the right (``E``), its Y at the left (``W``), its X at the top (``N``)
 _JOYCON_R_GLYPHS = {
-    "A": "B", "B": "A", "X": "Y", "Y": "X",
+    "S": "B", "E": "A", "W": "Y", "N": "X",
     "RB": "R", "RT": "ZR", "LP": "SL", "RP": "SR", "MENU": "+", "GUIDE": "HOME",
     "LSTICK": "R3",
 }
-_PRO_GLYPHS = {"LB": "L", "RB": "R", "LT": "ZL", "RT": "ZR", "VIEW": "−", "MENU": "+",
+_PRO_GLYPHS = {"S": "B", "E": "A", "W": "Y", "N": "X", "LB": "L", "RB": "R", "LT": "ZL", "RT": "ZR", "VIEW": "−", "MENU": "+",
                "GUIDE": "HOME", "SHARE": "◉", "LSTICK": "L3", "RSTICK": "R3"}
 
 MODELS: dict[str, Model] = {m.id: m for m in (
@@ -127,13 +150,15 @@ MODELS: dict[str, Model] = {m.id: m for m in (
     Model("dualsense", "DualSense", "sony", "hid", ((SONY_VID, 0x0CE6),),
           _SONY_OUT, {**_SONY_GLYPHS}),
     Model("edge", "DualSense Edge", "sony", "hid", ((SONY_VID, 0x0DF2),),
-          _SONY_OUT | {"back", "fn"}, {**_SONY_GLYPHS}),
+          _SONY_OUT | {"back", "fn"}, {**_SONY_GLYPHS}, None, _EDGE_LAYOUT),
     Model("joycon-l", "Joy-Con (L)", "nintendo", "hid", ((NINTENDO_VID, 0x2006),),
           _JOYCON_CAPS, {**_JOYCON_L_GLYPHS},
-          _JOYCON_COMMON | {"LB", "LT", "VIEW", "SHARE"}),
+          _JOYCON_COMMON | {"LB", "LT", "VIEW", "SHARE"},
+          _JOYCON_L_LAYOUT, True),
     Model("joycon-r", "Joy-Con (R)", "nintendo", "hid", ((NINTENDO_VID, 0x2007),),
           _JOYCON_CAPS, {**_JOYCON_R_GLYPHS},
-          _JOYCON_COMMON | {"RB", "RT", "MENU", "GUIDE"}),
+          _JOYCON_COMMON | {"RB", "RT", "MENU", "GUIDE"},
+          _JOYCON_R_LAYOUT, True),
     # the Pro Controller speaks the Joy-Con's protocol with the whole face
     # (both sticks, a D-pad): the codec reads it; no hand has checked one
     Model("procon", "Pro Controller", "nintendo", "hid", ((NINTENDO_VID, 0x2009),),
@@ -154,25 +179,40 @@ for _m in MODELS.values():
 # order on every pad, so it only grows at the end (`natural_pairs` says which
 # a model has). A single Joy-Con's four arrows are the face, so they are here
 PAIRS: tuple[tuple[str, str], ...] = (
-    ("UP", "DOWN"), ("RIGHT", "LEFT"), ("RB", "LB"), ("RP", "LP"), ("RFN", "LFN"),
-    ("Y", "A"), ("B", "X"),
+    ("hat.N", "hat.S"), ("hat.E", "hat.W"), ("RB", "LB"), ("RP", "LP"), ("RFN", "LFN"),
+    ("N", "S"), ("E", "W"),
 )
 _POLE_CAP = {"LP": "back", "RP": "back", "LFN": "fn", "RFN": "fn"}
-HAT_NAMES = frozenset(("UP", "RIGHT", "DOWN", "LEFT"))
+# plan 57 (row 545, FQ7): the four-button cluster and the D-pad are each north, south, east and
+# west on every pad, since every pad is orientable. A row says which by its scheme (`pad:N`,
+# `hat:N`); a control's own name needs one more word for the D-pad, `hat.N` (row 836)
+HAT_PREFIX = "hat."
+HAT_NAMES = frozenset(f"{HAT_PREFIX}{d}" for d in "NESW")
+HAT_WORDS = {"N": "up", "E": "right", "S": "down", "W": "left"}     # what a person reads
+FACE_WORDS = {"N": "north", "E": "east", "S": "south", "W": "west"}  # what a person reads
+# a face button's letter where the model prints none of its own: the Xbox pad's (row 552)
+XBOX_FACE = {"S": "A", "E": "B", "W": "X", "N": "Y"}
 
 
 def pole_source(name: str) -> str:
-    """The unqualified row source a discrete control's name is (``UP`` →
-    ``hat:UP``, ``A`` → ``pad:A``)."""
-    return f"hat:{name}" if name in HAT_NAMES else f"pad:{name}"
+    """The unqualified row source a discrete control's name is (``hat.N`` →
+    ``hat:N``, ``S`` → ``pad:S``)."""
+    return f"hat:{name[len(HAT_PREFIX):]}" if name in HAT_NAMES else f"pad:{name}"
+
+
+def pole_name(source: str) -> str:
+    """A discrete control's name from its row source, the inverse of `pole_source`
+    (``hat:N`` → ``hat.N``, ``pad@p2:S`` → ``S``)."""
+    head, _, addr = source.partition(":")
+    return f"{HAT_PREFIX}{addr}" if head.partition("@")[0] == "hat" else addr
 
 
 def control_free(model: Model | None, name: str, skip=frozenset()) -> bool:
     """May the discrete control `name` be a pole on `model` right now? The one
     question plan 56 asks, wherever a pair is offered, counted or read: not
     while something else holds it, `skip` (sources, as `Router.pad`'s: the
-    totem's). `model` is here for what a pad's own layout holds."""
-    return pole_source(name) not in skip
+    totem's), nor a control the pad's own layout holds."""
+    return pole_source(name) not in skip and not any(row[0] == name for row in getattr(model, "layout", ()))
 
 
 def natural_pairs(model: Model | None) -> tuple[tuple[str, str], ...]:
@@ -186,10 +226,15 @@ def natural_pairs(model: Model | None) -> tuple[tuple[str, str], ...]:
 
 
 def pair_label(model: Model | None, pos: str, neg: str) -> str:
-    """A pair in the pad's own words: "D-pad up / down", "R1 / L1"."""
+    """A pair in the pad's own words: "D-pad up / down", "R1 / L1", "Y / A"."""
     if pos in HAT_NAMES and neg in HAT_NAMES:
-        return f"D-pad {pos.lower()} / {neg.lower()}"
-    return f"{glyph(model, pos, pos)} / {glyph(model, neg, neg)}"
+        return f"D-pad {HAT_WORDS[pos[-1]]} / {HAT_WORDS[neg[-1]]}"
+
+    def one(n: str) -> str:
+        if n in HAT_NAMES:
+            return f"D-pad {HAT_WORDS[n[-1]]}"
+        return glyph(model, n, XBOX_FACE.get(n, n))
+    return f"{one(pos)} / {one(neg)}"
 
 
 SPECS_WORDS = ("any",) + tuple(MODELS) + tuple(sorted({m.family for m in MODELS.values()}))
@@ -280,6 +325,14 @@ def glfw_ids(guid: str | None) -> tuple[int | None, int | None]:
     except ValueError:
         return None, None
     return (vid, pid) if vid else (None, None)
+
+
+def glyph_name(source: str) -> str:
+    """The name `glyph` looks a source up by: a button's or axis's own (``pad:N`` → ``N``),
+    a hat's with `HAT_PREFIX` (``hat:N`` → ``hat.N``), so the D-pad's north never reads as
+    the face's north button (plan 57 §7b)."""
+    scheme, _, rest = source.partition(":")
+    return f"{HAT_PREFIX}{rest}" if scheme.partition("@")[0] == "hat" else rest
 
 
 def glyph(model: Model | None, name: str, default: str) -> str:

@@ -4,8 +4,8 @@
 Driven through `MidiIO` with the fake ports tests/test_midi.py injects (its
 rig: a scratch library seeded with the corpus, its show the party show):
 
-- **S1–S8 are the preset's**: the track faders carry no factory row on the
-  preset layer, so every corpus preset leaves them dark; a preset whose
+- **S1–S8 are the loadable patch's**: the track faders carry no factory row on the
+  patch layer, so every corpus loadable patch leaves them dark; a loadable patch whose
   desk binds them (the fixture under tests/fixtures/desk-faders/, loaded
   through the scratch library) lights all eight and drives its params, and
   the rows round-trip through save and load;
@@ -16,7 +16,7 @@ rig: a scratch library seeded with the corpus, its show the party show):
   up its own param on the other instead of jumping it;
 - **the migration**: an older `bindings.json` with the eight invariant
   fader rows gets them on the SHIFT layer, noted, backed up, written once;
-- **lines and points opacity**: two performance params at 1, today's
+- **lines and points opacity**: two patch params at 1, today's
   picture; at 0 the layer is gone.
 """
 
@@ -28,8 +28,7 @@ import pytest
 from conftest import CORPUS
 from test_midi import cc, push, rig, shift  # noqa: F401 — the fixture
 
-import hyperspace.ui  # noqa: F401 — first: ui_desk imports through the panel (ui_pad reads its EDGE)
-from hyperspace import apc40, preset, routing, ui_desk
+from hyperspace import apc40, loadable, routing, ui_desk
 from hyperspace.routing import Binding, Bindings, bindings_path
 from hyperspace.view import ViewState
 
@@ -42,10 +41,10 @@ SHIFT_TARGETS = (*(f"band.{i}.post" for i in range(6)), "master.dyn", "master.tr
 
 
 def load_fixture(rig, name="faders.json"):
-    lib = rig.presets.lib
-    (lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURES / name, lib.home / "presets" / name)
-    lib.presets.load("FADERS")
+    lib = rig.loaded_patch.lib
+    (lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES / name, lib.home / "loadable" / name)
+    lib.loaded_patch.load("FADERS")
     rig.midi.poll()
     return lib
 
@@ -72,8 +71,8 @@ def at(rig, pid) -> int:
 
 # ------------------------------------------------------------------ the map
 
-def test_the_faders_are_the_presets_and_the_audio_strip_is_shifts():
-    """Decision 17: no preset-layer fader row in the factory map (no
+def test_the_faders_are_the_loadables_and_the_audio_strip_is_shifts():
+    """Decision 17: no patch-layer fader row in the factory map (no
     inherited default); the audio strip is the SHIFT layer's; MASTER and the
     crossfader stay invariant."""
     rows = [Binding.from_json(d) for d in apc40.DEFAULT_MAP]
@@ -82,52 +81,52 @@ def test_the_faders_are_the_presets_and_the_audio_strip_is_shifts():
         (k, t, "global") for k, t in enumerate(SHIFT_TARGETS)]
     assert apc40.SHIFT_FADERS == SHIFT_TARGETS
     assert all(b.feedback is None and b.pickup and b.op == "abs" for b in on_faders)
-    (gain,) = [b for b in rows if b.target == "master.gain"]
-    (dim,) = [b for b in rows if b.target == "output.dim"]
+    (gain,) = [b for b in rows if b.target == "output.dim"]
+    (dim,) = [b for b in rows if b.target == "output.xfade"]
     assert (gain.number, gain.layer) == (apc40.CC_MASTER, None)
     assert (dim.number, dim.layer) == (apc40.CC_XFADE, None)
-    assert not [b for b in preset.fresh_desk() if b.number == FADER and b.kind == "cc"]
+    assert not [b for b in loadable.fresh_desk() if b.number == FADER and b.kind == "cc"]
 
 
-def test_every_corpus_preset_leaves_the_faders_dark_and_shift_lights_the_audio(rig):
-    """Decision 23: no shipped preset got fader rows — every corpus file's
+def test_every_corpus_loadable_leaves_the_faders_dark_and_shift_lights_the_audio(rig):
+    """Decision 23: no shipped loadable patch got fader rows — every corpus file's
     desk binds no track fader, and each loads with S1–S8 dark on the
-    preset layer and the audio strip under SHIFT, with no desk note."""
-    lib, t = rig.presets.lib, rig.midi.table
-    for path in sorted((CORPUS / "presets").glob("*.json")):
+    patch layer and the audio strip under SHIFT, with no desk note."""
+    lib, t = rig.loaded_patch.lib, rig.midi.table
+    for path in sorted((CORPUS / "loadable").glob("*.json")):
         desk = json.loads(path.read_text()).get("desk") or []
         assert not [d for d in desk if d["source"].endswith(f":{FADER}")
                     and d["source"].startswith("cc:")], path.name
-    for name in lib.list("presets"):
-        lib.presets.load(name)
+    for name in lib.list("loadable"):
+        lib.loaded_patch.load(name)
         rig.midi.poll()
-        assert lib.presets.desk_notes == [], name
+        assert lib.loaded_patch.desk_notes == [], name
         assert t.layer == "preset"
         assert faders_lit(t) == {}, name
     shift(rig)
     assert faders_lit(t) == dict(zip(GLYPHS, SHIFT_TARGETS))
 
 
-def test_track_fader_is_a_preset_layer_row_with_soft_pickup():
-    """`preset.track_fader(k, pid)` is the row a preset's desk binds track
-    fader k with: the preset layer's, `abs`, no feedback, soft pickup."""
-    b = preset.track_fader(8, "dream.mix")
+def test_track_fader_is_a_loadable_layer_row_with_soft_pickup():
+    """`loadable.track_fader(k, pid)` is the row a loadable patch's desk binds track
+    fader k with: the patch layer's, `abs`, no feedback, soft pickup."""
+    b = loadable.track_fader(8, "dream.mix")
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
         f"cc:7:{FADER}", "abs", "preset", None, True)
 
 
-# -------------------------------------------------- a preset with fader rows
+# -------------------------------------------------- a loadable patch with fader rows
 
-def test_a_preset_with_fader_rows_lights_s1_s8_and_drives_them(rig):
+def test_a_loadable_with_fader_rows_lights_s1_s8_and_drives_them(rig):
     """The fixture binds S1–S8 on its desk: it loads with no note and no
-    dirt, all eight light (the on-screen desk's rule) on the preset layer,
+    dirt, all eight light (the on-screen desk's rule) on the patch layer,
     and each fader drives its own param once picked up. Under SHIFT the same
     faders are the audio strip."""
     lib = load_fixture(rig)
     t = rig.midi.table
-    assert lib.current("presets") == "FADERS"
-    assert lib.presets.desk_notes == []
-    assert not lib.is_dirty("presets")
+    assert lib.current("loadable") == "FADERS"
+    assert lib.loaded_patch.desk_notes == []
+    assert not lib.is_dirty("loadable")
     assert faders_lit(t) == dict(zip(GLYPHS, TARGETS))
     for k, pid in enumerate(TARGETS):
         push(rig, cc(FADER, at(rig, pid), channel=k))           # picked up where it is
@@ -140,27 +139,27 @@ def test_a_preset_with_fader_rows_lights_s1_s8_and_drives_them(rig):
 
 
 def test_the_fader_rows_round_trip_through_save_and_load(rig):
-    """Saved, the preset's file holds the eight fader rows as the fixture
+    """Saved, the loadable patch's file holds the eight fader rows as the fixture
     had them; loaded back, the desk is the same and nothing is noted."""
     lib = load_fixture(rig)
     t = rig.midi.table
     before = sorted(json.dumps(b.to_json(), sort_keys=True) for b in t.desk())
-    path = lib.presets.save_as("FADERS 2")
+    path = lib.loaded_patch.save_as("FADERS 2")
     doc = json.loads(Path(path).read_text())
     want = json.loads((FIXTURES / "faders.json").read_text())["desk"]
     assert norm_rows(doc["desk"]) == norm_rows(want)
-    lib.presets.load("FADERS 2")
+    lib.loaded_patch.load("FADERS 2")
     rig.midi.poll()
-    assert lib.presets.desk_notes == []
+    assert lib.loaded_patch.desk_notes == []
     assert sorted(json.dumps(b.to_json(), sort_keys=True) for b in t.desk()) == before
     assert faders_lit(t) == dict(zip(GLYPHS, TARGETS))
 
 
 def test_a_fader_picks_up_its_own_param_across_the_latch(rig):
-    """D7 across SHIFT: S1 set on the preset layer, then SHIFT latched —
+    """D7 across SHIFT: S1 set on the patch layer, then SHIFT latched —
     the same fader, now band.0.post's, does not jump the band to where the
     fader stands; it moves the band once it reaches the band's value. Back
-    on the preset layer, the opacity waits likewise."""
+    on the patch layer, the opacity waits likewise."""
     load_fixture(rig)
     reg = rig.reg
     push(rig, cc(FADER, at(rig, "view.points_alpha")), cc(FADER, 120))
@@ -202,7 +201,7 @@ def test_a_power_up_forgets_where_a_fader_was_on_every_layer(rig):
     is known, so only an on-value catch counts). The same for MASTER, an
     invariant fader, through the power-up alone."""
     reg = rig.reg
-    band, gain = reg["band.0.post"], reg["master.gain"]
+    band, gain = reg["band.0.post"], reg["output.dim"]
     shift(rig)
     band.set_norm(0.5)
     gain.set_norm(0.5)
@@ -211,7 +210,7 @@ def test_a_power_up_forgets_where_a_fader_was_on_every_layer(rig):
          cc(apc40.CC_MASTER, 110))
     assert band.norm == pytest.approx(110 / 127, abs=0.01)
     assert gain.norm == pytest.approx(110 / 127, abs=0.01)
-    shift(rig)                                             # back to the preset layer
+    shift(rig)                                             # back to the patch layer
     band.set_norm(0.5)
     gain.set_norm(0.5)
     rig.midi.poll()
@@ -224,9 +223,9 @@ def test_a_power_up_forgets_where_a_fader_was_on_every_layer(rig):
     assert band.norm == pytest.approx(70 / 127, abs=0.01)
 
 
-def test_a_track_fader_is_learnable_on_the_preset_layer(rig):
-    """Decision 17: S1 is the preset's, so the on-screen desk offers it and
-    a desk learn on CC 7 lands a preset-layer pickup row with no ring."""
+def test_a_track_fader_is_learnable_on_the_loadable_layer(rig):
+    """Decision 17: S1 is the loadable patch's, so the on-screen desk offers it and
+    a desk learn on CC 7 lands a patch-layer pickup row with no ring."""
     t, m = rig.midi.table, rig.midi
     s1 = next(c for c in apc40.LAYOUT if c.glyph == "S1")
     assert t.layer == "preset" and ui_desk.mappable(t, s1) is None
@@ -237,19 +236,19 @@ def test_a_track_fader_is_learnable_on_the_preset_layer(rig):
     assert (b.feedback, b.ring) == (None, 0)               # no light: the map's fader row
     assert faders_lit(t)["S1"] is not None
     shift(rig)
-    assert ui_desk.mappable(t, s1) is not None             # SHIFT up: the session's layer
+    assert ui_desk.mappable(t, s1) is not None             # SHIFT up: the meta controller's layer
 
 
 # ------------------------------------------------------------- the migration
 
-def test_an_older_session_file_moves_the_fader_rows_to_shift_once(tmp_path):
+def test_an_older_meta_file_moves_the_fader_rows_to_shift_once(tmp_path):
     """A `bindings.json` from before C2 holds the eight audio rows on the
     track faders with no layer (invariant): its next load gives each the
     SHIFT layer, notes it, keeps a backup and writes the file back once; the
     next load is quiet. A fader row the owner changed stays invariant."""
     old = []
     for b in Bindings.factory().bindings:
-        if not routing.is_session_row(b):
+        if not routing.is_meta_row(b):
             continue
         if b.kind == "cc" and b.number == FADER and b.is_midi:
             b = Binding.from_json({**b.to_json(), "layer": None})
@@ -266,7 +265,7 @@ def test_an_older_session_file_moves_the_fader_rows_to_shift_once(tmp_path):
         assert (b.target, b.layer) == (pid, "global")
         assert any(n.startswith(f"moved cc:{k}:{FADER} → {pid} to the SHIFT layer")
                    for n in t.notes)
-    assert (folder / "bindings.json.bak-v3").exists()
+    assert list(folder.glob("bindings.json.bak-v*"))
     assert t.said.startswith("bindings.json updated (8 rows changed)")
     rows = json.loads(path.read_text())["bindings"]
     assert all(r.get("layer") == "global" for r in rows
@@ -274,7 +273,7 @@ def test_an_older_session_file_moves_the_fader_rows_to_shift_once(tmp_path):
     assert path.read_text() == Bindings.factory(path=path).dumps()
     again = Bindings.load(path, legacy_midi=None)
     assert again.notes == []
-    # an owner's own row on S1 stays the session's on both layers
+    # an owner's own row on S1 stays the meta controller's on both layers
     mine = Binding(f"cc:0:{FADER}", "view.speed", "abs", ring=0)
     folder = tmp_path / "b"
     folder.mkdir()
@@ -285,22 +284,22 @@ def test_an_older_session_file_moves_the_fader_rows_to_shift_once(tmp_path):
     assert (b.target, b.layer) == ("view.speed", None)
 
 
-def test_a_preset_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig):
-    """Where the owner kept a fader invariant, a preset's row on it is
+def test_a_loadable_row_on_an_owners_invariant_fader_drops_with_the_d6_note(rig):
+    """Where the owner kept a fader invariant, a loadable patch's row on it is
     dropped with D6's note, as on any invariant control."""
     t = rig.midi.table
     for b in [x for x in t.bindings if x.source == f"cc:0:{FADER}"]:
         t.bindings.remove(b)
     t.bindings.append(Binding(f"cc:0:{FADER}", "view.speed", "abs", ring=0))
     lib = load_fixture(rig)
-    assert lib.presets.desk_notes == [
+    assert lib.loaded_patch.desk_notes == [
         (f"dropped cc:0:{FADER} → view.points_alpha: that control is invariant, the "
-         "session's (plan 13 D6)")]
+         "meta controller's (plan 13 D6)")]
 
 
 # ------------------------------------------------------- lines and points opacity
 
-def test_lines_and_points_opacity_are_performance_params_at_one(rig):
+def test_lines_and_points_opacity_are_patch_params_at_one(rig):
     """Decision 24: each new opacity defaults to the picture as it was."""
     for pid in ("view.lines_alpha", "view.points_alpha"):
         p = rig.reg[pid]
@@ -308,7 +307,7 @@ def test_lines_and_points_opacity_are_performance_params_at_one(rig):
         assert getattr(ViewState(), pid.partition(".")[2]) == 1.0
         assert (p.lo, p.hi) == (0.0, 1.0)
         assert p.modulatable and p.persist
-        assert not routing.is_session_id(pid)
+        assert not routing.is_shared_meta_id(pid)
         assert routing.base_refusal(pid, rig.reg) is None
 
 

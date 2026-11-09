@@ -1,4 +1,4 @@
-"""Rig configuration — an optional config.toml in the library home.
+"""Meta controller configuration — an optional config.toml in the library home.
 
 The home is ``$HYPERSPACE_HOME`` (default ``~/Hyperspace``, library.py);
 a config.toml still sitting in the working directory is copied there on
@@ -27,11 +27,16 @@ dream.py, too, is imported only when its gate is open.
                             # the render window is always opaque — no transparent
                             # framebuffer, and T / MASTER select / the panel cannot
                             # float it see-through; true for a laptop demo
+                            # monitor, control_monitor, fullscreen and [[output.screens]]'
+                            # screens: a seed, read once per Mac into <library>/displays.json;
+                            # from then on the output section's rows say (displays.py)
     monitor = -1            # which screen the RENDER window opens on, and the one
-                            # fullscreen covers: a screen index, or -1 = where it
-                            # was last time (else the primary screen)
-    control_monitor = -1    # which screen the CONTROL window opens on: an index,
-                            # or -1 = where it was last time (else the primary).
+                            # fullscreen covers: a screen's exact name ("MStar";
+                            # "MStar #2" for the second of two, left to right), a
+                            # screen index, or -1 = where it was last time (else
+                            # the primary screen)
+    control_monitor = -1    # which screen the CONTROL window opens on: a name, an
+                            # index, or -1 = where it was last time (else the primary).
                             # "Last time" is <home>/windows.json (placement.py),
                             # written on quit and on restart; delete it to forget.
                             # An index with no such screen is treated as -1, with
@@ -46,7 +51,7 @@ dream.py, too, is imported only when its gate is open.
     flip_y = false          # last step, for a Pepper's Ghost glass (plan 23 WP1);
                             # one output. With [[output.screens]], each entry's
                             # own flip_x / flip_y. output.N.flip_x / .flip_y on
-                            # the OUTPUT page; never saved in a preset or show
+                            # the OUTPUT page; never saved in a loadable patch or show
     keep_awake = true       # while the app runs, the Mac does not idle into the
                             # screensaver, display sleep or system sleep (macOS
                             # `caffeinate -d -i`, app.Awake); false lets it
@@ -76,10 +81,11 @@ dream.py, too, is imported only when its gate is open.
                             # passthrough, bg and alpha stay above and are
                             # output 1's alone (every later output is opaque)
     name = "glass"          # optional: the label on the OUTPUT page and in notes
-    monitor = 1             # a screen index, or -1 = a plain window where it was
-                            # last. Output 1 always opens (an index no screen has
-                            # is -1, with a note). A LATER output whose index no
-                            # screen has is NOT opened, with a note (fork F9); a
+    monitor = 1             # a screen's name, a screen index, or -1 = a plain
+                            # window where it was last. Output 1 always opens (a
+                            # screen that is not there is -1, with a note). A LATER
+                            # output whose screen is not there is NOT opened, with
+                            # a note (fork F9); a
                             # screen plugged in after the launch is not picked up
                             # until the next launch
     fullscreen = true       # a borderless cover of that screen at its current
@@ -88,7 +94,7 @@ dream.py, too, is imported only when its gate is open.
                             # OUTPUT page are output 1's only)
     scene = true            # optional launch values of this window's mutes:
     hands = true            #   the picture, the hands (plan 35: "hands through the
-                            #   effects" is the preset's wiring, no key here), and
+                            #   effects" is the loadable patch's wiring, no key here), and
     dim = 1.0               #   its own dim, times the master's; under 0.1 is 0.1,
                             #   with a note — the config cannot launch an output black
     flip_x = false          #   mirror this output left-right / top-bottom, its last
@@ -114,7 +120,7 @@ A file that will not parse is not fatal: the defaults stand and
 ``cfg["error"]`` carries the message; ``cfg["notes"]`` carries requests
 like the rename above. The SYSTEM page shows both.
 
-    [[devices]]             # the rig's devices (plan 27, devices.py): one table per
+    [[devices]]             # the meta controller's devices (plan 27, devices.py): one table per
                             # device, polled in this order. No list: the four tables
                             # below ([midi], [gamepad], [hands], [bridge]) are read
                             # as before and become the equivalent entries at load,
@@ -131,7 +137,7 @@ like the rename above. The SYSTEM page shows both.
                             # map, [gamepad]'s usb, [hands]'s whole table,
                             # [bridge]'s out / in / encoding / channel / cc / rate /
                             # send / in_lanes — each with the defaults below.
-                            # Today's rig, as a list:
+                            # Today's meta controller, as a list:
                             #   [[devices]]  role = "pad"     kind = "gamepad"
                             #   [[devices]]  role = "apc40"   kind = "midi"
                             #   [[devices]]  role = "leap"    kind = "hands"   enabled = false
@@ -148,9 +154,11 @@ like the rename above. The SYSTEM page shows both.
                             #                profile = "generic"  port = "Launch Control"
                             # SHIFT (desk.shift) is the first MIDI role's latch;
                             # bindings.json's "profile" never overrides an entry's.
-                            # The app watches this file: an edit to the list lands
-                            # without a relaunch (a bad edit is a note; the old list
-                            # stands). [dream] is a worker, not a device: it stays a table
+                            # **Read once per Mac (wave 5 CT1), as the seed of
+                            # devices.json in the library, which then says, on both
+                            # Macs:** a new controller comes in by dragging it from the
+                            # player board's tray, and an edit here lands nowhere.
+                            # devicelist.py has the rules. [dream] is a worker, not a device: it stays a table
                             # Sinks (plan 27 B3) send values out: the bridge's out
                             # half, and a "midi-out" entry — a MIDI port of its
                             # own, carrying a hands device's DAW messages and any
@@ -165,7 +173,7 @@ like the rename above. The SYSTEM page shows both.
                             #   hands entry — becomes this entry at load (one note
                             #   when the file wrote it), unless the list has a
                             #   midi-out carrying that role already. What a sink
-                            #   sends is the session's sink rows in bindings.json
+                            #   sends is the meta controller's sink rows in bindings.json
                             #   ("param:view.bright" or "lane:3" → "bridge:3"):
                             #   ROUTING's sinks, or right-click → Learn sink ▸.
                             #   [bridge] send becomes those rows the first launch
@@ -175,7 +183,7 @@ like the rename above. The SYSTEM page shows both.
                             # kind finds its feeds every 2 s and offers them to the
                             # media channels as source ids; nothing connects until
                             # a channel puts one on. NDI over the network
-                            # (ndi:<sender>, another rig's Resolume / TouchDesigner),
+                            # (ndi:<sender>, another machine's Resolume / TouchDesigner),
                             # Syphon from another app on this Mac
                             # (syphon:<app>/<server>, zero-copy) and the webcams
                             # (camera:<name>, 1280x720 at 30 fps):
@@ -213,9 +221,11 @@ like the rename above. The SYSTEM page shows both.
                             # the next joystick no other pad entry reads. Several pads:
                             # one gamepad entry each; the first is the primary (the
                             # unqualified rows, the sticks' camera job), another's rows
-                            # carry its role (pad@p2:A, axis@p2:LX) — Learn pad writes them
-    dial_left = "petal"     # how each stick reads as a dial (gamepad.dial): "petal",
-    dial_right = "blend"    # hard sectors, or "blend", neighbours crossfade
+                            # carry its role (pad@p2:S, axis@p2:LX) — Learn pad writes them
+    dial_left = "petal"     # how each stick reads as a dial (gamepad.dial) in a loadable
+    dial_right = "blend"    # patch that names none: "petal", hard sectors, or "blend",
+                            # neighbours crossfade (its own `pad.dial.*` wins). Read at launch,
+                            # on the first enabled pad only: an edit waits for the next launch
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported
@@ -236,8 +246,8 @@ like the rename above. The SYSTEM page shows both.
     precision = "fp32"      # or "fp16": ~10 % faster on VGG, more p99 outliers
     weights_dir = ""        # pretrained weights; "" = <library home>/weights
 
-    [hands]                 # Ultraleap hands (hands/, the `leap` bindings) — the rig;
-                            # the performance setup is the HANDS page / `hands` presets.
+    [hands]                 # Ultraleap hands (hands/, the `leap` bindings) — the meta controller;
+                            # the performance setup is the HANDS page / `hands` loadable patches.
                             # The defaults are hands/core.py's DEFAULTS, the one table
     enabled = false         # true opens the tracker; off, `leap` is never imported
     mode = "desktop"        # camera looks up from below; "screentop" from above, "hmd"
@@ -254,10 +264,10 @@ like the rename above. The SYSTEM page shows both.
     tape = ""               # a hand tape (tools/hands_tape.py record) to play instead
                             # of the camera, relative to this file; "" = the camera
 
-    [library]               # where the presets live (plan 25)
+    [library]               # where the loadable patches live (plan 25)
     path = ""               # "" = the home above, as always. Otherwise a folder —
                             # typically a cloud-synced one (Dropbox, iCloud Drive,
-                            # Syncthing…) shared with whoever you trade presets with.
+                            # Syncthing…) shared with whoever you trade loadable patches with.
                             # It holds the library: presets/, projects/, the module
                             # groups (fx/, dream/, band/…) and trash/.
                             # Machine files stay in the home: this config.toml,
@@ -290,10 +300,11 @@ DEFAULTS: dict = {
     # overlay.py: the render window's placement and look; ground 0 = see-through.
     # overlay: off, the window is opaque and overlay cannot switch on
     # (decision 21 (a), plan 14 WP2). monitor / control_monitor: the screen
-    # each window opens on, −1 = where it was last time (placement.py)
+    # each window opens on, by name or index, −1 = where it was last time
+    # (placement.py)
     "output": {"overlay": False, "monitor": -1, "control_monitor": -1, "fullscreen": False,
                "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0,
-               "keep_awake": True, "render": "1080p",
+               "keep_awake": True, "render": "1080p", "unplug_hold_s": 3.0,
                "flip_x": False, "flip_y": False,
                "syphon": "", "ndi": "", "window": True},
     # gamepad.py: the Xbox pad — on by default, inert when absent
@@ -324,13 +335,13 @@ SCREEN: dict = {"name": "", "monitor": -1, "fullscreen": False,
 # the keys that publish an output (plan 32 T9): a Syphon server's and an
 # NDI sender's name ("" = not published)
 PUBLISH_KEYS = ("syphon", "ndi")
-ONE_WINDOW = ("output 1 holds the GL context and paces the loop — it always opens a window "
-              "(publish it, or set a later output's window = false)")
+ONE_WINDOW = ("whether output 1 has a window is the display rows' to say, on the output section "
+              "(and --laptop always opens one), so this isn't read: publish it, and leave it no row")
 DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 fork F4)
-# plan 35 M: an entry's `through` (plan 21 WP2's switch) is the preset's
+# plan 35 M: an entry's `through` (plan 21 WP2's switch) is the loadable patch's
 # wiring now — read, ignored, said once
 THROUGH_IS_WIRING = ("config: [[output.screens]] output {n}: through is wiring now (plan 35) — "
-                     "OUTPUT's 'hands through the effects' writes it into the preset")
+                     "OUTPUT's 'hands through the effects' writes it into the patch")
 
 # `[[devices]]` (plan 27 B1): the old per-adapter tables, in today's poll
 # order, each with the kind and the role its entry gets (None: the MIDI
@@ -381,7 +392,7 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
     name = e.get("name", "")
     out["name"] = name if isinstance(name, str) else str(name)
     if "monitor" in e:
-        out["monitor"], bad = placement.read("monitor", e["monitor"])
+        out["monitor"], bad = placement.kept("monitor", e["monitor"])
         if bad:
             _note(cfg, f"{where} monitor = {e['monitor']!r} is not a screen index — "
                        "using the last position")
@@ -494,13 +505,14 @@ def screens(cfg: dict) -> list[dict]:
 
 LAPTOP_NOTE = ("laptop: output 1 is a plain window on this screen — no fullscreen, no "
                "overlay at launch, no later outputs; the windows open at their default "
-               "spots and where they are is not remembered")
+               "spots and where they are is not remembered, and the display rows are "
+               "neither read nor written")
 
 
 def laptop(cfg: dict) -> None:
-    """`hyperspace --laptop`: the rig's config read for a machine with no
+    """`hyperspace --laptop`: the show machine's config read for a machine with no
     projector — one plain render window and the controls on the one
-    screen, so a config made for the rig cannot cover the laptop black.
+    screen, so a config made for the show machine cannot cover the laptop black.
     In place: output 1 neither fullscreen nor floated as the overlay at
     launch (T and the panel still can), both windows on the primary
     screen, every later output dropped. Publishing (syphon / ndi) and
@@ -685,8 +697,21 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
     resolved against the file's folder in both."""
     raw = data.get("devices")
     wrote_out: set[str] = set()
+    # what `devicelist` takes from this file: the seed of `<library>/devices.json`, what
+    # this Mac alone has said off, and whether it may look for MIDI ports at all
+    midi_table = data.get("midi")
+    cfg["no_midi_look"] = isinstance(midi_table, dict) and midi_table.get("enabled") is False
+    cfg["device_seed_listed"] = isinstance(raw, list)
+    # (a file that didn't read seeds nothing: `DeviceList` then leaves its one read for later)
+    readable = not cfg.get("error")
     if raw is None:
         entries = _translate(cfg, data)
+        if readable:
+            cfg["device_seed"] = [_compact(e) for e in entries]
+            cfg["device_here"] = {e["role"]: data[section]["enabled"]
+                                  for (section, _kind, _role), e in zip(DEVICE_TABLES, entries, strict=True)
+                                  if isinstance(data.get(section), dict)
+                                  and isinstance(data[section].get("enabled"), bool)}
         if isinstance(data.get("hands"), dict) and "out" in data["hands"]:
             wrote_out = {e["role"] for e in entries if e["kind"] == "hands"}
     else:
@@ -694,6 +719,7 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
             problems.append(f"config: devices = {raw!r} is not a list of [[devices]] tables")
             raw = []
         entries, roles, pins = [], set(), set()
+        seed = []
         for i, e in enumerate(raw):
             if not isinstance(e, dict):
                 problems.append(f"config: [[devices]] entry {i + 1} is not a table ({e!r}) "
@@ -702,6 +728,11 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
             got = _device(i + 1, e, cfg, roles, problems, pins)
             if got is not None:
                 entries.append(got)
+                seed.append({**copy.deepcopy(e), "role": got["role"], "kind": got["kind"]})
+        if cfg["device_seed_listed"] and readable:
+            cfg["device_seed"] = seed
+            cfg["device_here"] = {e["role"]: e["enabled"] for e in seed
+                                  if isinstance(e.get("enabled"), bool)}
         for section, kind, _ in DEVICE_TABLES:
             if isinstance(data.get(section), dict):
                 _note(cfg, f"config: [[devices]] is listed, so [{section}] is ignored — "
@@ -709,11 +740,22 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
         wrote_out = {str(e.get("role", "")).strip() for e in raw
                      if isinstance(e, dict) and "out" in e}
     entries = _daw(cfg, entries, wrote_out)
+    _resolve(entries, path.parent)
+    take_devices(cfg, entries)
+
+
+def _resolve(entries: list[dict], base: Path) -> None:
+    """A relative `map`, `calibration` or `tape`, against `base`, in place."""
     for e in entries:
         for key in ("map", "calibration", "tape"):
             v = e.get(key)
             if isinstance(v, str) and v and not Path(v).is_absolute():
-                e[key] = str(path.parent / v)
+                e[key] = str(base / v)
+
+
+def take_devices(cfg: dict, entries: list[dict]) -> None:
+    """`entries` are the device list; the first of each old kind folds back into its
+    table (`_devices`' docstring)."""
     for section, kind, _ in DEVICE_TABLES:
         first = next((e for e in entries if e["kind"] == kind), None)
         if first is None:
@@ -722,6 +764,46 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
         cfg[section] = {**cfg[section], **{k: v for k, v in first.items() if k not in DEVICE_KEYS},
                         "enabled": first["enabled"]}
     cfg["devices"] = entries
+
+
+def _compact(entry: dict) -> dict:
+    """An old table's entry as `devices.json` holds it: what differs from its kind's
+    defaults. A table's `enabled = false` on a kind that's on by default stays out: it is
+    this Mac's to say (`cfg["device_here"]`), and the list is both Macs'."""
+    kind = entry["kind"]
+    defaults = _kind_defaults(kind)
+    out = {"role": entry["role"], "kind": kind}
+    if kind in ("hands", "bridge"):       # off with nothing said, so the list must say
+        out["enabled"] = entry["enabled"]
+    out.update({k: v for k, v in entry.items()
+                if k not in DEVICE_KEYS and (k not in defaults or defaults[k] != v)})
+    return copy.deepcopy(out)
+
+
+def listed_devices(raw: list, base: Path, here: dict | None = None
+                   ) -> tuple[list[dict], list[str], list[str]]:
+    """Entries as a list holds them, checked as `[[devices]]` is: (entries, problems,
+    notes), printing nothing. `base` is the folder a relative path means on this Mac, and
+    `here` (role → bool) is on or off on this Mac, whatever the list says."""
+    import contextlib
+    import io
+
+    scratch: dict = {"notes": []}
+    problems: list[str] = []
+    entries: list[dict] = []
+    roles: set[str] = set()
+    pins: set[int] = set()
+    with contextlib.redirect_stderr(io.StringIO()):
+        for i, e in enumerate(raw):
+            got = _device(i + 1, e, scratch, roles, problems, pins)
+            if got is not None:
+                # (on or off first: `_daw` asks it of a hands entry)
+                got["enabled"] = here.get(got["role"], got["enabled"]) if here else got["enabled"]
+                entries.append(got)
+        # (`wrote_out` only chooses a note: the sink is made either way)
+        entries = _daw(scratch, entries, set())
+    _resolve(entries, base)
+    return entries, problems, scratch["notes"]
 
 
 def devices(cfg: dict) -> list[dict]:
@@ -808,11 +890,18 @@ def load(path: Path | None = None) -> dict:
             cfg["output"][key] = DEFAULTS["output"][key]
             _note(cfg, f"config: [output] {key} = {v!r} is not a number — "
                        f"{DEFAULTS['output'][key]}")
-    # a screen index is a whole number: `monitor = "left"` is −1 from here
+    # how long a window waits for its display to come back (hotplug.py)
+    v = cfg["output"].get("unplug_hold_s", DEFAULTS["output"]["unplug_hold_s"])
+    hold = number(v)
+    if hold is None or hold < 0:
+        cfg["output"]["unplug_hold_s"] = DEFAULTS["output"]["unplug_hold_s"]
+        _note(cfg, f"config: [output] unplug_hold_s = {v!r} is not a number of seconds — "
+                   f"{DEFAULTS['output']['unplug_hold_s']}")
+    # a screen is a whole number or a name: anything else is −1 from here
     # on (where the window was last time) and the SYSTEM page says so —
     # whether that screen exists is placement's to say, at the launch
     for key in ("monitor", "control_monitor"):
-        cfg["output"][key], note = placement.read(key, cfg["output"].get(key, -1))
+        cfg["output"][key], note = placement.kept(key, cfg["output"].get(key, -1))
         if note:
             cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)
@@ -851,7 +940,7 @@ def load(path: Path | None = None) -> dict:
     # an absolute path. A leftover `git` key (the old git switch, removed) is said once
     if "git" in cfg["library"]:
         cfg["library"].pop("git")
-        note = ("config: [library] git is gone (plan 25) — presets are shared "
+        note = ("config: [library] git is gone (plan 25) — patches are shared "
                 "through [library] path; remove the line")
         _note(cfg, note)
         print(note, file=sys.stderr)

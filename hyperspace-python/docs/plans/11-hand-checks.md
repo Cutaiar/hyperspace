@@ -235,7 +235,7 @@ launch, wait twenty seconds, plug in: lit within ten seconds (five
 tries two seconds apart, then every ten). *Fail:* no LEDs →
 `apc40.enter` / `[midi] port`; wrong param → `apc40.DEFAULT_MAP` (its
 `layer`); knob jumps back → check 31; fader jumps → pickup in
-`MidiIO._apply`; late desk never found → `midi.retry_after`.
+`MidiIO._apply`; late desk never found → `midi.Ports.retry`.
 
 **11. Rings show the setting, LEDs show the state.**
 Headless: `tests/test_midi.py::{test_ring_shows_the_base_and_never_chases_a_performer,test_select_buttons_and_led_state}`.
@@ -821,7 +821,8 @@ not connected — opening on "<laptop>"'. Restore `fullscreen`.
 swap regardless of file. `monitor = 7`: SYSTEM and terminal: "config: [output] monitor = 7, but 2 screens are connected
 (0–1) — using the last position"; last position used. `monitor = "left"`:
 launches, with "config: [output] monitor = 'left'
-is not a screen index — using the last position". Remove both keys.
+matches no screen (connected: …) — using the last position" (row 771: a
+string is a screen's name). Remove both keys.
 (f) Delete `windows.json`, launch: render top-left, controls flush
 right, primary screen, full size (overlap on small screens). (g) ⌘R with
 a window moved: it stays. An index not connected **at launch** is
@@ -829,7 +830,7 @@ ignored for the run: plug projector in first. *Fail:* off-screen or
 misplaced → `placement.place` / `usable`; wrong screen for index →
 `placement.screens` (GLFW's order); fullscreen size saved →
 `Output.windowed_rect`; no file after Esc → `app._save_windows`; no
-launch with `"left"` → `placement.read` / `config.load`. Window out of
+launch with `"left"` → `placement.settle` / `config.load`. Window out of
 reach: delete `windows.json`.
 
 **62. Instances to zero.**
@@ -3006,20 +3007,23 @@ two chips, "Acid" and "Acid 2", each with its own strip and twist
 the first.
 
 **213. Two hands nodes: one in the scene, one over the glass.** (copy, glass and projector)
-Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_session_params_and_state,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`.
-The rig of 206; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
+Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_look_and_the_rooms_mirror,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`, `tests/test_one_mirror.py`.
+*Changed by LY1 (row 773, pending the owner): `ghost.2.mirror` is gone. The glass's own flip is its **Flip X** on the OUTPUT page, which flips everything in that window.*
+The rig of 206, the glass with **scene** off; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
 desk) switch **Ghost 2 hands** (`ghost.2.on`) on — off by default, like
-every new switch — and set `ghost.2.mirror` on and `ghost.2.style` to
-CAGE. Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
+every new switch — set `ghost.2.style` to CAGE, and tick the glass's Flip X.
+Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
 load TWO-HANDS.
-*Pass:* the projector shows solid hands inside the shape; the glass shows
-mirrored cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
+*Pass:* the projector shows solid hands inside the shape, not flipped; the glass shows
+flipped cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
 `readout` with times; TRIP takes the glass back to the first node's
-layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the mirror and the
-cage back; after the relaunch they are still there and the show is
-clean. *Fail:* the same hands on both outputs; the glass mirrored on the
-projector too; a stale `hands.2` line; the cage lost after the relaunch
-(the show's held-back `ghost.2.*`).
+layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the cage back; after the
+relaunch they are still there, the flip kept, and the show is
+clean. **Judge:** the hands are in the same place as the old mirror put them, but
+lit from the other side (the light is fixed in the hands' space, so a window flip
+flips it too), and a guide's labels read backwards. *Fail:* the same hands on both
+outputs; the projector flipped too; a stale `hands.2` line; the cage lost after the
+relaunch.
 
 **214. Hands as lines.** (copy)
 Headless: `tests/test_graph_json.py::test_hands_as_lines_draw_their_edges`, goldens `hands-lines|present|*`.
@@ -4416,7 +4420,7 @@ nodes; old presets migrate on load and save back unchanged. On
 `plan-33-free-graph` (PR #235, into `plan-31-32-integration`). Run on the
 copy (`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`, with a
 clip (`.mp4`) and a still in `~/Hyperspace-try/media/` and a camera for
-318. **A free graph saves as `hyperspace.preset/5`, which an older build
+**A free graph saves as `hyperspace.preset/5`, which an older build
 refuses:** both Macs must run this build before 322's last step and 328.
 Group AC assumes the control window at its usual 960 × 900. None of these
 has been run by a person; the goldens were recorded on the build machine.
@@ -7075,7 +7079,7 @@ Headless: `tests/test_audio_mix.py` (`test_mix_with_nothing_heard_is_silence_not
 1. Launch with no channel's `audio` on. AUDIO: *Listen to video sound*.
 2. MEDIA: tick `audio` on A (the video playing at rate 1).
 3. Untick it; then pull the headphones or switch the output device.
-*Pass:* step 1 shows no error, the line "silent until a channel's sound
+*Pass:* step 1 shows no error, the line "silent until an on-air channel's sound
 is on (MEDIA)", the bands at rest and SYSTEM shows no `media sound` line
 (nothing opened); step 2 the bands come alive with the sound; unticked,
 the bands decay to rest (not frozen on the last block); a device change
@@ -7086,6 +7090,7 @@ Fail: a frozen meter after the untick points at the no-voice block not
 being pushed (`Mixer._push`).
 
 ## BF. The panel fold, stage 1: the side pane always on (plan 49)
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 597–601, 2026-11-03. Headless: `tests/test_ui_pane.py`
 (the panel driver on GRAPH: each section opened by a click and a control
 found in it by its page's id, a click in a section moving the param, a
@@ -7351,6 +7356,7 @@ colour, "this preset wires Output 2, which this rig has not open — add a
 window on OUTPUT to show it"; (2) both lines are gone.
 
 ## BK. The panel fold, stage 2: every page a section, the FX page retired (plan 49)
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 626–632, 2026-11-03. Headless: `tests/test_ui_pane.py`
 (each stage-2 section opened alone at 240 px and 320 px, its page's
 control found inside the pane and nothing past its edge; MEDIA four to
@@ -7538,6 +7544,7 @@ preset and an **Update patch** write `patch/2`. Fail: "is not a
 hyperspace.patch".
 
 ## BN. Deck 2 offscreen and the one fade (plan 44 D4)
+*These describe the fade before #380 (plan 44 D5d), and no longer gate it (the owner, 2026-11-06). Re-try the same matters with #380 on the rig before the rename (SEM).*
 Register rows 648–653, 2026-11-03. Headless and on GL:
 `tests/test_deck_fade.py` (deck 2 at `xfade` 1 equals deck 1 on the same
 preset byte for byte over the corpus, half white over black within one step,
@@ -7659,6 +7666,7 @@ the projector as saved, but for its turn (the pose stays the host's). Fail:
 a host param moved at (1) or (2), or a second scene at (4).
 
 ## BQ. Replace the host's dream, and the dream's own params (wave 3 P2)
+
 Register rows 661–664, 2026-11-03. Headless:
 `tests/test_patches_replace_dream.py` (the sheet, one press and one undo step,
 what goes and what stays, a host group letting go, the splice, the hold, whose
@@ -7710,6 +7718,7 @@ not on the look-back. (4) the same two lists as the canvas. Saved presets play a
 they did. Fail: a knob on neither node, or a picture change on any load.
 
 ## BR. Wire as saved, taking over (wave 3 P3)
+
 Register rows 524, 665–667, 2026-11-04. Headless: `tests/test_wire_take_over.py`
 (one press and one undo step, the words, the plain chip unmoved, what is not taken,
 several cuts, the mouse on the real chip, a stale press). Nobody has seen the chip
@@ -7753,6 +7762,8 @@ chip is left under the mouse. Let go off the chip: nothing is said.
 *Fail:* any cable cut by the old words.
 
 ## BS. The panel fold, stage 3: the rail gone, `ui.page` the focus (plan 49)
+
+*Superseded 2026-11-07 by group DV (one viewer): where a check below says fold, unfold or focus a section, bring it up by its chip or the sections menu; the fold memory and the shared heights are gone.*
 Register rows 668–672, 2026-11-03. Headless: `tests/test_ui_pane.py` (the
 four new sections at 240 and 320 px, nothing past the pane's edge; every
 slot a section but GRAPH's; the focus and the fold; the focused header at
@@ -7790,6 +7801,7 @@ Right if: 1 maps it; 2 reads as before; 3 no frame cost you can see. Wrong if:
 headers go dead while picking, or the panel drops the output's frame rate.
 
 ## BT. Video audio 4 of 4: sync and varispeed (plan 45 V4)
+
 Decision register rows 673–677. A channel's sound now follows its transport
 at any rate, in either direction, and the occasional click at rate 1 that
 checks 437 and 446 expected is gone: a click there is now a fail. No restart
@@ -7843,6 +7855,7 @@ sounds like a scratch and not a stutter; the meters follow what is heard all
 through. Fail: a click on the cut, or the meters moving when the sound is silent.
 
 ## BU. The room lanes (plan 51 O1)
+
 Register rows 678–681, 2026-11-03. **Nothing here has run on a real sensor**:
 `tests/test_hands_room.py` plays tapes written from computed poses through
 `TapeSource` and `HandsIO`, and that is the whole of the proof. No preset or
@@ -7881,6 +7894,7 @@ visibly shimmer: this filter is the page's `smooth` and `response`, untuned
 for a camera. Fail: a shimmer you would see on a shape (tell O2 to tune it).
 
 ## BV. The orbit (plan 51 O2)
+
 Register rows 682–685, 2026-11-03. **Nothing here has run on a real sensor**:
 `tests/test_hands_orbit.py` plays tapes from computed poses through `TapeSource`,
 `HandsIO` and `Router.modulate`, and the tape's fist has the same palm vectors as
@@ -7917,7 +7931,16 @@ you wanted the orbit on the projector (row 684). (3) No camera jump on the way d
 (4) The camera holds through the pass with no sweep. Say if it holds so often near
 vertical that the 20° zone wants to be smaller (row 685).
 
+## BW. The Joy-Con's version 0 (rows 686–687)
+
+Landed unproved at the owner's word, 2026-11-07: checked on tapes and a stand-in pad, not yet on a live one. A charged Joy-Con; an Edge for the last line of 521.
+
+**520. Gyro.** With the totem on, turn the pad about each axis: the shape turns with it. Tip it and fling it: the shape's position does not move. Set it on the desk for 30 seconds: the shape holds still. Walk across the room and back: the shape keeps following, with no jump when the signal recovers.
+
+**521. The layout and shake.** In both modes SL and SR step the shape, the stick's click resets the view (with the totem on, the rotation stays the gyro's), L (R on the right Joy-Con) holds the base chase and lets go on release; ZL does nothing until learned. Capture (HOME on the R) switches the totem; − (+ on the R) resets it: hold the pad in any pose, press it, the shape squares up and turns from there. With the totem off the stick orbits; on, it does nothing until learned. Learn a param onto it: the param follows the stick only with the totem on, and with it off the stick orbits and the param lets go. ← → ↑ throw the turn into W with the totem on; ↓ is its row in both modes. The pad window names all of this. Learn a shake onto a param and shake or thrust the pad: the row fires, and the tilt ring pulses. On a DualSense Edge, hold Options: one save, and a brush saves nothing.
+
 ## BX. The meta controller's pointers (plan 44 D5a)
+
 Register rows 688–690, 2026-11-04. **Nothing should look or feel different:** every
 pointer is on deck 1 and nothing in the app moves one. Tests cover pointing at deck 2
 (`tests/test_meta_controller.py`); these two check the real app, after a restart.
@@ -7933,6 +7956,7 @@ Read `docs/GLOSSARY.md`. *Pass:* each row says what you mean. Say which to chang
 SEM renames the code from it.
 
 ## BY. Three undo stacks (plan 44 D5b)
+
 Register rows 691–693, 2026-11-04. Restart first. **One thing is different on purpose:**
 a ⌘Z no longer takes back a meta edit made while you were elsewhere.
 **524. ⌘Z by where you are.** (the rig, or a laptop)
@@ -7940,24 +7964,27 @@ a ⌘Z no longer takes back a meta edit made while you were elsewhere.
    mouse on the canvas, turn a preset knob.
 2. Mouse on the canvas, ⌘Z. *Pass:* the knob goes back and the threshold stays.
 3. ⌘Z again until "nothing to undo". *Pass:* the threshold still stays.
-4. Mouse on the analyzer section, ⌘Z. *Pass:* the threshold goes back, the footer says so, and the
-   picture's preset values do not move. Do the same with `master.gain` in the audio section, and say
-   whether audio should count as a meta section.
+4. Mouse on the analyzer section, ⌘Z. *Pass:* the footer says "nothing to undo here yet" and the threshold
+   stays (the latch, row 753). Nudge another threshold, then ⌘Z twice. *Pass:* the threshold goes back, the
+   footer says so, and the picture's preset values do not move. Do the same with `master.gain` in the audio
+   section, and say whether audio should count as a meta section.
 5. Load the wrong preset, ⌘Z on the canvas. *Pass:* the earlier preset is back with its unsaved edits.
 6. Tweak a band, then press the key row that focuses the analyzer. Move the mouse to the desk diagram,
-   turn a desk knob, ⌘Z. *Pass:* the knob goes back and the band stays.
-7. In the hands section, ⌘Z with the mouse on a `ghost` row, then on a shaping knob. *Pass:* the first
+   turn a desk knob, ⌘Z. *Pass:* refused, since a controller moves no focus (row 753), and the band stays.
+   Turn it again, ⌘Z. *Pass:* the knob goes back and the band stays.
+7. In the hands section, change a `ghost` row and ⌘Z, then change a shaping knob and ⌘Z. *Pass:* the first
    takes the deck's, the second the last hands change.
 *Fail:* any ⌘Z that moves the other layer, or a knob or an orbit that ends up as two steps.
 **525. A show, and the table's rows.** (anywhere; a throwaway show)
 1. Open another show. Mouse on the canvas, ⌘Z. *Pass:* the earlier preset is back, the show's name stays.
-2. Mouse on the hands section, ⌘Z. *Pass:* the show's name, its bank and the analyzer's name are back,
-   and the picture does not move.
+2. Mouse on the hands section, change a knob there, ⌘Z twice (the latch, row 753). *Pass:* the show's name,
+   its bank and the analyzer's name are back, and the picture does not move.
 3. Say whether two ⌘Zs in two places is what you want for a show load (row 693).
-4. Learn a key row on ROUTING, then ⌘Z in a meta section, and restart. *Pass:* the row is gone, and stays
-   gone after the restart.
+4. Learn a key row on ROUTING, then in a meta section change something, ⌘Z twice, and restart. *Pass:* the
+   row is gone, and stays gone after the restart.
 
 ## BZ. The crossfader's side and copy on air (plan 44 D5c)
+
 Register rows 694–696, 2026-11-04. Restart first. **Nothing here is meant to look different yet:** no control
 calls the new verbs until D5d.
 **526. Neutral at 0.** (the rig, or a laptop)
@@ -7978,7 +8005,140 @@ calls the new verbs until D5d.
 5. Hold GRAPH on the deck off air, then fade. *Pass:* a delay's trail carries across the size change; say if it restarts.
 6. Time a 5-second fade by the clock. Grab the fader mid-way. *Pass:* it stops there and is yours.
 
+## CA. The crossfader, copy, and the panel on either deck (plan 44 D5d)
+
+Register rows 697–702 and 752, 2026-11-04 and 2026-11-06. Restart first. HOLD, TAKE and DROP are gone, so group AI's checks are retired. **This
+replaces the mechanism a show relies on: run it at the rig before one.** 528 goes with it.
+**529. The verbs that replaced the hold.** (the rig)
+1. GRAPH's head. *Pass:* no hold, take or drop; a chip, "copy on air to off air", a slider, "fade" and seconds.
+2. Copy, click the chip, load another look on deck 2, turn knobs. *Pass:* the room does not move.
+3. **fade.** *Pass:* it runs over the seconds; on air goes across at the middle once.
+*Fail:* anything on the panel names a hold.
+**530. The desk.** (the rig, with the APC40)
+1. Launch once. *Pass:* a `bindings.json.bak-*` beside the file and the note on SYSTEM.
+2. Crossfader end to end. *Pass:* deck 1 to deck 2, a mix between. MASTER down. *Pass:* black, whichever deck.
+3. Audio: AUDIO section's master drive. *Pass:* it moves the analyzer; no desk control does.
+4. Arm Learn on a param and move the crossfader, then MASTER. *Pass:* "invariant", not learned, each still doing its job.
+5. Move the fader during a 30-second timed fade. *Pass:* the fade stops where it is, at once, from the other end of the
+   throw too; the fader then does nothing until it reaches the value. Leave it alone during another. *Pass:* it runs out.
+6. Move a pad's player off air (the player screen). *Pass:* both faders still work.
+*Fail:* a fader moves `master.gain`, or a preset can claim either.
+**531. Which deck am I on.** (a laptop)
+1. Chip on the deck on air. *Pass:* grey "deck 1 · on air", the window's title the same, no frame.
+2. Click it. *Pass:* red "deck 2 · off air", the title the same, a red frame round the canvas, the ON AIR inset showing the room,
+   the nodes' pictures deck 2's.
+3. Fade across without clicking. *Pass:* the chip reads "deck 2 · on air", the frame goes.
+*Judge:* can you tell from across the room? Does the inset cover too much?
+**532. No pad changes what is on air.** (the rig, with the APC40)
+1. APC on air, press a filled bank pad, QUANT, OVERDUB. *Pass:* the room does not move; deck 2 loads each time and the footer says so.
+2. Press F1, then Home. *Pass:* the same.
+3. Move the APC's player off air. Press a pad. *Pass:* the same: deck 2 loads, its light on.
+4. Fader at the middle, press again, and press **copy**. *Pass:* both refused in words. Fader a hair off its end. *Pass:* neither is.
+5. Hold an empty pad on air. *Pass:* it saves deck 1's look and blinks; the picture does not move.
+**533. Fading in practice.** (the rig)
+1. Fade into an empty deck after a launch. *Pass:* black, and allowed.
+2. Fade with dim down, a render cap set and sound on. *Pass:* no flash of a wrong size or brightness at the middle.
+3. Orbit with a fist on the deck on air after a copy. *Pass:* only that deck's camera moves. Fade across. *Pass:* a step if they differ; say if it bothers you.
+4. MEDIA section on deck 2. *Pass:* it shows deck 2's channels.
+**534. Nothing crosses.** (a laptop)
+1. Different looks on each deck. Panel on deck 2: add a route, edit GRAPH, reset a pattern strip, ⌘Z, save. Watch the room.
+   *Pass:* it never moves.
+2. Fade across, panel on the other, the same. *Pass:* the same, both ways.
+*Fail:* any edit shows on the other deck. The owner's absolute rule: report it.
+**578. A press always loads off air.** (the rig, with the APC40; rows 700, 752)
+1. Player 1 on air as it starts, deck 2 on another look. Press a filled bank pad. *Pass:* the room does not move. The footer reads "<name> loaded off air on deck 2; the room still sees deck 1", with no ⌘Z in it. That pad is lit green and the rest of the filled ones amber; the pad deck 1's look came from is amber too.
+2. Click the chip to deck 2. *Pass:* the strip and the canvas show what the pad loaded. ⌘Z there refuses (group CR); change something there and ⌘Z twice takes the load back. Press a pad with the panel on deck 2: the footer ends "⌘Z takes it back", and it does. Back on deck 1, ⌘Z never undoes a pad.
+3. QUANT several times. *Pass:* it walks the pads from the one lit, wrapping. F-keys and Home the same.
+4. Fade across. *Pass:* the pads' light moves to what deck 1 holds; the next press loads deck 1, and the footer says so.
+5. In ROUTING or Learn, try to put a desk knob or button on `preset.next`, then on `preset.save_new`. *Pass:* each refused, in words, "no preset row may drive it". A pad button's Learn takes one, and works.
+6. Save three ways: the panel's "as…", a held empty pad, and the Edge's hold on MENU if you have one. *Pass:* each saves, as before.
+*Judge:* is green for off air right, with nothing on the pads saying what the room is on? The panel's chip and the OS title say that.
+
+## CB. The panel says which `Deck` (plan 44 D5e)
+
+Register rows 703, 704, 2026-11-06. Restart first (a param's label and tips are read at launch), and copy on air to off air so both decks hold a look.
+**535. Which `Deck`, wherever you look.** (the rig, with the APC40)
+1. GRAPH's head chip, to "deck 2 · off air". *Pass:* the inset says "ON AIR · deck 1", the window's title deck 2, and over the PRESETS strip "deck 2 · off air", red, the look's name not cut for it.
+2. H to hide the panel, the desk diagram up. *Pass:* its header says "deck 2 · off air · the desk plays deck 1", red; a knob on the APC40 moves deck 1. Pick a control: the deck's words stay. Unplug the APC40: "the desk plays" goes.
+3. Show the panel, ROUTING. *Pass:* "the desk plays deck 1" over the desk's rows.
+4. SYSTEM. *Pass:* two GPU blocks, "deck 1 (on air) gpu" and "deck 2 gpu". Chip back to deck 1. *Pass:* the "deck 1 (on air) gpu" block and one line, "deck 2: off air, draws nothing"; never deck 1's twice.
+*Fail:* any place showing a deck's rows without saying which.
+**536. The words match what happens.** (the Mac, a pad helps)
+1. On deck 2, select a route cable from a controller whose player is on air. *Pass:* its row says "dormant: its controller is on the other deck". Move that player off air. *Pass:* the line goes and the row reads live.
+2. The cheat sheet. *Pass:* F1–F8, Home, APC40 clip pads and QUANT say off air; nothing says pad B walks a list.
+3. The footer's chip starts "players:". On the desk diagram, X reads "Crossfade".
+4. With the panel on air, Home, then ⌘Z. *Pass:* refused in words; the room does not move. The foot's line after Home did not offer ⌘Z.
+*Fail:* a word that describes the old hold, or a load landing on air.
+
+## CC. The playlist's file (plan 44 D6a)
+
+Register rows 705–707, 2026-11-06. Nothing plays one until group CD. Headless: `tests/test_playlist.py`, over stand-ins.
+**537. The folder is harmless.** Put a `playlists/` folder with one `.json` in a scratch library, as `tests/test_playlist.py` writes one, and launch on it.
+*Pass:* the presets section lists nothing new, the footer says nothing, and a dry run of `tools/migrate_library.py` on that library leaves the folder out.
+**538. Read the plan's model.** No machine needed. `playlist.py`'s docstring against what you want from a cart left running.
+*Judge:* a dwell of 300 is a fade starting every 300 s, whatever the fade takes (row 706), not 300 s alone on air. Right?
+
+## CD. The playlist plays (plan 44 D6b)
+
+Register rows 708–709, 2026-11-06. Restart first. Headless: `tests/test_playlist.py`, on the real two decks. In the app: `tools/drive_playlist.py`. **One thing is new on purpose:** it writes over the deck off air, whatever is there.
+**539. A cart left running.** (a laptop, then the projector)
+1. In the playlist section at the pane's narrowest, type a name, new, add three looks and one you then delete from the library. Set each dwell to 20.
+   *Pass:* nothing passes the pane's edge, and a file appears in `<library>/playlists/`.
+2. Play. *Pass:* the first look fades in, each comes every 20 s, and the deleted one is skipped with a footer line naming it.
+3. Leave it ten minutes. *Pass:* no hitch you can see at a load or at a fade's first frame, on the projector. Try a look with a heavy shader and a dream look.
+4. Stop. *Pass:* what is on air stays.
+*Fail:* a hitch at a fade you would mind in a room, or a fade into black with a look to show.
+**540. ⌘Z at a running cart.** While it plays, change something on the panel's deck, wait for an advance, ⌘Z.
+*Pass:* refused, in words, and the room does not change. Change something, ⌘Z twice or more: the steps go back in order.
+*Judge:* far enough back, ⌘Z reaches a look the playlist loaded on that deck, and takes it off if that deck is on air (row 709). Right for an install, where nobody is at the panel?
+
+## CE. Node mode on the APC (plan 53 N1)
+
+Register rows 710–714, 2026-11-06. Restart first, on one build on both Macs. The merge waits on
+506–509. Headless: `tests/test_node_desk.py` (N1a), `tests/test_node_mode_graph.py` (N1b).
+Work on a throwaway copy of a preset. Never the shared library's own file.
+**541. The knobs follow the node.** (the rig's APC40, GRAPH on the control window)
+1. Select an effect with several knobs, say acid. In the side pane's selection, press
+   **point apc40 here**.
+*Pass:* K1 onward's rings jump to that effect's values; turning K1 moves its first param on the
+picture; K1–K8 then D1–D8 then S1–S8 fill in order; the footer's dirty dot is lit. What does not
+fit is listed in the side pane, by name. An LFO or an analyzer route on one of its params: that
+param stops riding it and sits where the knob puts it; press leave and it rides again, and a save
+then holds the route as it was (row 711).
+2. Press SHIFT. *Pass:* the knobs and faders are the global layer as ever (K1 hand smooth).
+3. Learn another param of acid onto D8 first and enter again. *Pass:* D8 stays; the rest fill.
+4. Dillon's desk, while pointed. *Pass:* every clip launch pad loads as ever; MASTER is the dim, the
+crossfader crossfades, CUE changes the shape; SHIFT, the transport and the scene pads as ever. Only
+knobs and faders moved. Ask Dillon.
+**542. FINE and node mode, on the same knob.** (row 609)
+Hold SEND B and turn a filled K1 slowly, let go, and turn on. *Pass:* it creeps while held, its
+LED lit; when let go the value does not jump, and the next detent is one detent.
+**543. It is drawn, in its own colour.** (GRAPH)
+With 541's node pointed. *Pass:* a green bundle from the apc40 to the node, apart from white ones
+(hover says each row: "K1 → …"; expand both ends and each is its own green cable). Green is
+easy to tell from white, amber, blue and violet. Its K1 cable thickens as the param rises. A saved
+row on K1 goes faint and says "(under node mode)". Right-click: leave; ⌫ keeps the cable and the
+head says "a node mode cable is no row: leave the node to end it". Selected, its side pane says the
+same and has a leave chip. Say if a
+white bundle lying under the green one between the same two nodes reads badly (row 713).
+Then a real copy, since no corpus patch holds one: on a throwaway copy of a preset with an effect,
+add a copy of that effect, select the copy, and press **point apc40 here**. *Pass:* expand it: the
+green cables land on the copy's own pins, not the original's; turning K1 moves the knob the side
+pane names, on the picture.
+**544. Saved, per `Deck`.** (two `Deck`s; throwaway copies)
+1. Save, load another, load it back. *Pass:* pointed again, with no click.
+2. Undo a re-point. *Pass:* one ⌘Z, the rows follow; the desk stays on its `Deck`.
+3. With a second copy off air, and the panel on it, press **move apc40 here** with player 1 on air.
+*Pass:* the off-air patch moves under the knobs and the room does not change. Move the player on
+the select screen. *Pass:* the desk goes back; deck 2's cables go faint and its file does not change.
+4. From the on-air graph, press **bring apc40 here**. *Pass:* the knobs act on air again.
+**545. The on-screen desk, and a learn.** (desk diagram)
+*Pass:* filled knobs outlined green, named for their params; "node · n" in its head; dark under
+SHIFT. Learn another param onto a filled knob. *Pass:* the footer says it is under node mode, and
+when you leave the knob it does that job.
+
 ## CF. Node mode's saved form (plan 57)
+
 Register rows 715–717, 2026-11-04. Restart first. Headless: `tests/test_nodemode.py` (the round
 trip over the corpus, the fill, the kind). **No panel writes the key until N1b,** so 546 and 547
 edit a throwaway copy by hand. Never the shared library's own file.
@@ -7998,6 +8158,7 @@ cables, amber triggers, blue geometry and violet masks, and faint when its playe
 `Deck`. Say whether the green is right (row 716).
 
 ## CH. BACK holds the base chase; the generic pad swaps, taps and saves nothing (wave 4 B2)
+
 Register rows 723–724, 2026-11-04. Headless: `tests/test_pad_learn.py` (the old
 factory rows moving once, with their backup; a row of the owner's on BACK or the
 d-pad staying; the hold, the release, a sleeping pad, the totem; every model's
@@ -8028,7 +8189,36 @@ yours: without it the row is the old factory row, and the next load takes it (ro
 save from another pad, or the row gone. A Joy-Con's chase, L on the left and R on the right, is
 checked with #365's layout, not here.
 
+## CJ. The dial's readings: the patch's, on the pad node (wave 4 #287)
+
+Register rows 729–730, 2026-11-06, after Dillon's #287. Headless: `tests/test_dial.py` (a load
+on the other deck, both ways round; two pads on two decks; save and load; the launch readings;
+the pad node's pane). Picture: `assets/28-gamepad-dial/dial-pad-node.png`.
+**559. A preset keeps its sticks' readings.** (a pad; GRAPH, PRESETS)
+1. Copy `tests/corpus/presets/dial.json` into the library's `presets/` and load DIAL. Open
+   GRAPH and click the **pad** node.
+2. Read its details under the pad's picture: both faces, **Left dial**, **Right dial**, **Swap
+   dials**. Move each stick round the rim. Read the pad's picture: the wells and their X / Y lanes.
+3. Set Left dial to blend and Right dial to petal. Save as a new preset. Load another, then the new one.
+4. Press ⌘Z. Open SYSTEM.
+*Pass:* (2) each face fills under the stick, each sector named in full; each well shows eight
+sectors; the lanes read "Left dial · petal" / "Right dial · blend", not the orbit. (3) It comes
+back left blend, right petal, and the sticks read that way; DIAL comes back petal / blend. (4)
+The last reading change is undone; SYSTEM has only the sticks' feel. Fail: a preset that comes
+back with the last one's readings (`pad` not in `params.PATCH_GROUPS`), or the picture still
+saying the orbit on a dialed stick (`ui_pad.says`).
+**560. A load off air does not touch the pad on air.** (a pad on air; a preset with dial routes on both decks)
+1. On air, DIAL, and push the left stick slowly round the rim: petal, one parameter at a time.
+2. Panel to the deck off air. Load a preset saved with left blend (check 559's). Push the stick round again.
+3. On GRAPH, click the pad node with the panel still on the deck off air.
+4. Move the pad's player to off air, on the player select screen. Push the stick round.
+*Pass:* (2) nothing in the room or the stick's feel changes: still petal. (3) The faces rest,
+the drop-downs say blend, and the node says the pad is on the other deck. (4) Now it crossfades
+and the faces fill. Fail: the stick on air turning to blend at (2), the one thing that may never
+happen (`PadDevice.poll`, `Registry.dial_modes`), or a face moving at (3).
+
 ## CK. Pane paper cuts (wave 4 PC)
+
 Register rows 731–732, 2026-11-04. Headless: `tests/test_ui_fine.py` (every raw slider's drag,
 its tip), `tests/test_ui_pane.py` (nothing past the pane, nothing colliding, at 240 px and the
 default) and `tests/test_ui_desk.py`. What they cannot judge is the feel and the legibility.
@@ -8049,6 +8239,7 @@ Expected: nothing passes the pane's edge and no control sits on another. At the 
 Expected: the diagram says what the button does, and no row lands on it from the diagram.
 
 ## CL. Players and duties (plan 55)
+
 Register rows 733–736, 2026-11-04. Headless: `tests/test_players.py`, two players with
 fake pads over two decks with different patches, through the real registry, router and
 pass. These checks predate PS (group CN), and can move a player on its screen instead of
@@ -8075,7 +8266,9 @@ Fail: the on-air look moving under the second pad.
 fade first shows it. Say whether the totem's switches should follow the player, as built
 (row 735). Fail: a phase jump, or a pan left behind on a deck. Moving a player mid-turn
 has no way to be done by hand until PS: repeat this check there.
+
 ## CM. "Band" becomes the analyzer in the panel (wave 4 AZ)
+
 Register rows 737–738, 2026-11-04. Words only: nothing should move or load differently.
 **566. The words read right.** (the Mac, an APC40 for step 3 if it is to hand)
 1. Open ANALYZER in the side pane. The head reads ANALYZER TUNING; drag the pane to its narrowest and look again.
@@ -8091,6 +8284,7 @@ Expected: "analyzer" throughout, "band" only as a count or the plain audio word,
 Expected: the route and the knob work as before; no warning about a missing param.
 
 ## CN. The player select screen (wave 4 PS)
+
 Register rows 739–742, 2026-11-04. Headless: `tests/test_ui_players.py`, the real panel and
 `MetaController` by mouse through `tests/ui_driver.py`. **Restart:** a new module.
 **568. Moving a player by mouse.** (the rig, two pads)
@@ -8124,6 +8318,7 @@ should select, as built, or move (row 739), and whether O should work on the ren
 tray should add the entry (row 741).
 
 ## CO. No preset row on a meta param (wave 4 MR)
+
 Register rows 743–745, 2026-11-04.
 **572. The left hand stops driving audio.** (the Mac with the Leap and audio) Before
 this, run `uv run python tools/meta_routes.py "<your library path>"`: it writes
@@ -8143,7 +8338,22 @@ no cable lands. On ROUTING, open a route's target combo: no audio, tempo or band
 is offered. Fail: a route lands on one, or a menu offers one and then nothing happens
 with no words.
 
+## CP. The two layers, mechanically (SEM)
+
+Register rows 746, 747, 755, 756, 2026-11-06.
+**574. A person's rows on `preset.*` work; a desk Learn says where to go.** (the rig, with the APC40, a pad)
+With one look on air and another off air: a bank pad and F2 each load off air, and the room is as
+it was. Shift+F1 saves the look in slot 1, and a held empty pad saves into it. On the Edge, hold the
+save button. Right-click **Base chase** or a preset verb: there is no Learn desk, and Learn pad is there
+with a pad connected. Pick it and press a button: it works from then on. Holding the pad's BACK still
+chases the base. Fail: any of those is refused, or a Learn desk is offered on one.
+
+**581. The rename moved nothing you can see.** (the rig) Restart. A look you know draws as it did, its
+save writes the same file, ⌘Z on each stack works, and a save of a file with a hot reload watching the
+new `loadable.py` is picked up. Fail: anything but a code word changed.
+
 ## CQ. Paired axes (plan 56)
+
 Register rows 748–751, 2026-11-04. Headless: `tests/test_paired_axes.py`, a scripted
 pad through the real `Router.pad`: each pole, both, a lost pad, a second pad, a save
 and reload, the factory pairs held to their two rows.
@@ -8173,9 +8383,393 @@ learn press that also steps the param, or a pair lost on reload.
 pad's press is refused in words and the learn still waits; the row names the second
 pad's role, and only that pad moves it. Fail: a stuck offset.
 
+## CR. The undo latch (row 753)
+
+Register row 753, 2026-11-06. Restart first. Headless: `tests/test_undo_latch.py`, every case on the real
+`MetaController`. **One thing is different on purpose:** ⌘Z can say no where it used to act.
+**579. Coming to a stack.** (a laptop)
+1. On deck 1, move Brightness. Click the chip to deck 2, move something, click back to deck 1. ⌘Z, on the canvas.
+   *Pass:* "nothing to undo here yet: make a change on deck 1 first", and Brightness stays. ⇧⌘Z says the same for redo.
+2. Move any small thing on deck 1, then ⌘Z twice. *Pass:* the first takes that thing, the second Brightness.
+3. Panel on the deck on air, a change, then press a filled bank pad, then ⌘Z. *Pass:* nothing moves in the room, and
+   the footer refuses. Click to the deck off air, ⌘Z. *Pass:* refused too, and the load stands. Change something, ⌘Z twice. *Pass:* the load goes back. Back on the deck on air, a change, then the pad of the look the other deck already holds, unedited, then ⌘Z. *Pass:* the change goes back: a load that changed nothing shuts nothing.
+4. Mouse on the analyzer section, move a threshold. Run the mouse over the canvas and back, with no press, ⌘Z. *Pass:* it goes back: passing over is no focus change.
+5. Move a threshold again, on the canvas turn a knob, back on the analyzer ⌘Z. *Pass:* refused; the threshold stays.
+6. Pick a value from a combo in the audio or hands section, the first change there, where the list hangs over another section. Bring the mouse back to that section, ⌘Z. *Pass:* it goes back.
+7. Ride `master.gain` on the APC, and straight after run the mouse across the analyzer and back to the canvas. ⌘Z in the analyzer: *Pass:* refused, the old meta step stays. Then, again from a change on the deck, the same ride and pass, ⌘Z on the canvas. *Pass:* it takes the deck's step.
+8. Hold BACK (a base chase) on deck 1 with deck 1 latched, ⌘Z. *Pass:* refused, and the hold goes on. Let go: the latch is still shut. Turn an APC knob on that deck, ⌘Z. *Pass:* it goes back.
+9. Panel on the deck off air, a change, fade across, ⌘Z. *Pass:* refused. Nudge an analyzer threshold with the mouse there, press a bank pad, ⌘Z, the mouse unmoved. *Pass:* the threshold goes back.
+*Fail:* any ⌘Z that takes back a step you made before you came to that stack, or a refusal right after a change you just made there.
+*Judge:* with the panel on air and open, a pad's load shuts it (step 3), and any fade shuts the panel's deck (step 9): both past the owner's sentence, row 753. Right? And a controller's change opens the stack in focus, whoever's it is: another player's knob counts (row 753). Right, or only your own player's?
+
+## CS. A pair that overlaps a mapping asks (plan 56)
+
+Register row 754, 2026-11-06. Headless: `tests/test_pair_consent.py`: each road asks and
+doesn't, each answer, a file load, undo on the real three stacks. A real panel by the
+mouse: `tools/app_driver.py`, Let the pair take over.
+**580. Consent, by your eye.** (a pad with the factory's D-pad rows)
+1. On a continuous param: **Learn pair (spring)**, press ↑, then ↓. Read the question. Press
+   Enter. Press **Keep both**, then press ↑.
+2. ⌘Z. Learn it again. **Let the pair take over**, then press ↑.
+3. ⌘Z with the mouse over OUTPUT, then ⌘Z with it over the graph.
+4. On GRAPH, drag from the pad node's `UP / DOWN` onto another param's mod. **Cancel**.
+5. Quit and reopen after step 3's undo. Load a saved patch whose route is on `pair:UP/DOWN`.
+*Pass:* (1) the question names d-pad up and down, Brightness, and the meta controller; Enter
+does nothing; after **Keep both** ↑ moves both. (2) ↑ moves only the param, and the line says
+which stack the rows are on. (3) Over OUTPUT ⌘Z brings ↑ and ↓ back on Brightness, and over
+the graph it then refuses in words until a change is made there (row 753). Say whether one ⌘Z should take back both (row 754). (4) Nothing lands. (5) No
+question at any load, and both act. Fail: a row landing or going before you answer, or a
+meta row not coming back.
+
+## CT. A cursor in a text field is no hand (row 757)
+
+Register row 757, 2026-11-06. Headless: `tests/test_undo_hand.py`, on real ImGui and the real stacks; the real panel by `Driver`.
+**582. A text field, the APC, and ⌘Z.** (the rig, with the APC40)
+1. On deck 1, move Brightness, then click into a find field (ROUTING's filter or the media search). Leave the cursor there and take your hand off the mouse. Ride `master.gain` on the APC. Click into the analyzer, ⌘Z. *Pass:* refused in words; the ride stands.
+2. Change something small on deck 1 and repeat the ride with the cursor in the field, but click on the canvas, not the analyzer, ⌘Z. *Pass:* that small change goes back, no refusal.
+3. Mouse in the analyzer, with the deck in focus: Cmd+click a threshold, leave the mouse alone, type a value, Enter. ⌘Z there. *Pass:* it goes back: the typed value was your own change.
+4. On the canvas, select a group, type a new name in the side pane, Enter, ⌘Z. *Pass:* the old name returns.
+5. Type a macro's label in ROUTING, click to the canvas, ⌘Z. *Pass:* the label goes.
+*Fail:* a ride taken back in step 1, or a refusal in steps 3 to 5 right after what you typed.
+
+## DI. Video sound on the toggle (plan 58 LY3, row 790)
+
+Register row 790, 2026-11-06. Headless: `tests/test_video_sound_path.py`, on a fake sound card; the line seen in the real app at both widths, never read by a person.
+**614. It says so, and it's true.** (the rig; a video with sound)
+1. Unfold audio with the mic on, or no source. Hover **Listen to video sound**. *Pass:* the hover says off air's audio routes react while it's on, and no line stands under the button.
+2. Put a video on air with its channel's sound on, and load a look with an audio route off air. With the mic still on or no source: *Pass:* off air doesn't react to the video.
+3. Press **Listen to video sound**, and drag the side pane to its narrowest and then wider. *Pass:* the words "Off air reacts to on air's video sound." read at a glance, whole, at each width, and the off-air preview reacts to the sound you hear.
+4. Press **Listen to mic**. *Pass:* the words go, and off air stops reacting to the video.
+5. Back on **Listen to video sound**, stop the on-air channel's sound and turn on the sound of a video that's off air. *Pass:* you hear nothing, and off air doesn't react.
+*Fail:* words cut off or hidden, words standing while the analyzer is off the mix, a look off air that doesn't react in step 3, or one that reacts in step 2, 4 or 5.
+
+## DH. GRAPH's start zoom (plan 58 SM2, row 787)
+
+Register row 787, 2026-11-06. Headless: `tests/test_graphview.py`, `tests/test_placement.py`. Seen in the real app on two of the Mac's displays; never on the show's display, and never by a person.
+**612. It reads where it opens.** (each display you'll run the control window on)
+1. Set `control_monitor` to that display, launch, and open a patch. *Pass:* the node words read from where you'd stand, the canvas's top-left is at the first column, and you can still see enough nodes to work. 2. Say the display and whether the zoom is too big or too small: the number is `placement.ZOOM_READ`.
+*Fail:* a start as small as before, or a view opening away from the first column.
+**613. Your zoom stays, and layouts don't move.** (the rig)
+1. ⌘+scroll to a zoom of your own and note what's in the canvas's top-left. Load another patch, then resize the control window taller and shorter. *Pass:* your zoom stands through both, and the same node stays in the top-left. This is new: a resize used to zoom the canvas.
+2. Open a patch you laid out by hand before this build. *Pass:* every node is where you put it relative to its neighbours.
+3. After a run, look in the temp folder for `hyperspace-graph-view-*`. *Pass:* none.
+*Fail:* a zoom that changes by itself, or a node moved.
+
+## DF. The picture rests on no display (wave 5 SC3a, rows 781-785)
+
+Register rows 781-785, 2026-11-06. Headless and on this Mac: `tests/test_root_frame.py` and `tests/test_pacing.py`, the real `_draw_render` against the old shape on 48 looks, and the real app against the old build. No person has looked at a real projector, the glass, or the overlay over a real window.
+**607. Pacing on an unlocked Mac.** (either Mac, unlocked, the app closed, every display on. The builder's unlocked run met this on 2026-11-06, so it doesn't block a merge. Run it on the show Mac.)
+1. From `hyperspace-python/`: `.venv/bin/python tools/sc3a_spike.py state`. *Pass:* `"locked": false`. Locked, stop: the numbers below would mean nothing.
+2. `tools/sc3a_spike_pacing.sh 3 20`, about twelve minutes. Windows open and close by themselves. *Pass:* on each display, `today` and `presenter-vsync` agree on `fps` within about 2. `guarded` matches `presenter-vsync` on that display. `occluded` is at most 240, never hundreds more. `runaway` is 240. `hidden-timer` is 60.
+3. `.venv/bin/python tools/sc3a_spike.py handover --phase 6`. *Pass:* each phase's `settled_fps` is its new rate: the phases with a pacer at the display's real rate, about 120 here, `timer` 60.
+*A whole run sometimes drops to about 81 fps with `p50` near 13.6, in the old shape `today` as well as the new, cause unknown. Once in the rounds is not a fail; a shape that stays there is.*
+*Fail:* `presenter-vsync` well under `today`, `guarded` under `presenter-vsync`, `runaway` over 250, or a phase that doesn't settle. **Send the lines as they are.**
+**608. The picture on real displays.** (the rig: output 1 on the projector or TV, fullscreen)
+1. Launch. Load `party-tumble` and `woven-lattice`, and watch the thin lines. *Pass:* the edges are as soft as before this build, no stair-steps.
+2. With `[[output.screens]]`, a second output on another display, flip it. *Pass:* both show the picture, each right, and neither stutters where it didn't.
+3. Move the fader `output.xfade` through a fade. *Pass:* it mixes on every output, as before.
+4. Quit with Q, launch, then ⌘R. *Pass:* no crash report, either way.
+*Fail:* stair-steps on the lines, a dark or stale window, or a crash on the way out.
+**609. Overlay over a real window.** (`[output] overlay = true`, either Mac)
+1. Open a video in another app. In the app, press T. *Pass:* the picture floats over the video, the video shows through where the picture is black, and clicks reach the video.
+2. Move `output.bg` up and `output.alpha` down. *Pass:* the ground darkens and the whole window fades, as before.
+*Fail:* an opaque black ground, or a window that won't let the video through.
+**610. A Mac that isn't looking.** (either Mac, app open)
+1. Note the fps on the SYSTEM page. Lock the Mac for a minute. Unlock. *Pass:* the fans climb less than on the old build (it's 240 fps at most while locked, where the old build ran flat out), `<home>/stall.log` has no new `stall`, and the fps returns to the first number.
+2. Minimise the render window for a minute, then bring it back. *Pass:* the same.
+*Fail:* fans climbing, or a picture that doesn't come back.
+
+## DG. The poi probe on a real Joy-Con (wave 5 SM1, row 786)
+
+Register row 786, 2026-11-06. Headless: `tests/test_poi_real.py`, the owner's tape through the tool, the live loop on a stand-in for the reader. Only a person can run a real pad through it.
+**611. The probe, live, then its own tape.** (a Joy-Con paired, the app closed: hidapi opens the pad exclusively)
+1. From `hyperspace-python/`: `uv run python tools/poi_probe.py --record /tmp/poi.jsonl`. *Pass:* the pad's name, then about ten lines a second; `calibration written to /tmp/poi.jsonl.findings.json`.
+2. Lay the pad on the table for ten seconds. *Pass:* `turn` near 0, `still` climbing, `v 0.00`.
+3. Type `hold` and Enter, then pick it up and hold it as you'd hold a poi handle for ten seconds, without walking. Read `wrist`, `pan` and `wall`. *Report, not pass or fail:* whether the hand runs to a wall (`wall x`, `y` or `z`), as the owner's tape does (rows 786, 817).
+4. Press A. *Pass:* `wrist` back to 0, `pan` near its start.
+5. Ctrl-C, then `uv run python tools/poi_probe.py --replay /tmp/poi.jsonl`. *Pass:* `tape written`, then a table with a `hold` row.
+*Fail:* a traceback at any step, or a line that never comes.
+
+## DD. Matte and segment thumbnails (SM3)
+
+Register row 777, 2026-11-06. Headless: `tests/test_mask_thumbnails.py`, on real GL with a fake worker; the real app seen in motion mode only. Person mode's orientation on real Vision is yours.
+**604. A mask on the node.** (either Mac, a camera or a clip with a person in it)
+1. Wire a channel into a `matte` and the matte into a `cut`. *Pass:* the matte's node shows grey, white where it passes, not red, and turning `matte.key` changes it live.
+2. Wire the same channel into a `segment`, mode person, and `segment.fg` into an output. *Pass:* the segment's node shows the person in white on black, the right way up, lined up with the channel's picture.
+3. Mode motion, then back to person. *Pass:* the right way up in both.
+4. Hover each node's picture. *Pass:* the hover ends "… mask" with its size, and gives the node's own words.
+5. Lit `pictures · tint cables`. *Pass:* the matte's cable stays plain purple; a cable out of `segment.fg` leans toward the foreground's colour. Fold the segment into a group with `fg` going out: the group shows the foreground, not the white-on-black.
+6. Pan both nodes off the canvas and watch the SYSTEM page's thumbnail line for a second. *Pass:* their count drops, and FPS doesn't change noticeably with them on or off screen.
+7. Set the segment's mode to subject, then turn `segment.on` off. *Pass:* the box is black and says why in words readable at a distance, a different line for each.
+8. Open a saved patch of yours whose matte or segment you had placed by hand. *Pass:* no node has moved; if the taller node now covers another, drag it or press tidy, and say how many patches did this.
+*Fail:* a red box, an upside-down person, or a frame-rate dip that follows the nodes on screen.
+
+## DB. One mirror (LY1)
+
+Register rows 773, 774, 2026-11-06. Headless: `tests/test_one_mirror.py`, on two real `Deck`s, both ways.
+**602. One mirror, two decks.** (the rig, with the hands tracker)
+1. Make a patch with a second hands node (GRAPH, add a hands node, its on-switch on) and load it on both decks. Hold your hands up. *Pass:* both hands nodes draw, on each deck as you crossfade.
+2. HANDS page, more ▸, tick Mirror. *Pass:* every hands node flips, on both decks. There's no second mirror to tick anywhere.
+3. With the crossfader on deck 1, load a patch with no second hands node onto deck 2, off air. *Pass:* deck 1's picture doesn't change, and its second hands node still flips when you tick Mirror off and on.
+4. Crossfade to deck 2, load the same one-hands patch onto deck 1, then crossfade back and forth. *Pass:* no error, the mirror still reaches deck 2's hands.
+5. Save the show, quit, open again. *Pass:* no "unknown" line, the show isn't marked changed, Mirror as you left it.
+*Fail:* a hands node that stops following Mirror, or a picture that moves on the deck you didn't load.
+
+## DC. The flag says what is true (LY2)
+
+Register rows 775–776, 2026-11-06. Headless: `tests/test_meta_rule.py`, on the real table, MIDI adapter and router. Restart first: a hot reload leaves a param's old flag until a restart.
+**603. The meta controller still plays.** (the rig, with the APC40)
+1. Latch SHIFT. Ride S1 and S7, then S8: `band.0.post` on the analyzer and `master.dyn`, then `master.trim` on the audio page. *Pass:* each is caught at its own value, then follows the fader.
+2. SHIFT off. Move the APC's MASTER and its crossfader. *Pass:* both act as they did.
+3. Right-click `master.gain`. *Pass:* no "Route a lane here…", the menu reads as it did, and Learn pad is still there. Learn pad with a button: *Pass:* it lands, and the button acts on `master.gain`.
+4. Open a look whose routes are scaled by `master.gain` (`party-tumble`). Pull `master.gain` down. *Pass:* its motion shrinks with it, and `master.gain` itself doesn't move.
+5. Turn the analyzer's post-drive up on a band with a route on its lane. *Pass:* the route moves more.
+*Fail:* a fader or button that stops acting, a "not modulatable" on any meta param's menu, or a look that stops following `master.gain`.
+
+## DE. "Session" and "rig" are gone (rows 778-780)
+
+Register rows 778-780, 2026-11-06. Headless: `tests/test_person_words.py` scans every string; the existing tests pin the words. Drawn by `tools/app_driver.py` with the pane at 240 and 320 px: the SHOW line, ROUTING's two headings and a placeholder's node. Not seen drawn: a placeholder's side pane, the cable hovers, an APC40's refusal.
+**605. The panel's longer words fit.** (any Mac, no devices needed)
+1. PRESETS, SHOW: read the line under the SHOW label, and hover it. *Pass:* "SHOW: PADS, META CONTROLLER" whole at the pane's first width; drag its grip to the narrowest and it ends in "…", never cut off bare; the hover says the bus cables are the preset's.
+2. ROUTING: find the "meta controller" heading over the invariant rows, and "its own rows — edit bindings.json" beside it. Do the same for SINKS, "the meta controller's — out to a sink · right-click a param: Learn sink". *Pass:* at the pane's narrowest (240 px) and its first width (320 px), every word shows, "Learn sink" too, with the note under the heading if there's no room beside it.
+3. With the APC40 connected, Learn desk on MASTER. *Pass:* the refusal says "invariant (the meta controller's)", and the line fits where it lands.
+*Fail:* "session" anywhere; a line cut so it can't be read.
+**606. A missing controller, and a bus cable.**
+1. Load a patch whose rows want a controller that isn't plugged in. On GRAPH, read its placeholder node, and PRESETS' line. *Pass:* "not set up on this Mac"; the node's side pane names `[[devices]]` in config.toml. A controller plugged in but not listed says the same, which is the point.
+2. On GRAPH, hover a cable from All outputs into a window. *Pass:* it starts "the bus cable", and hovering All outputs says "The meta controller's bus". Cut it, then read the line GRAPH says it on. *Pass:* "cut the bus cable". Then cut a cloud's wire into the scene, if a cloud is wired: *Pass:* its hover says "this cloud's wire into the scene", and the line "cut the cloud's wire".
+*Fail:* "rig" anywhere.
+
+## DA. Screens by name (wave 5 SC1)
+
+Register rows 771, 772, 2026-11-06. Headless: `tests/test_placement.py` and `tests/test_app_boundary.py`, on stand-in screens. Only a real replug shows what macOS does. A name is read at the launch; a replug while the app runs is SC3b's, not this.
+**600. Outputs stay put across a replug.** (the rig, with two outputs on HDMI)
+1. In the OUTPUT page's Screen list, read the exact names of the screens. In `config.toml` give each `[[output.screens]]` its `monitor` by name, and `[output] control_monitor` too. Launch. *Pass:* each window opens on the screen named, no note in SYSTEM.
+2. Quit. Unplug both HDMI cables, plug them back in the other order, launch. *Pass:* the same pictures on the same screens. An index in the same place would have swapped them.
+3. Set one output's `monitor` to the name cut short (`"MSta"`, or lower case). Launch. *Pass:* that output doesn't open (or output 1 opens at its last spot), and the note lists the screens connected.
+4. Put an index back on one output and launch. *Pass:* it works as it always did.
+*Fail:* a swap in step 2, a window on a screen that matched only part of the name, or a launch that stops.
+
+**601. Two identical screens.** (two displays of one model, if the rig has them; otherwise say skipped)
+1. Launch with one `monitor` given as the bare name. *Pass:* it opens on the left of the two, and the note names both, such as "MStar #1, MStar #2". If the Mac lists them as "DELL (1)" and "DELL (2)", the words are still "DELL #1" and "DELL #2": note in row 772 what it listed.
+2. Set the two outputs to `"MStar #1"` and `"MStar #2"`. Launch. *Pass:* #1 on the left one, #2 on the right.
+3. Quit, swap the two cables, launch. *Pass:* the same again. **Say what you saw either way:** if macOS moved them, two identical screens can't be told apart without a serial, and row 772 needs the owner's word.
+4. Quit, unplug the left one, launch. *Pass:* "MStar #1" opens on the one still there, with a note that only one is connected and it may be either of a pair; "MStar #2" doesn't open, with a note saying 1 is connected.
+*Fail:* #2 on the left with the arrangement unchanged, step 4 with no note, or a launch that stops.
+
+## DL. A player's moves on the meta stack (SM5, rows 800, 801)
+
+**623. On the player screen, with two controllers plugged in.** Drag player 2 to off air, leave the mouse on the board, and read the line: it ends "⌘Z takes it back". Press ⌘Z: player 2 is on air again, its controller's rows act on the deck on air, and the line says "undid player 2 to off air". Press ⇧⌘Z: off air again. Drag a controller to another player and press ⌘Z: it goes back, and its rows answer as before. Drag it across again, unplug it and press ⌘Z: it stays, and the line says it was unplugged since. Plug it back in and press ⌘Z: it goes back. Change a HANDS setting, come to the board and press ⌘Z: the setting stays, and the line says so in the warning colour. Move a player, go to the HANDS section and press ⌘Z: the move stays, and the footer says to press over the player screen. Quit and open the app: the players are as you left them. Over a tip that used to say "HANDS page" (Ghost hands' output switch), read "HANDS section".
+
+## DJ. Audit faults closed (SM4)
+
+Register rows 791–795, 2026-11-06. Headless: `tests/test_midiports.py`, which also runs a real refusal in a sandbox. Restart first: `midiports.py` is a new module.
+**615. A desk comes and goes.** (the Mac, with the APC40)
+1. Launch with the desk unplugged. *Pass:* no crash, and the SYSTEM page says it isn't there.
+2. Plug it in. *Pass:* it comes up by itself within a few seconds, LEDs lit, with no relaunch.
+3. Pull it mid-run, wait a minute, plug it back. *Pass:* no crash, and it's back within a few seconds, however long it was out.
+*Fail:* an app that quits, or a desk that needs a relaunch.
+
+**616. A knob won't take the bank.** (the Mac, with the APC40)
+1. PRESETS page: right-click a bank pad's param, Learn desk, if it's offered. Turn a track knob. *Pass:* it's refused in words, or Learn desk isn't offered, and the knob doesn't load anything.
+*Fail:* a knob that loads presets as it turns.
+
+**617. The nudge chips' menu.** (the Mac)
+1. LFO page: right-click nudge −, then nudge +. *Pass:* each opens one menu, with no item listed twice.
+*Fail:* a doubled menu.
+
+**618. The strip in a narrow pane.** (the Mac)
+1. GRAPH: click a node with a strip (view, output) so the side pane shows it, and edit a value so the dot shows. Drag the pane from narrow to wide. *Pass:* ◀ name ● ▶ and save · as… · reset never touch, and the chips drop to their own row when it's narrowest.
+*Fail:* a chip over ▶ or over the name.
+
+## DK. Controllers composed in the app (CT1)
+
+Register rows 796–799, 2026-11-06. Headless: `tests/test_devicelist.py`, `tests/test_players.py`, `tests/test_ui_players.py`, `tools/drive_players.py` on real panel frames with stood-in hardware. Nothing here has met real hardware yet. Restart first: `devicelist.py` is a new module. Both Macs on this build.
+
+**619. A pad nobody lists.** (the Mac, with a pad the list has no free entry for)
+1. Note `devices.json` in the library, then plug the pad in. Open the board (O). *Pass:* it shows under NOBODY HOLDS, drawn as itself, and the file hasn't changed.
+2. Hover it. *Pass:* the tip names the role it would get.
+3. Drag it to player 2. *Pass:* said in words; it's on player 2's token, lit; the file has one new entry, last, and nothing else moved. Rows naming `@p2` move with it, on player 2's deck.
+4. Quit and relaunch. *Pass:* still there, same role, still player 2's, with no drag.
+5. Click it on the board, then its "on this Mac" chip. *Pass:* it goes off here and comes back, and `devices.json` doesn't change.
+*Fail:* adopted by plugging in, a role that changes, or an old row that goes dead.
+
+**620. The APC40 from the tray.** (the Mac, with the APC40)
+1. With the app closed, take the `apc40` entry out of `devices.json`. Launch with the desk plugged in. *Pass:* the board's tray shows it with the desk's picture, and the desk is dark.
+2. Drag it to player 1. *Pass:* LEDs come up with no relaunch; the role is `apc40`; knobs do what they did before.
+*Fail:* a desk that needs a relaunch, or rows that came back under another name.
+
+**621. Both Macs.** (both Macs, on the shared Drive)
+1. Launch on the owner's Mac, then Dillon's. *Pass:* one `devices.json`, holding both Macs' lists; the SYSTEM page says which Mac's `config.toml` differed, if one did.
+2. Adopt a controller on one, with both running. *Pass:* within a sync the other's board lists it, under the same role, on player 1 there; nothing else closes or blinks.
+3. Adopt a different one on each within a few seconds. *Pass:* a minute later both Macs show both, and `devices.json` stops changing.
+*Fail:* an adopt that disappears, or a file that keeps changing by itself.
+
+**622. No Drive.** (the Mac)
+1. Quit Google Drive, or point `[library] path` at a missing folder, and launch. *Pass:* the app starts, controllers work as last seen, and the board and SYSTEM say the library isn't there. No folder appears at that path.
+2. Adopt a controller. *Pass:* it works now, and the words say it's kept on this Mac.
+3. Bring the Drive back, with no restart. *Pass:* within 30 s the warning goes, and the entry is in `devices.json`.
+4. With the projector running, pause Drive syncing, or take the network away, and watch the picture for a minute. *Pass:* no hitch that wasn't there before. (`Library`'s own scan reads this folder on the frame thread and isn't CT1's: a hitch here is worth saying, with that in mind.)
+*Fail:* no launch, a created folder, or a lost adopt.
+
+## DM. A save lands in the running app (HR, row 802)
+
+Headless: `tests/test_hot_reload_app.py`; its real-app test, one output and no devices, is in `--all`. Restart first: `hotreload.py` and `hot_slots.py` are cold.
+
+**624. Saves on the rig.** (the Mac, with the second output and the desk)
+1. Launch with the show's outputs and devices. Save `outputs.py`, `render.py`, `ghost.py` and `ui.py` in turn, with no edit needed beyond the save. *Pass:* the SYSTEM section says `hot: <file>` each time, and the picture and the panel keep going, on every output.
+*Fail:* `swap: …` on the SYSTEM section, or an output that stops.
+
+## DN. One row per display (SC2, rows 804–807)
+
+Since SC3b (group DO) a change of target acts at once, so the ⌘R below is only ever needed for what the row can't change; a window opening or closing is DO's.
+
+**625. Set the screens up.** (the rig, every display plugged in) On the output section, each display has a row with its name. Choose what targets each. ⌘R. Each display shows what its row says, and the control window is on its own. Quit and launch: the same, fullscreen included. Pass: set up in a minute, with no config.toml.
+
+**626. Both Macs.** (both Macs on one library) Choose a target on one Mac, and open the output section on the other within a minute or so of Drive syncing: its row says the same. Choose different targets for one display on both: both settle on the later, and `displays.json` stops changing. Unmount the Drive and launch: the rows come up from this Mac's copy, and the panel says so. `hyperspace --laptop` changes nothing in the file.
+
+**627. One output, two displays, different flips.** (two displays, a Pepper's Ghost glass if it's there) Put one output on two rows, with flip X on one. ⌘R. The two pictures are mirror images, moving together, each filling its own display, and neither drops the frame rate by eye. Tick a flip and it changes at once on that display only. Run a crossfade: both stay right. Then with output 2 in place of output 1.
+
+**628. Two with one name.** (two identical TVs) They read "TV #1" and "TV #2", left to right. Swap their cables and ⌘R: each position keeps its job. Unplug one and ⌘R: the row left is the first's job. A window dragged on a display and left there comes back to that spot.
+
+## DO. A display coming and going (SC3b, rows 813–816)
+
+**Do these first in this group, and nothing about hot-plug is done until 629 has passed.** Every number so far came from a private virtual display on a locked Mac, with no cable, no TV and no one watching. RT1 waits for 629.
+
+**629. A real cable.** (the rig, every display plugged in, a look running, the output section open, ideally a real show file)
+1. *A render.* Pull the HDMI of a display showing an output, mid-look. Passes: the other displays' pictures never stop, and nothing appears on them from the one you pulled. The section says "… has gone: output N waits for it" for 3 s. No restart, no red banner, and nothing moved under your hands. A hitch on the other pictures once, at the pull, is expected; say how long it looked.
+2. *Back after the hold.* Wait 10 s, and plug it in. Passes: within about a second the same output is on that display, with its fullscreen and flips, and the picture is live. If it was fullscreen, it covers the display, with no menu bar.
+3. *The control window.* Pull the cable of the display the control window is on. For 3 s it's wherever macOS puts it. Then it's on a display showing no render, or if there's none, floating over a render, even a fullscreen one, and it still takes clicks. Plug it back: it returns to where it was.
+4. *A row.* Choose another output on a row. It changes at once, with no ⌘R.
+5. *Two of one name,* if there are two identical TVs. Unplug the left: the right keeps its job. Plug it back: both have theirs. Unplug both, plug the right back first, then the left: say whether each got its job, as this is what the Mac's id must tell apart. With one TV on, plug the other in on its left: the first keeps its picture, the new one shows nothing, and the section says a restart numbers them left to right.
+
+Fails: an app that needs a restart; a picture that stops; a window sitting on the wrong display; a control window you can't reach. Look at `hotplug.py`, `<home>/stall.log`, and the SYSTEM page, whose notes give each change and its milliseconds. Tell the owner's Mac's numbers: **"displays: … (N ms)"**.
+
+**630. A TV going to sleep.** (a TV with a sleep timer or a power button, showing an output) Turn it off with its remote and leave it 30 s, then turn it on. Passes: either nothing changes (it kept its link), or it's a display gone and back, as 629. The other pictures go on either way, and it shows its output when it wakes. If a TV takes more than 3 s to come back and its window reopens each time, say so: that's only a hitch, but `[output] unplug_hold_s` in config.toml can be raised. Do the same with a projector.
+
+**631. A re-sync.** (a display that shows an output, fullscreen) In System Settings → Displays, change that display's refresh rate or resolution, then change it back. Or pull and replug its HDMI within a second. Passes: it's black for a moment and comes back showing the same thing, covering the display, and `SYSTEM` says "dropped and came back: the same window", or nothing at all. Fails: another display's picture stops, or the window comes back the wrong size.
+
+**632. Every display out.** (a Mac mini or a closed laptop on external displays, or as many as you can pull; audio on so you can hear it's alive) Pull every display. Nothing can show you anything: wait 10 s, keep the desk moving, and plug them back in any order, one at a time. Passes: the sound never stopped, each display takes up its job as it arrives, the control window returns, and the desk's changes have landed. `<home>/stall.log` has no "render stall" while the picture was drawing with no window.
+
+## DR. Node mode on a pad (N2, rows 820–823)
+
+Nothing here has run on a real pad. The tests and `tools/drive_node_mode_pad.py` use a stand-in on the real router and the real panel.
+
+**635. A pad on a node.** (any pad on, a patch with a node of many params; GRAPH open) Select the node, and click "point pad here" in the side pane.
+1. Passes: the dot lights, one ⌘Z takes it back, and the map lists LX, LY, RX, RY, LT, RT, each with a param. Green cables run from the pad's node to this one.
+2. With the sticks at rest, nothing in the picture moves.
+3. Push each stick and trigger. Passes: its param moves, a stick either way from where it sat, a trigger up only. Let go. Passes: the look is back where it was.
+4. Say whether the depth is right: a stick all the way moves a param half its range. It is one number (row 820).
+5. Save, load another patch, load this one. Passes: the pad is back on the node.
+
+Fails: a stick at rest that moves the look; a param that stays where the stick left it; a dot that doesn't light.
+
+**636. The view and the sticks.** (as 635)
+1. Point at a node with only one or two params. Passes: those axes leave the camera job and move the param; every other axis still does what it did (the left stick orbits, the right stick zooms, the triggers ride depth).
+2. Leave by the chip. Passes: the stick orbits again, at once.
+3. *A Joy-Con,* totem off: its stick orbits. Point it at a node. Passes: the stick moves the param, and the view doesn't orbit under it. Leave: it orbits. With the totem on: the stick is the row's, and the gyro still turns the shape, and with a node of one param only LX is the row's.
+4. *No button stops working.* While pointed: every button that did something still does the same, on a 360, an Edge and a Joy-Con. SL/SR, the stick click, − and capture on a Joy-Con; hold-to-save on the Edge. There is no key to enter or leave.
+5. Hold BACK (a Joy-Con's L or R), push a stick, let go of BACK, then the stick. Passes: the look stays. Leave. Passes: nothing jumps.
+
+**637. What fills.** (an Edge or a DualSense; a node of many params)
+1. On the factory rows: the six axes, then D-pad left/right as one, the one pair with no row. Press → and ←: the param moves each way and comes back.
+2. Learn a row onto RT, then point. Passes: RT keeps its row, and the rest fill. Learn onto an axis the node holds: the row lands there and the map moves off it.
+3. *Beside a desk:* point the APC40 at the same node, then the pad. Passes: the pad's map starts past the knobs' and the knobs don't change.
+4. *An LFO:* with an LFO routed to a param the stick holds. Passes: the LFO stops moving it while pointed and comes back on leave, and the route's cable says so. Say how the step on entering feels in a room.
+5. *Two players:* put a second pad on player 2, and point both. Passes: each has its own map; neither moves the other's params. Move player 2 to the other `Deck`. Passes: its cables go faint, and its stick moves nothing on this one.
+
+**638. Drawn.** (the pad diagram on, from the system section)
+1. Passes: each filled control is outlined in the node cables' green and says its param, and the header says "node · n". Its hover says it's node mode and where to leave.
+2. Move the pad to the other `Deck`. Passes: the outlines go faint, and the header says "other deck".
+3. Point the pad and the desk at different nodes. Passes: a chip for each in the side pane, and each leaves on its own.
+
+Fails: a control doing something its label doesn't say.
+## DP. The poi at a real pad (row 817)
+Register row 817, 2026-11-07. Headless: `tests/test_poi.py`, `tests/test_poi_guide.py`, and `tests/test_poi_real.py` on the owner's tape. **No one has felt this at a real pad.** The tests hold one Joy-Con tape's numbers, and that's a pad the app's poi no longer reads; how it feels on the pad you use is yours.
+**633. Swing it.** (a DualSense or an Edge, not a Joy-Con: the app's poi reads no Nintendo pad, row 686. In the app, `poi.on`, the output you'd show on)
+1. Turn the poi on. Hold the pad as you'd hold a poi handle for ten seconds, without walking. *Pass:* the shape's centre never leaves the screen, and its size stays within half to double.
+2. Hold the pad dead still after a move. *Pass:* the shape stops moving within about a second, and then doesn't creep.
+3. Press A. *Pass:* the shape goes back under the handle.
+4. Carry the pad about half a metre to one side in a second or so, then hold it. *Pass:* the shape follows and stays there, with no pull back. *Fail:* it hardly moves: the carry is being read as still. A much slower carry can come back short, and the tests show it: say how slow matters.
+5. Swing it round hard for ten seconds. *Pass:* the shape swings and stays on the screen.
+6. Resize the first output to another shape. *Pass:* the limit follows that frame. A second output of another shape has no limit of its own: the limit is the frame's, not each output's. *Report:* if it clips there.
+*Report, not pass or fail:* how often the hand ends up stuck at an edge until A, and whether that's acceptable for a show. If it isn't, the choices are less hand push (`poi.hand`), or to take position off this pad too, as row 686 did for the Joy-Con.
+## DQ. GRAPH at 1080p (row 818)
+
+Register row 818, 2026-11-07. Headless: `tests/test_placement.py`. Seen in the app at a 1920x1080 window, but at 1x only on a taller display and on a real 1080p display only at 2x.
+**634. The show's display.** (the display you'll run the show on, at 1080p)
+*Since 658 (GRAPH opens with every node in view, Dillon's choice of 2026-11-07), 1.3 is the most the opening fit zooms in, not the zoom it always opens at: in steps 1 and 2, a patch too wide for 1.3 opens zoomed out, centred left of the pane. Check the words at 1.3 on a small patch, and ⌘-scroll to 1.3 on a big one.*
+1. Open the control window on it, launch, and load a patch. *Pass:* the node words read from where you'll stand, and the first column is at the canvas's top-left.
+2. Count the columns beside the pane. *Pass:* enough to work without panning all the time; about four. Say if you want it tighter or looser: the number is `placement.ZOOM_READ`.
+3. Look at a node's words up close, at a 1x display if you have one. *Pass:* sharp enough not to bother you. They're softer than the head's words above the canvas at any zoom but 1:1; say if it bothers you.
+4. ⌘-scroll to a new zoom during a look with the output up. *Pass:* no visible stutter on the output when you stop, about a third of a second later.
+5. Resize the window. *Pass:* the zoom doesn't change.
+*Fail:* a start as small as before, words too soft to read, a stutter you can see, or a zoom that follows the resize.
+## DS. The one migration (rows 830–835, 839)
+
+Register rows 830–835, 2026-11-07. Proved on a copy of the Drive (counts in row 832). On both Macs, after the run.
+**645. Every file opens at `/11`.** (this Mac, then Dylan's)
+1. After the run, launch. *Pass:* no "this library still has files in presets/" on the footer or the SYSTEM page.
+2. Open PATCHES and load five patches, two from folders. *Pass:* each loads, looks as it did last night.
+3. Open each install on the install line. *Pass:* each opens; the analyzer scene is the one it was (Balanced, Kick & Sizzle on huuu).
+4. In Finder, the library holds `loadable/` and `installs/`, and no `presets/`, `projects/`, `trash/` or `fx/`.
+*Fail:* a patch that won't load, a look that changed, a missing install, or an old folder back.
+**646. What a save writes.** (one install)
+1. Nudge the tempo, then save the install. Quit and launch. *Pass:* the BPM is back, the nudge is not.
+2. Open `installs/<name>.json` in a text editor. *Pass:* `"schema": "hyperspace.install/1"`, a `tuning` key, no `session`, no `tempo.nudge`.
+*Fail:* a nudge that comes back, or a `session` key.
+
+## DT. NSEW on the pads (rows 836–838)
+
+Register rows 836–838, 2026-11-07. Headless: `tests/test_format_lane.py`, `tests/test_paired_axes.py`. Nothing tried on a pad.
+**647. This Mac's `bindings.json` moves once.** (each Mac, its first launch)
+1. Launch once. *Pass:* SYSTEM says `bindings.json migrated … kept as bindings.json.bak-v3`.
+2. Press the face buttons and the D-pad. *Pass:* faces, points, lines, screen strokes, and brightness, as before.
+3. Press T and G on the keyboard. *Pass:* overlay and click-through, as before.
+*Fail:* a button that does nothing, or a second backup at the next launch.
+**648. A pair on the D-pad.** (the Xbox pad)
+1. Right-click a param, Learn pair, press ↑ then ↓. *Pass:* the row reads "pair D-pad up / down".
+2. Learn pair on the face, Y then A. *Pass:* "pair Y / A".
+*Fail:* a pair that takes the face for the D-pad or the other way round.
+**649. The pad window says it by position.** (Joy-Con and DualSense)
+1. Open the pad window. *Pass:* each pad draws its own letters (✕ ○ □ △, the Joy-Con's arrows); a hover names "south button" and so on.
+*Fail:* an Xbox letter on a pad that has its own.
+
+## DU. The panel says patch (rows 840–843)
+
+Register rows 840–843, 2026-11-07. Headless: `tests/test_person_words.py`.
+**650. No preset anywhere a person reads.** (the panel, all sections)
+1. Walk the pane, the desk diagram, ROUTING, the footer after a save. *Pass:* "patch" or "loadable patch", never "preset".
+*Fail:* any "preset" on the panel.
+**651. The conflict sheet reads plainly.** (spawn a patch onto a loadable patch that uses one of its controls)
+1. Spawn. *Pass:* the sheet says "the patch's" for the spawned one and "the loadable patch's" for the open one.
+*Fail:* a line where both are "the patch".
+**652. A cart starts by itself.** (a playlist)
+1. Tick "start this list at launch", quit, launch. *Pass:* the list plays without a press.
+2. Untick, relaunch. *Pass:* it doesn't.
+*Fail:* a cart that doesn't start, or starts when unticked.
+**653. A config.toml that won't read.** (this Mac: a copy of `config.toml` kept first)
+1. Put a stray `[` in `config.toml`, launch. *Pass:* the library is the Drive's as before (or, never launched here, nothing listed and saves refused in words).
+2. Put the file back.
+*Fail:* patches saved into `~/Hyperspace` instead of the Drive.
+
+## DV. The side pane is one viewer, and GRAPH frames every node (2026-11-07)
+
+Headless: `tests/test_ui_pane.py` (every view by the mouse, a canvas click, open on … and ←, ⌘[ / ⌘], the body's height, the band, the chips holding still) and `tests/test_graph_fit.py`. A restart after pulling.
+
+**654. Every view, by the mouse.** (Mac, the panel wide) The pane shows the selection at launch. Click each chip — patches, audio, routing, playlist, players, system — then each row of **sections ▾**. *Pass:* each fills the pane under the chips, alone, its chip lit (the menu's chip naming it); **selection** brings the selection back; the chips never move while you work. *Fail:* a section you can't reach, or two at once.
+
+**655. A node and its section.** Click a node on the canvas while patches is up: the selection shows it. Click **open on …**: its section, at full height, with **← <node>** at its top; click it: the node again. Select a node from OUTPUT's open on GRAPH: the section you were in stays. *Fail:* a click on the bare canvas that changes the view.
+
+**656. ⌘[ and ⌘].** After 654 and 655, press ⌘[ again and again, then ⌘]. *Pass:* back through every view in the order seen, forward again, each scrolled where you left it. Select node A, then node B (the selection up): ⌘[ selects A again and centres it on the canvas, ⌘] B. Delete A, then ⌘[ to where it was: the pane shows what is selected, and ⌘] still goes forward.
+
+**657. The narrow band.** (the desk up, the panel narrow) The band shows the chips and the selection; a section grows it to all but a strip of canvas; **selection** shrinks it back. No chip passes the band's edge, a long playlist name included.
+
+**658. Every node in view.** (Mac, the rig's display) Launch: every node is on screen, centred left of the pane, not under it. Zoom right in and drag away, then load another patch (F-key or PATCHES): its nodes all come into view, gliding. **save as…** and an edit leave the view where it is. Load a patch with three nodes: they're not blown up past the size they open at. With the band under the canvas (the desk up), the nodes sit above the band.
+
 ## What no test covers
 
 Only a person can settle these:
+- what macOS does to screens across a real replug, and to two of one model (600, 601): the tests list stand-in screens in either order;
 - the dream's look (9) and the default hand feel (16);
 - a spawned dream patch's picture with a worker running (497): the tests read
   the section and the values, no worker;
@@ -8312,6 +8906,10 @@ Only a person can settle these:
   - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
   - the face patterns themselves (375), which only the owner can name;
   - the moved effect's area frame on a preset saved before plan 37 (376).
+- **a real cable, a real TV and a real projector coming and going (629–632): SC3b's real-app runs used a private virtual display, on a locked Mac, and its id changed every time, so a real display keeping its number across a replug is unproven;**
+- node mode on a real pad (635–638): the tests and `tools/drive_node_mode_pad.py` use a stand-in, so how the sticks feel, whether the depth is right, and a real Joy-Con's stick are for a person;
+- the rows on the rig, both Macs through a real Drive, identical displays and a glass (625–628): SC2's real-app runs used this Mac's three different displays, a scratch library and a stand-in pair;
+- the picture and the pacing on real displays, the overlay over a real window, a locked Mac (607–610): SC3a's real-app runs read the back buffers on one Mac, and one person hasn't watched them;
 - video sound by ear (510–513): the tests read a ramp through the callback by
   hand with no audio device, so the slew's numbers, the linear resampler's
   sound above rate 1, an uncut clip's seam and a long clip's gap at its wrap

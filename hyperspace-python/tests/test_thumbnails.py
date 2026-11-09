@@ -45,7 +45,7 @@ class Clock:
 def party(rig):
     """`test_graph_legible.party` over the corpus: party-trip is test data
     since 2026-10-28, seeded into the rig's home first (never over a file)."""
-    seed(rig.lib.home, "presets")
+    seed(rig.lib.home, "loadable")
     return _party(rig)
 
 
@@ -129,9 +129,9 @@ def test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none():
     for kind, made in G.WIRED_MAKES.items():
         if made == G.IMAGE and kind not in (G.GROUND, G.DEPTH_PORT, *G.SEGMENT_PINS):
             assert graphview.THUMBS[kind] == graphview.PICTURE, kind
-    # plan 39: a matte makes a mask and a segment's own output is its matte: text
-    assert graphview.thumb_of("matte", G.MatteNode("matte")) is None
-    assert graphview.thumb_of("segment", G.SegmentNode("segment")) is None
+    # SM3: a matte makes a mask and a segment's own output is its matte: in grey
+    assert graphview.thumb_of("matte", G.MatteNode("matte")) == graphview.MASK_PIC
+    assert graphview.thumb_of("segment", G.SegmentNode("segment")) == graphview.MASK_PIC
     assert graphview.THUMBS["shape"] == graphview.THUMBS["cloud"] == graphview.SCENE_PIC
     assert graphview.THUMBS["hands"] == graphview.LAYER_PIC
     assert graphview.thumb_of("output.2") == graphview.WINDOW_PIC
@@ -294,7 +294,7 @@ def test_the_page_wants_the_picture_nodes_it_draws_on_screen(rig):
     assert pics and any(n.thumb == graphview.SCENE_PIC for n in pics)
     everywhere = ((-1e9, -1e9), (1e9, 1e9))
     st["seen_rect"] = everywhere
-    st["preset_only"] = False
+    st["patch_only"] = False
     st["hide"] = ui_graph.hidden_ids(st, view)
     got = ui_graph.thumb_wants(st, view, lambda nid: ((0.0, 0.0), (10.0, 10.0)))
     drawn = {ui_graph.thumb_name(n) for n in pics
@@ -308,7 +308,7 @@ def test_the_page_wants_the_picture_nodes_it_draws_on_screen(rig):
     # 2026-10-31 preset only keeps every channel, so party-trip leaves no
     # picture node off: one is left off by hand, as a folded group's member is
     st["seen_rect"] = everywhere
-    st["preset_only"] = True
+    st["patch_only"] = True
     st["hide"] = ui_graph.hidden_ids(st, view) | {pics[0].id}
     hidden = {ui_graph.thumb_name(n) for n in pics if n.id in st["hide"]}
     assert hidden

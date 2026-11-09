@@ -31,7 +31,7 @@ through to the sources, so whatever feeds one with no bank still feeds it.
 
 A leaf below `routing`: it imports `motion`, `pointer` and numpy, and `glfw` /
 `gamepad` only lazily, to resolve key and pad names
-(`tests/test_routing_boundary.py`). The rig facts the device registry
+(`tests/test_routing_boundary.py`). The meta controller facts the device registry
 states — which schemes are rows, which MIDI role an unqualified row
 means, which device is a scheme's primary — are written into every live
 binding table that follows these sources (`follow`, held weakly). The
@@ -63,12 +63,16 @@ BUILTIN_LANES = ("lane", "lfo", "env", "seq")
 # banks' and `modifiers.SCHEME` by tests/test_routing_sources.py
 DECK_SCHEMES = frozenset(("lfo", "env", "seq", "mod"))
 
+# the schemes no controller feeds: an analyzer's lanes and a deck's own. A route from one is
+# no mapping for node mode, which holds its param off it instead (`Bindings.node_holds`)
+MODULATOR_SCHEMES = frozenset(BUILTIN_LANES) | DECK_SCHEMES
+
 MIDI_SCHEMES = ("cc", "note", "pitch")
 # the row kinds the table dispatches itself (plan 27 B2): the keys
 # (`Router.keys`), the pad's buttons and D-pad (`Router.pad`) and MIDI
 # (midi.MidiIO). Every other scheme is a **continuous** source — a lane
 # some device feeds (`lane`, `lfo`, `hand`, `axis`, a new device's role) —
-# so a preset row naming a device this rig lacks is still a performer,
+# so a patch row naming a device this rig lacks is still a performer,
 # dormant until its device feeds (decision 11). Which continuous schemes
 # exist, and in what order a page offers them, is the device registry's
 # (`Sources.schemes`, devices.DeviceRegistry.continuous_schemes): there is
@@ -89,16 +93,40 @@ QUALIFIER = "@"
 
 # Plan 56: two discrete controls of one pad as one bipolar lane. The address
 # is its own declaration, ``pair:<+ pole>/<− pole>`` in the rows' own control
-# names (``pair:UP/DOWN``, ``pair@p2:RB/LB``), so nothing lists a pair but the
+# names (``pair:hat.N/hat.S``, ``pair@p2:RB/LB``), so nothing lists a pair but the
 # row that reads it. Continuous: a route reads it as it reads a stick; a `step`
 # row on one is `Router.pad`'s
 PAIR_SCHEME = "pair"
 PAIR_SEP = "/"
 PAIR_REST = 0.5
 
+# plan 57 (row 545): the words every pad's cluster and D-pad had until `bindings/4` and `/11`.
+# Old and new don't overlap, so the map is idempotent and needs no version to read by
+OLD_FACE = {"A": "S", "B": "E", "X": "W", "Y": "N"}
+OLD_HAT = {"UP": "N", "RIGHT": "E", "DOWN": "S", "LEFT": "W"}
+
+
+def nsew(source: str) -> str:
+    """A row's source in today's words: ``pad:A`` → ``pad:S``, ``hat@p2:UP`` → ``hat@p2:N``,
+    ``pair:UP/DOWN`` → ``pair:hat.N/hat.S``, ``pair:Y/A`` → ``pair:N/S``. Anything else as it is."""
+    head, sep, addr = source.partition(":")
+    if not sep:
+        return source
+    scheme = head.partition(QUALIFIER)[0]
+    if scheme == "pad":
+        return f"{head}:{OLD_FACE.get(addr, addr)}"
+    if scheme == "hat":
+        return f"{head}:{OLD_HAT.get(addr, addr)}"
+    if scheme == PAIR_SCHEME:
+        def pole(p: str) -> str:
+            return OLD_FACE.get(p) or (f"hat.{OLD_HAT[p]}" if p in OLD_HAT else p)
+        pos, s, neg = addr.partition(PAIR_SEP)
+        return f"{head}:{pole(pos)}{s}{pole(neg)}"
+    return source
+
 
 class Pole(NamedTuple):
-    """One end of a pair: the row source its control is (``hat:UP``,
+    """One end of a pair: the row source its control is (``hat:N``,
     ``pad:LB``), the constant that reads it, and whether that is a hat bit."""
 
     source: str
@@ -128,8 +156,9 @@ def pair_poles(addr: str) -> tuple[Pole, Pole] | None:
     if sep and pos != neg:
         poles = []
         for name in (pos, neg):
-            if name in gamepad.HATS:
-                poles.append(Pole(f"hat:{name}", gamepad.HATS[name], True))
+            hat = name.removeprefix(gamepad.models.HAT_PREFIX)
+            if hat != name and hat in gamepad.HATS:
+                poles.append(Pole(f"hat:{hat}", gamepad.HATS[hat], True))
             elif name in gamepad.ALL_BUTTONS:
                 poles.append(Pole(f"pad:{name}", gamepad.ALL_BUTTONS[name], False))
         if len(poles) == 2:
@@ -145,7 +174,7 @@ def pole_free(pad, pole: Pole, skip=frozenset()) -> bool:
     models = gamepad.models
     m = getattr(pad, "model", None)
     return models.control_free(m if models.is_model(m) else None,
-                               pole.source.partition(":")[2], skip)
+                               models.pole_name(pole.source), skip)
 
 
 def pair_lanes(pad, names: dict[str, int], skip=frozenset()) -> list[float]:
@@ -248,7 +277,7 @@ class Layered(MutableMapping):
 class LaneLayer:
     """One deck's own lanes (plan 44 D4, row 591): what its banks and its
     modifiers publish — the five per-scheme dicts the sources hold for the
-    rig's — and nobody else's pass or panel reads."""
+    meta controller's — and nobody else's pass or panel reads."""
 
     __slots__ = ("feeds", "gates", "labels", "lane_kinds", "rests")
 
@@ -273,7 +302,7 @@ _NOWHERE: frozenset = frozenset()   # `away_from`, with every controller on this
 class Sources:
     """What every source said this frame, shared by every router over it.
 
-    `devices` is the rig's device registry (devices.DeviceRegistry, plan 27
+    `devices` is the meta controller's device registry (devices.DeviceRegistry, plan 27
     B2), handed in as an argument — this module imports nothing above it —
     and asked which continuous schemes there are and in what order a page
     offers them (`schemes`); None (bare sources, the tests') offers what
@@ -307,13 +336,13 @@ class Sources:
 
     def follow(self, table) -> None:
         """`table` (a routing.Bindings a router runs over) is told the
-        registry's rig facts from now on (`follow_devices`). Held weakly:
+        registry's meta controller facts from now on (`follow_devices`). Held weakly:
         a table no router keeps is forgotten, never written again. Plan 44
-        D3 (row 593's note): the rig facts are the session's, so a deck's
-        table is followed through its session table (`table.session`, a
-        `routing.SessionTable`) — every deck over one session is told at
-        once, and the session is written once."""
-        table = getattr(table, "session", None) or table
+        D3 (row 593's note): the meta controller facts are the meta controller's, so a deck's
+        table is followed through its meta table (`table.meta_table`, a
+        `routing.MetaTable`) — every deck over one meta controller is told at
+        once, and the meta controller is written once."""
+        table = getattr(table, "meta_table", None) or table
         if any(r() is table for r in self._tables):
             return
         self._tables.append(weakref.ref(table))
@@ -521,13 +550,13 @@ class Sources:
 
 
 def _resolve(scheme: str, name: str) -> int | None:
-    """key:NAME → glfw.KEY_NAME; pad:NAME → gamepad.NAME; hat:DIR → gamepad.HAT_DIR.
+    """key:NAME → glfw.KEY_NAME; pad:NAME → gamepad.ALL_BUTTONS; hat:DIR → gamepad.HATS.
     Imported here so the table itself never needs a window system."""
     try:
         if scheme == "key":
             import glfw
             return getattr(glfw, f"KEY_{name.rsplit('+', 1)[-1]}")   # SHIFT+B → KEY_B
         from . import gamepad
-        return getattr(gamepad, f"HAT_{name}" if scheme == "hat" else name)
+        return (gamepad.HATS if scheme == "hat" else gamepad.ALL_BUTTONS).get(name)
     except (ImportError, AttributeError):
         return None

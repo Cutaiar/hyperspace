@@ -3,7 +3,7 @@ envelope.py; plan 31 U).
 
 Top to bottom:
 
-  seq   ◀ preset ▶ …     the transport: run · span · restart, the beat
+  seq   ◀ loadable patch ▶ …     the transport: run · span · restart, the beat
                          light and the playhead's step on one line; length,
                          swing and gate as three half faders on the next
         the grid         five lanes × eight steps, the APC40's clip grid on
@@ -16,7 +16,7 @@ Top to bottom:
                          left of each row: the lane's number (a click
                          selects the lane), its mute, and the envelope it
                          fires (`seq.<l>.env`, a picker over the bank)
-  envs  ◀ preset ▶ …     a strip per envelope, by id — the five lane
+  envs  ◀ loadable patch ▶ …     a strip per envelope, by id — the five lane
                          envelopes, then any extras. Every strip but one is
                          folded to half a line, two to a row (a thumbnail of
                          the shape, the name, the live level, a chevron) —
@@ -34,7 +34,7 @@ panel's own widgets or wired to its menu (`Panel._ctx`), so a click is an
 ordinary param write — undo sees it — and right-click → Learn works on a
 cell like on any fader. A function over the Panel, like ui_lfo: no state of
 its own but the selected lane (`panel._seq_lane`) and an opened envelope
-(`panel._seq_env`), kept for the session and never saved; a save of this
+(`panel._seq_env`), kept for the meta controller and never saved; a save of this
 file lands live (hotreload.MODULES). Without a sequencer and envelopes
 attached (a Panel built without app.py) the page says so and draws nothing
 else.
@@ -119,7 +119,7 @@ def page(panel, dt: float) -> None:
     _folds(panel, seq, envs, ids[k + 1:], "after")
 
 
-# ---- the selection: the Panel's, never the preset's ----
+# ---- the selection: the Panel's, never the loadable patch's ----
 
 def selected_lane(panel, seq) -> int:
     """The selected lane, 0-based: the one picked this session, else lane 1."""

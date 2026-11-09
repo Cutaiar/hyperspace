@@ -25,6 +25,8 @@ and a projector. It is one Python process in `hyperspace-python/`.
     rows are the owner's own answers before a build (plan 40's 501–510
     among them).
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
+  - [`AUDIT-STRUCTURE-2026-10.md`](AUDIT-STRUCTURE-2026-10.md): the code's shape on 2026-10-27,
+    re-measured 2026-11-06. A record: plan 58 §6 decides what's done.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
@@ -189,6 +191,16 @@ the tree, `tests/test_pads_joycon_real.py`); 424 and 426–429 (group AV)
 remain. **Restart** rather than hot reload (the road's module list
 changed).
 
+**The Joy-Con's version 0** (2026-11-04, the owner): buttons, sticks, the gyro
+and shake. A Nintendo pad's sensors move no position (`poi.no_position`) and its
+reader learns the gyro's rest offset; the Edge and `motion:shake` are unchanged.
+The Joy-Con has its own layout on its model (`routing.layout_of`): SL / SR the
+shape, stick click the view's reset, − the totem's reset, capture the totem; L
+the base chase; ZL free, and the stick free while the totem reads it. The Edge's
+hold-to-save is its own layout too. Rows 686–687, checks
+520–521 (group BW), with a charged pad. Position waits for
+an idealized control object; draft PR #342 is its record.
+
 ## What is left
 
 - **Plan 46, hand checks 424 and 426–429** (the owner's Joy-Con): the
@@ -242,7 +254,7 @@ changed).
 - **Plan 29**, the devices: wands, drums, a Kinect or other depth sensor
   (the point-cloud node is ready for it), DMX / sACN lights, bulbs, a
   generic on-screen desk.
-- **Known faults**: the open audit findings R14, R15, U9, U10, P6, V8.
+- **Known faults**: the open audit finding P6.
 - **Things nobody has observed:** frame pacing with two screens; a screen
   unplugged mid-run; anything on the APC40, the hand camera, the
   projector or the glass — the registry's devices, the hands through the
@@ -267,6 +279,13 @@ changed).
 - Never push to `main`. The owner merges.
 - A change to a file format backs the old file up before the first
   rewrite.
+- **Work on current `main`, and stay on it.** `git fetch origin main` before
+  starting, and again before every push or hand-off: rebase the branch onto
+  it, rerun the tests, then push. A branch that has fallen behind `main`
+  undoes what merged meanwhile for anyone who runs it (2026-11-07: a branch
+  cut before #426 brought the CONTROLS title bar back on the owner's
+  screen). After a rebase, check the hand-check numbers and DECISIONS rows
+  against `main`'s (`tests/test_doc_numbers.py`).
 
 ## Ideas for later (not started)
 

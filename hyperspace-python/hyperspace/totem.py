@@ -2,7 +2,8 @@
 
 A pad with motion sensors (a Joy-Con, a DualSense) held in the hand turns
 the shape: its gyro, integrated, drives **three of the six rotation
-planes**, and its tilt holds the shape off centre. Off by default
+planes**, and its tilt holds the shape off centre (not a Joy-Con's: `poi.no_position`,
+register row 686). Off by default
 (`totem.on`), and nothing here runs while it is off.
 
 **The planes.** A turn about one of the pad's axes is a turn in the plane
@@ -53,8 +54,9 @@ up to ~2 deg/s), times its own time — summed on the hid reader's thread
 takes each frame (`Motion.take_turn`). A report that stalls adds no turn,
 two reports between frames both count, a slow frame loses none.
 
-**Reset** (A, or the D-pad's down on a pad that has one — on a Joy-Con (L)
-held sideways these are the same arrow): the registry's own `camera.reset`
+**Reset** (A, or the D-pad's down on a pad that has one; a pad with a layout
+of its own, a Joy-Con, has its reset there: − on the L, + on the R, and its
+A goes back to its row): the registry's own `camera.reset`
 (every phase, the orbit, the zoom and the pan to their rests, the 3D
 switch's held pose dropped — the shape congruent with the world's axes),
 then the pad's pose now becomes the reference the tilt is measured from.
@@ -94,11 +96,11 @@ AXIS_PLANES = (("YZ", "XW"), ("XZ", "YW"), ("XY", "ZW"))
 # turn about +x takes y toward z (YZ +), about +z takes x toward y (XY +),
 # about +y takes z toward x (XZ −). A W plane takes its axis's sign
 AXIS_SIGN = (1.0, -1.0, 1.0)
-W_BUTTON = ("X", "Y", "B")        # the button that throws each axis into W
-RESET_BUTTON = "A"
+W_BUTTON = ("W", "N", "E")        # the button that throws each axis into W (west, north, east)
+RESET_BUTTON = "S"
 HAT_DOWN = 4                      # GLFW's hat bit (gamepad.HAT_DOWN; a test holds them equal)
 # the pad's rows the totem holds off while it drives (`Router.pad(skip=)`)
-SKIP = frozenset({*(f"pad:{b}" for b in (*W_BUTTON, RESET_BUTTON)), "hat:DOWN"})
+SKIP = frozenset({*(f"pad:{b}" for b in (*W_BUTTON, RESET_BUTTON)), "hat:S"})
 
 LOST_S = 0.5                      # no step from the pad it reads this long: it lets go
 PAN_PER_RAD = 1.5                 # world units of pan per radian of tilt
@@ -154,9 +156,9 @@ class TotemState:
 
 
 def register(reg, state: TotemState) -> None:
-    """The `totem.*` params: rig switches, never saved (persist off) and
+    """The `totem.*` params: meta switches, never saved (persist off) and
     never a performer's (modulatable off) — an experiment touches no
-    preset or show file. `reg.totem` is the state the pad device reads."""
+    loadable patch or show file. `reg.totem` is the state the pad device reads."""
     if f"{GROUP}.on" in reg:
         return
     reg.totem = state
@@ -172,8 +174,9 @@ def register(reg, state: TotemState) -> None:
     reg.toggle(f"{GROUP}.on", "Totem", lambda: state.on, set_on, group=GROUP,
                persist=False, modulatable=False,
                tip="The Joy-Con as a 4D totem (an experiment, plan 47): its gyro turns "
-                   "three of the six rotation planes, its tilt moves the shape. X / Y / B "
-                   "throw the x / y / z turn into the W planes; A resets.")
+                   "three of the six rotation planes, and a DualSense's tilt moves the shape (a Joy-Con's "
+                   "moves nothing). X / Y / B "
+                   "throw the x / y / z turn into the W planes; A (a Joy-Con's − or +) resets.")
     for i, axis in enumerate(AXES):
         def set_w(v, i=i, axis=axis) -> None:
             v = bool(v)
@@ -184,7 +187,7 @@ def register(reg, state: TotemState) -> None:
                    lambda i=i: state.w[i], set_w, group=GROUP,
                    persist=False, modulatable=False,
                    tip=f"A turn about the pad's {axis} drives {plane_of(i, True)} instead of "
-                       f"{plane_of(i, False)}. The pad's {W_BUTTON[i]} latches it.")
+                       f"{plane_of(i, False)}. The pad's {('west', 'north', 'east')[i]} button latches it.")
     reg.toggle(f"{GROUP}.pan", "Totem tilt pans", lambda: state.pan,
                lambda v: setattr(state, "pan", bool(v)), group=GROUP,
                persist=False, modulatable=False,
@@ -195,7 +198,7 @@ def register(reg, state: TotemState) -> None:
         reset(state, reg)
     reg.trigger(f"{GROUP}.reset", "Totem reset", fire_reset, group=GROUP, modulatable=False,
                 tip="The view's own reset (every phase, the orbit, the zoom and the pan) "
-                    "and the pad's pose now the reference. The pad's A.")
+                    "and the pad's pose now the reference. The pad's A (a Joy-Con's − or +).")
 
 
 def reset(state: TotemState, reg) -> None:
@@ -335,7 +338,41 @@ def step(state: TotemState | None, pad, reg, dt: float, role: str = "",
         state.ang[p] = _fold(state.ang[p] + AXIS_SIGN[i] * math.radians(float(turn[i])))
     for p, name in enumerate(PLANES):
         _set(reg, f"rot.phase.{name}", state.ang[p])
-    _pan(state, motion, reg, dt)
+    _pan(state, motion, reg, dt, pad)
+
+
+def own_layout(model) -> bool:
+    """Has this model's stick and reset its own arrangement with the totem (a Joy-Con's)?"""
+    return bool(getattr(model, "totem_layout", False))
+
+
+def reads_stick(model, reg, role: str) -> bool:
+    """Is the totem reading a pad of `model` and `role`, so its stick is off the camera
+    job and free for a route? The one question, the device's and the pad window's."""
+    return own_layout(model) and drives(state_of(reg), role)
+
+
+def quiet_stick(model, reg, role: str, steers: bool = True) -> bool:
+    """Does a route on this pad's stick let go, because the stick orbits instead (the
+    owner, 2026-11-04)? Only where the stick has that job: a pad that doesn't `steer`
+    keeps its routes, or the stick would be dead."""
+    return own_layout(model) and steers and not drives(state_of(reg), role)
+
+
+def keep_turn(state: TotemState | None, reg) -> None:
+    """The phases back to the totem's angles, after the pad's rows ran: a row that fired
+    `camera.reset` (a Joy-Con's stick click) would otherwise show the shape at no
+    rotation for a frame, and the totem would put it back on the next."""
+    if state is None:
+        return
+    for p, name in enumerate(PLANES):
+        _set(reg, f"rot.phase.{name}", state.ang[p])
+
+
+def skip_of(pad) -> frozenset:
+    """The rows held off `pad` while the totem reads it: `SKIP`, less the
+    reset for a pad whose layout has its own."""
+    return SKIP - {f"pad:{RESET_BUTTON}"} if own_layout(getattr(pad, "model", None)) else SKIP
 
 
 def _buttons(state: TotemState, pad, reg) -> None:
@@ -346,6 +383,8 @@ def _buttons(state: TotemState, pad, reg) -> None:
             p = reg.get(f"{GROUP}.w.{AXES[i]}")
             if p is not None:
                 p.set(not state.w[i])
+    if own_layout(getattr(pad, "model", None)):
+        return                                    # its reset is a row of its layout
     code = named.get(RESET_BUTTON)
     if (code is not None and pad.pressed(code)) or pad.hat_pressed(HAT_DOWN):
         p = reg.get(f"{GROUP}.reset")
@@ -353,13 +392,14 @@ def _buttons(state: TotemState, pad, reg) -> None:
             p.fire()
 
 
-def _pan(state: TotemState, motion, reg, dt: float) -> None:
+def _pan(state: TotemState, motion, reg, dt: float, pad=None) -> None:
     """The tilt against the reference onto camera.pan, as a relative move
     of what the totem added last frame: x right for the right side down,
-    up (pan.y −) for the far end up. Off, or while a poi owns the pan
-    (poi.py), what it added is taken back."""
+    up (pan.y −) for the far end up. Off, while a poi owns the pan (poi.py),
+    or for a pad whose sensors move no position (`poi.no_position`, a
+    Joy-Con), what it added is taken back."""
     want = [0.0, 0.0]
-    if state.pan and not poi.owns_pan(reg):       # a poi swinging the shape owns the pan
+    if state.pan and not poi.owns_pan(reg) and not poi.no_position(pad):
         roll, pitch = math.radians(motion.roll), math.radians(motion.pitch)
         if state.ref is None:
             state.ref = (roll, pitch)

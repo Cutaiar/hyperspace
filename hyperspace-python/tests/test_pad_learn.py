@@ -39,7 +39,7 @@ def rig(tmp_path):
     chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(tmp_path)
-    reg = build_registry(ViewState(), control, NS(chain=chain), lib.project)
+    reg = build_registry(ViewState(), control, NS(chain=chain), lib.install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     router = Router(reg, table)
     return NS(reg=reg, table=table, router=router, path=tmp_path / "bindings.json",
@@ -87,13 +87,13 @@ def test_release_edges():
 
 # ---- Learn pad ----
 
-def test_a_button_learns_a_session_row_by_the_params_kind(rig):
+def test_a_button_learns_a_meta_row_by_the_params_kind(rig):
     pad, lrn = ScriptedPad(), rig.learn
     for pid, src, held, hat, op, value in (
-            ("view.faces", "pad:Y", {gp.Y}, 0, "toggle", 0.0),
+            ("view.faces", "pad:N", {gp.Y}, 0, "toggle", 0.0),
             ("camera.reset", "pad:LB", {gp.LB}, 0, "fire", 0.0),
             ("view.shape", "pad:RB", {gp.RB}, 0, "toggle", 0.0),
-            ("view.bright", "hat:DOWN", (), gp.HAT_DOWN, "step", -1.0),
+            ("view.bright", "hat:S", (), gp.HAT_DOWN, "step", -1.0),
             ("view.inst_amp", "pad:GUIDE", {gp.GUIDE}, 0, "step", 1.0)):
         pad.frame()
         lrn.arm(pid, "pad")
@@ -103,21 +103,21 @@ def test_a_button_learns_a_session_row_by_the_params_kind(rig):
         assert [(b.target, b.op, b.value) for b in rows] == [(pid, op, value)], pid
         assert lrn.learning is None and f"learned {pid}" in lrn.last and not lrn.refused
     written = {(d["source"], d["target"]) for d in on_file(rig.path)}
-    assert ("pad:Y", "view.faces") in written and ("hat:DOWN", "view.bright") in written
+    assert ("pad:N", "view.faces") in written and ("hat:S", "view.bright") in written
 
 
 def test_a_button_learn_replaces_the_buttons_row_and_keeps_the_params_others(rig):
     pad, lrn, t = ScriptedPad(), rig.learn, rig.table
-    assert any(b.source == "pad:A" and b.target == "view.faces" for b in t.bindings)
-    assert any(b.source == "pad:Y" and b.target == "view.lines" for b in t.bindings)
+    assert any(b.source == "pad:S" and b.target == "view.faces" for b in t.bindings)
+    assert any(b.source == "pad:N" and b.target == "view.lines" for b in t.bindings)
     lrn.arm("view.lines", "pad")
     pad.frame()
     pad.frame(held={gp.A})
     gp.learn_from(pad, lrn)
-    on_a = [b for b in t.bindings if b.source == "pad:A"]
+    on_a = [b for b in t.bindings if b.source == "pad:S"]
     assert [(b.target, b.op) for b in on_a] == [("view.lines", "toggle")]
     assert "view.faces let go" in lrn.last
-    assert any(b.source == "pad:Y" and b.target == "view.lines" for b in t.bindings)
+    assert any(b.source == "pad:N" and b.target == "view.lines" for b in t.bindings)
 
 
 def test_the_learning_press_does_not_fire_the_old_row(rig):
@@ -125,13 +125,13 @@ def test_the_learning_press_does_not_fire_the_old_row(rig):
     faces = rig.reg["view.faces"].value
     lrn.arm("view.points", "pad")
     pad.frame()
-    pad.frame(held={gp.A})              # pad:A is view.faces's in the factory table
+    pad.frame(held={gp.A})              # pad:S is view.faces's in the factory table
     learned = gp.learn_from(pad, lrn)
     rig.router.pad(pad, buttons=not learned)
     assert rig.reg["view.faces"].value == faces
 
 
-def test_a_stick_learns_a_push_route_into_the_preset(rig):
+def test_a_stick_learns_a_push_route_into_the_loadable(rig):
     pad, lrn, t = ScriptedPad(), rig.learn, rig.table
     lrn.arm("camera.yaw", "pad")
     pad.frame(axes=[0.3, 0, 0, 0, -1, -1])          # inside LEARN_TRAVEL: nothing yet
@@ -141,7 +141,7 @@ def test_a_stick_learns_a_push_route_into_the_preset(rig):
     b = t.owner("camera.yaw")
     assert (b.source, b.op, b.value) == ("axis:LX", "push", PUSH_DEPTH)
     assert not any(d.get("source") == "axis:LX" for d in on_file(rig.path)) \
-        if rig.path.exists() else True             # a route is the preset's, not the session's
+        if rig.path.exists() else True             # a route is the loadable patch's, not the rig's
 
 
 def test_a_trigger_on_a_one_sided_fader_is_its_position(rig):
@@ -202,7 +202,7 @@ def test_hold_fires_once_after_hold_s(rig):
     pad, r = ScriptedPad(), rig.router
     fired = []
     rig.reg["camera.reset"].fire = lambda: fired.append(1)
-    rig.table.add(Binding("hat:RIGHT", "camera.reset", "hold"))
+    rig.table.add(Binding("hat:E", "camera.reset", "hold"))
     pad.frame(hat=gp.HAT_RIGHT)
     r.pad(pad, now=10.0)
     pad.frame(hat=gp.HAT_RIGHT)
@@ -222,8 +222,8 @@ def test_hold_fires_once_after_hold_s(rig):
     assert fired == [1]
 
 
-def test_no_factory_pad_row_loads_a_preset_or_taps_the_tempo(rig):
-    """2026-11-04, the owner: no swapping presets from a controller, and tap
+def test_no_factory_pad_row_loads_a_loadable_or_taps_the_tempo(rig):
+    """2026-11-04, the owner: no swapping loadable patches from a controller, and tap
     tempo not a default on every controller. On the factory table neither the
     d-pad's ← / → nor B, X and BACK walk or tap, however long they are held;
     the APC keeps TAP TEMPO and the keyboard (not a controller) B."""
@@ -276,30 +276,38 @@ def test_a_stick_never_ends_a_learn_on_a_setting_it_cannot_drive(rig):
 
 # ---- the factory layout (2026-10-14) ----
 
+def _older(rows, path):
+    """`rows` as a file from before the layout stamp (row 723) holds them."""
+    Bindings(rows, path=path).write()
+    doc = json.loads(path.read_text())
+    doc.pop(routing.PAD_LAYOUT_KEY)
+    path.write_text(json.dumps(doc))
+
+
 def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_path):
     """The old factory pad rows (A rotate, X points, Y faces, START the
     sheet, BACK the panel, the right-stick click the camera) move to the
     layout of 2026-10-14 — START's sheet gone — on to 2026-10-29's where it
     moved again (X screen strokes), and BACK's holds the chase (2026-11-04); a
     row the owner learned onto a button stays; a second load changes nothing."""
-    old = [Binding("pad:A", "view.rotate", "toggle"), Binding("pad:X", "view.points", "toggle"),
-           Binding("pad:Y", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
+    old = [Binding("pad:S", "view.rotate", "toggle"), Binding("pad:W", "view.points", "toggle"),
+           Binding("pad:N", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
            Binding("pad:VIEW", "ui.panel", "toggle"),
            Binding("pad:LSTICK", "camera.reset", "fire"),
            Binding("pad:RSTICK", "camera.reset", "fire"),
-           Binding("hat:UP", "fx.wobble.freq", "step")]          # the owner's own
+           Binding("hat:N", "fx.wobble.freq", "step")]          # the owner's own
     path = tmp_path / "bindings.json"
-    Bindings(old, path=path).write()
+    _older(old, path)
     t = Bindings.load(path, legacy_midi=None)
     rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
-    assert rows["pad:A"] == ("view.faces", "toggle")
-    assert rows["pad:X"] == ("view.screen_strokes", "toggle")   # straight to the newest
-    assert rows["pad:Y"] == ("view.lines", "toggle")
+    assert rows["pad:S"] == ("view.faces", "toggle")
+    assert rows["pad:W"] == ("view.screen_strokes", "toggle")   # straight to the newest
+    assert rows["pad:N"] == ("view.lines", "toggle")
     assert "pad:MENU" not in rows                            # the sheet's row gone
     assert rows["pad:VIEW"] == ("deck.chase", "momentary")    # the panel's row moved
     assert rows["pad:LSTICK"] == ("camera.reset", "fire")
     assert rows["pad:RSTICK"] == ("rot.reset_w", "fire")
-    assert rows["hat:UP"] == ("fx.wobble.freq", "step")
+    assert rows["hat:N"] == ("fx.wobble.freq", "step")
     assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 4
     assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 1
     assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 1
@@ -314,17 +322,17 @@ def test_the_pads_bank_rows_move_straight_to_the_newest_layout(tmp_path):
     noted;
     the same targets on another button or op — the owner's — stay, and the
     APC40's QUANT keeps the bank; a second load changes nothing."""
-    for b_row in (Binding("pad:B", "preset.next", "fire"),
-                  Binding("pad:B", "theme.next", "fire")):
-        old = [b_row, Binding("pad:X", "preset.prev", "fire"),
+    for b_row in (Binding("pad:E", "preset.next", "fire"),
+                  Binding("pad:E", "theme.next", "fire")):
+        old = [b_row, Binding("pad:W", "preset.prev", "fire"),
                Binding("pad:LB", "preset.next", "fire"),            # the owner's
                Binding("pad:RB", "preset.prev", "hold")]            # the owner's
         path = tmp_path / "bindings.json"
-        Bindings(old, path=path).write()
+        _older(old, path)
         t = Bindings.load(path, legacy_midi=None)
         rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
-        assert rows["pad:B"] == ("view.points", "toggle")
-        assert rows["pad:X"] == ("view.screen_strokes", "toggle")
+        assert rows["pad:E"] == ("view.points", "toggle")
+        assert rows["pad:W"] == ("view.screen_strokes", "toggle")
         assert rows["pad:LB"] == ("preset.next", "fire")
         assert rows["pad:RB"] == ("preset.prev", "hold")
         assert "pad:MENU" not in rows                               # never added
@@ -342,19 +350,19 @@ def test_the_10_14_layout_goes_straight_to_the_newest(tmp_path):
     the walk of 2026-10-29, which one load would have left behind for a second
     to remove. A d-pad row the owner changed stays; a second load changes
     nothing."""
-    old = [Binding("pad:B", "preset.list.next", "fire"),
-           Binding("pad:X", "preset.list.prev", "fire"),
-           Binding("hat:LEFT", "view.speed", "step", -4),
-           Binding("hat:RIGHT", "view.speed", "step", 2),           # the owner's
+    old = [Binding("pad:E", "preset.list.next", "fire"),
+           Binding("pad:W", "preset.list.prev", "fire"),
+           Binding("hat:W", "view.speed", "step", -4),
+           Binding("hat:E", "view.speed", "step", 2),           # the owner's
            Binding("pad:MENU", "preset.save_new", "hold")]
     path = tmp_path / "bindings.json"
-    Bindings(old, path=path).write()
+    _older(old, path)
     t = Bindings.load(path, legacy_midi=None)
     rows = {b.source: (b.target, b.op, b.value) for b in t.of("pad", "hat")}
-    assert rows["pad:B"] == ("view.points", "toggle", 1.0)
-    assert rows["pad:X"] == ("view.screen_strokes", "toggle", 1.0)
-    assert "hat:LEFT" not in rows
-    assert rows["hat:RIGHT"] == ("view.speed", "step", 2.0)
+    assert rows["pad:E"] == ("view.points", "toggle", 1.0)
+    assert rows["pad:W"] == ("view.screen_strokes", "toggle", 1.0)
+    assert "hat:W" not in rows
+    assert rows["hat:E"] == ("view.speed", "step", 2.0)
     assert "pad:MENU" not in rows
     assert sum("the pad layout of 2026-10-29" in n for n in t.notes) == 2
     assert sum("the pad layout of 2026-11-04" in n for n in t.notes) == 2
@@ -370,9 +378,9 @@ def test_the_factory_pad_walks_nothing_and_the_desk_the_bank():
     from hyperspace.routing import factory_desk, padmap
 
     pad = {b.source: (b.target, b.op) for b in padmap()}
-    assert "hat:LEFT" not in pad and "hat:RIGHT" not in pad
-    assert pad["pad:B"] == ("view.points", "toggle")
-    assert pad["pad:X"] == ("view.screen_strokes", "toggle")
+    assert "hat:W" not in pad and "hat:E" not in pad
+    assert pad["pad:E"] == ("view.points", "toggle")
+    assert pad["pad:W"] == ("view.screen_strokes", "toggle")
     assert any(b.source == f"note:0:{apc40.N_QUANT}" and b.target == "preset.next"
                for b in factory_desk())
 
@@ -460,7 +468,7 @@ def test_the_right_stick_click_resets_the_4d_spin(rig):
 
 def test_learn_on_a_second_pad_writes_its_qualified_rows(rig):
     """Learn pad completes on whichever pad moves; a second pad's rows
-    carry its role (``pad@p2:A``, ``axis@p2:LX``), the primary's stay
+    carry its role (``pad@p2:S``, ``axis@p2:LX``), the primary's stay
     unqualified."""
     two, lrn, t = ScriptedPad(), rig.learn, rig.table
     lrn.arm("view.points", "pad")
@@ -468,9 +476,9 @@ def test_learn_on_a_second_pad_writes_its_qualified_rows(rig):
     two.frame(held={gp.A})
     assert gp.learn_from(two, lrn, role="p2") is True
     assert [(b.source, b.op) for b in t.bindings if b.target == "view.points"
-            and b.source.startswith("pad@")] == [("pad@p2:A", "toggle")]
-    assert any(d.get("source") == "pad@p2:A" for d in on_file(rig.path))   # the session's
-    assert any(b.source == "pad:A" for b in t.bindings)                   # the primary's stays
+            and b.source.startswith("pad@")] == [("pad@p2:S", "toggle")]
+    assert any(d.get("source") == "pad@p2:S" for d in on_file(rig.path))   # the rig's
+    assert any(b.source == "pad:S" for b in t.bindings)                   # the primary's stays
     lrn.arm("camera.yaw", "pad")
     two.frame(axes=[1.0, 0, 0, 0, -1, -1])
     gp.learn_from(two, lrn, role="p2")
@@ -480,7 +488,7 @@ def test_learn_on_a_second_pad_writes_its_qualified_rows(rig):
     two.frame(hat=gp.HAT_DOWN)
     assert gp.learn_from(two, lrn, role="p2") is True
     b = next(b for b in t.bindings if b.target == "view.inst_amp" and b.source.startswith("hat"))
-    assert (b.source, b.op, b.value) == ("hat@p2:DOWN", "step", -1.0)    # DOWN steps down
+    assert (b.source, b.op, b.value) == ("hat@p2:S", "step", -1.0)    # DOWN steps down
 
 
 def test_two_pads_drive_their_own_routes(rig):
@@ -536,7 +544,7 @@ def test_the_camera_job_is_the_primary_pads_only(rig, monkeypatch):
 
 def test_learn_p2_completes_only_from_the_second_pad(rig):
     """"Learn p2" (the second pad's own want): a press on the primary does
-    not complete it; a press on p2 writes `pad@p2:A`."""
+    not complete it; a press on p2 writes `pad@p2:S`."""
     from hyperspace import devices
 
     lrn, t = rig.learn, rig.table
@@ -552,11 +560,11 @@ def test_learn_p2_completes_only_from_the_second_pad(rig):
     two.frame(held={gp.A})
     assert gp.learn_from(two, lrn, role="p2") is True
     assert [b.source for b in t.bindings if b.target == "view.points"
-            and b.source.startswith("pad@")] == ["pad@p2:A"]
-    assert lrn.accepts("pad@p2:A") is False                 # (it landed: nothing armed)
+            and b.source.startswith("pad@")] == ["pad@p2:S"]
+    assert lrn.accepts("pad@p2:S") is False                 # (it landed: nothing armed)
     lrn.arm("view.points", "p2")
-    assert lrn.accepts("pad@p2:B") and lrn.accepts("axis@p2:LX")
-    assert not lrn.accepts("pad:B") and not lrn.accepts("axis:LX")
+    assert lrn.accepts("pad@p2:E") and lrn.accepts("axis@p2:LX")
+    assert not lrn.accepts("pad:E") and not lrn.accepts("axis:LX")
 
 
 def _second(d):
@@ -567,10 +575,10 @@ def _second(d):
 # ---- BACK holds the base chase (register row 723, the owner, 2026-11-04) ----
 
 THE_LAST_LAYOUT = [Binding("pad:VIEW", "tempo.tap", "fire"),     # as the factory wrote them
-                   Binding("hat:LEFT", "preset.list.prev", "hold"),
-                   Binding("hat:RIGHT", "preset.list.next", "hold"),
+                   Binding("hat:W", "preset.list.prev", "hold"),
+                   Binding("hat:E", "preset.list.next", "hold"),
                    Binding("pad:MENU", "preset.save_new", "hold"),
-                   Binding("hat:UP", "view.bright", "step", 3)]
+                   Binding("hat:N", "view.bright", "step", 3)]
 
 
 def test_the_new_row_reaches_an_existing_bindings_json_once(tmp_path, capsys):
@@ -579,17 +587,17 @@ def test_the_new_row_reaches_an_existing_bindings_json_once(tmp_path, capsys):
     and the next load finds nothing to do and leaves no second copy. Not a
     schema move: the file's schema stays."""
     path = tmp_path / "bindings.json"
-    Bindings(THE_LAST_LAYOUT, path=path).write()
+    _older(THE_LAST_LAYOUT, path)
     before, schema = path.read_text(), json.loads(path.read_text())["schema"]
     t = Bindings.load(path, legacy_midi=None)
     rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
     assert rows["pad:VIEW"] == (CHASE_PARAM, "momentary")
-    assert "hat:LEFT" not in rows and "hat:RIGHT" not in rows and "pad:MENU" not in rows
-    assert rows["hat:UP"] == ("view.bright", "step")
+    assert "hat:W" not in rows and "hat:E" not in rows and "pad:MENU" not in rows
+    assert rows["hat:N"] == ("view.bright", "step")
     assert ("removed pad:MENU → preset.save_new (the pad layout of 2026-11-04: "
             "the button is free)") in t.notes
     assert "remapped pad:VIEW: tempo.tap → deck.chase (the pad layout of 2026-11-04)" in t.notes
-    assert ("removed hat:LEFT → preset.list.prev (the pad layout of 2026-11-04: "
+    assert ("removed hat:W → preset.list.prev (the pad layout of 2026-11-04: "
             "the button is free)") in t.notes
     baks = list(tmp_path.glob("bindings.json.bak-*"))
     assert len(baks) == 1 and baks[0].read_text() == before
@@ -607,7 +615,7 @@ def test_a_deleted_chase_row_stays_deleted(tmp_path):
     """No pad row is added to a file: one with nothing on BACK or START is one
     where the owner took it off, and the next load does not put it back."""
     path = tmp_path / "bindings.json"
-    Bindings(THE_LAST_LAYOUT, path=path).write()
+    _older(THE_LAST_LAYOUT, path)
     t = Bindings.load(path, legacy_midi=None)
     t.remove(next(b for b in t.bindings if b.source == "pad:VIEW"))
     t.write()
@@ -622,10 +630,10 @@ def test_a_qualified_row_on_back_is_the_owners(tmp_path):
     does not know which role is primary (`Bindings.primaries` comes later), so
     `pad@…` and `hat@…` rows are the owner's, whatever they say, and stay."""
     mine = [Binding("pad@pad:VIEW", "tempo.tap", "fire"),
-            Binding("hat@pad:LEFT", "preset.list.prev", "hold"),
+            Binding("hat@pad:W", "preset.list.prev", "hold"),
             Binding("pad@p2:VIEW", "view.lines", "toggle")]
     path = tmp_path / "bindings.json"
-    Bindings(mine, path=path).write()
+    _older(mine, path)
     t = Bindings.load(path, legacy_midi=None)
     rows = {b.source: b.target for b in t.of("pad", "hat")}
     assert {b.source for b in mine} <= set(rows) and "pad:VIEW" not in rows
@@ -641,7 +649,7 @@ def test_a_row_the_owner_put_on_back_is_left_alone(tmp_path, mine):
     """A row that is not the old factory row, tempo.tap learned by hand
     among them, stays, and this pad has no chase until it is Learned."""
     path = tmp_path / "bindings.json"
-    Bindings([mine, Binding("pad:MENU", "preset.save_new", "hold")], path=path).write()
+    _older([mine, Binding("pad:MENU", "preset.save_new", "hold")], path)
     t = Bindings.load(path, legacy_midi=None)
     rows = [b for b in t.of("pad") if b.source == "pad:VIEW"]
     assert [(b.target, b.op, b.value) for b in rows] == [(mine.target, mine.op, mine.value)]
@@ -652,32 +660,37 @@ def test_a_row_the_owner_put_on_back_is_left_alone(tmp_path, mine):
 def test_a_d_pad_row_the_owner_changed_stays(tmp_path):
     """Exact rows only: the list on ← by Learn pad (fire), or on another
     button, is the owner's, and survives as many loads as it likes."""
-    mine = [Binding("hat:LEFT", "preset.list.prev", "fire", 0.0),
-            Binding("hat:RIGHT", "camera.reset", "hold"),
+    mine = [Binding("hat:W", "preset.list.prev", "fire", 0.0),
+            Binding("hat:E", "camera.reset", "hold"),
             Binding("pad:MENU", "preset.save_new", "hold", 0.0),
             Binding("pad:LP", "preset.list.next", "hold"),
-            Binding("hat:DOWN", "preset.list.next", "hold"),
-            Binding("hat:UP", "preset.list.prev", "hold", 0.0)]      # value 0: not the old row
+            Binding("hat:S", "preset.list.next", "hold"),
+            Binding("hat:N", "preset.list.prev", "hold", 0.0)]      # value 0: not the old row
     path = tmp_path / "bindings.json"
-    Bindings(mine, path=path).write()
+    _older(mine, path)
     for _ in range(2):
         t = Bindings.load(path, legacy_midi=None)
         rows = {b.source: (b.target, b.op) for b in t.of("pad", "hat")}
-        assert rows["hat:LEFT"] == ("preset.list.prev", "fire")
-        assert rows["hat:RIGHT"] == ("camera.reset", "hold")
+        assert rows["hat:W"] == ("preset.list.prev", "fire")
+        assert rows["hat:E"] == ("camera.reset", "hold")
         assert rows["pad:MENU"] == ("preset.save_new", "hold")
         assert rows["pad:LP"] == ("preset.list.next", "hold")
-        assert rows["hat:DOWN"] == ("preset.list.next", "hold")
-        assert rows["hat:UP"] == ("preset.list.prev", "hold")
+        assert rows["hat:S"] == ("preset.list.next", "hold")
+        assert rows["hat:N"] == ("preset.list.prev", "hold")
     # and the exact old row, by whatever hand, is the old row: the file can't say whose
-    Bindings([Binding("hat:RIGHT", "preset.list.next", "hold"),
-              Binding("hat:LEFT", "preset.list.prev", "hold", 0.0)], path=path).write()
+    _older([Binding("hat:E", "preset.list.next", "hold"),
+            Binding("hat:W", "preset.list.prev", "hold", 0.0)], path)
     rows = {b.source: b.target for b in Bindings.load(path, legacy_midi=None).of("hat")}
-    assert "hat:RIGHT" not in rows and rows["hat:LEFT"] == "preset.list.prev"
+    assert "hat:E" not in rows and rows["hat:W"] == "preset.list.prev"
+    # plan 57 (row 723): a file this build wrote says which layouts it has seen, so the same
+    # row written by hand since then is the owner's, and stays
+    Bindings([Binding("hat:E", "preset.list.next", "hold")], path=path).write()
+    rows = {b.source: b.target for b in Bindings.load(path, legacy_midi=None).of("hat")}
+    assert rows["hat:E"] == "preset.list.next"
 
 
-@pytest.mark.parametrize("pid,source", [("preset.list.next", "hat:RIGHT"),
-                                        ("preset.list.prev", "hat:LEFT"),
+@pytest.mark.parametrize("pid,source", [("preset.list.next", "hat:E"),
+                                        ("preset.list.prev", "hat:W"),
                                         ("tempo.tap", "pad:VIEW"),
                                         ("tempo.tap", "pad:LP")])
 def test_learn_can_put_them_back_and_a_reload_leaves_them(rig, pid, source):
@@ -737,9 +750,9 @@ def test_every_pad_has_back_but_the_right_joycon():
 
 
 def test_the_totem_skipping_a_learned_row_leaves_backs_press_alone(rig):
-    """A skip lets go only of what the skipped button holds: with `pad:A` on
+    """A skip lets go only of what the skipped button holds: with `pad:S` on
     the chase too and A in the totem's SKIP, BACK still works."""
-    rig.table.add(Binding("pad:A", CHASE_PARAM, "momentary"))
+    rig.table.add(Binding("pad:S", CHASE_PARAM, "momentary"))
     pad, r = ScriptedPad(), rig.router
     for now in (0.0, 0.1):
         pad.frame(held={gp.VIEW})
@@ -758,7 +771,7 @@ def test_the_totem_skipping_a_learned_row_leaves_backs_press_alone(rig):
 
 
 def test_two_buttons_on_the_chase_hold_it_until_the_last_lets_go(rig):
-    rig.table.add(Binding("pad:Y", CHASE_PARAM, "momentary"))
+    rig.table.add(Binding("pad:N", CHASE_PARAM, "momentary"))
     pad, r = ScriptedPad(), rig.router
     pad.frame(held={gp.VIEW})
     r.pad(pad, now=0.0)

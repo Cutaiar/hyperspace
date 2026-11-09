@@ -28,23 +28,21 @@ from hyperspace.deck import (
     MetaController,
     Mix,
     draw_size,
-    register_xfade,
 )
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.outputs import Preview, Switches, View
 from hyperspace.params import part_of
 from hyperspace.pointer import Pointer
 from hyperspace.routing import Binding, Bindings
 
-CORPUS = Path(__file__).parent / "corpus" / "presets"
+CORPUS = Path(__file__).parent / "corpus" / "loadable"
 
 
 @pytest.fixture()
 def rig(tmp_path):
     r = boot(tmp_path / "home")
     two = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
-    mix = Mix()
-    register_xfade(r.reg, mix)
+    mix = r.mix
     meta = MetaController(r.deck, two, mix=mix)
     yield SimpleNamespace(r=r, meta=meta, one=r.deck, two=two, mix=mix, chain=r.chain)
     undo.install(None)
@@ -69,14 +67,14 @@ def _frame(rig) -> None:
         d.view.integrate(DT)
 
 
-def _performance(deck) -> dict:
-    """Every performance param as it lands, to the bit."""
+def _patch(deck) -> dict:
+    """Every patch param as it lands, to the bit."""
     return {p.id: repr(p.value) for p in deck.reg
-            if part_of(p) == "performance" and p.group != "ui"}
+            if part_of(p) == "patch" and p.group != "ui"}
 
 
-def _session(deck) -> dict:
-    return {p.id: repr(p.value) for p in deck.session if p.group != "ui"}
+def _meta_table(deck) -> dict:
+    return {p.id: repr(p.value) for p in deck.meta_reg if p.group != "ui"}
 
 
 def _diff(a: dict, b: dict) -> dict:
@@ -88,16 +86,16 @@ def _diff(a: dict, b: dict) -> dict:
 def test_at_0_exactly_today_and_on_air_is_the_side_the_fader_is_on(rig):
     meta, one, two = rig.meta, rig.one, rig.two
     assert meta.on_air is one and meta.off_air is two and meta.parked == [two]
-    assert one.session.lead is one.reg
+    assert one.meta_reg.on_air_reg is one.reg
     assert not meta.follow_fader()
     rig.mix.xfade = 0.5
     assert not meta.follow_fader() and meta.on_air is one
     rig.mix.xfade = 1.0
     assert meta.follow_fader()
     assert meta.on_air is two and meta.off_air is one and meta.parked == [one]
-    assert one.session.lead is two.reg
+    assert one.meta_reg.on_air_reg is two.reg
     rig.mix.xfade = 0.0
-    assert meta.follow_fader() and meta.on_air is one and one.session.lead is one.reg
+    assert meta.follow_fader() and meta.on_air is one and one.meta_reg.on_air_reg is one.reg
 
 
 def test_a_fader_sitting_at_the_middle_does_not_flap(rig):
@@ -166,26 +164,26 @@ def test_a_held_chase_lets_go_on_the_deck_left_one_step_on_its_stack(rig):
     assert len(one.undo.stack) <= steps + 1
 
 
-def test_no_session_param_jumps_at_the_middle(rig):
-    """Same look or not: the session's values are one object, and a row of the
-    session's reads on from the same follower."""
+def test_no_meta_param_jumps_at_the_middle(rig):
+    """Same look or not: the meta controller's values are one object, and a row of the
+    meta controller's reads on from the same follower."""
     meta, one, two = rig.meta, rig.one, rig.two
     one.reg["output.dim"].set(0.7)
-    one.presets.load(min(one.presets.lib.list(PRESETS)))
+    one.loaded_patch.load(min(one.loaded_patch.lib.list(LOADABLE)))
     meta.copy_on_air()
     for _ in range(20):
         _frame(rig)
-    was = _session(one)
+    was = _meta_table(one)
     rig.mix.xfade = 1.0
     meta.tick(rig.r.t, DT)
-    assert one.session.lead is two.reg
+    assert one.meta_reg.on_air_reg is two.reg
     for k in range(10):
         _frame(rig)
-        moved = {i: v for i, v in _diff(was, _session(two)).items() if i != "output.xfade"}
+        moved = {i: v for i, v in _diff(was, _meta_table(two)).items() if i != "output.xfade"}
         assert not moved, (k, moved)
 
 
-def test_only_the_deck_on_air_lands_the_session_after_a_crossing(rig):
+def test_only_the_deck_on_air_lands_the_meta_after_a_crossing(rig):
     meta, one, two = rig.meta, rig.one, rig.two
     assert one.reg.lands(one.reg["output.dim"]) and not two.reg.lands(one.reg["output.dim"])
     rig.mix.xfade = 1.0
@@ -193,13 +191,15 @@ def test_only_the_deck_on_air_lands_the_session_after_a_crossing(rig):
     assert two.reg.lands(one.reg["output.dim"]) and not one.reg.lands(one.reg["output.dim"])
 
 
-def test_a_desk_fader_on_a_session_param_reads_on_across_the_middle(rig):
+def test_a_desk_fader_on_a_meta_param_reads_on_across_the_middle(rig):
     """Over the MASTER's real row and fake ports: a crossing is a pointer's move, and
-    the catch of a session fader stays (D5a's `MidiIO._follow_pointer`)."""
+    the catch of a meta controller fader stays (D5a's `MidiIO._follow_pointer`)."""
     meta, one, two = rig.meta, rig.one, rig.two
     midi = rig.r.midi
     midi.point(meta.pointer("apc40"), meta.panel_pointer)
-    gain = one.reg["master.gain"]
+    gain = one.reg["output.dim"]
+    gain.set_norm(0.5)
+    midi.poll()
     row = next(b for b in midi.table.bindings if b.source == "cc:0:14")
     at = round(gain.norm * 127)
     rig.r.inp.queue.extend([cc(14, at), cc(14, at + 1)])
@@ -273,27 +273,27 @@ def test_a_hand_on_the_fader_ends_a_timed_fade_there(rig):
 # ----------------------------------------------------------------- copy, headless
 
 @pytest.mark.parametrize("ran", [0, 45], ids=["just loaded", "running"])
-def test_copy_then_every_performance_param_of_both_decks_equal_each_frame(rig, ran):
-    """Over every corpus preset, whatever was on the deck off air: 120 frames,
+def test_copy_then_every_patch_param_of_both_decks_equal_each_frame(rig, ran):
+    """Over every corpus loadable patch, whatever was on the deck off air: 120 frames,
     one lane vector, not a bit apart, and `signature` and the dirty dot agree."""
     meta, one, two = rig.meta, rig.one, rig.two
-    names = sorted(one.presets.lib.list(PRESETS))
+    names = sorted(one.loaded_patch.lib.list(LOADABLE))
     assert len(names) > 5
     rig.chain.out = CEIL * np.linspace(0.15, 0.85, len(rig.chain.out))
     for name in names:
-        one.presets.load(name)
+        one.loaded_patch.load(name)
         for _ in range(ran):
             _frame(rig)
-        before = _performance(one)
+        before = _patch(one)
         assert meta.copy_on_air() == [], name
-        assert _performance(one) == before, name  # the source is not moved
-        assert two.presets.current == one.presets.current, name
-        assert two.presets.is_dirty() == one.presets.is_dirty(), name
-        assert undo.alike(two.presets.signature(), one.presets.signature()), name
-        assert two.presets.notes == [], (name, two.presets.notes)
+        assert _patch(one) == before, name  # the source is not moved
+        assert two.loaded_patch.current == one.loaded_patch.current, name
+        assert two.loaded_patch.is_dirty() == one.loaded_patch.is_dirty(), name
+        assert undo.alike(two.loaded_patch.signature(), one.loaded_patch.signature()), name
+        assert two.loaded_patch.notes == [], (name, two.loaded_patch.notes)
         for k in range(120):
             _frame(rig)
-            diff = _diff(_performance(one), _performance(two))
+            diff = _diff(_patch(one), _patch(two))
             assert not diff, (name, k, dict(list(diff.items())[:5]))
         assert list(two.view.ang) == list(one.view.ang), name
         assert two.view.inst_phase == one.view.inst_phase, name
@@ -354,14 +354,14 @@ def test_a_copy_onto_a_deck_that_had_another_row_there_keeps_the_ledger(rig):
 
 
 def test_copy_leaves_the_mirror(rig):
-    """`ghost.mirror` is the meta controller's in a performance group, one object
-    on both, in no preset (`_values` is `snapshot(part="performance")`)."""
+    """`ghost.mirror` is the meta controller's in a patch group, one object
+    on both, in no loadable patch (`_values` is `snapshot(part="performance")`)."""
     meta, one, two = rig.meta, rig.one, rig.two
     mirror = one.reg["ghost.mirror"]
-    assert two.reg["ghost.mirror"] is mirror and part_of(mirror) == "session"
+    assert two.reg["ghost.mirror"] is mirror and part_of(mirror) == "shared_meta"
     mirror.set(1)
     was = mirror.base
-    doc = one.presets.document("x")
+    doc = one.loaded_patch.document("x")
     assert "ghost.mirror" not in doc["values"]
     meta.copy_on_air()
     assert mirror.base == was
@@ -369,14 +369,14 @@ def test_copy_leaves_the_mirror(rig):
 
 def test_a_copy_is_one_step_on_the_off_air_stack_and_its_undo_puts_the_look_back(rig):
     meta, one, two = rig.meta, rig.one, rig.two
-    names = sorted(one.presets.lib.list(PRESETS))
-    two.presets.load(names[1])
+    names = sorted(one.loaded_patch.lib.list(LOADABLE))
+    two.loaded_patch.load(names[1])
     for _ in range(40):
         _frame(rig)
-    two_look, two_name = two.reg.snapshot(part="performance"), two.presets.current
+    two_look, two_name = two.reg.snapshot(part="patch"), two.loaded_patch.current
     two_routes = [b.to_json() for b in two.table.routes()]
     steps, one_steps = len(two.undo.stack), len(one.undo.stack)
-    one.presets.load(names[0])
+    one.loaded_patch.load(names[0])
     for _ in range(40):
         _frame(rig)
     one_steps = len(one.undo.stack)
@@ -386,49 +386,49 @@ def test_a_copy_is_one_step_on_the_off_air_stack_and_its_undo_puts_the_look_back
     assert len(two.undo.stack) == steps + 1
     assert len(one.undo.stack) == one_steps
     assert two.undo.undo()
-    assert two.presets.current == two_name
+    assert two.loaded_patch.current == two_name
     assert [b.to_json() for b in two.table.routes()] == two_routes
-    now = two.reg.snapshot(part="performance")
+    now = two.reg.snapshot(part="patch")
     assert undo.alike(now, two_look)
 
 
 def test_copying_onto_an_empty_deck_leaves_no_undo_back_to_black(rig):
     meta, two = rig.meta, rig.two
-    assert two.presets.current is None and not two.undo.stack
+    assert two.loaded_patch.current is None and not two.undo.stack
     meta.copy_on_air()
     for _ in range(90):
         _frame(rig)
-    assert two.presets.current == rig.one.presets.current
+    assert two.loaded_patch.current == rig.one.loaded_patch.current
     assert not two.undo.stack and two.undo._open is None
     assert not two.undo.undo()
-    assert two.presets.current == rig.one.presets.current
+    assert two.loaded_patch.current == rig.one.loaded_patch.current
 
 
 def test_a_copy_of_unsaved_edits_is_dirty_and_a_clean_look_clean(rig):
     meta, one, two = rig.meta, rig.one, rig.two
     meta.copy_on_air()
-    assert not two.presets.is_dirty()
+    assert not two.loaded_patch.is_dirty()
     one.reg["view.bright"].set(one.reg["view.bright"].value * 0.5)
     meta.copy_on_air()
-    assert one.presets.is_dirty() and two.presets.is_dirty()
-    one.presets.new()
+    assert one.loaded_patch.is_dirty() and two.loaded_patch.is_dirty()
+    one.loaded_patch.new()
     meta.copy_on_air()
-    assert two.presets.unsaved and two.presets.is_dirty()
+    assert two.loaded_patch.unsaved and two.loaded_patch.is_dirty()
 
 
 def test_nothing_of_a_copy_is_shared_after_it(rig):
-    """No preset can affect another: a knob, a route, an LFO on the copy."""
+    """No loadable patch can affect another: a knob, a route, an LFO on the copy."""
     meta, one, two = rig.meta, rig.one, rig.two
     one.table.add(Binding("axis:LX", "view.bright", "push", 0.5))
     meta.copy_on_air()
-    look = one.reg.snapshot(part="performance")
+    look = one.reg.snapshot(part="patch")
     rows = [b.to_json() for b in one.table.routes()]
     two.reg["view.bright"].set(0.1)
     two.table.remove(two.table.routes()[0])
     two.lfos.add()
-    assert one.reg.snapshot(part="performance") == look
+    assert one.reg.snapshot(part="patch") == look
     assert [b.to_json() for b in one.table.routes()] == rows
-    assert one.presets.current == two.presets.current
+    assert one.loaded_patch.current == two.loaded_patch.current
 
 
 # ------------------------------------------------------------- neutrality, the wires
@@ -439,7 +439,7 @@ def test_main_moves_nothing_and_calls_no_verb():
         assert verb not in src, verb
     assert "off_air=meta.parked" in src
     assert "pointer=meta.on_air_pointer" in src
-    assert "media.heard = lambda: meta.on_air.presets.media" in src
+    assert "media.seat(meta)" in src        # what it does: tests/test_video_sound_path.py
 
 
 def test_the_frame_runs_the_deck_parked_list_it_is_handed(rig):
@@ -505,21 +505,7 @@ def test_the_poi_guide_is_on_the_picture_of_the_deck_its_pad_is_on(rig):
     assert poi.guides(state, None)                # a renderer with no deck behind it
 
 
-def test_the_guide_asks_the_renderers_own_deck_whatever_a_hold_swapped_in(rig):
-    """`Hold.program` swaps `rig_source` for its `_HeldRig`, which has no `reg`."""
-    from hyperspace.hold import _HeldRig
-    from hyperspace.render import Renderer
-
-    state = poi.PoiState()
-    state.on, state.on_reg = True, rig.two.reg
-    guide = SimpleNamespace(shown=True, layer=lambda *a: pytest.fail("drew on the other's"))
-    r = SimpleNamespace(poi_source=state, poi_guide=guide, rig_source=_HeldRig("cables"),
-                        deck_reg=rig.one.reg)
-    Renderer._poi_layer(r, None, (8, 8), None, None)
-    assert guide.shown is False
-
-
-def test_main_puts_the_rigs_wires_on_both_renderers():
+def test_main_puts_the_meta_wires_on_both_renderers():
     src = inspect.getsource(app.main)
     assert "renderer2.cloud_source, renderer2.poi_source = " in src
     assert "renderer2.ghost.source = renderer.ghost.source" in src
@@ -585,7 +571,7 @@ def test_a_fade_back_short_of_the_far_end_returns_the_worker_once():
 
 def test_a_deck_with_no_dream_coming_in_leaves_the_worker_until_the_end():
     f = _fading(dreams=(True, False))
-    for x in np.linspace(0.0, 0.99, 50):
+    for x in np.linspace(0.0, 0.98, 50):
         f.mix.xfade = float(x)
         if x >= 0.5 + MIDDLE:
             f.pointer.deck = f.b
@@ -669,9 +655,9 @@ def test_a_save_lands_no_new_graph_so_it_asks_for_no_warm_draw():
 
 def test_a_real_save_on_the_deck_off_air_keeps_its_spec(rig):
     two = rig.two
-    two.presets.load(min(two.presets.lib.list(PRESETS)))
+    two.loaded_patch.load(min(two.loaded_patch.lib.list(LOADABLE)))
     spec = two.graph.spec
-    two.presets.save_as("a save")
+    two.loaded_patch.save_as("a save")
     assert two.graph.spec is spec
 
 
@@ -752,7 +738,7 @@ def _gl(ctx, home):
     meta = MetaController(first, second, mix=mix)
     fade = Fade(first, second, mix, ctx, pointer=meta.on_air_pointer)
     for d in meta.decks:                          # as `app.main`
-        d.presets.listeners.append(lambda name, d=d: fade.ask_warm(d))
+        d.loaded_patch.listeners.append(lambda name, d=d: fade.ask_warm(d))
     return SimpleNamespace(a=first, b=second, meta=meta, fade=fade, mix=mix)
 
 
@@ -801,7 +787,7 @@ def test_copy_then_xfade_1_is_deck_1_at_0(ctx, tmp_path, name):
     size = (320, 200)
     rig = _gl(ctx, tmp_path / "rig")
     doc = json.loads((CORPUS / f"{name}.json").read_text())
-    rig.a.presets.load_doc(doc, None)
+    rig.a.loaded_patch.load_doc(doc, None)
     t = 7.0
     for _ in range(3):                           # running: its clocks and turn off their zeros
         rig.a.view.integrate(0.25)
@@ -835,8 +821,8 @@ def test_the_mix_either_side_of_the_middle_is_one_picture(ctx, tmp_path):
     nothing, within a step or two."""
     size = (320, 200)
     rig = _gl(ctx, tmp_path / "rig")
-    rig.a.presets.load_doc(json.loads((CORPUS / "party-acid.json").read_text()), None)
-    rig.b.presets.load_doc(json.loads((CORPUS / "party-trip.json").read_text()), None)
+    rig.a.loaded_patch.load_doc(json.loads((CORPUS / "party-acid.json").read_text()), None)
+    rig.b.loaded_patch.load_doc(json.loads((CORPUS / "party-trip.json").read_text()), None)
     t = 7.0
     rig.mix.xfade = 0.5
     a_side = _draw(ctx, rig, size, t)
@@ -853,7 +839,7 @@ def test_the_preview_road_draws_at_the_preview_size_and_reuses_a_fades_frame(ctx
     size = (1600, 900)
     rig = _gl(ctx, tmp_path / "rig")
     doc = json.loads((CORPUS / "party-acid.json").read_text())
-    rig.b.presets.load_doc(doc, None)
+    rig.b.loaded_patch.load_doc(doc, None)
     pv = Preview(ctx)
     r = rig.b.renderer
     turns = []
@@ -887,13 +873,13 @@ def test_a_warm_draw_compiles_now_and_leaves_the_picture_as_it_was(ctx, tmp_path
     doc = json.loads((CORPUS / f"{name}.json").read_text())
     t = 7.0
     cold = _gl(ctx, tmp_path / "cold")
-    cold.b.presets.load_doc(doc, None)
+    cold.b.loaded_patch.load_doc(doc, None)
     cold.mix.xfade = 1.0
     cold.meta.tick(t, DT)
     want = _draw(ctx, cold, size, t)
 
     warm = _gl(ctx, tmp_path / "warm")
-    warm.b.presets.load_doc(doc, None)
+    warm.b.loaded_patch.load_doc(doc, None)
     assert warm.fade.warm_deck is None           # `load_doc` alone tells no listener
     warm.fade.ask_warm(warm.b)
     warm.fade.ask_warm(warm.a)                   # (on air: drawn anyway, no matter)

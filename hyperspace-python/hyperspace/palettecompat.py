@@ -58,7 +58,7 @@ def _sub_target(s: dict) -> str:
 
 
 def palette_slice(doc: dict) -> tuple[dict, list[str]]:
-    """`doc` (a whole preset, or an `fx` module preset) with its palette ids
+    """`doc` (a whole loadable patch, or an `fx` module preset) with its palette ids
     in the slice's form. Returns (a copy, notes); the document itself and
     no notes when it names no old id."""
     values = doc.get("values") if isinstance(doc.get("values"), dict) else {}

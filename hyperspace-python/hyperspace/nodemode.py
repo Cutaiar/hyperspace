@@ -31,10 +31,10 @@ params stays, the rest fill what is left, and there is no paging: a param with n
 freedom left is `Fit.over`, listed, as a node with too many params. A pair of
 discrete controls is one degree of freedom (`gamepad.degrees_of_freedom`). You
 enter with a node selected and a node with no params cannot be entered
-(`enter_refusal`). A meta param is no row of a preset's, in node mode as anywhere
+(`enter_refusal`). A meta param is no row of a loadable patch's, in node mode as anywhere
 (`routing.meta_refusal`, row 743).
 
-**Whose it is.** The preset's: `preset.Presets.node_mode`, one per `Deck`, in its
+**Whose it is.** The loadable patch's: `loadable.LoadedPatch.node_mode`, one per `Deck`, in its
 dirty dot and in a load's undo step (`library.Marks`). Who is on which `Deck` is the
 meta controller's: a cable naming a player on another `Deck` is drawn dormant, and
 the file does not change.
@@ -55,12 +55,12 @@ KEY = "node_mode"
 
 BAD_ENTRY = "node mode: an entry that is not a player, a controller and a node, ignored"
 TWICE = "node mode: player {player}'s {controller} points twice, kept {node}"
-NODE_GONE = "node mode: {node} is not in the preset, left out"
+NODE_GONE = "node mode: {node} is not in the patch, left out"
 
 NO_NODE = "select a node first"
 NO_PARAMS = "{node} has no params to point at"
 NO_FILLABLE = "{node} has no param a controller can fill"
-ONLY_META = "{node}'s params are the meta controller's: no row of a preset moves them"
+ONLY_META = "{node}'s params are the meta controller's: no row of a patch moves them"
 TOO_MANY = "{node} has too many params for this controller: {params}"
 
 
@@ -92,7 +92,7 @@ def _entry(raw: Any) -> Pointing | None:
 @dataclass(frozen=True)
 class NodeMode:
     """What a patch points where. Immutable, so an undo mark keeps one by
-    reference (as `graph.RigWires`), and in one order whatever made it, so the
+    reference (as `graph.BusCuts`), and in one order whatever made it, so the
     dirty dot and the file do not depend on the order things were pointed."""
 
     entries: tuple[Pointing, ...] = ()

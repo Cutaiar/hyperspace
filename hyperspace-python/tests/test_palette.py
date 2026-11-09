@@ -21,11 +21,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 from conftest import CORPUS
-from test_presets import boot, put
+from test_loadable import boot, put
 
 from hyperspace import ui_fx
 from hyperspace.fx import FX_DIR, FxChain, FxState, SpecError, parse
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.palettecompat import palette_slice
 from hyperspace.params import Kind
 
@@ -328,7 +328,7 @@ def test_a_full_snapshot_from_before_loads_with_no_note_and_no_dot(tmp_path):
     """What a save on the build before N8 wrote: every performance base,
     the palette's old ids among them at their defaults, the palette off."""
     rig = boot(tmp_path)
-    snap = rig.reg.snapshot(part="performance")
+    snap = rig.reg.snapshot(part="patch")
     old = {k: v for k, v in snap.items()
            if not k.startswith("fx.palette.") or k.rsplit(".", 1)[1] in
            ("on", "mix", "speed", "blend", "order", "target", "mode", "anchors")
@@ -340,8 +340,8 @@ def test_a_full_snapshot_from_before_loads_with_no_note_and_no_dot(tmp_path):
     assert not any(k.endswith(("hue_from", "hue_to", "hue_turn", "_from", "_to"))
                    for k in old if k.startswith("fx.palette."))
     put(rig.home, "before-n8", values=old)
-    assert rig.lib.load(PRESETS, "before-n8") == [] and rig.presets.notes == []
-    assert not rig.lib.is_dirty(PRESETS)
+    assert rig.lib.load(LOADABLE, "before-n8") == [] and rig.loaded_patch.notes == []
+    assert not rig.lib.is_dirty(LOADABLE)
     # (plan 36 T3: the palette off, in no run, is not in the section — so
     # it does not exist, and its old ids are dropped with it, said by none)
     assert "palette" not in rig.reg.fx_state.specs and "fx.palette.on" not in rig.reg
@@ -406,8 +406,8 @@ def test_a_centre_set_outright_becomes_the_turn():
     assert notes == []
 
 
-def test_an_old_preset_loads_as_the_same_slice(tmp_path):
-    """A preset saved with centre 200 / width 60 loads with no note, its
+def test_an_old_loadable_loads_as_the_same_slice(tmp_path):
+    """A loadable patch saved with centre 200 / width 60 loads with no note, its
     palette at 170 → 230, its centre route on the turn and its macro with
     it; the next save writes the new keys only."""
     rig = boot(tmp_path)
@@ -419,15 +419,15 @@ def test_an_old_preset_loads_as_the_same_slice(tmp_path):
         macros={"macro.1": {"label": "hue", "subs": [
             {"depth": {"source": "lane:0", "target": "fx.palette.centre"},
              "from": 0.0, "to": 1.0}]}})
-    assert rig.lib.load(PRESETS, "old-fold") == [] and rig.presets.notes == []
-    assert not rig.lib.is_dirty(PRESETS)
+    assert rig.lib.load(LOADABLE, "old-fold") == [] and rig.loaded_patch.notes == []
+    assert not rig.lib.is_dirty(LOADABLE)
     v = rig.reg.fx_state.values["palette"]
     assert (v["on"], v["hue_from"], v["hue_to"], v["sat_from"]) == (True, 170.0, 230.0, 0.25)
     assert [b.target for b in rig.router.table.routes()
             if b.target.startswith("fx.palette")] == ["fx.palette.hue_turn"]
     assert [s.depth for s in rig.router.table.macros["macro.1"].subs] == [
         ("lane:0", "fx.palette.hue_turn")]
-    saved = rig.presets.document("old-fold")
+    saved = rig.loaded_patch.document("old-fold")
     assert saved["values"]["fx.palette.hue_from"] == 170.0
     assert not any(k.endswith((".centre", ".width", "_lo", "_hi")) for k in saved["values"]
                    if k.startswith("fx.palette"))
@@ -442,7 +442,7 @@ def test_the_fixtures_carry_the_slice(slug):
 
 
 def test_no_corpus_file_names_the_palette():
-    """The base goldens cannot move: no corpus preset (tests/corpus, the
+    """The base goldens cannot move: no corpus loadable patch (tests/corpus, the
     goldens' subjects) turns the palette on."""
     hits = [p for p in CORPUS.rglob("*.json") if "fx.palette" in p.read_text()]
     assert hits == []

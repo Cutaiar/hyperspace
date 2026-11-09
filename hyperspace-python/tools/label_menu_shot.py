@@ -62,7 +62,7 @@ class Hidden:
         load_fonts()
         self.impl = GlfwRenderer(self.win)
         self.r = r = demo.boot()
-        self.panel = panel = Panel(r.control, r.audio, r.view, bank=r.lib.project,
+        self.panel = panel = Panel(r.control, r.audio, r.view, bank=r.lib.install,
                                    registry=r.reg, library=r.lib)
         panel.clock, panel.lfos, panel.router, panel.learn = r.clock, r.lfos, r.router, r.learn
         panel.hands, panel.hand_settings, panel.output = r.hands_io, r.settings, r.output

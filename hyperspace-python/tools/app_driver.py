@@ -15,14 +15,15 @@ them), and ``OUT/frames.json`` lists them with the mouse per frame, for a
 cursor overlay — imgui draws none of its own.
 
 A known start: a fresh home (``--home`` to keep one) seeded with the test
-corpus as the tests' homes are (`conftest.seed`: the corpus presets and
-the party show, opened at launch — an empty home opens an unwired preset
+corpus as the tests' homes are (`conftest.seed`: the corpus loadable patches and
+the party show, opened at launch — an empty home opens an unwired loadable patch
 and a black output), a config with no devices and no dream, the mouse
 parked. ``--empty`` skips the corpus. The panel opens where a fresh home
-opens it (GRAPH, nothing focused): a script focuses the section it wants
-first — ``panel.reg["ui.page"].set(PAGE_KEYS.index("view"))``, a frame or two
-before it looks for a control, or ``d.click("pane.view")`` on the header —
-and loads a preset with ``panel.presets.load(name)`` if it wants another.
+opens it (GRAPH, the pane on the selection): a script shows the section it
+wants first — ``panel.reg["ui.page"].set(PAGE_KEYS.index("view"))``, a frame or
+two before it looks for a control, or a click on its chip (``pane.<key>``, or
+``pane.sections`` and then the menu's row) —
+and loads a loadable patch with ``panel.loaded_patch.load(name)`` if it wants another.
 
 Off the Mac, run it under the virtual display (the cloud session's
 DISPLAY=:99, or ``xvfb-run -a``). The software rasteriser draws what the
@@ -92,13 +93,12 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
     shots: list[dict] = []
     draw = ui.Panel.draw
 
-    def stepped(self, dt, fps):
-        draw(self, dt, fps)
+    def step(panel):
         st["n"] += 1
         if st["done"]:
             return
         if st["action"] is None and st["n"] >= settle:
-            st["action"] = script(d, self)
+            st["action"] = script(d, panel)
         if st["action"] is not None:
             try:
                 next(st["action"])
@@ -110,7 +110,25 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
                 traceback.print_exc()
                 os._exit(1)
 
-    swap = glfw.swap_buffers
+    def stepped(panel, dt, fps):
+        # the class's draw as it is now, so a hot reload's new `Panel` is what runs; a draw
+        # that raises still steps, or a script waiting to report that error never would
+        try:
+            type(panel).draw(panel, dt, fps)
+        finally:
+            step(panel)
+
+    def first_draw(self, dt, fps):
+        # from here on the wrapper is the panel's own, which a re-class leaves in place
+        ui.Panel.draw = draw
+        self.draw = lambda dt, fps: stepped(self, dt, fps)
+        stepped(self, dt, fps)
+
+    swap, destroy = glfw.swap_buffers, glfw.destroy_window
+
+    def destroyed(window):
+        st["windows"].pop(ctypes.addressof(window.contents), None)    # (a display went: SC3b)
+        destroy(window)
 
     def captured(window):
         st["windows"][ctypes.addressof(window.contents)] = window
@@ -130,13 +148,17 @@ def run(script, out: Path, every: int = 2, home: Path | None = None, settle: int
                               "mouse": list(d.mouse)})
         swap(window)
 
-    ui.Panel.draw = stepped
+    ui.Panel.draw = first_draw
     glfw.swap_buffers = captured
+    glfw.destroy_window = destroyed
     sys.argv = sys.argv[:1]         # app.main parses its own flags: these were this tool's
     try:
         app.main()
     finally:
-        ui.Panel.draw, glfw.swap_buffers = draw, swap
+        glfw.swap_buffers = swap
+        glfw.destroy_window = destroy
+        if ui.Panel.draw is first_draw:     # the app never drew
+            ui.Panel.draw = draw
         (out / "frames.json").write_text(json.dumps(shots, indent=0))
     print(f"{len(shots)} frames in {out}; home {home}")
 

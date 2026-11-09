@@ -15,7 +15,7 @@ It never overwrites: a file DEST already has is left alone — identical is
 prints). The machine files (config.toml, bindings.json and its backups, hands.json,
 windows.json, last_show, logs, weights/), the trash, the legacy bindings/
 folder, backups, dot-files and ``.git`` stay behind — and so does a
-``hidden.json`` from before 2026-10-28 (the library has no hidden presets
+``hidden.json`` from before 2026-10-28 (the library has no hidden loadable patches
 any more). Nothing in HOME is deleted or edited, and config.toml is never
 touched.
 """
@@ -60,7 +60,7 @@ def files(root: Path) -> list[Path]:
     for folder in sorted(p for p in root.iterdir() if p.is_dir()):
         if folder.name in SKIP_DIRS or folder.name.startswith("."):
             continue
-        found = _walk(folder) if folder.name == "presets" else sorted(folder.glob("*.json"))
+        found = _walk(folder) if folder.name in ("loadable", "presets") else sorted(folder.glob("*.json"))
         for f in found:
             if f.name.startswith(".") or ".bak-" in f.name or not f.is_file():
                 continue

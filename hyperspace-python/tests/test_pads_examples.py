@@ -1,14 +1,14 @@
 """Plan 42's example patches (docs/plans/assets/42-controllers/patches/)
 are patches this build spawns: the touchpad's and the motion sensors'
-rows are rig rows like a hand's.
+rows are control rows like a hand's.
 
 Every patch in the folder is checked against the real app — the shape
 (`patches.check`), the pad lanes it reads (each one `pads/gesture.py` or
 the pad publishes), each row's target and each value (a param the app's
 own registry has, with the patch's envelope and LFO voices declared) —
-and so are the session's rows beside it (session-rows/<patch>.json): the
+and so are the meta controller's rows beside it (session-rows/<patch>.json): the
 sink rows that drive the pad back, which a patch may not carry (a sink is
-the session's), and the pad-button rows a patch may not hold. Each sink
+the meta controller's), and the pad-button rows a patch may not hold. Each sink
 row names a real channel (`devices.SINKS`) and a param the patch drives,
 and reads through `routing.sink_values` into `devices.pad_effects`.
 
@@ -131,7 +131,7 @@ def test_every_target_and_value_is_a_param_the_app_has(name, reg):
 
 
 @pytest.mark.parametrize("name", [n for n in NAMES if (ROWS / f"{n}.json").is_file()])
-def test_the_session_rows_drive_the_pad_back(name, reg):
+def test_the_meta_rows_drive_the_pad_back(name, reg):
     """Each sink row names a real channel and a param the patch drives (a
     route's target or one of its own), the param continuous (a trigger
     reads 0 out); each pad row a button the pad has, onto a param of the
@@ -201,8 +201,8 @@ def test_spin_spin_reads_the_spin_either_way():
 
 
 def test_the_lab_plays_the_patches_that_ship(reg):
-    """The lab's island: each of its patches and session rows is the file's,
-    word for word, every file with session rows is in it, and each range it
+    """The lab's island: each of its patches and meta rows is the file's,
+    word for word, every file with meta rows is in it, and each range it
     runs a param on is the registry's (kind, ends, log, wrap, choices, the
     fresh home's base)."""
     if not LAB_PAGE.is_file():

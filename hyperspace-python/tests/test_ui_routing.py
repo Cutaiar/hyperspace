@@ -5,7 +5,7 @@ macro scales, the preset strip through the library.
 
 Plan 28 N7: the routes and the modifiers are the GRAPH page's now —
 ROUTING draws a pointer line there in their place, and its desk, macros,
-session and sinks as before. The route rows are ROUTING's own function
+meta controller and sinks as before. The route rows are ROUTING's own function
 still (`ui_routing._row`), drawn by GRAPH's side pane (`ui_graph.route_rows`);
 the tests of a row's widgets draw them there (`rows`).
 """
@@ -18,7 +18,7 @@ from imgui_bundle import imgui
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import routing, ui_graph, ui_presets, ui_routing
+from hyperspace import routing, ui_graph, ui_loadable, ui_routing
 from hyperspace.bands import CEIL
 from hyperspace.learn import LANE_DEPTH
 from hyperspace.library import LibraryError
@@ -60,8 +60,8 @@ def test_routing_page_draws_routes(rig, tmp_path):
     frame(panel)
     frame(panel)
     assert "bindings" not in panel.library.kinds           # no routing-preset strip here
-    assert panel.library.current("presets") is None        # the head: nothing loaded
-    assert not panel.library.is_dirty("presets")
+    assert panel.library.current("loadable") is None        # the head: nothing loaded
+    assert not panel.library.is_dirty("loadable")
 
 
 def test_routing_page_live_lane_draws_ghost_and_bar(rig, tmp_path):
@@ -130,23 +130,23 @@ def _on_disk(tmp_path):
     return Bindings.load(routing.bindings_path(tmp_path), legacy_midi=None)
 
 
-def test_routing_page_edits_change_the_preset_not_bindings_json(rig, tmp_path):
+def test_routing_page_edits_change_the_loadable_not_bindings_json(rig, tmp_path):
     """Plan 13 §3.3: a route deleted, added or edited on the page (or from
-    the context menu) is the loaded preset's — the table changes, the
-    preset's dirty dot moves, and bindings.json is never written."""
+    the context menu) is the loaded patch's — the table changes, the
+    loadable patch's dirty dot moves, and bindings.json is never written."""
     panel, lib = rig.panel, rig.panel.library
-    router = rig.router                             # the one the rig's Presets loads into
+    router = rig.router                             # the one the rig's Loadable patches loads into
     router.table.write()
     path = routing.bindings_path(tmp_path)
     assert router.table.path == path
     before = (path.read_text(), path.stat().st_mtime_ns)
-    lib.load("presets", "BIG BLUE WAVE")
+    lib.load("loadable", "BIG BLUE WAVE")
     frame(panel, "routing")
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     for b in list(router.table.routes()):
         router.table.remove(b)
     frame(panel)
-    assert router.table.routes() == [] and lib.is_dirty("presets")
+    assert router.table.routes() == [] and lib.is_dirty("loadable")
     b = ui_routing.add_route(panel, "view.bright")   # the context menu's add, page unseen
     assert [x.target for x in router.table.routes()] == ["view.bright"]
     b.value = -0.25
@@ -157,7 +157,7 @@ def test_routing_page_edits_change_the_preset_not_bindings_json(rig, tmp_path):
 
 
 def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
-    """One performer per target: a preset's second owner is listed as
+    """One performer per target: a loadable patch's second owner is listed as
     dropped until the next edit; adding a route on an owned target raises
     the prompt and leaves the table alone until it is answered; a new
     push row has no rest of its own (it rests where its source does); one
@@ -190,7 +190,7 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
     frame(panel)
     assert [x.target for x in router.table.routes()] == [
         "view.bright", "view.speed", "view.depth4"]
-    assert not routing.bindings_path(tmp_path).exists()                   # the preset's, no file
+    assert not routing.bindings_path(tmp_path).exists()                   # the loadable patch's, no file
     # the row's checkbox goes through the referee too: waking a row onto
     # a taken target leaves it off and says why
     off = router.table.add(Binding("hand:3", "view.speed", "push", 0.2, enabled=False))
@@ -203,7 +203,7 @@ def test_the_routing_page_shows_the_referees_refusals(rig, tmp_path):
 def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, monkeypatch):
     """Plan 09 WP5, exit criterion 3 without the mouse: a second performer
     on a target is a question, not an error. *Replace* swaps the owner (in
-    the loaded preset — no file is written, plan 13 §3.3); *Keep* leaves
+    the loaded patch — no file is written, plan 13 §3.3); *Keep* leaves
     the table untouched. The same modal
     serves the page's own edits (add, a retarget, a row waking up) and a
     hand learn the shared `Learn` is holding in `pending` — no MIDI adapter
@@ -260,7 +260,7 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, m
     writes, real_write = [], table.write
     monkeypatch.setattr(table, "write", lambda: (writes.append(1), real_write()))
     ui_routing.answer(panel, True)                                     # Replace: the axis moves
-    assert writes == []                                                # the preset's: no file
+    assert writes == []                                                # the loadable patch's: no file
     got = table.owner("view.bright")
     assert got.source == "hand:1" and cur not in table.bindings
     assert not table.routes_to("view.speed")                           # one axis, one param
@@ -341,7 +341,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
     panel, reg = rig.panel, rig.reg
     table = rig.router.table
     with_patch(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     frame(panel, "graph")
     lrn = panel.learn = Learn(reg, table)
     lrn.arm("view.speed")
@@ -352,7 +352,7 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
                                                                "view.bright")
     assert ui_routing.sheet_title(panel, landing) == "spawn acid wash into TRIP"   # (its name)
     assert ui_routing.sheet_wants(panel, landing) == [
-        "apc40 (not in this rig): K1", "leap (not in this rig): right hand y"]
+        "apc40 (not set up on this Mac): K1", "leap (not set up on this Mac): right hand y"]
     frame(panel)
     st = ui_routing._state(panel)
     assert st["modal"] and st["sheet"]
@@ -374,10 +374,10 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
         assert not lrn.held and lrn.accepts("hand:right.x")
         assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["view.bright"]
         assert not [b for b in table.bindings if b.target == "fx.acid.speed" and b.is_midi]
-        (g,) = rig.lib.presets.groups
+        (g,) = rig.lib.loaded_patch.groups
         (kept,) = g["kept_by_host"]
-        assert graphview.kept_words(kept) == "K1 kept by the preset"
-        assert "1 row kept by the preset" in ui_graph._state(panel)["said"]
+        assert graphview.kept_words(kept) == "K1 kept by the loadable patch"
+        assert "1 row kept by the loadable patch" in ui_graph._state(panel)["said"]
         frame(panel)
         assert not ui_routing._state(panel)["modal"]
         # a second spawn, cancelled: nothing lands, no step
@@ -402,7 +402,7 @@ def test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it(rig, monkeypa
     from hyperspace import ui
     panel, table = rig.panel, rig.router.table
     with_patch(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     frame(panel, "graph")
     old = Binding("lfo:0", "view.speed", "push", 0.5)
     new = Binding("lfo:1", "view.speed", "push", 0.5)
@@ -532,14 +532,14 @@ def _drawn(monkeypatch) -> tuple[list[str], list[str]]:
     return texts, previews
 
 
-def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monkeypatch):
-    """Plan 13 decision 13: the page is the loaded preset — the head names
+def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, monkeypatch):
+    """Plan 13 decision 13: the page is the loaded patch — the head names
     it (its dot, the layer, the last learn — a refusal among them — and the
     desk rows its load dropped), then its routes, its desk (each row, and
-    each preset control it leaves dark), its macros with their subscribers
-    (a param two macros set marked), and the session's rows read-only. An
-    edit on the page marks the preset dirty and writes no file."""
-    from test_presets import put
+    each loadable patch control it leaves dark), its macros with their subscribers
+    (a param two macros set marked), and the meta controller's rows read-only. An
+    edit on the page marks the loadable patch dirty and writes no file."""
+    from test_loadable import put
 
     from hyperspace.learn import Learn
 
@@ -559,15 +559,15 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
                     {"depth": {"source": "hand:7", "target": "view.bright"},
                      "from": 0.0, "to": 1.0}]},
                 "macro.2": {"subs": [{"base": "view.depth4", "from": 1.0, "to": 0.0}]}})
-    lib.load("presets", "SHOW")
+    lib.load("loadable", "SHOW")
     panel.learn = Learn(reg, table)
-    panel.learn.refuse("MASTER fader is invariant (the session's) — not learned")
+    panel.learn.refuse("MASTER fader is invariant (the meta controller's) — not learned")
     texts, previews = _drawn(monkeypatch)
     frame(panel, "routing")
     frame(panel)
     # the head
-    assert "SHOW" in texts and "DESK LAYER: PRESET" in texts and "●" not in texts
-    assert "learn: MASTER fader is invariant (the session's) — not learned" in texts
+    assert "SHOW" in texts and "DESK LAYER: PATCH" in texts and "●" not in texts
+    assert "learn: MASTER fader is invariant (the meta controller's) — not learned" in texts
     assert any(t.startswith("desk: dropped cc:0:14 → view.bright") and "invariant" in t
                for t in texts)
     assert "bindings" not in lib.kinds                         # no routing-preset strip
@@ -578,21 +578,21 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert "view.bright" in previews and "× macro.1" in texts
     # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
     # scene launch 5), and the controls it leaves dark
-    assert {"DESK  ·  PRESET LAYER", "D1", "G5·9"} <= set(texts)
+    assert {"DESK  ·  PATCH LAYER", "D1", "G5·9"} <= set(texts)
     assert "device knob 1" not in texts                        # Akai's name: the tooltip
     assert {"view.speed", "view.points"} <= set(previews)
     assert "K1" in texts and "unmapped — dark" in texts
     dark = [f.source for f in ui_routing.unmapped(table)]
     assert "cc:0:48" in dark and "cc:*:16" not in dark and "cc:0:14" not in dark
-    assert "cc:0:7" in dark          # S1: the preset's since plan 24 C2, and this one maps none
+    assert "cc:0:7" in dark          # S1: the loadable patch's since plan 24 C2, and this one maps none
     # the macros: both subscribers, the shared param marked on both lines
     assert "view.depth4" in previews and any(p.endswith("→ view.bright") for p in previews)
     assert texts.count("shared") >= 2
     assert ui_routing.shared_bases(table) == {"view.depth4": ["macro.1", "macro.2"]}
-    # the session, read-only
-    assert "the session's — edit bindings.json" in texts
+    # the meta controller, read-only
+    assert "its own rows — edit bindings.json" in texts
     assert {"S1", "band.0.post", "⇧", "desk.shift", "band.sel.trim"} <= set(texts)
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     # an edit on the page: a subscriber's `to` dragged
     real = imgui.slider_float
     hit = []
@@ -606,11 +606,11 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     monkeypatch.setattr(imgui, "slider_float", drag)
     frame(panel)
     assert table.macros["macro.1"].subs[0].hi == pytest.approx(0.9)
-    assert lib.is_dirty("presets")
+    assert lib.is_dirty("loadable")
     texts.clear()
     frame(panel)
     # the head's dot: a disc since plan 19 WP5, no longer the "●" glyph
-    assert "head.dot" in ui_presets._state(panel)["rects"]
+    assert "head.dot" in ui_loadable._state(panel)["rects"]
     assert (path.read_text(), path.stat().st_mtime_ns) == before   # no file written
     # SHIFT latched: the head says so
     table.set_layer("global")
@@ -632,53 +632,53 @@ def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
 
 
 def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
-    """Was test_routing_presets_step_load_save: the routing presets' kind is
-    gone (plan 13 WP5) and what it held is presets — stepped, loaded, saved
+    """Was test_routing_presets_step_load_save: the routing loadable patches' kind is
+    gone (plan 13 WP5) and what it held is loadable patches — stepped, loaded, saved
     and deleted on the one preset strip's library group, the routes with
-    the rest of the preset."""
+    the rest of the loadable patch."""
     panel, lib = rig.panel, rig.panel.library
-    router = rig.router                             # the one the rig's Presets loads into
+    router = rig.router                             # the one the rig's Loadable patches loads into
     frame(panel, "routing")
-    assert lib.kinds == ("patches", "presets")     # plan 40 T1: patches are spawned
-    listing = lib.list("presets")
+    assert lib.kinds == ("patches", "playlists", "loadable")     # plan 40 T1: patches are spawned
+    listing = lib.list("loadable")
     assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(listing)
-    assert [k for k in lib.load("presets", "lfo-breathe")
+    assert [k for k in lib.load("loadable", "lfo-breathe")
             if not k.startswith(("env.", "seq."))] == []  # (plan 36 T3: the `/7`'s envelope ids, this rig has none)
     assert rig.reg["lfo.1.sync"].value == 3         # lfo-breathe lands its bases: 1 bar
-    assert lib.next("presets") == listing[listing.index("lfo-breathe") + 1]
-    lib.load("presets", "legacy6")
+    assert lib.next("loadable") == listing[listing.index("lfo-breathe") + 1]
+    lib.load("loadable", "legacy6")
     assert rig.view.pattern_mod[0] == 1.0           # legacy6 lands its bases (1: plan 22 B3)
-    assert not lib.is_dirty("presets")
+    assert not lib.is_dirty("loadable")
     frame(panel)
-    # an edit dirties; save as writes the whole preset to the user folder
+    # an edit dirties; save as writes the whole loadable patch to the user folder
     router.table.add(Binding("lane:2", "view.bright", "push", 0.3))
-    assert lib.is_dirty("presets")
+    assert lib.is_dirty("loadable")
     frame(panel)
-    path = lib.save_as("presets", "My Routes")
-    assert path == tmp_path / "presets" / "my-routes.json"
+    path = lib.save_as("loadable", "My Routes")
+    assert path == tmp_path / "loadable" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/10" and len(doc["routes"]) == 13
-    assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
+    assert doc["schema"] == "hyperspace.loadable/11" and len(doc["routes"]) == 13
+    assert lib.current("loadable") == "My Routes" and not lib.is_dirty("loadable")
     frame(panel)
-    # another preset back: the user route goes, the inputs stay
+    # another loadable patch back: the user route goes, the inputs stay
     inputs = ("key", "pad", "hat", *routing.MIDI_SCHEMES)
     n_inputs = len(router.table.of(*inputs))
-    lib.load("presets", "hands-play")
+    lib.load("loadable", "hands-play")
     assert not [b for b in router.table.routes_to("view.bright") if b.source == "lane:2"]
     assert len(router.table.of(*inputs)) == n_inputs
-    lib.load("presets", "My Routes")
+    lib.load("loadable", "My Routes")
     assert [b.value for b in router.table.routes_to("view.bright")] == [0.3]
     frame(panel)
     with pytest.raises(LibraryError):
-        lib.load("presets", "no-such")
-    lib.error = "library: presets: no preset 'no-such'"     # what the strip's guard records
+        lib.load("loadable", "no-such")
+    lib.error = "library: loadable: no patch 'no-such'"     # what the strip's guard records
     frame(panel)
-    assert lib.delete("presets", "My Routes")
+    assert lib.delete("loadable", "My Routes")
 
 
-def test_the_base_picker_offers_performance_params_only(rig):
+def test_the_base_picker_offers_patch_params_only(rig):
     """D9, review of PR #67: a macro's "+ base" picker offers persisted,
-    non-alias performance params — never a session one (the BPM, the
+    non-alias patch params — never a meta controller one (the BPM, the
     drive, a band), an alias or a macro — and "+ base" adds one of those."""
     from hyperspace.params import part_of
 
@@ -687,24 +687,24 @@ def test_the_base_picker_offers_performance_params_only(rig):
     ids = {q.id for q in offered}
     assert "view.bright" in ids and "fx.mix" in ids
     assert not ids & {"tempo.bpm", "master.gain", "band.sel.trim", "band.0.trim"}
-    assert all(part_of(q) == "performance" and q.persist and not q.alias for q in offered)
+    assert all(part_of(q) == "patch" and q.persist and not q.alias for q in offered)
     assert not any(q.group == "macro" for q in offered)
     assert all(routing.base_refusal(q.id, reg) is None for q in offered)
 
 
 def test_the_routing_heads_name_field_draws(rig):
     """The head's save as… is the preset strip's name field, over the
-    loaded preset (ui_presets._name_field under its own key)."""
+    loaded patch (ui_loadable._name_field under its own key)."""
     panel, lib = rig.panel, rig.panel.library
-    lib.load("presets", "TRIP")
+    lib.load("loadable", "TRIP")
     frame(panel, "routing")
-    ui_presets._begin_naming(panel, ui_routing.NAMING, "seed")
+    ui_loadable._begin_naming(panel, ui_routing.NAMING, "seed")
     frame(panel)
     ui_routing._save_as(panel, "Mine")                    # what its ok / Enter commits
-    ui_presets._state(panel)["naming"] = None
+    ui_loadable._state(panel)["naming"] = None
     frame(panel)
-    assert lib.current("presets") == "Mine" and not lib.is_dirty("presets")
-    assert (rig.lib.home / "presets" / "mine.json").exists()
+    assert lib.current("loadable") == "Mine" and not lib.is_dirty("loadable")
+    assert (rig.lib.home / "loadable" / "mine.json").exists()
 
 
 # ------------------------------------------------------ plan 15 WP1: undo
@@ -818,7 +818,7 @@ def test_the_filter_matches_glyph_param_and_source(rig):
     assert m(panel, router, "", "anything") and m(panel, router, "   ")
     assert m(panel, router, "a b", "xa", "by") and not m(panel, router, "a z", "xa", "by")
     assert not m(panel, router, "ab", "a", "b")           # a word never spans two strings
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     router.labels["hand"] = ["R x", "R height", "R z"]
     router.labels["lfo"] = ["LFO 1", "LFO 2"]
     table.set_routes([Binding("hand:1", "view.bright", "position"),
@@ -847,7 +847,7 @@ def test_the_filter_matches_glyph_param_and_source(rig):
     for text in ("lfo 1", "LFO 1", "lfo:0", "zoom", "lfo 1 zoom", "pushes"):
         assert route(text, lfo1), text
     assert not route("lfo 2", lfo1) and not route("r height", lfo1)
-    # a dark line is its control only: the factory row's target is not the preset's
+    # a dark line is its control only: the factory row's target is not the loadable patch's
     dark = ui_routing.unmapped(table)[0]
     assert line(ui_routing.control_glyph(table, dark).lower(), dark, mapped=False)
     assert line(dark.target, dark) and not line(dark.target, dark, mapped=False)
@@ -868,14 +868,14 @@ def test_the_filter_matches_glyph_param_and_source(rig):
 def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkeypatch):
     """TRIP with "kaleido" typed: the two desk lines (D3, D4) and the one
     macro that subscribes one are all the page draws, under the section
-    titles; the session, which has none, says so; the counts read "3 of N
+    titles; the meta controller, which has none, says so; the counts read "3 of N
     rows" (plan 28 N7: the two kaleidoscope routes are GRAPH's now, and no
     route row is drawn here, filtered or not). No two widgets share an
     imgui id, and a × on a filtered line removes the row it is on."""
     from hyperspace import ui
 
     panel, router, table = rig.panel, rig.router, rig.router.table
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     table.set_macros({"macro.3": {"label": "Heat", "subs": [
         {"base": "fx.kaleido.zoom", "from": 0.0, "to": 1.0}]},
         "macro.5": {"label": "Cool", "subs": [{"base": "view.bright"}]}})
@@ -922,8 +922,8 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
         p for p in previews if p.startswith("fx.")}
     # the macros: the one that subscribes a kaleidoscope param, drawn whole
     assert knobs == ["macro.3"]
-    # the titles stay; the session has no such row and says so, once
-    assert {"DESK  ·  PRESET LAYER", "MACROS", "SESSION"} <= set(texts)
+    # the titles stay; the meta controller has no such row and says so, once
+    assert {"DESK  ·  PATCH LAYER", "MACROS", "META CONTROLLER"} <= set(texts)
     assert "ROUTES" not in texts and "MODIFIERS" not in texts
     assert texts.count(ui_routing.NO_MATCH) == 1
     assert "invariant · both layers" not in texts
@@ -969,8 +969,8 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
 
 def test_the_filter_is_ui_state(rig, tmp_path):
     """The filter's text lives in the page's state on the panel and nowhere
-    else: no param holds it, a snapshot and a saved preset do not carry it,
-    typing it is no undo step and no dirty dot, a preset load leaves it,
+    else: no param holds it, a snapshot and a saved loadable patch do not carry it,
+    typing it is no undo step and no dirty dot, a loadable patch load leaves it,
     and one state write — what `goto` (WP4) does — clears it. A new panel
     starts with none, and a state dict from before a hot reload gains the
     key."""
@@ -979,11 +979,11 @@ def test_the_filter_is_ui_state(rig, tmp_path):
     from hyperspace import undo
 
     panel, lib, reg, router = rig.panel, rig.lib, rig.reg, rig.router
-    lib.load("presets", "TRIP")
+    lib.load("loadable", "TRIP")
     frame(panel, "routing")
     ids = [p.id for p in reg]
     before = (json.dumps(reg.snapshot(), sort_keys=True, default=str),
-              json.dumps(lib.document("presets", "X"), sort_keys=True, default=str))
+              json.dumps(lib.document("loadable", "X"), sort_keys=True, default=str))
     u = undo.Undo(reg, router.table, on_restore=router.sync_macros)
     undo.install(u)
     clock = [0.0]
@@ -1003,10 +1003,10 @@ def test_the_filter_is_ui_state(rig, tmp_path):
     assert [p.id for p in reg] == ids
     assert not any("zzfind" in str(p.base) for p in reg if p.kind is Kind.TEXT)
     after = (json.dumps(reg.snapshot(), sort_keys=True, default=str),
-             json.dumps(lib.document("presets", "X"), sort_keys=True, default=str))
+             json.dumps(lib.document("loadable", "X"), sort_keys=True, default=str))
     assert after == before and "zzfind" not in "".join(after)
-    assert u.stack == [] and not lib.is_dirty("presets")
-    path = lib.save_as("presets", "Mine")
+    assert u.stack == [] and not lib.is_dirty("loadable")
+    path = lib.save_as("loadable", "Mine")
     assert "zzfind" not in path.read_text()
     assert not [f for f in tmp_path.rglob("*") if f.is_file() and f.suffix in (".json", ".toml")
                 and "zzfind" in f.read_text()]
@@ -1016,8 +1016,8 @@ def test_the_filter_is_ui_state(rig, tmp_path):
     st["find"] = "kaleido"
     assert ui_routing.found(panel, router)[0] == 2      # (N7: TRIP's two kaleido routes are GRAPH's)
     st["filter"] = ""
-    # a preset load leaves it (fork 9 (a))
-    lib.load("presets", "MANDALA")
+    # a loadable patch load leaves it (fork 9 (a))
+    lib.load("loadable", "MANDALA")
     frame(panel)
     assert st["find"] == "kaleido" and ui_routing._state(panel) is st
     n, m = ui_routing.found(panel, router)
@@ -1082,7 +1082,7 @@ def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
     from hyperspace import ui
 
     panel, table = rig.panel, rig.router.table
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     table.set_macros({"macro.3": {"label": "Heat", "subs": []}})
     knobs: list[str] = []
     slider = panel._slider
@@ -1121,7 +1121,7 @@ def test_a_line_in_use_is_not_filtered_away_under_the_hand(rig, monkeypatch):
 # ------------------------------------------- plan 17 WP4: the picked control's line
 
 def _many_routes(rig, n=30) -> None:
-    """Enough routes that the desk and session sections start under the fold."""
+    """Enough routes that the desk and meta controller sections start under the fold."""
     reg, table = rig.reg, rig.router.table
     for p in reg:
         if len(table.routes()) >= n:
@@ -1141,15 +1141,15 @@ def _routing_probe(monkeypatch) -> dict:
     from hyperspace.ui import Panel
 
     out: dict = {"lines": []}
-    page, session, mark = Panel._page_routing, ui_routing.session, ui_routing._mark_line
+    page, meta_rows, mark = Panel._page_routing, ui_routing.meta_rows, ui_routing._mark_line
 
     def page_(self, dt):
         out["lines"] = []
         page(self, dt)
         out["page"] = (imgui.get_scroll_y(), imgui.get_scroll_max_y())
 
-    def session_(panel, router):
-        session(panel, router)
+    def meta_(panel, router):
+        meta_rows(panel, router)
         out["child"] = (imgui.get_scroll_y(), imgui.get_scroll_max_y())
 
     def mark_(panel, table, b, section, y0):
@@ -1159,7 +1159,7 @@ def _routing_probe(monkeypatch) -> dict:
             top = imgui.get_window_pos().y
             out["lines"].append((b, section, y0, top, top + imgui.get_window_height()))
     monkeypatch.setattr(Panel, "_page_routing", page_)
-    monkeypatch.setattr(ui_routing, "session", session_)
+    monkeypatch.setattr(ui_routing, "meta_rows", meta_)
     monkeypatch.setattr(ui_routing, "_mark_line", mark_)
     return out
 
@@ -1173,7 +1173,7 @@ def _seen(got) -> bool:
 def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     """`goto` (fork 2): the rows' child scrolls to the picked control's
     line — its row on the layer that is up, its "unmapped — dark" line, an
-    invariant row in the session section — and frames it for as long as
+    invariant row in the meta controller section — and frames it for as long as
     it is picked; the page itself never scrolls and is never changed. If
     ROUTING is not open the scroll waits until it is, while the control is
     still picked. A control dark on the global layer has no line. The
@@ -1186,7 +1186,7 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     panel, table = rig.panel, rig.router.table
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     _many_routes(rig)
     got = _routing_probe(monkeypatch)
     st = ui_routing._state(panel)
@@ -1213,15 +1213,15 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     at = got["child"][0]
     draw(3)
     assert got["child"][0] == at and st["marked"] == 1       # once: it does not keep pulling
-    # an invariant control: its row in the session section, further down
+    # an invariant control: its row in the meta controller section, further down
     s3 = control("SM")                     # MASTER (S1–S8 are layered since plan 24 C2)
     lrn.pick(s3.source)
     ui_routing.goto(panel, s3.source)
     draw(2)
     (b, section, *_), = got["lines"]
-    assert (b.source, b.layer, section) == (s3.source, None, "session") and _seen(got)
+    assert (b.source, b.layer, section) == (s3.source, None, "meta") and _seen(got)
     assert got["child"][0] > at and got["page"] == (0, 0)
-    # a dark preset control: its "unmapped — dark" line
+    # a dark loadable patch control: its "unmapped — dark" line
     dark = ui_routing.unmapped(table)[0]
     lrn.pick(dark.source)
     ui_routing.goto(panel, dark.source)
@@ -1235,7 +1235,7 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     ui_routing.goto(panel, "cc:*:18")
     draw(2)
     (b, section, *_), = got["lines"]
-    assert (b.layer, section) == ("global", "session") and _seen(got)
+    assert (b.layer, section) == ("global", "meta") and _seen(got)
     k6 = control("K6")
     assert k6.glyph not in ui_desk.lit(table)
     at = got["child"][0]
@@ -1284,7 +1284,7 @@ def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
     io = imgui.get_io()
     io.display_size = imgui.ImVec2(*CONTROL_SIZE)
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     for _ in range(3):
         frame(panel, "routing")
     real = imgui.input_text_with_hint
@@ -1318,20 +1318,20 @@ def test_a_desk_click_clears_a_filter_that_has_the_keyboard(rig, monkeypatch):
 
 def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
     """Plan 19 WP5: ROUTING's head is the preset strip's save over the
-    same preset — the same 12 px disc beside the name, the save chip lit
-    while dirty and reading "save" (one tier: every preset is yours).
+    same loadable patch — the same 12 px disc beside the name, the save chip lit
+    while dirty and reading "save" (one tier: every loadable patch is yours).
     Clicking it is `Library.overwrite`, as before."""
     from test_ui_shell import _click
 
     from hyperspace import ui
 
     panel, lib, reg = rig.panel, rig.lib, rig.reg
-    lib.load("presets", "BIG BLUE WAVE")
-    path = tmp_path / "presets" / "big-blue-wave.json"
+    lib.load("loadable", "BIG BLUE WAVE")
+    path = tmp_path / "loadable" / "big-blue-wave.json"
     was = path.read_bytes()
     frame(panel, "routing")
     frame(panel)
-    st = ui_presets._state(panel)
+    st = ui_loadable._state(panel)
     assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)
     reg["view.bright"].set(reg["view.bright"].value * 0.5 + 0.1)
     frame(panel)
@@ -1340,7 +1340,7 @@ def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
     assert x1 - x0 == y1 - y0 == 2 * ui.DOT_R
     assert st["save"]["head"] == ("save", True)
     _click(panel, st["rects"]["head.save"])
-    assert path.read_bytes() != was and not lib.is_dirty("presets")
+    assert path.read_bytes() != was and not lib.is_dirty("loadable")
     assert [t.name for t in lib.trash()] == ["BIG BLUE WAVE"]  # the old text, kept
     frame(panel)
     assert "head.dot" not in st["rects"] and st["save"]["head"] == ("save", False)
@@ -1348,7 +1348,7 @@ def test_the_head_has_the_same_dot_and_label(rig, tmp_path):
 
 def test_a_routes_own_feel_draws_its_line_with_its_own_ids(rig, tmp_path, monkeypatch):
     """A row with a feel of its own (motion.py) draws a third line — attack
-    and release, or a spring's preset, duration and bounce — then a fourth,
+    and release, or a spring's loadable patch, duration and bounce — then a fourth,
     the feel live, and every widget keeps its own id."""
     from hyperspace.motion import Motion
     panel = rig.panel
@@ -1400,7 +1400,7 @@ def test_neither_shift_nor_save_is_a_desk_target(rig, tmp_path):
     desk" and "Learn pad". SHIFT's param is not one, and neither is the
     desk's SAVE (plan 24 C1, review of PR #175): a learned toggle or key on
     `desk.save` would latch it, and every bank pad's tap would then make a
-    new preset."""
+    new loadable patch."""
     router = _with_router(rig, tmp_path)
     routing.register_desk(rig.reg, router.table)
     reg = rig.reg
@@ -1414,7 +1414,7 @@ def test_neither_shift_nor_save_is_a_desk_target(rig, tmp_path):
 
 def test_the_routing_page_lists_the_sink_rows_with_the_others(rig, tmp_path, monkeypatch):
     """Plan 27 B3: a sink row appears as the others do — a line in the
-    page's own `sinks` section (the session's), its words the router's,
+    page's own `sinks` section (the meta controller's), its words the router's,
     found by the filter, an off row dimmed but listed."""
     router = _with_router(rig, tmp_path)
     router.table.add(Binding("param:view.bright", "bridge:2", routing.SINK_OP))
@@ -1455,22 +1455,22 @@ def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
     9.5 ms a frame on ROUTING. It is remembered against what decides it —
     the profile and each row's source, layer, enabled flag (and target) —
     so two draws of an unchanged table work it out once, and a Learn, a
-    flipped row, a preset load or another profile each work it out again,
+    flipped row, a loadable patch load or another profile each work it out again,
     with the same answer as a fresh scan."""
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace import apc40
     from hyperspace.learn import Learn
 
     panel, lib, table = rig.panel, rig.lib, rig.router.table
-    real = ui_routing.preset_controls
+    real = ui_routing.patch_controls
     calls = []
 
     def counted(t):
         calls.append(1)
         return real(t)
     monkeypatch.setattr(ui_routing, "_DARK", {})           # nothing remembered yet
-    monkeypatch.setattr(ui_routing, "preset_controls", counted)
+    monkeypatch.setattr(ui_routing, "patch_controls", counted)
 
     def fresh() -> list[str]:
         rows = table.desk()
@@ -1493,8 +1493,8 @@ def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
     assert lrn.learn_control(first, apc40)
     frame(panel)
     assert len(calls) == 2 and first not in dark() and dark() == fresh()
-    # (b) a session row on a dark control makes it invariant; its enabled
-    # flag flipped off gives the control back to the preset
+    # (b) a meta row on a dark control makes it invariant; its enabled
+    # flag flipped off gives the control back to the loadable patch
     ctl = dark()[0]
     row = table.add(Binding(ctl, "view.bright", "abs"))
     frame(panel)
@@ -1502,10 +1502,10 @@ def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
     table.enable(row, False)
     frame(panel)
     assert len(calls) == 4 and ctl in dark() and dark() == fresh()
-    # (c) a preset load replaces the desk
+    # (c) a loadable patch load replaces the desk
     nxt = next(c for c in dark() if c != ctl)
     put(tmp_path, "SHOW", desk=[{"source": nxt, "target": "view.speed", "op": "abs"}])
-    lib.load("presets", "SHOW")
+    lib.load("loadable", "SHOW")
     frame(panel)
     assert len(calls) == 5 and nxt not in dark() and first in dark()
     assert dark() == fresh()

@@ -15,7 +15,6 @@ from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graphview, render, ui_graph
-from hyperspace import hold as holdmod
 
 
 def _rgba(tex) -> np.ndarray:
@@ -106,7 +105,7 @@ def test_only_the_shape_nodes_details_ask_for_the_wireframe(shell_rig, monkeypat
     st = ui_graph._state(panel)
     asked: list[int] = []
     stub = NS(want_wire=asked.append, wire_texture=lambda: None)
-    monkeypatch.setattr(holdmod, "canvas_renderer", lambda p: stub)
+    monkeypatch.setattr(panel, "renderer", stub)
     from imgui_bundle import imgui
     shape = st["view"].node("render:shape")
     got = []

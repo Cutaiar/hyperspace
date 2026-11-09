@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 from conftest import seed
+from walls import family
 
 from hyperspace import app, config, devices
 from hyperspace.analysis import Analyser
@@ -27,11 +28,18 @@ from hyperspace.ui import PageHistory
 IMPORT_SCRIPT = """
 import sys
 import hyperspace.app
-gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "hyperspace.osc",
-         "leap", "torch", "pythonosc",
+gated = ("leap", "torch", "pythonosc",
          "av", "pillow_heif", "syphon", "cyndilib", "AVFoundation",
-         "hyperspace.segment", "Vision", "Vision._Vision", "CoreML", "torchvision")
-print(sorted(m for m in gated if m in sys.modules), "hyperspace.hands" in sys.modules)
+         "Vision", "Vision._Vision", "CoreML", "torchvision", "hyperspace.hands.device")
+# a gated module of ours, and any split of it (row 788): midi.py, midi_x.py, midi/x.py. Not
+# hands: importing app imports that package on purpose, and only its device is gated
+ours = ("midi", "bridge", "dream", "osc", "segment")
+found = [m for m in gated if m in sys.modules]
+for m in sys.modules:
+    name = m.removeprefix("hyperspace.")
+    if m.startswith("hyperspace.") and name.split(".")[0].split("_")[0] in ours:
+        found.append(m)
+print(sorted(found), "hyperspace.hands" in sys.modules)
 """
 
 
@@ -693,8 +701,9 @@ def test_the_library_never_imports_config():
     """The library never imports config: app.main reads [library] path and
     hands the library its root and the machine home (plan 25)."""
     pkg = Path(app.__file__).parent
-    lib = _imports(pkg / "library.py")
-    assert not any(m.endswith("config") for m in lib), lib
+    for f in family("library", pkg):
+        lib = _imports(f)
+        assert not any(m.endswith("config") for m in lib), (f, lib)
 
 
 # ---- decision 21 (a): the transparent framebuffer only when the config asks ----
@@ -734,6 +743,7 @@ def test_the_render_window_is_transparent_only_when_the_config_asks(monkeypatch,
     render = slots[0].win
     assert (render, ctrl) == ("win1", "win2")
     assert g.created[0]["TRANSPARENT_FRAMEBUFFER"] is want
+    assert g.created[0]["SAMPLES"] == 0                        # MSAA is the frame's own (SC3a)
     assert g.created[1]["TRANSPARENT_FRAMEBUFFER"] is False    # the control window, always
 
 
@@ -763,6 +773,9 @@ class _PlaceGlfw(_HintGlfw):
 
     def get_monitor_workarea(self, m):
         return self.mons[m]
+
+    def get_monitor_pos(self, m):
+        return self.mons[m][:2]
 
     def get_monitor_name(self, m):
         return m.encode()
@@ -796,7 +809,7 @@ def _open(monkeypatch, cfg, home, mons=None):
 
 
 @pytest.mark.parametrize(("monitor", "said"), [
-    ("left", "monitor = 'left' is not a screen index"),      # no number at all
+    ("left", "monitor = 'left' matches no screen"),           # a name no screen has
     (7, "monitor = 7, but 2 screens are connected (0–1)"),    # a screen that is not there
     (None, "monitor = None is not a screen index"),
 ])
@@ -826,6 +839,103 @@ def test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note(
         g, render, _ = _open(monkeypatch, cfg, tmp_path)
         assert cfg == {"output": {"monitor": good, "control_monitor": good}}
         assert app._make_output(render, Registry(), cfg).monitor == good
+
+
+class _TwinGlfw(_PlaceGlfw):
+    """A window system whose two screens have one name: the part after | is
+    only this fake's key."""
+
+    def get_monitor_name(self, m):
+        return m.split("|")[0].encode()
+
+
+LAPTOP_ = ("Built-in", (0, 38, 1728, 1041))
+TV_LEFT = ("MStar|a", (1728, 0, 1920, 1080))
+TV_RIGHT = ("MStar|b", (3648, 0, 1920, 1080))
+
+
+def _open_twins(monkeypatch, cfg, tmp_path, *mons):
+    g = _TwinGlfw(dict(mons))
+    monkeypatch.setattr(app, "glfw", g)
+    return g, app._windows(False, cfg, tmp_path)
+
+
+def test_screens_by_name_survive_the_plug_order(monkeypatch, tmp_path, capsys):
+    """Row 771, through `_windows`: named outputs land on their own screens
+    however the window system lists them, where an index would swap them.
+    `Output.monitor` and `Slot.monitor` are indices still (until SC3b): the
+    index the name found on this launch."""
+    from hyperspace import config
+    from hyperspace.params import Registry
+
+    for mons, first, second in (((LAPTOP_, TV_LEFT, TV_RIGHT), 1, 2),
+                                ((LAPTOP_, TV_RIGHT, TV_LEFT), 2, 1)):
+        cfg = {"output": {**config.DEFAULTS["output"], "control_monitor": "Built-in",
+                          "screens": [{**config.SCREEN, "monitor": "MStar #1"},
+                                      {**config.SCREEN, "monitor": "MStar #2"}]}}
+        cfg["output"]["monitor"] = "MStar #1"
+        g, (slots, ctrl) = _open_twins(monkeypatch, cfg, tmp_path, *mons)
+        assert g.pos[slots[0].win] == (1728 + 16, 16)
+        assert g.pos[slots[1].win] == (3648 + 16, 16)
+        assert g.pos[ctrl][0] < 1728                               # on the laptop
+        assert [s.monitor for s in slots] == [first, second]
+        assert cfg["output"]["monitor"] == first and cfg["output"]["control_monitor"] == 0
+        assert app._make_output(slots[0].win, Registry(), cfg).monitor == first
+        assert app._later_output(slots[1]).monitor == second
+        assert "notes" not in cfg
+
+
+def test_output_1_named_only_in_the_list_is_resolved_and_said(monkeypatch, tmp_path, capsys):
+    """`_slots` leaves output 1 to `settle`, which reads `[output] monitor`:
+    `config.load` copies the list's first entry there, so a name given only
+    in `[[output.screens]]` reaches it, from a real file."""
+    from hyperspace import config
+
+    p = tmp_path / "config.toml"
+    p.write_text('[[output.screens]]\nmonitor = "MStar #2"\n')
+    cfg = config.load(p)
+    g, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_RIGHT, TV_LEFT)
+    assert g.pos[slots[0].win] == (3648 + 16, 16) and slots[0].monitor == 1
+    assert "notes" not in cfg
+    # a name no screen has: −1, as output 1 always opens, and said once
+    p.write_text('[[output.screens]]\nmonitor = "nothing"\n')
+    cfg = config.load(p)
+    g, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_LEFT)
+    assert slots[0].opened and slots[0].monitor == -1
+    assert cfg["notes"] == [("config: [output] monitor = 'nothing' matches no screen "
+                             "(connected: Built-in, MStar) — using the last position")]
+
+
+def test_a_later_output_whose_named_screen_is_absent_is_not_opened(monkeypatch, tmp_path, capsys):
+    """Fork F9 holds for a name as for an index; output 1 always opens."""
+    from hyperspace import config
+
+    cfg = {"output": {**config.DEFAULTS["output"], "monitor": "MStar #1",
+                      "screens": [{**config.SCREEN, "monitor": "MStar #1"},
+                                  {**config.SCREEN, "name": "wall", "monitor": "MStar #2"},
+                                  {**config.SCREEN, "monitor": "TV"},
+                                  {**config.SCREEN, "monitor": "MStar", "window": False,
+                                   "syphon": "x"}]}}
+    _, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_LEFT)
+    assert slots[0].opened and slots[0].monitor == 1
+    assert not slots[1].opened and slots[1].missing == 'screen "MStar #2" is not connected'
+    assert not slots[2].opened and slots[2].missing == 'screen "TV" is not connected'
+    assert slots[3].publish_only and not slots[3].missing          # looks for no screen
+    first, wall, tv = cfg["notes"]              # each said once, output 1's too
+    assert first.startswith("config: [output] monitor = 'MStar #1' asks for number 1")
+    assert "only one is connected" in first
+    assert wall == ("config: output 2 (wall): monitor = 'MStar #2' asks for number 2 of 'MStar', "
+                    "and 1 connected (connected: Built-in, MStar) — not opened")
+    assert tv == ("config: output 3: monitor = 'TV' matches no screen "
+                  "(connected: Built-in, MStar) — not opened")
+    assert wall in capsys.readouterr().err
+    # a bare name on two screens opens, and says which
+    cfg = {"output": {**config.DEFAULTS["output"],
+                      "screens": [{**config.SCREEN},
+                                  {**config.SCREEN, "monitor": "MStar"}]}}
+    _, (slots, _) = _open_twins(monkeypatch, cfg, tmp_path, LAPTOP_, TV_RIGHT, TV_LEFT)
+    assert slots[1].opened and slots[1].monitor == 2
+    assert any("is 2 screens (MStar #1, MStar #2)" in n for n in cfg["notes"])
 
 
 def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
@@ -1001,13 +1111,15 @@ def test_both_exits_destroy_every_window_before_terminate(monkeypatch):
     assert log == ["audio", "shutdown", "destroy ctrl", "destroy render", "terminate", "execv"]
 
     # main: the quit destroys every window (the later outputs', the control
-    # window, output 1's) after imgui's shutdown, before terminate; the
-    # restart is handed the same list
+    # window, output 1's, the root's last) after imgui's shutdown, before
+    # terminate; the restart is handed the same list
     src = inspect.getsource(app.main)
     tail = src[src.index("impl.shutdown()"):]
     assert tail.index("_destroy_windows(all_windows())") < tail.index("glfw.terminate()")
     assert "windows=all_windows()" in src
-    assert "return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]" in src
+    assert ("*(a.win for sl in slots for a in sl.also), *(sl.win for sl in slots[1:]),\n"
+            "                ctrl_win, slots[0].win, root_win]") in src
+    assert "*(plug.windows() if plug is not None else ())," in src, "and those held for a display"
 
 
 # ---- the desk's table and knob smoothing's default (plan 18 WP2, fork 12) ----
@@ -1015,16 +1127,16 @@ def test_both_exits_destroy_every_window_before_terminate(monkeypatch):
 def _launch(home):
     """`app.main`'s order around the desk's table, headless: the table is
     read and `_desk_table` called before the library attaches, the router
-    and the presets after, then the show's startup preset."""
+    and the loadable patches after, then the show's startup loadable patch."""
     from hyperspace import lfo, tempo
     from hyperspace.library import Library
-    from hyperspace.preset import Presets
+    from hyperspace.loadable import LoadedPatch
     from hyperspace.routing import Bindings, Router, bindings_path
 
     chain = Analyzer(Analyser())
     control = Control(chain)
     lib = Library(home, period=0.0)
-    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project)
+    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.install)
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     clock = tempo.Clock(now=lambda: 0.0)
@@ -1038,9 +1150,9 @@ def _launch(home):
     table = app._desk_table(reg, Bindings.load(bindings_path(home), legacy_midi=None))
     lib.attach(reg)
     router = Router(reg, table)
-    Presets(lib, reg, router)
-    lib.project.load_startup()
-    return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.project)
+    LoadedPatch(lib, reg, router)
+    lib.install.load_startup()
+    return SimpleNamespace(lib=lib, reg=reg, table=table, show=lib.install)
 
 
 def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tmp_path):
@@ -1048,7 +1160,7 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     `routing.SLEW_DEFAULT_S` before the show lands. The party show, which
     names no smoothing, opens at 80 ms and is not unsaved because of it;
     a show that saved a number keeps it — 0 included — with no unknown-id
-    warning, since the param exists when the session values land (`main`
+    warning, since the param exists when the meta controller values land (`main`
     makes the table before `library.attach`); a show file from before the
     param opens at 80 ms, clean; and a new show goes back to 80 ms."""
     import inspect
@@ -1092,9 +1204,9 @@ def test_the_app_starts_with_knob_smoothing_at_80_ms_and_a_show_keeps_its_own(tm
     assert r.table.slew == 0.08
 
     # a show saved before the param existed: no key, 80 ms, clean
-    path = home / "projects" / "mine.hyp.json"
+    path = home / "installs" / "mine.json"
     doc = json.loads(path.read_text())
-    assert doc["session"].pop("desk.slew") == 0.2
+    assert doc["tuning"].pop("desk.slew") == 0.2
     path.write_text(json.dumps(doc))
     r = _launch(home)
     assert r.show.name == "mine" and r.table.slew == 0.08
@@ -1125,19 +1237,19 @@ def _screens_cfg(*entries, **output):
 
 
 def test_one_window_per_listed_output(monkeypatch, tmp_path, capsys):
-    """Three listed outputs, two screens: output 1 is created as before
-    (MSAA, transparent only with overlay), then the controls, then each
-    later output in output 1's share group — opaque, no MSAA, never
-    minimised on focus loss — titled by its name, at its screen's default
-    spot (cascaded when it would sit on output 1's). No list: two windows,
-    as before."""
+    """Three listed outputs, two screens: output 1 is created first
+    (transparent only with overlay), then the controls, then each later
+    output, all in the root's share group (SC3a) — no MSAA, opaque but for
+    output 1 with overlay, never minimised on focus loss — titled by its
+    name, at its screen's default spot (cascaded when it would sit on output
+    1's). No list: two windows, as before."""
     from hyperspace import config
 
     g = _OutGlfw()
     monkeypatch.setattr(app, "glfw", g)
     cfg = _screens_cfg({"name": "glass", "monitor": 0}, {"name": "projector", "monitor": 1},
                        {"monitor": -1, "scene": False, "dim": 0.5}, monitor=0)
-    slots, ctrl = app._windows(True, cfg, tmp_path)
+    slots, ctrl = app._windows(True, cfg, tmp_path, "root")
     assert [s.n for s in slots] == [1, 2, 3] and all(s.opened for s in slots)
     out1, proj, third = slots
     assert (out1.win, ctrl, proj.win, third.win) == ("win1", "win2", "win3", "win4")
@@ -1145,9 +1257,9 @@ def test_one_window_per_listed_output(monkeypatch, tmp_path, capsys):
     assert g.titles[proj.win] == "Hyperspace — projector" and g.titles["win4"] == (
         "Hyperspace — output 3")
     assert g.titles["win1"] == "Hyperspace"                         # as before
-    assert g.shares == {"win1": None, "win2": "win1", "win3": "win1", "win4": "win1"}
+    assert g.shares == {"win1": "root", "win2": "root", "win3": "root", "win4": "root"}
     first, later = g.created[0], g.created[2:]
-    assert first["SAMPLES"] == 4 and first["TRANSPARENT_FRAMEBUFFER"] is True   # overlay asked
+    assert first["SAMPLES"] == 0 and first["TRANSPARENT_FRAMEBUFFER"] is True   # overlay asked
     for hints in later:
         assert hints["SAMPLES"] == 0 and hints["TRANSPARENT_FRAMEBUFFER"] is False
         assert hints["AUTO_ICONIFY"] is False
@@ -1260,31 +1372,89 @@ class _SwapGlfw:
         return self.sizes.get(win, (640, 400))
 
 
+def test_the_root_window_is_hidden_and_shares_with_every_other(monkeypatch):
+    """SC3a: the root holds the context, hidden and single-sampled, and leaves the
+    next window's hints visible; main destroys it last and it paces nothing."""
+    import inspect
+
+    g = _HintGlfw()
+    g.VISIBLE = "VISIBLE"
+    monkeypatch.setattr(app, "glfw", g)
+    assert app._root_window() == "win1"
+    assert g.created[0]["VISIBLE"] is False and g.created[0]["SAMPLES"] == 0
+    assert g.created[0]["TRANSPARENT_FRAMEBUFFER"] is False
+    assert g.hints["VISIBLE"] is True
+    src = inspect.getsource(app.main)
+    assert "(root.pacer, \"pacing\", \"Pacer\")" in src      # a save re-classes the pacer
+    assert "for sl in slots if sl.presenter]" in src          # output 1's presenter too
+    # the floor closes the frame, the control window's swap included
+    assert src.index("glfw.swap_buffers(ctrl_win)") < src.index("root.pacer.end_frame()")
+
+
+def test_a_hot_reload_runs_with_the_render_context_current(fake):
+    """Audit V8: `reloader.poll()` used to run with the control window's context
+    current, so `on_reload`'s vertex arrays and framebuffers were built there. Apple's
+    GL hides it (its share group shares vertex arrays, measured,
+    `tools/sc3a_spike.py v8`); the spec doesn't, and Mesa wouldn't."""
+    import inspect
+
+    log: list[str] = []
+    h = _host(log)
+    h.render_current = lambda: log.append("render context current")
+    app.frame(h, 0.0, 1 / 60, 60.0)
+    assert log.index("render context current") < log.index("reloader.poll")
+    assert "render_current=lambda: glfw.make_context_current(root_win)" in inspect.getsource(app.main)
+
+
+class _Frame:
+    """`Root.frame`, as `_draw_render` touches it."""
+
+    def __init__(self, log):
+        self.tex = "frame-tex"
+        self.fbo = None
+        self.asked: list = []
+        self._target = SimpleNamespace(use=lambda: log.append("bind frame"), glo=5)
+
+    def fit(self, size):
+        self.asked.append(tuple(size))
+        self.fbo = self._target
+        return self.fbo
+
+
+def _rig_root(log, slots=(), glfw=None):
+    """The root for these slots, output 1 pacing already (the launch's handover
+    done, unlogged), so a frame's log holds only the frame's calls."""
+    from hyperspace.pacing import Pacer
+
+    root = app.Root("root", _Frame(log), Pacer(glfw or app.glfw))
+    wins = [sl.win for sl in slots if sl.opened and sl.presenter is not None]
+    root.pacer.owner = wins[0] if wins else None
+    return root
+
+
 def _rig_slots(*names, presenter=None):
     from hyperspace.outputs import Slot
 
     out = []
     for k, name in enumerate(names):
         sl = Slot(k + 1, name=name, win=f"w{k + 1}")
-        if k:
-            sl.presenter = presenter(sl) if presenter else None
+        sl.presenter = presenter(sl) if presenter else None
         out.append(sl)
     return out
 
 
 def test_only_the_first_output_waits_for_the_screen(monkeypatch):
-    """Fork F6: output 1's swap waits (interval 1, set where main makes its
-    context), every later output's does not (interval 0), and each gets a
-    presenter on its own context; one that will not build is said on its
-    slot. Output 1's context is current after. In a frame the others swap
-    first and output 1 last (it paces the loop)."""
+    """Fork F6, SC3a: every output gets a presenter on its own context, none
+    waiting (interval 0); one later output that will not build is said on its
+    slot. The root's context is current after. Then main's handover makes output 1's
+    swap the one that waits; in a frame the others swap first and it last."""
     import inspect
 
     log: list[str] = []
     monkeypatch.setattr(app, "glfw", _SwapGlfw(log))
     slots = _rig_slots("glass", "projector", "third")
     slots.append(app.Slot(4, missing="screen 4 is not connected"))
-    made = iter([object(), RuntimeError("no context")])
+    made = iter([object(), object(), RuntimeError("no context")])
 
     def make():
         m = next(made)
@@ -1295,9 +1465,10 @@ def test_only_the_first_output_waits_for_the_screen(monkeypatch):
     destroyed: list = []
     app.glfw.destroy_window = destroyed.append
     notes: list[str] = []
-    app._open_presenters(slots, make, notes)
-    assert log == ["current w2", "interval 0", "current w3", "interval 0", "current w1",
-                   "current w1"]
+    app._open_presenters(slots, "root", make, notes)
+    assert log == ["current w1", "interval 0", "current w2", "interval 0", "current w3",
+                   "interval 0", "current root", "current root"]
+    assert isinstance(slots[0].presenter, app.Presenter)
     assert isinstance(slots[1].presenter, app.Presenter) and slots[2].presenter is None
     # one that will not build is closed and counts as not opened (review of #123):
     # never drawn, it would show garbage and the watch would count it as live
@@ -1305,18 +1476,38 @@ def test_only_the_first_output_waits_for_the_screen(monkeypatch):
     assert slots[2].missing == "its GL context would not open (presenter: RuntimeError: no context)"
     assert notes == [f"output: output 3 (third): {slots[2].missing} — not opened"]
     src = inspect.getsource(app.main)
-    assert src.index("glfw.make_context_current(render_win)") < src.index(
-        "glfw.swap_interval(1)") < src.index("_open_presenters(slots, ")
-    assert src.index("glfw.swap_interval(0)") > src.index("glfw.make_context_current(ctrl_win)")
+    assert src.index("root_win = _root_window()") < src.index(
+        "_windows(_overlay_allowed(cfg), cfg, None if args.laptop else home, root_win, want)")
+    assert src.index("glfw.make_context_current(root_win)") < src.index(
+        "ctx = moderngl.create_context()") < src.index("_open_presenters(slots, root_win, ") < (
+        src.index("root.pacer.choose("))
+    assert "glfw.swap_interval(1)" not in src      # the pacer's alone
+    assert src.index("glfw.make_context_current(ctrl_win)") < src.rindex("glfw.swap_interval(0)")
+
+
+def test_output_1_failing_its_presenter_stops_the_launch(monkeypatch):
+    """Output 1 always opens: a later output that won't build is closed and said,
+    output 1 raises, as its context failing always has."""
+    log: list[str] = []
+    monkeypatch.setattr(app, "glfw", _SwapGlfw(log))
+
+    def make():
+        raise RuntimeError("no context")
+
+    with pytest.raises(RuntimeError, match="no context"):
+        app._open_presenters(_rig_slots("glass"), "root", make)
+    assert log[-1] == "current root"
 
 
 class _Ctx:
-    """The renderer's moderngl context as `_draw_render` touches it."""
+    """The renderer's moderngl context as `_draw_render` touches it: never its
+    window's framebuffer, as nothing is drawn on the root's (SC3a)."""
+
+    error = "GL_NO_ERROR"
 
     def __init__(self, log):
         self.fbo = None
         self.viewport = None
-        self.screen = SimpleNamespace(use=lambda: log.append("bind screen"), glo=0)
 
 
 class _Renderer:
@@ -1340,11 +1531,13 @@ class _Renderer:
 
 
 class _Pres:
-    def __init__(self, log, name, boom=False):
-        self.log, self.name, self.boom = log, name, boom
+    def __init__(self, log, name, boom=False, handed=None):
+        self.log, self.name, self.boom, self.handed = log, name, boom, handed
 
     def present(self, ho, size):
         self.log.append(f"present {self.name}")
+        if self.handed is not None:
+            self.handed.append((ho, size))
         if self.boom:
             raise RuntimeError("lost the context")
 
@@ -1364,14 +1557,26 @@ def test_one_output_draws_the_view_renderer_draw_would():
     try:
         r = _Renderer(log)
         r.bg_alpha = 0.4
-        app._draw_render(r, _Ctx(log), object(), _rig_slots("x"),
+        shown: list = []
+        slots = _rig_slots("x", presenter=lambda sl: _Pres(log, sl.name, handed=shown))
+        root = _rig_root(log, slots, g)
+        app._draw_render(r, _Ctx(log), object(), slots, root,
                          flush=lambda: log.append("flush"))
     finally:
         app.glfw = app_glfw
     (v,) = r.calls[0]
     assert v.switches == app.Switches() and v.size == (800, 500) and v.bg_alpha == 0.4
     assert v.viewport == (0, 0, 800, 500) and v.presenter is None
-    assert log == ["current w1", "bind screen", "draw 1", "current w1", "swap w1"]
+    # on the frame target, at the window's framebuffer, and shown 1:1 on the window
+    assert v.target is root.frame.fbo and root.frame.asked == [(800, 500)]
+    assert log == ["current root", "bind frame", "draw 1", "flush", "current w1", "present x",
+                   "swap w1", "current root"]
+    ((ho, size),) = shown
+    assert ho.frame == root.frame.tex and ho.frame_size == size == (800, 500)
+    assert ho.rect == (0, 0, 800, 500) and ho.bg_alpha == 0.4
+    assert ho.hands is None and ho.mix is None and ho.factor == 1.0 and ho.flip == (False, False)
+    # the frame's MSAA: an offscreen target says 0 samples, so the view must say 4
+    assert v.samples == app.FRAME_SAMPLES == 4
     # Renderer.draw's own view, for comparison: the same fields from the bound framebuffer
     src = inspect.getsource(Renderer.draw)
     assert "View(Switches(), (vp[2], vp[3]), target=target," in src
@@ -1381,7 +1586,8 @@ def test_one_output_draws_the_view_renderer_draw_would():
 def test_the_rendering_context_is_flushed_before_a_presenter():
     """§1, measured: without glFlush in output 1's context a presenter
     shows last frame's texture. The order: draw, flush, then each later
-    output current → present → swap, then output 1 current and swapped."""
+    output current → present → swap, then output 1's the same, last, as it
+    paces the loop, and the root current for whatever is next."""
     log: list[str] = []
     g = _SwapGlfw(log, {"w1": (640, 400), "w2": (1920, 1080), "w3": (0, 0)})
     app_glfw, app.glfw = app.glfw, g
@@ -1389,13 +1595,14 @@ def test_the_rendering_context_is_flushed_before_a_presenter():
         slots = _rig_slots("glass", "projector", "min",
                            presenter=lambda sl: _Pres(log, sl.name))
         r = _Renderer(log)
-        app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: log.append("flush"))
+        app._draw_render(r, _Ctx(log), object(), slots, _rig_root(log, slots, g),
+                         flush=lambda: log.append("flush"))
     finally:
         app.glfw = app_glfw
-    assert log == ["current w1", "bind screen", "draw 3", "flush",
+    assert log == ["current root", "bind frame", "draw 3", "flush",
                    "current w2", "present projector", "swap w2",
-                   "current w3", "swap w3",                       # no framebuffer: nothing drawn
-                   "current w1", "swap w1"]
+                   # w3 has no framebuffer: nothing drawn, nothing swapped
+                   "current w1", "present glass", "swap w1", "current root"]
     views = r.calls[0]
     assert [v.size for v in views] == [(640, 400), (1920, 1080), (0, 0)]
     assert views[1].presenter is slots[1].presenter and views[1].target is None
@@ -1416,33 +1623,173 @@ def test_a_raising_presenter_does_not_stop_the_frame():
     try:
         slots = _rig_slots("glass", "projector", "third",
                            presenter=lambda sl: _Pres(log, sl.name, boom=sl.n == 2))
-        app._draw_render(_Renderer(log), _Ctx(log), object(), slots, watch,
+        root = _rig_root(log, slots, g)
+        app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, watch,
                          flush=lambda: log.append("flush"))
         assert slots[1].error == "present: RuntimeError: lost the context"
         assert slots[2].error == ""
         assert warned == [("output 2 (projector)", "lost the context")]
-        assert log[-5:] == ["current w3", "present third", "swap w3", "current w1", "swap w1"]
+        assert log[-7:] == ["current w3", "present third", "swap w3",
+                            "current w1", "present glass", "swap w1", "current root"]
         # recovers: the next good present clears the error
         slots[1].presenter.boom = False
         log.clear()
-        app._draw_render(_Renderer(log), _Ctx(log), object(), slots, watch,
+        app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, watch,
                          flush=lambda: None)
         assert slots[1].error == ""
-        # output 1's pipeline raised: the others still get their picture, then it raises
+        # output 1's view caught a draw's error: the others still get their picture,
+        # its half-drawn target is neither shown nor swapped, then it raises
         log.clear()
+        root.pacer.end_frame()
         boom = RuntimeError("scene")
         with pytest.raises(RuntimeError, match="scene"):
             app._draw_render(_Renderer(log, raise_first=boom), _Ctx(log), object(), slots,
-                             watch, flush=lambda: None)
+                             root, watch, flush=lambda: None)
         assert "present projector" in log and "present third" in log
-        assert log[-2:] == ["current w1", "swap w1"]
-        # a stranded framebuffer is still the alarm
+        assert "present glass" not in log and "swap w1" not in log
+        assert log[-1] == "current root" and not root.pacer._swapped
+        assert slots[0].error == "SCENE: boom"
+        # …and the next good frame clears it and shows
+        app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, watch, flush=lambda: None)
+        assert slots[0].error == "" and root.pacer._swapped
+        root.pacer.end_frame()
+        # the whole draw raised: no window is swapped, each holds its last frame (a
+        # swap would bring up an old back buffer), and the timer paces the loop
+        log.clear()
+        root.pacer.end_frame()
+        r = _Renderer(log)
+        r.draw_outputs = lambda *a, **k: (_ for _ in ()).throw(boom)
+        with pytest.raises(RuntimeError, match="scene"):
+            app._draw_render(r, _Ctx(log), object(), slots, root, watch, flush=lambda: None)
+        assert not [e for e in log if e.startswith(("swap", "present"))]
+        assert log[-1] == "current root" and not root.pacer._swapped
+        # a stranded framebuffer is still the alarm…
         ctx = _Ctx(log)
         ctx.fbo = SimpleNamespace(glo=7)
-        app._draw_render(_Renderer(log), ctx, object(), slots, watch, flush=lambda: None)
+        app._draw_render(_Renderer(log), ctx, object(), slots, root, watch, flush=lambda: None)
         assert 7 in warned
+        # …and the frame target left bound by the last frame is not one (it is
+        # bound at every frame's end now, not the window's framebuffer: glo 5, not 0)
+        warned.clear()
+        ctx = _Ctx(log)
+        ctx.fbo = root.frame.fbo
+        app._draw_render(_Renderer(log), ctx, object(), slots, root, watch, flush=lambda: None)
+        assert warned == []
     finally:
         app.glfw = app_glfw
+
+
+def test_a_later_output_whose_view_failed_says_so_and_holds():
+    """A later output's caught draw error goes on its slot, with a handoff or without
+    one, and it isn't shown or swapped; output 1 and the rest go on. A good frame clears
+    a stale error. (Second review: an early `continue` skipped the assignment.)"""
+    log: list[str] = []
+    g = _SwapGlfw(log)
+    app_glfw, app.glfw = app.glfw, g
+    boom = RuntimeError("its pipeline")
+
+    class Failing(_Renderer):
+        def __init__(self, log, keep_handoff):
+            super().__init__(log)
+            self.keep_handoff = keep_handoff
+
+        def draw_outputs(self, s, w, h, dpr, views, t_now=None):
+            super().draw_outputs(s, w, h, dpr, views, t_now)
+            views[1].error, views[1].exc = "output: RuntimeError: its pipeline", boom
+            if not self.keep_handoff:
+                views[1].handoff = None
+
+    try:
+        slots = _rig_slots("glass", "projector", "third", presenter=lambda sl: _Pres(log, sl.name))
+        root = _rig_root(log, slots, g)
+        slots[1].error = "stale"
+        for keep in (False, True):
+            log.clear()
+            app._draw_render(Failing(log, keep), _Ctx(log), object(), slots, root,
+                             flush=lambda: None)
+            assert slots[1].error == "output: RuntimeError: its pipeline"
+            assert "present projector" not in log and "swap w2" not in log
+            assert "swap w3" in log and "swap w1" in log and root.pacer._swapped
+            root.pacer.end_frame()
+        log.clear()
+        app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, flush=lambda: None)
+        assert slots[1].error == "" and "swap w2" in log
+    finally:
+        app.glfw = app_glfw
+
+
+def test_output_1_failing_its_present_reaches_the_red_banner():
+    """The operator's one warning. Output 1's present raising must not be caught as a
+    later output's is: the others still get their picture, then it raises, so `frame`
+    calls `watch.failed`, not `watch.drew`. The window isn't swapped, so it holds its
+    last frame, and nothing marks the pacer as swapped: the timer paces."""
+    from hyperspace.watchdog import RenderWatch
+
+    log: list[str] = []
+    g = _SwapGlfw(log)
+    app_glfw, app.glfw = app.glfw, g
+    try:
+        slots = _rig_slots("glass", "projector",
+                           presenter=lambda sl: _Pres(log, sl.name, boom=sl.n == 1))
+        root = _rig_root(log, slots, g)
+        warned: list = []
+        watch = SimpleNamespace(output_failed=lambda *a: warned.append(a))
+        with pytest.raises(RuntimeError, match="lost the context"):
+            app._draw_render(_Renderer(log), _Ctx(log), object(), slots, root, watch,
+                             flush=lambda: None)
+    finally:
+        app.glfw = app_glfw
+    assert "swap w2" in log and "swap w1" not in log       # the other went first, and got its frame
+    assert slots[0].error == "present: RuntimeError: lost the context"
+    assert warned == [] and not root.pacer._swapped
+    # …and through `frame`'s own path, the banner up and no frame counted
+    log2: list[str] = []
+    h = _host(log2)
+    seen = RenderWatch(SimpleNamespace(), info=dict)
+    seen.warn = lambda *a, **k: None
+    seen._once = lambda *a, **k: False
+    h.render_watch = seen
+
+    def draw(dt):
+        raise RuntimeError("lost the context")
+
+    h.draw_render = draw
+    app.frame(h, 0.0, 1 / 60, 60.0)
+    assert seen.frames == 0 and "render window stopped" in seen.error
+
+
+def test_a_pending_gl_error_is_told_not_hidden_and_not_blamed_on_the_flush():
+    """Read before the flush, so PyOpenGL's check can't raise someone else's error as
+    the frame's; out of memory reaches the banner, the rest the log, once each."""
+    from hyperspace.watchdog import RenderWatch
+
+    log: list[str] = []
+    told: list = []
+    errors = iter(["GL_INVALID_VALUE", "GL_OUT_OF_MEMORY", "GL_NO_ERROR"])
+
+    class C(_Ctx):
+        @property
+        def error(self):
+            return next(errors)
+
+    g = _SwapGlfw(log)
+    app_glfw, app.glfw = app.glfw, g
+    try:
+        slots = _rig_slots("glass", presenter=lambda sl: _Pres(log, sl.name))
+        watch = SimpleNamespace(gl_error=lambda e: (told.append(e), log.append("told")))
+        app._draw_render(_Renderer(log), C(log), object(), slots, _rig_root(log, slots, g), watch,
+                         flush=lambda: log.append("flush"))
+    finally:
+        app.glfw = app_glfw
+    assert told == ["GL_INVALID_VALUE", "GL_OUT_OF_MEMORY"]
+    assert log.index("told") < log.index("flush")
+    w = RenderWatch(SimpleNamespace(), info=dict)
+    logged: list = []
+    w._once = lambda key, kind, msg, body="": logged.append(key) or True
+    w.gl_error("GL_INVALID_VALUE")
+    assert w.warnings == [] and logged == ["gl error:GL_INVALID_VALUE"]
+    w.gl_error("GL_OUT_OF_MEMORY")
+    assert w.warnings == ["a render frame left GL_OUT_OF_MEMORY pending"]
 
 
 def test_every_output_is_applied_and_polled_for_keys(fake):
@@ -1464,8 +1811,8 @@ def test_every_output_is_applied_and_polled_for_keys(fake):
     fake.keys.add(("out3", g.KEY_B))
     assert keys.pressed(g.KEY_B)
     src = inspect.getsource(app.main)
-    assert "any(glfw.window_should_close(sl.win) for sl in slots if sl.opened)" in src
-    assert "Keys(render_win, ctrl_win, [sl.win for sl in later])" in src
+    assert "any(glfw.window_should_close(w) for w in _slot_windows(slots))" in src
+    assert "Keys(render_win, ctrl_win, [w for w in _slot_windows(slots) if w is not render_win])" in src
 
 
 def test_a_later_output_is_the_configs_and_never_overlay(monkeypatch):
@@ -1487,7 +1834,7 @@ def test_a_later_output_is_the_configs_and_never_overlay(monkeypatch):
 
 def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch, tmp_path):
     """Plan 21 WP4: main registers each opened output's switches before
-    the library attaches (with the other rig settings), seeded from the
+    the library attaches (with the other meta settings), seeded from the
     slots `_windows` filled from the config; the panel gets the slots;
     and what a param writes is the `View` the next frame draws."""
     import inspect
@@ -1514,10 +1861,10 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
     log: list[str] = []
     sizes = {"win1": (640, 400), "win3": (640, 400)}
     monkeypatch.setattr(app, "glfw", _SwapGlfw(log, sizes))
-    for sl in slots[1:]:
+    for sl in slots:
         sl.presenter = _Pres(log, sl.name)
     r = _Renderer(log)
-    app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: None)
+    app._draw_render(r, _Ctx(log), object(), slots, _rig_root(log, slots), flush=lambda: None)
     assert r.calls[0][1].switches is slots[1].switches and r.calls[0][1].switches.scene
 
 
@@ -1651,14 +1998,16 @@ def test_the_graph_preview_rides_on_output_1_only_when_asked():
     pv.tap = object()
     try:
         r = _Renderer(log)
-        app._draw_render(r, _Ctx(log), object(), _rig_slots("x"),
+        slots = _rig_slots("x", presenter=lambda sl: _Pres(log, sl.name))
+        root = _rig_root(log, slots, g)
+        app._draw_render(r, _Ctx(log), object(), slots, root,
                          flush=lambda: log.append("flush"), preview=pv)
         pv.want()
-        app._draw_render(r, _Ctx(log), object(), _rig_slots("x"),
+        app._draw_render(r, _Ctx(log), object(), slots, root,
                          flush=lambda: log.append("flush"), preview=pv)
     finally:
         app.glfw = app_glfw
     (quiet,), (asked,) = r.calls
     assert not quiet.publish and quiet.tap is None
     assert asked.publish == [pv] and asked.tap is pv.tap
-    assert log.count("flush") == 1 and not pv.wanted
+    assert not pv.wanted

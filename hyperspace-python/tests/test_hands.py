@@ -444,7 +444,7 @@ def make_app(tmp_path):
     control = Control(chain)
     view = ViewState()
     lib = Library(tmp_path)
-    reg = build_registry(view, control, NS(chain=chain), lib.project)
+    reg = build_registry(view, control, NS(chain=chain), lib.install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
 
     class Quiet:
@@ -465,7 +465,7 @@ def _frame(app):
 
 def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     """Until plan 18 WP3 `…_as_a_position_route`: the moved pitch — a
-    centred axis — now lands a push at the session's learn depth."""
+    centred axis — now lands a push at the meta controller's learn depth."""
     r = rig()
     run(r, 1, hand(), learn=app.learn, router=app.router)
     app.learn.arm("view.inst_amp")
@@ -481,7 +481,7 @@ def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     rows[0].motion = None                             # off here: the arithmetic is under test
     assert app.table.owner("view.inst_amp") is rows[0]
     assert app.learn.last == ("learned view.inst_amp ← hand right.pitch pushes +0.25 "
-                              "(into the preset)")
+                              "(into the patch)")
     # the hand pushes about the base — in floats, off its 100 detents —
     # through the Router like every route; the base is what the panel set
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=app.learn, router=app.router)
@@ -496,7 +496,7 @@ def test_learn_takes_the_axis_that_moved_as_a_push_about_the_base(app):
     _frame(app)
     assert p.eff_norm == pytest.approx(0.25, abs=1e-4)
     # into the loaded preset: the table has it, bindings.json does not
-    # (plan 13 §3.3 — a save of the preset writes it)
+    # (plan 13 §3.3 — a save of the loadable patch writes it)
     on_disk = Bindings.load(app.table.path, legacy_midi=None)
     assert on_disk.owner("view.inst_amp") is None
 
@@ -533,10 +533,10 @@ def _spied(app) -> list:
     return seen
 
 
-def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
+def test_learn_passes_the_axiss_centredness_and_the_meta_depth(tmp_path):
     """Plan 18 WP3, the adapter's half: a learn is told whether the axis
     that won rests in the middle — its setup *now* (`hands.<axis>.bipolar`,
-    "Centred"), not the feature table — and the session's `hands.learn_depth`.
+    "Centred"), not the feature table — and the meta controller's `hands.learn_depth`.
     Roll lands a push at 0.25; height on a one-sided param is still the
     fader; a roll whose "Centred" was switched off is one-sided too; at
     0.5 a push lands 0.5, a one-sided axis on a zero-centred range included.
@@ -596,7 +596,7 @@ def test_learn_passes_the_axiss_centredness_and_the_sessions_depth(tmp_path):
                       (-90.0, -15.64)):
         assert reads(deg) == pytest.approx(want, abs=0.01), deg
     assert rate.base == pytest.approx(1.0)
-    run(r, 1, router=app.router)                             # the hand leaves: the preset's 1×
+    run(r, 1, router=app.router)                             # the hand leaves: the loadable patch's 1×
     _frame(app)
     assert rate.value == pytest.approx(1.0) and not rate.modulated
     app.table.remove(b)                                      # the row before this package
@@ -786,7 +786,7 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
     MidiIO anywhere — `[midi] enabled = false`, or the adapter failed to
     open — right-click → Learn, move a hand, and the row lands."""
     chain = Analyzer(Analyser())
-    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), Library(tmp_path).project)
+    reg = build_registry(ViewState(), Control(chain), NS(chain=chain), Library(tmp_path).install)
     table = Bindings.load(tmp_path / "bindings.json", legacy_midi=None)
     learn, router = Learn(reg, table), Router(reg, table)
     r = rig()
@@ -800,7 +800,7 @@ def test_a_hand_learn_needs_no_midi_adapter(tmp_path):
     assert b.motion == DEFAULT_ROUTE_FEEL
     b.motion = None                                   # the push's arithmetic, not its travel
     assert learn.learning is None and "learned view.inst_amp" in learn.last
-    assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") is None  # the preset's
+    assert Bindings.load(table.path, legacy_midi=None).owner("view.inst_amp") is None  # the loadable patch's
     run(r, 1, hand(direction=tilt(math.radians(13.0))), learn=learn, router=router)
     router.modulate()
     reg.apply()
@@ -868,11 +868,11 @@ def test_hands_page_draws_live_and_offline(tmp_path):
         audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
-        reg = build_registry(view, control, audio, lib.project)
+        reg = build_registry(view, control, audio, lib.install)
         r = rig()
         hands.register(reg, r.s)
         lib.attach(reg)
-        panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+        panel = Panel(control, audio, view, bank=lib.install, registry=reg, library=lib)
         panel.hand_settings = r.s
         reg["ui.page"].set(PAGE_KEYS.index("hands"))
 
@@ -1066,7 +1066,7 @@ def test_learning_while_pinched_gates_the_row_on_that_pinch(app):
 
 def test_a_hand_learn_writes_the_axis_by_name_on_any_dofs(app):
     """Decision register row 20: a learn writes `hand:<name>` — the same
-    row whatever lane the axis sits on — so a preset saved on this rig
+    row whatever lane the axis sits on — so a loadable patch saved on this rig
     plays on one whose `[hands] dofs` list is ordered differently."""
     r = rig(dofs=["yaw", "pitch"])                  # right pitch is lane 3 here, not 10
     shut = {"tips": (10.0, 60.0, 60.0, 60.0), "palm_w": 100.0}
@@ -1135,7 +1135,7 @@ def test_the_adapter_publishes_its_switches_as_gates(app):
 
 # ------------------------------------------------- one rig table (audit N1)
 
-def test_one_defaults_table_for_the_rig(tmp_path):
+def test_one_defaults_table_for_the_meta(tmp_path):
     """config.load fills the [hands] section from hands.DEFAULTS (config has
     no table of its own), and a bare AxisSettings is the axis from_config
     builds — no second table of defaults anywhere."""
@@ -1149,7 +1149,7 @@ def test_one_defaults_table_for_the_rig(tmp_path):
     assert cfg["calibration"] == str(tmp_path / "hands.json")
     cfg["dofs"].append("grab")                             # a copy: the table is untouched
     assert hands.DEFAULTS["dofs"] == hands.core.DEFAULT_DOFS and "grab" not in hands.core.DEFAULT_DOFS
-    filled = hands.core.rig({"dofs": ["x"]})
+    filled = hands.core.filled_config({"dofs": ["x"]})
     filled["dofs"].append("y")
     assert hands.DEFAULTS["dofs"][:2] == ["x", "y"] and len(hands.DEFAULTS["dofs"]) == 6
     s = HandSettings.from_config()
@@ -1355,7 +1355,7 @@ def test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced(monkeypatch, c
 
 
 def test_a_daw_port_that_stays_missing_is_looked_for_less_often(monkeypatch):
-    """The hands' out port keeps midi.Ports' pace (audit R15): RECONNECT_S
+    """The hands' out port keeps midi.Ports' pace: RECONNECT_S
     for RECONNECT_FAST looks, then RECONNECT_SLOW_S, and from the start
     again once it has opened."""
     from hyperspace import bridge, midi
@@ -1908,11 +1908,11 @@ def test_hands_page_draws_the_box_and_a_hand_outside_it(tmp_path):
         audio = NS(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
         view = ViewState()
         lib = Library(tmp_path, period=0.0)
-        reg = build_registry(view, control, audio, lib.project)
+        reg = build_registry(view, control, audio, lib.install)
         r = boxed()
         hands.register(reg, r.s)
         lib.attach(reg)
-        panel = Panel(control, audio, view, bank=lib.project, registry=reg, library=lib)
+        panel = Panel(control, audio, view, bank=lib.install, registry=reg, library=lib)
         panel.hand_settings = r.s
         reg["ui.page"].set(PAGE_KEYS.index("hands"))
         said = []
@@ -1995,7 +1995,7 @@ def _play(r, app, frames) -> int | None:
 
 
 def test_a_hand_learn_listens_to_one_hand(tmp_path):
-    """The session's "the Leap assigned a learn to the wrong hand" (plan 17
+    """The meta controller's "the Leap assigned a learn to the wrong hand" (plan 17
     §1 row 1). A bare learn takes whichever axis of either hand travelled
     furthest: in both cases that is the right hand's. Armed with
     "hand:left" only the left hand's axes can win — the left roll is

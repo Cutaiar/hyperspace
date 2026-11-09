@@ -10,10 +10,10 @@ the default is now, just use that as an upper bound for what audio is
 allowed to push on its controls, and then just update all the presets
 accordingly. Make sure that they're all using spring controls as well."
 PRs #301 and #305 set those defaults for *new* routes only (a saved row
-keeps its own depth and feel), and presets here are made by copying and
+keeps its own depth and feel), and loadable patches here are made by copying and
 editing older ones, so the old rows would have lived on for ever.
 
-For each preset in ``<library>/presets/*.json`` (not ``trash/``, not a
+For each loadable patch in ``<library>/presets/*.json`` (not ``trash/``, not a
 backup, not a dot-file), every route whose source is an analyzer lane
 (the ``lane`` scheme, ``lane:<k>``) is rewritten:
 
@@ -30,14 +30,14 @@ backup, not a dot-file), every route whose source is an analyzer lane
 
 Nothing else in the file moves: the document is read and written back
 as the app writes it (``json.dumps(indent=1)``), so a diff shows only the
-rows that changed. A preset with no lane route is not written. The run
+rows that changed. A loadable patch with no lane route is not written. The run
 is idempotent.
 
-The default is a **dry run**: one line per preset with what would change.
+The default is a **dry run**: one line per loadable patch with what would change.
 ``--apply`` first copies the whole library folder to
 ``~/Hyperspace/library-backup-<stamp>/`` (the machine's home, never
 inside the library; `migrate_library.backup`) and says where, then
-writes. The test corpus (``tests/corpus/presets``) is test data behind
+writes. The test corpus (``tests/corpus/loadable``) is test data behind
 the goldens and is never touched by this tool.
 """
 
@@ -75,7 +75,7 @@ def _migrate_library():
 
 @dataclass
 class Change:
-    """What one preset's rewrite did."""
+    """What one loadable patch's rewrite did."""
     file: str
     lanes: int = 0            # lane rows seen
     capped: int = 0           # pushes held to the cap
@@ -102,7 +102,7 @@ def _old_default_spring(m: dict | None) -> bool:
 
 def calm(doc: dict, *, cap: float = LANE_DEPTH, file: str = "") -> Change:
     """Rewrite `doc`'s lane routes in place (see the module doc) and say
-    what moved. `doc` is the preset as loaded from its file."""
+    what moved. `doc` is the loadable patch as loaded from its file."""
     c = Change(file)
     smooth = DEFAULT_ROUTE_FEEL.to_json()
     for row in doc.get("routes", []):
@@ -137,8 +137,8 @@ def calm(doc: dict, *, cap: float = LANE_DEPTH, file: str = "") -> Change:
 
 
 def rewrite(path: Path, *, cap: float, apply: bool, ml) -> Change:
-    """One preset file: read, calm, and (with `apply`) write it back as the
-    app writes it. A file that is not a preset document is skipped."""
+    """One loadable patch file: read, calm, and (with `apply`) write it back as the
+    app writes it. A file that is not a loadable patch document is skipped."""
     doc = json.loads(path.read_text())
     if not isinstance(doc, dict) or not isinstance(doc.get("routes", []), list):
         return Change(path.name)
@@ -170,9 +170,9 @@ def main(argv: list[str] | None = None) -> int:
     ml = _migrate_library()
     home = ml.machine_home()
     library = a.library or ml.configured_library(home)
-    files = ml.preset_files(library)
+    files = ml.loadable_files(library)
     if not files:
-        print(f"no presets under {library / ml.PRESETS}")
+        print(f"no presets under {library / ml.LOADABLE}")
         return 1
     if a.apply:
         print(f"backup: {ml.backup(library, home)}")

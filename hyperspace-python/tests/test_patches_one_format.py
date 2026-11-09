@@ -1,4 +1,4 @@
-"""Plan 50: one saved format — a patch, a group and a preset are one
+"""Plan 50: one saved format — a patch, a group and a loadable patch are one
 document shape (`patches.shape_of`); every fragment comes in through one
 ladder (`patches.forward`: a ``patch/1`` and a ``hyperspace.preset/1``
 module preset read as their ``patch/2``); a module preset is a **patch of
@@ -9,8 +9,8 @@ shape, a backup first.
 
 Old files are opened end to end (REVIEW.md: not only the converter): an
 old module preset in a group's folder loads from the strip, an old
-``patch/1`` spawns from GRAPH's library door, and a corpus preset
-round-trips byte for byte through the preset's one loader."""
+``patch/1`` spawns from GRAPH's library door, and a corpus loadable patch
+round-trips byte for byte through the loadable patch's one loader."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ACID_WASH = ROOT / "tests" / "fixtures" / "patches" / "acid-wash.json"
 WAKE = CORPUS / "patches" / "dream" / "wake.json"
 OLD_MODULE = {"schema": "hyperspace.preset/1", "group": "dream", "name": "OLD",
-              "note": "a module preset from before plan 50",
+              "note": "a module patch from before plan 50",
               "values": {"dream.mix": 0.25, "dream.echoes": 12}}
 
 
@@ -53,7 +53,7 @@ def test_the_one_ladder_reads_every_fragment_as_its_patch_2():
     new = patches.forward(old)
     assert old == OLD_MODULE                                   # the input is never changed
     assert new == {"schema": "hyperspace.patch/2", "name": "OLD",
-                   "note": "a module preset from before plan 50", "group": "dream",
+                   "note": "a module patch from before plan 50", "group": "dream",
                    "values": {"dream.mix": 0.25, "dream.echoes": 12}}
     one = json.loads(ACID_WASH.read_text())
     assert one["schema"] == "hyperspace.patch/1"
@@ -70,13 +70,13 @@ def test_the_one_ladder_reads_every_fragment_as_its_patch_2():
 
 
 def test_shape_of_reads_the_one_shape_three_ways():
-    preset_doc = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
-    assert patches.shape_of(preset_doc) == patches.PRESET_SHAPE
+    loadable_doc = json.loads((CORPUS / "loadable" / "party-trip.json").read_text())
+    assert patches.shape_of(loadable_doc) == patches.LOADABLE_SHAPE
     assert patches.shape_of(json.loads(ACID_WASH.read_text())) == patches.PATCH_SHAPE
     assert patches.shape_of(json.loads(WAKE.read_text())) == patches.GROUP_SHAPE
     assert patches.shape_of(patches.forward(OLD_MODULE)) == patches.GROUP_SHAPE
-    # a preset is a patch that fills the frame: it writes no ports
-    assert "ports" not in preset_doc
+    # a loadable patch is a patch that fills the frame: it writes no ports
+    assert "ports" not in loadable_doc
 
 
 def test_a_group_patch_spawns_as_its_values_replacing_its_group():
@@ -98,34 +98,34 @@ def test_the_corpus_is_in_the_one_shape():
         assert doc["schema"] == "hyperspace.patch/2" and doc["group"] == "dream", path.name
         assert patches.check(doc) == [] and patches.forward(doc) == doc
     assert not (CORPUS / "dream").exists()
-    for path in sorted((CORPUS / "presets").glob("*.json")):
+    for path in sorted((CORPUS / "loadable").glob("*.json")):
         assert b'"modules"' not in path.read_bytes(), path.name
 
 
-def test_the_presets_ladder_is_one_function_the_load_reads_through():
-    """A whole preset's steps (`seven`, `nine`, `ten`) are one function,
-    `graphmigrate.forward`, which the load runs: a `/10` passes untouched,
+def test_the_loadables_ladder_is_one_function_the_load_reads_through():
+    """A whole loadable patch's steps (`seven`, `nine`, `ten`) are one function,
+    `graphmigrate.forward`, which the load runs: an `/11` passes untouched,
     a `/2` comes out `/7`-shaped and said."""
     import inspect
 
-    from hyperspace import graphmigrate, preset
-    assert "graphmigrate.forward(" in inspect.getsource(preset.Presets.load_doc)
-    new = json.loads((CORPUS / "presets" / "party-trip.json").read_text())
+    from hyperspace import graphmigrate, loadable
+    assert "graphmigrate.forward(" in inspect.getsource(loadable.LoadedPatch.load_doc)
+    new = json.loads((CORPUS / "loadable" / "party-trip.json").read_text())
     fwd = graphmigrate.forward(copy.deepcopy(new), {})
     assert fwd.doc == new and fwd.notes == () and fwd.migrated == ""
     old = json.loads((ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
                       / "party-trip.json").read_text())
     fwd = graphmigrate.forward(old, {})
-    assert fwd.migrated.startswith(f"{old['schema']} migrated to hyperspace.preset/10")
+    assert fwd.migrated.startswith(f"{old['schema']} migrated to hyperspace.loadable/11")
     assert "modules" not in fwd.doc and "desk_template" not in fwd.doc
 
 
 # ---------------------------------------------------------------- end to end
 
-def test_a_corpus_preset_round_trips_byte_for_byte_through_the_one_loader(tmp_path):
+def test_a_corpus_loadable_round_trips_byte_for_byte_through_the_one_loader(tmp_path):
     for k, name in enumerate(("party-trip", "party-noita", "seq-demo")):
-        data = (CORPUS / "presets" / f"{name}.json").read_bytes()
-        again, notes, _ = headless.resave(CORPUS / "presets" / f"{name}.json", tmp_path / str(k))
+        data = (CORPUS / "loadable" / f"{name}.json").read_bytes()
+        again, notes, _ = headless.resave(CORPUS / "loadable" / f"{name}.json", tmp_path / str(k))
         assert again == data and notes == [], name
 
 
@@ -176,7 +176,7 @@ def test_an_old_patch_1_reads_as_its_2_through_the_library(tmp_path):
     app = headless.make_app(tmp_path)
     doc = app.lib.read_patch("acid-wash")
     assert doc["schema"] == "hyperspace.patch/2"
-    host = patches.Host.of(app.presets.graph.spec, app.router.table, app.presets.banks())
+    host = patches.Host.of(app.loaded_patch.graph.spec, app.router.table, app.loaded_patch.banks())
     landing = patches.spawn(doc, host)
     assert {e.get("file") for e in landing.nodes if e.get("kind") == "effect"} == {
         "acid", "wobble"}
@@ -186,7 +186,7 @@ def test_an_old_patch_1_reads_as_its_2_through_the_library(tmp_path):
 # ---------------------------------------------------------------- the migration's step
 
 def _old_library(root: Path) -> Path:
-    (root / "presets").mkdir(parents=True)
+    (root / "loadable").mkdir(parents=True)
     (root / "dream").mkdir()
     (root / "dream" / "old.json").write_text(json.dumps(OLD_MODULE))
     (root / "dream" / ".tmp.json").write_text("{}")
@@ -211,7 +211,7 @@ def test_the_tool_moves_module_presets_and_patch_1_into_the_shape(tmp_path):
         ("camera/wide.json", "patches/camera/wide.json"),
         ("dream/old.json", "patches/dream/old.json"),
         ("patches/acid-wash.json", "patches/acid-wash.json")]
-    assert left == ["fx/wobbly.json: a retired group's — left as it is"]
+    assert left == ["fx/wobbly.json: a retired group's — deleted"]
     assert (root / "dream" / "old.json").is_file()            # planning writes nothing
     assert tool.group_write(moves) == []
     assert not (root / "camera").exists()                     # an emptied folder goes
@@ -222,7 +222,7 @@ def test_the_tool_moves_module_presets_and_patch_1_into_the_shape(tmp_path):
                     "values": {"camera.zoom": 0.7}, "units": {"camera.pan": "world"}}
     acid = json.loads((root / PATCHES / "acid-wash.json").read_text())
     assert acid["schema"] == "hyperspace.patch/2"
-    assert tool.group_plan(root) == ([], ["fx/wobbly.json: a retired group's — left as it is"])
+    assert tool.group_plan(root) == ([], ["fx/wobbly.json: a retired group's — deleted"])
     # and the app opens what the step wrote
     app = headless.make_app(root)
     assert app.lib.list("camera") == ["Wide"] and app.lib.load("camera", "Wide") == []
@@ -251,13 +251,13 @@ def test_the_tool_dry_run_writes_nothing_and_apply_backs_up_first(tmp_path, monk
 
 # ---------------------------------------------------------------- review fixes (PR #352)
 
-def test_a_group_never_holds_the_rigs_kinds_one_list_with_graphview():
+def test_a_group_never_holds_the_meta_kinds_one_list_with_graphview():
     """Review fix 1: a media channel, a window, All outputs and a cloud are
-    the rig's (`patches.RIG_KINDS`, `graphview.RIG_KINDS` the same list):
+    the rig's (`patches.FIXTURE_KINDS`, `graphview.FIXTURE_KINDS` the same list):
     Group refuses them, so a group never carries what no patch can."""
     from hyperspace import graph as G
     from hyperspace import graphview
-    assert graphview.RIG_KINDS is patches.RIG_KINDS
+    assert graphview.FIXTURE_KINDS is patches.FIXTURE_KINDS
     spec = G.read_graph({"frame": "wired", "wires": [
         {"from": "channel.a", "to": "warp.image"}, {"from": "warp", "to": "output.all.image"}]})
     held, said = patches.groupable(spec, None, ["render:channel.a", "render:warp",
@@ -280,18 +280,18 @@ def test_an_empty_group_key_is_one_refusal_and_one_reading():
 
 
 def test_a_groups_folder_refuses_what_is_no_patch_of_that_group(tmp_path):
-    """Review fix 7: in `patches/dream/`, a whole preset, a canvas patch and
+    """Review fix 7: in `patches/dream/`, a whole loadable patch, a canvas patch and
     another group's patch are each refused, the mismatch named — never
     landed as dream values."""
     folder = tmp_path / PATCHES / "dream"
     folder.mkdir(parents=True)
-    shutil.copy(CORPUS / "presets" / "dial.json", folder / "dial.json")
+    shutil.copy(CORPUS / "loadable" / "dial.json", folder / "dial.json")
     shutil.copy(ACID_WASH, folder / "acid.json")
     (folder / "cam.json").write_text(json.dumps(patches.group_doc("camera", "cam", {})))
     (folder / "blank.json").write_text(json.dumps({**patches.group_doc("dream", "b", {}),
                                                     "group": ""}))
     app = headless.make_app(tmp_path)
-    for name, words in (("dial", "dial.json is a whole preset, not a patch of the dream group"),
+    for name, words in (("dial", "dial.json is a whole loadable patch, not a patch of the dream group"),
                         ("acid wash", "acid.json is a canvas patch, not a patch of the dream"),
                         ("cam", "cam.json is a patch of the camera group, not a patch of"),
                         ("b", "the key names no param group")):
@@ -316,17 +316,17 @@ def test_a_headless_resave_sees_the_librarys_patches(tmp_path):
     shutil.copy(WAKE, lib / PATCHES / "dream" / "wake.json")
     shutil.copy(ACID_WASH, lib / PATCHES / "acid-wash.json")
     assert headless.SHARED_FOLDERS == (PATCHES,)
-    headless.resave(CORPUS / "presets" / "dial.json", tmp_path / "scratch", library=lib)
+    headless.resave(CORPUS / "loadable" / "dial.json", tmp_path / "scratch", library=lib)
     home = tmp_path / "scratch" / "library"
     assert (home / PATCHES / "dream" / "wake.json").is_file()
     assert (home / PATCHES / "acid-wash.json").is_file()
 
 
 def test_to_moves_no_patch_with_or_without_apply(tmp_path, monkeypatch, capsys):
-    """Review round 2: `--to` moves none — alone it writes only presets into
+    """Review round 2: `--to` moves none — alone it writes only loadable patches into
     the folder; with `--apply` the tool refuses the pair before anything is
     read (and the apply path guards its plan the same way), so the module
-    presets and the `/1` patch are left as they were."""
+    loadable patches and the `/1` patch are left as they were."""
     tool = _tool()
     root = _old_library(tmp_path / "lib")
     monkeypatch.setenv("HYPERSPACE_HOME", str(tmp_path / "machine"))

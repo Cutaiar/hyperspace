@@ -112,17 +112,18 @@ class GhostState:
 def prefix(n: int = 1) -> str:
     """The n-th hands node's id prefix, by the naming rule (plan 26 A0/A4,
     ENGINEERING §2): `ghost`, then `ghost.2`, … — same group, so an extra
-    hands node's params are the session's like the first's."""
+    hands node's params are the meta controller's like the first's."""
     if n < 1:
         raise ValueError(f"hands instances start at 1, not {n}")
     return GROUP if n == 1 else f"{GROUP}.{n}"
 
 
 class RoomSetting:
-    """A hands node's room setting — its mirror (plan 44 D3, review of
-    #351): the value is held here, on the session's param, and written to
-    every deck's `GhostState` that follows it, each held weakly (a deck
-    rebuilt or dropped lets its old state go, and is never written again)."""
+    """The room's one mirror (plan 44 D3, review of #351; one for every hands
+    node, LY1): the value is held here, on `ghost.mirror`, and written to every
+    `GhostState` that follows it, every deck's and every hands node's, each
+    held weakly (a deck rebuilt or dropped lets its old state go, and is never
+    written again)."""
 
     def __init__(self, value: bool = False):
         import weakref
@@ -147,25 +148,63 @@ class RoomSetting:
             st.mirror = self.value
 
 
+def _the_mirror(reg, state: GhostState) -> RoomSetting:
+    """`ghost.mirror`'s room setting, the param declared here if it isn't yet."""
+    mirror = reg.get(f"{GROUP}.mirror")
+    room = mirror.__dict__.get("room") if mirror is not None else None
+    if isinstance(room, RoomSetting):
+        return room
+    if room is not None:
+        # a room from before a hot reload, which re-classes no room by itself:
+        # the same object, so everything that follows it still does
+        room.__class__ = RoomSetting
+        return room
+    if mirror is not None:
+        # a param from before the room existed: its setting kept, given a room
+        # of its own — never declared twice (review of #351)
+        room = RoomSetting(bool(mirror.get()))
+        mirror.get, mirror.put = (lambda: room.value), room.set
+    else:
+        # the meta controller's (plan 44 D3): one setting for the room, owned by the
+        # meta controller's param and read from there — written to every live deck's
+        # hands state, held weakly so a deck rebuilt lets its old state go
+        room = RoomSetting(bool(state.mirror))
+        mirror = reg.toggle(
+            f"{GROUP}.mirror", "Ghost mirror", lambda: room.value, room.set, group=GROUP,
+            modulatable=False,
+            tip="Flip the ghost hands left for right, the hands only and every hands "
+                "node — for a real mirror in front of the performer's hands. For a "
+                "Pepper's Ghost glass use Flip X / Flip Y in the OUTPUT section, which "
+                "mirror the whole picture; with an output flip on, leave this off or "
+                "the hands flip twice. The room's, not the patch's: an install keeps it.")
+    mirror.__dict__["room"] = room
+    return room
+
+
 def register(reg, state: GhostState, n: int = 1) -> None:
-    """ghost.* — the hands' look, performance params (plan 43 §6, plan 44
-    D3, schema `/10`): a preset is a complete look, so it carries how the
+    """ghost.* — the hands' look, patch params (plan 43 §6, plan 44
+    D3, schema `/10`): a loadable patch is a complete look, so it carries how the
     hands are drawn and a load lands it, as it lands the eye — the one
-    exception is `mirror` (`params.SESSION_KEYS`), a fact of the room (a
-    real mirror in front of the performer's hands): the session's single
+    exception is `mirror` (`params.SHARED_META_KEYS`), a fact of the room (a
+    real mirror in front of the performer's hands): the meta controller's single
     copy, kept by the show, declared once and written to every deck's
     hands state. They show on the HANDS page and can be
     learned onto a desk button or knob. Only `on` and `alpha` are
     modulatable (a hand or an LFO may drive them); `mirror`, `guide`,
-    `tethers` and `style` are settings of the rig and the show — a
+    `tethers` and `style` are settings of the meta controller and the show — a
     performer's row on the mirror would flip the hands with a hand's move,
     and a style stepping under an LFO would swap the drawn object
     mid-gesture (plan 21 WP5 R12, WP6).
 
     Plan 26 A4: `n` ≥ 2 declares a second hands node's own set
-    (`ghost.2.on` … "Ghost 2 opacity"), the same params on its own state."""
+    (`ghost.2.on` … "Ghost 2 opacity") on its own state, without a mirror: its
+    state follows `ghost.mirror` (LY1), so a hands node adds nothing to what's
+    shared and none is left behind when a deck drops it."""
     pre, lb = prefix(n), "Ghost" if n == 1 else f"Ghost {n}"
     if f"{pre}.on" in reg:
+        # (declared already, each deck's landing of a held node: it follows still,
+        # a node from before a hot reload included)
+        _the_mirror(reg, state).follow(state)
         return
     reg.toggle(f"{pre}.on", f"{lb} hands", lambda: state.on,
                lambda v: setattr(state, "on", bool(v)), group=GROUP,
@@ -175,29 +214,7 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                    lambda v: setattr(state, "alpha", float(v)), lo=0.0, hi=1.0,
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
-    mirror = reg.get(f"{pre}.mirror")
-    room = mirror.__dict__.get("room") if mirror is not None else None
-    if mirror is not None and not isinstance(room, RoomSetting):
-        # a param from before this build (a hot reload): its setting kept,
-        # given a room of its own — never declared twice (review of #351)
-        room = RoomSetting(bool(mirror.get()))
-        mirror.get, mirror.put = (lambda: room.value), room.set
-        mirror.__dict__["room"] = room
-    elif not isinstance(room, RoomSetting):
-        # the session's (plan 44 D3): one setting for the room, owned by the
-        # session's param and read from there — written to every live deck's
-        # hands state, held weakly so a deck rebuilt lets its old state go
-        room = RoomSetting(bool(state.mirror))
-        mirror = reg.toggle(
-            f"{pre}.mirror", f"{lb} mirror", lambda: room.value, room.set, group=GROUP,
-            modulatable=False,
-            tip="Flip the ghost hands left for right, the hands only — for a real "
-                "mirror in front of the performer's hands. For a Pepper's Ghost "
-                "glass use Flip X / Flip Y on the OUTPUT page, which mirror the whole "
-                "picture; with an output flip on, leave this off or the hands flip "
-                "twice. The room's, not the preset's: a show keeps it.")
-        mirror.__dict__["room"] = room
-    room.follow(state)
+    _the_mirror(reg, state).follow(state)
     reg.enum(f"{pre}.guide", f"{lb} guide", lambda: state.guide,
              lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
              modulatable=False,
@@ -324,15 +341,15 @@ def camera(box, m: np.ndarray, aspect: float) -> tuple[np.ndarray, np.ndarray]:
 # they had until then, kept as the reference the default calibration is
 # tuned against (tests/test_hands_node.py).
 #
-# Plan 43 C2 (the owner, 2026-11-02, row 575): the eye is the preset's, and
+# Plan 43 C2 (the owner, 2026-11-02, row 575): the eye is the loadable patch's, and
 # where the hands are drawn decides what it does to them. The calibration
-# (the box into the world) is the rig's: fitted to the **reference eye**
-# (`EYE_FOV` / `EYE_DISTANCE`, the defaults) whatever the preset's eye, so
+# (the box into the world) is the meta controller's: fitted to the **reference eye**
+# (`EYE_FOV` / `EYE_DISTANCE`, the defaults) whatever the loadable patch's eye, so
 # the hands sit in the same world as the shape. Hands drawn **in the scene**
-# are seen through the preset's eye like the shape — a zoomed eye scales
+# are seen through the loadable patch's eye like the shape — a zoomed eye scales
 # both alike. Hands drawn as **a layer** are a screen-space picture: drawn
 # through the reference eye too (`Settled.layer`), they keep their size and
-# place on screen whatever the preset's eye. At the default eye the two are
+# place on screen whatever the loadable patch's eye. At the default eye the two are
 # the same matrix, so no picture of before moves.
 
 def calibration(box, m: np.ndarray, units=None) -> np.ndarray:
@@ -348,9 +365,9 @@ def calibration(box, m: np.ndarray, units=None) -> np.ndarray:
     tightly as `camera` frames it on that picture — a room setting, so the
     same on every output (plan 26 A3: A2 fitted the square on the shorter
     side, which drew the hands at about two thirds of their old size on a
-    landscape output). The eye fitted to is the rig's reference eye
-    (`EYE_FOV` / `EYE_DISTANCE`), never the preset's (plan 43 C2, row 575:
-    no argument takes another, so nobody can pass the preset's back in).
+    landscape output). The eye fitted to is the meta controller's reference eye
+    (`EYE_FOV` / `EYE_DISTANCE`), never the loadable patch's (plan 43 C2, row 575:
+    no argument takes another, so nobody can pass the loadable patch's back in).
     `tilt` (degrees, 32 = ELEVATION) turns the stage's up toward the eye:
     the eye looks along the world's −z, and the ghost camera looked down
     onto the hands from that high."""
@@ -388,9 +405,9 @@ def shared_camera(box, m: np.ndarray, aspect: float, units=None, *,
                   ) -> tuple[np.ndarray, np.ndarray]:
     """(view_proj 4×4, eye) like `camera`, but through the shape's eye:
     `geometry.eye_matrix` (the `eye.*` params; the defaults when None)
-    after `calibration` — fitted to the rig's reference eye, never to
+    after `calibration` — fitted to the meta controller's reference eye, never to
     `fov` / `distance` (plan 43 C2, row 575: the hands live in the world,
-    so a preset's zoomed eye sees them as it sees the shape). `view_proj`
+    so a loadable patch's zoomed eye sees them as it sees the shape). `view_proj`
     takes Leap-basis stage points, as `camera`'s does — the calibration's
     stage basis is undone first — and `eye` is the eye's position in that
     stage space, for the shading. What the hands node draws with (plan 26
@@ -420,10 +437,10 @@ def through_eye(cal: np.ndarray, m: np.ndarray, aspect: float, fov: float | None
 
 class Settled(tuple):
     """A frame's settled hands (`Ghost.settle`): ``(poses, view_proj, eye)``
-    through the preset's eye — what the scene draws them with — and
-    `layer`, the same poses' ``(view_proj, eye)`` through the rig's
+    through the loadable patch's eye — what the scene draws them with — and
+    `layer`, the same poses' ``(view_proj, eye)`` through the meta controller's
     reference eye: what a hands layer draws them with, so a layer keeps its
-    size on screen whatever the preset's eye (plan 43 C2, row 575). Unpacks
+    size on screen whatever the loadable patch's eye (plan 43 C2, row 575). Unpacks
     as the three it always was."""
 
     layer: tuple | None = None
@@ -1436,7 +1453,7 @@ class Ghost:
 
     def calibrated(self, box, m: np.ndarray, units=None) -> np.ndarray:
         """`calibration(box, m, units)`, fitted once and kept until one of
-        the three changes (plan 43 C2, row 575: the fit is the rig's — the
+        the three changes (plan 43 C2, row 575: the fit is the meta controller's — the
         box, the basis with its mirror, hands.json's units — never the eye
         or the output, so a zoomed eye costs no fit a frame)."""
         key = (np.asarray(box, dtype=np.float64).tobytes(), np.asarray(m).tobytes(),
@@ -1457,7 +1474,7 @@ class Ghost:
         the Leap calibration (`HandsIO.units`, from the box when the source
         has none) — the one camera the scene is drawn in, so the hands can
         be drawn inside the scene. Plan 43 C2: a `Settled`, whose `layer`
-        is the same poses through the rig's reference eye, for a hands
+        is the same poses through the meta controller's reference eye, for a hands
         layer (at the default eye the two are one). Steps the fades: call
         it once a frame (`settle`)."""
         st = self.state
@@ -1605,8 +1622,8 @@ class Ghost:
         included — `draw` and `Renderer._draw_frame` do).
 
         Plan 43 C2 (row 575): a layer is screen-space — the hands are
-        drawn through the rig's reference eye (`Settled.layer`), so they
-        keep their size and place on screen whatever the preset's eye —
+        drawn through the meta controller's reference eye (`Settled.layer`), so they
+        keep their size and place on screen whatever the loadable patch's eye —
         unless `world` (the layer is laid depth-aware, `HandsLayer.in_world`:
         its depth is compared with the scene's, so it is drawn through the
         scene's eye, one projection for both). The readout alone (`hands`

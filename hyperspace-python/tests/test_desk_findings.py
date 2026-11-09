@@ -1,8 +1,8 @@
 # ruff: noqa: F811 — `rig` is test_midi's fixture, taken as each test's argument
 """The owner's APC40 findings of 2026-10-16, reproduced with the fake port.
 
-The owner's session file is copied to tests/fixtures/desk-findings/ (its
-MIDI rows are the factory map's session part, row for row). Every symptom
+The owner's meta controller file is copied to tests/fixtures/desk-findings/ (its
+MIDI rows are the factory map's meta controller part, row for row). Every symptom
 of the report — the activator row (G8) taking two presses to go off and
 one to go on, the solo row (G9) that never goes dark while the rec-arm
 row (G10) lights and darkens press by press, track select (G7) and
@@ -39,10 +39,10 @@ from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.library import Library
+from hyperspace.loadable import LoadedPatch
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Router
 from hyperspace.view import ViewState
 
@@ -97,9 +97,9 @@ class Apc40:
 
 
 def owner_rig(tmp_path):
-    """test_midi's rig on the owner's session file and a shipped preset
+    """test_midi's rig on the owner's rig file and a shipped loadable patch
     from the corpus (its desk holds the activator row, as every corpus
-    preset's does)."""
+    loadable patch's does)."""
     shutil.copy(OWNER, tmp_path / "bindings.json")
     seed(tmp_path)
     chain = Analyzer(Analyser())
@@ -107,7 +107,7 @@ def owner_rig(tmp_path):
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
     lib = Library(tmp_path)
-    reg = build_registry(view, control, audio, lib.project)
+    reg = build_registry(view, control, audio, lib.install)
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
     reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
@@ -122,8 +122,8 @@ def owner_rig(tmp_path):
     inp, out = FakeIn(), FakeOut()
     t = [100.0]
     m = MidiIO(reg, path=tmp_path / "bindings.json", inp=inp, out=out, clock=lambda: t[0])
-    presets = Presets(lib, reg, Router(reg, m.table))
-    presets.load("TUMBLE")
+    loaded_patch = LoadedPatch(lib, reg, Router(reg, m.table))
+    loaded_patch.load("TUMBLE")
     m.poll()
     return SimpleNamespace(reg=reg, view=view, control=control, lib=lib, midi=m,
                            inp=inp, out=out, t=t)
@@ -133,11 +133,15 @@ def intros(r) -> list[int]:
     return [list(m.data)[6] for m in r.out.sent if m.type == "sysex"]
 
 
-def test_the_owners_file_holds_the_factory_session_rows_and_nothing_else():
+def test_the_owners_file_holds_the_factory_meta_rows_and_nothing_else():
     """No stale, duplicated or conflicting row: every MIDI row of the
-    owner's file is a factory map row (the session part); what the
-    factory has beyond it is the preset layer, which lives in presets."""
+    owner's file is a factory map row (the meta controller part); what the
+    factory has beyond it is the patch layer, which lives in loadable patches."""
     own = json.loads(OWNER.read_text())["bindings"]
+    # (the file as a load moves it: plan 44 D5d's crossfader and MASTER)
+    own = [b.to_json() | {"op": b.op, "value": b.value, "layer": b.layer}
+           for b in routing.remap_factory(routing.old_words(
+               [routing.Binding.from_json(r) for r in own])[0])[0]]
 
     def key(r):
         return (r["source"], r["target"], r.get("op"), float(r.get("value", 1.0)),
@@ -145,7 +149,7 @@ def test_the_owners_file_holds_the_factory_session_rows_and_nothing_else():
     mine = {key(r) for r in own if r["source"].split(":")[0] in ("cc", "note")}
     factory = {key(r) for r in apc40.DEFAULT_MAP}
     assert mine <= factory
-    # beyond it: the preset layer, and SEND A — the sequencer page (plan 31
+    # beyond it: the patch layer, and SEND A — the sequencer page (plan 31
     # §A), newer than the file, added at its load (`APC_NEW_ROWS`)
     send_a = (routing.SEQ_PAGE_SOURCE, routing.SEQ_PAGE_PARAM, "toggle", 1.0, None)
     assert {r[4] for r in factory - mine - {send_a}} == {"preset"}
@@ -208,7 +212,7 @@ def test_quant_sent_on_a_banked_channel_still_steps_the_bank(tmp_path):
     device selected; it is read as the one button it is (channel 0 in
     Alternate mode) — and it tells the app the desk fell back."""
     r = owner_rig(tmp_path)
-    bank = r.lib.project
+    bank = r.lib.install
     dev = Apc40(r)
     dev.press(apc40.N_SELECT, 2)            # nothing reaches the app: the device banks
     was = bank.active
@@ -248,12 +252,12 @@ def test_the_diagram_says_what_the_band_rows_and_the_corner_do(rig):
     fn = reg["band.0.fn"]
     assert text(reg, Binding("note:0:49", "band.0.fn", "toggle")) == \
         f"{fn.label}: {fn.text()} · next"
-    assert text(reg, Binding("note:0:80", "overlay.on", "toggle")) == "Overlay (if config allows)"
-    assert text(reg, Binding("note:0:87", "overlay.passthrough", "toggle")) == \
+    assert text(reg, Binding("note:0:80", "output.overlay", "toggle")) == "Overlay (if config allows)"
+    assert text(reg, Binding("note:0:87", "output.passthrough", "toggle")) == \
         "Click-through (overlay)"
     assert text(reg, Binding("note:0:81", "scene.reset_all", "toggle")) == \
         "Reset analyzer (again: undo)"
-    assert text(reg, Binding("note:0:63", "preset.next", "toggle")) == "Next bank preset"
+    assert text(reg, Binding("note:0:63", "preset.next", "toggle")) == "Next bank patch"
 
 
 def test_a_revealing_press_is_finished_so_the_next_press_is_no_second_sign(tmp_path):

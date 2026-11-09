@@ -65,7 +65,7 @@ beat-grid lock) waits for a beat source; nothing here derives ticks yet.
 **Sinks (plan 27 B3).** On the device registry the bridge is one device
 with two halves (devices.BridgeDevice): its `receive` stays a source (the
 ``ext`` vector, with its labels and rests published, `publish`) and its out
-half is a *sink*: what goes out is the session's sink rows on the
+half is a *sink*: what goes out is the meta controller's sink rows on the
 bridge's role (routing.py, ``param:view.bright → bridge:3``, `sink_values`),
 read after ``reg.apply()`` — so a param lane carries this frame's effective
 value, no longer one frame behind — and sent through `send_values`. The
@@ -92,6 +92,7 @@ import numpy as np
 from .bands import CEIL
 from .config import DEFAULTS
 from .midi import RECONNECT_S, Ports, retry_after
+from .midiports import port_names
 from .params import Kind, Registry
 from .pointer import Through
 
@@ -182,8 +183,12 @@ def _open_out(name: str, *, virtual: bool = True) -> tuple:
     backend refuses. (Moved here from hands/core.py, plan 27 B3.)"""
     if not name:
         return None, "", False
+    # (the one road; it can't abort on a refusal it sees: audit R15)
+    seen = port_names(fresh=True)
+    if seen.out_why:
+        return None, f"out {name!r}: {seen.out_why}"[:120], False
     try:
-        hit = next((n for n in mido.get_output_names() if name.lower() in n.lower()), None)
+        hit = next((n for n in seen.outputs if name.lower() in n.lower()), None)
         if hit:
             return mido.open_output(hit), "", False
         if not virtual:
