@@ -77,7 +77,7 @@ from pathlib import Path
 
 from imgui_bundle import imgui
 
-from . import library, ui, ui_fx, ui_loadable, ui_playlist, undo
+from . import library, ui, ui_fx, ui_loadable, ui_players, ui_playlist, undo
 
 UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings
 
@@ -138,7 +138,7 @@ SELECTION = "selection"
 # node's "open on …" leads to (`ui_graph.home_page`), so the mouse reaches them
 TABS = (SELECTION, "loadable", "audio", "routing", "playlist", "players", "system")
 MENU = tuple(k for k in KEYS if k not in TABS)  # the sections chip's menu: the rest, in order
-SAYS = (SELECTION, "playlist")   # chips whose words say something live: a fixed width (`_chip`)
+CHIP_DOT_R = 3.0         # px: the dirty dot in a chip's corner (`_corner_dot`)
 ROUTING = "routing"      # the section a picked desk control never dims (`_body`)
 CHIP_MAX = 220.0         # px: the most a chip's words take
 WRITE_AFTER_S = 0.5      # a setting in ui.json is written this long after the last change
@@ -256,7 +256,7 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     """The pane inside the pane's child: the row of chips (`_bar`), then the
     view's body at all the height left. `selection` draws the selected
     thing's details (None: nothing is selected, and the view says so);
-    `said` names it on its chip. `home`: the section the selected node's
+    `said` names it on the back chip and the selection chip's tooltip. `home`: the section the selected node's
     **open on …** leads to — shown, it has a **←** chip back to the
     selection."""
     key = showing(panel)
@@ -276,22 +276,21 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     _body(panel, st, key, body, dt, selection, 0.0, drawn)
 
 
-def _bar(panel, key: str, said: str) -> None:
+def _bar(panel, key: str, said: str = "") -> None:
     """The views' chips: `TABS`, then the **sections** chip and its menu
     (`MENU`), each lit while it is the view, a chip that would pass the
     pane's edge starting the next row. A click shows what it names."""
     titles = {k: t for k, t, _, _ in SECTIONS}
     groups = {k: g for k, _, g, _ in SECTIONS}
     for i, k in enumerate(TABS):
-        if _chip(panel, f"pane.{k}", titles[k].upper(), k == key, _said(panel, k, said),
-                 _dirty(panel, groups[k]), first=i == 0, tip=VIEW_TIP,
-                 dots=bool(groups[k]), full=k in SAYS):
+        live = _live(panel, k, said)
+        if _chip(f"pane.{k}", titles[k].upper(), k == key, _dirty(panel, groups[k]),
+                 first=i == 0, tip=f"{live}\n{VIEW_TIP}" if live else VIEW_TIP):
             show(panel, k)
     words = f"{titles[key].upper()}  ▾" if key in MENU else "SECTIONS  ▾"
     widest = max((f"{titles[k].upper()}  ▾" for k in MENU), key=len)
-    if _chip(panel, "pane.sections", words, key in MENU, "",
-             any(_dirty(panel, groups[k]) for k in MENU), first=False, tip=MENU_TIP,
-             dots=True, wide=("SECTIONS  ▾", widest)):
+    if _chip("pane.sections", words, key in MENU, any(_dirty(panel, groups[k]) for k in MENU),
+             first=False, tip=MENU_TIP, wide=("SECTIONS  ▾", widest)):
         imgui.open_popup("##pane.menu")
     if imgui.begin_popup("##pane.menu"):
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
@@ -371,42 +370,39 @@ def timing_line(panel) -> str:
     return "side pane: " + "  ·  ".join(f"{k} {ms:.2f}" for ms, k in got) + " ms"
 
 
-def _said(panel, key: str, said: str) -> str:
-    """What a chip names beside its title: the selection's what is selected;
-    the playlist's where it is. The players' chip is its title alone (Dillon,
-    2026-11-07: who is on and off air read as the chip's own words); the
-    footer's chip says who is where."""
-    if key == "selection":
-        return said
+def _live(panel, key: str, said: str) -> str:
+    """What a chip's tooltip says first, live (Dillon, 2026-11-09: the chips
+    say their names alone): what is selected, where the playlist is, who is
+    on and off air; "" for the rest."""
+    if key == SELECTION:
+        return f"selected: {said}" if said else "nothing selected"
     if key == "playlist" and getattr(panel, "playing", None) is not None:
         return ui_playlist.where(panel.playing)
+    if key == "players":
+        return ui_players.summary(panel)
     return ""
 
 
-def _chip(panel, cid: str, title: str, lit: bool, said: str, dot: bool,
-          first: bool, tip: str, dots: bool = False, full: bool = False,
+def _chip(cid: str, title: str, lit: bool, dot: bool, first: bool, tip: str,
           wide: tuple[str, ...] = ()) -> bool:
-    """One chip of the bar: `title` in the micro face with `said` after it,
-    lit while `lit`, a dot where its section's group has moved off its
-    loadable patch, on the row of the chip before it (`first`: there is
-    none) unless it would pass the edge. True when clicked.
+    """One chip of the bar: `title` in the micro face, lit while `lit`, on
+    the row of the chip before it (`first`: there is none) unless it would
+    pass the edge. True when clicked.
 
-    **Its width never follows what changes** (the rows of chips, and so the
-    body under them, must not jump while you work): a chip that can show a
-    dot (`dots`) keeps the dot's room with or without it; one whose words
-    say something live (`full`: the selection's node, the playlist's place)
-    is `CHIP_MAX` wide whatever they say; one whose words are one of a few
-    (`wide`) is as wide as the widest. Otherwise as wide as its words. Never
-    past the pane's edge."""
-    room = 2 * ui.HEADER_DOT_R + 12 if (dot or dots) else 0.0
+    **As wide as its name, and never wider or narrower while you work**
+    (Dillon, 2026-11-09: the rows of chips, and so the body under them,
+    must not jump, nor be padded out): a chip says its title alone — what
+    is selected, playing or on air is its tooltip (`_live`) — and the dirty dot sits in
+    its top-right corner, in its padding, taking no room. The sections chip,
+    whose name is one of a few (`wide`), is as wide as the widest."""
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)   # measured in the face it is drawn in
     try:
         pad = 2 * imgui.get_style().frame_padding.x
         # (the cursor is at a row's start here: the room is the whole row's)
-        most = min(CHIP_MAX, imgui.get_content_region_avail().x - room - pad)
-        words = ui.fit_text(f"{title}  ·  {said}" if said else title, most)
-        w = most if full else max([imgui.calc_text_size(t).x for t in (words, *wide)])
-        size = imgui.ImVec2(min(w, most) + room, 0)
+        most = min(CHIP_MAX, imgui.get_content_region_avail().x - pad)
+        words = ui.fit_text(title, most)
+        w = max(imgui.calc_text_size(t).x for t in (words, *wide))
+        size = imgui.ImVec2(min(w, most), 0)
         if not first:               # a selectable pads its words by the frame's padding
             ui.beside(size.x + pad)
         hit, _ = imgui.selectable(f"{words}##{cid}", lit, 0, size)
@@ -415,5 +411,14 @@ def _chip(panel, cid: str, title: str, lit: bool, said: str, dot: bool,
     if imgui.is_item_hovered():
         ui.tooltip(tip)
     if dot:
-        _dot()
+        _corner_dot()
     return bool(hit)
+
+
+def _corner_dot() -> None:
+    """The dirty dot on the chip just drawn: in its top-right corner, over
+    the padding, so a chip is the same width with it or without."""
+    lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+    r = CHIP_DOT_R
+    imgui.get_window_draw_list().add_circle_filled(
+        imgui.ImVec2(hi.x - r, lo.y + r), r, ui.u32(ui.RED))

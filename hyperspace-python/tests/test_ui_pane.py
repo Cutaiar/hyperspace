@@ -129,10 +129,10 @@ def test_a_selection_shows_in_the_selection_view(pane):
     assert st["pane_drawn"] == ["selection"]
 
 
-def test_a_selection_by_code_leaves_the_view_and_its_chip_names_it(pane):
+def test_a_selection_by_code_leaves_the_view_and_its_chip_is_its_name(pane):
     """A section being worked in stays when something else selects a node
-    (OUTPUT's open on GRAPH, a controller); the selection's chip says what is
-    selected, one click away."""
+    (OUTPUT's open on GRAPH, a controller); the selection's chip is one
+    click away, and says SELECTION alone (Dillon, 2026-11-09)."""
     r, d = pane
     st = _st(r)
     d.run(d.click("pane.loadable"), d.park())
@@ -141,8 +141,7 @@ def test_a_selection_by_code_leaves_the_view_and_its_chip_names_it(pane):
     r.panel.select_graph_node(node.id)
     d.run(d.wait(3))
     assert st["pane_drawn"] == ["loadable"]
-    chip = next(k for k in d.rects if k.endswith("##pane.selection"))
-    assert ui_graph.sel_words(("node", node))[:4] in chip
+    assert "SELECTION##pane.selection" in d.rects
 
 
 def _node_point(monkeypatch, st) -> dict:
@@ -1128,3 +1127,39 @@ def test_the_chips_hold_still_whatever_they_say(pane, monkeypatch):
     d.run(d.wait(2))
     after = {k: d.rect(k) for k in ids}
     assert after == before
+
+
+def test_each_chip_is_as_wide_as_its_name(pane, monkeypatch):
+    """No chip is padded out (Dillon, 2026-11-09): each is its title's width,
+    the dirty dot in its corner taking no room; only the sections chip is
+    the width of its widest name."""
+    r, d = pane
+    monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)     # every dot up
+    d.run(d.wait(2))
+    imgui.new_frame()
+    imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
+    extra = set()                       # what a chip adds to its words: the same for all
+    for k in ui_pane.TABS:
+        word = next(t for key, t, _, _ in ui_pane.SECTIONS if key == k).upper()
+        x0, _y0, x1, _y1 = d.rect(f"pane.{k}")
+        extra.add(round((x1 - x0) - imgui.calc_text_size(word).x))
+    imgui.pop_font()
+    assert len(extra) == 1 and next(iter(extra)) <= 12, extra
+    imgui.end_frame()
+
+
+def test_what_a_chip_would_say_live_is_its_tooltip(pane, monkeypatch):
+    """The selection's node is the selection chip's tooltip, not its words
+    (Dillon, 2026-11-09)."""
+    r, d = pane
+    view = ui_graph.view_of(r.panel)
+    node = next(n for n in view.nodes if n.label and n.kind != "modifier")
+    r.panel.select_graph_node(node.id)
+    d.run(d.click("pane.loadable"), d.park(), d.wait(3))
+    said: list[str] = []
+    real = ui.tooltip
+    monkeypatch.setattr(ui, "tooltip", lambda text: (said.append(text), real(text)))
+    d.run(d.move("pane.selection"), d.wait(2))
+    words = ui_graph.sel_words(("node", node))
+    assert any(t.startswith(f"selected: {words}") for t in said), said
+    assert "SELECTION##pane.selection" in d.rects
