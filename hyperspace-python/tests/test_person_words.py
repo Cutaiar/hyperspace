@@ -224,7 +224,6 @@ PRESET = re.compile(r"(?<![._/#\w])presets?(?![/_\w]|\.\w)", re.IGNORECASE)
 # names, which FQ4 left as they are. Anything else that stays is listed, and why
 ID = re.compile(r"[a-z_.0-9{}]*")
 PRESET_LEFT: dict[tuple[str, str], tuple[int, str]] = {
-    ("ui_loadable.py", "PRESET"): (1, "an imgui drag payload's type: never drawn"),
 }
 
 
