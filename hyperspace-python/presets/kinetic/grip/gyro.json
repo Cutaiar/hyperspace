@@ -1,0 +1,15 @@
+{
+ "schema": "hyperspace.patch/2",
+ "name": "gyro",
+ "note": "The shape on a loose spring with little drag, its inertia shaped by the other hand: swing it and it lags and overshoots, let go and it flies on spinning, close the left fist and pull the hands together to spin it up. For kinetic-comet.",
+ "group": "grip",
+ "values": {
+  "grip.on": true,
+  "grip.hand": 1,
+  "grip.coupling": 0.4,
+  "grip.drag": 0.9,
+  "grip.inertia": true,
+  "grip.shape": 2.5,
+  "grip.skater": true
+ }
+}

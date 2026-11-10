@@ -1,0 +1,149 @@
+{
+ "schema": "hyperspace.loadable/11",
+ "name": "kinetic-comet",
+ "note": "Throw it. With the grip on (the gyro setup), catch the knot in a right fist, swing it and let go: it flies on, tumbling, and paints a tail of colour behind it. Close the left fist too and pull the hands together to spin it up, apart to slow it. Left hand height sets how long the tail lasts; a hard throw glows.",
+ "graph": {
+  "frame": "wired",
+  "nodes": [
+   {
+    "kind": "hands",
+    "laid": "over"
+   },
+   {
+    "kind": "composite"
+   },
+   {
+    "kind": "delay"
+   }
+  ],
+  "wires": [
+   {
+    "from": "shape",
+    "to": "scene.geometry"
+   },
+   {
+    "from": "pattern",
+    "to": "shape.faces"
+   },
+   {
+    "from": "scene",
+    "to": "composite.over"
+   },
+   {
+    "from": "composite",
+    "to": "output.all.image"
+   },
+   {
+    "from": "composite",
+    "to": "delay.image"
+   },
+   {
+    "from": "delay",
+    "to": "huecycle.image"
+   },
+   {
+    "from": "huecycle",
+    "to": "fade.image"
+   },
+   {
+    "from": "fade",
+    "to": "composite.under"
+   },
+   {
+    "from": "hands",
+    "to": "hands.layer.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.hands"
+   },
+   {
+    "from": "hands.layer",
+    "to": "output.all.guide"
+   }
+  ]
+ },
+ "values": {
+  "ghost.on": true,
+  "ghost.alpha": 0.35,
+  "view.shape": 22,
+  "view.faces": true,
+  "view.points": false,
+  "view.pattern": 9,
+  "view.pattern_mix": 1.0,
+  "view.speed": 0.1,
+  "view.bright": 3.0,
+  "camera.zoom": 0.5,
+  "fx.huecycle.on": true,
+  "fx.huecycle.paint": 0.6,
+  "fx.huecycle.spread": 0.4,
+  "fx.huecycle.rings": 0.0,
+  "fx.fade.on": true,
+  "fx.fade.level": 0.92,
+  "view.lines_alpha": 1.0
+ },
+ "routes": [
+  {
+   "source": "hand:left.y",
+   "target": "fx.fade.level",
+   "op": "push",
+   "value": 0.07
+  },
+  {
+   "source": "hand:right.energy",
+   "target": "view.bright",
+   "op": "push",
+   "value": 0.15
+  },
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  }
+ ],
+ "macros": {},
+ "units": {
+  "camera.pan": "world",
+  "fx.depth": "taper"
+ },
+ "media": {
+  "channels": {}
+ }
+}
