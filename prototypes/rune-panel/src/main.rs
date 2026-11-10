@@ -1,4 +1,5 @@
-//! Hyperspace's control window, redrawn in Rune: a UI-only proof of concept.
+//! Hyperspace's control window, redrawn in Rune as a glass cockpit: a UI-only proof of
+//! concept.
 //!
 //! Nothing here drives a renderer or reads a device. The graph, the decks, the inspector and
 //! the library are the real app's information, laid out again with Rune's layout, springs and
@@ -10,6 +11,7 @@ mod data;
 mod graph;
 mod icons;
 mod inspector;
+mod instruments;
 mod polytope;
 mod theme;
 mod widgets;
@@ -200,7 +202,7 @@ fn view(s: &App, cx: &mut Cx<App>) -> El {
         .key("window")
         .w_full()
         .h_full()
-        .fill(l.window)
+        .fill(l.bezel)
         .child(chrome::top_bar(s, &l, &k))
         .child(
             row()
@@ -208,7 +210,7 @@ fn view(s: &App, cx: &mut Cx<App>) -> El {
                 .w_full()
                 .grow(1.0)
                 .min_h(0.0)
-                .child(chrome::library(s, &l, &k))
+                .child(chrome::library(s, &l))
                 .child(graph::pane(s, &l, &k, vw))
                 .child(inspector::pane(s, &l, &k, &mut layer)),
         )
@@ -258,6 +260,8 @@ fn main() {
         poll: Some(poll),
         on_key: Some(on_key),
         min_size: Some((1280.0, 760.0)),
+        fonts: theme::FONTS,
+        families: (theme::SANS, theme::MONO),
         ..AppSpec::new("Hyperspace", (1680.0, 1000.0), init, view)
     });
 }

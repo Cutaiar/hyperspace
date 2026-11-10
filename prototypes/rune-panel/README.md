@@ -1,10 +1,10 @@
 # Rune panel
 
 Hyperspace's control window redrawn in [Rune](https://github.com/anomalyco/rune),
-a Rust UI framework that draws everything itself on the GPU. **It is UI only**:
-nothing here drives the renderer, reads a device or saves a file. It is here to
-show what the panel could look and feel like on Rune, not to replace the Python
-app.
+a Rust UI framework that draws everything itself on the GPU, as a glass cockpit.
+**It is UI only**: nothing here drives the renderer, reads a device or saves a
+file. It is here to show what the panel could look and feel like on Rune, not to
+replace the Python app.
 
 ![The control window](shots/panel.png)
 
@@ -12,54 +12,81 @@ The information is the real panel's: the GRAPH's columns, nodes, ports and
 cables, the two decks and the crossfader, the side pane's sections. The names
 come from the Python app: bands and the planes they turn (`bands.BANDS`), shapes
 (`geometry.SHAPES`), effects (`shaders/fx/`) and the party show's patches.
-The layout is new.
+The layout and the look are new.
+
+## The look
+
+A flight deck's displays, where colour is meaning and never decoration:
+
+| Colour | Means | Where |
+|---|---|---|
+| White | Labels and scales | Legends, titles, tick marks |
+| Green | Measured, normal, live | Live cables and ports, LIVE, level meters, the shape on PGM |
+| Cyan | Set by the operator | Gauge pointers and readouts, the selection, PVW |
+| Magenta | Driven by automation | Cables out of the LFOs, envelopes and sequencer; values they drive (brightness, camera yaw) |
+| Amber | Caution | Master caution, FAULT, the camera symbol |
+| Red | Warning, and on air | PGM, TAKE |
+
+So a readout in magenta is a value an LFO is moving under you, and a magenta
+cable is modulation, without reading a label. The first version of this
+prototype gave every graph column its own hue; that is gone, and so are the
+gradients and coloured swatches.
+
+Type is [B612](https://github.com/polarsys/b612), the face Airbus had made
+for cockpit screens, in `fonts/` under the SIL Open Font License
+(`fonts/OFL.txt`). Numbers use its tabular figures; B612 Mono is kept for the
+module codes (CTL, AUD, MOD …) because it gives a point or a colon a whole
+cell.
 
 ## What's in it
 
-- **Top bar.** Deck 1 and deck 2, each with a live thumbnail, ON AIR or CUE, a
-  crossfader between them, the fade time and **Take**. Take springs the
-  crossfader across, and ON AIR, the program monitor and the library follow it.
-  On the right: the devices warning and a BPM light on the beat.
-- **Library** (left). Program and preview monitors with the shape turning in
-  4D, the patches (click one to cue it on the deck that's off air) and the
-  devices with their status.
-- **GRAPH** (middle). The patch as eight columns, Controllers to Outputs. Live
-  cables carry a pulse, and a selected node lights its cables in the accent.
-  The program output turns behind the graph. Drag the background to pan, drag
-  a node by its header to move it, and use the minimap in the corner to jump.
-  The toolbar has the original's filters (All, Patched, Patch only), Output
-  behind, Pictures, Tint cables and Tidy, which springs every node home.
-- **Inspector** (right). The patch on air, the selection, then Shape (the
-  cells, the shape menu, brightness, speed, 4D depth), Audio (source, six band
-  meters labelled with their planes, drive, master), Tempo & LFOs (BPM, the
-  beat, four LFOs with their waves and targets), Camera and Output. Each
-  section folds to a one-line summary.
-- **Status bar.** Frame rate, the graph's counts, the players, the library and
-  the show.
+- **Top bar.** Deck 1 and deck 2 with live thumbnails and PGM or PVW, a
+  crossfader lever between them with detents, the fade time, **TAKE** and
+  COPY (on air to off air). TAKE springs the lever across, and PGM, the
+  displays and the patch list follow it. On the right: the master caution
+  (2 devices), the show clock and the tempo with a lamp on the beat.
+- **Library** (left). PGM and PVW displays with the shape turning in 4D in
+  a reticle, the patches as a numbered list (click one to cue it on the deck
+  that's off air) and the devices with ON, IDLE or FAULT.
+- **GRAPH** (middle). The patch as eight numbered columns on a screen with
+  a crosshair grid, the program output faint behind it. Modules carry a code,
+  a name and LIVE, IDLE or FAULT; a port is a square, filled green while a
+  live signal passes. Drag the background to pan, drag a module by its title
+  bar, and use the NAV display to jump. The toolbar has the original's
+  filters (All, Patched, Patch), Behind, Pictures, Signal colour (off draws
+  every cable white) and Tidy.
+- **Inspector** (right). The patch on air, the selection, then numbered
+  modules: Shape (the cells, the shape menu, gauges for brightness, speed and
+  4D depth), Audio (a source selector, six segmented meters with the plane
+  each band turns, drive, master), Tempo · LFO (BPM, the beat, four LFOs on
+  scopes with their targets), Camera (an attitude indicator: pitch moves the
+  horizon, yaw runs the heading tape) and Output (dim, the screen, four
+  annunciators). Each module folds to its values on one line.
+- **Status line.** Frame rate, the graph's counts, PGM and PVW, the library
+  and the show.
 
-![The Shape node selected: its cables light up, the inspector shows it](shots/selected.png)
+![Operating: a module moved and selected, Camera open on the attitude indicator, deck 2 on air](shots/operating.png)
 
-![Panned to the effects and outputs, with the minimap following](shots/effects.png)
+![The Shape module selected: its cables turn cyan](shots/selected.png)
 
-### Choices
+### The controls
 
-- **One accent, and red only for on air.** Interaction is cyan. Red is kept for
-  what the audience sees, as a broadcast tally light is; amber for warnings.
-  The original uses red for every active toggle and slider.
-- **A hue per column.** A cable takes its source column's colour, so you can
-  read where a signal comes from without following it. *Tint cables* off draws
-  them neutral.
-- **Proper controls.** Switches for on/off, a segmented control for exclusive
-  choices, a field-style menu for the shape and the screen, sliders with the
-  value on their label line and a tick at unity or the centre.
-- **Folded sections say their values.** A closed section shows a summary
-  (`24-cell · 2.00×`, `1.30× · +0°`), so the pane can stay short.
-- **Tabular figures** wherever a number moves, so readouts don't jitter.
+- **Gauges** instead of sliders: a tape with a tick scale, a pointer and a
+  boxed readout. Press away from the pointer to jump; drag it to move by the
+  drag.
+- **Annunciators** instead of switches: a name over an ON or OFF that lights.
+- **Selectors** for exclusive modes: push-buttons in a row, the one in use
+  lit cyan with a bar under it.
+- **Segmented meters**: green, then amber, then red, with the held peak lit.
+- **Readouts** wherever a number is shown, in the colour of whose number it is.
 
-Components: rune-kit's `Button`, `IconButton`, `Switch`, `SegmentedControl`
-and `Select`. The slider, the meters, the sections, the crossfader, the graph
-and the minimap are this prototype's, in `src/widgets.rs`, `src/graph.rs` and
-`src/chrome.rs`.
+rune-kit supplies the shape and screen menus (`Select`), squared off and set
+in B612 through the kit's tokens. Everything else is this prototype's, in
+`src/widgets.rs` and `src/instruments.rs`.
+
+The first version, before the cockpit:
+
+![The first version](shots/before.png)
 
 ## Run it
 
@@ -83,26 +110,28 @@ B=target/release/rune-panel
 $B --snap panel.png --at 1.3                       # a PNG at 2×
 $B --snap selected.png --scene selected --at 1.3   # a scene by name
 $B --list-scenes
-$B --script scripts/tour.json --video tour.mp4 --pointer --duration auto
+$B --script scripts/tour.json --video tour.mp4 --pointer --duration 7
 $B --tree tree.json --at 1.3                        # the element tree, as JSON
 ```
 
-The scenes: `default`, `selected` (the Shape node), `analyzer`, `effects` (the
-canvas panned to the right-hand columns), `folded`, `camera`, `shape-menu`,
-`tesseract`, `patched`, `plain` (no tint, pictures or output behind), `taken`
-(deck 2 on air) and `still` (the clock stopped).
+The scenes: `default`, `selected` (the Shape module), `analyzer`, `effects`
+(the canvas panned to the right-hand columns), `folded`, `camera`,
+`shape-menu`, `tesseract`, `patched`, `plain` (white cables, no pictures, no
+output behind), `taken` (deck 2 on air) and `still` (the clock stopped).
 
-`scripts/tour.json` selects the Analyzer, drags the Channel A node, drags the
-brightness slider, opens Camera, jumps with the minimap, presses Take and
-folds Shape.
+`scripts/tour.json` selects the Analyzer, drags the Channel A module, drags
+the brightness pointer, folds Audio and Tempo, opens Camera, jumps with the
+NAV display and presses TAKE. A scripted tap doesn't scroll: a control below
+the inspector's fold has to be brought up by folding what's above it, as a
+person would.
 
 ### What a headless run can't tell you
 
 Speed. In a cloud session Rune draws through lavapipe, Mesa's software Vulkan,
-and a frame costs about 32 ms whether the clock runs or not, in debug or
+and a frame costs about 30 ms whether the clock runs or not, in debug or
 release: that is the rasteriser, not the view. Frame rate is a check on the
 Mac. The view does rebuild every frame while the shape turns (`poll` returns
-true); the cards, the patch list and the dot grid are `memo`ised so only what
+true); the modules, the patch list and the grid are `memo`ised so only what
 moves is rebuilt.
 
 ## Files
@@ -111,20 +140,22 @@ moves is rebuilt.
 |---|---|
 | `src/main.rs` | The state, the root view, the scenes, the clock |
 | `src/data.rs` | The mock patch: nodes, cables, patches, devices, bands |
-| `src/graph.rs` | The GRAPH: toolbar, canvas, cards, cables, minimap |
-| `src/inspector.rs` | The right pane and its sections |
-| `src/chrome.rs` | Top bar, decks, crossfader, library, status bar |
-| `src/widgets.rs` | Slider, section, meter, dots, tags |
+| `src/graph.rs` | The GRAPH: toolbar, canvas, modules, cables, NAV |
+| `src/inspector.rs` | The right pane and its modules |
+| `src/chrome.rs` | Top bar, decks, lever, library, status line |
+| `src/widgets.rs` | Gauge, annunciator, selector, meter, readout, section |
+| `src/instruments.rs` | The attitude indicator and the LFO scope |
 | `src/polytope.rs` | The 24-cell, tesseract and 16-cell, turned in six planes and projected |
-| `src/theme.rs` | Colours, type, the column hues, the kit |
+| `src/theme.rs` | Colours, type, the kit |
+| `fonts/` | B612 and B612 Mono, regular and bold, with their licence |
 
 ## What it isn't
 
 - No link to the Python app. A real panel would need a protocol to read state
   and write params, routing rows and undo. The OSC device only takes input, and
   the bridge only sends lanes out.
-- No node editor behaviour beyond moving cards: no making or deleting cables,
-  no Learn, no grouping.
+- No node editor behaviour beyond moving modules: no making or deleting
+  cables, no Learn, no grouping.
 - No live media in the panel. The faces thumbnail is drawn, not read off the
   GPU.
 - Rune is pre-release. This pins one revision of its `dev` branch.

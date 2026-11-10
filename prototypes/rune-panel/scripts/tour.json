@@ -1,9 +1,10 @@
 {"events": [
   {"t": 0.4, "type": "tap", "key": "node-analyzer/header"},
   {"t": 1.2, "type": "drag", "key": "node-chan/header", "dx": 30, "dy": 150, "dur": 0.6},
-  {"t": 2.2, "type": "drag", "key": "brightness/track/knob-row/knob", "dx": -70, "dur": 0.5},
-  {"t": 3.0, "type": "tap", "key": "sec-camera/header"},
-  {"t": 3.6, "type": "tap", "key": "minimap"},
-  {"t": 4.4, "type": "tap", "key": "take"},
-  {"t": 5.6, "type": "tap", "key": "sec-shape/header"}
+  {"t": 2.2, "type": "drag", "key": "brightness/tape/pointer/ptr", "dx": -70, "dur": 0.5},
+  {"t": 3.0, "type": "tap", "key": "sec-audio/header"},
+  {"t": 3.4, "type": "tap", "key": "sec-tempo/header"},
+  {"t": 3.8, "type": "tap", "key": "sec-camera/header"},
+  {"t": 4.6, "type": "tap", "key": "minimap"},
+  {"t": 5.4, "type": "tap", "key": "take"}
 ]}

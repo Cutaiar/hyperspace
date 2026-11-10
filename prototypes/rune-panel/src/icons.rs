@@ -1,12 +1,6 @@
-//! A few icons rune-kit's glyph set doesn't have, drawn on its 16-point grid.
+//! Two icons rune-kit's glyph set doesn't have, drawn on its 16-point grid.
 
 use rune::Icon;
-
-pub static PLUS: Icon = Icon {
-    name: "hs-plus",
-    view: 16.0,
-    body: r#"<path d="M8 3.5V12.5M3.5 8H12.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>"#,
-};
 
 pub static CHEVRON_LEFT: Icon = Icon {
     name: "hs-chevron-left",

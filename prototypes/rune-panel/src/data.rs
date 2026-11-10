@@ -37,20 +37,22 @@ pub const NODE_W: f32 = 158.0;
 pub const PITCH: f32 = 186.0;
 pub const MARGIN: f32 = 28.0;
 pub const TOP: f32 = 64.0;
-pub const HEADER: f32 = 34.0;
+pub const HEADER: f32 = 30.0;
 pub const ROW: f32 = 19.0;
-pub const FOOTER: f32 = 26.0;
-pub const THUMB: f32 = 74.0;
+pub const FOOTER: f32 = 24.0;
+pub const THUMB: f32 = 70.0;
+/// Padding above and below a module's port rows.
+pub const PORTS_PAD: f32 = 3.0;
 
 impl Node {
     pub fn rows(&self) -> usize {
         self.ins.len().max(self.outs.len())
     }
     pub fn height(&self) -> f32 {
-        HEADER + if self.thumb { THUMB + 8.0 } else { 0.0 } + self.rows() as f32 * ROW + 6.0 + FOOTER
+        HEADER + if self.thumb { THUMB + 8.0 } else { 0.0 } + self.rows() as f32 * ROW + 2.0 * PORTS_PAD + FOOTER
     }
     fn port_y(&self, i: usize) -> f32 {
-        self.pos[1] + HEADER + if self.thumb { THUMB + 8.0 } else { 0.0 } + i as f32 * ROW + ROW / 2.0
+        self.pos[1] + HEADER + if self.thumb { THUMB + 8.0 } else { 0.0 } + PORTS_PAD + i as f32 * ROW + ROW / 2.0
     }
     pub fn out_at(&self, i: usize) -> [f32; 2] {
         [self.pos[0] + NODE_W, self.port_y(i)]
@@ -85,13 +87,13 @@ pub fn patch() -> (Vec<Node>, Vec<Cable>) {
     };
     let mut nodes = vec![
         n("keys", "Keyboard", Controllers, "47 ports · 47 patched", Idle, &[], &["space", "arrows", "1 … 9", "shift"]),
-        n("leap", "Leap Motion", Controllers, "7 ports · 7 patched", Missing("not set up on this Mac"), &[], &[
+        n("leap", "Leap", Controllers, "7 ports · 7 patched", Missing("not set up on this Mac"), &[], &[
             "left.roll",
             "left.pitch",
             "right.y",
             "right.z",
         ]),
-        n("apc", "APC40 mkII", Controllers, "117 ports · 117 patched", Missing("unplugged"), &[], &[
+        n("apc", "APC40", Controllers, "117 ports · 117 patched", Missing("unplugged"), &[], &[
             "faders 1–8",
             "knobs 1–8",
             "clip grid",
@@ -101,7 +103,7 @@ pub fn patch() -> (Vec<Node>, Vec<Cable>) {
         n("lfo", "LFO bank", Modulation, "4 voices", Live, &["rate"], &["LFO 1 · sine", "LFO 2 · tri", "LFO 3 · saw", "LFO 4 · S&H"]),
         n("seq", "Sequencer", Modulation, "5 lanes × 8 steps", Live, &["clock"], &["lanes 1–5"]),
         n("env", "Envelopes", Modulation, "AHDSR × 5", Idle, &["trigger"], &["env 1", "env 2"]),
-        Node { thumb: true, ..n("faces", "Faces pattern", Media, "voronoi · 17 patterns", Live, &[], &["texture"]) },
+        Node { thumb: true, ..n("faces", "Faces", Media, "voronoi · 17 patterns", Live, &[], &["texture"]) },
         n("chan", "Channel A", Media, "camera · 1280×720", Idle, &[], &["frame"]),
         n("shape", "Shape", Scene, "24-cell · {3,4,3}", Live, &[
             "faces", "camera", "rot.XY", "rot.XZ", "rot.XW", "rot.YW", "rot.ZW", "speed", "brightness",
@@ -153,20 +155,19 @@ pub fn patch() -> (Vec<Node>, Vec<Cable>) {
 pub struct Patch {
     pub name: &'static str,
     pub detail: &'static str,
-    pub hue: f32,
 }
 
 pub const PATCHES: [Patch; 10] = [
-    Patch { name: "TUMBLE", detail: "24-cell · bands → planes", hue: 215.0 },
-    Patch { name: "ACID", detail: "tesseract · acid, kaleido", hue: 140.0 },
-    Patch { name: "FACES", detail: "16-cell · voronoi faces", hue: 350.0 },
-    Patch { name: "TRACER", detail: "600-cell · look-back", hue: 260.0 },
-    Patch { name: "FIELD", detail: "instances · FCC lattice", hue: 190.0 },
-    Patch { name: "WAKE", detail: "Clifford torus · dream", hue: 300.0 },
-    Patch { name: "TRIP", detail: "grand antiprism · warp", hue: 40.0 },
-    Patch { name: "MANDALA", detail: "120-cell · kaleido", hue: 80.0 },
-    Patch { name: "NOITA", detail: "5-cell · plasma", hue: 20.0 },
-    Patch { name: "TUMBLE II", detail: "24-cell · slow", hue: 230.0 },
+    Patch { name: "TUMBLE", detail: "24-cell · bands → planes" },
+    Patch { name: "ACID", detail: "tesseract · acid, kaleido" },
+    Patch { name: "FACES", detail: "16-cell · voronoi faces" },
+    Patch { name: "TRACER", detail: "600-cell · look-back" },
+    Patch { name: "FIELD", detail: "instances · FCC lattice" },
+    Patch { name: "WAKE", detail: "Clifford torus · dream" },
+    Patch { name: "TRIP", detail: "grand antiprism · warp" },
+    Patch { name: "MANDALA", detail: "120-cell · kaleido" },
+    Patch { name: "NOITA", detail: "5-cell · plasma" },
+    Patch { name: "TUMBLE II", detail: "24-cell · slow" },
 ];
 
 pub struct Device {
