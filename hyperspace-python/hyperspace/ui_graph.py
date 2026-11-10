@@ -230,10 +230,12 @@ from . import (
     patches,
     pinch,
     ui,
+    ui_browse,
     ui_fx,
     ui_pad,
     ui_pane,
     ui_players,
+    ui_playlist,
     ui_routing,
     undo,
 )
@@ -1398,18 +1400,28 @@ def _wrap_for(width: float) -> None:
 
 def _deck_row(panel, st: dict) -> None:
     """The head's first line (plan 44 D5d): which `Deck` the panel is on, the same
-    words as the window's title, red off air, a click for the other; then the two
-    verbs, "copy on air to off air" and the crossfade, by hand and timed. Nothing with
+    words as the window's title, red off air, a click for the other; then **load…**
+    (a patch from the library onto the deck off air, ui_browse), **playlist** (its
+    controls in a popup, ui_playlist) and the two verbs,
+    "copy on air to off air" and the crossfade, by hand and timed. Nothing with
     no meta controller (a panel from a test). A click moves the panel at the page's end
     (`_arrive`): this frame's view and selection are of the deck it is on."""
     meta = getattr(panel, "meta", None)
-    if meta is None:
+    if meta is None:                    # (a test's panel: the playlist's chip alone)
+        ui_playlist.chip(panel, st)
         return
     words = meta.words(meta.panel)
     if ui.lit_chip(f"{words}##graph.deck", panel_off_air(panel)):
         st["panel_to"] = meta.decks[1] if meta.panel is meta.decks[0] else meta.decks[0]
     if imgui.is_item_hovered():
         ui.tooltip(DECK_TIP)
+    # choosing a patch to load is the meta controller's: onto the deck off air
+    _wrap_for(ui.chip_w(ui_browse.LABEL))
+    ui_browse.chip(panel)
+    # and so is the playlist: its controls in a popup under its chip
+    if getattr(panel, "playing", None) is not None:
+        _wrap_for(ui.chip_w(ui_playlist.label(panel.playing)))
+        ui_playlist.chip(panel, st)
     _wrap_for(ui.chip_w(COPY_LABEL))
     if ui.chip(f"{COPY_LABEL}##graph.copy"):
         copy_on_air(panel)

@@ -652,3 +652,23 @@ def test_headless_make_app_has_the_grip(tmp_path):
     app_ = headless.make_app(tmp_path)
     reg = app_.reg if hasattr(app_, "reg") else app_[0]
     assert "grip.on" in reg and reg["grip.on"].value is False
+
+
+def test_a_pad_button_is_no_lane_so_it_never_closes_a_clutch():
+    """Review of #443: `pad` is a row scheme (`routing_sources.ROW_SCHEMES`), never a
+    lane, so `grip.clutch = "pad:S"` reads open; the tip offers lanes only."""
+    from hyperspace.routing import Bindings, Router
+    from hyperspace.routing_sources import ROW_SCHEMES
+
+    assert "pad" in ROW_SCHEMES
+    assert not R.lane_closed(Router(Registry(), Bindings([])), "pad:S")
+    reg = Registry()
+    R.register(reg, R.GripState())
+    assert "pad:" not in reg["grip.clutch"].tip
+
+
+def test_a_hot_reload_reclasses_each_decks_grip(tmp_path):
+    from test_undo import boot
+
+    r = boot(tmp_path)
+    assert (r.deck.reg.grip, "grip", "GripState") in r.deck.targets()

@@ -45,6 +45,7 @@ from . import (
     graphview,
     learn,
     ui_bands,
+    ui_browse,
     ui_desk,
     ui_displays,
     ui_feel,
@@ -937,10 +938,7 @@ class Panel:
         quit and on ⌘R, before imgui shuts down; a panel that never drew
         the page holds none — the GRAPH canvas's tap (`canvas_tap`,
         2026-11-02) and the pad drawings' NanoVG (ui_pad_nvg) go with it,
-        while the control window's GL is up. Safe to call twice. A loadable patches
-        fold clicked under `WRITE_AFTER_S` ago is written first (plan 48
-        stage 2)."""
-        ui_loadable.flush_folds(self, force=True)
+        while the control window's GL is up. Safe to call twice."""
         ui_graph.close(self)
         tap, self.canvas_tap = getattr(self, "canvas_tap", None), None
         if tap is not None:
@@ -996,15 +994,15 @@ class Panel:
         `ghost.*`, SYSTEM with `desk.slew`, a fixture node in the selection); else the
         section under it (`ui_pane.where`); else the deck. Over the player screen, its
         own window too, `undo.BOARD`: the meta stack, for a player's moves alone (row
-        800). None over the playlist's section: no stack, since an edit there is on none
-        of them (`undo.here`)."""
+        800). None over the playlist (its popup on GRAPH's deck row, `ui_playlist.popup`):
+        no stack, since an edit there is on none of them (`undo.here`)."""
         p = getattr(self, "_param_under", None)
         if p is not None and undo.watched(p):
             return part_of(p) != "patch"
         if ui_players.over(self):
             return undo.BOARD
         section = ui_pane.where(self)
-        if section == "playlist":    # a list's edits are files, on no stack (row 709)
+        if section == ui_playlist.UNDER:   # a list's edits are files, on no stack (row 709)
             return None
         return section in META_SECTIONS
 
@@ -2122,6 +2120,7 @@ class Panel:
         # Replace / Keep, its own window, before anything can return: a
         # held hand learn is never parked behind a hidden or collapsed panel
         ui_routing.modal(self)
+        ui_browse.draw(self)    # the patches' file explorer, while it is up: its own window
         self.canvas_px = None   # the GRAPH page sets it when it draws (replay.grab reads it)
         ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
         ui_graph.settle(self)   # a loadable patch landed without the published node: let it go
@@ -2322,9 +2321,6 @@ class Panel:
         """Who is on air, and what they hold (ui_players.py)."""
         ui_players.section(self, dt)
 
-    def _page_playlist(self, dt: float) -> None:
-        """The playlist, for installs (ui_playlist.py)."""
-        ui_playlist.page(self, dt)
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""

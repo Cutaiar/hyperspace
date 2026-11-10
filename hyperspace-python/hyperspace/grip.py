@@ -26,8 +26,9 @@ look — a load writes `grip.on`, a deck switch is another `GripState` — sends
 shape away from home back there first (`Joint.homing`). Its own lanes,
 `grip:held` / `flying` / `speed` / `spin` (`lanes`, `publish`), let a look's
 routes follow the shape in hand or in flight. `grip.clutch` /
-`grip.shape_clutch` are lane addresses; empty is the default gate, so it
-follows `grip.hand`.
+`grip.shape_clutch` are lane addresses (a lane reading ≥ 0.5 is closed, as a
+row's `when`; a pad button or key is a row's scheme, never a lane, so it can't
+be one); empty is the default gate, so it follows `grip.hand`.
 
 Imports only `world`. The registry and the lanes are duck-typed: the host hands
 `apply` a `closed(address) -> bool` (`app._step_world`).
@@ -248,8 +249,9 @@ def register(reg, state: GripState) -> None:
                tip="Keep the spin's momentum when the inertia changes: hands apart slow "
                    "it, together speed it up. Off: the spin stays as it is.")
     reg.text(f"{GROUP}.clutch", "Clutch", lambda: state.clutch, setter("clutch", str),
-             group=GROUP, tip="The holding gate, a lane address (hand:right.pinch.index, "
-                              "pad:A). Empty: the holding hand's grab.")
+             group=GROUP, tip="The holding gate, a lane that reads 1 while held "
+                              "(hand:right.pinch.index, hand:right.pinch.middle). Empty: the "
+                              "holding hand's grab. A pad button or key is no lane.")
     reg.text(f"{GROUP}.shape_clutch", "Shape clutch", lambda: state.shape_clutch,
              setter("shape_clutch", str), group=GROUP,
              tip="The shaping gate, a lane address. Empty: the other hand's grab.")

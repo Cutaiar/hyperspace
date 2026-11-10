@@ -3,7 +3,7 @@
 **Status: built (2026-11-10).** `hyperspace/grip.py` (the params, the clutches),
 the joint and the rigid body in `hyperspace/world.py`, the HANDS page's grip
 section, the turned depth of row 856 (`geometry.turned_depth`); tests
-`tests/test_grip.py`; register rows 857–867, hand checks 661–668. Built on plan
+`tests/test_grip.py`; register rows 859–869, hand checks 661–668. Built on plan
 59 as merged (#442), with the amendments in §10. Plans 61 and 62 are not needed.
 
 The owner, 2026-11-10: *a slider that controls the momentum damping of the
@@ -140,37 +140,37 @@ tracker best (plan 51's check 518 asked the same of the clutch).
 Read against `world.py` and register rows 851–856 after #442 merged. Each is
 built and has a register row.
 
-1. **The joint works in the offset's terms** (row 858). The shape is drawn as
+1. **The joint works in the offset's terms** (row 860). The shape is drawn as
    home ∘ offset (row 853), the home being `camera.pan` and `camera.zoom` with
    no turn; the hands are in the world. The joint captures hand → the pose
    drawn, and pulls the offset to home⁻¹ ∘ hand ∘ rel. The springs are
    mass-normalized (a frequency and a damping ratio), so the zoom changes
    nothing of how they feel.
-2. **Yaw and pitch stay outside the pose** (row 864). `camera.yaw` / `.pitch`
+2. **Yaw and pitch stay outside the pose** (row 866). `camera.yaw` / `.pitch`
    turn the points on the CPU before the offset, so a `turn` row turns the
    shape about its own axes on top of the rig's turn, and the locked inertia
    lives in the offset's frame.
-3. **Fit and the 3D lattices take no offset** (row 851 stands; row 864): the
+3. **Fit and the 3D lattices take no offset** (row 851 stands; row 866): the
    rig moves nothing there. A flat field with Fit off moves as one figure.
-4. **Row 856, the depth of a turned shape, is built** (row 863): while the
+4. **Row 856, the depth of a turned shape, is built** (row 865): while the
    offset is not the identity, a 3D shape's depth cue and painter sort read
    its depth after the offset's turn. A 4D shape keeps its w. The identity
    offset is unchanged, so are the goldens.
 5. **`world.py` imports nothing**, so the gates and the box arrive from the
    host: `grip.apply` takes a `closed(address)` that `app._step_world` reads
    from the on-air router's lanes (the debounced grab, plan 51), and the
-   renderer sets `World.box` from the scene drawn (`poi.box_for`, row 862).
+   renderer sets `World.box` from the scene drawn (`poi.box_for`, row 864).
    The box holds the shape's drawn centre, in the world, grown to take its
    home in.
-6. **The step is rebuilt, not extended** (rows 860, 865). A body with a joint
+6. **The step is rebuilt, not extended** (rows 862, 867). A body with a joint
    or an uneven inertia steps as a rigid body, its angular momentum carried
    (so a free body keeps L exactly); the joint's clutch, the inertia shaping
    and the skater run once a frame before the steps; a plan 59 free body steps
    as before. `World.joints` holds a `Joint` keyed by the shape, naming its
    hand. `world.reset` also lets go and evens the inertia.
-7. **The hand is blended across the steps** (row 859): read once a frame, it
+7. **The hand is blended across the steps** (row 861): read once a frame, it
    moves from last frame's pose to this one's across the frame's 960 Hz steps.
-8. **The params are a patch group, per preset** (row 857). The first build made
+8. **The params are a patch group, per preset** (row 859). The first build made
    them a shared meta group, one grip for every look. The owner, testing it:
    "this really should be per preset. This is an absurd level of power to be
    able to command on any preset". So `grip.*` is in `PATCH_GROUPS`, each
@@ -179,17 +179,17 @@ built and has a register row.
    world. Worked out with the kinetic-presets session: a look either keeps
    its own fist rows (Clay) or turns the grip on in its own file (Comet);
    writing both is the author's call.
-9. **§7 is dropped** (row 866): moving the poi changes what a save holds.
-10. **The group is `grip`, not `rig`** (row 857): "rig" leaves every string a
+9. **§7 is dropped** (row 868): moving the poi changes what a save holds.
+10. **The group is `grip`, not `rig`** (row 859): "rig" leaves every string a
     person reads, ids included (row 779, the owner, 2026-11-06), held by
     `tests/test_person_words.py`. The params, the module (`grip.py`) and the
     panel section say grip; the plan keeps its name, the hand rig. (Since
     #447 the word is allowed again; the ids stay `grip`, saved in patches.)
-11. **A new look starts with the shape home** (row 865): a load (it writes
+11. **A new look starts with the shape home** (row 867): a load (it writes
     `grip.on`) or a deck switch springs a shape away from home back there,
     critically damped in about 0.3 s, whether the new look has the grip on or
     off; a hand closing on the way takes it. Off, once home, nothing steps.
-12. **The box keeps a parked shape whole** (row 862): inset by its radius.
-13. **The grip's own lanes** (row 867): `grip:held`, `grip:flying` (gates),
+12. **The box keeps a parked shape whole** (row 864): inset by its radius.
+13. **The grip's own lanes** (row 869): `grip:held`, `grip:flying` (gates),
     `grip:speed`, `grip:spin` (the shape's, not the hand's), for routes.
 
