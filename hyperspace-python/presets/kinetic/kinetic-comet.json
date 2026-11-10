@@ -1,7 +1,7 @@
 {
  "schema": "hyperspace.loadable/11",
  "name": "kinetic-comet",
- "note": "Throw it. With the grip on (the gyro setup), catch the knot in a right fist, swing it and let go: it flies on, tumbling, and paints a tail of colour behind it. Close the left fist too and pull the hands together to spin it up, apart to slow it. Left hand height sets how long the tail lasts; a hard throw glows.",
+ "note": "Throw it. Catch the knot in a right fist, swing it and let go: it flies on, tumbling, and paints a tail of colour behind it. The faster it flies the longer the tail, and the faster it spins the brighter it glows. Close the left fist too and pull the hands together to spin it up, apart to slow it. Left hand height turns the colours.",
  "graph": {
   "frame": "wired",
   "nodes": [
@@ -79,21 +79,32 @@
   "fx.huecycle.spread": 0.4,
   "fx.huecycle.rings": 0.0,
   "fx.fade.on": true,
-  "fx.fade.level": 0.92,
-  "view.lines_alpha": 1.0
+  "fx.fade.level": 0.88,
+  "view.lines_alpha": 1.0,
+  "grip.on": true,
+  "grip.coupling": 0.4,
+  "grip.drag": 0.9,
+  "grip.inertia": true,
+  "grip.shape": 2.5
  },
  "routes": [
   {
-   "source": "hand:left.y",
+   "source": "grip:speed",
    "target": "fx.fade.level",
    "op": "push",
-   "value": 0.07
+   "value": 0.12
   },
   {
-   "source": "hand:right.energy",
+   "source": "hand:left.y",
+   "target": "fx.huecycle.paint",
+   "op": "push",
+   "value": 0.4
+  },
+  {
+   "source": "grip:spin",
    "target": "view.bright",
    "op": "push",
-   "value": 0.15
+   "value": 0.2
   },
   {
    "source": "lane:0",

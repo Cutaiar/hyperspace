@@ -3,8 +3,7 @@
 They are files for the owner's library, not part of the app (nothing ships:
 DECISIONS "One tier"), so nothing else reads them. Each must land through the
 library's own load with no unknown id and no note: a route dropped at load is
-a gesture that does nothing on stage. `grip/` holds a setup of the hand
-rig (plan 60) for the grip's own strip.
+a gesture that does nothing on stage.
 """
 
 from __future__ import annotations
@@ -15,37 +14,24 @@ from pathlib import Path
 
 import pytest
 
-from hyperspace import grip, headless, library
+from hyperspace import headless, library
 
 KINETIC = Path(__file__).resolve().parents[1] / "presets" / "kinetic"
 FILES = sorted(KINETIC.glob("*.json"))
 
 
-GRIPS = sorted((KINETIC / "grip").glob("*.json"))
-
-
-def test_there_are_six_and_one_grip_setup():
+def test_there_are_six():
     assert len(FILES) == 6
-    assert [p.stem for p in GRIPS] == ["gyro"]
 
 
-@pytest.mark.parametrize("path", GRIPS, ids=lambda p: p.stem)
-def test_a_grip_setup_opens_from_the_grip_strip(path, tmp_path):
-    """The grip is the meta controller's (grip.py), so no kinetic preset can
-    set it: its setup is a patch of the grip group, for the HANDS
-    page's strip."""
-    doc = json.loads(path.read_text())
-    folder = tmp_path / library.PATCHES / grip.GROUP
-    folder.mkdir(parents=True)
-    shutil.copy(path, folder / path.name)
-    app = headless.make_app(tmp_path)
-    state = grip.GripState()
-    grip.register(app.reg, state)
-    assert app.lib.load(grip.GROUP, path.stem) == []
-    assert not app.lib.warning
-    assert state.on
-    for pid, value in doc["values"].items():
-        assert app.reg[pid].value == pytest.approx(value), pid
+def test_only_comet_turns_the_grip_on(tmp_path):
+    """The grip is a patch's own (plan 60): comet is thrown, so it carries
+    the grip's values; clay's grab is its own turn rows, and the grip with
+    them would turn the shape twice over."""
+    on = [p.stem for p in FILES if json.loads(p.read_text())["values"].get("grip.on")]
+    assert on == ["kinetic-comet"]
+    clay = json.loads((KINETIC / "kinetic-clay.json").read_text())
+    assert any(r["op"] == "turn" for r in clay["routes"])
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)
