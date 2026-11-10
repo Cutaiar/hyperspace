@@ -340,6 +340,16 @@ def test_the_readout_and_the_fill_are_the_values_through_a_fine_drag(route, monk
         fills.append(norm)
         return track(self, draw, norm, *a, **k)
     monkeypatch.setattr(ui.Panel, "_track", tracked)
+    from hyperspace import ui_kit
+    if ui_kit.ready():          # on the kit the fill is the fraction the kit slider is handed
+        I = ui_kit.mod("interact")
+        real_kit = I.slider
+
+        def kit_slider(k, key, *a, **kw):
+            if key == "depth":
+                fills.append(kw["frac"])
+            return real_kit(k, key, *a, **kw)
+        monkeypatch.setattr(I, "slider", kit_slider)
     d2 = Driver(step=d.step)                     # (over a wrap of its own, so the driver sees it)
     monkeypatch.setattr(imgui, "slider_float", noted)
     d2.record(monkeypatch.setattr)
@@ -353,7 +363,10 @@ def test_the_readout_and_the_fill_are_the_values_through_a_fine_drag(route, monk
     assert 0.2 < b.value < 0.3
     d2.run(d2.wait(1))
     assert float(shown[-1]) == pytest.approx(b.value, abs=0.006)     # not imgui's +1.00
-    assert fills[-2] == pytest.approx((b.value + 1) / 2, abs=1e-6)   # (the rest is drawn last)
+    from hyperspace import ui_kit
+    # (stock: the rest's fill is drawn last; the kit's list holds the depth's alone)
+    fill = fills[-1] if ui_kit.ready() else fills[-2]
+    assert fill == pytest.approx((b.value + 1) / 2, abs=1e-6)
     d2.run(d2.press(False), shift(False), d2.park())
 
 
@@ -445,3 +458,29 @@ def test_a_shift_drag_moves_graphs_backdrop_a_tenth_as_far(tmp_path, monkeypatch
         fine, plain = fine_and_plain(d, "graph.backdrop", lambda: st["backdrop_alpha"],
                                      lambda: st.__setitem__("backdrop_alpha", 0.3), 20)
         assert plain > 0.1 and fine == pytest.approx(plain * ui.FINE, rel=0.1)
+
+
+def test_a_slider_keeps_its_shape_through_a_drag(route, monkeypatch):
+    """A raw slider's readout grows as its value does ("200 ms" to "1584 ms");
+    on the kit the slider's room for it is the widest it ever says, so the
+    control under the pointer keeps one width all through a drag — it used to
+    flip between a track and a value box mid-drag, and the drag with it."""
+    _, d, b = route
+    b.motion = Motion("spring", dur=0.2, bounce=0.0)
+    d.run(d.wait(1))
+    widths: list[float] = []
+    real = imgui.slider_float
+
+    def noted(label, *a, **k):
+        out = real(label, *a, **k)
+        if label == "##dur":
+            lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
+            widths.append(round(hi.x - lo.x, 3))
+        return out
+    monkeypatch.setattr(imgui, "slider_float", noted)
+    d.run(d.reveal("dur"))
+    x0, y0, x1, y1 = d.rect("dur")
+    y = (y0 + y1) / 2
+    d.run(d.move((x0 + 4, y)), d.press(True), d.move((x1 + 200, y), 12), d.press(False), d.park())
+    assert b.motion.dur > 1.0                           # it went the whole way…
+    assert len(set(widths)) == 1, sorted(set(widths))   # …in one shape

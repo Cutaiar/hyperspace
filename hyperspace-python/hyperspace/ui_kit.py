@@ -170,6 +170,10 @@ def begin(panel=None):
     if st is None:
         U, ease = mod("uictx"), mod("ease")
         ui = _panel_ui(U)(None, _FACES, theme(), ease.Anim(), theme_name="dark")
+        # a slider's track in the panel's line grey: the kit's `muted` (the
+        # panel's frame grey) all but vanished on the black ground, so a
+        # slider at its low end read as a lone dot (the crossfader, at 0)
+        ui.slider_tbl = {**ui.slider_tbl, "track": ("border", 1.0)}
         # (the cache `comp_button._table_for` reads, filled with the panel's)
         ui.anim.store.setdefault("button_tbl", {})["dark"] = _button_table("dark")
         st = holder[STATE] = {"ui": ui, "frame": None}

@@ -1692,6 +1692,8 @@ class Panel:
         the readouts' face, off for words that need the room. A value a
         file left outside the range is not pulled in by a fine drag: it can
         come in, and go no further out."""
+        if ui_kit.ready():              # on the kit (tools/dkit): a track, its readout beside
+            return ui_fields.inline_raw(self, key, value, lo, hi, fmt, tip, width, log, dim, num)
         value = float(value)
         log = log and lo > 0
         t0 = (math.log(max(value, lo) / lo) / math.log(hi / lo) if log
@@ -1883,12 +1885,20 @@ class Panel:
         — the control beside it never lands back over the line's start."""
         pos = imgui.get_cursor_screen_pos()
         fh = FONT_NUM + 2 * imgui.get_style().frame_padding.y
+        words = text.upper()
+        if ui_kit.ready():
+            # cut to its column: the stock slider's opaque frame hid a label's
+            # overflow, the kit's thin track does not ("KNOB SMOOTHING" ran
+            # into its fill). The whole label is the cell's tooltip.
+            words = fit_micro(text, width - LABEL_GAP, 0.0) or words[:1]
         imgui.push_font(_FONTS["micro"], FONT_MICRO)
         imgui.get_window_draw_list().add_text(
             imgui.ImVec2(pos.x, pos.y + (fh - FONT_MICRO) / 2 - 1),
-            u32(DIM if color is None else color), text.upper())
+            u32(DIM if color is None else color), words)
         imgui.pop_font()
         imgui.dummy(imgui.ImVec2(width - LABEL_GAP, fh))
+        if words != text.upper() and imgui.is_item_hovered():
+            tooltip(text)
         imgui.same_line(0, LABEL_GAP)
 
     def _row(self, pid: str, width: float = -1, label: str | None = None,

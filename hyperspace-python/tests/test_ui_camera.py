@@ -190,3 +190,27 @@ def test_the_section_fits_the_narrowest_pane(tmp_path, monkeypatch):
         (x, _y), (w, _h) = ui_graph._state(r.panel)["details_rect"]
         for pid in (*SLIDERS, ui_camera.RESET):
             assert d.rect(pid)[2] <= x + w + 1, pid
+
+
+def test_a_rows_label_stays_in_its_column(tmp_path, monkeypatch):
+    """`Panel._label_cell` on the kit cuts a label to its column (the stock
+    slider's opaque frame hid the overflow; the kit's thin track does not:
+    "KNOB SMOOTHING" ran into its fill), and its hover says the whole of it."""
+    from hyperspace import ui as ui_mod
+    drawn: list[tuple[str, float]] = []
+    real = ui_mod.fit_micro
+
+    def fit(text, width, least=12.0):
+        out = real(text, width, least)
+        drawn.append((text, width, out))
+        return out
+    monkeypatch.setattr(ui_mod, "fit_micro", fit)
+    with build_rig(tmp_path) as r:
+        d = _rig(r, monkeypatch)
+        r.reg["ui.page"].set(PAGE_KEYS.index("system"))
+        d.run(d.wait(3))
+    knob = [x for x in drawn if x[0] == r.reg["desk.slew"].label]
+    assert knob, drawn[:5]
+    text, width, out = knob[-1]
+    assert out != text.upper() and out.endswith("…")
+    assert width == ui.LABEL_W - ui.LABEL_GAP

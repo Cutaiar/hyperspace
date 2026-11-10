@@ -131,11 +131,40 @@ def _head(panel, k, a, p, x, y, w, h, label) -> None:
     _label_hit(panel, a, lab.x, y, lab.w, h)
 
 
-def _slider(panel, k, a, p, x, y, w, h) -> bool:
+GRAB_PAD = 2.0            # px imgui's slider keeps between its frame and its grab, each end
+
+
+def _value_box(k, x, y, w, h, frac, origin, words, font, size, col) -> None:
+    """A slider too short to read as a track, drawn as a value box: the
+    panel's frame grey, the value's words centred, and a thin bar along its
+    foot from `origin` to `frac` in the one red — where the value sits."""
+    dl = k.dl
+    r = ui.ROUND
+    dl.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h),
+                       imgui.get_color_u32(imgui.Col_.frame_bg), r)
+    a, b = sorted((min(max(origin, 0.0), 1.0), min(max(frac, 0.0), 1.0)))
+    inset = r / 2
+    bx0, bx1 = x + inset + (w - 2 * inset) * a, x + inset + (w - 2 * inset) * b
+    if bx1 - bx0 >= 1.0:
+        dl.add_rect_filled(imgui.ImVec2(bx0, y + h - 3), imgui.ImVec2(bx1, y + h - 1),
+                           ui.u32(ui.RED), 1.0)
+    imgui.push_font(ui._FONTS[font], size)
+    shown = ui.fit_text(words, w - 2 * _m("tokens").SPACE[1])
+    tw = imgui.calc_text_size(shown).x
+    imgui.pop_font()
+    text(dl, x + (w - tw) / 2, y - 1, h, shown, font, size, col)
+
+
+def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
+    """The kit slider for param `a` (reading and writing `p`) in (x, y, w, h);
+    `box`: (words, colour) to draw it as a value box (`_value_box`) rather
+    than a track."""
     I, tbl = _m("interact"), k.slider_tbl
     thumb = tbl["thumb"]
     span = w - thumb
     t0 = p.norm
+    if box is not None:
+        _value_box(k, x, y, w, h, t0, panel._origin(p), box[0], "num", ui.FONT_NUM, box[1])
     shown = (panel._mod_text(p) if p.modulated else p.text()).replace("%", "%%")
     if p.taper is not None:                 # the detents: the stock slider over positions
         steps = p.steps
@@ -155,11 +184,14 @@ def _slider(panel, k, a, p, x, y, w, h) -> bool:
     try:
         changed, nv = I.slider(k, a.id, x, y, w, h, value, lo, hi, fine=False,
                                disabled=_dim(panel), fmt=shown, flags=flags, frac=t0,
-                               origin=panel._origin(p))
+                               origin=panel._origin(p), draw=box is None)
     finally:
         imgui.pop_font()
         imgui.pop_style_var(2)
-    own, t = panel._fine(p, t0, x + thumb / 2, span)
+    # a ⇧-drag measured over imgui's own throw — its grab padding inside the
+    # frame at each end — so a fine drag is a tenth of a plain one exactly,
+    # whatever the track's width (on a short one the 4 px were 20 %)
+    own, t = panel._fine(p, t0, x + thumb / 2 + GRAB_PAD, span - 2 * GRAB_PAD)
     if own:
         changed = t is not None             # a frame the mouse did not move writes nothing
         if changed:
@@ -168,7 +200,9 @@ def _slider(panel, k, a, p, x, y, w, h) -> bool:
     panel._ctx(a)
     panel._learn_frame(a)
     cy = y + h / 2
-    if p.taper is not None and p.taper.unity is not None and steps:
+    if box is not None:
+        pass                                # (a value box: no notch, no ghost on a track)
+    elif p.taper is not None and p.taper.unity is not None and steps:
         nx = x + thumb / 2 + span * p.taper.unity / steps
         col = ui.u32(ui.FAINT)
         th = tbl["track_h"] / 2
@@ -475,7 +509,23 @@ def inline_fader(panel, pid: str) -> bool:
     return changed
 
 
-SLIDER_TRACK_MIN = 24.0   # px: the least track an inline slider keeps beside its readout
+SLIDER_TRACK_MIN = 60.0   # px: under this a track beside its readout is a value box (ui.SLIDER_MIN)
+
+
+def _widest(panel, a, p, now: str) -> float:
+    """The room an inline slider keeps for its readout: the widest it shows
+    at either end of its range — the layout must not change shape while a
+    drag moves the value under the pointer ("200 ms" to "1584 ms" turned a
+    track into a value box mid-drag) — or now, while a lane makes it wider."""
+    cache = panel.__dict__.setdefault("_kit_widest", {})
+    w = cache.get(a.id)
+    if w is None:
+        try:
+            ends = [readout(a.label, p.fmt(v)) for v in (p.lo, p.hi)]
+        except Exception:  # noqa: BLE001 — a format that cannot say an end: today's words
+            ends = [now]
+        w = cache[a.id] = max(ui._readout_width(t) for t in ends)
+    return max(w, ui._readout_width(now)) if p.modulated else w
 
 
 def inline_slider(panel, pid: str, width: float = -1) -> bool:
@@ -493,28 +543,20 @@ def inline_slider(panel, pid: str, width: float = -1) -> bool:
     fh = imgui.get_frame_height()
     x, y, _, _ = ui_kit.block(fh)
     value = readout(a.label, panel._mod_text(p) if p.modulated else p.text())
-    rw = ui._readout_width(value)
+    rw = _widest(panel, a, p, value)
     gap = _m("tokens").SPACE[2]
     col = ui.RED if p.modulated else ui.TEXT
     beside = w - rw - gap >= SLIDER_TRACK_MIN
     track = w - rw - gap if beside else w
     with _m("uictx").chrome(k):
         # the hit is the whole row, as the stock slider's frame was: the
-        # track is centred in it, and a row of controls keeps one top
-        changed = _slider(panel, k, a, p, x, y, track, fh)
+        # track is centred in it, and a row of controls keeps one top. Too
+        # narrow for a readable track beside its readout (a cell of the 240 px
+        # pane, the head's seconds): a value box, the whole room
+        changed = _slider(panel, k, a, p, x, y, track, fh,
+                          box=None if beside else (value, col))
         if beside:
             text(k.dl, x + track + gap, y, fh, value, "num", ui.FONT_NUM, col)
-        else:
-            # too narrow for both side by side (a cell of the 240 px pane):
-            # the readout over the track's middle, on a plate of the ground
-            tx = x + (w - min(rw, w)) / 2
-            pad = _m("tokens").SPACE[1]
-            k.dl.add_rect_filled(imgui.ImVec2(tx - pad, y + 4), imgui.ImVec2(tx + min(rw, w) + pad, y + fh - 4),
-                                 imgui.get_color_u32(imgui.Col_.window_bg), ui.ROUND)
-            imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
-            shown = ui.fit_text(value, w)
-            imgui.pop_font()
-            text(k.dl, tx, y, fh, shown, "num", ui.FONT_NUM, col)
     ui_kit.end_block((x, y, w, fh))
     return changed
 
@@ -698,3 +740,68 @@ def text_field(label: str, hint: str, text: str, flags: int = 0) -> tuple[bool, 
                                                  placeholder=hint, flags=flags)
     ui_kit.end_block((p.x, p.y, w, fh))
     return changed, out
+
+
+def inline_raw(panel, key: str, value: float, lo: float, hi: float, fmt: str, tip: str,
+               width: float = -1, log: bool = False, dim: bool = False,
+               num: bool = True) -> tuple[bool, float]:
+    """`Panel._raw_slider` on the kit — a slider with no param behind it (a
+    route's depth, GRAPH's backdrop) — in the room the stock one had: the
+    kit's track, the readout (`fmt % value`, words and all) at the row's
+    end, the panel's ⇧-drag fine mode, its tooltip and its undo report,
+    exactly as `_raw_slider` makes them. `(changed, value)`."""
+    import math
+    k = ui_kit.begin(panel)
+    I = _m("interact")
+    value = float(value)
+    log = log and lo > 0
+    t0 = (math.log(max(value, lo) / lo) / math.log(hi / lo) if log
+          else (value - lo) / ((hi - lo) or 1.0))
+    origin = -lo / (hi - lo) if lo < 0 < hi else 0.0
+    shown = fmt % value
+    avail = imgui.get_content_region_avail().x
+    w = avail if width == -1 else (avail + width if width < 0 else width)
+    fh = imgui.get_frame_height()
+    x, y, _, _ = ui_kit.block(fh)
+    font, size = ("num", ui.FONT_NUM) if num else ("ui", ui.FONT_BASE)
+    imgui.push_font(ui._FONTS[font], size)
+    # the widest the readout gets, at either end: the layout holds still
+    # through a drag (see `_widest`)
+    rw = max(imgui.calc_text_size(fmt % v).x for v in (lo, hi))
+    imgui.pop_font()
+    gap = _m("tokens").SPACE[2]
+    beside = w - rw - gap >= SLIDER_TRACK_MIN
+    track = w - rw - gap if beside else w
+    thumb = k.slider_tbl["thumb"]
+    col = ui.DIM if dim else ui.TEXT
+    if not beside:
+        _value_box(k, x, y, w, fh, t0, origin, shown, font, size, col)
+    imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, (fh - ui.FONT_NUM) / 2))
+    imgui.push_style_var(imgui.StyleVar_.grab_min_size, thumb)
+    imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
+    try:
+        with _m("uictx").chrome(k):
+            changed, v = I.slider(k, key, x, y, track, fh, value, lo, hi, fine=False,
+                                  fmt=shown.replace("%", "%%"),
+                                  flags=imgui.SliderFlags_.logarithmic if log else 0,
+                                  frac=min(max(t0, 0.0), 1.0), origin=origin, draw=beside)
+    finally:
+        imgui.pop_font()
+        imgui.pop_style_var(2)
+    own, t = panel._fine_throw(t0, track - thumb - 2 * GRAB_PAD)   # imgui's own throw
+    if own:
+        changed = t is not None             # a frame the mouse did not move writes nothing
+        v = value if t is None else lo * (hi / lo) ** t if log else lo + t * (hi - lo)
+    shift = getattr(panel, "_shift", False)
+    st = getattr(panel, "_fine_drag", None)
+    hovered = imgui.is_item_hovered()
+    if shift and not hovered and st is not None and st["id"] == imgui.get_item_id():
+        ui.tooltip(ui.FINE_TIP)
+    elif hovered:
+        ui.tooltip(f"{ui.FINE_TIP}\n{tip}" if shift else tip)
+    if beside:
+        text(k.dl, x + track + gap, y, fh, shown, font, size, col)
+    ui_kit.end_block((x, y, w, fh))
+    if changed:
+        undo.by_hand(True)                  # (typed into it: row 757)
+    return changed, v

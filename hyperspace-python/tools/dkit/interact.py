@@ -257,7 +257,7 @@ FINE = 0.1          # Shift scales a drag to a tenth, as the panel's does
 
 def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
            snap=0.02, fine=True, disabled=False, fmt="%.3f", flags=0,
-           frac=None, origin=0.0) -> tuple:
+           frac=None, origin=0.0, draw=True) -> tuple:
     """shadcn Slider over a real `imgui.slider_float`.
 
     Returns (changed, value). `value` is in the caller's own domain; a taper
@@ -280,6 +280,10 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
       INPUT: the thumb lands where the value was when the frame began, as
       Hyperspace's `_track` draws it;
     * `origin` is where the fill starts (`rect.slider_geom`).
+
+    `draw=False` submits the slider and draws no chrome: a host drawing the
+    value its own way in that room (Hyperspace's value box, where a track
+    would be too short to read).
     """
     span = float(hi - lo) or 1.0
     cols = _sandwich_begin(ui)
@@ -348,8 +352,9 @@ def slider(ui: Ui, key, x, y, w, h, value, lo=0.0, hi=1.0, *, detents=(),
     ring_f = ui.anim.to(
         f"{key}:ring",
         1.0 if (hovered or active or kb_focus) and not disabled else 0.0)
-    D.slider(ui.dl, x, y, w, h, [min(max(frac, 0.0), 1.0)], ui.theme, tbl,
-             ring_f=ring_f, disabled=disabled, origin=origin)
+    if draw:
+        D.slider(ui.dl, x, y, w, h, [min(max(frac, 0.0), 1.0)], ui.theme, tbl,
+                 ring_f=ring_f, disabled=disabled, origin=origin)
     ui.dl.channels_merge()
     return changed, out
 
