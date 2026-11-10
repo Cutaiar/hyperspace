@@ -97,7 +97,7 @@ MODES: dict[str, tuple[tuple[float, float, float], ...]] = {
 
 GUIDES = ["OFF", "BESIDE", "ON HAND"]
 STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "MESH",
-          "LEAP HAND", "LOW POLY"]   # PARTS, in order
+          "LEAP HAND", "LOW POLY", "BONES"]   # PARTS, in order
 
 @dataclass
 class GhostState:
@@ -239,7 +239,8 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                  "the palm and breathes with the grip), MARIONETTE (fingertips on strings "
                  "from a bar), MESH (a rigged hand model bent onto "
                  "your bones: WebXR's), LEAP HAND (Ultraleap's, with a forearm), LOW POLY "
-                 "(Ultraleap's faceted pair). The guide and the tethers are the same "
+                 "(Ultraleap's faceted pair), BONES (the hand's own 27 bones, each "
+                 "carried rigidly by the one it is). The guide and the tethers are the same "
                  "in every style.")
 
 
@@ -1273,9 +1274,10 @@ def _model_parts(name: str):
 mesh_parts = _model_parts("webxr")
 leap_parts = _model_parts("ultraleap")
 lowpoly_parts = _model_parts("lowpoly")
+bones_parts = _model_parts("bones")
 
 PARTS = (hands_parts, joints_parts, palms_parts, cage_parts, marionette_parts,
-         mesh_parts, leap_parts, lowpoly_parts)
+         mesh_parts, leap_parts, lowpoly_parts, bones_parts)
 
 
 def eye_of(view_proj: np.ndarray) -> np.ndarray:

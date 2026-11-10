@@ -250,6 +250,11 @@ MODELS: dict[str, Spec] = {
     # their low-poly pair, each joint prefixed by its side ("L_", "R_")
     "lowpoly": Spec((("left", "ultraleap/lowpoly_left.glb"),
                      ("right", "ultraleap/lowpoly_right.glb")), _ultraleap_slots("{s}_")),
+    # the hand's own 27 bones (nlm/LICENSE.md): one unrigged mesh welded into
+    # its pieces and skinned a bone to a piece, so nothing bends — a skeleton
+    # does not. Right only (mirrored); its units are neither metres nor
+    # millimetres, so the scale is what makes its palm a hand's.
+    "bones": Spec((("right", "nlm/bones_right.glb"),), _webxr_slots(), scale=9.33),
 }
 
 # kept across a hot reload of this module: the files are read once a run

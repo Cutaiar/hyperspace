@@ -882,7 +882,7 @@ def test_every_style_draws_from_the_same_poses():
     fist, 1 open — which PALMS' orb and CAGE's size follow."""
     poses, _, _ = _guided_poses()
     assert G.STYLES == ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "MESH",
-                        "LEAP HAND", "LOW POLY"]
+                        "LEAP HAND", "LOW POLY", "BONES"]
     assert len(G.PARTS) == len(G.STYLES) and G.PARTS[0] is G.hands_parts
     for p in poses:
         drawn = []
