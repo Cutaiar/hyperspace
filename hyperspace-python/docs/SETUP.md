@@ -298,8 +298,22 @@ On the Mac, with both on the same network:
 ```bash
 brew install android-platform-tools                  # adb
 adb connect <HALO_IP>:5555                            # the projector asks "Allow USB debugging?": tick Always allow, accept
-uv run python tools/projector_probe.py <HALO_IP>      # projector 85 % · charging
+uv run python tools/projector_probe.py <HALO_IP>      # projector 85 % · charging · awake
 ```
+
+Then tell the app, in `config.toml`:
+
+```toml
+[projector]
+host = "192.168.1.40"   # the projector's address; no [projector], no asking
+# every = 30            # seconds between asks (5 at least)
+```
+
+The OUTPUT section says it under the displays (charge, charging,
+awake or asleep, how old the reading is; hover for every number), and
+the status bar at the bottom of the control window says it on every
+section only when it matters: at or under 20 % and not charging, asleep,
+or gone after it had answered.
 
 "unauthorised" means the prompt on the projector wasn't accepted;
 "unreachable" that it's off, asleep or on another network. Give the

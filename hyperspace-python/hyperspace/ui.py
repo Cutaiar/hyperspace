@@ -68,6 +68,7 @@ from . import (
     undo,
 )
 from . import players as players_mod
+from . import projector
 from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
@@ -2441,6 +2442,16 @@ class Panel:
         if black:
             imgui.same_line()
             imgui.text_colored(WARN, black)
+        # the projector (projector.py), on every page only when it matters:
+        # low and not charging, asleep, or gone after it had answered
+        watch = getattr(self, "projector", None)
+        if watch is not None:
+            said = projector.alert(watch.latest())
+            if said:
+                imgui.same_line()
+                imgui.text_colored(WARN, f"·  {said}")
+                if imgui.is_item_hovered():
+                    tooltip(projector.detail(watch.latest(), watch.serial))
         lib = self.library
         if lib is not None and lib.reg is not None:
             proj = lib.install
@@ -2456,6 +2467,20 @@ class Panel:
         """Who is on air, and what they hold (ui_players.py)."""
         ui_players.section(self, dt)
 
+
+    def _projector_line(self) -> None:
+        """The projector's state under the displays (projector.py): its battery,
+        charging, awake, how old; the hover every number. Only with `[projector] host`."""
+        watch = getattr(self, "projector", None)
+        if watch is None:
+            return
+        r = watch.latest()
+        line = projector.words(r)
+        imgui.align_text_to_frame_padding()
+        room = imgui.get_content_region_avail().x
+        imgui.text_colored(WARN if projector.alert(r) else DIM, fit_text(line, room))
+        if imgui.is_item_hovered():
+            tooltip(projector.detail(r, watch.serial))
 
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""
@@ -2473,6 +2498,7 @@ class Panel:
         rows = self.displays
         if rows is not None:                # which display shows what (SC2)
             ui_displays.section(self, rows)
+        self._projector_line()
         self._output_blocks()
         for want in ui_graph.window_wants(self):   # plan 44 D3: a window the meta controller lacks
             imgui.text_colored(WARN, want)

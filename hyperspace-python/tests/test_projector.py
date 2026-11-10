@@ -5,7 +5,7 @@ import ast
 from pathlib import Path
 
 from hyperspace import projector
-from hyperspace.projector import Battery, Reading, Watch, ask, parse, words
+from hyperspace.projector import Battery, Reading, Watch, alert, ask, detail, parse, words
 
 DUMPSYS = """Current Battery Service state:
   AC powered: true
@@ -22,13 +22,14 @@ DUMPSYS = """Current Battery Service state:
   voltage: 8123
   temperature: 312
   technology: Li-ion
+  mWakefulness=Awake
 """
 
 
 def test_parse_reads_the_state_of_charge():
     b = parse(DUMPSYS)
     assert b == Battery(percent=85, status="charging", plugged=("ac",), present=True,
-                        temp_c=31.2, volts=8.123)
+                        temp_c=31.2, volts=8.123, wake="awake")
     assert b.charging
 
 
@@ -63,7 +64,7 @@ def test_ask_connects_then_reads_the_battery():
     b, err = ask("10.0.0.9:5555", "adb", run)
     assert err is None and b.percent == 85
     assert calls == [["adb", "connect", "10.0.0.9:5555"],
-                     ["adb", "-s", "10.0.0.9:5555", "shell", "dumpsys", "battery"]]
+                     ["adb", "-s", "10.0.0.9:5555", "shell", projector.SHELL]]
 
 
 def test_ask_says_why_it_failed():
@@ -94,7 +95,7 @@ def test_the_watch_keeps_the_last_good_battery_through_a_failure():
     t[0] = 400.0
     r = w.poll()
     assert r.battery.percent == 85 and r.at == 100.0 and r.error == "unreachable"
-    assert words(r, now=400.0) == "projector 85 % · charging · 5 min ago · unreachable"
+    assert words(r, now=400.0) == "projector 85 % · charging · awake · 5 min ago · unreachable"
 
 
 def test_the_watch_thread_starts_and_closes():
@@ -110,6 +111,45 @@ def test_words():
     on_mains = Reading(Battery(60, status="not charging", plugged=("ac",)), at=0.0)
     assert words(on_mains, now=1.0) == "projector 60 % · plugged in"
     assert words(Reading(Battery(40, status="discharging"), at=0.0), now=1.0) == "projector 40 %"
+
+
+def test_parse_reads_asleep_and_no_wakefulness():
+    assert parse("  level: 50\n  mWakefulness=Asleep\n").wake == "asleep"
+    assert parse("  level: 50\n").wake is None
+
+
+def test_the_header_speaks_only_when_it_matters():
+    assert alert(Reading()) == ""                                       # never answered: the page says it
+    assert alert(Reading(error="unreachable")) == ""
+    fine = Battery(85, status="discharging", wake="awake")
+    assert alert(Reading(fine, at=0.0)) == ""
+    assert alert(Reading(Battery(14, status="discharging"), at=0.0)) == "projector 14 %"
+    assert alert(Reading(Battery(14, status="charging"), at=0.0)) == ""
+    assert alert(Reading(Battery(14, plugged=("ac",)), at=0.0)) == ""
+    assert alert(Reading(Battery(14, present=False), at=0.0)) == ""   # a fake battery isn't low
+    assert alert(Reading(Battery(90, wake="asleep"), at=0.0)) == "projector asleep"
+    assert alert(Reading(fine, at=0.0, error="unauthorised: accept the prompt")) == "projector unauthorised"
+    assert alert(Reading(fine, at=0.0, error="unreachable")) == "projector unreachable"
+
+
+def test_the_hover_says_every_number():
+    r = Reading(parse(DUMPSYS), at=10.0, error="unreachable")
+    text = detail(r, "h:5555", now=40.0)
+    assert "h:5555" in text and "battery 85 %, charging, plugged in: ac" in text
+    assert "31.2 °C, 8.12 V, screen awake" in text and "read 30 s ago" in text
+    assert "last ask: unreachable" in text
+    assert "not asked yet" in detail(Reading(), "h:5555")
+
+
+def test_the_app_opens_a_watch_only_with_a_host(monkeypatch):
+    from hyperspace import app
+    started = []
+    monkeypatch.setattr(Watch, "start", lambda self: started.append(self) or self)
+    assert app._open_projector({}) is None
+    assert app._open_projector({"projector": {"host": "  "}}) is None
+    w = app._open_projector({"projector": {"host": "10.0.0.9", "every": 60}})
+    assert w.serial == "10.0.0.9:5555" and w.every == 60.0 and started == [w]
+    assert app._open_projector({"projector": {"host": "10.0.0.9", "every": 0}}).every == projector.EVERY_S
 
 
 def test_projector_is_a_leaf():

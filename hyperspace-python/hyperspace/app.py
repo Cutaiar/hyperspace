@@ -1214,6 +1214,19 @@ def _share_experiments(first: Registry, second: Registry, *, poi_cfg: dict) -> N
         poi.register(second, swing, poi_cfg)
 
 
+def _open_projector(cfg: dict):
+    """The projector's battery watch (projector.py), started, with
+    `[projector] host` set; None without. `every` the seconds between asks."""
+    sec = cfg.get("projector", {})
+    host = sec.get("host") if isinstance(sec, dict) else None
+    if not isinstance(host, str) or not host.strip():
+        return None
+    from . import projector
+    every = sec.get("every", projector.EVERY_S)
+    every = float(every) if isinstance(every, (int, float)) and every >= 5 else projector.EVERY_S
+    return projector.Watch(host.strip(), every=every).start()
+
+
 def _open_awake(cfg: dict):
     """`Awake`, unless [output] keep_awake = false (on by default)."""
     if cfg.get("output", {}).get("keep_awake", True) is False:
@@ -2284,13 +2297,17 @@ def main(argv: list[str] | None = None) -> None:
         _save_windows(home, slots[0].win, ctrl_win, output, [sl.output for sl in slots[1:]], slots,
                       plug.away_spots() if plug is not None else None)
 
+    # the projector's battery (projector.py): one watch, every deck's panel shows it
+    projector_watch = _open_projector(cfg)
+    for p in panels:
+        p.projector = projector_watch
     # the flat handles are the deck's (plan 44 D1), so `frame` is unchanged
     host = Host(reg=deck.reg, view=deck.view, control=control, audio=audio, router=deck.router,
                 clock=clock, lfos=deck.lfos, keys=keys, mouse=mouse, output=output,
                 renderer=deck.renderer, panel=panel, reloader=reloader,
                 render_current=lambda: glfw.make_context_current(root_win),
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters,
+                restart=lambda: _restart(audio, (watchdog, awake, projector_watch, panel, *host.adapters,
                                                  publishers, segmenters,
                                                  *([display_list] if display_list else [])), impl,
                                          ctrl_win,
@@ -2369,7 +2386,7 @@ def main(argv: list[str] | None = None) -> None:
     # (its GRAPH page's node editor context, plan 28 N2)
     if display_list is not None:
         _quiet(display_list.close)
-    close_all(audio, watchdog, awake, panel, *host.adapters, publishers, segmenters)
+    close_all(audio, watchdog, awake, projector_watch, panel, *host.adapters, publishers, segmenters)
     impl.shutdown()
     _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()

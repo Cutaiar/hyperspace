@@ -5,11 +5,13 @@ options on and network debugging enabled (the steps are in
 docs/SETUP.md, "The projector's battery"), the Mac reaches it with::
 
     adb connect <HALO_IP>:5555
-    adb -s <HALO_IP>:5555 shell dumpsys battery
+    adb -s <HALO_IP>:5555 shell 'dumpsys battery; dumpsys power | grep -m1 mWakefulness='
 
-and `dumpsys battery` prints the state of charge as ``level`` over
-``scale``, the charger as ``AC powered`` / ``USB powered``, and the status
-as a number (2 charging, 3 discharging, 4 not charging, 5 full).
+`dumpsys battery` prints the state of charge as ``level`` over ``scale``,
+the charger as ``AC powered`` / ``USB powered``, and the status as a
+number (2 charging, 3 discharging, 4 not charging, 5 full); `dumpsys
+power`'s ``mWakefulness`` says whether the projector is awake (showing a
+picture) or asleep / dozing (its lamp off, still on the network).
 
 Two pieces:
 
@@ -21,7 +23,10 @@ Two pieces:
   off, asleep or unauthorised is a `Reading` with `error` said and the
   last good `battery` kept, so a readout can show "85 %, 2 min ago".
 
-`words` is the one line a readout shows ("projector 85 % · charging").
+`words` is the one line the OUTPUT page shows ("projector 85 % · charging
+· awake"), `alert` the few words the panel's header shows on every page,
+and only when they matter (low and not charging, asleep, gone), `detail`
+the hover's lines.
 
 A leaf: the standard library only, nothing from the package
 (`tests/test_projector.py::test_projector_is_a_leaf`). Cold for hot
@@ -45,6 +50,9 @@ STALE_S = 180.0       # a reading older than this is said as old
 # `BatteryManager.BATTERY_STATUS_*`
 STATUS = {1: "unknown", 2: "charging", 3: "discharging", 4: "not charging", 5: "full"}
 
+LOW = 20              # the header says the battery at or under this, when not charging
+SHELL = "dumpsys battery; dumpsys power | grep -m1 mWakefulness="
+
 Runner = Callable[[list[str], float], tuple[int, str]]
 
 
@@ -59,6 +67,7 @@ class Battery:
     present: bool = True                 # False: the build reports a battery it hasn't got
     temp_c: float | None = None
     volts: float | None = None
+    wake: str | None = None              # "awake", "asleep", "dozing", "dreaming"; None: not said
 
     @property
     def charging(self) -> bool:
@@ -118,7 +127,13 @@ def parse(text: str) -> Battery | None:
         except (KeyError, ValueError):
             return None
 
-    return Battery(percent=pct, status=status, plugged=plugged,
+    wake = None
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("mWakefulness="):
+            wake = line.split("=", 1)[1].strip().lower() or None
+            break
+    return Battery(percent=pct, status=status, plugged=plugged, wake=wake,
                    present=_flag(kv.get("present", "true")),
                    temp_c=num("temperature", 10.0),     # tenths of a degree
                    volts=num("voltage", 1000.0))        # millivolts
@@ -136,6 +151,8 @@ def words(r: Reading, now: float | None = None) -> str:
         parts.append(b.status)
     elif b.plugged:
         parts.append("plugged in")
+    if b.wake:
+        parts.append(b.wake)
     if not b.present:
         parts.append("no battery reported")
     if r.at is not None and now - r.at >= STALE_S:
@@ -143,6 +160,45 @@ def words(r: Reading, now: float | None = None) -> str:
     if r.error:
         parts.append(r.error)
     return " · ".join(parts)
+
+
+def alert(r: Reading, now: float | None = None) -> str:
+    """What the header says on every page, or "": the battery low and not
+    charging ("projector 14 %"), the projector asleep, or a projector that
+    answered before and doesn't now ("projector unreachable"). Nothing
+    while it has never answered: the OUTPUT page says that."""
+    b = r.battery
+    if b is None:
+        return ""
+    if r.error:
+        return f"projector {r.error.split(':')[0]}"
+    if b.present and b.percent <= LOW and not b.charging and not b.plugged:
+        return f"projector {b.percent} %"
+    if b.wake in ("asleep", "dozing"):
+        return f"projector {b.wake}"
+    return ""
+
+
+def detail(r: Reading, serial: str, now: float | None = None) -> str:
+    """The hover's lines: every number the projector gave, and when."""
+    now = time.monotonic() if now is None else now
+    lines = [f"XGIMI Halo+ over ADB at {serial}, asked every {int(EVERY_S)} s"]
+    b = r.battery
+    if b is not None:
+        lines.append(f"battery {b.percent} %, {b.status}, "
+                     f"plugged in: {', '.join(b.plugged) or 'no'}")
+        extra = [f"{b.temp_c:.1f} °C" if b.temp_c is not None else "",
+                 f"{b.volts:.2f} V" if b.volts is not None else "",
+                 f"screen {b.wake}" if b.wake else ""]
+        if any(extra):
+            lines.append(", ".join(e for e in extra if e))
+        if r.at is not None:
+            lines.append(f"read {int(now - r.at)} s ago")
+    if r.error:
+        lines.append(f"last ask: {r.error}")
+    if b is None and not r.error:
+        lines.append("not asked yet")
+    return "\n".join(lines)
 
 
 def run_adb(argv: list[str], timeout: float) -> tuple[int, str]:
@@ -178,7 +234,7 @@ def ask(serial: str, adb: str = "adb", runner: Runner = run_adb,
     code, out = runner([adb, "connect", serial], timeout)
     if code != 0 or "connected to" not in out.lower():
         return None, _reason(out)
-    code, out = runner([adb, "-s", serial, "shell", "dumpsys", "battery"], timeout)
+    code, out = runner([adb, "-s", serial, "shell", SHELL], timeout)
     if code != 0:
         return None, _reason(out)
     b = parse(out)
