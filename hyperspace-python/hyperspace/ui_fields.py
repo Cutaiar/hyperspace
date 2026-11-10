@@ -588,7 +588,7 @@ def inline_select(panel, pid: str, width: float = -1, tip: str | None = None) ->
 # ---------------------------------------------------------------- chips
 
 def _chip_colours(k, variant: str) -> tuple:
-    """(rest, hover, ring) of a kit Button variant's fill, as imgui colours —
+    """(rest, hover, ring, border) of a kit Button variant, as imgui colours —
     resolved once per variant and kept (`anim.store`): a chip is drawn ~70
     times a frame, and the Button's general path resolved and mixed five
     tokens for each (tools/profile_kit.py)."""
@@ -598,18 +598,20 @@ def _chip_colours(k, variant: str) -> tuple:
         T = _m("tokens")
         v = _m("comp_button")._table_for(k)[variant]
         got = cache[variant] = tuple(imgui.ImVec4(*T.rgba(tok, al, theme=k.theme))
-                                     for tok, al in (v["fill"], v["hover_fill"], v["ring"]))
+                                     for tok, al in (v["fill"], v["hover_fill"], v["ring"],
+                                                     v["border"]))
     return got
 
 
 def _chip_chrome(k, dl, x, y, w, h, variant, hot, down, focus, dim, r) -> None:
     """The kit Button's chrome for a chip, lean: what `comp_button.button`
-    paints for a variant with a transparent border — the fill inset by that
-    border (`bg-clip-padding`), the hover tint, the press's 1 px nudge, the
-    focus ring outside the box, half strength disabled — without its
-    general path (joins, borders, glyphs), which a chip never uses."""
+    paints — the fill inset by the 1 px border (`bg-clip-padding`), the
+    border itself where the variant has one (`outline`), the hover tint,
+    the press's 1 px nudge, the focus ring outside the box, half strength
+    disabled — without its general path (joins, glyphs), which a chip never
+    uses."""
     C, D = _m("comp_button"), _m("draw")
-    rest, hover, ring = _chip_colours(k, variant)
+    rest, hover, ring, border = _chip_colours(k, variant)
     t = 0.0 if dim else hot
     a = 0.5 if dim else 1.0
     fill = imgui.ImVec4(rest.x + (hover.x - rest.x) * t, rest.y + (hover.y - rest.y) * t,
@@ -621,10 +623,18 @@ def _chip_chrome(k, dl, x, y, w, h, variant, hot, down, focus, dim, r) -> None:
     b = C.BORDER_W
     dl.add_rect_filled(imgui.ImVec2(bx + b, by + b), imgui.ImVec2(bx + bw - b, by + bh - b),
                        imgui.color_convert_float4_to_u32(fill), max(r - b, 0.0))
+    if border.w > 0.01:
+        edge = imgui.ImVec4(border.x, border.y, border.z, border.w * a)
+        dl.add_rect(imgui.ImVec2(bx + 0.5, by + 0.5), imgui.ImVec2(bx + bw - 0.5, by + bh - 0.5),
+                    imgui.color_convert_float4_to_u32(edge), r, b)    # (the binding's order: thickness, then flags)
+
+
+CHIP_VARIANT = "outline"  # an unlit chip: the kit's outline Button, a border and a faint fill
+CHIP_RADIUS = "sm"        # its corners (tokens.RADII): a button's, not a pill's
 
 
 def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
-         pill: bool = True, icon: str | None = None, variant: str | None = None,
+         pill: bool = False, icon: str | None = None, variant: str | None = None,
          reveal: float = 1.0) -> bool:
     """`ui.chip` / `ui.lit_chip` on the kit — and, with `pill` off and its
     own `pad`, `ui.button` / `ui.small_button` / `ui.arrow_button`: the kit's
@@ -663,8 +673,9 @@ def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
     focus = k.focus_f(f"chip:{key}", imgui.is_item_focused(), disabled=dim)
     reveal = max(reveal, hot, focus)            # its own hover or focus shows it whole
     if reveal > 0.01:
-        _chip_chrome(k, dl, x, y, w, h, variant or ("default" if lit else "secondary"),
-                     hot, down, focus, dim, h / 2 if pill else min(ui.ROUND, h / 2))
+        _chip_chrome(k, dl, x, y, w, h, variant or ("default" if lit else CHIP_VARIANT),
+                     hot, down, focus, dim,
+                     h / 2 if pill else min(_m("tokens").RADII[CHIP_RADIUS], h / 2))
     # lit: white on the red; an unlit lit_chip: its colour; anything else: TEXT
     ink = imgui.ImVec4(1, 1, 1, 1) if lit else (color if color is not None else ui.TEXT)
     ink = imgui.ImVec4(ink.x, ink.y, ink.z, ink.w * reveal)
