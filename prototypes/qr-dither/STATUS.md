@@ -53,6 +53,13 @@ clean and running the whole thing.
   solves in 0.2 ms instead of 2 s. The URL is baked into the factorisation —
   point it elsewhere and every artefact must be rebuilt.
 - **29 stills** across eight subjects, seven dot styles, six palettes.
+- **Editions.** `gen/editions.py` pairs one pose with one irrational constant,
+  pinned into the leading digits of the numeric filler, so the fragment opens
+  with the number: a code is a one-of-one in both its shape and its payload.
+  `basis.py` grew `pin_digits` for it, extending the `forced` map that already
+  held the URL. Costs **3 modules a digit**, linear to the end of the filler.
+  5/5 rasterised, decoded, and checked that the fragment really begins with the
+  digits asked for.
 - **The family tree.** `gen/polytopes.py` carries the taxonomy and the reject
   log as data rather than a comment, `gallery.py` writes both into the
   manifest, and the families view reads it. A subject that was rendered and
@@ -135,6 +142,16 @@ See STICKERS.md for the detail. In short, each needs one cheap real-world test:
   a different but equally valid code. Expect a 29-file diff for no change. The
   style fields added to the manifest were therefore written from gallery.py's
   own tables rather than by regenerating; `gallery.py` emits them from now on.
+- **The affine path's extra noise is the 511 cap, not the pivot order.** An
+  affine still is ~3.5 points behind pyqart on drawing fidelity, and it is
+  tempting to blame the fixed pivot order. It is not: ranking pivots by image
+  contrast instead moved it 0.3 points, and the mask moved it 0.7 either way.
+  The cap is the whole gap. 269 numeric groups, one bit pinned each to hold the
+  group under 512, is 269 modules; an uncontrolled module is right by chance
+  half the time, so that predicts 3.2 points against 3.5 measured. pyqart does
+  not pay it because it retries instead, which is fatal in a loop and free for
+  a still. **Open:** lift the cap for stills, check the solved groups for
+  legality, re-solve the rare one over 999.
 - **Only `export_js.py` takes the fast path** through `basis.py`. Everything
   else calls pyqart directly and pays ~2 s per image — fine for a still,
   impossible for a frame.
