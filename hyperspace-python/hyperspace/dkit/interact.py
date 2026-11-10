@@ -42,16 +42,27 @@ from imgui_bundle import imgui
 from . import draw as D
 from . import tokens as T
 from .ease import mix
-from .rect import stretched_hit
+from .rect import slider_geom, stretched_hit
 
 # The per-frame context and the sandwich live in uictx.py. Re-exported for
 # `I.Ui` / `I.chrome` / `I._sandwich_end` callers, and used unqualified below.
-from .uictx import State, Ui, _sandwich_begin, _sandwich_end
+from .uictx import (
+    State,
+    Ui,
+    _sandwich_begin,
+    _sandwich_end,
+    chrome,  # noqa: F401 - re-exported
+)
 
 # The wheel lives in wheel.py; these are re-exported for `I.x` callers, and
 # `snap_scroll` is also called unqualified by `scroll_area` below.
-from .wheel import (
+from .wheel import (  # noqa: F401 - re-exported
+    _PRECISE,
+    install_wheel,
+    note_wheel_step,
+    scale_wheel,
     snap_scroll,
+    wheel_px_per_unit,
 )
 
 # --------------------------------------------------------------------------
@@ -705,7 +716,7 @@ def range_slider(ui: Ui, key, x, y, w, h, lo, hi, vmin=0.0, vmax=1.0, *,
     flo = min(max((lo - vmin) / span, 0.0), 1.0)
     fhi = min(max((hi - vmin) / span, 0.0), 1.0)
     tz = ui.slider_tbl["thumb"] if thumb is None else thumb
-    _track, _rng, thumbs = __import__("box").slider_geom(
+    _track, _rng, thumbs = slider_geom(
         x, y, w, h, [flo, fhi], track_h=ui.slider_tbl["track_h"], thumb=tz)
 
     changed = False

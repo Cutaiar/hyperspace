@@ -28,7 +28,7 @@ from . import ui, ui_fields, ui_kit, ui_pane
 TAB_H = 32.0            # the TabsList: h-8, its triggers inset by its 3 px padding
 TAB_PAD = 3.0
 DIRTY = "●"             # a Select row's dirty mark, at its end
-ICONS = {               # Lucide's names (tools/dkit/icons.py)
+ICONS = {               # Lucide's names (hyperspace/dkit/icons.py)
     ui_pane.SELECTION: "mouse_pointer_2",
     "loadable": "layers",
     "audio": "audio_lines",
@@ -41,7 +41,7 @@ ICONS = {               # Lucide's names (tools/dkit/icons.py)
 
 def height() -> float:
     """The switcher's two rows and the step between them."""
-    return TAB_H + ui_kit.mod("tokens").SPACE[2] + ui_fields.ROW_H
+    return TAB_H + ui_kit.mod("tokens").SPACE[2] + ui.FIELD_ROW_H
 
 
 def bar(panel, key: str, said: str = "") -> None:

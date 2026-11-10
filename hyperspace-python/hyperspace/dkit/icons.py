@@ -1,6 +1,6 @@
 """Lucide icon geometry, as draw-list paths. GENERATED — do not edit.
 
-Built by tools/dkit/build_icons.py from lucide-react's own node data;
+Built by hyperspace/dkit/dev/build_icons.py from lucide-react's own node data;
 see that file for how arcs and primitives are resolved. Lucide is ISC
 licensed — fonts/ carries the notice.
 

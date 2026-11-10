@@ -266,7 +266,7 @@ def draw(panel, st: dict, dt: float, selection: Callable[[], None] | None,
     drawn = st["pane_drawn"] = []
     if ui_kit.ready():
         from . import ui_switcher  # (late: it imports this module)
-        ui_switcher.bar(panel, key, said)      # on the kit (tools/dkit)
+        ui_switcher.bar(panel, key, said)      # on the kit (hyperspace/dkit)
     else:
         _bar(panel, key, said)
     if home is not None and key == home and key != SELECTION and said:

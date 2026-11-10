@@ -1,5 +1,5 @@
 """The panel's bridge to dkit (`hyperspace/dkit`), the measured shadcn kit
-(its tests, gallery, oracles and docs: `tools/dkit`). ``HYPERSPACE_KIT=0``
+(its docs beside it, its tests, gallery and oracles in `hyperspace/dkit/dev`). ``HYPERSPACE_KIT=0``
 switches it off: `ready` says so and every section that uses it draws as
 it did before (`ui_camera.page` → `Panel._camera_stock`).
 

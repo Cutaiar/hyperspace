@@ -121,6 +121,12 @@ DESK_ASPECT = 4 / 3   # at launch the desk diagram left of the panel is this wid
 LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
 SLIDER_MIN = 60.0   # a slider sharing a row in a narrow pane is never thinner
+# the kit's fields (`ui_fields`): a slider's row (the 12 px thumb, its ring, and
+# room to press); a switch's, a select's, a button's row (the panel's frame
+# height); how far a detent's tick stands off the track, above and below
+FIELD_SLIDER_H = 20.0
+FIELD_ROW_H = 28.0
+FIELD_NOTCH = 3.0
 LABEL_GAP = 12   # px between a label cell's text room and its control (Panel._label_cell)
 SCENE_COMBO_MIN = 100   # px; the analyzer's scene combo keeps this beside its label and Reset all
 ROUND = 8.0      # corner radius of frames; chips and grabs go rounder
@@ -308,7 +314,7 @@ def chip(label: str, size: imgui.ImVec2 | None = None, **kit) -> bool:
     """A compact pill button — small_button, with room to breathe. `kit`:
     what the kit's chip can do besides (`ui_fields.chip`: an icon, a
     variant, a reveal); the stock chip draws its words and ignores them."""
-    if ui_kit.ready():                  # on the kit (tools/dkit): the same size and id
+    if ui_kit.ready():                  # on the kit (hyperspace/dkit): the same size and id
         return ui_fields.chip(label, size, **kit)
     imgui.push_style_var(imgui.StyleVar_.frame_padding, CHIP_PAD)
     imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
@@ -408,7 +414,7 @@ def chip_group(labels, lit=None, tips=None) -> int | None:
 def lit_chip(label: str, lit: bool, color: imgui.ImVec4 | None = None,
              size: imgui.ImVec2 | None = None) -> bool:
     """A chip that is solid red while on — a lit key, readable from the floor."""
-    if ui_kit.ready():                  # on the kit (tools/dkit): the same size and id
+    if ui_kit.ready():                  # on the kit (hyperspace/dkit): the same size and id
         return ui_fields.chip(label, size, lit=lit, color=color or DIM)
     if lit:
         imgui.push_style_color(imgui.Col_.button, RED)
@@ -1722,7 +1728,7 @@ class Panel:
         the readouts' face, off for words that need the room. A value a
         file left outside the range is not pulled in by a fine drag: it can
         come in, and go no further out."""
-        if ui_kit.ready():              # on the kit (tools/dkit): a track, its readout beside
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a track, its readout beside
             return ui_fields.inline_raw(self, key, value, lo, hi, fmt, tip, width, log, dim, num)
         value = float(value)
         log = log and lo > 0
@@ -1783,7 +1789,7 @@ class Panel:
 
     def _fader(self, pid: str) -> bool:
         """Full-width taper fader: label and readout over a filled track, detent notch."""
-        if ui_kit.ready():              # on the kit (tools/dkit): a slider field
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a slider field
             return ui_fields.inline_fader(self, pid)
         a = self.reg[pid]           # what the widget is: id, label, tip, binding
         p = self._real(a)           # what it reads and writes
@@ -1854,7 +1860,7 @@ class Panel:
     def _slider(self, pid: str, width: float = -1) -> bool:
         """Compact slider with the readout inside. A tapered range slides
         over its detents (the instance count's), as a fader does."""
-        if ui_kit.ready():              # on the kit (tools/dkit): a track, its readout beside
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a track, its readout beside
             return ui_fields.inline_slider(self, pid, width)
         a = self.reg[pid]
         p = self._real(a)
@@ -1968,7 +1974,7 @@ class Panel:
                rows: int = -1) -> bool:
         """A drop-down of the enum's choices; `rows` the most the list shows
         before it scrolls (imgui's default, eight, at -1)."""
-        if ui_kit.ready():              # on the kit (tools/dkit): a Select, short enums
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a Select, short enums
             got = ui_fields.inline_select(self, pid, width, tip)
             if got is not None:
                 return got
@@ -2018,7 +2024,7 @@ class Panel:
         return changed
 
     def _check(self, pid: str, label: str | None = None) -> bool:
-        if ui_kit.ready():              # on the kit (tools/dkit): a Switch, the same room
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a Switch, the same room
             return ui_fields.inline_check(self, pid, label)
         a = self.reg[pid]
         p = self._real(a)
@@ -2033,7 +2039,7 @@ class Panel:
         return changed
 
     def _button(self, pid: str, label: str | None = None, small: bool = False) -> bool:
-        if ui_kit.ready():              # on the kit (tools/dkit): a Button, the same room
+        if ui_kit.ready():              # on the kit (hyperspace/dkit): a Button, the same room
             return ui_fields.inline_button(self, pid, label, small)
         p = self.reg[pid]
         text = f"{p.label if label is None else label}##{pid}"
@@ -2788,7 +2794,7 @@ class Panel:
             self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
 
     def _page_view(self, dt: float) -> None:
-        """The VIEW section, on the kit (tools/dkit) where it is there
+        """The VIEW section, on the kit (hyperspace/dkit) where it is there
         (`ui_view.page`); else `_view_stock`."""
         ui_view.page(self, dt)
 
@@ -2925,7 +2931,7 @@ class Panel:
             return None
 
     def _page_camera(self, dt: float) -> None:
-        """The CAMERA section, on the kit (tools/dkit) where it is there
+        """The CAMERA section, on the kit (hyperspace/dkit) where it is there
         (`ui_camera.page`); else `_camera_stock`."""
         ui_camera.page(self, dt)
 

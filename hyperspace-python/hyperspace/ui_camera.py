@@ -5,7 +5,7 @@ with its key beside it as a Kbd.
 The first section ported (the kit's HANDOFF item 5); the fields it needed
 are `ui_fields` now, and what is left here is the section's layout:
 `box.flex` on `tokens.SPACE`'s steps (REVIEW: space is a scale). Without
-the kit (``HYPERSPACE_KIT=0``, or no `tools/dkit`), the section is drawn as
+the kit (``HYPERSPACE_KIT=0``, or no `hyperspace/dkit`), the section is drawn as
 before (`Panel._camera_stock`). `Panel._page_camera` is the section's
 entry, as every section's is its `_page_<key>`.
 """
@@ -58,7 +58,7 @@ def layout(w: float, field_h: float, row_h: float) -> list[tuple[str, tuple]]:
 def draw(panel, k) -> None:
     """The body, on the kit `Ui` `k`, in the window's flow at the cursor."""
     x, y, w, _ = ui_kit.block(0.0)
-    rows = layout(w, ui_fields.slider_h(), ui_fields.ROW_H)
+    rows = layout(w, ui_fields.slider_h(), ui.FIELD_ROW_H)
     h = max(r[1] + r[3] for _, r in rows)
     for what, (rx, ry, rw, rh) in rows:
         rect = (x + rx, y + ry, rw, rh)

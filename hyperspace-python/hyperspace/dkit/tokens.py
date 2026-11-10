@@ -181,7 +181,7 @@ def badge_table(theme_name: str) -> dict:
 # Tier 1 components, as measured
 # --------------------------------------------------------------------------
 #
-# Every number below came out of tools/dkit/probe_react.js against the real
+# Every number below came out of hyperspace/dkit/dev/probe_react.js against the real
 # components on the ?probe route - not out of reading the Tailwind classes.
 # Four of them are things a reading gets wrong:
 #

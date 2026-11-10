@@ -6,7 +6,7 @@ Re-exported by `box.py` - see `HANDOFF.md` item 3a.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from .flex import Item, flex
@@ -71,7 +71,7 @@ class Node:
     justify: str = "start"
     align: str = "stretch"
     align_self: str | None = None
-    kids: tuple = ()
+    kids: Sequence[Node] = ()              # read, never written: a list or a tuple
     measure: Callable[[], tuple[float, float]] | None = None   # () -> (w, h), for a leaf
     key: object = None                      # what place() keys its rect by
     # filled in by the passes

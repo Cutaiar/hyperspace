@@ -27,7 +27,7 @@ Without the kit, `Panel._view_stock`.
 
 from __future__ import annotations
 
-from . import field, ui_fields, ui_kit
+from . import field, ui, ui_fields, ui_kit
 from .geometry import SHAPES
 from .params import PLANES
 
@@ -55,7 +55,7 @@ def spec(panel) -> list:
     copies (more than one: their rows) and on the layout (a lattice: its
     perspective)."""
     v = panel.view
-    fh, rh = ui_fields.slider_h(), ui_fields.ROW_H
+    fh, rh = ui_fields.slider_h(), ui.FIELD_ROW_H
     out = [[("view.bright", fh)], [("view.speed", fh)], [("view.depth4", fh)],
            [None], [("planes", rh)]]
     sw = list(SWITCHES)
@@ -89,8 +89,8 @@ def _cell(panel, k, key: str, rect) -> None:
         _planes(panel, k, rect)
     elif key == "view.inst_fit":            # beside the count: on the count's slider row
         x, y, w, h = rect
-        sh = ui_fields.ROW_H
-        ui_fields.switch(panel, k, key, (x, y + h - sh - (ui_fields.SLIDER_H - sh) / 2, w, sh))
+        sh = ui.FIELD_ROW_H
+        ui_fields.switch(panel, k, key, (x, y + h - sh - (ui.FIELD_SLIDER_H - sh) / 2, w, sh))
     else:
         ui_fields.any_param(panel, k, key, rect)
 

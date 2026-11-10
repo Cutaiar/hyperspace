@@ -308,7 +308,7 @@ def strip(panel, group: str) -> None:
         return                  # (plan 40 T5: a retired module group has no strip)
     from . import ui_kit
     if ui_kit.ready():
-        from . import ui_strip  # (late: it imports this module) — on the kit (tools/dkit)
+        from . import ui_strip  # (late: it imports this module) — on the kit (hyperspace/dkit)
         ui_strip.strip(panel, group)
         return
     # the deck this name is on, for the hover (`page` says it over the strip)
@@ -538,7 +538,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, drawn: dict, rect,
         _kit_row_end(panel, kit, name, name == cur)
 
 
-# ---- a row on the kit (tools/dkit) ----
+# ---- a row on the kit (hyperspace/dkit) ----
 
 ROW_ICONS = {"rename": "pencil", "×": "trash_2"}    # a row's actions, as Lucide draws them
 ROW_INSET = 8.0          # px: a row's words in from its band (tokens.SPACE[2])

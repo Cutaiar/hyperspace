@@ -1,4 +1,4 @@
-"""A param as a kit control (`ui_kit`, tools/dkit): one function per kind of
+"""A param as a kit control (`ui_kit`, hyperspace/dkit): one function per kind of
 param, each drawn into a rectangle a kit layout gave it, each keeping
 everything a param widget is on the panel.
 
@@ -30,11 +30,8 @@ from imgui_bundle import imgui
 from . import ui, ui_kit, undo
 from .params import Kind
 
-SLIDER_H = 20.0          # a slider's row: the 12 px thumb, its ring, and room to press
-ROW_H = 28.0             # a switch's, a select's, a button's row: the panel's frame height
-SELECT_SIZE = "sm"       # 28 tall, as ROW_H
+SELECT_SIZE = "sm"       # 28 tall, as `ui.FIELD_ROW_H`
 BUTTON_SIZE = "sm"
-NOTCH = 3.0              # px a detent's tick stands off the track, above and below
 
 
 def _m(name: str):
@@ -59,7 +56,7 @@ def head_h() -> float:
 
 def slider_h() -> float:
     """A slider field's height: its header, a step, its slider."""
-    return head_h() + _m("tokens").SPACE[1] + SLIDER_H
+    return head_h() + _m("tokens").SPACE[1] + ui.FIELD_SLIDER_H
 
 
 def text(dl, x: float, y: float, h: float, s: str, font: str, size: float, col) -> float:
@@ -100,8 +97,8 @@ def slider(panel, k, pid: str, rect, label: str | None = None, *,
         _head(panel, k, a, p, x, y, w, hh, label)
         sy = y + hh + T.SPACE[1]
     else:
-        sy = y + (h - SLIDER_H) / 2
-    return _slider(panel, k, a, p, x, sy, w, SLIDER_H)
+        sy = y + (h - ui.FIELD_SLIDER_H) / 2
+    return _slider(panel, k, a, p, x, sy, w, ui.FIELD_SLIDER_H)
 
 
 def readout(label: str, value: str) -> str:
@@ -195,8 +192,8 @@ def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
         nx = x + thumb / 2 + span * p.taper.unity / steps
         col = ui.u32(ui.FAINT)
         th = tbl["track_h"] / 2
-        k.dl.add_line(imgui.ImVec2(nx, cy - th - NOTCH - 3), imgui.ImVec2(nx, cy - th - NOTCH), col, 1.5)
-        k.dl.add_line(imgui.ImVec2(nx, cy + th + NOTCH), imgui.ImVec2(nx, cy + th + NOTCH + 3), col, 1.5)
+        k.dl.add_line(imgui.ImVec2(nx, cy - th - ui.FIELD_NOTCH - 3), imgui.ImVec2(nx, cy - th - ui.FIELD_NOTCH), col, 1.5)
+        k.dl.add_line(imgui.ImVec2(nx, cy + th + ui.FIELD_NOTCH), imgui.ImVec2(nx, cy + th + ui.FIELD_NOTCH + 3), col, 1.5)
     if p.modulated:                         # the effective value: a white tick on the track
         gx = x + thumb / 2 + span * min(max(p.eff_norm, 0.0), 1.0)
         k.dl.add_rect_filled(imgui.ImVec2(gx - 1.5, cy - 5), imgui.ImVec2(gx + 1.5, cy + 5),
@@ -301,7 +298,7 @@ def select(panel, k, pid: str, rect, tip: str | None = None) -> bool:
     menu = _m("menu")
     cap = 2 * menu.PAD + SELECT_ROWS_MAX * menu.ITEM_H
     chosen, _open = _m("interact").select(
-        k, pid, x, y + (h - ROW_H) / 2, w, names[cur] if 0 <= cur < len(names) else "",
+        k, pid, x, y + (h - ui.FIELD_ROW_H) / 2, w, names[cur] if 0 <= cur < len(names) else "",
         items, size=SELECT_SIZE, disabled=_dim(panel), max_h=cap)
     # the trigger's item is the select's hit, submitted first: ask for it again
     panel._tip(a, tip)
@@ -360,7 +357,7 @@ def any_param(panel, k, pid: str, rect) -> bool:
 
 def height(panel, pid: str) -> float:
     """The row `any_param` wants for `pid`."""
-    return slider_h() if panel._real(panel.reg[pid]).kind is Kind.CONTINUOUS else ROW_H
+    return slider_h() if panel._real(panel.reg[pid]).kind is Kind.CONTINUOUS else ui.FIELD_ROW_H
 
 
 # ---------------------------------------------------------------- forms

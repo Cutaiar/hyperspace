@@ -56,7 +56,7 @@ def _draw(panel, group: str, lib, meta) -> None:
 
     k = ui_kit.begin(panel)
     gap = T.SPACE[1]
-    rh = ui_fields.ROW_H
+    rh = ui.FIELD_ROW_H
     aw = [ui_fields.button_w(k, words[a]) for a in actions]
     actions_w = sum(aw) + gap * (len(aw) - 1)
     x, y, w, _ = ui_kit.block(0.0)

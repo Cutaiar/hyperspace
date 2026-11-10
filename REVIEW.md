@@ -87,7 +87,7 @@ In Claude Code, `/deep-review` runs this review on the current branch
   its card header used 20px where the component it copied uses 4. Nothing in
   the code said either number was wrong, because no number said what it was.
   The fix is not better constants; it is not writing constants
-  (`tools/dkit/box.py`, `tools/dkit/tokens.py:SPACE`).
+  (`hyperspace/dkit/box.py`, `hyperspace/dkit/tokens.py:SPACE`).
 
 ## The base
 

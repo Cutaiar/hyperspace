@@ -14,7 +14,7 @@ from imgui_bundle import imgui
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import ui, ui_camera, ui_fields, ui_graph, ui_kit
+from hyperspace import ui, ui_camera, ui_graph, ui_kit
 from hyperspace.ui import PAGE_KEYS
 
 WIDE = (1600, 900)      # the pane beside the canvas (test_ui_pane.WIDE)
@@ -51,7 +51,7 @@ def test_the_section_is_the_kit(cam):
     assert ui_kit.ready()
     assert ui_kit.STATE in r.panel.__dict__
     for pid in SLIDERS:
-        assert _h(d.rect(pid)) == ui_fields.SLIDER_H, pid
+        assert _h(d.rect(pid)) == ui.FIELD_SLIDER_H, pid
     assert _h(d.rect(ui_camera.RESET)) == ui_kit.mod("comp_button").BUTTON_SIZES["sm"]["h"]
 
 

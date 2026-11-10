@@ -161,7 +161,7 @@ def place_popover(anchor: Rect, w: float, h: float, avail: Rect, *,
 #
 # Pure width -> rects, no imgui, so these are unit-tested the way
 # ui_players.lay_out (ui_players.py:122-176) is. Every law here was read off
-# tools/dkit/probe_react.js rather than derived from the Tailwind classes,
+# hyperspace/dkit/dev/probe_react.js rather than derived from the Tailwind classes,
 # and two of them are not what the classes suggest.
 
 def card_body(card, *, description: bool = True):
