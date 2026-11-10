@@ -1,7 +1,7 @@
 {
  "schema": "hyperspace.loadable/11",
  "name": "kinetic-clay",
- "note": "Hold it. With the grip on (the held setup), close the right fist near the shape and it is in your hand: it moves and turns as the hand does, and a flick of the wrist throws it. Left hand height pushes it through 4D, rolling the left hand sets the spin. Move fast and it leaves a wake.",
+ "note": "Grab it. Close the right fist and turn: the shape turns with your hand and stays where you leave it. Pull two hands apart to stretch it bigger. Left hand height pushes it through 4D; a left fist twisted like a throttle sets the spin. Move fast and it leaves a wake.",
  "graph": {
   "frame": "wired",
   "nodes": [
@@ -71,7 +71,7 @@
   "view.pattern_mix": 0.55,
   "view.speed": 0.25,
   "view.depth4": 2.6,
-  "camera.zoom": 0.6,
+  "camera.zoom": 0.75,
   "view.plane.ZW": true,
   "dream.echoes": 14,
   "dream.gap": 0.05,
@@ -81,16 +81,35 @@
  },
  "routes": [
   {
+   "source": "hand:right.room.yaw",
+   "target": "camera.yaw",
+   "op": "turn",
+   "when": "hand:right.grab"
+  },
+  {
+   "source": "hand:right.room.pitch",
+   "target": "camera.pitch",
+   "op": "turn",
+   "when": "hand:right.grab"
+  },
+  {
+   "source": "hands:gap",
+   "target": "camera.zoom",
+   "op": "push",
+   "value": 0.065
+  },
+  {
    "source": "hand:left.y",
    "target": "view.depth4",
    "op": "push",
    "value": -0.45
   },
   {
-   "source": "hand:left.roll",
+   "source": "hand:left.room.roll",
    "target": "view.speed",
-   "op": "push",
-   "value": 0.35
+   "op": "turn",
+   "value": -0.5,
+   "when": "hand:left.grab"
   },
   {
    "source": "hand:right.energy",

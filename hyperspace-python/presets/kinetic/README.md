@@ -1,8 +1,8 @@
 # Kinetic presets
 
 Six whole-frame presets (`hyperspace.loadable/11`) played with the body:
-the Ultraleap hands first, a gamepad or Joy-Con second, and two setups of
-the hand rig (plan 60, the grip) for the two presets built on it. They are
+the Ultraleap hands first, a gamepad or Joy-Con second, and one setup of
+the hand rig (plan 60, the grip) for the preset built on it. They are
 not part of the app (nothing ships with it). Copy the ones you want into
 the library and they appear in the list and on the grip's strip:
 
@@ -25,37 +25,34 @@ and fails on any note or dropped route.
 ## The grip is the show's, not a preset's
 
 The grip's settings (`grip.*`) belong to the meta controller and are saved
-in the show, so no preset can turn the grip on or set its coupling.
-`kinetic-clay` and `kinetic-comet` are looks made to be held and thrown;
-the physics comes from a grip setup, loaded from the grip's strip on the
-HANDS page:
+in the show, so no preset can turn the grip on or set its coupling. That
+splits the two presets where you take hold of the shape:
 
-| Setup | For | What it is |
-| --- | --- | --- |
-| `held` | `kinetic-clay` | Coupling 0.7, drag 1.2, even inertia. Firm with a little give; a throw dies away in a second or two. |
-| `gyro` | `kinetic-comet` | Coupling 0.4, drag 0.9, shaped inertia and the skater on. A loose spring: it lags, overshoots and flies on. |
+- **`kinetic-clay` needs nothing.** Its grab is its own routes, so it works
+  on any show. Play it with the grip **off**: with the grip on, the same
+  fist turns the shape twice over (a 36° turn of the wrist turned it 72° in
+  the check) and the left fist's throttle also reshapes the inertia.
+- **`kinetic-comet` needs the grip on.** A throw is the grip's physics and
+  no route can stand in for it. Load the `gyro` setup from the grip's strip
+  on the HANDS page: coupling 0.4, drag 0.9, shaped inertia and the skater
+  on. With the grip off its fist does nothing.
 
-With the grip on, a closed fist of the holding hand takes the shape in
-every preset, and the other fist shapes its inertia. The other four presets
-here use no fist, so nothing in them fights it. Reset world puts a shape
-that was thrown away back home.
+The other four presets use no fist, so the grip being on or off changes
+nothing in them. Reset world puts a shape that was thrown away back home.
 
 ## The gestures
 
-### kinetic-clay: hold it
+### kinetic-clay: grab it
 
-A 24-cell in your hand. Needs the grip on (the `held` setup).
+A 24-cell you handle like an object. Grip off.
 
 | Do this | It does this |
 | --- | --- |
-| Close the right fist | The shape is in your hand: it moves and turns as the hand does. Open the hand to let go. |
-| Flick the wrist as you let go | Throws it; it coasts and settles |
+| Close the right fist and turn the wrist | The shape turns with the hand and stays where you leave it. Open the hand to let go, like lifting a mouse. |
+| Pull two hands apart | It gets bigger |
 | Raise the left hand | Pushes it through 4D (the inner cells swell) |
-| Roll the left hand | Sets the spin speed |
+| Close the left fist and twist, like a throttle | Sets the spin speed, and it stays |
 | Move the right hand fast | Leaves a wake behind the shape |
-
-With the grip off, the fist does nothing here; the left hand and the wake
-still play.
 
 ### kinetic-comet: throw it
 
@@ -138,14 +135,14 @@ the pinch and it sustains, let go and it rings out over half a second.
 Checked in a cloud session, with no hardware: each file opens with no note
 through the real load; with synthetic hands fed through the real tracking
 chain and router, every hand route moved its target and the picture changed
-as the tables above say. For the two grip presets the world and the grip
+as the tables above say. For `kinetic-comet` the world and the grip
 were stepped as `app._step_world` does, with a synthetic grab, swing and
 release: the shape followed the fist, flew on when let go and stayed in the
 picture.
 
 Not checked: anything on a real sensor. Precession and the skater's spin-up
 were not judged by eye, only that shaping changed the inertia. The grip
-setups were loaded through the library with the grip's params registered,
+setup was loaded through the library with the grip's params registered,
 not from the HANDS page's strip in the running app. The depths were set by eye from
 rendered frames, not by hand, so expect to trim them on the rig. The
 `motion:` routes of `kinetic-wand` and the two `axis:RT` routes were only
