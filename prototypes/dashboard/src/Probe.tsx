@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/command"
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel,
-  ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger,
+  ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub,
+  ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -444,6 +445,64 @@ export default function Probe({ dark, open }: { dark: boolean; open: boolean }) 
             <ContextMenuItem>Duplicate</ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem variant="destructive">Delete</ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      </P>
+
+      {/* ---- ContextMenu with a SUBMENU: the SubTrigger row and the
+           SubContent panel, which menu.py has never drawn. Opened the same
+           way (a dispatched `contextmenu`), then the trigger is HOVERED so
+           Radix mounts the SubContent — `probe_submenu.js` does both and
+           dumps the two panels' rects, because the static walk in
+           probe_react.js only ever sees the first level. ---- */}
+      <P id="contextmenu.sub" w={420}>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
+              data-probe-ctxsub
+              style={{ height: 60, border: "1px dashed #999", borderRadius: 8 }}
+            />
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuLabel>Node</ContextMenuLabel>
+            <ContextMenuItem>Open</ContextMenuItem>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger data-probe-subtrigger>
+                Insert
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent data-probe-subcontent>
+                <ContextMenuItem>Gain</ContextMenuItem>
+                <ContextMenuItem>Curve</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem variant="destructive">Remove</ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant="destructive">Delete</ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      </P>
+
+      {/* ---- A SubTrigger at MAX-CONTENT: the width law for a row that
+           carries a chevron. `min-w-36` hides it in the block above, where
+           every label is short. ---- */}
+      <P id="contextmenu.subwide" w={420}>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
+              data-probe-ctxwide
+              style={{ height: 60, border: "1px dashed #999", borderRadius: 8 }}
+            />
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger data-probe-widetrigger>
+                Insert a modifier on this route
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent data-probe-widecontent>
+                <ContextMenuItem>A considerably longer row than that</ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
           </ContextMenuContent>
         </ContextMenu>
       </P>

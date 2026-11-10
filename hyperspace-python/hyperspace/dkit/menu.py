@@ -63,6 +63,64 @@ DESTRUCTIVE_HOVER_A = {"light": 0.10, "dark": 0.20}
 SHORTCUT_TRACKING = 1.2
 ICON = 16.0          # size-4, measured; 14 was a guess
 
+# --------------------------------------------------------------------------
+# SUBMENUS, measured
+# --------------------------------------------------------------------------
+#
+# Measured on the real ContextMenu in Chromium at dpr 1, in both themes, by
+# `hyperspace/dkit/dev/probe_submenu.js` against the `contextmenu.sub` and
+# `contextmenu.subwide` blocks of `?probe`. None of it could come out of
+# `probe_react.js`: that walks the DOM once, and a Radix SubContent is not
+# in the DOM at all until its trigger is HOVERED, which is a gesture and
+# not a selector.
+#
+#   SubTrigger   an ITEM row to the pixel - 28 tall, px-1.5, gap-1.5,
+#                rounded-md, 14/20 - plus a 16px chevron whose RIGHT edge is
+#                `row.right - ITEM_PAD_X`, at `y + 6`.
+#                width  6 + label + 6 + 16 + 6: ONE gap, exactly as a
+#                       shortcut gets one. The wide block measured
+#                       221.3594 = 6 + 187.3594 + 6 + 16 + 6, and the
+#                       chevron does not sit over the label.
+#                open   bg `accent`, ink `secondary-foreground` - the same
+#                       pair hover paints (`data-open:bg-accent`), so an
+#                       open trigger needs no colour of its own.
+#   SubContent   min-w-32 = 128, NOT the ContextMenu's own 144 floor.
+#                rounded-lg 10 · p-1 4 · bg-popover · shadow-**LG**, not md
+#                · `border`: a 1px SOLID border INSIDE the box, where the
+#                top panel's ring is a box-shadow wholly outside it. So a
+#                sub panel's rows start 5px in, not 4, and the measured
+#                103px panel is 1 + 4 + 28 + 28 + 9 + 28 + 4 + 1.
+#                separator  full-bleed INSIDE the border: measured x =
+#                           panel.x + 1 and w = 126 in a 128 panel.
+#   placement    x = trigger.RIGHT, y = trigger.y. side="right"
+#                align="start" with no offset, anchored on the TRIGGER ROW
+#                and not on the panel: measured dx 0.000 from the trigger's
+#                right edge (which is -4 from the panel's) and dy 0.000.
+#   the gesture  hover opens after Radix's 100 ms timer - measured 114, 123
+#                and 129 ms with a 10 ms poll - and moving to another row of
+#                the parent closes it again inside 100 ms.
+#   the keys     ArrowRight, Enter and Space on the trigger each open it and
+#                highlight its FIRST row; ArrowLeft closes it and leaves the
+#                highlight on the trigger; ArrowDown / ArrowUp then move
+#                inside the sub; and Escape in a sub closes the WHOLE menu,
+#                the parent panel with it. All six driven, not read.
+#
+# One deliberate divergence, and it is the one `place_at_pointer` already
+# carries: Radix neither flips nor clamps a SubContent. Measured in a 250px
+# viewport the panel stayed at `trigger.right` and hung 20px off the edge.
+# `place_sub` flips it to the trigger's left instead, because an ImGui popup
+# that leaves the window is simply lost.
+SUB_MIN_W = 128.0       # min-w-32
+SUB_BORDER = 1.0        # `border`, and inside the box
+SUB_SHADOW = T.SHADOW_LG
+SUB_OPEN_S = 0.10       # Radix's hover timer
+CHEVRON = "chevron_right"
+
+
+def is_sub(it) -> bool:
+    """Is this row a SubTrigger - an item carrying items of its own."""
+    return bool(getattr(it, "items", ()))
+
 
 # --------------------------------------------------------------------------
 # THE KEYBOARD, measured
@@ -399,6 +457,17 @@ def _keys(ui, key: str, items, rows, role: str) -> None:
     if imgui.is_key_pressed(imgui.Key.up_arrow, True):
         st["sel"] = n - 1 if cur is None else max(cur - 1, 0)
         return
+    # ArrowRight opens the submenu under the highlight, and does nothing on
+    # a row that has none (measured; Enter and Space do the same, and live
+    # in `_end_keys` with the rest of a row's activation). ArrowLeft is the
+    # OWNER's key, not this one's: it is handled by the level holding the
+    # open panel (`_submenus`), which is the only one that can tell whether
+    # a deeper panel should answer first.
+    if imgui.is_key_pressed(imgui.Key.right_arrow, False):
+        row = highlighted_item(items, cur)
+        if row is not None and is_sub(items[row]):
+            st["open_sub"] = row
+        return
     first = [imgui.Key.home]
     last = [imgui.Key.end]
     # PageUp / PageDown are a menu's keys and not a listbox's. Measured:
@@ -431,12 +500,20 @@ def _keys(ui, key: str, items, rows, role: str) -> None:
         st["sel"] = at
 
 
-def _begin_keys(ui, key: str, items, x, y, w, role: str):
+def _begin_keys(ui, key: str, items, x, y, w, role: str,
+                frozen: bool = False):
     """Resolve the open, let the pointer and the keys move the highlight,
     and hand back which row holds it. Runs BEFORE the rows are drawn.
 
     Returns a position in `item_rows(items)`, or None for "nothing
     highlighted" - which a pointer-opened menu really is.
+
+    `frozen` keeps the highlight exactly where it is: it is what a panel
+    with an open SUBMENU does, because the keys then belong to the deepest
+    panel and two levels both reading ArrowDown would move two highlights
+    with one press. The pointer is frozen with them, so a mouse sitting
+    over the trigger cannot drag the parent's highlight away while the
+    submenu is being driven by the keyboard.
     """
     from imgui_bundle import imgui
     st = _kb(ui, key)
@@ -468,7 +545,7 @@ def _begin_keys(ui, key: str, items, x, y, w, role: str):
     # `ui.hit`, so it can be read before the row is submitted and the
     # highlight the keys chose is the one THIS frame paints.
     io = imgui.get_io()
-    if rows and (io.mouse_delta.x or io.mouse_delta.y):
+    if rows and not frozen and (io.mouse_delta.x or io.mouse_delta.y):
         iy = y
         for i, it in enumerate(items):
             if i in rows and imgui.is_mouse_hovering_rect(
@@ -477,7 +554,8 @@ def _begin_keys(ui, key: str, items, x, y, w, role: str):
             iy += row_h(it)
 
     # second, so an arrow beats the pointer on a frame that carries both
-    _keys(ui, key, items, rows, role)
+    if not frozen:
+        _keys(ui, key, items, rows, role)
     return st["sel"]
 
 
@@ -528,8 +606,15 @@ def _end_keys(ui, key: str, items) -> str | None:
     # where an Enter with no highlight closes the list.
     if not take or hi is None or not (0 <= hi < len(rows)):
         return None
+    it = items[rows[hi]]
+    if is_sub(it):
+        # Measured: Enter and Space on a SubTrigger open it and highlight
+        # its first row, and the parent panel stays up - they are
+        # ArrowRight, not a choice.
+        st["open_sub"] = rows[hi]
+        return None
     imgui.close_current_popup()
-    return getattr(items[rows[hi]], "id", "")
+    return getattr(it, "id", "")
 
 
 @dataclass
@@ -543,6 +628,11 @@ class Item:
     variant: str = "default"      # default | destructive
     checked: bool | None = None
     enabled: bool = True
+    # A SubTrigger's rows. Empty for an ordinary item; set, the row grows a
+    # chevron and `popup` hangs a panel off it (`SUBMENUS, measured`). A
+    # tuple rather than a list so an Item stays hashable-ish and two menus
+    # cannot share one mutable child list by accident.
+    items: tuple = ()
 
 
 def sep() -> Item:
@@ -581,6 +671,313 @@ def panel_chrome(ui, dl, x, y, w, h, a: float = 1.0) -> None:
     D.border(dl, x - 1, y - 1, w + 2, h + 2,
              ui.col("foreground", 0.10 * a), T.RADII["lg"] + 1, 1.0)
     dl.pop_clip_rect()
+
+
+def sub_chrome(ui, dl, x, y, w, h, a: float = 1.0) -> None:
+    """A SubContent panel's chrome: shadow-lg, bg-popover, and a 1px
+    `border` INSIDE the box.
+
+    Not `panel_chrome` with a bigger shadow. The top panel's outline is a
+    `ring-1` box-shadow, which sits wholly OUTSIDE the box and costs its
+    rows nothing; a SubContent carries `border`, which is a real CSS border
+    and takes a pixel off each edge. That one pixel is why a sub panel is
+    2px wider and taller than its rows need and why its rows start 5px in,
+    and it is measurable: the 128x103 panel measured `1 + 4 + 28 + 28 + 9 +
+    28 + 4 + 1` tall with its first row at `panel.y + 5`.
+    """
+    dl.push_clip_rect(imgui.ImVec2(x - 20, y - 20),
+                      imgui.ImVec2(x + w + 20, y + h + 20), False)
+    D.shadow_stack(dl, x, y, w, h, T.RADII["lg"],
+                   [(dx, dy, blur, spread, al * a)
+                    for dx, dy, blur, spread, al in SUB_SHADOW])
+    D.fill(dl, x, y, w, h, ui.col("popover", a), T.RADII["lg"])
+    D.border(dl, x, y, w, h, ui.col("border", a), T.RADII["lg"], SUB_BORDER)
+    dl.pop_clip_rect()
+
+
+def sub_size(ui, items) -> tuple[float, float]:
+    """A submenu panel's box for `items`: its rows, its padding and its
+    border. One function because the placement and the window size must not
+    be able to disagree.
+
+    `min-w-32` is the floor on the PANEL, so the border comes off it before
+    `measure` is asked for a content width - otherwise the floor is applied
+    to the rows and the panel comes out 130 wide where the browser measures
+    128 and its rows 118.
+    """
+    edge = 2 * (PAD + SUB_BORDER)
+    cw, ch = measure(ui, items, SUB_MIN_W - 2 * SUB_BORDER)
+    return cw + edge, ch + edge
+
+
+def _dismiss(ui, key: str) -> None:
+    """Close the popup `key` if ImGui is still holding it open.
+
+    `imgui.close_current_popup` closes the popup it is called INSIDE and
+    nothing else, so a submenu the parent has decided to close cannot be
+    closed from the parent: it has to be begun one last time to dismiss
+    itself. Begun at 1x1 with a transparent ground and nothing drawn in it,
+    so the frame it goes on paints nothing.
+
+    Not optional, and not only tidiness: without it the panel stays on
+    ImGui's popup stack with nobody submitting it, and `LAST_RECT` keeps the
+    rect of a panel that is no longer there - the exact staleness
+    `test_menu_keys._painted` exists because of.
+    """
+    if imgui.is_popup_open(key):
+        old = LAST_RECT.get(key) or (0.0, 0.0)
+        imgui.set_next_window_pos(imgui.ImVec2(old[0], old[1]))
+        imgui.set_next_window_size(imgui.ImVec2(1.0, 1.0))
+        imgui.push_style_color(imgui.Col_.popup_bg, imgui.ImVec4(0, 0, 0, 0))
+        imgui.push_style_var(imgui.StyleVar_.popup_border_size, 0.0)
+        if imgui.begin_popup(key, imgui.WindowFlags_.no_scrollbar
+                             | imgui.WindowFlags_.no_focus_on_appearing):
+            imgui.close_current_popup()
+            imgui.end_popup()
+        imgui.pop_style_var()
+        imgui.pop_style_color()
+    LAST_RECT.pop(key, None)
+    ui.anim.to(f"{key}:open", 0.0)
+
+
+def place_sub(trig, w: float, h: float, avail) -> B.Rect:
+    """Where a submenu panel goes beside its trigger row. Pure geometry.
+
+    The law is measured: `x = trigger.right`, `y = trigger.y`, anchored on
+    the TRIGGER and not on the panel - Radix's implicit `side="right"
+    align="start"` with no offset.
+
+    The flip is not. Radix leaves a SubContent hanging off the edge (in a
+    250px viewport it stayed at `trigger.right` and overhung by 20px, the
+    same way `place_at_pointer` records for the panel itself), so this
+    flips to the trigger's LEFT when the right does not fit, keeping the
+    side that overflows less when neither does. An ImGui popup that leaves
+    the window is simply lost, which is the reason the divergence is worth
+    it here and was worth it there.
+    """
+    if not isinstance(trig, B.Rect):
+        trig = B.Rect(*trig)
+    h = min(h, max(avail.h, 0.0))
+    x = trig.right
+    if x + w > avail.right:
+        alt = trig.x - w
+        if (avail.x - alt) < (x + w - avail.right):
+            x = alt
+    # clamp last, and low last of all, as `place_at_pointer` does: a panel
+    # that cannot fit pins to the top-left rather than hiding its first row
+    x = min(x, avail.right - w)
+    x = max(x, avail.x)
+    y = min(trig.y, avail.bottom - h)
+    return B.Rect(x, max(y, avail.y), w, h)
+
+
+def _subs(ui, key: str) -> dict:
+    """Which of `key`'s rows has its submenu open, and the hover timer.
+
+    On `ui.anim.store` for the reason `_kb` is: a `Ui` is rebuilt every
+    frame, so anything that has to outlive one - an open panel, a dwell -
+    cannot live on it.
+    """
+    return ui.anim.store.setdefault("menusub", {}).setdefault(
+        key, {"open": None, "hot": None, "age": 0.0})
+
+
+def _forget(ui, key: str) -> None:
+    """Drop every record of `key`'s submenu chain, closed panels and all.
+
+    ImGui closes a child popup with its parent, so when the top panel goes
+    nothing submits the children again and their `LAST_RECT` entries would
+    outlive the panels - which is a seam going stale, the thing
+    `test_menu_keys._painted` exists because of.
+    """
+    st = _subs(ui, key)
+    shown = st.get("shown")
+    if shown is not None:
+        _forget(ui, shown)
+        LAST_RECT.pop(shown, None)
+        ui.anim.to(f"{shown}:open", 0.0)
+    st["open"], st["shown"], st["hot"], st["age"] = None, None, None, 0.0
+
+
+def _submenus(ui, key: str, items, rects: dict, over, a: float, *,
+              row_id=None) -> str | None:
+    """Open, close and draw `key`'s submenus. Returns a chosen id, or None.
+
+    Called from INSIDE the parent's popup window, which is what makes the
+    panel a nested ImGui popup: `open_popup` registers at the current popup
+    stack level, so ImGui closes the submenu when the parent goes, keeps it
+    above everything, and dismisses the lot on a click away. None of that
+    is reimplemented here.
+
+    `rects` is `{index: Rect}` for the SubTrigger rows drawn this frame and
+    `over` the index of the row the pointer is on (None for none of them -
+    including when the pointer is inside the submenu, which is exactly when
+    the panel has to STAY open).
+    """
+    st, kb = _subs(ui, key), _kb(ui, key)
+    want = kb.pop("open_sub", None)
+    if want is not None and want in rects:
+        st["open"], st["hot"], st["age"] = want, want, 0.0
+    elif over is not None and over != st["open"]:
+        # Radix's 100 ms, and the dwell is per ROW: moving along the rows
+        # must not pour one row's wait into the next.
+        if st["hot"] != over:
+            st["hot"], st["age"] = over, 0.0
+        st["age"] += ui._dt
+        if over not in rects:
+            st["open"] = None       # another row: measured, the sub closes
+        elif st["age"] >= SUB_OPEN_S:
+            st["open"] = want = over
+
+    at = st["open"]
+    subkey = None
+    if at is not None and at in rects:
+        it = items[at]
+        subkey = f"{key}>{getattr(it, 'id', '') or at}"
+        # ArrowLeft and Escape belong to the DEEPEST open panel: with a
+        # level below this one up, that level answers them and this one
+        # must not, or one press would collapse two panels.
+        if _subs(ui, subkey)["open"] is None:
+            if imgui.is_key_pressed(imgui.Key.left_arrow, False):
+                # measured: the highlight is left on the trigger, where it
+                # already is, so there is nothing to restore
+                at = st["open"] = None
+            elif imgui.is_key_pressed(imgui.Key.escape, False):
+                # measured: Escape in a submenu closes the WHOLE menu.
+                # ImGui's own Escape closes only the topmost popup, so each
+                # level says so on its way out and the chain goes together.
+                at = st["open"] = None
+                imgui.close_current_popup()
+    else:
+        at = st["open"] = None
+
+    # A panel this level was showing and is not any more has to be begun
+    # once more to be dismissed (`_dismiss`).
+    shown = st.get("shown")
+    if shown is not None and shown != (subkey if at is not None else None):
+        _dismiss(ui, shown)
+        st["shown"] = None
+    if at is None:
+        return None
+
+    st["shown"] = subkey
+    if not imgui.is_popup_open(subkey):
+        imgui.open_popup(subkey)
+        if want is not None:
+            # a KEY opened it: measured, the first row is highlighted. A
+            # hover open highlights nothing, which is what no `arm` means.
+            arm(ui, subkey, SEL_FIRST)
+    chosen = sub_popup(ui, subkey, items[at].items, rects[at], a, row_id=row_id)
+    if chosen is not None:
+        st["open"] = None
+    return chosen
+
+
+def sub_popup(ui, key: str, items, trig, a: float = 1.0, *,
+              row_id=None) -> str | None:
+    """Draw one submenu panel beside `trig`. Returns the chosen id.
+
+    The panel is a nested ImGui popup with `no_focus_on_appearing`, and
+    that flag is the whole trick. A popup that takes focus takes hovering
+    with it: ImGui's `IsWindowContentHoverable` refuses hover to every
+    window outside the focused popup's begin-stack chain, so a focused
+    submenu would make its own PARENT dead to the mouse - no switching to
+    another row, no click on one. Left unfocused, the parent keeps focus
+    and hover, the submenu is hoverable as its child, and Escape keeps
+    reaching the parent, which is what the measured "Escape closes the
+    whole menu" needs.
+    """
+    w, h = sub_size(ui, items)
+    at = place_sub(trig, w, h, ui.viewport)
+    imgui.set_next_window_pos(imgui.ImVec2(at.x, at.y))
+    imgui.set_next_window_size(imgui.ImVec2(at.w, at.h))
+    imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
+    imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+    imgui.push_style_var(imgui.StyleVar_.popup_border_size, 0.0)
+    imgui.push_style_var(imgui.StyleVar_.popup_rounding, T.RADII["lg"])
+    imgui.push_style_color(imgui.Col_.popup_bg, imgui.ImVec4(0, 0, 0, 0))
+    chosen = None
+    if imgui.begin_popup(
+            key,
+            imgui.WindowFlags_.no_scrollbar
+            | imgui.WindowFlags_.no_scroll_with_mouse
+            | imgui.WindowFlags_.no_focus_on_appearing):
+        op = ui.anim.to(f"{key}:open", 1.0)
+        dl = imgui.get_window_draw_list()
+        p = imgui.get_window_pos()
+        x, y = p.x, p.y
+        LAST_RECT[key] = (x, y, at.w, at.h)
+        saved, ui.dl = ui.dl, dl
+        sub_chrome(ui, dl, x, y, at.w, at.h, op)
+        inset = PAD + SUB_BORDER
+        cw = at.w - 2 * inset
+        frozen = _subs(ui, key)["open"] is not None
+        hi = highlighted_item(
+            items, _begin_keys(ui, key, items, x + inset, y + inset, cw,
+                               "menu", frozen))
+        chosen, rects, over = _row_loop(ui, key, items, x + inset, y + inset,
+                                        cw, op, at=hi, row_id=row_id,
+                                        keyboard=True)
+        if chosen is not None:
+            imgui.close_current_popup()
+        else:
+            chosen = _submenus(ui, key, items, rects, over, op, row_id=row_id)
+            if chosen is not None:
+                imgui.close_current_popup()
+        if chosen is None and not frozen:
+            chosen = _end_keys(ui, key, items)
+        ui.dl = saved
+        imgui.end_popup()
+    else:
+        LAST_RECT.pop(key, None)
+        ui.anim.to(f"{key}:open", 0.0)
+        # a closed panel holds no open submenu: without this, the next open
+        # of the same menu comes up with the last submenu already showing -
+        # and its children's rects outlive the children
+        _forget(ui, key)
+    imgui.pop_style_color()
+    imgui.pop_style_var(4)
+    return chosen
+
+
+def _row_loop(ui, key: str, items, x: float, y: float, cw: float, a: float, *,
+              at, row_id=None, keyboard: bool = True, window=None):
+    """The row stride, shared by `popup` and `sub_popup`.
+
+    Returns `(chosen id or None, {index: Rect} of the SubTrigger rows, the
+    index of the row the pointer is on or None)`. The last two are what
+    `_submenus` needs and neither can be worked out from outside the loop:
+    a row's rect is only known once the stride has walked to it.
+
+    `window` is `(top, bottom)` for a panel whose rows scroll: a row
+    outside it is not submitted at all, which is `popup`'s cap.
+    """
+    chosen, rects, over = None, {}, None
+    sub_open = _subs(ui, key)["open"]
+    iy = y
+    for i, it in enumerate(items):
+        rh = row_h(it)
+        if window is not None and (iy + rh <= window[0] or iy >= window[1]):
+            iy += rh                # out of view: not submitted
+            continue
+        rk = row_id(it, i) if row_id is not None else f"{key}.{i}"
+        # `data-open:bg-accent`: an open SubTrigger is painted exactly as a
+        # highlighted row is, so the pointer can be inside the submenu and
+        # the row it came through stays lit.
+        lit = (i == at) or (i == sub_open)
+        hit = _row(ui, it, x, iy, cw, rk, a,
+                   hi=lit if (keyboard or i == sub_open) else None)
+        if is_sub(it):
+            rects[i] = B.Rect(x, iy, cw, ITEM_H)
+            if hit:                 # a click on a SubTrigger opens it
+                _kb(ui, key)["open_sub"] = i
+        elif hit:
+            chosen = it.id
+        if it.kind == "item" and imgui.is_mouse_hovering_rect(
+                imgui.ImVec2(x, iy), imgui.ImVec2(x + cw, iy + ITEM_H)):
+            over = i
+        iy += rh
+    return chosen, rects, over
 
 
 def rows(ui, items, x, y, w, key, a: float = 1.0, *,
@@ -641,6 +1038,10 @@ def measure(ui, items, min_w: float = MIN_W) -> tuple[float, float]:
         extra = 2 * ITEM_PAD_X
         if it.icon or it.checked is not None:
             extra += ICON + GAP
+        if is_sub(it):
+            # the chevron, with ONE gap - measured, the same law the
+            # shortcut follows and for the same reason
+            extra += GAP + ICON
         if it.shortcut:
             # ONE gap, not two: measured at max-content a row is
             # `pad + label + gap + shortcut + pad`, which came to the panel
@@ -735,6 +1136,11 @@ def _row(ui, it, x, y, w, key, alpha, *, chrome_only: bool = False,
         D.label(ui.dl, x, y, it.shortcut, ui.faces, "regular", 12,
                 sc_ink, align="right",
                 box_w=w - ITEM_PAD_X, baseline_box=ITEM_H, tabular=True)
+    if is_sub(it):
+        # ChevronRightIcon, `ml-auto`: its right edge is the row's right
+        # edge less the row's own padding (measured 136 in a 142-wide row)
+        D.icon(ui.dl, CHEVRON, x + w - ITEM_PAD_X - ICON,
+               y + (ITEM_H - ICON) / 2, ICON, ink)
     return bool(st and st.clicked)
 
 
@@ -852,26 +1258,24 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
         # highlight can land on. `None` for `at` is a real answer - nothing
         # highlighted, which is what a pointer-opened menu is.
         at = None
+        # a panel with a SUBMENU up hands its keys to that panel, and holds
+        # its own highlight where it is (`_begin_keys`' `frozen`)
+        frozen = _subs(ui, key)["open"] is not None
         if keyboard:
             at = highlighted_item(
-                items, _begin_keys(ui, key, items, x + PAD, y + PAD, cw, role))
+                items, _begin_keys(ui, key, items, x + PAD, y + PAD, cw, role,
+                                   frozen))
 
         off = 0.0
         if scrolls:
             off = _scroll(ui, key, items, at, h - 2 * PAD, ch)
             dl.push_clip_rect(imgui.ImVec2(x, y + PAD), imgui.ImVec2(x + w, y + h - PAD), True)
-        iy = y + PAD - off
-        for i, it in enumerate(items):
-            rh = row_h(it)
-            if scrolls and (iy + rh <= y + PAD or iy >= y + h - PAD):
-                iy += rh                # out of view: not submitted
-                continue
-            rk = row_id(it, i) if row_id is not None else f"{key}.{i}"
-            if _row(ui, it, x + PAD, iy, cw, rk, a,
-                    hi=(i == at) if keyboard else None):
-                chosen = it.id
-                imgui.close_current_popup()
-            iy += rh
+        chosen, rects, over = _row_loop(
+            ui, key, items, x + PAD, y + PAD - off, cw, a, at=at,
+            row_id=row_id, keyboard=keyboard,
+            window=(y + PAD, y + h - PAD) if scrolls else None)
+        if chosen is not None:
+            imgui.close_current_popup()
         if scrolls:
             dl.pop_clip_rect()
             view = h - 2 * PAD
@@ -879,15 +1283,25 @@ def popup(ui, key: str, items, *, min_w: float = MIN_W, anchor=None,
             th = max(view * view / ch, 16.0)
             ty = y + PAD + (view - th) * (off / max(ch - view, 1.0))
             D.fill(dl, x + w - tw - 2.0, ty, tw, th, ui.col("border", a), tw / 2)
+        # The submenus AFTER the rows, so their panels are drawn over this
+        # one and a click on a row of this panel has already had its say.
+        if chosen is None:
+            chosen = _submenus(ui, key, items, rects, over, a, row_id=row_id)
+            if chosen is not None:
+                imgui.close_current_popup()
         # AFTER the rows, so a click on one has already had its say: Enter
         # and Space on a highlighted row do what clicking it does.
-        if keyboard and chosen is None:
+        if keyboard and chosen is None and not frozen:
             chosen = _end_keys(ui, key, items)
         ui.dl = saved
         imgui.end_popup()
     else:
         LAST_RECT.pop(key, None)
         ui.anim.to(f"{key}:open", 0.0)
+        # a closed panel holds no open submenu: without this, the next open
+        # of the same menu comes up with the last submenu already showing -
+        # and its children's rects outlive the children
+        _forget(ui, key)
     imgui.pop_style_color()
     imgui.pop_style_var(4)
     return chosen

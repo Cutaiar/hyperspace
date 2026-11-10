@@ -63,6 +63,27 @@ ROW_MENU = [
            variant="destructive"),
 ]
 
+# Row 0's right-click menu, and only row 0's: the SUBMENU's driving ground.
+# A submenu cannot be driven without one somewhere in this app, and adding a
+# row to ROW_MENU would move the rows `test_menu_keys` counts - "the last
+# row" is a measured rule and it is asserted on that list. So the submenu
+# lives on a row no test names, with the same ids either side of it.
+ROW_MENU_SUB = [
+    M.Item("open", "Open in catalog", icon="eye"),
+    M.Item("insert", "Insert", items=(
+        M.Item("insert.gain", "Gain"),
+        M.Item("insert.curve", "Curve"),
+        M.Item("insert.deep", "More", items=(
+            M.Item("insert.deep.one", "One"),
+            M.Item("insert.deep.two", "Two"),
+        )),
+    )),
+    M.Item("pin", "Pin to scene", icon="layers"),
+    M.sep(),
+    M.Item("remove", "Remove from view", icon="trash-2",
+           variant="destructive"),
+]
+
 NAV = [("Overview", "gauge"), ("Gallery", "boxes"), ("Catalog", "shapes"),
        ("Scenes", "layers"), ("Analyzer", "activity"), ("Routing", "waves")]
 # Which nav row shows the contact sheet rather than the dashboard body.
@@ -774,7 +795,8 @@ def _table_rows(ui, rows, view, r, faces, theme, ink, state):
         # The same menu on a right-click anywhere in the row - which is the
         # gesture a node editor wants. `allow_overlap` is on by default, so
         # the row's target does not swallow the kebab's hover.
-        got = CX.context_menu(ui, f"ctx.{ri}", (rx, ry, rw, rh), ROW_MENU)
+        got = CX.context_menu(ui, f"ctx.{ri}", (rx, ry, rw, rh),
+                              ROW_MENU_SUB if ri == 0 else ROW_MENU)
         if got:
             state["ctx"] = f"{got} \u00b7 {row['name']}"
             state["said"] = state["ctx"]
