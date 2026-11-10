@@ -183,7 +183,7 @@ def test_a_registry_takes_only_a_registered_object():
 def test_no_body_means_not_moved_and_removing_an_object_clears_every_registry():
     w = W.World.default()
     w.body("shape", W.Body(velocity=np.array([1.0, 0, 0, 0])))
-    w.joints["hand.left"] = object()               # plan 60's, by hand here
+    w.joint("hand.left", W.Joint("hand.right", "shape"))   # plan 60's: no body, never moves
     w.clip["hand.left"] = object()
     w.step(0.1)
     assert w["shape"].offset.position[0] > 0.09     # the body moved its offset

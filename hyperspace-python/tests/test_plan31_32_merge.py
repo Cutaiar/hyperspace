@@ -81,7 +81,9 @@ def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):
     # channel under the scene is the graph's wire)
     from hyperspace import graphmigrate as M
 
-    assert doc["values"] == reg.snapshot(part="patch")
+    # (plan 60, row 859: the grip at its defaults, never used, is left out)
+    assert doc["values"] == {k: v for k, v in reg.snapshot(part="patch").items()
+                             if not k.startswith("grip.")}
     assert not [k for k in doc["values"] if M.retired(k)]
     assert doc[loadable.MEDIA_KEY] == {"channels": {"a": [CLIP]}}
     app.loaded_patch.save_as("both")

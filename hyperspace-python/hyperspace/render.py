@@ -134,6 +134,7 @@ from .geometry import (
     geom,
     model_matrix,
     shape_world,
+    turned_depth,
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
@@ -3282,6 +3283,16 @@ class Renderer:
         world = getattr(self, "world", None)
         off = world.offset_matrix("shape") if world is not None and legacy else None
         model = model_matrix(zoom, s.pan, off) if legacy else model_matrix(1.0, (0.0, 0.0))
+        if world is not None and hasattr(world, "box"):
+            # plan 60: the box the rig holds the shape to, what the eye sees at
+            # depth 0 — set from the scene drawn, as the poi's (`poi.box_for`)
+            world.box = tuple(poi.box_for(w, h, getattr(s, "eye_fov", EYE_FOV),
+                                          getattr(s, "eye_distance", EYE_DISTANCE)))
+        if off is not None:
+            # plan 60 (register row 856): a turned offset turns a 3D shape before
+            # the painter sort and the depth cue read its depth, so it sorts and
+            # shades by where it is now; a 4D shape's cue stays its w
+            pd = turned_depth(s.shape, P, pd, off)
         vp = eye_matrix(w, h, getattr(s, "eye_fov", EYE_FOV),
                         getattr(s, "eye_distance", EYE_DISTANCE))
         mats = (np.asarray(vp, dtype="f4").T.tobytes(),

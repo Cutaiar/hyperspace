@@ -618,12 +618,13 @@ def test_ui_page_on_fx_shows_the_fx_section_and_every_slot_keeps_its_index(pane)
     assert ui_pane.showing(r.panel) == "lfo" and st["pane_drawn"] == ["lfo"]
 
 
-def test_every_page_slot_but_graph_is_a_section():
+def test_every_page_slot_but_graph_and_playlist_is_a_section():
     """No page is left to switch to: the table `ui.page` indexes names a
     section in every slot, GRAPH's being the selection (the canvas is always
-    drawn)."""
+    drawn). The playlist's slot is kept for saved bindings, but it is the meta
+    controller's now (row 858: GRAPH's deck row), so it shows the selection."""
     assert ui_pane.section_of("graph") == "selection"
-    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) != k} == {"graph"}
+    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) != k} == {"graph", "playlist"}
     assert set(ui_pane.KEYS) - set(PAGE_KEYS) == {"selection"}
 
 
@@ -1178,3 +1179,19 @@ def test_what_a_chip_would_say_live_is_its_tooltip(pane, monkeypatch):
         assert any("SELECTION" in t for t in said), said
     else:
         assert "SELECTION##pane.selection" in d.rects
+
+
+@pytest.mark.parametrize("layout", ["band", "min", "default"])
+def test_the_grip_section_open_whole_stays_inside_the_pane(tmp_path, monkeypatch, layout):
+    """Plan 60: the HANDS page's grip section with every control showing (the
+    grip on, the inertia shaped) draws in the pane and passes no edge."""
+    with build_rig(tmp_path) as r:
+        r.reg["grip.on"].set(True)
+        r.reg["grip.inertia"].set(True)
+        d = _focus_rig(r, monkeypatch, layout)
+        r.reg["ui.page"].set(PAGE_KEYS.index("hands"))
+        d.run(d.wait(4))
+        st = _st(r)
+        assert "hands" in st["pane_drawn"]
+        spills = _spills(d, st)
+        assert not spills, sorted(spills)

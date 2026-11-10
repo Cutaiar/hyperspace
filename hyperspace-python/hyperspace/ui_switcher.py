@@ -3,8 +3,8 @@ uppercase chips (`ui_pane._bar`) where the kit is there.
 
 Two rows, whatever the pane's width:
 
-- **the seven views no canvas node leads to** (`ui_pane.TABS`: selection,
-  patches, audio, routing, playlist, players, system) as one TabsList of
+- **the six views no canvas node leads to** (`ui_pane.TABS`: selection,
+  patches, audio, routing, players, system) as one TabsList of
   icons — the kit's muted ground, the view's own tab lifted on the card
   colour with its icon in the one red. Each tab's name, and what it would
   say live (`ui_pane._live`), is its tooltip; a dot in a tab's corner is
@@ -33,7 +33,6 @@ ICONS = {               # Lucide's names (hyperspace/dkit/icons.py)
     "loadable": "layers",
     "audio": "audio_lines",
     "routing": "route",
-    "playlist": "list_music",
     "players": "users",
     "system": "cpu",
 }
@@ -57,7 +56,7 @@ def bar(panel, key: str, said: str = "") -> None:
 
 
 def _tabs(panel, k, key: str, said: str, x: float, y: float, w: float) -> None:
-    """The seven views as the kit's Tabs — its triggers ``##pane.<key>``, its
+    """The views of `ui_pane.TABS` as the kit's Tabs — its triggers ``##pane.<key>``, its
     icons Lucide's, the active one's in the one red — then each tab's dirty
     dot and tooltip over the rects it hands back."""
     I = ui_kit.mod("interact")

@@ -505,7 +505,9 @@ def test_an_untouched_loadable_saves_as_6_with_every_value(app, tmp_path):
     from hyperspace import graphmigrate as M
 
     held = M.section_effects(doc["graph"])
+    # (plan 60, row 859: and the grip, at its defaults, is left out)
     assert doc["values"] == {k: v for k, v in every.items() if not k.startswith("mod.")
+                             and not k.startswith("grip.")
                              and M.effect_of(k) in (None, *held)}
     assert "seq.run" not in doc["values"] and _new_ids(doc)
     path = app.loaded_patch.save_as("plain")

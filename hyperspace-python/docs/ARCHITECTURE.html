@@ -732,8 +732,8 @@
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
-        <div><div class="name">World</div><div class="mods">world</div></div>
-        <div class="what">The things drawn — the shape and the two hands — each with a home pose (what its params or its palm say) and an offset (what the world adds), and the registries keyed by them: bodies, joints, puppets, clipping. A pose is a 4-vector and a pair of quaternions; the world stays 3D. The renderer reads the shape's offset into its model matrix; an identity offset is the matrix of before. <span>A leaf: imports nothing from the package.</span></div>
+        <div><div class="name">World</div><div class="mods">world · grip</div></div>
+        <div class="what">The things drawn — the shape and the two hands — each with a home pose (what its params or its palm say) and an offset (what the world adds), and the registries keyed by them: bodies, joints, puppets, clipping. A pose is a 4-vector and a pair of quaternions; the world stays 3D. The renderer reads the shape's offset into its model matrix; an identity offset is the matrix of before. The hand rig (plan 60) holds the shape on a spring from a hand while a clutch is closed, throws it, and shapes its inertia with the other hand, so it precesses. <span>world a leaf: imports nothing from the package; grip only world.</span></div>
         <div class="chip c-read">Poses</div>
       </div>
       <div class="rrow">

@@ -83,6 +83,7 @@ from . import (
     config,
     devices,
     gamepad,
+    grip,
     lfo,
     node_desk,
     placement,
@@ -1788,7 +1789,17 @@ def _step_world(h: Host, dt: float) -> None:
         return
     view = h.view
     world.home(worlds.SHAPE, worlds.shape_home(view.zoom, view.pan))
+    # plan 60: the on-air deck's grip (a patch's own, `reg.grip`) sets the shape's
+    # body, joint and clutches; a deck switch hands the one world to the other's
+    state = getattr(getattr(h, "reg", None), "grip", None)
+    if not isinstance(getattr(state, "on", None), bool):     # no grip on this registry
+        state = None
+    if state is not None:
+        router = h.router
+        grip.apply(world, state, lambda address: grip.lane_closed(router, address))
     world.frame(dt, palms_in_world(getattr(h.renderer, "ghost", None)))
+    if state is not None:
+        grip.publish(getattr(h, "router", None), world, state)   # `grip:*`, the next frame's
 
 
 def _hot_error_toast(msg: str) -> None:
