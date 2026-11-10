@@ -39,6 +39,13 @@ def main() -> None:
     rec.add_argument("path", type=Path)
     rec.add_argument("--seconds", type=float, default=5.0)
     rec.add_argument("--mode", help="desktop | screentop | hmd (default: [hands] mode)")
+    rec.add_argument("--cues", help="pose names, comma-separated: each is called in turn, "
+                                    "held --hold seconds, and its span kept in the tape")
+    rec.add_argument("--hold", type=float, default=3.0, help="seconds a cue is held")
+    rec.add_argument("--ready", type=float, default=1.5, help="seconds to get into a pose")
+    rec.add_argument("--fps", type=float, help="thin the frames to about this rate "
+                                               "(the camera's own is ~120: a fixture that "
+                                               "replays in the tests wants ~30)")
     inf = sub.add_parser("info", help="what a tape holds")
     inf.add_argument("path", type=Path)
     sh = sub.add_parser("shots", help="render a tape through the ghost hands")
@@ -71,12 +78,59 @@ def _record(args) -> None:
         raise SystemExit(f"{e} — the Ultraleap bindings aren't installed; "
                          "see Install in docs/plans/08-hands.md") from e
     src.connecting.join(5.0)
-    print(f"{src.status} — recording {args.seconds:.1f} s in {mode} mode; move both hands",
-          file=sys.stderr)
-    t = tape.record(src, args.seconds, mode=mode)
+    if args.cues:
+        t = _cued(src, [c.strip() for c in args.cues.split(",") if c.strip()], args, mode)
+    else:
+        print(f"{src.status} — recording {args.seconds:.1f} s in {mode} mode; move both hands",
+              file=sys.stderr)
+        t = tape.record(src, args.seconds, mode=mode)
     src.close()
+    if args.fps:
+        t["frames"] = _thinned(t["frames"], args.fps)
     tape.save(t, args.path)
     print(f"wrote {args.path}: {_summary(t)}")
+    for c in t.get("cues", []):
+        print(f"  {c['t0']:6.2f}–{c['t1']:5.2f} s  {c['label']}")
+
+
+def _thinned(frames: list[dict], fps: float) -> list[dict]:
+    """Every frame whose time has moved on by 1/`fps` — the camera runs at
+    about 120, which no replay needs and a committed fixture should not
+    carry. Keeps the first frame of every hold, so a cue's pose survives."""
+    out: list[dict] = []
+    step, last = 1.0 / fps, None
+    for f in frames:
+        if last is None or f["t"] - last >= step - 1e-9:
+            out.append(f)
+            last = f["t"]
+    return out
+
+
+def _cued(src, cues: list[str], args, mode: str) -> dict:
+    """One take a cue, called in turn and spliced into a single tape, each
+    cue's span kept in `cues` so a screenshot can find the pose by name."""
+    import time
+
+    frames: list[dict] = []
+    spans: list[dict] = []
+    at = 0.0
+    print(f"{src.status} — {len(cues)} poses, {args.hold:.0f} s each; "
+          f"hold each one still until the next is called\n", file=sys.stderr)
+    for n, label in enumerate(cues, 1):
+        for k in range(int(args.ready), 0, -1):
+            print(f"\r  next ({n}/{len(cues)}): {label} … {k}  ", end="", file=sys.stderr)
+            time.sleep(1.0)
+        print(f"\r  NOW ({n}/{len(cues)}): {label}{' ' * 24}", file=sys.stderr)
+        one = tape.record(src, args.hold, mode=mode)
+        if not one["frames"]:
+            print(f"    no frames for {label} — hands in the box?", file=sys.stderr)
+            continue
+        for f in one["frames"]:
+            frames.append({**f, "t": round(at + f["t"], 6)})
+        spans.append({"label": label, "t0": round(at, 6), "t1": round(frames[-1]["t"], 6)})
+        at = frames[-1]["t"] + 1.0 / 60.0
+    print(file=sys.stderr)
+    return {"schema": tape.TAPE_SCHEMA, "mode": mode, "frames": frames, "cues": spans}
 
 
 def _summary(t: dict) -> str:
