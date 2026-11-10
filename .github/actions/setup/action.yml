@@ -19,6 +19,14 @@ runs:
         packages: libasound2-dev libportaudio2 libgl-dev libgl1-mesa-dri libglx-mesa0 libegl1 xvfb xauth glslang-tools
         version: 1
 
+    - name: Linker cache
+      # a cache hit untars the packages without their install scripts, so
+      # nothing runs ldconfig: sounddevice's find_library("portaudio") then
+      # finds no libportaudio.so.2 and every module importing the audio
+      # engine fails to collect (PR #453's first sweeps run)
+      shell: bash
+      run: sudo ldconfig
+
     - uses: astral-sh/setup-uv@v7
       with:
         enable-cache: true
