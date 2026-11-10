@@ -1,7 +1,10 @@
 # Plan 59: world objects
 
-**Status: planned (2026-11-10).** The first of four separate efforts (59–62). It
-needs nothing else, and plans 60 and 61 build on it. Each plan is its own branch and PR.
+**Status: built (2026-11-10).** `hyperspace/world.py`, the world step in the frame
+(ARCHITECTURE §2 step 13a), the shape's offset in `geometry.model_matrix`, `world.reset`;
+tests `tests/test_world.py`; register rows 851–856, hand checks 659–660. The first of four
+separate efforts (59–62). It needs nothing else, and plans 60 and 61 build on it. Each plan
+is its own branch and PR.
 
 | Plan | Effort | Size | Needs |
 | --- | --- | --- | --- |

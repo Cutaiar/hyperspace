@@ -333,6 +333,19 @@ points are red quads, each a whole number of pixels across. Both carry a
 real depth. `geometry.project` / `project_h`, the old CPU path to 2D,
 stay the parity oracle.
 
+**World objects** (plan 59, `world.py`): the shape and the two hands are
+world objects, each with a **home** pose — the shape's is `camera.zoom` and
+`camera.pan`, a hand's its tracked palm, through the ghost hands'
+calibration — and an **offset** the world adds, drawn as home ∘ offset. The
+shape's offset composes into `u_model` (`model_matrix(zoom, pan, offset)`)
+on the one-copy path and a flat field with Fit off; while it is the identity
+the matrix is built exactly as before. Bodies (velocity, drag), joints,
+puppets and clipping are separate registries keyed by an object's id; the
+world steps once a frame after the integrator (puppets, then fixed physics
+steps of 1/960 s). Nothing moves an offset yet (plan 60 will): **Reset
+world** (`world.reset`, the camera section) puts every one home. Runtime
+state only — never saved, never undone.
+
 **The eye** is a fixed perspective camera on the world's +z axis looking
 at the origin: `eye.fov` (47.6°, `geometry.EYE_FOV`, across the
 picture's shorter side; 10–120°) and `eye.distance` (3.78 shape radii,

@@ -361,7 +361,8 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
                 sinks=lambda role: log.append("table.sinks") or [])),
             io=Stub("bridge", log, on=True, error=""), audio=audio)])
     h = app.Host(
-        reg=reg, view=Stub("view", log), control=Stub("control", log), audio=audio,
+        reg=reg, view=Stub("view", log, zoom=1.0, pan=[0.0, 0.0]), control=Stub("control", log),
+        audio=audio,
         # plan 44 D2: the router's sources are what the feeds go to
         router=Stub("router", log, sources=Stub("sources", log)),
         clock=Stub("clock", log), lfos=Stub("lfos", log),
@@ -371,6 +372,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         draw_panel=lambda dt, fps: log.append("panel.draw"),
         restart=lambda: log.append("restart"), quit=lambda: log.append("quit"),
         devices=rig, dream_io=None, undo=Stub("undo", log), media=Stub("media", log),
+        world=Stub("world", log),
     )
     assert g.KEY_ESCAPE  # the fake never touches glfw; the keys are plain ints
     return h
@@ -406,6 +408,7 @@ ORDER = [
                                                      # plan 28 N0), then one commit
     "table.sinks", "bridge.send_values",             # devices.send: the sinks' rows (B3)
     "view.integrate",
+    "world.home", "world.frame",                     # plan 59: the shape's home, puppets, physics
     "render.draw", "panel.draw",                     # the two windows
 ]
 
@@ -528,8 +531,19 @@ def test_a_raising_step_is_recorded_and_the_windows_still_draw():
     assert "reg.apply" not in log                    # the pass stopped where it raised
     assert log[-2:] == ["render.draw", "panel.draw"]
     # K3 (row 578): the integrator is guarded on its own, so the turn, the
-    # field's motion and the media path keep moving through it
-    assert log[-3] == "view.integrate"
+    # field's motion and the media path keep moving through it; and the
+    # world (plan 59) after it, on its own too
+    assert log[-5:-2] == ["view.integrate", "world.home", "world.frame"]
+
+
+def test_a_raising_world_step_is_recorded_and_the_windows_still_draw():
+    """Plan 59: the world's frame is guarded on its own, like the integrator."""
+    log: list[str] = []
+    h = _host(log)
+    h.world.frame = _boom
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
+    assert h.reloader.runtime_error.startswith("world: RuntimeError: boom")
+    assert log[-3:] == ["world.home", "render.draw", "panel.draw"]
 
 
 def test_a_raising_adapter_is_a_note_that_survives_the_frame():

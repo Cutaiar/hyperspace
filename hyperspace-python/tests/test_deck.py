@@ -481,7 +481,8 @@ def test_main_builds_its_deck_once_and_the_frame_order_is_unchanged():
         "media.poll", "router.follow_macros", "undo.tick", "output.apply", "mouse.poll",
         "audio.step", "audio.publish", "hands.poll", "bridge.receive", "bridge.publish",
         "router.modulate", "reg.apply", "table.sinks", "bridge.send_values",
-        "view.integrate", "render.draw", "panel.draw"]
+        "view.integrate", "world.home", "world.frame",       # plan 59: the world, after D1
+        "render.draw", "panel.draw"]
 
 
 def test_the_build_keeps_mains_order():

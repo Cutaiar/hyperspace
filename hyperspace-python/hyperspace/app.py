@@ -75,6 +75,7 @@ if "PYGLFW_LIBRARY" not in os.environ:
 
 import glfw
 import moderngl
+import numpy as np
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
@@ -92,7 +93,9 @@ from . import (
     tempo,
     totem,
 )
+from . import ghost as ghosts
 from . import undo as undos
+from . import world as worlds
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
@@ -1470,6 +1473,9 @@ class Host:
     # makes the render context current: what `frame` runs a hot reload's hooks in
     # (audit V8). None (a host from a test): whatever is current
     render_current: Callable[[], None] | None = None
+    # the world objects (world.py, plan 59): the shape and the hands, stepped
+    # once a frame after the integrator (`_step_world`). None: no world step
+    world: worlds.World | None = None
 
     @property
     def adapters(self) -> tuple:
@@ -1693,6 +1699,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         ok, reloader.runtime_error = False, _err("view.integrate", e)
     if said := _off_air(h, "integrate", lambda d: d.view.integrate(dt)):
         ok, reloader.runtime_error = False, said
+    # the world (plan 59): the shape's home from this frame's params, the
+    # puppets (the palms, read after HandsIO.poll), then the physics' fixed
+    # steps; the render below reads the poses
+    try:
+        _step_world(h, dt)
+    except Exception as e:  # noqa: BLE001
+        ok, reloader.runtime_error = False, _err("world", e)
     # the analyzer's lanes as a route reads them (out / CEIL), for the
     # patterns that draw the bands themselves (u_levels, plan 22 B3): render
     # input, read-only, like the dim — never a param
@@ -1727,6 +1740,54 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         h.panel.restart_requested = False
         h.restart()
     return ok
+
+
+def palm_in_world(skel: dict, cal: np.ndarray):
+    """A `hands.core.skeleton`'s palm in the world (plan 59, the hand objects'
+    puppets): (position (3), rotation 3×3), through calibration `cal` (Leap mm
+    → world, `ghost.calibration`) — the transform the ghost hand is drawn
+    through, so the position is where its palm is drawn. The rotation's columns
+    are `hands.room.palm_axes` (right, up, back) of the palm through the
+    calibration's turn: a proper rotation, mirror or not. None for a palm that
+    gives no frame. Here, not in ghost.py: `hands` is the meta controller's,
+    and the render stack does not reach it (tests/test_layer_boundary.py)."""
+    from .hands.room import palm_axes  # lazily: importing app imports no hands adapter
+
+    p = cal @ np.array([*map(float, skel["palm"]), 1.0])
+    t = (cal[:3, :3] / max(float(np.linalg.norm(cal[:3, 0])), 1e-12)).tolist()   # s · R, s off
+    turn = ((t[0][0], t[0][1], t[0][2]), (t[1][0], t[1][1], t[1][2]), (t[2][0], t[2][1], t[2][2]))
+    axes = palm_axes(skel["normal"], skel["direction"], turn)
+    if axes is None or not np.isfinite(p).all():
+        return None
+    return p[:3].copy(), np.array(axes, dtype=np.float64).T
+
+
+def palms_in_world(gh) -> dict:
+    """side → `palm_in_world` for the hands `gh` (a `ghost.Ghost`) has this
+    frame, through the calibration it draws with (`Ghost.calibrated`: the
+    tracking mode, `ghost.mirror`, the box and hands.json's units) — whether or
+    not the ghost hands are shown. A side not seen is missing; no tracker, {}."""
+    src = getattr(gh, "source", None)
+    skel = (getattr(src, "skeleton", None) or {}) if src is not None else {}
+    if not skel:
+        return {}
+    cfg = getattr(src, "cfg", None) or {}
+    m = ghosts.basis(cfg.get("mode", "desktop"), bool(getattr(gh.state, "mirror", False)))
+    cal = gh.calibrated(ghosts.box_of(src), m, getattr(src, "units", None))
+    return {side: palm_in_world(sk, cal) for side, sk in skel.items()}
+
+
+def _step_world(h: Host, dt: float) -> None:
+    """The world's frame (plan 59, ARCHITECTURE §2 step 13a): the shape
+    object's home is `camera.zoom` / `camera.pan` as they landed this frame
+    (the on-air deck's view), the hands' puppets read the palms through the
+    ghost hands' calibration (`palms_in_world`), then the physics steps."""
+    world = h.world
+    if world is None:
+        return
+    view = h.view
+    world.home(worlds.SHAPE, worlds.shape_home(view.zoom, view.pan))
+    world.frame(dt, palms_in_world(getattr(h.renderer, "ghost", None)))
 
 
 def _hot_error_toast(msg: str) -> None:
@@ -1797,6 +1858,9 @@ def main(argv: list[str] | None = None) -> None:
     glfw.swap_interval(0)
     ctx = moderngl.create_context()
     renderer = Renderer(ctx)
+    # the world objects (plan 59): one world, the renderers' (deck 2's is a sibling)
+    world = worlds.World.default()
+    renderer.world = world
     root = Root(root_win, Offscreen(ctx), Pacer(glfw), logical=RENDER_SIZE, size=RENDER_SIZE)
     # each output: a presenter on its own context, none waiting yet
     _open_presenters(slots, root_win, notes=cfg.setdefault("notes", []))
@@ -1999,6 +2063,7 @@ def main(argv: list[str] | None = None) -> None:
     restart = lambda: [setattr(p, "restart_requested", True) for p in panels]
     # the meta controller's params, with what any deck's registry reads as it is built
     meta_reg = build_meta(control, audio, restart, media=media.state)
+    worlds.register(meta_reg, world)          # `world.reset`: one world, every deck
     meta_reg.dial_launch = _dial_launch(cfg)
     deck = Deck.build(library=library, control=control, audio=audio, table=load_table,
                       renderer=renderer, media=media.state, restart=restart, meta_reg=meta_reg,
@@ -2107,6 +2172,7 @@ def main(argv: list[str] | None = None) -> None:
         # the devices' adapters, the shims and the registry (devices.py):
         # re-evaluated each swap, so a device the list brought in counts
         *device_reg.targets(),
+        *world.targets(),         # plan 59: the world, its objects, bodies and puppets
     ], watchers=[library])
     if display_list is not None:
         # the windows follow the rows and the connected list from here on (SC3b)
@@ -2222,7 +2288,8 @@ def main(argv: list[str] | None = None) -> None:
                 undo=deck.undo, media=media,
                 outputs=_outputs_now(slots), deck=deck,
                 off_air=meta.parked, stacks=meta.stacks, on_air_pointer=meta.on_air_pointer,
-                panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS), meta=meta)
+                panel_pointer=meta.panel_pointer, keys_pointer=meta.pointer(KEYS), meta=meta,
+                world=world)
 
     def rewired() -> None:
         # what holds a window, as the displays came or went (`hotplug.py`)
