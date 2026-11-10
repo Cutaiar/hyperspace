@@ -109,7 +109,7 @@ def test_a_follower_lands_once_settled():
 
 def test_the_spring_shaper_is_motion_spring():
     from hyperspace.bands import SHAPERS
-    sh = next(s for s in SHAPERS if s.tag == "SPRG")
+    sh = next(s for s in SHAPERS if s.tag == "sprg")
     st, ys = {}, []
     for _ in range(30):
         ys.append(sh.f(st, 1.0, DT))

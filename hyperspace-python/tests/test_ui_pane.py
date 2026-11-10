@@ -1176,7 +1176,7 @@ def test_what_a_chip_would_say_live_is_its_tooltip(pane, monkeypatch):
     words = ui_graph.sel_words(("node", node))
     assert any(t.startswith(f"selected: {words}") for t in said), said
     if ui_kit.ready():          # an icon tab: its name is in the tooltip, after the live words
-        assert any("SELECTION" in t for t in said), said
+        assert any("selection" in t for t in said), said
     else:
         assert "SELECTION##pane.selection" in d.rects
 

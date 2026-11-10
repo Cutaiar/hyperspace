@@ -123,7 +123,7 @@ def _nav(panel, k, group, cur, listing, is_dirty, meta, x, y, w, h) -> None:
         if cur is None:
             ui.tooltip(f"no patch loaded{L._on_deck(meta)}")
         elif group == L.LOADABLE:
-            ui.tooltip(f"{cur}{L._on_deck(meta)}  ·  the loaded patch — load… on GRAPH's "
+            ui.tooltip(f"{cur}{L._on_deck(meta)}  ·  the loaded patch — load… on the graph's "
                        "deck row picks another")
         else:
             ui.tooltip(f"{cur}  ·  click for the list")

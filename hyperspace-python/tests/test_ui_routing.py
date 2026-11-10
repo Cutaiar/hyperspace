@@ -566,7 +566,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
     frame(panel, "routing")
     frame(panel)
     # the head
-    assert "SHOW" in texts and "DESK LAYER: PATCH" in texts and "●" not in texts
+    assert "SHOW" in texts and "desk layer: patch" in texts and "●" not in texts
     assert "learn: MASTER fader is invariant (the meta controller's) — not learned" in texts
     assert any(t.startswith("desk: dropped cc:0:14 → view.bright") and "invariant" in t
                for t in texts)
@@ -578,7 +578,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
     assert "view.bright" in previews and "× macro.1" in texts
     # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
     # scene launch 5), and the controls it leaves dark
-    assert {"DESK  ·  PATCH LAYER", "D1", "G5·9"} <= set(texts)
+    assert {"desk  ·  patch layer", "D1", "G5·9"} <= set(texts)
     assert "device knob 1" not in texts                        # Akai's name: the tooltip
     assert {"view.speed", "view.points"} <= set(previews)
     assert "K1" in texts and "unmapped — dark" in texts
@@ -616,7 +616,7 @@ def test_the_routing_page_is_one_page_over_the_loaded_loadable(rig, tmp_path, mo
     table.set_layer("global")
     texts.clear()
     frame(panel)
-    assert "DESK LAYER: GLOBAL" in texts
+    assert "desk layer: global" in texts
 
 
 def test_route_a_lane_here_jumps_to_the_page(rig, tmp_path):
@@ -923,7 +923,7 @@ def test_a_filtered_page_draws_only_matching_lines_and_keeps_its_ids(rig, monkey
     # the macros: the one that subscribes a kaleidoscope param, drawn whole
     assert knobs == ["macro.3"]
     # the titles stay; the meta controller has no such row and says so, once
-    assert {"DESK  ·  PATCH LAYER", "MACROS", "META CONTROLLER"} <= set(texts)
+    assert {"desk  ·  patch layer", "macros", "meta controller"} <= set(texts)
     assert "ROUTES" not in texts and "MODIFIERS" not in texts
     assert texts.count(ui_routing.NO_MATCH) == 1
     assert "invariant · both layers" not in texts

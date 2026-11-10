@@ -493,8 +493,8 @@ def test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph(
     texts.clear()
     ids.clear()
     frame(panel)
-    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PATCH LAYER")
-    assert "ROUTES" not in texts and "MODIFIERS" not in texts
+    assert texts.index(ui_routing.POINTER) < texts.index("desk  ·  patch layer")
+    assert "routes" not in texts and "modifiers" not in texts
     texts.clear()
     ids.clear()
     imgui.new_frame()                       # the strip's function, drawn on its own
@@ -502,7 +502,7 @@ def test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph(
     ui_routing.modifiers(panel, router)
     imgui.end()
     imgui.end_frame()
-    assert texts.index("MODIFIERS") == 0
+    assert texts.index("modifiers") == 0
     assert {"smooth", "combine", "threshold", "0.50", "1.00", "dormant"} <= set(texts)
     dup = {i for i in ids if ids.count(i) > 1}
     assert not dup, f"conflicting ids {sorted(dup)}"

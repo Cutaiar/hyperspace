@@ -550,7 +550,7 @@ def test_the_area_chips_and_a_title_click_frame_an_area(rig, monkeypatch):
     chips, framed = [], []
     chip = ui.chip
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)
-                        or label == "MODULATION##area" or chip(label, *a, **k))
+                        or label == "modulation##area" or chip(label, *a, **k))
     nav = ed.navigate_to_selection
     monkeypatch.setattr(ed, "navigate_to_selection",
                         lambda *a: (framed.append(list(ed.get_selected_nodes())), nav(*a)))
@@ -607,23 +607,23 @@ def test_area_titles_draw(rig, monkeypatch):
     n = len(graphview.ORDER)
     assert order[:n] == ["title"] * n and order[n] == "node"
     lay = st["auto"][1]
-    audio = next(t for t in texts if t[0] == "AUDIO")
+    audio = next(t for t in texts if t[0] == "audio")
     assert audio[1] == lay.titles[graphview.AUDIO][0]
-    assert ui_graph.titles(lay)[0] == ("CONTROLLERS", 0.0, 0.0)
+    assert ui_graph.titles(lay)[0] == ("controllers", 0.0, 0.0)
     # the room: to the next title on the row; OTHER (its own row) its column
     assert ui_graph.title_room(lay, graphview.CONTROLLERS) == (
         lay.titles[graphview.AUDIO][0] - ui_graph.TITLE_GAP)
     # the size: TITLE_SIZE at full zoom; zoomed out TITLE_SCREEN px on
     # screen, held to the room; never under TITLE_FLOOR px: the short word
     fit = ui_graph.title_fit
-    assert fit("AUDIO", "AUD", 244.0, 1.0, 13.0, 40.0, 25.0) == ("AUDIO", ui_graph.TITLE_SIZE)
-    text, size = fit("EFFECTS", "FX", 4000.0, 10.0, 13.0, 60.0, 30.0)
-    assert text == "EFFECTS" and size == pytest.approx(ui_graph.TITLE_SCREEN * 10.0)
-    text, size = fit("CONTROLLERS", "CTRL", 244.0, 6.0, 13.0, 100.0, 35.0)
-    assert text == "CTRL" and size >= ui_graph.TITLE_FLOOR * 6.0
+    assert fit("audio", "aud", 244.0, 1.0, 13.0, 40.0, 25.0) == ("audio", ui_graph.TITLE_SIZE)
+    text, size = fit("effects", "fx", 4000.0, 10.0, 13.0, 60.0, 30.0)
+    assert text == "effects" and size == pytest.approx(ui_graph.TITLE_SCREEN * 10.0)
+    text, size = fit("controllers", "ctrl", 244.0, 6.0, 13.0, 100.0, 35.0)
+    assert text == "ctrl" and size >= ui_graph.TITLE_FLOOR * 6.0
     assert size * 35.0 / 13.0 <= 244.0 + 1e-6
-    assert fit("CONTROLLERS", "CTRL", 10.0, 6.0, 13.0, 100.0, 35.0) == (
-        "CTRL", ui_graph.TITLE_FLOOR * 6.0)
+    assert fit("controllers", "ctrl", 10.0, 6.0, 13.0, 100.0, 35.0) == (
+        "ctrl", ui_graph.TITLE_FLOOR * 6.0)
 
 
 # ---------------------------------------------------------------- plan 37 P3

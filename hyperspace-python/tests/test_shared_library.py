@@ -158,7 +158,7 @@ def test_the_system_page_says_where_the_library_is(tmp_path, gone):
     assert lines(Library(tmp_path / "L", machine=gone.machine, period=0.0)) == [
         (f"library: {tmp_path / 'L'}", False), (f"machine: {gone.machine}", False)]
     assert lines(gone.lib) == [
-        (f"library: {gone.root} — NOT FOUND, saves are off (restart once it is there)", True),
+        (f"library: {gone.root} — not found, saves are off (restart once it is there)", True),
         (f"machine: {gone.machine}", False)]
 
 

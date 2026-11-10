@@ -1616,7 +1616,7 @@ def _inset(mon, dl, origin, avail, deck: str) -> None:
     dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                  imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
     dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 2.0)
-    dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), f"ON AIR · {deck}")
+    dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), f"on air · {deck}")
     m = imgui.get_mouse_pos()
     if a[0] <= m.x < b[0] and a[1] <= m.y < b[1]:
         ui.tooltip(MONITOR_TIP)
@@ -1880,7 +1880,7 @@ def effect_errors(panel, view: graphview.View) -> dict[str, str]:
 def titles(lay: graphview.Layout) -> list[tuple[str, float, float]]:
     """The areas' titles to draw (plan 28 N9): (words, x, y) in canvas units,
     over each area's first column, in `graphview.ORDER`."""
-    return [(graphview.TITLES.get(a, a.upper()), *lay.titles[a])
+    return [(graphview.TITLES.get(a, a), *lay.titles[a])
             for a in graphview.ORDER if a in lay.titles]
 
 
@@ -4290,7 +4290,7 @@ def _open_chip(panel, n: graphview.VNode) -> None:
     home = home_page(n)
     if home is None:
         return
-    if ui.chip(f"open on {home[0].upper()}##graph.side.open"):
+    if ui.chip(f"open on {home[0]}##graph.side.open"):
         open_on(panel, home)
     if imgui.is_item_hovered():
         ui.tooltip(OPEN_TIP)
