@@ -41,7 +41,7 @@ clean and running the whole thing.
 
 | view | what it is |
 | --- | --- |
-| **gallery** | 29 stills. Pick a destination (screen px, sticker mm, etched, projected) and every code gets a verdict against it. |
+| **gallery** | 35 stills. Pick a destination (screen px, sticker mm, etched, projected) and every code gets a verdict against it. |
 | **families** | The same stills grouped by what the solid *is* — hypercubes, cross-polytopes, duoprisms, simplexes, the 24-cell — including the members that have no still, and why. |
 | **live solver** | Re-derives the code per update, 0.2 ms a solve. Grab it and fold it. |
 | **sprite** | 216 precomputed frames, 94 KB, no solver on the client. |
@@ -53,7 +53,9 @@ clean and running the whole thing.
 - **The trick.** `gen/basis.py` reduces QArt to an affine map, so a browser
   solves in 0.2 ms instead of 2 s. The URL is baked into the factorisation —
   point it elsewhere and every artefact must be rebuilt.
-- **29 stills** across eight subjects, seven dot styles, six palettes.
+- **35 stills** across eight subjects, seven dot styles, twelve palettes —
+  seven of them inverted, because a dark sticker is the one people want on a
+  laptop lid and one inverted design was not a choice.
 - **The editions explorer.** A tab that re-derives a code per control change.
   The trick that makes it possible: the factorisation does **not** depend on
   which constant is pinned — `_build` picks pivots by position and only
@@ -91,11 +93,11 @@ Nothing here is trusted on looks.
 
 | what | how | result |
 | --- | --- | --- |
-| the 29 stills | Chrome rasterises each SVG, zxing decodes it | 29/29 |
+| the 35 stills | Chrome rasterises each SVG, zxing decodes it | 35/35 |
 | the sprite | every frame decoded before shipping | 216/216 |
 | the live solver | frame pulled off the React canvas, decoded in Python | lands on the URL |
-| the exports | 8 sheets rasterised by Chrome (SVG) and poppler (PDF), every sticker decoded, one of each code measured | 276/276 |
-| the style port | all 29 stills drawn again by `lib/style.ts` and diffed against `gen/style.py`'s own render | 26 bit identical, 3 within a pixel |
+| the exports | 9 sheets rasterised by Chrome (SVG) and poppler (PDF), every sticker decoded, one of each code measured — including one that is entirely inverted at zero gutter | 324/324 |
+| the style port | all 35 stills drawn again by `lib/style.ts` and diffed against `gen/style.py`'s own render | 32 bit identical, 3 within a pixel |
 | the layout model | every figure in STICKERS.md asserted in code | 85 checks |
 
 ## Open — all four are physical, none are code
@@ -126,6 +128,10 @@ See STICKERS.md for the detail. In short, each needs one cheap real-world test:
   up the moment you open the live view, where a divergent *export* would not,
   and a third harness would be friction on every style change. If a constant
   ever gets tuned in one file, this is the paragraph to remember.
+
+- **`shots/` predates the Instagram repoint.** The committed screenshots show
+  the gallery as it was: 29 stills, and codes that scan to the old destination.
+  They illustrate the arrangement, not the current artefacts.
 
 - Four of five texture blobs are gitignored (358 KB each). Only `gothic` ships;
   the live solver's texture picker prints the command for the others.

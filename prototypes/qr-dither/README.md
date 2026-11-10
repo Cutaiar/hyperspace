@@ -26,8 +26,8 @@ cd app && npm install && npm run dev
 Then <http://localhost:5181>. Vite 8 binds IPv6 only, so `127.0.0.1` will not
 answer — use `localhost`. Six views:
 
-- **gallery** — 29 stills across eight 4D subjects, seven dot styles and six
-  palettes. Pick a destination and every code gets a verdict against it.
+- **gallery** — 35 stills across eight 4D subjects, seven dot styles and twelve
+  palettes, seven of them inverted. Pick a destination and every code gets a verdict against it.
 - **families** — the same stills grouped by what the solid *is*. Which
   orientations survive module quantisation is a property of a family's edge
   set, not of any one solid, so the family is the unit that explains why the

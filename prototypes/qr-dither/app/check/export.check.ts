@@ -242,6 +242,12 @@ const sheets: Sheet[] = [
   // and the hostile one, styled: vendor, zero gutter, light and inverted
   // alternating, every plate pushing at its neighbour's quiet zone
   sheet('styled-hostile', 'vendor', 0, 3, [styled(item('pal-red')), styled(dark)]),
+  // every sticker inverted, at zero gutter: the case a dark sticker sheet
+  // actually is. Nothing here is light, so no neighbour's white quiet zone is
+  // there to absorb a plate that spreads — if the clamp were wrong this is
+  // where it would show.
+  sheet('all-dark', 'vendor', 0, 3,
+        (man.items as Item[]).filter(i => i.dark).slice(0, 6).map(styled)),
 ]
 
 for (const s of sheets) {

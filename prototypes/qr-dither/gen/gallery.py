@@ -128,6 +128,37 @@ PALETTES = [
     ("pal-plate",  "tess_tilt",      2, 12, "extra-rounded", "Rounded plate",
      "A rounded white plate, for dropping on the black page as a sticker.",
      INK, None, PAPER),
+
+    # --- inverted, the sticker case -------------------------------------
+    # A dark sticker is the one people actually want on a laptop lid, and
+    # inversion is the hardest thing to ask of a reader: pal-invert measures 3
+    # px/module where square-on-white measures 1, and loses blur headroom with
+    # it. So these stay on the bold silhouettes and keep their modules square
+    # or barely rounded -- circular modules on top of inversion would stack the
+    # two worst effects. Every one is measured below; the numbers decide, not
+    # the look.
+    ("inv-tess",   "tess_tilt",      2, 12, "extra-rounded", "Inverted tesseract",
+     "The signature pose, white on black. Softened modules keep the strokes "
+     "joined where inversion thins them.", PAPER, None, INK),
+    ("inv-duo",    "duo88_tilt",     3, 12, "square", "Inverted duoprism",
+     "Two octagonal rings at a 3-module stroke. The boldest thing here, which "
+     "is what inversion wants.", PAPER, None, INK),
+    ("inv-c24",    "c24_tilt",       2, 12, "square", "Inverted 24-cell",
+     "96 edges reversed out. The densest subject against the least forgiving "
+     "palette.", PAPER, None, INK),
+    ("inv-cube",   "cube_tilt",      2, 12, "rounded", "Inverted cube",
+     "The sparsest solid, so the most black left over. The calmest of these.",
+     PAPER, None, INK),
+    ("inv-plate",  "tess_nested",    2, 12, "extra-rounded", "Inverted plate",
+     "A rounded black plate: the sticker shape, cut as a dark square with "
+     "soft corners.", PAPER, None, INK),
+    ("inv-red",    "c16_tilt",       2, 12, "square", "Red on black",
+     "Red reversed out of black. Red carries about a third of white's "
+     "luminance, so this has the least contrast here \u2014 and yet it "
+     "measures the same 3 px/module as the other inverted ones. The margin "
+     "is thinner than the number shows; this is the one to test on a real "
+     "print.",
+     RED, None, INK),
 ]
 
 
@@ -250,7 +281,7 @@ def main():
         emit(ident, pose, stroke, ver, title, blurb, "palettes",
              dot=dot, eye_frame="rounded", eye_core="rounded",
              fg=fg, fg2=fg2, bg=bg,
-             plate_radius=6 if ident == "pal-plate" else 0)
+             plate_radius=6 if ident in ("pal-plate", "inv-plate") else 0)
 
     # The control has to be a code for the URL you actually asked for. It used
     # to be a committed file, which silently kept pointing at the old
