@@ -402,6 +402,9 @@ class Deck:
             # …and the poi's (plan 47, the poi)
             *([(sw, "poi", "PoiState")]
               if (sw := poi.state_of(self.reg)) is not None else []),
+            # …and the grip's (plan 60), each deck's own
+            *([(gs, "grip", "GripState")]
+              if (gs := getattr(self.reg, "grip", None)) is not None else []),
         ]
 
 
