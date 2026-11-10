@@ -24,14 +24,14 @@ from hyperspace import graph as G
 from hyperspace.devices import Port
 from hyperspace.learn import Learn
 from hyperspace.motion import DEFAULT_ROUTE_FEEL
-from hyperspace.routing import MOD_OPS, Binding, is_session_row
+from hyperspace.routing import MOD_OPS, Binding, is_meta_row
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
@@ -140,7 +140,7 @@ def test_moving_a_cables_end_moves_the_route_and_its_depth_subs_follow(rig):
     and the macro subscriber scaling its depth follows it. Onto a taken
     param it asks, and Replace retargets the row (`replace_owner(…,
     target=)`)."""
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     table = rig.router.table
     _mid, s = next((mid, s) for mid, m in table.macros.items() for s in m.subs
                   if s.depth is not None)
@@ -167,9 +167,9 @@ def test_moving_a_cables_end_moves_the_route_and_its_depth_subs_follow(rig):
 
 def test_a_hand_into_a_base_port_is_refused_in_words_and_a_pad_is_a_setter_row(rig):
     """`base` is the setters' stub: a hand (any lane) is refused in words;
-    a desk knob is the desk learn's row (a preset-layer `abs` row,
-    `bind(write=False)`: the loaded preset's); a pad button the pad
-    learn's (the session's, as the factory's pad rows are). A macro's
+    a desk knob is the desk learn's row (a patch-layer `abs` row,
+    `bind(write=False)`: the loaded patch's); a pad button the pad
+    learn's (the meta controller's, as the factory's pad rows are). A macro's
     cable is a base subscriber there, a depth subscriber on a depth stub."""
     reg, table = rig.reg, rig.router.table
     e, view = edit(rig, leap())
@@ -179,10 +179,10 @@ def test_a_hand_into_a_base_port_is_refused_in_words_and_a_pad_is_a_setter_row(r
     assert len(table.bindings) == n
     knob = e.connect("out:cc:0:52", "base:camera.zoom")
     assert (knob.op, knob.layer, knob.target) == ("abs", "preset", "camera.zoom")
-    assert not is_session_row(knob)
+    assert not is_meta_row(knob)
     pad = e.connect("out:pad:BACK", "base:view.points")
     assert (pad.source, pad.target, pad.op) == ("pad:BACK", "view.points", "toggle")
-    assert is_session_row(pad) and pad in table.bindings
+    assert is_meta_row(pad) and pad in table.bindings
     _, view = edit(rig, leap())
     refs = [c.ref for c in cables(view, "setter")]
     assert any(x is knob for x in refs) and any(x is pad for x in refs)
@@ -224,7 +224,7 @@ def test_dropping_a_modifier_on_a_cable_inserts_it(rig):
     push = table.add(Binding("lane:4", q.id, "push", 0.3))
     frame(panel, "graph")
     free = ui_graph.add_modifier(panel, "curve", at=(10, 10))
-    assert panel.library.presets.layout[free.id] == [10, 10]
+    assert panel.library.loaded_patch.layout[free.id] == [10, 10]
     frame(panel, "graph")
     st = ui_graph._state(panel)
     view = st["view"]
@@ -247,11 +247,11 @@ def test_dropping_a_modifier_on_a_cable_inserts_it(rig):
 def test_deleting_a_cable_removes_the_route_and_undo_puts_it_back(tmp_path):
     """Delete on a route's cable is `remove` — its macro depth subscriber
     goes with it — as one named undo step; ⌘Z puts the row and the
-    subscriber back. A session row's cable (a key, the pad) is refused."""
+    subscriber back. A meta row's cable (a key, the pad) is refused."""
     from test_undo import boot, settle
     r = boot(tmp_path / "home")
     settle(r)
-    r.lib.load("presets", "lfo-breathe")
+    r.lib.load("loadable", "lfo-breathe")
     settle(r)
     r.undo.clear()
     table = r.table
@@ -270,10 +270,10 @@ def test_deleting_a_cable_removes_the_route_and_undo_puts_it_back(tmp_path):
     assert any(x.depth == s.depth for x in table.macros[mid].subs)
     view = ui_graph.view_of(panel)
     assert any(x.ref is back[0] for x in cables(view))
-    # the session's rows are bindings.json's: refused, kept
-    key = next(c for c in cables(view, "setter") if is_session_row(c.ref))
+    # the meta controller's rows are bindings.json's: refused, kept
+    key = next(c for c in cables(view, "setter") if is_meta_row(c.ref))
     res = ui_graph.disconnect(panel, key)
-    assert res == graphview.SESSION_ROW.format(what=key.ref.source)
+    assert res == graphview.META_ROW.format(what=key.ref.source)
     assert key.ref in table.bindings
     assert ui_graph._state(panel)["note"] == res
 
@@ -367,11 +367,11 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
     (`wire`, `unwire`, `remove_render_node`, `wire_refusal`); their plain
     words come back as a `Refusal` (the page's note), a landing as None;
     the page's drag and delete tables route those types to N4's handlers."""
-    rig.lib.load("presets", "party-wake")            # (plan 35 T5: a wired frame landed)
+    rig.lib.load("loadable", "party-wake")            # (plan 35 T5: a wired frame landed)
     table = rig.router.table
     view = graphview.build(table, rig.reg, rig.router, None, None, None)
-    e = graphview.Edit(table, rig.reg, rig.router, view, graph=rig.lib.presets.graph)
-    gs = rig.lib.presets.graph
+    e = graphview.Edit(table, rig.reg, rig.router, view, graph=rig.lib.loaded_patch.graph)
+    gs = rig.lib.loaded_patch.graph
     assert graphview.RENDER_NOT_YET not in (
         e.connect("rout:shape", "rin:scene/geometry"),
         e.refusal("rin:scene/geometry", "rout:shape"))
@@ -414,7 +414,7 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
 def test_nodes_the_picker_adds_and_delete_removes(rig):
     """The picker's modifier and macro, a modifier's input by a cable, and
     a node delete: a modifier and a macro go (a route on the modifier's
-    lane stays, dormant); the rig's nodes are refused."""
+    lane stays, dormant); the meta controller's nodes are refused."""
     panel, table = rig.panel, rig.router.table
     frame(panel, "graph")
     m = ui_graph.add_modifier(panel, "combine", at=(300, 40))
@@ -425,7 +425,7 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     view = ui_graph._state(panel)["view"]
     assert view.node(m.id).kind == "modifier" and view.node("macro.7").kind == "macro"
     assert table.macros["macro.7"].label == "macro 7"
-    assert panel.library.presets.layout["macro.7"] == [600, 40]
+    assert panel.library.loaded_patch.layout["macro.7"] == [600, 40]
     assert "macro.7" not in ui_graph.macros_free(panel, view)
     e = ui_graph.edit_of(panel, view)
     e.connect("out:lane:0", f"in:{m.id}.0")
@@ -467,7 +467,7 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     assert "macro.7" not in table.macros
     assert ui_graph.remove_node(panel, graphview.ANALYZER) == graphview.NOT_REMOVABLE.format(
         label=view.node(graphview.ANALYZER).label)
-    # an LFO is the preset's since plan 31 (G1): it goes through its bank,
+    # an LFO is the loadable patch's since plan 31 (G1): it goes through its bank,
     # and a rig whose router steps none says so
     assert ui_graph.remove_node(panel, "lfo.1") == graphview.NO_BANK.format(what="LFO")
 
@@ -477,7 +477,7 @@ def test_the_page_draws_with_its_editing_menus(rig):
     cable, a node, the picker) and a refusal on its head — the create and
     delete queries open every frame without a drag and change nothing."""
     panel = rig.panel
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     frame(panel, "graph")
     st = ui_graph._state(panel)
     view = st["view"]
@@ -550,14 +550,14 @@ def _two_cable_rig(rig):
     from types import SimpleNamespace as NS
 
     from test_graphview import views
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Two", schema="hyperspace.preset/7", graph=_section(
         *FRAME0, ("lookback", "acid.image"), ("acid", "output.all.image"),
         nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
-    rig.lib.load("presets", "Two")
-    gs = rig.lib.presets.graph
+    rig.lib.load("loadable", "Two")
+    gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
                                                    effects=("acid", "wobble.2")))
     frame(rig.panel, "graph")
@@ -702,11 +702,12 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
     assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut", "_voice_node_cut",
                                             "_delete_render_cable", "_delete_render_node"}
     assert where["reject_deleted_item"] <= {"_value_cut", "_unknown_cut", "_delete",
-                                            "_rig_node_cut", "_delete_render_cable",
+                                            "_fixture_node_cut", "_delete_render_cable",
                                             "_voice_node_cut", "_lane_cut",   # plan 31 G1
                                             "_delete_render_node", "delete_bundle",
                                             "delete_through",   # N9: a through wire
-                                            "_feeds_cut"}   # plan 33 U: frame's picture
+                                            "_feeds_cut",   # plan 33 U: frame's picture
+                                            "_node_mode_cut"}   # N1b: says how to leave
     assert where["reject_new_item"] <= {"_value_drag", "_create_render", "_stub_drag"}
     # plan 28 N4: the render types and kinds are in the dispatch, to N4's handlers
     assert set(graphview.RENDER_TYPES) <= set(ui_graph.CREATE)
@@ -714,17 +715,17 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
     assert ui_graph.DELETE_NODE["render"] is ui_graph._delete_render_node
 
 
-def test_a_route_from_the_canvas_is_a_performer_row_in_the_preset(rig):
-    """What the canvas adds is the loaded preset's (a performer row): the
-    preset is dirty, bindings.json is not written."""
+def test_a_route_from_the_canvas_is_a_performer_row_in_the_loadable(rig):
+    """What the canvas adds is the loaded patch's (a performer row): the
+    loadable patch is dirty, bindings.json is not written."""
     lib, table = rig.lib, rig.router.table
-    lib.load("presets", "party-trip")
-    assert not lib.is_dirty("presets")
+    lib.load("loadable", "party-trip")
+    assert not lib.is_dirty("loadable")
     before = table.path.read_text() if table.path.exists() else None
     frame(rig.panel, "graph")
     b = ui_graph.connect(rig.panel, "out:lane:1", f"mod:{free_param(rig, centred=False).id}")
-    assert b.op in MOD_OPS and not is_session_row(b)
-    assert lib.is_dirty("presets")
+    assert b.op in MOD_OPS and not is_meta_row(b)
+    assert lib.is_dirty("loadable")
     assert (table.path.read_text() if table.path.exists() else None) == before
 
 
@@ -775,7 +776,7 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     """Delete on a node goes by its kind (`DELETE_NODE`): a render or an
     output node is N4's (the camera refused in words: plan 35 G — the look's
     one since plan 43 C2), a
-    kind not listed is the rig's; a macro node's delete goes through the
+    kind not listed is the meta controller's; a macro node's delete goes through the
     table's `set_macros`, its label and subscribers with it."""
     from imgui_bundle import imgui_node_editor as ed
     monkeypatch.setattr(ed, "reject_deleted_item", lambda: None)
@@ -785,7 +786,7 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     assert st["note"] == graphview.CAMERA_KEPT.format(label="Camera")
     assert ui_graph.DELETE_NODE["output"] is ui_graph._delete_render_node
     group = graphview.VNode("group:tempo", "group", "tempo")
-    ui_graph.DELETE_NODE.get(group.kind, ui_graph._rig_node_cut)(rig.panel, st, None, group)
+    ui_graph.DELETE_NODE.get(group.kind, ui_graph._fixture_node_cut)(rig.panel, st, None, group)
     assert st["note"] == graphview.NOT_REMOVABLE.format(label="tempo")
     # plan 31 G1: an LFO and an envelope go through their bank; a lane
     # envelope is kept, said
@@ -827,7 +828,7 @@ def test_a_render_edit_s_line_goes_at_the_next_edit_or_refusal(rig, monkeypatch)
     assert ui_graph._render_said(panel, landed, lambda e: "a loop", st) == "a loop"
     assert st["said"] == "" and st["note"] == "a loop"
     said_once()
-    ui_graph._rig_node_cut(panel, st, None, graphview.VNode("lfo.1", "lfo", "LFO 1"))
+    ui_graph._fixture_node_cut(panel, st, None, graphview.VNode("lfo.1", "lfo", "LFO 1"))
     assert st["said"] == "" and st["note"] == graphview.NOT_REMOVABLE.format(label="LFO 1")
 
 
@@ -892,16 +893,16 @@ def _section(*pairs, nodes=()):
 
 
 def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
-    """A headless rig over a scratch library with preset "Free" loaded —
+    """A headless rig over a scratch library with loadable patch "Free" loaded —
     its graph section the wired frame of wires `pairs` and entries `nodes`
     (a `/6` file) — the section attached to a stub renderer, and an Edit on
     it whose undo steps are counted (`undo_rig`: test_undo's boot, its Undo
     real)."""
     from test_graph_json import Stub
-    from test_presets import boot, put
+    from test_loadable import boot, put
 
     from hyperspace import undo
-    from hyperspace.library import PRESETS
+    from hyperspace.library import LOADABLE
     if undo_rig:
         from test_undo import boot as undo_boot
         from test_undo import settle
@@ -910,10 +911,10 @@ def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
     else:
         rig = boot(tmp_path)
     put(rig.home, "Free", schema="hyperspace.preset/7", graph=_section(*pairs, nodes=nodes))
-    rig.lib.load(PRESETS, "Free")
-    assert not [n for n in rig.presets.notes if n.startswith("graph")], rig.presets.notes
+    rig.lib.load(LOADABLE, "Free")
+    assert not [n for n in rig.loaded_patch.notes if n.startswith("graph")], rig.loaded_patch.notes
     stub = Stub()
-    rig.presets.graph.attach(stub)
+    rig.loaded_patch.graph.attach(stub)
     pushed: list[str] = []
     if undo_rig:
         settle(rig)
@@ -924,16 +925,16 @@ def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
             undo.push(label, load=True)
     else:
         push = pushed.append
-    return rig, graphview.Edit(graph=rig.presets.graph, push=push), pushed
+    return rig, graphview.Edit(graph=rig.loaded_patch.graph, push=push), pushed
 
 
 def wires_of(rig) -> set[tuple[str, str]]:
-    return {(w.src, w.dst) for w in rig.presets.graph.spec.wires}
+    return {(w.src, w.dst) for w in rig.loaded_patch.graph.spec.wires}
 
 
 def run_of(rig) -> tuple[str, ...]:
     """The effects from the look-back into All outputs (the run, in wires)."""
-    return G.run_back(rig.presets.graph.spec, "output.all.image")
+    return G.run_back(rig.loaded_patch.graph.spec, "output.all.image")
 
 
 def test_the_picker_adds_an_effect_unwired(tmp_path):
@@ -948,11 +949,11 @@ def test_the_picker_adds_an_effect_unwired(tmp_path):
     before = wires_of(rig)
     assert ("switch", None, "switch") in graphview.picker(e)
     assert e.add_node("effect", "acid") is None and e.added == "acid.2"
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert G.EffectAt("acid", 2) in spec.effects and wires_of(rig) == before
     assert "acid.2" not in G.reaches(spec) and run_of(rig) == ("acid",)
     assert e.add_node("switch") is None and e.added == "switch"
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert [s.name for s in spec.switches] == ["switch"] and "switch.select" in rig.reg
     assert wires_of(rig) == before and pushed == ["add acid.2", "add switch"]
     # on the canvas: faint, drawn, saying so
@@ -984,7 +985,7 @@ def test_insert_effect_on_a_render_cable(tmp_path):
     settle(rig)
     assert rig.undo.undo()
     assert ("channel.a", "shape.faces") in wires_of(rig)
-    assert "kaleido" not in {x.name for x in rig.presets.graph.spec.effects}
+    assert "kaleido" not in {x.name for x in rig.loaded_patch.graph.spec.effects}
     assert e.insert_effect(("lookback", "output.all.image"), "acid") is None
     assert run_of(rig) == ("acid",)
     assert ("lookback", "output.all.image") not in wires_of(rig)
@@ -1006,7 +1007,7 @@ def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(t
     assert pushed == ["insert kaleido into lookback → output.all.image"]
     assert e.add_node("effect", "wobble") is None and e.added == "wobble"
     assert reg["fx.wobble.on"].value is True
-    assert "wobble" in {x.name for x in rig.presets.graph.spec.effects}
+    assert "wobble" in {x.name for x in rig.loaded_patch.graph.spec.effects}
 
 
 def test_a_second_insert_of_the_same_file_takes_instance_two(tmp_path):
@@ -1071,7 +1072,7 @@ def test_undo_of_switch_over_the_channels_puts_the_channel_back(tmp_path):
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
     assert wires_of(rig) == {("lookback", "output.all.image"), ("channel.c", "pattern.media")}
-    assert rig.presets.graph.spec.switches == () and "switch.select" not in rig.reg
+    assert rig.loaded_patch.graph.spec.switches == () and "switch.select" not in rig.reg
 
 
 def test_the_runs_cables_are_ordinary_wires(tmp_path):
@@ -1085,10 +1086,10 @@ def test_the_runs_cables_are_ordinary_wires(tmp_path):
     assert e.unwire("acid", "wobble.image") is None
     assert wires_of(rig) == {("lookback", "acid.image"), ("wobble", "output.all.image")}
     assert e.unwire("lookback", "acid.image") is None
-    assert G.EffectAt("acid", 1) in rig.presets.graph.spec.effects     # (R21: kept, faint)
-    assert "acid" in graphview.unreached(rig.presets.graph.spec)
+    assert G.EffectAt("acid", 1) in rig.loaded_patch.graph.spec.effects     # (R21: kept, faint)
+    assert "acid" in graphview.unreached(rig.loaded_patch.graph.spec)
     assert e.drop_node("render:acid") is None and e.said == "acid deleted"
-    assert G.EffectAt("acid", 1) not in rig.presets.graph.spec.effects
+    assert G.EffectAt("acid", 1) not in rig.loaded_patch.graph.spec.effects
     n = len(pushed)
     assert e.unwire("lookback", "output.all.image") == graphview.NO_SUCH_WIRE.format(
         wire="lookback → output.all.image")
@@ -1123,14 +1124,14 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     from types import SimpleNamespace as NS
 
     from test_graphview import views
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Free", schema="hyperspace.preset/7", graph=_section(
         *FRAME0, ("lookback", "output.all.image"),
         nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
-    rig.lib.load("presets", "Free")
-    gs = rig.lib.presets.graph
+    rig.lib.load("loadable", "Free")
+    gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
                                                    effects=("wobble", "wobble.2")))
     frame(rig.panel, "graph")
@@ -1150,7 +1151,7 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
 def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     """R21 (row 349): `acid` unwired from both sides is kept in the section
     — `{"kind": "effect", "file": "acid"}`, on no wire — drawn faint,
-    "reaches nothing"; saved, the preset is `/6` (plan 35: an edited frame
+    "reaches nothing"; saved, the loadable patch is `/6` (plan 35: an edited frame
     no older schema says); undo puts its wires back."""
     import json
 
@@ -1165,17 +1166,17 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     rig.undo.clear()
     assert e.unwire("acid", "output.all.image") is None
     assert e.unwire("lookback", "acid.image") is None and len(pushed) == 2
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert run_of(rig) == () and wires_of(rig) == set()
     assert G.EffectAt("acid", 1) in spec.effects
-    assert {"kind": "effect", "file": "acid"} in rig.presets.graph.free_doc()["nodes"]
+    assert {"kind": "effect", "file": "acid"} in rig.loaded_patch.graph.free_doc()["nodes"]
     g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid",))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     n = view.node("render:acid")
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
-    doc = json.loads(rig.presets.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/10"
+    doc = json.loads(rig.loaded_patch.save_as("Out").read_text())
+    assert doc["schema"] == "hyperspace.loadable/11"
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
@@ -1187,7 +1188,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert e2.unwire("acid", "output.all.image") is None
     assert e2.wire("rout:lookback", "rin:output.all/image") is None
     assert e2.place_effect(("lookback", "output.all.image"), "acid") is None
-    assert rig2.presets.graph.spec.to_json()["nodes"] == [{"kind": "hands", "laid": "over"}]
+    assert rig2.loaded_patch.graph.spec.to_json()["nodes"] == [{"kind": "hands", "laid": "over"}]
 
 
 def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
@@ -1202,12 +1203,12 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     assert e.unwire("zoomblur", "huecycle.image") is None
     assert e.wire("rout:zoomblur", "rin:output.all/image") is None
     assert run_of(rig) == ("plasma", "kaleido", "zoomblur")
-    assert {"kind": "effect", "file": "huecycle"} in rig.presets.graph.spec.to_json()["nodes"]
+    assert {"kind": "effect", "file": "huecycle"} in rig.loaded_patch.graph.spec.to_json()["nodes"]
     rig.reg["fx.huecycle.on"].set(True)
     for name, on in (("On", True), ("Off", False)):
         rig.reg["fx.huecycle.on"].set(on)
-        doc = json.loads(rig.presets.save_as(name).read_text())
-        assert doc["schema"] == "hyperspace.preset/10", name
+        doc = json.loads(rig.loaded_patch.save_as(name).read_text())
+        assert doc["schema"] == "hyperspace.loadable/11", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
         assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
@@ -1236,11 +1237,11 @@ def test_a_sink_loop_drag_is_refused_in_words(tmp_path):
     never green, then dormant — and nothing changes. With a delay declared,
     `delay → shape.faces` lands (plan 35 G: only types and loops refuse)."""
     rig, e, pushed = free_rig(tmp_path, *FRAME0, ("lookback", "output.all.image"))
-    before = rig.presets.graph.spec.to_json()
+    before = rig.loaded_patch.graph.spec.to_json()
     why = e.refusal("rout:scene", "rin:shape/faces")
     # (R5: every wire on the loop is refused, the first named)
     assert isinstance(why, str) and "a loop through the faces" in why and "delay" in why
-    assert rig.presets.graph.spec.to_json() == before and pushed == []
+    assert rig.loaded_patch.graph.spec.to_json() == before and pushed == []
     assert e.add_node("delay") is None and e.added == "delay"
     assert graphview.render_wire(e, "rout:delay", "rin:shape/faces", dry=True) is None
 
@@ -1254,15 +1255,15 @@ def test_a_plain_loop_drag_points_at_a_delay(tmp_path):
         tmp_path, *FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
         ("wobble", "output.all.image"),
         nodes=[{"kind": "effect", "file": "acid"}, {"kind": "effect", "file": "wobble"}])
-    before = rig.presets.graph.spec.to_json()
+    before = rig.loaded_patch.graph.spec.to_json()
     why = e.refusal("rout:wobble", "rin:acid/aux")
     assert isinstance(why, str) and why.startswith("wire ") and "that makes a loop (" in why
     assert why.endswith(": wire it through a delay for last frame's picture")
-    assert rig.presets.graph.spec.to_json() == before
+    assert rig.loaded_patch.graph.spec.to_json() == before
     assert e.add_node("delay") is None
     assert graphview.render_wire(e, "rout:wobble", "rin:delay/image") is None
     assert graphview.render_wire(e, "rout:delay", "rin:acid/aux") is None
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert not spec.notes
     assert any((w.src, w.dst) == ("delay", "acid.aux") for w in spec.wires)
 
@@ -1275,14 +1276,14 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     from types import SimpleNamespace as NS
 
     from test_graphview import views
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace import undo as undo_mod
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Run", schema="hyperspace.preset/7", graph=_section(
         ("lookback", "acid.image"), ("acid", "wobble.image"), ("wobble", "output.all.image")))
-    rig.lib.load("presets", "Run")
-    gs = rig.lib.presets.graph
+    rig.lib.load("loadable", "Run")
+    gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
                                                    effects=("acid", "wobble")))
     frame(rig.panel, "graph")
@@ -1425,7 +1426,7 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
     monkeypatch.setattr(imgui, "begin_menu", lambda label, *a: False)
     monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k: False)
     # (plan 36 T3: an effect's params exist where the graph names it)
-    gs = rig.panel.library.presets.graph
+    gs = rig.panel.library.loaded_patch.graph
     spec = G.read_graph({**gs.spec.to_json(), "nodes": [
         *gs.spec.to_json()["nodes"], {"kind": "effect", "file": "glimmer"}]})
     gs.land(spec, spec.to_json())
@@ -1449,8 +1450,8 @@ def test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name(rig, 
     """macro ▸ (the owner, 2026-10-28: the Route from menu "should
     probably include the macros as well"): the rig's eight knobs by label
     (`macro_label`: ROUTING's label, else "macro 3"), one already setting
-    the param checked — on a persisted performance param, modulatable or
-    not (a base subscriber is no route), never on a macro or a session
+    the param checked — on a persisted patch param, modulatable or
+    not (a base subscriber is no route), never on a macro or a meta controller
     param (`routing.base_refusal`, plan 13 D9)."""
     from hyperspace.routing import Macro, Sub
 
@@ -1466,7 +1467,7 @@ def test_route_from_lists_the_macros_on_a_param_a_base_subscriber_may_name(rig, 
                            group="view", modulatable=False)
     assert list(ui_graph.route_from_items(panel, fixed)) == ["macro"]
     assert drawn_route_from(panel, fixed, monkeypatch)[0] == [ui_graph.ROUTE_FROM, "macro"]
-    # never on a macro, nor on a session param (the BPM)
+    # never on a macro, nor on a shared meta param (the BPM)
     assert "macro" not in (ui_graph.route_from_items(panel, reg["macro.1"]) or {})
     assert "macro" not in (ui_graph.route_from_items(panel, reg["tempo.bpm"]) or {})
 
@@ -1702,14 +1703,14 @@ def test_a_graph_cable_into_a_mod_pin_lands_the_smooth_spring(rig):
 # them by primitive, and its first item wires a scene to All outputs.
 
 def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
-    """`free_rig` for a wired frame: preset "Wired" whose section is
-    `graph` (a `/6` section) — or corpus preset `slug` (tests/corpus) loaded,
+    """`free_rig` for a wired frame: loadable patch "Wired" whose section is
+    `graph` (a `/6` section) — or corpus loadable patch `slug` (tests/corpus) loaded,
     migrated as every load is — on a stub renderer, an Edit on it."""
     from test_graph_json import Stub
-    from test_presets import boot, put
+    from test_loadable import boot, put
 
     from hyperspace import undo
-    from hyperspace.library import PRESETS
+    from hyperspace.library import LOADABLE
     if undo_rig:
         from test_undo import boot as undo_boot
         from test_undo import settle
@@ -1720,16 +1721,16 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
     fixture = Path(__file__).parent / "fixtures" / "presets" / f"{slug}.json"
     if slug is None:
         put(rig.home, "Wired", schema="hyperspace.preset/7", graph=graph)
-        rig.lib.load(PRESETS, "Wired")
+        rig.lib.load(LOADABLE, "Wired")
     elif fixture.exists():          # (a graph fixture, loaded and migrated as a file is)
-        (rig.home / "presets").mkdir(parents=True, exist_ok=True)
-        (rig.home / "presets" / fixture.name).write_text(fixture.read_text())
-        rig.lib.load(PRESETS, slug)
-    else:                           # (a corpus preset, seeded into the scratch library)
-        seed(rig.home, "presets", "dream")
-        rig.lib.load(PRESETS, slug)
+        (rig.home / "loadable").mkdir(parents=True, exist_ok=True)
+        (rig.home / "loadable" / fixture.name).write_text(fixture.read_text())
+        rig.lib.load(LOADABLE, slug)
+    else:                           # (a corpus loadable patch, seeded into the scratch library)
+        seed(rig.home, "loadable", "dream")
+        rig.lib.load(LOADABLE, slug)
     stub = Stub()
-    rig.presets.graph.attach(stub)
+    rig.loaded_patch.graph.attach(stub)
     pushed: list[str] = []
     if undo_rig:
         settle(rig)
@@ -1740,11 +1741,11 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
             undo.push(label, load=True)
     else:
         push = pushed.append
-    return rig, graphview.Edit(graph=rig.presets.graph, push=push), pushed
+    return rig, graphview.Edit(graph=rig.loaded_patch.graph, push=push), pushed
 
 
 def wired_wires(rig) -> set[tuple[str, str]]:
-    return {(w.src, w.dst) for w in rig.presets.graph.spec.wires}
+    return {(w.src, w.dst) for w in rig.loaded_patch.graph.spec.wires}
 
 
 def _names(spec) -> list[str]:
@@ -1781,7 +1782,7 @@ def test_every_frame_node_and_wire_deletes(tmp_path, slug):
     fx` and the run's cables are gone. What is left is the marker alone.
     And nodes first, their wires in place: every node goes the same way."""
     rig, e, pushed = wired_rig(tmp_path, slug=slug)
-    gs = rig.presets.graph
+    gs = rig.loaded_patch.graph
     assert gs.spec.wired and gs.spec.wires
     for w in list(gs.spec.wires):
         e.said = ""
@@ -1799,7 +1800,7 @@ def test_every_frame_node_and_wire_deletes(tmp_path, slug):
         "frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
     assert pushed and all(p.startswith(("unwire", "delete")) for p in pushed)
     rig, e, _ = wired_rig(tmp_path / "nodes-first", slug=slug)
-    gs = rig.presets.graph
+    gs = rig.loaded_patch.graph
     for name in _names(gs.spec):
         if name not in _names(gs.spec):          # (gone with another: a copy with its effect)
             continue
@@ -1814,14 +1815,14 @@ def test_deleting_an_effect_takes_its_copies(tmp_path):
     entries and wires) in the same landing — a copy of nothing is no node —
     and says so."""
     rig, e, pushed = wired_rig(tmp_path, slug="through-one-output")
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     name = min({c.of for c in spec.copies})
     mine = [c.name for c in spec.copies if c.of == name]
     n = len(pushed)
     assert e.drop_node(f"render:{name}") is None
     words = "its copy" if len(mine) == 1 else f"its {len(mine)} copies"
     assert e.said == f"{name} deleted, and {words}" and len(pushed) == n + 1
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert not [c for c in spec.copies if c.of == name]
     assert not [w for w in spec.wires if {w.src, w.node} & set(mine)]
 
@@ -1831,19 +1832,19 @@ def test_unwiring_an_effects_only_input_leaves_it_faint_with_its_outs(tmp_path):
     faint, its outs kept, no refusal (`branch-two-sizes`: `acid.2` fed by a
     channel into two ports)."""
     rig, e, _ = wired_rig(tmp_path, slug="branch-two-sizes")
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     feed = next(w for w in spec.wires if w.dst == "acid.2.image")
     outs = {w for w in spec.wires if w.src == "acid.2"}
     assert len(outs) > 1
     assert e.unwire(f"rout:{feed.src}", "rin:acid.2/image") is None
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert {w for w in spec.wires if w.src == "acid.2"} == outs and not spec.notes
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, None, spec)
     assert view.node("render:acid.2").faint
     # deleting the channel that fed it: the same
     rig, e, _ = wired_rig(tmp_path / "again", slug="branch-two-sizes")
     assert e.drop_node(f"render:{feed.src}") is None
-    assert {w for w in rig.presets.graph.spec.wires if w.src == "acid.2"} == outs
+    assert {w for w in rig.loaded_patch.graph.spec.wires if w.src == "acid.2"} == outs
 
 
 def test_deleting_an_unwired_window_says_nothing_to_delete(tmp_path):
@@ -1878,7 +1879,7 @@ def test_the_owners_sequence(tmp_path):
     for src, dst in (("scene", "backdrop/scene"), ("lookback", "plasma/image"),
                      ("plasma", "kaleido/image"), ("kaleido", "output.all/image")):
         assert e.unwire(f"rout:{src}", f"rin:{dst}") is None, (src, dst)
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert "lookback" not in G.reaches(spec)
     assert ("kaleido", "output.all.image") not in wired_wires(rig)
 
@@ -1894,7 +1895,7 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
     from hyperspace.outputs import Switches, View
 
     rig, e, _ = wired_rig(tmp_path, slug="glimmer-bug")
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     into = next(w.src for w in spec.wires if w.dst == "backdrop.scene")
     fed = sorted(w.dst for w in spec.wires if w.src == "backdrop")
     assert into == "scene" and fed == ["output.all.image"]
@@ -1911,7 +1912,7 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
         pytest.skip(f"no standalone GL context available: {ex}")
     gl = _tool().Rig("legacy6", "present", gl_ctx)
     try:
-        gl.renderer.wiring = rig.presets.graph.spec.wiring()
+        gl.renderer.wiring = rig.loaded_patch.graph.spec.wiring()
         vs = [View(Switches(), SIZE, target=_fbo(gl_ctx))]
         for _ in range(3):
             gl.frame(vs, SIZE, 1.0)
@@ -1922,7 +1923,7 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
 
 
 def test_deleting_a_window_unwires_it(tmp_path):
-    """An output is the rig's window: delete takes the wires into it and
+    """An output is the meta controller's window: delete takes the wires into it and
     says so (`OUTPUT_UNWIRED`), not a refusal; it shows its ground."""
     section = {"frame": "wired", "wires": [
         {"from": "channel.b", "to": "output.2.image"},
@@ -1930,9 +1931,9 @@ def test_deleting_a_window_unwires_it(tmp_path):
         {"from": "channel.a", "to": "output.all.image"}]}
     rig, e, pushed = wired_rig(tmp_path, section)
     assert e.drop_node("render:output.2") is None
-    assert not [w for w in rig.presets.graph.spec.wires if w.node == "output.2"]
+    assert not [w for w in rig.loaded_patch.graph.spec.wires if w.node == "output.2"]
     assert e.said == graphview.OUTPUT_UNWIRED.format(label="Output 2") == (
-        "Output 2 is a window of this rig: its wires are gone, it shows its ground")
+        "Output 2 is one of the meta controller's windows: its wires are gone, it shows its ground")
     assert ("channel.a", "output.all.image") in wired_wires(rig) and len(pushed) == 1
 
 
@@ -1945,7 +1946,7 @@ def test_the_picker_groups_by_primitive(tmp_path):
                "wires": [{"from": "scene", "to": "acid.image"},
                          {"from": "acid", "to": "output.all.image"}]}
     rig, e, _ = wired_rig(tmp_path, section)
-    files = sorted(rig.presets.graph.files())
+    files = sorted(rig.loaded_patch.graph.files())
     echoes = [("echo", "1", "echo.1 (newest)"),
               *(("echo", str(k), f"echo.{k}") for k in range(2, 32)),
               ("echo", "32", "echo.32 (oldest)")]
@@ -1995,7 +1996,7 @@ def test_a_ground_wire_is_drawn(tmp_path):
 
     from hyperspace.outputs import Switches
     rig, _, _ = wired_rig(tmp_path, GROUNDED)
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     g = G.build_graph(views(Switches(), Switches()), spec.wiring())
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     n = view.node("render:ground")
@@ -2024,7 +2025,7 @@ def test_a_ground_wire_deletes(tmp_path):
     settle(rig)
     assert rig.undo.undo() and ("ground", "output.2.image") in wired_wires(rig)
     assert e.drop_node("render:ground") is None and e.said == "Ground deleted"
-    assert not [w for w in rig.presets.graph.spec.wires if w.src == "ground"]
+    assert not [w for w in rig.loaded_patch.graph.spec.wires if w.src == "ground"]
 
 
 def test_a_frame_node_is_added_once(tmp_path):
@@ -2033,12 +2034,12 @@ def test_a_frame_node_is_added_once(tmp_path):
     from hyperspace import graph as G
     rig, e, _ = wired_rig(tmp_path, {"frame": "wired"})
     assert e.add_node("lookback") is None and e.added == "lookback"
-    assert G.LookbackAt() in rig.presets.graph.spec.frame_nodes
+    assert G.LookbackAt() in rig.loaded_patch.graph.spec.frame_nodes
     assert e.add_node("lookback") == "Look-back is in the graph already"
     assert e.add_node("effect", "acid") is None
     assert e.add_node("copy", "acid") is None and e.added == "copy"
     assert e.add_node("copy", "acid") is None and e.added == "copy.2"
-    assert rig.presets.graph.spec.copies == (G.CopyAt(1, "acid"), G.CopyAt(2, "acid"))
+    assert rig.loaded_patch.graph.spec.copies == (G.CopyAt(1, "acid"), G.CopyAt(2, "acid"))
     assert e.add_node("copy", "teapot") == "copy of teapot: no such effect instance in the graph"
 
 
@@ -2056,10 +2057,11 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
     drew, real = [], ui_pad.inline
     monkeypatch.setattr(ui_pad, "inline", lambda p: (drew.append(1), real(p)))
     picked, combo = [], panel._combo
-    monkeypatch.setattr(panel, "_combo", lambda pid, **k: (picked.append(pid), combo(pid, **k))[1])
+    monkeypatch.setattr(panel, "_combo",
+                        lambda pid, *a, **k: (picked.append(pid), combo(pid, *a, **k))[1])
     said, disabled = [], imgui.text_disabled
     monkeypatch.setattr(imgui, "text_disabled", lambda s: (said.append(s), disabled(s))[1])
-    port = graphview.VPort("pad:A", "A", "out", patched=True)
+    port = graphview.VPort("pad:S", "A", "out", patched=True)
     nodes = (("edge", SimpleNamespace(kind="gamepad", io=pad), [1]),
              ("pad", SimpleNamespace(kind="gamepad", io=pad), [1]),
              ("xbox", SimpleNamespace(kind="gamepad", io=other), []),
@@ -2076,7 +2078,8 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
         imgui.end()
         imgui.end_frame()
         assert drew == want, role
-        assert picked == (["ui.pad_view"] if want else []), role   # the readout's drop-down
+        # the readout's drop-down, and under the picture the sticks' dials (rows 729-730)
+        assert picked == (["ui.pad_view", "pad.dial.left", "pad.dial.right"] if want else []), role
         assert ("A: not live" in said) is (not want), role         # the port lines: not under it
     assert ui_pad.rect(panel, gamepad.LAYOUT[0]) is not None    # it really laid the pad out
 
@@ -2093,27 +2096,27 @@ def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
 
 def _drag_rig(rig, monkeypatch, *pairs, nodes=(), effects=("acid", "wobble.2"), on=("acid",),
               layout=None):
-    """The page drawn on preset "Drag" — the wired frame of `pairs` and
+    """The page drawn on loadable patch "Drag" — the wired frame of `pairs` and
     `nodes` — with a probe on `_moved` (the editor's origin and scale on
     screen, the press and the last plan lit); every node at `layout`'s
     place (canvas units) when given. Returns (the section, the probe)."""
     from types import SimpleNamespace as NS
 
     from test_graphview import views
-    from test_presets import put
+    from test_loadable import put
 
     from hyperspace.outputs import Switches
     put(rig.lib.home, "Drag", schema="hyperspace.preset/7", graph=_section(*pairs, nodes=nodes),
         **({"layout": layout} if layout else {}))
-    rig.lib.load("presets", "Drag")
-    gs = rig.lib.presets.graph
+    rig.lib.load("loadable", "Drag")
+    gs = rig.lib.loaded_patch.graph
     rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.spec.wiring(),
                                                    effects=effects))
     imgui.get_io().display_size = imgui.ImVec2(1600, 1000)
     rig.panel.desk = False
     # the app's canvas: preset only (the conftest starts the page tests on
     # the full canvas, where a params group sits over the free node's place)
-    ui_graph._state(rig.panel)["preset_only"] = True
+    ui_graph._state(rig.panel)["patch_only"] = True
     probe: dict = {}
     real = ui_graph._moved
 
@@ -2375,7 +2378,7 @@ def test_a_node_that_never_splices_is_refused_in_words_and_dims_nothing(rig, mon
 
 def test_the_other_refusals_are_said_and_cold(rig):
     """A picture node over a value cable, a modifier over a picture cable,
-    a free effect over the rig's bus cable and over a through wire (an off
+    a free effect over the meta controller's bus cable and over a through wire (an off
     effect's): each refused in its words, each cable cold (undimmed) while
     the node is dragged — "won't take it" reads differently from "not
     near enough"."""
@@ -2515,7 +2518,7 @@ def test_insert_node_from_the_cable_menu(rig):
     assert G.run_back(gs.spec, "output.all.image") == ("acid",)       # nothing yet
     assert ui_graph.insert_node(rig.panel, c, "composite", None, "over", (321.0, 654.0)) is None
     assert wires_of(rig.lib) >= {("acid", "composite.over"), ("composite", "output.all.image")}
-    assert rig.lib.presets.layout["render:composite"] == [321, 654]
+    assert rig.lib.loaded_patch.layout["render:composite"] == [321, 654]
     assert st["said"] == ("composite inserted: acid → composite over → output.all.image; "
                           "composite under is open")
     frame(rig.panel, "graph")
@@ -2699,7 +2702,7 @@ def test_a_group_made_taken_apart_and_remade_by_the_mouse(rig, monkeypatch):
     places = {"render:shape": [-800, 0], "render:scene": [-400, 0], "render:lookback": [0, 0],
               "render:acid": [320, 0], "render:wobble": [640, 0], "render:output.all": [960, 0]}
     _gs, probe = _drag_rig(rig, monkeypatch, *pairs, layout=places, effects=("acid", "wobble"), on=("acid", "wobble"))
-    st, pre = ui_graph._state(rig.panel), rig.lib.presets
+    st, pre = ui_graph._state(rig.panel), rig.lib.loaded_patch
     assert pre.groups == []
     _centre_on(rig, probe, (600.0, 90.0))      # (the page pans by moving the nodes:
     (ax, ay), (aw, ah) = _node_box(rig, "render:acid")        # read them after)

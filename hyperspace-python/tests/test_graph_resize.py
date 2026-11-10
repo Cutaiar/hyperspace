@@ -117,8 +117,8 @@ def test_declare_resizes_comes_and_goes():
     assert reg.resize_state["resize"] is kept
     assert not params.is_resize_id("resize.1.size") and not params.is_resize_id("resize.crop")
     assert params.is_resize_id("resize.12.filter")
-    assert params.RESIZE_GROUP in params.PERFORMANCE_GROUPS
-    groups = params.PERFORMANCE_GROUPS
+    assert params.RESIZE_GROUP in params.PATCH_GROUPS
+    groups = params.PATCH_GROUPS
     assert groups.index("resize") == groups.index("switch") + 1
 
 
@@ -465,9 +465,9 @@ def test_two_consumers_of_one_resize_refit_from_the_one_small_picture(ctx):
             keys = set(r._frames)
 
 
-def test_a_load_frees_the_last_presets_frame_targets(ctx):
-    """R16 (final review): preset A (channel a through a resize into
-    outputs 2 and 3), then preset B (channel b alone into output 2): 60
+def test_a_load_frees_the_last_loadables_frame_targets(ctx):
+    """R16 (final review): loadable patch A (channel a through a resize into
+    outputs 2 and 3), then loadable patch B (channel b alone into output 2): 60
     frames later none of A's frame targets — its `shown(...)` end, the
     resize's own size, channel a's fit — is held, and what is
     held is what B alone holds in steady state."""

@@ -4,7 +4,7 @@ each written to fail before its fix. The rigs are test_plan31_wiring's."""
 import pytest
 from test_plan31_wiring import frame, make_app, rig
 
-from hyperspace import envelope, graphview, modbank, preset, sequencer
+from hyperspace import envelope, graphview, loadable, modbank, sequencer
 from hyperspace.envelope import Envelope
 from hyperspace.sequencer import SPANS, Sequencer
 from hyperspace.tempo import Clock
@@ -156,21 +156,21 @@ def test_a_lane_on_a_missing_id_fires_nothing():
 def test_a_refused_load_keeps_the_extra_voices_and_their_values(tmp_path):
     app = make_app(tmp_path)
     reg = app.reg
-    doc = app.presets.document("x")            # four LFOs, five envelopes
+    doc = app.loaded_patch.document("x")            # four LFOs, five envelopes
     bad = {**doc, "values": {**doc["values"], "view.bright": "fast"}}
     n = app.lfos.add()
     reg[f"lfo.{n}.depth"].set(0.9)
     reg[f"lfo.{n}.rate"].set(7.0)
     m = app.envs.add()
     reg[f"env.{m}.decay"].set(3.0)
-    before = reg.snapshot(part="performance")
+    before = reg.snapshot(part="patch")
     with pytest.raises(ValueError):
-        app.presets.load_doc(bad)
+        app.loaded_patch.load_doc(bad)
     assert app.lfos.ids() == [1, 2, 3, 4, 5] and app.envs.ids() == [1, 2, 3, 4, 5, 6]
     assert reg[f"lfo.{n}.depth"].value == pytest.approx(0.9)
     assert reg[f"lfo.{n}.rate"].value == pytest.approx(7.0)
     assert reg[f"env.{m}.decay"].value == pytest.approx(3.0)
-    assert reg.snapshot(part="performance") == before
+    assert reg.snapshot(part="patch") == before
 
 
 # ---- 5 and 6: the sequencer alone (test_sequencer's rig) ----
@@ -238,14 +238,14 @@ def test_desk_rows_and_layout_keys_on_plan_31_ids_survive_a_build_without_it(tmp
     against the registry and `read_layout` keeps any name. (Row 394: the
     save is `/6` whatever it holds.)"""
     old = make_app(tmp_path, plan31=False)
-    doc = old.presets.document("x")
+    doc = old.loaded_patch.document("x")
     row = {**doc["desk"][0], "target": "env.2.fire", "op": "momentary"}
     layout = {"env.6": [10, 20], "seq": [1, 2], "lfo.7": [3, 4]}
     doc = {**doc, "desk": [row, *doc["desk"][1:]], "layout": layout}
-    old.presets.load_doc(doc)
-    out = old.presets.document("x")
+    old.loaded_patch.load_doc(doc)
+    out = old.loaded_patch.document("x")
     assert out["desk"][0] == row and out["layout"] == layout
-    assert out["schema"] == preset.SAVE_SCHEMA
+    assert out["schema"] == loadable.SAVE_SCHEMA
 
 
 # ---- 8: a refused add says why: the count, or the ids used up ----
@@ -283,7 +283,7 @@ def test_the_tooltips_and_the_graph_picker_say_the_banks_reason():
     assert "LFO" in ui_lfo.add_tip(rig().lfos) and "env 6" in ui_seq.add_tip(rig().envs)
 
 
-# ---- 9: a removed id is never handed out again in the session ----
+# ---- 9: a removed id is never handed out again in the meta controller ----
 
 def test_removing_the_top_voice_then_adding_does_not_reuse_its_id():
     import math

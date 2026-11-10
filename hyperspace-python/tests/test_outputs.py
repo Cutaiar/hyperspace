@@ -78,7 +78,7 @@ def test_outputs_imports_nothing_from_app_ui_or_params():
     """ARCHITECTURE §3: the render stack only reads. outputs.py imports
     moderngl and glsl at most — no app, ui, params, routing or library."""
     tree = ast.parse(Path(O.__file__).read_text())
-    banned = {"app", "ui", "params", "routing", "library", "preset", "undo", "control",
+    banned = {"app", "ui", "params", "routing", "library", "loadable", "undo", "control",
               "overlay", "config"}
     for node in ast.walk(tree):
         names = []
@@ -142,7 +142,7 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
     if echoes:
         st = r.lookback.state
         st.on, st.echoes, st.gap, st.tint_from = True, 8, 0.0, 0
-        # (plan 36 T4: the look-back drawn, as an old preset with it on and
+        # (plan 36 T4: the look-back drawn, as an old loadable patch with it on and
         # no dream migrates: `scene → lookback → composite (add)`)
         r.wiring = wired_wiring(r.old_wiring, look="trail")
     g = r.ghost
@@ -152,7 +152,7 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
 
 
 def wired(r, section: dict):
-    """`section` (a preset's graph section, plan 28 N4's words) as a load
+    """`section` (a loadable patch's graph section, plan 28 N4's words) as a load
     lands it over `r`'s effects: plan 33 R23, `graphmigrate` — the run the
     effects on make, beside the section's own wires."""
     from hyperspace.graphmigrate import specs_of, state_values, wiring_for
@@ -1009,7 +1009,7 @@ def test_the_presenter_handoff_carries_the_readout(ctx):
     assert r.stats["chain_runs"] == 2 and r.stats["direct"] is False
 
 
-@pytest.mark.parametrize("style", range(1, 5))
+@pytest.mark.parametrize("style", range(1, 9))
 def test_every_style_behaves_as_the_hands_in_every_state(ctx, style):
     """Plan 21 WP6: a style is drawn into the same hands' layer, so the
     eight states hold for it as for HANDS — 3 = 4 and 7 = 8, six pictures,
@@ -1211,7 +1211,7 @@ def test_hands_through_an_effect_on_a_flipped_output_flip_once(ctx):
     assert np.array_equal(flipped, _mirror(plain, True, False))
 
 
-def test_the_flips_come_from_the_config_never_a_preset(tmp_path):
+def test_the_flips_come_from_the_config_never_a_loadable(tmp_path):
     from hyperspace import config
     from hyperspace.app import _slots
 

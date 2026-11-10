@@ -1,7 +1,9 @@
-"""Plan 49, stage 1: GRAPH's side pane is always on and holds folding
-sections — selection, presets, lookback, faces, analyzer — each drawing
-what its page draws, found by the panel driver by the ids its page uses;
-the fold state is this Mac's, in ui.json beside the pane's width."""
+"""GRAPH's side pane (plan 49, then the single viewer of 2026-11-07): always
+on, one view at a time at its full height — the selection or a section,
+each section drawing what its page draws, found by the panel driver by the
+ids its page uses. The view is `ui.page`: a chip, the sections menu, a
+node's open on …, its ← chip, a click on the canvas, a key row and ⌘[ / ⌘]
+all move it, and nothing is stranded."""
 
 import itertools
 import json
@@ -11,7 +13,7 @@ from imgui_bundle import imgui, implot
 from test_ui_shell import build_rig, frame
 from ui_driver import Driver
 
-from hyperspace import ui, ui_bands, ui_graph, ui_pane, ui_presets
+from hyperspace import ui, ui_bands, ui_graph, ui_kit, ui_loadable, ui_pane
 from hyperspace.analyzer import N_MAX
 from hyperspace.ui import PAGE_KEYS
 
@@ -19,7 +21,7 @@ WIDE = (1600, 900)      # a page wider than ui_graph.WIDE: the pane beside the c
 
 # a control each section draws, by the id its page draws it under
 SECTION_IDS = {
-    "presets": "new##new",           # the preset strip's new chip (ui_presets.strip)
+    "loadable": "new##new",           # the preset strip's new chip (ui_loadable.strip)
     "lookback": "dream.on",
     "faces": "view.faces",
     "analyzer": "scene.select",
@@ -53,44 +55,63 @@ def test_the_pane_is_on_with_nothing_selected_and_says_so(pane, monkeypatch):
     st = _st(r)
     assert r.panel.graph_selected is None
     assert st["details_rect"] is not None            # the pane, with nothing selected
-    assert {"pane.selection", "pane.presets", "pane.lookback", "pane.faces",
-            "pane.analyzer"} <= set(d.rects)
+    assert {f"pane.{k}" for k in ui_pane.TABS} | {"pane.sections"} <= set(d.rects)
     said: list[str] = []
     real = imgui.text_wrapped
     monkeypatch.setattr(imgui, "text_wrapped", lambda s, *a: (said.append(s), real(s, *a)))
     d.run(d.wait(1))
     assert ui_pane.NOTHING in said
-    assert st["pane_drawn"] == ["selection", "presets"]      # the defaults (rec)
+    assert st["pane_drawn"] == ["selection"]                 # the launch's view
+    assert ui_pane.showing(r.panel) == ui_pane.SELECTION
+
+
+def test_every_view_has_a_chip_or_a_menu_row_and_one_route_each():
+    """Nothing stranded (Dillon, 2026-11-07): the selection and every
+    section reachable by the mouse — its own chip, or a row of the sections
+    menu — and by `ui.page` (so by ⌘[ / ⌘], a key row, a pad)."""
+    assert set(ui_pane.TABS) | set(ui_pane.MENU) == set(ui_pane.KEYS)
+    assert not set(ui_pane.TABS) & set(ui_pane.MENU)
+    assert ui_pane.MENU == tuple(k for k in ui_pane.KEYS if k in ui_pane.MENU)   # in order
+    for k in ui_pane.KEYS:
+        assert ui_pane.section_of(PAGE_KEYS[ui_pane.slot_of(k)]) == k
+
+
+@pytest.mark.parametrize("key", [k for k in ui_pane.KEYS if k != "selection"])
+def test_every_view_comes_up_by_the_mouse_alone(pane, key):
+    """Each section, from the selection, by its chip or by the sections
+    chip and its row: shown alone, its chip lit, `ui.page` saying so — and
+    the selection's chip brings the selection back."""
+    r, d = pane
+    st = _st(r)
+    d.run(_click_view(d, key), d.wait(2))
+    assert ui_pane.showing(r.panel) == key and st["pane_drawn"] == [key]
+    assert r.reg["ui.page"].value == PAGE_KEYS.index(key)
+    d.run(d.click("pane.selection"), d.park(), d.wait(1))
+    assert ui_pane.showing(r.panel) == "selection" and st["pane_drawn"] == ["selection"]
 
 
 @pytest.mark.parametrize("key", sorted(SECTION_IDS))
-def test_each_section_opens_by_a_click_and_its_controls_are_found_by_id(pane, key):
+def test_each_section_shown_by_a_click_has_its_controls_found_by_id(pane, key):
     r, d = pane
     st = _st(r)
     pid = SECTION_IDS[key]
-    if key == "presets":                             # open by default: fold it first
-        d.run(d.click("pane.presets"), d.park())
-        assert "presets" not in st["pane_drawn"]
-    else:
-        assert "pane." + key in d.rects and key not in st["pane_drawn"]
-        with pytest.raises(KeyError):
-            d.rect(pid)
-    if key != "presets":
-        d.run(d.click("pane.presets"), d.park())     # room for the one under test
-    d.run(d.click("pane." + key), d.park(), d.wait(1))
-    assert key in st["pane_drawn"]
+    if pid == "new##new" and ui_kit.ready():
+        pid = "strip.loadable:new"      # the kit strip's (ui_strip): a Button has no words in its id
+    assert key not in st["pane_drawn"]
+    with pytest.raises(KeyError):
+        d.rect(pid)
+    d.run(_click_view(d, key), d.wait(1))
+    assert st["pane_drawn"] == [key]
     assert _inside(d.rect(pid), st["details_rect"])   # drawn in the pane, under its page's id
 
 
 def test_a_click_in_a_section_moves_the_param_as_on_its_page(pane):
     r, d = pane
-    d.run(d.click("pane.faces"), d.park(), d.wait(1))
+    d.run(_click_view(d, "faces"), d.wait(1))
     was = bool(r.reg["view.faces"].base)
     d.run(d.click("view.faces"), d.park())
     assert bool(r.reg["view.faces"].base) is (not was)
-    # (the lookback section alone open: the dream's head, where its switch
-    # is, is far enough down that a shared body scrolls it out of view)
-    _only(_st(r), "lookback")
+    _only(r, "lookback")
     d.step = _tall_driver(r, None).step     # (a pane tall enough for the whole section)
     d.run(d.wait(3))
     was = bool(r.reg["dream.on"].base)
@@ -98,7 +119,7 @@ def test_a_click_in_a_section_moves_the_param_as_on_its_page(pane):
     assert bool(r.reg["dream.on"].base) is (not was)
 
 
-def test_a_selection_shows_in_the_selection_section(pane):
+def test_a_selection_shows_in_the_selection_view(pane):
     r, d = pane
     st = _st(r)
     view = ui_graph.view_of(r.panel)
@@ -107,87 +128,213 @@ def test_a_selection_shows_in_the_selection_section(pane):
     d.run(d.wait(3))
     assert r.panel.graph_selected == node.id
     assert ui_graph._selection(st, st["view"])[1].id == node.id
-    assert "selection" in st["pane_drawn"]
+    assert st["pane_drawn"] == ["selection"]
 
 
-def test_a_new_selection_leaves_the_fold_alone_and_its_header_names_it(pane, monkeypatch):
-    """Review fix 7: only a click unfolds a section; a folded selection's
-    header says what is selected."""
+def test_a_selection_by_code_leaves_the_view_and_its_chip_is_its_name(pane):
+    """A section being worked in stays when something else selects a node
+    (OUTPUT's open on GRAPH, a controller); the selection's chip is one
+    click away, and says SELECTION alone (Dillon, 2026-11-09)."""
     r, d = pane
     st = _st(r)
-    d.run(d.click("pane.selection"), d.park())
-    assert "selection" not in st["pane_drawn"]
+    d.run(d.click("pane.loadable"), d.park())
     view = ui_graph.view_of(r.panel)
     node = next(n for n in view.nodes if n.label)
     r.panel.select_graph_node(node.id)
     d.run(d.wait(3))
-    assert "selection" not in st["pane_drawn"]
-    head = next(k for k in d.rects if k.endswith("##pane.selection"))
-    assert ui_graph.sel_words(("node", node))[:4] in head
+    assert st["pane_drawn"] == ["loadable"]
+    # the chip's words are its name alone; on the kit the tab is an icon
+    # and its name is in its tooltip (test_what_a_chip_would_say_live…)
+    assert ("pane.selection" if ui_kit.ready() else "SELECTION##pane.selection") in d.rects
 
 
-def test_the_fold_state_round_trips_through_this_macs_ui_json(pane):
+def _node_point(monkeypatch, st) -> dict:
+    """Each frame: a node drawn on the canvas, left of the pane, as (its id,
+    a screen point inside its title) — read while the editor draws."""
+    from imgui_bundle import imgui_node_editor as ed
+    seen: dict = {}
+    real = ui_graph._moved
+
+    def moved(panel, st_, view):
+        left = st_["details_rect"][0][0] if st_.get("details_rect") else 1e9
+        for n in view.nodes:
+            if n.kind == "modifier" or not ui_graph.drawn_node(st_, n):
+                continue
+            at = ed.canvas_to_screen(ed.get_node_position(ed.NodeId(ui_graph._id(st_, "n:" + n.id))))
+            if 0 < at.x + 12 < left - 20 and at.y > 0:
+                seen["node"] = (n.id, (at.x + 12, at.y + 8))
+                break
+        return real(panel, st_, view)
+    monkeypatch.setattr(ui_graph, "_moved", moved)
+    return seen
+
+
+def test_a_click_on_a_node_shows_the_selection(pane, monkeypatch):
+    """The mouse on the canvas: a node clicked while a section is up brings
+    the selection view up with it; a click on the bare canvas, which selects
+    nothing, leaves the view as it is."""
     r, d = pane
     st = _st(r)
+    seen = _node_point(monkeypatch, st)
+    d.run(d.click("pane.loadable"), d.park(), d.wait(2))
+    assert st["pane_drawn"] == ["loadable"] and "node" in seen
+    nid, at = seen["node"]
+    d.run(d.click(at), d.wait(3))
+    assert r.panel.graph_selected == nid
+    assert ui_pane.showing(r.panel) == "selection" and st["pane_drawn"] == ["selection"]
+    d.run(d.click("pane.loadable"), d.park(), d.wait(1))
+    (px, py), _size = st["details_rect"]
+    d.run(d.click((px - 6, py + 6)), d.wait(3))       # the bare canvas by the pane's corner
+    assert r.panel.graph_selected is None
+    assert ui_pane.showing(r.panel) == "loadable"
+
+
+def test_open_on_shows_the_nodes_section_and_its_back_chip_returns(pane):
+    """A node's **open on …** shows its section at the pane's height, with a
+    ← chip back to the node; a section the node does not lead to has none."""
+    r, d = pane
+    st = _st(r)
+    view = ui_graph.view_of(r.panel)
+    node, home = next((n, ui_graph.home_page(n)) for n in view.nodes
+                      if ui_graph.home_page(n) is not None)
+    r.panel.select_graph_node(node.id)
+    d.run(d.wait(3))
+    d.run(d.click("graph.side.open"), d.park(), d.wait(2))
+    assert ui_pane.showing(r.panel) == home[0] and st["pane_drawn"] == [home[0]]
+    assert "pane.back" in d.rects
+    d.run(d.click("pane.back"), d.park(), d.wait(2))
+    assert ui_pane.showing(r.panel) == "selection" and r.panel.graph_selected == node.id
+    assert "pane.back" not in d.rects
+    other = next(k for k in ui_pane.TABS if k not in ("selection", home[0]))
+    d.run(d.click(f"pane.{other}"), d.park(), d.wait(1))
+    assert "pane.back" not in d.rects
+
+
+def test_cmd_brackets_walk_back_and_forth_through_every_view(pane):
+    """⌘[ / ⌘] (`ui.PageHistory`, noted each frame by app.frame as
+    `ui.view_of`, stepped by `ui.go_view`) through views brought up every
+    way — a chip, a menu row, a node's open on …, its ← chip — and through
+    the nodes the selection view showed, each one selected again."""
+    r, d = pane
+    p = r.panel
+    hist = p.history = ui.PageHistory(ui.view_of(p))       # the selection, as at launch
+
+    def note(frames=1):
+        for _ in range(frames):
+            yield
+            hist.note(ui.view_of(p))
+
+    def step(by):
+        view = hist.step(by)
+        assert view is not None
+        ui.go_view(p, view)
+        d.run(note(4))
+        assert ui.view_of(p) == view
+        return ui_pane.showing(p), p.graph_selected
+
+    view = ui_graph.view_of(p)
+    picked = [n for n in view.nodes if n.kind != "modifier" and ui_graph.home_page(n) is not None
+              and ui_graph.drawn_node(_st(r), n)]       # (one the canvas can select)
+    a, b = picked[0], next(n for n in picked[1:] if n.id != picked[0].id)
+    home = ui_graph.home_page(b)[0]
+    d.run(_click_view(d, "loadable"), note())
+    d.run(_click_view(d, "lfo"), note())
+    p.select_graph_node(a.id)                          # by code, in a section: no step
+    d.run(note(3))
+    d.run(d.click("pane.selection"), d.park(), note(2))
+    p.select_graph_node(b.id)                          # in the selection's view: a step
+    d.run(note(3))
+    d.run(d.click("graph.side.open"), d.park(), note(2))
+    d.run(d.click("pane.back"), d.park(), note(2))
+    assert len(hist.visited) == 7
+    assert step(-1) == (home, b.id)
+    assert step(-1) == ("selection", b.id)
+    assert step(-1) == ("selection", a.id)             # A selected and centred again
+    assert step(-1)[0] == "lfo"
+    assert step(-1)[0] == "loadable"
+    assert step(-1) == ("selection", None)             # launch: nothing selected
+    assert hist.step(-1) is None
+    assert step(1)[0] == "loadable"
+    assert step(1)[0] == "lfo"
+    assert step(1) == ("selection", a.id)
+
+
+def test_a_step_waits_for_its_selection_and_keeps_the_forward_run():
+    """The history alone: a step to a node's view waits for the node to be
+    selected; one whose node never comes (deleted since) takes what landed
+    in its place, and the forward run is kept; another slot noted while it
+    waits is a new visit at once."""
+    g = PAGE_KEYS.index("graph")
+    h = ui.PageHistory((g, None))
+    for v in ((g, "a"), (g, "b"), (3, None)):
+        h.note(v)
+    assert h.step(-1) == (g, "b")
+    h.note((3, None))                                  # (the page set, not the node: another slot)
+    assert h.visited[-1] == (3, None) and h.at == 3
+    h = ui.PageHistory((g, None))
+    for v in ((g, "a"), (g, "b"), (3, None)):
+        h.note(v)
+    h.step(-1)
+    assert h.step(-1) == (g, "a")
+    for _ in range(ui.SETTLE_NOTES):
+        h.note((g, "b"))                               # "a" not landed yet: nothing moves
+    assert h.visited == [(g, None), (g, "a"), (g, "b"), (3, None)]
+    h.note((g, "b"))                                   # never came: what landed, in its place,
+    assert h.visited == [(g, None), (g, "b"), (3, None)] and h.at == 1    # one "b", not two
+    assert h.step(1) == (3, None)                      # ⌘] goes forward at the first press
+    assert ui.PageHistory(4).visited == [(4, None)]    # a bare slot, as before
+
+
+def test_the_view_writes_nothing_and_an_old_fold_file_is_left_alone(pane):
+    """Which view is up is not kept: a click writes nothing to ui.json, and a
+    file from the folding pane keeps its ``pane`` key untouched beside the
+    width."""
+    r, d = pane
     machine = r.lib.machine
-    d.run(d.click("pane.analyzer"), d.park(), d.click("pane.presets"), d.park())
-    assert not (machine / ui_pane.UI_FILE).exists()      # not yet: a click is written later
-    assert ui_pane.flush(st, force=True)
-    doc = json.loads((machine / ui_pane.UI_FILE).read_text())
-    assert doc["pane"]["open"]["analyzer"] is True and doc["pane"]["open"]["presets"] is False
-    assert ui_pane.read_open(machine) == dict(ui_pane.DEFAULT_OPEN, analyzer=True,
-                                              presets=False)
-    # a fresh page state (a relaunch) reads it back
-    st.pop("pane_open")
-    d.run(d.wait(2))
-    assert st["pane_drawn"] == ["selection", "analyzer"]
-    # the width beside it is kept by a drag's write, and the fold by a click's
+    old = {"pane": {"open": {"selection": True, "faces": True}}, "graph": {"side_w": 300}}
+    (machine / ui_pane.UI_FILE).write_text(json.dumps(old))
+    d.run(d.click("pane.loadable"), d.park(), _click_view(d, "analyzer"), d.wait(3))
+    assert json.loads((machine / ui_pane.UI_FILE).read_text()) == old
     ui_graph.write_side(machine, 400.0)
     doc = json.loads((machine / ui_pane.UI_FILE).read_text())
-    assert doc["graph"]["side_w"] == 400.0 and doc["pane"]["open"]["analyzer"] is True
-    ui_pane.write_open(machine, ui_pane.read_open(machine))
-    assert ui_graph.read_side(machine) == 400.0
+    assert doc["graph"]["side_w"] == 400.0 and doc["pane"] == old["pane"]
 
 
 def test_a_bad_ui_json_costs_only_the_memory(tmp_path):
-    assert ui_pane.read_open(tmp_path) == ui_pane.DEFAULT_OPEN          # no file
+    assert ui_pane.read_doc(tmp_path) == {}                            # no file
     (tmp_path / ui_pane.UI_FILE).write_text("[1, 2]")
-    assert ui_pane.read_open(tmp_path) == ui_pane.DEFAULT_OPEN          # not an object
-    (tmp_path / ui_pane.UI_FILE).write_text(
-        '{"pane": {"open": {"faces": true, "analyzer": "yes", "nope": true}}, "x": 1}')
-    got = ui_pane.read_open(tmp_path)
-    assert got["faces"] is True and got["analyzer"] is False and "nope" not in got
-    ui_pane.write_open(tmp_path, got)
-    assert json.loads((tmp_path / ui_pane.UI_FILE).read_text())["x"] == 1   # the rest kept
-    ui_pane.write_open(tmp_path / "missing" / "dir", got)                # no raise
-    assert ui_pane.read_open(None) == ui_pane.DEFAULT_OPEN
+    assert ui_pane.read_doc(tmp_path) == {}                            # not an object
+    ui_pane.write_key(tmp_path / "missing" / "dir", "x", 1)            # no raise
 
 
-def test_open_bodies_share_the_pane():
-    assert ui_pane.body_height(600.0, 2) == 300.0
-    assert ui_pane.body_height(200.0, 3) == ui_pane.MIN_BODY_H
-    assert ui_pane.body_height(600.0, 0) == 0.0
-
-
-def test_every_section_open_draws_with_no_conflicting_ids(pane, monkeypatch):
-    """All of them open at once: each widget its own imgui id (the label
-    hashed under the id stack), though the sections reuse their pages'
-    labels and two of them draw preset strips."""
-    r, _d = pane
+def test_the_body_has_the_whole_pane_under_the_chips(pane, monkeypatch):
+    """One view at a time, at all the height under the chips: the body's
+    child reaches the pane's foot, whatever section it is."""
+    r, d = pane
     st = _st(r)
-    ui_pane.opened(st).update(dict.fromkeys(ui_pane.KEYS, True))
+    got = {}
+    real = r.panel._page_system
+
+    def system(dt):
+        p, s = imgui.get_window_pos(), imgui.get_window_size()
+        got["body"] = (p.y, p.y + s.y)
+        return real(dt)
+    monkeypatch.setattr(r.panel, "_page_system", system)
+    d.run(d.click("pane.system"), d.park(), d.wait(2))
+    (_x, y), (_w, h) = st["details_rect"]
+    top, foot = got["body"]
+    assert d.rect("pane.system")[3] <= top and abs(foot - (y + h)) <= 12
+    assert foot - top > h - 120                        # the chips' rows and the rule only
+
+
+def test_one_body_at_a_time_draws_with_no_conflicting_ids(pane, monkeypatch):
+    """Each view in turn, the sections menu open: every widget its own
+    imgui id (the label hashed under the id stack), though the bodies reuse
+    their pages' labels, the chips and the menu rows share ``##pane.<key>``
+    and two sections draw preset strips."""
+    r, d = pane
     view = ui_graph.view_of(r.panel)
     r.panel.select_graph_node(view.nodes[0].id)
-
-    def tall() -> None:                 # a window tall enough for every body unscrolled
-        imgui.get_io().display_size = imgui.ImVec2(1600, 4000)
-        imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(1576, 3976))
-        r.panel.draw(1 / 60, 60.0)
-        imgui.end_frame()
-    for _ in range(3):
-        tall()
-    assert st["pane_drawn"] == list(ui_pane.KEYS)
     ids: list[tuple[int, str]] = []
     for fn in ("button", "checkbox", "slider_float", "slider_int", "combo",
                "invisible_button", "small_button", "selectable"):
@@ -197,82 +344,36 @@ def test_every_section_open_draws_with_no_conflicting_ids(pane, monkeypatch):
             ids.append((imgui.get_id(label), label))
             return _real(label, *a, **k)
         monkeypatch.setattr(imgui, fn, rec)
-    tall()
-    seen = [i for i, _ in ids]
-    dup = {lb for i, lb in ids if seen.count(i) > 1}
-    assert not dup, f"conflicting ids {sorted(dup)}"
+    d.run(d.click("pane.sections"), d.park(), d.wait(1))
+    for key in ui_pane.KEYS:
+        _only(r, key)
+        d.run(d.wait(2))
+        ids.clear()
+        d.step()                        # one frame's ids
+        seen = [i for i, _ in ids]
+        dup = {lb for i, lb in ids if seen.count(i) > 1}
+        assert not dup, (key, sorted(dup))
 
 
 def test_the_pages_still_draw_their_bodies(pane):
-    """The rail and the pages are untouched: each page whose body a
-    section shares still draws it, at full height."""
+    """Each section's body is its page's draw, at the pane's height."""
     r, _d = pane
-    for key in ("presets", "lookback", "faces", "analyzer"):
+    for key in ("loadable", "lookback", "faces", "analyzer"):
         frame(r.panel, key)
         frame(r.panel, key)
-        assert PAGE_KEYS[r.panel.page] == key
+        assert PAGE_KEYS[r.panel.page] == key and _st(r)["pane_drawn"] == [key]
     frame(r.panel, "graph")
 
 
-def test_a_fold_is_written_after_the_last_click_and_on_close(tmp_path):
-    """Review fix 7: no write on the click's frame; one `WRITE_AFTER_S`
-    after the last change, or at once when the page closes."""
-    st = {"machine": tmp_path}
-    ui_pane.set_open(st, "faces", True, now=10.0)
-    assert not ui_pane.flush(st, now=10.0 + ui_pane.WRITE_AFTER_S / 2)
-    ui_pane.set_open(st, "analyzer", True, now=10.3)          # a second click: the clock again
-    assert not ui_pane.flush(st, now=10.0 + ui_pane.WRITE_AFTER_S)
-    assert ui_pane.flush(st, now=10.3 + ui_pane.WRITE_AFTER_S)
-    assert ui_pane.read_open(tmp_path)["analyzer"] is True
-    assert not ui_pane.flush(st, force=True)                   # nothing left
-    ui_pane.set_open(st, "faces", False, now=20.0)
-    assert ui_pane.flush(st, force=True)
-    assert ui_pane.read_open(tmp_path)["faces"] is False
-
-
-def test_a_library_attached_late_has_its_fold_read_then(tmp_path, monkeypatch):
-    """Review fix 4: GRAPH drawn before the library is attached shows the
-    defaults, then reads this Mac's file the first frame the machine is
-    known."""
-    with build_rig(tmp_path) as r:
-        machine = r.lib.machine
-        ui_pane.write_open(machine, dict(ui_pane.DEFAULT_OPEN, faces=True))
-        r.panel.desk = False
-        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
-        lib, r.panel.library = r.panel.library, None
-        for _ in range(2):
-            frame(r.panel, "graph")
-        st = _st(r)
-        assert st["machine"] is None and "faces" not in st["pane_drawn"]
-        ui_pane.set_open(st, "analyzer", True)       # a click before the library is there
-        r.panel.library = lib
-        for _ in range(2):
-            frame(r.panel, "graph")
-        assert st["machine"] == machine
-        # the file's fold and the click both kept (review round 2); (plan 49
-        # stage 2: with twelve headers the analyzer's body may be scrolled
-        # out of the pane's view, so its fold is read, not its draw)
-        assert "faces" in st["pane_drawn"]
-        assert ui_pane.opened(st)["faces"] and ui_pane.opened(st)["analyzer"]
-        assert ui_pane.flush(st, force=True)
-        got = ui_pane.read_open(machine)
-        assert got["faces"] is True and got["analyzer"] is True
-
-
-def test_the_grip_holds_its_edge_while_the_pane_scrolls(pane):
-    """Review fix 1: with every section open the column scrolls; its range
-    stays put frame after frame (the grip adds no content), and a drag on
-    the edge still resizes it, scrolled or not."""
+def test_the_pane_never_scrolls_and_the_grip_still_drags(pane):
+    """Review fix 1, now: the pane's column holds the chips and one body
+    that scrolls by itself, so the column has no range to scroll, the
+    longest section up or not; a drag on the edge still resizes it."""
     r, d = pane
     st = _st(r)
-    ui_pane.opened(st).update(dict.fromkeys(ui_pane.KEYS, True))
-    d.run(d.wait(3))
+    d.run(d.click("pane.routing"), d.park(), d.wait(3))
     win = imgui.internal.find_window_by_name(st["pane_window"])
-    assert win.scroll_max.y > 0
-    first = win.scroll_max.y
-    win.scroll.y = win.scroll_max.y
-    d.run(d.wait(5))
-    assert win.scroll_max.y == first
+    assert win.scroll_max.y == 0
     (x, y), (_w, h) = st["details_rect"]
     io = imgui.get_io()
     side = st["side_w"]
@@ -288,31 +389,31 @@ def test_the_grip_holds_its_edge_while_the_pane_scrolls(pane):
     assert not st["side_drag"] and ui_graph.read_side(r.lib.machine) == side + 40.0
 
 
-def test_the_narrow_band_opens_selection_alone_and_one_section_takes_it_all(
-        tmp_path, monkeypatch):
-    """Review fix 2: on the control window's narrow page the pane is the
-    band under the canvas, with its own fold state — selection alone at
-    first — the headers one row, and an open section the band's height."""
+def test_the_narrow_band_holds_the_chips_and_one_view(tmp_path, monkeypatch):
+    """Review fix 2, now: on the control window's narrow page the pane is
+    the band under the canvas — `BELOW_H` for the selection, its chips in
+    rows inside it in reading order; a section shown grows it, and the
+    selection's chip brings it back."""
     with build_rig(tmp_path) as r:
         d = Driver(step=lambda: frame(r.panel, "graph"))    # the rig's 820 px window
         d.record(monkeypatch.setattr)
         d.run(d.wait(3))
         st = _st(r)
-        _pos, (_w, h) = st["details_rect"]
-        assert h == ui_graph.BELOW_H
+        assert st["details_rect"][1][1] == ui_graph.BELOW_H
         assert st["pane_drawn"] == ["selection"]
-        heads = [d.rect("pane." + k) for k in ui_pane.KEYS]
-        # (plan 49 stage 2: twelve chips wrap to rows, each inside the band)
+        heads = [d.rect(f"pane.{k}") for k in ui_pane.TABS] + [d.rect("pane.sections")]
         (bx, _by), (bw, _bh) = st["details_rect"]
         assert all(bx <= rc[0] and rc[2] <= bx + bw + 1 for rc in heads)
         rows = sorted({round(rc[1]) for rc in heads})
-        assert 1 < len(rows) <= 3
+        assert 1 <= len(rows) <= 3
         assert [round(rc[1]) for rc in heads] == sorted(round(rc[1]) for rc in heads)
-        d.run(d.click("pane.selection"), d.park(), d.click("pane.presets"), d.park())
-        assert st["pane_drawn"] == ["presets"]
-        assert ui_pane.opened(st, "open") == ui_pane.DEFAULT_OPEN    # beside: untouched
-        ui_pane.flush(st, force=True)
-        assert ui_pane.read_open(r.lib.machine, "below")["presets"] is True
+        d.step = lambda: frame(r.panel)
+        d.run(d.click("pane.loadable"), d.park(), d.wait(2))
+        assert st["pane_drawn"] == ["loadable"]
+        assert st["details_rect"][1][1] > ui_graph.BELOW_H
+        d.run(d.click("pane.selection"), d.park(), d.wait(2))
+        assert st["pane_drawn"] == ["selection"]
+        assert st["details_rect"][1][1] == ui_graph.BELOW_H
 
 
 def test_the_strip_budgets_the_devices_missing_chip(tmp_path):
@@ -320,11 +421,11 @@ def test_the_strip_budgets_the_devices_missing_chip(tmp_path):
     with build_rig(tmp_path):
         imgui.new_frame()
         chips = ("new", "save", "as…")
-        full = ui_presets.strip_name_w(1000.0, chips, False)
-        assert full == ui_presets.name_w()
-        narrow = ui_presets.strip_name_w(300.0, chips, False)
-        assert ui_presets.strip_name_w(300.0, chips, False, 60.0) == max(
-            ui_presets.NAME_MIN, narrow - 60.0)
+        full = ui_loadable.strip_name_w(1000.0, chips, False)
+        assert full == ui_loadable.name_w()
+        narrow = ui_loadable.strip_name_w(300.0, chips, False)
+        assert ui_loadable.strip_name_w(300.0, chips, False, 60.0) == max(
+            ui_loadable.NAME_MIN, narrow - 60.0)
         imgui.end_frame()
 
 
@@ -349,7 +450,6 @@ def test_the_projector_inset_keeps_clear_of_the_pane(tmp_path, monkeypatch):
         r.panel.desk = False
         imgui.get_io().display_size = imgui.ImVec2(*WIDE)
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(WIDE[0] - 24, WIDE[1] - 24))
         r.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
         (px, py), (_pw, _ph) = st["details_rect"]
@@ -381,8 +481,26 @@ def _with_seq(r):
     r.panel.envs, r.panel.seq = envs, seq
 
 
-def _only(st, key, layout="open"):
-    ui_pane.opened(st, layout).update({k: k == key for k in ui_pane.KEYS})
+def _only(r, key):
+    """Section `key` the pane's view, as its chip or its menu row would."""
+    ui_pane.show(r.panel, key)
+
+
+def _chip(key: str) -> str:
+    """The id of the chip that lights for view `key`: its own, or the
+    sections chip for one of the menu's."""
+    return "pane.sections" if key in ui_pane.MENU else f"pane.{key}"
+
+
+def _click_view(d, key: str):
+    """Bring view `key` up by the mouse: its chip, or the sections chip and
+    then its row in the menu."""
+    if key in ui_pane.MENU:
+        yield from d.click("pane.sections")
+        yield from d.park()
+        yield from d.wait(1)
+    yield from d.click(f"pane.{key}")
+    yield from d.park()
 
 
 def _spills(d, st) -> list[tuple[str, float]]:
@@ -400,7 +518,6 @@ def _tall_driver(r, monkeypatch, size=(1600, 2400)):
     def tall() -> None:
         imgui.get_io().display_size = imgui.ImVec2(*size)
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(size[0] - 24, size[1] - 24))
         r.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
     d = Driver(step=tall)
@@ -425,7 +542,7 @@ def test_each_stage2_section_draws_in_the_pane_and_nothing_passes_its_edge(
         d.run(d.wait(2))
         st = _st(r)
         st["side_w"] = ui_graph.SIDE_MIN if width == "min" else ui_graph.SIDE_W
-        _only(st, key)
+        _only(r, key)
         d.run(d.wait(3))
         assert st["pane_drawn"] == [key]
         assert _inside(d.rect(STAGE2_IDS[key]), st["details_rect"])
@@ -443,7 +560,7 @@ def test_the_redrawn_lookback_section_keeps_inside_the_narrowest_pane(tmp_path, 
         d.run(d.wait(2))
         st = _st(r)
         st["side_w"] = ui_graph.SIDE_MIN
-        _only(st, "lookback")
+        _only(r, "lookback")
         d.run(d.wait(3))
         assert _spills(d, st) == []
         fade, gap = d.rect("dream.fade"), d.rect("dream.gap")
@@ -466,12 +583,12 @@ def test_the_media_grid_goes_four_to_a_row_and_the_seq_grid_thins_in_the_pane(
         d.run(d.wait(2))
         st = _st(r)
         st["side_w"] = ui_graph.SIDE_MIN
-        _only(st, "media")
+        _only(r, "media")
         d.run(d.wait(3))
         cells = ui_media._state(r.panel)["rects"]
         a, e, d_ = cells[("cell", "a", 0)], cells[("cell", "e", 0)], cells[("cell", "d", 0)]
         assert e[1] > a[3] and abs(e[0] - a[0]) < 1 and d_[1] == a[1]   # E under A, D beside
-        _only(st, "seq")
+        _only(r, "seq")
         d.run(d.wait(3))
         one, eight = d.rect("seq.1.1"), d.rect("seq.1.8")
         assert one[1] == eight[1]                              # the eight across
@@ -479,107 +596,72 @@ def test_the_media_grid_goes_four_to_a_row_and_the_seq_grid_thins_in_the_pane(
         assert _spills(d, st) == []
 
 
-def test_ui_page_on_fx_focuses_the_fx_section_and_every_slot_keeps_its_index(pane):
+def test_ui_page_on_fx_shows_the_fx_section_and_every_slot_keeps_its_index(pane):
     """The FX page went with stage 2; its slot stays, so a key row or an old
-    show that names it lands on the effects: `ui.page` set to FX focuses
-    the fx section. The slots are the ones every saved binding names."""
+    show that names it lands on the effects: `ui.page` set to FX shows the
+    fx section. The slots are the ones every saved binding names."""
     r, d = pane
     st = _st(r)
     assert PAGE_KEYS == [
         "output", "view", "faces", "media", "camera", "lookback", "fx", "audio", "analyzer",
-        "routing", "graph", "lfo", "seq", "hands", "presets", "system", "players"]
+        "routing", "graph", "lfo", "seq", "hands", "loadable", "system", "players", "playlist"]
     fx = PAGE_KEYS.index("fx")
     assert "fx" not in st["pane_drawn"]
     r.reg["ui.page"].set(fx)
     assert PAGE_KEYS[r.panel.page] == "fx"
     d.run(d.wait(3))
-    assert ui_pane.focused(r.panel) == "fx" and "fx" in st["pane_drawn"]
+    assert ui_pane.showing(r.panel) == "fx" and st["pane_drawn"] == ["fx"]
     assert _inside(d.rect("fx.on"), st["details_rect"])
     # set straight, not through the param (⌘[ / ⌘]'s history): the same
     r.panel.page = PAGE_KEYS.index("lfo")
     d.run(d.wait(3))
-    assert ui_pane.focused(r.panel) == "lfo" and "lfo" in st["pane_drawn"]
-    assert "fx" not in st["pane_drawn"]
+    assert ui_pane.showing(r.panel) == "lfo" and st["pane_drawn"] == ["lfo"]
 
 
-def test_every_page_slot_but_graph_is_a_section():
+def test_every_page_slot_but_graph_and_playlist_is_a_section():
     """No page is left to switch to: the table `ui.page` indexes names a
-    section in every slot, GRAPH's being the canvas that is always drawn."""
-    assert ui_pane.section_of("graph") is None
-    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) is None} == {"graph"}
+    section in every slot, GRAPH's being the selection (the canvas is always
+    drawn). The playlist's slot is kept for saved bindings, but it is the meta
+    controller's now (row 858: GRAPH's deck row), so it shows the selection."""
+    assert ui_pane.section_of("graph") == "selection"
+    assert {k for k in PAGE_KEYS if ui_pane.section_of(k) != k} == {"graph", "playlist"}
     assert set(ui_pane.KEYS) - set(PAGE_KEYS) == {"selection"}
 
 
-def test_focus_unfolds_only_while_it_holds_and_never_touches_the_fold(pane):
-    """The focused section shows however it is folded and folds back when
-    the focus moves on or lets go; nothing is written: a walk through the
-    sections leaves no pile of open ones, on screen or in ui.json."""
+def test_a_walk_through_the_views_shows_one_at_a_time(pane):
+    """A key row or a pad stepping through sections: each shown alone, the
+    one before gone; GRAPH's slot is the selection again."""
     r, d = pane
     st = _st(r)
-    before = dict(ui_pane.opened(st))
     for key in ("lfo", "seq", "audio"):
         r.reg["ui.page"].set(PAGE_KEYS.index(key))
-        d.run(d.wait(3))
-        assert key in st["pane_drawn"], key
-    assert "lfo" not in st["pane_drawn"] and "seq" not in st["pane_drawn"]
-    assert ui_pane.opened(st) == before and not st.get("pane_dirty")
+        d.run(d.wait(2))
+        assert st["pane_drawn"] == [key], key
     r.reg["ui.page"].set(PAGE_KEYS.index("graph"))
     d.run(d.wait(2))
-    assert ui_pane.focused(r.panel) is None and st["pane_drawn"] == ["selection", "presets"]
-
-
-def test_a_click_on_the_focused_header_lets_go_and_on_another_leaves_it(pane):
-    r, d = pane
-    st = _st(r)
-    r.reg["ui.page"].set(PAGE_KEYS.index("lfo"))
-    d.run(d.wait(3))
-    d.run(d.click("pane.camera"), d.park())
-    assert ui_pane.focused(r.panel) == "lfo" and ui_pane.opened(st)["camera"]
-    d.run(d.wait(2))
-    d.run(d.click("pane.lfo"), d.park())
-    assert ui_pane.focused(r.panel) is None and "lfo" not in st["pane_drawn"]
-    assert ui_pane.opened(st)["camera"]                       # a click's: kept
+    assert ui_pane.showing(r.panel) == "selection" and st["pane_drawn"] == ["selection"]
 
 
 def test_setting_the_same_slot_again_brings_the_section_back(pane):
-    """A key row pressed twice, the section folded by a click between: the
-    second press focuses it again."""
+    """A key row pressed twice, the selection's chip clicked between: the
+    second press shows the section again."""
     r, d = pane
     st = _st(r)
     k = PAGE_KEYS.index("seq")
     r.reg["ui.page"].set(k)
     d.run(d.wait(3))
-    d.run(d.click("pane.seq"), d.park())
-    assert ui_pane.focused(r.panel) is None
+    d.run(d.click("pane.selection"), d.park())
+    assert ui_pane.showing(r.panel) == "selection"
     r.reg["ui.page"].set(k)
     d.run(d.wait(3))
-    assert ui_pane.focused(r.panel) == "seq" and "seq" in st["pane_drawn"]
+    assert ui_pane.showing(r.panel) == "seq" and st["pane_drawn"] == ["seq"]
 
 
-def test_the_focused_section_lands_at_the_top_of_the_pane_with_room(tmp_path, monkeypatch):
-    """Selection and presets open above it, the pane shorter than the lot:
-    the focused header scrolls to the pane's top, its body runs down to the
-    headers after it, and those stay in view."""
-    with build_rig(tmp_path) as r:
-        r.panel.desk = False
-        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
-        d = Driver(step=lambda: frame(r.panel))
-        d.record(monkeypatch.setattr)
-        r.reg["ui.page"].set(PAGE_KEYS.index("view"))
-        d.run(d.wait(4))
-        st = _st(r)
-        (_x, y), (_w, h) = st["details_rect"]
-        head = d.rect("pane.view")
-        assert y <= head[1] <= y + 24                         # at the top of the pane
-        assert d.rect("pane.system")[3] <= y + h              # the last header still in view
-        assert d.rect("pane.fx")[1] - head[3] >= ui_pane.MIN_BODY_H   # the body's room
-
-
-def test_the_band_grows_for_the_focused_section_and_only_it_draws(tmp_path, monkeypatch):
-    """The desk's narrow panel: the band under the canvas holds the focused
-    section alone, all but `CANVAS_MIN` of the page, the chips above it; a
-    click on a chip lets go and the band is `BELOW_H` again. The column
-    beside the canvas keeps its folds."""
+def test_the_band_grows_for_a_section_and_its_chips_stay_live(tmp_path, monkeypatch):
+    """The desk's narrow panel: the band under the canvas holds a section
+    shown at all but `CANVAS_MIN` of the page, the chips above it; another
+    chip shows its own, and the selection's brings the band back to
+    `BELOW_H`."""
     with build_rig(tmp_path) as r:              # the rig's 820 px window: the band
         d = Driver(step=lambda: frame(r.panel))
         d.record(monkeypatch.setattr)
@@ -592,11 +674,11 @@ def test_the_band_grows_for_the_focused_section_and_only_it_draws(tmp_path, monk
         assert st["details_rect"][1][1] > ui_graph.BELOW_H
         assert st["pane_drawn"] == ["fx"]
         assert _inside(d.rect("fx.on"), st["details_rect"])
-        assert not ui_pane.opened(st, "below")["fx"]
-        d.run(d.click("pane.seq"), d.park())
-        assert ui_pane.focused(r.panel) is None
+        d.run(_click_view(d, "seq"), d.wait(2))
+        assert ui_pane.showing(r.panel) == "seq" and st["pane_drawn"] == ["seq"]
+        d.run(d.click("pane.selection"), d.park(), d.wait(2))
+        assert ui_pane.showing(r.panel) == "selection"
         assert st["details_rect"][1][1] == ui_graph.BELOW_H
-        assert ui_pane.opened(st, "below")["seq"]
 
 
 def test_the_rail_is_gone_and_graph_is_live_on_every_frame(pane):
@@ -626,12 +708,12 @@ def test_every_section_draws_without_a_router(tmp_path, monkeypatch):
             assert key in _st(r)["pane_drawn"]
 
 
-def test_the_system_page_says_what_each_open_section_costs(pane, monkeypatch):
+def test_the_system_page_says_what_the_shown_section_costs(pane, monkeypatch):
     r, _d = pane
     st = _st(r)
-    assert set(st["pane_ms"]) >= {"selection", "presets"}
+    assert set(st["pane_ms"]) == {"selection"}            # one body a frame
     line = ui_pane.timing_line(r.panel)
-    assert line.startswith("side pane: ") and "presets" in line and line.endswith(" ms")
+    assert line.startswith("side pane: ") and "selection" in line and line.endswith(" ms")
     from types import SimpleNamespace
     assert ui_pane.timing_line(SimpleNamespace()) == ""         # GRAPH never drew
     said: list[str] = []
@@ -653,8 +735,7 @@ def test_a_node_heads_hover_is_the_whole_band(tmp_path, monkeypatch):
         r.panel.page = PAGE_KEYS.index("graph")
         d = _tall_driver(r, monkeypatch)
         d.run(d.wait(2))
-        st = _st(r)
-        _only(st, "lookback")
+        _only(r, "lookback")
         d.run(d.wait(3))
         said: list[str] = []
         real = ui.tooltip
@@ -702,26 +783,6 @@ def test_the_track_readout_is_measured_as_printed(tmp_path, monkeypatch):
 
 
 
-def test_focus_lands_on_a_fold_from_before_stage_2(tmp_path, monkeypatch):
-    """Review round 2: a ui.json written by stage 1 names five sections,
-    and a page state from before a hot reload may hold only those; landing
-    on FX still unfolds and draws the fx section."""
-    with build_rig(tmp_path) as r:
-        old = {k: k in ("selection", "presets") for k in
-               ("selection", "presets", "lookback", "faces", "analyzer")}
-        (r.lib.machine / ui_pane.UI_FILE).write_text(json.dumps({"pane": {"open": old}}))
-        r.panel.desk = False
-        imgui.get_io().display_size = imgui.ImVec2(*WIDE)
-        for _ in range(2):
-            frame(r.panel, "graph")
-        st = _st(r)
-        st["pane_open"]["open"] = dict(old)          # the stage-1 state, no fx key at all
-        r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
-        for _ in range(2):
-            frame(r.panel)
-        assert ui_pane.focused(r.panel) == "fx" and "fx" in st["pane_drawn"]
-
-
 # ---- stage 3 (U3): the rail goes, every page a section
 
 STAGE3_IDS = {
@@ -746,7 +807,7 @@ def test_each_stage3_section_draws_in_the_pane_and_nothing_passes_its_edge(
         d.run(d.wait(2))
         st = _st(r)
         st["side_w"] = ui_graph.SIDE_MIN if width == "min" else ui_graph.SIDE_W
-        _only(st, key)
+        _only(r, key)
         d.run(d.wait(3))
         assert st["pane_drawn"] == [key]
         assert _inside(d.rect(STAGE3_IDS[key]), st["details_rect"])
@@ -783,62 +844,33 @@ def test_every_section_focused_lands_in_view_and_inside_the_pane(tmp_path, monke
         st = _st(r)
         assert key in st["pane_drawn"]
         (_x, y), (_w, h) = st["details_rect"]
-        head = d.rect(f"pane.{key}")
+        head = d.rect(_chip(key))
         assert y <= head[1] and head[3] <= y + h, (head, st["details_rect"])
         spills = _spills(d, st)
         assert not spills, sorted(spills)
 
 
 def test_a_fresh_launch_has_no_scrollbar_on_the_pane(pane):
-    """Selection and presets open, nothing focused: the sections fit the
-    pane exactly, with the spacing after each open body counted."""
+    """The selection up, as at launch: the chips and the body fit the pane
+    exactly."""
     r, _d = pane
     win = imgui.internal.find_window_by_name(_st(r)["pane_window"])
     assert win.scroll_max.y == 0
 
 
-def test_a_chip_hidden_by_the_focus_opens_what_it_asks_for(tmp_path, monkeypatch):
-    """In the band a section open in the fold but hidden by the focus is not
-    lit, and a click on it shows it: the band never ends up empty."""
-    with build_rig(tmp_path) as r:
-        d = _focus_rig(r, monkeypatch, "band")
-        st = _st(r)
-        assert ui_pane.opened(st, "below")["selection"]
-        r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
-        d.run(d.wait(3))
-        assert st["pane_drawn"] == ["fx"]
-        d.run(d.click("pane.selection"), d.park(), d.wait(1))
-        assert ui_pane.focused(r.panel) is None
-        assert st["pane_drawn"] == ["selection"] and ui_pane.opened(st, "below")["selection"]
-
-
-def test_the_band_scrolls_on_a_focus(tmp_path, monkeypatch):
-    """`scroll_to` promises a scroll in either layout."""
-    with build_rig(tmp_path) as r:
-        d = _focus_rig(r, monkeypatch, "band")
-        asked: list[float] = []
-        real = imgui.set_scroll_y
-        monkeypatch.setattr(imgui, "set_scroll_y", lambda y: (asked.append(y), real(y))[1])
-        r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
-        d.run(d.wait(1))
-        assert asked == [0.0]
-
-
-def test_letting_go_by_a_click_moves_the_one_owner_of_the_focus(pane):
-    """A click on the focused header: `ui.page` and `Panel.page` say so too,
-    and the pane is not scrolled away from where the click was."""
+def test_a_chip_moves_the_one_owner_of_the_view(pane):
+    """A click on the selection's chip with a section up: `ui.page` and
+    `Panel.page` say so too, so the history has it."""
     r, d = pane
-    st = _st(r)
     r.reg["ui.page"].set(PAGE_KEYS.index("fx"))
     d.run(d.wait(3))
     assert r.reg["ui.page"].value == PAGE_KEYS.index("fx")
-    d.run(d.click("pane.fx"), d.park())
-    assert ui_pane.focused(r.panel) is None and PAGE_KEYS[r.panel.page] == "graph"
+    d.run(d.click("pane.selection"), d.park())
+    assert ui_pane.showing(r.panel) == "selection" and PAGE_KEYS[r.panel.page] == "graph"
     assert r.reg["ui.page"].value == PAGE_KEYS.index("graph")
-    assert "pane_scroll" not in st
 
 
-def test_selecting_a_node_does_not_move_the_focus(pane):
+def test_selecting_a_node_by_code_does_not_move_the_view(pane):
     """FX's SHOW chip, OUTPUT's "open on GRAPH", a controller: the canvas is
     always drawn, so the section being worked in stays."""
     r, d = pane
@@ -846,13 +878,13 @@ def test_selecting_a_node_does_not_move_the_focus(pane):
     d.run(d.wait(2))
     ui_graph.select_node(r.panel, "output.all")
     d.run(d.wait(2))
-    assert ui_pane.focused(r.panel) == "output" and "output" in _st(r)["pane_drawn"]
+    assert ui_pane.showing(r.panel) == "output" and _st(r)["pane_drawn"] == ["output"]
 
 
-def test_the_picked_words_ask_what_is_on_screen_not_the_focus(tmp_path, monkeypatch):
-    """ROUTING's body drawn is what "its line is framed" means: unfolded by a
-    click with the focus elsewhere it counts; focused, then folded, it does
-    not."""
+def test_the_picked_words_ask_what_is_on_screen(tmp_path, monkeypatch):
+    """ROUTING's body drawn is what "its line is framed" means: its chip
+    clicked while a desk control is picked (the chips stay live), it counts;
+    the selection's chip, and it does not."""
     from test_ui_shell import _control, _learn_over
 
     from hyperspace import ui_desk
@@ -865,14 +897,10 @@ def test_the_picked_words_ask_what_is_on_screen_not_the_focus(tmp_path, monkeypa
         table = r.router.table
         d.run(d.wait(1))
         assert "framed" not in ui_desk.pick_line(r.panel, table, c)[0]
-        d.run(d.click("pane.routing"), d.park(), d.wait(1))       # a click: the page elsewhere
-        assert PAGE_KEYS[r.panel.page] != "routing" and "routing" in st["pane_drawn"]
-        assert "framed" in ui_desk.pick_line(r.panel, table, c)[0]
         d.run(d.click("pane.routing"), d.park(), d.wait(1))
-        r.reg["ui.page"].set(PAGE_KEYS.index("routing"))
-        d.run(d.wait(2))
+        assert PAGE_KEYS[r.panel.page] == "routing" and st["pane_drawn"] == ["routing"]
         assert "framed" in ui_desk.pick_line(r.panel, table, c)[0]
-        d.run(d.click("pane.routing"), d.park(), d.wait(1))       # its own header: lets go
+        d.run(d.click("pane.selection"), d.park(), d.wait(1))
         assert "framed" not in ui_desk.pick_line(r.panel, table, c)[0]
 
 
@@ -897,7 +925,7 @@ def _analyzer_at(r, monkeypatch, width):
     d.run(d.wait(2))
     st = _st(r)
     st["side_w"] = width
-    _only(st, "analyzer")
+    _only(r, "analyzer")
     return d, st
 
 
@@ -905,8 +933,8 @@ def test_save_as_patch_and_update_patch_keep_inside_the_narrowest_pane(tmp_path,
     """#364's 19 px: the two chips one row where they fit, and two where not."""
     with build_rig(tmp_path) as r:
         r.panel.desk = False
-        r.lib.load("presets", "party-noita")
-        r.lib.presets.groups = []
+        r.lib.load("loadable", "party-noita")
+        r.lib.loaded_patch.groups = []
         frame(r.panel, "graph")
         entry = ui_graph.group_nodes(r.panel, ["render:warp", "render:doublevision"])
         entry["patch"] = "noita-core"
@@ -1082,3 +1110,88 @@ def test_the_short_hints_tooltip_only_over_a_plot_nothing_covers(tmp_path, monke
         tips.clear()
         d.run(d.move(over), d.wait(2))
         assert ui_bands.HINT not in tips
+
+
+def test_the_chips_hold_still_whatever_they_say(pane, monkeypatch):
+    """The rows of chips, and so the body under them, never jump while you
+    work: a node selected, a dot coming up on every chip, the sections chip
+    naming another section — every chip keeps its place and size."""
+    r, d = pane
+    ids = [f"pane.{k}" for k in ui_pane.TABS] + ["pane.sections"]
+    d.run(d.wait(1))
+    before = {k: d.rect(k) for k in ids}
+    view = ui_graph.view_of(r.panel)
+    node = max((n for n in view.nodes if n.kind != "modifier"), key=lambda n: len(n.label or ""))
+    r.panel.select_graph_node(node.id)
+    d.run(d.wait(3))
+    assert r.panel.graph_selected == node.id
+    monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)
+    d.run(d.wait(2))
+    assert {k: d.rect(k) for k in ids} == before
+    _only(r, "camera")                                 # the sections chip says CAMERA ▾
+    d.run(d.wait(2))
+    after = {k: d.rect(k) for k in ids}
+    assert after == before
+
+
+def test_each_chip_is_as_wide_as_its_name(pane, monkeypatch):
+    """No chip is padded out (Dillon, 2026-11-09): each is its title's width,
+    the dirty dot in its corner taking no room; only the sections chip is
+    the width of its widest name."""
+    _r, d = pane
+    monkeypatch.setattr(ui_loadable, "dirty", lambda *a, **k: True)     # every dot up
+    d.run(d.wait(2))
+    if ui_kit.ready():
+        # icon tabs (ui_switcher): one TabsList, the seven sharing its width
+        # evenly, edge to edge, the dots taking no room
+        tabs = [d.rect(f"pane.{k}") for k in ui_pane.TABS]
+        widths = {round(x1 - x0, 3) for x0, _y0, x1, _y1 in tabs}
+        assert len(widths) == 1, widths
+        assert all(abs(tabs[i][2] - tabs[i + 1][0]) < 0.01 for i in range(len(tabs) - 1))
+        return
+    imgui.new_frame()
+    imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
+    extra = set()                       # what a chip adds to its words: the same for all
+    for k in ui_pane.TABS:
+        word = next(t for key, t, _, _ in ui_pane.SECTIONS if key == k).upper()
+        x0, _y0, x1, _y1 = d.rect(f"pane.{k}")
+        extra.add(round((x1 - x0) - imgui.calc_text_size(word).x))
+    imgui.pop_font()
+    assert len(extra) == 1 and next(iter(extra)) <= 12, extra
+    imgui.end_frame()
+
+
+def test_what_a_chip_would_say_live_is_its_tooltip(pane, monkeypatch):
+    """The selection's node is the selection chip's tooltip, not its words
+    (Dillon, 2026-11-09)."""
+    r, d = pane
+    view = ui_graph.view_of(r.panel)
+    node = next(n for n in view.nodes if n.label and n.kind != "modifier")
+    r.panel.select_graph_node(node.id)
+    d.run(d.click("pane.loadable"), d.park(), d.wait(3))
+    said: list[str] = []
+    real = ui.tooltip
+    monkeypatch.setattr(ui, "tooltip", lambda text: (said.append(text), real(text)))
+    d.run(d.move("pane.selection"), d.wait(2))
+    words = ui_graph.sel_words(("node", node))
+    assert any(t.startswith(f"selected: {words}") for t in said), said
+    if ui_kit.ready():          # an icon tab: its name is in the tooltip, after the live words
+        assert any("selection" in t for t in said), said
+    else:
+        assert "SELECTION##pane.selection" in d.rects
+
+
+@pytest.mark.parametrize("layout", ["band", "min", "default"])
+def test_the_grip_section_open_whole_stays_inside_the_pane(tmp_path, monkeypatch, layout):
+    """Plan 60: the HANDS page's grip section with every control showing (the
+    grip on, the inertia shaped) draws in the pane and passes no edge."""
+    with build_rig(tmp_path) as r:
+        r.reg["grip.on"].set(True)
+        r.reg["grip.inertia"].set(True)
+        d = _focus_rig(r, monkeypatch, layout)
+        r.reg["ui.page"].set(PAGE_KEYS.index("hands"))
+        d.run(d.wait(4))
+        st = _st(r)
+        assert "hands" in st["pane_drawn"]
+        spills = _spills(d, st)
+        assert not spills, sorted(spills)

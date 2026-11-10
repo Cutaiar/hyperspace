@@ -3,7 +3,7 @@
 Modulation is the one control concept every source shares (params.py
 docstring): a source calls modulate(u) each frame, Registry.apply() lands
 base + offsets on the object, and the base — what the user set — is what
-every surface reads and every preset saves.
+every surface reads and every loadable patch saves.
 """
 
 import math
@@ -77,7 +77,7 @@ def test_flags_say_what_a_param_is_for(rig):
         assert not reg[pid].persist, pid
     assert not reg["preset.select"].modulatable
     assert not reg["preset.save.0"].modulatable
-    assert reg["preset.load.0"].modulatable     # a kick may load a preset
+    assert not reg["preset.load.0"].modulatable  # a person's press, no row's (rows 746, 775)
     assert not reg["camera.reset"].persist       # triggers never persist
     assert reg["view.bright"].persist and reg["view.bright"].modulatable
     assert not reg["view.test_file"].modulatable
@@ -135,9 +135,10 @@ def test_snapshot_saves_the_base_not_the_modulated_value(rig):
 def test_remove_and_remove_prefix(rig):
     reg = rig[0]
     n = len(reg)
-    assert reg.remove("band.5.atk").id == "band.5.atk"
+    meta = reg.meta_reg                 # (a shared param is the meta controller's to drop: LY1)
+    assert meta.remove("band.5.atk").id == "band.5.atk"
     assert "band.5.atk" not in reg and reg.get("band.5.atk") is None
-    gone = reg.remove_prefix("band.5.")
+    gone = meta.remove_prefix("band.5.")
     assert gone and all(p.id.startswith("band.5.") for p in gone)
     assert len(reg) == n - 1 - len(gone)
     assert reg.remove("nope") is None

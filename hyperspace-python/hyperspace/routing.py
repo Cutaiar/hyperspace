@@ -45,18 +45,18 @@ Sources are one string, ``scheme:address``:
                    (``hand:left.present``), a pinch switch
                    (``hand:right.pinch.index`` … ``.pinky``; the `when`
                    gates). Resolved through the map the adapter publishes
-                   (`Router.names`): a name the rig lacks is dormant.
+                   (`Router.names`): a name the meta controller lacks is dormant.
                    NaN while that hand is out of the box or was never
                    seen, and a NaN reading is not live
-  hand:<i>         the hand lane at index i on the rig's layout (axes,
+  hand:<i>         the hand lane at index i on the meta controller's layout (axes,
                    then presence, then switches) — still read, so an
-                   older saved preset plays; nothing writes it any more
+                   older saved loadable patch plays; nothing writes it any more
   param:<id>       a param's effective value, as a *sink row*'s source
                    (plan 27 B3): ``{"source": "param:view.bright",
                    "target": "bridge:3", "op": "send"}`` sends it out on a
                    sink port (``<role>:<channel>``); ``lane:<i>`` and
                    ``lane:*`` are a sink row's other sources. The
-                   session's rows (bindings.json), never performers
+                   meta controller's rows (bindings.json), never performers
                    (`SINK_OP`, `sink_values`)
 
 Numeric addresses are 0-based (``lfo:0`` is "LFO 1", ``hand:0`` the first
@@ -73,6 +73,9 @@ and returns to. The last two are the *performer* ops:
   abs        an absolute MIDI control's position → set_norm (cc / pitch,
              with soft pickup); a trigger fires on the rising half. MIDI
              only: a continuous source never sets the base
+  abs14      `abs` read at 14 bits: the row's CC n (n < 32) is the MSB and
+             CC n + 32 on the same channel the LSB (MIDI 1.0's pair); the
+             adapter applies the pair once both halves are in (midi.py)
   rel/rel64  a relative encoder's delta → step
   momentary  note-on (a pad button's press) sets a toggle on, note-off
              (its release) sets it off
@@ -115,7 +118,7 @@ Either op's reading first travels with the row's *feel* (`motion`,
 motion.py): ``follow`` — the analyzer's own asymmetric envelope, attack
 away from the source's rest and release back toward it — or ``spring``,
 a damped spring (perceptual duration, bounce). A row with no feel of its own takes
-its source's (`Router.feel_of`): for the pad's `axis` lanes the session's
+its source's (`Router.feel_of`): for the pad's `axis` lanes the meta controller's
 `desk.pad.*`, which the sticks' default camera job reads too
 (`Router.felt`); none for every other source. A row's follower starts
 where it moves nothing and is dropped the frame the row stops acting.
@@ -123,7 +126,7 @@ where it moves nothing and is dropped the frame the row stops acting.
 One performer per parameter — the model (plan 09)::
 
                        scene-setters (write the BASE, never prompt)
-    panel · keys · pad buttons · APC40 · presets · mouse/stick (relative, on base)
+    panel · keys · pad buttons · APC40 · loadable patches · mouse/stick (relative, on base)
                                    │
                                    ▼
    Param ─── base ──────────────────────────────▶ effective = base + offset
@@ -131,7 +134,7 @@ One performer per parameter — the model (plan 09)::
                                    │  ONE route row, ONE per-frame path: Router.modulate
               performer ───────────┘
     lane:<i> · hand:<name> · ext:<i> · lfo:<i>   op = push | position
-                                                  depth · scale (a session param: master.gain)
+                                                  depth · scale (a shared meta param: master.gain)
                                                   rest (push; the source's, or a number) · when (a gate)
 
    chaining:  hand:right.y ──position──▶ lfo.1.depth   lfo:0 ──push──▶ view.bright
@@ -146,7 +149,7 @@ performer already has it (`Bindings.owner`), and the caller asks — the
 panel's Replace / Keep prompt (ui_routing.py), which a hand learn reaches
 through `learn.Learn.pending` — before `replace_owner` swaps them. The prompt
 names the owner as its adapter does (`Router.describe`: "R height
-positions", from `labels` / `gates`). A preset or file with two rows on
+positions", from `labels` / `gates`). A loadable patch or file with two rows on
 one target keeps the first and lists the rest in `Bindings.dropped` until
 the next edit. Disabled rows don't own. Layering is chaining, never
 stacking: a hand owns an LFO's depth, the LFO owns brightness. Scene-
@@ -200,7 +203,7 @@ clamps at any gain, and the effective rate is the reference's number to
 round-off *while the source is live* (a value passes through the
 registry's normalized space and back: within an ulp of the range, the
 same float32 the GPU sees; params.py says why the range is that wide).
-`preset.legacy6_values` gives the preset ``legacy6`` its bases (zeros
+`preset.legacy6_values` gives the loadable patch ``legacy6`` its bases (zeros
 for the rates — a push reproduces "audio replaces the constant" only on
 0 — and the pattern inputs' 1, as designed). Where the reference spun at 1× the moment the
 source stopped, the planes now stop: the base is 0 and the parity anchor
@@ -209,11 +212,11 @@ The house presets carry the same routes on WP0's bases of 1, so a plane
 keeps its un-driven spin and a lane rides on top.
 
 The file (``bindings.json``, schema ``hyperspace.bindings/3``) holds the
-**session's controls** (plan 13 §2.2): the keys, the pad, and the
+**meta controller's controls** (plan 13 §2.2): the keys, the pad, and the
 invariant and global-layer MIDI rows — never a performer row, a
-preset-layer row, the macros or any values; those are the loaded
-preset's (preset.py), and the table holds them in memory only
-(`is_session_row`, `to_json`):
+patch-layer row, the macros or any values; those are the loaded
+loadable patch's (loadable.py), and the table holds them in memory only
+(`is_meta_row`, `to_json`):
 
   {"schema": "hyperspace.bindings/3", "profile": "apc40",
    "bindings": [{"source": "key:RIGHT", "target": "view.shape",
@@ -223,11 +226,11 @@ preset's (preset.py), and the table holds them in memory only
                 {"source": "note:0:98", "target": "desk.shift", "op": "toggle"}, …]}
 
 Schema 3 (plan 13 WP3) adds a MIDI row's `layer` — absent: invariant,
-the session's control; "global": the SHIFT layer; "preset": the loaded
-preset's desk (`Bindings.dispatch` / `active`, `set_desk`, the latch
+the meta controller's control; "global": the SHIFT layer; "preset": the loaded
+loadable patch's desk (`Bindings.dispatch` / `active`, `set_desk`, the latch
 `desk.shift`) — and the macros' subscribers (`Macro`, `Sub`; the base
 ones followed by `Router.follow_macros`, the depth ones multiplied in by
-`Router.modulate`). A `scale` is kept only on a session param
+`Router.modulate`). A `scale` is kept only on a shared meta param
 (`master.gain`, the drive fader; decision register row 18 (a)); `scale:
 "macro.N"` becomes a depth subscriber on load, and one on any other
 param is dropped with a note (`migrate_scales`). An older file's
@@ -245,21 +248,21 @@ each dropped row named on stderr). Whatever the schema, every load runs
 the crossfader plan 15 WP3 gave to the master dim
 and the B / ⇧B keys are brought up to date where the factory rows still
 stand, each change noted. A changed file is backed up (`backup`) and
-written back once — except a file that still holds a preset's part
-(every file before plan 13 WP5: performer rows, preset-layer rows,
+written back once — except a file that still holds a loadable patch's part
+(every file before plan 13 WP5: performer rows, patch-layer rows,
 `macros`, `values`), which keeps that part in `Bindings.carried` and is
 not rewritten on the read (plan 13 §6's first-launch migration moved that part into
-presets; it is retired since 2026-10-28, so the next write drops it). A schema this code doesn't know is left
+loadable patches; it is retired since 2026-10-28, so the next write drops it). A schema this code doesn't know is left
 alone and reported, like a file that won't parse. `bindings_path(home)`
 says where the file lives; the app always passes the library home, and
 the working-directory default is for tests.
 
-The routing presets — this file format with only modulation rows, once a
+The routing loadable patches — this file format with only modulation rows, once a
 library document kind of their own — are gone since plan 13 WP5
-(decision 10): the factory ones are full presets
-(``library/presets/legacy6.json`` …, generated by preset.py) and a
-user's ``<home>/bindings/*.json`` were made presets once, the files left
-as they were and no longer read. The factory session table is exported
+(decision 10): the factory ones are full loadable patches
+(``library/presets/legacy6.json`` …, generated by loadable.py) and a
+user's ``<home>/bindings/*.json`` were made loadable patches once, the files left
+as they were and no longer read. The factory meta table is exported
 to ``hyperspace/bindings.default.json`` (`write_factory`).
 """
 
@@ -268,12 +271,15 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import sys
 import time
 import weakref
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field, replace
+from functools import cache, lru_cache
 from pathlib import Path
+from typing import NamedTuple, Protocol
 
 import numpy as np
 
@@ -282,6 +288,9 @@ from . import undo as undo_steps
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
 from .motion import CUSTOM, OFF, Follower, Motion
+
+# re-exported: the grammar and the shared sources (plan 44 D2) live there
+from .pads.models import FACE_WORDS, HAT_WORDS, pair_label
 from .params import (
     CHASE_PARAM,
     DEPTH_TAPER,
@@ -295,17 +304,19 @@ from .params import (
     Param,
     Registry,
     fx_files,
+    is_meta_id,
+    is_per_deck_meta_id,
+    is_shared_meta_id,
     part_of,
     part_of_id,
     retaper_depths,
 )
-
-# re-exported: the grammar and the shared sources (plan 44 D2) live there
 from .routing_sources import (  # noqa: F401
     _NO_LANES,
     BUILTIN_LANES,
     DECK_SCHEMES,
     MIDI_SCHEMES,
+    MODULATOR_SCHEMES,
     PAIR_SCHEME,
     PAIR_SEP,
     QUALIFIER,
@@ -315,6 +326,7 @@ from .routing_sources import (  # noqa: F401
     Sources,
     base_scheme,
     is_continuous,
+    nsew,
     pair_address,
     pair_lanes,
     pair_poles,
@@ -322,14 +334,15 @@ from .routing_sources import (  # noqa: F401
     qualified,
 )
 
-SCHEMA = "hyperspace.bindings/3"
+SCHEMA = "hyperspace.bindings/4"
+SCHEMA_V3 = "hyperspace.bindings/3"
 SCHEMA_V1 = "hyperspace.bindings/1"
 SCHEMA_V2 = "hyperspace.bindings/2"
-SCHEMA_VERSIONS = (1, 2, 3)        # what a load reads (the library's routing kind too)
+SCHEMA_VERSIONS = (1, 2, 3, 4)      # what a load reads (the library's routing kind too)
 FILE = "bindings.json"
 LEGACY_MIDI_FILE = Path("midi_map.json")
-# the factory session table as a file (`write_factory`): what a fresh
-# bindings.json holds — outside library/, since it is no group's preset
+# the factory meta table as a file (`write_factory`): what a fresh
+# bindings.json holds — outside library/, since it is no group's loadable patch
 FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 
 # the modulator banks (modbank.py, plan 31 B) the modulation patch knows,
@@ -370,16 +383,22 @@ HOLD_S = 0.6       # midi.HOLD_S is the note's; tests hold the two equal
 # effective norm (``param:<id>``) or an analyzer lane (``lane:<i>``, or
 # ``lane:*`` for every lane from the row's channel on) sent to a sink port,
 # ``<role>:<channel>`` (a device's `sinks`: the bridge's lane k, a
-# `midi-out`'s lane k). Its op is `SINK_OP`; it is the session's (sinks are
-# rig, D1 / D9: bindings.json keeps it), never a performer, never asks
+# `midi-out`'s lane k). Its op is `SINK_OP`; it is the meta controller's (sinks are
+# meta controller, D1 / D9: bindings.json keeps it), never a performer, never asks
 # Replace / Keep, and nothing in the modulation pass reads it — the sink
 # device does, after `reg.apply()` (`sink_values`)
 SINK_OP = "send"
 SINK_SCHEMES = ("param", "lane")
-OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hold", *MOD_OPS,
-       SINK_OP)
+# a 14-bit absolute control (a DJ controller's fader): the row sits on the MSB's
+# CC n (n < 32) and the adapter fuses CC n + LSB_OFFSET into it (midi.py)
+ABS14 = "abs14"
+ABS_OPS = ("abs", ABS14)        # the absolute MIDI reads: soft pickup, glide, catch
+LSB_OFFSET = 32                 # MIDI 1.0: CC n's LSB is CC n + 32, n in 0–31
+OPS = ("fire", "toggle", "step", "set", "abs", ABS14, "rel", "rel64", "momentary", "hold",
+       *MOD_OPS, SINK_OP)
+OP_WORDS = {ABS14: "14-bit"}    # an op as a row's line says it, where its name is not words
 # the APC40's two layers (plan 13 §3): a MIDI row's `layer` is None — the
-# control is invariant, the session's, one meaning on both layers — or one
+# control is invariant, the meta controller's, one meaning on both layers — or one
 # of these. The table's `layer` says which is up; SHIFT latches it.
 LAYERS = ("preset", "global")
 SHIFT_SOURCE = f"note:0:{apc40.N_SHIFT}"     # always invariant: it is the latch
@@ -397,18 +416,18 @@ FINE_DIV = 10
 # `desk.fine` is left out: a learned toggle on it is allowed (`midi._follow_fine`)
 HELD_ONLY = (SAVE_PARAM, CHASE_PARAM)
 # the sequencer page's latch (plan 31 §A, decision 7): SEND A, invariant,
-# a session toggle (seq_page.register) — while it is on the page's rows
+# a meta controller toggle (seq_page.register) — while it is on the page's rows
 # shadow the clip grid, the clip stops and scene launch 1–5
 SEQ_PAGE_PARAM = seq_page.PARAM
 SEQ_PAGE_SOURCE = f"note:0:{apc40.N_SEND_A}"
 # knob smoothing (plan 18 WP2): how long a value from one of the desk's
-# absolute knobs or faders takes to arrive (midi.py's glide). One session
+# absolute knobs or faders takes to arrive (midi.py's glide). One meta controller
 # param for the whole desk. SLEW_MAX_S stays under undo.SETTLE_S by more
 # than a slow frame, so one knob turn is still one undo step
 # (tests/test_undo.py pins the two together). A bare table has it off —
 # the adapter is then the one from before the glide, to the bit;
 # SLEW_DEFAULT_S is what the app sets on its table before the show's
-# session values land (app.main), so a show that saved the number keeps it.
+# meta controller values land (app.main), so a show that saved the number keeps it.
 SLEW_PARAM = "desk.slew"
 SLEW_MAX_S = 0.25
 SLEW_DEFAULT_S = 0.08
@@ -445,7 +464,7 @@ MODIFIERS = ("SHIFT", "SUPER", "CONTROL")
 # crossfader row the owner changed is left alone.
 #
 # plan 19 WP2 gives clip rows 4 and 5 to the bank (slots 9–24,
-# apc40.BANK_PADS; invariant, D6 extended). A session file since plan 13
+# apc40.BANK_PADS; invariant, D6 extended). A meta controller file since plan 13
 # WP5 has no row on those pads, so the sixteen are added (APC_NEW_ROWS) —
 # only where nothing uses the pad: a row the owner put there is left alone
 # and that pad does what the owner's row says. A file from before plan
@@ -462,30 +481,36 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"note:0:{apc40.N_TAP}", "theme.next", "toggle", 1.0): ("tempo.tap", "toggle", 1.0),
     (f"note:0:{apc40.N_NUDGE_P}", "view.shape", "step", 1.0): ("tempo.nudge", "step", 1.0),
     (f"note:0:{apc40.N_NUDGE_M}", "view.shape", "step", -1.0): ("tempo.nudge", "step", -1.0),
-    (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim", "abs", 1.0),
+    (f"cc:0:{apc40.CC_XFADE}", "output.bg", "abs", 1.0): ("output.xfade", "abs", 1.0),
+    # plan 44 D5d (the owner, 2026-11-04, overturning row 559): the crossfader is
+    # the decks', the MASTER fader the dim, and `master.gain` is the panel's. One
+    # pass applies one key, so the old row above goes straight there too
+    (f"cc:0:{apc40.CC_XFADE}", "output.dim", "abs", 1.0): ("output.xfade", "abs", 1.0),
+    (f"cc:0:{apc40.CC_MASTER}", "master.gain", "abs", 1.0): ("output.dim", "abs", 1.0),
     **BANK_REMAP,
 }
 # Plan 24 C1 made the render toggles on scene launch 1–4 invariant
-# (apc40.TOGGLES): every preset saved before holds their four factory rows
+# (apc40.TOGGLES): every loadable patch saved before holds their four factory rows
 # in its desk, and every factory file still does (decision 23: no library
-# file is rewritten; `preset.file_desk`). The session's invariant rows do
+# file is rewritten; `preset.file_desk`). The meta controller's invariant rows do
 # the same job, so those exact rows drop quietly (in RETIRED_DESK_ROWS).
 TOGGLE_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
     (f"note:0:{n}", pid, "toggle", 1.0) for pid, n in zip(apc40.TOGGLES, apc40.N_SCENE))
 # Plan 24 C2 (decision 17, amending D6) frees the track faders S1–S8 for
 # the presets: the audio strip that was invariant on them (the bands'
 # post-drive on 1–6, master.dyn and master.trim on 7–8) moves to the SHIFT
-# layer. A session file from before holds those eight rows with no layer;
+# layer. A meta controller file from before holds those eight rows with no layer;
 # `remap_factory` gives each exact row the global layer, with a note (the
 # file is backed up and written back once). A fader row the owner changed
 # matches no key and stays invariant: that fader is the owner's on both
-# layers, and a preset's row on it drops with D6's note.
+# layers, and a loadable patch's row on it drops with D6's note.
 FADER_SHIFT_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
     (f"cc:{ch}:{apc40.CC_FADER}", pid, "abs", 1.0)
     for ch, pid in zip(apc40.TRACK_FADERS, apc40.SHIFT_FADERS))
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
-APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
+APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 44",
+                  f"cc:0:{apc40.CC_MASTER}": "plan 44",
                   f"note:0:{apc40.N_OVERDUB}": "plan 15",
                   **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
                   **{source: "plan 19" for _k, source in _FAR_PADS},
@@ -493,8 +518,13 @@ APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   **{source: "plan 24" for source, *_ in FADER_SHIFT_ROWS},
                   f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24",
                   SEQ_PAGE_SOURCE: "plan 31"}
-# Factory preset-layer rows a later plan took for the session, as (source,
-# target, op, value): plan 19's sixteen shape pads. Every preset saved
+# HOLD, TAKE and DROP went (plan 44 D5d, the owner, 2026-11-04): a row learned on
+# one drops at the next load, with a note and the file's backup
+GONE_TARGETS = frozenset(("output.hold", "output.take", "output.drop"))
+# Each profile's controls reserved for the meta controller (`Bindings.is_invariant`)
+META_CONTROLS: dict[str, tuple[str, ...]] = {"apc40": apc40.META_CONTROLS}
+# Factory patch-layer rows a later plan took for the meta controller, as (source,
+# target, op, value): plan 19's sixteen shape pads. Every loadable patch saved
 # before it holds them in its `desk`; `Bindings.set_desk` drops such a row
 # without a note (plan 19 fork 4 — a note means something the owner mapped
 # was dropped), while any other row on those pads keeps the note. Emptying
@@ -511,8 +541,8 @@ APC_NEW_ROWS = (
     (f"note:0:{apc40.N_OVERDUB}", "preset.home", "toggle", 1.0, False),   # plan 15 WP2
     # plan 19 WP2: clip rows 4 and 5 load the bank's slots 9–24
     *[(source, "preset.select", "set", float(k), False) for k, source in _FAR_PADS],
-    # plan 24 C1: the render toggles, invariant now (a session file never
-    # held them: they were the preset layer's), and SAVE on track 8's clip stop
+    # plan 24 C1: the render toggles, invariant now (a meta controller file never
+    # held them: they were the patch layer's), and SAVE on track 8's clip stop
     *[(source, pid, op, value, False) for source, pid, op, value in sorted(TOGGLE_DESK_ROWS)],
     (f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}", SAVE_PARAM, "momentary", 1.0, False),
     # plan 31 §A: SEND A enters and leaves the sequencer page, latched
@@ -527,14 +557,14 @@ RETIRED_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
     (f"note:{k}:{apc40.N_CLIPSTOP}", "preset.save_new", "hold", 1.0) for k in range(8))
 # the keys WP4 added, likewise only where the key is free
 # the keys plan 11 moved out of app.py's loop into the table (audit R2;
-# decision register row 7): R resets the camera, F1–F8 load the preset
+# decision register row 7): R resets the camera, F1–F8 load the loadable patch
 # bank's slots 1–8 (param ids are 0-based), ⇧F1–F8 save the live state
 # as them. Cmd+R (restart), Q and ↑ / ↓ stay in the loop.
 # Plan 15 WP1 adds undo and redo, on both ⌘ and Ctrl (fork 1): ⌘Z / Ctrl+Z
 # fire `edit.undo`, ⌘⇧Z / Ctrl+⇧Z fire `edit.redo` — a chord fires only
 # its own row (`Router.keys`).
 # Plan 15 WP2 adds Home (fn ← on a laptop; fork 7): it fires `preset.home`,
-# which loads the show's startup preset.
+# which loads the show's startup loadable patch.
 # F_KEYS (params): the F-key rows are the bank's first eight slots
 LOOP_KEY_ROWS = (
     ("R", "camera.reset", "fire"),
@@ -544,22 +574,22 @@ LOOP_KEY_ROWS = (
     ("CONTROL+Z", "edit.undo", "fire"), ("CONTROL+SHIFT+Z", "edit.redo", "fire"),
     ("HOME", "preset.home", "fire"),
 )
-# plan 13 WP2: the theme bank became the preset bank. A row a file wrote
+# plan 13 WP2: the theme bank became the loadable patch bank. A row a file wrote
 # before it that targets a theme param — a factory key or APC40 row, or
-# one the user learned — is rewritten to the preset param of the same
+# one the user learned — is rewritten to the loadable patch param of the same
 # slot (`remap_factory`, noted, the file written back once)
-THEME_TO_PRESET = {
+THEME_TO_BANK = {
     "theme.select": "preset.select", "theme.next": "preset.next",
     "theme.prev": "preset.prev",
     **{f"theme.{w}.{k}": f"preset.{w}.{k}" for w in ("load", "save") for k in range(F_KEYS)},
 }
 # the pad's factory rows as they were before 2026-10-14 → the owner's
-# layout (`padmap`): A faces, X previous preset, Y lines, START held saves
-# a new preset; and B / X off the bank onto the preset list (2026-10-14,
+# layout (`padmap`): A faces, X previous loadable patch, Y lines, START held saves
+# a new loadable patch; and B / X off the bank onto the preset list (2026-10-14,
 # `preset.list.*`). Exact rows only — a row the owner learned onto a
 # button is kept (`remap_factory`). One pass applies one key, so every
 # older form maps straight to the newest: X's points and bank rows, B's
-# bank row and its theme row from before plan 13 (ahead of THEME_TO_PRESET).
+# bank row and its theme row from before plan 13 (ahead of THEME_TO_BANK).
 # Later the same day: the right-stick click resets the 4D spin
 # (`rot.reset_w`) and BACK is let go — it hid the panel, and the desk
 # diagram filled the window: None drops the row. START keeps its
@@ -567,11 +597,11 @@ THEME_TO_PRESET = {
 # written before `padmap` gained it never gained it either (no pad row
 # was ever added to an existing file), which read as a pad whose buttons
 # the map could not find. A table of new rows added it, until 2026-11-04.
-# 2026-10-29: the preset walk leaves the face buttons, where a thumb
+# 2026-10-29: the loadable patch walk leaves the face buttons, where a thumb
 # brushing B or X threw the live look away, for the d-pad's ← / → held
 # HOLD_S; speed leaves the pad. B takes points, X screen strokes, and BACK
 # tap tempo. Every older B / X form above maps straight to the newest.
-# 2026-11-04 (the owner, register row 723): no swapping presets from a pad,
+# 2026-11-04 (the owner, register row 723): no swapping loadable patches from a pad,
 # so the walk leaves the d-pad too and ← / → are free; tap tempo is too
 # sensitive to be a default on every controller, so BACK holds the base
 # chase instead (the APC keeps TAP TEMPO, the keyboard B). Older rows on the
@@ -582,28 +612,38 @@ THEME_TO_PRESET = {
 PAD_LAYOUTS: dict[str, dict[tuple[str, str, str, float], tuple[str, str, float] | None]] = {
     "2026-10-14": {
         ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
-        ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
-        ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
+        ("pad:S", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
+        ("pad:N", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
         ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
     },
     "2026-10-29": {
-        ("pad:X", "view.points", "toggle", 1.0): ("view.screen_strokes", "toggle", 1.0),
-        ("pad:X", "preset.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
-        ("pad:B", "preset.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-        ("pad:B", "theme.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-        ("pad:B", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
-        ("pad:X", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+        ("pad:W", "view.points", "toggle", 1.0): ("view.screen_strokes", "toggle", 1.0),
+        ("pad:W", "preset.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
+        ("pad:E", "preset.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:E", "theme.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:E", "preset.list.next", "fire", 1.0): ("view.points", "toggle", 1.0),
+        ("pad:W", "preset.list.prev", "fire", 1.0): ("view.screen_strokes", "toggle", 1.0),
     },
     "2026-11-04": {
         ("pad:VIEW", "tempo.tap", "fire", 1.0): (CHASE_PARAM, "momentary", 1.0),
         ("pad:VIEW", "ui.panel", "toggle", 1.0): (CHASE_PARAM, "momentary", 1.0),
         ("pad:MENU", "preset.save_new", "hold", 1.0): None,
-        ("hat:LEFT", "preset.list.prev", "hold", 1.0): None,
-        ("hat:RIGHT", "preset.list.next", "hold", 1.0): None,
-        ("hat:LEFT", "view.speed", "step", -4.0): None,
-        ("hat:RIGHT", "view.speed", "step", 4.0): None,
+        ("hat:W", "preset.list.prev", "hold", 1.0): None,
+        ("hat:E", "preset.list.next", "hold", 1.0): None,
+        ("hat:W", "view.speed", "step", -4.0): None,
+        ("hat:E", "view.speed", "step", 4.0): None,
     },
 }
+# plan 57 (row 723): which of those a file has seen, its `pad_layout` key. A layout moves a
+# file that hasn't seen it, once, so a row written by hand later that happens to be a twin of an
+# old one stays. No key: a file from before, which has seen none of them
+PAD_LAYOUT_KEY = "pad_layout"
+PAD_LAYOUT_NEWEST = max(PAD_LAYOUTS)
+# plan 58 §9 item 6: the pre-split ids the factory rows named. `bindings/4` holds the real ones;
+# the alias params (overlay.py) stay for an old patch's route until CL3
+OVERLAY_ALIASES = {"overlay.on": "output.overlay", "overlay.passthrough": "output.passthrough",
+                   "overlay.bg": "output.bg", "overlay.alpha": "output.alpha",
+                   "overlay.monitor": "output.monitor"}
 # row → (the layout that moved it, what it became)
 PAD_REMAP = {key: (when, hit) for when, rows in PAD_LAYOUTS.items() for key, hit in rows.items()}
 # No pad row is added to an existing file: a row that was never there may be
@@ -670,9 +710,9 @@ class Binding:
     on: int = 1                  # led velocity when lit
     off: int = 0                 # led velocity when dark
     ring: int = 2                # ring style for "ring" feedback (profile-defined)
-    # the desk layer (plan 13 §3.1): None = invariant, the session's control
+    # the desk layer (plan 13 §3.1): None = invariant, the meta controller's control
     # with one meaning on both layers; "global" = SHIFT up; "preset" = the
-    # loaded preset's own. MIDI rows only
+    # loaded patch's own. MIDI rows only
     layer: str | None = None
     # runtime, never persisted
     caught: bool = field(default=False, repr=False, compare=False)
@@ -772,6 +812,13 @@ class Binding:
             return -1
 
     @property
+    def is_modulator_route(self) -> bool:
+        """A performer row from a source no controller feeds: what node mode rests on a
+        param it fills (the owner, row 711), and a mapping that keeps a param from filling
+        only if it is not this. The one rule: `Bindings.node_holds` and `NodeDesk._kept`."""
+        return self.op in MOD_OPS and self.scheme in MODULATOR_SCHEMES
+
+    @property
     def is_sink(self) -> bool:
         """A sink row (plan 27 B3): a param or a lane sent out to a sink
         port — `target` is ``<role>:<channel>``, not a param id."""
@@ -814,6 +861,15 @@ class Binding:
         if None not in (self.channel, other.channel) and self.channel != other.channel:
             return False
         return self.kind == "pitch" or self.number == other.number
+
+    def feedback_from(self, profile) -> None:
+        """Show what `profile` says this control can show (`feedback_for`: its light,
+        its ring, its velocities). `profile` None or a control it has no word on: as is."""
+        fb = (profile.feedback_for(self.kind, self.channel, self.number)
+              if profile is not None else None)
+        if fb:
+            self.feedback, self.ring = fb["feedback"], fb.get("ring", self.ring)
+            self.on, self.off = fb.get("on", self.on), fb.get("off", self.off)
 
     @property
     def control(self) -> tuple[str, int, int] | None:
@@ -876,14 +932,15 @@ class Binding:
             if s == "pitch":
                 return f"MIDI pitch bend {ch}{on}"
             what = "CC" if s == "cc" else "note"
-            extra = "" if self.op in ("abs", "toggle") else f" {self.op}"
+            extra = "" if self.op in ("abs", "toggle") else f" {OP_WORDS.get(self.op, self.op)}"
             return f"MIDI {what} {self.number} {ch}{on}{extra}"
         addr = ":".join(self.parts)
         on = f" on {self.device}" if self.device else ""     # a second pad's (plan 27 B6)
         if s == "hat":
-            return f"d-pad {addr}{on}"
+            return f"d-pad {HAT_WORDS.get(addr, addr)}{on}"
         lane = is_continuous(s)
-        who = (name if name and lane else f"{s} {addr}") + on
+        who = (name if name and lane else row_words(f"{s}:{addr}") if s == PAIR_SCHEME
+               else f"{s} {addr}") + on
         if s == PAIR_SCHEME and self.op == "step":
             return f"{who} steps ±{abs(self.value):.3g}"
         if lane and self.op in MOD_OPS:
@@ -902,6 +959,18 @@ class Binding:
 _SHIFT = Binding(SHIFT_SOURCE, SHIFT_PARAM, "toggle")    # the latch's control
 
 
+@lru_cache(maxsize=1024)
+def _bare_row(source: str) -> Binding:
+    """A control by its address alone, parsed once: asked per port and per row."""
+    return Binding(source, "")
+
+
+@cache
+def _reserved(profile: str) -> tuple[Binding, ...]:
+    """The profile's `META_CONTROLS`, parsed once, as `_SHIFT` is."""
+    return tuple(_bare_row(s) for s in META_CONTROLS.get(profile, ()))
+
+
 def row_words(row: Binding | str, names=None) -> str:
     """A row's source in words (plan 40 T4): what a person calls the
     control or the lane, without its device's role — the caller says the
@@ -912,8 +981,8 @@ def row_words(row: Binding | str, names=None) -> str:
     through to the row's own words —
 
       ``hand:right.y`` → "right hand y"    ``hands:gap`` → "hands gap"
-      ``lane:0`` → "analyzer 1"            ``pad:A`` → "pad A"
-      ``hat:UP`` → "d-pad up"              ``axis@p2:LX`` → "axis LX"
+      ``lane:0`` → "analyzer 1"            ``pad:S`` → "pad south"
+      ``hat:N`` → "d-pad up"              ``axis@p2:LX`` → "axis LX"
       ``cc:0:48`` → "CC 48 ch1"            ``pitch:*`` → "pitch bend any ch"
       ``lfo:0`` → "LFO 1"                  ``mod:3`` → "mod.3"
       ``osc1:/fader/1`` → "/fader/1"       anything else → the source
@@ -947,11 +1016,12 @@ def row_words(row: Binding | str, names=None) -> str:
     if scheme == modifiers.SCHEME:
         return modifiers.id_of(f"{scheme}:{addr}") or source
     if scheme == "pad":
-        return f"pad {addr}"
+        return f"pad {FACE_WORDS.get(addr, addr)}"
     if scheme == "hat":
-        return f"d-pad {addr.lower()}"
+        return f"d-pad {HAT_WORDS.get(addr, addr.lower())}"
     if scheme == PAIR_SCHEME:
-        return f"pair {addr.replace(PAIR_SEP, ' / ')}"
+        pos, _, neg = addr.partition(PAIR_SEP)
+        return f"pair {pair_label(None, pos, neg)}"
     if scheme == "axis":
         return f"axis {addr}"
     if scheme == "key":
@@ -977,6 +1047,36 @@ def _macro_n(mid: str) -> int:
 
 
 # ------------------------------------------------------------------- ops
+
+class PadLayout(NamedTuple):
+    """A pad model's own controls as rows (`models.Model.layout`): `rows`
+    stand in for every table row on `sources`. Empty for a pad with none: its
+    table as ever."""
+
+    rows: tuple[Binding, ...] = ()
+    sources: frozenset[str] = frozenset()
+
+    def hides(self, b: Binding) -> bool:
+        """Is this table row not heard by this pad?"""
+        return b.bare in self.sources
+
+
+NO_LAYOUT = PadLayout()
+
+
+@cache
+def _layout(spec: tuple, role: str) -> PadLayout:
+    head = f"pad{QUALIFIER}{role}" if role else "pad"
+    return PadLayout(tuple(Binding(f"{head}:{c}", t, op, v) for c, t, op, v in spec),
+                     frozenset(f"pad:{c}" for c, _, _, _ in spec))
+
+
+def layout_of(model, role: str = "") -> PadLayout:
+    """`model`'s `PadLayout`, its rows under the qualifier `role` ("" the
+    primary pad's bare rows). Asked every frame, so kept by the rows themselves."""
+    spec = getattr(model, "layout", ())
+    return _layout(spec, role) if spec else NO_LAYOUT
+
 
 def act(reg: Registry, b: Binding) -> None:
     """A discrete row fires: keys, pad buttons and MIDI buttons share this.
@@ -1049,7 +1149,7 @@ def sink_rows_from_send(role: str, send: Iterable, lanes: int | None = None
     expanded — becomes the row on ``<role>:<k>``. A star is one row,
     ``lane:*`` on its first channel, and takes `lanes` channels (the
     default band layout's count when None) before the next entry, as the
-    old list did on a rig with that many bands (`sink_values`: a row on a
+    old list did on an install with that many bands (`sink_values`: a row on a
     channel a star also fills wins it)."""
     n = len(BANDS) if lanes is None else int(lanes)
     rows: list[Binding] = []
@@ -1127,7 +1227,7 @@ def keymap() -> list[Binding]:
         ("COMMA", "view.speed", "step", -4), ("PERIOD", "view.speed", "step", 4),
         ("M", "audio.mic", "toggle"), ("K", "audio.play", "toggle"),
         ("0", "audio.restart", "fire"),
-        ("T", "overlay.on", "toggle"), ("G", "overlay.passthrough", "toggle"),
+        ("T", "output.overlay", "toggle"), ("G", "output.passthrough", "toggle"),
         ("B", "tempo.tap", "fire"), ("SHIFT+B", "lfo.trigger", "fire"),
         *[(str(p + 1), f"view.plane.{n}", "toggle") for p, n in enumerate(PLANES)],
         *LOOP_KEY_ROWS,
@@ -1140,16 +1240,16 @@ def padmap() -> list[Binding]:
     B / X the points and screen strokes, ↑ / ↓ the brightness; the
     left-stick click resets the camera, the right-stick click the 4D spin;
     BACK (``pad:VIEW``), while held, chases the base (`deck.chase`, plan 52).
-    The rows every controller shares: no row swaps a preset, taps the tempo
+    The rows every controller shares: no row swaps a loadable patch, taps the tempo
     or saves, and ← / → and START are free: the owner, 2026-11-04 (register
     rows 723–724). The owner's layout: PAD_LAYOUTS moves an older file's."""
     rows = [
-        ("pad:A", "view.faces", "toggle"), ("pad:B", "view.points", "toggle"),
-        ("pad:X", "view.screen_strokes", "toggle"), ("pad:Y", "view.lines", "toggle"),
+        ("pad:S", "view.faces", "toggle"), ("pad:E", "view.points", "toggle"),
+        ("pad:W", "view.screen_strokes", "toggle"), ("pad:N", "view.lines", "toggle"),
         ("pad:VIEW", CHASE_PARAM, "momentary"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
-        ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
+        ("hat:N", "view.bright", "step", 3), ("hat:S", "view.bright", "step", -3),
     ]
     return [Binding(src, pid, op, *arg) for src, pid, op, *arg in rows]
 
@@ -1206,7 +1306,7 @@ def latch_refusal(b: Binding) -> str | None:
     """Why `b` may not drive a held-only param (`HELD_ONLY`), or None: only a
     `momentary` row may — anything that could leave it on (a toggle, a set, a
     key or pad row that fires) would turn every bank pad's tap into a new
-    preset (the desk's SAVE, plan 24 C1) or go on committing the performer
+    loadable patch (the desk's SAVE, plan 24 C1) or go on committing the performer
     into the look (the base chase, plan 52) until something turned it off."""
     if b.target in HELD_ONLY and b.op != "momentary":
         return f"{b.target} takes only a momentary row (held, never latched)"
@@ -1261,8 +1361,8 @@ def seq_missing(rows: Iterable[Binding]) -> str | None:
 def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding, str]]]:
     """First performer per target wins: (kept, [(dropped row, why)]).
 
-    What a preset or a file gets instead of a prompt — the loader asks
-    nothing, so the rule is fixed: table order decides. A preset's row on a
+    What a loadable patch or a file gets instead of a prompt — the loader asks
+    nothing, so the rule is fixed: table order decides. A loadable patch's row on a
     meta controller param (`meta_row_refusal`, register row 743) goes first,
     on or off: it owns nothing and nothing may keep it.
     """
@@ -1346,7 +1446,36 @@ def backup(path: Path, schema: str) -> Path | None:
     return bak
 
 
-def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
+# the dial's readings were `desk.pad.dial.*`, never saved, but a row learned onto one
+# was (plan 28 tells the performer to put Swap dials on a button). They are the loadable
+# patch's now, `pad.dial.*` (register row 730): a pad button's row on one stays, as any
+# meta row on a patch param does, and acts on the deck the pad is on
+OLD_DIAL = "desk.pad.dial."
+
+
+LAYER_WORDS = {"preset": "patch"}     # a desk row's `layer`, saved, in a person's words
+
+
+def layer_word(layer) -> str:
+    """A desk layer as a person reads it: the patch layer, the global layer."""
+    return LAYER_WORDS.get(layer, str(layer))
+
+
+def old_words(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
+    """A file before `bindings/4` in today's words (plan 57): the sources (`nsew`) and the
+    `overlay.*` aliases' targets. Returns (rows, a note per row that moved)."""
+    out, notes = [], []
+    for b in rows:
+        source, target = nsew(b.source), OVERLAY_ALIASES.get(b.target, b.target)
+        if (source, target) != (b.source, b.target):
+            notes.append(f"renamed {b.source} → {b.target} to {source} → {target} (plan 57)")
+            b = replace(b, source=source, target=target)
+        out.append(b)
+    return out, notes
+
+
+def remap_factory(rows: Iterable[Binding], profile: str = "apc40", seen: str = ""
+                  ) -> tuple[list[Binding], list[str]]:
     """The factory rows plan 09 WP4 and plan 15 WP3 moved, on a table of
     any schema: the old APC40 factory rows swapped for the new (APC_REMAP —
     the clock's three buttons, the crossfader's master dim), the METRONOME /
@@ -1357,31 +1486,42 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     clip-stop SAVE AS bar dropped (RETIRED_ROWS, 2026-10-09: a held empty
     bank pad saves now); and,
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
-    ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
+    ``preset.*`` param of the same slot (THEME_TO_BANK); the pad's four
     old factory rows (and B / X's bank rows) moved to the layout of
-    2026-10-14, the preset walk to the d-pad held (2026-10-29), and off the
+    2026-10-14, the loadable patch walk to the d-pad held (2026-10-29), and off the
     pad with BACK's tap tempo the base chase now (2026-11-04)
-    (PAD_LAYOUTS); the track faders' eight invariant audio rows
-    moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
+    (PAD_LAYOUTS, those newer than `seen`, the file's `pad_layout`); the track faders' eight invariant audio rows
+    moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2); any row on the
+    dial's old ids moved to `pad.dial.*` (OLD_DIAL, row 730).
     Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
 
     Plan 19's swap (the sixteen old shape pads, BANK_REMAP) also clears
     the row's layer and gives it the factory row's light: the pad is
     invariant now, and a file from between plan 13's WP3 and WP5 has those
-    rows on the preset layer. An APC40 row is added only where no MIDI row
+    rows on the patch layer. An APC40 row is added only where no MIDI row
     of the table is on its control (`Binding.overlaps`: an any-channel row
     the owner wrote by hand holds every track's pad)."""
     out: list[Binding] = []
     notes: list[str] = []
     moved_theme = False
     for b in rows:
+        if b.target.startswith(OLD_DIAL):
+            target = "pad.dial." + b.target[len(OLD_DIAL):]
+            notes.append(f"moved {b.source} → {b.target} to {target} (the dial's readings "
+                         "are the loadable patch's: the row acts on the deck the pad is on)")
+            b = replace(b, target=target)
         key = (b.source, b.target, b.op, float(b.value))
         if key in RETIRED_ROWS:
             notes.append(f"removed {b.source} → {b.target} (the clip-stop SAVE AS bar is "
                          "retired: hold an empty bank pad to save into it; the row is free)")
             continue
-        hit = APC_REMAP.get(key)
+        if b.target in GONE_TARGETS:
+            notes.append(f"removed {b.source} → {b.target} (HOLD, TAKE and DROP are gone: "
+                         "the crossfade and \"copy on air to off air\" replace them; the "
+                         "row is free)")
+            continue
+        hit = APC_REMAP.get(key) if profile == "apc40" else None    # (the APC40's numbers)
         if hit is not None:
             target, op, value = hit
             plan = APC_REMAP_PLAN.get(b.source, "plan 09")
@@ -1393,9 +1533,9 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
         elif key in FADER_SHIFT_ROWS and b.layer is None:
             notes.append(f"moved {b.source} → {b.target} to the SHIFT layer (the APC40 "
-                         "map of plan 24: the track faders are the presets')")
+                         "map of plan 24: the track faders are the patches')")
             b = replace(b, layer="global")
-        elif key in PAD_REMAP:
+        elif key in PAD_REMAP and PAD_REMAP[key][0] > seen:
             when, hit = PAD_REMAP[key]
             if hit is None:
                 notes.append(f"removed {b.source} → {b.target} (the pad layout of "
@@ -1405,15 +1545,15 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             notes.append(f"remapped {b.source}: {b.target} → {target} (the pad layout "
                          f"of {when})")
             b = replace(b, target=target, op=op, value=value)
-        elif b.target in THEME_TO_PRESET:
-            target = THEME_TO_PRESET[b.target]
-            notes.append(f"remapped {b.source}: {b.target} → {target} (the preset bank "
+        elif b.target in THEME_TO_BANK:
+            target = THEME_TO_BANK[b.target]
+            notes.append(f"remapped {b.source}: {b.target} → {target} (the patch bank "
                          "of plan 13)")
             b = replace(b, target=target)
         out.append(b)
     used = {b.source for b in out}
     midi = [b for b in out if b.is_midi]
-    for source, target, op, value, only_if_moved in APC_NEW_ROWS:
+    for source, target, op, value, only_if_moved in APC_NEW_ROWS if profile == "apc40" else ():
         new = Binding(source, target, op, value, feedback="led")
         if (source in used or (only_if_moved and not moved_theme)
                 or any(b.overlaps(new) for b in midi)):
@@ -1421,6 +1561,13 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         out.append(new)
         notes.append(f"added {source} → {target} (the APC40 map of "
                      f"{APC_REMAP_PLAN.get(source, 'plan 09')})")
+    # a reserved control with no row of the meta controller's (deleted: Learn may not
+    # put one back, plan 44 D5d) gets the factory's again; a row the owner changed stays
+    for f in factory_desk(profile):
+        if (f.source in META_CONTROLS.get(profile, ())
+                and not any(b.layer is None and b.overlaps(f) for b in midi)):
+            out.append(f)
+            notes.append(f"added {f.source} → {f.target} (reserved for the meta controller)")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
     chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}
@@ -1499,7 +1646,7 @@ class Macro:
         """The meta params this macro's subscribers name (row 744), a depth
         subscriber by its route's target."""
         names = (s.base if s.depth is None else s.depth[1] for s in self.subs)
-        return [pid for pid in names if is_session_id(pid)]
+        return [pid for pid in names if is_meta_id(pid)]
 
     @classmethod
     def from_json(cls, d: dict) -> Macro:
@@ -1519,58 +1666,60 @@ def macros_of(doc: dict | None) -> dict[str, Macro]:
     return {mid: Macro.from_json(m) for mid, m in (doc or {}).items()}
 
 
-# the words every door refuses a preset's row on a meta param in (row 743)
-META_WORDS = "{pid} is the meta controller's, tuned before the show; no preset row may drive it"
-
-
-def is_session_id(pid: str | None) -> bool:
-    """Does `pid` name a session param (params.SESSION_GROUPS, plan 13 §4)?
-    By its group prefix, so a param this registry lacks (a band a layout
-    has not built yet) is still classed."""
-    return bool(pid) and part_of_id(pid) == "session"
+# the words every door refuses a loadable patch's row on a meta param in (row 743)
+META_WORDS = "{pid} is the meta controller's, tuned before the show; no patch row may drive it"
+# ...and on a meta param that is one per `Deck` (register row 746: `preset.*`, `deck.chase`,
+# `totem.*`, `poi.*`): a press of one is a person's, whatever it does
+PER_DECK_WORDS = "{pid} is the meta controller's, one per deck, a person's own; no patch's row may drive it"
 
 
 def meta_refusal(pid: str | None) -> str | None:
-    """Why no row of a preset may drive `pid`, or None when one may. The hard
+    """Why no row of a loadable patch may drive `pid`, or None when one may. The hard
     rule (the owner, 2026-11-04, register row 743; overturns the old "a route
     may perform a session param"): tuning like `master.gain` happens before
-    the show, and the refusal says which params belong in the preset. By the
-    id (`is_session_id`), so a table with no registry and a param this build
+    the show, and the refusal says which params belong in the loadable patch. By the
+    id (`is_shared_meta_id`), so a table with no registry and a param this build
     has not made yet are still classed; it says what `part_of` says of every
-    param a registry holds."""
-    return META_WORDS.format(pid=pid) if is_session_id(pid) else None
+    param a registry holds. And a meta param that is one per `Deck` (row 746, replacing
+    row 752's list of load and save verbs): from a row a load lands on the other deck
+    (row 700) and a save writes over a slot's file, so a patch's row on `preset.*` would
+    be one patch changing another, which the absolute rule forbids; `deck.chase`,
+    `totem.*` and `poi.*` are a person's controls, in no look."""
+    if is_shared_meta_id(pid):
+        return META_WORDS.format(pid=pid)
+    return PER_DECK_WORDS.format(pid=pid) if is_per_deck_meta_id(pid) else None
 
 
 def meta_row_refusal(b: Binding, target: str | None = None) -> str | None:
     """`meta_refusal` for row `b` (aimed at `target`, when it is moving), but
-    only if the row is a preset's. The line is `is_session_row`, what the
+    only if the row is a loadable patch's. The line is `is_meta_row`, what the
     meta controller's table holds, and no list of ids: a route of any op and
-    a preset-layer desk row are a preset's; an invariant or global-layer desk
-    row (the APC's MASTER fader on `master.gain`), a key, a pad button and a
+    a patch-layer desk row are a loadable patch's; an invariant or global-layer desk
+    row (the APC's MASTER fader on `output.dim`), a key, a pad button and a
     sink are the meta controller's own and stay."""
-    return None if is_session_row(b) else meta_refusal(b.target if target is None else target)
+    return None if is_meta_row(b) else meta_refusal(b.target if target is None else target)
 
 
 def base_refusal(pid: str, reg: Registry | None = None) -> str | None:
     """Why a macro's base subscriber may not name `pid`, or None when it
     may (plan 13 D9, review of PR #67). A base subscriber is a scene-setter
-    a preset carries, so it names a **performance** param — persisted, not
-    an alias — never a session one (a preset never moves a session base).
+    a loadable patch carries, so it names a **performance** param — persisted, not
+    an alias — never a meta controller one (a loadable patch never moves a meta controller base).
     With a registry the param's own group and flags decide; an id it lacks,
     or no registry, is judged by its group prefix, so a param this build
     has not made yet is kept when its group is a performance one."""
     p = reg.get(pid) if reg is not None else None
     if p is None:
         part = part_of_id(pid)
-        if part == "session":
-            return "a session param, never a preset's (plan 13 D9)"
-        return None if part == "performance" else "not part of a preset"
-    if part_of(p) == "session":
-        return "a session param, never a preset's (plan 13 D9)"
+        if part == "shared_meta":
+            return "a meta controller param, never a patch's (plan 13 D9)"
+        return None if part == "patch" else "not part of a patch"
+    if part_of(p) == "shared_meta":
+        return "a meta controller param, never a patch's (plan 13 D9)"
     if p.alias:
-        return "an alias, not part of a preset"
-    if part_of(p) != "performance" or not p.persist:
-        return "not part of a preset"
+        return "an alias, not part of a patch"
+    if part_of(p) != "patch" or not p.persist:
+        return "not part of a patch"
     return None
 
 
@@ -1600,20 +1749,20 @@ def settle_bases(doc: dict | None, reg: Registry | None = None
 
 def migrate_scales(rows: Iterable[Binding], macros: dict[str, Macro]) -> list[str]:
     """A route's `scale` settled (decision register row 18 (a)): it is the
-    rig's attenuator, so it names a **session** param — the legacy6 rate
+    meta controller's attenuator, so it names a **shared meta** param — the legacy6 rate
     rows' `master.gain`, the drive fader — and is kept only then.
     `scale: "macro.N"` becomes a depth subscriber of macro.N `from 0, to 1`
     (unless an identical one is there) and the row loses the field (plan 13
     §2.4); a `scale` naming any other param — a performance one, which a
-    preset load could move under the route — is dropped, the depth left as
+    loadable patch load could move under the route — is dropped, the depth left as
     it is. Edits `rows` and `macros` in place; returns a note per row."""
     notes: list[str] = []
     for b in rows:
-        if b.scale is None or is_session_id(b.scale):
+        if b.scale is None or is_shared_meta_id(b.scale):
             continue
         if not is_macro(b.scale):
             notes.append(f"dropped the scale {b.scale} of {b.source} → {b.target}: a route's "
-                         "scale is a session param (decision register row 18 (a)); a macro "
+                         "scale is a meta controller param (decision register row 18 (a)); a macro "
                          "attenuates a route as its depth subscriber")
             b.scale = None
             continue
@@ -1639,7 +1788,7 @@ def sort_layers(rows: Iterable[Binding], profile: str = "apc40"
     """Give an older file's MIDI rows their layers, once (plan 13 §3.2, §6):
     a row identical to a factory row in (source, target, op, value) takes
     that row's layer; any other row on an invariant factory control stays
-    invariant; any other row goes to the preset layer. Then the factory's
+    invariant; any other row goes to the patch layer. Then the factory's
     global rows and SHIFT are added where the file has no row on that
     control for that layer. A profile with no factory map keeps every row
     invariant. Returns (rows, notes)."""
@@ -1747,12 +1896,12 @@ def register_desk(reg: Registry, table: Bindings) -> None:
     24 C1) — a momentary row sets it, and while it is on a bank pad's tap
     saves instead of loading (midi.py); never saved, never performed.
     `desk.fine`: the desk's FINE held, the same shape (wave 2 T3). And
-    `desk.slew`: the table's knob smoothing (plan 18 WP2), a session param
-    a show keeps and no preset may name. The first table a registry meets
-    keeps each. Plan 44 D3: every one is a session param (group `desk`),
-    so a deck's registry hands it to the session registry and a second
-    deck finds it there — declared once; each reads and writes the session
-    table (`SessionTable`: the latch, the slew, the pad's feel) through
+    `desk.slew`: the table's knob smoothing (plan 18 WP2), a shared meta param
+    a show keeps and no loadable patch may name. The first table a registry meets
+    keeps each. Plan 44 D3: every one is a shared meta param (group `desk`),
+    so a deck's registry hands it to the meta controller registry and a second
+    deck finds it there — declared once; each reads and writes the meta controller
+    table (`MetaTable`: the latch, the slew, the pad's feel) through
     whichever deck's table declared it."""
     if SHIFT_PARAM not in reg:
         reg.toggle(SHIFT_PARAM, "Shift", lambda: table.layer == "global",
@@ -1760,7 +1909,7 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    persist=False, modulatable=False,
                    tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
                        "(the analyzer strip, the hand feel, BPM, the analyzer scenes); off, the "
-                       "loaded preset's. Loading a preset turns it off.")
+                       "loaded patch's. Loading a patch turns it off.")
     if SAVE_PARAM not in reg:
         # held by the hand on SAVE, never saved: a reconnect lets go of it
         # (midi.MidiIO._enter), so a lost note-off cannot leave it down
@@ -1770,8 +1919,8 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    persist=False, modulatable=False,
                    tip="The APC40's SAVE (track 8's clip stop): hold it and tap a bank "
                        "pad to save the live state into that slot. An empty slot gets a "
-                       "new preset; a filled one gets a new preset too (TRIP → TRIP 2) "
-                       "and the old one stays in the preset list. Nothing is ever "
+                       "new patch; a filled one gets a new patch too (TRIP → TRIP 2) "
+                       "and the old one stays in the patch list. Nothing is ever "
                        "overwritten. SAVE alone does nothing.")
     if FINE_PARAM not in reg:
         fine = [False]                  # (as SAVE's: `midi.HELD_PARAMS` lets go of it)
@@ -1798,7 +1947,7 @@ def declare_modifiers(reg: Registry, mods: Iterable[Modifier]) -> None:
     """The modifiers' params on `reg` (plan 28 N1), the way `fx.declare`
     adds an effect's: every ``mod.*`` param dropped, then ``mod.<n>.<p>``
     for each modifier's kind (`modifiers.PARAMS`), group ``mod`` — a
-    performance group, so preset content — modulatable, a view onto the
+    patch group, so loadable patch content — modulatable, a view onto the
     modifier's `params`. A route onto one of a modifier that went away
     goes dormant, as for a deleted band."""
     reg.remove_prefix(modifiers.PREFIX)
@@ -1826,8 +1975,8 @@ PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
 
 
 def _register_pad_feel(reg: Registry, table: Bindings) -> None:
-    """The pad's feel as six session params over `table.pad_feel` (the
-    mode; follow's attack and release; a spring's preset, perceptual
+    """The pad's feel as six shared meta params over `table.pad_feel` (the
+    mode; follow's attack and release; a spring's loadable patch, perceptual
     duration and bounce): the
     motion an `axis` lane travels with when its row names none, and the
     sticks' default camera job's (motion.py). Off, a stick is as it reads."""
@@ -1897,7 +2046,7 @@ def _register_pad_feel(reg: Registry, table: Bindings) -> None:
 
 
 
-# the stick spring's session params before 2026-10-29 — a natural frequency
+# the stick spring's shared meta params before 2026-10-29 — a natural frequency
 # and a damping ratio: an old show's values read as the perceptual knobs
 # (`renamed_session`), and its file is kept before a save drops them
 # (library.SPRING_BACKUP)
@@ -1940,6 +2089,8 @@ def dumps_doc(d: dict) -> str:
     rows = ",\n".join("  " + json.dumps(b) for b in d["bindings"])
     text = f'{{\n "schema": {json.dumps(d["schema"])},\n'
     text += f' "profile": {json.dumps(d["profile"])},\n'
+    if d.get(PAD_LAYOUT_KEY):            # plan 57 (row 723): the pad layouts it has seen
+        text += f' {json.dumps(PAD_LAYOUT_KEY)}: {json.dumps(d[PAD_LAYOUT_KEY])},\n'
     if d.get("sinks_seeded"):            # plan 27 B3: the sinks' `send` lists translated
         text += f' "sinks_seeded": {json.dumps(d["sinks_seeded"])},\n'
     text += f' "bindings": [\n{rows}\n ]'
@@ -1948,11 +2099,11 @@ def dumps_doc(d: dict) -> str:
     return text + "\n}\n"
 
 
-def is_session_row(b: Binding) -> bool:
+def is_meta_row(b: Binding) -> bool:
     """A row `bindings.json` keeps (plan 13 §2.2): anything but a performer
-    row (push / position, disabled ones too) and a preset-layer MIDI row —
-    those are the loaded preset's. A sink row (plan 27 B3, `SINK_OP`) is
-    the session's: sinks are rig (D1 / D9)."""
+    row (push / position, disabled ones too) and a patch-layer MIDI row —
+    those are the loaded patch's. A sink row (plan 27 B3, `SINK_OP`) is
+    the meta controller's: sinks are meta controller (D1 / D9)."""
     # (the layer first: the undo stack reads this for every row, every frame,
     # and `is_midi` parses the source)
     return b.op not in MOD_OPS and not (b.layer == "preset" and b.is_midi)
@@ -1960,9 +2111,9 @@ def is_session_row(b: Binding) -> bool:
 
 @dataclass
 class Carried:
-    """What an older `bindings.json` held that is a preset's now (plan 13
+    """What an older `bindings.json` held that is a loadable patch's now (plan 13
     §6): its performer rows (the referee's refusals after them, so nothing
-    is lost and the first still wins), its preset-layer MIDI rows (None:
+    is lost and the first still wins), its patch-layer MIDI rows (None:
     the file had none), its macros and its `values`. `Bindings.load` keeps
     it in memory; nothing reads it since 2026-10-28 (plan 13 §6's migration
     is retired), and the next write leaves it out."""
@@ -1976,38 +2127,38 @@ class Carried:
         return not (self.routes or self.desk or self.macros or self.values)
 
 
-# the attributes of a deck's table that are the session table's (plan 44
+# the attributes of a deck's table that are the meta table's (plan 44
 # D3): one value for every deck, read and written through the deck's
-# table as before (`Bindings.<name>` is a property onto `session`)
-SESSION_ATTRS = ("path", "profile", "slew", "pad_feel", "unbacked", "said", "midi_roles",
+# table as before (`Bindings.<name>` is a property onto `meta_table`)
+META_TABLE_ATTRS = ("path", "profile", "slew", "pad_feel", "unbacked", "said", "midi_roles",
                  "primaries", "row_schemes", "carried", "error", "migrated", "read_at",
                  "changed", "sinks_seeded", "layer", "layers", "layer_serial",
                  "page", "page_serial")
 
 
-class SessionTable:
-    """The rig's half of the binding table (plan 44 D3): the session's rows
+class MetaTable:
+    """The meta controller's half of the binding table (plan 44 D3): the meta controller's rows
     and the file they live in — `bindings.json`, which holds only them
-    (`is_session_row`: key, pad, hat, invariant and global-layer MIDI rows,
-    sink rows) — and the session's own state: the knob smoothing
+    (`is_meta_row`: key, pad, hat, invariant and global-layer MIDI rows,
+    sink rows) — and the meta controller's own state: the knob smoothing
     (`desk.slew`), the pad's feel, the desk's layer latch per MIDI role
     (`layer`, `layers`, `desk.shift`), the device registry's facts
     (`midi_roles`, `primaries`, `row_schemes`, which `Sources.follow`
     writes here), and what the launch did to the file (`read_at`,
     `migrated`, `unbacked`, `said`, `error`, `carried`, `sinks_seeded`).
 
-    One for the rig. Each deck's `Bindings` follows it (`follow`) and holds
-    its rows by reference beside the deck's own (routes, the desk's preset
+    One for the meta controller. Each deck's `Bindings` follows it (`follow`) and holds
+    its rows by reference beside the deck's own (routes, the desk's loadable patch
     layer, the macros, the modifiers), so a deck's table is still one list;
-    a session row a deck learns, edits or drops is handed to every other
+    a meta row a deck learns, edits or drops is handed to every other
     deck's table at once (`Bindings._share`). The file is read by
-    `Bindings.load(path)` into a first deck's table (its `.session` is this
+    `Bindings.load(path)` into a first deck's table (its `.meta_table` is this
     table; the old file's migrations — `migrate_v1`, `remap_factory` — and
     its `backup` first) and written here: `to_json`, `dumps`, `write`."""
 
     # knob smoothing in seconds (`desk.slew`, register_desk; midi.py reads
-    # it): the session's — a show keeps it, bindings.json never does. On
-    # the class, so a session from before a hot reload has it too
+    # it): the meta controller's — a show keeps it, bindings.json never does. On
+    # the class, so a meta controller from before a hot reload has it too
     slew: float = 0.0
     # the surface page up on the desk (`Bindings.page`): the desk's, so it
     # stays up whichever deck the desk is on (plan 44 D5a). On the class too
@@ -2015,7 +2166,7 @@ class SessionTable:
     page_serial: int = 0
     # the pad's feel (`pad.feel` …, register_desk): the motion an `axis`
     # lane travels with when its row names none, and the sticks' default
-    # camera job's (app.py). The session's, on the class like `slew`
+    # camera job's (app.py). The meta controller's, on the class like `slew`
     pad_feel: Motion = OFF
     # no backup, no rewrite (plan 19 fork 12): the schema number the file
     # was read at while a load changed the table in memory (a migration, a
@@ -2026,9 +2177,9 @@ class SessionTable:
     unbacked: str | None = None
     # what the launch did to the file, in one line, for the SYSTEM page
     # (`announce`; app.py adds it to the page's notes). `notes` holds the
-    # rows one by one until the next edit — and the startup preset's load
+    # rows one by one until the next edit — and the startup loadable patch's load
     # is an edit (`set_routes`), so they are gone before the first frame;
-    # this line stays for the session. "" when the load wrote nothing
+    # this line stays for the meta controller. "" when the load wrote nothing
     said: str = ""
     # the MIDI devices' roles (plan 27 B2; the device registry sets them,
     # `DeviceRegistry.midi_roles`: the desk of this table's profile first,
@@ -2040,8 +2191,8 @@ class SessionTable:
     # every other scheme's primary device (plan 27 B6; the registry sets
     # it, `DeviceRegistry.primaries`): scheme → the role of the first
     # enabled device of its kind in list order, whose rows are unqualified
-    # (``pad:A`` is the first pad's; a second pad's carry its role,
-    # ``pad@p2:A``). Empty — a bare table — names no role
+    # (``pad:S`` is the first pad's; a second pad's carry its role,
+    # ``pad@p2:S``). Empty — a bare table — names no role
     primaries: dict[str, str] = {}  # noqa: RUF012 — never mutated: replaced whole
     # the schemes delivered as rows, never read as lanes (`_check`): the
     # table's own kinds, and any a device of this rig adds (`Router.use`)
@@ -2058,7 +2209,7 @@ class SessionTable:
         self.carried: Carried | None = None
         self.error = ""
         self.migrated = False
-        self.read_at = "3"
+        self.read_at = "4"
         self.changed = False
         self.sinks_seeded: list[str] = []
         self.layer = "preset"
@@ -2086,19 +2237,19 @@ class SessionTable:
 
     @property
     def rows(self) -> list[Binding]:
-        """The session's rows, in their order: one list in every deck."""
+        """The meta controller's rows, in their order: one list in every deck."""
         tables = self.tables
-        return [b for b in tables[0].bindings if is_session_row(b)] if tables else []
+        return [b for b in tables[0].bindings if is_meta_row(b)] if tables else []
 
     def set_rows(self, rows: Iterable[Binding]) -> None:
-        """An undo's restore: these are the session's rows now, in every deck's
+        """An undo's restore: these are the meta controller's rows now, in every deck's
         table, with each table's own after them as `Bindings._share` leaves
         them, and in the file, where a row lives the moment it changes."""
         tables = self.tables
         if not tables:
             return
         home = tables[0]
-        home.bindings = [*rows, *(b for b in home.bindings if not is_session_row(b))]
+        home.bindings = [*rows, *(b for b in home.bindings if not is_meta_row(b))]
         home.dropped, home.notes = [], []
         home._share()
         for t in tables:
@@ -2107,20 +2258,20 @@ class SessionTable:
         self.write()
 
     def sinks(self, role: str | None = None, *, enabled: bool = True) -> list[Binding]:
-        """The sink rows (plan 27 B3), the session's: of `role`, enabled ones."""
+        """The sink rows (plan 27 B3), the meta controller's: of `role`, enabled ones."""
         return [b for b in self.rows if b.is_sink and (not enabled or b.enabled)
                 and (role is None or b.sink[0] == role)]
 
     # ---- the file ----
 
     def to_json(self, rows: Iterable[Binding] | None = None) -> dict:
-        """The file's dict: the session's rows only (`is_session_row`) — never
-        a performer row, a preset-layer row, the macros or any values;
+        """The file's dict: the meta controller's rows only (`is_meta_row`) — never
+        a performer row, a patch-layer row, the macros or any values;
         those are a deck's (plan 13 §2.2). `rows`: a table's whole list, of
-        which the session's are written (default: `rows`)."""
+        which the meta controller's are written (default: `rows`)."""
         rows = self.rows if rows is None else rows
-        d = {"schema": SCHEMA, "profile": self.profile,
-             "bindings": [b.to_json() for b in rows if is_session_row(b)]}
+        d = {"schema": SCHEMA, "profile": self.profile, PAD_LAYOUT_KEY: PAD_LAYOUT_NEWEST,
+             "bindings": [b.to_json() for b in rows if is_meta_row(b)]}
         seeded = getattr(self, "sinks_seeded", None)
         if seeded:
             d["sinks_seeded"] = list(seeded)
@@ -2133,7 +2284,7 @@ class SessionTable:
         return dumps_doc(self.to_json(rows))
 
     def write(self, rows: Iterable[Binding] | None = None) -> None:
-        """The session's rows to the file (`to_json`). While the load owes
+        """The meta controller's rows to the file (`to_json`). While the load owes
         the file a backup (`unbacked`) that copy is made first, and nothing
         is written without it — the file stays as the owner had it, `error`
         says so."""
@@ -2147,41 +2298,60 @@ class SessionTable:
             self.said = f"{self.path.name} updated, the old file kept as {bak.name}"
         self.unbacked = None
         try:
-            self.path.write_text(self.dumps(rows))
+            # (review of #435: a temp file beside it, then renamed over: a crash
+            # mid-write never leaves half a file)
+            tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}.tmp")
+            try:
+                tmp.write_text(self.dumps(rows))
+                tmp.replace(self.path)
+            finally:
+                tmp.unlink(missing_ok=True)
             self.error = ""
         except OSError as e:
             self.error = f"bindings: {e}"
 
 
-def _session_attr(name: str) -> property:
-    """A deck table's view of the session table's `name` (plan 44 D3)."""
+def _meta_table_attr(name: str) -> property:
+    """A deck table's view of the meta table's `name` (plan 44 D3)."""
     return property(lambda self: getattr(self._sess(), name),
                     lambda self, v: setattr(self._sess(), name, v),
-                    doc=f"The session table's `{name}` (`SessionTable`).")
+                    doc=f"The meta table's `{name}` (`MetaTable`).")
+
+
+class NodeRows(Protocol):
+    """What a table asks of `node_desk.NodeDesk`, which is the meta controller's and above
+    this module."""
+
+    def rows(self, role: str | None = None) -> list[Binding]: ...
+    def serial(self, role: str | None = None) -> int: ...
+    def under(self, b: Binding) -> bool: ...
+    def holding(self) -> frozenset[str]: ...
+    def away(self, b: Binding, role: str | None = None) -> bool | None: ...
+    def routed(self) -> list[Binding]: ...
 
 
 class Bindings:
     """A deck's table: rows of every scheme, indexed for the adapters.
 
-    In memory the table holds the session's rows — by reference, the
-    session table's (`session`, `SessionTable`, plan 44 D3) — and this
-    deck's own: the loaded preset's performer rows, preset layer, macros
+    In memory the table holds the meta controller's rows — by reference, the
+    meta table's (`meta_table`, `MetaTable`, plan 44 D3) — and this
+    deck's own: the loaded patch's performer rows, patch layer, macros
     and modifiers, so `bindings`, `routes()`, `desk()`, `serves`, the
     referee and `dispatch` see one list as they always have. The file
-    (`to_json`, `write`) holds only the session's (`is_session_row`), and
-    the session's state (`SESSION_ATTRS`: the slew, the pad feel, the layer
-    latch, the rig facts, what the launch did to the file) is read and
-    written through this table onto the session table."""
+    (`to_json`, `write`) holds only the meta controller's (`is_meta_row`), and
+    the meta controller's state (`META_TABLE_ATTRS`: the slew, the pad feel, the layer
+    latch, the meta controller facts, what the launch did to the file) is read and
+    written through this table onto the meta table."""
 
-    # the loaded preset's modifiers (plan 28 N1, `modifiers.Modifier`), in
+    # the loaded patch's modifiers (plan 28 N1, `modifiers.Modifier`), in
     # id order: a tuple, always replaced whole (`set_modifiers`,
     # `add_modifier`, `remove_modifier`), so a table from before a hot
-    # reload reads the class's empty one. The preset's, never the file's:
-    # `to_json` writes rows only, and `is_session_row` is about rows
+    # reload reads the class's empty one. The loadable patch's, never the file's:
+    # `to_json` writes rows only, and `is_meta_row` is about rows
     modifiers: tuple[Modifier, ...] = ()
     modifiers_serial: int = 0    # bumped by every change: the Router's lanes follow
-    # row 563 (2026-11-02): told after every `set_modifiers` — the preset
-    # points it at `Presets.settle_groups`, so a modifier removed by any
+    # row 563 (2026-11-02): told after every `set_modifiers` — the loadable patch
+    # points it at `LoadedPatch.settle_groups`, so a modifier removed by any
     # road leaves its GRAPH group in the same call (class-level: an
     # instance from before a hot reload has it)
     on_modifiers: Callable[[], None] | None = None
@@ -2190,78 +2360,84 @@ class Bindings:
     # every row on their controls, invariant ones included, while it is up;
     # they are in memory only — never in `bindings`, never saved, never
     # Learnable. `page_serial` counts the flips (`set_page`): midi.py
-    # redraws the whole desk on one. The session table's (`SESSION_ATTRS`)
+    # redraws the whole desk on one. The meta table's (`META_TABLE_ATTRS`)
 
-    # plan 44 D3: the session table's state (`SESSION_ATTRS`) is read and
+    # N1a (plan 53, `node_desk.NodeDesk`): the rows this deck's loadable patch's node
+    # mode derives for a desk. The deck's own, never the meta table's: one patch's
+    # pointing is no row of the other's. Never in `bindings`, so never saved, no
+    # learn's, and no pair asks over one (`Learn`, row 754). None: no rows
+    node_desk: NodeRows | None = None
+
+    # plan 44 D3: the meta table's state (`META_TABLE_ATTRS`) is read and
     # written through this table — one property per name, made from the
     # list below the class (review of #351: one list, one copy)
 
     @property
-    def session(self) -> SessionTable:
-        """The session table this deck's table follows (plan 44 D3)."""
+    def meta_table(self) -> MetaTable:
+        """The meta table this deck's table follows (plan 44 D3)."""
         return self._sess()
 
-    def _sess(self) -> SessionTable:
-        """The session table — made here, from what the table held itself,
+    def _sess(self) -> MetaTable:
+        """The meta table — made here, from what the table held itself,
         for a table from before a hot reload (re-classed, never re-inited)."""
-        s = self.__dict__.get("_session")
+        s = self.__dict__.get("_meta_table")
         if s is None:
-            s = SessionTable()
-            for name in SESSION_ATTRS:
+            s = MetaTable()
+            for name in META_TABLE_ATTRS:
                 if name in self.__dict__:
                     setattr(s, name, self.__dict__.pop(name))
-            self.__dict__["_session"] = s
+            self.__dict__["_meta_table"] = s
             s.follow(self)
         return s
 
     def _share(self) -> None:
-        """Hand this table's session rows to every other deck's table that
-        follows the session (plan 44 D3): one set of `Binding` objects,
+        """Hand this table's meta rows to every other deck's table that
+        follows the meta controller (plan 44 D3): one set of `Binding` objects,
         first in each table's list, the deck's own rows after. A no-op with
         one deck."""
         others = [t for t in self._sess().tables if t is not self]
         if not others:
             return
-        rows = [b for b in self.bindings if is_session_row(b)]
+        rows = [b for b in self.bindings if is_meta_row(b)]
         for t in others:
-            t.bindings = [*rows, *(b for b in t.bindings if not is_session_row(b))]
+            t.bindings = [*rows, *(b for b in t.bindings if not is_meta_row(b))]
             t.rows_serial = getattr(t, "rows_serial", 0) + 1
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
-                 profile: str | None = None, session: SessionTable | None = None):
-        # plan 44 D3: the session table this deck's table follows — given,
+                 profile: str | None = None, meta_table: MetaTable | None = None):
+        # plan 44 D3: the meta table this deck's table follows — given,
         # its rows are this table's first (by reference) and `path` and
         # `profile` are its (one naming another is refused: the file is the
-        # session's); else a new one over `path` and `profile`
+        # meta controller's); else a new one over `path` and `profile`
         own = list(bindings)
         shared = False
-        if session is None:
-            session = SessionTable(path=path, profile=profile or "apc40")
+        if meta_table is None:
+            meta_table = MetaTable(path=path, profile=profile or "apc40")
             self.bindings: list[Binding] = own
-        elif (path is not None and path != session.path) or (
-                profile is not None and profile != session.profile):
-            raise ValueError("Bindings(session=): the path and profile are the session's — "
-                             f"{session.path} / {session.profile}")
-        elif session.tables:
-            # (review of #351, round 2: a session row given that the session
-            # lacks is shared, never dropped — added after the session's,
+        elif (path is not None and path != meta_table.path) or (
+                profile is not None and profile != meta_table.profile):
+            raise ValueError("Bindings(meta_table=): the path and profile are the meta table's — "
+                             f"{meta_table.path} / {meta_table.profile}")
+        elif meta_table.tables:
+            # (review of #351, round 2: a meta row given that the meta controller
+            # lacks is shared, never dropped — added after the meta controller's,
             # and handed to every deck by the `_share` below)
-            have = session.rows
+            have = meta_table.rows
             known = {json.dumps(b.to_json(), sort_keys=True) for b in have}
-            extra = [b for b in own if is_session_row(b)
+            extra = [b for b in own if is_meta_row(b)
                      and json.dumps(b.to_json(), sort_keys=True) not in known]
-            self.bindings = [*have, *extra, *(b for b in own if not is_session_row(b))]
+            self.bindings = [*have, *extra, *(b for b in own if not is_meta_row(b))]
             shared = bool(extra)
         else:
-            # (review of #351: a session no table follows yet holds no rows —
+            # (review of #351: a meta controller no table follows yet holds no rows —
             # the first table to follow it seeds them, its own given ones)
             self.bindings = own
-        self.__dict__["_session"] = session
-        session.follow(self)
-        # the preset content an older file carried (`Carried`), until the
-        # first-launch migration moves it into presets; None once it has
+        self.__dict__["_meta_table"] = meta_table
+        meta_table.follow(self)
+        # the loadable patch content an older file carried (`Carried`), until the
+        # first-launch migration moves it into loadable patches; None once it has
         # (or for a file that never had any)
-        # what the referee refused from the last preset or file, (row, why),
+        # what the referee refused from the last loadable patch or file, (row, why),
         # for the ROUTING page to show until the next edit
         self.dropped: list[tuple[Binding, str]] = []
         # from_json read a schema-1 file: `notes` names every row it dropped
@@ -2279,12 +2455,12 @@ class Bindings:
         # rows (plan 27 B3, devices.DeviceRegistry._seed_sinks): kept in the
         # file, so deleting every row of a role never brings the list back
         # the desk (plan 13 §3): which layer is up — runtime, never saved,
-        # a fresh start is on the preset layer — and two counters the MIDI
+        # a fresh start is on the patch layer — and two counters the MIDI
         # adapter watches: a layer change or a desk replacement redraws
         # every ring and LED, and a replacement clears the faders' catch
         # the other MIDI roles' layers (plan 27 B2: the latch is per role —
         # `layer` is the first role's, SHIFT's, `desk.shift`); a role with
-        # no latch of its own stays on the preset layer
+        # no latch of its own stays on the patch layer
         self.desk_serial = 0
         # an edit of a desk row in place (the ROUTING page): a redraw only,
         # never the faders' catch cleared — no base moved
@@ -2294,15 +2470,15 @@ class Bindings:
         # and length (ui_pad's), so it never scans the rows to notice
         self.rows_serial = 0
         if shared:
-            self._share()                 # (the session rows it added, every deck's)
+            self._share()                 # (the meta rows it added, every deck's)
 
     # ---- construction ----
 
     @classmethod
     def factory(cls, profile: str = "apc40", path: Path | None = None) -> Bindings:
-        """Keys, pad and the device profile's default MIDI map — its preset
-        layer too, the fresh preset's desk, which the file never keeps. No
-        performer rows: those are the loaded preset's (plan 13 §2.2; the
+        """Keys, pad and the device profile's default MIDI map — its loadable patch
+        layer too, the fresh loadable patch's desk, which the file never keeps. No
+        performer rows: those are the loaded patch's (plan 13 §2.2; the
         house presets carry the legacy6 lane rows)."""
         return cls([*keymap(), *padmap(), *factory_desk(profile)], path=path, profile=profile)
 
@@ -2320,11 +2496,11 @@ class Bindings:
         file is not rewritten** (plan 19 fork 12): the table in memory is
         the changed one, `error` says so, and the next launch tries again.
 
-        A file that still holds a preset's part — performer rows,
-        preset-layer MIDI rows, `macros`, `values` (every file before plan
+        A file that still holds a loadable patch's part — performer rows,
+        patch-layer MIDI rows, `macros`, `values` (every file before plan
         13 WP5) — keeps it in memory and in `carried`, and is **not**
         rewritten here, whatever else changed (plan 13 §6's migration moved
-        that part into presets first; retired since 2026-10-28, the next write
+        that part into loadable patches first; retired since 2026-10-28, the next write
         drops it)."""
         if path is not None and path.exists():
             try:
@@ -2335,7 +2511,8 @@ class Bindings:
                 t = cls.factory(profile, path)
                 t.error = f"bindings: {e}"
                 return t
-            t.bindings, remapped = remap_factory(t.bindings)
+            t.bindings, remapped = remap_factory(t.bindings, t.profile,
+                                                 str(data.get(PAD_LAYOUT_KEY) or ""))
             t.notes += remapped
             carried = Carried(
                 routes=[b.to_json() for b in [*t.routes(), *(b for b, _ in t.dropped)]],
@@ -2365,11 +2542,11 @@ class Bindings:
                 n = len(rows)
                 rows, _ = sort_layers(rows, t.profile)     # the desk's layers, plan 13 §3.2
                 t.bindings = [b for b in t.bindings if not b.is_midi] + rows
-                # a knob the old map had off the factory's is a preset's row
+                # a knob the old map had off the factory's is a loadable patch's row
                 # now: kept for the migration, like a newer file's — with the
                 # lane rows the factory table shipped then, the routes this
-                # rig played — and the file is left for the migration to write
-                # (written now, it would hold the session's rows only, and a
+                # meta controller played — and the file is left for the migration to write
+                # (written now, it would hold the meta controller's rows only, and a
                 # launch whose migration stopped would lose the knobs)
                 fresh = sorted(json.dumps(b.to_json(), sort_keys=True)
                                for b in factory_desk(t.profile) if b.layer == "preset")
@@ -2395,7 +2572,7 @@ class Bindings:
         changed = len(self.notes) - dropped
         tail = ", ".join(f"{n} rows {what}" for n, what in ((dropped, "dropped"),
                                                               (changed, "changed")) if n)
-        verb = "migrated" if self.migrated or self.read_at != "3" else "updated"
+        verb = "migrated" if self.migrated or self.read_at != "4" else "updated"
         what = f"migrated {path} to {SCHEMA}" if verb == "migrated" else f"updated {path}"
         if not written:
             what = (f"{path} not rewritten — no backup could be made; the changes above "
@@ -2421,19 +2598,19 @@ class Bindings:
         Schema 3 adds `layer` on MIDI rows and the `macros` key. An older
         file's MIDI rows get their layers once (`sort_layers`; a file with
         no MIDI rows gets none added, and `desk=False` — an old routing
-        preset read by the migration, whose MIDI rows are never read —
+        loadable patch read by the migration, whose MIDI rows are never read —
         skips the sort), and on any schema a row's `scale` is settled
         (`migrate_scales`: a macro's a depth subscriber, a performance
         param's dropped); either sets `changed`, noted, so `load` writes
         the file back once (or leaves it to the migration, `load`)."""
         schema = data.get("schema")
-        if schema not in (SCHEMA, SCHEMA_V2, SCHEMA_V1, None):
+        if schema not in (SCHEMA, SCHEMA_V3, SCHEMA_V2, SCHEMA_V1, None):
             raise ValueError(f"unknown schema {schema!r}")
         # wave 0 T1: a file without the `units` marker has its rows' depths
         # onto the effects' retapered params — a button's `set` norm, a
         # hand-edited push — measured along the linear ranges: read as they
         # were (`params.retaper_depths`, against the shader folder's effect
-        # files: a session row has no base of its own, so a push is measured
+        # files: a meta row has no base of its own, so a push is measured
         # about the effect's default), noted, and the file written back once
         data, retapered = retaper_depths(data, fx_files())
         rows = [Binding.from_json(b) for b in data.get("bindings", [])]
@@ -2444,10 +2621,14 @@ class Bindings:
             notes += v1_notes
         profile = data.get("profile", "apc40")
         changed = bool(retapered)
-        if desk and schema != SCHEMA and any(b.is_midi for b in rows):
+        if desk and schema not in (SCHEMA, SCHEMA_V3) and any(b.is_midi for b in rows):
             rows, sorted_notes = sort_layers(rows, profile)
             notes += sorted_notes
             changed = bool(sorted_notes)
+        if schema != SCHEMA:       # plan 57: `bindings/4`, this Mac's file at its next launch
+            rows, renamed = old_words(rows)
+            notes += renamed
+            changed = True
         macros = macros_of(data.get("macros"))
         moved = migrate_scales(rows, macros)
         notes += moved
@@ -2469,9 +2650,9 @@ class Bindings:
         return t
 
     def to_json(self) -> dict:
-        """The file's dict: the session's rows of this table only
-        (`SessionTable.to_json`) — never a performer row, a preset-layer
-        row, the macros or any values; those are the loaded preset's (plan
+        """The file's dict: the meta controller's rows of this table only
+        (`MetaTable.to_json`) — never a performer row, a patch-layer
+        row, the macros or any values; those are the loaded patch's (plan
         13 §2.2)."""
         return self._sess().to_json(self.bindings)
 
@@ -2480,7 +2661,7 @@ class Bindings:
         return self._sess().dumps(self.bindings)
 
     def write(self) -> None:
-        """The session's rows to the file (`SessionTable.write`), the backup
+        """The meta controller's rows to the file (`MetaTable.write`), the backup
         a load owes made first."""
         self._sess().write(self.bindings)
 
@@ -2498,7 +2679,7 @@ class Bindings:
 
     def routes(self) -> list[Binding]:
         """Every performer row, disabled ones too — what the matrix lists
-        and a preset saves."""
+        and a loadable patch saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
 
     def sinks(self, role: str | None = None, *, enabled: bool = True) -> list[Binding]:
@@ -2558,24 +2739,28 @@ class Bindings:
     # ---- the desk: two layers under a latched SHIFT (plan 13 §3) ----
 
     def invariant_rows(self) -> list[Binding]:
-        """The enabled MIDI rows with no layer: the session's controls."""
+        """The enabled MIDI rows with no layer: the meta controller's controls."""
         return [b for b in self.bindings if b.is_midi and b.layer is None and b.enabled]
 
     def is_invariant(self, b: Binding, rows: list[Binding] | None = None) -> bool:
         """Is `b`'s control invariant — SHIFT (the first role's latch), or
         the control of an enabled layer-None row on the same device
-        (`rows`, when the caller has them)? A layered row on such a control
+        (`rows`, when the caller has them), or one of the profile's
+        controls reserved for the meta controller (`META_CONTROLS`, on the first
+        role's desk, as SHIFT, whatever the table holds on it: plan 44 D5d)? A layered row on such a control
         never acts and never lights (D6)."""
         if not b.is_midi:
             return False
-        if self.is_primary(b.device) and Binding(b.bare, "").overlaps(_SHIFT):
+        bare, primary = _bare_row(b.bare), self.is_primary(b.device)
+        if primary and (bare.overlaps(_SHIFT)
+                        or any(bare.overlaps(x) for x in _reserved(self.profile))):
             return True
         # a page's control while it is up: the page's, so no Learn takes it.
         # Only for the desk as it stands (`rows` None): given `rows`, the
-        # question is the table's own (D6: a preset's desk loaded under the
+        # question is the table's own (D6: a loadable patch's desk loaded under the
         # page keeps its rows there)
-        if (rows is None and self.is_primary(b.device)
-                and any(Binding(b.bare, "").overlaps(x) for x in self.page_rows)):
+        if (rows is None and primary
+                and any(bare.overlaps(x) for x in self.page_rows)):
             return True
         inv = self.invariant_rows() if rows is None else rows
         return any(x is not b and b.overlaps(x) for x in inv)
@@ -2615,21 +2800,43 @@ class Bindings:
         (plan 27 B2: the latch is per role) — nothing else (D8: no
         fall-through; a control the up layer does not map does nothing).
         A surface page's rows come first (plan 31 §A): on a page control
-        they are all there is, and a disabled one does nothing."""
+        they are all there is, and a disabled one does nothing. Node mode's
+        rows (N1a) are the patch layer's, ahead of its saved rows on the same
+        control: under SHIFT the global layer is as it was, since a patch has
+        no say there."""
         if self.is_primary(role):
             page = [b for b in self.page_rows if b.matches(kind, channel, number)]
             if page:
                 return [b for b in page if b.enabled]
         rows = [b for b in self.route(kind, channel, number)
                 if b.enabled and self.serves(role, b)]
-        inv = [b for b in rows if b.layer is None]
+        above = self.above_layers(kind, channel, number, role, rows)    # (one scan a message)
+        if above is not None:
+            return above
+        layer = self.layer_of(role)
+        if layer == "preset":
+            node = [b for b in self.node_rows(role) if b.matches(kind, channel, number)]
+            if node:
+                return node
+        return [b for b in rows if b.layer == layer]
+
+    def above_layers(self, kind: str, channel: int, number: int, role: str | None = None,
+                     rows: Iterable[Binding] | None = None) -> list[Binding] | None:
+        """What answers a message ahead of every layer: the enabled invariant rows on its
+        control, none at all on SHIFT or a reserved control, or None when the layers
+        decide. `dispatch`'s rule, which node mode's fill asks too (`NodeDesk`): a control
+        this holds is no degree of freedom, since a row there could never be reached.
+        `rows`: a narrower list to look through than the table's, when the caller has one."""
+        inv = [b for b in (self.bindings if rows is None else rows)
+               if b.layer is None and b.enabled and b.matches(kind, channel, number)
+               and self.serves(role, b)]
         if inv:
             return inv
-        if (self.is_primary(role) and kind == "note" and channel == 0
-                and number == _SHIFT.number):
-            return []
-        layer = self.layer_of(role)
-        return [b for b in rows if b.layer == layer]
+        if self.is_primary(role) and (
+                (kind == "note" and channel == 0 and number == _SHIFT.number)
+                or any(x.matches(kind, channel, number) for x in _reserved(self.profile))):
+            return []                # (their row disabled: still no layer's, `is_invariant`)
+        return None
 
     def active(self, role: str | None = None) -> list[Binding]:
         """The MIDI rows of the device of `role` (None: the first MIDI
@@ -2637,14 +2844,19 @@ class Bindings:
         rows on controls that are not invariant — and, first, a surface
         page's rows (plan 31 §A), which hide every row on their controls."""
         rows = [b for b in self.midi() if self.serves(role, b)]
-        index = self._controls([b for b in rows if b.layer is None and b.enabled],
+        reserved = _reserved(self.profile) if self.is_primary(role) else ()
+        index = self._controls([*(b for b in rows if b.layer is None and b.enabled), *reserved],
                                shift=self.is_primary(role))     # once a frame: an index,
         layer = self.layer_of(role)                             # not a pairwise scan
         page = self.page_rows if self.is_primary(role) else []
         if page:
             under = self._controls(page, shift=False)
             rows = [b for b in rows if not self._on(b, under)]
-        return [*page, *(b for b in rows
+        node = self.node_rows(role) if layer == "preset" else []
+        if node:
+            under = self._controls(node, shift=False)
+            rows = [b for b in rows if b.layer != "preset" or not self._on(b, under)]
+        return [*page, *node, *(b for b in rows
                          if b.layer is None or (b.layer == layer and not self._on(b, index)))]
 
     @property
@@ -2660,10 +2872,61 @@ class Bindings:
             self.page = page
             self.page_serial = getattr(self, "page_serial", 0) + 1
 
+    def node_rows(self, role: str | None = None) -> list[Binding]:
+        """The rows node mode derives for the desk of `role` on this deck (N1a,
+        `node_desk`), as they stand: the same objects until what they say moves."""
+        nd = self.node_desk
+        return nd.rows(role) if nd is not None else []
+
+    def under_node_mode(self, b: Binding) -> bool:
+        """Is saved row `b` on a control node mode fills now, so it waits (N1a)?"""
+        nd = self.node_desk
+        return nd is not None and nd.under(b)
+
+    def node_row_away(self, b: Binding, role: str | None = None) -> bool | None:
+        """`b` as a picture of a controller asks (`role`; None, the first desk): None when
+        node mode did not derive it, else whether that controller is on the other `Deck`
+        (`NodeDesk.away`)."""
+        nd = self.node_desk
+        return nd.away(b, role) if nd is not None else None
+
+    def node_routes(self) -> list[Binding]:
+        """The rows node mode runs as routes on this deck (N2, `NodeDesk.routed`): each pad's
+        here. Never in `bindings`, so not in `mods`, `routes`, the file or the undo; `Router`
+        joins them where it reads those."""
+        nd = self.node_desk
+        return nd.routed() if nd is not None else []
+
+    def node_held(self) -> frozenset[str]:
+        """The params a desk in node mode holds on this deck (`NodeDesk.holding`)."""
+        nd = self.node_desk
+        return nd.holding() if nd is not None else frozenset()
+
+    def node_holds(self, b: Binding, held: frozenset[str] | None = None) -> bool:
+        """Does node mode hold route `b` off its param now? A modulator's, on a filled
+        param (the owner, row 711). The row is untouched: this is read, never written."""
+        if not b.is_modulator_route:
+            return False
+        return b.target in (self.node_held() if held is None else held)
+
+    def node_rows_serial(self, role: str | None = None) -> int:
+        """How many times those rows have changed: a desk redraws on one."""
+        nd = self.node_desk
+        return nd.serial(role) if nd is not None else 0
+
+    def pad_serves(self, role: str, b: Binding) -> bool:
+        """Is row `b` the pad's whose qualifier is `role` ("" the primary)? A second pad's those
+        qualified with its role; the primary's the bare ones and, as a desk's `serves`, any
+        qualified with the primary's own role (``pad@pad:S``)."""
+        if b.device == role:
+            return True
+        own = getattr(self, "primaries", {}).get("pad", "")
+        return not role and bool(own) and b.device == own
+
     def layer_of(self, role: str | None = None) -> str:
         """The layer up on the device of `role`: the first role's is
         `layer` (SHIFT's, `desk.shift`); another role's is its own, the
-        preset layer until something latches it."""
+        patch layer until something latches it."""
         if self.is_primary(role):
             return self.layer
         return self.__dict__.setdefault("layers", {}).get(role, "preset")
@@ -2698,28 +2961,28 @@ class Bindings:
         return self.layer_of(role)
 
     def drop_layer(self) -> None:
-        """Back to the preset layer (D4) on every device — what a preset
+        """Back to the patch layer (D4) on every device — what a loadable patch
         load does."""
         self.set_layer("preset")
         for role in list(self.__dict__.setdefault("layers", {})):
             self.set_layer("preset", role)
 
     def desk(self) -> list[Binding]:
-        """The preset layer's rows — what a preset's `desk` holds."""
+        """The patch layer's rows — what a loadable patch's `desk` holds."""
         return [b for b in self.bindings if b.is_midi and b.layer == "preset"]
 
     def set_desk(self, rows: Iterable[Binding | dict], *, load: bool = True) -> list[str]:
-        """Replace every preset-layer row with `rows` (layer forced to
+        """Replace every patch-layer row with `rows` (layer forced to
         "preset"), dropping with a note each row that is not a MIDI control,
         each on a meta param (row 743) and each on an invariant control
         (D6) — but one of
         `RETIRED_DESK_ROWS` on an invariant control goes without a note:
         it is a factory row of an older desk (plan 19: the sixteen shape
-        pads every earlier preset holds), nothing the owner mapped. Drop
-        to the preset layer
+        pads every earlier loadable patch holds), nothing the owner mapped. Drop
+        to the patch layer
         (D4) and ask the adapter to redraw the desk and clear the faders'
         catch (`desk_serial`). Returns the notes; the file is not written —
-        the desk is the loaded preset's.
+        the desk is the loaded patch's.
 
         ``load=False`` is an undo's restore (undo.py, plan 15): the same
         replacement and the same dropping rules, but only a redraw is
@@ -2740,7 +3003,7 @@ class Bindings:
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
                 notes.append(f"dropped {b.source} → {b.target}: that control is "
-                             "invariant, the session's (plan 13 D6)")
+                             "invariant, the meta controller's (plan 13 D6)")
             elif (why := meta_row_refusal(b)) is not None:
                 notes.append(f"dropped {b.source} → {b.target}: {why}")
             else:
@@ -2766,7 +3029,7 @@ class Bindings:
         """Replace every macro's label and subscribers with `doc`'s (the
         `macros` key's shape); the router re-lands the base subscribers on
         its next `follow_macros`. A base subscriber on anything but a
-        performance param — a session one above all (D9) — is dropped
+        patch param — a meta controller one above all (D9) — is dropped
         (`settle_bases`, judged against `reg` when given). Returns a note
         per subscriber dropped."""
         self.macros, notes = settle_bases(doc, reg)
@@ -2784,7 +3047,7 @@ class Bindings:
         """Re-point a route's source or target, its depth subscribers with
         it — a subscriber names its route by (source, target), so an edit
         that moved only the row would leave the macro behind. Raises
-        `ValueError` before anything moves when a preset's row is aimed at a
+        `ValueError` before anything moves when a loadable patch's row is aimed at a
         meta param (row 743)."""
         why = meta_row_refusal(b, target) if target is not None else None
         if why is not None:
@@ -2824,7 +3087,7 @@ class Bindings:
     def refusal(self, b: Binding) -> str | None:
         """The words `_check` raises `ValueError` with for `b` whoever holds
         its target — a sink's refusal, an op a continuous source has not, a
-        row no file may hold, a preset's row on a meta param — or None. Read-only: a caller about to move
+        row no file may hold, a loadable patch's row on a meta param — or None. Read-only: a caller about to move
         other rows for `b` asks first (plan 40's spawn: a one-owner
         source's other rows go only once `b` is sure to land)."""
         if b.is_sink:
@@ -2855,16 +3118,16 @@ class Bindings:
 
         Drops every row on the same physical control (`Binding.overlaps`:
         an any-channel row on that knob included, so learning ``cc:0:16``
-        where the preset has ``cc:*:16`` leaves one row, not two), and the
+        where the loadable patch has ``cc:*:16`` leaves one row, not two), and the
         param's previous binding in the same role: a knob (any cc or pitch
         binding) when learning a knob, or a button of the same op and value
         when learning a button — so a param's step buttons survive a knob
-        learn. Only rows of `b`'s own layer go: a preset-layer learn never takes
+        learn. Only rows of `b`'s own layer go: a patch-layer learn never takes
         an invariant or a global row with it, nor the reverse (plan 13
         D5, D6). A continuous source's row (a hand learn) is a performer
         like any route: `add` — `Owned` if the target is taken. The file
         is written unless `write` is False (a knob Learn: the row is the
-        loaded preset's, plan 13 §3.3). Returns the rows dropped.
+        loaded patch's, plan 13 §3.3). Returns the rows dropped.
         """
         why = latch_refusal(b) or meta_row_refusal(b)
         if why is not None:
@@ -2894,16 +3157,16 @@ class Bindings:
         self.bindings = [x for x in self.bindings if not any(x is g for g in gone)]
         self.bindings.append(b)
         self.dropped, self.notes = [], []
-        if is_session_row(b) or any(is_session_row(g) for g in gone):
-            self._share()                 # plan 44 D3: the session's rows, every deck's
+        if is_meta_row(b) or any(is_meta_row(g) for g in gone):
+            self._share()                 # plan 44 D3: the meta controller's rows, every deck's
         if write:
             self.write()
         return gone
 
     def unbind(self, pid: str) -> list[Binding]:
-        """Right-click → Unbind: the loaded preset's desk rows on `pid` go
-        (plan 13 §3.3) — the preset is edited, not saved, so no file is
-        written; a session row (invariant or global) stays, it is edited in
+        """Right-click → Unbind: the loaded patch's desk rows on `pid` go
+        (plan 13 §3.3) — the loadable patch is edited, not saved, so no file is
+        written; a meta row (invariant or global) stays, it is edited in
         `bindings.json`. Returns the rows removed."""
         gone = [b for b in self.bindings
                 if b.target == pid and b.is_midi and b.layer == "preset"]
@@ -2919,8 +3182,8 @@ class Bindings:
         self._check(b)
         self.bindings.append(b)
         self.dropped, self.notes = [], []
-        if is_session_row(b):
-            self._share()                 # plan 44 D3: the session's rows, every deck's
+        if is_meta_row(b):
+            self._share()                 # plan 44 D3: the meta controller's rows, every deck's
         return b
 
     def replace_owner(self, new: Binding, *, target: str | None = None) -> Binding | None:
@@ -2933,7 +3196,7 @@ class Bindings:
         slept. Returns the row removed (None when the target was free).
         Raises only for what the referee can't allow whatever goes: a bad
         op on a continuous source (`ValueError`), or a second owner still
-        standing after the swap (`Owned`), or a preset's row on a meta param
+        standing after the swap (`Owned`), or a loadable patch's row on a meta param
         (`ValueError`, row 743), said before anything moves."""
         pid = new.target if target is None else target
         why = meta_row_refusal(new, pid)
@@ -2977,11 +3240,13 @@ class Bindings:
         """Take a row out; a route's depth subscribers go with it unless
         another route has the same (source, target)."""
         self.bindings = [x for x in self.bindings if x is not b]
-        if is_session_row(b):
+        if is_meta_row(b):
             self._share()                 # plan 44 D3: gone from every deck
         if b.op in MOD_OPS:
             self._follow_route((b.source, b.target), None)
         self.dropped, self.notes = [], []
+
+    routes_replaced_n = 0     # `set_routes` so far (a load, an undo): a held question (row 754)
 
     def set_routes(self, routes: Iterable[Binding]) -> None:
         """Replace every performer row, keeping the input bindings. Two
@@ -2989,6 +3254,7 @@ class Bindings:
         kept, self.dropped = referee(routes)
         self.notes = []
         self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + kept
+        self.routes_replaced_n += 1
 
     # ---- the modifiers (plan 28 N1) ----
 
@@ -2996,7 +3262,7 @@ class Bindings:
         return next((m for m in self.modifiers if m.id == mid), None)
 
     def modifiers_doc(self, reg: Registry | None = None) -> list[dict]:
-        """The preset's ``modifiers`` list: each modifier's entry, its
+        """The loadable patch's ``modifiers`` list: each modifier's entry, its
         params at their **bases** in `reg` (a performer riding one never
         reaches the file), else as the modifier holds them."""
         out = []
@@ -3011,7 +3277,7 @@ class Bindings:
         return out
 
     def set_modifiers(self, doc, reg: Registry | None = None) -> list[str]:
-        """Replace every modifier with `doc`'s (the preset's list of
+        """Replace every modifier with `doc`'s (the loadable patch's list of
         entries, or Modifier objects), and — given `reg` — their params
         ``mod.<n>.<p>`` with them (`declare_modifiers`). An entry this
         build cannot read, or a second one with an id already taken, is
@@ -3086,11 +3352,11 @@ class Bindings:
 
 # ---------------------------------------------------------------- router
 
-# plan 44 D3 (review of #351): every name of `SESSION_ATTRS` a property of
+# plan 44 D3 (review of #351): every name of `META_TABLE_ATTRS` a property of
 # a deck's table onto its session — generated from the one list, which
 # `Bindings._sess` also migrates on a hot reload
-for _name in SESSION_ATTRS:
-    setattr(Bindings, _name, _session_attr(_name))
+for _name in META_TABLE_ATTRS:
+    setattr(Bindings, _name, _meta_table_attr(_name))
 del _name
 
 
@@ -3201,7 +3467,7 @@ class Router:
         return self.sources.clock
 
     def _clock_from(self, clock) -> None:
-        """The sources' clock is the rig's one: taken from `clock` when the
+        """The sources' clock is the meta controller's one: taken from `clock` when the
         sources have none, and a different clock is refused — a router
         must not move the beat every other router's banks step on."""
         src = self.sources
@@ -3218,7 +3484,7 @@ class Router:
         self.sources.use(devices)
 
     def follow_devices(self) -> None:
-        """`Sources.follow_devices`: the registry's rig facts, again."""
+        """`Sources.follow_devices`: the registry's meta controller facts, again."""
         self.sources.follow_devices()
 
     def schemes(self) -> tuple[str, ...]:
@@ -3306,7 +3572,7 @@ class Router:
                 if q.kind in (Kind.TRIGGER, Kind.TEXT):
                     continue
                 if not self.reg.lands(q):
-                    continue                  # (plan 44 D4: a session param is the lead's)
+                    continue                  # (plan 44 D4: a shared meta param is the lead's)
                 q.set(q._value_of_norm(min(1.0, max(0.0, s.at(m)))))
                 written.append(q.id)
         return written
@@ -3362,7 +3628,7 @@ class Router:
                     act(self.reg, b)
 
     def pad(self, pad, now: float | None = None, *, buttons: bool = True,
-            role: str = "", skip=frozenset()) -> None:
+            role: str = "", skip=frozenset(), quiet=frozenset()) -> None:
         """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
         the `axis` lanes (None while no pad is on, so their routes let go),
         then its pad / hat rows — unless `buttons` is False (the frame's
@@ -3376,16 +3642,23 @@ class Router:
         `role` is the pad's qualifier (plan 27 B6): "" for the primary pad
         — the unqualified rows and the `axis` lanes, as ever — or a second
         pad's role, whose lanes are ``axis@<role>`` and whose rows are
-        those qualified with it (``pad@p2:A``); each pad hears only its own.
+        those qualified with it (``pad@p2:S``); each pad hears only its own.
 
-        `skip`: the rows' sources, unqualified (``pad:A``, ``hat:DOWN``),
+        `skip`: the rows' sources, unqualified (``pad:S``, ``hat:S``),
         that do not fire this frame — the buttons the totem holds while it
         reads this pad (totem.SKIP, the plan 47 experiment). A skipped
         `hold` row forgets a press it was timing, so a press that began
         before the skip does not fire when the skip ends mid-press. A
         `momentary` row's press is let go by a skip of its own button, by
         its row going, or by the pad going away (`pad_lost`), whose release
-        would never come (plan 52)."""
+        would never come (plan 52).
+
+        A pad model with a layout of its own (`layout_of`: a Joy-Con's, the
+        Edge's hold-to-save) hears those rows in place of the table's on the
+        same controls.
+
+        `quiet`: the `axis` lanes that read NaN this frame, so their routes
+        let go (a Joy-Con's stick while the totem is off: it orbits then)."""
         axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
@@ -3394,7 +3667,10 @@ class Router:
         if not pad.on:
             self.pad_lost(role)
             return
-        self.sources.feed(axis, pad.lanes())
+        lanes = pad.lanes()
+        if quiet:
+            lanes = [math.nan if i in quiet else v for i, v in enumerate(lanes)]
+        self.sources.feed(axis, lanes)
         # plan 56: each published pair's lane (nothing published, nothing fed)
         pairs = qualified(PAIR_SCHEME, role)
         pair_names = self.sources.names.get(pairs)
@@ -3403,24 +3679,24 @@ class Router:
         holds = self._pad_timing(role)
         down_now = self._pad_pressed(role)
         now = time.monotonic() if now is None else now
-        # each pad hears its own rows: a second pad those qualified with its
-        # role; the primary the bare ones and — as a desk's `serves` — any
-        # qualified with the primary's own role (``pad@pad:A``)
-        own = role or getattr(self.table, "primaries", {}).get("pad", "")
+        # each pad hears its own rows (`Bindings.pad_serves`)
         if buttons:
             for b in self.table.of(PAIR_SCHEME):
-                if b.op == "step" and b.enabled and (
-                        b.device == role or (not role and own and b.device == own)):
+                if b.op == "step" and b.enabled and self.table.pad_serves(role, b):
                     self._pair_step(pad, b, skip)
-        rows = self.table.of("pad", "hat")
+        layout = layout_of(getattr(pad, "model", None), role)
+        table_rows = self.table.of("pad", "hat")
+        n_table = len(table_rows)
+        rows = (*table_rows, *layout.rows)
         if down_now:                         # a row gone or off under a held button
             for key in down_now - {(b.source, b.target) for b in rows if b.enabled}:
                 self._let_go_pad(down_now, key)
-        for b in rows:
+        for i, b in enumerate(rows):
             code = self._code(b)
-            if code is None or not b.enabled or not (
-                    b.device == role or (not role and own and b.device == own)):
+            if code is None or not b.enabled or not self.table.pad_serves(role, b):
                 continue
+            if i < n_table and layout.hides(b):
+                continue                         # not this pad's: nor are its timer or press
             if skip and b.bare in skip:
                 if b.op == "hold":
                     holds.pop((b.source, b.target), None)
@@ -3511,10 +3787,29 @@ class Router:
 
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
-        one is off its default camera job (gamepad.steer). A named address
-        resolves through what the scheme's device has published."""
-        return {i for b in self.table.mods() for s, i in [self.lane(b.source)]
+        one is off its default camera job (gamepad.steer), and so is one node
+        mode fills (N2). A named address resolves through what the scheme's
+        device has published."""
+        return {i for b in self.performers() for s, i in [self.lane(b.source)]
                 if s == scheme and i >= 0}
+
+    def performers(self, *, switched_off: bool = False) -> list[Binding]:
+        """The rows the pass runs, in order: the table's performer rows (`switched_off`: those
+        that are off too, as a graph draws them), then those node mode derives on this deck
+        (`Bindings.node_routes`), in no file. Everything here that asks what runs, asks this."""
+        t = self.table
+        rows = t.routes() if switched_off else t.mods()
+        node = getattr(t, "node_routes", None)      # (a `Router` may be handed a shim)
+        return [*rows, *node()] if node is not None else rows
+
+    def performer_of(self, pid: str) -> Binding | None:
+        """The row performing `pid` now, for the panel's words: a filled stick's, ahead of any
+        modulator's it rests (row 711), else the table's owner."""
+        node = getattr(self.table, "node_routes", None)
+        for b in node() if node is not None else ():
+            if b.target == pid:
+                return b
+        return self.table.owner(pid)
 
     def _code(self, b: Binding) -> int | None:
         """The key / button / hat constant a source names; None if there is none."""
@@ -3715,16 +4010,17 @@ class Router:
         is rebuilt only when one of them changes, never per frame."""
         t = self.table
         rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when)
-                     for b in t.bindings if b.op in MOD_OPS)
+                     for b in self.performers(switched_off=True))
         subs = tuple((mid, id(s), s.depth, s.base) for mid, m in t.macros.items() for s in m.subs)
         mods = (getattr(t, "modifiers_serial", 0),
                 *((getattr(m, "id", ""), getattr(m, "kind", ""),
                    tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t)))
         banks = tuple((scheme, tuple(b.ids())) for scheme, b in self._banks().items())
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()    # (node mode, row 711)
         return (id(t), rows, t.macros_serial, subs, mods, banks,
-                getattr(self.reg, "serial", 0))
+                getattr(self.reg, "serial", 0), held)
 
-    def build_modgraph(self) -> modgraph.ModGraph:
+    def build_modgraph(self, held: frozenset[str] | None = None) -> modgraph.ModGraph:
         """The modulation graph of this table (modgraph.py's nodes and edges):
         every bank voice (when the router steps the bank: each LFO, by id)
         and modifier first, in their
@@ -3735,7 +4031,8 @@ class Router:
         subscribers as `base` edges; each voice's knob params (and the
         bank-wide ones, ``lfo.trigger``) and each modifier's own params, where the patch
         holds them, into their node. A switched-off row's edges are drawn
-        disabled. No loop is cut here (`modgraph` does that)."""
+        disabled. No loop is cut here (`modgraph` does that). `held`: the params node mode
+        holds, by default as they stand now (row 711)."""
         g = modgraph.ModGraph()
         t = self.table
         for scheme, bank in self._banks().items():
@@ -3758,8 +4055,11 @@ class Router:
             for inp in getattr(m, "inputs", ()):
                 if inp:                                  # "" is an input not chosen yet
                     g.link(source(inp), _modifier_node(m), "in")
-        for b in t.routes():
-            cable, on = (b.source, b.target), b.enabled
+        if held is None:
+            held = t.node_held() if hasattr(t, "node_held") else frozenset()
+        for b in self.performers(switched_off=True):
+            # (a route node mode holds off is an edge switched off, so it closes no loop)
+            cable, on = (b.source, b.target), b.enabled and not (held and t.node_holds(b, held))
             src = source(b.source)
             gate = source(b.when) if b.when is not None else None
             scale = param(b.scale) if b.scale is not None else None
@@ -3820,23 +4120,35 @@ class Router:
         self.modgraph                                # noqa: B018 — current
         return self.__dict__["_modgraph_cut"]
 
-    def _forget_lost_rows(self, by_target: dict[str, list]) -> None:
+    @property
+    def modgraph_stays_cut(self) -> set[tuple[str, str]]:
+        """The cables a loop keeps off with no desk holding anything: what `modgraph_cut`
+        is once node mode lets go. A route it holds is an edge off, so it closes no loop
+        now and the live cut does not name it, and "back on leave" would be untrue of one
+        this names (row 711)."""
+        self.modgraph                                # noqa: B018 — current
+        return self.__dict__["_modgraph_stays_cut"]
+
+    def _forget_lost_rows(self, by_target: dict[str, list], resting: Iterable[Binding] = ()) -> None:
         """A param none of whose rows is left has lost the source its base
-        chase ledger was about (plan 52): a row made later rides in full."""
+        chase ledger was about (plan 52): a row made later rides in full. A route node
+        mode holds off (`resting`) is not lost: it comes back with the offset the base
+        holds, as a source's flicker does."""
         had = self.__dict__.get("_row_sources", {})
         now = {t: {b.source for b, _ in rows} for t, rows in by_target.items()}
+        for b in resting:
+            now.setdefault(b.target, set()).add(b.source)
         self.reg.forget_commits(t for t, was in had.items() if not was & now.get(t, set()))
         self._row_sources = now
 
-    def _rebuild_modgraph(self, key: tuple) -> None:
-        g = self.build_modgraph()
-        t = self.table
+    def _break_loops(self, g: modgraph.ModGraph, mod_ids: dict[str, str]
+                     ) -> tuple[set[tuple[str, str]], set[tuple[str, str]], list[str]]:
+        """Every loop of `g` that passes through no delay, broken in place: the cables kept
+        off, the modifier inputs kept off, and a note for each."""
         rank: dict[tuple[str, str], int] = {}
-        for k, b in enumerate(t.bindings):
+        for k, b in enumerate(self.table.bindings):
             if b.op in MOD_OPS:
                 rank[(b.source, b.target)] = k
-        mods = _modifiers_of(t)
-        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in mods}
         mod_rank = {node: modifiers.number(mid) or 0 for node, mid in mod_ids.items()}
         cut: set[tuple[str, str]] = set()
         cut_in: set[tuple[str, str]] = set()     # (input address, modifier node) kept off
@@ -3868,13 +4180,32 @@ class Router:
             who = mod_ids.get(last.dst, last.dst)
             notes.append(f"loop: {said} needs a delay — {who}'s input {last.src} "
                          f"is off until it has one")
+        return cut, cut_in, notes
+
+    def _rebuild_modgraph(self, key: tuple) -> None:
+        t = self.table
+        held = t.node_held() if hasattr(t, "node_held") else frozenset()
+        g = self.build_modgraph(held)
+        mods = _modifiers_of(t)
+        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in mods}
+        cut, cut_in, notes = self._break_loops(g, mod_ids)
+        stays_cut = cut | cut_in
+        if held:                # asked again as if every desk had let go (`modgraph_stays_cut`)
+            a, b, _ = self._break_loops(self.build_modgraph(frozenset()), mod_ids)
+            stays_cut = a | b
         # the evaluation plan: per node in order, what `modulate` does there
         banks = self._banks()
         reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
-        for b in t.mods():
-            if (b.source, b.target) not in cut:
-                by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
+        resting: list[Binding] = []
+        for b in self.performers():
+            if (b.source, b.target) in cut:
+                continue
+            if held and t.node_holds(b, held):
+                if (b.source, b.target) not in stays_cut:
+                    resting.append(b)
+                continue
+            by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
         # a delay closing a loop runs before its input (`modgraph.ordering`):
         # it emits that input's lane as it stands — last frame's value
         live = [e for e in g.edges if e.enabled and e.port == "in"]
@@ -3882,7 +4213,7 @@ class Router:
         early = {e.dst for e in live if id(e) not in ordered}
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
-        self._forget_lost_rows(by_target)
+        self._forget_lost_rows(by_target, resting)
         for node in modgraph.order(g):
             if node.kind in banks:
                 i = int(node.id.split(":")[1])
@@ -3899,6 +4230,7 @@ class Router:
         d = self.__dict__
         d["_modgraph"], d["_plan"], d["_modgraph_seen"] = g, plan, key
         d["_modgraph_notes"], d["_modgraph_cut"] = notes, cut | cut_in
+        d["_modgraph_stays_cut"] = stays_cut
 
     # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
 
@@ -4029,15 +4361,12 @@ class Router:
         follower, and starts afresh. A cable `modgraph` keeps off to break a
         loop does not run. Plan 55: a row on a controller whose player is on
         another deck has no reading here (`feeds`), so it does not act, and
-        loses its follower and its turn's reading. Plan 44 D4 (row 625, §7's
-        recommendation): on a
-        deck that is not the session's lead, a row onto a session param is
-        dormant. No door lets one in since row 743, but a hot reload leaves
-        one standing until the next load (row 745)."""
+        loses its follower and its turn's reading. A row on a param no lane may
+        drive (`Param.modulatable`) does nothing here and keeps no follower. No
+        door lets one onto a meta param since row 743, but a hot reload leaves
+        one standing until the next load (rows 745, 775)."""
         dt = 1 / 60 if dt is None else dt
         reg = self.reg
-        session = getattr(reg, "session", None)
-        follower = session is not None and session is not reg and session.lead is not reg
         self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
         self.modgraph                                # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]
@@ -4056,7 +4385,7 @@ class Router:
         # plan 31 W1: after every `begin` (a held global trigger has moved
         # the epoch), before the plan (the envelopes step at their nodes)
         self._step_sequencer(t, clock)
-        # this frame's reads: this deck's lanes over the rig's (plan 44 D4)
+        # this frame's reads: this deck's lanes over the meta controller's (plan 44 D4)
         feeds = self.feeds
         movers = self.__dict__.setdefault("_movers", {})
         moved: set = set()
@@ -4091,8 +4420,8 @@ class Router:
                 if b.when is not None and not self.gated(b, feeds):
                     continue         # gate open: apply() writes the base back
                 p = reg.get(b.target)
-                if p is None or (follower and not reg.lands(p)):
-                    continue         # (plan 44 D4: a session param is the lead's to move)
+                if p is None or not p.modulatable:
+                    continue         # (no lane may drive it: dormant, on any deck, row 775)
                 depth = b.value
                 if b.scale is not None:
                     sp = self.reg.get(b.scale)
@@ -4125,14 +4454,14 @@ class Router:
                 else:
                     # position: the source is the fader — the offset that lands
                     # it (p.norm is the base while modulated, the object before)
-                    if p.kind is Kind.TEXT or not p.modulatable:
+                    if p.kind is Kind.TEXT:
                         continue
                     x = min(1.0, max(0.0, depth * u)) - p.norm
                 # (a position row's share: the base chase's ledger leaves it out)
                 p.modulate(x, position=b.op != "push")
             if step[3]:              # something later in the pass reads it: land it now
                 q = reg.get(step[1])
-                if q is not None and q._base is not None and reg.lands(q):
+                if q is not None and q._base is not None:
                     q.apply(mark)
         for key in [k for k in movers if k not in moved]:
             del movers[key]
@@ -4148,7 +4477,7 @@ class Router:
         is no circle, or on a target it cannot turn. A row in `_turn_cut` only
         reads."""
         if (b.when is None or not whole_circle(b.source) or p.kind is not Kind.CONTINUOUS
-                or p.integer or not p.modulatable):
+                or p.integer):
             return
         d = self.__dict__
         turns = d.setdefault("_turns", {})
@@ -4171,7 +4500,7 @@ class Router:
         """A closure begins: one undo step from here until no row acts, however
         still the hand goes (`Undo.keep_open`, the base chase's), on the `Undo`
         that watches this deck's registry, chosen here each closure. Whatever
-        else closes the step (an undo, a load, the hold, a chase's press) cuts
+        else closes the step (an undo, a load, a chase's press) cuts
         the rows acting then, each until it has not acted for TURN_GRACE_S (a
         dropout is not letting go), so a fist still closed cannot run on from
         what was just put back, and it has no step left to close. A step someone else is keeping (a held chase) is left to them:
@@ -4258,9 +4587,9 @@ def _modifier_node(m) -> str:
 # --------------------------------------------------------------- factory file
 
 def write_factory(path: Path = FACTORY_FILE) -> Path:
-    """Export the factory session table — the file a fresh `bindings.json`
+    """Export the factory meta table — the file a fresh `bindings.json`
     would be (`python -m hyperspace.routing`); test_routing guards it
-    against drift. Outside the library tree: it is no group's preset."""
+    against drift. Outside the library tree: it is no group's loadable patch."""
     path.write_text(Bindings.factory().dumps())
     return path
 

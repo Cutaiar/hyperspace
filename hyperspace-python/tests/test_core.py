@@ -88,7 +88,7 @@ def test_soft_ceil_properties():
     assert ys.max() < bands.CEIL, "asymptote is never reached"
 
 
-def test_presets_load():
+def test_loadables_load():
     from hyperspace.analysis import Analyser
     from hyperspace.control import SCENES, SCENES_DIR
     from hyperspace.library import scene_doc, slug

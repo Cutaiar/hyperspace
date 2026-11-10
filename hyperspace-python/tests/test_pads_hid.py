@@ -196,7 +196,7 @@ def test_a_sony_pad_reads_as_the_pads_vocabulary_with_touch_and_motion(monkeypat
     pad.poll(1 / 60)
     assert pad.on and pad.source == "hid" and pad.model.id == "edge" and pad.link == "usb"
     assert pad.lanes()[:6] == [pytest.approx(0.5, abs=0.01)] * 4 + [0.0, 0.0]
-    assert set(pad.buttons_named) >= {"A", "TOUCH", "LP", "RP", "LFN", "RFN"}
+    assert set(pad.buttons_named) >= {"S", "TOUCH", "LP", "RP", "LFN", "RFN"}
     r.report = bytes(usb_report(p7=0x28, p9=0x40))         # the cross, the left back button
     pad.poll(1 / 60)
     assert pad.pressed(gp.A) and pad.pressed(gp.LP)

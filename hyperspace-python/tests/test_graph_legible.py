@@ -6,13 +6,13 @@ title and at most five short lines, nothing per port); one wire between
 two nodes while either end is collapsed, however many params are mapped
 between them, the real cables appearing when both ends are expanded; and
 the GRAPH page takes over the routes and the modifiers from ROUTING,
-whose desk, macros, session and sinks stay where they are.
+whose desk, macros, meta controller and sinks stay where they are.
 
 Headless, on the harness N2 and N3 used: the shell's rig
 (tests/test_ui_shell.py) with the corpus's party-trip loaded, a render graph built by
 `graph.default_graph`, the APC40 as a real `devices.MidiDevice` over a
 stand-in adapter (tests/test_graphview_devices.py), and the page drawn
-for real on `imgui_node_editor`. No preset is edited or added."""
+for real on `imgui_node_editor`. No loadable patch is edited or added."""
 
 import json
 import math
@@ -29,7 +29,7 @@ from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
-from hyperspace import graphview, modifiers, ui, ui_graph, ui_routing
+from hyperspace import graphview, modifiers, ui, ui_graph, ui_pane, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import CEIL
 from hyperspace.graphmigrate import Shows
@@ -48,11 +48,11 @@ def party(rig):
     """party-trip (the corpus's, seeded into the scratch library) on the
     page: its rows, a render graph with effects, the APC40 listed. Returns
     the page's state after two frames. Plan 35 T5: the canvas is the
-    preset's wired frame, so the frame the render graph is built from —
+    loadable patch's wired frame, so the frame the render graph is built from —
     acid and palette in the run, output 2 the hands through them — is
-    landed as the preset's graph too."""
+    landed as the loadable patch's graph too."""
     seed(rig.lib.home)
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     spec = land_frame(rig, stacked(("acid", "palette")), Shows(), Shows(through=True))
     g = thru(stacked(("acid", "palette")), ("acid", "palette"), Shows(), Shows(through=True))
     g.section = spec.to_json()          # (what a reload lands again: test_graph_areas.load)
@@ -65,12 +65,12 @@ def party(rig):
 
 def land_frame(rig, src, *shows):
     """The wired frame of `src` with output k's overrides for `shows[k - 1]`
-    (`tests/wiredframe.shown`) landed as the loaded preset's graph."""
+    (`tests/wiredframe.shown`) landed as the loaded patch's graph."""
     from wiredframe import shown
     section = shown(src, *shows)
     spec = G.read_graph(section)
     assert not spec.notes, spec.notes
-    rig.lib.presets.graph.land(spec, spec.to_json())
+    rig.lib.loaded_patch.graph.land(spec, spec.to_json())
     return spec
 
 
@@ -312,7 +312,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     frame(rig.panel, "graph")
     assert st["said"] == ui_graph.ALREADY_TIDY
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.presets.layout["render:camera"] = [900, 40]
+    rig.lib.loaded_patch.layout["render:camera"] = [900, 40]
     frame(rig.panel, "graph")
     assert st["applied"]["render:camera"] == (900.0, 40.0)
     st["tidy"] = True
@@ -321,7 +321,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     k = len({n.area for n in view.nodes if not n.idle})     # (plan 35 G: by primitive)
     assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in {k} areas, every one "
                           f"collapsed · {idle} idle off the canvas")
-    assert st["open"] == set() and rig.lib.presets.layout == {}
+    assert st["open"] == set() and rig.lib.loaded_patch.layout == {}
     auto = ui_graph.layout_of(st, view)
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
                if not n.idle)                           # N9: an idle node is not placed
@@ -345,8 +345,8 @@ def test_beside_shows_on_a_narrow_page_selected_or_not(rig, monkeypatch):
                         or chip(label, *a, **k))
     frame(rig.panel, "graph")
     assert "tidy##graph" in chips and "expand all##graph" in chips
-    # the control window's narrow page, nothing selected: the chip (plan 49)
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    # a narrow control window's page, nothing selected: the chip (plan 49)
+    imgui.get_io().display_size = imgui.ImVec2(ui.PANEL_W + 2 * ui.PANEL_EDGE, CONTROL_SIZE[1])
     frame(rig.panel, "graph")
     chips.clear()
     frame(rig.panel, "graph")
@@ -425,11 +425,11 @@ def test_a_right_click_on_the_details_opens_no_graph_menu(rig, monkeypatch):
 def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
         rig, monkeypatch):
     """ROUTING draws a pointer line where its routes and its MODIFIERS strip
-    were, then its desk, macros, session and sinks as before; the functions
+    were, then its desk, macros, meta controller and sinks as before; the functions
     of the two sections stay and keep working (the canvas and the tests
     call them)."""
     panel, router = rig.panel, rig.router
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     m = ui_routing.add_modifier(panel, "smooth", ["lane:0"])
     texts, rows, strips = [], [], []
     td, tc = imgui.text_disabled, imgui.text_colored
@@ -441,9 +441,9 @@ def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
     frame(panel, "routing")
     frame(panel)
     assert ui_routing.POINTER in texts
-    assert "ROUTES" not in texts and "MODIFIERS" not in texts and not rows and not strips
-    assert {"DESK  ·  PRESET LAYER", "MACROS", "SESSION", "SINKS"} <= set(texts)
-    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
+    assert "routes" not in texts and "modifiers" not in texts and not rows and not strips
+    assert {"desk  ·  patch layer", "macros", "meta controller", "sinks"} <= set(texts)
+    assert texts.index(ui_routing.POINTER) < texts.index("desk  ·  patch layer")
     # the functions stay
     assert ui_routing._sources(panel, router) and ui_routing._targets(panel)
     b = ui_routing.add_route(panel, "fx.acid.mix", source=m.address, depth=0.4)
@@ -512,7 +512,7 @@ def test_the_smoothed_energy_times_band_patch_from_graph_alone(rig, monkeypatch)
     editor. Played, it is what N1's is."""
     panel, reg, router = rig.panel, rig.reg, rig.router
     st = party(rig)
-    router.table.set_routes([])                     # a preset with no routes yet
+    router.table.set_routes([])                     # a loadable patch with no routes yet
     hands(router, 0.0)
     frame(panel, "graph")
     smooth = ui_graph.add_modifier(panel, "smooth", at=(300, 40))
@@ -676,7 +676,7 @@ def test_the_page_draws_in_every_state(rig):
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert ui_graph.timing_line(rig.panel).startswith("graph page: ")
+    assert ui_graph.timing_line(rig.panel).startswith("graph draw: ")
     assert view is not None
     frame(rig.panel, "system")
 
@@ -739,7 +739,7 @@ def spy_rows(monkeypatch):
 
 
 def undo_watch(rig):
-    """An undo watcher over the rig's registry and table (app.main's, without
+    """An undo watcher over the meta controller's registry and table (app.main's, without
     the marks), ticked by hand: `tick()` one frame on, `settle()` past
     `SETTLE_S`."""
     from hyperspace import undo
@@ -897,7 +897,7 @@ def test_every_nodes_side_panel_draws(rig):
     — a toggle's checkbox, a trigger's chip and a combo beside the sliders."""
     st = party(rig)
     # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
-    e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
+    e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
     # (plan 36 T2: the pattern is in already — the faces' wire says it;
     # T4: an echo is the look-back's pin — its item adds the look-back)
     for kind, f in (("backdrop", None), ("guide", None), ("echo", "2"),
@@ -1002,7 +1002,7 @@ def test_home_page_maps_each_node_kind(rig):
 
 
 def test_open_on_page_switches_page_and_selects(rig, monkeypatch):
-    """The side panel's "open on MEDIA" chip: the panel turns to MEDIA with
+    """The side panel's "open on media" chip: the panel turns to media with
     the node's channel selected there."""
     from hyperspace import ui_media
     st = party(rig)
@@ -1010,10 +1010,10 @@ def test_open_on_page_switches_page_and_selects(rig, monkeypatch):
     chips = []
     chip = ui.chip
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)
-                        or label.startswith("open on MEDIA") or chip(label, *a, **k))
+                        or label.startswith("open on media") or chip(label, *a, **k))
     frame(rig.panel, "graph")
     monkeypatch.setattr(ui, "chip", chip)
-    assert any(c.startswith("open on MEDIA") for c in chips)
+    assert any(c.startswith("open on media") for c in chips)
     assert rig.panel.page == ui.PAGE_KEYS.index("media")
     assert ui_media._state(rig.panel)["sel"] == "c"
     frame(rig.panel)
@@ -1027,7 +1027,7 @@ def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
     select row with its Learn menu sits under them, and the canvas's
     summary says the pick."""
     st = party(rig)
-    e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
+    e = graphview.Edit(graph=rig.lib.loaded_patch.graph, push=lambda label: None)
     assert e.add_node("switch") is None and e.added == "switch"
     assert e.wire("rout:channel.a", "rin:switch/in1") is None
     assert e.wire("rout:channel.c", "rin:switch/in3") is None
@@ -1098,13 +1098,13 @@ def test_the_side_column_width_is_clamped_and_this_macs(tmp_path):
     pos, size = ui_graph.details_rect((10.0, 20.0), (1000.0, 600.0), wide=True, side_w=460.0)
     assert (pos, size) == ((10.0 + 1000.0 - 460.0, 20.0), (460.0, 600.0))
     assert ui_graph.read_side(tmp_path) is None                        # no file
-    (tmp_path / ui_graph.UI_FILE).write_text("{not json")
+    (tmp_path / ui_pane.UI_FILE).write_text("{not json")
     assert ui_graph.read_side(tmp_path) is None                        # a broken one
-    (tmp_path / ui_graph.UI_FILE).write_text('{"graph": {"side_w": "wide"}, "other": 1}')
+    (tmp_path / ui_pane.UI_FILE).write_text('{"graph": {"side_w": "wide"}, "other": 1}')
     assert ui_graph.read_side(tmp_path) is None                        # not a number
     ui_graph.write_side(tmp_path, 460.25)
     assert ui_graph.read_side(tmp_path) == 460.2                       # rounded to a tenth
-    doc = json.loads((tmp_path / ui_graph.UI_FILE).read_text())
+    doc = json.loads((tmp_path / ui_pane.UI_FILE).read_text())
     assert doc["other"] == 1 and doc["graph"]["side_w"] == 460.2       # the rest kept
     ui_graph.write_side(tmp_path / "missing" / "dir", 300.0)           # a failed write: no raise
 
@@ -1116,12 +1116,12 @@ def test_the_side_column_takes_its_width_from_this_mac_and_a_drag(rig):
     moved, resizes it, and letting go writes the width back."""
     st = party(rig)
     io = imgui.get_io()
+    rig.panel.desk = False          # the panel fills the window (the rig's desk would take a column)
 
     def sized(width: float) -> None:                    # a frame with the panel this wide
-        io.display_size = imgui.ImVec2(max(width + 40.0, 820.0), 900.0)
+        io.display_size = imgui.ImVec2(width + 2 * ui.PANEL_EDGE, 900.0)   # CONTROLS fills it
         rig.panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))
         imgui.new_frame()
-        imgui.set_window_size("CONTROLS", imgui.ImVec2(width, 876.0))
         rig.panel.draw(1 / 60, 60.0)
         imgui.end_frame()
 

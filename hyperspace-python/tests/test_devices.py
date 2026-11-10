@@ -99,11 +99,11 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
     assert isinstance(off, devices.OffDevice) and off.status == "off" and off.kind == "midi"
     odd = devices.make({"role": "r", "kind": "wand", "enabled": True})
     assert isinstance(odd, devices.UnknownDevice) and odd.status == "error: unknown kind 'wand'"
-    assert devices.Port("x", "X") == devices.Port("x", "X", "value", 0.0, False, False, "", "", "")
+    assert devices.Port("x", "W") == devices.Port("x", "W", "value", 0.0, False, False, "", "", "")
     # a port knows its scheme, so a row's source — a cable (plan 28) — is one property
     assert devices.Port("LX", "left stick X", scheme="axis").address == "axis:LX"
     assert devices.Port("0:48", "track knob 1", scheme="cc").address == "cc:0:48"
-    assert devices.Port("x", "X").address == "x"                       # (no scheme: bare)
+    assert devices.Port("x", "W").address == "x"                       # (no scheme: bare)
     assert off.schemes == ("cc", "note", "pitch") and off.feeds == ()   # off, still its kind's
 
 
@@ -184,8 +184,8 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     assert two.rows == ("pad@p2", "hat@p2")
     assert [p.address for p in one.sources][:2] == ["axis:LX", "axis:LY"]
     assert [p.address for p in two.sources][:2] == ["axis@p2:LX", "axis@p2:LY"]
-    assert "pad@p2:A" in [p.address for p in two.sources]
-    assert "hat@p2:UP" in [p.address for p in two.sources]
+    assert "pad@p2:S" in [p.address for p in two.sources]
+    assert "hat@p2:N" in [p.address for p in two.sources]
     assert reg.schemes() == ("axis", "pair", "pad", "hat", "touch", "motion",
                              "axis@p2", "pair@p2", "pad@p2", "hat@p2", "touch@p2", "motion@p2")
     assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "pair", "touch",
@@ -433,7 +433,7 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
     `lane` and `lfo` first, then the schemes the listed devices feed —
     the pad's `axis` (not its `pad` / `hat` rows), the hands' `hand`, the
     bridge's `ext`; MIDI feeds nothing; an `off` device's scheme is still
-    listed, so a preset row naming it is dormant, not unknown."""
+    listed, so a patch row naming it is dormant, not unknown."""
     io = SimpleNamespace(on=False, error="", last="", name="", profile=None, bindings=[])
     reg = devices.DeviceRegistry(devices=[
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
@@ -582,7 +582,7 @@ def test_the_pad_shim_polls_learns_and_delivers_rows_as_the_frame_did(monkeypatc
     assert d.status == "connected" and d.last == "glfw"
     assert [p.name for p in d.sources][:6] == list(gamepad.AXES)
     assert [p.address for p in d.sources][:6] == [f"axis:{n}" for n in gamepad.AXES]
-    assert "pad:A" in [p.address for p in d.sources] and "hat:UP" in [p.address for p in d.sources]
+    assert "pad:S" in [p.address for p in d.sources] and "hat:N" in [p.address for p in d.sources]
     assert [p.kind for p in d.sources].count("trigger") == len(gamepad.BUTTONS) + len(gamepad.HATS)
     assert {p.name: p.rest for p in d.sources if p.group == "sticks"} == {
         "LX": 0.5, "LY": 0.5, "RX": 0.5, "RY": 0.5}
@@ -754,7 +754,7 @@ enabled = false
 '''
 
 
-def test_todays_rig_as_a_devices_list_equals_the_old_tables(tmp_path, capsys):
+def test_todays_meta_as_a_devices_list_equals_the_old_tables(tmp_path, capsys):
     """The exact `[[devices]]` block the owner pastes to get today's rig
     gives the same device entries as the old tables do, and nothing is
     said about it."""
@@ -813,3 +813,20 @@ def test_the_pad_picture_follows_a_controller_connected_after_launch():
     joy.io.on = False
     reg.poll(1 / 60, 0.0)
     assert panel.pad is generic.io
+
+
+def test_a_device_that_is_its_own_io_takes_a_pointer():
+    """A live media kind is its own adapter once open (`LiveKind.open`:
+    ``self.io = self``). `Base.point` handed the pointer on to
+    ``type(self.io).point`` — itself — and the app died at start of a
+    RecursionError with a camera, NDI or Syphon listed (2026-11-05)."""
+    from hyperspace.devices import Base
+
+    class Own(Base):
+        pass
+
+    d = Own("cam", {})
+    d.io = d
+    ptr = object()
+    d.point(ptr, None)
+    assert d.pointer is ptr

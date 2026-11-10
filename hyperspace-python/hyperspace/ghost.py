@@ -43,8 +43,8 @@ the data path (stage-space joints and the bones' raw rotations, per hand,
 with its fade and colour); a style is a pure function from one pose to
 spheres, tubes and triangles (`PARTS`: HANDS — a sphere per joint, a
 capsule per bone and a palm — JOINTS, PALMS, CAGE, MARIONETTE), and
-`Geometry` draws whichever is picked. The guide is not a style's: `Ghost`
-passes its rows to `Geometry.draw` beside the hands'. A skinned mesh is
+`Geometry` draws whichever is picked. The
+guide is not a style's: `Ghost` passes its rows to `Geometry.draw` beside the hands'. A skinned mesh is
 another parts function, or another class with the same `draw`.
 """
 
@@ -53,10 +53,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from itertools import pairwise
+from typing import cast
 
 import moderngl
 import numpy as np
 
+from . import handmesh
 from .geometry import EYE_DISTANCE, EYE_FOV, eye_matrix
 from .glsl import QUAD_VS
 
@@ -94,7 +96,14 @@ MODES: dict[str, tuple[tuple[float, float, float], ...]] = {
 # ------------------------------------------------------------------ params
 
 GUIDES = ["OFF", "BESIDE", "ON HAND"]
-STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE"]   # PARTS, in this order
+STYLES = ["HANDS", "JOINTS", "PALMS", "CAGE", "MARIONETTE", "MESH",
+          "LEAP HAND", "LOW POLY", "BONES"]   # PARTS, in order
+
+# What the hands are made of, over whatever `style` draws: the same
+# geometry and the same draws, a branch in the one shared fragment shader
+# (`SHADE_FS`, `u_mat`), so a material costs nothing a frame. PLAIN is the
+# look the ghost always had, and stays the default.
+MATERIALS = ["PLAIN", "BONE", "GLASS", "EMBER"]
 
 @dataclass
 class GhostState:
@@ -107,22 +116,24 @@ class GhostState:
     guide: int = 0          # GUIDES: off, a gauge beside each hand, or on the palm
     tethers: bool = False   # with a guide: a labelled line from each routed mark
     style: int = 0          # STYLES: what is drawn from the poses (HANDS, the capsules)
+    material: int = 0       # MATERIALS: what it is made of (PLAIN, the look it had)
 
 
 def prefix(n: int = 1) -> str:
     """The n-th hands node's id prefix, by the naming rule (plan 26 A0/A4,
     ENGINEERING §2): `ghost`, then `ghost.2`, … — same group, so an extra
-    hands node's params are the session's like the first's."""
+    hands node's params are the meta controller's like the first's."""
     if n < 1:
         raise ValueError(f"hands instances start at 1, not {n}")
     return GROUP if n == 1 else f"{GROUP}.{n}"
 
 
 class RoomSetting:
-    """A hands node's room setting — its mirror (plan 44 D3, review of
-    #351): the value is held here, on the session's param, and written to
-    every deck's `GhostState` that follows it, each held weakly (a deck
-    rebuilt or dropped lets its old state go, and is never written again)."""
+    """The room's one mirror (plan 44 D3, review of #351; one for every hands
+    node, LY1): the value is held here, on `ghost.mirror`, and written to every
+    `GhostState` that follows it, every deck's and every hands node's, each
+    held weakly (a deck rebuilt or dropped lets its old state go, and is never
+    written again)."""
 
     def __init__(self, value: bool = False):
         import weakref
@@ -147,25 +158,63 @@ class RoomSetting:
             st.mirror = self.value
 
 
+def _the_mirror(reg, state: GhostState) -> RoomSetting:
+    """`ghost.mirror`'s room setting, the param declared here if it isn't yet."""
+    mirror = reg.get(f"{GROUP}.mirror")
+    room = mirror.__dict__.get("room") if mirror is not None else None
+    if isinstance(room, RoomSetting):
+        return room
+    if room is not None:
+        # a room from before a hot reload, which re-classes no room by itself:
+        # the same object, so everything that follows it still does
+        room.__class__ = RoomSetting
+        return room
+    if mirror is not None:
+        # a param from before the room existed: its setting kept, given a room
+        # of its own — never declared twice (review of #351)
+        room = RoomSetting(bool(mirror.get()))
+        mirror.get, mirror.put = (lambda: room.value), room.set
+    else:
+        # the meta controller's (plan 44 D3): one setting for the room, owned by the
+        # meta controller's param and read from there — written to every live deck's
+        # hands state, held weakly so a deck rebuilt lets its old state go
+        room = RoomSetting(bool(state.mirror))
+        mirror = reg.toggle(
+            f"{GROUP}.mirror", "Ghost mirror", lambda: room.value, room.set, group=GROUP,
+            modulatable=False,
+            tip="Flip the ghost hands left for right, the hands only and every hands "
+                "node — for a real mirror in front of the performer's hands. For a "
+                "Pepper's Ghost glass use Flip X / Flip Y in the OUTPUT section, which "
+                "mirror the whole picture; with an output flip on, leave this off or "
+                "the hands flip twice. The room's, not the patch's: an install keeps it.")
+    mirror.__dict__["room"] = room
+    return room
+
+
 def register(reg, state: GhostState, n: int = 1) -> None:
-    """ghost.* — the hands' look, performance params (plan 43 §6, plan 44
-    D3, schema `/10`): a preset is a complete look, so it carries how the
+    """ghost.* — the hands' look, patch params (plan 43 §6, plan 44
+    D3, schema `/10`): a loadable patch is a complete look, so it carries how the
     hands are drawn and a load lands it, as it lands the eye — the one
-    exception is `mirror` (`params.SESSION_KEYS`), a fact of the room (a
-    real mirror in front of the performer's hands): the session's single
+    exception is `mirror` (`params.SHARED_META_KEYS`), a fact of the room (a
+    real mirror in front of the performer's hands): the meta controller's single
     copy, kept by the show, declared once and written to every deck's
     hands state. They show on the HANDS page and can be
     learned onto a desk button or knob. Only `on` and `alpha` are
     modulatable (a hand or an LFO may drive them); `mirror`, `guide`,
-    `tethers` and `style` are settings of the rig and the show — a
+    `tethers` and `style` are settings of the meta controller and the show — a
     performer's row on the mirror would flip the hands with a hand's move,
     and a style stepping under an LFO would swap the drawn object
     mid-gesture (plan 21 WP5 R12, WP6).
 
     Plan 26 A4: `n` ≥ 2 declares a second hands node's own set
-    (`ghost.2.on` … "Ghost 2 opacity"), the same params on its own state."""
+    (`ghost.2.on` … "Ghost 2 opacity") on its own state, without a mirror: its
+    state follows `ghost.mirror` (LY1), so a hands node adds nothing to what's
+    shared and none is left behind when a deck drops it."""
     pre, lb = prefix(n), "Ghost" if n == 1 else f"Ghost {n}"
     if f"{pre}.on" in reg:
+        # (declared already, each deck's landing of a held node: it follows still,
+        # a node from before a hot reload included)
+        _the_mirror(reg, state).follow(state)
         return
     reg.toggle(f"{pre}.on", f"{lb} hands", lambda: state.on,
                lambda v: setattr(state, "on", bool(v)), group=GROUP,
@@ -175,29 +224,7 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                    lambda v: setattr(state, "alpha", float(v)), lo=0.0, hi=1.0,
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
-    mirror = reg.get(f"{pre}.mirror")
-    room = mirror.__dict__.get("room") if mirror is not None else None
-    if mirror is not None and not isinstance(room, RoomSetting):
-        # a param from before this build (a hot reload): its setting kept,
-        # given a room of its own — never declared twice (review of #351)
-        room = RoomSetting(bool(mirror.get()))
-        mirror.get, mirror.put = (lambda: room.value), room.set
-        mirror.__dict__["room"] = room
-    elif not isinstance(room, RoomSetting):
-        # the session's (plan 44 D3): one setting for the room, owned by the
-        # session's param and read from there — written to every live deck's
-        # hands state, held weakly so a deck rebuilt lets its old state go
-        room = RoomSetting(bool(state.mirror))
-        mirror = reg.toggle(
-            f"{pre}.mirror", f"{lb} mirror", lambda: room.value, room.set, group=GROUP,
-            modulatable=False,
-            tip="Flip the ghost hands left for right, the hands only — for a real "
-                "mirror in front of the performer's hands. For a Pepper's Ghost "
-                "glass use Flip X / Flip Y on the OUTPUT page, which mirror the whole "
-                "picture; with an output flip on, leave this off or the hands flip "
-                "twice. The room's, not the preset's: a show keeps it.")
-        mirror.__dict__["room"] = room
-    room.follow(state)
+    _the_mirror(reg, state).follow(state)
     reg.enum(f"{pre}.guide", f"{lb} guide", lambda: state.guide,
              lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
              modulatable=False,
@@ -217,7 +244,20 @@ def register(reg, state: GhostState, n: int = 1) -> None:
                  "bead per joint), PALMS (an orb that swells as the hand opens, a ring, a "
                  "spoke where the fingers point), CAGE (a wire octahedron that turns with "
                  "the palm and breathes with the grip), MARIONETTE (fingertips on strings "
-                 "from a bar). The guide and the tethers are the same in every style.")
+                 "from a bar), MESH (a rigged hand model bent onto "
+                 "your bones: WebXR's), LEAP HAND (Ultraleap's, with a forearm), LOW POLY "
+                 "(Ultraleap's faceted pair), BONES (the hand's own 27 bones, each "
+                 "carried rigidly by the one it is). The guide and the tethers are the same "
+                 "in every style.")
+    reg.enum(f"{pre}.material", f"{lb} material", lambda: getattr(state, "material", 0),
+             lambda i: setattr(state, "material", int(i)), MATERIALS, group=GROUP,
+             modulatable=False,
+             tip="What the hands are made of, whatever style draws them: PLAIN (the lit "
+                 "surface they have always had), BONE (chalky and ivory, the light "
+                 "hardened), GLASS (clear in the middle, bright at every edge — the hand "
+                 "shows as its own silhouette), EMBER (lit from within, cool at the "
+                 "middle and hot at the rim). The guide and the tethers are PLAIN "
+                 "whatever this says.")
 
 
 # ------------------------------------------------------------------ camera
@@ -324,15 +364,15 @@ def camera(box, m: np.ndarray, aspect: float) -> tuple[np.ndarray, np.ndarray]:
 # they had until then, kept as the reference the default calibration is
 # tuned against (tests/test_hands_node.py).
 #
-# Plan 43 C2 (the owner, 2026-11-02, row 575): the eye is the preset's, and
+# Plan 43 C2 (the owner, 2026-11-02, row 575): the eye is the loadable patch's, and
 # where the hands are drawn decides what it does to them. The calibration
-# (the box into the world) is the rig's: fitted to the **reference eye**
-# (`EYE_FOV` / `EYE_DISTANCE`, the defaults) whatever the preset's eye, so
+# (the box into the world) is the meta controller's: fitted to the **reference eye**
+# (`EYE_FOV` / `EYE_DISTANCE`, the defaults) whatever the loadable patch's eye, so
 # the hands sit in the same world as the shape. Hands drawn **in the scene**
-# are seen through the preset's eye like the shape — a zoomed eye scales
+# are seen through the loadable patch's eye like the shape — a zoomed eye scales
 # both alike. Hands drawn as **a layer** are a screen-space picture: drawn
 # through the reference eye too (`Settled.layer`), they keep their size and
-# place on screen whatever the preset's eye. At the default eye the two are
+# place on screen whatever the loadable patch's eye. At the default eye the two are
 # the same matrix, so no picture of before moves.
 
 def calibration(box, m: np.ndarray, units=None) -> np.ndarray:
@@ -348,9 +388,9 @@ def calibration(box, m: np.ndarray, units=None) -> np.ndarray:
     tightly as `camera` frames it on that picture — a room setting, so the
     same on every output (plan 26 A3: A2 fitted the square on the shorter
     side, which drew the hands at about two thirds of their old size on a
-    landscape output). The eye fitted to is the rig's reference eye
-    (`EYE_FOV` / `EYE_DISTANCE`), never the preset's (plan 43 C2, row 575:
-    no argument takes another, so nobody can pass the preset's back in).
+    landscape output). The eye fitted to is the meta controller's reference eye
+    (`EYE_FOV` / `EYE_DISTANCE`), never the loadable patch's (plan 43 C2, row 575:
+    no argument takes another, so nobody can pass the loadable patch's back in).
     `tilt` (degrees, 32 = ELEVATION) turns the stage's up toward the eye:
     the eye looks along the world's −z, and the ghost camera looked down
     onto the hands from that high."""
@@ -388,9 +428,9 @@ def shared_camera(box, m: np.ndarray, aspect: float, units=None, *,
                   ) -> tuple[np.ndarray, np.ndarray]:
     """(view_proj 4×4, eye) like `camera`, but through the shape's eye:
     `geometry.eye_matrix` (the `eye.*` params; the defaults when None)
-    after `calibration` — fitted to the rig's reference eye, never to
+    after `calibration` — fitted to the meta controller's reference eye, never to
     `fov` / `distance` (plan 43 C2, row 575: the hands live in the world,
-    so a preset's zoomed eye sees them as it sees the shape). `view_proj`
+    so a loadable patch's zoomed eye sees them as it sees the shape). `view_proj`
     takes Leap-basis stage points, as `camera`'s does — the calibration's
     stage basis is undone first — and `eye` is the eye's position in that
     stage space, for the shading. What the hands node draws with (plan 26
@@ -420,10 +460,10 @@ def through_eye(cal: np.ndarray, m: np.ndarray, aspect: float, fov: float | None
 
 class Settled(tuple):
     """A frame's settled hands (`Ghost.settle`): ``(poses, view_proj, eye)``
-    through the preset's eye — what the scene draws them with — and
-    `layer`, the same poses' ``(view_proj, eye)`` through the rig's
+    through the loadable patch's eye — what the scene draws them with — and
+    `layer`, the same poses' ``(view_proj, eye)`` through the meta controller's
     reference eye: what a hands layer draws them with, so a layer keeps its
-    size on screen whatever the preset's eye (plan 43 C2, row 575). Unpacks
+    size on screen whatever the loadable patch's eye (plan 43 C2, row 575). Unpacks
     as the three it always was."""
 
     layer: tuple | None = None
@@ -939,6 +979,7 @@ in vec3 v_pos;
 in vec3 v_n;
 in vec4 v_col;
 uniform vec3 u_eye;
+uniform int u_mat;
 out vec4 f_color;
 void main() {
     vec3 n = normalize(v_n);
@@ -948,8 +989,23 @@ void main() {
     float diff = max(dot(n, l), 0.0);
     float rim = pow(1.0 - max(dot(n, v), 0.0), 2.0);
     vec3 rgb = v_col.rgb * (0.28 + 0.62 * diff) + 0.45 * rim * mix(v_col.rgb, vec3(1.0), 0.5);
+    float a = v_col.a;
+    if (u_mat == 1) {                       // BONE: chalky, the light hardened
+        vec3 bone = mix(v_col.rgb, vec3(0.96, 0.94, 0.88), 0.85);
+        rgb = bone * (0.42 + 0.50 * diff * diff) + 0.30 * pow(rim, 1.5) * vec3(1.0);
+    } else if (u_mat == 2) {                // GLASS: clear within, bright at the edge
+        float f = pow(1.0 - max(dot(n, v), 0.0), 2.2);
+        vec3 tint = mix(v_col.rgb, vec3(0.55, 0.85, 1.0), 0.5);
+        rgb = tint * (0.15 + 0.35 * diff) + 1.15 * f * vec3(1.0);
+        a = v_col.a * clamp(1.30 * f - 0.04, 0.0, 1.0);
+        if (a <= 0.0) discard;          // no colour, no depth: the scene shows
+    } else if (u_mat == 3) {                // EMBER: cool at the middle, hot at the rim
+        float heat = clamp(0.25 + 0.75 * rim, 0.0, 1.0);
+        vec3 hot = mix(vec3(0.35, 0.02, 0.0), vec3(1.0, 0.75, 0.25), heat);
+        rgb = hot * (0.55 + 0.75 * diff) + 0.65 * rim * rim * vec3(1.0, 0.45, 0.1);
+    }
     // premultiplied by the hand's fade: the composite lays it over at ghost.alpha
-    f_color = vec4(min(rgb, vec3(1.0)) * v_col.a, v_col.a);
+    f_color = vec4(min(rgb, vec3(1.0)) * a, a);
 }
 """
 
@@ -1216,7 +1272,92 @@ def marionette_parts(p: HandPose) -> tuple[list, list, list]:
     return spheres, tubes, []
 
 
-PARTS = (hands_parts, joints_parts, palms_parts, cage_parts, marionette_parts)
+# ---- MESH: a rigged hand model, skinned to the bones ----# ---- MESH: a rigged hand model, skinned to the bones ----
+#
+# The model (`handmesh.MODELS`) bent onto the tracked joints by
+# `handmesh.bone_matrices`, the skinning on the GPU (`SKINMESH_VS`). Its
+# parts are the model's own joints where the skinning puts them — what
+# the lines view's edges skip, what a test can read without GL.
+
+def mesh_model(p: HandPose, name: str):
+    """The `handmesh.HandModel` that draws pose `p` (by its own
+    handedness), or None (palm only, or the model would not load)."""
+    if not len(p.joints):
+        return None
+    ms = handmesh.models(name)
+    return None if ms is None else ms.get(handmesh.chirality(p.joints, p.normal))
+
+
+def _model_parts(name: str):
+    def parts(p: HandPose) -> tuple[list, list, list]:
+        m = mesh_model(p, name)
+        if m is None:
+            return ([_orb(p)], [], []) if not len(p.joints) else hands_parts(p)
+        mats = handmesh.bone_matrices(m, p.joints)
+        r = FINGER_R * p.width
+        # every joint, the palm's too (a wrist, an elbow): each model its own
+        return [(mats[i, :3, :3] @ m.rest[i] + mats[i, :3, 3], r)
+                for i in range(len(m.names))], [], []
+    parts.__name__ = parts.__qualname__ = f"mesh_parts_{name}"
+    parts.model = name           # Geometry draws the mesh, not these parts
+    return parts
+
+
+mesh_parts = _model_parts("webxr")
+leap_parts = _model_parts("ultraleap")
+lowpoly_parts = _model_parts("lowpoly")
+bones_parts = _model_parts("bones")
+
+PARTS = (hands_parts, joints_parts, palms_parts, cage_parts, marionette_parts,
+         mesh_parts, leap_parts, lowpoly_parts, bones_parts)
+
+
+def eye_of(view_proj: np.ndarray) -> np.ndarray:
+    """Where `view_proj` sees from, as (x, y, z, 1) — or, for a parallel
+    view, the direction it looks in as (x, y, z, 0): the point its x, y
+    and w rows all send to zero."""
+    m = np.asarray(view_proj, dtype=np.float64)[[0, 1, 3], :]
+    c = np.linalg.svd(m)[2][-1]
+    if abs(c[3]) > 1e-9:
+        return np.array([*(c[:3] / c[3]), 1.0])
+    d = c[:3] / max(np.linalg.norm(c[:3]), 1e-12)
+    # looking along +d: a point ahead of the eye has a larger clip depth
+    far = np.asarray(view_proj, dtype=np.float64) @ np.array([*d, 0.0])
+    return np.array([*(d if far[2] > 0 else -d), 0.0])
+
+
+SKINMESH_VS = """
+#version 330
+in vec3 in_pos;
+in vec3 in_n;
+in vec4 in_j;        // four joints (as floats)
+in vec4 in_w;        // their weights
+uniform mat4 u_vp;
+uniform mat4 u_bones[MAX_BONES_N];
+uniform vec4 u_col;
+out vec3 v_pos;
+out vec3 v_n;
+out vec4 v_col;
+void main() {
+    mat4 m = in_w.x * u_bones[int(in_j.x)] + in_w.y * u_bones[int(in_j.y)]
+           + in_w.z * u_bones[int(in_j.z)] + in_w.w * u_bones[int(in_j.w)];
+    v_pos = (m * vec4(in_pos, 1.0)).xyz;
+    v_n = mat3(m) * in_n;
+    v_col = u_col;
+    gl_Position = u_vp * vec4(v_pos, 1.0);
+}
+""".replace("MAX_BONES_N", str(handmesh.MAX_BONES))
+
+
+def _put(prog: moderngl.Program, name: str, v) -> None:
+    """A uniform, by bytes or by value; nothing when the compiler dropped it."""
+    if name not in prog:
+        return
+    u = cast(moderngl.Uniform, prog[name])
+    if isinstance(v, bytes):
+        u.write(v)
+    else:
+        u.value = v
 
 
 def style_parts(i) -> object:
@@ -1286,20 +1427,25 @@ class Geometry:
                                        (self._inst_t, "3f 4f 4f/i", "in_a", "in_b", "in_col")])
             made.append(vt)
             vm = ctx.vertex_array(pm, [(self._mesh, "3f 3f 4f", "in_pos", "in_n", "in_col")])
+            made.append(vm)
+            pg = ctx.program(vertex_shader=SKINMESH_VS, fragment_shader=SHADE_FS)
         except Exception:
             for res in made:
                 res.release()
             raise
         self.progs, self.vaos = (ps, pt, pm), (vs, vt, vm)
+        self.skinmesh = pg
+        self._models: dict = {}      # id(model) → (model, its buffers and vao)
 
     def on_reload(self) -> None:
-        old = (*self.vaos, *self.progs)
+        old = (*self.vaos, *self.progs, self.skinmesh, *self._model_res())
         self._build()
         for res in old:
             res.release()
 
     def draw(self, poses: list[HandPose], view_proj: np.ndarray, eye: np.ndarray,
-             parts=hands_parts, extra: list | None = None, lines: bool = False) -> None:
+             parts=hands_parts, extra: list | None = None, lines: bool = False,
+             material: int = 0) -> None:
         """Each pose as `parts` draws it, in its colour and fade, then the
         pose's `extra` rows — (sphere rows, tube rows), aligned with `poses`
         — in the same instanced draws, so they share the depth test. With
@@ -1309,13 +1455,15 @@ class Geometry:
         if lines:
             self.ctx.wireframe = True
             try:
-                self.draw(poses, view_proj, eye, parts, extra)
+                self.draw(poses, view_proj, eye, parts, extra, material=material)
             finally:
                 self.ctx.wireframe = False
             return
         s_rows, t_rows, m_rows = [], [], []
+        model = getattr(parts, "model", None)
+        meshed = [p for p in poses if model is not None and mesh_model(p, model) is not None]
         for k, p in enumerate(poses):
-            if parts is not None:
+            if parts is not None and not any(p is q for q in meshed):
                 col = (*p.colour, float(p.fade))
                 spheres, tubes, tris = parts(p)
                 s_rows += [(*c, r, *col) for c, r in spheres]
@@ -1330,6 +1478,7 @@ class Geometry:
         for prog in self.progs:
             prog["u_vp"].write(vp)
             prog["u_eye"].value = ey
+            _put(prog, "u_mat", int(material))
         for rows, buf, vao, verts in ((m_rows, self._mesh, self.vaos[2], None),
                                       (s_rows, self._inst_s, self.vaos[0], self._n_s),
                                       (t_rows, self._inst_t, self.vaos[1], self._n_t)):
@@ -1342,10 +1491,43 @@ class Geometry:
                 vao.render(moderngl.TRIANGLES, vertices=len(data))
             else:
                 vao.render(moderngl.TRIANGLES, vertices=verts, instances=len(data))
+        if meshed:
+            self._draw_meshes(meshed, vp, ey, str(model), material)
+
+    def _model_res(self) -> list:
+        return [r for _, res in self._models.values() for r in res]
+
+    def _draw_meshes(self, poses: list[HandPose], vp: bytes, eye: tuple, name: str,
+                     material: int = 0) -> None:
+        """Each pose as the rigged model `name`, skinned to its joints."""
+        prog = self.skinmesh
+        _put(prog, "u_vp", vp)
+        _put(prog, "u_eye", eye)
+        _put(prog, "u_mat", int(material))
+        for p in poses:
+            m = mesh_model(p, name)
+            if m is None:
+                continue
+            hit = self._models.get(id(m))
+            if hit is None or hit[0] is not m:
+                v = np.concatenate([m.positions, m.normals, m.joints, m.weights],
+                                   axis=1).astype("f4")
+                vb = self.ctx.buffer(v.tobytes())
+                ib = self.ctx.buffer(m.indices.astype("u4").tobytes())
+                vao = self.ctx.vertex_array(prog, [(vb, "3f 3f 4f 4f", "in_pos", "in_n",
+                                                    "in_j", "in_w")], index_buffer=ib,
+                                            index_element_size=4)
+                hit = self._models[id(m)] = (m, [vao, vb, ib])
+            mats = np.zeros((handmesh.MAX_BONES, 4, 4), dtype="f4")
+            b = handmesh.bone_matrices(m, p.joints)
+            mats[:len(b)] = b
+            _put(prog, "u_bones", np.transpose(mats, (0, 2, 1)).tobytes())   # column-major
+            _put(prog, "u_col", (*p.colour, float(p.fade)))
+            hit[1][0].render(moderngl.TRIANGLES)
 
     def release(self) -> None:
-        for res in (*self.vaos, *self.progs, self._unit_s, self._unit_t, self._inst_s,
-                    self._inst_t, self._mesh):
+        for res in (*self.vaos, *self.progs, self.skinmesh, *self._model_res(),
+                    self._unit_s, self._unit_t, self._inst_s, self._inst_t, self._mesh):
             res.release()
 
 
@@ -1436,7 +1618,7 @@ class Ghost:
 
     def calibrated(self, box, m: np.ndarray, units=None) -> np.ndarray:
         """`calibration(box, m, units)`, fitted once and kept until one of
-        the three changes (plan 43 C2, row 575: the fit is the rig's — the
+        the three changes (plan 43 C2, row 575: the fit is the meta controller's — the
         box, the basis with its mirror, hands.json's units — never the eye
         or the output, so a zoomed eye costs no fit a frame)."""
         key = (np.asarray(box, dtype=np.float64).tobytes(), np.asarray(m).tobytes(),
@@ -1457,7 +1639,7 @@ class Ghost:
         the Leap calibration (`HandsIO.units`, from the box when the source
         has none) — the one camera the scene is drawn in, so the hands can
         be drawn inside the scene. Plan 43 C2: a `Settled`, whose `layer`
-        is the same poses through the rig's reference eye, for a hands
+        is the same poses through the meta controller's reference eye, for a hands
         layer (at the default eye the two are one). Steps the fades: call
         it once a frame (`settle`)."""
         st = self.state
@@ -1538,10 +1720,11 @@ class Ghost:
             ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND)
             ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
             parts = style_parts(getattr(self.state, "style", 0))
+            mat = int(getattr(self.state, "material", 0))
             if lines:
-                self.geometry.draw(poses, view_proj, eye, parts, lines=True)
+                self.geometry.draw(poses, view_proj, eye, parts, lines=True, material=mat)
             else:
-                self.geometry.draw(poses, view_proj, eye, parts)
+                self.geometry.draw(poses, view_proj, eye, parts, material=mat)
         finally:
             ctx.disable(moderngl.DEPTH_TEST)
             ctx.enable(moderngl.BLEND)
@@ -1605,8 +1788,8 @@ class Ghost:
         included — `draw` and `Renderer._draw_frame` do).
 
         Plan 43 C2 (row 575): a layer is screen-space — the hands are
-        drawn through the rig's reference eye (`Settled.layer`), so they
-        keep their size and place on screen whatever the preset's eye —
+        drawn through the meta controller's reference eye (`Settled.layer`), so they
+        keep their size and place on screen whatever the loadable patch's eye —
         unless `world` (the layer is laid depth-aware, `HandsLayer.in_world`:
         its depth is compared with the scene's, so it is drawn through the
         scene's eye, one projection for both). The readout alone (`hands`
@@ -1651,6 +1834,7 @@ class Ghost:
         # `extra` (no style knows the guide exists, plan 21 WP6).
         # getattr: a GhostState from before the style existed
         parts = style_parts(getattr(self.state, "style", 0))
+        mat = int(getattr(self.state, "material", 0))
         guides = [p.guide for p in poses]
         try:
             if hands:
@@ -1672,11 +1856,12 @@ class Ghost:
                     ro.color_mask = (False, False, False, False)
                     try:
                         ro.use()
-                        self.geometry.draw(poses, view_proj, eye, parts)
+                        self.geometry.draw(poses, view_proj, eye, parts, material=mat)
                     finally:
                         ro.color_mask = (True, True, True, True)
                         ro.use()
                 ctx.viewport = (0, 0, w, h)
+                # the guide is a readout, never a material: PLAIN by the default
                 self.geometry.draw(poses, view_proj, eye, None, guides)
                 ctx.disable(moderngl.DEPTH_TEST)
                 if any(p.tethers for p in poses):
@@ -1711,15 +1896,24 @@ class Ghost:
         # goes over it: the style first, then the depth cleared, then
         # the guide — the guide reads the same in every style
         over = parts is not hands_parts or lines
+        mat = int(getattr(self.state, "material", 0))
+        draw = self.geometry.draw          # bound once: `geometry` is Optional
+        shown = any(g[0] or g[1] for g in guides)
         if lines:                       # the parts' edges; the guide solid, after
-            self.geometry.draw(poses, view_proj, eye, parts, None, lines=True)
+            draw(poses, view_proj, eye, parts, None, lines=True, material=mat)
         else:
-            self.geometry.draw(poses, view_proj, eye, parts,
-                               None if split or over else guides)
-        if over and not split and any(g[0] or g[1] for g in guides):
+            # the guide rides with the hands only while they are PLAIN; under a
+            # material it is drawn after them instead, in the same depth pass,
+            # so its colours are its own (review of #449)
+            with_hands = not (split or over or mat)
+            draw(poses, view_proj, eye, parts, guides if with_hands else None, material=mat)
+            if mat and not split and not over and shown:
+                draw(poses, view_proj, eye, None, guides)
+        if over and not split and shown:
             _clear_depth(ctx, draw_fbo)
             ctx.viewport = (0, 0, *self.size)
-            self.geometry.draw(poses, view_proj, eye, None, guides)
+            # the guide is a readout, never a material: PLAIN by the default
+            draw(poses, view_proj, eye, None, guides)
         ctx.disable(moderngl.DEPTH_TEST)
         if not split and any(p.tethers for p in poses):
             self._draw_tethers(poses, view_proj)

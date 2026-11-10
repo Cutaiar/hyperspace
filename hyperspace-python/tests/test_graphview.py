@@ -3,7 +3,7 @@
 
 The model is built from the shell's rig (tests/test_ui_shell.py: the full
 registry, the factory table, a scratch library on tmp_path) with the
-corpus's presets (tests/corpus, seeded) loaded through it, a render graph built by `graph.default_graph`
+corpus's loadable patches (tests/corpus, seeded) loaded through it, a render graph built by `graph.default_graph`
 (or by hand, for an effect placed off the default chain) and a device
 registry of fakes. The page is drawn under the same headless imgui
 context the other pages are, with the node editor's own context on it:
@@ -18,7 +18,7 @@ import pytest
 from conftest import seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
-from test_ui_shell import frame
+from test_ui_shell import build_rig, frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 from wiredframe import Shows
 from wiredframe import wiring as wired_for
@@ -36,14 +36,14 @@ PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
-    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
+    seed(shell_rig.lib.home)         # (the corpus: the loadable patches the tests load by slug)
     return shell_rig
 
 
 def _every_file(rig) -> None:
     """Every effect file's params, as before a graph landed (plan 36 T3:
     `FxState.hold(None)`) — a canvas these tests build from a render graph
-    no preset's section says."""
+    no loadable patch's section says."""
     from hyperspace.fx import declare
 
     st = rig.reg.fx_state
@@ -71,7 +71,7 @@ def stacked(effects, wiring=None) -> G.Wiring:
     """`wiring` (None: the default) with `effects` its run — those no wire
     or placement of it takes, in the order given: what the order-built
     stack ran for a wiring that said no run, and what a load lands for an
-    old preset with them on (plan 33 R23: a graph fixture says its run)."""
+    old loadable patch with them on (plan 33 R23: a graph fixture says its run)."""
     from dataclasses import replace
 
     wiring = wiring if wiring is not None else G.Wiring()
@@ -92,11 +92,11 @@ def owner_of(view, pid):
 
 def test_every_route_is_one_cable_and_every_cable_one_route(rig):
     """Today's routes convert one-to-one (decision 13): every performer
-    row of a loaded preset — enabled or not — is exactly one `route`
+    row of a loaded patch — enabled or not — is exactly one `route`
     cable whose `ref` is that row, into its target's `mod` stub, and no
     route cable stands for anything else."""
     for name in ("party-trip", "lfo-breathe", "hands-fx", "legacy6"):
-        rig.lib.load("presets", name)
+        rig.lib.load("loadable", name)
         rows = rig.router.table.routes()
         rows[-1].enabled = False                        # a dormant row is a cable too
         view = build(rig)
@@ -121,7 +121,7 @@ def test_macro_subs_are_cables_into_base_or_depth(rig):
     one cable from that output — a base subscriber into the param's `base`
     stub, a depth subscriber into the `depth` stub of the param its route
     lands on (lfo-breathe has both)."""
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     table = rig.router.table
     view = build(rig)
     subs = [c for c in view.cables if c.kind == "sub"]
@@ -182,7 +182,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     assert owner_of(view, out1) == "render:output.1"
     assert owner_of(view, "lfo.1.depth") == "lfo.1"
     assert owner_of(view, "tempo.bpm") == "group:tempo"
-    assert owner_of(view, "master.gain") == "group:master"
+    assert owner_of(view, "master.dyn") == "group:master"
     # no render graph: the same params fall to their groups' nodes
     bare = build(rig)
     assert owner_of(bare, "view.bright") == "group:view"
@@ -191,12 +191,12 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     port = view.owner("mod:view.bright")[1]
     assert port.pins[:2] == ("base:view.bright", "mod:view.bright")
     # where each node's position lives
-    assert graphview.home(view.node("render:shape")) == graphview.PRESET
-    assert graphview.home(view.node("render:output.1")) == graphview.SESSION
-    # plan 31 G1: an LFO is the preset's (a bank's membership is preset content)
-    assert graphview.home(view.node("lfo.1")) == graphview.PRESET
-    assert graphview.home(view.node(graphview.ANALYZER)) == graphview.SESSION
-    assert graphview.home(view.node("group:tempo")) == graphview.SESSION
+    assert graphview.home(view.node("render:shape")) == graphview.PATCH_SECTION
+    assert graphview.home(view.node("render:output.1")) == graphview.META_SECTION
+    # plan 31 G1: an LFO is the loadable patch's (a bank's membership is loadable patch content)
+    assert graphview.home(view.node("lfo.1")) == graphview.PATCH_SECTION
+    assert graphview.home(view.node(graphview.ANALYZER)) == graphview.META_SECTION
+    assert graphview.home(view.node("group:tempo")) == graphview.META_SECTION
 
 
 class FakeDevice(devices.Base):
@@ -223,7 +223,7 @@ def test_device_nodes_come_from_the_registry_with_their_port_groups(rig):
     ))
     pad = FakeDevice("pad", "gamepad", ("axis",), (), connected=False)
     reg = devices.DeviceRegistry(devices=[hands, pad])
-    rig.lib.load("presets", "hands-fx")
+    rig.lib.load("loadable", "hands-fx")
     rig.router.table.add(rig.router.table.routes()[0].__class__(
         "axis:LX", "camera.zoom", "push", 0.3))
     view = build(rig, devs=reg)
@@ -265,7 +265,7 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
     view = graphview.build(Bindings(), Registry(), None, None, g, spec)
     wires = [c for c in view.cables if c.kind == "render" and not G.is_bus(c.ref)]
     assert [c.ref for c in wires] == list(spec.wires)
-    # plan 36 T1: and the rig's bus cables into the ports the section
+    # plan 36 T1: and the meta controller's bus cables into the ports the section
     # leaves to All outputs (its own wire takes output.1.hands)
     assert [c.ref for c in view.cables if c.kind == "render" and G.is_bus(c.ref)] == [
         G.bus_wire(1, "image"), G.bus_wire(1, "guide"), G.bus_wire(1, "depth")]
@@ -289,12 +289,12 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
     """R14: positions saved on the canvas before plan 35 (`render:eye`,
     `render:history`, `render:media.a`, `render:ghost`, `render:hands` the
     layer …) are read under the wired frame's ids (`graphmigrate.
-    renamed_layout`), in the preset's layout and in the show's, so the
+    renamed_layout`), in the loadable patch's layout and in the show's, so the
     owner's arrangement stays; a layout already in the new ids is as it is."""
     import json
 
     from hyperspace import graphmigrate as M
-    from hyperspace.preset import LAYOUT_KEY
+    from hyperspace.loadable import LAYOUT_KEY
     old = {"render:eye": [1, 2], "render:history": [3, 4], "render:media.a": [5, 6],
            "render:ghost": [7, 8], "render:hands": [9, 10], "render:readout.2": [11, 12],
            "render:acid.2": [13, 14], "lfo.1": [15, 16]}
@@ -303,56 +303,56 @@ def test_old_layout_positions_follow_the_renamed_ids(rig):
            "render:hands.2.guide": [11, 12], "render:acid.2": [13, 14], "lfo.1": [15, 16]}
     assert M.renamed_layout(old) == new
     assert M.renamed_layout(new) == new           # (new ids: untouched — `render:hands` too)
-    lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
-    lib.load("presets", "party-trip")
-    doc = presets.document("party-trip")
+    lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.install
+    lib.load("loadable", "party-trip")
+    doc = loaded_patch.document("party-trip")
     doc[LAYOUT_KEY] = old
-    presets.load_doc(doc)
-    assert presets.layout == new
+    loaded_patch.load_doc(doc)
+    assert loaded_patch.layout == new
     project.save("old-show")
     raw = json.loads(project.path.read_text())
     raw["layout"] = {"render:eye": [40, 50], "render:output.1": [60, 70]}
     project.path.write_text(json.dumps(raw))
     project.load("old-show")
     # (plan 43 C2: the camera's position is the look's — held for the old
-    # presets this show opens, never the show's own)
+    # loadable patches this show opens, never the show's own)
     assert project.layout == {"render:output.1": [60, 70]}
     assert project.camera_at == [40, 50]
 
 
-def test_layout_round_trips_through_the_preset_and_the_show(rig):
-    """The look's nodes' positions are the preset's ``layout``, the rig's
-    the show's: written on save, read on load. A preset without the key
-    (every corpus preset) loads with no note and no dirt; one with a bad
+def test_layout_round_trips_through_the_loadable_and_the_show(rig):
+    """The look's nodes' positions are the loadable patch's ``layout``, the rig's
+    the show's: written on save, read on load. A loadable patch without the key
+    (every corpus loadable patch) loads with no note and no dirt; one with a bad
     entry keeps the good ones and says so."""
-    from hyperspace.preset import LAYOUT_KEY
-    lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
-    lib.load("presets", "party-trip")
+    from hyperspace.loadable import LAYOUT_KEY
+    lib, loaded_patch, project = rig.lib, rig.lib.loaded_patch, rig.lib.install
+    lib.load("loadable", "party-trip")
     # (plan 36 T3: the corpus `/7` holds the envelopes' and the sequencer's
     # values, which this rig — the panel's, built without them — lacks)
-    said = [n for n in presets.notes if not n.endswith("…") or "env." not in n]
-    assert presets.layout == {} and said == [] and not lib.is_dirty("presets")
-    assert LAYOUT_KEY not in presets.document("party-trip")
-    presets.layout["render:shape"] = [520, 40]
-    presets.layout["mod.1"] = [260, 300]
-    assert lib.is_dirty("presets")                  # a node moved is an edit
-    lib.save_as("presets", "trip-laid")
-    doc = lib.read("presets", "trip-laid")
+    said = [n for n in loaded_patch.notes if not n.endswith("…") or "env." not in n]
+    assert loaded_patch.layout == {} and said == [] and not lib.is_dirty("loadable")
+    assert LAYOUT_KEY not in loaded_patch.document("party-trip")
+    loaded_patch.layout["render:shape"] = [520, 40]
+    loaded_patch.layout["mod.1"] = [260, 300]
+    assert lib.is_dirty("loadable")                  # a node moved is an edit
+    lib.save_as("loadable", "trip-laid")
+    doc = lib.read("loadable", "trip-laid")
     assert doc[LAYOUT_KEY] == {"mod.1": [260, 300], "render:shape": [520, 40]}
-    lib.load("presets", "party-trip")
-    assert presets.layout == {}
-    lib.load("presets", "trip-laid")
-    assert presets.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
-    assert not lib.is_dirty("presets")
+    lib.load("loadable", "party-trip")
+    assert loaded_patch.layout == {}
+    lib.load("loadable", "trip-laid")
+    assert loaded_patch.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
+    assert not lib.is_dirty("loadable")
     # one entry a line in the file
-    text = (lib.path_of("presets", "trip-laid")).read_text()
+    text = (lib.path_of("loadable", "trip-laid")).read_text()
     assert '  "render:shape": [520, 40]' in text
     # a bad entry: dropped, said
     doc[LAYOUT_KEY]["oops"] = ["x", 1]
-    presets.load_doc(doc)
-    assert presets.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
-    assert any(n.startswith("layout: 1 entry") for n in presets.notes)
-    # the show: the rig's nodes
+    loaded_patch.load_doc(doc)
+    assert loaded_patch.layout == {"mod.1": [260, 300], "render:shape": [520, 40]}
+    assert any(n.startswith("layout: 1 entry") for n in loaded_patch.notes)
+    # the show: the meta controller's nodes
     project.save("laid-show")
     assert not project.is_dirty()
     project.layout["lfo.1"] = [0, 120]
@@ -372,7 +372,7 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     right (plan 28 N9: controllers → audio → modulation → plan 35 G's media
     → scene → look-back → effects → outputs; the render nodes by their
     depth within theirs); a placed node keeps its own and takes no room."""
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
     # (plan 36 T4: the look-back drawn, as the old words with it on)
     g = G.build_graph(views(Switches()), wired_wiring(stacked(("acid",)), "trail"),
@@ -403,7 +403,7 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     ys = sorted(pos[nid][1] for nid in drawn)
     assert {"lfo.1", "lfo.2", "mod.1", "macro.1"} <= set(drawn)
     assert len(set(ys)) == len(ys)
-    # the preset's map and the show's, by home
+    # the loadable patch's map and the show's, by home
     pre, ses = graphview.split(view, {**pos, **placed})
     assert "render:shape" in pre and "mod.1" in pre and "macro.1" in pre and "lfo.1" in pre
     assert graphview.ANALYZER in ses and "render:output.1" in ses
@@ -421,12 +421,12 @@ def test_no_plumbing_words_remain():
     """Plan 35 T5: the frame is ordinary nodes and wires, so the canvas's
     words for the old frame's own plumbing are gone, and so are the T3/T4
     bridges that drew a wired frame in plan 33's words."""
-    from hyperspace import preset, ui_graph
+    from hyperspace import loadable, ui_graph
     for name in ("PLUMBING", "RUN_KEPT", "FEEDS", "FEEDS_NO_DELETE", "FrameNode",
                  "canvas_name", "run_end", "_with_run", "_framed", "_is_plumbing"):
         assert not hasattr(graphview, name), name
     assert not hasattr(ui_graph, "_feeds_cut")
-    assert not hasattr(preset.GraphSection, "said")
+    assert not hasattr(loadable.GraphSection, "said")
     src = (PKG / "graphview.py").read_text()
     assert "is the default graph's" not in src and "FX_NAMES" not in src
 
@@ -452,12 +452,12 @@ def test_the_graph_page_sits_after_routing():
     assert PAGE_KEYS.index("graph") == PAGE_KEYS.index("routing") + 1
 
 
-def test_the_page_draws_with_a_corpus_preset_and_a_render_graph(rig):
+def test_the_page_draws_with_a_corpus_loadable_and_a_render_graph(rig):
     """The page drawn for real on the node editor, headless: a corpus
-    preset loaded, a render graph with effects, every node expanded and
+    loadable patch loaded, a render graph with effects, every node expanded and
     collapsed, a route and an effect node selected (the side column), a
     tidy — and nothing raises; the SYSTEM page then has its line."""
-    from test_graph_legible import party  # (plan 35 T5: its frame landed as the preset's)
+    from test_graph_legible import party  # (plan 35 T5: its frame landed as the loadable patch's)
     party(rig)
     rig.reg["fx.acid.on"].set(1)        # N9: an off effect with no cable is not drawn
     for _ in range(3):
@@ -487,7 +487,7 @@ def test_the_page_draws_with_a_corpus_preset_and_a_render_graph(rig):
     assert ui_graph._selection(st, view)[1].id == "render:acid"
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert ui_graph.timing_line(rig.panel).startswith("graph page: ")
+    assert ui_graph.timing_line(rig.panel).startswith("graph draw: ")
     frame(rig.panel, "system")
 
 
@@ -507,14 +507,14 @@ def _in_editor(rig, fn):
 
 def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     """A node moved on the canvas is written where it lives — a render
-    node and an LFO (plan 31 G1) into the loaded preset's layout (dirtying
+    node and an LFO (plan 31 G1) into the loaded patch's layout (dirtying
     it), the analyzer into the show's — once the mouse lets go; a node left
     alone is written nowhere."""
-    rig.lib.load("presets", "party-trip")
+    rig.lib.load("loadable", "party-trip")
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
-    assert rig.lib.presets.layout == {} and rig.lib.project.layout == {}
-    assert not rig.lib.is_dirty("presets")
+    assert rig.lib.loaded_patch.layout == {} and rig.lib.install.layout == {}
+    assert not rig.lib.is_dirty("loadable")
 
     def move():
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:render:camera")), imgui.ImVec2(700, 50))
@@ -523,13 +523,13 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     _in_editor(rig, move)
     frame(rig.panel, "graph")
     # N9: lfo.2 is idle, not drawn
-    assert rig.lib.presets.layout == {"render:camera": [700, 50], "lfo.1": [30, 640]}
-    assert rig.lib.project.layout == {"analyzer": [40, 20]}
-    assert rig.lib.is_dirty("presets")
+    assert rig.lib.loaded_patch.layout == {"render:camera": [700, 50], "lfo.1": [30, 640]}
+    assert rig.lib.install.layout == {"analyzer": [40, 20]}
+    assert rig.lib.is_dirty("loadable")
     # tidy forgets them both
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert rig.lib.presets.layout == {} and rig.lib.project.layout == {}
+    assert rig.lib.loaded_patch.layout == {} and rig.lib.install.layout == {}
 
 
 def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_close(rig,
@@ -594,7 +594,7 @@ def test_a_route_depth_follows_its_macro_and_its_slider_without_a_rebuild(rig):
     """The hover's depth (`value × scale × Π depth subscribers`) is
     `refresh`'s: a depth-subscribing macro turned, or the row's depth
     dragged, moves it with the same view (no rebuild per frame)."""
-    rig.lib.load("presets", "lfo-breathe")
+    rig.lib.load("loadable", "lfo-breathe")
     table = rig.router.table
     mid, s = next((mid, s) for mid, m in table.macros.items() for s in m.subs
                   if s.depth is not None)
@@ -634,23 +634,23 @@ def _undo_rig(tmp_path):
 
 
 def test_undoing_a_load_puts_the_earlier_layout_back(tmp_path):
-    """The marks carry the GRAPH page's positions: undoing a preset load
-    over a plain preset leaves no positions and no dirt; undoing a show
+    """The marks carry the GRAPH page's positions: undoing a loadable patch load
+    over a plain loadable patch leaves no positions and no dirt; undoing a show
     load gives the earlier show's map back, clean."""
-    from hyperspace.library import PRESETS
+    from hyperspace.library import LOADABLE
     r, settle = _undo_rig(tmp_path)
-    lib, presets, pr = r.lib, r.presets, r.lib.project
-    presets.save_as("plain")
-    presets.layout["render:shape"] = [40, 80]
-    presets.save_as("laid")
-    lib.load(PRESETS, "plain")
+    lib, loaded_patch, pr = r.lib, r.loaded_patch, r.lib.install
+    loaded_patch.save_as("plain")
+    loaded_patch.layout["render:shape"] = [40, 80]
+    loaded_patch.save_as("laid")
+    lib.load(LOADABLE, "plain")
     settle(r)
-    lib.load(PRESETS, "laid")
+    lib.load(LOADABLE, "laid")
     settle(r)
-    assert presets.layout == {"render:shape": [40, 80]}
+    assert loaded_patch.layout == {"render:shape": [40, 80]}
     assert r.undo.undo()
-    assert lib.current(PRESETS) == "plain"
-    assert presets.layout == {} and not lib.is_dirty(PRESETS)
+    assert lib.current(LOADABLE) == "plain"
+    assert loaded_patch.layout == {} and not lib.is_dirty(LOADABLE)
     # the show
     pr.save("show-plain")
     pr.layout["lfo.1"] = [0, 10]
@@ -671,24 +671,24 @@ def test_a_tidy_is_one_undo_step(tmp_path):
     ⇧⌘Z tidies both again."""
     from types import SimpleNamespace
 
-    from hyperspace.library import PRESETS
+    from hyperspace.library import LOADABLE
     r, settle = _undo_rig(tmp_path)
-    lib, presets, pr = r.lib, r.presets, r.lib.project
-    presets.layout["render:shape"] = [40, 80]
+    lib, loaded_patch, pr = r.lib, r.loaded_patch, r.lib.install
+    loaded_patch.layout["render:shape"] = [40, 80]
     pr.layout["lfo.1"] = [0, 10]
     settle(r)
     view = graphview.View(nodes=[graphview.VNode("render:shape", "render", "shape"),
                                  graphview.VNode("lfo.1", "lfo", "LFO 1")])
     ui_graph.forget(SimpleNamespace(library=lib), view)
-    assert presets.layout == {} and pr.layout == {}
+    assert loaded_patch.layout == {} and pr.layout == {}
     settle(r)
     assert r.undo.undo() and r.undo.status.endswith("tidy the graph")
-    assert presets.layout == {"render:shape": [40, 80]} and pr.layout == {"lfo.1": [0, 10]}
-    assert lib.is_dirty(PRESETS)            # the positions are still not saved
+    assert loaded_patch.layout == {"render:shape": [40, 80]} and pr.layout == {"lfo.1": [0, 10]}
+    assert lib.is_dirty(LOADABLE)            # the positions are still not saved
     settle(r)
     assert r.undo.redo() and r.undo.status.endswith("tidy the graph")
-    assert presets.layout == {} and pr.layout == {}     # both maps tidied again
-    assert not lib.is_dirty(PRESETS)        # (the saved preset holds no positions either)
+    assert loaded_patch.layout == {} and pr.layout == {}     # both maps tidied again
+    assert not lib.is_dirty(LOADABLE)        # (the saved loadable patch holds no positions either)
 
 
 # ---------------------------------------------------------------- plan 32 T10: the media area
@@ -715,7 +715,7 @@ def test_graph_has_media_area(rig):
     assert view.node("render:backdrop") is None
     assert owner_of(view, "backdrop.alpha") == "group:backdrop"
     assert all(n.idle for n in chans)                       # nothing in a bin, no cable
-    assert graphview.TITLES[graphview.MEDIA] == "MEDIA"
+    assert graphview.TITLES[graphview.MEDIA] == "media"
     assert graphview.AREAS.index(graphview.MEDIA) < graphview.AREAS.index(graphview.SCENE_AREA)
     lay = graphview.layout(view, collapsed=lambda nid: True)
     assert graphview.MEDIA in lay.titles and lay.idle[graphview.MEDIA]
@@ -894,3 +894,230 @@ def test_a_drops_reach_is_never_under_near_screen_px():
     assert graphview.drop_reach() == graphview.NEAR
     assert graphview.drop_reach(0.5) == graphview.NEAR
     assert graphview.drop_reach(4.0) == 4 * graphview.NEAR
+
+
+# ---- GRAPH's start zoom (plan 58 SM2) ----
+
+def _start(rig, zoom: float, frames: int = 3) -> dict:
+    from test_graph_legible import party
+    rig.panel.graph_start_zoom = zoom       # (before the editor's first draw: it reads it once)
+    party(rig)
+    for _ in range(frames):
+        frame(rig.panel, "graph")
+    return ui_graph._state(rig.panel)
+
+
+def test_scale_is_what_saved_layouts_are_in():
+    """Saved positions are in canvas units behind SCALE: a display's zoom
+    must never get there by changing it."""
+    assert graphview.SCALE == 1.25
+
+
+def test_the_start_zoom_lands_and_leaves_no_file(rig, monkeypatch, tmp_path):
+    spare = tmp_path / "spare"
+    spare.mkdir()
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
+    st = _start(rig, 1.6)
+    assert st["zoom"] == pytest.approx(1 / 1.6)     # the editor's zoom reads canvas units a point
+    assert ed.get_config(st["editor"]).settings_file == ""
+    assert list(spare.iterdir()) == []              # read, off, gone: nothing saved into it
+
+
+def test_the_start_zoom_keeps_the_view_at_the_corner(rig):
+    """Zoomed from the canvas's origin, as 1:1 opens, not about its middle."""
+    st = _start(rig, 1.6)
+    assert st["seen"][0] == pytest.approx(0.0, abs=12.0)
+    assert st["seen"][1] == pytest.approx(0.0, abs=12.0)
+
+
+def test_a_start_zoom_of_one_writes_nothing(rig, monkeypatch):
+    written = []
+    monkeypatch.setattr(ui_graph.tempfile, "mkstemp", lambda **k: written.append(k))
+    st = _start(rig, 1.0)
+    assert written == [] and st["zoom"] == pytest.approx(1.0)
+
+
+def test_the_start_zoom_moves_no_position(rig, tmp_path):
+    st = _start(rig, 1.6)
+    moved = dict(st["applied"])
+    assert moved
+    (tmp_path / "other").mkdir()
+    with build_rig(tmp_path / "other") as other:
+        assert dict(_start(other, 1.0)["applied"]) == moved
+
+
+def test_the_start_zoom_is_not_set_twice(rig):
+    """A person's zoom during a run stays: the view framed to fit stands in
+    for one, and a loaded patch and more frames leave it."""
+    st = _start(rig, 1.6)
+    assert st["zoom"] == pytest.approx(1 / 1.6)
+    ui_graph.ask_fit(st)
+    for _ in range(90):
+        frame(rig.panel, "graph")
+    theirs = st["zoom"]
+    assert theirs != pytest.approx(1 / 1.6)
+    rig.panel.graph_start_zoom = 1.9        # (a new number changes nothing: read once)
+    for _ in range(5):
+        frame(rig.panel, "graph")
+    assert st["zoom"] == pytest.approx(theirs)
+    assert st["created"] == 1
+
+
+def _resized(monkeypatch, narrower: float, shorter: float) -> None:
+    real = ui_graph._canvas
+    monkeypatch.setattr(ui_graph, "_canvas", lambda panel, st, view, size, through=0.0: real(
+        panel, st, view, imgui.ImVec2(size.x - narrower, size.y - shorter), through))
+
+
+def _node_on_canvas(monkeypatch, st) -> dict:
+    """Each frame: a drawn node's screen point, less the canvas's corner."""
+    seen = {}
+    real = ui_graph._moved
+
+    def moved(panel, st_, view):
+        n = next(n for n in view.nodes if ui_graph.drawn_node(st_, n))
+        at = ed.canvas_to_screen(ed.get_node_position(ed.NodeId(ui_graph._id(st_, "n:" + n.id))))
+        corner = ed.canvas_to_screen(imgui.ImVec2(*st_["seen"]))
+        seen["at"] = (at.x - corner.x, at.y - corner.y)
+        return real(panel, st_, view)
+    monkeypatch.setattr(ui_graph, "_moved", moved)
+    return seen
+
+
+@pytest.mark.parametrize("zoom", [1.0, 1.6])
+@pytest.mark.parametrize(("narrower", "shorter"), [(0.0, 23.0), (40.0, 0.0), (40.0, 165.0)])
+def test_a_change_of_canvas_size_moves_no_node(rig, monkeypatch, zoom, narrower, shorter):
+    """The zoom stands, and every node stays where it was against the canvas's
+    top-left (the owner, 2026-10-24): a head's extra line, a window's resize."""
+    st = _start(rig, zoom)
+    seen = _node_on_canvas(monkeypatch, st)
+    frame(rig.panel, "graph")
+    before = seen["at"]
+    _resized(monkeypatch, narrower, shorter)
+    frame(rig.panel, "graph")
+    assert st["zoom"] == pytest.approx(1 / zoom)
+    assert seen["at"] == pytest.approx(before, abs=1.5 * zoom)      # (the pan is in whole units)
+
+
+def test_a_line_on_the_head_moves_no_node(rig, monkeypatch):
+    """What changes the canvas's height with no window touched: a patch that
+    wires a window this Mac lacks puts a line on the head."""
+    st = _start(rig, 1.6)
+    seen = _node_on_canvas(monkeypatch, st)
+    frame(rig.panel, "graph")
+    tall, before = st["canvas_size"], seen["at"]
+    laid = dict(rig.lib.loaded_patch.layout)
+    monkeypatch.setattr(ui_graph, "window_wants", lambda _panel: ["a window this Mac lacks"])
+    frame(rig.panel, "graph")
+    assert st["canvas_size"][1] < tall[1]
+    assert seen["at"] == pytest.approx(before, abs=2.4)
+    assert st["zoom"] == pytest.approx(1 / 1.6)
+    assert rig.lib.loaded_patch.layout == laid      # a pan, never a move
+
+
+def test_the_page_has_no_scrollbar_and_the_canvas_keeps_its_width(rig, monkeypatch):
+    """The canvas's size is one from its first frame: the footer counted whole,
+    CONTROLS doesn't overflow into a scrollbar on its second."""
+    sizes = []
+    real = ui_graph._canvas
+
+    def spy(panel, st, view, size, through=0.0):
+        sizes.append((size.x, size.y, imgui.internal.get_current_window().parent_window.scrollbar_y))
+        real(panel, st, view, size, through)
+    monkeypatch.setattr(ui_graph, "_canvas", spy)
+    for _ in range(4):
+        frame(rig.panel, "graph")
+    assert len(set(sizes)) == 1 and sizes[0][2] is False
+
+
+def test_a_begin_that_raises_leaves_the_editor_holding_no_file(rig, monkeypatch, tmp_path):
+    """Or the next frame's editor would save its nodes into that file: it only
+    reads the view on the frame it's made."""
+    spare = tmp_path / "spare"
+    spare.mkdir()
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(spare))
+
+    def fails(*_a):
+        raise RuntimeError("no")
+    monkeypatch.setattr(ui_graph.ed, "begin", fails)
+    rig.panel.graph_start_zoom = 1.6
+    with pytest.raises(RuntimeError):
+        frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    assert ed.get_config(st["editor"]).settings_file == ""
+    assert list(spare.iterdir()) == []
+
+
+@pytest.mark.parametrize(("base", "zoom", "density"), [
+    (1.0, 1.0, 1.0),        # 1:1, as before
+    (1.0, 1.3, 1.3),        # the show's display: baked at the size it lands
+    (2.0, 1.3, 2.6),
+    (1.0, 1.376, 1.4),      # up to the next step: never stretched
+    (1.0, 0.5, 1.0),        # zoomed out, as before
+    (2.0, 4.0, 4.0),        # capped
+])
+def test_the_canvas_bakes_its_words_for_the_zoom(base, zoom, density):
+    assert ui_graph.canvas_density(base, 1 / zoom) == pytest.approx(density)
+
+
+def test_a_zoom_bakes_once_at_its_end():
+    st = {}
+    assert ui_graph.held_density(st, 1.3, now=0.0) == 1.3      # the start: at once
+    assert ui_graph.held_density(st, 1.3, now=1.0) == 1.3
+    assert ui_graph.held_density(st, 1.4, now=2.0) == 1.3      # a sweep: each step restarts the wait
+    assert ui_graph.held_density(st, 1.5, now=2.2) == 1.3
+    assert ui_graph.held_density(st, 1.6, now=2.4) == 1.3
+    assert ui_graph.held_density(st, 1.6, now=2.6) == 1.3
+    assert ui_graph.held_density(st, 1.6, now=2.8) == 1.6      # held: baked once
+    assert ui_graph.held_density(st, 1.6, now=2.9) == 1.6
+    assert ui_graph.held_density(st, 1.4, now=3.0) == 1.6      # and back, the same
+    assert ui_graph.held_density(st, 1.6, now=3.1) == 1.6      # changed its mind: no bake
+    assert ui_graph.held_density(st, 1.4, now=3.2) == 1.6      # the wait starts over
+
+
+@pytest.mark.parametrize(("zoom", "density"), [(1.0, 1.0), (1.3, 1.3)])
+def test_the_density_holds_for_the_canvas_and_no_further(rig, monkeypatch, zoom, density):
+    during = []
+    real = ui_graph._moved
+
+    def moved(panel, st, view):
+        during.append(imgui.internal.get_font_rasterizer_density())
+        return real(panel, st, view)
+    monkeypatch.setattr(ui_graph, "_moved", moved)
+    st = _start(rig, zoom)
+    frame(rig.panel, "graph")
+    assert st["zoom"] == pytest.approx(1 / zoom)
+    assert during[-1] == pytest.approx(density)
+    assert imgui.internal.get_font_rasterizer_density() == pytest.approx(1.0)
+
+
+def test_a_failed_write_leaves_no_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(tmp_path))
+
+    def full(*_a, **_k):
+        raise OSError("disk full")
+    monkeypatch.setattr(ui_graph.json, "dump", full)
+    assert ui_graph.start_view(1.6) == ""
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_failed_open_closes_the_file_and_leaves_none(monkeypatch, tmp_path):
+    monkeypatch.setattr(ui_graph.tempfile, "tempdir", str(tmp_path))
+    closed = []
+    real_close = ui_graph.os.close
+
+    def full(fd, *_a, **_k):
+        closed.append(fd)
+        raise OSError("no")
+    monkeypatch.setattr(ui_graph.os, "fdopen", full)
+    monkeypatch.setattr(ui_graph.os, "close", lambda fd: (closed.append(-fd), real_close(fd)))
+    assert ui_graph.start_view(1.6) == ""
+    assert closed[1] == -closed[0]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_no_file_means_the_editors_own_start(monkeypatch):
+    def refused(**_k):
+        raise OSError("disk full")
+    monkeypatch.setattr(ui_graph.tempfile, "mkstemp", refused)
+    assert ui_graph.start_view(1.6) == ""

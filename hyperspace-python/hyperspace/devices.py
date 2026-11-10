@@ -1,5 +1,5 @@
-"""The device registry (plan 27): every input or output the rig has,
-listed in ``config.toml`` as ``[[devices]]``, opened behind its own entry,
+"""The device registry (plan 27): every input or output the meta controller has,
+listed in the library's ``devices.json`` (`devicelist`), opened behind its own entry,
 polled in order each frame, and closed in one list.
 
 A *device* is anything that satisfies the `Device` protocol below:
@@ -23,7 +23,7 @@ module, each imported lazily inside its device's `open`, so importing
 **Roles, not serials** (decision 11): an entry has a `role` — `apc40`,
 `pad`, `leap`, `wand1` — the name the SYSTEM page, the notes and a MIDI
 row's qualifier (``cc@launch:0:7``) use. A role contains no ``:``. **For
-today's devices the role is not the scheme:** a preset names a *scheme*
+today's devices the role is not the scheme:** a loadable patch names a *scheme*
 (`hand:right.roll`, `axis:LX`, `ext:3`, `cc:0:48`) and the device's
 `schemes` tuple says which schemes its role publishes, so every existing
 row is unchanged whatever the entry is called. A new device (B4's OSC)
@@ -50,7 +50,7 @@ when the device sends one). Discrete controls stay scene-setters: a
 device delivers them as rows through the table (`Router.pad`,
 `MidiIO._handle`), never as a feed. A device may expose `layers`
 (decision 14: the APC40 as two nodes in plan 28): the first MIDI role's
-desk has two, the preset layer and SHIFT's global one.
+desk has two, the patch layer and SHIFT's global one.
 
 **The frame.** `DeviceRegistry.poll` runs in the scene-setter slot
 (after the key rows, before the macros and undo): each device is polled,
@@ -69,19 +69,19 @@ hardware is not there reports `lost` and **reconnects itself** on its own
 schedule — today's adapters do (`midi.Ports.retry`, the pad's GLFW poll
 and USB rescan, the hands' Leap thread and DAW port), and a B2 / B4
 device must too; the registry never closes or reopens a `lost` device
-(a `Ports` of its own inside `poll` is the pattern). The registry watches `config.toml`'s
-mtime every `WATCH_FRAMES` frames and re-reads only the device list,
-closing what left and opening what arrived; a bad edit is a note and the
-old list stands.
+(a `Ports` of its own inside `poll` is the pattern). The registry asks the list
+(`devicelist.DeviceList`, whose worker does the disk) every `WATCH_FRAMES` frames
+whether it changed, closing what left and opening what arrived; a bad list is a note
+and the old one stands.
 
 **Sinks** (plan 27 B3). A sink takes values *out* of the app: a device's
 `sinks` are its sink ports (a `Port` whose `scheme` is the device's role and
 whose `name` is the channel, so its `address` is ``<role>:<channel>`` —
 ``bridge:3``), and its `send(reg, analyzer)` runs in the slot after
 `reg.apply`, reading **effective** values. What a sink sends is the
-session's *sink rows* (routing.py, `SINK_OP`): a `Binding` from a param
+meta controller's *sink rows* (routing.py, `SINK_OP`): a `Binding` from a param
 (``param:<id>``) or a lane (``lane:<i>``, ``lane:*``) to a sink port, in
-`bindings.json` (sinks are rig), made on the ROUTING page or by the param
+`bindings.json` (sinks are meta controller), made on the ROUTING page or by the param
 menu's "Learn sink ▸ <role>:<channel>" (learn.Learn.learn_sink) — the same
 table and Learn as a hand routed to a param, with no referee (a sink row is
 not a performer). An entry's old `send` list (`[bridge] send`) becomes its
@@ -102,13 +102,16 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
+from .players import THERE, UNLISTED, UNPLUGGED
+
 # the open-retry schedule — midi.Ports' (RECONNECT_S, RECONNECT_FAST,
 # RECONNECT_SLOW_S), restated here because midi is imported only behind
 # a device's entry; tests/test_devices.py holds the two equal
 RETRY_S = 2.0
 RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
-WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
+WATCH_FRAMES = 30        # the device list's mtime is looked at this often (as the shaders are)
+REOPEN_S = 3.0           # a device reopened while connected: longer than one `RETRY_S` to find it
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
 # fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
 # not a device
@@ -118,7 +121,7 @@ BUILTIN_SCHEMES = ("lane", "lfo", "env", "seq")
 # module imports nothing of the app at its top) and the keyboard
 NO_DEVICE_SCHEMES = (*BUILTIN_SCHEMES, "mod", "key")
 # a role-less row's role when no listed device publishes its scheme: the
-# rig's usual name for the kind behind it (config.py's example list); a
+# meta controller's usual name for the kind behind it (config.py's example list); a
 # scheme not here is a role of its own (an OSC device's scheme is its
 # role). Plan 28 N5's table, moved here from graphview by plan 40 T4
 # (graphview reads it from here: the placeholder node keeps its words)
@@ -289,7 +292,10 @@ class Base:
         """This controller's own pointer, and the panel's for what follows
         the panel (the learn); handed on to an adapter that reads a deck."""
         self.pointer = pointer
-        point = getattr(type(self.io), "point", None)
+        # a device that is its own adapter (a live media kind once open:
+        # `LiveKind.open` sets io to self) has nothing to hand on to —
+        # calling its own point again recursed until the app died at start
+        point = getattr(type(self.io), "point", None) if self.io is not self else None
         if point is not None:
             point(self.io, pointer, panel)
 
@@ -414,14 +420,14 @@ class OffDevice(Base):
 
     @property
     def wants(self) -> tuple[str, ...]:
-        """Its kind's: a rig that lists a device, off or not, can arm a
+        """Its kind's: a meta controller that lists a device, off or not, can arm a
         learn for it (it completes once the device is on)."""
         f = self.__dict__.get("_wants_for")
         return f(self.role, self.qualifier) if f is not None else self._wants
 
     @property
     def rows(self) -> tuple[str, ...]:
-        """Its kind's, so a hit row in a preset is not refused while the
+        """Its kind's, so a hit row in a loadable patch is not refused while the
         device is off."""
         return self._rows
 
@@ -474,7 +480,7 @@ class MidiDevice(Base):
     MIDI role's rows are unqualified (every row written before plan 27),
     any other's carry its role (``cc@launch:0:7``) — `MidiIO.qualifier` —
     and each role has its own layer; the first role's desk has two, the
-    preset layer and SHIFT's global one (`desk.shift`). Its rows are
+    patch layer and SHIFT's global one (`desk.shift`). Its rows are
     applied inside `poll` (a scene-setter), an armed desk Learn completed
     there too. A desk that is not plugged in is `lost` and reconnects
     itself (`midi.Ports.retry`), redrawing every light when it comes."""
@@ -510,8 +516,8 @@ class MidiDevice(Base):
     @property
     def layers(self) -> tuple[str, ...]:
         """The desk's layers (decision 14, for plan 28's one node per
-        mode): the first MIDI role's APC40 has the preset layer and SHIFT's
-        global one; any other desk has the preset layer only — no latch of
+        mode): the first MIDI role's APC40 has the patch layer and SHIFT's
+        global one; any other desk has the patch layer only — no latch of
         its own in this plan."""
         if self.profile == "apc40" and self._primary():
             return ("preset", "global")
@@ -578,10 +584,10 @@ class PadDevice(Base):
     All in the scene-setter slot.
 
     Several at once (plan 27 B6): the kind is `repeatable`. The first
-    enabled pad entry is the primary — its rows unqualified (``pad:A``,
+    enabled pad entry is the primary — its rows unqualified (``pad:S``,
     ``axis:LX``, every row before B6), the factory pad rows its, the
     sticks' camera job its alone; each later pad publishes under its
-    role (``pad@p2:A``, ``axis@p2:LX``) and starts with no rows. Each
+    role (``pad@p2:S``, ``axis@p2:LX``) and starts with no rows. Each
     reads its own controller (`gamepad.Pad.attach` on the registry's
     shared `Context.pads`): the next free GLFW joystick in list order, or
     the entry's ``joystick = n``; the one libusb reader is lent, not
@@ -656,18 +662,13 @@ class PadDevice(Base):
         return j if isinstance(j, int) and not isinstance(j, bool) and j >= 0 else None
 
     def open(self) -> None:
-        from .gamepad import DIAL_MODES, Claims, Pad
+        from .gamepad import Claims, Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
         # plan 42: which controllers it may take, the hid road, a tape
         tape = self.entry.get("tape")
         self.io.hid = bool(self.entry.get("hid", True))
         self.io.controller = str(self.entry.get("controller", "any") or "any")
         self.io.tape = tape if isinstance(tape, str) and tape else None
-        # where each stick's dial reading starts (`dial_left` / `dial_right`)
-        for stick, key in (("L", "dial_left"), ("R", "dial_right")):
-            mode = self.entry.get(key)
-            if mode in DIAL_MODES:
-                self.io.dial_modes[stick] = mode
         claims = getattr(self.ctx, "pads", None)
         if claims is None:
             claims = self.ctx.pads = Claims()
@@ -748,8 +749,8 @@ class PadDevice(Base):
                          or (n in ("LFN", "RFN") and model.has("fn"))) and has(n)}
         buttons = [Port(n, n, kind="trigger", group="buttons", scheme=sc("pad"))
                    for n in named]
-        hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme=sc("hat"))
-                for n in g.HATS if has(n)]
+        hats = [Port(n, f"D-pad {models.HAT_WORDS[n]}", kind="trigger", group="d-pad", scheme=sc("hat"))
+                for n in g.HATS if has(f"{models.HAT_PREFIX}{n}")]
         extra: list[Port] = []
         from .pads import gesture as ge
         if model is not None and model.has("touch"):
@@ -836,6 +837,10 @@ class PadDevice(Base):
         if self.io is not None:
             self.io.dt_hint = dt       # the touch and motion lanes' time (plan 42)
             self.io.poll()
+            # a pad reads the `Deck` it drives: that deck's dict, no copy (`params.declare_dial`)
+            modes = getattr(self.reg, "dial_modes", None)
+            if modes is not None:
+                self.io.dial_modes = modes
 
     def learn(self, learn) -> bool:
         if self.io is None:
@@ -861,7 +866,7 @@ class PadDevice(Base):
         """The pad's rows, then the sticks' camera job — on the registry
         of the deck it is on (`Base.reg`), else the router's. The camera
         job is one pad's on each deck (plan 27 B6, decision 24: defaults
-        author no look; plan 55, `_steers`): another's unrouted axes do nothing."""
+        author no look; plan 55, `steers`): another's unrouted axes do nothing."""
         self._router = router       # `close` lets go through it: no later frame will
         io = self.io
         if io is None:
@@ -873,25 +878,33 @@ class PadDevice(Base):
         if was is not None and was is not router:
             was.pad_left(q)
         self._acted_on = router
-        from . import gamepad
+        from . import gamepad, totem
         # the sticks a route reads as a dial, for the next frame's Learn
         # (gamepad.dialed); asked only while the pad is there, once a frame
         claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
         reg = self.reg if self.reg is not None else getattr(router, "reg", None)
         skip = self._totem(io, reg)
+        model = getattr(io, "model", None)
+        quiet = self.quiet_stick(model, reg, router)
+        if quiet:
+            skip = {**skip, "quiet": quiet}
         if q:
             router.pad(io, buttons=not self._taken, role=q, **skip)
         else:
             router.pad(io, buttons=not self._taken, **skip)
+        state = totem.state_of(reg)
+        if totem.drives(state, self.role):
+            totem.keep_turn(state, reg)
         if io.on:
             axis = f"axis@{q}" if q else "axis"
             routed = (claimed(axis) or ()) if claimed is not None else ()
             self._dialed = gamepad.dialed(routed)
-            if reg is not None and self._steers(router):
-                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed,
+            if reg is not None and self.steers(router):
+                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0),
+                              routed={*(set(routed) - quiet), *self._no_camera_job(model, reg)},
                               scheme=axis)
 
-    def _steers(self, router) -> bool:
+    def steers(self, router) -> bool:
         """Is the camera job this pad's: the first pad listed on the deck it is on
         (plan 55)? So with every player on air it is the first pad's, as ever, and
         a player off air alone, or the only pad given to player 2, keeps a stick
@@ -942,19 +955,54 @@ class PadDevice(Base):
         if state is not None and state.on:
             totem.step(state, io, reg, dt, self.role)
             if totem.drives(state, self.role):
-                skip |= totem.SKIP
+                skip |= totem.skip_of(io)
         return {"skip": skip} if skip else {}
+
+    def quiet_stick(self, model, reg, router=None, drawn=None) -> frozenset[int]:
+        """The lanes a route lets go of, `totem.quiet_stick`: a Joy-Con's stick while it
+        orbits, less the axes node mode holds, which the view leaves (`Router.claimed`), or
+        the claim would be dead with the view orbiting under it. `router`, the deck it acts
+        on (None: the last one, for the pad window). `drawn`, the deck whose rows are being
+        asked about, when that is another (the window's panel may be looking elsewhere)."""
+        from . import gamepad, totem
+        router = router if router is not None else self.__dict__.get("_acted_on")
+        steers = router is None or self.steers(router)
+        if not totem.quiet_stick(model, reg, self.role, steers):
+            return frozenset()
+        return gamepad.left_stick_lanes() - self._node_lanes(drawn if drawn is not None else router)
+
+    def _node_lanes(self, router) -> frozenset[int]:
+        """The `axis` lanes node mode fills on this pad on `router`'s deck."""
+        from . import gamepad
+        rows = getattr(getattr(router, "table", None), "node_rows", None)
+        if rows is None:
+            return frozenset()
+        return frozenset(gamepad.LANES.index(b.parts[0]) for b in rows(self.role)
+                         if b.scheme == "axis")
+
+    def _no_camera_job(self, model, reg) -> tuple[int, ...]:
+        """The axes a pad with a layout of its own (a Joy-Con) keeps off the
+        sticks' camera job (`gamepad.steer`), free for a learned route: its
+        triggers always, and its stick while the totem reads this pad, whose
+        gyro has the rotation."""
+        from . import gamepad, totem
+        if not totem.own_layout(model):
+            return ()
+        free = (gamepad.AX_LT, gamepad.AX_RT)
+        if totem.reads_stick(model, reg, self.role):
+            free += (gamepad.AX_LX, gamepad.AX_LY)
+        return free
 
     def _totem_skip(self, reg, io) -> frozenset:
         """The buttons the totem and the poi hold off this pad this frame —
         as they will be once `act` has run their take-over (Learn runs
         first): none while each reads another pad, or is off."""
-        from . import poi, totem
+        from . import poi, routing, totem
         state = totem.state_of(reg)
-        skip = totem.SKIP if totem.will_drive(state, io, self.role) else frozenset()
+        skip = totem.skip_of(io) if totem.will_drive(state, io, self.role) else frozenset()
         if poi.will_drive(poi.state_of(reg), io, self.role):
             skip |= poi.SKIP
-        return skip
+        return skip | routing.layout_of(getattr(io, "model", None)).sources
 
     def _feed_extras(self, sources, io, q: str) -> None:
         """The ``touch`` and ``motion`` lanes (plan 42): their names,
@@ -1081,7 +1129,7 @@ class BridgeDevice(Base):
     ports looked for again in `poll`; the inbound lanes fed as ``ext``,
     with their labels and rests, in the feed slot (`receive`, `publish`);
     and the out half a **sink** — in the slot after `reg.apply`, the
-    session's sink rows on this role (``param:view.bright → bridge:3``,
+    meta controller's sink rows on this role (``param:view.bright → bridge:3``,
     routing.sink_values) read as effective values and sent through the
     bridge's gate (`send_values`). With no binding table in the context (a
     bare shim) the out half sends the entry's old `send` list, as a
@@ -1188,7 +1236,7 @@ class MidiOutDevice(Base):
         `hands-daw` entry the `[hands] out` setting becomes at load
         (config.py). When the port comes back after a gap the DAW is
         brought up to date (`HandsIO.resync`) before the hands' frame runs;
-      * the session's sink rows on this role, encoded like the bridge's
+      * the meta controller's sink rows on this role, encoded like the bridge's
         lanes (`encoding`, `channel`, `cc`, `rate`; `bridge.Sender`).
 
     A `lost` port is looked for again in `poll` (the device's own job,
@@ -1715,7 +1763,9 @@ class DeviceRegistry:
     own entry (`open_all`), polled in order each frame, closed in one
     list (reverse order). `entries` are checked entries (config.devices);
     `devices` may be given ready-made (tests, the frame-order stubs).
-    `path` is the config.toml to watch, `clock` the retry clock
+    `store` is the list both Macs share (`devicelist.DeviceList`), which it
+    watches and `relist`s from; `path`, with no store, a config.toml to
+    watch instead (RT1 retires that road). `clock` is the retry clock
     (monotonic, as midi.Ports'). `listeners` are called after any open
     or close, so the host can re-point what holds an adapter (the panel,
     the ghost renderer).
@@ -1732,12 +1782,21 @@ class DeviceRegistry:
         """The status-change hook (plan 40 T4): a no-op until the app sets
         an instance's own (`rig.said = …`, app.py)."""
 
+    def renamed(self, old: str, new: str) -> None:
+        """A controller adopted here is `new`: the file gave `old` to the other Mac's. A
+        hook the app sets to the meta controller's (`rename_controller`), so who holds it
+        follows; with none, the players'."""
+        players = getattr(self.ctx, "players", None)
+        if players is not None:
+            players.rename(old, new)
+
     def __init__(self, entries: list[dict] | None = None, ctx: Context | None = None, *,
                  devices: list | None = None, path: Path | None = None,
-                 clock=time.monotonic, notes: list[str] | None = None):
+                 clock=time.monotonic, notes: list[str] | None = None, store=None):
         self.ctx = ctx if ctx is not None else Context()
         self.notes = notes if notes is not None else self.ctx.notes
         self.path = Path(path) if path is not None else None
+        self.store = store
         self.clock = clock
         self.entries: list[dict] = [dict(e) for e in (entries or [])]
         if getattr(self.ctx, "devices", None) is None:
@@ -1747,7 +1806,7 @@ class DeviceRegistry:
         self._tell_table()           # which MIDI role an unqualified row means, before any opens
         self.listeners: list = []
         self._say_players()
-        self._seed_sinks(self.entries)   # an old `send` list → the session's sink rows, once
+        self._seed_sinks(self.entries)   # an old `send` list → the meta controller's sink rows, once
         self.error = ""              # this frame's first device error (the toast)
         # a device handed in with its adapter (tests, the frame-order stubs) is open
         self._opened: set[str] = {d.role for d in self.devices if getattr(d, "io", None) is not None}
@@ -1769,6 +1828,21 @@ class DeviceRegistry:
     def get(self, role: str):
         """The device of `role`, or None."""
         return next((d for d in self.devices if d.role == role), None)
+
+    def presence(self, role: str) -> str:
+        """Where the controller `role` is, for an undo of a move (row 800): `UNLISTED`,
+        no entry lists it; `UNPLUGGED`, listed and lost; else `THERE`. One switched off is
+        there. One `apply` has just reopened reads as lost until a poll finds it (a pad's
+        `io.on`), and that is no unplugging: it is there for `REOPEN_S`, or until it says."""
+        d = self.get(role)
+        if d is None:
+            return UNLISTED
+        word = self._word(d)
+        reopening = self.__dict__.setdefault("_reopening", {})
+        if word is None or word.startswith(("connected", OFF)):
+            reopening.pop(role, None)
+            return THERE
+        return THERE if self.clock() < reopening.get(role, 0.0) else UNPLUGGED
 
     def first(self, kind: str):
         """The first listed device of `kind` (off or not), or None."""
@@ -1806,7 +1880,7 @@ class DeviceRegistry:
     def continuous_schemes(self) -> tuple[str, ...]:
         """The schemes a route can read as a lane, in offer order: the
         built-in `lane` (the analyzer), `lfo`, `env` and `seq` first, then each listed
-        device's `feeds` in list order (an `off` device's too, so a preset
+        device's `feeds` in list order (an `off` device's too, so a loadable patch
         row naming it stays a dormant route, not an unknown one). What the
         Router offers (`Router.schemes`, plan 27 B2: no fixed tuple)."""
         out = list(BUILTIN_SCHEMES)
@@ -1840,7 +1914,7 @@ class DeviceRegistry:
         `apc40` by default) — the desk the file's rows were written for —
         else the first listed; the rest in list order. So a generic box
         listed above the APC40 never inherits the APC40's rows or SHIFT,
-        and a rig whose only desk is generic still maps (orchestrator's
+        and a meta controller whose only desk is generic still maps (orchestrator's
         ruling on PR #181)."""
         midi = [d for d in self.devices if d.kind == "midi"]
         table = getattr(self.ctx, "table", None)
@@ -1894,11 +1968,11 @@ class DeviceRegistry:
 
     def _seed_sinks(self, entries: list[dict]) -> None:
         """An enabled entry's old `send` list (`[bridge] send`, the bridge's
-        default ``["lane:*"]`` included) becomes the session's sink rows on
+        default ``["lane:*"]`` included) becomes the meta controller's sink rows on
         its role — **once per role**, marked done in `bindings.json` itself
         (`Bindings.sinks_seeded`, never by consuming the owner's config
         key): a role in that list is never seeded again, so deleting every
-        row of it on ROUTING, or saving config.toml mid-session, brings
+        row of it on ROUTING, or the list changing mid-run, brings
         nothing back. A file that already holds sink rows on a role counts
         as seeded for it (the mark is added). Written with one note; from
         then on the rows say and the key is not read."""
@@ -1927,7 +2001,7 @@ class DeviceRegistry:
                        "ROUTING (sinks)")
             for why in bad:
                 self._note(f"bindings: [{e.get('kind', role)}] send {why} — not translated")
-        # a file still holding a preset's part waits for the first-launch
+        # a file still holding a loadable patch's part waits for the first-launch
         # migration to rewrite it (routing.Bindings.load): the rows are in
         # memory until then, and that rewrite keeps them
         if added and hasattr(table, "write") and getattr(table, "carried", None) is None:
@@ -2072,6 +2146,9 @@ class DeviceRegistry:
         close list for a quit and a restart (the pad included)."""
         for d in reversed(self.devices):
             self._close(d)
+        store = self.__dict__.get("store")
+        if store is not None:
+            store.close()
 
     # ---- the frame ----
 
@@ -2122,6 +2199,18 @@ class DeviceRegistry:
                         got.setdefault(s, p)
             self._holders = got
         return got
+
+    def pad_model(self, pad):
+        """What a pad's node mode fills as (`node_desk`): the model it reads, or its entry
+        names, else the last it read, kept by role. `PadDevice.model` is None (an Xbox's
+        face) for a `controller = any` pad asleep, and a nap must not move a map: nor may a
+        frame that reads no model while it wakes. Nothing to go on yet, before a pad has ever
+        been read: None."""
+        seen = self.__dict__.setdefault("_pad_models", {})
+        model = pad.model
+        if model is not None:
+            seen[pad.role] = model
+        return seen.get(pad.role)
 
     def first_pad_on(self, router):
         """The first listed pad pointed at `router`'s deck, or None."""
@@ -2254,7 +2343,7 @@ class DeviceRegistry:
                 on = p.deck.reg if p is not None else reg
                 self._guard(d, lambda d=d, on=on: d.send(on, analyzer))
 
-    # ---- config.toml, watched ----
+    # ---- the list, watched ----
 
     def _stat(self) -> float | None:
         if self.path is None:
@@ -2264,10 +2353,43 @@ class DeviceRegistry:
         except OSError:
             return None
 
+    def relist(self) -> bool:
+        """The list as the store has it, applied (an adopt, here on this Mac: an entry
+        that won't check is left out, and the rest stand). True when anything changed."""
+        store = self.__dict__.get("store")
+        if store is None:
+            return False
+        for old, new in store.take_renames():
+            self.renamed(old, new)
+        entries, problems, _notes = store.checked()
+        for why in problems:
+            self._note(why)
+        return self.apply(entries)
+
     def watch(self) -> bool:
-        """Re-read the `[[devices]]` list when config.toml's mtime moved;
-        True when the list changed. A file that will not parse, or a list
-        with a bad entry, is a note and the old list stands."""
+        """Re-read the list when its file moved; True when the list changed. A file
+        that will not parse, or a list with a bad entry, is a note and the old list
+        stands, with every device still running. The store's list when there is one
+        (`DeviceList.look`: the other Mac's change lands here, and no local adopt is
+        lost to it); else `path`'s `[[devices]]`."""
+        store = self.__dict__.get("store")
+        if store is not None:
+            try:
+                changed = store.look()
+                # (asked whether or not the list moved: a launch's rename left no change behind)
+                renames = store.take_renames()
+                for old, new in renames:
+                    self.renamed(old, new)
+                if not changed and not renames:
+                    return False
+                entries, problems, _notes = store.checked()
+                if problems:
+                    self._note(f"devices: the list not applied — {problems[0]} — the old list stands")
+                    return False
+                return self.apply(entries)
+            except Exception as e:  # noqa: BLE001 — what's in a shared file never stops a frame
+                self._note(_err("devices: the list not applied, and the old one stands", e))
+                return False
         if self.path is None:
             return False
         mtime = self._stat()
@@ -2304,6 +2426,8 @@ class DeviceRegistry:
                 devices.append(have.pop(role))
                 continue
             if kept is not None:
+                if str(self._word(kept)).startswith("connected"):     # (`presence`)
+                    self.__dict__.setdefault("_reopening", {})[role] = self.clock() + REOPEN_S
                 self._close(have.pop(role))
                 self._note(f"devices: {role} changed — reopened")
             else:
@@ -2342,21 +2466,21 @@ class DeviceRegistry:
         return changed
 
 
-# ---- what the loaded preset wants, and the arrival (plan 40 T4) ----
+# ---- what the loaded patch wants, and the arrival (plan 40 T4) ----
 #
-# The bindings on a device the rig lacks were never dropped (decision 11:
-# a performer row on a scheme no device feeds waits; a preset-layer desk
+# The bindings on a device the meta controller lacks were never dropped (decision 11:
+# a performer row on a scheme no device feeds waits; a patch-layer desk
 # row is kept whatever is plugged in, and the desk relights from the table
 # when its port comes back). What was missing is the *saying*: which
-# devices the loaded preset wants and does not have, and a word when one
+# devices the loaded patch wants and does not have, and a word when one
 # arrives. `wants` is that answer, pure over the table and the registry;
 # the GRAPH head's and the PRESET strip's chip, the SYSTEM page's lines,
 # a group node's status line (T2) and a spawn's notes (T3) all read it.
 
 CONNECTED, LOST, OFF, MISSING = "connected", "lost", "off", "missing"
 WANT_STATES = (CONNECTED, LOST, OFF, MISSING)
-# a want's state as a sentence says it ("apc40 (lost)", "leap (not in this rig)")
-STATE_WORDS = {CONNECTED: "connected", LOST: "lost", OFF: "off", MISSING: "not in this rig"}
+# a want's state as a sentence says it ("apc40 (lost)", "leap (not set up on this Mac)")
+STATE_WORDS = {CONNECTED: "connected", LOST: "lost", OFF: "off", MISSING: "not set up on this Mac"}
 _MIDI = ("cc", "note", "pitch")             # routing.MIDI_SCHEMES, restated (no app import)
 PLAYER_1 = "player 1"       # who a bare row names, when no device publishes it bare
 WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
@@ -2364,7 +2488,7 @@ WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
 
 @dataclass(frozen=True)
 class Want:
-    """One device role the loaded preset's rows name (plan 40 T4): `state`
+    """One device role the loaded patch's rows name (plan 40 T4): `state`
     is the registry's view this frame — ``connected`` (listed, live),
     ``lost`` (listed, the hardware away, or in error), ``off`` (listed,
     ``enabled = false``) or ``missing`` (no entry for the role: "not in this
@@ -2400,7 +2524,7 @@ def _desk_glyph(source: str) -> str | None:
     return apc40.glyph(source)
 
 
-def _rig(registry, table) -> tuple[dict[str, str], str, dict[str, str], dict[str, str],
+def _device_facts(registry, table) -> tuple[dict[str, str], str, dict[str, str], dict[str, str],
                                    dict[str, str]]:
     """What `wants` reads of the registry, once a call: role → status (each
     device's own `status`, read directly — not through `lines()`, which
@@ -2427,10 +2551,10 @@ def _rig(registry, table) -> tuple[dict[str, str], str, dict[str, str], dict[str
 
 
 def _rows_of(table) -> list[tuple[str, str]]:
-    """(source, where it lands) for each row the loaded preset names a
+    """(source, where it lands) for each row the loaded patch names a
     device by: its enabled performer routes (target: the param), its
-    enabled preset-layer desk rows (the param) and its modifiers' inputs
-    (the modifier's id) — never a session row, which is the rig's."""
+    enabled patch-layer desk rows (the param) and its modifiers' inputs
+    (the modifier's id) — never a meta row, which is the meta controller's."""
     out: list[tuple[str, str]] = []
     for b in getattr(table, "bindings", ()) or ():
         if not b.enabled:
@@ -2453,7 +2577,7 @@ def _lands(where: str, only) -> bool:
 
 
 def wants(table, registry, only=None) -> list[Want]:
-    """Every device role the loaded preset's rows name (plan 40 T4), in
+    """Every device role the loaded patch's rows name (plan 40 T4), in
     table order, each with its state this frame and its rows in words.
     A row's role is its ``@role`` qualifier; else, for ``cc:`` / ``note:``
     / ``pitch:``, the first MIDI role (`DeviceRegistry.midi_roles`, the
@@ -2465,13 +2589,13 @@ def wants(table, registry, only=None) -> list[Want]:
     named. `only`, when given, keeps the rows that land on those ids — a
     param id, a modifier id, or an id a landing starts with (``fx.acid.2``
     covers ``fx.acid.2.speed``): `wants_for`. Pure: reads the table and
-    the registry (`registry` None: a rig with nothing listed).
+    the registry (`registry` None: a test rig with nothing listed).
 
-    >>> [(w.role, w.state, w.rows) for w in wants(table, rig)]   # doctest: +SKIP
+    >>> [(w.role, w.state, w.rows) for w in wants(table, meta controller)]   # doctest: +SKIP
     [('apc40', 'lost', ('K1', 'K2')), ('leap', 'missing', ('right hand y',))]
     """
     from .routing import base_scheme, row_words
-    status, midi_first, prim, listed, profile = _rig(registry, table)
+    status, midi_first, prim, listed, profile = _device_facts(registry, table)
     table_profile = str(getattr(table, "profile", "") or "apc40")
     by_role: dict[str, tuple[str, list[str]]] = {}
     for source, where in _rows_of(table):
@@ -2496,7 +2620,7 @@ def wants(table, registry, only=None) -> list[Want]:
                 role = (PLAYER_1 if any(base_scheme(s) == scheme for s in listed)
                         else SCHEME_ROLE.get(scheme, scheme))
         # the desk's glyphs for an APC40's rows: a listed desk's own profile;
-        # a desk the rig lacks is the table's profile only when it is the
+        # a desk the meta controller lacks is the table's profile only when it is the
         # first role (an unqualified row) — a qualified one's is unknown
         prof = profile.get(role) if role in status else (
             table_profile if not (at and q) else "")
@@ -2521,7 +2645,7 @@ def wants_for(table, registry, ids) -> list[Want]:
     T2): a collection of param ids and modifier ids, each covering the
     ids under it — `wants(table, registry, only=ids)`.
 
-    >>> wants_for(table, rig, ["fx.acid.2", "mod.3"])            # doctest: +SKIP
+    >>> wants_for(table, device_reg, ["fx.acid.2", "mod.3"])            # doctest: +SKIP
     [Want(role='apc40', state='lost', scheme='cc', rows=('K1', 'K2'))]
     """
     return wants(table, registry, only=frozenset(ids))
@@ -2529,7 +2653,7 @@ def wants_for(table, registry, ids) -> list[Want]:
 
 def want_lines(ws, limit: int = WANT_ROWS_SHOWN) -> list[str]:
     """One line per want whose device is not there: "apc40 (lost): K1, K2",
-    "leap (not in this rig): right hand y" — the first `limit` rows, then
+    "leap (not set up on this Mac): right hand y" — the first `limit` rows, then
     "+ k more". Nothing for a connected want."""
     out = []
     for w in ws:
@@ -2544,12 +2668,12 @@ def want_lines(ws, limit: int = WANT_ROWS_SHOWN) -> list[str]:
 
 def want_words(ws, limit: int = WANT_ROWS_SHOWN) -> str:
     """The wants as a group node's status line says them (plan 40 T4):
-    "waits for apc40 (lost): K1, K2 · leap (not in this rig): right hand
+    "waits for apc40 (lost): K1, K2 · leap (not set up on this Mac): right hand
     y"; "" when every device is there.
 
     >>> want_words([Want("apc40", "lost", "cc", ("K1", "K2")),
     ...             Want("leap", "missing", "hand", ("right hand y",))])
-    'waits for apc40 (lost): K1, K2 · leap (not in this rig): right hand y'
+    'waits for apc40 (lost): K1, K2 · leap (not set up on this Mac): right hand y'
     """
     lines = want_lines(ws, limit)
     return "waits for " + " · ".join(lines) if lines else ""
@@ -2566,11 +2690,11 @@ def missing_chip(ws) -> str | None:
 
 def wanted_lines(ws) -> list[str]:
     """The SYSTEM page's lines under the device lines (plan 40 T4), one per
-    wanted role the rig lacks: "wanted by the preset: leap — not in this
+    wanted role the meta controller lacks: "wanted by the preset: leap — not in this
     rig; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
-    wait". Nothing for a connected role, nothing when the preset wants
+    wait". Nothing for a connected role, nothing when the loadable patch wants
     nothing."""
-    return [f"wanted by the preset: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"
+    return [f"wanted by the patch: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"
             for w in ws if w.lacking]
 
 

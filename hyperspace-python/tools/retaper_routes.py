@@ -7,7 +7,7 @@
 **The owner runs this on the library before the next show**, with both
 Macs on this build (a dry run first, then `--write`). Until then every
 old file is read as it was at each load (`params.retaper_depths` in
-`Presets.load_doc`, `patches.read`, the desk templates' expansion and
+`LoadedPatch.load_doc`, `patches.read`, the desk templates' expansion and
 `Bindings.from_json`), so nothing is lost; this rewrite makes it
 permanent, with a backup, so the whole library moves together.
 
@@ -22,16 +22,16 @@ safe; depths are not. The documents visited, each without the marker
 ``units["fx.depth"] == "taper"`` (a marked one is left as it is, so a
 second run finds nothing to do):
 
-- the presets, ``<library>/presets/*.json``;
+- the loadable patches, ``<library>/presets/*.json``;
 - the patches, ``<library>/patches/*.json`` (a patch saved on this build
   carries the marker; `patches.read` converts an older one when it is
   spawned);
-- the desk templates, ``<library>/desk/*.json`` (expanded into a preset's
+- the desk templates, ``<library>/desk/*.json`` (expanded into a loadable patch's
   desk at load; a `set` row's value is a norm);
-- the session table, ``<home>/bindings.json`` — the machine home's, not
+- the meta table, ``<home>/bindings.json`` — the machine home's, not
   the library's — whose `set` rows (and any hand-edited performer row) are
   measured about the effect's default, there being no base of its own.
-  A show holds no rows (its `session` is a snapshot of session params),
+  A show holds no rows (its `session` is a snapshot of shared meta params),
   so there is nothing to visit there.
 
 In each (not ``trash/``, not a backup, not a dot-file):
@@ -56,7 +56,7 @@ In each (not ``trash/``, not a backup, not a dot-file):
   runs the taper's curve — a macro resting mid-throw lands the base
   somewhere else at load, and two macros that agreed on a shared base
   at their rests no longer do. The tool names every such sub; listen to
-  those presets and re-set the ends by ear;
+  those loadable patches and re-set the ends by ear;
 - a row whose ``value`` is missing is read as 1.0 (`Binding.value`'s
   default, which `to_json` omits); a row whose value is not a number is
   left as it is and named ("left");
@@ -65,9 +65,9 @@ In each (not ``trash/``, not a backup, not a dot-file):
 Rows onto other params, depth subscribers, ``scale`` and ``rest`` do not
 move. A changed row is written as the app writes one (`Binding.to_json`:
 a depth of exactly 1.0 omitted, the keys in its order), and each document
-as the app saves its kind (a preset through `preset.dumps`, the rows one
+as the app saves its kind (a loadable patch through `loadable.dumps`, the rows one
 a line; a patch and a desk template as the library writes them,
-``json.dumps(indent=1)``; the session table through `routing.dumps_doc`),
+``json.dumps(indent=1)``; the meta table through `routing.dumps_doc`),
 so a diff shows only the rows that moved and the marker. Every unmarked
 document is written, marker at least.
 
@@ -77,7 +77,7 @@ then copies the whole library folder to ``~/Hyperspace/library-backup-
 <stamp>/`` (the machine's home, never inside the library;
 `migrate_library.backup`), keeps ``bindings.json`` beside itself as the
 app does before it rewrites it (`routing.backup`, ``bindings.json.bak-v3``),
-says where, and writes. The test corpus (``tests/corpus/presets``) was
+says where, and writes. The test corpus (``tests/corpus/loadable``) was
 rewritten with this tool in the PR that brought the tapers, so the goldens
 draw the migrated depths; it is never touched again by a run on a library.
 """
@@ -97,8 +97,8 @@ if str(ROOT) not in sys.path:
 
 from hyperspace import routing
 from hyperspace.fx import FxState, retaper_of
+from hyperspace.loadable import dumps as loadable_text
 from hyperspace.params import DEPTH_TAPER, DEPTH_UNIT, UNITS_KEY, retaper_depths
-from hyperspace.preset import dumps as preset_text
 
 PATCHES = "patches"
 DESK = "desk"
@@ -185,13 +185,13 @@ def retaper(doc: dict, files: dict, *, file: str = "", kind: str = "preset"
 
 
 def text(doc: dict, kind: str = "preset") -> str:
-    """`doc` as the app writes one of its `kind`: a preset through
-    `preset.dumps` (the rows one a line); a patch or a desk template as the
-    library writes them (``json.dumps(indent=1)``); the session table
+    """`doc` as the app writes one of its `kind`: a loadable patch through
+    `loadable.dumps` (the rows one a line); a patch or a desk template as the
+    library writes them (``json.dumps(indent=1)``); the meta table
     through `routing.dumps_doc` (a hand-edited file with no `profile` gets
     the default's, which the app would write too)."""
     if kind == "preset":
-        return preset_text(doc)
+        return loadable_text(doc)
     if kind == "bindings":
         return routing.dumps_doc({"profile": "apc40", **doc})
     return json.dumps(doc, indent=1) + "\n"
@@ -240,16 +240,16 @@ def main(argv: list[str] | None = None) -> int:
     ml = _migrate_library()
     home = ml.machine_home()
     library = (a.library or ml.configured_library(home)).expanduser()
-    presets = ml.preset_files(library)
+    loadable_files = ml.loadable_files(library)
     patches = json_files(library / PATCHES)
     desks = json_files(library / DESK)
     table = home / routing.FILE
-    if not presets and not patches and not desks:
-        print(f"no presets under {library / ml.PRESETS}")
+    if not loadable_files and not patches and not desks:
+        print(f"no presets under {library / ml.LOADABLE}")
         return 1
     files = FxState().files
     # every change worked out before anything is written
-    todo: list[tuple[Path, Change]] = [(p, plan(p, files)) for p in presets]
+    todo: list[tuple[Path, Change]] = [(p, plan(p, files)) for p in loadable_files]
     todo += [(p, plan(p, files, kind="patch")) for p in patches]
     todo += [(p, plan(p, files, kind="desk")) for p in desks]
     if table.is_file():
@@ -263,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{'':46s}{r}")
     touched = [c for _, c in todo if c.changed]
     moved = sum(len(c.rows) for c in touched)
-    print(f"\n{len(presets)} presets, {len(patches)} patches, {len(desks)} desk templates"
+    print(f"\n{len(loadable_files)} presets, {len(patches)} patches, {len(desks)} desk templates"
           f"{', bindings.json' if table.is_file() else ''}: {len(touched)} "
           f"{'written' if a.write else 'would be written'} ({moved} rows moved, "
           f"{sum(1 for c in touched if not c.rows)} marker only, "

@@ -128,8 +128,8 @@ def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
     if lines:
         for b in rows:                  # in the adapter's words: "R height positions …"
             imgui.text(router.describe(b) + ("" if b.enabled else " (off)"))
-    # routes are the loaded preset's (plan 13 §3.3): an edit here changes
-    # the table and the preset's dirty dot, and writes no file
+    # routes are the loaded patch's (plan 13 §3.3): an edit here changes
+    # the table and the loadable patch's dirty dot, and writes no file
     if gate and rows:
         _gate_menu(router, rows)
 
@@ -137,7 +137,7 @@ def ctx_rows(panel, p, *, lines: bool = True, gate: bool = True) -> None:
 def _gate_menu(router, rows) -> bool:
     """Pick the pinch that has to be held for these rows to act; the pick
     is written by name (``hand:right.pinch.index``, decision register row
-    20), and a gate an older preset names by number shows as its switch."""
+    20), and a gate an older loadable patch names by number shows as its switch."""
     gates = getattr(router, "gates", {}).get("hand") or []
     if not gates:
         return False
@@ -168,7 +168,7 @@ def page(panel, dt: float) -> None:
     io = getattr(panel, "hands", None)
     panel._section("hands", GROUP if settings is not None else None)
     if settings is None:
-        imgui.text_disabled("no hands setup — see [hands] in config.toml")
+        imgui.text_disabled("no hands setup — the SYSTEM page says why")
         return
     _status(io, getattr(panel, "config_notes", None) or ())
     _box(io)
@@ -186,6 +186,47 @@ def page(panel, dt: float) -> None:
             if f"{GROUP}.{pid}" in panel.reg:    # a setting newer than a hot-reloaded registry
                 panel._row(f"{GROUP}.{pid}")
         _calibrate(io, settings, k)
+    if "grip.on" in panel.reg:
+        imgui.spacing()
+        grip(panel)
+
+
+GRIP_ROWS = ("grip.coupling", "grip.drag")
+GRIP_SHAPE_ROWS = ("grip.shape",)
+# (param, label, the GripState property naming its default gate): the state is
+# read duck-typed off the registry (`reg.grip`), the panel importing no grip.py
+GRIP_GATES = (("grip.clutch", "Clutch", "default_clutch"),
+             ("grip.shape_clutch", "Shape clutch", "default_shape_clutch"))
+
+
+def grip(panel) -> None:
+    """The hand rig (plan 60, grip.py): its section and preset strip, the
+    switch, then — while on — the hand, the coupling and drag, the inertia
+    and the two clutches as lane addresses (empty: the grabs)."""
+    reg = panel.reg
+    panel._section("grip", "grip")
+    panel._check("grip.on")
+    if not bool(reg["grip.on"].value):
+        return
+    panel._row("grip.hand")
+    for pid in GRIP_ROWS:
+        panel._row(pid)
+    panel._check("grip.inertia")
+    if bool(reg["grip.inertia"].value):
+        ui.beside(ui.chip_w("Skater") + 24)
+        panel._check("grip.skater")
+        for pid in GRIP_SHAPE_ROWS:
+            panel._row(pid)
+    state = getattr(reg, "grip", None) or getattr(getattr(reg, "meta_reg", None), "grip", None)
+    for pid, label, key in GRIP_GATES:
+        p = reg[pid]
+        default = str(getattr(state, key, "") or "")
+        panel._label_cell(label)
+        imgui.set_next_item_width(-1)
+        changed, text = imgui.input_text_with_hint(f"##{pid}", default, str(p.base or ""))
+        panel._tip(p)
+        if changed:
+            p.set(text)
 
 
 GHOST_MORE = "more ▸"          # the chip that opens the ghost's popup
@@ -200,7 +241,7 @@ def _ghost(panel) -> None:
     Two lines while the ghost is on — the page has no room for a third
     (test_ui_shell): ``[x] Ghost hands  OPACITY [slider]  more ▸`` then
     ``STYLE [combo]  GUIDE [combo]``. "more ▸" opens a popup with the
-    rig's settings (Mirror, and Tethers once a guide is on) and the
+    meta controller's settings (Mirror, and Tethers once a guide is on) and the
     ghost's notes; while there is a note the chip reads "! more ▸" in the
     warning colour and its hover says it. Each group goes on the line only
     when it fits beside what is there, so a narrower panel wraps it rather
@@ -235,7 +276,9 @@ def _ghost(panel) -> None:
     if _beside(right, more_w):
         imgui.same_line()
     _more_chip(panel, more, notes)
-    for k, (pid, label) in enumerate((("ghost.style", "Style"), ("ghost.guide", "Guide"))):
+    for k, (pid, label) in enumerate((("ghost.style", "Style"),
+                                     ("ghost.material", "Material"),
+                                     ("ghost.guide", "Guide"))):
         if pid not in reg:
             continue
         lw = ui._micro_width(label) + ui.LABEL_GAP
@@ -298,7 +341,7 @@ def _more_chip(panel, label: str, notes) -> None:
 
 
 def _more_popup(panel, notes) -> None:
-    """The rig's ghost settings and the ghost's notes, off "more ▸"."""
+    """The meta controller's ghost settings and the ghost's notes, off "more ▸"."""
     if not imgui.begin_popup(GHOST_POPUP):
         return
     reg = panel.reg
@@ -337,8 +380,8 @@ def _status(io, notes=()) -> None:
         if why:
             imgui.text_colored(ui.WARN, why)
         else:
-            imgui.text_disabled("tracker off — [hands] enabled = true in config.toml; "
-                                "the setup still edits and saves")
+            imgui.text_disabled("tracker off — click it on the player board (O) to turn it on "
+                                "on this Mac; the setup still edits and saves")
         return
     port = io.out_name or "no DAW port"
     imgui.text_disabled(f"{io.status or '—'}  ·  {_ins(io)}  ·  {port}")
@@ -698,7 +741,7 @@ def _editor(panel, io, settings, k: int) -> None:
     ui.beside(ui.check_w(panel.reg[f"{p}.bipolar"].label))
     panel._check(f"{p}.bipolar")
     ui.beside(ui.chip_w("mirror"))
-    if imgui.small_button("mirror"):
+    if ui.small_button("mirror"):
         mirror(settings, a.name)
     if imgui.is_item_hovered():
         ui.tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
@@ -707,7 +750,7 @@ def _editor(panel, io, settings, k: int) -> None:
         ui.beside(ui.chip_w("solo"))
         solo = io.solo == k
         imgui.push_style_color(imgui.Col_.text, ui.RED if solo else ui.DIM)
-        if imgui.small_button("solo"):
+        if ui.small_button("solo"):
             io.solo = None if solo else k
         imgui.pop_style_color()
         if imgui.is_item_hovered():
@@ -773,10 +816,10 @@ def _calibrate(io, settings, k: int) -> None:
     left = io.calibrating
     if left > 0:
         imgui.text_colored(ui.RED, f"sweeping… {math.ceil(left)} s — every axis, end to end")
-        if imgui.small_button("cancel"):
+        if ui.small_button("cancel"):
             io.cancel_calibration()
     else:
-        if imgui.small_button(f"calibrate {CAL_SECONDS:.0f} s"):
+        if ui.small_button(f"calibrate {CAL_SECONDS:.0f} s"):
             io.start_calibration(CAL_SECONDS)
         if imgui.is_item_hovered():
             ui.tooltip("For the next 20 s, move each hand through everything it "
@@ -785,7 +828,7 @@ def _calibrate(io, settings, k: int) -> None:
                               "and the box becomes what your palms covered plus "
                               f"{BOX_MARGIN:.0f} mm; a hand outside it reads absent.")
         imgui.same_line()
-        if imgui.small_button("reset ranges"):
+        if ui.small_button("reset ranges"):
             io.reset_ranges()
         if imgui.is_item_hovered():
             ui.tooltip("Every axis's range back to its default, and the box "
@@ -810,7 +853,7 @@ def _level(io) -> None:
     if io.levelling > 0:
         imgui.text_colored(ui.RED, "levelling… hold one hand flat, fingers forward")
         return
-    if imgui.small_button("level room"):
+    if ui.small_button("level room"):
         io.start_level()
     if imgui.is_item_hovered():
         ui.tooltip("Only one hand in view: hold it flat with the fingers pointing where forward is, "
@@ -819,7 +862,7 @@ def _level(io) -> None:
                    "for this box: the answer to a sensor mounted at an angle.")
     imgui.same_line()
     if getattr(io, "level", None) is not None:
-        if imgui.small_button("clear##level"):
+        if ui.small_button("clear##level"):
             io.clear_level()
         imgui.same_line()
         imgui.text_disabled("room levelled")

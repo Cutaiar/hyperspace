@@ -145,7 +145,7 @@ class Clock:
 
 def register(reg, clock: Clock) -> None:
     """The clock's params in the ``tempo`` group: bpm and nudge persist as
-    **session** state (a project's session part — a preset never carries
+    **meta controller** state (a project's session part — a loadable patch never carries
     or moves a tempo, plan 13 §4), tap is the key's and the APC's
     button."""
     if f"{GROUP}.bpm" in reg:
@@ -156,14 +156,14 @@ def register(reg, clock: Clock) -> None:
                    tip="The clock's tempo. Tap it (B, the APC's TAP TEMPO) or set it "
                        "here; a change keeps every synced LFO where it is and only "
                        "alters its rate.")
-    # not modulatable (decision register row 2, option c): a performer on
-    # tap tempo — an audio band, say — would tap on every transient. The
+    # the meta controller's, so no lane may drive it (rows 743, 775), which also keeps a
+    # performer from tapping on every transient (decision register row 2, option c). The
     # LFO triggers stay ownable (lfo.py).
-    reg.trigger(f"{GROUP}.tap", "Tap tempo", clock.tap, group=GROUP, modulatable=False,
+    reg.trigger(f"{GROUP}.tap", "Tap tempo", clock.tap, group=GROUP,
                 tip="Tap on the beat: two or more taps within 2 s of each other set "
                     "the BPM. Tapping never restarts the LFOs — the trigger does.")
     reg.continuous(f"{GROUP}.nudge", "Nudge", lambda: clock.nudge,
                    lambda v: setattr(clock, "nudge", float(v)), lo=-0.5, hi=0.5,
-                   fmt=lambda v: f"{v:+.2f} beat", group=GROUP,
+                   fmt=lambda v: f"{v:+.2f} beat", group=GROUP, persist=False,
                    tip="Shift the downbeat by a fraction of a beat without changing "
                        "the tempo — the APC's NUDGE buttons step it by a hundredth.")

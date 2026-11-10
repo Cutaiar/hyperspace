@@ -33,11 +33,11 @@ from PIL import Image
 
 from hyperspace import ui_routing
 from hyperspace.app import CONTROL_SIZE
-from hyperspace.library import PRESETS
+from hyperspace.library import LOADABLE
 from hyperspace.ui import PAGE_KEYS, Panel, apply_style, load_fonts
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "plans" / "assets" / "17-learn-and-the-desk"
-PRESET, TEXT, GAP = "TRIP", "kaleido", 16
+LOOK, TEXT, GAP = "TRIP", "kaleido", 16
 
 
 def main() -> None:
@@ -60,12 +60,12 @@ def main() -> None:
     impl = GlfwRenderer(win)
 
     r = demo.boot()
-    panel = Panel(r.control, r.audio, r.view, bank=r.lib.project, registry=r.reg,
+    panel = Panel(r.control, r.audio, r.view, bank=r.lib.install, registry=r.reg,
                   library=r.lib)
     panel.clock, panel.lfos, panel.router, panel.learn = r.clock, r.lfos, r.router, r.learn
     panel.hands, panel.hand_settings, panel.output = r.hands_io, r.settings, r.output
     panel.midi, panel.undo = r.midi, r.undo
-    r.lib.load(PRESETS, PRESET)
+    r.lib.load(LOADABLE, LOOK)
     panel.reg["ui.page"].set(PAGE_KEYS.index("routing"))
 
     def draw(n: int = 8) -> None:
@@ -102,7 +102,7 @@ def main() -> None:
     sheet.paste(some, (every.width + GAP, 0))
     OUT.mkdir(parents=True, exist_ok=True)
     sheet.save(OUT / "routing-filter.png", optimize=True)
-    print(f"wrote {OUT / 'routing-filter.png'}  — {PRESET}: {n_all[1]} rows; "
+    print(f"wrote {OUT / 'routing-filter.png'}  — {LOOK}: {n_all[1]} rows; "
           f"{TEXT!r}: {n} of {m} rows")
     impl.shutdown()
     glfw.terminate()

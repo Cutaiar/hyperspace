@@ -114,11 +114,13 @@ def _state(panel) -> dict:
 
 
 def media_of(panel):
-    """The channels (`MediaState`): the app's (`panel.media.state`), else the
-    registry's own (`build_registry` keeps the one its params write)."""
-    io = getattr(panel, "media", None)
-    state = getattr(io, "state", None)
-    return state if state is not None else getattr(panel.reg, "media", None)
+    """The channels (`MediaState`) of the deck the panel is on: its registry's own
+    (`build_registry` keeps the one its params write), else the app's
+    (`panel.media.state`: a stand-in registry has none)."""
+    state = getattr(getattr(panel, "reg", None), "media", None)
+    if state is not None:
+        return state
+    return getattr(getattr(panel, "media", None), "state", None)
 
 
 def folder_of(panel):
@@ -211,7 +213,7 @@ def _banner(state) -> None:
     gone = state.missing()
     if not gone:
         return
-    ui._micro("this preset relies on sources this Mac lacks", ui.WARN)
+    ui._micro("this patch relies on sources this Mac lacks", ui.WARN)
     w = imgui.get_content_region_avail().x
     tail = " — shows black"     # the heading says why; a long id is fitted, never this
     for sid in gone[:BANNER_LINES]:
@@ -257,14 +259,14 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
     copy = "Copy to shared"
     imgui.set_next_item_width(-(ui.button_w(copy) + imgui.get_style().item_spacing.x))
     imgui.push_font(ui._FONTS["ui"], ui.FONT_BASE)
-    _, st["search"] = imgui.input_text_with_hint("##media.search", "search", st["search"])
+    _, st["search"] = ui.input_text_with_hint("##media.search", "search", st["search"])
     imgui.pop_font()
     imgui.same_line()
     pick = st["pick"] or ""
     can = (folder is not None and getattr(folder, "shared", None) is not None
            and pick.startswith(("local:", "file:")) and st["copy"] is None)
     imgui.begin_disabled(not can)
-    if imgui.button(f"{copy}##media.copy"):
+    if ui.button(f"{copy}##media.copy"):
         copy_to_shared(panel)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
@@ -289,7 +291,7 @@ def _fit_note(title: str, text: str) -> str:
     """A section note cut to what its title leaves it on the line."""
     room = imgui.get_content_region_avail().x - ui._micro_width(title) - 24
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-    out = ui.fit_text(text.upper(), room)
+    out = ui.fit_text(text, room)
     imgui.pop_font()
     return out
 
@@ -298,7 +300,7 @@ def _empty_words(panel, tab: int) -> str:
     if _state(panel)["search"]:
         return "nothing matches"
     if tab == 2:
-        return "no live feeds — Syphon, NDI and cameras listed in config.toml show here"
+        return "no live feeds — Syphon, NDI and cameras in the device list show here"
     if folder_of(panel) is None:
         return "no media folder"
     if tab == 0 and getattr(folder_of(panel), "shared", None) is None:
@@ -338,7 +340,7 @@ def _row(panel, st: dict, it: Item) -> None:
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
         bad = it.status not in (FETCHING, OFF_PAGE)     # expected words, not faults
         dl.add_text(imgui.ImVec2(b.x - ww - 6, a.y + (ROW_H - 4 - ui.FONT_MICRO) / 2),
-                    ui.u32(ui.WARN if bad else ui.FAINT), word.upper())
+                    ui.u32(ui.WARN if bad else ui.FAINT), word)
         imgui.pop_font()
 
 
@@ -347,7 +349,7 @@ def hint(status: str) -> str:
     `off page` (`panel:graph` while the panel is hidden, the only time GRAPH
     is not drawn: plan 49 stage 3) says why the preview is dark."""
     if status == OFF_PAGE:
-        return ("\nthe GRAPH canvas is drawn only while the panel is up (it was hidden): "
+        return ("\nthe graph canvas is drawn only while the panel is up (it was hidden): "
                 f"a channel on it holds the last picture {HOLD_S:g} s, then shows black")
     return ""
 
@@ -365,7 +367,7 @@ def _thumb(panel, st: dict, it: Item, dl, p0, p1) -> None:
     if tex is None:
         dl.add_rect_filled(p0, p1, ui.u32(DEAD), 4.0)
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
-        word = {"live": "LIVE", "video": "CLIP"}.get(it.kind, "")
+        word = {"live": "live", "video": "clip"}.get(it.kind, "")
         if word:
             tw = imgui.calc_text_size(word).x
             dl.add_text(imgui.ImVec2((p0.x + p1.x - tw) / 2, (p0.y + p1.y - ui.FONT_MICRO) / 2),
@@ -752,7 +754,7 @@ def _mmss(s: float) -> str:
 # ---- the backdrop and the faces ----
 
 def _pickers(panel, st: dict) -> None:
-    panel._section("backdrop · faces", note="which picture each draws · wired on GRAPH")
+    panel._section("backdrop · faces", note="which picture each draws · wired on graph")
     if imgui.begin_table("##media.pickers", 2, imgui.TableFlags_.sizing_stretch_same):
         # plan 33 T7: the channel is the graph's wire, said here (GRAPH wires it)
         for port, label in (("backdrop.image", "backdrop"), ("pattern.media", "faces")):
@@ -761,7 +763,7 @@ def _pickers(panel, st: dict) -> None:
             imgui.align_text_to_frame_padding()
             imgui.text_colored(ui.TEXT, feed_words(panel, port))
             if imgui.is_item_hovered():
-                ui.tooltip(f"what the graph wires into {port}: rewire it on GRAPH")
+                ui.tooltip(f"what the graph wires into {port}: rewire it on graph")
         for pid in ("backdrop.alpha", "view.media_alpha"):
             imgui.table_next_column()
             if pid in panel.reg:

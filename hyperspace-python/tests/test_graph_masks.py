@@ -242,7 +242,7 @@ def test_declare_mattes_comes_and_goes():
     assert params.declare_mattes(reg, ["matte"]) == []
     assert reg.matte_state["matte"] is kept
     assert not params.is_matte_id("matte.1.key") and params.is_matte_id("matte.12.hue")
-    groups = params.PERFORMANCE_GROUPS
+    groups = params.PATCH_GROUPS
     assert groups.index("matte") == groups.index("resize") + 1
 
 
@@ -267,28 +267,28 @@ def test_the_fixture_saves_and_loads_as_seven(tmp_path):
     """`mask-as-picture` (a `/7` wired frame with a matte entry and its
     values), loaded, saved and loaded into a fresh rig, lands the same
     `GraphSpec` and the same matte values, and saves `/7`."""
-    from test_presets import boot
+    from test_loadable import boot
 
     src = json.loads(FIXTURE.read_text())
     assert src["schema"] == "hyperspace.preset/7"
     spec, saved = None, None
     for home in (tmp_path / "a", tmp_path / "b"):
-        (home / "presets").mkdir(parents=True, exist_ok=True)
-        (home / "presets" / FIXTURE.name).write_text(saved or FIXTURE.read_text())
+        (home / "loadable").mkdir(parents=True, exist_ok=True)
+        (home / "loadable" / FIXTURE.name).write_text(saved or FIXTURE.read_text())
         r = boot(home)
-        r.presets.load("mask-as-picture")
-        got = r.presets.graph.spec
+        r.loaded_patch.load("mask-as-picture")
+        got = r.loaded_patch.graph.spec
         assert got is not None and got.wired and not got.notes
         assert got.mattes == (G.MatteAt(1),)
-        assert [n for n in r.presets.notes if n.startswith("graph:")] == []
+        assert [n for n in r.loaded_patch.notes if n.startswith("graph:")] == []
         assert r.reg["matte.key"].value == pytest.approx(0.95)
         assert r.reg["matte.feather"].value == pytest.approx(4.0)
         if spec is not None:
             assert got == spec
         spec = got
-        saved = r.presets.save_as("mask-as-picture").read_text()
+        saved = r.loaded_patch.save_as("mask-as-picture").read_text()
         doc = json.loads(saved)
-        assert doc["schema"] == "hyperspace.preset/10"
+        assert doc["schema"] == "hyperspace.loadable/11"
         assert {"kind": "matte"} in doc["graph"]["nodes"]
         assert doc["values"]["matte.key"] == pytest.approx(0.95)
 

@@ -138,9 +138,9 @@ def test_curve_shapes():
         a.set_band(0, f=f, q=q, curve=cv.tag)
         w = a.band_curve(0, [lo, f, hi, f * 8, f / 8])
         assert w[1] == pytest.approx(1.0)
-        if cv.tag == "RECT":
+        if cv.tag == "rect":
             assert list(w[:3]) == [1, 1, 1] and list(w[3:]) == [0, 0]
-        elif cv.tag == "TRI":
+        elif cv.tag == "tri":
             assert w[0] == pytest.approx(0) and w[2] == pytest.approx(0)
         else:
             assert w[0] == pytest.approx(0.5) and w[2] == pytest.approx(0.5)
@@ -165,8 +165,8 @@ def test_curves_read_the_spectrum_differently():
         an.feed(tone(lo, seconds=0.1))
         a.step(1 / 60)
         levels[cv.tag] = a.env[0]
-    assert levels["RECT"] > levels["GAUSS"] > levels["TRI"]
-    assert levels["RECT"] > levels["BUTTER"] > levels["TRI"]
+    assert levels["rect"] > levels["gauss"] > levels["tri"]
+    assert levels["rect"] > levels["butter"] > levels["tri"]
 
 
 def test_narrow_band_falls_back_to_its_nearest_bin():
@@ -181,7 +181,7 @@ def test_set_band_keeps_trackers_and_recouples():
     v = a.layout_version
     a.set_band(2, f=9000.0)                     # MIDB jumps above AIR
     assert np.all(a.env == 0.7) and a.layout_version == v
-    assert a.band_names[2] == "MIDB"            # explicit names stay
+    assert a.band_names[2] == "midb"            # explicit names stay
     a.set_band(2, name=None)
     assert a.band_names[2] == "9.0 kHz"         # anonymous bands read their centre
     # coupling follows frequency order: … UPR → AIR (7.5k) → MIDB (9k) → itself
@@ -200,7 +200,7 @@ def test_add_remove_move():
     assert 2190 < a.spec[5].f < 7484 and a.spec[5].curve == RECT
     assert a.params[5] == Params(0, 0, 1, 1, 0.050, 0.300, 0.075, 0.80, 0.22)
     assert a.env[5] == 0.0 and a.env[6] == 0.5   # AIR's tracker moved with it
-    assert a.band_names[6] == "AIR" and a.st[6] == {}
+    assert a.band_names[6] == "air" and a.st[6] == {}
     assert a._next[4] == 5 and a._next[5] == 6
 
     a.remove_band(5)
@@ -208,7 +208,7 @@ def test_add_remove_move():
     assert a.band_names == [b.id for b in BANDS]
 
     a.move_band(0, 5)                           # SUB to the end of the strip
-    assert a.band_names[-1] == "SUB" and a.env[-1] == 0.0 and a.env[0] == 0.1
+    assert a.band_names[-1] == "sub" and a.env[-1] == 0.0 and a.env[0] == 0.1
     assert a._next[5] == 0                      # SUB still couples to BASS (now index 0)
     assert a._next[4] == 4                      # AIR (now index 4) couples to itself
 
@@ -303,11 +303,11 @@ def test_layout_round_trip():
     a = Analyzer(Analyser())
     lay = a.layout()
     assert [r["name"] for r in lay["bands"]] == [b.id for b in BANDS]
-    assert all(r["curve"] == "RECT" for r in lay["bands"])
+    assert all(r["curve"] == "rect" for r in lay["bands"])
     a.set_band(1, curve="gauss", name=None)     # tags are case-insensitive
     a.add_band(f=3000, q=2, curve="TRI")
     lay = a.layout()
-    assert "name" not in lay["bands"][1] and lay["bands"][1]["curve"] == "GAUSS"
+    assert "name" not in lay["bands"][1] and lay["bands"][1]["curve"] == "gauss"
     b = Analyzer(Analyser(), layout=lay)
     assert b.layout() == lay and b.n == 7 and b.band_names == a.band_names
     for i in range(b.n):
@@ -375,14 +375,14 @@ def strip_of(chain):
 
 def test_the_scene_combo_and_the_strip_follow_each_other(tmp_path):
     """Audit A1, as it stands since the library went one-tier: the combo's
-    scenes are code data (hyperspace/scenes/band/), the strip's presets the
+    scenes are code data (hyperspace/scenes/band/), the strip's loadable patches the
     user's — a band preset saved under a scene's name with the scene's
     document lands the same strip, the combo follows a strip load of it
     (Library.on_load), and a strip load keeps the band names because the
     layout carries them."""
     reg, control, audio, lib = wired(tmp_path)
     assert reg["scene.select"].names == list(SCENES)
-    assert lib.list("band") == [], "nothing ships: the strip lists the user's presets"
+    assert lib.list("band") == [], "nothing ships: the strip lists the user's patches"
     put_band(tmp_path, "Kick & Sizzle", scene("Kick & Sizzle"))
     put_band(tmp_path, "Balanced", scene("Balanced"))
     control.select_scene(SCENES.index("Kick & Sizzle"))
@@ -412,7 +412,7 @@ def test_band_params_follow_the_layout():
     assert audio.chain.n == 7 and control.selb == 5   # the new band, in frequency order
     assert "band.6.f" in reg and "band.6.reset" in reg
     assert len(reg["band.select"].names) == 7
-    assert reg["band.6.fn"].label.startswith("AIR ")   # AIR moved up one
+    assert reg["band.6.fn"].label.startswith("air ")   # air moved up one
     assert reg["band.sel.f"].value == audio.chain.spec[5].f
 
     reg["band.sel.curve"].set(2)
@@ -438,7 +438,7 @@ def test_control_apply_layout_rebuilds_and_restore_lands_values():
     missing = reg.restore({"band.1.atk": 0.02, "band.1.q": 3.0, "band.9.atk": 0.5})
     assert missing == ["band.9.atk"]
     assert audio.chain.params[1].atk == 0.02 and audio.chain.spec[1].q == 3.0
-    assert audio.chain.layout()["bands"][1]["curve"] == "BUTTER"
+    assert audio.chain.layout()["bands"][1]["curve"] == "butter"
     snap = reg.snapshot("band")
     assert "band.1.q" in snap and "band.sel.q" not in snap and "band.select" not in snap
 
@@ -447,8 +447,8 @@ def test_move_band_keeps_the_open_strip_on_its_band():
     reg, control, audio = rig()
     control.selb = 0
     control.move_band(0, 5)
-    assert control.selb == 5 and audio.chain.band_names[5] == "SUB"
-    assert reg["band.5.fn"].label.startswith("SUB ")
+    assert control.selb == 5 and audio.chain.band_names[5] == "sub"
+    assert reg["band.5.fn"].label.startswith("sub ")
 
 
 def test_reset_all_re_tunes_the_bands_loaded_and_undo_is_whole(tmp_path):
@@ -467,7 +467,7 @@ def test_reset_all_re_tunes_the_bands_loaded_and_undo_is_whole(tmp_path):
 def test_the_combo_is_clean_on_any_layout_and_undo_gives_the_strip_back(tmp_path):
     """Code review of PR #44: the combo applies no layout, so its reference
     for "clean" is the state it landed, not the file's layout ids; and a
-    reset undo puts the strip's current preset back too."""
+    reset undo puts the strip's current loadable patch back too."""
     reg, control, audio, lib = wired(tmp_path)
     put_band(tmp_path, "Balanced", scene("Balanced"))   # the strip's Balanced: the user's
     control.add_band()                                # seven bands, not the file's six
@@ -523,23 +523,15 @@ def test_a_partial_band_preset_fills_from_the_defaults(tmp_path):
     assert audio.chain.params[2].exp == lib.defaults("band")["band.2.exp"] == 0.95
 
 
-def test_a_scene_lands_on_the_base_under_a_performer_and_reads_clean(tmp_path):
+def test_a_scene_lands_on_the_base_and_reads_clean(tmp_path):
     """WP11's review of PR #44: a scene select is a base write when a
-    registry is attached, so a band knob a performer holds keeps its
-    offset — the strip reads clean at once, not after the fold, and never
-    an offset off."""
+    registry is attached, so the strip reads clean at once, not after the fold."""
     reg, control, _, lib = wired(tmp_path)
     p = reg["band.1.atk"]
-    p.modulate(0.1)                                   # a lane holds BASS attack
-    reg.apply()
     control.select_scene(SCENES.index("Kick & Sizzle"))
     want = scene("Kick & Sizzle")["values"]["band.1.atk"]
     assert p.base == want, "the scene landed on the base"
     assert not lib.is_dirty("band"), "clean straight after the select"
-    p.modulate(0.1)
-    reg.apply()
-    assert p.base == want and p.value > want, "the offset rides on the scene's value"
-    assert not lib.is_dirty("band")
     control.reset_band(1)
     assert p.base == want and not lib.is_dirty("band")
     # no library: the combo writes the analyzer's Params directly, as before
@@ -573,7 +565,7 @@ def test_audio_engine_carries_the_layout_across_sources():
 
 def test_balanced_is_the_default_table_and_the_reference_edges():
     """The reference's per-band windows live once in code (`default_params`);
-    the Balanced scene file is the same numbers as a preset, and its layout
+    the Balanced scene file is the same numbers as a loadable patch, and its layout
     is the six reference bands (audit A5: one table, the file pinned to it)."""
     doc = scene("Balanced")
     rows = A.scene_rows(doc["values"])

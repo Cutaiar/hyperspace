@@ -3,9 +3,9 @@ of up to sixteen source ids with one of them on the channel (`slot`), and
 a transport for a timed source.
 
 `Channels` (plan 44 D3; `MediaState` is its old name) is the one object a deck reads, over
-the rig's `MediaSources` (the resolver, the opener, the closer, the mixer —
+the meta controller's `MediaSources` (the resolver, the opener, the closer, the mixer —
 shared by every deck: one decode for every reader): the registry's `media.*`
-params write its channels' fields (params.py), the preset's `media`
+params write its channels' fields (params.py), the loadable patch's `media`
 section is its bins (`to_json` / `from_json`), the renderer reads
 `frame(c)` and `channels[c].fit`, the MEDIA page `status`, `playhead` and
 `missing`. `poll` runs once a frame on the frame thread, right after the
@@ -56,6 +56,20 @@ FITS = ("cover", "contain", "stretch")
 EMPTY = "empty"          # a bin entry with nothing in it: black
 FROZEN = "frozen"        # a live feed held at rate 0 (row 324)
 RECHECK_S = 1.0          # how often a channel asks the resolver about its id again
+
+
+def prefer_shared(resolver, sid: str) -> str:
+    """`sid` as it should be stored, asked of the resolver when it offers
+    `prefer_shared` (`media.folder.MediaFolder`; a fake resolver in a test
+    need not). Storing the id exactly as picked is always safe, so anything
+    that goes wrong here leaves it alone."""
+    fn = getattr(resolver, "prefer_shared", None)
+    if fn is None:
+        return sid
+    try:
+        return fn(sid) or sid
+    except Exception:  # noqa: BLE001 — the id as picked still opens on this Mac
+        return sid
 STILL_KINDS = ("still", "missing")   # untimed and not live: rate means nothing
 CLOSE_BUDGET_S = 1.5     # app exit: how long `MediaState.close` waits for the closes
 CLOSER_IDLE_S = 2.0      # the closer thread ends after this long with nothing to close
@@ -217,7 +231,7 @@ class NoResolver:
 
 
 def read_bins(doc) -> tuple[dict[str, list[str | None]], list[str]]:
-    """The preset's `media` section as {channel: bin of BIN}, and a note for
+    """The loadable patch's `media` section as {channel: bin of BIN}, and a note for
     each thing dropped: an unknown channel, a bin that is not a list, an
     entry that is not a source id, entries past the sixteenth. A missing
     section is every bin empty."""
@@ -251,7 +265,7 @@ def read_bins(doc) -> tuple[dict[str, list[str | None]], list[str]]:
 
 
 class MediaSources:
-    """What the channels read their pictures and sound through — the rig's,
+    """What the channels read their pictures and sound through — the meta controller's,
     one for every deck (plan 44 D3, §2 "the media sources"): the resolver
     (an id → a file or a live feed), the opener, the closer thread a dropped
     source goes to, the soundtracks' bookkeeping and the mixer (plan 45
@@ -334,9 +348,9 @@ def _through(name: str) -> property:
 class Channels:
     """A deck's eight media channels (plan 44 D3): each `Channel`'s bin,
     slot, fit and transport — what the deck's `media.*` params write
-    (`params.build_performance`), the preset's `media` section (`to_json`
+    (`params.build_patch`), the loadable patch's `media` section (`to_json`
     / `from_json`), what the deck's renderer reads (`frame`) — over the
-    rig's `MediaSources` (`sources`: one for every deck; made here when
+    meta controller's `MediaSources` (`sources`: one for every deck; made here when
     none is given, from `resolver` and `opener`). `resolver`, `opener`,
     `closer`, `mixer` and `sound` read and write the sources'."""
 
@@ -355,7 +369,7 @@ class Channels:
 
     @property
     def sources(self) -> MediaSources:
-        """The rig's media sources these channels read through."""
+        """The meta controller's media sources these channels read through."""
         return self._sources()
 
     def _sources(self) -> MediaSources:
@@ -621,13 +635,19 @@ class Channels:
 
     def assign(self, c: str, i: int, sid: str | None) -> None:
         """Put `sid` (None: empty) in channel `c`'s bin at `i`; the next
-        poll opens it if it is the slot on the channel."""
+        poll opens it if it is the slot on the channel.
+
+        A `local:` or `file:` id whose file is also in the shared folder is
+        stored as that `shared:` id (`prefer_shared`): both name the same
+        picture on this Mac, but only the shared one opens on the other, so
+        the patch a save writes is the one that travels."""
         if sid is not None:
             ids.parse(sid)
+            sid = prefer_shared(self.resolver, sid)
         self.channels[c].bin[int(i)] = sid
 
     def to_json(self) -> dict:
-        """The preset's `media` section: each bin holding anything, trailing
+        """The loadable patch's `media` section: each bin holding anything, trailing
         empties trimmed."""
         out: dict[str, list[str | None]] = {}
         for c, ch in self.channels.items():
@@ -656,7 +676,7 @@ class Channels:
     def drop_sources(self) -> None:
         """Every source this deck holds handed to the closer, and none opened
         again: all a deck off air has to do at exit (plan 44 D4) — the mixer
-        and the closer's budget are the rig's, spent by the on-air deck."""
+        and the closer's budget are the meta controller's, spent by the on-air deck."""
         self._closed = True
         for ch in self.channels.values():
             self._switch(ch, None, 0.0)
@@ -675,7 +695,7 @@ class Channels:
 
 
 # plan 44 D3: the one object before the split, by its old name — a deck's
-# channels over the rig's sources (`MediaState(resolver, opener)` makes both)
+# channels over the meta controller's sources (`MediaState(resolver, opener)` makes both)
 MediaState = Channels
 
 

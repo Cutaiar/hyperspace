@@ -17,11 +17,11 @@ slider shows base → effective).
 
 writes, into docs/plans/assets/22-face-patterns/:
 
-  b3-faces-rings.png    RINGS, nothing driven: the offers
+  b3-faces-rings.png    rings, nothing driven: the offers
   b3-faces-hex.png      HEX with four inputs driven and one off neutral
-  b3-faces-flat.png     FLAT: its note and the dimmed rows
-  b3-faces-hover.png    CAUSTIC with a mode chip's hover up (its one line)
-  b3-faces-meter.png    METER on a loud passage's bands (Renderer.bands)
+  b3-faces-flat.png     flat: its note and the dimmed rows
+  b3-faces-hover.png    caustic with a mode chip's hover up (its one line)
+  b3-faces-meter.png    meter on a loud passage's bands (Renderer.bands)
 
 (B2's b2-*.png are the same page before B3's five modes.)
 """
@@ -56,7 +56,7 @@ def boot(renderer) -> SimpleNamespace:
     audio = SimpleNamespace(chain=chain, on=False, mode="", error="", label="", sr=48000.0)
     view = ViewState()
     lib = Library(demo.HOME, period=0.0)
-    reg = build_registry(view, control, audio, lib.project, dream=renderer.lookback.state,
+    reg = build_registry(view, control, audio, lib.install, dream=renderer.lookback.state,
                          fx=renderer.fx.state)
     t = SimpleNamespace(t=0.0)
     clock = tempo.Clock(now=lambda: t.t)
@@ -112,7 +112,7 @@ def main() -> int:
     view.faces = True
     view.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     scene_fbo = ctx.framebuffer(color_attachments=[ctx.texture(RENDER_SIZE, 4)])
-    panel = Panel(r.control, r.audio, view, renderer=renderer, bank=r.lib.project,
+    panel = Panel(r.control, r.audio, view, renderer=renderer, bank=r.lib.install,
                   registry=reg, library=r.lib)
     router = panel.router = Router(reg, Bindings([]))
     router.labels["lane"] = list(r.chain.band_names)   # as the audio engine publishes them
@@ -167,9 +167,9 @@ def main() -> int:
     try:
         reg["view.pattern"].set(1)
         draw(40)
-        shoot("b3-faces-rings.png", "RINGS, nothing driven: each row offers the convention's source")
+        shoot("b3-faces-rings.png", "rings, nothing driven: each row offers the convention's source")
 
-        reg["view.pattern"].set(MODES.index(next(m for m in MODES if m.name == "HEX")))
+        reg["view.pattern"].set(MODES.index(next(m for m in MODES if m.name == "hex")))
         for b in (Binding("lane:0", "pattern.mod.0", "push", PATTERN_DEPTH),
                   Binding("lane:1", "pattern.mod.1", "push", PATTERN_DEPTH),
                   Binding("lfo:0", "pattern.mod.6", "push", 0.8)):
@@ -184,22 +184,22 @@ def main() -> int:
 
         reg["view.pattern"].set(0)
         draw(30)
-        shoot("b3-faces-flat.png", "FLAT: its note, the rows dimmed")
+        shoot("b3-faces-flat.png", "flat: its note, the rows dimmed")
 
-        caustic = next(k for k, m in enumerate(MODES) if m.name == "CAUSTIC")
+        caustic = next(k for k, m in enumerate(MODES) if m.name == "caustic")
         reg["view.pattern"].set(caustic)
         draw(30)
         io = imgui.get_io()
-        x0, y0, x1, y1 = rects[f"mode.{MODES.index(next(m for m in MODES if m.name == 'EMBER'))}"]
+        x0, y0, x1, y1 = rects[f"mode.{MODES.index(next(m for m in MODES if m.name == 'ember'))}"]
         io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
         draw(20)
-        shoot("b3-faces-hover.png", "CAUSTIC on show, EMBER's chip hovered: its one line")
+        shoot("b3-faces-hover.png", "caustic on show, ember's chip hovered: its one line")
 
         io.add_mouse_pos_event(-1.0, -1.0)
         renderer.bands = (0.85, 0.90, 0.30, 0.35, 0.45, 0.80)
-        reg["view.pattern"].set(MODES.index(next(m for m in MODES if m.name == "METER")))
+        reg["view.pattern"].set(MODES.index(next(m for m in MODES if m.name == "meter")))
         draw(30)
-        shoot("b3-faces-meter.png", "METER on a loud passage's bands: the swatches too")
+        shoot("b3-faces-meter.png", "meter on a loud passage's bands: the swatches too")
     finally:
         imgui.invisible_button = real_inv
         impl.shutdown()

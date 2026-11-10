@@ -71,7 +71,7 @@ def test_a_shape_flat_toward_the_eye_draws_at_full_weight(ctx, name, ang):
 
 def test_only_a_plane_figure_is_thinner_than_the_depth_floor_at_rest():
     # the floor is for a shape with no depth toward the eye: at rest, the
-    # pose every preset starts from, every other shape is deeper than it,
+    # pose every loadable patch starts from, every other shape is deeper than it,
     # so none of them draws differently for it
     from hyperspace.geometry import shape_world
     from hyperspace.render import DEPTH_FLOOR
@@ -612,7 +612,7 @@ def _dim_renderer(ctx, *, effect=True, hands=True, bg_alpha=1.0, echoes=False):
     if echoes:
         st = r.lookback.state
         st.on, st.echoes, st.gap, st.tint_from = True, 8, 0.0, 0
-        # (plan 36 T4: the look-back drawn, as an old preset with it on)
+        # (plan 36 T4: the look-back drawn, as an old loadable patch with it on)
         from hyperspace.graphmigrate import specs_of, state_values, wiring_for
         r.wiring = wired_wiring(wiring_for(state_values(fx), specs_of(fx), wired=False), "trail")
     return r
@@ -899,7 +899,7 @@ def test_zero_instances_draws_only_the_ground(ctx):
     r.bg_alpha = 0.0
     assert not _inst_frames(ctx, r, [0]).any()
     r.bg_alpha = 1.0
-    # nonsense below the floor (a hand-edited preset) is zero, not a raise
+    # nonsense below the floor (a hand-edited loadable patch) is zero, not a raise
     assert not _inst_frames(ctx, r, [-3])[..., :3].any()
     assert writes == []
     # and the scene comes straight back: the same bits as before the zero
@@ -1104,7 +1104,7 @@ def _hue(px):
 def _face_view(bitmap="", **kw) -> ViewState:
     """A tesseract's faces alone, big in the window: no lines, no points.
     `bitmap` (a card) puts channel a on the faces — the wire `media.a →
-    pattern.media` `_wire` makes of this view's `media` (an old preset's
+    pattern.media` `_wire` makes of this view's `media` (an old loadable patch's
     `view.media`, plan 32; this file's note of it since plan 33 T7 retired
     the param): the renderer drawing it holds the card as its channels
     (`_carded`)."""
@@ -1119,7 +1119,7 @@ def _face_view(bitmap="", **kw) -> ViewState:
 
 def _aimed(*names, face_map=0, **values):
     """An FxState with `names` on, for the faces: `_wire` wires them there,
-    as a load of an old preset aiming them at the faces (`target` 1) does —
+    as a load of an old loadable patch aiming them at the faces (`target` 1) does —
     `aimed`, this file's own note of them (plan 33 T7: no target param)."""
     from hyperspace.fx import FxState
 
@@ -1724,7 +1724,7 @@ def test_the_render_stack_imports_no_registry():
     import hyperspace.fx as F
     import hyperspace.render as R
 
-    banned = {"params", "routing", "library", "preset", "undo", "control"}
+    banned = {"params", "routing", "library", "loadable", "undo", "control"}
     for mod in (R, F):
         tree = ast.parse(Path(mod.__file__).read_text())
         for node in ast.walk(tree):

@@ -1,5 +1,5 @@
 {
- "schema": "hyperspace.preset/1",
+ "schema": "hyperspace.patch/2",
  "group": "band",
  "name": "Kick & Sizzle",
  "layout": {
@@ -8,37 +8,37 @@
     "f": 34.64101615137755,
     "q": 0.8660254037844387,
     "curve": "rect",
-    "name": "SUB"
+    "name": "sub"
    },
    {
     "f": 97.97958971132712,
     "q": 0.9797958971132712,
     "curve": "rect",
-    "name": "BASS"
+    "name": "bass"
    },
    {
     "f": 252.98221281347034,
     "q": 1.0540925533894598,
     "curve": "rect",
-    "name": "MIDB"
+    "name": "midb"
    },
    {
     "f": 692.8203230275509,
     "q": 0.8660254037844386,
     "curve": "rect",
-    "name": "MID"
+    "name": "mid"
    },
    {
     "f": 2190.8902300206646,
     "q": 0.7824607964359517,
     "curve": "rect",
-    "name": "UPR"
+    "name": "upr"
    },
    {
     "f": 7483.314773547882,
     "q": 0.7483314773547882,
     "curve": "rect",
-    "name": "AIR"
+    "name": "air"
    }
   ]
  },

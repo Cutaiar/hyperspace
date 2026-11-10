@@ -35,7 +35,7 @@ def test_every_mode_says_what_each_of_the_eight_inputs_does():
     assert N_INPUTS == N_MOD == 8
     assert PATTERNS == [m.name for m in MODES]
     for m in MODES:
-        assert m.name.isupper() and m.about, m
+        assert m.name == m.name.lower() and m.about, m
         assert len(m.does) == N_INPUTS, m.name
         assert all(isinstance(d, str) for d in m.does), m.name
 
@@ -265,7 +265,7 @@ def test_only_meter_and_pulse_read_the_bands_and_they_show_them():
     try:
         r = Renderer(ctx)
         loud = (0.85, 0.9, 0.3, 0.35, 0.45, 0.8)
-        reads = {patterns.NAMES.index("METER"), patterns.NAMES.index("PULSE")}
+        reads = {patterns.NAMES.index("meter"), patterns.NAMES.index("pulse")}
         for mode in range(1, len(MODES)):
             s = ViewState(pattern=mode)
             r.bands = ()
@@ -279,7 +279,7 @@ def test_only_meter_and_pulse_read_the_bands_and_they_show_them():
             else:
                 assert d == 0.0, MODES[mode].name
         # METER: a band's wedge lights out from the hub as far as it reads
-        meter = ViewState(pattern=patterns.NAMES.index("METER"))
+        meter = ViewState(pattern=patterns.NAMES.index("meter"))
         r.bands = (1.0, 0, 0, 0, 0, 0)
         one = r.pattern_tile(meter, 96, 0.0, 0.0).astype(float)
         r.bands = (0.0,) * 6
@@ -291,11 +291,11 @@ def test_only_meter_and_pulse_read_the_bands_and_they_show_them():
         ctx.release()
 
 
-def test_new_modes_are_appended_so_preset_indices_keep_their_patterns():
+def test_new_modes_are_appended_so_loadable_indices_keep_their_patterns():
     """Presets hold `view.pattern` as an index: the first twelve stay put."""
-    assert patterns.NAMES[:12] == ["FLAT", "RINGS", "PLAID", "MOIRE", "BLOOM", "CAUSTIC",
-                                   "HEX", "SPIRAL", "CELLS", "PLASMA", "WEAVE", "EMBER"]
-    assert patterns.NAMES[12:] == ["METER", "PULSE", "MARBLE", "TRUCHET", "KALEIDO"]
+    assert patterns.NAMES[:12] == ["flat", "rings", "plaid", "moire", "bloom", "caustic",
+                                   "hex", "spiral", "cells", "plasma", "weave", "ember"]
+    assert patterns.NAMES[12:] == ["meter", "pulse", "marble", "truchet", "kaleido"]
 
 
 def test_every_phrase_fits_a_faces_row():
@@ -321,7 +321,7 @@ def test_pulses_hats_still_sparkle_hours_into_a_set():
     try:
         r = Renderer(ctx)
         r.bands = (0.0, 0.0, 0.0, 0.0, 0.0, 0.5)          # the hats alone
-        s = ViewState(pattern=patterns.NAMES.index("PULSE"))
+        s = ViewState(pattern=patterns.NAMES.index("pulse"))
 
         def lit(t):                                       # the ice-cyan points' share
             img = r.pattern_tile(s, 128, t, 0.0).astype(float)

@@ -3,8 +3,7 @@ base; let go, the look stays where the performer left it.
 
 The param model first, against a twin the verb never touches (what shows is
 what would have shown), then the rig: the real router's rows, undo's one step
-per hold, the dirty dot, the projector's hold, Learn, and two decks over one
-session."""
+per hold, the dirty dot, Learn, and two decks over one meta controller."""
 
 from __future__ import annotations
 
@@ -16,7 +15,6 @@ import mido
 import pytest
 from test_undo import boot, frames, labels
 
-from hyperspace import hold as H
 from hyperspace import lfo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
@@ -26,8 +24,8 @@ from hyperspace.params import (
     CHASE_LABEL,
     CHASE_PARAM,
     Registry,
-    build_performance,
-    build_session,
+    build_meta,
+    build_patch,
     chase_reaches,
 )
 from hyperspace.routing import Binding, Bindings, latch_refusal, press_momentary
@@ -179,7 +177,7 @@ def test_a_load_under_a_live_route_inherits_no_commit(rig):
     """The saved base plus the route's whole offset: a look holds no commit
     it never made. Its undo brings the commit back, nothing counted twice."""
     p = routed(rig)
-    rig.presets.save_as("LOOK")
+    rig.loaded_patch.save_as("LOOK")
     saved = p.norm
     rig.out_value[0] = 0.6
     go(rig, 2)
@@ -191,7 +189,7 @@ def test_a_load_under_a_live_route_inherits_no_commit(rig):
     settle_with(rig)
     committed, shown = p.norm, p.eff_norm
     assert committed == pytest.approx(saved + offset) and shown == pytest.approx(committed)
-    rig.presets.load("LOOK")
+    rig.loaded_patch.load("LOOK")
     go(rig, 2)
     p = rig.reg[p.id]
     assert p.norm == pytest.approx(saved)
@@ -210,8 +208,8 @@ def test_a_load_with_the_same_value_as_the_commit_inherits_nothing(rig):
     rig.reg[CHASE_PARAM].set(False)
     offset = p._trim
     assert offset > 0
-    rig.presets.save_as("SAME")                # the committed value, in a file
-    rig.presets.load("SAME")
+    rig.loaded_patch.save_as("SAME")                # the committed value, in a file
+    rig.loaded_patch.load("SAME")
     go(rig, 2)
     assert p.eff_norm == pytest.approx(p.norm + offset)
 
@@ -224,8 +222,8 @@ def test_a_loads_pose_inherits_no_commit(rig):
     go(rig, 2)
     rig.reg[CHASE_PARAM].set(False)
     assert p._trim
-    rig.presets.save_as("POSED")
-    rig.presets.load("POSED")
+    rig.loaded_patch.save_as("POSED")
+    rig.loaded_patch.load("POSED")
     assert p._trim == 0.0
 
 
@@ -405,31 +403,31 @@ def test_a_restore_brings_the_ledger_of_the_base_it_brings(reg):
 
 def test_the_verb_reaches_continuous_modulatable_look_params():
     chain = Analyzer(Analyser())
-    session = build_session(Control(chain), SimpleNamespace(chain=chain))
-    reg = build_performance(ViewState(), session=session)
+    meta_reg = build_meta(Control(chain), SimpleNamespace(chain=chain))
+    reg = build_patch(ViewState(), meta_reg=meta_reg)
     reached = {p.id for p in reg if chase_reaches(p)}
     assert "view.bright" in reached and "rot.rate.XY" in reached and "camera.yaw" in reached
     for p in reg:
         if p.id in reached:
             assert p.modulatable and p.kind.value == "continuous"
-    assert "master.gain" not in reached, "a session param is the room's"
-    assert not any(p.id in reached for p in session)
+    assert "master.gain" not in reached, "a meta controller param is the room's"
+    assert not any(p.id in reached for p in meta_reg)
     reg["macro.1"]                             # declared
     assert not any(i.startswith("macro.") for i in reached), "a macro's base moves its subscribers"
     assert CHASE_PARAM not in reached and not reg[CHASE_PARAM].persist
-    assert CHASE_PARAM not in session, "every deck has its own"
+    assert CHASE_PARAM not in meta_reg, "every deck has its own"
 
 
-def test_two_decks_chase_alone_and_leave_the_session_alone():
+def test_two_decks_chase_alone_and_leave_the_meta_alone():
     chain = Analyzer(Analyser())
-    session = build_session(Control(chain), SimpleNamespace(chain=chain))
-    a = build_performance(ViewState(), session=session)
-    b = build_performance(ViewState(), session=session)
+    meta_reg = build_meta(Control(chain), SimpleNamespace(chain=chain))
+    a = build_patch(ViewState(), meta_reg=meta_reg)
+    b = build_patch(ViewState(), meta_reg=meta_reg)
     a[CHASE_PARAM].set(True)
     assert a.chasing and not b.chasing and not b[CHASE_PARAM].value
     pa, pb = a["view.bright"], b["view.bright"]
     was_a, was_b = pa.base, pb.base
-    m = session["master.gain"]
+    m = meta_reg["master.gain"]
     gain = m.base
     for q in (pa, pb, m):
         q.modulate(0.05)
@@ -640,27 +638,27 @@ def test_the_step_closes_on_the_undo_the_press_opened_it_on(rig):
 
 def test_a_hold_that_moved_nothing_costs_no_step_and_no_dirty_dot(rig):
     routed(rig)
-    dirty = rig.presets.is_dirty()
+    dirty = rig.loaded_patch.is_dirty()
     rig.undo.clear()
     rig.reg[CHASE_PARAM].set(True)
     go(rig, 5)                                 # the hand at rest: nothing to commit
     rig.reg[CHASE_PARAM].set(False)
     assert labels(rig) == []
-    assert rig.presets.is_dirty() == dirty
+    assert rig.loaded_patch.is_dirty() == dirty
 
 
 def test_a_commit_lights_the_dirty_dot_and_a_save_holds_it(rig):
     p = routed(rig)
-    rig.presets.save_as("CHASED")
-    assert not rig.presets.is_dirty()
+    rig.loaded_patch.save_as("CHASED")
+    assert not rig.loaded_patch.is_dirty()
     rig.out_value[0] = 0.6
     go(rig, 2)
-    assert not rig.presets.is_dirty(), "an offset alone is no edit"
+    assert not rig.loaded_patch.is_dirty(), "an offset alone is no edit"
     rig.reg[CHASE_PARAM].set(True)
     go(rig, 2)
     rig.reg[CHASE_PARAM].set(False)
-    assert rig.presets.is_dirty()
-    assert rig.reg.snapshot(part="performance")[p.id] == pytest.approx(p.value)
+    assert rig.loaded_patch.is_dirty()
+    assert rig.reg.snapshot(part="patch")[p.id] == pytest.approx(p.value)
 
 
 def test_the_turn_commits_with_no_step(rig):
@@ -680,68 +678,10 @@ def test_the_turn_commits_with_no_step(rig):
     assert p.base == pytest.approx(shown, abs=0.05)
 
 
-# ---------------------------------------------------------------- the projector's hold
-
-@pytest.fixture()
-def held(rig):
-    rig.renderer = SimpleNamespace(wiring=None, ghost_states={})
-    rig.hold = H.Hold(rig.reg, rig.renderer, undo=rig.undo, section=rig.presets.graph)
-    H.register(rig.reg, rig.hold)
-    return rig
-
-
-def test_under_the_projectors_hold_the_press_is_refused(held):
-    p = routed(held)
-    held.out_value[0] = 0.6
-    go(held, 2)
-    base = p.base
-    assert held.hold.engage()
-    held.reg[CHASE_PARAM].set(True)
-    assert not held.reg[CHASE_PARAM].value and not held.reg.chasing
-    go(held, 2)
-    assert p.base == pytest.approx(base) and held.hold.changed() == []
-    held.hold.take()
-    held.reg[CHASE_PARAM].set(True)
-    assert held.reg.chasing, "let go of the hold, the verb works"
-
-
-def test_engaging_the_hold_lets_the_verb_go_and_keeps_its_commit(held):
-    p = routed(held)
-    held.out_value[0] = 0.6
-    go(held, 2)
-    held.reg[CHASE_PARAM].set(True)
-    go(held, 2)
-    shown = p.base
-    assert held.hold.engage()
-    assert not held.reg.chasing and held.undo._open is None and held.undo._kept is None
-    assert labels(held) == [CHASE_LABEL], "the step closed before the point Drop goes back to"
-    held.out_value[0] = 0.5
-    go(held, 3)
-    assert p.base == pytest.approx(shown) and held.hold.changed() == []
-    held.hold.drop()
-    assert p.base == pytest.approx(shown), "Drop goes back to the hold's point, the commit in it"
-
-
-def test_drop_does_not_jump_with_the_source_still_out(held):
-    p = routed(held)
-    held.out_value[0] = 0.6
-    go(held, 2)
-    held.reg[CHASE_PARAM].set(True)
-    go(held, 2)
-    held.reg[CHASE_PARAM].set(False)
-    shown = p.value
-    assert held.hold.engage()
-    p.set(p.base * 0.5)                        # the operator builds the next look
-    go(held, 2)
-    held.hold.drop()
-    go(held, 2)
-    assert p.value == pytest.approx(shown)
-
-
 # ---------------------------------------------------------------- two decks
 
 def beside(r):
-    """A second deck over `r`'s session, sources and clock, with the same
+    """A second deck over `r`'s meta controller, sources and clock, with the same
     route `routed` gives the first."""
     b = Deck.beside(r.deck, lfos=lfo.LFOs(seed=1))
     b.table.add(Binding("hand:0", "view.bright", "push", 1.0, rest=0.5))
@@ -794,18 +734,6 @@ def test_deck_2s_control_uses_deck_2s_undo(rig):
     assert [s.label for s in b.undo.stack] == [CHASE_LABEL] and labels(rig) == []
 
 
-def test_the_hold_refuses_and_lets_go_on_every_deck(held):
-    routed(held)
-    b = beside(held)
-    assert b.chase(True)
-    go_both(held, b)
-    assert held.hold.engage()
-    assert not b.reg.chasing and b.undo._kept is None, "engaging lets deck 2 go too"
-    assert not b.chase(True) and not b.reg[CHASE_PARAM].value, "and a press there is refused"
-    held.hold.take()
-    assert b.chase(True)
-
-
 # ---------------------------------------------------------------- pressing it
 
 def _note(on: bool, number: int = 94, channel: int = 0):
@@ -813,11 +741,24 @@ def _note(on: bool, number: int = 94, channel: int = 0):
     return mido.Message(kind, channel=channel, note=number, velocity=127 if on else 0)
 
 
-def test_a_desk_button_learned_on_it_is_held_not_latched(rig):
-    src = "note:0:94"
+def _row_on_desk(rig, src: str = "note:0:94") -> Binding:
+    """A person's row on a desk button, as `bindings.json` may hold one: since row 746 no
+    Learn lands one (row 755), and a file's patch-layer row on it drops with a note."""
+    return rig.table.add(Binding(src, CHASE_PARAM, "momentary"))
+
+
+def test_a_desk_button_cannot_be_learned_on_it(rig):
+    """Row 755: refused, per the seventh round, in words that say where its road is."""
     rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control(src)
-    row = [b for b in rig.table.bindings if b.source == src]
+    assert not rig.learn.learn_control("note:0:94")
+    assert "Learn pad" in rig.learn.last
+    assert [b.source for b in rig.table.bindings if b.target == CHASE_PARAM] == ["pad:VIEW"]
+
+
+def test_a_desk_row_on_it_is_held_not_latched(rig):
+    src = "note:0:94"
+    _row_on_desk(rig, src)
+    row = [b for b in rig.table.bindings if b.source == src and b.target == CHASE_PARAM]
     assert [(b.target, b.op) for b in row] == [(CHASE_PARAM, "momentary")]
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
@@ -863,7 +804,7 @@ def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
     for b in [b for b in rig.table.bindings if b.target == CHASE_PARAM]:
         rig.table.remove(b)                    # BACK's factory row: this stub is one button
     rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_pad_button("pad:Y")
+    assert rig.learn.learn_pad_button("pad:N")
     row = [b for b in rig.table.bindings if b.target == CHASE_PARAM]
     assert [b.op for b in row] == ["momentary"]
     pad = Pad()
@@ -881,7 +822,7 @@ def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
     rig.router.pad(pad, now=0.3)
     assert rig.reg.chasing
     pad.was_down = True
-    rig.router.pad(pad, now=0.4, skip=frozenset({"pad:Y"}))
+    rig.router.pad(pad, now=0.4, skip=frozenset({"pad:N"}))
     assert not rig.reg.chasing
     # a release as ever
     pad.was_down = False
@@ -895,8 +836,7 @@ def test_a_pad_button_learned_on_it_is_held_and_a_lost_pad_lets_go(rig):
 def test_a_desk_button_and_a_pad_button_hold_it_together(rig):
     """Brushing the pad's button does not end what the APC's holds, or the
     other way about; a desk cable lost lets go only of the desk's."""
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control("note:0:94")
+    _row_on_desk(rig)
     pad = Pad()
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
@@ -922,8 +862,7 @@ def test_a_desk_button_and_a_pad_button_hold_it_together(rig):
 
 def test_a_desk_closed_lets_go(rig):
     """A desk's device closed with its button down: no poll follows."""
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control("note:0:94")
+    _row_on_desk(rig)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
@@ -949,8 +888,7 @@ def test_a_desk_lost_leaves_what_another_desk_holds(rig, lost):
     qualified or not, and its own release still ends the chase."""
     p = rig.reg[CHASE_PARAM]
     press_momentary(p, "note@launch:0:94", True)     # the second desk's button
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control("note:0:94")
+    _row_on_desk(rig)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     getattr(rig.midi, lost)()
@@ -962,12 +900,11 @@ def test_a_desk_lost_leaves_what_another_desk_holds(rig, lost):
 
 @pytest.mark.parametrize("change", ["removed", "retargeted", "switched off", "its rows forgotten"])
 def test_a_desk_row_changed_under_its_button_still_releases(rig, change):
-    rig.learn.arm(CHASE_PARAM)
-    assert rig.learn.learn_control("note:0:94")
+    _row_on_desk(rig)
     rig.inp.queue.append(_note(True))
     rig.midi.poll()
     assert rig.reg.chasing
-    row = next(b for b in rig.table.bindings if b.source == "note:0:94")
+    row = next(b for b in rig.table.bindings if b.source == "note:0:94" and b.target == CHASE_PARAM)
     if change == "removed":
         rig.table.remove(row)
     elif change == "retargeted":

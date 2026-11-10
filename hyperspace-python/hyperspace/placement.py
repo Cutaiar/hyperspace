@@ -3,7 +3,8 @@
 Two sources, in this order (plan 16 WP4, fork F4):
 
 - ``[output] monitor`` / ``control_monitor`` in config.toml — a screen
-  index. At 0 or above the window opens on that screen.
+  index, or a screen's name (row 771: `match`). At 0 or above, or on a name
+  that is connected, the window opens on that screen.
 - ``<home>/windows.json`` — the windowed rects at the last quit (or ⌘R).
   It fills in what the config leaves at −1, and on a configured screen it
   still supplies the spot when the last position was on that screen.
@@ -28,10 +29,16 @@ fullscreen is the config's say, fork F6). ``render`` is a list, one entry
 per render output in the config's order (plan 21: ``[[output.screens]]``;
 one entry with no list), and `place` is called once per window, so
 nothing here assumes how many render windows there are. A file with one
-entry still loads for a rig with two: the second opens at its default spot. ``screen`` is the
+entry still loads for an install with two: the second opens at its default spot. ``screen`` is the
 name of the screen the rect was on, kept for the note; placement is decided
 by geometry alone. The file is written on quit and on restart only (fork
 F5); delete it to forget.
+
+**Since each display's row says what it shows (`displays.py`, SC2),** an output can move
+between displays, so a place in ``render`` says little: a window's spot goes under
+``displays``, by the display's label, ``{"displays": {"TV #2": {"x": ...}}}``, and that's read
+first (`spot`). The file stays ``/1``: ``render`` is still written, an older build reads it,
+and it's where a display with no entry of its own looks once.
 
 No GL, no imgui, and nothing imported from the package: `glfw` is passed
 in, and the home folder is the caller's (app.py takes it from
@@ -40,11 +47,13 @@ in, and the home folder is the caller's (app.py takes it from
 
 from __future__ import annotations
 
+import ctypes
 import json
 import math
 import os
+import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 FILE = "windows.json"
@@ -65,6 +74,21 @@ class Screen:
     y: int
     w: int
     h: int
+    at: tuple[int, int] | None = None     # the monitor's own frame, Dock or no Dock
+    # the window system's id for this display, this boot (`labels`' `held`); 0: it won't say
+    uid: int = field(default=0, compare=False)
+
+
+def _uid(glfw, m) -> int:
+    """A display's id for this boot: on a Mac its CGDirectDisplayID, which Apple says stays the
+    same until a restart, across a replug too; elsewhere GLFW's handle, while it's connected;
+    0 when neither will say."""
+    for read in (lambda: glfw.get_cocoa_monitor(m), lambda: ctypes.addressof(m.contents)):
+        try:
+            return int(read())
+        except Exception:  # noqa: BLE001, S112 — not a Mac, or a stand-in: it won't say
+            continue
+    return 0
 
 
 def screens(glfw) -> list[Screen]:
@@ -79,14 +103,52 @@ def screens(glfw) -> list[Screen]:
     for i, m in enumerate(mons):
         try:
             x, y, w, h = (int(v) for v in glfw.get_monitor_workarea(m))
+            px, py = (int(v) for v in glfw.get_monitor_pos(m))
             name = glfw.get_monitor_name(m)
             name = name.decode(errors="replace") if isinstance(name, bytes) else str(name or "")
+            name = name.strip()            # what `match` compares a trimmed value with
         except Exception:  # noqa: BLE001 — as above
             return []      # indices must keep meaning what the config says: all or nothing
         if w <= 0 or h <= 0:
             return []
-        out.append(Screen(name or f"screen {i + 1}", x, y, w, h))
+        out.append(Screen(name or f"screen {i + 1}", x, y, w, h, (px, py), _uid(glfw, m)))
     return out
+
+
+# ---- GRAPH's start zoom (plan 58 SM2) ----
+#
+# Read off the display the control window opens on, by its usable height alone,
+# never its reported millimetres (a 48-inch panel on the owner's Mac says it is
+# 598 mm wide). The show's display is 1080p (the owner, 2026-11-07).
+
+ZOOM_READ = 1.3         # by eye at 1920x1080: words read from a distance, four columns on the canvas
+ZOOM_FULL = 960.0       # a display at least this tall gets ZOOM_READ: 1080p, less a menu bar and a dock
+ZOOM_SMALL = 720.0      # at this height or under, 1:1: 1.3 left under two columns at 1024x768
+ZOOM_HEIGHT = 1080.0    # the height whose square root is 1: only a much taller display passes ZOOM_READ
+ZOOM_MAX = 1.5          # by eye: 1.38 reads well in a 900-point window, 1.89 held two nodes
+
+
+def start_zoom(height: float) -> float:
+    """GRAPH's first zoom on a display, in screen points per canvas unit, by its
+    usable height alone: `ZOOM_READ` from `ZOOM_FULL` up, easing to 1 at
+    `ZOOM_SMALL`; above about 1825 points the square root of the height over
+    `ZOOM_HEIGHT`, up to `ZOOM_MAX` (a taller screen is seen from further off,
+    but a window on it needn't fill it)."""
+    room = (height - ZOOM_SMALL) / (ZOOM_FULL - ZOOM_SMALL)
+    read = 1.0 + (ZOOM_READ - 1.0) * min(max(room, 0.0), 1.0)
+    return min(max(read, math.sqrt(max(height, 0.0) / ZOOM_HEIGHT)), ZOOM_MAX)
+
+
+def window_zoom(glfw, win) -> float:
+    """`start_zoom` for the display `win` is on (`on_screen`). `ZOOM_READ` when
+    the window system won't say: the show's display is the likeliest, and a launch
+    must not die for a zoom, nor run its whole length too small to read."""
+    try:
+        rect = (*glfw.get_window_pos(win), *glfw.get_window_size(win))
+        on = on_screen(rect, screens(glfw))
+        return start_zoom(on.h) if on is not None else ZOOM_READ
+    except Exception:  # noqa: BLE001 — as above
+        return ZOOM_READ
 
 
 # ---- the file ----
@@ -107,9 +169,12 @@ def load(home: Path) -> dict:
 
 
 def save(home: Path, control: Rect | None, render: list[Rect | None],
-         scr: list[Screen]) -> None:
+         scr: list[Screen], spots: dict[str, Rect | None] | None = None,
+         away: dict[str, tuple] | None = None) -> None:
     """Write the windowed rects. A None (a minimised window) keeps that
-    window's old entry. Atomic — a temp file, then a rename — and a failed
+    window's old entry. `spots`: each window's rect by the label of the display
+    it's on (`spot`). `away` (SC3b): where a window was on a display with no window now, by its
+    memory, kept though no display here can show it: `place` says if it's any use later. Atomic — a temp file, then a rename — and a failed
     write costs only the memory: it is said on stderr and never raised."""
     home = Path(home)
     old = load(home)
@@ -121,6 +186,18 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
     doc = {"schema": SCHEMA,
            "control": _entry(control, scr) or old.get("control"),
            "render": entries}
+    kept = old.get("displays")
+    kept = dict(kept) if isinstance(kept, dict) else {}
+    for key, rect in (away or {}).items():
+        r = _rect(dict(zip("xywh", rect, strict=False)))
+        if r is not None:
+            kept[key] = {"x": r[0], "y": r[1], "w": r[2], "h": r[3], "screen": key}
+    for tag, rect in (spots or {}).items():
+        new = _entry(rect, scr)
+        if new is not None:
+            kept[memory(tag)] = new
+    if kept:
+        doc["displays"] = kept
     tmp = home / f"{FILE}.{os.getpid()}.tmp"     # its own: two instances may share a home
     try:
         tmp.write_text(json.dumps(doc, indent=1) + "\n")
@@ -132,6 +209,17 @@ def save(home: Path, control: Rect | None, render: list[Rect | None],
             tmp.unlink(missing_ok=True)
         except OSError:
             pass
+
+
+def spot(seen: dict, tag: str, n: int) -> dict | None:
+    """Where a window on the display labelled `tag` was, showing output `n`, as `load`
+    gave it: its own entry, else that output's old place in ``render``. `place` says
+    whether it's any use there."""
+    own = seen.get("displays")
+    if isinstance(own, dict) and memory(tag) in own:
+        return own[memory(tag)]
+    old = seen.get("render") or []
+    return old[n - 1] if 0 <= n - 1 < len(old) else None
 
 
 def _entry(rect, scr: list[Screen]) -> dict | None:
@@ -201,6 +289,11 @@ def _centre_screen(rect: Rect, scr: list[Screen]) -> Screen | None:
     return next((s for s in scr if _on(rect, s)), None)
 
 
+def on_screen(rect: Rect, scr: list[Screen]) -> Screen | None:
+    """The screen a rect's centre is over, else the one it lands on."""
+    return _centre_screen(rect, scr) or _landing(rect, scr)
+
+
 def _fit(rect: Rect, scr: list[Screen]) -> Rect | None:
     """A remembered rect as it may open: its size clipped to the screen it
     lands on and never under MIN_SIZE; None when it is not usable (before
@@ -238,13 +331,204 @@ def _key(kind: str) -> str:
     return "control_monitor" if kind == "control" else "monitor"
 
 
+def named(value) -> str:
+    """The screen name a config value asks for, "" when it asks by index:
+    a string `int()` will not read. "1" is an index written as text."""
+    if isinstance(value, str):
+        v = value.strip()
+        if v:
+            try:
+                int(v)
+            except ValueError:
+                return v
+    return ""
+
+
+def _family(name: str) -> str:
+    """A screen's name less the " (n)" a Mac may add to tell twins apart
+    ("DELL (2)"): that number can follow the plug order, so it is not what
+    an ordinal counts. A year in brackets is not such a number."""
+    return re.sub(r" \(\d{1,2}\)$", "", name)
+
+
+def _along(i: int, scr: list[Screen]) -> tuple:
+    """Left to right across the desk, then top to bottom: the arrangement
+    in System Settings, by the monitor's frame, since a Dock moves the work
+    area. `glfw.get_monitors()` order can change with the plug order."""
+    s = scr[i]
+    return (*(s.at or (s.x, s.y)), i)
+
+
+def arranged(scr: list[Screen]) -> list[int]:
+    """The screens' indices left to right across the desk, then top to bottom."""
+    return sorted(range(len(scr)), key=lambda i: _along(i, scr))
+
+
+def _same(family: str, scr: list[Screen]) -> list[int]:
+    """The indices of this family's screens, in the order an ordinal counts."""
+    return sorted((i for i, s in enumerate(scr) if _family(s.name) == family),
+                  key=lambda i: _along(i, scr))
+
+
+def _ordinal(want: str) -> tuple[str, int] | None:
+    """("TV", 2) for "TV #2"; None when it is not written that way."""
+    base, hash_, n = want.rpartition(" #")
+    if base and hash_ and n.isascii() and n.isdecimal() and len(n) <= 3 and int(n) >= 1:
+        return base, int(n)
+    return None
+
+
+def match(asked: str, scr: list[Screen]) -> int:
+    """The index of the screen a name asks for, −1 for none (row 771).
+
+    In this order:
+    1. "TV #2": the second of the "TV" family across the desk (`_same`).
+       It comes first so that `labels` can always name every screen.
+    2. The exact whole name, case and all: "TV" does not find "TV Samsung",
+       and "DELL (2)" finds that name whatever the Mac means by it today.
+       A screen really called "TV #2", beside two "TV", is "TV #2 #1".
+    3. The family: "DELL" finds the first of "DELL (1)" and "DELL (2)".
+
+    `resolve` says what this cannot be sure of."""
+    want = asked.strip()
+    n = _ordinal(want)
+    if n:
+        same = _same(n[0], scr)
+        if n[1] <= len(same):
+            return same[n[1] - 1]
+    exact = [i for i, s in enumerate(scr) if s.name == want]
+    if exact:
+        return min(exact, key=lambda i: _along(i, scr))
+    same = _same(want, scr)
+    return same[0] if same else -1
+
+
+def memory(label: str) -> str:
+    """What a display's memory goes under, for a label `labels` gave: a lone display and the
+    first of a pair are one, so "TV" carries on as "TV #1" when a second is plugged in, and
+    back. "DELL (2)" alone is its family's first too: that number can follow the plug order."""
+    base, hash_, n = label.rpartition(" #")
+    return (_family(base) if hash_ and n == "1" else label if hash_ else _family(label))
+
+
+def labels(scr: list[Screen], held: dict[int, str] | None = None) -> list[str]:
+    """What to write in the config for each screen, in `scr`'s order: its
+    name when that is enough, and otherwise its family and ordinal. `match`
+    finds each screen by its own label, always.
+
+    **`held` (SC3b), a running app's:** each display's `memory` by its `Screen.uid`, kept and
+    updated here. A display keeps its number for the run, wherever a twin plugs in or whichever
+    goes: across the desk says nothing of which is which once one comes or goes, and the window
+    stays on the display it's on. So the one that goes leaves its number free, and one that
+    comes takes its old number if the id says it's the same, else the lowest free. With
+    nothing in `held`, the first call, these are the labels by arrangement. A restart goes back to
+    those, so numbers kept this way can swap then: `differs` says when, for the panel."""
+    out = []
+    for i, s in enumerate(scr):
+        fam = _family(s.name)
+        same = _same(fam, scr)
+        if len(same) > 1:
+            out.append(f"{fam} #{same.index(i) + 1}")
+        else:
+            out.append(s.name if match(s.name, scr) == i else f"{fam} #1")
+    if held is None or not all(s.uid for s in scr):
+        return out
+    for fam in {_family(s.name) for s in scr}:
+        same = _same(fam, scr)
+        numbers: dict[int, int] = {}            # index in `scr` → its number in the family
+        for i in same:
+            n = _number(held.get(scr[i].uid), fam)
+            if n is not None and n not in numbers.values():
+                numbers[i] = n
+        free = (n for n in range(1, 2 * len(same) + len(held) + 2) if n not in numbers.values())
+        for i in same:
+            if i not in numbers:
+                numbers[i] = next(free)
+            if len(same) > 1 or numbers[i] > 1:
+                out[i] = f"{fam} #{numbers[i]}"
+    now = {s.uid: memory(out[i]) for i, s in enumerate(scr)}
+    # a number taken is no longer held for one that went: back, it takes a free one, so no two
+    # connected displays can ever claim one number and swap jobs by list order
+    for uid in [u for u, key in held.items() if key in now.values() and u not in now]:
+        del held[uid]
+    held.update(now)
+    return out
+
+
+def _number(key: str | None, fam: str) -> int | None:
+    """Which of family `fam` the memory `key` is; None when it's no memory of that family."""
+    if key is None:
+        return None
+    n = _ordinal(key)
+    if n is not None and n[0] == fam:
+        return n[1]
+    return 1 if key == fam else None
+
+
+def differs(scr: list[Screen], held: dict[int, str]) -> list[str]:
+    """The labels `held` kept that a restart would give another display, across the desk."""
+    now, plain = labels(scr, dict(held)), labels(scr)
+    return [now[i] for i in arranged(scr) if memory(now[i]) != memory(plain[i])]
+
+
+def resolve(asked: str, scr: list[Screen]) -> tuple[int, str]:
+    """`match`, and what to say about it: (index, words or ""). The words
+    finish a sentence that begins with the config key and its value. The
+    one place a name becomes an index: each value is resolved once."""
+    want = asked.strip()
+    i = match(want, scr)
+    tags = labels(scr)
+    n = _ordinal(want)
+    many = _same(n[0], scr) if n else []
+    if i < 0:
+        have = f"connected: {', '.join(tags) or 'none'}"
+        if many:
+            return -1, f"asks for number {n[1]} of {n[0]!r}, and {len(many)} connected ({have})"
+        return -1, f"matches no screen ({have})"
+    if n and many == [i]:
+        # a twin alone: the left of two and the right of two look the same
+        return i, (f"asks for number 1 of {n[0]!r}, and only one is connected, which may be "
+                   f"either of a pair — using it; if there is only ever one, write {tags[i]!r}")
+    same = _same(_family(want), scr)
+    if len(same) > 1:
+        each = ", ".join(tags[k] for k in same)
+        if sum(s.name == want for s in scr) != 1:
+            return i, f"is {len(same)} screens ({each}) — using the first; say which to be sure"
+        if _family(want) != want:
+            return i, (f"is the Mac's own number for one of {len(same)} screens ({each}), and it "
+                       f"can follow the plug order — say {tags[i]!r} to be sure")
+    return i, ""
+
+
+def settle(output: dict, scr: list[Screen]) -> list[str]:
+    """`[output] monitor` and `control_monitor` as indices, where they are
+    names: once, at the launch, in place, with the notes to show."""
+    notes = []
+    for key in ("monitor", "control_monitor"):
+        name = named(output.get(key))
+        if name:
+            output[key], said = resolve(name, scr)
+            if said:
+                tail = " — using the last position" if output[key] < 0 else ""
+                notes.append(f"config: [output] {key} = {name!r} {said}{tail}")
+    return notes
+
+
+def kept(key: str, monitor) -> tuple[int | str, str]:
+    """A config value as `config.load` keeps it, before any window system:
+    a name stays a name for the launch to `resolve`, and anything else is
+    `read`."""
+    name = named(monitor)
+    return (name, "") if name else read(key, monitor)
+
+
 def read(key: str, monitor) -> tuple[int, str]:
-    """A config value as a screen index: (index, note or ""). The index
+    """A config number as a screen index: (index, note or ""). The index
     is what `int()` reads of it, and −1 for anything under −1; a value
-    `int()` will not read ("left", None, a NaN) is −1 with the note. The
-    one reading of ``[output] monitor`` / ``control_monitor`` (plan 16
-    WP7) — `config.load`, `place` below and `app._make_output` all go
-    through it, so a window's screen and the one fullscreen covers agree.
+    `int()` will not read (None, a NaN, a name nobody resolved) is −1 with
+    the note. The one reading of ``[output] monitor`` / ``control_monitor``
+    (plan 16 WP7) — `config.load`, `place` below and `app._make_output` all
+    go through it, so a window's screen and the one fullscreen covers agree.
     It never raises. Whether a screen has that index is `place`'s to say."""
     try:
         return max(int(monitor), -1), ""
@@ -265,7 +549,7 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
     """Where one window opens: (rect, note or "").
 
     `kind` is "render" or "control"; `monitor` is that window's config
-    index (−1: no say); `remembered` is its entry from the file, or None.
+    index (−1: no say; `settle` has made any name one); `remembered` is its entry from the file, or None.
     `what` names the window in the notes in place of `kind` ("output 2",
     plan 21: one call per render output); it changes nothing else.
 

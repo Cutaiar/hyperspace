@@ -24,6 +24,17 @@ Contract for hot classes:
   - a changed __init__ does NOT re-run on live instances; attributes it
     would have added are missing until restart (the frame guard in app.py
     catches the resulting error and shows it instead of crashing)
+  - a hot class adds nothing to the layout over another hot class: a live
+    instance can't be re-classed once the base was reloaded ("object layout
+    differs", row 802). So it declares no slots over one, and it isn't slotless
+    over one that declares slots (it would gain a __dict__; `__slots__ = ()` is
+    fine). A class that needs slots there takes them from a base in cold
+    `hot_slots.py`, as the deck's views do; slots directly over `object` or a
+    cold base re-class while the names stay the same.
+    tests/test_hot_reload_app.py holds this on every class in a hot module.
+  - a target that refuses (that error, or a hook that raises) never stands in
+    the way of the others: all are re-classed that can be, `error` names every
+    one that couldn't, and the next save tries them again.
   - an Enum defined in a reloaded module keeps its identity: the class the
     process first built is put back after the re-execution, so a live
     object's member still `is` the module's (params.Kind was the case that
@@ -34,7 +45,7 @@ A watched module that was never imported (an optional adapter behind its
 device entry — dream, bridge, midi) is skipped, not an error.
 
 Data is watched the same way: `watchers` are objects with a ``poll(now)``
-(the preset library) that get polled on the same cadence, so a preset
+(the loadable patch library) that get polled on the same cadence, so a loadable patch
 JSON saved in an editor lands like a module save does.
 """
 
@@ -55,11 +66,11 @@ from pathlib import Path
 # holds both rules against the package's own imports).
 MODULES = (
     "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media.thumbs", "media.folder", "media",
-    "pointer", "players", "analysis", "tapers", "motion", "media.transport", "media.mixer", "media.channels", "modifiers", "palettecompat", "groupwords", "undo", "placement", "geometry", "bands", "analyzer", "audio", "tempo", "modbank", "lfo", "envelope", "sequencer", "glsl", "masks", "patterns",
-    "lookback", "dream", "fx", "ghost", "outputs", "replay", "view", "field", "graph", "graphmigrate", "media_tex", "poi_guide", "render", "params", "hold", "library", "control", "config",
-    "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "modgraph", "seq_page", "routing_sources", "routing", "nodemode", "patches", "preset", "learn", "deck", "midi", "bridge",
-    "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "osc", "graphview", "ui_presets", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
-    "ui_lfo", "ui_media", "ui_desk", "ui_pad_lab", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_players", "ui_pane", "ui_graph", "ui_seq", "ui",
+    "pointer", "players", "analysis", "tapers", "motion", "media.transport", "media.mixer", "media.channels", "modifiers", "palettecompat", "groupwords", "undo", "placement", "geometry", "world", "grip", "bands", "analyzer", "audio", "tempo", "modbank", "lfo", "envelope", "sequencer", "glsl", "masks", "patterns",
+    "lookback", "dream", "fx", "handmesh", "ghost", "outputs", "pacing", "replay", "view", "field", "graph", "routing_sources", "graphmigrate", "media_tex", "poi_guide", "render", "params", "library", "playlist", "control", "config",
+    "overlay", "pads.models", "pads.gesture", "poi", "totem", "pads.sony", "pads.nintendo", "pads.hid", "pads", "gamepad", "apc40", "generic", "sharedfile", "devicelist", "displays", "hotplug", "modgraph", "seq_page", "routing", "nodemode", "patches", "loadable", "learn", "deck", "midiports", "midi", "bridge",
+    "hands.signal", "hands.tape", "hands.room", "hands.core", "hands", "devices", "media.live", "media.panel", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "node_desk", "osc", "graphview", "ui_browse", "ui_loadable", "ui_lookback", "ui_bands", "ui_feel", "ui_routing", "ui_fx", "ui_patterns",
+    "ui_lfo", "ui_media", "ui_diagram", "ui_desk", "ui_pad_lab", "ui_pad_nvg", "ui_pad_views", "ui_pad", "hands.panel", "ui_players", "ui_displays", "ui_playlist", "dkit.tokens", "dkit.ease", "dkit.icons", "dkit.rect", "dkit.flex", "dkit.tree", "dkit.box", "dkit.draw", "dkit.uictx", "dkit.wheel", "dkit.comp_button", "dkit.interact", "dkit.menu", "dkit.combobox_tokens", "dkit.combobox_items", "dkit.combobox_select", "dkit.combobox_measure", "dkit.layer", "dkit.comp_combobox", "dkit.comp_command", "dkit.comp_context_menu", "dkit", "ui_kit", "ui_fields", "ui_camera", "ui_view", "ui_pane", "ui_switcher", "ui_strip", "ui_graph", "ui_seq", "ui",
 )
 # (plan 39 T2: `masks` sits after `glsl`, whose QUAD_VS it binds, and before
 # `render`, which binds its MaskPasses. Plan 39 T4: `segment` is left out —
@@ -188,19 +199,28 @@ class HotReloader:
             self.error = f"{type(e).__name__}: {e}"[:160]
             return False
 
+        refused: dict[str, int] = {}    # what each said → how many objects said it
         try:
             for obj, mod, clsname in self.targets():
-                newcls = getattr(sys.modules[f"{self.package}.{mod}"], clsname)
-                if type(obj) is newcls:
-                    continue  # module untouched this round
-                obj.__class__ = newcls
-                if dataclasses.is_dataclass(newcls):
-                    _backfill_dataclass(obj)
-                hook = getattr(obj, "on_reload", None)
-                if hook is not None:
-                    hook()
-        except Exception as e:  # noqa: BLE001
+                try:
+                    newcls = getattr(sys.modules[f"{self.package}.{mod}"], clsname)
+                    if type(obj) is newcls:
+                        continue  # module untouched this round
+                    obj.__class__ = newcls
+                    if dataclasses.is_dataclass(newcls):
+                        _backfill_dataclass(obj)
+                    hook = getattr(obj, "on_reload", None)
+                    if hook is not None:
+                        hook()
+                except Exception as e:  # noqa: BLE001 — one object must not strand the rest
+                    said = f"{mod}.{clsname}: {type(e).__name__}: {e}"
+                    refused[said] = refused.get(said, 0) + 1
+        except Exception as e:  # noqa: BLE001 — the target list itself
             self.error = f"swap: {type(e).__name__}: {e}"[:160]
+            return False
+        if refused:
+            self.error = "swap: " + "; ".join(
+                said if n == 1 else f"{said} (x{n})" for said, n in refused.items())
             return False
 
         for note in notes:

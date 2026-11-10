@@ -6,7 +6,7 @@ air, and it stays until someone moves the player: `deck.MetaController` turns
 a duty into a `Deck` and moves the pointers of what the player holds.
 
 **A patch names a player, never a device.** A row's qualifier is the player's:
-bare (``pad:A``, ``axis:LX``) is player 1, ``axis@p2:LX`` is player 2, with no
+bare (``pad:S``, ``axis:LX``) is player 1, ``axis@p2:LX`` is player 2, with no
 file change (plan 27's roles were the seam). A player's first controller of a
 repeatable kind publishes under that name (`devices.qualifiers_of`); a second
 of the same kind keeps its role as its address, so no two feed one lane. A
@@ -21,7 +21,7 @@ controllers ever collide on a name, whatever is registered.
 **Who holds what, unless told otherwise:** a role ``p2``, ``p3``, ``p4`` is
 that player's, every other role player 1's, and a repeatable kind's primary
 (`primaries`, told by the device registry) is player 1's whatever its role, so
-a rig whose first pad is called ``p2`` reads the bare rows as it always did.
+an install whose first pad is called ``p2`` reads the bare rows as it always did.
 
 **Persistence.** The meta controller's, on this Mac: ``<home>/players.json``
 beside ``bindings.json`` (`library_home()`, never the shared library, never a
@@ -46,6 +46,8 @@ SCHEMA = "players/1"
 NUMBERS = (1, 2, 3, 4)
 _ROLE = re.compile(r"p([1-4])")
 NAMES = frozenset(f"p{n}" for n in NUMBERS[1:])     # what a row calls players 2, 3, 4
+# where a controller is, for an undo of a move (`DeviceRegistry.presence`, row 800)
+THERE, UNPLUGGED, UNLISTED = "there", "unplugged", "unlisted"
 
 
 class Duty(StrEnum):
@@ -82,7 +84,7 @@ class Player:
 
 class Players:
     """The four players, who holds what, and the file that remembers it.
-    `path` None: nothing is written (the tests', and a rig with no home)."""
+    `path` None: nothing is written (the tests', and a test rig with no home)."""
 
     def __init__(self, path: Path | None = None, notes: list[str] | None = None):
         self.path = Path(path) if path is not None else None
@@ -155,6 +157,22 @@ class Players:
         if self.held.get(role) != number:
             self.held[role] = number
             self.save()
+
+    def rename(self, old: str, new: str) -> None:
+        """The controller `old` is called `new` from now on (`devicelist`, a name the
+        other Mac took first): who holds it, remembered, and `old` is nobody's."""
+        if old in self.held:
+            self.held[new] = self.held.pop(old)
+            self.save()
+
+    def put(self, doc: dict) -> None:
+        """Back to `to_json`'s `doc`, remembered: an undo's (row 740).
+        `MetaController.put_players` also moves the pointers: call that."""
+        duties = doc["duties"]
+        for p in self:
+            p.duty = Duty(duties.get(str(p.number), Duty.ON_AIR))
+        self.held = dict(doc["controllers"])
+        self.save()
 
     # ---- the file ----
 

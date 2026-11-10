@@ -1,0 +1,153 @@
+# Wave 5 of the post-show plan: the opening prompt for the orchestrating session
+
+Paste everything below the line into a fresh Claude Code session opened in
+`/Users/dallman/antigrav_repos/hyperspace`. It is written for the session that orchestrates: the
+orchestrator reads, briefs, reviews and merges; builders build. Planned 2026-11-06.
+
+---
+
+You are orchestrating **wave 5** of the Hyperspace post-show plan: the cleanup, the rig's last piece, and
+cheaper changes. The plan is `hyperspace-python/docs/plans/58-wave-5.md`. The Python app is
+`hyperspace-python/`. Enter a scratch worktree before anything else (EnterWorktree); never run reviews or
+checkouts in the owner's checkout.
+
+## Three tracks: start now
+
+**The owner, 2026-11-06: what matters most is getting wave 5 running and accomplishing its spirit.** The rename is merged, so only the cleanup truly needs the migration. Run these side by side, and don't wait on one for another:
+
+- **Track W5, wave 5's work, starts now:** screens, hot-plug, controllers, leak fixes, words, types. Nothing here needs the migration.
+- **Track W4, the end of wave 4, as its gates open:** you orchestrate it too.
+  - **N1 #396 + #397:** reviewed once, with the owner's ruling on routes being built on top: check their PR bodies, give the new work a review, `--all`, then merge when the owner says hand checks 506–509 passed.
+  - **#365 Joy-Con:** another session's; it lands when the owner has run check 520–521. Then N2a + N2b (`53-node-mode.md`; `PadDevice._quiet_stick` and `steer` stand down on axes node mode holds), then NSEW.
+  - **WORDS, starts now:** "session" and "rig" leave what a person reads (155 preset, 30 session, 19 rig strings, listed in #393's body). "Preset" becomes "patch" in the panel **with the migration**, when the folder renames. Say each one as what it means: "the rig's cable" is the bus cable, "not in this rig" is "not on this Mac".
+  - **Row 740:** player moves on the meta stack; the words pass, row 668.
+  - **The one migration,** `57-format-lane.md` §7 and §7a: after NSEW; the owner runs it, both Macs closed.
+- **Track CL, the cleanup, only after the gate:** CL2, CL1, CL3, CL4. **The gate: the owner says the migration ran and that both Macs have opened the new library.** Only the owner can say this, and they coordinate with Dylan: ask, and never assume it. Removing old-file code before then would strand a Mac that hasn't updated.
+
+Nothing in W5 may change an existing saved format before the migration. `output.bg`, `.alpha` and `tempo.nudge` live in show files today, so LY2's saved half and SC2's move of them wait for the migration; everything else in those items goes now. If W5 and the migration collide in `library.py`, the migration wins.
+
+## Read first, in this order
+
+1. **"The owner's answers" below: they overrule every other document.**
+2. `docs/plans/58-wave-5.md`, all of it; its §9 corrects §2 and §4 against `main`. Live state: `tier-2-3-build-order.md`, "Where we are".
+3. `docs/GLOSSARY.md`, signed 2026-11-06. New code uses its words. After SEM, the code does too.
+4. `docs/plans/wave-4-session-prompt.md`: "The owner's answers" (ten rounds), which still hold, and "Lessons
+   from wave 3".
+5. `docs/plans/57-format-lane.md` for what the migration did. `REVIEW.md`, `docs/ENGINEERING.md` §15–§16,
+   `docs/ARCHITECTURE.md` §3–§4.
+6. Your memory: `wave-4-run`, `wave-5-plan`, `all-waves-before-show`, `no-old-schema-support`.
+
+## The owner's concept, in brief
+
+- **Two layers only.** The **meta controller** is everything set or tuned for a performance or install. The
+  **patch** is where anything can change anything; a **loadable patch** has no wires coming out. `Deck` is a
+  loaded patch inside the meta controller; exactly two, on air and off air.
+- **Absolute: no loadable patch can affect another.** Any path that does is a bug. A patch wired into its host
+  drives it; that is what its wires are for.
+- **Every planned wave lands before the next show. The owner will not change their mind; never propose holding
+  work for after it, and don't re-raise show timing.**
+- The owner judges recommendations quickly: give a recommendation with each question, and accept "as
+  recommended". Be plain and short with them, and use no project jargon in a question.
+
+## The owner's answers
+
+Given 2026-11-06. These overrule every other document.
+
+- **Screens:** "It needs to be extremely easy for us to just quickly set up the screens for the thing that we're doing. I
+  don't think we need a whole configuration layer called venues for it." The output tab "shouldn't be a dropdown. Each
+  connected display should get its own row there, and you should be able to choose what targets that display, like the
+  control window or any of our renders."
+- **"Share the screen memory between Macs. We want to make this thing as interoperable as possible."**
+- **Hot-plug is required:** if a display "gets accidentally unplugged and then plugged back in, we cannot restart the app in
+  order to pick up that change. It has to be hot-pluggable."
+- **A new controller** waits until it is dragged to a player.
+- **Video sound** reaching the off-air look through the analyzer is accepted; say so on the toggle.
+- **Old files:** the reader goes only once the owner says both Macs have opened the new library. They coordinate that.
+- **Trash:** "Just delete the trash items." Done in the migration, not converted.
+- **Scope is right:** no new looks or controllers. **`dkit` is orthogonal:** "we don't need to worry about that", so no UI
+  preparation in this wave.
+- **Merge on green holds** for this wave.
+
+- **Patches:** the panel says patches. "Session and rig need to go away. Presets need to go away." Timing as Track W4 says.
+- **Node mode:** LFO and audio routes may be overwritten, "as long as they come back when you disengage node mode". SHIFT reaches the meta layer. Knobs fill before faders. Dylan cares about the clip launch buttons and the meta controls ("where's the master brightness fader? how do I change the shape?"), not the layout of knobs and faders, so node mode never takes those.
+- **Playlist:** repeated ⌘Z may reach a look it loaded. **A cart starts by itself after launch:** one key in the install file, once `installs/` exists: add it as SM6, after the migration. Dwell runs from fade start to fade start.
+- **Saves carry the pad dial readings,** even at their launch values.
+- **A display has one target, and a target may go to several displays.**
+- **Rows pending the owner were bulk accepted,** and marked so. All 17 face patterns stay; SEND B stays FINE; creating a pair
+  over an existing mapping asks (wave 4).
+
+## Synopsis
+
+Delete what only existed to read old files. Close the last ways one look reaches another. Give every display its own row,
+remembered by name and shared by both Macs, surviving an unplug with no restart. Set up controllers in the app. Stop doc
+conflicts, and stop the type errors growing.
+
+## The work
+
+`58-wave-5.md` §4 has every item, with its files, size, dependency and proof.
+
+| Order | Track W5, now |
+| --- | --- |
+| 1 | H2, SM1 (H1 is merged); SC1; LY1, LY2's unsaved half; SM2, SM3; TY1, TY2 |
+| 2 | **SC3a, alone on the render loop, after a short spike.** If the spike fails, stop and tell the owner: hot-plug is required |
+| 3 | SC2, CT1, LY3, SM4, SM5 |
+| 4 | SC3b; the hand check with a real unplug goes to the owner |
+| 5 | TY3, then TY4, last, so they annotate what survived |
+| After the gate | CL2, alone among anything touching tests' builders; CL1 once the owner's dry run is clean; CL3, CL4; then RT1, after SC3b's unplug and CT1 |
+
+**Numbers:** plan 58 is this; rows from 770, checks from 600, groups from DA. Pre-assign each item's block when
+you brief it, as parallel builders collide. If wave 4's remainder ran past those, take the next free.
+
+**Where the plan may be wrong:** it was read before wave 4's remainder landed. Before stage 1, spend one
+read-only agent on re-reading §4's file and line references against `main`. SEM renames most of them. Correct the
+plan in the same PR as the first item, and tell the owner only what changes scope.
+
+## How to run it
+
+- **One builder per item,** on Opus (`model: "opus"`), `isolation: "worktree"`, `run_in_background: true`. Give
+  each the shared brief, `docs/plans/wave-5-builder-brief.md`, and its item, the files it owns, its numbers and **this
+  session's commit trailer lines**. Do not use Fable for builders.
+- **Every PR gets an independent review** before its merge: `/code-review medium <PR>` from your scratch worktree,
+  one at a time, findings sent to the same builder. A `low` second pass when fixes were large; a third when the
+  second found real bugs. Reviewers are sometimes wrong; builders verify, and a disproved finding gets a test, not
+  a change.
+- **A review that returns nothing is not a pass.** On 2026-11-06 a run came back empty in four seconds with one tool
+  call; the replacement found four real problems. Check it read the diff. If not, brief an independent agent with
+  an explicit list.
+- **Testing:** builders run the fast tier only, through `~/.claude/handoffs/wave4/fast-tier.sh` (two machine-wide
+  slots), or let CI be their last check once H2 lands. You run `--all` serially, `fast-tier.sh --all -rs`, on a PR's
+  head before merging anything that touches the render path, the loader or `graphmigrate`. **Goldens must not move
+  anywhere in this wave.** A golden that moves is a bug, or a stop-and-ask.
+- **A keeper agent** in its own worktree, or the PR's own builder, does each queue step for the rest of the wave,
+  as in wave 4. Doc tails merge on their own in a local merge only: GitHub's server doesn't honour the attribute
+  (retested 2026-11-06, plan 58 §3), so a PR showing doc conflicts still needs main merged locally and pushed,
+  which union then resolves with no hand work. Keep `tools/sort_register.py`.
+- **Merging:** the owner authorised merging on green for wave 5, but for CL1, which waits for their dry run, RT1, which waits for the unplug, and N1, which waits for 506–509. `main` has no required checks, so `--auto` merges at once: wait first with
+  `~/.claude/handoffs/wave4/wait-green.sh <pr> <head>`, or its replacement from H2, then call `gh pr ready` and `gh pr merge <pr>
+  --squash --delete-branch --body-file <file>` directly, with the review and test counts and the trailer lines in the
+  body. A wrapper around `gh pr merge` gets refused. If `gh` then errors that `main` is used by a worktree, the merge
+  still happened: check with `gh pr view`, and delete the remote branch.
+- **Keep git commands plain:** a worktree-isolated session refuses compound commands that mix `cd` or variables with
+  git. Run them singly.
+- **Don't run tools against `~/Hyperspace` or `/Users/dallman/My Drive/Hyperspace`,** except read-only counts. The
+  owner runs migrations and the dry run in CL1. `.github/workflows/` needs the owner's token, so TY1's CI step goes to
+  them as a file to apply.
+- **A red run twice on one head isn't a flake, and a green run isn't a fix.** Report failures with their output, and
+  skipped steps as skipped.
+
+## Reporting
+
+**Keep the live status current:** `tier-2-3-build-order.md`, "Where we are", has a row per item. Update it whenever an item changes state.
+
+Nothing in wave 4 had been tried on real hardware when this was written, and CL1 is the point of no return for
+old files. SC3b can only be proved by unplugging a real display, so nothing about hot-plug is done until that has happened. Say what's been tried at the machine whenever it matters. CL1's PR body must say in its first line
+that old files stop opening, and what to do if a Mac hasn't updated.
+
+**In your first status message to the owner,** ask for the per-face render check (`58-wave-5.md` §4), and list §8's "Assumed unless the owner objects", so they can object.
+
+**Dylan's Mac:** the steps are `58-wave-5.md` §2a. Give them to the owner when the migration nears.
+
+## After the last merge
+
+Both Macs pull, `uv sync` and restart. List the wave's hand checks. Then write up what comes next and stop: don't
+plan further without the owner.

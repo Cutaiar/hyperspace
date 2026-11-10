@@ -5,7 +5,7 @@ shows_line`), offers the graph's pictures in a combo (`graphview.
 picture_sources`, `picture_choices`) whose pick is a GRAPH edit
 (`graphview.set_picture`: `render_wire` into `output.N.image`, `ground`
 for "nothing", the override removed for "as All outputs"), keeps the two
-mutes as the window's own (never the preset), and writes "hands through the
+mutes as the window's own (never the loadable patch), and writes "hands through the
 effects" as wiring (`graphview.set_through`: `graphmigrate.through_wires`,
 plan 36 T1 — only the wires it names). Every edit lands through GRAPH's `_land`: one
 undo step, the same refusals, and an edit put back saves in the lowest
@@ -115,10 +115,10 @@ def test_output_offers_a_channel_with_a_source_and_picking_wires_it(tmp_path):
         "composite", "channel.b"]
     rig, e, pushed = free_rig(tmp_path, *_pairs(DEFAULT), nodes=DEFAULT["nodes"])
     assert graphview.set_picture(e, "output.2.image", "channel.b") is None
-    assert G.Wire("channel.b", "output.2.image") in rig.presets.graph.spec.wires
-    assert shows_line(rig.presets.graph.spec, 2) == "shows: Channel B" and len(pushed) == 1
+    assert G.Wire("channel.b", "output.2.image") in rig.loaded_patch.graph.spec.wires
+    assert shows_line(rig.loaded_patch.graph.spec, 2) == "shows: Channel B" and len(pushed) == 1
     assert graphview.set_picture(e, "output.all.image", "channel.c") is None
-    assert G.Wire("channel.c", "output.all.image") in rig.presets.graph.spec.wires
+    assert G.Wire("channel.c", "output.all.image") in rig.loaded_patch.graph.spec.wires
     assert len(pushed) == 2
 
 
@@ -132,33 +132,33 @@ def test_picking_a_picture_wires_the_output(tmp_path):
     section = {**DEFAULT, "wires": [{"from": "channel.a", "to": "shape.faces"},
                                     *(w for w in DEFAULT["wires"] if w["to"] != "shape.faces")]}
     rig, e, pushed = free_rig(tmp_path, *_pairs(section), nodes=section["nodes"], undo_rig=True)
-    before = rig.presets.graph.spec.to_json()
+    before = rig.loaded_patch.graph.spec.to_json()
     assert graphview.set_picture(e, "output.2.image", "channel.a") is None
-    spec = rig.presets.graph.spec
+    spec = rig.loaded_patch.graph.spec
     assert G.Wire("channel.a", "output.2.image") in spec.wires and len(pushed) == 1
     assert graphview.picture_now(spec, "output.2.image") == "channel.a"
     assert shows_line(spec, 2) == "shows: Channel A"
     settle(rig)
     assert graphview.set_picture(e, "output.2.image", "nothing") is None
-    assert G.Wire("ground", "output.2.image") in rig.presets.graph.spec.wires
+    assert G.Wire("ground", "output.2.image") in rig.loaded_patch.graph.spec.wires
     settle(rig)
     assert graphview.set_picture(e, "output.2.image", "as All outputs") is None
-    assert rig.presets.graph.spec.to_json() == before and len(pushed) == 3
+    assert rig.loaded_patch.graph.spec.to_json() == before and len(pushed) == 3
     settle(rig)
     # (a pick that is so already lands nothing)
     assert graphview.set_picture(e, "output.2.image", "as All outputs") is None
     assert e.said == "already so" and len(pushed) == 3
     assert rig.undo.undo()
-    assert G.Wire("ground", "output.2.image") in rig.presets.graph.spec.wires
+    assert G.Wire("ground", "output.2.image") in rig.loaded_patch.graph.spec.wires
     assert rig.undo.undo()
-    assert G.Wire("channel.a", "output.2.image") in rig.presets.graph.spec.wires
+    assert G.Wire("channel.a", "output.2.image") in rig.loaded_patch.graph.spec.wires
     assert rig.undo.undo()
-    assert rig.presets.graph.spec.to_json() == before
+    assert rig.loaded_patch.graph.spec.to_json() == before
     # the same refusals GRAPH gives: a picture is no geometry
     assert graphview.set_picture(e, "output.2.image", "shape") is not None
     # All outputs' block: "nothing" takes its picture's wire away
     assert graphview.set_picture(e, "output.all.image", "nothing") is None
-    assert graphview.picture_now(rig.presets.graph.spec, "output.all.image") == "nothing"
+    assert graphview.picture_now(rig.loaded_patch.graph.spec, "output.all.image") == "nothing"
 
 
 def test_through_writes_the_wiring(tmp_path):
@@ -168,7 +168,7 @@ def test_through_writes_the_wiring(tmp_path):
     the section its former `to_json()` again. Plan 36 T1: a picture picked
     while through is that one wire — the chain stays, faint."""
     rig, e, pushed = free_rig(tmp_path, *_pairs(ACID), nodes=ACID["nodes"])
-    gs = rig.presets.graph
+    gs = rig.loaded_patch.graph
     before = gs.spec.to_json()
     want = M.through_wires(G.read_graph(before), 2)
     assert graphview.set_through(e, 2, True) is None and len(pushed) == 1
@@ -207,28 +207,28 @@ def test_through_needs_a_hands_layer_over_all_outputs(tmp_path):
 
 
 def test_a_picture_put_back_saves_the_untouched_frame(tmp_path):
-    """A corpus preset, a picture picked for output 2 and put back — the
-    frame is the migrated one again, so the save is the untouched preset's
+    """A corpus loadable patch, a picture picked for output 2 and put back — the
+    frame is the migrated one again, so the save is the untouched loadable patch's
     (row 394: `/6` either way, and the same graph)."""
     from test_plan31_wiring import make_app
 
     app = make_app(seed(tmp_path))
-    app.lib.load("presets", "TRIP")
-    gs = app.presets.graph
-    untouched = app.presets.document("TRIP")
+    app.lib.load("loadable", "TRIP")
+    gs = app.loaded_patch.graph
+    untouched = app.loaded_patch.document("TRIP")
     assert untouched["schema"] == M.SAVE_SCHEMA
     e = graphview.Edit(graph=gs, push=lambda label: None)
     assert graphview.set_picture(e, "output.2.image", "scene") is None
     assert G.Wire("scene", "output.2.image") in gs.spec.wires    # (plan 28's words: /2)
     assert graphview.set_picture(e, "output.2.image", "nothing") is None
-    edited = app.presets.document("TRIP")
+    edited = app.loaded_patch.document("TRIP")
     assert edited["schema"] == M.SAVE_SCHEMA and edited["graph"] != untouched["graph"]
     assert graphview.set_picture(e, "output.2.image", "as All outputs") is None
-    assert app.presets.document("TRIP") == untouched
+    assert app.loaded_patch.document("TRIP") == untouched
     assert graphview.set_through(e, 2, True) is None      # (TRIP lays All outputs' hands)
-    assert app.presets.document("TRIP")["graph"] != untouched["graph"]
+    assert app.loaded_patch.document("TRIP")["graph"] != untouched["graph"]
     assert graphview.set_through(e, 2, False) is None
-    assert app.presets.document("TRIP") == untouched
+    assert app.loaded_patch.document("TRIP") == untouched
 
 
 def test_open_on_graph_selects_the_window(tmp_path):
@@ -248,24 +248,24 @@ def test_open_on_graph_selects_the_window(tmp_path):
         assert "select_node" not in ui_graph._state(rig.panel)
 
 
-def test_the_mutes_are_not_the_preset(tmp_path, monkeypatch):
+def test_the_mutes_are_not_the_loadable(tmp_path, monkeypatch):
     """Row 374: `output.2.scene` ("picture") is the window's mute — toggling
-    it leaves the preset clean and its section as it was. The page draws
+    it leaves the loadable patch clean and its section as it was. The page draws
     each window's combo, its two mutes and "hands through the effects"."""
-    from test_presets import put
+    from test_loadable import put
     from test_ui_shell import _output_page, build_rig
 
-    from hyperspace.library import PRESETS
+    from hyperspace.library import LOADABLE
 
     with build_rig(tmp_path) as rig:
         put(rig.lib.home, "Free", schema="hyperspace.preset/6", graph=ACID)
-        rig.lib.load(PRESETS, "Free")
-        gs = rig.lib.presets.graph
+        rig.lib.load(LOADABLE, "Free")
+        gs = rig.lib.loaded_patch.graph
         before = gs.spec.to_json()
-        assert not rig.lib.is_dirty(PRESETS)
+        assert not rig.lib.is_dirty(LOADABLE)
         rig.reg["output.2.scene"].set(False)
-        assert not rig.lib.is_dirty(PRESETS) and gs.spec.to_json() == before
+        assert not rig.lib.is_dirty(LOADABLE) and gs.spec.to_json() == before
         drawn, _ = _output_page(rig, monkeypatch)
         assert drawn.count("picture") == 4 and drawn.count("hands through the effects") == 4
         assert rig.reg["output.2.scene"].value is False
-        assert not rig.lib.is_dirty(PRESETS) and gs.spec.to_json() == before
+        assert not rig.lib.is_dirty(LOADABLE) and gs.spec.to_json() == before

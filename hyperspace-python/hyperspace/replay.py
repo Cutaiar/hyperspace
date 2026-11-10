@@ -18,8 +18,9 @@ current window's list; it opens no child). So:
 - **dropped**: everything else — the details side pane (a child window,
   `…/##graph.side_…`), every popup, menu and tooltip (their own windows),
   the desk, and the viewport's background and foreground
-  lists (the held PROJECTOR inset is on the foreground list);
-- **cut out**: the side pane's decorations — its ground, border and
+  lists;
+- **cut out**: the deck off air's red frame and ON AIR inset (`ui_graph._monitor`), and
+  the side pane's decorations — its ground, border and
   scrollbar — which imgui draws on the *parent's* list inside
   `begin_child` (one draw call fewer, since 1.71). The page notes the
   indices of its list they took (`omit`, the fifth of `Panel.canvas_px`)

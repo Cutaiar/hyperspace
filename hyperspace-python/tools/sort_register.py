@@ -10,18 +10,24 @@ import sys
 from itertools import pairwise
 from pathlib import Path
 
-first = int(sys.argv[1]) if len(sys.argv) > 1 else 544
-path = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).parents[1] / "docs/DECISION-REGISTER.md")
-lines, num = path.read_text().split("\n"), lambda s: int(re.match(r"\D*(\d+)", s).group(1))
-numbered = lambda s: re.match(r"### \d", s) is not None
-a = next(i for i, s in enumerate(lines) if re.match(r"\| \d", s))
-b = next(i for i in range(a, len(lines)) if not re.match(r"\| \d", lines[i]))
-lines[a:b] = sorted(lines[a:b], key=num)
-heads = [i for i, s in enumerate(lines) if numbered(s)]
-heads = heads[next(k for k, i in enumerate(heads) if num(lines[i]) >= first):]
-back = [next((j for j in range(h - 1, -1, -1) if lines[j].startswith("## ") or numbered(lines[j])), h)
-        for h in heads]
-end = next((j for j in range(heads[-1] + 1, len(lines)) if lines[j].startswith("## ")), len(lines))
-cuts = [c if lines[c].startswith("## ") else h for c, h in zip(back, heads)] + [end]
-chunks = sorted((lines[c:d] for c, d in pairwise(cuts)), key=lambda ch: num(next(filter(numbered, ch))))
-path.write_text("\n".join(lines[:cuts[0]] + [s for ch in chunks for s in ch] + lines[end:]))
+
+def main() -> None:
+    first = int(sys.argv[1]) if len(sys.argv) > 1 else 544
+    path = Path(sys.argv[2] if len(sys.argv) > 2 else Path(__file__).parents[1] / "docs/DECISION-REGISTER.md")
+    lines, num = path.read_text().split("\n"), lambda s: int(re.match(r"\D*(\d+)", s).group(1))
+    numbered = lambda s: re.match(r"### \d", s) is not None
+    a = next(i for i, s in enumerate(lines) if re.match(r"\| \d", s))
+    b = next(i for i in range(a, len(lines)) if not re.match(r"\| \d", lines[i]))
+    lines[a:b] = sorted(lines[a:b], key=num)
+    heads = [i for i, s in enumerate(lines) if numbered(s)]
+    heads = heads[next(k for k, i in enumerate(heads) if num(lines[i]) >= first):]
+    back = [next((j for j in range(h - 1, -1, -1) if lines[j].startswith("## ") or numbered(lines[j])), h)
+            for h in heads]
+    end = next((j for j in range(heads[-1] + 1, len(lines)) if lines[j].startswith("## ")), len(lines))
+    cuts = [c if lines[c].startswith("## ") else h for c, h in zip(back, heads)] + [end]
+    chunks = sorted((lines[c:d] for c, d in pairwise(cuts)), key=lambda ch: num(next(filter(numbered, ch))))
+    path.write_text("\n".join(lines[:cuts[0]] + [s for ch in chunks for s in ch] + lines[end:]))
+
+
+if __name__ == "__main__":
+    main()

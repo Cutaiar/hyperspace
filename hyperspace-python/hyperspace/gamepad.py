@@ -81,10 +81,10 @@ HAT_UP, HAT_RIGHT, HAT_DOWN, HAT_LEFT = 1, 2, 4, 8
 DEADZONE = 0.18
 
 # the names a row's source spells: pad:<BUTTON>, hat:<DIR>, axis:<AXIS>
-BUTTONS = {"A": A, "B": B, "X": X, "Y": Y, "LB": LB, "RB": RB, "VIEW": VIEW,
+BUTTONS = {"S": A, "E": B, "W": X, "N": Y, "LB": LB, "RB": RB, "VIEW": VIEW,
            "MENU": MENU, "GUIDE": GUIDE, "LSTICK": LSTICK, "RSTICK": RSTICK,
            "SHARE": SHARE}
-HATS = {"UP": HAT_UP, "RIGHT": HAT_RIGHT, "DOWN": HAT_DOWN, "LEFT": HAT_LEFT}
+HATS = {"N": HAT_UP, "E": HAT_RIGHT, "S": HAT_DOWN, "W": HAT_LEFT}
 # what an Xbox pad lacks (plan 42), at indices no GLFW pad reaches: the
 # touchpad's click, the Edge's back buttons and its Fn buttons. A pad
 # lists them only when its model has them (`Pad.buttons_named`)
@@ -145,13 +145,13 @@ DEPTH_OCTAVES_PER_S = 2.4
 #   A B X Y          the face buttons, in their diamond
 #   BACK START       pad:VIEW and pad:MENU, with the Xbox button (XBOX)
 #   SHR              pad:SHARE, on a pad that has one
-#   ↑ ↓ ← →          the D-pad (hat:UP …)
+#   ↑ ↓ ← →          the D-pad (hat:N …)
 #   LX LY RX RY      the sticks' axes, and LT RT the triggers' — lanes
 
 
 @dataclass(frozen=True)
 class Control:
-    """One control of the pad: its routing source (``pad:A``, ``hat:UP``,
+    """One control of the pad: its routing source (``pad:S``, ``hat:N``,
     ``axis:LX``), its kind (button, stick, axis), its glyph, and where it
     sits (x, y, w, h in layout units)."""
 
@@ -174,6 +174,7 @@ class Control:
 
 
 # the buttons in words, for the hovers; a face button is "A button"
+FACE_WORDS = models.FACE_WORDS
 _BUTTON_NAMES = {
     "LB": "left bumper", "RB": "right bumper", "VIEW": "BACK (View)",
     "MENU": "START (Menu)", "GUIDE": "Xbox button", "SHARE": "Share",
@@ -185,15 +186,15 @@ _BUTTON_NAMES = {
 
 def control_name(source: str) -> str | None:
     """The control a routing source names, in words ("pad:LB" → "left
-    bumper", "hat:UP" → "d-pad up", "axis:LT" → "left trigger"), or None
+    bumper", "hat:N" → "d-pad up", "axis:LT" → "left trigger"), or None
     for a source no gamepad sends."""
     scheme, _, addr = source.partition(":")
     if scheme == "pad":
-        if addr in ("A", "B", "X", "Y"):
-            return f"{addr} button"
+        if addr in FACE_WORDS:
+            return f"{FACE_WORDS[addr]} button"
         return _BUTTON_NAMES.get(addr) if addr in ALL_BUTTONS else None
     if scheme == "hat":
-        return f"d-pad {addr.lower()}" if addr in HATS else None
+        return f"d-pad {models.HAT_WORDS[addr]}" if addr in HATS else None
     if scheme == "axis":
         return LANE_LABELS[LANES.index(addr)] if addr in LANES else None
     if scheme == TOUCH_SCHEME and addr in gesture.TOUCH_LANES:
@@ -219,12 +220,14 @@ def _layout() -> list[Control]:
     btn("GUIDE", "XBOX", 4.45, 1.75, 1.5, 0.8)
     btn("SHARE", "SHR", 6.4, 1.75, 1.3, 0.8)
     # the D-pad, as a cross between the left stick and the middle
-    for name, glyph, dx, dy in (("UP", "↑", 1.15, 0.0), ("LEFT", "←", 0.0, 0.95),
-                                ("RIGHT", "→", 2.3, 0.95), ("DOWN", "↓", 1.15, 1.9)):
+    for name, glyph, dx, dy in (("N", "↑", 1.15, 0.0), ("W", "←", 0.0, 0.95),
+                                ("E", "→", 2.3, 0.95), ("S", "↓", 1.15, 1.9)):
         out.append(Control(f"hat:{name}", "button", glyph, 2.75 + dx, 2.6 + dy, 1.15, 0.9))
     # the face buttons, in their diamond, and the right stick under them
-    for name, dx, dy in (("Y", 1.25, 0.0), ("X", 0.0, 1.05), ("B", 2.5, 1.05), ("A", 1.25, 2.1)):
-        btn(name, name, 8.6 + dx, 0.95 + dy, 1.25, 1.0)
+    # (the Xbox face's own letters: a model with its own says so, `Model.glyphs`, row 552)
+    for name, glyph, dx, dy in (("N", "Y", 1.25, 0.0), ("W", "X", 0.0, 1.05),
+                                ("E", "B", 2.5, 1.05), ("S", "A", 1.25, 2.1)):
+        btn(name, glyph, 8.6 + dx, 0.95 + dy, 1.25, 1.0)
     out.append(Control("pad:RSTICK", "stick", "RS", 9.1, 4.2, 2.4, 2.5))
     # the axes, as lanes across the foot
     for k, name in enumerate(AXES):
@@ -244,7 +247,7 @@ _BY_SOURCE = {c.source: c for c in LAYOUT}
 # `pad:TOUCH`, every ``touch:`` row on it), a tilt bubble under the left
 # stick (every ``motion:`` row on it), the Edge's back buttons and Fn
 # buttons between the D-pad and the right stick — and every glyph its own
-# face's (✕ for ``pad:A``). The rows keep the canonical names.
+# face's (✕ for ``pad:S``). The rows keep the canonical names.
 _EXTRA_CONTROLS = {
     "touch": Control("pad:TOUCH", "touchpad", "TOUCH", 3.0, 0.0, 6.5, 0.8),
     "motion": Control("motion:roll", "tilt", "TILT", 0.3, 3.75, 2.3, 2.9),
@@ -268,7 +271,8 @@ def layout_for(model) -> list[Control]:
     out: list[Control] = []
     for c in LAYOUT:
         name = c.address if c.source.startswith(("pad:", "axis:")) else ""
-        if c.source.startswith(("pad:", "axis:", "hat:")) and not model.has_control(c.address):
+        have = f"{models.HAT_PREFIX}{c.address}" if c.source.startswith("hat:") else c.address
+        if c.source.startswith(("pad:", "axis:", "hat:")) and not model.has_control(have):
             continue                   # a single Joy-Con: no right stick, no D-pad (plan 43)
         out.append(replace(c, glyph=models.glyph(model, name, c.glyph)) if name else c)
     for cap in ("touch", "motion", "back", "fn"):
@@ -320,7 +324,7 @@ def control(source: str) -> Control | None:
 
 def glyph(source: str) -> str | None:
     """The glyph of the control a source names ("pad:LB" → "LB",
-    "hat:UP" → "↑"), None for a source no gamepad sends."""
+    "hat:N" → "↑"), None for a source no gamepad sends."""
     c = control(source)
     return c.glyph if c is not None else None
 
@@ -405,6 +409,11 @@ def claims(lanes) -> set[int]:
         elif len(AXES) <= i < len(LANES):
             out.update(DIAL_STICKS[LANES[i].partition(".")[0]])
     return out
+
+
+def left_stick_lanes() -> frozenset[int]:
+    """The `axis` lanes the left stick feeds: its two axes and its dial's."""
+    return frozenset({AX_LX, AX_LY} | {i for i, n in enumerate(LANES) if n.startswith("L.")})
 
 
 def _unwrap(ret) -> list:
@@ -1147,9 +1156,9 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
     (not modulatable) only a button can: the axes are not asked, so a
     nudged stick never ends the learn. True when the press was the
     learn's, so the router lets that frame's button rows be. `role` is a
-    second pad's qualifier (plan 27 B6): its rows read ``pad@p2:A``,
-    ``hat@p2:UP``, ``axis@p2:LX``; "" (the primary pad) leaves them bare.
-    `skip`: the buttons, unqualified (``pad:A``, ``hat:DOWN``), that land
+    second pad's qualifier (plan 27 B6): its rows read ``pad@p2:S``,
+    ``hat@p2:N``, ``axis@p2:LX``; "" (the primary pad) leaves them bare.
+    `skip`: the buttons, unqualified (``pad:S``, ``hat:S``), that land
     nothing — the totem's while it reads this pad (as `Router.pad`'s)."""
     if learn is None or getattr(learn, "learning", None) is None or not pad.on:
         return False
@@ -1169,7 +1178,7 @@ def learn_from(pad: Pad, learn, role: str = "", dials=frozenset,
             learn.learn_pad_button(f"pad{q}:{name}")
             return True
     for name, bit in HATS.items():
-        if f"hat:{name}" in skip or no_pole(name):
+        if f"hat:{name}" in skip or no_pole(f"{models.HAT_PREFIX}{name}"):
             continue
         if pad.hat_pressed(bit) and learn.accepts(f"hat{q}:{name}"):
             learn.learn_pad_button(f"hat{q}:{name}")
@@ -1249,7 +1258,7 @@ def _learn_extra(pad, learn=None) -> tuple[str, str, bool] | None:
 
 def paired_with(source: str, model=None) -> str | None:
     """The other pole of the natural pair the discrete control `source` is on
-    (``hat:UP`` → ``hat:DOWN``), None when it is on none of `model`'s."""
+    (``hat:N`` → ``hat:S``), None when it is on none of `model`'s."""
     for a, b in models.natural_pairs(model if models.is_model(model) else None):
         a, b = models.pole_source(a), models.pole_source(b)
         if source in (a, b):
@@ -1268,7 +1277,8 @@ def degrees_of_freedom(model=None, pairs=None) -> list[tuple[str, ...]]:
     def has(name: str) -> bool:
         return m is None or m.has_control(name)
     extras = {"TOUCH": "touch", "LP": "back", "RP": "back", "LFN": "fn", "RFN": "fn"}
-    left = [n for n in BUTTONS if has(n)] + [n for n in HATS if has(n)]
+    left = [n for n in BUTTONS if has(n)] + [
+        f"{models.HAT_PREFIX}{n}" for n in HATS if has(f"{models.HAT_PREFIX}{n}")]
     left += [n for n, cap in extras.items() if m is not None and m.has(cap) and has(n)]
     left = [n for n in left if models.control_free(m, n)]
     out: list[tuple[str, ...]] = [(f"axis:{n}",) for n in AXES if has(n)]
@@ -1286,7 +1296,7 @@ def publish(router, scheme: str = "axis", model=None) -> None:
     table's (plan 27 B2: they left `Router._publish_axes`). Once: the names
     map is published as one new dict, so the router's address cache keeps.
     `scheme` is a second pad's qualified key (``axis@p2``, plan 27 B6)."""
-    # plan 56: `model`'s natural pairs; merged every frame, since a preset's row
+    # plan 56: `model`'s natural pairs; merged every frame, since a loadable patch's row
     # can have named a pair first, and another model can come (`Sources.add_pairs`)
     add = getattr(router, "add_pairs", None)
     if add is not None:

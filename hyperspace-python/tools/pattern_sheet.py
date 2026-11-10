@@ -19,7 +19,7 @@ drift apart above 0.
 And a gallery (plan 22 B3): a row per mode, a column per passage —
 silence, quiet, medium (every band near nominal), loud, a kick transient
 with bright hats — with the bands as the analyzer would read them
-(`Renderer.bands`, which METER and PULSE draw) and the eight inputs as
+(`Renderer.bands`, which meter and pulse draw) and the eight inputs as
 the factory routes push them (lane i on input i at routing.PATTERN_DEPTH
 on a base of 1; HUE and SPREAD unrouted); and a last column, the loud
 passage at the old factory depth of 1, which pinned the inputs.
@@ -110,7 +110,7 @@ def mode_sheet(r: Renderer, mode: int, t: float, n: int) -> Image.Image:
 
 def input_sheet(r: Renderer, k: int, t: float, n: int) -> Image.Image:
     inp = INPUTS[k]
-    modes = range(1, len(MODES))              # FLAT reads nothing
+    modes = range(1, len(MODES))              # flat reads nothing
     lw, gap, head = 260, 4, 64
     img = Image.new("RGB", (lw + 3 * (n + gap), head + len(modes) * (n + gap)), BG)
     d = ImageDraw.Draw(img)

@@ -16,10 +16,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 from conftest import CORPUS
-from test_presets import boot
+from test_loadable import boot
 
 from hyperspace import geometry as G
-from hyperspace import ghost, preset
+from hyperspace import ghost, loadable
 from hyperspace.hands import core as hc
 from hyperspace.params import EYE_DISTANCE_RANGE, EYE_FOV_RANGE, PAN_RANGE, part_of
 from hyperspace.view import ViewState
@@ -122,9 +122,9 @@ def test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it():
     assert abs((new_x[0] - w / 2) - 2.0 * (old_x[0] - w / 2)) > 10.0
 
 
-def test_the_eye_params_are_the_presets_and_default_to_the_old_view(tmp_path):
+def test_the_eye_params_are_the_loadables_and_default_to_the_old_view(tmp_path):
     """Plan 43 C2 (rows 555, 574): the eye is the look's — performance, in
-    every preset's values, never the show's session — and modulatable, its
+    every loadable patch's values, never the show's session — and modulatable, its
     taper as it was (review 4: the fov linear, the distance log, so a row
     learned before lands the same value); the defaults the old view."""
     rig = boot(tmp_path)
@@ -133,11 +133,11 @@ def test_the_eye_params_are_the_presets_and_default_to_the_old_view(tmp_path):
             ("eye.fov", G.EYE_FOV, EYE_FOV_RANGE, False),
             ("eye.distance", G.EYE_DISTANCE, EYE_DISTANCE_RANGE, True)):
         p = reg[pid]
-        assert p.group == "eye" and part_of(p) == "performance" and p.persist, pid
+        assert p.group == "eye" and part_of(p) == "patch" and p.persist, pid
         assert p.modulatable and p.log is log and p.taper is None, pid
         assert p.value == pytest.approx(default) and (p.lo, p.hi) == (lo, hi), pid
-        assert pid in reg.snapshot(part="performance")
-        assert pid not in reg.snapshot(part="session")
+        assert pid in reg.snapshot(part="patch")
+        assert pid not in reg.snapshot(part="shared_meta")
     assert rig.view.eye_fov == pytest.approx(G.EYE_FOV)
     pan = reg["camera.pan.x"]
     assert (pan.lo, pan.hi) == (-PAN_RANGE, PAN_RANGE) and pan.text() == "+0.00"
@@ -146,7 +146,7 @@ def test_the_eye_params_are_the_presets_and_default_to_the_old_view(tmp_path):
 def test_the_pan_range_keeps_a_routed_pan_as_far_as_it_was():
     """hands-orbit's push of 0.1 on a hand across the box (0 → 1) moves the
     pan by 0.1 of its range: ±400 px before, ±1.2 units now — ≈ ±390 px on
-    the 1080p screen the presets are converted at, within 5 %."""
+    the 1080p screen the loadable patches are converted at, within 5 %."""
     old = 0.1 * 8000.0 / 2.0
     new = 0.1 * 2.0 * PAN_RANGE / 2.0 * G.PAN_REF_PX
     assert new == pytest.approx(old, rel=0.05)
@@ -302,50 +302,50 @@ def test_a_shape_through_the_eye_draws_without_error(ctx):
 
 # ------------------------------------------------------- the pan's migration
 
-def test_a_preset_2_pan_in_px_is_read_in_world_units(tmp_path):
+def test_a_loadable_2_pan_in_px_is_read_in_world_units(tmp_path):
     """The fixture is a preset/2 file from before (its pan 162, −81 px),
     loaded through a scratch library: the pan lands in world units through
     the default eye on the 1080p screen (324 px a unit), the route's depth
-    is the file's (a fraction of the range), and the preset is clean."""
+    is the file's (a fraction of the range), and the loadable patch is clean."""
     rig = boot(tmp_path)
     lib = rig.lib
-    (lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    shutil.copy(FIXTURES / "pan-px.json", lib.home / "presets" / "pan-px.json")
-    lib.presets.load("PAN PX")
+    (lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    shutil.copy(FIXTURES / "pan-px.json", lib.home / "loadable" / "pan-px.json")
+    lib.loaded_patch.load("PAN PX")
     assert rig.reg["camera.pan.x"].value == pytest.approx(0.5)
     assert rig.reg["camera.pan.y"].value == pytest.approx(-0.25)
     assert rig.view.pan == pytest.approx([0.5, -0.25])
     (b,) = rig.router.table.routes()
     assert (b.target, b.value) == ("camera.pan.x", 0.1)
-    assert not lib.is_dirty("presets")
-    assert rig.presets.notes == []                     # silent: nothing to say
+    assert not lib.is_dirty("loadable")
+    assert rig.loaded_patch.notes == []                     # silent: nothing to say
 
 
-def test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_path):
+def test_a_saved_loadable_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_path):
     rig = boot(tmp_path)
     rig.reg["camera.pan.x"].set(2.5)
     rig.reg["camera.pan.y"].set(-0.75)
-    path = rig.presets.save_as("WORLD PAN")
+    path = rig.loaded_patch.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/10"     # (row 394); a key marks the units
-    assert doc[preset.UNITS_KEY] == preset.UNITS       # (…and the depths' taper, wave 0 T1)
-    assert doc[preset.UNITS_KEY]["camera.pan"] == "world"
+    assert doc["schema"] == "hyperspace.loadable/11"     # (row 394); a key marks the units
+    assert doc[loadable.UNITS_KEY] == loadable.UNITS       # (…and the depths' taper, wave 0 T1)
+    assert doc[loadable.UNITS_KEY]["camera.pan"] == "world"
     assert doc["values"]["camera.pan.x"] == 2.5
     rig.reg["camera.pan.x"].set(0.0)
-    rig.lib.presets.load("WORLD PAN")
+    rig.lib.loaded_patch.load("WORLD PAN")
     assert rig.view.pan == pytest.approx([2.5, -0.75])
-    assert not rig.lib.is_dirty("presets")
+    assert not rig.lib.is_dirty("loadable")
 
 
 def test_pan_world_leaves_a_marked_or_panless_document_alone():
     marked = {"values": {"camera.pan.x": 3.0}, "units": {"camera.pan": "world"}}
-    assert preset.pan_world(marked) == (marked, False)
+    assert loadable.pan_world(marked) == (marked, False)
     plain = {"values": {"view.bright": 1.0}, "macros": {}}
-    assert preset.pan_world(plain) == (plain, False)
+    assert loadable.pan_world(plain) == (plain, False)
     sub = {"base": "camera.pan.x", "from": 0.25, "to": 0.75}
     old = {"values": {"camera.pan.x": 324.0, "camera.pan.y": 0.0},
            "macros": {"macro.1": {"label": "", "subs": [dict(sub)]}}}
-    new, changed = preset.pan_world(old)
+    new, changed = loadable.pan_world(old)
     assert changed and new["values"] == {"camera.pan.x": 1.0, "camera.pan.y": 0.0}
     # a subscriber's ends are fractions of the range (`Sub.at` lands a norm)
     assert new["macros"]["macro.1"]["subs"] == [sub]
@@ -356,12 +356,12 @@ def test_every_corpus_pan_lands_inside_the_new_range():
     """The corpus files keep their px as the build shipped them; each
     converts to a pan well inside ±PAN_RANGE (party-mandala's 190 px is
     0.59 of a radius)."""
-    for path in sorted((CORPUS / "presets").glob("*.json")):
-        doc, _ = preset.pan_world(json.loads(path.read_text()))
-        for pid in preset.PAN_IDS:
+    for path in sorted((CORPUS / "loadable").glob("*.json")):
+        doc, _ = loadable.pan_world(json.loads(path.read_text()))
+        for pid in loadable.PAN_IDS:
             v = doc.get("values", {}).get(pid, 0.0)
             assert abs(v) < PAN_RANGE / 4, (path.name, pid, v)
-    mandala, _ = preset.pan_world(json.loads((CORPUS / "presets" / "party-mandala.json")
+    mandala, _ = loadable.pan_world(json.loads((CORPUS / "loadable" / "party-mandala.json")
                                              .read_text()))
     assert mandala["values"]["camera.pan.x"] == pytest.approx(190.0 / 324.0)
 
@@ -498,10 +498,10 @@ def test_an_old_camera_module_loads_at_its_converted_pan(tmp_path):
     assert not rig.lib.is_dirty("camera")
 
 
-def test_an_old_camera_default_fills_a_preset_at_its_converted_pan(tmp_path):
+def test_an_old_camera_default_fills_a_loadable_at_its_converted_pan(tmp_path):
     """The same file as the group's default (`camera/default.json`): what
     `defaults` and `resolved` fill the camera strip with — at the converted
-    pan, not 190 radii. A whole preset that names no pan lands the build's
+    pan, not 190 radii. A whole loadable patch that names no pan lands the build's
     pan (plan 44 D3: a load fills from `_fresh_of`, never a `default.json`)."""
     rig = boot(tmp_path)
     _old_module(rig.lib, "default")
@@ -511,9 +511,9 @@ def test_an_old_camera_default_fills_a_preset_at_its_converted_pan(tmp_path):
     for pid in ("camera.pan.x", "camera.pan.y"):
         del doc["values"][pid]
     doc["name"] = "NO PAN"
-    (rig.lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    (rig.lib.home / "presets" / "no-pan.json").write_text(json.dumps(doc))
-    rig.lib.presets.load("NO PAN")
+    (rig.lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    (rig.lib.home / "loadable" / "no-pan.json").write_text(json.dumps(doc))
+    rig.lib.loaded_patch.load("NO PAN")
     assert rig.view.pan == pytest.approx([0.0, 0.0])
 
 
@@ -522,25 +522,25 @@ def test_a_camera_module_saved_now_says_its_pan_is_in_world_units(tmp_path):
     rig.reg["camera.pan.x"].set(3.0)
     path = rig.lib.save_as("camera", "World")
     doc = json.loads(path.read_text())
-    assert doc[preset.UNITS_KEY] == preset.UNITS and preset.UNITS["camera.pan"] == "world"
+    assert doc[loadable.UNITS_KEY] == loadable.UNITS and loadable.UNITS["camera.pan"] == "world"
     rig.reg["camera.pan.x"].set(0.0)
     rig.lib.load("camera", "World")
     assert rig.view.pan[0] == pytest.approx(3.0) and not rig.lib.is_dirty("camera")
     # another group's module carries no marker
-    assert preset.UNITS_KEY not in rig.lib.document("view", "V")
+    assert loadable.UNITS_KEY not in rig.lib.document("view", "V")
 
 
 def test_a_hand_edited_units_that_is_no_object_is_no_marker(tmp_path):
     """`"units": "world"` (a string) neither raises nor counts as the
-    marker: the preset loads and its pan is read in px."""
-    out, _ = preset.pan_world({"units": "world", "values": {"camera.pan.x": 324.0}})
+    marker: the loadable patch loads and its pan is read in px."""
+    out, _ = loadable.pan_world({"units": "world", "values": {"camera.pan.x": 324.0}})
     assert out["values"]["camera.pan.x"] == pytest.approx(1.0)
     odd = {"units": None, "values": None}
-    assert preset.pan_world(odd) == (odd, False)
+    assert loadable.pan_world(odd) == (odd, False)
     rig = boot(tmp_path)
     doc = json.loads((FIXTURES / "pan-px.json").read_text())
     doc.update(name="ODD UNITS", units="world")
-    (rig.lib.home / "presets").mkdir(parents=True, exist_ok=True)
-    (rig.lib.home / "presets" / "odd-units.json").write_text(json.dumps(doc))
-    rig.lib.presets.load("ODD UNITS")
+    (rig.lib.home / "loadable").mkdir(parents=True, exist_ok=True)
+    (rig.lib.home / "loadable" / "odd-units.json").write_text(json.dumps(doc))
+    rig.lib.loaded_patch.load("ODD UNITS")
     assert rig.view.pan == pytest.approx([0.5, -0.25])

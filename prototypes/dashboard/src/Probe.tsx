@@ -1,7 +1,7 @@
 // The measuring route: ?probe
 //
 // Renders the real shadcn components in the configurations dkit needs to
-// match, each in a labelled wrapper. tools/dkit/probe_react.js walks every
+// match, each in a labelled wrapper. hyperspace/dkit/dev/probe_react.js walks every
 // [data-probe] and dumps the rect + computed style of each data-slot inside
 // it, so the kit is built from measurements rather than from a reading of the
 // Tailwind classes.

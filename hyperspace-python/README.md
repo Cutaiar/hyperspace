@@ -55,7 +55,7 @@ live render error is a red banner at the bottom of the control window.
   `hands/`; `bridge`), the input adapters (`midi` + `apc40`, `gamepad`),
   the render stack (`geometry`, `view`, `render`, `glsl`, `fx`, `lookback`,
   `dream`, `overlay`, `shaders/`), the panel (`ui`, `ui_bands`,
-  `ui_routing`, `ui_feel`, `ui_graph`, `ui_lfo`, `ui_seq`, `ui_fx`, `ui_lookback`, `ui_presets`,
+  `ui_routing`, `ui_feel`, `ui_graph`, `ui_lfo`, `ui_seq`, `ui_fx`, `ui_lookback`, `ui_loadable`,
   `hands/panel`, `control`), the library (`library`, `preset`, `config`;
   `scenes/band/` holds the band scenes) and the host (`app`, `hotreload`). Who owns
   what and who may write a parameter: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -69,6 +69,9 @@ live render error is a red banner at the bottom of the control window.
   lights an APC40), `hands_probe.py` (every hand axis live; `--calibrate`
   sweeps the box), `control_shots.py` / `fx_shots.py` / `lookback_shots.py`
   / `dream_shots.py` (screenshots for the docs) and `dream_bench/`.
+- `presets/kinetic/` — six presets played with the hands, a pad or a Joy-Con,
+  to copy into a library's `loadable/` folder; their gestures are in
+  [its README](presets/kinetic/README.md). Not part of the app.
 - `docs/` — [`SETUP.md`](docs/SETUP.md) a new Mac,
   [`ENGINEERING.md`](docs/ENGINEERING.md) the manual,
   [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) the structure,
@@ -76,6 +79,7 @@ live render error is a red banner at the bottom of the control window.
   [`DECISION-REGISTER.md`](docs/DECISION-REGISTER.md) the reasons,
   [`TESTING-GUIDE.md`](docs/TESTING-GUIDE.md) what a person still has to
   check, [`AUDIT-2026-09.md`](docs/AUDIT-2026-09.md) the open findings,
+  [`AUDIT-STRUCTURE-2026-10.md`](docs/AUDIT-STRUCTURE-2026-10.md) a dated record of the code's shape,
   and [`plans/`](docs/plans/) short records of what each recent plan built
   and the numbered hand checks.
 
@@ -104,10 +108,10 @@ onto it, or to unbind it.
 
 A **preset** is one whole performance moment — the look, its routes, the
 APC40's preset layer and the macros — and a load replaces all of it
-without touching the session (tempo, the hands' feel, the analyzer, the
+without touching the meta controller (tempo, the hands' feel, the analyzer, the
 outputs). A **show** is the desk's pads (a bank of
 twenty-four presets: F1–F8 and the APC40's clip rows 1, 4 and 5 load them,
-set on the desk only), the session and the rig's wires. Nothing ships with
+set on the desk only) and the meta controller. Nothing ships with
 the app: the library is the owner's, in `~/Hyperspace` (or
 `$HYPERSPACE_HOME`), as plain JSON the running app follows when you edit
 it; a fresh one opens an unsaved show called `untitled`. The band scenes

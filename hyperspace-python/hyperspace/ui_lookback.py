@@ -28,7 +28,7 @@ layout: which param is drawn under which node, in order, two to a row
 
 One function, `page`, for the LOOKBACK page and GRAPH's side pane's
 lookback section (ui_pane.py). A function over the Panel, like
-ui_presets: it draws with the panel's widget helpers and keeps no state,
+ui_loadable: it draws with the panel's widget helpers and keeps no state,
 so a hot reload of this module lands on the next frame. Without a
 renderer (headless tests) or before the first capture, the thumbnail row
 says so instead of drawing textures; the control window shares the
@@ -138,7 +138,7 @@ def _drawn(panel, spec):
 
 
 def _spec(panel):
-    """The loaded preset's graph (`Panel.graph_now`), or None: a stand-in
+    """The loaded patch's graph (`Panel.graph_now`), or None: a stand-in
     renderer or library, no graph."""
     now = getattr(panel, "graph_now", None)
     try:
@@ -175,7 +175,7 @@ def _node_head(panel, title: str, word: str, on_canvas: bool,
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
     try:
         right = word if on_canvas else OFF_CANVAS
-        rw = min(imgui.calc_text_size(right.upper()).x, w * 0.5)
+        rw = min(imgui.calc_text_size(right).x, w * 0.5)
         right = ui.fit_micro(right, rw)
         room = p0.x + w - 8 - rw - 10 - imgui.get_cursor_screen_pos().x
         ports = ui.fit_micro(PORTS[title], room, 24.0)
@@ -191,7 +191,7 @@ def _node_head(panel, title: str, word: str, on_canvas: bool,
     band = imgui.ImVec2(p0.x + w, p0.y + h)
     if not tick and imgui.is_window_hovered() and imgui.is_mouse_hovering_rect(p0, band):
         ui.tooltip(f"{title}: {PORTS[title]}" + ("" if on_canvas else
-                   f" — {OFF_CANVAS}: its knobs act once GRAPH has one (right-click the "
+                   f" — {OFF_CANVAS}: its knobs act once the graph has one (right-click the "
                    "canvas, look-back ▸)") + HEAD_NOTES.get(title, ""))
     imgui.set_cursor_screen_pos(imgui.ImVec2(p0.x, p0.y + h + imgui.get_style().item_spacing.y))
 
@@ -216,14 +216,14 @@ def _dream_word(dr, on: bool) -> str:
 CAPTURE = "lookback.image"            # plan 36 T4: what it records is its image
 RECORDS_NOTHING = "nothing — the echoes fade"
 RECORDS_TIP = ("what the look-back records: the picture wired into lookback.image — "
-               "the echoes are made of it (a GRAPH edit, one undo step)")
+               "the echoes are made of it (a graph edit, one undo step)")
 
 
 def capture_line(spec) -> str:
     """The LOOKBACK page's "records:" (plan 35 U): the source wired into
     `lookback.image` by its title (`graphview.picture_label`: "Scene"),
     or "nothing — the echoes fade" with no wire there. `spec` is the
-    loaded preset's graph (`graphview.page_spec`: None is the empty
+    loaded patch's graph (`graphview.page_spec`: None is the empty
     frame, plan 36 T3)."""
     spec = graphview.page_spec(spec)
     now = graphview.picture_now(spec, CAPTURE)
@@ -248,7 +248,7 @@ def draws_over_line(spec) -> str:
 def _records_row(panel, spec) -> None:
     """The records combo, half the row, and "draws over:" beside it; the
     last edit's words under them while there are any. `spec` is the
-    loaded preset's graph (`_spec`)."""
+    loaded patch's graph (`_spec`)."""
     frame = graphview.page_spec(spec)
     width = imgui.get_content_region_avail().x * 0.55
     # (the hover: the longer words — "with the hands", a placed effect)
@@ -469,7 +469,7 @@ def _thumbnails(panel, lb) -> None:
     """The look-back's echoes newest first: what its trail is made of this
     frame, with each one's age and weight on hover."""
     if lb is None or lb.atlas is None:
-        imgui.text_disabled("no history yet — wire a look-back on GRAPH")
+        imgui.text_disabled("no history yet — wire a look-back on graph")
         return
     thumbs = lb.thumbnails()
     if not thumbs:

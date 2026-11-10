@@ -15,14 +15,18 @@ keyboard's knobs — maps on the desk's Learn with no code:
   * **No feedback.** `FEEDBACK` is False: MidiIO sends the device nothing —
     no power-up SysEx, no ring, no LED — so a controller that echoes what
     it receives never sees its own knob come back.
-  * **Absolute knobs.** Every CC learns as an ``abs`` row with soft
-    pickup (no encoder is relative), a note as a ``toggle``, pitch bend as
-    an ``abs`` 14-bit fader — exactly what Learn makes with no profile.
+  * **Learn listens.** `LISTENS`: knowing nothing of the device, Learn
+    hears a CC for a moment (midi.LISTEN_S) and writes the row the way the
+    control spoke (`midi.heard_as`): an MSB/LSB pair (CC n, n + 32) is a
+    14-bit ``abs14`` fader, a value repeated is a relative encoder
+    (``rel64`` or ``rel``: a DJ controller's jog), anything else an
+    ``abs`` row with soft pickup. A note learns as a ``toggle``, pitch
+    bend as an ``abs`` 14-bit fader — at once.
   * **Plain names.** A control is named by its row ("MIDI CC 7 ch1 on
     launch"); there is no layout to draw, so the desk page (ui_desk.py)
     stays the APC40's, and the device line counts no sources.
-  * **One layer.** It has no SHIFT: its rows are the loaded preset's (a
-    learn) or the session's invariant ones; plan 28 is where a device with
+  * **One layer.** It has no SHIFT: its rows are the loaded patch's (a
+    learn) or the meta controller's invariant ones; plan 28 is where a device with
     a mode switch becomes one node per mode.
 
 Imports nothing from the package.
@@ -35,6 +39,7 @@ FEEDBACK = False           # nothing is ever sent to the device
 RING_REBASES_KNOB = False  # (no ring) every absolute knob keeps soft pickup
 LAYOUT: tuple = ()         # no controls known in advance: none to draw or to darken
 DEFAULT_MAP: list = []     # no factory rows: every row is learned
+LISTENS = True             # a CC learn hears the control first (midi.heard_as)
 
 
 def enter() -> list:

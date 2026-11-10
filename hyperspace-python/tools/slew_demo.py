@@ -3,7 +3,7 @@
 
 Builds the app's objects the way `app.main` does around the desk — the
 library, the registry, the binding table with `desk.slew` declared before
-the show lands, the router, the presets, a `MidiIO` over fake ports on a
+the show lands, the router, the loadable patches, a `MidiIO` over fake ports on a
 clock the script moves, the `Undo` — with no window and no device, and
 prints a transcript:
 
@@ -12,7 +12,7 @@ prints a transcript:
      80 ms: how many frames it moves on, the largest step, where it rests;
   2. a fast flick (50 CC steps in 5 frames);
   3. the ring messages sent back to the knob in both cases;
-  4. a preset load in the middle of a glide;
+  4. a loadable patch load in the middle of a glide;
   5. one turn at 80 ms as one undo step.
 
 `--png` also draws the slow turn on `camera.pan.x` as base against time,
@@ -22,7 +22,7 @@ Every number is the adapter's own, read off the registry after each
 `MidiIO.poll()`. It always runs on fresh temp homes of its own
 (`HYPERSPACE_HOME` is set here, before anything reads it), each seeded
 with the test corpus (`tests/conftest.py::seed`: TRIP is one of its
-presets): it cannot touch ~/Hyperspace. What it cannot show is the desk: whether the APC40's
+loadable patches): it cannot touch ~/Hyperspace. What it cannot show is the desk: whether the APC40's
 encoder re-bases cleanly with a value in flight, and how 80 ms feels.
 
   uv run python tools/slew_demo.py \\
@@ -54,11 +54,11 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.library import Library, Marks
+from hyperspace.loadable import LoadedPatch
 from hyperspace.lookback import DreamState
 from hyperspace.midi import MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import build_registry
-from hyperspace.preset import Presets
 from hyperspace.routing import Bindings, Router, bindings_path
 from hyperspace.view import ViewState
 
@@ -107,7 +107,7 @@ def build(seconds: float) -> SimpleNamespace:
     view = ViewState()
     seed(home)
     lib = Library(home, period=0.0)
-    reg = build_registry(view, control, audio, lib.project, dream=DreamState(), fx=FxState())
+    reg = build_registry(view, control, audio, lib.install, dream=DreamState(), fx=FxState())
     lib.on_layout("band", control.apply_layout)
     lib.extra("band", lambda: {"layout": chain.layout()})
     r = SimpleNamespace(t=100.0)
@@ -119,14 +119,14 @@ def build(seconds: float) -> SimpleNamespace:
     routing.register_desk(reg, table)       # before attach, as app._desk_table does
     lib.attach(reg)
     router = Router(reg, table)
-    presets = Presets(lib, reg, router)
+    loaded_patch = LoadedPatch(lib, reg, router)
     inp, out = FakeIn(), FakeOut()
     midi = MidiIO(reg, table, inp=inp, out=out, clock=lambda: r.t)
-    lib.project.load_startup()
+    lib.install.load_startup()
     u = undo.Undo(reg, table, marks=Marks(lib), tag=lambda: tuple(s.name for s in chain.spec),
                   on_restore=router.sync_macros)
     undo.install(u)
-    r.__dict__.update(lib=lib, reg=reg, table=table, presets=presets, midi=midi, inp=inp,
+    r.__dict__.update(lib=lib, reg=reg, table=table, loaded_patch=loaded_patch, midi=midi, inp=inp,
                       out=out, undo=u)
     give_knobs(r)
     reg["desk.slew"].set(seconds)
@@ -245,7 +245,7 @@ def load_mid_glide() -> None:
     frames(r, 2)
     say(f"   2 frames into a turn to the end and a fade to black: pan {pan.base:.2f} units, "
         f"dim {dim.base:.3f}; gliding: {sorted(r.midi._slews)}")
-    r.presets.load("TRIP")
+    r.loaded_patch.load("TRIP")
     loaded = pan.base
     say(f"   load TRIP: pan is {loaded:.2f} units (the preset's)")
     frames(r)
@@ -254,7 +254,7 @@ def load_mid_glide() -> None:
     frames(r, 20)
     xfade = next(b for b in r.table.midi() if b.target == "output.dim")
     say(f"   20 frames on: pan {pan.base:.2f} units (the load's value stands), dim "
-        f"{dim.base:.3f} (the session's: it arrived), the crossfader still caught: "
+        f"{dim.base:.3f} (the meta controller's: it arrived), the crossfader still caught: "
         f"{xfade.caught}")
     assert pan.base == loaded and dim.base == 0.0 and xfade.caught
     say()

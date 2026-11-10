@@ -190,7 +190,7 @@ def test_a_delay_reaches_only_when_read():
 ])
 def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
     """Plan 34's feedback words (a delay, a resize, an echo, the dream) on a
-    wire and as a bare entry read with no note, and a preset holding them
+    wire and as a bare entry read with no note, and a loadable patch holding them
     saves `/6` with the node in its frame (row 394)."""
     from test_plan31_wiring import make_app
 
@@ -199,10 +199,10 @@ def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
     assert spec.notes == ()
     assert G.read_graph({"nodes": [node]}).notes == ()
     app = make_app(tmp_path)
-    assert app.presets.load_doc({"schema": "hyperspace.preset/5", "name": "fb",
+    assert app.loaded_patch.load_doc({"schema": "hyperspace.preset/5", "name": "fb",
                                  "values": {}, "graph": sec}) == []
-    doc = app.presets.document("fb")
-    assert doc["schema"] == "hyperspace.preset/10"
+    doc = app.loaded_patch.document("fb")
+    assert doc["schema"] == "hyperspace.loadable/11"
     # (plan 36 T4: an echo is its look-back's pin now — the look-back's node)
     kind = "lookback" if node["kind"] == "echo" else node["kind"]
     wires = doc["graph"]["wires"]

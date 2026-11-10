@@ -179,13 +179,13 @@ changes brightness or volume instead).
 
 ## Running the automated tests (tiers)
 
-`uv run pytest` is the inner loop: it runs the fast tier (about 3,940
-tests) on every core, in about 17 s on the owner's Mac. It leaves out three
+`uv run pytest` is the inner loop: it runs the fast tier on every core
+(its size and cost: the last-measured line in `ENGINEERING.md` §16). It leaves out three
 tiers that `tests/conftest.py` marks by name:
 
-- `golden`: the golden-frame draws (`tests/test_golden_frames.py`: 128
-  tests, one per rig job, comparing hashes, the shader programs pooled;
-  about 12 s and 0.33 GB). Run them after touching rendering, shaders, a preset or
+- `golden`: the golden-frame draws (`tests/test_golden_frames.py`: one
+  test per rig job, comparing hashes, the shader programs pooled).
+  Run them after touching rendering, shaders, a preset or
   the graph's evaluation, and once before a merge.
 - `slow`: about 1 s or more each (torch dream, undo, plan 12 presets,
   whole-library sweeps).
@@ -201,7 +201,7 @@ lock. Why it can hang on the Mac, how to find the stuck process and how to
 recover: `ENGINEERING.md` §16, "Why `glfwInit()` hangs on the Mac". Never run
 two test tiers at once on the Mac.
 
-`uv run pytest --all` runs every tier (about 50 s). Pick a tier with
+`uv run pytest --all` runs every tier. Pick a tier with
 `-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
 use `-n0` to run serially (for a debugger). A test named by node id is
 still skipped by the default `-m`: add `--all`. A new test that takes a
@@ -549,6 +549,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | F4 | Momentary and hold on a pad button | 2f | gamepad | 147 |
 | F5 | The pad after a restart, and its sticks | 2f | gamepad | 171, 179 |
 | F6 | Two pads at once | 2f | the Xbox pad (Bluetooth), the wired pad, the copy | 219 |
+| F7 | The sticks' dials: a preset keeps petal / blend | 2f | gamepad | 559, 560 |
 | G1 | A second MIDI controller learned onto a knob | 2g | APC40, a second MIDI controller, the copy | 176 |
 | G2 | SHIFT is the APC40's | 2g | APC40, a second MIDI controller, the copy | 177 |
 | G3 | A phone's fader moves a setting | 2g | a phone on the same Wi-Fi, the copy | 186 |
@@ -2525,8 +2526,8 @@ on the hands entry), with **Ghost hands** ticked on the HANDS page.
 (it takes under a minute; it uses a throwaway home folder, never yours). Then
 open a few pictures in `tests/golden/frames/png/`.
 
-**Right if:** it ends "all 757 frames match their goldens (Apple M3 Max,
-4.1 Metal - 90.5)" (after a macOS update it may add a note naming two
+**Right if:** it ends "all 789 frames match their goldens (Apple M3 Max,
+4.1 Metal - 90.5)", 789 on 2026-11-06 and more after a build that adds some (after a macOS update it may add a note naming two
 versions); the pictures show the presets, some with two made-up hands
 (the left open, the right a fist).
 
@@ -4294,7 +4295,7 @@ Plan 36's tests: the fast tier is 3,941 passed (2 skipped) and the goldens
 128 passed over 757 pictures, nine of them re-recorded (hand check 369 and
 register rows 405, 406, 408, 414); `tests/test_plan36_bus.py`,
 `tests/test_plan36_lookback_dream.py`, `tests/test_graph_starters.py` and
-`tests/test_graph_preset_only.py` are its own. A new preset is no longer
+`tests/test_graph_patch_only.py` are its own. A new preset is no longer
 black: L158 above (check 342) describes the plan 35 build, and L170 is its
 replacement. The checks are 354-369 (group AG); a `/7` file is refused by an
 older build, so L173 is last.
@@ -7153,7 +7154,8 @@ its default spot, and the terminal and SYSTEM page name the screen it
 was last on. (4) the windows swap (render on screen 0, controls on
 screen 1); with 7, the note "monitor = 7, but 2 screens are connected
 (0–1) — using the last position"; with "left", the app still launches
-with "monitor = 'left' is not a screen index — using the last position".
+with "monitor = 'left' matches no screen (connected: …) — using the last
+position", since a string is a screen's name now (row 771).
 
 **Know:** a screen number that is not there at launch is ignored for the
 whole run — plug in first.
@@ -8042,6 +8044,26 @@ wired pad's stick turns the camera.
 
 *(check 219)*
 
+#### F7. The sticks' dials: a preset keeps petal / blend
+
+**Needs:** a pad, and `tests/corpus/presets/dial.json` copied into the library's `presets/`.
+
+**Do:** load DIAL. Open GRAPH and click the **pad** node. Move each stick round the rim and watch
+its details. Set Left dial to blend and Right dial to petal, save the preset as a new one, load
+another, then the new one. Press ⌘Z. Open SYSTEM. Then with the panel on the deck off air, load
+that new preset there while DIAL is on air, and push the left stick.
+
+**Right if:** the pad node's details show both sticks as clock faces, each slice named in full
+and filling as you push; on the pad's picture the sticks show their slices and read "Left dial ·
+…" instead of the orbit. The new preset comes back with left blend and right petal; DIAL with
+petal / blend. ⌘Z undoes the last change. SYSTEM shows only the sticks' feel. The load off air
+leaves the stick on air exactly as it was.
+
+**Wrong if:** a preset comes back with the readings of the one before; a stick still orbits while
+it is a dial; a load on the deck off air changes how the stick on air feels.
+
+*(checks 559, 560)*
+
 ## (g) A second controller, a phone (OSC)
 
 Plan 27. Each of these adds an entry to the config file's device list
@@ -8423,7 +8445,7 @@ the pad grid (G6 is the clip-stop row), B-numbers the single buttons
 (B11 OVERDUB, B20 TAP TEMPO…).
 
 **Golden picture (golden frame)** — a picture of a factory preset the
-automated tests draw and compare to the last byte; 596 of them, kept in
+automated tests draw and compare to the last byte; hundreds of them, kept in
 `hyperspace-python/tests/golden/frames/`.
 
 **GRAPH page** — the page (after ROUTING) that draws every control,

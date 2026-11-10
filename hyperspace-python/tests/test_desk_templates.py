@@ -1,12 +1,12 @@
 """Plan 44 D3 — desk templates retired, and the migration that retires them.
 
-Plan 24 C3's desk templates (decision 19: a named set of preset-layer rows
-in ``<library>/desk/``, a preset naming one keeping only its overrides) are
+Plan 24 C3's desk templates (decision 19: a named set of patch-layer rows
+in ``<library>/desk/``, a loadable patch naming one keeping only its overrides) are
 gone: neither the Drive library nor ``~/Hyperspace`` held one (the owner,
 2026-11-03), so the inlining plan 43 §6 item 4 asked for is a no-op and the
 template code went (`preset.TEMPLATE_KEY`, `expand_desk`, `compact_desk`,
 `library.DESK`, `desk_template`). What is left is the migration's word on
-an old file that still names one, proven on plan 24's fixture preset
+an old file that still names one, proven on plan 24's fixture loadable patch
 (tests/fixtures/desk-templates/):
 
 - a load says the template is retired and lands the file's own desk rows
@@ -23,18 +23,18 @@ import json
 import shutil
 from pathlib import Path
 
-from test_presets import boot
+from test_loadable import boot
 
-from hyperspace import graphmigrate, library, preset
-from hyperspace.preset import desk_json
+from hyperspace import graphmigrate, library, loadable
+from hyperspace.loadable import desk_json
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "desk-templates"
 TEMPLATE = FIXTURES / "desk" / "fixture-shape.json"
-PRESET = FIXTURES / "presets" / "templated.json"
+TEMPLATED = FIXTURES / "presets" / "templated.json"
 
 
 def put_fixtures(home: Path) -> None:
-    for src, group in ((PRESET, "presets"), (TEMPLATE, "desk")):
+    for src, group in ((TEMPLATED, "loadable"), (TEMPLATE, "desk")):
         (home / group).mkdir(parents=True, exist_ok=True)
         shutil.copy(src, home / group / src.name)
 
@@ -42,17 +42,17 @@ def put_fixtures(home: Path) -> None:
 def test_the_template_code_is_gone():
     for name in ("TEMPLATE_KEY", "expand_desk", "compact_desk", "merge_modifiers",
                  "template_doc"):
-        assert not hasattr(preset, name), name
+        assert not hasattr(loadable, name), name
     for name in ("DESK", "DESK_SCHEMA"):
         assert not hasattr(library, name), name
     assert not hasattr(library.Library, "desk_template")
     for name in ("template_of_loaded", "template_at_load", "_at_load", "_mods_at_load"):
-        assert not hasattr(preset.Presets, name), name
+        assert not hasattr(loadable.LoadedPatch, name), name
     assert graphmigrate.TEN_RETIRED == ("modules", "desk_template")
 
 
 def test_ten_drops_the_template_and_its_dark_rows_and_the_labels():
-    doc = json.loads(PRESET.read_text())
+    doc = json.loads(TEMPLATED.read_text())
     out = graphmigrate.ten(doc)
     assert "desk_template" not in out and "modules" not in out
     assert [r["source"] for r in out["desk"]] == ["cc:*:17", "cc:0:50"]
@@ -62,30 +62,30 @@ def test_ten_drops_the_template_and_its_dark_rows_and_the_labels():
     assert graphmigrate.ten(ten) is ten
 
 
-def test_an_old_templated_preset_loads_its_own_rows_and_saves_without_the_key(tmp_path):
+def test_an_old_templated_loadable_loads_its_own_rows_and_saves_without_the_key(tmp_path):
     rig = boot(tmp_path)
     put_fixtures(rig.home)
     rig.lib._sync()
-    assert rig.presets.load("TEMPLATED") == []
-    assert preset.TEMPLATE_RETIRED.format(name="fixture shape") in rig.presets.notes
+    assert rig.loaded_patch.load("TEMPLATED") == []
+    assert loadable.TEMPLATE_RETIRED.format(name="fixture shape") in rig.loaded_patch.notes
     desk = desk_json(rig.router.table.desk())
     assert [r["source"] for r in desk] == ["cc:*:17", "cc:0:50"]
     assert {r["target"] for r in desk} == {"dream.mix", "view.pattern_mix"}
-    doc = rig.presets.document("TEMPLATED")
-    assert doc["schema"] == "hyperspace.preset/10"
+    doc = rig.loaded_patch.document("TEMPLATED")
+    assert doc["schema"] == "hyperspace.loadable/11"
     assert "desk_template" not in doc and "modules" not in doc
-    path = rig.presets.save_as("TEMPLATED")
+    path = rig.loaded_patch.save_as("TEMPLATED")
     first = path.read_bytes()
-    rig.presets.load("TEMPLATED")
-    assert rig.presets.notes == [] and not rig.lib.is_dirty("presets")
-    assert rig.presets.save_as("TEMPLATED").read_bytes() == first      # a fixed point
+    rig.loaded_patch.load("TEMPLATED")
+    assert rig.loaded_patch.notes == [] and not rig.lib.is_dirty("loadable")
+    assert rig.loaded_patch.save_as("TEMPLATED").read_bytes() == first      # a fixed point
     # the template file is never read, never written
     assert (rig.home / "desk" / TEMPLATE.name).read_bytes() == TEMPLATE.read_bytes()
 
 
-def test_the_tool_rewrites_a_templated_preset_on_a_scratch_copy(tmp_path, monkeypatch):
+def test_the_tool_rewrites_a_templated_loadable_on_a_scratch_copy(tmp_path, monkeypatch):
     """tools/migrate_library.py --apply over a scratch library (never the
-    owner's): the templated preset is /10 without the key, the library was
+    owner's): the templated loadable patch is /10 without the key, the library was
     backed up first, `desk/` is left as it was."""
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -98,13 +98,13 @@ def test_the_tool_rewrites_a_templated_preset_on_a_scratch_copy(tmp_path, monkey
     monkeypatch.setenv("HYPERSPACE_HOME", str(home))
     code = tool.main(["--library", str(lib), "--apply"], picture=lambda p, **kw: ([], []))
     assert code == 0
-    doc = json.loads((lib / "presets" / PRESET.name).read_text())
-    assert doc["schema"] == tool.NEWEST == "hyperspace.preset/10"
+    doc = json.loads((lib / "loadable" / TEMPLATED.name).read_text())
+    assert doc["schema"] == tool.NEWEST == "hyperspace.loadable/11"
     assert "desk_template" not in doc and "modules" not in doc
     backups = list(home.glob("library-backup-*"))
     assert len(backups) == 1
-    assert json.loads((backups[0] / "presets" / PRESET.name).read_text()) == json.loads(
-        PRESET.read_text())
+    assert json.loads((backups[0] / "loadable" / TEMPLATED.name).read_text()) == json.loads(
+        TEMPLATED.read_text())
     assert (lib / "desk" / TEMPLATE.name).read_bytes() == TEMPLATE.read_bytes()
 
 

@@ -13,7 +13,7 @@ import json
 import numpy as np
 import pytest
 from test_camera import _draw, _rows, _view
-from test_presets import boot, boot_registry
+from test_loadable import boot, boot_registry
 
 from hyperspace.geometry import geom, is_3d, view_angles, world_points
 from hyperspace.params import part_of
@@ -25,27 +25,27 @@ def _strokes(ctx, monkeypatch, **kw):
     return _rows(ctx, monkeypatch, _view(lines=True, **kw))
 
 
-def test_the_default_is_world_space_a_preset_performance_switch():
+def test_the_default_is_world_space_a_loadable_patch_switch():
     reg = boot_registry()
     p = reg["view.screen_strokes"]
     assert ViewState().screen_strokes is False and p.base is False
-    assert p.group == "view" and part_of(p) == "performance" and p.persist
+    assert p.group == "view" and part_of(p) == "patch" and p.persist
     assert p.modulatable                      # as view.lines / view.cut_through
 
 
-def test_the_switch_is_in_a_saved_preset_and_loads_back(tmp_path):
+def test_the_switch_is_in_a_saved_loadable_and_loads_back(tmp_path):
     rig = boot(tmp_path)
     rig.reg["view.screen_strokes"].set(True)
-    doc = rig.presets.document("S")
+    doc = rig.loaded_patch.document("S")
     assert doc["values"]["view.screen_strokes"] is True
     rig.reg["view.screen_strokes"].set(False)
     path = tmp_path / "S.json"
     path.write_text(json.dumps(doc))
-    rig.presets.load_doc(doc, path)
+    rig.loaded_patch.load_doc(doc, path)
     assert rig.view.screen_strokes is True
-    # a preset without the key (every corpus file) lands world space
+    # a loadable patch without the key (every corpus file) lands world space
     del doc["values"]["view.screen_strokes"]
-    rig.presets.load_doc(doc, path)
+    rig.loaded_patch.load_doc(doc, path)
     assert rig.view.screen_strokes is False
 
 

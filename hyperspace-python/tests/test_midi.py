@@ -10,12 +10,13 @@ from hyperspace import apc40, hands, lfo, midi, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
+from hyperspace.deck import Mix, register_xfade
 from hyperspace.library import Library
+from hyperspace.loadable import LoadedPatch
 from hyperspace.midi import PICKUP_TOL, Binding, MidiIO
 from hyperspace.overlay import Output
 from hyperspace.params import Kind, build_registry
-from hyperspace.preset import Presets
-from hyperspace.routing import Bindings, Router, is_session_row
+from hyperspace.routing import Bindings, Router, is_meta_row
 from hyperspace.view import ViewState
 
 
@@ -53,8 +54,8 @@ def rig(tmp_path):
     view = ViewState()
     seed(tmp_path)              # the corpus: the party show's bank, TUMBLE first
     lib = Library(tmp_path)
-    presets = lib.project
-    reg = build_registry(view, control, audio, presets)
+    project = lib.install
+    reg = build_registry(view, control, audio, project)
     lib.attach(reg)
     reg.toggle("ui.panel", "Panel", lambda: True, lambda v: None)
     reg.toggle("ui.cheatsheet", "Sheet", lambda: True, lambda v: None)
@@ -62,15 +63,16 @@ def rig(tmp_path):
     reg.trigger("audio.stop", "Stop", lambda: None)
     reg.toggle("audio.play", "Play", lambda: False, lambda v: None)
     Output(None, None).register(reg)
+    register_xfade(reg, Mix())
     clock = tempo.Clock(now=lambda: 0.0)       # the transport corner: tap, nudge, trigger
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
     hands.register(reg, hands.HandSettings.from_config({}))   # the global track knobs
     inp, out = FakeIn(), FakeOut()
     m = MidiIO(reg, path=tmp_path / "midi_map.json", inp=inp, out=out)
-    Presets(lib, reg, Router(reg, m.table))     # the bank the clip row and QUANT load
+    LoadedPatch(lib, reg, Router(reg, m.table))     # the bank the clip row and QUANT load
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio,
-                           presets=presets, midi=m, inp=inp, out=out, clock=clock)
+                           loaded_patch=project, midi=m, inp=inp, out=out, clock=clock)
 
 
 def push(r, *msgs):
@@ -114,7 +116,7 @@ def test_device_knob_drives_selected_band_under_shift(rig):
     reg, control = rig.reg, rig.control
     atk = reg["band.sel.atk"]
     before = atk.norm
-    push(rig, cc(0x15, 0))            # the preset layer: nothing there
+    push(rig, cc(0x15, 0))            # the patch layer: nothing there
     assert atk.norm == pytest.approx(before)
     shift(rig)
     push(rig, cc(0x15, 127))          # re-based at the ring: applied at once
@@ -166,12 +168,12 @@ def test_a_fader_moved_while_its_row_is_disabled_has_to_pick_up_again(rig):
 
 def test_fader_without_pickup_jumps(rig):
     for x in rig.midi.bindings:
-        if x.target == "master.gain":
+        if x.target == "output.xfade":
             x.pickup = False
-    g = rig.reg["master.gain"]
-    push(rig, cc(apc40.CC_MASTER, 0))
+    g = rig.reg["output.xfade"]
+    push(rig, cc(apc40.CC_XFADE, 0))
     assert g.value == 0.0
-    push(rig, cc(apc40.CC_MASTER, 127))
+    push(rig, cc(apc40.CC_XFADE, 127))
     assert g.norm == 1.0
 
 
@@ -247,7 +249,7 @@ def test_step_buttons(rig):
 
 
 def test_transport_corner_is_the_clock(rig):
-    """TAP TEMPO taps, NUDGE ± steps a hundredth, QUANT steps the preset bank."""
+    """TAP TEMPO taps, NUDGE ± steps a hundredth, QUANT steps the loadable patch bank."""
     c = rig.clock
     c.tick(1.0)
     push(rig, note(apc40.N_TAP), note(apc40.N_TAP, 0))
@@ -259,9 +261,9 @@ def test_transport_corner_is_the_clock(rig):
     push(rig, note(apc40.N_NUDGE_M), note(apc40.N_NUDGE_M, 0))
     push(rig, note(apc40.N_NUDGE_M), note(apc40.N_NUDGE_M, 0))
     assert c.nudge == pytest.approx(-0.01)
-    was = rig.presets.active
+    was = rig.loaded_patch.active
     push(rig, note(apc40.N_QUANT))
-    assert rig.presets.active != was
+    assert rig.loaded_patch.active != was
 
 
 def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
@@ -286,12 +288,12 @@ def test_metronome_fires_the_trigger_and_blinks_on_the_beat(rig):
     assert len(rig.midi.table.route("note", 0, apc40.N_METRO)) == 1
 
 
-def test_preset_row_lights_the_active_preset(rig):
+def test_loadable_row_lights_the_active_loadable(rig):
     push(rig, note(apc40.N_CLIP[0], channel=2))
-    assert rig.presets.active == 2
+    assert rig.loaded_patch.active == 2
     leds = {(m.channel, m.note): m.velocity for m in rig.out.sent if m.type == "note_on"}
     assert leds[(2, apc40.N_CLIP[0])] == apc40.GREEN
-    # a slot that holds another preset is amber, not dark (plan 19 WP2)
+    # a slot that holds another loadable patch is amber, not dark (plan 19 WP2)
     assert leds[(0, apc40.N_CLIP[0])] == apc40.YELLOW
 
 
@@ -333,7 +335,7 @@ def test_ring_shows_the_base_and_never_chases_a_performer(rig):
     for u in (0.1, 0.2, 0.3):         # only the offset moves
         perform(u)
     assert b.modulated and b.eff_norm == pytest.approx(0.8, abs=1e-3) and rings() == []
-    b.set_norm(0.25)                  # the base moves (a fader, a preset)
+    b.set_norm(0.25)                  # the base moves (a fader, a loadable patch)
     perform(0.3)
     assert rings() == [round(0.25 * 127)]
     assert b.eff_norm == pytest.approx(0.55, abs=1e-3)
@@ -378,8 +380,8 @@ def test_selected_band_rings_follow_the_selection(rig):
 
 # ---------------------------------------------------------------- learn
 
-def test_learn_binds_next_message_into_the_preset_layer(rig, tmp_path):
-    """Plan 13 §3.3: the learned row is a preset-layer row in the live
+def test_learn_binds_next_message_into_the_loadable_layer(rig, tmp_path):
+    """Plan 13 §3.3: the learned row is a patch-layer row in the live
     table — the file is not written (tests/test_learn.py has the rest)."""
     m = rig.midi
     path = tmp_path / "midi_map.json"
@@ -425,31 +427,31 @@ def test_learn_takes_over_a_key_from_its_old_param(rig):
     assert rig.view.pattern_mix == 1.0
 
 
-def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
-    """Plan 13 WP5: right-click → Unbind is an edit of the loaded preset —
+def test_unbind_removes_only_loadable_layer_rows_and_writes_no_file(rig):
+    """Plan 13 WP5: right-click → Unbind is an edit of the loaded patch —
     its desk rows on the param go (the knob and the step buttons), no file
-    is written, the preset's dot lights; a param only the session maps (an
+    is written, the loadable patch's dot lights; a param only the meta controller maps (an
     invariant fader, a global-layer knob) is refused with the reason in
     the learn line, as Learn refuses, and its row stays."""
-    m, lib = rig.midi, rig.presets.lib
-    lib.load("presets", "BIG BLUE WAVE")
-    assert not lib.is_dirty("presets")
+    m, lib = rig.midi, rig.loaded_patch.lib
+    lib.load("loadable", "BIG BLUE WAVE")
+    assert not lib.is_dirty("loadable")
     path = m.table.path
     before = path.read_bytes() if path.exists() else None
-    session = [b.to_json() for b in m.table.bindings if b.layer != "preset"]
+    meta_rows = [b.to_json() for b in m.table.bindings if b.layer != "preset"]
     rows = [b for b in m.table.desk() if b.target == "view.bright"]
     assert {b.kind for b in rows} == {"cc", "note"}               # the knob and ▲ ▼
     m.unbind("view.bright")
     assert not [b for b in m.table.bindings if b.target == "view.bright" and b.is_midi]
     assert not m.learner.refused and "unbound view.bright" in m.learner.last
     assert (path.read_bytes() if path.exists() else None) == before
-    assert lib.is_dirty("presets")
-    assert [b.to_json() for b in m.table.bindings if b.layer != "preset"] == session
+    assert lib.is_dirty("loadable")
+    assert [b.to_json() for b in m.table.bindings if b.layer != "preset"] == meta_rows
     push(rig, cc(0x30, 10))                                       # nothing listens now
-    assert rig.view.bright == pytest.approx(lib.read("presets", "BIG BLUE WAVE")["values"]
+    assert rig.view.bright == pytest.approx(lib.read("loadable", "BIG BLUE WAVE")["values"]
                                             .get("view.bright", 1.0))
-    # the session's rows: refused, kept
-    for pid, why in (("master.gain", "invariant"), ("band.0.post", "global layer"),
+    # the meta controller's rows: refused, kept
+    for pid, why in (("output.xfade", "invariant"), ("band.0.post", "global layer"),
                      ("band.sel.trim", "global layer")):
         m.unbind(pid)
         assert m.learner.refused and why in m.learner.last, pid
@@ -495,7 +497,7 @@ def test_a_knob_bump_during_a_hand_learn_does_its_own_job(rig):
     low = bright.norm
     push(rig, cc(0x30, 110))
     assert bright.norm > low and bright.norm == pytest.approx(110 / 127, abs=0.02)
-    # a preset-layer pad (activator 1; the render toggles are invariant
+    # a patch-layer pad (activator 1; the render toggles are invariant
     # since plan 24 C1)
     plane = rig.reg["view.plane.ZW"].value
     pad = next(b for b in m.table.desk() if b.target == "view.plane.ZW" and b.kind == "note")
@@ -516,16 +518,16 @@ def test_an_invariant_control_works_through_a_desk_learn(rig):
     — it does its one job. A fader moves its param, SHIFT latches (and
     latches back), TAP taps, and the learn is still armed, unrefused, the
     table untouched; a release is never a candidate; then a knob the
-    preset may map lands it, and that message is not dispatched."""
+    loadable patch may map lands it, and that message is not dispatched."""
     m, lrn, reg = rig.midi, rig.midi.learner, rig.reg
     for x in m.bindings:
         x.pickup = False
     rows = [(b.to_json(), b.layer) for b in m.table.bindings]
     lrn.arm("view.depth4", "desk")
-    post = reg["master.gain"]                                # MASTER (S1–S8 are layered, C2)
-    push(rig, cc(apc40.CC_MASTER, 0))                        # a fader's jitter
+    post = reg["output.xfade"]                                # the crossfader (S1–S8 are layered, C2)
+    push(rig, cc(apc40.CC_XFADE, 0))                        # a fader's jitter
     low = post.norm
-    push(rig, cc(apc40.CC_MASTER, 127))
+    push(rig, cc(apc40.CC_XFADE, 127))
     assert post.norm > low
     assert lrn.learning == "view.depth4" and not lrn.refused and lrn.last == ""
     shift(rig)                                               # SHIFT latches through it
@@ -538,7 +540,7 @@ def test_an_invariant_control_works_through_a_desk_learn(rig):
     assert lrn.learning == "view.depth4" and len(rig.clock.taps) == taps + 1
     assert [(b.to_json(), b.layer) for b in m.table.bindings] == rows
     depth4, bright = reg["view.depth4"].norm, reg["view.bright"].norm
-    push(rig, cc(0x30, 100))                                 # K1: the preset's to map
+    push(rig, cc(0x30, 100))                                 # K1: the loadable patch's to map
     assert lrn.learning is None and "learned view.depth4 ← K1 (track knob 1)" in lrn.last
     assert "B16" not in lrn.last                             # Brightness keeps its buttons
     assert reg["view.depth4"].norm == depth4 and reg["view.bright"].norm == bright
@@ -550,7 +552,7 @@ def test_an_invariant_control_works_through_a_desk_learn(rig):
 def test_map_round_trips_json(tmp_path):
     path = tmp_path / "m.json"
     mm = Bindings.load(path)
-    n = len([b for b in mm.midi() if is_session_row(b)])   # the file keeps the session's
+    n = len([b for b in mm.midi() if is_meta_row(b)])   # the file keeps the meta controller's
     mm.bind(Binding("pitch:3", "view.zoom", "abs"))
     mm2 = Bindings.load(path)
     assert len(mm2.midi()) == n + 1
@@ -582,7 +584,7 @@ def test_close_returns_to_generic_mode(rig):
 # ------------------------------------------------------ plan 15 WP1: undo
 
 def test_an_unbind_is_one_undo_step(tmp_path):
-    """Right-click → Unbind is one undo step: every preset-layer row it
+    """Right-click → Unbind is one undo step: every patch-layer row it
     took comes back, the desk is redrawn (the control lights again), and
     it is a restore, not a load. A refused unbind leaves no step."""
     from test_undo import boot, frames, labels, settle
@@ -609,7 +611,7 @@ def test_an_unbind_is_one_undo_step(tmp_path):
     assert u.redo() and not any(b.target == pid for b in table.desk())
     u.undo()
     frames(r, 3)
-    # the session's rows: refused, nothing changes, no step
+    # the meta controller's rows: refused, nothing changes, no step
     m.unbind("band.0.post")
     assert m.learner.refused
     settle(r)
@@ -619,39 +621,39 @@ def test_an_unbind_is_one_undo_step(tmp_path):
 # ---------------------------------------------------------------- the master dim
 
 def test_the_crossfader_dims_with_soft_pickup(rig):
-    """Plan 15 WP3: the crossfader is the master dim on both layers, CC 0
+    """Plan 15 WP3, plan 44 D5d: MASTER is the master dim on both layers, CC 0
     black. A launch is at full with the fader wherever it was left: parked
     at the left it does nothing — it cannot black the rig out by being
     touched — until it is brought up to the value; then it follows."""
     dim = rig.reg["output.dim"]
-    b = next(x for x in rig.midi.bindings if x.source == f"cc:0:{apc40.CC_XFADE}")
+    b = next(x for x in rig.midi.bindings if x.source == f"cc:0:{apc40.CC_MASTER}")
     assert (b.target, b.op, b.layer, b.pickup, b.feedback) == ("output.dim", "abs", None,
                                                                True, None)
-    # invariant (D6): a preset's row on the control would never act
+    # invariant (D6): a loadable patch's row on the control would never act
     assert rig.midi.table.is_invariant(Binding(b.source, "view.bright", "abs", layer="preset"))
     assert dim.value == 1.0 and not b.caught
     for v in (0, 0, 3, 40, 90, 120):               # parked at black, then on the way up
-        push(rig, cc(apc40.CC_XFADE, v))
+        push(rig, cc(apc40.CC_MASTER, v))
         assert dim.value == 1.0 and not b.caught, v
-    push(rig, cc(apc40.CC_XFADE, 127))             # reached it
+    push(rig, cc(apc40.CC_MASTER, 127))             # reached it
     assert b.caught and dim.value == 1.0
-    push(rig, cc(apc40.CC_XFADE, 64))
+    push(rig, cc(apc40.CC_MASTER, 64))
     assert dim.value == pytest.approx(64 / 127, abs=PICKUP_TOL)
     shift(rig)                                     # the same on the global layer
     assert b.caught
-    push(rig, cc(apc40.CC_XFADE, 20))
+    push(rig, cc(apc40.CC_MASTER, 20))
     assert dim.value == pytest.approx(20 / 127, abs=PICKUP_TOL)
-    push(rig, cc(apc40.CC_XFADE, 0))               # the left end
+    push(rig, cc(apc40.CC_MASTER, 0))               # the left end
     assert dim.value == 0.0 and dim.text() == "black"
-    push(rig, cc(apc40.CC_XFADE, 127))
+    push(rig, cc(apc40.CC_MASTER, 127))
     assert dim.value == 1.0
     # the panel's fader moved it: pickup again, no jump
     dim.set_norm(0.5)
     rig.midi.poll()
     assert not b.caught
-    push(rig, cc(apc40.CC_XFADE, 126))
+    push(rig, cc(apc40.CC_MASTER, 126))
     assert dim.value == pytest.approx(0.5)
-    push(rig, cc(apc40.CC_XFADE, 40))              # swept through it
+    push(rig, cc(apc40.CC_MASTER, 40))              # swept through it
     assert dim.value == pytest.approx(40 / 127, abs=PICKUP_TOL)
 
 
@@ -703,26 +705,26 @@ def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
     """A `hold` row fires when its button has been down HOLD_S — while it
     is still down (fork 14) — and never again for that press."""
     at, fires = bar_rig(rig)
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     rows = [b for b in rig.midi.bindings if b.op == "hold"]
     assert [(b.source, b.target, b.layer) for b in rows] \
         == [(f"note:{k}:{STOP}", "preset.save_new", None) for k in BAR]
     pr.clear_slot(5)
     push(rig, note(apc40.N_CLIP[0], channel=4), note(apc40.N_CLIP[0], 0, channel=4))
-    assert lib.current("presets") == "TRIP"
+    assert lib.current("loadable") == "TRIP"
     at(0.0, note(STOP, channel=2))
     at(0.3)
     at(0.59)
-    assert fires == [] and lib.current("presets") == "TRIP"
+    assert fires == [] and lib.current("loadable") == "TRIP"
     at(0.6)                                                  # still held: it fires now
     assert fires == [0.6]
-    assert lib.current("presets") == "TRIP 2" and pr.bank[5] == "TRIP 2"
+    assert lib.current("loadable") == "TRIP 2" and pr.bank[5] == "TRIP 2"
     at(1.0)
     at(2.0)                                                  # still down: nothing more
     assert fires == [0.6]
     at(2.5, note(STOP, 0, channel=2))                        # the release does nothing
     at(5.0)
-    assert fires == [0.6] and lib.current("presets") == "TRIP 2"
+    assert fires == [0.6] and lib.current("loadable") == "TRIP 2"
     # a key or pad row with the op does nothing (`routing.act` ignores it)
     from hyperspace import routing
     routing.act(rig.reg, Binding("key:F9", "preset.save_new", "hold"))
@@ -736,13 +738,13 @@ def test_a_hold_fires_once_at_the_hold_time_while_held(rig):
 
 def test_a_tap_fires_nothing(rig):
     at, fires = bar_rig(rig)
-    lib = rig.presets.lib
-    was, bank = lib.current("presets"), list(rig.presets.bank)
+    lib = rig.loaded_patch.lib
+    was, bank = lib.current("loadable"), list(rig.loaded_patch.bank)
     at(0.0, note(STOP, channel=3))
     at(0.3, note(STOP, 0, channel=3))                        # released at 0.3 s
     at(0.6)
     at(2.0)
-    assert fires == [] and lib.current("presets") == was and rig.presets.bank == bank
+    assert fires == [] and lib.current("loadable") == was and rig.loaded_patch.bank == bank
     # a tap in one poll, and taps one after the other, likewise
     at(3.0, note(STOP, channel=3), note(STOP, 0, channel=3))
     at(3.5, note(STOP, channel=3))
@@ -799,7 +801,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     from hyperspace import midi
 
     at, fires = bar_rig(rig)
-    pr = rig.presets
+    pr = rig.loaded_patch
     pad = apc40.N_CLIP[0]
     assert apc40.blink_of(STOP, 1) == 2 and apc40.blink_of(pad, apc40.GREEN) == apc40.GREEN_BLINK
     assert apc40.blink_of(apc40.N_CLIP[2], apc40.RED) == apc40.RED_BLINK
@@ -863,7 +865,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
     assert pr.next_empty() is None
     at(20.0, note(STOP, channel=0))
     at(20.65)
-    assert pr.lib.warning == "saved TRIP 4 — the bank is full: it is in the preset list"
+    assert pr.lib.warning == "saved TRIP 4 — the bank is full: it is in the patch list"
     assert [leds(rig, STOP, k, mark) for k in BAR] == [[1, 2]] * len(BAR)
     assert [m.velocity for m in rig.out.sent[mark:]                 # TRIP 3's pad: amber
             if m.type == "note_on" and m.note == pad] == [apc40.YELLOW]
@@ -897,7 +899,7 @@ def test_the_bar_lights_while_held_and_the_new_slots_pad_blinks(rig):
 
 TICK = 1 / 64               # a frame, exact in binary: so are the sums below
 GLIDE = 0.125               # desk.slew for these tests: eight frames
-K_MIX = 0x33                # track knob 4 on the preset layer: view.pattern_mix, 100 detents
+K_MIX = 0x33                # track knob 4 on the patch layer: view.pattern_mix, 100 detents
 
 
 def slew_rig(rig, seconds=GLIDE):
@@ -1080,13 +1082,13 @@ def test_a_fader_keeps_its_catch_through_a_glide_and_an_uncaught_one_writes_noth
     (`_note_written`), so `_uncatch_moved` never reads them as "moved
     without us" and a caught fader stays caught while its value arrives;
     a fader that has not reached its param's value starts no glide."""
-    dim, gain = rig.reg["output.dim"], rig.reg["master.gain"]
-    x = next(b for b in rig.midi.bindings if b.source == f"cc:0:{apc40.CC_XFADE}")
-    m = next(b for b in rig.midi.bindings if b.target == "master.gain")
-    push(rig, cc(apc40.CC_XFADE, 127))             # brought up to the value: caught
+    dim, gain = rig.reg["output.dim"], rig.reg["output.xfade"]
+    x = next(b for b in rig.midi.bindings if b.source == f"cc:0:{apc40.CC_MASTER}")
+    m = next(b for b in rig.midi.bindings if b.target == "output.xfade")
+    push(rig, cc(apc40.CC_MASTER, 127))             # brought up to the value: caught
     assert x.caught and x.pickup and dim.value == 1.0
     at = slew_rig(rig)
-    at(TICK, cc(apc40.CC_XFADE, 0))
+    at(TICK, cc(apc40.CC_MASTER, 0))
     seen = []
     for k in range(2, 9):
         at(k * TICK)
@@ -1095,14 +1097,14 @@ def test_a_fader_keeps_its_catch_through_a_glide_and_an_uncaught_one_writes_noth
     assert seen == sorted(seen, reverse=True) and 0.0 < seen[-1] < seen[0] < 1.0
     at(9 * TICK)
     assert dim.value == 0.0 and x.caught and rig.midi._slews == {}
-    at(10 * TICK, cc(apc40.CC_XFADE, 64))          # still caught: it follows, gliding
+    at(10 * TICK, cc(apc40.CC_MASTER, 64))          # still caught: it follows, gliding
     assert x.caught and 0.0 < dim.norm < 0.2
     # master.gain's fader has not been brought to its value: nothing
     was = gain.value
     assert m.pickup and not m.caught
     far = 0 if gain.norm > 0.5 else 127
-    at(11 * TICK, cc(apc40.CC_MASTER, far))
-    assert not m.caught and gain.value == was and "master.gain" not in rig.midi._slews
+    at(11 * TICK, cc(apc40.CC_XFADE, far))
+    assert not m.caught and gain.value == was and "output.xfade" not in rig.midi._slews
     for k in range(12, 24):
         at(k * TICK)
     assert gain.value == was and dim.norm == round(64 / 127 * 100) / 100
@@ -1256,7 +1258,7 @@ def test_a_param_that_moves_on_its_own_is_written_at_once(rig):
 
 
 def test_a_load_from_a_pad_ends_a_glide_before_it_steps(rig):
-    """Review of PR #98: a knob message and a pad that loads a preset in
+    """Review of PR #98: a knob message and a pad that loads a loadable patch in
     one poll. The load's desk replacement is followed before the glides
     step, so the glide the knob just aimed is gone and the value the load
     left stands — even though it equals what the glide last saw."""
@@ -1277,9 +1279,9 @@ def test_closing_the_adapter_lands_every_glide(rig):
     """Review of PR #98: nothing is left between detents when the app
     quits inside the glide's time."""
     dim = rig.reg["output.dim"]
-    push(rig, cc(apc40.CC_XFADE, 127))
+    push(rig, cc(apc40.CC_MASTER, 127))
     at = slew_rig(rig)
-    at(TICK, cc(apc40.CC_XFADE, 64))
+    at(TICK, cc(apc40.CC_MASTER, 64))
     at(2 * TICK)
     assert 0.5 < dim.norm < 1.0
     rig.midi.close()
@@ -1290,14 +1292,14 @@ def test_closing_the_adapter_lands_every_glide(rig):
 
 def test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty(rig, monkeypatch):
     """Fork 5: the velocities sent for a bank pad's three states — GREEN
-    (1) for the loaded preset's slot, YELLOW (5) for a slot that holds
-    another preset, 0 for an empty one — on rows 1, 4 and 5 alike, and
+    (1) for the loaded patch's slot, YELLOW (5) for a slot that holds
+    another loadable patch, 0 for an empty one — on rows 1, 4 and 5 alike, and
     the same under SHIFT. A load moves the green; a cleared slot goes
     dark; a filled one comes up amber. `filled_of` answering None (the
     way to turn the third state off) leaves a filled pad dark."""
     from hyperspace import routing
 
-    pr = rig.presets
+    pr = rig.loaded_patch
 
     def led(k):
         n, ch = apc40.BANK_PADS[k]
@@ -1317,7 +1319,7 @@ def test_a_bank_pad_is_green_loaded_amber_filled_and_dark_empty(rig, monkeypatch
     # a press on row 4's first pad loads slot 9: green there, amber elsewhere
     n, ch = apc40.BANK_PADS[8]
     push(rig, note(n, channel=ch), note(n, 0, channel=ch))
-    assert pr.active == 8 and pr.lib.current("presets") == "TRACER"
+    assert pr.active == 8 and pr.lib.current("loadable") == "TRACER"
     assert [routing.led_level(row[k], p) for k in (0, 8, 9)] == [1, 2, 0]
     assert [led(k) for k in range(24)] == [apc40.YELLOW] * 8 + [apc40.GREEN] + [0] * 15
     # a load from row 1 moves the green; slot 9 falls back to amber
@@ -1352,12 +1354,12 @@ def test_save_as_blinks_the_new_pad_on_row_four(rig):
     """Plan 15 row 42, now on rows 4–5 too: with F1–F8 and slot 9 full the
     hold on the clip-stop row lands in slot 10 — row 4, pad 2 — and that
     pad blinks green with the bar for BLINK_S (`blink_of`), then shows
-    green; the pad of the preset that was up falls to amber. The same
+    green; the pad of the loadable patch that was up falls to amber. The same
     under SHIFT, into slot 11."""
     from hyperspace import midi
 
     at, fires = bar_rig(rig)
-    pr = rig.presets
+    pr = rig.loaded_patch
     assert pr.next_empty() == 9                                     # slot 10
     pad = apc40.N_CLIP[0]
     push(rig, note(pad, channel=4), note(pad, 0, channel=4))        # TRIP, on F5
@@ -1438,7 +1440,7 @@ def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
     """The bank pads carry the save: `preset.select` declares `held`, so
     its `set` row is a press and a hold at once — the press loads (an
     empty slot only says so), held HOLD_S on an empty slot the live state
-    is a new preset in that slot and its pad blinks; a filled slot is never
+    is a new loadable patch in that slot and its pad blinks; a filled slot is never
     written over. One row per pad; the clip-stop row is free."""
     from hyperspace import midi
 
@@ -1449,7 +1451,7 @@ def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
         t[0] = seconds
         push(rig, *msgs)
 
-    lib, pr = rig.presets.lib, rig.presets
+    lib, pr = rig.loaded_patch.lib, rig.loaded_patch
     pad = apc40.N_CLIP[0]
     # free but for SAVE on track 8's (plan 24 C1, decision 18)
     assert [b.target for b in rig.midi.bindings if b.kind == "note" and b.number == STOP] \
@@ -1457,30 +1459,30 @@ def test_holding_an_empty_bank_pad_saves_into_that_slot(rig):
     assert [b.target for b in rig.midi.table.route("note", 5, pad)] == ["preset.select"]
     push(rig, note(pad, channel=4), note(pad, 0, channel=4))                # TRIP
     pr.clear_slot(5)
-    assert lib.current("presets") == "TRIP" and pr.bank[5] is None
+    assert lib.current("loadable") == "TRIP" and pr.bank[5] is None
     # a tap on the empty pad: says so, saves nothing
     at(0.0, note(pad, channel=5))
     at(0.3, note(pad, 0, channel=5))
     at(1.0)
-    assert pr.bank[5] is None and lib.current("presets") == "TRIP"
+    assert pr.bank[5] is None and lib.current("loadable") == "TRIP"
     # held: at HOLD_S, while still down, the save lands in slot 6 (index 5)
     mark = len(rig.out.sent)
     at(2.0, note(pad, channel=5))
     at(2.0 + midi.HOLD_S - 0.01)
     assert pr.bank[5] is None
     at(2.0 + midi.HOLD_S)
-    assert pr.bank[5] == "TRIP 2" and lib.current("presets") == "TRIP 2" and pr.active == 5
+    assert pr.bank[5] == "TRIP 2" and lib.current("loadable") == "TRIP 2" and pr.active == 5
     assert apc40.GREEN_BLINK in leds(rig, pad, 5, mark)                     # the new pad blinks
     at(4.0)                                                                 # still down: once
     at(4.5, note(pad, 0, channel=5))
     assert [n for n in pr.bank if n == "TRIP 2"] == ["TRIP 2"]
     # a filled pad held: the press loads it, the hold writes nothing
-    files = sorted(x.name for x in (lib.home / "presets").glob("*.json"))
+    files = sorted(x.name for x in (lib.home / "loadable").glob("*.json"))
     at(6.0, note(pad, channel=4))
     at(7.0)
     at(7.1, note(pad, 0, channel=4))
-    assert lib.current("presets") == "TRIP" and pr.bank[4] == "TRIP"
-    assert sorted(x.name for x in (lib.home / "presets").glob("*.json")) == files
+    assert lib.current("loadable") == "TRIP" and pr.bank[4] == "TRIP"
+    assert sorted(x.name for x in (lib.home / "loadable").glob("*.json")) == files
 
 
 def test_two_empty_pads_held_together_each_save_into_their_own_slot(rig):
@@ -1488,7 +1490,7 @@ def test_two_empty_pads_held_together_each_save_into_their_own_slot(rig):
 
     t = [0.0]
     rig.midi.clock = lambda: t[0]
-    pr, pad = rig.presets, apc40.N_CLIP[0]
+    pr, pad = rig.loaded_patch, apc40.N_CLIP[0]
     pr.clear_slot(6)
     pr.clear_slot(7)
     t[0] = 0.0
@@ -1530,7 +1532,7 @@ def fine_leds(rig, since=0):
             if m.type == "note_on" and m.note == FINE and m.channel == 0]
 
 
-def test_the_fine_param_is_the_rigs_and_send_b_is_free_on_both_layers(rig):
+def test_the_fine_param_is_the_meta_and_send_b_is_free_on_both_layers(rig):
     p = rig.reg[midi.FINE_PARAM]
     assert p.kind is Kind.TOGGLE and not p.value
     assert (p.group, p.persist, p.modulatable) == ("desk", False, False)
@@ -1613,14 +1615,14 @@ def test_fines_led_is_lit_while_held(rig):
 
 
 def test_fine_leaves_discrete_targets_and_faders_coarse(rig):
-    pattern = rig.reg["view.pattern"]               # D4, an enum on the preset layer
+    pattern = rig.reg["view.pattern"]               # D4, an enum on the patch layer
     push(rig, cc(0x13, 0))
     push(rig, note(FINE))
     push(rig, cc(0x13, 127))
     assert pattern.value == len(pattern.names) - 1
-    dim = rig.reg["output.dim"]                     # the crossfader: a pot, soft pickup
+    dim = rig.reg["output.dim"]                     # MASTER: a pot, soft pickup
     dim.set_norm(0.0)
-    push(rig, cc(apc40.CC_XFADE, 0), cc(apc40.CC_XFADE, 127))
+    push(rig, cc(apc40.CC_MASTER, 0), cc(apc40.CC_MASTER, 127))
     assert dim.norm == pytest.approx(1.0)
 
 
@@ -1684,7 +1686,7 @@ def test_fine_reaches_both_ends_and_wraps_a_circular_param(rig):
     rig.midi.poll()
     knob.turn(-30)
     assert mix.norm == pytest.approx(0.0)
-    yaw = rig.reg["camera.yaw"]                     # D2 on the preset layer
+    yaw = rig.reg["camera.yaw"]                     # D2 on the patch layer
     assert yaw.wrap
     yaw.set_norm(0.99)
     rig.midi.poll()

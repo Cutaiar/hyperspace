@@ -1,10 +1,10 @@
-"""Plan 40 T4 — what the loaded preset wants and the rig lacks, and the
+"""Plan 40 T4 — what the loaded patch wants and the rig lacks, and the
 arrival (spec P4).
 
 - **`devices.wants(table, registry)`**: one `Want(role, state, scheme,
-  rows)` per device role the preset's performer routes, preset-layer desk
+  rows)` per device role the loadable patch's performer routes, patch-layer desk
   rows and modifier inputs name — ``connected``, ``lost``, ``off`` or
-  ``missing`` (not in this rig) — with its rows in words
+  ``missing`` (not set up on this Mac) — with its rows in words
   (`routing.row_words`); never a built-in scheme. Over a bare registry and
   a `[[devices]]` list, headless.
 - **`wants_for` / `want_words`**: what a group node's status line says
@@ -56,8 +56,8 @@ def test_row_words_say_a_control_as_a_person_does():
     assert w(Binding("hand:left.pinch.index", "x", "position")) == "left hand pinch index"
     assert w("hands:gap") == "hands gap"
     assert w("lane:0") == "analyzer 1"
-    assert w("pad:A") == "pad A" and w("pad@p2:A") == "pad A"
-    assert w("hat:UP") == "d-pad up"
+    assert w("pad:S") == "pad south" and w("pad@p2:S") == "pad south"
+    assert w("hat:N") == "d-pad up"
     assert w("axis@p2:LX") == "axis LX"
     assert w("cc:0:48") == "CC 48 ch1" and w("note:*:53") == "note 53 any ch"
     assert w("pitch:2") == "pitch bend ch3"
@@ -83,7 +83,7 @@ def test_cable_words_still_read_the_port_name_first():
 
 # ---------------------------------------------------------------- wants
 
-def test_hand_rows_on_a_rig_without_hands_want_leap_not_in_this_rig():
+def test_hand_rows_on_a_meta_without_hands_want_leap_not_in_this_meta():
     ws = devices.wants(table_of(*HAND_ROWS), rig_of(DESK))
     assert ws == [Want("leap", "missing", "hand",
                        ("right hand y", "right hand roll", "left hand x"))]
@@ -123,15 +123,15 @@ def test_a_qualified_midi_row_wants_its_role_not_the_primary():
     assert by["apc40"].count == "1 control"
 
 
-def test_only_the_presets_rows_count_and_never_a_builtin_scheme():
-    """Performer routes, preset-layer desk rows and modifier inputs: a
-    session row (a SHIFT-layer or invariant desk row, a pad button, a key)
-    is the rig's, a disabled row reads nothing, and `lane`, `lfo`, `env`,
+def test_only_the_loadables_rows_count_and_never_a_builtin_scheme():
+    """Performer routes, patch-layer desk rows and modifier inputs: a
+    meta row (a SHIFT-layer or invariant desk row, a pad button, a key)
+    is the meta controller's, a disabled row reads nothing, and `lane`, `lfo`, `env`,
     `seq`, `mod` are no device's."""
     t = table_of(Binding("cc:0:48", "view.bright", "abs", layer="preset"),
                  Binding("cc:0:49", "view.bright", "abs", layer="global"),
                  Binding("cc:0:50", "view.bright", "abs"),
-                 Binding("pad:A", "view.faces", "toggle"),
+                 Binding("pad:S", "view.faces", "toggle"),
                  Binding("key:B", "view.faces", "toggle"),
                  Binding("lane:0", "view.zoom", "push", 0.5),
                  Binding("lfo:0", "view.zoom", "push", 0.5),
@@ -160,7 +160,7 @@ def test_wants_for_keeps_the_rows_that_land_on_the_ids_and_want_words_say_them()
     assert ws == [Want("apc40", "lost", "cc", ("K1", "K2")),
                   Want("leap", "missing", "hand", ("right hand y", "right hand roll"))]
     assert devices.want_words(ws) == ("waits for apc40 (lost): K1, K2 · "
-                                      "leap (not in this rig): right hand y, right hand roll")
+                                      "leap (not set up on this Mac): right hand y, right hand roll")
     assert devices.wants_for(t, rig, ["mod.1"]) == []
     assert devices.want_words([Want("apc40", "connected", "cc", ("K1",))]) == ""
     # a long list is cut, the rest counted
@@ -175,11 +175,11 @@ def test_the_chip_and_the_system_lines():
     ws = devices.wants(t, rig_of(DESK))
     assert devices.missing_chip(ws) == "2 devices missing"
     assert ui.wanted_lines(rig_of(DESK), t) == [
-        "wanted by the preset: leap — not in this rig; 3 rows wait",
-        "wanted by the preset: apc40 — lost; 1 control wait"]
+        "wanted by the patch: leap — not set up on this Mac; 3 rows wait",
+        "wanted by the patch: apc40 — lost; 1 control wait"]
     assert devices.missing_chip(devices.wants(table_of(HAND_ROWS[0]), rig_of(DESK))) == \
         "1 device missing"
-    # nothing when all are there, nothing when the preset wants nothing
+    # nothing when all are there, nothing when the loadable patch wants nothing
     live = devices.DeviceRegistry(devices=[_Live("leap", ("hand", "hands"))])
     assert devices.missing_chip(devices.wants(table_of(*HAND_ROWS), live)) is None
     assert ui.wanted_lines(live, table_of(*HAND_ROWS)) == []
@@ -187,8 +187,8 @@ def test_the_chip_and_the_system_lines():
     assert ui.wanted_lines(None, t) == [] and ui.wanted_lines(rig_of(DESK), None) == []
 
 
-def test_the_chip_draws_on_the_graph_head_the_preset_strip_and_system(shell_rig, monkeypatch):  # noqa: F811
-    """Headless: with a registry that lacks the hands and a preset with a
+def test_the_chip_draws_on_the_graph_head_the_loadable_strip_and_system(shell_rig, monkeypatch):  # noqa: F811
+    """Headless: with a registry that lacks the hands and a loadable patch with a
     hand row, the GRAPH page, the PRESETS page and the SYSTEM page draw
     with the chip and the line; without a registry the head is as it was."""
     p = shell_rig.panel
@@ -206,18 +206,18 @@ def test_the_chip_draws_on_the_graph_head_the_preset_strip_and_system(shell_rig,
     ui_frame(p, "graph")
     ui_frame(p, "graph")
     assert not any("missing" in s for s in seen)          # no registry: nothing
-    # the factory desk's preset layer on an APC40 not plugged in, and a hand
+    # the factory desk's patch layer on an APC40 not plugged in, and a hand
     # row on a rig with no hands: two devices
     p.devices = rig_of(DESK)
     shell_rig.router.table.bindings.append(HAND_ROWS[0])
     ui_frame(p, "graph")
     assert "2 devices missing##wants" in seen
     seen.clear()
-    ui_frame(p, "presets")
+    ui_frame(p, "loadable")
     assert "2 devices missing##wants" in seen
     ui_frame(p, "system")
-    assert "wanted by the preset: leap — not in this rig; 1 row wait" in texts
-    assert any(t.startswith("wanted by the preset: apc40 — lost; ") for t in texts)
+    assert "wanted by the patch: leap — not set up on this Mac; 1 row wait" in texts
+    assert any(t.startswith("wanted by the patch: apc40 — lost; ") for t in texts)
 
 
 def test_the_wants_are_asked_once_a_frame_for_every_place_that_shows_them(shell_rig,  # noqa: F811
@@ -371,7 +371,7 @@ def test_a_midi_device_coming_back_fires_the_listeners_once_and_the_hook_once(in
     """The real thing over the fake bus: the APC40 not plugged in at launch
     reads `lost`; plugged in, its own retry (`midi.Ports`) finds it and
     relights the desk inside `poll` — the registry sees the status move
-    and says it once, with the preset layer's control count."""
+    and says it once, with the patch layer's control count."""
     r = inputs_build(entries(launch=False), plug=())
     rig = r.devices
     apc = rig.get("apc40")
@@ -391,7 +391,7 @@ def test_a_midi_device_coming_back_fires_the_listeners_once_and_the_hook_once(in
     for _ in range(5):
         frame(r)
     assert told == [1]
-    # the factory desk's preset layer: 26 controls, counted by `wants`
+    # the factory desk's patch layer: 26 controls, counted by `wants`
     assert said == ["apc40 connected — 26 controls live"]
 
 
@@ -421,8 +421,8 @@ def test_a_device_added_to_config_says_it_through_apply():
     assert "leap" not in rig._status                          # …and is forgotten
 
 
-def test_a_window_the_rig_lacks_is_said_on_output_and_the_graph_head(shell_rig, monkeypatch):  # noqa: F811
-    """Plan 44 D3 (row 623): a preset that wires Output 6 and cuts a bus
+def test_a_window_the_meta_lacks_is_said_on_output_and_the_graph_head(shell_rig, monkeypatch):  # noqa: F811
+    """Plan 44 D3 (row 623): a loadable patch that wires Output 6 and cuts a bus
     cable into Output 5, on a rig of four windows — OUTPUT (beside the
     output blocks) and the GRAPH head each say one line per window, the
     same words; with every window there, nothing is said."""
@@ -434,8 +434,8 @@ def test_a_window_the_rig_lacks_is_said_on_output_and_the_graph_head(shell_rig, 
                         lambda col, text: texts.append(text) or real_colored(col, text))
     ui_frame(p, "graph")
     ui_frame(p, "output")
-    assert not any("which this rig has not open" in t for t in texts)
-    pre = p.library.presets
+    assert not any("which is not open on this Mac" in t for t in texts)
+    pre = p.library.loaded_patch
     spec = G.read_graph({"frame": "wired", "wires": [{"from": "scene", "to": "output.6.image"}]})
     pre.graph.land(spec, spec.to_json())
     pre.bus = pre.bus.cutting(G.bus_wire(5, "hands"))

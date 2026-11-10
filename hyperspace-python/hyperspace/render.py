@@ -67,7 +67,7 @@ The ghost hands (ghost.py) are a geometry in the same
 camera (plan 26 A3): by default their own layer, laid over the finished
 frame (or onto it before the effects); wired into the scene, solid,
 before the shape; off, the frame is untouched. Last of all the master
-dim (`Renderer.dim`, the crossfader's `output.dim`; plan 15 WP3)
+dim (`Renderer.dim`, the MASTER fader's `output.dim`; plan 15 WP3)
 multiplies what is there — it draws nothing of its own, and at 1 it does
 not run.
 
@@ -85,7 +85,7 @@ count and the wiring do not change — and evaluates it: the nodes run
 once each, in an order settled when the graph was built, and each node
 is timed on the GPU (`PassTimer`, one line per node on the SYSTEM page).
 Plan 35 T4: every graph is a wired frame's (`graph.build_graph`; plan 36
-T3: nothing else — `graph.EMPTY` until a preset lands); the pipelines are gone, and
+T3: nothing else — `graph.EMPTY` until a loadable patch lands); the pipelines are gone, and
 every golden frame is drawn byte for byte. The passes themselves (`draw_scene`,
 `_face_picture`, `_draw_cover`, `_compose`, `_show`, `dim_pass`) stay
 here; the nodes call them.
@@ -105,7 +105,7 @@ import math
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import moderngl
 import numpy as np
@@ -134,6 +134,7 @@ from .geometry import (
     geom,
     model_matrix,
     shape_world,
+    turned_depth,
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
@@ -152,12 +153,14 @@ from .graph import (
     SegmentNode,
     Wiring,
     build_graph,
+    bus_cuts_of,
     channel_into,
     cloud_roles,
     graph_key,
+    mask_flip,
+    mask_made,
     param_prefix,
     picture,
-    rig_of,
 )
 from .lookback import Dreamer, DreamState, Lookback
 from .masks import MaskPasses
@@ -704,6 +707,7 @@ class SceneTarget:
         self._msaa: moderngl.Framebuffer | None = None    # on the renderbuffer, if any
         self.depth: moderngl.Texture | None = None        # single-sampled: the depth
         self._depth_rb = None                             # multisampled: its renderbuffer
+        self._color_rb = None                             # …and the colour's, the size of the frame
         # plan 26 A3: multisampled, the depth resolved for a node that reads
         # it (`depth_texture`), made on first ask: a depth texture and the
         # framebuffer the blit lands in (a colour renderbuffer beside it,
@@ -721,9 +725,9 @@ class SceneTarget:
         self.tex.repeat_x = self.tex.repeat_y = False
         if samples > 0:
             self.fbo = self.ctx.framebuffer(color_attachments=[self.tex])
-            rb = self.ctx.renderbuffer(size, 4, samples=samples)
+            self._color_rb = self.ctx.renderbuffer(size, 4, samples=samples)
             self._depth_rb = self.ctx.depth_renderbuffer(size, samples=samples)
-            self._msaa = self.ctx.framebuffer(color_attachments=[rb],
+            self._msaa = self.ctx.framebuffer(color_attachments=[self._color_rb],
                                               depth_attachment=self._depth_rb)
         else:
             self.depth = _readable_depth(self.ctx, size)
@@ -760,11 +764,12 @@ class SceneTarget:
         # getattr: a target from before A2 has no depth, from before A3 no
         # resolved one
         for res in (self._msaa, self.fbo, self.tex, getattr(self, "depth", None),
-                    getattr(self, "_depth_rb", None), getattr(self, "_rfbo", None),
-                    getattr(self, "_rdepth", None), getattr(self, "_rcol", None)):
+                    getattr(self, "_depth_rb", None), getattr(self, "_color_rb", None),
+                    getattr(self, "_rfbo", None), getattr(self, "_rdepth", None),
+                    getattr(self, "_rcol", None)):
             if res is not None:
                 res.release()
-        self._msaa = self.fbo = self.tex = self.depth = self._depth_rb = None
+        self._msaa = self.fbo = self.tex = self.depth = self._depth_rb = self._color_rb = None
         self._rfbo = self._rdepth = self._rcol = None
         self.size, self.samples = (0, 0), -1
 
@@ -1058,7 +1063,10 @@ def thumb_source(frame: Frame, name: str, how: str,
     - ``window``: an output after the first: its presenter's picture (the
       `Handoff`'s frame, a texture of this context: no readback), or a
       publish-only output's own target; output 1 is the page's `Preview`,
-      never asked here."""
+      never asked here;
+    - ``mask``: a matte or a segment (SM3): the mask this frame already
+      made, at its own size (`graph.mask_made`), else None: a thumbnail
+      never makes one. The caller reads it as a mask (`PreviewTextures.put`)."""
     g = frame.graph
     node = g.nodes.get(name) if g is not None else None
     if node is None:
@@ -1071,6 +1079,8 @@ def thumb_source(frame: Frame, name: str, how: str,
             return v.handoff.frame
         own = getattr(v.target, "color_attachments", None) if v.target is not None else None
         return own[0] if own and isinstance(own[0], moderngl.Texture) else None
+    if how == "mask":
+        return mask_made(node, frame)
     if how in ("scene", "layer"):
         if how == "layer":
             layer = next((n for n in g.order if isinstance(n, HandsLayer)
@@ -1155,7 +1165,7 @@ class Renderer:
         self._show_vao: moderngl.VertexArray | None = None
         # plan 26 A3: the program a Composite node lays a layer with, on
         # first use; and the wiring the frame is built from — plan 36 T3
-        # (W3): the empty frame (black) until a preset's graph lands one
+        # (W3): the empty frame (black) until a loadable patch's graph lands one
         self._lay_prog: moderngl.Program | None = None
         self._lay_vao: moderngl.VertexArray | None = None
         self.wiring = EMPTY
@@ -1171,12 +1181,12 @@ class Renderer:
         self.poi_guide = None
         # the registry of the deck this renderer draws (`Deck.build`); None: no deck
         self.deck_reg = None
-        # plan 36 T1: whoever holds the rig's own wires (the open show,
-        # `library.Project.rig`, by `app`); None: every bus cable standing
-        self.rig_source = None
+        # plan 36 T1: whoever holds the meta controller's own wires (the open show,
+        # `library.Install.rig`, by `app`); None: every bus cable standing
+        self.bus_source = None
         # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
-        # …), handed over by whoever declared their params (the preset's
-        # graph section, `preset.GraphSection`); their Ghosts, made on
+        # …), handed over by whoever declared their params (the loadable patch's
+        # graph section, `loadable.GraphSection`); their Ghosts, made on
         # first use (`ghost_of`)
         self.ghost_states: dict[str, GhostState] = {}
         self._ghosts: dict[str, Ghost] = {}
@@ -1237,6 +1247,10 @@ class Renderer:
         # the analyzer's lanes, normalized, set by the app each frame (app._bands):
         # render input for the patterns that draw the bands (u_levels)
         self.bands: tuple[float, ...] = ()
+        # the world objects (world.World, plan 59), set by the app: the
+        # shape's offset composes into its model matrix. Read only; None (a
+        # renderer of a test, a host with no world): no offset
+        self.world: Any = None
         self._ptime = 0.0                  # the patterns' clock (_pattern_clock) …
         self._ptime_at: float | None = None   # … and the wall time it was last moved to
         self._ptile: tuple | None = None   # the tiles' program, vao, and the mtimes it read
@@ -1248,7 +1262,7 @@ class Renderer:
         self._build_face_program()
         # plan 39 T4: the segment nodes' workers (`segmenter`), made from
         # `segment_cfg` (the config's [segment], app.py hands it over) on a
-        # node's first need — None, as the hold's preview renderer is given,
+        # node's first need — None until `app.main` gives it,
         # makes none: its segments pass their pictures through — and motion
         # mode's background models (`motion_pair`), each by its node's name
         self.segment_cfg: dict | None = None
@@ -1260,10 +1274,11 @@ class Renderer:
     def sibling(self, dream: DreamState | None = None, fx: FxState | None = None,
                 ghost: GhostState | None = None) -> Renderer:
         """A second renderer on this one's context and its one wall clock, on
-        the states given (each a fresh one of its own when None): the hold's
+        the states given (each a fresh one of its own when None): a
         preview, deck 2's (plan 44 D4). This context must be current."""
         r = Renderer(self.ctx, dream=dream, fx=fx, ghost=ghost)
         r._t0 = self._t0
+        r.world = getattr(self, "world", None)     # one world: its shape is either deck's
         return r
 
     def take_running(self, src: Renderer) -> None:
@@ -1427,7 +1442,7 @@ class Renderer:
     def _face_media(self, s: ViewState) -> tuple[moderngl.Texture, bool] | None:
         """The texture the faces draw over their pattern (plan 32 T7, row
         331: where the one bitmap file was) and whether it is in GL's row
-        order. Plan 33 R: what the preset's graph wires into `pattern.media`
+        order. Plan 33 R: what the loadable patch's graph wires into `pattern.media`
         — not `view.media`. In a frame, what the graph's pattern node read
         for this scene pass (`graph.PatternNode.layer`, handed over as
         `_face_layer`: a channel's raw texture, or a branch's picture at its
@@ -1748,7 +1763,7 @@ class Renderer:
         # and its background model go, after `SIZED_KEEP_FRAMES`
         self._tend_segments(graph)
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
-        # effect the preset placed on an edge runs there (and moves its
+        # effect the loadable patch placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
         # effects on a through output stands down as with none. Plan 33 R:
         # the runs are the graph's (its wires), each effect asked `live`
@@ -1792,6 +1807,8 @@ class Renderer:
                 guide.shown = False
             return
         try:
+            if hasattr(state, "box"):    # the limit the poi holds the hand and the shape to
+                state.box = poi.box_for(*size, s.eye_fov, s.eye_distance)
             if guide is None:
                 from .poi_guide import PoiGuide
                 guide = self.poi_guide = PoiGuide(self.ctx)
@@ -1817,34 +1834,34 @@ class Renderer:
         effect files present (`FxState.specs`, as a set): each pipeline's
         run is the wiring's (`Wiring.run`, its wires), so a file that goes
         or comes builds again and a toggle does not (an off node reads
-        through). A wiring that says no run (no preset's graph reached it)
+        through). A wiring that says no run (no loadable patch's graph reached it)
         has the empty one (R23, plan 33 T7). A new graph
         fits the effects' texture pool to what it needs (`Graph.pool`).
-        Plan 28 N4: the preset's wires are part of the key — they ride in
+        Plan 28 N4: the loadable patch's wires are part of the key — they ride in
         the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
         so an edit on the GRAPH page that lands a new `GraphSpec` builds
         the graph again, with the same refusals (a dormant wire, a loop).
         Plan 35 B, T4: every frame is a wired frame, keyed by the views'
         count alone — a window's switches are mutes, read by each output
-        every frame, never a rebuild. Plan 36 T1: the rig's own wires
-        (`rig_source`, the open show: `graph.rig_of`) are part of the key —
+        every frame, never a rebuild. Plan 36 T1: the meta controller's own wires
+        (`bus_source`, the open show: `graph.bus_cuts_of`) are part of the key —
         a bus cable cut on GRAPH builds again."""
         # (`s`: the view state, unread since plan 36 T3 — the backdrop is
         # the section's wires, never laid on per frame)
         wiring = getattr(self, "wiring", None) or EMPTY
         key = graph_key(views)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
-        rig = rig_of(getattr(self, "rig_source", None))
+        bus_cuts = bus_cuts_of(getattr(self, "bus_source", None))
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
-                or getattr(graph, "rig", None) != rig
+                or getattr(graph, "bus_cuts", None) != bus_cuts
                 or frozenset(getattr(graph, "effects", ())) != effects):
             graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
-                                              rig)
+                                              bus_cuts)
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
@@ -1942,17 +1959,21 @@ class Renderer:
             saved = {k: list(v) if isinstance(v, list) else v for k, v in frame.stats.items()}
             try:
                 pulled = frame.graph.pulled(frame) if frame.graph is not None else None
-                for name, how in wanted.items():
+                # (masks last: one a picture's repaint just made is free to show)
+                for name, how in sorted(wanted.items(), key=lambda kv: kv[1] == "mask"):
                     held = len(frame.data)
                     try:
                         src = thumb_source(frame, name, how, pulled)
+                        flip = (how == "mask" and src is not None
+                                and mask_flip(frame.graph.nodes[name], frame))
                     except Exception as e:  # noqa: BLE001 — one node's picture: not the rest
                         th.error = f"{name}: {type(e).__name__}: {e}"[:120]
                         continue
                     # (a picture the frame had not made — painted, or made
                     # into a texture — leaves a new entry in the frame's data)
                     if src is not None:
-                        th.put(name, src, repainted=len(frame.data) > held)
+                        th.put(name, src, repainted=len(frame.data) > held,
+                               mask=how == "mask", flip=flip)
             finally:
                 frame.stats.clear()
                 frame.stats.update(saved)
@@ -2447,7 +2468,7 @@ class Renderer:
             frames = self._frames = {}
         # R16 (final review): every key asked for is marked — a string
         # key (an end's `shown(...)`, a `#fit`) is pruned when idle as a
-        # `(name, size)` one is, so a load leaves nothing of the last preset
+        # `(name, size)` one is, so a load leaves nothing of the last loadable patch
         self.__dict__.setdefault("_sized_used", set()).add(key)
         have = frames.get(key)
         if (have is not None and have[0].size == size
@@ -2522,7 +2543,7 @@ class Renderer:
     def delay_pair(self, name: str) -> DelayPair:
         """Delay `name`'s pair (plan 34 D, row 354), made on first ask and
         kept by name across graph rebuilds — an edit elsewhere on GRAPH
-        does not cut the feedback; a preset load does (`reset_delays`, R19)
+        does not cut the feedback; a loadable patch load does (`reset_delays`, R19)
         (__dict__: a renderer from before plan 34 has none)."""
         pairs = self.__dict__.setdefault("_delays", {})
         got = pairs.get(name)
@@ -2533,8 +2554,7 @@ class Renderer:
     def segmenter(self, name: str):
         """Segment node `name`'s worker (plan 39 T4, `segment.SegmentWorker`),
         made on its first need from `segment_cfg` and kept by name across
-        graph rebuilds — or None on a renderer with no `segment_cfg` (the
-        hold's preview: only the program renderer runs a model). Closed when
+        graph rebuilds — or None on a renderer with no `segment_cfg`. Closed when
         no graph has held its node for `SIZED_KEEP_FRAMES` (`_tend_segments`)
         and in `close`. `segment_factory(cfg, name)`, when set, makes it
         instead (tests). segment.py is imported here, on the first need,
@@ -2606,7 +2626,7 @@ class Renderer:
         close list, at quit and restart) — all stopped first, then joined
         against one shared deadline of `timeout` seconds, the ones
         `_tend_segments` stopped earlier too — never anything another
-        renderer shares (the hold's preview has none of its own). Threads
+        renderer shares. Threads
         only: the GL it holds goes with its context, which may not be
         current at this point of the exit."""
         workers = [*(self.__dict__.get("_segmenters") or {}).values(),
@@ -2626,9 +2646,9 @@ class Renderer:
         self._stopped = []
 
     def reset_delays(self) -> None:
-        """R19 (final review, row 354): a preset load landed a new section —
+        """R19 (final review, row 354): a loadable patch load landed a new section —
         at the next turn every pair holds nothing (as on its first frame),
-        so no trail of the last preset shows in the new one. A GRAPH edit
+        so no trail of the last loadable patch shows in the new one. A GRAPH edit
         or rebuild does not ask: the feedback runs on across those. The
         textures are kept; only what they hold is forgotten."""
         self.__dict__["_delays_reset"] = True
@@ -2674,7 +2694,7 @@ class Renderer:
         textures (R16: every key — `(name, size)`, an end's `shown(...)`, a
         `#fit`, a channel's fit) that no frame has asked for in the last
         `SIZED_KEEP_FRAMES` — a channel whose clip changed size, a branch
-        unwired, the preset before a load — so pictures never pile up,
+        unwired, the loadable patch before a load — so pictures never pile up,
         and (R29) a switch flicked every frame between branches of other
         sizes reallocates nothing: the branch not picked keeps its
         textures for the next flick."""
@@ -2726,7 +2746,7 @@ class Renderer:
         """The `Ghost` that draws hands node `name` (plan 26 A4): `ghost` is
         the renderer's own (`self.ghost`, `ghost.*`); another (`ghost.2` …)
         is made on first ask over its state in `ghost_states` — the one the
-        registry's `ghost.2.*` params write (`preset.GraphSection`), a
+        registry's `ghost.2.*` params write (`loadable.GraphSection`), a
         fresh one when none was handed over — and follows the first's
         tracker and routing table. A state handed over again later
         replaces the Ghost. getattr: a renderer from before A4."""
@@ -3256,7 +3276,23 @@ class Renderer:
         zoom = max(s.zoom, 1e-3)
         legacy = not getattr(s, "inst_fit", False) and (
             int(s.instances) <= 1 or not is_3d_layout(int(getattr(s, "inst_layout", 0))))
-        model = model_matrix(zoom, s.pan) if legacy else model_matrix(1.0, (0.0, 0.0))
+        # plan 59: the world's offset on the shape object (home ∘ offset, the
+        # home being zoom and pan), None while it is the identity — the matrix
+        # of before, built exactly as before. Fit and the 3D lattices carry the
+        # camera in each copy's row and take no offset (register row 851)
+        world = getattr(self, "world", None)
+        off = world.offset_matrix("shape") if world is not None and legacy else None
+        model = model_matrix(zoom, s.pan, off) if legacy else model_matrix(1.0, (0.0, 0.0))
+        if world is not None and hasattr(world, "box"):
+            # plan 60: the box the rig holds the shape to, what the eye sees at
+            # depth 0 — set from the scene drawn, as the poi's (`poi.box_for`)
+            world.box = tuple(poi.box_for(w, h, getattr(s, "eye_fov", EYE_FOV),
+                                          getattr(s, "eye_distance", EYE_DISTANCE)))
+        if off is not None:
+            # plan 60 (register row 856): a turned offset turns a 3D shape before
+            # the painter sort and the depth cue read its depth, so it sorts and
+            # shades by where it is now; a 4D shape's cue stays its w
+            pd = turned_depth(s.shape, P, pd, off)
         vp = eye_matrix(w, h, getattr(s, "eye_fov", EYE_FOV),
                         getattr(s, "eye_distance", EYE_DISTANCE))
         mats = (np.asarray(vp, dtype="f4").T.tobytes(),
@@ -3364,7 +3400,7 @@ class Renderer:
             return
         # the copies: where each goes, how big, how bright — far to near,
         # those wholly off screen dropped (`_copies_of`)
-        inst = self._copies_of(s, w, h, P, vp, dpr, legacy)
+        inst = self._copies_of(s, w, h, P, vp, dpr, legacy, model if off is not None else None)
         if not len(inst):
             return                     # every copy is off screen: the ground alone
         self._ibuf.orphan(inst.nbytes)
@@ -3586,7 +3622,8 @@ class Renderer:
         return inst
 
     def _copies_of(self, s: ViewState, w: int, h: int, P: np.ndarray,
-                   vp: np.ndarray, dpr: float, legacy: bool = False) -> np.ndarray:
+                   vp: np.ndarray, dpr: float, legacy: bool = False,
+                   model: np.ndarray | None = None) -> np.ndarray:
         """The instance rows for the scene pass, (m, 4) float32: each copy's
         centre in the world (x, y on the plane through the origin, y up),
         its scale and its alpha. A copy wholly off screen through the eye
@@ -3598,7 +3635,11 @@ class Renderer:
         world transform (the camera's zoom and pan, `model_matrix`).
         Otherwise `_field`'s px through the default eye (SCALE·min(w, h)
         px a unit), so the field keeps its world spacing whatever the eye;
-        the camera is in the rows and the world transform is the identity."""
+        the camera is in the rows and the world transform is the identity.
+
+        `model` (plan 59, legacy only): the world transform when the world's
+        offset is on it (turned, moved in z). Each copy's box then goes
+        through the whole matrix for the cull; None, the cull of before."""
         if legacy:
             inst = self._legacy_field(s)
             if not len(inst):
@@ -3630,7 +3671,13 @@ class Renderer:
             box = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
                             for z in (lo[2], hi[2])])
             k = seen[:, 2]
-            q = k[:, None, None] * box[None] + np.c_[seen[:, :2], np.zeros(len(seen))][:, None]
+            if model is None:
+                q = k[:, None, None] * box[None] + np.c_[seen[:, :2], np.zeros(len(seen))][:, None]
+            else:      # the box at each copy, through the world transform with its offset
+                m = np.asarray(model, dtype=np.float64)
+                local = (inst[:, 2, None, None] * box[None]
+                         + np.c_[inst[:, :2], np.zeros(len(inst))][:, None])
+                q = local @ m[:3, :3].T + m[:3, 3]
             c = q @ np.asarray(vp)[:3, :3].T + np.asarray(vp)[:, 3][:3]
             cw = q @ np.asarray(vp)[3, :3] + np.asarray(vp)[3, 3]
             front = (cw > EYE_NEAR).all(axis=1)
@@ -3704,7 +3751,7 @@ def render_offscreen(
     `wiring`: the graph's (`Renderer.wiring` — plan 33 R: a channel on the
     faces is the wire `media.<c> → pattern.media`), None today's frame —
     plan 36 T3: said here, as the tool's own wiring, by the one-way
-    migration of a preset with no section (`graphmigrate.wired_wiring`),
+    migration of a loadable patch with no section (`graphmigrate.wired_wiring`),
     never by the renderer, whose own is the empty frame."""
     own = ctx is None
     if own:

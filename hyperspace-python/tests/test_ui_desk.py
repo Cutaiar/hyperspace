@@ -4,7 +4,7 @@
 The layout (`apc40.LAYOUT`): one entry per control the protocol names,
 none overlapping, a unique short glyph each, and a glyph for every MIDI
 row shipped. The diagram (ui_desk.py): what it lights is the layer that
-is up — the loaded preset's desk plus the invariant controls, then the
+is up — the loaded patch's desk plus the invariant controls, then the
 global layer after SHIFT — read from the table with no MIDI device. The
 ROUTING rows print the glyph. Headless imgui, a library on tmp_path.
 """
@@ -96,16 +96,16 @@ def test_the_glyph_resolves_a_row_on_any_channel():
 def _shipped_midi_rows() -> list[str]:
     srcs = [r["source"] for r in apc40.DEFAULT_MAP]
     srcs += [b.source for b in routing.factory_desk("apc40")]
-    session = json.loads(routing.FACTORY_FILE.read_text())
-    srcs += [r["source"] for r in session["bindings"]]
-    for f in sorted((CORPUS / "presets").glob("*.json")):
+    meta_file = json.loads(routing.FACTORY_FILE.read_text())
+    srcs += [r["source"] for r in meta_file["bindings"]]
+    for f in sorted((CORPUS / "loadable").glob("*.json")):
         srcs += [r["source"] for r in json.loads(f.read_text()).get("desk") or []]
     return [s for s in srcs if s.startswith(("cc:", "note:"))]
 
 
 def test_every_midi_row_shipped_has_a_glyph():
-    """DEFAULT_MAP, the factory session table and every corpus preset's desk
-    (tests/corpus: the presets the build shipped until 2026-10-28)."""
+    """DEFAULT_MAP, the factory meta table and every corpus loadable patch's desk
+    (tests/corpus: the loadable patches the build shipped until 2026-10-28)."""
     srcs = _shipped_midi_rows()
     assert len(srcs) > 200
     assert [s for s in srcs if apc40.glyph(s) is None] == []
@@ -117,9 +117,9 @@ def _glyphs(rows) -> set[str]:
     return {c.glyph for b in rows for c in apc40.controls(b.source)}
 
 
-def test_the_diagram_lights_the_loaded_presets_desk_and_the_invariant_controls(rig):
+def test_the_diagram_lights_the_loaded_loadables_desk_and_the_invariant_controls(rig):
     lib, table, panel = rig.lib, rig.router.table, rig.panel
-    lib.load("presets", "TRIP")
+    lib.load("loadable", "TRIP")
     assert table.layer == "preset" and table.desk()
     inv = _glyphs(table.invariant_rows())
     assert "⇧" in inv and "SM" in inv
@@ -129,7 +129,7 @@ def test_the_diagram_lights_the_loaded_presets_desk_and_the_invariant_controls(r
     fine = {_fine_control().glyph}                            # the adapter's, drawn (row 732)
     assert set(lit) == _glyphs(b for b in table.desk() if b.enabled) | inv | fine
     assert "D1" in lit and lit["D1"].layer == "preset"        # TRIP's device knobs
-    # SHIFT: the global layer's rows instead of the preset's
+    # SHIFT: the global layer's rows instead of the loadable patch's
     table.toggle_layer()
     frame(panel)
     lit = ui_desk.lit_cached(panel, table)
@@ -147,7 +147,7 @@ def test_the_diagram_follows_an_edit_and_needs_no_midi_device(rig):
     panel, table = rig.panel, rig.router.table
     assert panel.midi is None
     frame(panel)
-    assert "K6" in ui_desk.lit_cached(panel, table)           # the fresh preset's view faders
+    assert "K6" in ui_desk.lit_cached(panel, table)           # the fresh loadable patch's view faders
     k6 = next(b for b in table.desk() if b.source == "cc:0:53")
     table.remove(k6)
     assert "K6" not in ui_desk.lit_cached(panel, table)
@@ -160,7 +160,7 @@ def test_the_hover_names_glyph_param_layer_and_akais_name(rig):
     table = rig.router.table
     c = next(c for c in apc40.LAYOUT if c.glyph == "K1")
     b = ui_desk.lit(table)["K1"]
-    assert ui_desk.label(table, c, b) == f"K1 · {b.target} · preset layer\ntrack knob 1"
+    assert ui_desk.label(table, c, b) == f"K1 · {b.target} · patch layer\ntrack knob 1"
     dark = next(c for c in apc40.LAYOUT if c.glyph == "B7")        # device ◀: no row
     assert "B7" not in ui_desk.lit(table)
     assert "unmapped — dark" in ui_desk.label(table, dark, None)
@@ -253,18 +253,18 @@ def test_the_desk_does_not_jump_when_the_sheet_comes_up(rig, monkeypatch):
 
 
 def test_the_routing_rows_print_the_glyph(rig, monkeypatch):
-    """A desk row and a session row: the glyph first, the param after it."""
+    """A desk row and a meta row: the glyph first, the param after it."""
     texts: list[str] = []
     real_text, real_col = imgui.text, imgui.text_colored
     monkeypatch.setattr(imgui, "text", lambda s: (texts.append(s), real_text(s))[1])
     monkeypatch.setattr(imgui, "text_colored",
                         lambda c, s: (texts.append(s), real_col(c, s))[1])
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     frame(rig.panel, "routing")
     frame(rig.panel)
     desk = rig.router.table.desk()
     assert {apc40.glyph(b.source) for b in desk} <= set(texts)
-    assert "S1" in texts and "⇧" in texts                     # the session's rows
+    assert "S1" in texts and "⇧" in texts                     # the meta controller's rows
     assert "device knob 1" not in texts                       # Akai's names: tooltips only
 
 
@@ -357,7 +357,7 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
     scroll range. On both layers."""
     panel, table, reg = rig.panel, rig.router.table, rig.reg
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     reg["ui.panel"].set(False)
     glyphs = {c.glyph for c in apc40.LAYOUT}
     for layer in ("preset", "global"):
@@ -390,12 +390,12 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
             assert any(head in v for v in says.values()), (layer, t)
         dark = [c.glyph for c in apc40.LAYOUT if c.glyph not in lit]
         assert dark and drawn.count(dark[0]) == 1
-    # the layer changes what is named: TRIP's knobs, then the session's
+    # the layer changes what is named: TRIP's knobs, then the meta controller's
     table.set_layer("preset")
     monkeypatch.setattr(ui_desk, "SAYS_S", 0.0)                  # (the texts are kept half a second)
     _desk_frames(rig, monkeypatch, 1)
     assert "FX mix" in ui_desk._state(panel)["labels"]
-    assert "TRIP" in ui_desk._state(panel)["labels"]             # the bank row: the presets' names
+    assert "TRIP" in ui_desk._state(panel)["labels"]             # the bank row: the loadable patches' names
     table.set_layer("global")
     _desk_frames(rig, monkeypatch, 1)
     labels = ui_desk._state(panel)["labels"]
@@ -413,7 +413,7 @@ def test_the_small_desk_draws_glyphs_only(rig, monkeypatch):
     room left of the panel, never over it."""
     panel = rig.panel
     imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     got = _desk_frames(rig, monkeypatch)
     st = ui_desk._state(panel)
     assert st["labels"] == [] and st["unit"][0] < ui_desk.LABEL_UNIT
@@ -442,9 +442,9 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("note:3:54", "scene.select", "set", 3.0)) == names[3]
     bank = reg["preset.select"].names
     assert text(reg, Binding("note:4:53", "preset.select", "set", 4.0)) == bank[4]
-    # a bank pad of rows 4–5 (plan 19 WP2): a filled slot its preset's name,
+    # a bank pad of rows 4–5 (plan 19 WP2): a filled slot its loadable patch's name,
     # an empty one nothing at all — not "SLOT 10"
-    assert rig.lib.project.bank[8] and rig.lib.project.bank[9] is None
+    assert rig.lib.install.bank[8] and rig.lib.install.bank[9] is None
     assert text(reg, Binding("note:0:56", "preset.select", "set", 8.0)) == bank[8]
     assert text(reg, Binding("note:1:56", "preset.select", "set", 9.0)) == ""
     assert text(reg, Binding("note:0:94", "view.bright", "step", 3.0)) == "Brightness +3"
@@ -465,7 +465,7 @@ def test_a_controls_text(rig):
     c = next(c for c in apc40.LAYOUT if c.glyph == "D3")
     b = Binding("cc:*:18", "fx.kaleido.segments", "abs", layer="preset")
     assert ui_desk.label(rig.router.table, c, b, reg) == (
-        f"D3 · fx.kaleido.segments · {reg['fx.kaleido.segments'].label} · preset layer\n"
+        f"D3 · fx.kaleido.segments · {reg['fx.kaleido.segments'].label} · patch layer\n"
         "device knob 3")
     # wrap, measured in the current font
     imgui.new_frame()
@@ -476,7 +476,7 @@ def test_a_controls_text(rig):
     assert wrap("Hue", wide, 2) == ["Hue"] and wrap("", wide, 2) == []
     one = wrap("Kaleidoscope segments", wide, 1)
     assert len(one) == 1 and one[0].endswith("…") and w(one[0]) <= wide
-    three = wrap("Save as a new preset", w("Save as") + 2, 2)
+    three = wrap("Save as a new patch", w("Save as") + 2, 2)
     assert three[0] == "Save as" and three[1].endswith("…") and w(three[1]) <= w("Save as") + 2
     narrow = wrap("Kaleidoscope segments", w("Kaleid"), 2)
     assert len(narrow) == 2 and all(w(r) <= w("Kaleid") for r in narrow)
@@ -491,13 +491,13 @@ def test_a_controls_text(rig):
 
 def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
     """Plan 19 WP2, fork 5, on screen as on the device: a bank pad is the
-    loaded preset's (green), a filled slot's (amber at `FILLED` strength,
-    its preset's name in the bright ink) or an empty slot's — drawn as a
+    loaded patch's (green), a filled slot's (amber at `FILLED` strength,
+    its loadable patch's name in the bright ink) or an empty slot's — drawn as a
     dark control, its glyph and no label, on both layers. Its hover and
     the pick line still say what the pad is: an empty slot."""
     from hyperspace.learn import Learn
 
-    panel, table, reg, pr = rig.panel, rig.router.table, rig.reg, rig.lib.project
+    panel, table, reg, pr = rig.panel, rig.router.table, rig.reg, rig.lib.install
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     pr.put_slot(11, "WAKE")                                  # G4·4: filled
     pr.load_slot(4)                                          # TRIP on F5: loaded
@@ -537,7 +537,7 @@ def test_a_filled_pad_is_amber_and_an_empty_one_has_no_label(rig, monkeypatch):
     panel.learn = Learn(reg, table)
     panel.learn.pick(c.source)
     line, ok = ui_desk.pick_line(panel, table, c)
-    assert not ok and line == "G4·2 (clip 4·2) is invariant (the session's): an empty slot"
+    assert not ok and line == "G4·2 (clip 4·2) is invariant (the meta controller's): an empty slot"
     panel.learn.pick(None)
 
 
@@ -567,7 +567,7 @@ def test_a_click_picks_and_a_second_click_lets_go(rig, monkeypatch):
     panel, table = rig.panel, rig.router.table
     imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     lrn = _learn_over(rig)
-    rig.lib.load("presets", "TRIP")
+    rig.lib.load("loadable", "TRIP")
     pushes = _pushes(monkeypatch)
     rows = [b.to_json() for b in table.bindings]
     d3, d4 = _control("D3"), _control("D4")
@@ -634,7 +634,7 @@ def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
     (row,) = [b for b in table.desk() if b.target == "view.depth4" and b.kind == "cc"]
     assert (row.source, row.op, row.layer, row.feedback) == (d5.source, "abs", "preset", "ring")
     assert lrn.learning is None and lrn.control is None
-    assert lrn.last.startswith("learned view.depth4 ← D5 (device knob 5) (into the preset)")
+    assert lrn.last.startswith("learned view.depth4 ← D5 (device knob 5) (into the patch)")
     assert pushes == ["learn view.depth4"]
     assert ui_desk.lit_cached(panel, table)["D5"] is row      # the desk shows it at once
     # a hand learn: the desk's click is not what it waits for
@@ -646,12 +646,12 @@ def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
     # the refusals are the knob learn's, and leave it armed
     lrn.arm("view.speed", "desk")
     _click(panel, ui_desk.rect(panel, s3))
-    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the session's) — not learned"
+    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the meta controller's) — not learned"
     assert lrn.learning == "view.speed" and lrn.control is None
     table.set_layer("global")
     frame(panel)
     _click(panel, ui_desk.rect(panel, d5))
-    assert lrn.refused and "is on the global layer (the session's)" in lrn.last
+    assert lrn.refused and "is on the global layer (the meta controller's)" in lrn.last
     assert lrn.learning == "view.speed"
     assert [b.to_json() for b in table.bindings] == rows and len(pushes) == 1
     table.set_layer("preset")
@@ -708,7 +708,7 @@ def test_a_pick_lets_go_by_itself(rig, monkeypatch):
     assert ui_desk.picking(panel) is None and ui_desk.picked(panel) is not None
     does = ui_desk.text(rig.reg, ui_desk.lit_cached(panel, table)["SM"])
     assert ui_desk.footer_line(panel) == (
-        f"SM (MASTER fader) is invariant (the session's): {does} (20 s)", False)
+        f"SM (MASTER fader) is invariant (the meta controller's): {does} (20 s)", False)
     clock[0] += ui_desk.PICK_S + 0.1
     frame(panel)
     assert lrn.control is None
@@ -717,7 +717,8 @@ def test_a_pick_lets_go_by_itself(rig, monkeypatch):
 def test_the_panel_opens_beside_a_four_by_three_desk():
     """The desk diagram gets a 4:3 slice of the window's height and the
     panel the rest (ui.panel_w): the two the same size on the default
-    window, the panel wider on a wider one, never under PANEL_W."""
+    window, the panel wider on a wider one, never under PANEL_W — and the
+    column never more than half the window, so the graph keeps room."""
     dw, dh = CONTROL_SIZE
     pw = ui.panel_w(CONTROL_SIZE)
     desk_w = dw - pw - 3 * ui_desk.EDGE
@@ -725,7 +726,22 @@ def test_the_panel_opens_beside_a_four_by_three_desk():
     assert abs(pw - desk_w) <= 2
     assert ui.panel_w((2932, 996)) == 2932 - 36 - int(4 / 3 * 972)
     assert ui.panel_w((960, 900)) == ui.PANEL_W
-    assert ui.panel_w((1696, 900)) == ui.PANEL_W
+    assert ui.panel_w((1696, 900)) == int(1696 - 36 - (1696 - 36) / 2)   # half, not 4:3
+    assert ui.panel_w((1100, 900)) == ui.PANEL_W
+
+
+def test_the_pad_alone_takes_only_its_own_width():
+    """With only the pad diagram up, the column is the pad's width, not
+    the desk's slice: the panel takes everything right of it, and the pad
+    window ends one gap short of the panel (the owner, 2026-11-07: the
+    split for the pad left the graph too little room)."""
+    from hyperspace import ui_pad
+    for display in (CONTROL_SIZE, (1480, 900), (1000, 606)):
+        pad_w = ui_pad.room(display, None)[2]
+        x, _, w, _ = ui.panel_rect(display, desk=False, pad=True)
+        assert w > ui.panel_w(display, desk=True, pad=False) or w == ui.PANEL_W
+        px, _, pw, _ = ui_pad.room(display, x)
+        assert pw == pad_w and abs(px + pw + ui_desk.EDGE - x) <= 1.0, (display, px, pw, x)
 
 
 # ---------------------------------------------------------------- FINE (row 732)

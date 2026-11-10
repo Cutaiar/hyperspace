@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" role="img" aria-label="QR Dither architecture: Python generators write static artifacts, the browser loads them with no build step">
+<title>QR Dither — architecture</title>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0L10 5L0 10z" fill="#5c5c5c"/>
+  </marker>
+  <style>
+    .mono{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+    .ttl{font-size:15px;fill:#ff2b2b;letter-spacing:4.5px}
+    .sub{font-size:11px;fill:#8a8a8a}
+    .hdr{font-size:10.5px;fill:#ff2b2b;letter-spacing:2.2px}
+    .hsub{font-size:10px;fill:#8a8a8a}
+    .bt{font-size:12.5px;fill:#fff}
+    .bs{font-size:10.5px;fill:#9a9a9a}
+    .bx{fill:#151515;stroke:#ffffff;stroke-opacity:.11;rx:7}
+    .ar{fill:none;stroke:#5c5c5c;stroke-width:1.3;marker-end:url(#a)}
+    .vb{fill:#120c0c;stroke:#ff2b2b;stroke-opacity:.3;rx:7}
+  </style>
+</defs>
+
+<rect width="1200" height="600" fill="#0a0a0a"/>
+<text class="mono ttl" x="40" y="44">QR DITHER · ARCHITECTURE</text>
+<text class="mono sub" x="40" y="66">Solving happens offline and rarely. The app only reads what the solve left behind.</text>
+
+<!-- ================= column headers ================= -->
+<text class="mono hdr" x="40"  y="112">gen/ — PYTHON, ON DEMAND VIA uv</text>
+<text class="mono hdr" x="440" y="112">app/public/data — SERVED AT /data</text>
+<text class="mono hdr" x="840" y="112">app/ — VITE + REACT + SHADCN</text>
+<text class="mono hsub" x="840" y="128">one app, three views</text>
+
+<!-- ================= column A : generators ================= -->
+<rect class="bx" x="40" y="140" width="330" height="50"/>
+<text class="mono bt" x="56" y="162">polytopes.py · tesseract.py</text>
+<text class="mono bs" x="56" y="179">4D subject → n×n target bitmap</text>
+
+<rect class="bx" x="215" y="216" width="155" height="72"/>
+<text class="mono bt" x="229" y="238">pyqart</text>
+<text class="mono bs" x="229" y="255">adaptive contrast</text>
+<text class="mono bs" x="229" y="270">order · ≈2 s each</text>
+
+<rect class="bx" x="40" y="216" width="155" height="72"/>
+<text class="mono bt" x="54" y="238">basis.py</text>
+<text class="mono bs" x="54" y="255">pinned order · one</text>
+<text class="mono bs" x="54" y="270">2 s factorisation</text>
+
+<rect class="bx" x="215" y="308" width="155" height="72"/>
+<text class="mono bt" x="229" y="330">style.py</text>
+<text class="mono bt" x="229" y="347">svg.py</text>
+<text class="mono bs" x="229" y="366">matrix → SVG</text>
+
+<rect class="bx" x="40" y="308" width="155" height="72"/>
+<text class="mono bt" x="54" y="330">export_js.py</text>
+<text class="mono bs" x="54" y="348">affine basis →</text>
+<text class="mono bs" x="54" y="363">one binary blob</text>
+
+<path class="ar" d="M205 190 L205 206 L117 206 L117 212"/>
+<path class="ar" d="M205 190 L205 206 L292 206 L292 212"/>
+<path class="ar" d="M117 288 L117 304"/>
+<path class="ar" d="M292 288 L292 304"/>
+
+<!-- ================= column B : artifacts ================= -->
+<rect class="bx" x="440" y="150" width="330" height="50"/>
+<rect x="440" y="150" width="3" height="50" fill="#ff2b2b" opacity=".55"/>
+<text class="mono bt" x="458" y="172">sweep-2ax.png + .json</text>
+<text class="mono bs" x="458" y="189">216 frames · 106 KB · sweep.py</text>
+
+<rect class="bx" x="440" y="222" width="330" height="50"/>
+<rect x="440" y="222" width="3" height="50" fill="#ff2b2b" opacity=".55"/>
+<text class="mono bt" x="458" y="244">gallery/*.svg + manifest.json</text>
+<text class="mono bs" x="458" y="261">29 stills · 1.0 MB · gallery.py</text>
+
+<rect class="bx" x="440" y="294" width="330" height="50"/>
+<rect x="440" y="294" width="3" height="50" fill="#ff2b2b" opacity=".55"/>
+<text class="mono bt" x="458" y="316">current-plain.svg</text>
+<text class="mono bs" x="458" y="333">the control · svg.py</text>
+
+<rect class="bx" x="440" y="366" width="330" height="50"/>
+<rect x="440" y="366" width="3" height="50" fill="#ff2b2b" opacity=".55"/>
+<text class="mono bt" x="458" y="388">solver-gothic.bin + .json</text>
+<text class="mono bs" x="458" y="405">358 KB · export_js.py</text>
+
+<path class="ar" d="M370 240 C405 240 405 175 436 175"/>
+<path class="ar" d="M370 330 C405 330 405 247 436 247"/>
+<path class="ar" d="M370 352 C405 352 405 319 436 319"/>
+<path class="ar" d="M117 380 L117 424 L410 424 L410 391 L436 391"/>
+
+<!-- ================= column C : pages ================= -->
+<rect class="bx" x="840" y="150" width="320" height="50"/>
+<text class="mono bt" x="856" y="172">sprite</text>
+<text class="mono bs" x="856" y="189">no solver on the client</text>
+
+<rect class="bx" x="840" y="222" width="320" height="50"/>
+<text class="mono bt" x="856" y="244">gallery</text>
+<text class="mono bs" x="856" y="261">medium selector · verdict per code</text>
+
+<rect class="bx" x="840" y="294" width="320" height="50"/>
+<text class="mono bt" x="856" y="316">(the control, in the gallery)</text>
+<text class="mono bs" x="856" y="333">a plain QR, judged by the same rule</text>
+
+<rect class="bx" x="840" y="366" width="320" height="50"/>
+<text class="mono bt" x="856" y="388">live solver → src/lib</text>
+<text class="mono bs" x="856" y="405">XOR per update · 0.2 ms a solve</text>
+
+<path class="ar" d="M774 175 L836 175"/>
+<path class="ar" d="M774 247 L836 247"/>
+<path class="ar" d="M774 319 L836 319"/>
+<path class="ar" d="M774 391 L836 391"/>
+
+<!-- ================= verification band ================= -->
+<rect class="vb" x="40" y="452" width="1120" height="62"/>
+<text class="mono hdr" x="58" y="474">VERIFICATION</text>
+<text class="mono bs" x="58" y="494">Every generator decodes its own output before writing it. gallery.py rasterises each SVG with headless Chrome, then zxing reads it back, and</text>
+<text class="mono bs" x="58" y="508">robust.py measures the rendered file, not the matrix. 29/29 stills · 216/216 sprite frames · the live solver pulled from the canvas and decoded.</text>
+
+<text class="mono bs" x="40" y="548">The app needs Node; the artefacts do not. Python resolves per run through uv, and every code is reconstructible from manifest.json alone.</text>
+<text class="mono bs" x="40" y="566">The URL is baked into the factorisation — point it elsewhere and every artifact in web/ has to be rebuilt.</text>
+</svg>

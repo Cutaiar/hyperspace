@@ -107,9 +107,9 @@ def segments() -> list[Segment]:
                 {"shape": idx("Tesseract"), "faces": True, "bright": 1.2, "speed": 0.6},
                 still="three-d-tesseract.png", still_at=0.6, each=switch_3d,
                 caption=three_d_caption, planes=[True] * 6),
-        Segment("Faces on a star", "Moravian star · faces on, pattern KALEIDO", 6.0,
+        Segment("Faces on a star", "Moravian star · faces on, pattern kaleido", 6.0,
                 {"shape": idx("Moravian star"), "faces": True, "bright": 1.5, "speed": 0.4,
-                 "pattern": PATTERN_NAMES.index("KALEIDO")},
+                 "pattern": PATTERN_NAMES.index("kaleido")},
                 still="moravian-kaleido.png", still_at=0.5),
     ]
     for i in range(len(G.SHAPES)):

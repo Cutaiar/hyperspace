@@ -121,7 +121,7 @@ def test_the_eight_rows_are_named_and_say_what_each_does_in_this_mode(faces, mod
         assert f"pattern.mod.{k}" in faces.rects, i.name    # the slider
         assert f"neutral.pattern.mod.{k}" in faces.rects
         assert patterns.effect(mode, k) in faces.texts, (i.name, patterns.effect(mode, k))
-    assert f"inputs · {MODES[mode].name}".upper() in faces.texts
+    assert f"inputs · {MODES[mode].name}" in faces.texts
 
 
 def test_flat_says_it_reads_no_input(faces):
@@ -164,9 +164,9 @@ def test_the_driver_line_names_the_macro_desk_and_base_subscribers(faces):
     assert ui_patterns.drivers(faces.panel, "pattern.mod.6").endswith("(off)")
 
 
-def test_a_session_control_on_an_input_is_named_and_nothing_is_offered(faces):
-    """A knob of the session's (bindings.json's global layer) sets the
-    input's base as a preset's desk row does: the row names it, and offers
+def test_a_meta_control_on_an_input_is_named_and_nothing_is_offered(faces):
+    """A knob of the meta controller's (bindings.json's global layer) sets the
+    input's base as a loadable patch's desk row does: the row names it, and offers
     no "+ <source>" over it."""
     table = faces.panel.router.table
     table.bindings.append(Binding("cc:0:48", "pattern.mod.3", "abs", layer="global"))

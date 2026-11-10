@@ -31,7 +31,7 @@ class Clock:
 def fake(tmp_path):
     clock = Clock()
     wd = Watchdog(tmp_path / "stall.log", clock=clock, wall=lambda: 1_790_000_000.0,
-                  preset=lambda: "TUMBLE")
+                  loadable=lambda: "TUMBLE")
     assert wd.open()           # the file, without the thread: check() is driven by hand
     yield wd, clock
     wd.close()
@@ -52,7 +52,7 @@ def test_a_stall_is_logged_once_with_every_thread(fake):
     assert not wd.check() and not wd.check(), "one dump per stall, not one per tick"
     text = wd.path.read_text()
     assert text.count("=== stall ") == 1 and wd.stalls == 1
-    assert "preset TUMBLE" in text
+    assert "patch TUMBLE" in text
     assert "no frame for 2.1 s" in text and "last completed frame at" in text
     assert "Current thread" in text and "test_a_stall_is_logged_once" in text
     # a frame completes, then the loop stalls again: a second dump
@@ -184,7 +184,7 @@ def test_a_raising_draw_is_logged_once_with_its_traceback_and_bannered(fake):
     text = wd.path.read_text()
     assert text.count("=== render error ") == 1, "once per distinct error"
     assert "Traceback (most recent call last)" in text and "_raise_in_draw" in text
-    assert "ValueError: the scene texture is gone" in text and "preset TUMBLE" in text
+    assert "ValueError: the scene texture is gone" in text and "patch TUMBLE" in text
     assert h.render_watch.alerts() == [
         "render window stopped — ValueError: the scene texture is gone"]
     assert h.reloader.runtime_error.startswith("render.draw: ValueError")
@@ -217,7 +217,7 @@ def test_a_stranded_target_nonfinite_params_and_warnings_are_logged_once(fake):
     rw.nonfinite(["view.speed"])
     rw.nonfinite(lambda: None)                        # a stub registry: ignored
     for _ in range(2):
-        rw.warn("preset WAKE: dream.on, but there is no dream worker")
+        rw.warn("patch WAKE: dream.on, but there is no dream worker")
     text = wd.path.read_text()
     assert text.count("=== stranded target ") == 1
     assert "framebuffer 5 was still bound" in text and "RuntimeError: once" in text
@@ -226,7 +226,7 @@ def test_a_stranded_target_nonfinite_params_and_warnings_are_logged_once(fake):
     alerts = rw.alerts()
     assert any("stranded" in a for a in alerts) and any("dream.on" in a for a in alerts)
     rw.dismiss()
-    rw.warn("preset WAKE: dream.on, but there is no dream worker")   # the next WAKE load
+    rw.warn("patch WAKE: dream.on, but there is no dream worker")   # the next WAKE load
     assert rw.alerts() == [], "a dismissed warning does not come back"
     assert wd.counts() == {"render error": 1, "stranded target": 1, "non-finite": 2,
                            "warning": 1}

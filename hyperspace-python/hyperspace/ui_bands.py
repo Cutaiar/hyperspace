@@ -12,8 +12,7 @@ stays (f and q both change, `drag_edge`); a left-drag box on the map
 sets the selected band's f/q from its frequency extent (`fit_box`, the
 time extent is ignored); a plain click selects the narrowest band under
 it. Every write goes through the registry (band.{i}.f / .q), so it is
-what a preset saves, what MIDI can learn, and ghosted (the base is the
-handle, a red hairline marks the effective centre) while a lane rides it.
+what the meta controller saves and what MIDI can learn; no lane may ride it (row 775).
 
 Cost: the history is 240 × 256 and implot's heat map is a quad per cell,
 which was 3 ms and 246 k vertices a frame headless — too much for a 320
@@ -37,7 +36,7 @@ from imgui_bundle import imgui, implot
 
 from . import ui
 from .analyzer import F_HI, F_LO, HIST_S, Q_HI, Q_LO, centre_q, edges
-from .bands import SHAPERS
+from .bands import NORMS, SHAPERS
 from .params import Kind, Registry
 
 PLOT_H = 136           # px; the page has to fit the control window with the meters and the strip
@@ -58,8 +57,8 @@ RAMP = np.array([
     (0.96, 0.96, 0.96, 1.0), (1.0, 43 / 255, 43 / 255, 1.0),
 ], dtype=np.float32)
 TICKS = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]
-HINT = "BOX FITS  ·  LINES MOVE  ·  CLICK SELECTS"
-HINT_SHORT = "BOX  ·  LINES  ·  CLICK"       # a narrow plot's; hovered, it says `HINT`
+HINT = "box fits  ·  lines move  ·  click selects"
+HINT_SHORT = "box  ·  lines  ·  click"       # a narrow plot's; hovered, it says `HINT`
 
 
 # ------------------------------------------------------- pure geometry
@@ -265,13 +264,7 @@ def _overlays(panel, freqs: np.ndarray, ly: np.ndarray) -> None:
         yc = min(max(py(math.log2(f)), pos.y + ui.FONT_MICRO * 1.5 + 6),
                  pos.y + size.y - ui.FONT_MICRO / 2 - 3)
         dl.add_text(imgui.ImVec2(x0 + 4, yc - ui.FONT_MICRO / 2 - 1),
-                    ui.u32(ui.RED if sel else ui.DIM), chain.band_names[i].upper())
-        # a modulated centre: the effective value as a red hairline ghost
-        pf = reg[f"band.{i}.f"]
-        if pf.modulated:
-            yg = py(math.log2(max(pf.value, 1e-3)))
-            dl.add_line(imgui.ImVec2(x0, yg), imgui.ImVec2(x1, yg), ui.u32(ui.RED), 1.0)
-            panel.ghosts += 1
+                    ui.u32(ui.RED if sel else ui.DIM), chain.band_names[i])
     implot.pop_plot_clip_rect()
 
 
@@ -342,14 +335,14 @@ def band_row(panel) -> None:
     imgui.end_disabled()
     imgui.same_line(0, 10)
     imgui.begin_disabled(c.selb == 0)
-    if imgui.arrow_button("##movel", imgui.Dir.left):
+    if ui.arrow_button("##movel", imgui.Dir.left):
         c.move_band(c.selb, c.selb - 1)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
         ui.tooltip("Move the band one strip earlier (lanes follow the strip order)")
     imgui.same_line(0, 2)
     imgui.begin_disabled(c.selb >= chain.n - 1)
-    if imgui.arrow_button("##mover", imgui.Dir.right):
+    if ui.arrow_button("##mover", imgui.Dir.right):
         c.move_band(c.selb, c.selb + 1)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
@@ -368,13 +361,13 @@ def band_row(panel) -> None:
 
 
 def _norm_chip(panel) -> None:
-    """AUTO / MANUAL normalisation for the open band (audit A10): lit red on
-    MANUAL, where the trim is a plain gain."""
+    """auto / manual normalisation for the open band (audit A10): lit red on
+    manual, where the trim is a plain gain."""
     a = panel.reg["band.sel.norm"]
     p = panel._real(a)
     manual = bool(p.base)
-    w = imgui.ImVec2(ui.chip_w("MANUAL"), 0)   # one width: the combos never jump
-    if ui.lit_chip(f"{'MANUAL' if manual else 'AUTO'}##norm", manual, size=w):
+    w = imgui.ImVec2(ui.chip_w(NORMS[1]), 0)   # one width: the combos never jump
+    if ui.lit_chip(f"{NORMS[1] if manual else NORMS[0]}##norm", manual, size=w):
         p.set(0 if manual else 1)
     panel._tip(a)
     panel._ctx(a)
@@ -393,7 +386,7 @@ def strip(panel) -> None:
     imgui.text_disabled(hz)
     sp = imgui.get_style().item_spacing.x
     # flush right on the title's line where it all fits, else a row of its own
-    whole = 2 * FN_W + 2 * sp + ui.chip_w("MANUAL")
+    whole = 2 * FN_W + 2 * sp + ui.chip_w(NORMS[1])
     if ui.beside(whole):
         imgui.same_line(full - whole)
     _norm_chip(panel)

@@ -45,19 +45,18 @@ def test_a_file_with_only_output_says_nothing(tmp_path, capsys):
 
 
 def test_a_screen_that_is_not_a_number_is_minus_one_and_a_note(tmp_path, capsys):
-    """Plan 16 WP7: `monitor = "left"` stopped the launch. A screen index
-    that is not a number is −1 (where the window was last time), for both
-    windows, said on stderr and in `cfg["notes"]` (the SYSTEM page); a
-    number is read as `int()` reads it and nothing is said — whether that
-    screen exists is placement's to say, at the launch."""
+    """Plan 16 WP7: `monitor = [1]` stopped the launch. A screen that is
+    neither a number nor a name is −1 (where the window was last time), for
+    both windows, said on stderr and in `cfg["notes"]` (the SYSTEM page); a
+    number is read as `int()` reads it and a name kept as it is, nothing
+    said — whether that screen exists is placement's to say, at the launch."""
     p = tmp_path / "config.toml"
-    p.write_text('[output]\nmonitor = "left"\ncontrol_monitor = [1]\n[overlay]\nbg = 0.3\n')
+    p.write_text('[output]\nmonitor = "MStar #2"\ncontrol_monitor = [1]\n[overlay]\nbg = 0.3\n')
     cfg = config.load(p)
-    assert cfg["output"]["monitor"] == cfg["output"]["control_monitor"] == -1
+    assert cfg["output"]["monitor"] == "MStar #2" and cfg["output"]["control_monitor"] == -1
     assert cfg["output"]["bg"] == 0.3
     assert cfg["notes"] == [
         f"config: [overlay] is now [output] — rename the section in {p}",   # kept, first
-        "config: [output] monitor = 'left' is not a screen index — using the last position",
         "config: [output] control_monitor = [1] is not a screen index — using the last position",
     ]
     err = capsys.readouterr().err
@@ -164,7 +163,7 @@ def test_library_git_leftover_is_ignored_with_a_note(tmp_path, capsys):
     p.write_text("[library]\ngit = true\n")
     cfg = config.load(p)
     assert cfg["library"] == {"path": ""}
-    assert cfg["notes"] == [("config: [library] git is gone (plan 25) — presets are shared "
+    assert cfg["notes"] == [("config: [library] git is gone (plan 25) — patches are shared "
                             "through [library] path; remove the line")]
     assert "[library] git is gone" in capsys.readouterr().err
 
@@ -190,7 +189,7 @@ def test_no_screens_list_is_one_output_as_today(tmp_path, capsys):
 
 
 def test_a_through_key_is_said_once(tmp_path, capsys):
-    """Plan 35 M: `through` in `[[output.screens]]` is the preset's wiring
+    """Plan 35 M: `through` in `[[output.screens]]` is the loadable patch's wiring
     now — read, ignored, and said once (`THROUGH_IS_WIRING`); the entry
     carries no `through`."""
     p = tmp_path / "config.toml"
@@ -218,7 +217,7 @@ def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
                     "dim": 0.6}
     # output 1's entry is what the first window's readers see
     assert (oc["monitor"], oc["fullscreen"], oc["bg"]) == (1, True, 0.4)
-    # (plan 35 T4: the `through` key said once — the preset's wiring now)
+    # (plan 35 T4: the `through` key said once — the loadable patch's wiring now)
     assert cfg["notes"] == [config.THROUGH_IS_WIRING.format(n=2),
                             ("config: [[output.screens]] is listed, so [output] monitor and "
                              "fullscreen are ignored — output 1's entry says")]
@@ -228,7 +227,7 @@ def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
     cfg = config.load(p)
     assert "notes" not in cfg and len(config.screens(cfg)) == 2
     # every key checked: a wrong kind is the default, with a note, never a dead launch
-    p.write_text('[[output.screens]]\nmonitor = "left"\nfullscreen = "yes"\nhands = 1\n'
+    p.write_text('[[output.screens]]\nmonitor = [1]\nfullscreen = "yes"\nhands = 1\n'
                  'dim = "x"\nmonitr = 2\nname = 7\n')
     cfg = config.load(p)
     (one,) = config.screens(cfg)
@@ -411,7 +410,7 @@ def test_read_devices_reports_problems_and_prints_nothing(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
-def test_laptop_reads_a_rig_config_for_one_screen(tmp_path, capsys):
+def test_laptop_reads_a_meta_config_for_one_screen(tmp_path, capsys):
     """`hyperspace --laptop`: a config made for the projector rig must
     not cover the laptop black — output 1 a plain window, no overlay at
     launch, both windows on the primary screen, later outputs dropped;
@@ -447,3 +446,14 @@ def test_the_laptop_flag_and_its_alias():
 
     assert not _args([]).laptop
     assert _args(["--laptop"]).laptop and _args(["--single"]).laptop
+
+
+def test_a_screen_named_in_a_list_is_kept_for_the_launch(tmp_path):
+    """Row 771: `[[output.screens]] monitor = "MStar"` read as "not a screen"
+    with a note; it is a name now, and output 1's is `[output] monitor` too."""
+    p = tmp_path / "config.toml"
+    p.write_text('[[output.screens]]\nmonitor = "MStar #1"\n'
+                 '[[output.screens]]\nmonitor = "MStar #2"\n[[output.screens]]\nmonitor = 1\n')
+    cfg = config.load(p)
+    assert [s["monitor"] for s in config.screens(cfg)] == ["MStar #1", "MStar #2", 1]
+    assert cfg["output"]["monitor"] == "MStar #1" and "notes" not in cfg

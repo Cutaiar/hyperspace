@@ -28,7 +28,7 @@ legacy layout is `i + 1` (and the top band reads itself), as before.
 
 Band → plane and `dir` are not the analyzer's business — the output is
 `lanes`, and what they drive is the routing table's (routing.py; the
-legacy table lives there as the "legacy6" preset).
+legacy table lives there as the "legacy6" loadable patch).
 
 Spectrum history: a ring of the last HIST_S seconds of spectra on a
 log-frequency axis, for the heat map (WP5b). One column every HIST_DT of
@@ -139,11 +139,16 @@ class Curve:
     f: object = field(repr=False)
 
 
+# A curve's tag is an enum option's words on screen, and it is also what a
+# saved layout holds — but `curve_index` has always read a tag in ANY case,
+# and the shipped scenes already stored it lower case, so these going lower
+# with the rest of the interface (2026-11-10) changes nothing a file can
+# notice: "RECT" in an old layout still loads.
 CURVES = [
-    Curve("RECT", "Rectangular — every bin between the edges, equally", _cv_rect),
-    Curve("TRI", "Triangular — full at the centre, zero at the edges", _cv_tri),
-    Curve("GAUSS", "Gaussian — half power at the edges, soft skirts", _cv_gauss),
-    Curve("BUTTER", "Butterworth — flat top, 4th-order skirts, half power at the edges",
+    Curve("rect", "Rectangular — every bin between the edges, equally", _cv_rect),
+    Curve("tri", "Triangular — full at the centre, zero at the edges", _cv_tri),
+    Curve("gauss", "Gaussian — half power at the edges, soft skirts", _cv_gauss),
+    Curve("butter", "Butterworth — flat top, 4th-order skirts, half power at the edges",
           _cv_butter),
 ]
 RECT = 0
@@ -154,8 +159,11 @@ def curve_index(c) -> int:
     if isinstance(c, Curve):
         return CURVES.index(c)
     if isinstance(c, str):
-        tags = [cv.tag for cv in CURVES]
-        return tags.index(c.upper())
+        # case-folded on BOTH sides, not on the argument alone: the tags are
+        # lower case as of 2026-11-10 and `.upper()` on the argument looked
+        # like case-insensitivity while only ever matching the old spelling
+        tags = [cv.tag.lower() for cv in CURVES]
+        return tags.index(c.lower())
     i = int(c)
     if not 0 <= i < len(CURVES):
         raise ValueError(f"no curve {c}")
@@ -174,6 +182,15 @@ class BandSpec:
 
     @property
     def label(self) -> str:
+        """The band's name on screen, as stored.
+
+        The names in `bands.BANDS` and the shipped scenes are lower case as
+        of 2026-11-10 ("remove all caps from the interface"), and nothing
+        here rewrites a stored one: a layout saved before that keeps the
+        capitals it holds, and a band somebody named keeps the name they
+        gave it. A name is a label and never a key, so the file format is
+        untouched either way.
+        """
         if self.name:
             return self.name
         return f"{self.f:.0f} Hz" if self.f < 1000 else f"{self.f / 1000:.1f} kHz"
@@ -288,7 +305,7 @@ class Analyzer:
         return self.spec[i].edges()
 
     def layout(self) -> dict:
-        """{"bands": [{"f", "q", "curve"(, "name")}, …]} — the preset's layout key."""
+        """{"bands": [{"f", "q", "curve"(, "name")}, …]} — the loadable patch's layout key."""
         rows = []
         for s in self.spec:
             row = {"f": s.f, "q": s.q, "curve": CURVES[s.curve].tag}
@@ -300,7 +317,7 @@ class Analyzer:
     def apply_layout(self, layout: dict, params: list[Params] | None = None) -> None:
         """Take the band set from a layout. Trackers of bands that keep their
         index carry on; new indices start fresh. Params are kept by index
-        (a preset restores its values after the layout) unless given."""
+        (a loadable patch restores its values after the layout) unless given."""
         specs = [_spec_of(r) for r in layout["bands"]]
         if not 1 <= len(specs) <= N_MAX:
             raise ValueError(f"a layout has 1..{N_MAX} bands, not {len(specs)}")

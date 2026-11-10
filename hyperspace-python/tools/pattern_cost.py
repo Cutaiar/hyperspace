@@ -3,8 +3,8 @@
 
 The 600-cell (1200 triangular faces) and the 120-cell (720 pentagons) with
 their faces on, drawn offscreen at 1280×720 with each pattern in turn,
-the bands of a loud passage fed (METER and PULSE read them): the median
-of `--frames` frames, `ctx.finish()` after each, beside FLAT (no pattern
+the bands of a loud passage fed (meter and pulse read them): the median
+of `--frames` frames, `ctx.finish()` after each, beside flat (no pattern
 runs). On this machine's GL — llvmpipe in the container, a software
 rasteriser — so read the ratios, not the milliseconds: a GPU spends far
 less on fragments. Writes docs/plans/assets/22-face-patterns/b3-cost.txt.
@@ -70,7 +70,7 @@ def main() -> int:
         rows.append((mode, m.name, ms))
     flat = rows[0][2]
     head = f"{'mode':<4} {'name':<8} " + "  ".join(f"{n:>17}" for n in SHAPE_NAMES)
-    lines = ["Face pattern cost, offscreen 1280x720, median ms per frame and x FLAT",
+    lines = ["Face pattern cost, offscreen 1280x720, median ms per frame and x flat",
              "(llvmpipe: relative numbers only; tools/pattern_cost.py)", "", head]
     for mode, name, ms in rows:
         cells = "  ".join(f"{v:7.1f} ms {v / f:5.2f}x" for v, f in zip(ms, flat, strict=True))

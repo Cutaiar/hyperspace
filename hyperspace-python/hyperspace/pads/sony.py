@@ -72,7 +72,7 @@ _HAT = (1, 1 | 2, 2, 2 | 4, 4, 4 | 8, 8, 8 | 1)
 # (payload byte, bit) → canonical button, the face and the shoulders, then
 # the PS row; the Edge's four sit in the PS row's high bits (Linux 115-119)
 _BUTTONS = (
-    (7, 0x10, "X"), (7, 0x20, "A"), (7, 0x40, "B"), (7, 0x80, "Y"),
+    (7, 0x10, "W"), (7, 0x20, "S"), (7, 0x40, "E"), (7, 0x80, "N"),
     (8, 0x01, "LB"), (8, 0x02, "RB"), (8, 0x10, "VIEW"), (8, 0x20, "MENU"),
     (8, 0x40, "LSTICK"), (8, 0x80, "RSTICK"),
     (9, 0x01, "GUIDE"), (9, 0x02, "TOUCH"), (9, 0x04, "SHARE"),

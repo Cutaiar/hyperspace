@@ -6,7 +6,7 @@ offscreen by the real renderer.
 
 Writes into docs/plans/assets/28-catalog/: `flow-demo.mp4` (1280×720,
 30 fps, through ffmpeg on the PATH) and `flow-mark-and-capsules.png`, the
-mark with PLAID on its bars beside the capsules with BLOOM, turned. Each
+mark with plaid on its bars beside the capsules with bloom, turned. Each
 segment is a ViewState turned by `ViewState.integrate`, as the app turns
 it; the stage, the captions and the encoder are catalog_demo's.
 """
@@ -25,7 +25,7 @@ from hyperspace.view import ViewState
 
 MARK, CAPS = G.shape_index("Flow mark"), G.shape_index("Flow capsules")
 # what the patterns segment walks through, a second and a half each
-WALK = ["PLAID", "RINGS", "MOIRE", "BLOOM", "CAUSTIC", "PLASMA", "KALEIDO", "METER"]
+WALK = ["plaid", "rings", "moire", "bloom", "caustic", "plasma", "kaleido", "meter"]
 STILL = [False] * 6
 
 
@@ -60,9 +60,9 @@ def segments() -> list[Segment]:
         Segment("Flow capsules", "each bar lifted into a capsule round its own axis", 7.0,
                 {"shape": CAPS, "bright": 1.3, "speed": 0.0},
                 each=sway(0.9, 1.0), planes=STILL),
-        Segment("Flow capsules · tumbling", "faces on, pattern BLOOM", 8.0,
+        Segment("Flow capsules · tumbling", "faces on, pattern bloom", 8.0,
                 {"shape": CAPS, "faces": True, "bright": 1.6, "speed": 0.5,
-                 "pattern": PATTERN_NAMES.index("BLOOM")},
+                 "pattern": PATTERN_NAMES.index("bloom")},
                 planes=[False, True, True, False, False, False]),   # a 3D shape: 3D planes
         Segment("A field of marks", "nine instances on a grid, RIPPLE: the app's "
                 "instancing, on the new subject", 7.0,
@@ -104,11 +104,11 @@ def run() -> None:
 
 def still() -> None:
     """The picture beside the plan 28 record: the flat mark face-on with
-    PLAID on its bars, and the capsules turned with BLOOM."""
+    plaid on its bars, and the capsules turned with bloom."""
     stage = Stage(640, 480)
-    shots = [ViewState(shape=MARK, faces=True, pattern=PATTERN_NAMES.index("PLAID"),
+    shots = [ViewState(shape=MARK, faces=True, pattern=PATTERN_NAMES.index("plaid"),
                        bright=1.4),
-             ViewState(shape=CAPS, faces=True, pattern=PATTERN_NAMES.index("BLOOM"),
+             ViewState(shape=CAPS, faces=True, pattern=PATTERN_NAMES.index("bloom"),
                        bright=1.4, ang=[0.0, 0.5, 0.25, 0.0, 0.0, 0.0])]
     out = Image.new("RGB", (1280, 480))
     for k, v in enumerate(shots):

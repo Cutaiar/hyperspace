@@ -46,3 +46,8 @@ and a prototype:
   (Vite + React + Tailwind), reading the real shape catalog and band
   routing. A look at that component library, not a proposed UI. Not part
   of the app.
+- **[`prototypes/qr-dither/`](prototypes/qr-dither/)** — a tesseract drawn in
+  the data of a QR code rather than over one, foldable through 4D with the
+  code re-solved every update (0.2 ms a solve) and always scanning to
+  `hyperspace.cutaiar.io`. Reed-Solomon is linear, so the picture is the
+  payload. Not part of the app.

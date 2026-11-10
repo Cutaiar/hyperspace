@@ -3,7 +3,7 @@
 A holder is whatever acts on a look: one controller (a device by its role), the
 keys, the mouse, the panel. Each has its own `Pointer`, so each can be moved on
 its own, and it reads what it needs through it each time, never keeping a
-deck's object: a kept `Param` or table is how a preset comes to affect another.
+deck's object: a kept `Param` or table is how a loadable patch comes to affect another.
 
 `Through` is that read as a descriptor, for a holder whose handles tests and
 the app assign before there is anything to point at (`panel.reg = …`,
@@ -22,6 +22,11 @@ from typing import Any
 # every move of any pointer counts here (kept across a hot reload of this file): what
 # a reader that caches what the pointers say compares (`Sources.away_from`)
 moves: int = globals().get("moves", 0)
+
+
+def deck_number(decks, deck) -> int:
+    """Which of the two `decks` this is, as a person reads it: 1 or 2."""
+    return 1 if deck is decks[0] else 2
 
 
 @dataclass

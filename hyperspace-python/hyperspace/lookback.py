@@ -146,7 +146,7 @@ def is_lookback_key(key: str) -> bool:
 
 
 RES = [128, 192, 256, 384]              # dream.res: the echo's short side, px
-# dream.layer's choices in their stored order: a preset saves the index, so
+# dream.layer's choices in their stored order: a loadable patch saves the index, so
 # a new layer is appended, never inserted. The menu's order is LAYER_INFO's.
 LAYERS = ["conv2_2", "conv3_3", "conv4_3", "inception3b", "inception4c", "inception4e",
           "conv1_1", "conv1_2", "conv2_1", "conv3_1", "conv3_2", "conv4_1", "conv4_2",
@@ -389,7 +389,7 @@ class DreamState:
     echoes: int = 8           # ring depth; 0 = only the dream buffer
     gap: float = 0.033333     # seconds between captures (every 2 frames at 60 Hz)
     res: int = 2              # index into RES → 256
-    # the dream worker's (WP6b) — declared here so presets carry them
+    # the dream worker's (WP6b) — declared here so loadable patches carry them
     steps: int = 2
     step: float = 0.03
     k: float = 0.05           # step × steps / k = 1.2, under dream.py's 1.5 guard

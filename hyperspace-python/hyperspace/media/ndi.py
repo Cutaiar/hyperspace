@@ -1,4 +1,4 @@
-"""NDI in (plan 32 T8): another rig's picture over the network — Resolume
+"""NDI in (plan 32 T8): another machine's picture over the network — Resolume
 or TouchDesigner on the next laptop — as `ndi:<sender>` sources.
 
 `NdiKind` is a ``kind = "ndi"`` device entry. Its scan (on the media

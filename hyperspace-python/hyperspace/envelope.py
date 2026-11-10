@@ -7,10 +7,10 @@ the analyzer lanes, so a push row from it only ever pushes one way and a
 negative row depth pushes down. This module is the leaf voice and its
 params, and `Envelopes`, the `modbank.Bank` that holds voices by stable
 id, publishes them as the ``env`` scheme and saves membership in the
-preset (``"envs"``), calling `declare` once per voice.
+loadable patch (``"envs"``), calling `declare` once per voice.
 
 Per envelope (every knob a registry param ``env.<n>.<knob>``, so it is
-modulatable, Learnable and saved in the preset like an LFO's):
+modulatable, Learnable and saved in the loadable patch like an LFO's):
 
   mode      gate · one-shot — one-shot closes its own gate at the end of
             decay (a drum hit: a release does nothing); gate sustains
@@ -67,8 +67,8 @@ envelope the way an LFO's depth does instead of waiting for the next fire.
 **The bank** (plan 31 W1, decision 3): `Envelopes` always holds the five
 lane envelopes, 1–5 — the sequencer's lanes fire them, so every lane works
 the moment a pad is pressed — and `remove` refuses them. Extras, 6 up to
-the cap of 16, come and go by stable id like the LFOs. Its preset key,
-``"envs"``, is written only when there are extras (`preset.Presets.document`
+the cap of 16, come and go by stable id like the LFOs. Its loadable patch key,
+``"envs"``, is written only when there are extras (`loadable.LoadedPatch.document`
 compares with `DEFAULT`), so a file saved without any is the file it was.
 
 Nothing here imports from the host but the leaf `modbank`: the clock and
@@ -313,9 +313,9 @@ def _fmt_time(env: Envelope, zero: bool = False):
 
 def declare(reg, n: int, env: Envelope) -> None:
     """Envelope n's params, ``env.<n>.<knob>`` in the ``env`` group: every
-    knob modulatable and persistent (an LFO can own a decay, a preset
+    knob modulatable and persistent (an LFO can own a decay, a loadable patch
     carries the shape), `fire` a trigger and `gate` a modulatable toggle.
-    `gate` is not persisted: a preset that loaded a held gate would fire a
+    `gate` is not persisted: a loadable patch that loaded a held gate would fire a
     note and leave it hanging. The bank calls this once per voice; a
     second call is a no-op."""
     p, name = f"{GROUP}.{n}", label(n)

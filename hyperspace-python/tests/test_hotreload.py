@@ -125,6 +125,44 @@ def test_bad_save_keeps_last_good_until_fixed(pkg):
     assert t.speak() == "new"
 
 
+def test_a_refused_target_strands_no_other_and_all_are_named(pkg):
+    """Row 802: one object refusing left every later target on its old class."""
+    mod_a = importlib.import_module("hotpkg.mod_a")
+    importlib.import_module("hotpkg.mod_b")
+    first, later = mod_a.Thing(), mod_a.Thing()
+    r = _reloader(lambda: [
+        (first, "mod_a", "Thing"),
+        (object(), "mod_a", "Thing"),           # Python refuses: not a heap type's instance
+        (object(), "mod_a", "Thing"),
+        (SimpleNamespace(), "mod_a", "Gone"),   # no such class
+        (later, "mod_a", "Thing"),
+    ])
+
+    write(pkg, "mod_a", A_V2)
+    assert not r.poll(now=1.0)
+    assert first.speak() == "new" and later.speak() == "new"
+    assert first.rebuilt is True and later.rebuilt is True    # the hooks ran, either side
+    assert r.error.startswith("swap: ") and "mod_a.Thing: TypeError" in r.error
+    assert "(x2)" in r.error                    # the same refusal, said once with its count
+    assert "mod_a.Gone: AttributeError" in r.error
+    assert r.status == ""
+
+
+def test_a_raising_hook_strands_no_other(pkg):
+    mod_a = importlib.import_module("hotpkg.mod_a")
+    importlib.import_module("hotpkg.mod_b")
+    first, later = mod_a.Thing(), mod_a.Thing()
+    r = _reloader(lambda: [(first, "mod_a", "Thing"), (later, "mod_a", "Thing")])
+
+    write(pkg, "mod_a", A_V2.replace("self.rebuilt = True", """self.rebuilt = True
+            if self.count == 0:
+                raise RuntimeError("no")"""))
+    first.count, later.count = 0, 1
+    assert not r.poll(now=1.0)
+    assert later.speak() == "new" and later.rebuilt is True
+    assert "mod_a.Thing: RuntimeError: no" in r.error
+
+
 def test_dataclass_backfill(pkg):
     mod_a = importlib.import_module("hotpkg.mod_a")
     importlib.import_module("hotpkg.mod_b")
@@ -217,7 +255,7 @@ def _source(name: str) -> Path:
     import hyperspace
 
     root = Path(hyperspace.__file__).parent / name.replace(".", "/")
-    # `library.py` sits beside the `library/` preset folder: the file wins
+    # `library.py` sits beside the `library/` loadable patch folder: the file wins
     return root.with_suffix(".py") if root.with_suffix(".py").exists() else root / "__init__.py"
 
 
@@ -259,7 +297,11 @@ def test_every_package_module_but_the_cold_core_is_watched():
     # in, so a reloaded copy would sum nothing
     # segment (plan 39 T4) is cold: a worker module, its threads outlive a
     # reload (masks went on MODULES, before render, at the 37/38/39 integration)
-    cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch", "segment"}
+    # hot_slots (row 802) is what a hot class's slots stand on across a reload
+    # dkit.dev is the kit's workbench (its tests, gallery, oracles): the app
+    # never imports it
+    cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch", "segment", "hot_slots"}
+    names = {n for n in names if n != "dkit.dev" and not n.startswith("dkit.dev.")}
     assert names - cold == set(_watched()), sorted((names - cold) ^ set(_watched()))
 
 
@@ -441,7 +483,7 @@ def test_reloading_params_keeps_kind_identity():
     """The same rule on the real module: a params.py reload through the
     reloader keeps `Kind`, and a live toggle still toggles. In a subprocess,
     because a real reload of hyperspace.params would leave this test
-    session's other modules holding stale classes."""
+    meta controller's other modules holding stale classes."""
     import subprocess
 
     out = subprocess.run([sys.executable, "-c", KIND_SCRIPT], capture_output=True, text=True,

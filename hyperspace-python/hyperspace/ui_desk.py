@@ -2,13 +2,13 @@
 
 **APC40-only** (plan 27 B2): with several MIDI desks listed, this draws
 the first MIDI role's rows (`Bindings.active()` with no role) over
-`apc40.LAYOUT` — the APC40 in every rig that lists it first. A second
+`apc40.LAYOUT` — the APC40 in every install that lists it first. A second
 desk (a `generic` profile) has no layout to draw; plan 29's generic
 on-screen desk is what replaces this module for any profile.
 
 A picture of the desk in the control window: every control of
 `apc40.LAYOUT` at its place on the device, with its glyph — the same
-glyph the ROUTING page prints first on a desk or session row and Learn
+glyph the ROUTING page prints first on a desk or meta row and Learn
 prints in its messages — so a row can be found on the device by looking.
 
 **It takes the room it has** (`room`, plan 17 fork 1): the space left of
@@ -18,7 +18,7 @@ panel hidden (`ui.panel`: H, DEVICE ON/OFF, the header's `big` chip) it is
 the whole control window. There is no DESK page and no param for its
 size. Once a layout unit is `LABEL_UNIT` px wide every lit control also
 carries **what it does** (`text`): its param's label, or the value's name
-for an enum `set` row (the bank row reads the presets' names). A label in
+for an enum `set` row (the bank row reads the loadable patches' names). A label in
 the bright ink is a row of the layer that is up; a grey one is invariant
 — the same on both layers. Under that size the drawing is the glyphs
 alone, as before.
@@ -30,9 +30,9 @@ either size. ⇧ fills red while the global layer is up. A knob's arc is
 its ring — the param's base (audit R6); a fader's cap the param's value;
 a button's LED is filled when the device's would be (`routing.led_level`,
 the rule midi.py lights by). A **bank pad** (clip rows 1, 4 and 5, plan 19
-WP2) has three states, as on the device: the loaded preset's is green, a
-slot that holds another preset is amber at half strength and reads that
-preset's name, and an empty slot's is drawn as a dark control — its glyph
+WP2) has three states, as on the device: the loaded patch's is green, a
+slot that holds another loadable patch is amber at half strength and reads that
+loadable patch's name, and an empty slot's is drawn as a dark control — its glyph
 only, no label (`empty`); its hover still says what the pad is. The hover
 names the control: glyph · param · its label · layer, and Akai's name.
 
@@ -57,10 +57,10 @@ click completes it instead, as a knob bump would.
 
 **The offer** (plan 24 C3): while a mappable control is picked, the
 empty ground of the right-hand section (`OFFER`, under the transport row)
-lists the params this preset uses, ranked (`offer`, `learn.ranked`: what
+lists the params this loadable patch uses, ranked (`offer`, `learn.ranked`: what
 its routes and macros move, what it set off the group default, the
 effects and layers it has on, then what is already on the desk), and its
-chip "all params ▾" opens every param, this preset's first and then a
+chip "all params ▾" opens every param, this loadable patch's first and then a
 menu per group — not the whole registry in one list. A click on one puts
 the picked control there (`take`): `Learn.map_picked`, the same road the
 page's click takes, which still works beside it.
@@ -81,35 +81,31 @@ from dataclasses import dataclass, replace
 
 from imgui_bundle import imgui
 
-from . import apc40, learn, ui, ui_pane, ui_routing
+from . import apc40, graphview, learn, ui, ui_pane, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .groupwords import group_part, group_word
-from .params import PERFORMANCE_GROUPS, Kind
-from .routing import FINE_PARAM, Binding, fine_gives_way, led_shade
+from .params import PATCH_GROUPS, Kind
+from .routing import FINE_PARAM, Binding, fine_gives_way, layer_word, led_shade
+from .ui_diagram import EDGE, GAP, GLYPH_PX, HEAD_H, PAD  # shared with the pad (ui_diagram.py)
 
 MIN_W = 300.0              # the window is never narrower, px
 MIN_H = 120.0              # …or shorter (a control window with no room above the sheet)
 LABEL_UNIT = 44.0          # a layout unit this wide or wider carries labels…
 LABEL_UNIT_H = 32.0        # …if it is also this tall (a short, wide window: glyphs only)
-EDGE = 12.0                # from the control window's edges, the panel and the sheet
-PAD = 8.0
-HEAD_H = 26.0              # the header's line: the layer, the preset, the chip
-GLYPH_PX = 10.0            # the glyphs' type size
-GAP = EDGE                 # from the cheat sheet
 LABEL_PX = (11.0, 18.0)    # the labels' type size: 0.2 of a unit, kept in this range
 LABEL_LINES = 2            # a label wraps to at most this many lines
 BIG, PANEL = "big", "panel"    # the header's chip: hide the panel / bring it back
 CLOSE = "×"                # the header's last chip: close the desk (`ui.desk`)
 PICK_S = 20.0              # a picked control lets go by itself after this long with no click
 PICK_MOVE = 12.0           # px the mouse must leave a pick's click by before a click can map
-SAYS_S = 0.5               # how long the labels' texts are kept (a renamed preset shows by then)
+SAYS_S = 0.5               # how long the labels' texts are kept (a renamed loadable patch shows by then)
 LET_GO_TIP = "click to let go"     # the footer's picked line: on it where it fits, and on hover
-# The offer (plan 24 C3): where the picked control's list of this preset's
+# The offer (plan 24 C3): where the picked control's list of this loadable patch's
 # params is drawn, in layout units (x, y, w, h) — the right-hand section's
 # empty ground between the transport row and the crossfader, so it covers
 # no control and the desk's own layout never moves while a pick stands
 OFFER = (apc40.RIGHT, 10.45, 4.0, 2.95)
-OFFER_ALL = "all params ▾"          # its chip: every param, this preset's first, then by group
+OFFER_ALL = "all params ▾"          # its chip: every param, this loadable patch's first, then by group
 OFFER_SHORT = "all ▾"               # …where the long label does not fit beside the head
 OFFER_PAD = (4.0, 3.0)              # its inner padding, px
 OFFER_SPACING = (4.0, 1.0)          # …and its items' spacing: three items fit on the small desk
@@ -144,10 +140,34 @@ def _key(table) -> tuple:
             getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings),
             getattr(table, "rows_serial", 0),
             getattr(table, "page_serial", 0),
-            id(table.page_rows) if getattr(table, "page", None) is not None else None)
+            id(table.page_rows) if getattr(table, "page", None) is not None else None,
+            table.node_rows_serial())
 
 
 PAGE_OWNS = "the sequencer page owns this"
+NODE_FAINT = 0.3        # a filled control while the desk is on the other `Deck` (row 712)
+
+
+def _node_ink(away: bool) -> imgui.ImVec4:
+    return imgui.ImVec4(*graphview.NODE_MODE_RGB, NODE_FAINT if away else 1.0)
+
+
+def filled_rows(table, role: str | None = None) -> dict[int, bool]:
+    """The rows node mode fills on a controller (`role`; None, the first desk), by `id`, each
+    with whether it is on the other `Deck`: asked once a draw, since `_edge` is asked once a
+    control."""
+    rows = table.node_rows(role)
+    if not rows:
+        return {}
+    away = bool(table.node_row_away(rows[0], role))
+    return {id(b): away for b in rows}
+
+
+def _edge(filled: dict[int, bool], b: Binding | None, on: bool) -> int:
+    """A control's outline: a row node mode fills (`filled_rows`) is in its cable's
+    colour, faint when the desk is on the other `Deck`, as the cable is."""
+    away = filled.get(id(b)) if b is not None else None
+    return ui.u32(ui.DIM if on else ui.LINE) if away is None else ui.u32(_node_ink(away))
 
 
 def on_page(table, c: apc40.Control) -> bool:
@@ -207,7 +227,7 @@ def lit_cached(panel, table) -> dict[str, Binding]:
 
 def mappable(table, c: apc40.Control) -> str | None:
     """Why a click on a param could not put this control on it, or None
-    when it can: an invariant control is the session's on both layers
+    when it can: an invariant control is the meta controller's on both layers
     (D6), and nothing is mapped while the global layer is up (D5) — what
     `Learn.learn_control` refuses, asked before the click."""
     name = apc40.named(c.source) or c.glyph
@@ -216,12 +236,7 @@ def mappable(table, c: apc40.Control) -> str | None:
     if on_page(table, c):                       # (learn.blocked says "invariant" too)
         return f"{name}: {PAGE_OWNS}"
     why = learn.blocked(table, c.source)        # the rule `learn_control` refuses by
-    if why == "invariant":
-        return f"{name} is invariant (the session's)"
-    if why == "global":
-        return (f"{name} is on the global layer (the session's) — latch SHIFT off to map "
-                "into the preset")
-    return None
+    return None if why is None else learn.blocked_words(name, why)
 
 
 def picked(panel) -> apc40.Control | None:
@@ -332,7 +347,7 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
     """What the desk's header says of the picked control, and whether a
     click on a param would map it: "D3 picked: click a param to put it
     here · click D3 again to let go", or why not and what the control
-    does ("S3 (track fader 3) is invariant (the session's): SUB Post-drive")."""
+    does ("S3 (track fader 3) is invariant (the meta controller's): SUB Post-drive")."""
     why = mappable(table, c)
     if why is None:
         if panel.open and ui_pane.shown(panel, ui_pane.ROUTING):
@@ -343,7 +358,7 @@ def pick_line(panel, table, c: apc40.Control) -> tuple[str, bool]:
                 "to let go"), True
     b = lit_cached(panel, table).get(c.glyph)
     does = ((text(panel.reg, b) or "an empty slot") if b is not None
-            else f"unmapped on the {table.layer} layer")
+            else f"unmapped on the {layer_word(table.layer)} layer")
     return f"{why}: {does}", False
 
 
@@ -365,14 +380,14 @@ def footer_line(panel, now: float | None = None) -> tuple[str, bool] | None:
 def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
     """What a picked control is offered (plan 24 C3): `learn.ranked` over
     every param a desk control may take (`ui_routing.desk_target`) — this
-    preset's own first, ranked, then the rest by group. Built from the
+    loadable patch's own first, ranked, then the rest by group. Built from the
     registry, the table and the library's group defaults, and kept while
-    the pick, the table and the loaded preset stand."""
+    the pick, the table and the loaded patch stand."""
     st = _state(panel)
     lib = getattr(panel, "library", None)
     key = (getattr(getattr(panel, "learn", None), "control", None), _key(table),
            getattr(table, "macros_serial", 0),
-           lib.current("presets") if lib is not None else None)
+           lib.current("loadable") if lib is not None else None)
     hit = st.get("offer")
     if hit is not None and hit[0] == key:
         return hit[1]
@@ -381,7 +396,7 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     values = reg.snapshot()
     defaults: dict = {}
     if lib is not None and lib.reg is not None:
-        for g in PERFORMANCE_GROUPS:
+        for g in PATCH_GROUPS:
             defaults.update(lib.defaults(g))
     routed = {b.target for b in table.routes() if b.enabled}
     routed |= {s.base for m in table.macros.values() for s in m.subs if s.base}
@@ -417,11 +432,11 @@ def _offer_item(panel, pid: str, why: str, width: float) -> None:
 
 
 def _offer_all(panel, used, rest) -> None:
-    """The chip's popup: this preset's params, then every other param a
+    """The chip's popup: this loadable patch's params, then every other param a
     menu per group."""
     if not imgui.begin_popup("##offer_all"):
         return
-    ui._micro("this preset", ui.DIM)
+    ui._micro("this patch", ui.DIM)
     if not used:
         imgui.text_disabled("nothing it moves, routes or switches on")
     for pid, why in used:
@@ -441,7 +456,7 @@ def _offer_all(panel, used, rest) -> None:
 
 def _offer(panel, table, origin, unit) -> None:
     """The picked control's offer, in the `OFFER` ground: a chip that
-    opens every param, then this preset's params, ranked (`offer`); a
+    opens every param, then this loadable patch's params, ranked (`offer`); a
     click on one maps the pick there. Drawn only while a click on a param
     would map it (`picking`)."""
     st = _state(panel)
@@ -474,7 +489,7 @@ def _offer(panel, table, origin, unit) -> None:
         _offer_all(panel, used, rest)
         room_ = imgui.get_content_region_avail().x
         if not used:
-            imgui.text_disabled(ui.fit_text("nothing of this preset's", room_))
+            imgui.text_disabled(ui.fit_text("nothing of this patch's", room_))
         for pid, why in used:
             _offer_item(panel, pid, why, room_)
     finally:
@@ -501,14 +516,14 @@ def _offer_chip(panel) -> None:
         label = OFFER_SHORT
     imgui.push_style_var(imgui.StyleVar_.frame_padding, _v(*OFFER_CHIP_PAD))
     imgui.push_style_var(imgui.StyleVar_.frame_rounding, 999.0)
-    hit = imgui.button(f"{label}##offer")
+    hit = ui.button(f"{label}##offer")
     imgui.pop_style_var(2)
     a, b = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     _state(panel)["offer_chip"] = (a.x, a.y, b.x, b.y)
     if hit:
         imgui.open_popup("##offer_all")
     if imgui.is_item_hovered():
-        ui.tooltip("Every param: this preset's first, then the rest by group")
+        ui.tooltip("Every param: this patch's first, then the rest by group")
 
 
 def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
@@ -579,7 +594,7 @@ def _hover(panel, table, c: apc40.Control, b: Binding | None) -> str:
         return f"{tip}\nclick: let go"
     if mappable(table, c) is None:
         return f"{tip}\nclick: pick it — then click a param to put it there"
-    return f"{tip}\nclick: pick it — ROUTING shows its row"
+    return f"{tip}\nclick: pick it — routing shows its row"
 
 
 # ---------------------------------------------------------------- the room
@@ -616,15 +631,11 @@ def room(display: tuple[float, float], panel_x: float | None,
 
 
 def _room(panel) -> tuple[float, float, float, float]:
-    """`room` for this frame: the panel's edge is last frame's (the desk
-    is drawn before the panel), its launch place before there is one."""
+    """`room` for this frame: the panel is pinned (`ui.panel_rect`), so its
+    edge is this frame's though the panel draws after."""
     io = imgui.get_io()
     display = (io.display_size.x, io.display_size.y)
-    panel_x = None
-    if panel.open:
-        panel_x = getattr(panel, "_panel_x", None)
-        if panel_x is None:
-            panel_x = display[0] - ui.panel_w(display) - EDGE
+    panel_x = panel.panel_left()
     sheet = None
     if panel.cheatsheet:
         sheet = (getattr(panel, "_sheet_w", 0.0), getattr(panel, "_sheet_h", 0.0))
@@ -642,10 +653,10 @@ def _room(panel) -> tuple[float, float, float, float]:
 # STOP ALL resets the analyzer to the selected scene and a second press within
 # 8 s undoes it; QUANT walks the bank, not the preset list
 DESK_WORDS = {
-    "overlay.on": "Overlay (if config allows)",
-    "overlay.passthrough": "Click-through (overlay)",
+    "output.overlay": "Overlay (if config allows)",
+    "output.passthrough": "Click-through (overlay)",
     "scene.reset_all": "Reset analyzer (again: undo)",
-    "preset.next": "Next bank preset",
+    "preset.next": "Next bank patch",
     FINE_PARAM: "Fine (hold)",
 }
 # an enum `set` row whose choice's name alone does not say what the
@@ -660,7 +671,7 @@ STEP_WORDS = {"band.select": group_part("band").capitalize()}
 def text(reg, b: Binding) -> str:
     """What a lit control does, in the panel's words (plan 17 fork 8): a
     `set` row on an enum → that value's name (the bank row reads the
-    presets' names, a scene pad the scene's; `SET_WORDS` puts a word
+    loadable patches' names, a scene pad the scene's; `SET_WORDS` puts a word
     before it — "analyzer SUB"); a `step` row → the label and the step
     ("Brightness +3"); a toggle row on an enum, which steps it → the
     label, the value now and "next" ("SUB Transfer: SQ · next"); a target
@@ -751,7 +762,7 @@ def _wrapped(text: str, width: float, lines: int, px: float
     key = (text, round(width), lines, round(px, 1))
     hit = _WRAPS.get(key)
     if hit is None:
-        if len(_WRAPS) > 4000:          # preset names come and go; never grows without end
+        if len(_WRAPS) > 4000:          # loadable patch names come and go; never grows without end
             _WRAPS.clear()
         rows = wrap(text, width, lines)
         hit = _WRAPS[key] = (rows, [imgui.calc_text_size(r).x for r in rows],
@@ -762,7 +773,7 @@ def _wrapped(text: str, width: float, lines: int, px: float
 def _says(panel, table, shown: dict[str, Binding]) -> dict[str, str]:
     """{glyph: `text`} for the lit controls, kept while the lit map stands
     and for at most `SAYS_S` (an enum's names are asked of the app — the
-    bank's are its presets' — and can change under a row that did not)."""
+    bank's are its loadable patches' — and can change under a row that did not)."""
     st = _state(panel)
     now = time.monotonic()
     hit = st.get("says")
@@ -781,7 +792,7 @@ def _layer_word(table, b: Binding) -> str:
         return "sequencer page"
     if b.layer is None:
         return "invariant"
-    return f"{b.layer} layer"
+    return f"{layer_word(b.layer)} layer"
 
 
 def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
@@ -789,7 +800,7 @@ def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     preset layer", then Akai's name. Without a registry (or when the text
     is the id) the param's words are left out."""
     if b is None:
-        return f"{c.glyph} · unmapped — dark on the {table.layer} layer\n{c.name}"
+        return f"{c.glyph} · unmapped — dark on the {layer_word(table.layer)} layer\n{c.name}"
     says = text(reg, b) if reg is not None else b.target
     if reg is not None and empty(reg, b):
         says = f"slot {round(b.value) + 1}: empty"
@@ -797,16 +808,43 @@ def label(table, c: apc40.Control, b: Binding | None, reg=None) -> str:
     return f"{c.glyph} · {mid} · {_layer_word(table, b)}\n{c.name}"
 
 
-def _preset_name(panel) -> str:
-    pr = ui_routing._presets(panel)
+def _deck_words(panel, table) -> tuple[str, str, bool]:
+    """The header's deck (plan 44 D5e, DQ7): the `Deck` whose rows this draws, the clause
+    naming the one the hardware plays while it is another, and whether it is red: either
+    of those. Empty with no meta controller."""
+    meta = getattr(panel, "meta", None)
+    if meta is None:
+        return "", "", False
+    away = ui_routing.desk_elsewhere(panel, table) or ""
+    return meta.words(meta.panel), away, bool(away) or meta.panel is not meta.on_air
+
+
+NEIGHBOUR_MIN = 64.0        # px: what the deck's words leave of what sits beside them
+
+
+def fit_deck(deck: str, away: str, beside: str, room: float, width=None) -> str:
+    """The deck's words for a header with `room` px, sharing it with `beside` (the look's
+    name, or the pick's line): with the "desk plays" clause where both fit, without it
+    where they do not, and cut only past that, always leaving `beside` its minimum."""
+    width = width or (lambda t: imgui.calc_text_size(t).x)
+    keep = min(width(beside), NEIGHBOUR_MIN) + 8.0      # (the line's item spacing)
+    if away and width(f"{deck} · {away}") + keep <= room:
+        return f"{deck} · {away}"
+    if width(deck) + keep <= room:
+        return deck
+    return ui.fit_text(deck, max(0.0, room - keep))
+
+
+def _loadable_name(panel) -> str:
+    pr = ui_routing._loaded_patch(panel)
     cur = getattr(pr, "current", None) if pr is not None else None
-    return cur or "no preset"
+    return cur or "no patch"
 
 
 def _led(panel, b: Binding) -> tuple[float, float, float] | None:
     """The colour the device's LED shows for a lit button row, or None
     (off). A row at level 1 (`routing.led_level`: a bank pad whose slot
-    holds a preset that is not the loaded one) shows the profile's
+    holds a loadable patch that is not the loaded one) shows the profile's
     "filled" colour — amber on the clip grid — at `FILLED` strength."""
     p = panel.reg.get(b.target)
     if p is None or b.feedback != "led":
@@ -880,10 +918,10 @@ def _ring(dl, cx: float, cy: float, r: float, v: float | None) -> None:
 
 
 def _draw(panel, dl, table, c: apc40.Control, b: Binding | None,
-          x0: float, y0: float, x1: float, y1: float) -> None:
+          x0: float, y0: float, x1: float, y1: float, filled: dict[int, bool]) -> None:
     """One control at the small size: its glyph on its face."""
     on = b is not None and not empty(panel.reg, b)     # an empty bank slot's pad is dark
-    edge = ui.u32(ui.DIM if on else ui.LINE)
+    edge = _edge(filled, b, on)
     ink = ui.u32(ui.TEXT if on else ui.FAINT)
     w, h = x1 - x0, y1 - y0
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -940,15 +978,16 @@ class _Job:
 
 
 def _draw_big(panel, dl, table, c: apc40.Control, b: Binding | None,
-              x0: float, y0: float, x1: float, y1: float, lh: float, says: str) -> _Job | None:
+              x0: float, y0: float, x1: float, y1: float, lh: float, says: str,
+              filled: dict[int, bool]) -> _Job | None:
     """One control at the labelled size: its face, its glyph small in the
     top-left corner, and — returned, for the label pass, which draws in
     the labels' type — the room its label has. `lh` is a label line's
     height. A dark control gets no label (D8), and an empty bank slot's
     pad is drawn as one (`empty`)."""
     on = b is not None and not empty(panel.reg, b)
-    edge = ui.u32(ui.DIM if on else ui.LINE)
-    small = ui.u32(ui.DIM if on else ui.FAINT)          # the glyph: small and dim
+    edge = _edge(filled, b, on)
+    small =ui.u32(ui.DIM if on else ui.FAINT)          # the glyph: small and dim
     # whose row it is: the up layer's in the bright ink, an invariant one grey
     ink = ui.u32(ui.TEXT if on and b.layer is not None else ui.DIM)
     w, h = x1 - x0, y1 - y0
@@ -1046,7 +1085,7 @@ def _runs(jobs: list[tuple[apc40.Control, _Job]]) -> list[_Job]:
 
 
 def diagram(panel) -> None:
-    """The desk window: a header (the layer up, the loaded preset, the
+    """The desk window: a header (the layer up, the loaded patch, the
     `big` / `panel` chip), then every control at its place — in the room
     `room` gives it."""
     table = _table(panel)
@@ -1097,14 +1136,15 @@ def _close(panel) -> None:
 
 
 def _header(panel, table) -> None:
-    """One line `HEAD_H` tall: apc40 · the layer up · the loaded preset,
+    """One line `HEAD_H` tall: apc40 · the layer up · the loaded patch,
     and the chip at the right. While a control is picked the line says so
     — what is picked, what the next click does, how to let go, the
-    seconds left — after the preset's name where there is room (the big
+    seconds left — after the loadable patch's name where there is room (the big
     desk), in place of the line's other words where there is not."""
     start = imgui.get_cursor_pos()
     full = imgui.get_content_region_avail().x
     end = start.x + full - ui.chip_w(BIG, CLOSE) - 8     # where the words stop: the chips
+    deck, away, deck_red = _deck_words(panel, table)
     imgui.set_cursor_pos(_v(start.x, start.y + 3))
     c = picked(panel) if table is not None else None
     line = can = None
@@ -1112,11 +1152,17 @@ def _header(panel, table) -> None:
     if c is not None:
         line, can = pick_line(panel, table, c)
         line = f"{line} · {math.ceil(left(panel))} s"
-        words = (ui._micro_width("apc40") + ui._micro_width(f"{table.layer} layer  ·  shift")
-                 + imgui.calc_text_size(f"{_preset_name(panel)}").x + 40)
+        words = (ui._micro_width("apc40") + ui._micro_width(f"{layer_word(table.layer)} layer  ·  shift")
+                 + imgui.calc_text_size(f"{_loadable_name(panel)}").x + 40)
         alone = imgui.calc_text_size(line).x > end - start.x - words
     if alone:
-        imgui.text_colored(ui.RED if can else ui.DIM, ui.fit_text(line, end - start.x))
+        # which deck a bind lands on, before the line that offers it
+        if deck:
+            said = fit_deck(deck, "", line, end - start.x)
+            imgui.text_colored(ui.RED if deck_red else ui.DIM, said)
+            imgui.same_line()
+        imgui.text_colored(ui.RED if can else ui.DIM,
+                           ui.fit_text(line, max(0.0, end - imgui.get_cursor_pos_x())))
         if imgui.is_item_hovered():
             ui.tooltip(line)
     else:
@@ -1126,10 +1172,14 @@ def _header(panel, table) -> None:
     elif table is None:
         imgui.same_line()
         imgui.text_disabled("no desk table")
+        if deck:
+            imgui.same_line()
+            imgui.text_colored(ui.RED if deck_red else ui.DIM,
+                               ui.fit_text(deck, max(0.0, end - imgui.get_cursor_pos_x())))
     else:
         glob = table.layer == "global"
         imgui.same_line()
-        ui._micro(f"{table.layer} layer" + ("  ·  shift" if glob else ""),
+        ui._micro(f"{layer_word(table.layer)} layer" + ("  ·  shift" if glob else ""),
                   ui.RED if glob else ui.DIM)
         if imgui.is_item_hovered():
             ui.tooltip("The layer that is up — SHIFT (⇧) latches it. Lit controls do "
@@ -1142,9 +1192,27 @@ def _header(panel, table) -> None:
                 ui.tooltip("The sequencer page is up — SEND A lets it go. The clip "
                                   "grid is the lanes' steps, scene 1–5 the lanes, clip stop "
                                   "k the length.")
+        filled = table.node_rows()
+        if filled and not glob:             # node mode (plan 53 N1b): saved, and said here
+            imgui.same_line()
+            node_away = bool(table.node_row_away(filled[0]))
+            ui._micro(f"node · {len(filled)}" + (" · other deck" if node_away else ""),
+                      _node_ink(node_away))
+            if imgui.is_item_hovered():
+                ui.tooltip("This patch points the desk at a node: the controls outlined in "
+                           "its colour are that node's. Under SHIFT the global layer is as ever."
+                           + (" The desk is on the other Deck now, so turning them moves "
+                              "that Deck's rows, not these." if node_away else ""))
         imgui.same_line()
+        if deck:        # with the panel hidden this is all that says which deck this is
+            room_ = end - imgui.get_cursor_pos_x()
+            said = fit_deck(deck, away, _loadable_name(panel), room_)
+            imgui.text_colored(ui.RED if deck_red else ui.DIM, said)
+            if away and imgui.is_item_hovered():
+                ui.tooltip(f"{deck} · {away}")
+            imgui.same_line()
         room_ = end - imgui.get_cursor_pos_x()
-        imgui.text_colored(ui.TEXT, ui.fit_text(_preset_name(panel), max(0.0, room_)))
+        imgui.text_colored(ui.TEXT, ui.fit_text(_loadable_name(panel), max(0.0, room_)))
         if line is not None:
             imgui.same_line(0, 20)
             imgui.text_colored(ui.RED if can else ui.DIM, line)
@@ -1160,6 +1228,7 @@ def _body(panel, table) -> None:
     if table is None:
         return
     shown = lit_cached(panel, table)
+    filled = filled_rows(table)
     origin = imgui.get_cursor_screen_pos()
     avail = imgui.get_content_region_avail()
     sx = avail.x / apc40.LAYOUT_W
@@ -1183,11 +1252,11 @@ def _body(panel, table) -> None:
             b = shown.get(c.glyph)
             if big:
                 job = _draw_big(panel, dl, table, c, b, x0, y0, x1, y1, lh,
-                                says.get(c.glyph, ""))
+                                says.get(c.glyph, ""), filled)
                 if job is not None:
                     jobs.append((c, job))
             else:
-                _draw(panel, dl, table, c, b, x0, y0, x1, y1)
+                _draw(panel, dl, table, c, b, x0, y0, x1, y1, filled)
             if hovered and x0 <= mouse.x < x1 and y0 <= mouse.y < y1:
                 tip, hit = _hover(panel, table, c, b), (c, b)
             if c.source == source:

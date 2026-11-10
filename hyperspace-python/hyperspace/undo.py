@@ -3,7 +3,7 @@
 Nothing tells this module that a parameter was written. Once a frame
 `Undo.tick` compares a cheap **fingerprint** of what the user sets — the
 *base* of every watched param, the table's performer rows, the desk's
-preset layer and the macros — with last frame's. A change opens a step
+patch layer and the macros — with last frame's. A change opens a step
 that holds the state as it was; the step stays open while changes keep
 coming and closes after `SETTLE_S` of quiet. So one slider drag, one knob
 turn on the desk, one typed value or one toggle is one step, whatever
@@ -18,7 +18,7 @@ move in its last bits (the norm round trip in `Param.modulate` /
 `Param.apply`), so two fingerprints are *the same* when every float pair
 is within `REL_TOL` / `ABS_TOL`.
 
-A **replacing action** — a preset or show load, a Learn landing, an
+A **replacing action** — a loadable patch or show load, a Learn landing, an
 Unbind, a route or macro delete, Replace in the Replace / Keep prompt —
 calls `push(label)` *before* it changes anything: the step is then named
 by the caller and, with `load=True`, carries "what is loaded" (`marks`),
@@ -37,22 +37,41 @@ What is watched (`watched`): a param that is persisted, not an alias, not
 a trigger, and not in `EXCLUDED_GROUPS` (the clock: a tap burst rewrites
 `tempo.bpm` on every tap, slower than the settle time). The integrated
 angles (`rot.phase.*`), selections, the panel's own state, transport and
-the rig's output settings are all `persist=False`.
+the meta controller's output settings are all `persist=False`.
 
 **Three stacks** (plan 44 D5b, the owner's design, 2026-11-04): one `Undo` per
-`Deck`, scoped to its preset (`only`: `deck.in_preset`), and one for the meta
-controller over `SessionRegistry` and `SessionTable` (`install_meta`,
+`Deck`, scoped to its loadable patch (`only`: `deck.in_patch`), and one for the meta
+controller over `MetaRegistry` and `MetaTable` (`install_meta`,
 `deck.meta_stack`). The second watches the meta params, whose tuning is done before a performance and
-not during one, and the meta controller's rows of the table (keys, pad,
-invariant and global-layer MIDI rows, sinks). Those rows live in `bindings.json`
-the moment they change, so their restore (`SessionTable.set_rows`) writes that
-file: the one write a restore makes.
+not during one, the meta controller's rows of the table (keys, pad,
+invariant and global-layer MIDI rows, sinks) and who holds what (`moves`:
+`deck.MetaPlayers`, row 740). Those rows live in `bindings.json` and the players in
+`players.json` the moment they change, so their restores (`MetaTable.set_rows`,
+`MetaController.put_players`) write those files: the two writes a restore makes.
 
 **⌘Z goes by where you are** (`here`): the panel's `Deck`, except with the mouse
 in a meta section or on a meta param (`where`), which takes the meta stack. Never the newest of all stacks: a
 ⌘Z meant for a knob on one deck must not take back an analyzer tweak from an hour
 ago, and never the panel's focus, which says nothing of where you are an hour on.
-Pressing it never crosses over: a stack with nothing says so.
+Pressing it never crosses over: a stack with nothing says so. On the meta stack the
+player screen (`BOARD`) answers for a player's moves and every other place for the
+rest (`_not_its_own`, row 800).
+
+**The latch** (the owner, 2026-11-06, row 753): a stack you have just come to takes
+nothing back until you change something on it. Whenever focus comes to a stack it
+latches shut (`latched`); ⌘Z and ⇧⌘Z there refuse, in words, and touch no history; the
+first push after that opens it, and ⌘Z then goes all the way down, older steps
+included. Focus (`_focused`) is not where the mouse is: `here` follows the mouse, and
+one passing over a section is no event. It moves on three acts only: the panel moving
+the stack ⌘Z reaches (`install`), a ⌘Z pressed at a stack, and the person's own change
+in the panel (`by_hand`, read from the panel's input and reported by a text field's own
+writers, row 757), whose stack is the edited param's own, so a popup over another
+section cannot mislead it. A controller's change opens the stack in focus and never
+moves the focus, wherever the mouse is; a held step (`keep_open`) opens nothing. A
+change out of focus opens nothing, and coming back latches it again. Two things shut the
+stack ⌘Z reaches without moving focus, since what it would take back has changed under
+you: the panel's deck going on or off air (`on_air`), and, with the panel on air, a load
+landing on the other deck (`push_on`).
 
 The band layout: a band added, removed or moved re-declares every
 `band.*` param and is **not** a step. Each state is tagged with the shape
@@ -170,7 +189,7 @@ def _macros(table) -> tuple:
 @dataclass(frozen=True)
 class State:
     """What a step puts back: the watched bases by id, copies of the
-    performer rows and of the preset-layer rows, the macros' document, the
+    performer rows and of the patch-layer rows, the macros' document, the
     tag as it read then, and — for a load step — the marks."""
 
     bases: dict[str, Any]
@@ -185,6 +204,7 @@ class State:
     # (the base chase's ledger, plan 52), so a base goes back with its own
     trims: Any = None
     rows: tuple = ()          # the meta controller's rows (`deck.MetaRows`, plan 44 D5b)
+    moves: Any = None         # who holds what and who is where (`Undo.moves`, row 740)
 
 
 @dataclass
@@ -200,6 +220,7 @@ class Step:
     # a step that is not a load: every group's landed name and reference
     # as of the last quiet frame before it (`marks.lands()`), for `mend`
     lands: Any = None
+    then: Any = None          # `Undo.moves.then()` as the step began (row 800)
 
 
 class Undo:
@@ -223,15 +244,28 @@ class Undo:
     a step holds their membership and a restore puts it back before the
     bases, so a voice's params exist before their values land. `only`
     (optional) narrows `watched` to the params this stack is for: a `Deck`'s
-    takes those of its preset (plan 44 D5b). A `table` with `rows` and
-    `set_rows(rows)` (`deck.MetaRows`) has those watched too.
+    takes those of its loadable patch (plan 44 D5b). A `table` with `rows` and
+    `set_rows(rows)` (`deck.MetaRows`) has those watched too. `moves` (optional:
+    `deck.MetaPlayers`, row 740) is one more part of what a step holds: `doc()` to
+    compare and hold; `then()`, what a step must remember of the moment it began and
+    `doc` does not hold, kept on the `Step`; `put(doc, then)` to restore it;
+    `refuses(doc, then)`, the words why it may not go back now (else None, and the step
+    stays where it is, as under the latch); `trouble()`, what went wrong in the last
+    `put`, for the status; and `heard`, what ⌘Z last said over the board, for its line.
     """
 
     only = None      # on the class: a live `Undo` from before a hot reload has it
+    moves: Any = None     # …and this
+    latched = False  # …and these: ⌘Z refuses here until a new push (row 753)
+    called = "here"  # how the refusal names this stack ("on deck 2"; `MetaController`)
+    _opens = False   # the open step began on focus: when it lands it opens the latch
 
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
-                 on_restore=None, banks=None, only=None):
+                 on_restore=None, banks=None, only=None, called=None, moves=None):
         self.reg, self.table = reg, table
+        self.moves = moves
+        if called is not None:
+            self.called = called
         try:
             _watching[reg] = ref(self)
         except TypeError:                 # a stand-in registry: found only by `installed`
@@ -281,7 +315,7 @@ class Undo:
         return self._watched
 
     def _mods(self) -> list:
-        """The table's modifiers as a preset holds them, their params at
+        """The table's modifiers as a loadable patch holds them, their params at
         their bases (plan 28 N1); [] for a table with none or no such call."""
         doc = getattr(self.table, "modifiers_doc", None)
         return doc(self.reg) if doc is not None else []
@@ -294,7 +328,7 @@ class Undo:
         return dict(banks or {})
 
     def _bank_ids(self) -> dict:
-        """Each bank's membership as a preset holds it: scheme → ids."""
+        """Each bank's membership as a loadable patch holds it: scheme → ids."""
         return {scheme: list(b.doc()) for scheme, b in self._banks().items()}
 
     def _table_rows(self) -> list:
@@ -303,8 +337,8 @@ class Undo:
         return getattr(self.table, "rows", ())
 
     def _fingerprint(self) -> tuple:
-        """(ids, bases, routes, desk, macros, tag, modifiers, banks, rows) as of now — the cheap
-        read `tick` makes every frame. The preset layer is read as the
+        """(ids, bases, routes, desk, macros, tag, modifiers, banks, rows, moves) as of now — the cheap
+        read `tick` makes every frame. The patch layer is read as the
         table's rows whose `layer` is "preset" (what `table.desk()`
         returns, without asking every row whether it is a MIDI row)."""
         ps = self._params()
@@ -312,14 +346,33 @@ class Undo:
         return (self._ids, tuple([p.base for p in ps]), _rows(table.routes()),
                 _rows([b for b in table.bindings if b.layer == "preset"]),
                 _macros(table), self._tag(), self._mods(), self._bank_ids(),
-                _rows(self._table_rows()))
+                _rows(self._table_rows()), self._moves_doc())
+
+    def _moves_doc(self):
+        return self.moves.doc() if self.moves is not None else None
+
+    def _then(self):
+        return self.moves.then() if self.moves is not None else None
+
+    def _next_is_a_move(self, src: list[Step]) -> bool | None:
+        """Is the step a press would take from `src` a player's move? None: there is no
+        such step. As `_swap` chooses it, touching nothing, so a hold goes on."""
+        now = self._take()
+        for step in reversed(src):
+            ids, parts, left = self._differs(step.before, now, tagged=True)
+            if "players" in parts:
+                return True
+            if ids or parts or left or (step.load and self.marks is not None
+                                        and not self._marks_equal(step.before.marks)):
+                return False
+        return None
 
     @staticmethod
     def _same_fp(a: tuple, b: tuple) -> bool:
         """Equal, or equal but for float pairs within the tolerance."""
         if a == b:
             return True
-        if a[0] != b[0] or a[2:6] != b[2:6] or a[8] != b[8] or not alike(a[6:8], b[6:8]):
+        if a[0] != b[0] or a[2:6] != b[2:6] or a[8:] != b[8:] or not alike(a[6:8], b[6:8]):
             return False
         return all(x is y or _same(x, y) for x, y in zip(a[1], b[1], strict=True))
 
@@ -336,7 +389,8 @@ class Undo:
                      self.marks.take() if marks and self.marks is not None else None,
                      modifiers=self._mods(), banks=self._bank_ids(),
                      trims={p.id: t for p in self._params() if (t := p._trim)},
-                     rows=tuple(replace(b) for b in self._table_rows()))
+                     rows=tuple(replace(b) for b in self._table_rows()),
+                     moves=self._moves_doc())
 
     def _read_lands(self):
         lands = getattr(self.marks, "lands", None)
@@ -357,6 +411,7 @@ class Undo:
         never more than one step."""
         self._flush()
         self.push(label)
+        self._opens = False               # a held control's writes open no latch
         self._action_frame = -1           # the next push is an action of its own
         self._kept, self._on_end = self._open, on_end
 
@@ -411,6 +466,8 @@ class Undo:
                 if self._open is None:
                     self._begin(Step("", self._settled, lands=self._lands))
                     self.redos.clear()
+                elif _hand and self._open is not self._kept:   # the person joins a step under way
+                    self._opens = _begun_on(self) or self._opens
                 return True
         return False
 
@@ -420,6 +477,8 @@ class Undo:
         to put back — a refused unbind or a load that fails changes
         nothing and must not cost the redo."""
         self._open = step
+        step.then = self._then()
+        self._opens = _begun_on(self)
         self.stack.append(step)
         del self.stack[:-LIMIT]
 
@@ -434,16 +493,39 @@ class Undo:
         if step is self._kept:
             self._end_kept()
         ids, parts, _left = self._differs(step.before, now, tagged=False)
-        empty = not ids and not parts and step.before.tag == now.tag
-        if empty and step.load and self.marks is not None:
-            empty = self._marks_equal(step.before.marks)
+        empty = self._empty(step, now, ids, parts)
+        opens, self._opens = self._opens, False
+        _load_closed(self, landed=not empty)
         if empty:
             self.stack[:] = [s for s in self.stack if s is not step]
             return
+        if opens:
+            self.latched = False
         if step.action:
             self.redos.clear()
         if not step.label:
             step.label = self._label(step.before, now, ids, parts)
+
+    def _empty(self, step: Step, now: State, ids, parts) -> bool:
+        """Has `step` nothing to put back, with `ids` and `parts` what differs?"""
+        empty = not ids and not parts and step.before.tag == now.tag
+        if empty and step.load and self.marks is not None:
+            empty = self._marks_equal(step.before.marks)
+        return empty
+
+    def _will_land(self) -> bool:
+        """Is there an open step not about to close empty (a load of the look already
+        there, a load that failed, a knob brought back)?"""
+        step = self._open
+        if step is None:
+            return False
+        now = self._take()
+        ids, parts, _left = self._differs(step.before, now, tagged=False)
+        return not self._empty(step, now, ids, parts)
+
+    def _will_open(self) -> bool:
+        """Will the open step open the latch when it lands: begun on focus, and landing?"""
+        return self._opens and self._will_land()
 
     def _marks_equal(self, mark) -> bool:
         try:
@@ -468,7 +550,7 @@ class Undo:
         Called **before** the change. `load`: the step also carries what
         is loaded (the library's names and references; a band layout).
         A second push with no tick since is the same action from the inside
-        (a show load that loads its startup preset; Replace landing a held
+        (a show load that loads its startup loadable patch; Replace landing a held
         learn): the outer label stands. Not so a load pushed under an open
         action that is no load — nothing nests that way, so it is another
         action (a delete at the end of one frame, an F-key at the start of
@@ -485,24 +567,6 @@ class Undo:
         self._begin(Step(label, before, load=load, action=True, lands=self._read_lands()))
         self._changed_at = self._now
         self._action_frame = self._frame
-
-    def checkpoint(self) -> State:
-        """The state as it is now, with what is loaded: a point a later
-        `revert` goes back to (plan 38: the hold's). An edit this frame's
-        tick has not seen closes its step first, so it is in the point."""
-        self._flush()
-        return self._take(marks=True)
-
-    def revert(self, state: State, label: str) -> None:
-        """Go back to `state` (a `checkpoint`'s, or one cut down from it)
-        as one replacing action: its step pushed first and carrying what is
-        loaded, so undoing it is undoing a load — every edit since comes
-        back. Only what differs is put back (`_restore`)."""
-        self.push(label, load=True)
-        left = self._restore(state, load=state.marks is not None)
-        self._say(label + (f" ({LEFT})" if left else ""))
-        self._fp = self._fingerprint()
-        self._absorb = ABSORB_FRAMES
 
     def undo(self) -> bool:
         """Take back the newest step that has something to put back.
@@ -524,11 +588,19 @@ class Undo:
                        and not self._marks_equal(step.before.marks))
             if not (ids or parts or left or relabel):
                 continue                      # nothing to put back: dropped
+            then = getattr(step, "then", None)
+            why = self.moves.refuses(step.before.moves, then) if "players" in parts else None
+            if why:                           # as the latch's refusal: no history moves
+                src.append(step)
+                self._say(f"not {'undone' if verb == 'undid' else 'redone'}: {why}")
+                return False
             dst.append(Step(step.label, now, load=step.load, action=step.action,
-                            lands=self._read_lands()))
+                            lands=self._read_lands(), then=self._then()))
             del dst[:-LIMIT]
-            left = self._restore(step.before, load=step.load, lands=step.lands)
-            self._say(f"{verb} {step.label}" + (f" ({LEFT})" if left else ""))
+            left = self._restore(step.before, load=step.load, lands=step.lands, then=then)
+            trouble = self.moves.trouble() if "players" in parts else ""
+            self._say(f"{verb} {step.label}" + (f" ({LEFT})" if left else "")
+                      + (f". {trouble}" if trouble else ""))
             self._fp = self._fingerprint()
             self._settled = self._take()
             self._lands = self._read_lands()
@@ -539,9 +611,11 @@ class Undo:
 
     def clear(self) -> None:
         """Forget every step; the state now is the settled one."""
+        _load_closed(self, landed=self._will_land())
         self.stack.clear()
         self.redos.clear()
         self._open, self._absorb, self._action_frame = None, 0, -1
+        self._opens = False               # (the latch stays as it was: a clear is no push)
         if self._kept is not None:
             self._end_kept()
         self._fp = self._fingerprint()
@@ -576,6 +650,9 @@ class Undo:
                                          ("rows", _rows(then.rows), _rows(now.rows))) if a != b]
         if not alike(then.modifiers or [], now.modifiers or []):
             parts.append("modifiers")
+        # (`getattr`: a state from before a hot reload has no such field)
+        if getattr(then, "moves", None) is not None and then.moves != now.moves:
+            parts.append("players")
         if then.banks is not None and now.banks is not None:
             banks = self._banks()
             parts += [getattr(banks.get(scheme), "KEY", "") or scheme
@@ -603,7 +680,7 @@ class Undo:
                                      if f.name in runtime}))
         return out
 
-    def _restore(self, state: State, *, load: bool, lands=None) -> bool:
+    def _restore(self, state: State, *, load: bool, lands=None, then=None) -> bool:
         """Put `state` back, touching only what differs. Returns whether
         tagged ids were left because the bands have changed."""
         reg, table, marks = self.reg, self.table, self.marks
@@ -617,7 +694,7 @@ class Undo:
             # 2. the routes, through the table's own call (the referee runs)
             if _rows(table.routes()) != _rows(state.routes):
                 table.set_routes(self._rows_for(state.routes, table.routes()))
-            # 3. the preset layer: a redraw, the layer and the faders' catch stay
+            # 3. the patch layer: a redraw, the layer and the faders' catch stay
             if _rows(table.desk()) != _rows(state.desk):
                 table.set_desk(self._rows_for(state.desk, table.desk()), load=False)
             # 4. the macros
@@ -627,6 +704,10 @@ class Undo:
             #     own call, which writes `bindings.json`, where they live
             if _rows(self._table_rows()) != _rows(state.rows):
                 table.set_rows(self._rows_for(state.rows, self._table_rows()))
+            # 4⅓. who holds what and who is where (row 740), through the meta
+            #     controller, which writes `players.json`, where they live
+            if getattr(state, "moves", None) is not None and self._moves_doc() != state.moves:
+                self.moves.put(state.moves, then)
             # 4½. the modifiers and their params (plan 28 N1)
             if state.modifiers is not None and not alike(self._mods(), state.modifiers):
                 table.set_modifiers(state.modifiers, reg)
@@ -716,6 +797,10 @@ class Undo:
 _installed: Undo | None = globals().get("_installed")
 _meta: Undo | None = globals().get("_meta")
 _where = globals().get("_where")
+_focused: Undo | None = globals().get("_focused", _installed)   # what the latch goes by
+_hand: bool = globals().get("_hand", False)   # the person is working the panel (`by_hand`)
+_room: Undo | None = globals().get("_room")   # the stack of the deck on air (`on_air`)
+_loading: Undo | None = globals().get("_loading")   # a load's step still open (`_await_load`)
 
 
 # each registry's own `Undo`, a deck's whether or not it is the installed one, so
@@ -741,15 +826,25 @@ def watching(reg) -> Undo | None:
 
 def install(u: Undo | None) -> None:
     """Make `u` the stack of the panel's `Deck` (app.main,
-    `MetaController.point_panel`); None uninstalls."""
-    global _installed
-    _installed = u
+    `MetaController.point_panel`); None uninstalls. Focus goes with it if this changes
+    the stack ⌘Z reaches. With the mouse in a meta section it does not, and meta stays
+    as it was; focus on the deck left goes nowhere, so coming back is still coming back."""
+    global _installed, _focused
+    old, _installed = _installed, u
+    if u is old:
+        return
+    if u is None or here() is u:
+        _focus(u)
+    elif _focused is old:
+        _focused = None
 
 
 def install_meta(u: Undo | None) -> None:
     """Make `u` the meta controller's stack (`MetaController`); None uninstalls,
     and with it `where`."""
-    global _meta, _where
+    global _meta, _where, _focused
+    if u is None and _focused is _meta:
+        _focused = None
     _meta = u
     if u is None:
         _where = None
@@ -761,13 +856,14 @@ def where(inside_meta) -> None:
     _where = inside_meta
 
 
-NOTHING_HERE = "nothing to undo here: drag the player back"
+NOTHING_HERE = "nothing to undo here: a playlist's edit is on no stack"
+BOARD = "board"       # what `where` says over the player screen: the meta stack, for moves alone
 
 
 def here() -> Undo | None:
     """The stack ⌘Z acts on: the meta controller's inside a meta section, else
     that of the panel's `Deck` (the owner, 2026-11-04). Never the newest of them.
-    None where `where` says None: there, nothing is taken back (the player screen);
+    None where `where` says None: there, nothing is taken back (a playlist's section);
     and with no stack installed. `_on_no_stack` tells the two apart."""
     inside = _inside()
     if inside is None:
@@ -789,9 +885,132 @@ def _inside() -> bool | None:
 
 def _on_no_stack() -> None:
     """⌘Z found no stack. Said only where `where` said so: no stack installed says
-    nothing, as before, and has no player to drag back."""
+    nothing, as before, and has no list to name."""
     if _inside() is None:
         _meta._say(NOTHING_HERE)
+
+
+def _over_board() -> bool:
+    """Is the mouse over the player screen (`where` says `BOARD`)?"""
+    if _where is None:
+        return False
+    try:
+        return _where() == BOARD
+    except Exception:  # noqa: BLE001 — `_inside` says it
+        return False
+
+
+def _not_its_own(at: Undo, verb: str) -> bool:
+    """A section takes back only its own (row 800): on the meta stack the board answers for
+    a player's moves and every other place for the rest. One stack and one order, so the step
+    a press would reach may be the other's: said, and no history moves. So a setting is not
+    taken back from an unrelated screen, nor a device reopened from the HANDS section."""
+    if at is not _meta or at.moves is None:
+        return False
+    move = at._next_is_a_move(at.stack if verb == "undo" else at.redos)
+    if move is None or move == _over_board():
+        return False
+    if move:
+        at._say(f"not here: the meta controller's last change is a player's move. "
+                f"To {verb} it, press over the player screen")
+    else:
+        at._say(f"nothing to {verb} on the player screen: the meta controller's last change "
+                "is not a player's move. Press over that setting")
+    return True
+
+
+def _heard(at: Undo) -> None:
+    """A press over the board: its answer for the board's line, marked if it did not do
+    what was asked or the file did not follow."""
+    moves = getattr(at, "moves", None)
+    if at is _meta and moves is not None and _over_board():
+        moves.heard = (at.status, not at.status.startswith(("undid ", "redid "))
+                       or bool(moves.trouble()))
+
+
+def _focus(u: Undo | None) -> None:
+    """Focus comes to `u`, from elsewhere: it latches, whatever happened in between,
+    and a step already open on it opens nothing. Already there: nothing."""
+    global _focused
+    if u is not _focused:
+        _focused = u
+        if u is not None:
+            u.latched, u._opens = True, False
+
+
+def _begun_on(u: Undo) -> bool:
+    """A step begins on `u`: does it open the latch when it lands? The person's own
+    change in the panel takes the focus there (only a stack ⌘Z can reach: a bank pad on
+    the on-screen desk loads off air), by the step's own stack and not by the mouse. A
+    controller's opens the stack in focus and moves nothing."""
+    if _hand and (u is _installed or u is _meta):
+        _focus(u)
+    return u is _focused
+
+
+def by_hand(on: bool) -> None:
+    """Is the person working the panel, as of its latest draw (`ui_pane.left`), or has a
+    text field just written (its writer, row 757)? It holds to the next draw's `left`, so
+    a stack's tick, which comes first in the frame, reads it. No panel: never, and a
+    change opens only the stack in focus."""
+    global _hand
+    _hand = bool(on)
+
+
+def on_air(u: Undo) -> None:
+    """`u`'s deck has gone on air (`MetaController`). The panel's deck has just gone on or
+    off air, so what ⌘Z reaches there is another thing than it was: its stack latches.
+    A meta stack in focus is as it was."""
+    global _room
+    if u is not _room:
+        _room = u
+        _shut(_installed)
+
+
+def _shut(u: Undo | None) -> None:
+    """Latch `u` where it stands: no focus moves, so the next change on it opens it."""
+    if u is not None:
+        u.latched, u._opens = True, False
+
+
+def _await_load(u: Undo) -> None:
+    """A load's step has opened on `u`, which is not the panel's deck. If it lands, and
+    the panel's deck is on air, that deck latches: a mis-pressed pad and a ⌘Z must not
+    take the room's last step. A load that changed nothing shuts nothing."""
+    global _loading
+    if u._open is not None and u._open.load:
+        _loading = u
+
+
+def _load_closed(u: Undo, *, landed: bool) -> None:
+    """`u`'s open step is closing (or a clear is dropping it): the end of the wait."""
+    global _loading
+    if u is _loading:
+        _loading = None
+        if landed and _installed is _room:
+            _shut(_installed)
+
+
+def takes_back(u: Undo, *, here_now: bool = False) -> bool:
+    """Would ⌘Z here take back the step just begun on `u`? For words which promise it:
+    only a step that opens the latch and will not close empty. `here_now`: the caller
+    knows ⌘Z reaches `u` from where the mouse is, and `here` cannot say yet (a drop's
+    frame, with the item still live: nothing reads as hovered until it ends)."""
+    return (here_now or here() is u) and u is _focused and u._will_open()
+
+
+def _refused(at: Undo, verb: str) -> bool:
+    """The press at `at`: an edit its tick has not seen lands first, then the press is a
+    focus event of its own. A latched stack says so and touches nothing: no step is
+    closed, so a hold or a gesture under way goes on."""
+    at._observe(at._fingerprint())
+    _focus(at)
+    if at is _installed and _loading is not None:     # inside a load's settle time
+        _load_closed(_loading, landed=_loading._will_land())
+    if at.latched and not at._will_open():
+        at._say(f"nothing to {verb} here yet: make a change {at.called} first")
+        return True
+    return _not_its_own(at, verb)
 
 
 def installed() -> Undo | None:
@@ -826,10 +1045,12 @@ def push_on(reg, label: str, *, load: bool = False) -> None:
         push(label, load=load)
     else:
         _guarded("push", lambda v: v.push(label, load=load), on=u)
+        if load:                              # a pad, a copy, with the panel on air (row 753)
+            _await_load(u)
 
 
 def push_meta(label: str, *, load: bool = False) -> None:
-    """`Undo.push` on the meta controller's stack (a show, an analyzer preset);
+    """`Undo.push` on the meta controller's stack (a show, an analyzer loadable patch);
     none installed: a no-op."""
     if _meta is not None:
         _guarded("push", lambda u: u.push(label, load=load), on=_meta)
@@ -846,18 +1067,23 @@ def let_close(on: Undo) -> None:
 
 
 def undo() -> None:
-    """`Undo.undo` on the stack `here` names (the `edit.undo` trigger)."""
+    """`Undo.undo` on the stack `here` names (the `edit.undo` trigger), unless it is
+    latched. `Undo.undo` itself knows no latch."""
     at = here()
     if at is not None:
-        _guarded("undo", lambda u: u.undo(), on=at)
+        _guarded("undo", lambda u: _refused(u, "undo") or u.undo(), on=at)
+        _heard(at)
     else:
         _on_no_stack()
 
 
 def redo() -> None:
-    """`Undo.redo` on the stack `here` names (the `edit.redo` trigger)."""
+    """`Undo.redo` on the stack `here` names (the `edit.redo` trigger), unless it is
+    latched: the same stack and the same surprise. The push that opens one clears its
+    redos, as any new change does, so a redo cannot cross a focus change."""
     at = here()
     if at is not None:
-        _guarded("redo", lambda u: u.redo(), on=at)
+        _guarded("redo", lambda u: _refused(u, "redo") or u.redo(), on=at)
+        _heard(at)
     else:
         _on_no_stack()

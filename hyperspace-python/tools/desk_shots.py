@@ -9,7 +9,7 @@ tracker — on a fresh temp home of its own (`tools/label_menu_shot.py`'s
 rect the desk or the widget was drawn at: nothing here has a real mouse.
 
   uv run python tools/desk_shots.py            # the four pictures
-  uv run python tools/desk_shots.py big        # → desk-big.png         the panel hidden, the preset layer
+  uv run python tools/desk_shots.py big        # → desk-big.png         the panel hidden, the patch layer
   uv run python tools/desk_shots.py global     # → desk-big-global.png  the same under SHIFT
   uv run python tools/desk_shots.py picked     # → desk-picked.png      D3 picked, VIEW dimmed, the footer's line
   uv run python tools/desk_shots.py goto       # → routing-goto.png     ROUTING scrolled to D3's line, framed
@@ -36,7 +36,7 @@ from imgui_bundle import imgui
 from hyperspace import apc40, ui, ui_desk, ui_routing
 from hyperspace.ui import PAGE_KEYS, Panel
 
-PRESET = "TRIP"
+LOOK = "TRIP"
 
 
 def control(glyph: str) -> apc40.Control:
@@ -49,7 +49,7 @@ def centre(rect) -> tuple[float, float]:
 
 def boot() -> Hidden:
     h = Hidden("desk shots")
-    h.r.lib.load("presets", PRESET)
+    h.r.lib.load("loadable", LOOK)
     h.page("view")
     h.draw(6)
     return h
@@ -81,7 +81,7 @@ def click_desk(h: Hidden, glyph: str) -> tuple[float, float]:
 
 def big(h: Hidden) -> None:
     """The panel hidden: the desk is the whole control window, every lit
-    control named, on the preset layer."""
+    control named, on the patch layer."""
     h.panel.reg["ui.panel"].set(False)
     h.r.router.table.set_layer("preset")
     h.draw(6)
@@ -92,7 +92,7 @@ def big(h: Hidden) -> None:
 
 
 def glob(h: Hidden) -> None:
-    """The same under SHIFT: the global layer's names, the preset's controls dark."""
+    """The same under SHIFT: the global layer's names, the loadable patch's controls dark."""
     h.panel.reg["ui.panel"].set(False)
     h.r.router.table.set_layer("global")
     h.draw(6)

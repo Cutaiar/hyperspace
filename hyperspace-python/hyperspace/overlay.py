@@ -18,7 +18,7 @@ window-system state is three settings and the params that drive them:
   output.bg           0–1      in overlay: ground darkness, 0 clear … 1 black
   output.alpha        0–1      in overlay: whole-window opacity
   output.dim          0–1      master dim of the finished frame, in every
-                               mode: 0 black … 1 full (the crossfader)
+                               mode: 0 black … 1 full (the desk's MASTER fader)
 
 and, per opened render output N (plan 21 WP4, `register_switches`; the
 config's ``[[output.screens]]``, one output with no list):
@@ -30,7 +30,7 @@ config's ``[[output.screens]]``, one output with no list):
   output.N.dim        0–1      that output's own dim, times the master —
                                only when the config lists two or more outputs
 
-("hands through the effects" is the preset's wiring, plan 35 O: no switch)
+("hands through the effects" is the loadable patch's wiring, plan 35 O: no switch)
 
 The monitor / fullscreen / overlay params above are output 1's; a later
 output's screen and fullscreen are its config entry's (plan 21 fork F10).
@@ -44,8 +44,8 @@ the control window) — G, or the pan button on the APC40, takes clicks
 back.
 
 Rig-specific settings (monitor, fullscreen, overlay, passthrough, dim,
-and every output.N.*) never persist in a preset and cannot be modulated; ground and opacity are
-a look and can. The dim (plan 15 WP3, decision 28) is the operator's: it
+and every output.N.*) never persist in a loadable patch. No ``output.*`` param can be
+modulated (row 775); ground and opacity are still saved until the migration moves them. The dim (plan 15 WP3, decision 28) is the operator's: it
 is not a window-system setting — the renderer multiplies the finished
 frame by it (render.Renderer.dim_pass; app.frame hands it over beside
 the ground) — it has no config key, so a launch always starts at full,
@@ -58,7 +58,7 @@ Overlay is there only when the config asks (decision 21 (a), plan 14
 WP2): ``[output] overlay = true``. Otherwise the render window is created
 without a transparent framebuffer (app._windows) and ``output.overlay``
 refuses to switch on — the ``T`` key, the APC40's MASTER select, the
-panel and a preset all land on the one param, so one gate covers every
+panel and a loadable patch all land on the one param, so one gate covers every
 road — and the ground (``output.bg``) and opacity do
 nothing, since they only ever act in overlay. The show behind a Pepper's
 Ghost glass can never go see-through by accident.
@@ -83,6 +83,7 @@ _JOIN_ALL_SPACES = 1 << 0
 _STATIONARY = 1 << 4
 _FULLSCREEN_AUX = 1 << 8
 _OVERLAY_LEVEL = 1000        # NSScreenSaverWindowLevel
+_OVER_A_RENDER = _OVERLAY_LEVEL + 1   # the control window, over a fullscreen render (SC3b)
 
 # the render cap (output.render): the box the frame must fit inside, its
 # aspect kept (outputs.capped); "full" is output 1's framebuffer, uncapped.
@@ -196,6 +197,14 @@ class GlfwBackend:
             ns.setHasShadow_(shadow)
             self._ns_saved = None
 
+    def float_over_renders(self, win, on: bool) -> None:
+        """The control window over a render on its display, a fullscreen one too, which is at
+        `_OVERLAY_LEVEL` (SC3b: it had nowhere free to go). Back to a normal window with off."""
+        self.set_attrib(win, "FLOATING", on)
+        ns = self._nswindow(win)
+        if ns is not None:
+            ns.setLevel_(_OVER_A_RENDER if on else 0)
+
 
 class Output:
     """The render window's output state, its params, and the once-per-frame apply."""
@@ -225,34 +234,34 @@ class Output:
 
     def register(self, reg: Registry) -> None:
         g = "output"
-        rig = {"persist": False, "modulatable": False}
+        settings = {"persist": False}
         # index 0 is "follow window" (monitor −1: the screen holding the
         # window, resolved by _target_monitor); the screens follow (audit P3)
         reg.enum("output.monitor", "Screen", lambda: self.monitor + 1,
                  lambda i: setattr(self, "monitor", int(i) - 1), self.screen_names, group=g,
                  tip="Which screen fullscreen and overlay cover: the one the window is "
-                     "on, or a screen by name.", **rig)
+                     "on, or a screen by name.", **settings)
         reg.toggle("output.fullscreen", "Fullscreen", lambda: self.fullscreen,
                    lambda v: setattr(self, "fullscreen", bool(v)), group=g,
                    tip="Borderless, covering the chosen screen — for the projector. "
-                       "No video-mode switch.", **rig)
+                       "No video-mode switch.", **settings)
         reg.enum("output.render", "Render size", lambda: self.render,
                  lambda i: setattr(self, "render", min(max(int(i), 0), len(RENDER_CAPS) - 1)),
                  RENDER_NAMES, group=g,
                  tip="The most pixels a frame is drawn at; every output shows it scaled. "
                      "1080p (the default) keeps a HiDPI screen from rendering at 4K. "
                      "full: output 1's whole framebuffer. Launch value: [output] render.",
-                 **rig)
+                 **settings)
         reg.toggle("output.overlay", "Overlay", lambda: self.overlay,
                    self._set_overlay, group=g,
                    tip="Float the render, frameless and see-through, over the whole "
-                       "screen — above a fullscreen video. T toggles.", **rig)
+                       "screen — above a fullscreen video. T toggles.", **settings)
         reg.toggle("output.passthrough", "Click-through", lambda: self.passthrough,
                    lambda v: setattr(self, "passthrough", bool(v)), group=g,
                    tip="On (the default): in overlay, clicks go to whatever is underneath, "
                        "so you can run the video behind. The render window then never "
                        "takes focus — keys still work from the control window; to orbit "
-                       "again press G there, or use the pan button on the APC40.", **rig)
+                       "again press G there, or use the pan button on the APC40.", **settings)
         reg.continuous("output.bg", "Ground", lambda: self.bg,
                        lambda v: setattr(self, "bg", float(v)), lo=0.0, hi=1.0,
                        fmt=lambda v: "clear" if v <= 0 else f"{v:.2f} black", group=g,
@@ -268,8 +277,8 @@ class Output:
                        fmt=self._dim_text, group=g,
                        tip="Dims the whole finished picture — the scene, the effects "
                            "and the ghost hands alike: 0 black, 1 full. The APC40's "
-                           "crossfader (left is black). Never saved; a launch starts "
-                           "at full and a preset load never moves it.", **rig)
+                           "MASTER fader. Never saved; a launch starts "
+                           "at full and a patch load never moves it.", **settings)
         # the pre-split ids: views onto the params above, never saved or
         # driven. The factory table and apc40.py bind these (overlay.on /
         # .passthrough), so they are what the rows name
@@ -307,6 +316,29 @@ class Output:
     def screen_names(self) -> list[str]:
         """The enum's choices: "follow window" (monitor −1), then every screen."""
         return [self.FOLLOW, *self.monitor_names()]
+
+    # ---- a window coming and going (SC3b) ----
+
+    def swap_window(self, other: Output) -> None:
+        """Trade windows with `other`, and all that goes with one: its backend (which caches
+        its NSWindow), what's been applied to it, where it is. Output 1's params stay with this
+        object, whichever window is output 1's now. `win` None: no window, and `apply` does nothing."""
+        for key in ("win", "backend", "fullscreen", "monitor", "_applied", "_saved_rect", "error"):
+            mine, theirs = getattr(self, key), getattr(other, key)
+            setattr(self, key, theirs)
+            setattr(other, key, mine)
+
+    def back_at(self, rect: tuple[int, int, int, int]) -> None:
+        """The window is back from a moment away, and macOS may have moved it. A plain window goes
+        to `rect`. A fullscreen one covers its display again at the next `apply`, even if the index
+        and the rect are as they were, and `rect` is where it goes when it's a plain window again."""
+        if self._applied["mode"] == "window":
+            if self.backend is not None:
+                self.backend.set_rect(self.win, *rect)
+        else:
+            self._saved_rect = (int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3]))
+            self._applied.pop("monitor", None)
+            self._applied.pop("cover", None)
 
     # ---- per frame ----
 
@@ -440,31 +472,30 @@ def _cap(s: str) -> str:
 
 
 def register_switches(reg: Registry, slots) -> list[str]:
-    """The per-output switches (plan 21 WP4): for each opened render output
+    """The per-output switches (plan 21 WP4): for each render output
     N (an `outputs.Slot`, numbered by its place in the config's list),
     ``output.N.scene`` (labelled "picture") and ``output.N.hands`` — the
     window's two mutes (plan 35 O, row 374: off, it ignores what is wired
-    into that port; never the preset's structure, never a rebuild) —,
+    into that port; never the loadable patch's structure, never a rebuild) —,
     ``output.N.flip_x`` / ``.flip_y`` (plan 23 WP1: the output's mirror) and
     — only when the config lists two or more outputs — ``output.N.dim``.
-    No ``.through``: "hands through the effects" is the preset's wiring. They
+    No ``.through``: "hands through the effects" is the loadable patch's wiring. They
     write the slot's `outputs.Switches`, which `app._draw_render` hands the
     renderer each frame in that output's `View`; the renderer only reads
     them (ARCHITECTURE §3).
 
-    Rig settings, like ``output.fullscreen`` beside them (fork F4): group
-    ``output``, never persisted — no preset, show or undo step holds them
+    Meta settings, like ``output.fullscreen`` beside them (fork F4): group
+    ``output``, never persisted — no loadable patch, show or undo step holds them
     — and not modulatable; a launch (and ⌘R) takes them from the config's
     ``[[output.screens]]`` entry, so a switch flipped at the party lasts
     until the restart. They can be learned onto a desk button like any
-    toggle. An output that did not open gets none; a publish-only one
-    (plan 32 T9: drawn, with no window) gets them all. Returns the ids."""
-    rig = {"persist": False, "modulatable": False}
+    toggle. Every slot gets them, whether or not a display shows it (SC2): a display
+    can take an output up while the app runs (SC3b), and params turning up then would
+    move ids and bindings. Returns the ids."""
+    settings = {"persist": False, "modulatable": False}
     several = len(slots) > 1
     ids: list[str] = []
     for sl in slots:
-        if not getattr(sl, "drawn", sl.opened):
-            continue
         sw, pre = sl.switches, f"output.{sl.n}"
         who = _cap(sl.name or f"output {sl.n}")
 
@@ -482,24 +513,24 @@ def register_switches(reg: Registry, slots) -> list[str]:
         reg.toggle(f"{pre}.scene", label("picture"), *flag("scene"), group="output",
                    tip=f"The picture wired into this window{whose} (GRAPH, OUTPUT). Off: "
                        "this window ignores the picture wired into it and shows its "
-                       "ground, the hands over. A mute, not the preset: a rig setting, "
-                       "the config's launch value comes back at a restart.", **rig)
+                       "ground, the hands over. A mute, not the patch: a meta controller setting, "
+                       "the config's launch value comes back at a restart.", **settings)
         reg.toggle(f"{pre}.hands", label("hands"), *flag("hands"), group="output",
                    tip=f"The hands and the guide wired into this window{whose}. Off: "
-                       "a mute — this window ignores them. Ghost hands (HANDS page) is "
-                       "the switch for every output at once.", **rig)
+                       "a mute — this window ignores them. Ghost hands (HANDS section) is "
+                       "the switch for every output at once.", **settings)
         # plan 23 WP1: this output's mirror, its last step — the scene, the
         # hands and the readout together, to undo a Pepper's Ghost glass
-        mirror = ("Ghost mirror (HANDS page) flips the hands only: with this on, "
+        mirror = ("Ghost mirror (HANDS section) flips the hands only: with this on, "
                   "leave it off or the hands flip twice. Launch value: the "
                   "config's flip_x / flip_y.")
         reg.toggle(f"{pre}.flip_x", label("flip X"), *flag("flip_x"), group="output",
                    tip=f"Mirror the whole picture left-right{whose} — the scene, the "
                        "ghost hands and the guide's text together — for a glass that "
-                       f"reflects it. {mirror}", **rig)
+                       f"reflects it. {mirror}", **settings)
         reg.toggle(f"{pre}.flip_y", label("flip Y"), *flag("flip_y"), group="output",
                    tip=f"Mirror the whole picture top-bottom{whose} — for a screen lying "
-                       f"flat under a 45° glass. {mirror}", **rig)
+                       f"flat under a 45° glass. {mirror}", **settings)
         ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.flip_x", f"{pre}.flip_y"]
         # one output: the master dim is its dim — unless the config gave it a
         # launch dim of its own, which must then have a fader (review of #124)
@@ -509,6 +540,6 @@ def register_switches(reg: Registry, slots) -> list[str]:
                            lo=0.0, hi=1.0, fmt=Output._dim_text, group="output",
                            tip=f"Dims {sl.label} alone, after everything, times the master "
                                "dim: 0 black, 1 full. Its launch value is the config's (never "
-                               "under 10%).", **rig)
+                               "under 10%).", **settings)
             ids.append(f"{pre}.dim")
     return ids

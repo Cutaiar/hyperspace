@@ -109,10 +109,10 @@ def test_the_sources_hold_the_tables_weakly():
     """A router dropped (the panel's router swap) lets its table go; the
     registry's rig facts are never written into it again."""
     src, a, b = _pair()
-    assert src.tables == [a.table.session, b.table.session]   # (plan 44 D3: via the session)
+    assert src.tables == [a.table.meta_table, b.table.meta_table]   # (plan 44 D3: via the meta controller)
     del b
     gc.collect()
-    assert src.tables == [a.table.session]
+    assert src.tables == [a.table.meta_table]
 
     class Devs:
         def continuous_schemes(self):
@@ -162,4 +162,4 @@ def test_a_router_from_before_the_split_survives_a_hot_reload():
     old.modulate()
     reg.apply()
     assert reg["t.x"].eff_norm == pytest.approx(0.9)
-    assert old.sources.tables == [table.session]
+    assert old.sources.tables == [table.meta_table]

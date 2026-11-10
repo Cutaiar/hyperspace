@@ -27,7 +27,7 @@ def _roll(r, app, normal=ROLL45, **kw):
 
 
 def test_a_named_hand_route_follows_its_axis_whatever_the_dofs_order(app):
-    """One preset row, two rigs: the default six dofs (right roll is lane 9)
+    """One patch row, two rigs: the default six dofs (right roll is lane 9)
     and a trimmed, reordered list (right roll is lane 5). The row follows the
     right roll on both — through the same router, so a republished layout
     re-resolves the cached address."""
@@ -52,7 +52,7 @@ def test_a_named_hand_route_follows_its_axis_whatever_the_dofs_order(app):
     assert seen == [9, 5]                                           # two different lanes
 
 
-def test_a_name_the_rig_lacks_leaves_the_row_dormant(app):
+def test_a_name_the_meta_lacks_leaves_the_row_dormant(app):
     """A rig without roll: `hand:right.roll` does nothing — not the lane
     that sits where the default layout's roll would. With no map published
     at all (no hands adapter), every named row is dormant too."""
@@ -75,7 +75,7 @@ def test_a_name_the_rig_lacks_leaves_the_row_dormant(app):
 
 
 def test_a_numeric_hand_route_still_reads(app):
-    """`hand:<i>` is the lane at index i — a saved user preset with numbers
+    """`hand:<i>` is the lane at index i — a saved user loadable patch with numbers
     works as it did, with or without the adapter's map."""
     r = rig()
     app.table.add(Binding("hand:9", "view.inst_amp", "position"))          # right.roll
@@ -153,7 +153,7 @@ def test_the_routing_page_offers_and_writes_names(app):
 
 
 def test_a_learn_knows_a_numbered_row_is_the_same_axis(app):
-    """Review of PR #70: a preset saved with numbers keeps `hand:7`; a learn
+    """Review of PR #70: a loadable patch saved with numbers keeps `hand:7`; a learn
     writes `hand:right.y`. Learn compares the lanes, not the strings: a
     learn onto the same param refreshes the gate with no Replace / Keep
     question, and a learn of the right height elsewhere moves the numbered
@@ -169,7 +169,7 @@ def test_a_learn_knows_a_numbered_row_is_the_same_axis(app):
     app.learn.learn_source("hand:right.y")
     assert old not in app.table.bindings                          # moved: one axis, one param
     assert app.table.owner("view.bright").source == "hand:right.y"
-    assert app.learn.last.endswith("(into the preset; moved from fx.mix)")
+    assert app.learn.last.endswith("(into the patch; moved from fx.mix)")
     # plan 18 WP3: the same holds whatever the numbered row's op — a
     # numbered push keeps its op and depth through a learn by name, and
     # moves like any other row of the axis
@@ -183,6 +183,6 @@ def test_a_learn_knows_a_numbered_row_is_the_same_axis(app):
     assert push not in app.table.bindings
     yaw = app.table.owner("camera.yaw")
     assert (yaw.source, yaw.op, yaw.value) == ("hand:left.roll", "push", 0.25)
-    assert app.learn.last.endswith("(into the preset; moved from view.speed)")
+    assert app.learn.last.endswith("(into the patch; moved from view.speed)")
     assert app.learn.same_source("hand:7", "hand:right.y")
     assert not app.learn.same_source("hand:right.nosuch", "hand:-1")
