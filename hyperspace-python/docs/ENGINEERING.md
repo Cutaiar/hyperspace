@@ -3280,10 +3280,16 @@ the head that CI just vouched for. The orchestrator updates the line above, with
 and head, in the next docs commit that lands anyway. Plan 58 §6's "cheaper goldens" waits
 on this figure, and conftest's tier tables are re-measured from the same list.
 
-- Tiers: `golden`, `slow` and `live` are markers `tests/conftest.py`
+- Tiers: `golden`, `slow`, `live` and `sweep` are markers `tests/conftest.py`
   applies by name (see "Running the automated tests" in
   `TESTING-GUIDE.md`); the default run is `-n auto` without them. Run
   `--all` before a merge and after touching rendering or loadable patches.
+  `sweep` (row 870) is a test that walks a whole library of content (every
+  effect, knob, shape or corpus loadable patch), a soak, or a finished
+  migration's old-way check: worth running while that content changes, not
+  on every merge. `pytest -m sweep` runs that tier alone. A contract any PR
+  can break (the watch list, the walls, the words, a registration) stays in
+  the fast tier, however it is spelled.
 - **One tier at a time on a shared Mac** (row 589). Every xdist worker
   that imports torch holds about 1 GB, and `-n auto` is sixteen of them
   on the M3 Max: two or three `--all` runs from parallel sessions took
@@ -3302,10 +3308,31 @@ on this figure, and conftest's tier tables are re-measured from the same list.
   `gh`'s own stderr shown. 1: bad arguments, a head under 7 characters, or `--help`. It
   only waits and it merges nothing, with two `gh` reads and no other way out
   (`tests/test_wait_green.py`). `main` has no required checks, so `gh pr merge --auto`
-  merges at once: whoever merges waits first, and then merges by hand. CI is ruff and the
-  fast tier on Linux, so it sees no golden, no `slow` or `live` test and no Mac GL. A PR
+  merges at once: whoever merges waits first, and then merges by hand. CI is ruff, the type
+  ratchet and the fast tier on Linux, so it sees no golden, no `slow`, `live` or `sweep` test
+  and no Mac GL (`sweeps.yml` runs the sweeps beside it, below, and this waits for none of it). A PR
   that touches the render path, the loader or `graphmigrate` still gets the orchestrator's
   `--all`, and a builder reports "CI green at <head>" as that, not as a run of the fast tier.
+- **CI is fanned out for the time between merges** (row 870). `tests.yml` runs five
+  jobs at once, each on its own runner (free on a public repository; a run holds five
+  of the account's twenty concurrent jobs): `lint and types` (ruff, then the ratchet's
+  one real pyright run, `test_no_new_complaint_in_the_app`, which the shards deselect)
+  and `fast tier 0` to `3`; then `tests`, the name a ruleset on `main` can require (the
+  single job had it), green only when all five are. `tools/ci_shard.py files <i> 4` splits the test files four
+  ways by the seconds CI took on each (`tests/ci_durations.json`), so the shards end
+  together; a file the timings don't name counts as their median. Before its run, a
+  shard collects its files in four processes (`ci_shard.py prewarm`): on a fresh
+  checkout pytest rewrites the asserts of every test module it imports, and each xdist
+  worker did all of it for itself, about 20 s of every start. In every run, conftest
+  hands out the tests the timings name as 1 s or more first, so a long test never
+  starts last with the other workers idle. The shards upload their JUnit reports on
+  each push to `main`; when a shard runs long, `python3 tools/ci_shard.py durations
+  junit-*.xml` rewrites the timings. `sweeps.yml` runs the `sweep` tier on a runner of
+  its own when a PR touches what it walks (its `paths:`, held to conftest's list by
+  `tests/test_ci_layout.py`) and after every push to `main`; it shows on the PR as its
+  own check, and `wait_green.py` doesn't wait for it. `wait_green.py` polls every 5 s.
+  The system libraries come from a cache keyed on their list
+  (`.github/actions/setup`, which every job of both workflows runs).
 - **A hung test fails by name.** pyproject's addopts carry
   `--dist load --timeout=120 --max-worker-restart=4` and its ini key
   `timeout_method = "thread"`. **Workers use the thread method, a
