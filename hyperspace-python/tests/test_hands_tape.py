@@ -216,3 +216,21 @@ def test_the_recorded_tape_names_frames_it_holds():
         for cue in doc.get("cues", []):
             assert cue["t0"] in times, (path.name, cue["label"], "t0")
             assert cue["t1"] in times, (path.name, cue["label"], "t1")
+
+
+def test_thinning_keeps_both_of_a_cues_bounds():
+    """A cue names a first and a last frame, and the fixture test holds a
+    tape to both. Keeping only the starts left the ends to the spacing,
+    which dropped one for 53 of 60 cue lengths — a fresh `record --cues
+    --fps` would then have failed that test (review of #450)."""
+    root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root / "tools"))
+    from hands_tape import _thinned
+
+    for n in (20, 31, 47, 60, 79):                  # a cue of n frames at 120 fps
+        frames = [{"t": round(k / 120, 6)} for k in range(2 * n)]
+        cues = [{"t0": 0.0, "t1": round((n - 1) / 120, 6)},
+                {"t0": round(n / 120, 6), "t1": round((2 * n - 1) / 120, 6)}]
+        bounds = [v for c in cues for v in (c["t0"], c["t1"])]
+        kept = {round(f["t"], 6) for f in _thinned(frames, 30.0, bounds)}
+        assert all(round(v, 6) in kept for v in bounds), (n, sorted(kept))

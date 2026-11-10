@@ -1175,3 +1175,34 @@ def test_the_guide_is_drawn_plain_under_every_material(ctx, style):
         if mat:
             assert any(c[0] and c[2] == mat for c in calls), (style, calls)
             assert all(not c[0] for c in calls if c[1]), (style, calls)
+
+
+def test_glass_leaves_the_scene_visible_through_the_hand(ctx):
+    """Hands inside the scene are solid and drawn before the shape
+    (DECISIONS: order-independent transparency, deferred), so a GLASS
+    hand that only lowered its alpha still wrote depth across its whole
+    silhouette and hid whatever was behind it (review of #449). GLASS
+    writes depth at its edges and nowhere else, so the scene shows
+    through the middle; PLAIN still fills the silhouette."""
+    io = HandsIO(HandSettings.from_config({}), {}, source=NS(latest=lambda: (0, 0.0, {})),
+                 out=NS(send=print))
+    src = NS(skeleton={"right": skeleton(hand("right", "open", (90.0, 200.0, 10.0)))},
+             cfg={"mode": "desktop"}, axes=io.axes, state=io.state, gates=io.gates)
+    written = {}
+    for name in ("PLAIN", "GLASS"):
+        gh = Renderer(ctx).ghost
+        gh.state.on, gh.state.alpha = True, 1.0
+        gh.state.style = G.STYLES.index("MESH")
+        gh.state.material = G.MATERIALS.index(name)
+        gh.source = src
+        for k in range(4):
+            assert gh.layer((320, 200), 1.0 + k / 30)
+        d = np.frombuffer(gh.depth.read(), dtype="f4").reshape(200, 320)
+        written[name] = d < 1.0                      # nearer than the far plane
+    assert written["PLAIN"].sum() > 0, "the hand never drew"
+    # every pixel GLASS writes is one PLAIN writes: it opens holes, never spreads
+    assert not (written["GLASS"] & ~written["PLAIN"]).any()
+    # and it leaves a real part of the silhouette open for the scene
+    # before the fix GLASS wrote depth over the whole silhouette, so this was 0
+    opened = int((written["PLAIN"] & ~written["GLASS"]).sum())
+    assert opened > 0, "GLASS still fills the silhouette"

@@ -88,26 +88,28 @@ def _record(args) -> None:
     src.close()
     if args.fps:
         t["frames"] = _thinned(t["frames"], args.fps,
-                               [c["t0"] for c in t.get("cues", [])])
+                               [v for c in t.get("cues", []) for v in (c["t0"], c["t1"])])
     tape.save(t, args.path)
     print(f"wrote {args.path}: {_summary(t)}")
     for c in t.get("cues", []):
         print(f"  {c['t0']:6.2f}–{c['t1']:5.2f} s  {c['label']}")
 
 
-def _thinned(frames: list[dict], fps: float, starts: Iterable[float] = ()) -> list[dict]:
+def _thinned(frames: list[dict], fps: float, keep_at: Iterable[float] = ()) -> list[dict]:
     """Every frame whose time has moved on by 1/`fps` — the camera runs at
     about 120, which no replay needs and a committed fixture should not
     carry.
 
-    `starts` are times that must survive whatever the spacing says: a
-    cue's first frame. Thinning across the whole tape could drop it, and
-    a tape is replayed by taking the last frame at or before a time
-    (`hands.tape.TapeSource`), so a cue's own `t0` then landed on the
-    pose before it (review of #449). A kept start also restarts the
-    spacing, so no cue is thinned against its neighbour.
+    `keep_at` are times that must survive whatever the spacing says: a
+    cue's bounds, both of them. Thinning across the whole tape could drop
+    either, and a tape is replayed by taking the last frame at or before
+    a time (`hands.tape.TapeSource`), so a cue's own `t0` landed on the
+    pose before it (review of #449) and its `t1` on a frame it no longer
+    held (review of #450 — 53 of 60 cue lengths lost an end). A kept time
+    also restarts the spacing, so no cue is thinned against its
+    neighbour.
     """
-    keep = {round(t, 6) for t in starts}
+    keep = {round(t, 6) for t in keep_at}
     out: list[dict] = []
     step, last = 1.0 / fps, None
     for f in frames:
