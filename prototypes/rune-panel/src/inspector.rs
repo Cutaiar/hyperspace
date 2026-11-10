@@ -57,7 +57,7 @@ fn patch_card(s: &App, l: &Look) -> El {
             .border(1.0, l.line_strong)
             .hover(l.hover)
             .on_press(move |s: &mut App| s.step_patch(d))
-            .child(rune::icon(glyph, 14.0).color(l.cyan).a11y_hidden())
+            .child(rune::icon(glyph, 14.0).color(l.set).a11y_hidden())
     };
     let p = &crate::data::PATCHES[s.live_patch()];
     col()
@@ -74,7 +74,7 @@ fn patch_card(s: &App, l: &Look) -> El {
                 .gap(8.0)
                 .child(caps(l, "Patch"))
                 .child(el().grow(1.0))
-                .child(tag(format!("PGM · DECK {}", s.live_deck()), l.red)),
+                .child(tag(format!("PGM · DECK {}", s.live_deck()), l.alert)),
         )
         .child(
             row()
@@ -120,9 +120,9 @@ fn selection(s: &App, l: &Look) -> El {
         Some(n) => {
             let wired = s.cables.iter().filter(|c| s.nodes[c.from.0].id == n.id || s.nodes[c.to.0].id == n.id).count();
             let (word, ink) = match n.status {
-                Status::Live => ("LIVE", l.green),
+                Status::Live => ("LIVE", l.live),
                 Status::Idle => ("IDLE", l.dim),
-                Status::Missing(_) => ("FAULT", l.amber),
+                Status::Missing(_) => ("FAULT", l.caution),
             };
             col()
                 .w_full()
@@ -164,7 +164,7 @@ fn shape(s: &App, l: &Look, k: &Kit, layer: &mut Vec<El>) -> El {
                 .radius(2.0)
                 .fill(l.glass)
                 .border(1.0, l.line)
-                .child(text(cells).font(ty::HERO).color(l.green))
+                .child(text(cells).font(ty::HERO).color(l.live))
                 .child(text("CELLS").font(ty::VALUE_SMALL).color(l.dim)),
         )
         .child(
@@ -213,7 +213,7 @@ fn audio(s: &App, l: &Look) -> El {
                 .items_center()
                 .child(seg_meter(l, format!("m{i}"), v, pk, 26.0, 84.0))
                 .child(text(*name).font(ty::VALUE_SMALL).color(l.label))
-                .child(text(*plane).font(ty::VALUE_SMALL).color(l.cyan)),
+                .child(text(*plane).font(ty::VALUE_SMALL).color(l.set)),
         );
     }
     col()
@@ -228,7 +228,7 @@ fn audio(s: &App, l: &Look) -> El {
                 .radius(2.0)
                 .fill(l.glass)
                 .border(1.0, l.line)
-                .child(row().w_full().justify_between().child(legend(l, "Bands → planes")).child(text("MIC 48K").font(ty::VALUE_SMALL).color(l.green)))
+                .child(row().w_full().justify_between().child(legend(l, "Bands → planes")).child(text("MIC 48K").font(ty::VALUE_SMALL).color(l.live)))
                 .child(bands),
         )
         .child(Gauge::new("drive", "Drive · log", s.drive, format!("{:.2}×", s.drive_x()), |s| &mut s.drive).build(l))
@@ -240,7 +240,7 @@ fn tempo(s: &App, l: &Look) -> El {
     let phase = (s.t * s.bpm / 60.0).fract();
     let mut beats = row().key("beats").gap(4.0).center_y();
     for i in 0..4 {
-        beats = beats.child(lamp(if i == 0 { l.amber } else { l.green }, 9.0, i == beat && phase < 0.5).key(format!("b{i}")));
+        beats = beats.child(lamp(if i == 0 { l.caution } else { l.live }, 9.0, i == beat && phase < 0.5).key(format!("b{i}")));
     }
     let bpm = row()
         .key("tempo-bpm")
@@ -256,7 +256,7 @@ fn tempo(s: &App, l: &Look) -> El {
                 .radius(2.0)
                 .fill(l.glass)
                 .border(1.0, l.line)
-                .child(text(format!("{:05.1}", s.bpm)).font(ty::BIG).color(l.cyan))
+                .child(text(format!("{:05.1}", s.bpm)).font(ty::BIG).color(l.set))
                 .child(col().gap(4.0).child(text("BPM").font(ty::VALUE_SMALL).color(l.dim)).child(beats)),
         )
         .child(el().grow(1.0))
@@ -287,7 +287,7 @@ fn tempo(s: &App, l: &Look) -> El {
                     .child(text(shape).font(ty::VALUE_SMALL).color(l.dim)),
             )
             .child(el().grow(1.0))
-            .child(text(format!("→ {target}")).font(ty::VALUE_SMALL).color(l.magenta));
+            .child(text(format!("→ {target}")).font(ty::VALUE_SMALL).color(l.driven));
         if i > 0 {
             r = r.border_sides([1.0, 0.0, 0.0, 0.0], l.line);
         }
@@ -346,9 +346,9 @@ fn output(s: &App, l: &Look, k: &Kit, layer: &mut Vec<El>) -> El {
             row()
                 .w_full()
                 .gap(6.0)
-                .child(annunciator(l, "fullscreen", "Full", s.fullscreen, l.green, |s| s.fullscreen ^= true))
-                .child(annunciator(l, "flip-x", "Flip X", s.flip_x, l.green, |s| s.flip_x ^= true))
-                .child(annunciator(l, "flip-y", "Flip Y", s.flip_y, l.green, |s| s.flip_y ^= true))
-                .child(annunciator(l, "overlay", "Ovly", s.overlay, l.green, |s| s.overlay ^= true)),
+                .child(annunciator(l, "fullscreen", "Full", s.fullscreen, l.live, |s| s.fullscreen ^= true))
+                .child(annunciator(l, "flip-x", "Flip X", s.flip_x, l.live, |s| s.flip_x ^= true))
+                .child(annunciator(l, "flip-y", "Flip Y", s.flip_y, l.live, |s| s.flip_y ^= true))
+                .child(annunciator(l, "overlay", "Ovly", s.overlay, l.live, |s| s.overlay ^= true)),
         )
 }

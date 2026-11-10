@@ -38,13 +38,13 @@ fn switch(l: &Look, key: &'static str, name: &'static str, on: bool, extra: Opti
         .center_y()
         .radius(2.0)
         .fill(l.module)
-        .border(1.0, if on { l.green.alpha(0.3) } else { l.line_strong })
+        .border(1.0, if on { l.live.alpha(0.3) } else { l.line_strong })
         .hover(l.hover)
         .on_press(flip)
-        .child(crate::widgets::lamp(l.green, 7.0, on))
+        .child(crate::widgets::lamp(l.live, 7.0, on))
         .child(text(name).font(ty::LABEL).text_case(TextCase::Uppercase).color(if on { l.label } else { l.dim }).a11y_hidden());
     if let Some(v) = extra {
-        r = r.child(text(v).font(ty::VALUE_SMALL).color(if on { l.cyan } else { l.faint }).a11y_hidden());
+        r = r.child(text(v).font(ty::VALUE_SMALL).color(if on { l.set } else { l.faint }).a11y_hidden());
     }
     r
 }
@@ -83,14 +83,14 @@ fn viewport(s: &App, l: &Look, vw: f32) -> El {
         .size(ww, world_h)
         .absolute(s.pan[0], s.pan[1])
         .motion(motion::SNAPPY)
-        .child(rune::memo("grid", world_h.to_bits(), || canvas(grid(l, ww, world_h)).key("grid").size(ww, world_h).absolute(0.0, 0.0)));
+        .child(rune::memo("grid", (world_h.to_bits(), s.scheme), || canvas(grid(l, ww, world_h)).key("grid").size(ww, world_h).absolute(0.0, 0.0)));
     for c in Cat::ALL {
         world = world.child(column(s, l, c, world_h));
     }
     world = world.child(canvas(cables(s, l)).key("cables").size(ww, world_h).absolute(0.0, 0.0));
     // A module changes only when it moves, is selected or the filter fades it: rebuild it then.
     for (i, n) in s.nodes.iter().enumerate() {
-        let version = (n.pos.map(f32::to_bits), s.selected == Some(i), faded(s, i, n), s.pictures, s.tint);
+        let version = (n.pos.map(f32::to_bits), s.selected == Some(i), faded(s, i, n), s.pictures, s.tint, s.scheme);
         world = world.child(rune::memo(format!("node-{}", n.id), version, || node(s, l, i, n)));
     }
     let size = 640.0;
@@ -103,7 +103,7 @@ fn viewport(s: &App, l: &Look, vw: f32) -> El {
         .center()
         .opacity(if s.behind { 0.2 + s.behind_opacity * 0.5 } else { 0.0 })
         .motion(motion::CALM)
-        .child(canvas(polytope::wire(&s.shape_poly, &pose, size, l.green, 1.3)).key("wire").size(size, size))
+        .child(canvas(polytope::wire(&s.shape_poly, &pose, size, l.live, 1.3)).key("wire").size(size, size))
         .a11y_hidden();
     el().key("viewport")
         .grow(1.0)
@@ -147,8 +147,8 @@ fn nav(s: &App, l: &Look, vw: f32, world_h: f32) -> El {
             el().key(format!("mm-{}", n.id))
                 .absolute(n.pos[0] * kx, n.pos[1] * ky)
                 .size(NODE_W * kx, (n.height() * ky).max(3.0))
-                .fill(if sel { l.cyan } else { l.label.alpha(0.18) })
-                .border(1.0, if sel { l.cyan } else { l.label.alpha(0.3) })
+                .fill(if sel { l.set } else { l.label.alpha(0.18) })
+                .border(1.0, if sel { l.set } else { l.label.alpha(0.3) })
                 .a11y_hidden(),
         );
     }
@@ -157,7 +157,7 @@ fn nav(s: &App, l: &Look, vw: f32, world_h: f32) -> El {
         el().key("view")
             .absolute(-s.pan[0] * kx, top)
             .size((vw * kx).min(mw), mh - top)
-            .border(1.2, l.cyan)
+            .border(1.2, l.set)
             .motion(motion::SNAPPY)
             .a11y_hidden(),
     );
@@ -187,7 +187,7 @@ fn nav(s: &App, l: &Look, vw: f32, world_h: f32) -> El {
                 .w_full()
                 .justify_between()
                 .child(text("NAV").font(ty::CAPS).color(l.label))
-                .child(text(format!("COL {:02}–{:02}", first_col(s) + 1, (first_col(s) + (vw / PITCH) as usize).min(8))).font(ty::VALUE_SMALL).color(l.green)),
+                .child(text(format!("COL {:02}–{:02}", first_col(s) + 1, (first_col(s) + (vw / PITCH) as usize).min(8))).font(ty::VALUE_SMALL).color(l.live)),
         )
         .child(el().key("screen").size(mw, mh).fill(l.glass).border(1.0, l.line).child(map))
 }
@@ -276,9 +276,9 @@ fn pin_state(s: &App, i: usize, r: usize, input: bool) -> Option<bool> {
 fn node(s: &App, l: &Look, i: usize, n: &Node) -> El {
     let selected = s.selected == Some(i);
     let (word, ink) = match n.status {
-        Status::Live => ("LIVE", l.green),
+        Status::Live => ("LIVE", l.live),
         Status::Idle => ("IDLE", l.faint),
-        Status::Missing(_) => ("FAULT", l.amber),
+        Status::Missing(_) => ("FAULT", l.caution),
     };
     let mut card = col()
         .key(format!("node-{}", n.id))
@@ -289,13 +289,13 @@ fn node(s: &App, l: &Look, i: usize, n: &Node) -> El {
         .h(n.height())
         .radius(2.0)
         .fill(l.module)
-        .border(1.0, if selected { l.cyan } else { l.line_strong })
+        .border(1.0, if selected { l.set } else { l.line_strong })
         .shadow(8.0, 20.0, Color::BLACK.alpha(0.5))
         .opacity(if faded(s, i, n) { 0.3 } else { 1.0 })
         .motion(motion::SNAPPY)
         .on_press(move |s: &mut App| s.selected = Some(i));
     if selected {
-        card = card.shadow(0.0, 14.0, l.cyan.alpha(0.25));
+        card = card.shadow(0.0, 14.0, l.set.alpha(0.25));
     }
     let header = row()
         .key("header")
@@ -329,8 +329,8 @@ fn node(s: &App, l: &Look, i: usize, n: &Node) -> El {
                 .mx(8.0)
                 .mt(4.0)
                 .mb(4.0)
-                .child(canvas(faces(NODE_W - 16.0, THUMB)).size(NODE_W - 16.0, THUMB))
-                .child(brackets(NODE_W - 16.0, THUMB, 8.0, l.green.alpha(0.8))),
+                .child(canvas(faces(l, NODE_W - 16.0, THUMB)).size(NODE_W - 16.0, THUMB))
+                .child(brackets(NODE_W - 16.0, THUMB, 8.0, l.live.alpha(0.8))),
         );
     }
     let mut ports = col().key("ports").w_full();
@@ -348,7 +348,7 @@ fn node(s: &App, l: &Look, i: usize, n: &Node) -> El {
     }
     card = card.child(ports.pt(data::PORTS_PAD).pb(data::PORTS_PAD));
     let (ink, words) = match n.status {
-        Status::Missing(why) => (l.amber, why),
+        Status::Missing(why) => (l.caution, why),
         _ => (l.faint, n.detail),
     };
     card.child(
@@ -368,7 +368,7 @@ fn pin(l: &Look, x: f32, state: Option<bool>) -> El {
     let (fill, edge) = match state {
         None => (l.glass, l.faint),
         Some(false) => (l.glass, l.label.alpha(0.7)),
-        Some(true) => (l.green, l.green),
+        Some(true) => (l.live, l.live),
     };
     el().size(8.0, 8.0).absolute(x, (ROW - 8.0) / 2.0).radius(1.0).fill(fill).border(1.5, edge).a11y_hidden()
 }
@@ -385,10 +385,10 @@ fn cables(s: &App, l: &Look) -> Shape {
         let hot = s.selected.is_some_and(|i| c.from.0 == i || c.to.0 == i);
         let modulation = s.nodes[c.from.0].cat == Cat::Modulation;
         let ink = match (hot, s.tint, modulation, c.live) {
-            (true, _, _, _) => l.cyan,
+            (true, _, _, _) => l.set,
             (false, false, _, _) => l.label,
-            (false, true, true, _) => l.magenta,
-            (false, true, false, true) => l.green,
+            (false, true, true, _) => l.driven,
+            (false, true, false, true) => l.live,
             (false, true, false, false) => l.dim,
         };
         let dim = faded(s, c.from.0, &s.nodes[c.from.0]) || faded(s, c.to.0, &s.nodes[c.to.0]);
@@ -418,8 +418,8 @@ fn bezier(a: [f32; 2], b: [f32; 2], c: [f32; 2], d: [f32; 2], t: f32) -> [f32; 2
 }
 
 /// The faces pattern's thumbnail, as a monochrome display shows a picture: triangles in
-/// shades of the screen's green.
-pub fn faces(w: f32, h: f32) -> Shape {
+/// shades of the panel's live colour.
+pub fn faces(l: &Look, w: f32, h: f32) -> Shape {
     let (nx, ny) = (9, 5);
     let (cw, ch) = (w / nx as f32, h / ny as f32);
     let jitter = |i: i32, j: i32| {
@@ -435,7 +435,7 @@ pub fn faces(w: f32, h: f32) -> Shape {
         for i in 0..nx {
             for (k, tri) in [[p(i, j), p(i + 1, j), p(i, j + 1)], [p(i + 1, j), p(i + 1, j + 1), p(i, j + 1)]].into_iter().enumerate() {
                 let seed = ((i * 31 + j * 17 + k as i32 * 7) as f32 * 3.7).sin().abs();
-                sh = sh.fill(tri.to_vec(), rune::oklch(0.18 + seed * 0.42, 0.06 + seed * 0.08, 150.0));
+                sh = sh.fill(tri.to_vec(), l.glass.mix(l.live, 0.2 + seed * 0.7));
             }
         }
     }

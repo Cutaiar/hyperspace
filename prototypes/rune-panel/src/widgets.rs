@@ -48,8 +48,8 @@ impl Gauge {
 
     fn ink(&self, l: &Look) -> Color {
         match self.source {
-            Source::Set => l.cyan,
-            Source::Driven => l.magenta,
+            Source::Set => l.set,
+            Source::Driven => l.driven,
         }
     }
 
@@ -237,14 +237,14 @@ pub fn selector(l: &Look, key: &'static str, options: &[&'static str], selected:
             .grow(1.0)
             .h_full()
             .center()
-            .fill(if on { l.cyan.alpha(0.08) } else { Color::TRANSPARENT })
+            .fill(if on { l.set.alpha(0.08) } else { Color::TRANSPARENT })
             .hover(l.hover)
             .on_press(move |s: &mut App| pick(s, i))
             .child(
                 text(*name)
                     .font(ty::LABEL)
                     .text_case(TextCase::Uppercase)
-                    .color(if on { l.cyan } else { l.dim })
+                    .color(if on { l.set } else { l.dim })
                     .a11y_hidden(),
             )
             .child(
@@ -252,8 +252,8 @@ pub fn selector(l: &Look, key: &'static str, options: &[&'static str], selected:
                     .w(22.0)
                     .h(2.0)
                     .mt(4.0)
-                    .fill(if on { l.cyan } else { Color::TRANSPARENT })
-                    .shadow(0.0, if on { 6.0 } else { 0.0 }, l.cyan.alpha(0.6))
+                    .fill(if on { l.set } else { Color::TRANSPARENT })
+                    .shadow(0.0, if on { 6.0 } else { 0.0 }, l.set.alpha(0.6))
                     .a11y_hidden(),
             );
         if i > 0 {
@@ -293,7 +293,7 @@ pub fn section(l: &Look, key: &'static str, n: usize, title: &'static str, summa
         .child(text(format!("{n:02}")).font(ty::VALUE_SMALL).color(l.faint).a11y_hidden())
         .child(text(title).font(ty::CAPS).text_case(TextCase::Uppercase).color(l.label).a11y_hidden())
         .child(el().grow(1.0))
-        .child(text(summary).key("summary").font(ty::VALUE_SMALL).color(l.green).opacity(if open { 0.0 } else { 1.0 }).a11y_hidden());
+        .child(text(summary).key("summary").font(ty::VALUE_SMALL).color(l.live).opacity(if open { 0.0 } else { 1.0 }).a11y_hidden());
     let mut s = col().key(key).w_full().border_sides([0.0, 0.0, 1.0, 0.0], l.line).child(header);
     if open {
         s = s.child(col().key("body").w_full().px(14.0).pt(12.0).pb(16.0).gap(12.0).border_sides([1.0, 0.0, 0.0, 0.0], l.line).child(body));
@@ -331,11 +331,11 @@ pub fn seg_meter(l: &Look, key: String, v: f32, peak: f32, w: f32, h: f32) -> El
     let mut m = col().key(key).w(w).h(h).gap(gap).a11y_hidden();
     for i in (0..N).rev() {
         let c = if i >= N - 2 {
-            l.red
+            l.alert
         } else if i >= N - 4 {
-            l.amber
+            l.caution
         } else {
-            l.green
+            l.live
         };
         let on = i < lit || i == pk;
         m = m.child(el().key(format!("s{i}")).w(w).h(seg_h).radius(1.0).fill(if on { c } else { c.alpha(0.09) }));
@@ -351,7 +351,7 @@ pub fn fact(l: &Look, k: &'static str, v: String) -> El {
         .justify_between()
         .center_y()
         .child(legend(l, k))
-        .child(text(v).font(ty::VALUE).color(l.green))
+        .child(text(v).font(ty::VALUE).color(l.live))
 }
 
 /// A boxed tag: a short code in a thin frame.

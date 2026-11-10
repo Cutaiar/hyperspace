@@ -1,10 +1,11 @@
 # Rune panel
 
 Hyperspace's control window redrawn in [Rune](https://github.com/anomalyco/rune),
-a Rust UI framework that draws everything itself on the GPU, as a glass cockpit.
-**It is UI only**: nothing here drives the renderer, reads a device or saves a
-file. It is here to show what the panel could look and feel like on Rune, not to
-replace the Python app.
+a Rust UI framework that draws everything itself on the GPU, as an instrument
+panel lit the way late-2000s BMW dashboards were: one dark burnt orange on
+black. **It is UI only**: nothing here drives the renderer, reads a device or
+saves a file. It is here to show what the panel could look and feel like on
+Rune, not to replace the Python app.
 
 ![The control window](shots/panel.png)
 
@@ -16,21 +17,28 @@ The layout and the look are new.
 
 ## The look
 
-A flight deck's displays, where colour is meaning and never decoration:
+Colour is meaning, never decoration. Every view paints from a handful of roles
+(`theme::Look`), and a scheme says what colour each role is:
 
-| Colour | Means | Where |
-|---|---|---|
-| White | Labels and scales | Legends, titles, tick marks |
-| Green | Measured, normal, live | Live cables and ports, LIVE, level meters, the shape on PGM |
-| Cyan | Set by the operator | Gauge pointers and readouts, the selection, PVW |
-| Magenta | Driven by automation | Cables out of the LFOs, envelopes and sequencer; values they drive (brightness, camera yaw) |
-| Amber | Caution | Master caution, FAULT, the camera symbol |
-| Red | Warning, and on air | PGM, TAKE |
+| Role | Means | Where | Orange (default) | Phosphor |
+|---|---|---|---|---|
+| `label` | Legends and scales | Titles, legends, tick marks | Light orange | White |
+| `live` | Measured, normal, live | Live cables and ports, LIVE, meters, the shape on the displays | Burnt orange | Green |
+| `set` | Set by the operator | Gauge pointers and readouts, the selection, PVW | Pale amber, the hottest lamp | Cyan |
+| `driven` | Driven by automation | Cables out of the LFOs, envelopes and sequencer; the values they drive (brightness, camera yaw) | The needle's red-orange | Magenta |
+| `caution` | Caution | Master caution, FAULT, the camera symbol | Check-control yellow | Amber |
+| `alert` | Warning, and on air | PGM, TAKE | Red, always as a fill or frame | Red |
 
-So a readout in magenta is a value an LFO is moving under you, and a magenta
-cable is modulation, without reading a label. The first version of this
-prototype gave every graph column its own hue; that is gone, and so are the
-gradients and coloured swatches.
+In the orange scheme the panel is nearly monochrome, as the dashboards were, so
+the roles are told apart by heat as much as hue: legends are a dimmer orange
+than values, what you set burns brightest, and what an LFO drives takes the
+red-orange of a needle. On air is the only true red, and it is always a filled
+badge or a frame, never text alone. The cost of a single hue is that `driven`
+and `live` are closer than magenta and green were.
+
+`Phosphor` is the glass cockpit this replaced (the `phosphor` scene):
+
+![The phosphor scheme](shots/phosphor.png)
 
 Type is [B612](https://github.com/polarsys/b612), the face Airbus had made
 for cockpit screens, in `fonts/` under the SIL Open Font License
@@ -50,11 +58,11 @@ cell.
   that's off air) and the devices with ON, IDLE or FAULT.
 - **GRAPH** (middle). The patch as eight numbered columns on a screen with
   a crosshair grid, the program output faint behind it. Modules carry a code,
-  a name and LIVE, IDLE or FAULT; a port is a square, filled green while a
-  live signal passes. Drag the background to pan, drag a module by its title
+  a name and LIVE, IDLE or FAULT; a port is a square, lit while a live
+  signal passes. Drag the background to pan, drag a module by its title
   bar, and use the NAV display to jump. The toolbar has the original's
   filters (All, Patched, Patch), Behind, Pictures, Signal colour (off draws
-  every cable white) and Tidy.
+  every cable in the legend colour) and Tidy.
 - **Inspector** (right). The patch on air, the selection, then numbered
   modules: Shape (the cells, the shape menu, gauges for brightness, speed and
   4D depth), Audio (a source selector, six segmented meters with the plane
@@ -67,7 +75,7 @@ cell.
 
 ![Operating: a module moved and selected, Camera open on the attitude indicator, deck 2 on air](shots/operating.png)
 
-![The Shape module selected: its cables turn cyan](shots/selected.png)
+![The Shape module selected: its cables light in the set colour](shots/selected.png)
 
 ### The controls
 
@@ -76,8 +84,9 @@ cell.
   drag.
 - **Annunciators** instead of switches: a name over an ON or OFF that lights.
 - **Selectors** for exclusive modes: push-buttons in a row, the one in use
-  lit cyan with a bar under it.
-- **Segmented meters**: green, then amber, then red, with the held peak lit.
+  lit with a bar under it.
+- **Segmented meters**: the live colour, then caution, then alert at the top,
+  with the held peak lit.
 - **Readouts** wherever a number is shown, in the colour of whose number it is.
 
 rune-kit supplies the shape and screen menus (`Select`), squared off and set
@@ -116,8 +125,9 @@ $B --tree tree.json --at 1.3                        # the element tree, as JSON
 
 The scenes: `default`, `selected` (the Shape module), `analyzer`, `effects`
 (the canvas panned to the right-hand columns), `folded`, `camera`,
-`shape-menu`, `tesseract`, `patched`, `plain` (white cables, no pictures, no
-output behind), `taken` (deck 2 on air) and `still` (the clock stopped).
+`shape-menu`, `tesseract`, `patched`, `plain` (label-coloured cables, no
+pictures, no output behind), `taken` (deck 2 on air), `still` (the clock
+stopped) and `phosphor` (the green scheme).
 
 `scripts/tour.json` selects the Analyzer, drags the Channel A module, drags
 the brightness pointer, folds Audio and Tempo, opens Camera, jumps with the
@@ -146,7 +156,7 @@ moves is rebuilt.
 | `src/widgets.rs` | Gauge, annunciator, selector, meter, readout, section |
 | `src/instruments.rs` | The attitude indicator and the LFO scope |
 | `src/polytope.rs` | The 24-cell, tesseract and 16-cell, turned in six planes and projected |
-| `src/theme.rs` | Colours, type, the kit |
+| `src/theme.rs` | The colour roles and the two schemes, type, the kit |
 | `fonts/` | B612 and B612 Mono, regular and bold, with their licence |
 
 ## What it isn't

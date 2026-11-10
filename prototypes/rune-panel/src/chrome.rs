@@ -21,7 +21,7 @@ pub fn top_bar(s: &App, l: &Look, _k: &Kit) -> El {
         .radius(2.0)
         .fill(l.glass)
         .border(1.0, l.line_strong)
-        .child(canvas(polytope::wire(&s.logo_poly, &Pose::at(s.t * 0.5, 0.6), 30.0, l.green, 0.9)).size(30.0, 30.0));
+        .child(canvas(polytope::wire(&s.logo_poly, &Pose::at(s.t * 0.5, 0.6), 30.0, l.live, 0.9)).size(30.0, 30.0));
     let brand = row()
         .key("brand")
         .gap(10.0)
@@ -44,11 +44,11 @@ pub fn top_bar(s: &App, l: &Look, _k: &Kit) -> El {
         .gap(3.0)
         .center()
         .radius(2.0)
-        .fill(l.amber.alpha(0.12))
-        .border(1.0, l.amber.alpha(0.7))
-        .hover(l.amber.alpha(0.06))
-        .child(text("CAUTION").font(ty::VALUE_BOLD).color(l.amber).a11y_hidden())
-        .child(text("2 DEV").font(ty::VALUE_SMALL).color(l.amber.alpha(0.8)).a11y_hidden());
+        .fill(l.caution.alpha(0.12))
+        .border(1.0, l.caution.alpha(0.7))
+        .hover(l.caution.alpha(0.06))
+        .child(text("CAUTION").font(ty::VALUE_BOLD).color(l.caution).a11y_hidden())
+        .child(text("2 DEV").font(ty::VALUE_SMALL).color(l.caution.alpha(0.8)).a11y_hidden());
     let clock = |key: &'static str, name: &'static str, value: String, ink: Color| {
         col().key(key).gap(3.0).items_end().child(legend(l, name)).child(readout(l, value, ink, 82.0))
     };
@@ -66,21 +66,21 @@ pub fn top_bar(s: &App, l: &Look, _k: &Kit) -> El {
         .child(decks(s, l))
         .child(el().grow(1.0))
         .child(caution)
-        .child(clock("met", "Show", format!("{:02}:{:02}:{:02}", met / 3600, met / 60 % 60, met % 60), l.green))
+        .child(clock("met", "Show", format!("{:02}:{:02}:{:02}", met / 3600, met / 60 % 60, met % 60), l.live))
         .child(
             col()
                 .key("bpm")
                 .gap(3.0)
                 .items_end()
                 .child(row().gap(6.0).center_y().child(beat_lamp(s, l)).child(legend(l, "Tempo")))
-                .child(readout(l, format!("{:.1}", s.bpm), l.cyan, 82.0)),
+                .child(readout(l, format!("{:.1}", s.bpm), l.set, 82.0)),
         )
 }
 
 /// A lamp on the beat, beside the tempo's legend.
 fn beat_lamp(s: &App, l: &Look) -> El {
     let phase = (s.t * s.bpm / 60.0).fract();
-    lamp(l.green, 6.0, phase < 0.25).key("beat")
+    lamp(l.live, 6.0, phase < 0.25).key("beat")
 }
 
 /// Deck 1, the crossfader lever, deck 2, the fade time, TAKE and copy.
@@ -88,9 +88,9 @@ fn decks(s: &App, l: &Look) -> El {
     let deck = |key: &'static str, n: usize, patch: usize, on_air: bool| {
         // Two elements, not one restyled: PVW leaves and PGM arrives rather than one morphing.
         let badge = if on_air {
-            row().key("on-air").h(18.0).px(6.0).center().radius(2.0).fill(l.red).child(text("PGM").font(ty::VALUE_BOLD).color(Color::WHITE))
+            row().key("on-air").h(18.0).px(6.0).center().radius(2.0).fill(l.alert).child(text("PGM").font(ty::VALUE_BOLD).color(Color::WHITE))
         } else {
-            row().key("cue").h(18.0).px(6.0).center().radius(2.0).border(1.0, l.cyan.alpha(0.8)).child(text("PVW").font(ty::VALUE_BOLD).color(l.cyan))
+            row().key("cue").h(18.0).px(6.0).center().radius(2.0).border(1.0, l.set.alpha(0.8)).child(text("PVW").font(ty::VALUE_BOLD).color(l.set))
         };
         let poly = if n == 1 { &s.shape_poly } else { &s.cue_poly };
         row()
@@ -102,13 +102,13 @@ fn decks(s: &App, l: &Look) -> El {
             .center_y()
             .radius(2.0)
             .fill(l.module)
-            .border(1.0, if on_air { l.red.alpha(0.55) } else { l.line_strong })
+            .border(1.0, if on_air { l.alert.alpha(0.55) } else { l.line_strong })
             .child(
                 el().key("thumb")
                     .size(30.0, 30.0)
                     .radius(1.0)
                     .fill(l.glass)
-                    .child(canvas(polytope::wire(poly, &Pose::at(s.t + n as f32 * 3.0, 0.8), 30.0, if on_air { l.green } else { l.dim }, 0.7)).size(30.0, 30.0)),
+                    .child(canvas(polytope::wire(poly, &Pose::at(s.t + n as f32 * 3.0, 0.8), 30.0, if on_air { l.live } else { l.dim }, 0.7)).size(30.0, 30.0)),
             )
             .child(
                 col()
@@ -127,9 +127,9 @@ fn decks(s: &App, l: &Look) -> El {
         .px(16.0)
         .center()
         .radius(2.0)
-        .fill(l.red.alpha(0.1))
-        .border(1.5, l.red.alpha(0.8))
-        .hover(l.red.alpha(0.08))
+        .fill(l.alert.alpha(0.1))
+        .border(1.5, l.alert.alpha(0.8))
+        .hover(l.alert.alpha(0.08))
         .press(Color::BLACK.alpha(0.3))
         .on_press_tx(|s: &mut App, tx| {
             s.xfade = if s.xfade < 0.5 { 1.0 } else { 0.0 };
@@ -143,7 +143,7 @@ fn decks(s: &App, l: &Look) -> El {
         .child(deck("deck-1", 1, s.on_air, s.live_deck() == 1))
         .child(lever(s, l))
         .child(deck("deck-2", 2, s.cue, s.live_deck() == 2))
-        .child(col().gap(3.0).child(legend(l, "Fade")).child(readout(l, format!("{:.1}s", s.fade_s), l.cyan, 52.0)))
+        .child(col().gap(3.0).child(legend(l, "Fade")).child(readout(l, format!("{:.1}s", s.fade_s), l.set, 52.0)))
         .child(take)
         .child(push(l, "copy-to-off-air", "Copy", l.dim, |s| {
             if s.live_deck() == 1 {
@@ -198,7 +198,7 @@ fn lever(s: &App, l: &Look) -> El {
                 .gradient(rune::oklch(0.62, 0.005, 250.0), rune::oklch(0.42, 0.005, 250.0))
                 .border(1.0, Color::BLACK.alpha(0.6))
                 .shadow(2.0, 6.0, Color::BLACK.alpha(0.6))
-                .child(el().size(cap - 2.0, 2.0).absolute(0.0, 13.0).fill(if v < 0.5 { l.red } else { l.cyan }))
+                .child(el().size(cap - 2.0, 2.0).absolute(0.0, 13.0).fill(if v < 0.5 { l.alert } else { l.set }))
                 .motion(motion::SNAPPY),
         )
 }
@@ -210,15 +210,15 @@ pub fn library(s: &App, l: &Look) -> El {
         .gap(8.0)
         .child(display(s, l, "PGM", s.live_deck(), true))
         .child(display(s, l, "PVW", 3 - s.live_deck(), false));
-    let patches = rune::memo("patches", (s.on_air, s.cue, s.live_deck()), || {
+    let patches = rune::memo("patches", (s.on_air, s.cue, s.live_deck(), s.scheme), || {
         PATCHES.iter().enumerate().fold(col().key("patches").w_full().radius(2.0).border(1.0, l.line), |c, (i, p)| c.child(patch_row(s, l, i, p)))
     });
     let mut devices = col().key("devices").w_full().radius(2.0).border(1.0, l.line);
     for (i, d) in DEVICES.iter().enumerate() {
         let (ink, word) = match d.status {
-            Status::Live => (l.green, "ON"),
+            Status::Live => (l.live, "ON"),
             Status::Idle => (l.dim, "IDLE"),
-            Status::Missing(_) => (l.amber, "FAULT"),
+            Status::Missing(_) => (l.caution, "FAULT"),
         };
         let mut r = row()
             .key(d.name)
@@ -270,7 +270,7 @@ pub fn library(s: &App, l: &Look) -> El {
                     .child(head("Patches", text(format!("{}", PATCHES.len())).font(ty::VALUE_SMALL).color(l.faint)))
                     .child(search)
                     .child(patches)
-                    .child(head("Devices", text("2 FAULT").font(ty::VALUE_SMALL).color(l.amber)))
+                    .child(head("Devices", text("2 FAULT").font(ty::VALUE_SMALL).color(l.caution)))
                     .child(devices),
             ),
         )
@@ -283,14 +283,14 @@ fn display(s: &App, l: &Look, what: &'static str, deck: usize, program: bool) ->
     let patch = PATCHES[if deck == 1 { s.on_air } else { s.cue }].name;
     let pose = Pose::at(s.t + deck as f32 * 3.0, 0.4 + s.speed * 1.6);
     let size = h * 1.25;
-    let ink = if program { l.green } else { l.label.alpha(0.7) };
+    let ink = if program { l.live } else { l.label.alpha(0.7) };
     let corner = |t: String, c: Color| text(t).font(ty::VALUE_SMALL).color(c);
     el().key(what)
         .w(w)
         .h(h)
         .radius(2.0)
         .fill(l.glass)
-        .border(1.0, if program { l.red.alpha(0.6) } else { l.line_strong })
+        .border(1.0, if program { l.alert.alpha(0.6) } else { l.line_strong })
         .clip_soft(0.0)
         .child(canvas(cross(rune::Shape::new(), w / 2.0, h / 2.0, 5.0, l.faint)).size(w, h).absolute(0.0, 0.0))
         .child(
@@ -313,9 +313,9 @@ fn display(s: &App, l: &Look, what: &'static str, deck: usize, program: bool) ->
                         .px(5.0)
                         .center()
                         .radius(1.0)
-                        .fill(if program { l.red } else { Color::TRANSPARENT })
-                        .border(1.0, if program { l.red } else { l.cyan })
-                        .child(text(what).font(ty::VALUE_BOLD).color(if program { Color::WHITE } else { l.cyan })),
+                        .fill(if program { l.alert } else { Color::TRANSPARENT })
+                        .border(1.0, if program { l.alert } else { l.set })
+                        .child(text(what).font(ty::VALUE_BOLD).color(if program { Color::WHITE } else { l.set })),
                 )
                 .child(corner(format!("DECK {deck}"), l.dim)),
         )
@@ -326,14 +326,14 @@ fn display(s: &App, l: &Look, what: &'static str, deck: usize, program: bool) ->
                 .w(w - 16.0)
                 .justify_between()
                 .child(corner(patch.to_string(), l.label))
-                .child(corner(format!("{:.0}%", s.dim * 100.0), l.green)),
+                .child(corner(format!("{:.0}%", s.dim * 100.0), l.live)),
         )
 }
 
 fn patch_row(s: &App, l: &Look, i: usize, p: &crate::data::Patch) -> El {
     let on_air = i == s.live_patch();
     let cue = !on_air && (i == s.on_air || i == s.cue);
-    let mark = if on_air { l.red } else if cue { l.cyan } else { Color::TRANSPARENT };
+    let mark = if on_air { l.alert } else if cue { l.set } else { Color::TRANSPARENT };
     let mut r = row()
         .key(p.name)
         .role("button")
@@ -344,7 +344,7 @@ fn patch_row(s: &App, l: &Look, i: usize, p: &crate::data::Patch) -> El {
         .pr(8.0)
         .gap(8.0)
         .center_y()
-        .fill(if cue { l.cyan.alpha(0.05) } else { Color::TRANSPARENT })
+        .fill(if cue { l.set.alpha(0.05) } else { Color::TRANSPARENT })
         .hover(l.hover)
         .on_press(move |s: &mut App| {
             // Load it on the deck that is off air.
@@ -361,9 +361,9 @@ fn patch_row(s: &App, l: &Look, i: usize, p: &crate::data::Patch) -> El {
         .child(text(p.name).font(ty::NODE).color(if on_air || cue { l.label } else { l.dim }))
         .child(el().grow(1.0));
     if on_air {
-        r = r.child(text("PGM").font(ty::VALUE_BOLD).color(l.red));
+        r = r.child(text("PGM").font(ty::VALUE_BOLD).color(l.alert));
     } else if cue {
-        r = r.child(text("PVW").font(ty::VALUE_BOLD).color(l.cyan));
+        r = r.child(text("PVW").font(ty::VALUE_BOLD).color(l.set));
     }
     if i > 0 {
         r = r.border_sides([1.0, 0.0, 0.0, 0.0], l.line);
@@ -387,15 +387,15 @@ pub fn status_bar(s: &App, l: &Look) -> El {
         .center_y()
         .fill(l.bezel)
         .border_sides([1.0, 0.0, 0.0, 0.0], l.line_strong)
-        .child(item("FPS", "60".into(), l.green))
-        .child(item("NODES", format!("{} ({idle} IDLE)", s.nodes.len()), l.green))
-        .child(item("HIDDEN", "35".into(), l.green))
-        .child(item("WIRES", format!("{}", s.cables.len()), l.green))
-        .child(item("CABLES", "213".into(), l.green))
-        .child(item("LIVE", format!("{live}"), l.green))
+        .child(item("FPS", "60".into(), l.live))
+        .child(item("NODES", format!("{} ({idle} IDLE)", s.nodes.len()), l.live))
+        .child(item("HIDDEN", "35".into(), l.live))
+        .child(item("WIRES", format!("{}", s.cables.len()), l.live))
+        .child(item("CABLES", "213".into(), l.live))
+        .child(item("LIVE", format!("{live}"), l.live))
         .child(el().grow(1.0))
-        .child(item("PGM", format!("DECK {}", s.live_deck()), l.red))
-        .child(item("PVW", format!("DECK {}", 3 - s.live_deck()), l.cyan))
+        .child(item("PGM", format!("DECK {}", s.live_deck()), l.alert))
+        .child(item("PVW", format!("DECK {}", 3 - s.live_deck()), l.set))
         .child(item("LIB", "~/HYPERSPACE".into(), l.label))
         .child(item("SHOW", "PARTY".into(), l.label))
 }

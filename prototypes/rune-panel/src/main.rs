@@ -24,6 +24,7 @@ use crate::polytope::Polytope;
 pub struct App {
     /// Seconds since launch (virtual when headless).
     pub t: f32,
+    pub scheme: theme::Scheme,
     pub spin: bool,
 
     // Decks
@@ -79,6 +80,7 @@ fn init() -> App {
     let (nodes, cables) = data::patch();
     App {
         t: 0.0,
+        scheme: theme::Scheme::Orange,
         spin: true,
         on_air: 0,
         cue: 1,
@@ -195,7 +197,7 @@ impl App {
 
 fn view(s: &App, cx: &mut Cx<App>) -> El {
     let vw = cx.layout_size("viewport").map_or(1076.0, |sz| sz[0]);
-    let l = theme::look();
+    let l = theme::look(s.scheme);
     let k = theme::kit(&l);
     let mut layer = Vec::new();
     let body = col()
@@ -256,6 +258,7 @@ fn main() {
             }),
             ("taken", |s| s.xfade = 1.0),
             ("still", |s| s.spin = false),
+            ("phosphor", |s| s.scheme = theme::Scheme::Phosphor),
         ],
         poll: Some(poll),
         on_key: Some(on_key),

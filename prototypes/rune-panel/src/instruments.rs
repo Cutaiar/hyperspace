@@ -27,7 +27,7 @@ pub fn attitude(l: &Look, pitch_deg: f32, yaw_deg: f32, w: f32, h: f32) -> El {
             continue;
         }
         let half = if p % 10 == 0 { 20.0 } else { 9.0 };
-        sh = sh.line([w / 2.0 - half, y], [w / 2.0 + half, y], 1.0, LineCap::Butt, l.green.alpha(0.8));
+        sh = sh.line([w / 2.0 - half, y], [w / 2.0 + half, y], 1.0, LineCap::Butt, l.live.alpha(0.8));
         if p % 10 == 0 {
             labels.push((p, y));
         }
@@ -35,9 +35,9 @@ pub fn attitude(l: &Look, pitch_deg: f32, yaw_deg: f32, w: f32, h: f32) -> El {
     // The camera: wings and a centre square, in amber as a flight deck draws the aircraft.
     let (cx, cy) = (w / 2.0, h / 2.0);
     sh = sh
-        .stroke(vec![[cx - 40.0, cy], [cx - 14.0, cy], [cx - 14.0, cy + 6.0]], 2.4, l.amber)
-        .stroke(vec![[cx + 40.0, cy], [cx + 14.0, cy], [cx + 14.0, cy + 6.0]], 2.4, l.amber)
-        .fill(vec![[cx - 2.5, cy - 2.5], [cx + 2.5, cy - 2.5], [cx + 2.5, cy + 2.5], [cx - 2.5, cy + 2.5]], l.amber);
+        .stroke(vec![[cx - 40.0, cy], [cx - 14.0, cy], [cx - 14.0, cy + 6.0]], 2.4, l.caution)
+        .stroke(vec![[cx + 40.0, cy], [cx + 14.0, cy], [cx + 14.0, cy + 6.0]], 2.4, l.caution)
+        .fill(vec![[cx - 2.5, cy - 2.5], [cx + 2.5, cy - 2.5], [cx + 2.5, cy + 2.5], [cx - 2.5, cy + 2.5]], l.caution);
     let mut screen = el()
         .key("adi")
         .size(w, h)
@@ -50,7 +50,7 @@ pub fn attitude(l: &Look, pitch_deg: f32, yaw_deg: f32, w: f32, h: f32) -> El {
         screen = screen.child(
             text(format!("{}", p.abs()))
                 .font(ty::VALUE_SMALL)
-                .color(l.green.alpha(0.8))
+                .color(l.live.alpha(0.8))
                 .absolute(w / 2.0 + 24.0, y - 7.0)
                 .a11y_hidden(),
         );
@@ -74,7 +74,7 @@ fn heading(l: &Look, yaw: f32, w: f32) -> El {
             tape = tape.child(text(format!("{n:02}")).font(ty::VALUE_SMALL).color(l.label).absolute(x - 6.0, 8.0).a11y_hidden());
         }
     }
-    sh = sh.fill(vec![[w / 2.0 - 5.0, 0.0], [w / 2.0 + 5.0, 0.0], [w / 2.0, 6.0]], l.cyan);
+    sh = sh.fill(vec![[w / 2.0 - 5.0, 0.0], [w / 2.0 + 5.0, 0.0], [w / 2.0, 6.0]], l.set);
     tape.child(canvas(sh).size(w, h).absolute(0.0, 0.0))
 }
 
@@ -99,6 +99,6 @@ pub fn scope(l: &Look, kind: usize, t: f32, w: f32, h: f32) -> El {
     let p = [3.0 + u * (w - 6.0), y(f(u))];
     let mut sh = Shape::new().line([0.0, h / 2.0], [w, h / 2.0], 1.0, LineCap::Butt, l.grid);
     sh = cross(sh, w / 2.0, h / 2.0, 2.0, l.faint);
-    sh = sh.stroke_path(&path, 1.3, LineCap::Round, l.magenta.alpha(0.85)).line(p, [p[0] + 0.01, p[1]], 4.5, LineCap::Round, l.label);
+    sh = sh.stroke_path(&path, 1.3, LineCap::Round, l.driven.alpha(0.85)).line(p, [p[0] + 0.01, p[1]], 4.5, LineCap::Round, l.label);
     canvas(sh).key("scope").size(w, h).radius(2.0).fill(l.glass).border(1.0, l.line)
 }
