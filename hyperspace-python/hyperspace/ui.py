@@ -375,6 +375,36 @@ def checkbox(label: str, value: bool) -> tuple[bool, bool]:
     return imgui.checkbox(label, value)
 
 
+def chip_group(labels, lit=None, tips=None) -> int | None:
+    """Chips side by side as ONE group, each `lit` (a list; None: none lit)
+    solid red while on, `tips` (a list; None for none) their hovers; on the
+    kit joined — one border between members, the outer corners rounded
+    (`comp_button.button_group`) — and as plain chips without it. The index
+    clicked, or None."""
+    lit = lit or [None] * len(labels)
+    hit = None
+    joins = None
+    if ui_kit.ready():
+        CB = ui_kit.mod("comp_button")
+        joins = CB.button_group([(0, 0, 1, 1)] * len(labels), "horizontal")
+    for i, label in enumerate(labels):
+        if i:
+            imgui.same_line(0, 0 if joins else -1)
+        if joins:           # (through `chip`, so whatever wraps the panel's chips sees these)
+            on = lit[i]
+            clicked = chip(label, lit=bool(on), color=DIM if on is False else None,
+                           join=joins[i])
+        elif lit[i] is not None:
+            clicked = lit_chip(label, lit[i])
+        else:
+            clicked = chip(label)
+        if tips and tips[i] and imgui.is_item_hovered():
+            tooltip(tips[i])
+        if clicked:
+            hit = i
+    return hit
+
+
 def lit_chip(label: str, lit: bool, color: imgui.ImVec4 | None = None,
              size: imgui.ImVec2 | None = None) -> bool:
     """A chip that is solid red while on — a lit key, readable from the floor."""

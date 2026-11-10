@@ -230,6 +230,7 @@ from . import (
     patches,
     pinch,
     ui,
+    ui_kit,
     ui_fx,
     ui_pad,
     ui_pane,
@@ -1282,26 +1283,25 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if _patches_chip(panel):                # plan 40 T3: the browser
         imgui.same_line()
     any_open = bool(st["open"])
-    if ui.chip("collapse all##graph" if any_open else "expand all##graph"):
+    # the canvas's two verbs, quiet (on the kit a ghost Button: no box until
+    # the pointer is on it), then its two filters as one joined pair
+    if ui.chip("collapse all##graph" if any_open else "expand all##graph", variant="ghost"):
         expand_all(st, view, not any_open)
     if imgui.is_item_hovered():
         ui.tooltip(ALL_TIP)
     imgui.same_line()
-    if ui.lit_chip("patched only##graph", st["patched_only"]):
-        st["patched_only"] = not st["patched_only"]
-        st["flip"].clear()
-    if imgui.is_item_hovered():
-        ui.tooltip(PATCHED_TIP)
-    imgui.same_line()
-    if ui.chip("tidy##graph"):
+    if ui.chip("tidy##graph", variant="ghost"):
         st["tidy"] = True
     if imgui.is_item_hovered():
         ui.tooltip(TIDY_TIP)
     imgui.same_line()
-    if ui.lit_chip("patch only##graph", st["patch_only"]):
+    hit = ui.chip_group(["patched only##graph", "patch only##graph"],
+                        [st["patched_only"], st["patch_only"]], [PATCHED_TIP, PATCH_ONLY_TIP])
+    if hit == 0:
+        st["patched_only"] = not st["patched_only"]
+        st["flip"].clear()
+    elif hit == 1:
         st["patch_only"] = not st["patch_only"]
-    if imgui.is_item_hovered():
-        ui.tooltip(PATCH_ONLY_TIP)
     imgui.same_line()
     _backdrop_chips(panel, st)
     label = beside_chip(selected, width, st["beside"])
@@ -1615,6 +1615,20 @@ def _area_chips(st: dict) -> None:
     MODULATION · MEDIA · SCENE · LOOK-BACK · EFFECTS · OUTPUTS (plan 35 G),
     wrapped to the page; a click frames
     the canvas on that area (`frame_area`, next frame)."""
+    if ui_kit.ready():
+        # on the kit one segmented bar — the areas joined, a line of them at a
+        # time where the page wraps them — rather than eight loose buttons
+        areas, labels = list(graphview.AREAS), [f"{graphview.TITLES[a]}##area" for a in graphview.AREAS]
+        while areas:
+            room, n = imgui.get_content_region_avail().x, 0
+            while n < len(areas) and ui.chip_w(*labels[:n + 1]) - imgui.get_style().item_spacing.x * n <= room:
+                n += 1
+            n = max(n, 1)
+            hit = ui.chip_group(labels[:n], None, [AREA_TIP] * n)
+            if hit is not None:
+                st["frame_area"] = areas[hit]
+            areas, labels = areas[n:], labels[n:]
+        return
     for i, a in enumerate(graphview.AREAS):
         label = f"{graphview.TITLES[a]}##area"
         if i:

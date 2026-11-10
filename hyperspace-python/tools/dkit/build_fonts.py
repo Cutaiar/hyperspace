@@ -27,7 +27,7 @@ from fontTools.ttLib import TTFont
 from fontTools.varLib import instancer
 
 HERE = Path(__file__).resolve().parent
-OUT = HERE / "fonts"
+OUT = HERE.parents[1] / "hyperspace" / "dkit" / "fonts"   # the package's
 SRC = (HERE / "../../../prototypes/dashboard/node_modules/"
        "@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
 

@@ -1,14 +1,7 @@
-"""The panel's bridge to dkit (`tools/dkit`), the measured shadcn kit — the
-first place Hyperspace imports it (the kit's HANDOFF, item 5).
-
-The kit is a directory of bare modules (`import tokens as T`), not a
-package, so `_import` puts its folder on `sys.path` and then CHECKS that
-every module it asked for came from there: a top-level `draw`, `tokens` or
-`wheel` from anywhere else (`wheel` is a PyPI package's name) would be a
-confident wrong import, and it fails here, by name, rather than as an
-AttributeError mid-frame. A build without `tools/dkit` (or
-``HYPERSPACE_KIT=0``) has no kit: `ready` says so and every section that
-uses it draws as it did before (`ui_camera.page` → `Panel._camera_stock`).
+"""The panel's bridge to dkit (`hyperspace/dkit`), the measured shadcn kit
+(its tests, gallery, oracles and docs: `tools/dkit`). ``HYPERSPACE_KIT=0``
+switches it off: `ready` says so and every section that uses it draws as
+it did before (`ui_camera.page` → `Panel._camera_stock`).
 
 What a section gets from here:
 
@@ -20,7 +13,7 @@ What a section gets from here:
 - `block(h)`: a rectangle `h` tall in the window's flow at the cursor, for
   the kit to place into (the kit draws at screen positions: imgui's flow is
   told the block's size after, `end_block`).
-- `THEME`: the kit's token names in Hyperspace's palette — the black
+- `theme()`: the kit's token names in Hyperspace's palette — the black
   ground, the three greys, the one red (`ui.py`'s, read from the style
   `ui.apply_style` sets), never shadcn's neutrals: the kit's measurements
   transfer, its palette does not (its ROADMAP's standing caution).
@@ -30,43 +23,25 @@ from __future__ import annotations
 
 import importlib
 import os
-import sys
-from pathlib import Path
 
 from imgui_bundle import imgui
 
-KIT_DIR = Path(__file__).resolve().parents[1] / "tools" / "dkit"
-# what the panel imports, leaves first; each must come from KIT_DIR
-KIT_MODULES = ("tokens", "ease", "rect", "flex", "tree", "box", "draw", "uictx", "wheel",
-               "interact", "menu", "comp_button")
+# what the panel uses of the kit, leaves first (hotreload.MODULES has them in this order)
+KIT_MODULES = ("tokens", "ease", "icons", "rect", "flex", "tree", "box", "draw", "uictx",
+               "wheel", "comp_button", "interact", "menu")
 STATE = "_kit"           # the panel's attribute: survives a reload of this module
 ENV = "HYPERSPACE_KIT"   # "0": no kit, every section as it was drawn before
 
 # the kit's faces, loaded into the atlas once (`load_faces`): kept across a
 # reload of this module, as the atlas keeps them
 _FACES: dict = globals().get("_FACES", {})
-_MODS: dict = globals().get("_MODS", {})
-
-
-class KitError(ImportError):
-    """The kit is there but a module of its name came from somewhere else."""
+_MODS: dict = {}         # (filled on first use: a reload of this module re-reads the kit's)
 
 
 def _import() -> dict:
-    """The kit's modules by name, imported from `KIT_DIR`; {} without one.
-    Raises `KitError` when a name resolves outside the kit."""
-    if _MODS or not (KIT_DIR / "interact.py").exists():
-        return _MODS
-    if str(KIT_DIR) not in sys.path:
-        sys.path.insert(0, str(KIT_DIR))
-    got = {}
-    for name in KIT_MODULES:
-        mod = importlib.import_module(name)
-        where = Path(getattr(mod, "__file__", "") or "").resolve().parent
-        if where != KIT_DIR:
-            raise KitError(f"dkit: `{name}` is {mod.__file__}, not the kit's ({KIT_DIR})")
-        got[name] = mod
-    _MODS.update(got)
+    """The kit's modules by name (`hyperspace.dkit`)."""
+    if not _MODS:
+        _MODS.update({n: importlib.import_module(f"hyperspace.dkit.{n}") for n in KIT_MODULES})
     return _MODS
 
 
@@ -96,9 +71,9 @@ def load_faces(io) -> None:
     the dict sees the new ones. Nothing without the kit, or with it
     switched off."""
     _FACES.clear()
-    if not enabled() or not _import():
+    if not enabled():
         return
-    _FACES.update(mod("draw").load_faces(io, KIT_DIR))
+    _FACES.update(mod("draw").load_faces(io))
 
 
 # ---------------------------------------------------------------- the theme
@@ -141,15 +116,19 @@ def theme() -> dict:
     }
 
 
-def _button_table(theme_name: str) -> dict:
-    """The kit's Button variants with the one literal its dark table holds
-    in shadcn's palette — `secondary`'s hover, an oklch mix rasterised on
-    shadcn's neutral (#2f2f2f) — put back on the panel's own hovered
-    button (`ui.apply_style`)."""
-    t = mod("comp_button").button_table(theme_name)
-    t["secondary"] = {**t["secondary"],
-                      "hover_fill": (_hex(imgui.get_style().color_(imgui.Col_.button_hovered)), 1.0)}
-    return t
+def tables() -> dict:
+    """The panel's own reading of the kit's measured tables (`uictx.Ui.tables`):
+    what a token name cannot say.
+
+    - ``slider.track``: the panel's line grey. The kit's `muted` — the
+      panel's frame grey — all but vanished on the black ground, so a slider
+      at its low end read as a lone dot (the crossfader, at 0).
+    - ``button.secondary.hover_fill``: the panel's own hovered button
+      (`ui.apply_style`), for the literal the kit's dark table holds — an
+      oklch mix rasterised on shadcn's neutral (#2f2f2f)."""
+    hover = _hex(imgui.get_style().color_(imgui.Col_.button_hovered))
+    return {"slider": {"track": ("border", 1.0)},
+            "button": {"secondary": {"hover_fill": (hover, 1.0)}}}
 
 
 # ---------------------------------------------------------------- per frame
@@ -169,32 +148,17 @@ def begin(panel=None):
     st = holder.get(STATE)
     if st is None:
         U, ease = mod("uictx"), mod("ease")
-        ui = _panel_ui(U)(None, _FACES, theme(), ease.Anim(), theme_name="dark")
-        # a slider's track in the panel's line grey: the kit's `muted` (the
-        # panel's frame grey) all but vanished on the black ground, so a
-        # slider at its low end read as a lone dot (the crossfader, at 0)
-        ui.slider_tbl = {**ui.slider_tbl, "track": ("border", 1.0)}
-        # (the cache `comp_button._table_for` reads, filled with the panel's)
-        ui.anim.store.setdefault("button_tbl", {})["dark"] = _button_table("dark")
+        # imgui's id stack, not the kit's raw key, tells two items apart: the
+        # panel draws one param in two scopes on purpose (a chip and a check
+        # for one FX, under different ``push_id``s), and imgui's own conflict
+        # check runs in the panel's tests (`test_ui_pane`'s "no conflicting ids")
+        ui = U.Ui(None, _FACES, theme(), ease.Anim(), theme_name="dark", tables=tables(),
+                  unique_keys=False)
         st = holder[STATE] = {"ui": ui, "frame": None}
     ui = st["ui"]
     _tick(st, ui)
     ui.dl = imgui.get_window_draw_list()
     return ui
-
-
-def _panel_ui(U):
-    """The kit's `Ui`, less one check: the kit refuses a key it has seen
-    this frame (`Ui.hit`), where imgui tells two items apart by the whole
-    id stack — and the panel draws one param in two scopes on purpose (a
-    chip and a check for one FX, under different ``push_id``s). imgui's own
-    conflict check, which the panel's tests run (`tests/test_ui_pane.py`'s
-    "no conflicting imgui ids"), is the one that holds here."""
-    class PanelUi(U.Ui):
-        def hit(self, key, *a, **k):
-            self._seen.discard(key)
-            return super().hit(key, *a, **k)
-    return PanelUi
 
 
 def _tick(st: dict, ui) -> None:

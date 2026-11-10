@@ -33,10 +33,16 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+# The kit's runtime is a package now (`hyperspace/dkit`); each of its
+# modules keeps a one-line alias here, so both folders are read, and an
+# import inside the package (`from . import tokens as T`, `from .tokens
+# import RADII`) is the same binding as the bare one outside it.
+PKG = HERE.parents[1] / "hyperspace" / "dkit"
+
 # Modules whose attributes are checked. The kit's own, not third-party:
 # `imgui.*` and `np.*` are not ours to keep stable.
-OURS = {p.stem for p in HERE.glob("*.py")
-        if not p.stem.startswith("test_")}
+OURS = {p.stem for p in [*HERE.glob("*.py"), *PKG.glob("*.py")]
+        if not p.stem.startswith("test_") and p.stem != "__init__"}
 
 # Attributes reached only inside a `try`/`except AttributeError` or via
 # getattr-with-default are deliberately optional; none exist today, and if
@@ -48,11 +54,19 @@ def _alias_map(tree: ast.Module) -> dict[str, str]:
     """{local name -> module name} for `import x as y` of OUR modules."""
     out = {}
     for n in ast.walk(tree):
-        if isinstance(n, ast.Import):
-            for a in n.names:
-                if a.name in OURS:
-                    out[a.asname or a.name] = a.name
+        for name, asname in _module_imports(n):
+            out[asname or name] = name
     return out
+
+
+def _module_imports(n) -> list[tuple[str, str | None]]:
+    """(module, as) for each of OUR modules node `n` imports as a module:
+    `import x as y`, and inside the package `from . import x as y`."""
+    if isinstance(n, ast.Import):
+        return [(a.name, a.asname) for a in n.names if a.name in OURS]
+    if isinstance(n, ast.ImportFrom) and n.level == 1 and n.module is None:
+        return [(a.name, a.asname) for a in n.names if a.name in OURS]
+    return []
 
 
 def _bound(fn) -> set[str]:
@@ -91,10 +105,8 @@ def _local_imports(fn) -> dict[str, str]:
     """
     out = {}
     for n in ast.walk(fn):
-        if isinstance(n, ast.Import):
-            for al in n.names:
-                if al.name in OURS:
-                    out[al.asname or al.name] = al.name
+        for name, asname in _module_imports(n):
+            out[asname or name] = name
     return out
 
 
@@ -139,14 +151,14 @@ def _from_imports(path: Path):
     tree = ast.parse(path.read_text())
     out = []
     for n in ast.walk(tree):
-        if isinstance(n, ast.ImportFrom) and n.module in OURS and n.level == 0:
+        if isinstance(n, ast.ImportFrom) and n.module in OURS and n.level in (0, 1):
             for al in n.names:
                 if al.name != "*":
                     out.append((n.module, al.name, n.lineno))
     return out
 
 
-SOURCES = sorted(HERE.glob("*.py"))
+SOURCES = sorted([*HERE.glob("*.py"), *(p for p in PKG.glob("*.py") if p.stem != "__init__")])
 
 
 @pytest.mark.parametrize("path", SOURCES, ids=lambda p: p.name)

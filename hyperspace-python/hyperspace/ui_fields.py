@@ -134,37 +134,24 @@ def _head(panel, k, a, p, x, y, w, h, label) -> None:
 GRAB_PAD = 2.0            # px imgui's slider keeps between its frame and its grab, each end
 
 
-def _value_box(k, x, y, w, h, frac, origin, words, font, size, col) -> None:
-    """A slider too short to read as a track, drawn as a value box: the
-    panel's frame grey, the value's words centred, and a thin bar along its
-    foot from `origin` to `frac` in the one red — where the value sits."""
-    dl = k.dl
-    r = ui.ROUND
-    dl.add_rect_filled(imgui.ImVec2(x, y), imgui.ImVec2(x + w, y + h),
-                       imgui.get_color_u32(imgui.Col_.frame_bg), r)
-    a, b = sorted((min(max(origin, 0.0), 1.0), min(max(frac, 0.0), 1.0)))
-    inset = r / 2
-    bx0, bx1 = x + inset + (w - 2 * inset) * a, x + inset + (w - 2 * inset) * b
-    if bx1 - bx0 >= 1.0:
-        dl.add_rect_filled(imgui.ImVec2(bx0, y + h - 3), imgui.ImVec2(bx1, y + h - 1),
-                           ui.u32(ui.RED), 1.0)
+def _box_words(k, x, y, w, h, words, font, size, col) -> None:
+    """A value box's words (`interact.slider(box=True)` draws the box), in
+    one of the panel's faces, centred, cut to fit."""
     imgui.push_font(ui._FONTS[font], size)
     shown = ui.fit_text(words, w - 2 * _m("tokens").SPACE[1])
     tw = imgui.calc_text_size(shown).x
     imgui.pop_font()
-    text(dl, x + (w - tw) / 2, y - 1, h, shown, font, size, col)
+    text(k.dl, x + (w - tw) / 2, y - 1, h, shown, font, size, col)
 
 
 def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
     """The kit slider for param `a` (reading and writing `p`) in (x, y, w, h);
-    `box`: (words, colour) to draw it as a value box (`_value_box`) rather
+    `box`: (words, colour) to draw it as a value box (the kit's `slider(box=True)`) rather
     than a track."""
     I, tbl = _m("interact"), k.slider_tbl
     thumb = tbl["thumb"]
     span = w - thumb
     t0 = p.norm
-    if box is not None:
-        _value_box(k, x, y, w, h, t0, panel._origin(p), box[0], "num", ui.FONT_NUM, box[1])
     shown = (panel._mod_text(p) if p.modulated else p.text()).replace("%", "%%")
     if p.taper is not None:                 # the detents: the stock slider over positions
         steps = p.steps
@@ -184,10 +171,12 @@ def _slider(panel, k, a, p, x, y, w, h, box=None) -> bool:
     try:
         changed, nv = I.slider(k, a.id, x, y, w, h, value, lo, hi, fine=False,
                                disabled=_dim(panel), fmt=shown, flags=flags, frac=t0,
-                               origin=panel._origin(p), draw=box is None)
+                               origin=panel._origin(p), box=box is not None)
     finally:
         imgui.pop_font()
         imgui.pop_style_var(2)
+    if box is not None:
+        _box_words(k, x, y, w, h, box[0], "num", ui.FONT_NUM, box[1])
     # a ⇧-drag measured over imgui's own throw — its grab padding inside the
     # frame at each end — so a fine drag is a tenth of a plain one exactly,
     # whatever the track's width (on a short one the 4 px were 20 %)
@@ -309,9 +298,11 @@ def select(panel, k, pid: str, rect, tip: str | None = None) -> bool:
     names = p.names
     cur = int(p.base)
     items = [M.Item(id=str(i), label=n, checked=i == cur) for i, n in enumerate(names)]
+    menu = _m("menu")
+    cap = 2 * menu.PAD + SELECT_ROWS_MAX * menu.ITEM_H
     chosen, _open = _m("interact").select(
         k, pid, x, y + (h - ROW_H) / 2, w, names[cur] if 0 <= cur < len(names) else "",
-        items, size=SELECT_SIZE, disabled=_dim(panel))
+        items, size=SELECT_SIZE, disabled=_dim(panel), max_h=cap)
     # the trigger's item is the select's hit, submitted first: ask for it again
     panel._tip(a, tip)
     panel._ctx(a)
@@ -446,21 +437,20 @@ def inline_check(panel, pid: str, label: str | None = None) -> bool:
     sw, sh, _ = _m("tokens").SWITCH_SIZES["sm"]
     dim = _dim(panel)
     with _m("uictx").chrome(k):
-        st = k.hit(pid, x, y, w, fh)
+        # the kit's Switch, its target the whole row (`interact.switch`'s `row`)
+        clicked, _out = _m("interact").switch(k, pid, x + (fh - sw) / 2, y + (fh - sh) / 2, on,
+                                               size="sm", disabled=dim, row=(x, y, w, fh))
         panel._tip(a)
         panel._ctx(a)
         panel._learn_frame(a)
         panel._mod_dot(p)
-        on_f = k.anim.to(f"{pid}:on", 1.0 if on else 0.0)
-        D.switch(k.dl, x + (fh - sw) / 2, y + (fh - sh) / 2, on_f, k.theme, k.switch_tbl,
-                 size="sm", focus_f=k.focus_f(pid, st.focused, disabled=dim), disabled=dim)
         if words:
             gap = imgui.get_style().item_inner_spacing.x
             imgui.set_cursor_screen_pos(imgui.ImVec2(x + fh + gap, y))
             imgui.align_text_to_frame_padding()
             imgui.text_colored(ui.TEXT if on else ui.DIM, words)
     ui_kit.end_block((x, y, w, fh))
-    if st.clicked and not dim:
+    if clicked and not dim:
         p.set(not on)
         return True
     return False
@@ -561,19 +551,15 @@ def inline_slider(panel, pid: str, width: float = -1) -> bool:
     return changed
 
 
-SELECT_ROWS_MAX = 12      # an enum longer than this keeps imgui's combo: the kit's menu has no scroll yet
+SELECT_ROWS_MAX = 12      # a Select shows this many rows, and scrolls past them (menu.popup's max_h)
 
 
 def inline_select(panel, pid: str, width: float = -1, tip: str | None = None) -> bool | None:
     """`Panel._combo` on the kit, in the room the stock combo had (`width`
-    as `inline_slider`'s): the kit's Select, one frame tall. None — draw
-    the stock combo — for an enum of more than `SELECT_ROWS_MAX` names,
-    which the kit's menu cannot scroll through (its HANDOFF: `menu.popup`
-    has no height clamp). Else True when another name is chosen."""
-    a = panel.reg[pid]
-    p = panel._real(a)
-    if len(p.names) > SELECT_ROWS_MAX:
-        return None
+    as `inline_slider`'s): the kit's Select, one frame tall, its list
+    `SELECT_ROWS_MAX` rows tall and scrolling past them. True when another
+    name is chosen (None is never returned now; `Panel._combo` keeps the
+    branch for the stock combo without the kit)."""
     k = ui_kit.begin(panel)
     avail = imgui.get_content_region_avail().x
     w = avail if width == -1 else (avail + width if width < 0 else width)
@@ -587,55 +573,13 @@ def inline_select(panel, pid: str, width: float = -1, tip: str | None = None) ->
 
 # ---------------------------------------------------------------- chips
 
-def _chip_colours(k, variant: str) -> tuple:
-    """(rest, hover, ring, border) of a kit Button variant, as imgui colours —
-    resolved once per variant and kept (`anim.store`): a chip is drawn ~70
-    times a frame, and the Button's general path resolved and mixed five
-    tokens for each (tools/profile_kit.py)."""
-    cache = k.anim.store.setdefault("chip_cols", {})
-    got = cache.get(variant)
-    if got is None:
-        T = _m("tokens")
-        v = _m("comp_button")._table_for(k)[variant]
-        got = cache[variant] = tuple(imgui.ImVec4(*T.rgba(tok, al, theme=k.theme))
-                                     for tok, al in (v["fill"], v["hover_fill"], v["ring"],
-                                                     v["border"]))
-    return got
-
-
-def _chip_chrome(k, dl, x, y, w, h, variant, hot, down, focus, dim, r) -> None:
-    """The kit Button's chrome for a chip, lean: what `comp_button.button`
-    paints — the fill inset by the 1 px border (`bg-clip-padding`), the
-    border itself where the variant has one (`outline`), the hover tint,
-    the press's 1 px nudge, the focus ring outside the box, half strength
-    disabled — without its general path (joins, glyphs), which a chip never
-    uses."""
-    C, D = _m("comp_button"), _m("draw")
-    rest, hover, ring, border = _chip_colours(k, variant)
-    t = 0.0 if dim else hot
-    a = 0.5 if dim else 1.0
-    fill = imgui.ImVec4(rest.x + (hover.x - rest.x) * t, rest.y + (hover.y - rest.y) * t,
-                        rest.z + (hover.z - rest.z) * t, (rest.w + (hover.w - rest.w) * t) * a)
-    by = round(y + down * C.NUDGE)
-    bx, bw, bh = round(x), round(w), round(h)
-    if focus > 0.01 and not dim:
-        D.ring(dl, bx, by, bw, bh, (ring.x, ring.y, ring.z, ring.w * focus), r, _m("tokens").RING_W)
-    b = C.BORDER_W
-    dl.add_rect_filled(imgui.ImVec2(bx + b, by + b), imgui.ImVec2(bx + bw - b, by + bh - b),
-                       imgui.color_convert_float4_to_u32(fill), max(r - b, 0.0))
-    if border.w > 0.01:
-        edge = imgui.ImVec4(border.x, border.y, border.z, border.w * a)
-        dl.add_rect(imgui.ImVec2(bx + 0.5, by + 0.5), imgui.ImVec2(bx + bw - 0.5, by + bh - 0.5),
-                    imgui.color_convert_float4_to_u32(edge), r, b)    # (the binding's order: thickness, then flags)
-
-
 CHIP_VARIANT = "outline"  # an unlit chip: the kit's outline Button, a border and a faint fill
 CHIP_RADIUS = "sm"        # its corners (tokens.RADII): a button's, not a pill's
 
 
 def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
          pill: bool = False, icon: str | None = None, variant: str | None = None,
-         reveal: float = 1.0) -> bool:
+         reveal: float = 1.0, join=None) -> bool:
     """`ui.chip` / `ui.lit_chip` on the kit — and, with `pill` off and its
     own `pad`, `ui.button` / `ui.small_button` / `ui.arrow_button`: the kit's
     Button chrome at the stock widget's size (its words and `pad`, by
@@ -673,9 +617,10 @@ def chip(label: str, size=None, lit: bool = False, color=None, *, pad=None,
     focus = k.focus_f(f"chip:{key}", imgui.is_item_focused(), disabled=dim)
     reveal = max(reveal, hot, focus)            # its own hover or focus shows it whole
     if reveal > 0.01:
-        _chip_chrome(k, dl, x, y, w, h, variant or ("default" if lit else CHIP_VARIANT),
-                     hot, down, focus, dim,
-                     h / 2 if pill else min(_m("tokens").RADII[CHIP_RADIUS], h / 2))
+        _m("comp_button").chip_chrome(
+            k, dl, x, y, w, h, variant or ("default" if lit else CHIP_VARIANT), hot=hot,
+            down=down, focus_f=focus, disabled=dim, join=join,
+            radius=h / 2 if pill else min(_m("tokens").RADII[CHIP_RADIUS], h / 2))
     # lit: white on the red; an unlit lit_chip: its colour; anything else: TEXT
     ink = imgui.ImVec4(1, 1, 1, 1) if lit else (color if color is not None else ui.TEXT)
     ink = imgui.ImVec4(ink.x, ink.y, ink.z, ink.w * reveal)
@@ -785,8 +730,6 @@ def inline_raw(panel, key: str, value: float, lo: float, hi: float, fmt: str, ti
     track = w - rw - gap if beside else w
     thumb = k.slider_tbl["thumb"]
     col = ui.DIM if dim else ui.TEXT
-    if not beside:
-        _value_box(k, x, y, w, fh, t0, origin, shown, font, size, col)
     imgui.push_style_var(imgui.StyleVar_.frame_padding, imgui.ImVec2(0, (fh - ui.FONT_NUM) / 2))
     imgui.push_style_var(imgui.StyleVar_.grab_min_size, thumb)
     imgui.push_font(ui._FONTS["num"], ui.FONT_NUM)
@@ -795,10 +738,12 @@ def inline_raw(panel, key: str, value: float, lo: float, hi: float, fmt: str, ti
             changed, v = I.slider(k, key, x, y, track, fh, value, lo, hi, fine=False,
                                   fmt=shown.replace("%", "%%"),
                                   flags=imgui.SliderFlags_.logarithmic if log else 0,
-                                  frac=min(max(t0, 0.0), 1.0), origin=origin, draw=beside)
+                                  frac=min(max(t0, 0.0), 1.0), origin=origin, box=not beside)
     finally:
         imgui.pop_font()
         imgui.pop_style_var(2)
+    if not beside:
+        _box_words(k, x, y, w, fh, shown, font, size, col)
     own, t = panel._fine_throw(t0, track - thumb - 2 * GRAB_PAD)   # imgui's own throw
     if own:
         changed = t is not None             # a frame the mouse did not move writes nothing

@@ -694,11 +694,39 @@ Note on the count: one run reported 6 skipped where every other reports 5
 (the five are environmental: macOS, CoreMIDI, a GPU, torch, a recorded
 tape); it did not reproduce in the next full run.
 
+### 5e. The kit as a package, a host theme, the additions on trial
+
+The kit moved to `hyperspace/dkit` (`git mv`, imports relative). Each
+`tools/dkit/<module>.py` is now a three-line shim that installs the package
+module under the bare name, so the gallery, the oracles and every test
+here run unchanged and see THE SAME module object (a test that patches
+`draw.X` patches what the panel draws with). `gradient.py` stayed here: it
+needs numpy and only the gallery draws it.
+
+The host-theme API is two things on `uictx.Ui`: the token dict (as before)
+and `tables`, per-component overrides merged over the measured tables in
+`__post_init__` (`{"slider": {"track": ...}, "button": {"secondary":
+{"hover_fill": ...}}}`). `unique_keys=False` lets a host whose id stack
+already disambiguates (imgui's `push_id`) draw one raw key twice. And
+`draw.Faces` carries each face's measured line span (`span_em_of` reads
+hhea/head), so a host's own face (Inter, 1.21) sizes the kit's text cells
+as Geist (1.30) does — `draw.host_faces`.
+
+Six additions went in as options, each with a sheet image for the owner to
+accept or reject (`additions_sheet.py --only <name>`, one per `xvfb-run`):
+`comp_button.chip_chrome` (the button's chrome without its layout — pixel-
+identical, `test_the_lean_chip_paints_what_the_button_paints`), a switch
+whose hit is the row (`switch(row=...)`, not the stretched hit that stole
+neighbours' clicks), tabs with ids, icons, a set width and an active ink,
+a slider whose value sits in a box at the track's end (`slider(box=True)`,
+`draw.slider_box`, and a bipolar `origin`), the scrolling menu above, and
+host type. None changes the gallery: light `4c00f27a67d1`, dark
+`fcd6d1efccab`.
+
 ### Two smaller things, both recorded in code
 
-`menu.popup` has no scroll area or height clamp, so a long menu cannot
-scroll to follow its keyboard highlight — measured on the real one, noted in
-`menu.py`. And a Select's closed typeahead (a letter sets the value without
+`menu.popup` now takes `max_h` and scrolls (only the visible rows are
+submitted, a thumb drawn) — see 5e. A a Select's closed typeahead (a letter sets the value without
 opening) has nowhere to live until `interact.select` reads characters.
 
 ### One more, new

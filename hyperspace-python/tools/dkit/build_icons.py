@@ -290,7 +290,7 @@ def main() -> None:
             body.append(f"        [{parts}],")
         body.append("    ],")
     body.append("}\n")
-    dest = HERE / "icons.py"
+    dest = HERE.parents[1] / "hyperspace" / "dkit" / "icons.py"   # the package's
     dest.write_text("\n".join(body))
     nops = sum(len(s) for subs in icons.values() for s in subs)
     print(f"wrote {dest.name}: {len(icons)} icons, "

@@ -1430,9 +1430,9 @@ def test_show_on_graph_selects_the_node(tmp_path, monkeypatch):
         real = ui.chip
         drawn = []
 
-        def chip(label, size=None):                 # a click on the button alone
+        def chip(label, size=None, **kw):           # a click on the button alone
             drawn.append(label)
-            return label.endswith("##fx.show") or real(label, size)
+            return label.endswith("##fx.show") or real(label, size, **kw)
         monkeypatch.setattr(ui, "chip", chip)
         frame(rig.panel, "fx")
         assert f"{ui_fx_show()}##fx.show" in drawn

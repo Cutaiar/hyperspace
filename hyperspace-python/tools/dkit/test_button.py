@@ -875,3 +875,31 @@ def test_hover_does_not_change_the_text_colour_anywhere():
             assert "hover_ink" not in row
     assert TL["outline"]["ink"] == ("foreground", 1.0)
     assert TL["ghost"]["ink"] == ("foreground", 1.0)
+
+
+def test_the_lean_chip_paints_what_the_button_paints():
+    """`chip_chrome` is `button`'s chrome by a shorter road (Hyperspace draws
+    ~70 a frame): every variant, at rest and hovered, enabled and disabled,
+    in both themes, the same pixels — 0 levels — or it is a second Button."""
+    import numpy as np
+    from additions_sheet import shot
+
+    cases = [(v, hot, dis) for v in ("default", "outline", "secondary", "ghost", "destructive")
+             for hot in (0.0, 1.0) for dis in (False, True)]
+
+    def paint(general: bool):
+        def draw_all(ui, dl):
+            t = CB._table_for(ui)
+            for i, (v, hot, dis) in enumerate(cases):
+                x, y = 10 + (i % 5) * 70, 10 + (i // 5) * 34
+                if general:
+                    CB.button(dl, x, y, 60, 28, "", ui.faces, ui.theme, t, variant=v, size="sm",
+                              hot=hot, disabled=dis)
+                else:
+                    CB.chip_chrome(ui, dl, x, y, 60, 28, v, hot=hot, disabled=dis)
+        return draw_all
+
+    for theme in ("light", "dark"):
+        a = shot(theme, paint(True), frames=2, w=360, h=160)
+        b = shot(theme, paint(False), frames=2, w=360, h=160)
+        assert int(np.abs(a.astype(int) - b.astype(int)).max()) == 0, theme

@@ -125,12 +125,15 @@ def test_no_popup_in_the_kit_lets_imgui_draw_its_own_scrollbar():
     from pathlib import Path
 
     here = Path(__file__).resolve().parent
+    pkg = here.parents[1] / "hyperspace" / "dkit"     # the kit's runtime, a package now
     offenders = []
-    for py in sorted(here.glob("*.py")):
+    scanned = 0
+    for py in sorted([*here.glob("*.py"), *pkg.glob("*.py")]):
         if py.name.startswith("test_"):
             continue
         src = py.read_text()
         for m in re.finditer(r"imgui\.begin_popup\(", src):
+            scanned += 1
             # the call's argument list, up to the matching close paren
             tail = src[m.end():m.end() + 400]
             depth, arg = 1, []
@@ -149,3 +152,5 @@ def test_no_popup_in_the_kit_lets_imgui_draw_its_own_scrollbar():
     assert not offenders, (
         "begin_popup without no_scrollbar - ImGui will draw the window's "
         f"own bar: {offenders}")
+    # and it read them: the menu's (hyperspace/dkit/menu.py) and the Combobox's
+    assert scanned >= 2, f"only {scanned} begin_popup calls found - the scan is reading nothing"

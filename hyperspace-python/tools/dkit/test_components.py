@@ -961,8 +961,9 @@ def test_pixel_rounding_is_monotone_not_bankers():
 def test_every_coordinate_the_kit_rounds_goes_through_px():
     """The wiring. A monotone helper nobody calls fixes nothing, which is
     how the wheel fix came to be a no-op."""
-    from pathlib import Path
-    src = (Path(__file__).resolve().parent / "draw.py").read_text()
+    import inspect
+    import draw as D                            # (the package's: hyperspace/dkit/draw.py)
+    src = inspect.getsource(D)
     body = src[src.index("def px("):]
     body = body[body.index("\n\n\n"):]          # everything after px itself
     import re

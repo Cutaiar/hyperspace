@@ -27,7 +27,6 @@ from . import ui, ui_fields, ui_kit, ui_pane
 
 TAB_H = 32.0            # the TabsList: h-8, its triggers inset by its 3 px padding
 TAB_PAD = 3.0
-ICON = 16.0             # a tab's glyph (size-4)
 DIRTY = "●"             # a Select row's dirty mark, at its end
 ICONS = {               # Lucide's names (tools/dkit/icons.py)
     ui_pane.SELECTION: "mouse_pointer_2",
@@ -58,38 +57,32 @@ def bar(panel, key: str, said: str = "") -> None:
 
 
 def _tabs(panel, k, key: str, said: str, x: float, y: float, w: float) -> None:
-    D, T, ease = ui_kit.mod("draw"), ui_kit.mod("tokens"), ui_kit.mod("ease")
+    """The seven views as the kit's Tabs — its triggers ``##pane.<key>``, its
+    icons Lucide's, the active one's in the one red — then each tab's dirty
+    dot and tooltip over the rects it hands back."""
+    I = ui_kit.mod("interact")
     titles = {kk: t for kk, t, _, _ in ui_pane.SECTIONS}
     groups = {kk: g for kk, _, g, _ in ui_pane.SECTIONS}
-    D.fill(k.dl, x, y, w, TAB_H, k.col("muted"), T.RADII["lg"])
-    n = len(ui_pane.TABS)
-    tw = (w - 2 * TAB_PAD) / n
-    ih = TAB_H - 2 * TAB_PAD
-    for i, kk in enumerate(ui_pane.TABS):
-        tx, ty = x + TAB_PAD + i * tw, y + TAB_PAD
-        st = k.hit(f"pane.{kk}", tx, ty, tw, ih)
-        on = kk == key
-        sel = k.anim.to(f"pane.{kk}:sel", 1.0 if on else 0.0)
-        if sel > 0.01:
-            D.shadow(k.dl, tx, ty, tw, ih, (0, 0, 0, 0.25 * sel), T.RADII["md"], dy=1.0, blur=3.0)
-            D.fill(k.dl, tx, ty, tw, ih, ease.mix(k.col("transparent"), k.col("card"), sel),
-                   T.RADII["md"])
-        ff = k.focus_f(f"pane.{kk}", st.focused)
-        if ff > 0.01:
-            D.ring(k.dl, tx, ty, tw, ih, k.col("ring", 0.5 * ff), T.RADII["md"], T.RING_W)
-        ink = ease.mix(ease.mix(k.col("muted-foreground"), k.col("foreground"), st.hot * 0.7),
-                       k.col("primary"), sel)
-        D.icon(k.dl, ICONS[kk], tx + (tw - ICON) / 2, ty + (ih - ICON) / 2, ICON, ink)
+    tabs = list(ui_pane.TABS)
+    rects: list = []
+    hit, _w = I.tabs(k, "pane.tabs", x, y, TAB_H, [titles[kk] for kk in tabs],
+                     tabs.index(key) if key in tabs else -1, pad=TAB_PAD,
+                     keys=[f"pane.{kk}" for kk in tabs], icons=[ICONS[kk] for kk in tabs],
+                     w=w, active_ink="primary", rects=rects)
+    m = imgui.get_io().mouse_pos
+    over = imgui.is_window_hovered()
+    for kk, (tx, ty, tw, th) in zip(tabs, rects):
         if ui_pane._dirty(panel, groups[kk]):
-            k.dl.add_circle_filled(imgui.ImVec2(tx + tw - ui_pane.CHIP_DOT_R - 3, ty + ui_pane.CHIP_DOT_R + 3),
+            k.dl.add_circle_filled(imgui.ImVec2(tx + tw - ui_pane.CHIP_DOT_R - 3,
+                                                ty + ui_pane.CHIP_DOT_R + 3),
                                    ui_pane.CHIP_DOT_R, ui.u32(ui.RED))
-        if st.hovered:
+        if over and tx <= m.x < tx + tw and ty <= m.y < ty + th:
             live = ui_pane._live(panel, kk, said)
             # what it would say live first, as the chip's tooltip does; then
             # the name the icon stands for
             ui.tooltip("\n".join(t for t in (live, titles[kk].upper(), ui_pane.VIEW_TIP) if t))
-        if st.clicked and not on:
-            ui_pane.show(panel, kk)
+    if hit is not None and tabs[hit] != key:
+        ui_pane.show(panel, tabs[hit])
 
 
 def _sections(panel, k, key: str, x: float, y: float, w: float) -> None:
